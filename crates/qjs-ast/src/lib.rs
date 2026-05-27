@@ -101,4 +101,26 @@ pub enum BinaryOp {
     Mul,
     /// Division.
     Div,
+    /// Remainder.
+    Rem,
+    /// Loose equality.
+    Eq,
+    /// Strict equality.
+    StrictEq,
+    /// Loose inequality.
+    Ne,
+    /// Strict inequality.
+    StrictNe,
+    /// Less than.
+    Lt,
+    /// Less than or equal.
+    Le,
+    /// Greater than.
+    Gt,
+    /// Greater than or equal.
+    Ge,
+    /// Logical and.
+    LogicalAnd,
+    /// Logical or.
+    LogicalOr,
 }
