@@ -336,6 +336,12 @@ pub enum AssignmentOp {
     DivAssign,
     /// `%=`.
     RemAssign,
+    /// `&&=`.
+    LogicalAndAssign,
+    /// `||=`.
+    LogicalOrAssign,
+    /// `??=`.
+    NullishAssign,
 }
 
 /// Update operator.

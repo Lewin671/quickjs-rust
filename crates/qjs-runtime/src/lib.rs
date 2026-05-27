@@ -303,10 +303,7 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, Run
         }
         Expr::Assignment {
             target, op, value, ..
-        } => {
-            let value = eval_expr(value, env)?;
-            eval_assignment(target, *op, value, env)
-        }
+        } => eval_assignment(target, *op, value, env),
         Expr::Conditional {
             test,
             consequent,
@@ -454,9 +451,26 @@ fn read_target(
 fn eval_assignment(
     target: &AssignmentTarget,
     op: AssignmentOp,
-    right: Value,
+    right: &Expr,
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
+    let old_value = match op {
+        AssignmentOp::LogicalAndAssign
+        | AssignmentOp::LogicalOrAssign
+        | AssignmentOp::NullishAssign => read_target(target, env)?,
+        _ => Value::Undefined,
+    };
+
+    match op {
+        AssignmentOp::LogicalAndAssign if !is_truthy(&old_value) => return Ok(old_value),
+        AssignmentOp::LogicalOrAssign if is_truthy(&old_value) => return Ok(old_value),
+        AssignmentOp::NullishAssign if !matches!(old_value, Value::Null | Value::Undefined) => {
+            return Ok(old_value);
+        }
+        _ => {}
+    }
+
+    let right = eval_expr(right, env)?;
     let value = match op {
         AssignmentOp::Assign => right,
         AssignmentOp::AddAssign => eval_binary(read_target(target, env)?, BinaryOp::Add, right)?,
@@ -464,6 +478,9 @@ fn eval_assignment(
         AssignmentOp::MulAssign => eval_binary(read_target(target, env)?, BinaryOp::Mul, right)?,
         AssignmentOp::DivAssign => eval_binary(read_target(target, env)?, BinaryOp::Div, right)?,
         AssignmentOp::RemAssign => eval_binary(read_target(target, env)?, BinaryOp::Rem, right)?,
+        AssignmentOp::LogicalAndAssign
+        | AssignmentOp::LogicalOrAssign
+        | AssignmentOp::NullishAssign => right,
     };
     assign_target(target, value.clone(), env)?;
     Ok(value)
@@ -907,6 +924,27 @@ mod tests {
         assert_eq!(
             eval("let o = { count: 1 }; o.count++; o.count;"),
             Ok(Value::Number(2.0))
+        );
+    }
+
+    #[test]
+    fn evaluates_logical_assignment() {
+        assert_eq!(eval("let x = 0; x &&= missing; x;"), Ok(Value::Number(0.0)));
+        assert_eq!(eval("let x = 2; x &&= 7; x;"), Ok(Value::Number(7.0)));
+        assert_eq!(eval("let x = 0; x ||= 7; x;"), Ok(Value::Number(7.0)));
+        assert_eq!(eval("let x = 2; x ||= missing; x;"), Ok(Value::Number(2.0)));
+        assert_eq!(eval("let x = null; x ??= 7; x;"), Ok(Value::Number(7.0)));
+        assert_eq!(
+            eval("let x = undefined; x ??= 8; x;"),
+            Ok(Value::Number(8.0))
+        );
+        assert_eq!(
+            eval("let x = false; x ??= missing; x;"),
+            Ok(Value::Boolean(false))
+        );
+        assert_eq!(
+            eval("let o = { value: 0 }; o.value ||= 3; o.value;"),
+            Ok(Value::Number(3.0))
         );
     }
 
