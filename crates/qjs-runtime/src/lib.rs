@@ -131,6 +131,7 @@ enum NativeFunction {
     ObjectCreate,
     ObjectGetPrototypeOf,
     ObjectPrototypeHasOwnProperty,
+    ObjectPrototypeToString,
 }
 
 /// User-defined function value.
@@ -294,6 +295,15 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
             Some("hasOwnProperty"),
             1,
             NativeFunction::ObjectPrototypeHasOwnProperty,
+            false,
+        )),
+    );
+    object_prototype.properties.borrow_mut().insert(
+        "toString".to_owned(),
+        Value::Function(Function::new_native(
+            Some("toString"),
+            0,
+            NativeFunction::ObjectPrototypeToString,
             false,
         )),
     );
@@ -884,6 +894,7 @@ fn call_native_function(
         NativeFunction::ObjectPrototypeHasOwnProperty => {
             native_object_prototype_has_own_property(this_value, &argument_values)
         }
+        NativeFunction::ObjectPrototypeToString => native_object_prototype_to_string(this_value),
     }
 }
 
@@ -947,6 +958,20 @@ fn native_object_prototype_has_own_property(
         }),
         Value::Number(_) | Value::Boolean(_) => Ok(Value::Boolean(false)),
     }
+}
+
+fn native_object_prototype_to_string(this_value: Value) -> Result<Value, RuntimeError> {
+    let tag = match this_value {
+        Value::Undefined => "Undefined",
+        Value::Null => "Null",
+        Value::Array(_) => "Array",
+        Value::Function(_) => "Function",
+        Value::String(_) => "String",
+        Value::Number(_) => "Number",
+        Value::Boolean(_) => "Boolean",
+        Value::Object(_) => "Object",
+    };
+    Ok(Value::String(format!("[object {tag}]")))
 }
 
 fn function_prototype(function: &Function) -> Option<ObjectRef> {
@@ -1220,7 +1245,7 @@ fn eval_member(
             Ok(Value::Number(elements.len() as f64))
         }
         (Value::Array(_), MemberProperty::Named(name)) => {
-            Ok(object_prototype_property(env, name).unwrap_or(Value::Undefined))
+            Ok(inherited_object_prototype_property(env, name).unwrap_or(Value::Undefined))
         }
         (Value::Function(function), MemberProperty::Named(name)) if name == "length" => {
             Ok(Value::Number(function.params.len() as f64))
@@ -1232,7 +1257,7 @@ fn eval_member(
                 .borrow()
                 .get(&key)
                 .cloned()
-                .or_else(|| object_prototype_property(env, &key))
+                .or_else(|| inherited_object_prototype_property(env, &key))
                 .unwrap_or(Value::Undefined))
         }
         (Value::String(value), MemberProperty::Named(name)) if name == "length" => {
@@ -1241,7 +1266,7 @@ fn eval_member(
         (Value::String(value), property) => {
             let key = property_key(property, env)?;
             Ok(string_property(&value, &key)
-                .or_else(|| object_prototype_property(env, &key))
+                .or_else(|| inherited_object_prototype_property(env, &key))
                 .unwrap_or(Value::Undefined))
         }
         (Value::Array(elements), MemberProperty::Computed(index)) => {
@@ -1264,6 +1289,14 @@ fn eval_member(
 
 fn object_prototype_property(env: &HashMap<String, Value>, key: &str) -> Option<Value> {
     object_prototype(env).and_then(|prototype| prototype.get(key))
+}
+
+fn inherited_object_prototype_property(env: &HashMap<String, Value>, key: &str) -> Option<Value> {
+    if key == "hasOwnProperty" {
+        object_prototype_property(env, key)
+    } else {
+        None
+    }
 }
 
 fn assign_member(
@@ -1712,6 +1745,18 @@ mod tests {
         assert_eq!(
             eval("({ value: 1 }).hasOwnProperty('value');"),
             Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("Object.prototype.toString.length;"),
+            Ok(Value::Number(0.0))
+        );
+        assert_eq!(
+            eval("Object.prototype.toString();"),
+            Ok(Value::String("[object Object]".to_owned()))
+        );
+        assert_eq!(
+            eval("({}).toString();"),
+            Ok(Value::String("[object Object]".to_owned()))
         );
         assert_eq!(
             eval("({ value: 1 }).hasOwnProperty('missing');"),
