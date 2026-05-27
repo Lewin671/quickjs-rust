@@ -109,6 +109,8 @@ pub enum Stmt {
     },
     /// A throw statement.
     Throw {
+        /// Optional thrown value.
+        argument: Option<Expr>,
         /// Source span.
         span: Span,
     },

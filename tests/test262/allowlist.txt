@@ -45,6 +45,7 @@ cases/break-basic.js
 cases/continue-basic.js
 cases/do-while-runs-before-test.js
 cases/do-while-continue-basic.js
+cases/throw-argument-not-reached.js
 cases/postfix-increment-basic.js
 cases/prefix-increment-basic.js
 cases/postfix-decrement-basic.js

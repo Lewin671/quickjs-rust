@@ -239,9 +239,17 @@ fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Completion
             };
             Ok(Completion::Return(value))
         }
-        Stmt::Throw { .. } => Err(RuntimeError {
-            message: "throw statement executed".to_owned(),
-        }),
+        Stmt::Throw { argument, .. } => {
+            let message = if let Some(argument) = argument {
+                format!(
+                    "throw statement executed: {}",
+                    error_value(eval_expr(argument, env)?)
+                )
+            } else {
+                "throw statement executed".to_owned()
+            };
+            Err(RuntimeError { message })
+        }
         Stmt::Break { .. } => Ok(Completion::Break),
         Stmt::Continue { .. } => Ok(Completion::Continue),
         Stmt::VarDecl { declarations, .. } => {
@@ -782,6 +790,21 @@ fn to_js_string(value: Value) -> Result<String, RuntimeError> {
     }
 }
 
+fn error_value(value: Value) -> String {
+    match value {
+        Value::Number(number) if number.fract() == 0.0 => format!("{number:.0}"),
+        Value::Number(number) => number.to_string(),
+        Value::String(value) => value,
+        Value::Boolean(true) => "true".to_owned(),
+        Value::Boolean(false) => "false".to_owned(),
+        Value::Null => "null".to_owned(),
+        Value::Undefined => "undefined".to_owned(),
+        Value::Function(_) => "function".to_owned(),
+        Value::Array(_) => "array".to_owned(),
+        Value::Object(_) => "object".to_owned(),
+    }
+}
+
 fn eval_in(left: Value, right: Value) -> Result<Value, RuntimeError> {
     let key = to_property_key(left)?;
     match right {
@@ -1072,8 +1095,16 @@ mod tests {
     #[test]
     fn evaluates_throw_statement_only_when_reached() {
         assert_eq!(eval("if (false) { throw; } 1;"), Ok(Value::Number(1.0)));
+        assert_eq!(
+            eval("if (false) { throw 'no'; } 1;"),
+            Ok(Value::Number(1.0))
+        );
         let error = eval("throw;").expect_err("throw should fail evaluation");
         assert_eq!(error.message, "throw statement executed");
+        let error = eval("throw 'expected';").expect_err("throw should fail evaluation");
+        assert_eq!(error.message, "throw statement executed: expected");
+        let error = eval("throw 42;").expect_err("throw should fail evaluation");
+        assert_eq!(error.message, "throw statement executed: 42");
     }
 
     #[test]
