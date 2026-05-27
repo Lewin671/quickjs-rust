@@ -1,0 +1,1 @@
+Math.abs(-7) + ":" + Math.ceil(1.2) + ":" + Math.floor(1.8) + ":" + Math.trunc(-1.8) + ":" + Math.max(1, 9, 3) + ":" + Math.min(1, -9, 3) + ":" + (Math.max() === -Infinity) + ":" + (Math.min() === Infinity) + ":" + (1 / Math.min(-0, 0) === -Infinity)
