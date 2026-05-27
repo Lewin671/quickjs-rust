@@ -2,7 +2,7 @@
 
 use qjs_ast::{
     AssignmentOp, AssignmentTarget, BinaryOp, Expr, ForInit, Literal, MemberProperty,
-    ObjectProperty, Script, Span, Stmt, UnaryOp, UpdateOp, VarKind,
+    ObjectProperty, Script, Span, Stmt, UnaryOp, UpdateOp, VarDeclarator, VarKind,
 };
 use qjs_lexer::{Token, TokenKind, lex};
 
@@ -328,8 +328,7 @@ impl Parser {
     fn variable_declaration(&mut self) -> Result<Stmt, ParseError> {
         let ForInit::VarDecl {
             kind,
-            name,
-            init,
+            declarations,
             span,
         } = self.for_variable_declaration()?
         else {
@@ -338,8 +337,7 @@ impl Parser {
         self.match_kind(&TokenKind::Semicolon);
         Ok(Stmt::VarDecl {
             kind,
-            name,
-            init,
+            declarations,
             span,
         })
     }
@@ -359,35 +357,54 @@ impl Parser {
             VarKind::Const
         };
 
-        let name_token = self.advance();
-        let TokenKind::Identifier(name) = name_token.kind else {
-            return Err(ParseError {
-                message: "expected binding identifier".to_owned(),
-                span: name_token.span,
-            });
-        };
-
-        let init = if self.match_kind(&TokenKind::Equal) {
-            Some(self.expression()?)
-        } else {
-            if kind == VarKind::Const {
-                return Err(ParseError {
-                    message: "const declarations require an initializer".to_owned(),
-                    span: name_token.span,
-                });
-            }
-            None
-        };
-
-        let end = init
-            .as_ref()
-            .map_or(name_token.span.end, |expr| expr.span().end);
+        let declarations = self.variable_declarator_list(kind)?;
+        let end = declarations.last().map_or(start, |decl| decl.span.end);
         Ok(ForInit::VarDecl {
             kind,
-            name,
-            init,
+            declarations,
             span: Span::new(start, end),
         })
+    }
+
+    fn variable_declarator_list(
+        &mut self,
+        kind: VarKind,
+    ) -> Result<Vec<VarDeclarator>, ParseError> {
+        let mut declarations = Vec::new();
+        loop {
+            let name_token = self.advance();
+            let TokenKind::Identifier(name) = name_token.kind else {
+                return Err(ParseError {
+                    message: "expected binding identifier".to_owned(),
+                    span: name_token.span,
+                });
+            };
+
+            let init = if self.match_kind(&TokenKind::Equal) {
+                Some(self.expression()?)
+            } else {
+                if kind == VarKind::Const {
+                    return Err(ParseError {
+                        message: "const declarations require an initializer".to_owned(),
+                        span: name_token.span,
+                    });
+                }
+                None
+            };
+            let end = init
+                .as_ref()
+                .map_or(name_token.span.end, |expr| expr.span().end);
+            declarations.push(VarDeclarator {
+                name,
+                init,
+                span: Span::new(name_token.span.start, end),
+            });
+
+            if !self.match_kind(&TokenKind::Comma) {
+                break;
+            }
+        }
+        Ok(declarations)
     }
 
     fn expression(&mut self) -> Result<Expr, ParseError> {
@@ -888,24 +905,27 @@ mod tests {
 
     #[test]
     fn parses_variable_declaration() {
-        let script = parse_script("let answer = 40 + 2;").expect("source should parse");
+        let script = parse_script("let answer = 40 + 2, missing;").expect("source should parse");
         let [
             Stmt::VarDecl {
-                kind, name, init, ..
+                kind, declarations, ..
             },
         ] = script.body.as_slice()
         else {
             panic!("expected one variable declaration");
         };
         assert_eq!(*kind, VarKind::Let);
-        assert_eq!(name, "answer");
+        assert_eq!(declarations.len(), 2);
+        assert_eq!(declarations[0].name, "answer");
         assert!(matches!(
-            init,
+            declarations[0].init,
             Some(Expr::Binary {
                 op: BinaryOp::Add,
                 ..
             })
         ));
+        assert_eq!(declarations[1].name, "missing");
+        assert!(declarations[1].init.is_none());
     }
 
     #[test]
@@ -1024,7 +1044,11 @@ mod tests {
         else {
             panic!("expected one for statement");
         };
-        assert!(matches!(init, Some(ForInit::VarDecl { name, .. }) if name == "i"));
+        assert!(matches!(
+            init,
+            Some(ForInit::VarDecl { declarations, .. })
+                if declarations.len() == 1 && declarations[0].name == "i"
+        ));
         assert!(matches!(
             test,
             Some(Expr::Binary {
@@ -1129,14 +1153,14 @@ mod tests {
         let script = parse_script("let object = { answer: 42, 'name': 7, }; object.answer = 43;")
             .expect("source should parse");
         let [
-            Stmt::VarDecl {
-                init: Some(Expr::Object { properties, .. }),
-                ..
-            },
+            Stmt::VarDecl { declarations, .. },
             Stmt::Expr(Expr::Assignment { target, .. }),
         ] = script.body.as_slice()
         else {
             panic!("expected object declaration followed by member assignment");
+        };
+        let Some(Expr::Object { properties, .. }) = &declarations[0].init else {
+            panic!("expected object initializer");
         };
         assert_eq!(properties.len(), 2);
         assert_eq!(properties[0].key, "answer");

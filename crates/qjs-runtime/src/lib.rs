@@ -213,13 +213,15 @@ fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Completion
         }),
         Stmt::Break { .. } => Ok(Completion::Break),
         Stmt::Continue { .. } => Ok(Completion::Continue),
-        Stmt::VarDecl { name, init, .. } => {
-            let value = if let Some(init) = init {
-                eval_expr(init, env)?
-            } else {
-                Value::Undefined
-            };
-            env.insert(name.clone(), value);
+        Stmt::VarDecl { declarations, .. } => {
+            for declaration in declarations {
+                let value = if let Some(init) = &declaration.init {
+                    eval_expr(init, env)?
+                } else {
+                    Value::Undefined
+                };
+                env.insert(declaration.name.clone(), value);
+            }
             Ok(Completion::Normal(Value::Undefined))
         }
         Stmt::Empty => Ok(Completion::Normal(Value::Undefined)),
@@ -228,13 +230,15 @@ fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Completion
 
 fn eval_for_init(init: &ForInit, env: &mut HashMap<String, Value>) -> Result<(), RuntimeError> {
     match init {
-        ForInit::VarDecl { name, init, .. } => {
-            let value = if let Some(init) = init {
-                eval_expr(init, env)?
-            } else {
-                Value::Undefined
-            };
-            env.insert(name.clone(), value);
+        ForInit::VarDecl { declarations, .. } => {
+            for declaration in declarations {
+                let value = if let Some(init) = &declaration.init {
+                    eval_expr(init, env)?
+                } else {
+                    Value::Undefined
+                };
+                env.insert(declaration.name.clone(), value);
+            }
             Ok(())
         }
         ForInit::Expr(expr) => eval_expr(expr, env).map(|_| ()),
@@ -732,6 +736,10 @@ mod tests {
             Ok(Value::Number(6.0))
         );
         assert_eq!(eval("var missing; missing;"), Ok(Value::Undefined));
+        assert_eq!(
+            eval("var x = 1, y = 2, missing; x + y;"),
+            Ok(Value::Number(3.0))
+        );
     }
 
     #[test]

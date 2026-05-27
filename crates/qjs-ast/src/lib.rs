@@ -106,10 +106,8 @@ pub enum Stmt {
     VarDecl {
         /// Declaration kind.
         kind: VarKind,
-        /// Binding name.
-        name: String,
-        /// Optional initializer.
-        init: Option<Expr>,
+        /// Variable declarators.
+        declarations: Vec<VarDeclarator>,
         /// Source span.
         span: Span,
     },
@@ -124,15 +122,24 @@ pub enum ForInit {
     VarDecl {
         /// Declaration kind.
         kind: VarKind,
-        /// Binding name.
-        name: String,
-        /// Optional initializer.
-        init: Option<Expr>,
+        /// Variable declarators.
+        declarations: Vec<VarDeclarator>,
         /// Source span.
         span: Span,
     },
     /// Expression initializer.
     Expr(Expr),
+}
+
+/// A variable declarator.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VarDeclarator {
+    /// Binding name.
+    pub name: String,
+    /// Optional initializer.
+    pub init: Option<Expr>,
+    /// Source span.
+    pub span: Span,
 }
 
 /// Variable declaration kind.
