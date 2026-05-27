@@ -704,6 +704,7 @@ impl Parser {
             TokenKind::Bang => UnaryOp::Not,
             TokenKind::Tilde => UnaryOp::BitwiseNot,
             TokenKind::Typeof => UnaryOp::Typeof,
+            TokenKind::Void => UnaryOp::Void,
             TokenKind::Delete => UnaryOp::Delete,
             _ => return self.postfix(),
         };
@@ -989,6 +990,7 @@ fn property_name(kind: TokenKind) -> Option<String> {
         TokenKind::Return => Some("return".to_owned()),
         TokenKind::Throw => Some("throw".to_owned()),
         TokenKind::Typeof => Some("typeof".to_owned()),
+        TokenKind::Void => Some("void".to_owned()),
         TokenKind::In => Some("in".to_owned()),
         TokenKind::Delete => Some("delete".to_owned()),
         _ => None,
@@ -1428,6 +1430,12 @@ mod tests {
             panic!("expected one unary expression");
         };
         assert_eq!(*op, UnaryOp::Typeof);
+
+        let script = parse_script("void sideEffect;").expect("source should parse");
+        let [Stmt::Expr(Expr::Unary { op, .. })] = script.body.as_slice() else {
+            panic!("expected one unary expression");
+        };
+        assert_eq!(*op, UnaryOp::Void);
 
         let script = parse_script("delete object.key;").expect("source should parse");
         let [Stmt::Expr(Expr::Unary { op, .. })] = script.body.as_slice() else {
