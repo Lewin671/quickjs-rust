@@ -276,6 +276,14 @@ enum NativeFunction {
     ObjectPrototypePropertyIsEnumerable,
     ObjectPrototypeToString,
     ObjectPrototypeValueOf,
+    String,
+    StringFromCharCode,
+    StringPrototypeCharAt,
+    StringPrototypeIncludes,
+    StringPrototypeIndexOf,
+    StringPrototypeSlice,
+    StringPrototypeToString,
+    StringPrototypeValueOf,
 }
 
 /// User-defined function value.
@@ -637,6 +645,83 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
     env.insert("Number".to_owned(), number_value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.set("Number".to_owned(), number_value);
+    }
+
+    let string_prototype =
+        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype.clone()));
+    let string_function = Function::new_native(Some("String"), 1, NativeFunction::String, true);
+    string_prototype.define_non_enumerable(
+        "constructor".to_owned(),
+        Value::Function(string_function.clone()),
+    );
+    string_prototype.define_non_enumerable(
+        "charAt".to_owned(),
+        Value::Function(Function::new_native(
+            Some("charAt"),
+            1,
+            NativeFunction::StringPrototypeCharAt,
+            false,
+        )),
+    );
+    string_prototype.define_non_enumerable(
+        "includes".to_owned(),
+        Value::Function(Function::new_native(
+            Some("includes"),
+            1,
+            NativeFunction::StringPrototypeIncludes,
+            false,
+        )),
+    );
+    string_prototype.define_non_enumerable(
+        "indexOf".to_owned(),
+        Value::Function(Function::new_native(
+            Some("indexOf"),
+            1,
+            NativeFunction::StringPrototypeIndexOf,
+            false,
+        )),
+    );
+    string_prototype.define_non_enumerable(
+        "slice".to_owned(),
+        Value::Function(Function::new_native(
+            Some("slice"),
+            2,
+            NativeFunction::StringPrototypeSlice,
+            false,
+        )),
+    );
+    string_prototype.define_non_enumerable(
+        "toString".to_owned(),
+        Value::Function(Function::new_native(
+            Some("toString"),
+            0,
+            NativeFunction::StringPrototypeToString,
+            false,
+        )),
+    );
+    string_prototype.define_non_enumerable(
+        "valueOf".to_owned(),
+        Value::Function(Function::new_native(
+            Some("valueOf"),
+            0,
+            NativeFunction::StringPrototypeValueOf,
+            false,
+        )),
+    );
+    string_function.properties.borrow_mut().insert(
+        "prototype".to_owned(),
+        Property::non_enumerable(Value::Object(string_prototype)),
+    );
+    define_function_property(
+        &string_function,
+        "fromCharCode",
+        1,
+        NativeFunction::StringFromCharCode,
+    );
+    let string_value = Value::Function(string_function);
+    env.insert("String".to_owned(), string_value.clone());
+    if let Value::Object(global_object) = global_this {
+        global_object.set("String".to_owned(), string_value);
     }
 
     let math_object = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype.clone()));
@@ -1302,6 +1387,13 @@ fn array_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef> {
     function_prototype(array_function)
 }
 
+fn string_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+    let Some(Value::Function(string_function)) = env.get("String") else {
+        return None;
+    };
+    function_prototype(string_function)
+}
+
 fn eval_arguments(
     arguments: &[Expr],
     env: &mut HashMap<String, Value>,
@@ -1471,6 +1563,23 @@ fn call_native_function(
         }
         NativeFunction::ObjectPrototypeToString => native_object_prototype_to_string(this_value),
         NativeFunction::ObjectPrototypeValueOf => native_object_prototype_value_of(this_value),
+        NativeFunction::String => native_string(&argument_values),
+        NativeFunction::StringFromCharCode => native_string_from_char_code(&argument_values),
+        NativeFunction::StringPrototypeCharAt => {
+            native_string_prototype_char_at(this_value, &argument_values, env)
+        }
+        NativeFunction::StringPrototypeIncludes => {
+            native_string_prototype_includes(this_value, &argument_values, env)
+        }
+        NativeFunction::StringPrototypeIndexOf => {
+            native_string_prototype_index_of(this_value, &argument_values, env)
+        }
+        NativeFunction::StringPrototypeSlice => {
+            native_string_prototype_slice(this_value, &argument_values, env)
+        }
+        NativeFunction::StringPrototypeToString | NativeFunction::StringPrototypeValueOf => {
+            native_string_prototype_to_string(this_value, env)
+        }
     }
 }
 
@@ -1894,7 +2003,6 @@ fn native_number(argument_values: &[Value]) -> Result<Value, RuntimeError> {
 
 fn to_number_for_number_constructor(value: Value) -> Result<f64, RuntimeError> {
     match value {
-        Value::String(value) => Ok(value.trim().parse::<f64>().unwrap_or(f64::NAN)),
         Value::Undefined => Ok(f64::NAN),
         value => to_number(value),
     }
@@ -1928,6 +2036,159 @@ fn native_number_is_safe_integer(argument_values: &[Value]) -> Result<Value, Run
         Some(Value::Number(number))
             if number.is_finite() && number.fract() == 0.0 && number.abs() <= MAX_SAFE_INTEGER
     )))
+}
+
+fn native_string(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    match argument_values.first().cloned() {
+        Some(value) => Ok(Value::String(to_js_string(value)?)),
+        None => Ok(Value::String(String::new())),
+    }
+}
+
+fn native_string_from_char_code(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    let mut result = String::new();
+    for value in argument_values.iter().cloned() {
+        let code_unit = to_uint16(value)?;
+        match char::from_u32(u32::from(code_unit)) {
+            Some(character) => result.push(character),
+            None => result.push(char::REPLACEMENT_CHARACTER),
+        }
+    }
+    Ok(Value::String(result))
+}
+
+fn native_string_prototype_char_at(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let value = this_string_value(this_value, env)?;
+    let index = to_string_position(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    Ok(Value::String(
+        value
+            .chars()
+            .nth(index)
+            .map(|character| character.to_string())
+            .unwrap_or_default(),
+    ))
+}
+
+fn native_string_prototype_includes(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let value = this_string_value(this_value, env)?;
+    let search = to_js_string(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    let start = string_search_start(
+        value.chars().count(),
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+    )?;
+    Ok(Value::Boolean(
+        value
+            .chars()
+            .skip(start)
+            .collect::<String>()
+            .contains(&search),
+    ))
+}
+
+fn native_string_prototype_index_of(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let value = this_string_value(this_value, env)?;
+    let search = to_js_string(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    let start = string_search_start(
+        value.chars().count(),
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+    )?;
+    let haystack = value.chars().skip(start).collect::<String>();
+    let Some(byte_index) = haystack.find(&search) else {
+        return Ok(Value::Number(-1.0));
+    };
+    let char_offset = haystack[..byte_index].chars().count();
+    Ok(Value::Number((start + char_offset) as f64))
+}
+
+fn native_string_prototype_slice(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let value = this_string_value(this_value, env)?;
+    let chars: Vec<_> = value.chars().collect();
+    let length = chars.len();
+    let start = string_slice_index(
+        length,
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        0,
+    )?;
+    let end = string_slice_index(
+        length,
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        length,
+    )?;
+    if end <= start {
+        return Ok(Value::String(String::new()));
+    }
+    Ok(Value::String(chars[start..end].iter().collect()))
+}
+
+fn native_string_prototype_to_string(
+    this_value: Value,
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    Ok(Value::String(this_string_value(this_value, env)?))
+}
+
+fn this_string_value(value: Value, env: &HashMap<String, Value>) -> Result<String, RuntimeError> {
+    match value {
+        Value::String(value) => Ok(value),
+        Value::Object(object) => {
+            if string_prototype(env).is_some_and(|prototype| object.ptr_eq(&prototype)) {
+                Ok(String::new())
+            } else {
+                Err(RuntimeError {
+                    message: "String.prototype method called on non-string object".to_owned(),
+                })
+            }
+        }
+        Value::Null | Value::Undefined => Err(RuntimeError {
+            message: "String.prototype method called on null or undefined".to_owned(),
+        }),
+        value => to_js_string(value),
+    }
+}
+
+fn to_string_position(value: Value) -> Result<usize, RuntimeError> {
+    let number = to_number(value)?;
+    if !number.is_finite() || number <= 0.0 {
+        Ok(0)
+    } else {
+        Ok(number.trunc() as usize)
+    }
+}
+
+fn string_search_start(length: usize, value: Value) -> Result<usize, RuntimeError> {
+    Ok(to_string_position(value)?.min(length))
+}
+
+fn string_slice_index(length: usize, value: Value, default: usize) -> Result<usize, RuntimeError> {
+    if matches!(value, Value::Undefined) {
+        return Ok(default);
+    }
+    let number = to_number(value)?;
+    if number.is_nan() {
+        return Ok(0);
+    }
+    let integer = number.trunc();
+    if integer < 0.0 {
+        Ok((length as f64 + integer).max(0.0) as usize)
+    } else {
+        Ok(integer.min(length as f64) as usize)
+    }
 }
 
 fn native_object_assign(argument_values: &[Value]) -> Result<Value, RuntimeError> {
@@ -2614,7 +2875,7 @@ fn eval_member(
         (Value::String(value), property) => {
             let key = property_key(property, env)?;
             Ok(string_property(&value, &key)
-                .or_else(|| inherited_object_prototype_property(env, &key))
+                .or_else(|| inherited_string_prototype_property(env, &key))
                 .unwrap_or(Value::Undefined))
         }
         (Value::Array(elements), MemberProperty::Computed(index)) => {
@@ -2652,6 +2913,12 @@ fn inherited_object_prototype_property(env: &HashMap<String, Value>, key: &str) 
 
 fn inherited_array_prototype_property(env: &HashMap<String, Value>, key: &str) -> Option<Value> {
     array_prototype(env)
+        .and_then(|prototype| prototype.get(key))
+        .or_else(|| inherited_object_prototype_property(env, key))
+}
+
+fn inherited_string_prototype_property(env: &HashMap<String, Value>, key: &str) -> Option<Value> {
+    string_prototype(env)
         .and_then(|prototype| prototype.get(key))
         .or_else(|| inherited_object_prototype_property(env, key))
 }
@@ -3053,9 +3320,14 @@ fn to_number(value: Value) -> Result<f64, RuntimeError> {
         Value::Number(number) => Ok(number),
         Value::Boolean(true) => Ok(1.0),
         Value::Boolean(false) | Value::Null => Ok(0.0),
-        Value::String(value) => value.parse::<f64>().map_err(|_| RuntimeError {
-            message: format!("cannot convert string `{value}` to number"),
-        }),
+        Value::String(value) => {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                Ok(0.0)
+            } else {
+                Ok(trimmed.parse::<f64>().unwrap_or(f64::NAN))
+            }
+        }
         Value::Undefined => Ok(f64::NAN),
         Value::Function(_) => Err(RuntimeError {
             message: "cannot convert function to number".to_owned(),
@@ -3085,6 +3357,15 @@ fn to_uint32_number(number: f64) -> u32 {
     }
     const TWO_32: f64 = 4_294_967_296.0;
     number.trunc().rem_euclid(TWO_32) as u32
+}
+
+fn to_uint16(value: Value) -> Result<u16, RuntimeError> {
+    let number = to_number(value)?;
+    if !number.is_finite() || number == 0.0 {
+        return Ok(0);
+    }
+    const TWO_16: f64 = 65_536.0;
+    Ok(number.trunc().rem_euclid(TWO_16) as u16)
 }
 
 fn is_truthy(value: &Value) -> bool {
@@ -3144,6 +3425,57 @@ mod tests {
         assert_eq!(eval("'abc'['1'];"), Ok(Value::String("b".to_owned())));
         assert_eq!(eval("'abc'[3];"), Ok(Value::Undefined));
         assert_eq!(eval("'abc'['01'];"), Ok(Value::Undefined));
+    }
+
+    #[test]
+    fn evaluates_string_builtins() {
+        assert_eq!(
+            eval("typeof String;"),
+            Ok(Value::String("function".to_owned()))
+        );
+        assert_eq!(eval("String.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("String();"), Ok(Value::String(String::new())));
+        assert_eq!(eval("String(123);"), Ok(Value::String("123".to_owned())));
+        assert_eq!(eval("String(null);"), Ok(Value::String("null".to_owned())));
+        assert_eq!(
+            eval("String.fromCharCode(65, 66, 67);"),
+            Ok(Value::String("ABC".to_owned()))
+        );
+        assert_eq!(
+            eval("String.prototype.constructor === String;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("String.prototype.charAt.length;"),
+            Ok(Value::Number(1.0))
+        );
+        assert_eq!(eval("'abc'.charAt(1);"), Ok(Value::String("b".to_owned())));
+        assert_eq!(eval("'abc'.charAt(9);"), Ok(Value::String(String::new())));
+        assert_eq!(eval("'abc'.indexOf('b');"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("'abc'.indexOf('b', 2);"), Ok(Value::Number(-1.0)));
+        assert_eq!(eval("'abc'.includes('b');"), Ok(Value::Boolean(true)));
+        assert_eq!(eval("'abc'.includes('b', 2);"), Ok(Value::Boolean(false)));
+        assert_eq!(
+            eval("'abcdef'.slice(1, 4);"),
+            Ok(Value::String("bcd".to_owned()))
+        );
+        assert_eq!(
+            eval("'abcdef'.slice(-3);"),
+            Ok(Value::String("def".to_owned()))
+        );
+        assert_eq!(
+            eval("'abc'.toString();"),
+            Ok(Value::String("abc".to_owned()))
+        );
+        assert_eq!(
+            eval("'abc'.valueOf();"),
+            Ok(Value::String("abc".to_owned()))
+        );
+        assert_eq!(
+            eval("Object.getOwnPropertyDescriptor(String.prototype, 'charAt').enumerable;"),
+            Ok(Value::Boolean(false))
+        );
+        assert!(eval("new String.prototype.charAt();").is_err());
     }
 
     #[test]
