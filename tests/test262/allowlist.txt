@@ -12,3 +12,5 @@ cases/typeof-basic.js
 cases/typeof-unresolvable.js
 cases/in-basic.js
 cases/in-undefined-vs-missing.js
+cases/delete-basic.js
+cases/delete-object-property.js

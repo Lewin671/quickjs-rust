@@ -276,6 +276,8 @@ pub enum UnaryOp {
     Not,
     /// Type query.
     Typeof,
+    /// Property deletion.
+    Delete,
 }
 
 /// Binary operators currently supported by the parser and runtime.

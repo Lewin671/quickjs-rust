@@ -411,6 +411,7 @@ impl Parser {
             TokenKind::Minus => UnaryOp::Minus,
             TokenKind::Bang => UnaryOp::Not,
             TokenKind::Typeof => UnaryOp::Typeof,
+            TokenKind::Delete => UnaryOp::Delete,
             _ => return self.call(),
         };
         self.advance();
@@ -671,6 +672,7 @@ fn property_name(kind: TokenKind) -> Option<String> {
         TokenKind::Throw => Some("throw".to_owned()),
         TokenKind::Typeof => Some("typeof".to_owned()),
         TokenKind::In => Some("in".to_owned()),
+        TokenKind::Delete => Some("delete".to_owned()),
         _ => None,
     }
 }
@@ -862,6 +864,12 @@ mod tests {
             panic!("expected one unary expression");
         };
         assert_eq!(*op, UnaryOp::Typeof);
+
+        let script = parse_script("delete object.key;").expect("source should parse");
+        let [Stmt::Expr(Expr::Unary { op, .. })] = script.body.as_slice() else {
+            panic!("expected one unary expression");
+        };
+        assert_eq!(*op, UnaryOp::Delete);
     }
 
     #[test]

@@ -209,6 +209,11 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, Run
             argument,
             ..
         } => eval_typeof(argument, env),
+        Expr::Unary {
+            op: UnaryOp::Delete,
+            argument,
+            ..
+        } => eval_delete(argument, env),
         Expr::Unary { op, argument, .. } => {
             let argument = eval_expr(argument, env)?;
             eval_unary(*op, argument)
@@ -415,7 +420,31 @@ fn eval_unary(op: UnaryOp, argument: Value) -> Result<Value, RuntimeError> {
         UnaryOp::Not => Ok(Value::Boolean(!is_truthy(&argument))),
         UnaryOp::Plus => Ok(Value::Number(to_number(argument)?)),
         UnaryOp::Minus => Ok(Value::Number(-to_number(argument)?)),
-        UnaryOp::Typeof => unreachable!("typeof requires unevaluated operand handling"),
+        UnaryOp::Typeof | UnaryOp::Delete => {
+            unreachable!("operator requires unevaluated operand handling")
+        }
+    }
+}
+
+fn eval_delete(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, RuntimeError> {
+    let Expr::Member {
+        object, property, ..
+    } = expr
+    else {
+        return Ok(Value::Boolean(true));
+    };
+
+    let object = eval_expr(object, env)?;
+    match object {
+        Value::Object(object) => {
+            let key = property_key(property, env)?;
+            object.properties.borrow_mut().remove(&key);
+            Ok(Value::Boolean(true))
+        }
+        Value::Array(_) => Ok(Value::Boolean(true)),
+        _ => Err(RuntimeError {
+            message: "delete target is not an object".to_owned(),
+        }),
     }
 }
 
@@ -610,6 +639,19 @@ mod tests {
         assert_eq!(
             eval("function f() { return 1; } typeof f;"),
             Ok(Value::String("function".to_owned()))
+        );
+    }
+
+    #[test]
+    fn evaluates_delete_operator() {
+        assert_eq!(eval("let o = {}; delete o.x;"), Ok(Value::Boolean(true)));
+        assert_eq!(
+            eval("let o = { red: 1 }; delete o.red; o.red;"),
+            Ok(Value::Undefined)
+        );
+        assert_eq!(
+            eval("let o = { 2: 2 }; delete o[2]; o['2'];"),
+            Ok(Value::Undefined)
         );
     }
 
