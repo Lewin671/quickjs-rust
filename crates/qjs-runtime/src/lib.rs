@@ -256,6 +256,11 @@ enum NativeFunction {
     MathTan,
     MathTanh,
     MathTrunc,
+    Number,
+    NumberIsFinite,
+    NumberIsInteger,
+    NumberIsNaN,
+    NumberIsSafeInteger,
     Object,
     ObjectAssign,
     ObjectCreate,
@@ -592,6 +597,48 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
         );
     }
 
+    let number_function = Function::new_native(Some("Number"), 1, NativeFunction::Number, true);
+    define_number_constant(&number_function, "EPSILON", f64::EPSILON);
+    define_number_constant(
+        &number_function,
+        "MAX_SAFE_INTEGER",
+        9_007_199_254_740_991.0,
+    );
+    define_number_constant(&number_function, "MAX_VALUE", f64::MAX);
+    define_number_constant(
+        &number_function,
+        "MIN_SAFE_INTEGER",
+        -9_007_199_254_740_991.0,
+    );
+    define_number_constant(&number_function, "MIN_VALUE", f64::MIN_POSITIVE);
+    define_number_constant(&number_function, "NaN", f64::NAN);
+    define_number_constant(&number_function, "NEGATIVE_INFINITY", f64::NEG_INFINITY);
+    define_number_constant(&number_function, "POSITIVE_INFINITY", f64::INFINITY);
+    define_function_property(
+        &number_function,
+        "isFinite",
+        1,
+        NativeFunction::NumberIsFinite,
+    );
+    define_function_property(
+        &number_function,
+        "isInteger",
+        1,
+        NativeFunction::NumberIsInteger,
+    );
+    define_function_property(&number_function, "isNaN", 1, NativeFunction::NumberIsNaN);
+    define_function_property(
+        &number_function,
+        "isSafeInteger",
+        1,
+        NativeFunction::NumberIsSafeInteger,
+    );
+    let number_value = Value::Function(number_function);
+    env.insert("Number".to_owned(), number_value.clone());
+    if let Value::Object(global_object) = global_this {
+        global_object.set("Number".to_owned(), number_value);
+    }
+
     let math_object = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype.clone()));
     define_math_constant(&math_object, "E", std::f64::consts::E);
     define_math_constant(&math_object, "LN10", std::f64::consts::LN_10);
@@ -751,6 +798,25 @@ fn define_math_function(object: &ObjectRef, key: &str, length: usize, native: Na
     object.define_non_enumerable(
         key.to_owned(),
         Value::Function(Function::new_native(Some(key), length, native, false)),
+    );
+}
+
+fn define_number_constant(function: &Function, key: &str, value: f64) {
+    function.properties.borrow_mut().insert(
+        key.to_owned(),
+        Property::data(Value::Number(value), false, false, false),
+    );
+}
+
+fn define_function_property(function: &Function, key: &str, length: usize, native: NativeFunction) {
+    function.properties.borrow_mut().insert(
+        key.to_owned(),
+        Property::non_enumerable(Value::Function(Function::new_native(
+            Some(key),
+            length,
+            native,
+            false,
+        ))),
     );
 }
 
@@ -1371,6 +1437,11 @@ fn call_native_function(
         NativeFunction::MathTan => native_math_unary(&argument_values, f64::tan),
         NativeFunction::MathTanh => native_math_unary(&argument_values, f64::tanh),
         NativeFunction::MathTrunc => native_math_unary(&argument_values, f64::trunc),
+        NativeFunction::Number => native_number(&argument_values),
+        NativeFunction::NumberIsFinite => native_number_is_finite(&argument_values),
+        NativeFunction::NumberIsInteger => native_number_is_integer(&argument_values),
+        NativeFunction::NumberIsNaN => native_number_is_nan(&argument_values),
+        NativeFunction::NumberIsSafeInteger => native_number_is_safe_integer(&argument_values),
         NativeFunction::Object => {
             native_object(function, this_value, &argument_values, is_construct)
         }
@@ -1814,6 +1885,49 @@ fn native_math_imul(argument_values: &[Value]) -> Result<Value, RuntimeError> {
     let right = to_number(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
     let product = to_uint32_number(left).wrapping_mul(to_uint32_number(right));
     Ok(Value::Number(f64::from(product as i32)))
+}
+
+fn native_number(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    Ok(Value::Number(to_number_for_number_constructor(value)?))
+}
+
+fn to_number_for_number_constructor(value: Value) -> Result<f64, RuntimeError> {
+    match value {
+        Value::String(value) => Ok(value.trim().parse::<f64>().unwrap_or(f64::NAN)),
+        Value::Undefined => Ok(f64::NAN),
+        value => to_number(value),
+    }
+}
+
+fn native_number_is_finite(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    Ok(Value::Boolean(matches!(
+        argument_values.first(),
+        Some(Value::Number(number)) if number.is_finite()
+    )))
+}
+
+fn native_number_is_integer(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    Ok(Value::Boolean(matches!(
+        argument_values.first(),
+        Some(Value::Number(number)) if number.is_finite() && number.fract() == 0.0
+    )))
+}
+
+fn native_number_is_nan(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    Ok(Value::Boolean(matches!(
+        argument_values.first(),
+        Some(Value::Number(number)) if number.is_nan()
+    )))
+}
+
+fn native_number_is_safe_integer(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
+    Ok(Value::Boolean(matches!(
+        argument_values.first(),
+        Some(Value::Number(number))
+            if number.is_finite() && number.fract() == 0.0 && number.abs() <= MAX_SAFE_INTEGER
+    )))
 }
 
 fn native_object_assign(argument_values: &[Value]) -> Result<Value, RuntimeError> {
@@ -4130,6 +4244,69 @@ mod tests {
     fn evaluates_global_undefined_binding() {
         assert_eq!(eval("undefined;"), Ok(Value::Undefined));
         assert_eq!(eval("undefined === undefined;"), Ok(Value::Boolean(true)));
+    }
+
+    #[test]
+    fn evaluates_number_builtins() {
+        assert_eq!(
+            eval("typeof Number;"),
+            Ok(Value::String("function".to_owned()))
+        );
+        assert_eq!(eval("Number.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("Number('10');"), Ok(Value::Number(10.0)));
+        assert_eq!(eval("Number(true);"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("Number(null);"), Ok(Value::Number(0.0)));
+        assert_eq!(
+            eval("Number('abc') === Number('abc');"),
+            Ok(Value::Boolean(false))
+        );
+        assert_eq!(
+            eval("Number.NaN === Number.NaN;"),
+            Ok(Value::Boolean(false))
+        );
+        assert_eq!(
+            eval("Number.POSITIVE_INFINITY === Infinity;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("Number.NEGATIVE_INFINITY === -Infinity;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("Number.MAX_SAFE_INTEGER;"),
+            Ok(Value::Number(9_007_199_254_740_991.0))
+        );
+        assert_eq!(
+            eval("Number.MIN_SAFE_INTEGER;"),
+            Ok(Value::Number(-9_007_199_254_740_991.0))
+        );
+        assert_eq!(eval("Number.isFinite.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("Number.isInteger.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("Number.isNaN.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("Number.isSafeInteger.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("Number.isFinite(10);"), Ok(Value::Boolean(true)));
+        assert_eq!(
+            eval("Number.isFinite(Infinity);"),
+            Ok(Value::Boolean(false))
+        );
+        assert_eq!(eval("Number.isFinite('10');"), Ok(Value::Boolean(false)));
+        assert_eq!(eval("Number.isNaN(NaN);"), Ok(Value::Boolean(true)));
+        assert_eq!(eval("Number.isNaN('NaN');"), Ok(Value::Boolean(false)));
+        assert_eq!(eval("Number.isInteger(10);"), Ok(Value::Boolean(true)));
+        assert_eq!(eval("Number.isInteger(10.5);"), Ok(Value::Boolean(false)));
+        assert_eq!(
+            eval("Number.isSafeInteger(9007199254740991);"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("Number.isSafeInteger(9007199254740992);"),
+            Ok(Value::Boolean(false))
+        );
+        assert_eq!(
+            eval("Object.getOwnPropertyDescriptor(Number, 'NaN').writable;"),
+            Ok(Value::Boolean(false))
+        );
+        assert!(eval("new Number.isNaN(NaN);").is_err());
     }
 
     #[test]

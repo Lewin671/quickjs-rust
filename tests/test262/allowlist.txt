@@ -63,6 +63,16 @@ cases/logical-or-assignment-basic.js
 cases/nullish-assignment-basic.js
 cases/logical-assignment-short-circuit.js
 cases/logical-and-basic.js
+cases/number-constructor-basic.js
+cases/number-constants-basic.js
+cases/number-is-finite-basic.js
+cases/number-is-finite-length.js
+cases/number-is-integer-basic.js
+cases/number-is-integer-length.js
+cases/number-is-nan-basic.js
+cases/number-is-nan-length.js
+cases/number-is-safe-integer-basic.js
+cases/number-is-safe-integer-length.js
 cases/undefined-basic.js
 cases/void-basic.js
 cases/void-evaluates-operand.js
