@@ -455,20 +455,22 @@ fn eval_call(
             message: "value is not callable".to_owned(),
         });
     };
-    if arguments.len() != function.params.len() {
-        return Err(RuntimeError {
-            message: format!(
-                "expected {} arguments, got {}",
-                function.params.len(),
-                arguments.len()
-            ),
-        });
+    let mut argument_values = Vec::with_capacity(arguments.len());
+    for argument in arguments {
+        argument_values.push(eval_expr(argument, env)?);
     }
 
     let mut local_env = env.clone();
     local_env.insert("this".to_owned(), this_value);
-    for (param, argument) in function.params.iter().zip(arguments) {
-        let value = eval_expr(argument, env)?;
+    local_env.insert(
+        "arguments".to_owned(),
+        Value::Array(argument_values.clone()),
+    );
+    for (index, param) in function.params.iter().enumerate() {
+        let value = argument_values
+            .get(index)
+            .cloned()
+            .unwrap_or(Value::Undefined);
         local_env.insert(param.clone(), value);
     }
 
@@ -744,6 +746,9 @@ fn eval_member(
     match (object, property) {
         (Value::Array(elements), MemberProperty::Named(name)) if name == "length" => {
             Ok(Value::Number(elements.len() as f64))
+        }
+        (Value::Function(function), MemberProperty::Named(name)) if name == "length" => {
+            Ok(Value::Number(function.params.len() as f64))
         }
         (Value::Array(elements), MemberProperty::Computed(index)) => {
             let index = eval_expr(index, env)?;
@@ -1425,6 +1430,38 @@ mod tests {
         assert_eq!(
             eval("function add(a, b) { return a + b; } add(2, 3);"),
             Ok(Value::Number(5.0))
+        );
+        assert_eq!(
+            eval("function first(a) { return a; } first();"),
+            Ok(Value::Undefined)
+        );
+        assert_eq!(
+            eval("function first(a) { return a; } first(1, 2);"),
+            Ok(Value::Number(1.0))
+        );
+        assert_eq!(
+            eval("function arg(index) { return arguments[index]; } arg(1, 2, 3);"),
+            Ok(Value::Number(2.0))
+        );
+        assert_eq!(
+            eval("function count() { return arguments.length; } count(1, 2, 3);"),
+            Ok(Value::Number(3.0))
+        );
+        assert_eq!(
+            eval("function none() { return arguments.length; } none();"),
+            Ok(Value::Number(0.0))
+        );
+        assert_eq!(
+            eval("function pair(a, b) { return b; } pair(1);"),
+            Ok(Value::Undefined)
+        );
+        assert_eq!(
+            eval("function pair(a, b) { return arguments[2]; } pair(1, 2, 3);"),
+            Ok(Value::Number(3.0))
+        );
+        assert_eq!(
+            eval("function pair(a, b) {} pair.length;"),
+            Ok(Value::Number(2.0))
         );
         assert_eq!(
             eval("let add = function(a, b) { return a + b; }; add(2, 3);"),
