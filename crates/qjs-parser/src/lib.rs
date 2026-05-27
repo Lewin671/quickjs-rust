@@ -1,6 +1,6 @@
 //! Parser for a small JavaScript subset.
 
-use qjs_ast::{BinaryOp, Expr, Literal, Script, Span, Stmt, UnaryOp, VarKind};
+use qjs_ast::{BinaryOp, Expr, Literal, MemberProperty, Script, Span, Stmt, UnaryOp, VarKind};
 use qjs_lexer::{Token, TokenKind, lex};
 
 /// A parse error.
@@ -467,28 +467,67 @@ impl Parser {
 
     fn call(&mut self) -> Result<Expr, ParseError> {
         let mut expr = self.primary()?;
-        while self.match_kind(&TokenKind::LeftParen) {
-            let mut arguments = Vec::new();
-            if !self.at(&TokenKind::RightParen) {
-                loop {
-                    arguments.push(self.expression()?);
-                    if !self.match_kind(&TokenKind::Comma) {
-                        break;
+        loop {
+            if self.match_kind(&TokenKind::LeftParen) {
+                let mut arguments = Vec::new();
+                if !self.at(&TokenKind::RightParen) {
+                    loop {
+                        arguments.push(self.expression()?);
+                        if !self.match_kind(&TokenKind::Comma) {
+                            break;
+                        }
                     }
                 }
+                let end = self
+                    .peek()
+                    .expect("parser should always have eof token")
+                    .span
+                    .end;
+                self.expect(&TokenKind::RightParen)?;
+                let span = Span::new(expr.span().start, end);
+                expr = Expr::Call {
+                    callee: Box::new(expr),
+                    arguments,
+                    span,
+                };
+                continue;
             }
-            let end = self
-                .peek()
-                .expect("parser should always have eof token")
-                .span
-                .end;
-            self.expect(&TokenKind::RightParen)?;
-            let span = Span::new(expr.span().start, end);
-            expr = Expr::Call {
-                callee: Box::new(expr),
-                arguments,
-                span,
-            };
+
+            if self.match_kind(&TokenKind::LeftBracket) {
+                let property = self.expression()?;
+                let end = self
+                    .peek()
+                    .expect("parser should always have eof token")
+                    .span
+                    .end;
+                self.expect(&TokenKind::RightBracket)?;
+                let span = Span::new(expr.span().start, end);
+                expr = Expr::Member {
+                    object: Box::new(expr),
+                    property: MemberProperty::Computed(Box::new(property)),
+                    span,
+                };
+                continue;
+            }
+
+            if self.match_kind(&TokenKind::Dot) {
+                let property_token = self.advance();
+                let TokenKind::Identifier(name) = property_token.kind else {
+                    return Err(ParseError {
+                        message: "expected property name".to_owned(),
+                        span: property_token.span,
+                    });
+                };
+                let span = Span::new(expr.span().start, property_token.span.end);
+                expr = Expr::Member {
+                    object: Box::new(expr),
+                    property: MemberProperty::Named(name),
+                    span,
+                };
+                continue;
+            }
+
+            break;
         }
         Ok(expr)
     }
@@ -546,7 +585,7 @@ fn stmt_end(stmt: &Stmt) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use qjs_ast::{BinaryOp, Expr, Stmt, UnaryOp, VarKind};
+    use qjs_ast::{BinaryOp, Expr, MemberProperty, Stmt, UnaryOp, VarKind};
 
     use super::parse_script;
 
@@ -707,5 +746,20 @@ mod tests {
             panic!("expected one array expression");
         };
         assert_eq!(elements.len(), 2);
+    }
+
+    #[test]
+    fn parses_member_access() {
+        let script = parse_script("items[0].length;").expect("source should parse");
+        let [
+            Stmt::Expr(Expr::Member {
+                object, property, ..
+            }),
+        ] = script.body.as_slice()
+        else {
+            panic!("expected member expression");
+        };
+        assert_eq!(property, &MemberProperty::Named("length".to_owned()));
+        assert!(matches!(object.as_ref(), Expr::Member { .. }));
     }
 }

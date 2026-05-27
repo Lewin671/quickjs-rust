@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use qjs_ast::{BinaryOp, Expr, Literal, Script, Stmt, UnaryOp};
+use qjs_ast::{BinaryOp, Expr, Literal, MemberProperty, Script, Stmt, UnaryOp};
 use qjs_parser::parse_script;
 
 /// A JavaScript value supported by the current runtime subset.
@@ -206,6 +206,12 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, Run
             }
             Ok(last)
         }
+        Expr::Member {
+            object, property, ..
+        } => {
+            let object = eval_expr(object, env)?;
+            eval_member(object, property, env)
+        }
         Expr::Binary {
             left, op, right, ..
         } if *op == BinaryOp::LogicalAnd => {
@@ -249,6 +255,39 @@ fn eval_literal(literal: &Literal) -> Result<Value, RuntimeError> {
         Literal::Boolean { value, .. } => Ok(Value::Boolean(*value)),
         Literal::Null { .. } => Ok(Value::Null),
     }
+}
+
+fn eval_member(
+    object: Value,
+    property: &MemberProperty,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    match (object, property) {
+        (Value::Array(elements), MemberProperty::Named(name)) if name == "length" => {
+            Ok(Value::Number(elements.len() as f64))
+        }
+        (Value::Array(elements), MemberProperty::Computed(index)) => {
+            let index = eval_expr(index, env)?;
+            let index = to_array_index(index)?;
+            Ok(elements.get(index).cloned().unwrap_or(Value::Undefined))
+        }
+        (_, MemberProperty::Named(name)) => Err(RuntimeError {
+            message: format!("unsupported property `{name}`"),
+        }),
+        (_, MemberProperty::Computed(_)) => Err(RuntimeError {
+            message: "unsupported computed member access".to_owned(),
+        }),
+    }
+}
+
+fn to_array_index(value: Value) -> Result<usize, RuntimeError> {
+    let number = to_number(value)?;
+    if !number.is_finite() || number < 0.0 || number.fract() != 0.0 {
+        return Err(RuntimeError {
+            message: "array index must be a non-negative integer".to_owned(),
+        });
+    }
+    Ok(number as usize)
 }
 
 fn eval_unary(op: UnaryOp, argument: Value) -> Result<Value, RuntimeError> {
@@ -401,5 +440,11 @@ mod tests {
                 Value::Boolean(true),
             ]))
         );
+    }
+
+    #[test]
+    fn evaluates_array_member_access() {
+        assert_eq!(eval("let xs = [1, 2 + 3]; xs[1];"), Ok(Value::Number(5.0)));
+        assert_eq!(eval("[1, 2, 3].length;"), Ok(Value::Number(3.0)));
     }
 }
