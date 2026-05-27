@@ -80,7 +80,7 @@ impl Parser {
         }
 
         if self.at(&TokenKind::Throw) {
-            return Ok(self.throw_statement());
+            return self.throw_statement();
         }
 
         if self.at(&TokenKind::Break) {
@@ -366,26 +366,31 @@ impl Parser {
         })
     }
 
-    fn throw_statement(&mut self) -> Stmt {
+    fn throw_statement(&mut self) -> Result<Stmt, ParseError> {
         let start = self
             .peek()
             .expect("parser should always have eof token")
             .span
             .start;
-        let throw = self.advance();
-        let mut end = throw.span.end;
-        while !self.at(&TokenKind::Semicolon)
-            && !self.at(&TokenKind::RightBrace)
-            && !self.at(&TokenKind::Eof)
+        self.expect(&TokenKind::Throw)?;
+        let argument = if self.at(&TokenKind::Semicolon)
+            || self.at(&TokenKind::RightBrace)
+            || self.at(&TokenKind::Eof)
         {
-            end = self.advance().span.end;
-        }
+            None
+        } else {
+            Some(self.expression()?)
+        };
+        let mut end = argument
+            .as_ref()
+            .map_or(start + "throw".len(), |expr| expr.span().end);
         if self.match_kind(&TokenKind::Semicolon) {
             end = self.tokens[self.cursor - 1].span.end;
         }
-        Stmt::Throw {
+        Ok(Stmt::Throw {
+            argument,
             span: Span::new(start, end),
-        }
+        })
     }
 
     fn break_or_continue_statement(&mut self, kind: TokenKind) -> Stmt {
@@ -1011,7 +1016,7 @@ fn stmt_end(stmt: &Stmt) -> usize {
         | Stmt::ForIn { span, .. }
         | Stmt::FunctionDecl { span, .. }
         | Stmt::Return { span, .. }
-        | Stmt::Throw { span }
+        | Stmt::Throw { span, .. }
         | Stmt::Break { span }
         | Stmt::Continue { span }
         | Stmt::VarDecl { span, .. } => span.end,
@@ -1346,16 +1351,21 @@ mod tests {
     }
 
     #[test]
-    fn parses_throw_statement_without_throw_expression_support() {
-        let script = parse_script("if (false) { throw new Test262Error('fail'); }")
-            .expect("source should parse");
+    fn parses_throw_statement_with_argument() {
+        let script = parse_script("if (false) { throw 'fail'; }").expect("source should parse");
         let [Stmt::If { consequent, .. }] = script.body.as_slice() else {
             panic!("expected one if statement");
         };
         let Stmt::Block { body, .. } = consequent.as_ref() else {
             panic!("expected block consequent");
         };
-        assert!(matches!(body.as_slice(), [Stmt::Throw { .. }]));
+        assert!(matches!(
+            body.as_slice(),
+            [Stmt::Throw {
+                argument: Some(_),
+                ..
+            }]
+        ));
     }
 
     #[test]
