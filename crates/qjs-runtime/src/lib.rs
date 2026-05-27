@@ -20,6 +20,8 @@ pub enum Value {
     Undefined,
     /// User-defined function.
     Function(Function),
+    /// Array value.
+    Array(Vec<Value>),
 }
 
 /// User-defined function value.
@@ -146,6 +148,13 @@ fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Completion
 fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, RuntimeError> {
     match expr {
         Expr::Literal(literal) => eval_literal(literal),
+        Expr::Array { elements, .. } => {
+            let mut values = Vec::with_capacity(elements.len());
+            for element in elements {
+                values.push(eval_expr(element, env)?);
+            }
+            Ok(Value::Array(values))
+        }
         Expr::Identifier { name, .. } => env.get(name).cloned().ok_or_else(|| RuntimeError {
             message: format!("undefined identifier `{name}`"),
         }),
@@ -295,6 +304,9 @@ fn to_number(value: Value) -> Result<f64, RuntimeError> {
         Value::Function(_) => Err(RuntimeError {
             message: "cannot convert function to number".to_owned(),
         }),
+        Value::Array(_) => Err(RuntimeError {
+            message: "cannot convert array to number".to_owned(),
+        }),
     }
 }
 
@@ -304,7 +316,7 @@ fn is_truthy(value: &Value) -> bool {
         Value::String(value) => !value.is_empty(),
         Value::Boolean(value) => *value,
         Value::Null | Value::Undefined => false,
-        Value::Function(_) => true,
+        Value::Function(_) | Value::Array(_) => true,
     }
 }
 
@@ -376,6 +388,18 @@ mod tests {
         assert_eq!(
             eval("function add(a, b) { return a + b; } add(2, 3);"),
             Ok(Value::Number(5.0))
+        );
+    }
+
+    #[test]
+    fn evaluates_array_literals() {
+        assert_eq!(
+            eval("[1, 2 + 3, true];"),
+            Ok(Value::Array(vec![
+                Value::Number(1.0),
+                Value::Number(5.0),
+                Value::Boolean(true),
+            ]))
         );
     }
 }

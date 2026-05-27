@@ -105,6 +105,13 @@ pub enum VarKind {
 pub enum Expr {
     /// A literal value.
     Literal(Literal),
+    /// An array literal.
+    Array {
+        /// Array elements.
+        elements: Vec<Expr>,
+        /// Source span.
+        span: Span,
+    },
     /// A unary expression.
     Unary {
         /// Unary operator.
@@ -153,7 +160,8 @@ impl Expr {
     pub const fn span(&self) -> Span {
         match self {
             Self::Literal(literal) => literal.span(),
-            Self::Unary { span, .. }
+            Self::Array { span, .. }
+            | Self::Unary { span, .. }
             | Self::Binary { span, .. }
             | Self::Assignment { span, .. }
             | Self::Call { span, .. }

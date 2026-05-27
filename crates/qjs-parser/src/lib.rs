@@ -427,6 +427,7 @@ impl Parser {
                 span: token.span,
             })),
             TokenKind::Null => Ok(Expr::Literal(Literal::Null { span: token.span })),
+            TokenKind::LeftBracket => self.array_literal(token.span.start),
             TokenKind::LeftParen => {
                 let expr = self.expression()?;
                 self.expect(&TokenKind::RightParen)?;
@@ -437,6 +438,31 @@ impl Parser {
                 span: token.span,
             }),
         }
+    }
+
+    fn array_literal(&mut self, start: usize) -> Result<Expr, ParseError> {
+        let mut elements = Vec::new();
+        if !self.at(&TokenKind::RightBracket) {
+            loop {
+                elements.push(self.expression()?);
+                if !self.match_kind(&TokenKind::Comma) {
+                    break;
+                }
+                if self.at(&TokenKind::RightBracket) {
+                    break;
+                }
+            }
+        }
+        let end = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .end;
+        self.expect(&TokenKind::RightBracket)?;
+        Ok(Expr::Array {
+            elements,
+            span: Span::new(start, end),
+        })
     }
 
     fn call(&mut self) -> Result<Expr, ParseError> {
@@ -672,5 +698,14 @@ mod tests {
         assert_eq!(name, "add");
         assert_eq!(params, &["a", "b"]);
         assert_eq!(arguments.len(), 2);
+    }
+
+    #[test]
+    fn parses_array_literal() {
+        let script = parse_script("[1, 2 + 3,];").expect("source should parse");
+        let [Stmt::Expr(Expr::Array { elements, .. })] = script.body.as_slice() else {
+            panic!("expected one array expression");
+        };
+        assert_eq!(elements.len(), 2);
     }
 }
