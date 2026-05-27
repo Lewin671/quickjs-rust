@@ -46,6 +46,11 @@ cases/call-member-nested-function-this-basic.js
 cases/function-expression-basic.js
 cases/function-expression-iife-basic.js
 cases/function-expression-object-member-basic.js
+cases/arguments-empty-basic.js
+cases/arguments-index-basic.js
+cases/function-extra-arguments-basic.js
+cases/function-missing-parameter-basic.js
+cases/function-length-basic.js
 cases/string-addition-basic.js
 cases/string-number-addition.js
 cases/for-var-basic.js
