@@ -515,8 +515,26 @@ impl Parser {
 
     fn logical_and(&mut self) -> Result<Expr, ParseError> {
         self.binary_left_assoc(
-            Self::equality,
+            Self::bitwise_or,
             &[(TokenKind::AmpersandAmpersand, BinaryOp::LogicalAnd)],
+        )
+    }
+
+    fn bitwise_or(&mut self) -> Result<Expr, ParseError> {
+        self.binary_left_assoc(Self::bitwise_xor, &[(TokenKind::Pipe, BinaryOp::BitwiseOr)])
+    }
+
+    fn bitwise_xor(&mut self) -> Result<Expr, ParseError> {
+        self.binary_left_assoc(
+            Self::bitwise_and,
+            &[(TokenKind::Caret, BinaryOp::BitwiseXor)],
+        )
+    }
+
+    fn bitwise_and(&mut self) -> Result<Expr, ParseError> {
+        self.binary_left_assoc(
+            Self::equality,
+            &[(TokenKind::Ampersand, BinaryOp::BitwiseAnd)],
         )
     }
 
@@ -534,13 +552,24 @@ impl Parser {
 
     fn comparison(&mut self) -> Result<Expr, ParseError> {
         self.binary_left_assoc(
-            Self::additive,
+            Self::shift,
             &[
                 (TokenKind::Less, BinaryOp::Lt),
                 (TokenKind::LessEqual, BinaryOp::Le),
                 (TokenKind::Greater, BinaryOp::Gt),
                 (TokenKind::GreaterEqual, BinaryOp::Ge),
                 (TokenKind::In, BinaryOp::In),
+            ],
+        )
+    }
+
+    fn shift(&mut self) -> Result<Expr, ParseError> {
+        self.binary_left_assoc(
+            Self::additive,
+            &[
+                (TokenKind::LessLess, BinaryOp::Shl),
+                (TokenKind::GreaterGreater, BinaryOp::Shr),
+                (TokenKind::GreaterGreaterGreater, BinaryOp::UShr),
             ],
         )
     }
@@ -591,6 +620,7 @@ impl Parser {
             TokenKind::Plus => UnaryOp::Plus,
             TokenKind::Minus => UnaryOp::Minus,
             TokenKind::Bang => UnaryOp::Not,
+            TokenKind::Tilde => UnaryOp::BitwiseNot,
             TokenKind::Typeof => UnaryOp::Typeof,
             TokenKind::Delete => UnaryOp::Delete,
             _ => return self.postfix(),
@@ -955,6 +985,32 @@ mod tests {
             panic!("expected one binary expression statement");
         };
         assert_eq!(*op, BinaryOp::In);
+    }
+
+    #[test]
+    fn parses_shift_and_bitwise_precedence() {
+        let script = parse_script("1 | 2 ^ 3 & 4 === 4;").expect("source should parse");
+        let [Stmt::Expr(Expr::Binary { op, right, .. })] = script.body.as_slice() else {
+            panic!("expected one binary expression statement");
+        };
+        assert_eq!(*op, BinaryOp::BitwiseOr);
+        let Expr::Binary { op: right_op, .. } = right.as_ref() else {
+            panic!("expected bitwise xor on right side");
+        };
+        assert_eq!(*right_op, BinaryOp::BitwiseXor);
+
+        let script = parse_script("1 + 2 << 3 < 30;").expect("source should parse");
+        let [Stmt::Expr(Expr::Binary { op, left, .. })] = script.body.as_slice() else {
+            panic!("expected one comparison expression statement");
+        };
+        assert_eq!(*op, BinaryOp::Lt);
+        assert!(matches!(
+            left.as_ref(),
+            Expr::Binary {
+                op: BinaryOp::Shl,
+                ..
+            }
+        ));
     }
 
     #[test]
