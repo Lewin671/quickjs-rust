@@ -3,8 +3,8 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use qjs_ast::{
-    AssignmentOp, AssignmentTarget, BinaryOp, Expr, ForInLeft, ForInit, Literal, MemberProperty,
-    Script, Stmt, SwitchCase, UnaryOp, UpdateOp,
+    AssignmentOp, AssignmentTarget, BinaryOp, CatchClause, Expr, ForInLeft, ForInit, Literal,
+    MemberProperty, Script, Stmt, SwitchCase, UnaryOp, UpdateOp,
 };
 use qjs_parser::parse_script;
 
@@ -108,6 +108,11 @@ pub fn eval_script(script: &Script) -> Result<Value, RuntimeError> {
                     message: "break or continue outside loop".to_owned(),
                 });
             }
+            Completion::Throw(value) => {
+                return Err(RuntimeError {
+                    message: format!("throw statement executed: {}", error_value(value)),
+                });
+            }
         }
     }
     Ok(last)
@@ -118,23 +123,13 @@ enum Completion {
     Return(Value),
     Break,
     Continue,
+    Throw(Value),
 }
 
 fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Completion, RuntimeError> {
     match stmt {
         Stmt::Expr(expr) => eval_expr(expr, env).map(Completion::Normal),
-        Stmt::Block { body, .. } => {
-            let mut last = Value::Undefined;
-            for stmt in body {
-                match eval_stmt(stmt, env)? {
-                    Completion::Normal(value) => last = value,
-                    Completion::Return(value) => return Ok(Completion::Return(value)),
-                    Completion::Break => return Ok(Completion::Break),
-                    Completion::Continue => return Ok(Completion::Continue),
-                }
-            }
-            Ok(Completion::Normal(last))
-        }
+        Stmt::Block { body, .. } => eval_statement_list(body, env),
         Stmt::If {
             test,
             consequent,
@@ -158,6 +153,7 @@ fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Completion
                     Completion::Return(value) => return Ok(Completion::Return(value)),
                     Completion::Break => break,
                     Completion::Continue => {}
+                    Completion::Throw(value) => return Ok(Completion::Throw(value)),
                 }
             }
             Ok(Completion::Normal(last))
@@ -170,6 +166,7 @@ fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Completion
                     Completion::Return(value) => return Ok(Completion::Return(value)),
                     Completion::Break => break,
                     Completion::Continue => {}
+                    Completion::Throw(value) => return Ok(Completion::Throw(value)),
                 }
                 if !is_truthy(&eval_expr(test, env)?) {
                     break;
@@ -196,6 +193,7 @@ fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Completion
                     Completion::Return(value) => return Ok(Completion::Return(value)),
                     Completion::Break => break,
                     Completion::Continue => {}
+                    Completion::Throw(value) => return Ok(Completion::Throw(value)),
                 }
                 if let Some(update) = update {
                     eval_expr(update, env)?;
@@ -215,6 +213,7 @@ fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Completion
                     Completion::Return(value) => return Ok(Completion::Return(value)),
                     Completion::Break => break,
                     Completion::Continue => {}
+                    Completion::Throw(value) => return Ok(Completion::Throw(value)),
                 }
             }
             Ok(Completion::Normal(last))
@@ -224,6 +223,12 @@ fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Completion
             cases,
             ..
         } => eval_switch(discriminant, cases, env),
+        Stmt::Try {
+            block,
+            handler,
+            finalizer,
+            ..
+        } => eval_try(block, handler.as_ref(), finalizer.as_deref(), env),
         Stmt::FunctionDecl {
             name, params, body, ..
         } => {
@@ -245,15 +250,12 @@ fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Completion
             Ok(Completion::Return(value))
         }
         Stmt::Throw { argument, .. } => {
-            let message = if let Some(argument) = argument {
-                format!(
-                    "throw statement executed: {}",
-                    error_value(eval_expr(argument, env)?)
-                )
+            let value = if let Some(argument) = argument {
+                eval_expr(argument, env)?
             } else {
-                "throw statement executed".to_owned()
+                Value::Undefined
             };
-            Err(RuntimeError { message })
+            Ok(Completion::Throw(value))
         }
         Stmt::Debugger { .. } => Ok(Completion::Normal(Value::Undefined)),
         Stmt::Break { .. } => Ok(Completion::Break),
@@ -271,6 +273,23 @@ fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Completion
         }
         Stmt::Empty => Ok(Completion::Normal(Value::Undefined)),
     }
+}
+
+fn eval_statement_list(
+    body: &[Stmt],
+    env: &mut HashMap<String, Value>,
+) -> Result<Completion, RuntimeError> {
+    let mut last = Value::Undefined;
+    for stmt in body {
+        match eval_stmt(stmt, env)? {
+            Completion::Normal(value) => last = value,
+            Completion::Return(value) => return Ok(Completion::Return(value)),
+            Completion::Break => return Ok(Completion::Break),
+            Completion::Continue => return Ok(Completion::Continue),
+            Completion::Throw(value) => return Ok(Completion::Throw(value)),
+        }
+    }
+    Ok(Completion::Normal(last))
 }
 
 fn eval_switch(
@@ -305,10 +324,60 @@ fn eval_switch(
                 Completion::Break => return Ok(Completion::Normal(last)),
                 Completion::Return(value) => return Ok(Completion::Return(value)),
                 Completion::Continue => return Ok(Completion::Continue),
+                Completion::Throw(value) => return Ok(Completion::Throw(value)),
             }
         }
     }
     Ok(Completion::Normal(last))
+}
+
+fn eval_try(
+    block: &[Stmt],
+    handler: Option<&CatchClause>,
+    finalizer: Option<&[Stmt]>,
+    env: &mut HashMap<String, Value>,
+) -> Result<Completion, RuntimeError> {
+    let mut completion = match eval_statement_list(block, env)? {
+        Completion::Throw(value) => {
+            if let Some(handler) = handler {
+                eval_catch(handler, value, env)?
+            } else {
+                Completion::Throw(value)
+            }
+        }
+        other => other,
+    };
+
+    if let Some(finalizer) = finalizer {
+        let final_completion = eval_statement_list(finalizer, env)?;
+        completion = match final_completion {
+            Completion::Normal(_) => completion,
+            abrupt => abrupt,
+        };
+    }
+
+    Ok(completion)
+}
+
+fn eval_catch(
+    handler: &CatchClause,
+    thrown: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Completion, RuntimeError> {
+    let previous = if let Some(param) = &handler.param {
+        env.insert(param.clone(), thrown)
+    } else {
+        None
+    };
+    let completion = eval_statement_list(&handler.body, env);
+    if let Some(param) = &handler.param {
+        if let Some(value) = previous {
+            env.insert(param.clone(), value);
+        } else {
+            env.remove(param);
+        }
+    }
+    completion
 }
 
 fn eval_for_init(init: &ForInit, env: &mut HashMap<String, Value>) -> Result<(), RuntimeError> {
@@ -446,6 +515,11 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, Run
                     Completion::Break | Completion::Continue => {
                         return Err(RuntimeError {
                             message: "break or continue outside loop".to_owned(),
+                        });
+                    }
+                    Completion::Throw(value) => {
+                        return Err(RuntimeError {
+                            message: format!("throw statement executed: {}", error_value(value)),
                         });
                     }
                 }
@@ -1201,11 +1275,40 @@ mod tests {
             Ok(Value::Number(1.0))
         );
         let error = eval("throw;").expect_err("throw should fail evaluation");
-        assert_eq!(error.message, "throw statement executed");
+        assert_eq!(error.message, "throw statement executed: undefined");
         let error = eval("throw 'expected';").expect_err("throw should fail evaluation");
         assert_eq!(error.message, "throw statement executed: expected");
         let error = eval("throw 42;").expect_err("throw should fail evaluation");
         assert_eq!(error.message, "throw statement executed: 42");
+    }
+
+    #[test]
+    fn evaluates_try_catch_finally_statements() {
+        assert_eq!(
+            eval("try { throw 'caught'; } catch (error) { error; }"),
+            Ok(Value::String("caught".to_owned()))
+        );
+        assert_eq!(
+            eval("let x = 1; try { throw 2; } catch (error) { x = error; } x;"),
+            Ok(Value::Number(2.0))
+        );
+        assert_eq!(
+            eval("let x = 1; try { x += 1; } finally { x += 2; } x;"),
+            Ok(Value::Number(4.0))
+        );
+        assert_eq!(
+            eval(
+                "let x = 1; try { throw 1; } catch (error) { x += error; } finally { x += 2; } x;"
+            ),
+            Ok(Value::Number(4.0))
+        );
+        let error = eval("try { throw 'try'; } finally { throw 'finally'; }")
+            .expect_err("throw should fail");
+        assert_eq!(error.message, "throw statement executed: finally");
+        assert_eq!(
+            eval("let error = 'outer'; try { throw 'inner'; } catch (error) { error; } error;"),
+            Ok(Value::String("outer".to_owned()))
+        );
     }
 
     #[test]

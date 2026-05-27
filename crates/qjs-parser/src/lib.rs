@@ -1,8 +1,9 @@
 //! Parser for a small JavaScript subset.
 
 use qjs_ast::{
-    AssignmentOp, AssignmentTarget, BinaryOp, Expr, ForInLeft, ForInit, Literal, MemberProperty,
-    ObjectProperty, Script, Span, Stmt, SwitchCase, UnaryOp, UpdateOp, VarDeclarator, VarKind,
+    AssignmentOp, AssignmentTarget, BinaryOp, CatchClause, Expr, ForInLeft, ForInit, Literal,
+    MemberProperty, ObjectProperty, Script, Span, Stmt, SwitchCase, UnaryOp, UpdateOp,
+    VarDeclarator, VarKind,
 };
 use qjs_lexer::{Token, TokenKind, lex};
 
@@ -73,6 +74,10 @@ impl Parser {
 
         if self.at(&TokenKind::Switch) {
             return self.switch_statement();
+        }
+
+        if self.at(&TokenKind::Try) {
+            return self.try_statement();
         }
 
         if self.at(&TokenKind::Function) {
@@ -364,6 +369,86 @@ impl Parser {
             cases,
             span: Span::new(start, end),
         })
+    }
+
+    fn try_statement(&mut self) -> Result<Stmt, ParseError> {
+        let start = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .start;
+        self.expect(&TokenKind::Try)?;
+        let block = self.block_body()?;
+        let handler = if self.at(&TokenKind::Catch) {
+            Some(self.catch_clause()?)
+        } else {
+            None
+        };
+        let finalizer = if self.match_kind(&TokenKind::Finally) {
+            Some(self.block_body()?)
+        } else {
+            None
+        };
+
+        if handler.is_none() && finalizer.is_none() {
+            let token = self.peek().expect("parser should always have eof token");
+            return Err(ParseError {
+                message: "try statement requires catch or finally".to_owned(),
+                span: token.span,
+            });
+        }
+
+        let end = finalizer
+            .as_ref()
+            .and_then(|body| body.last().map(stmt_end))
+            .or_else(|| handler.as_ref().map(|handler| handler.span.end))
+            .or_else(|| block.last().map(stmt_end))
+            .unwrap_or(start + "try".len());
+        Ok(Stmt::Try {
+            block,
+            handler,
+            finalizer,
+            span: Span::new(start, end),
+        })
+    }
+
+    fn catch_clause(&mut self) -> Result<CatchClause, ParseError> {
+        let start = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .start;
+        self.expect(&TokenKind::Catch)?;
+        let param = if self.match_kind(&TokenKind::LeftParen) {
+            let token = self.advance();
+            let TokenKind::Identifier(name) = token.kind else {
+                return Err(ParseError {
+                    message: "expected catch binding identifier".to_owned(),
+                    span: token.span,
+                });
+            };
+            self.expect(&TokenKind::RightParen)?;
+            Some(name)
+        } else {
+            None
+        };
+        let body = self.block_body()?;
+        let end = body.last().map_or(start + "catch".len(), stmt_end);
+        Ok(CatchClause {
+            param,
+            body,
+            span: Span::new(start, end),
+        })
+    }
+
+    fn block_body(&mut self) -> Result<Vec<Stmt>, ParseError> {
+        self.expect(&TokenKind::LeftBrace)?;
+        let mut body = Vec::new();
+        while !self.at(&TokenKind::RightBrace) && !self.at(&TokenKind::Eof) {
+            body.push(self.statement()?);
+        }
+        self.expect(&TokenKind::RightBrace)?;
+        Ok(body)
     }
 
     fn function_declaration(&mut self) -> Result<Stmt, ParseError> {
@@ -1089,6 +1174,9 @@ fn property_name(kind: TokenKind) -> Option<String> {
         TokenKind::Switch => Some("switch".to_owned()),
         TokenKind::Case => Some("case".to_owned()),
         TokenKind::Default => Some("default".to_owned()),
+        TokenKind::Try => Some("try".to_owned()),
+        TokenKind::Catch => Some("catch".to_owned()),
+        TokenKind::Finally => Some("finally".to_owned()),
         TokenKind::Break => Some("break".to_owned()),
         TokenKind::Continue => Some("continue".to_owned()),
         TokenKind::Function => Some("function".to_owned()),
@@ -1141,6 +1229,7 @@ fn stmt_end(stmt: &Stmt) -> usize {
         | Stmt::For { span, .. }
         | Stmt::ForIn { span, .. }
         | Stmt::Switch { span, .. }
+        | Stmt::Try { span, .. }
         | Stmt::FunctionDecl { span, .. }
         | Stmt::Return { span, .. }
         | Stmt::Throw { span, .. }
@@ -1548,6 +1637,42 @@ mod tests {
             body.as_slice(),
             [Stmt::Throw {
                 argument: Some(_),
+                ..
+            }]
+        ));
+    }
+
+    #[test]
+    fn parses_try_catch_finally_statement() {
+        let script =
+            parse_script("try { throw 'x'; } catch (error) { error; } finally { debugger; }")
+                .expect("source should parse");
+        let [
+            Stmt::Try {
+                block,
+                handler,
+                finalizer,
+                ..
+            },
+        ] = script.body.as_slice()
+        else {
+            panic!("expected one try statement");
+        };
+        assert!(matches!(block.as_slice(), [Stmt::Throw { .. }]));
+        let handler = handler.as_ref().expect("expected catch clause");
+        assert_eq!(handler.param.as_deref(), Some("error"));
+        assert_eq!(handler.body.len(), 1);
+        assert!(matches!(
+            finalizer.as_deref(),
+            Some([Stmt::Debugger { .. }])
+        ));
+
+        let script = parse_script("try { 1; } finally { 2; }").expect("source should parse");
+        assert!(matches!(
+            script.body.as_slice(),
+            [Stmt::Try {
+                handler: None,
+                finalizer: Some(_),
                 ..
             }]
         ));
