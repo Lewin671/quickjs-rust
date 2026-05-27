@@ -337,6 +337,17 @@ pub enum Expr {
         /// Source span.
         span: Span,
     },
+    /// A function expression.
+    Function {
+        /// Optional function name.
+        name: Option<String>,
+        /// Parameter names.
+        params: Vec<String>,
+        /// Function body statements.
+        body: Vec<Stmt>,
+        /// Source span.
+        span: Span,
+    },
     /// A member access expression.
     Member {
         /// Object expression.
@@ -367,6 +378,7 @@ impl Expr {
             | Self::Assignment { span, .. }
             | Self::Update { span, .. }
             | Self::Call { span, .. }
+            | Self::Function { span, .. }
             | Self::Member { span, .. }
             | Self::This { span }
             | Self::Identifier { span, .. } => *span,

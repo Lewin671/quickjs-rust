@@ -509,6 +509,10 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, Run
             }
             Ok(Value::Object(ObjectRef::new(values)))
         }
+        Expr::Function { params, body, .. } => Ok(Value::Function(Function {
+            params: params.clone(),
+            body: body.clone(),
+        })),
         Expr::Sequence { expressions, .. } => {
             let mut last = Value::Undefined;
             for expression in expressions {
@@ -1423,6 +1427,14 @@ mod tests {
             Ok(Value::Number(5.0))
         );
         assert_eq!(
+            eval("let add = function(a, b) { return a + b; }; add(2, 3);"),
+            Ok(Value::Number(5.0))
+        );
+        assert_eq!(
+            eval("(function(value) { return value + 1; })(2);"),
+            Ok(Value::Number(3.0))
+        );
+        assert_eq!(
             eval("function getThis() { return this; } getThis() === this;"),
             Ok(Value::Boolean(true))
         );
@@ -1437,6 +1449,10 @@ mod tests {
                 "function getGlobal() { return this; } function method() { return getGlobal(); } let o = {}; o.method = method; o.method() === this;"
             ),
             Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("let o = { method: function() { return this.value; }, value: 7 }; o.method();"),
+            Ok(Value::Number(7.0))
         );
     }
 
