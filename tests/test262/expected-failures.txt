@@ -1,0 +1,7 @@
+# Test262 files that are intentionally expected to fail.
+#
+# Format:
+# path/to/test.js # reason
+#
+# Do not add failures without a reason. Remove entries as implementation support
+# catches up.

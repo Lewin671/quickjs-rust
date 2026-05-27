@@ -29,6 +29,10 @@ boundaries.
 - `docs/`: architecture and implementation notes for humans and agents.
 - `tasks/`: small, agent-sized work items.
 - `scripts/check.sh`: standard verification command.
+- `scripts/compare-qjs.sh`: smoke comparison against QuickJS-NG.
+- `scripts/test262-subset.sh`: validates curated Test262 subset metadata.
+- `tests/fixtures/`: local JavaScript smoke fixtures.
+- `tests/test262/`: curated Test262 allowlist and expected failures.
 - `third_party/quickjs-ng`: pinned QuickJS-NG reference implementation.
 - `third_party/test262`: pinned TC39 ECMAScript conformance tests.
 
@@ -55,6 +59,18 @@ For a quick local run:
 
 ```sh
 cargo run -p qjs-cli -- -e "1 + 2;"
+```
+
+To compare the current runtime against QuickJS-NG on local smoke fixtures:
+
+```sh
+./scripts/compare-qjs.sh
+```
+
+To validate the curated Test262 allowlist metadata:
+
+```sh
+./scripts/test262-subset.sh
 ```
 
 ## Engineering Notes

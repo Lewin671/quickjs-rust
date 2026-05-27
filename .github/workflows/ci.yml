@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Install Rust toolchain
+        run: rustup show
+
+      - name: Bootstrap
+        run: ./scripts/bootstrap.sh
+
+      - name: Check
+        run: ./scripts/check.sh
+
+      - name: QuickJS comparison smoke tests
+        run: ./scripts/compare-qjs.sh
+
+      - name: Test262 subset metadata
+        run: ./scripts/test262-subset.sh

@@ -16,6 +16,8 @@ boundaries and make each change verifiable with focused tests.
 - Format only: `cargo fmt --all`
 - Test only: `cargo test --workspace`
 - CLI smoke test: `cargo run -p qjs-cli -- -e "1 + 2;"`
+- QuickJS comparison smoke tests: `./scripts/compare-qjs.sh`
+- Test262 subset metadata: `./scripts/test262-subset.sh`
 
 If Rust is not installed, report that clearly and do not fake test results.
 Both `scripts/bootstrap.sh` and `scripts/check.sh` fall back to
@@ -141,6 +143,11 @@ workspace configuration, global error models, or broad architecture documents.
   or expected-failure list rather than relying on tribal knowledge.
 - Prefer small fixtures that are easy to inspect over broad generated tests for
   early parser and runtime work.
+- Add simple QuickJS comparison programs under `tests/fixtures/compare-qjs/`.
+- Add Test262 paths to `tests/test262/allowlist.txt` only when the current
+  harness can run them deterministically.
+- Run `./scripts/test262-subset.sh` after editing Test262 allowlists or expected
+  failures.
 
 ## Definition of Done
 
