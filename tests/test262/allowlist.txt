@@ -86,6 +86,10 @@ cases/math-sign-basic.js
 cases/math-sign-length.js
 cases/math-sqrt-basic.js
 cases/math-sqrt-length.js
+cases/math-transcendental-basic.js
+cases/math-transcendental-length.js
+cases/math-transcendental-nan.js
+cases/math-log-special-values.js
 cases/object-assign-length.js
 cases/object-assign-target-object.js
 cases/object-assign-override.js
