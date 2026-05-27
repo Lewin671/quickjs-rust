@@ -206,6 +206,7 @@ enum NativeFunction {
     Array,
     ArrayIsArray,
     ArrayPrototypeIndexOf,
+    ArrayPrototypeLastIndexOf,
     ArrayPrototypeJoin,
     ArrayPrototypeToString,
     Object,
@@ -552,6 +553,15 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
             Some("indexOf"),
             1,
             NativeFunction::ArrayPrototypeIndexOf,
+            false,
+        )),
+    );
+    array_prototype.define_non_enumerable(
+        "lastIndexOf".to_owned(),
+        Value::Function(Function::new_native(
+            Some("lastIndexOf"),
+            1,
+            NativeFunction::ArrayPrototypeLastIndexOf,
             false,
         )),
     );
@@ -1151,6 +1161,9 @@ fn call_native_function(
         NativeFunction::ArrayPrototypeIndexOf => {
             native_array_prototype_index_of(this_value, &argument_values)
         }
+        NativeFunction::ArrayPrototypeLastIndexOf => {
+            native_array_prototype_last_index_of(this_value, &argument_values)
+        }
         NativeFunction::ArrayPrototypeJoin => {
             native_array_prototype_join(this_value, &argument_values)
         }
@@ -1230,6 +1243,35 @@ fn native_array_prototype_index_of(
     Ok(Value::Number(-1.0))
 }
 
+fn native_array_prototype_last_index_of(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let Value::Array(elements) = this_value else {
+        return Err(RuntimeError {
+            message: "Array.prototype.lastIndexOf called on non-array".to_owned(),
+        });
+    };
+    if elements.is_empty() {
+        return Ok(Value::Number(-1.0));
+    }
+
+    let search_element = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let Some(start) = array_search_end_index(
+        elements.len(),
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+    )?
+    else {
+        return Ok(Value::Number(-1.0));
+    };
+    for index in (0..=start).rev() {
+        if elements[index] == search_element {
+            return Ok(Value::Number(index as f64));
+        }
+    }
+    Ok(Value::Number(-1.0))
+}
+
 fn array_search_start_index(length: usize, from_index: Value) -> Result<usize, RuntimeError> {
     let number = match from_index {
         Value::Undefined => 0.0,
@@ -1250,6 +1292,26 @@ fn array_search_start_index(length: usize, from_index: Value) -> Result<usize, R
         Ok(0)
     } else {
         Ok(start as usize)
+    }
+}
+
+fn array_search_end_index(length: usize, from_index: Value) -> Result<Option<usize>, RuntimeError> {
+    let number = match from_index {
+        Value::Undefined => return Ok(Some(length - 1)),
+        value => to_number(value)?,
+    };
+    if number.is_nan() {
+        return Ok(Some(0));
+    }
+    if number >= 0.0 {
+        return Ok(Some(number.trunc().min((length - 1) as f64) as usize));
+    }
+
+    let start = length as f64 + number.trunc();
+    if start < 0.0 {
+        Ok(None)
+    } else {
+        Ok(Some(start as usize))
     }
 }
 
@@ -2880,6 +2942,10 @@ mod tests {
             eval("Array.prototype.indexOf.length;"),
             Ok(Value::Number(1.0))
         );
+        assert_eq!(
+            eval("Array.prototype.lastIndexOf.length;"),
+            Ok(Value::Number(1.0))
+        );
         assert_eq!(eval("Array.prototype.join.length;"), Ok(Value::Number(1.0)));
         assert_eq!(
             eval("Array.prototype.toString.length;"),
@@ -2939,6 +3005,21 @@ mod tests {
         assert_eq!(
             eval("[false, 'false'].indexOf('false');"),
             Ok(Value::Number(1.0))
+        );
+        assert_eq!(eval("[1, 2, 1].lastIndexOf(1);"), Ok(Value::Number(2.0)));
+        assert_eq!(eval("[1, 2, 1].lastIndexOf(1, 1);"), Ok(Value::Number(0.0)));
+        assert_eq!(
+            eval("[1, 2, 1].lastIndexOf(1, -2);"),
+            Ok(Value::Number(0.0))
+        );
+        assert_eq!(
+            eval("[1, 2, 1].lastIndexOf(1, -5);"),
+            Ok(Value::Number(-1.0))
+        );
+        assert_eq!(eval("[1, 2, 3].lastIndexOf(4);"), Ok(Value::Number(-1.0)));
+        assert_eq!(
+            eval("[false, 'false'].lastIndexOf(false);"),
+            Ok(Value::Number(0.0))
         );
         assert!(eval("Array(3);").is_err());
     }

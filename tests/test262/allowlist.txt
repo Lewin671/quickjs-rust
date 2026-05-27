@@ -16,6 +16,11 @@ cases/array-join-basic.js
 cases/array-join-empty.js
 cases/array-join-length.js
 cases/array-join-null-undefined.js
+cases/array-last-index-of-basic.js
+cases/array-last-index-of-empty.js
+cases/array-last-index-of-from-index.js
+cases/array-last-index-of-from-index-negative.js
+cases/array-last-index-of-length.js
 cases/array-prototype-constructor.js
 cases/array-to-string-basic.js
 cases/array-to-string-length.js
