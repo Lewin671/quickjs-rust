@@ -60,6 +60,14 @@ impl Parser {
             return self.while_statement();
         }
 
+        if self.at(&TokenKind::Function) {
+            return self.function_declaration();
+        }
+
+        if self.at(&TokenKind::Return) {
+            return self.return_statement();
+        }
+
         if self.at(&TokenKind::Var) || self.at(&TokenKind::Let) || self.at(&TokenKind::Const) {
             return self.variable_declaration();
         }
@@ -134,6 +142,87 @@ impl Parser {
         Ok(Stmt::While {
             test,
             body: Box::new(body),
+            span: Span::new(start, end),
+        })
+    }
+
+    fn function_declaration(&mut self) -> Result<Stmt, ParseError> {
+        let start = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .start;
+        self.expect(&TokenKind::Function)?;
+        let name_token = self.advance();
+        let TokenKind::Identifier(name) = name_token.kind else {
+            return Err(ParseError {
+                message: "expected function name".to_owned(),
+                span: name_token.span,
+            });
+        };
+
+        self.expect(&TokenKind::LeftParen)?;
+        let mut params = Vec::new();
+        if !self.at(&TokenKind::RightParen) {
+            loop {
+                let param_token = self.advance();
+                let TokenKind::Identifier(param) = param_token.kind else {
+                    return Err(ParseError {
+                        message: "expected parameter name".to_owned(),
+                        span: param_token.span,
+                    });
+                };
+                params.push(param);
+                if !self.match_kind(&TokenKind::Comma) {
+                    break;
+                }
+            }
+        }
+        self.expect(&TokenKind::RightParen)?;
+
+        let body_start = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .start;
+        self.expect(&TokenKind::LeftBrace)?;
+        let mut body = Vec::new();
+        while !self.at(&TokenKind::RightBrace) && !self.at(&TokenKind::Eof) {
+            body.push(self.statement()?);
+        }
+        let end = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .end;
+        self.expect(&TokenKind::RightBrace)?;
+
+        Ok(Stmt::FunctionDecl {
+            name,
+            params,
+            body,
+            span: Span::new(start.min(body_start), end),
+        })
+    }
+
+    fn return_statement(&mut self) -> Result<Stmt, ParseError> {
+        let start = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .start;
+        self.expect(&TokenKind::Return)?;
+        let argument = if self.at(&TokenKind::Semicolon) || self.at(&TokenKind::RightBrace) {
+            None
+        } else {
+            Some(self.expression()?)
+        };
+        self.match_kind(&TokenKind::Semicolon);
+        let end = argument
+            .as_ref()
+            .map_or(start + "return".len(), |expr| expr.span().end);
+        Ok(Stmt::Return {
+            argument,
             span: Span::new(start, end),
         })
     }
@@ -282,7 +371,7 @@ impl Parser {
             TokenKind::Plus => UnaryOp::Plus,
             TokenKind::Minus => UnaryOp::Minus,
             TokenKind::Bang => UnaryOp::Not,
-            _ => return self.primary(),
+            _ => return self.call(),
         };
         self.advance();
         let argument = self.unary()?;
@@ -350,6 +439,34 @@ impl Parser {
         }
     }
 
+    fn call(&mut self) -> Result<Expr, ParseError> {
+        let mut expr = self.primary()?;
+        while self.match_kind(&TokenKind::LeftParen) {
+            let mut arguments = Vec::new();
+            if !self.at(&TokenKind::RightParen) {
+                loop {
+                    arguments.push(self.expression()?);
+                    if !self.match_kind(&TokenKind::Comma) {
+                        break;
+                    }
+                }
+            }
+            let end = self
+                .peek()
+                .expect("parser should always have eof token")
+                .span
+                .end;
+            self.expect(&TokenKind::RightParen)?;
+            let span = Span::new(expr.span().start, end);
+            expr = Expr::Call {
+                callee: Box::new(expr),
+                arguments,
+                span,
+            };
+        }
+        Ok(expr)
+    }
+
     fn at(&self, kind: &TokenKind) -> bool {
         self.peek().is_some_and(|token| token.kind == *kind)
     }
@@ -394,6 +511,8 @@ fn stmt_end(stmt: &Stmt) -> usize {
         Stmt::Block { span, .. }
         | Stmt::If { span, .. }
         | Stmt::While { span, .. }
+        | Stmt::FunctionDecl { span, .. }
+        | Stmt::Return { span, .. }
         | Stmt::VarDecl { span, .. } => span.end,
         Stmt::Empty => 0,
     }
@@ -537,5 +656,21 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn parses_function_declaration_and_call() {
+        let script =
+            parse_script("function add(a, b) { return a + b; } add(1, 2);").expect("source");
+        let [
+            Stmt::FunctionDecl { name, params, .. },
+            Stmt::Expr(Expr::Call { arguments, .. }),
+        ] = script.body.as_slice()
+        else {
+            panic!("expected function declaration followed by call");
+        };
+        assert_eq!(name, "add");
+        assert_eq!(params, &["a", "b"]);
+        assert_eq!(arguments.len(), 2);
     }
 }

@@ -18,6 +18,17 @@ pub enum Value {
     Null,
     /// Undefined value.
     Undefined,
+    /// User-defined function.
+    Function(Function),
+}
+
+/// User-defined function value.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Function {
+    /// Parameter names.
+    pub params: Vec<String>,
+    /// Function body statements.
+    pub body: Vec<Stmt>,
 }
 
 /// Runtime error.
@@ -48,20 +59,31 @@ pub fn eval_script(script: &Script) -> Result<Value, RuntimeError> {
     let mut env = HashMap::new();
     let mut last = Value::Undefined;
     for stmt in &script.body {
-        last = eval_stmt(stmt, &mut env)?;
+        match eval_stmt(stmt, &mut env)? {
+            Completion::Normal(value) => last = value,
+            Completion::Return(value) => return Ok(value),
+        }
     }
     Ok(last)
 }
 
-fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Value, RuntimeError> {
+enum Completion {
+    Normal(Value),
+    Return(Value),
+}
+
+fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Completion, RuntimeError> {
     match stmt {
-        Stmt::Expr(expr) => eval_expr(expr, env),
+        Stmt::Expr(expr) => eval_expr(expr, env).map(Completion::Normal),
         Stmt::Block { body, .. } => {
             let mut last = Value::Undefined;
             for stmt in body {
-                last = eval_stmt(stmt, env)?;
+                match eval_stmt(stmt, env)? {
+                    Completion::Normal(value) => last = value,
+                    Completion::Return(value) => return Ok(Completion::Return(value)),
+                }
             }
-            Ok(last)
+            Ok(Completion::Normal(last))
         }
         Stmt::If {
             test,
@@ -75,15 +97,38 @@ fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Value, Run
             } else if let Some(alternate) = alternate {
                 eval_stmt(alternate, env)
             } else {
-                Ok(Value::Undefined)
+                Ok(Completion::Normal(Value::Undefined))
             }
         }
         Stmt::While { test, body, .. } => {
             let mut last = Value::Undefined;
             while is_truthy(&eval_expr(test, env)?) {
-                last = eval_stmt(body, env)?;
+                match eval_stmt(body, env)? {
+                    Completion::Normal(value) => last = value,
+                    Completion::Return(value) => return Ok(Completion::Return(value)),
+                }
             }
-            Ok(last)
+            Ok(Completion::Normal(last))
+        }
+        Stmt::FunctionDecl {
+            name, params, body, ..
+        } => {
+            env.insert(
+                name.clone(),
+                Value::Function(Function {
+                    params: params.clone(),
+                    body: body.clone(),
+                }),
+            );
+            Ok(Completion::Normal(Value::Undefined))
+        }
+        Stmt::Return { argument, .. } => {
+            let value = if let Some(argument) = argument {
+                eval_expr(argument, env)?
+            } else {
+                Value::Undefined
+            };
+            Ok(Completion::Return(value))
         }
         Stmt::VarDecl { name, init, .. } => {
             let value = if let Some(init) = init {
@@ -92,9 +137,9 @@ fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Value, Run
                 Value::Undefined
             };
             env.insert(name.clone(), value);
-            Ok(Value::Undefined)
+            Ok(Completion::Normal(Value::Undefined))
         }
-        Stmt::Empty => Ok(Value::Undefined),
+        Stmt::Empty => Ok(Completion::Normal(Value::Undefined)),
     }
 }
 
@@ -117,6 +162,40 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, Run
             let value = eval_expr(value, env)?;
             env.insert(name.clone(), value.clone());
             Ok(value)
+        }
+        Expr::Call {
+            callee, arguments, ..
+        } => {
+            let callee = eval_expr(callee, env)?;
+            let Value::Function(function) = callee else {
+                return Err(RuntimeError {
+                    message: "value is not callable".to_owned(),
+                });
+            };
+            if arguments.len() != function.params.len() {
+                return Err(RuntimeError {
+                    message: format!(
+                        "expected {} arguments, got {}",
+                        function.params.len(),
+                        arguments.len()
+                    ),
+                });
+            }
+
+            let mut local_env = env.clone();
+            for (param, argument) in function.params.iter().zip(arguments) {
+                let value = eval_expr(argument, env)?;
+                local_env.insert(param.clone(), value);
+            }
+
+            let mut last = Value::Undefined;
+            for stmt in &function.body {
+                match eval_stmt(stmt, &mut local_env)? {
+                    Completion::Normal(value) => last = value,
+                    Completion::Return(value) => return Ok(value),
+                }
+            }
+            Ok(last)
         }
         Expr::Binary {
             left, op, right, ..
@@ -213,6 +292,9 @@ fn to_number(value: Value) -> Result<f64, RuntimeError> {
             message: format!("cannot convert string `{value}` to number"),
         }),
         Value::Undefined => Ok(f64::NAN),
+        Value::Function(_) => Err(RuntimeError {
+            message: "cannot convert function to number".to_owned(),
+        }),
     }
 }
 
@@ -222,6 +304,7 @@ fn is_truthy(value: &Value) -> bool {
         Value::String(value) => !value.is_empty(),
         Value::Boolean(value) => *value,
         Value::Null | Value::Undefined => false,
+        Value::Function(_) => true,
     }
 }
 
@@ -286,5 +369,13 @@ mod tests {
         assert_eq!(eval("-1 + 3;"), Ok(Value::Number(2.0)));
         assert_eq!(eval("!0;"), Ok(Value::Boolean(true)));
         assert_eq!(eval("+true;"), Ok(Value::Number(1.0)));
+    }
+
+    #[test]
+    fn evaluates_function_declarations_and_calls() {
+        assert_eq!(
+            eval("function add(a, b) { return a + b; } add(2, 3);"),
+            Ok(Value::Number(5.0))
+        );
     }
 }
