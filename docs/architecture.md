@@ -31,6 +31,11 @@ This repository pins upstream references as git submodules:
 These directories are intentionally outside the Cargo workspace. They should not
 be imported by library crates or edited as part of normal engine work.
 
+Only top-level submodules are initialized by `scripts/bootstrap.sh`. QuickJS-NG
+also declares its own nested `test262` submodule, but this repository uses the
+top-level `third_party/test262` checkout as the conformance source to avoid
+duplicated test trees.
+
 ## Crates
 
 ### qjs-ast
@@ -57,6 +62,24 @@ clear semantics matter more than breadth.
 
 Thin wrapper for manual smoke tests. Keep policy and engine behavior in library
 crates rather than the CLI.
+
+## Error and Span Policy
+
+User input errors should be returned as structured errors with source spans
+where the layer has enough information. Panics are acceptable only for internal
+invariants that indicate a bug in the engine implementation.
+
+Spans are byte offsets into the original UTF-8 source. This matches Rust string
+slicing and keeps diagnostics deterministic while the diagnostic layer is still
+small.
+
+## Verification Layers
+
+- Crate unit tests validate local behavior.
+- Workspace checks validate formatting, lints, and all tests.
+- QuickJS-NG comparison tests should be added for selected semantic questions.
+- Test262 should be introduced through curated allowlists with explicit expected
+  failures.
 
 ## Growth Strategy
 

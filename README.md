@@ -2,9 +2,9 @@
 
 An incremental Rust rewrite of the QuickJS JavaScript engine.
 
-This repository is intentionally structured for autonomous agent work: small
-crates, narrow interfaces, explicit milestones, and one command that checks the
-whole workspace.
+This repository is structured as small Rust crates with narrow interfaces and a
+single workspace check command. Human-facing project context lives here; agent
+execution rules live in `AGENTS.md`.
 
 ## Current Scope
 
@@ -42,23 +42,33 @@ workspace checks:
 ./scripts/check.sh
 ```
 
+For a fresh clone, either clone with submodules:
+
+```sh
+git clone --recurse-submodules git@github.com:Lewin671/quickjs-rust.git
+```
+
+or run `./scripts/bootstrap.sh` after cloning. The bootstrap script initializes
+the top-level upstream references and fetches Cargo dependencies.
+
 For a quick local run:
 
 ```sh
 cargo run -p qjs-cli -- -e "1 + 2;"
 ```
 
-## Agent Workflow
+## Engineering Notes
 
-Before making changes, read:
+- `qjs-ast` is the shared contract between parser and runtime.
+- `qjs-lexer` and `qjs-parser` should return structured errors for user input.
+- `qjs-runtime` should execute AST semantics rather than adding parser-specific
+  shortcuts.
+- `third_party/quickjs-ng` is a behavioral oracle, not a build dependency.
+- `third_party/test262` should be consumed through small allowlisted subsets
+  until the engine is mature enough for broader conformance runs.
 
-1. `AGENTS.md`
-2. `docs/architecture.md`
-3. The relevant file in `tasks/`
+## Automation
 
-Keep changes scoped to one subsystem when possible, add tests with behavior
-changes, and finish by running `./scripts/check.sh`.
-
-The `third_party/` directory is reference material and test input. Do not edit
-vendored upstream code for engine changes; update the submodule pointer when an
-upstream refresh is needed.
+Codex, Harness, and other autonomous agents should start with `AGENTS.md`. That
+file defines repository-specific execution rules, task boundaries, commit
+discipline, and verification expectations.
