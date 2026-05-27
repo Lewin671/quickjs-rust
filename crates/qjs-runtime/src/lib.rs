@@ -195,6 +195,7 @@ impl ObjectRef {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum NativeFunction {
     Object,
+    ObjectAssign,
     ObjectCreate,
     ObjectGetOwnPropertyDescriptor,
     ObjectGetPrototypeOf,
@@ -424,6 +425,15 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
     object_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
         Property::non_enumerable(Value::Object(object_prototype)),
+    );
+    object_function.properties.borrow_mut().insert(
+        "assign".to_owned(),
+        Property::non_enumerable(Value::Function(Function::new_native(
+            Some("assign"),
+            2,
+            NativeFunction::ObjectAssign,
+            false,
+        ))),
     );
     object_function.properties.borrow_mut().insert(
         "create".to_owned(),
@@ -1035,6 +1045,7 @@ fn call_native_function(
         NativeFunction::Object => {
             native_object(function, this_value, &argument_values, is_construct)
         }
+        NativeFunction::ObjectAssign => native_object_assign(&argument_values),
         NativeFunction::ObjectCreate => native_object_create(&argument_values),
         NativeFunction::ObjectGetOwnPropertyDescriptor => {
             native_object_get_own_property_descriptor(&argument_values, env)
@@ -1055,6 +1066,69 @@ fn call_native_function(
         }
         NativeFunction::ObjectPrototypeToString => native_object_prototype_to_string(this_value),
         NativeFunction::ObjectPrototypeValueOf => native_object_prototype_value_of(this_value),
+    }
+}
+
+fn native_object_assign(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    match target {
+        Value::Object(_) | Value::Function(_) => {}
+        Value::Null | Value::Undefined => {
+            return Err(RuntimeError {
+                message: "Object.assign target must not be null or undefined".to_owned(),
+            });
+        }
+        Value::Array(_) | Value::String(_) | Value::Number(_) | Value::Boolean(_) => {
+            return Err(RuntimeError {
+                message: "Object.assign primitive targets are not implemented".to_owned(),
+            });
+        }
+    }
+
+    for source in argument_values.iter().skip(1).cloned() {
+        if matches!(source, Value::Null | Value::Undefined) {
+            continue;
+        }
+        for (key, value) in enumerable_property_entries(source)? {
+            set_property(target.clone(), key, value)?;
+        }
+    }
+    Ok(target)
+}
+
+fn enumerable_property_entries(value: Value) -> Result<Vec<(String, Value)>, RuntimeError> {
+    let keys = match value.clone() {
+        Value::Object(object) => object.own_property_keys(),
+        Value::Array(elements) => array_own_property_keys(&elements),
+        Value::Function(function) => function_own_property_keys(&function),
+        Value::String(value) => string_own_property_keys(&value),
+        Value::Number(_) | Value::Boolean(_) | Value::Null | Value::Undefined => Vec::new(),
+    };
+    let mut entries = Vec::with_capacity(keys.len());
+    for key in keys {
+        if let Some(property) = own_property_descriptor(value.clone(), &key)? {
+            entries.push((key, property.value));
+        }
+    }
+    Ok(entries)
+}
+
+fn set_property(target: Value, key: String, value: Value) -> Result<(), RuntimeError> {
+    match target {
+        Value::Object(object) => {
+            object.set(key, value);
+            Ok(())
+        }
+        Value::Function(function) => {
+            function
+                .properties
+                .borrow_mut()
+                .insert(key, Property::enumerable(value));
+            Ok(())
+        }
+        _ => Err(RuntimeError {
+            message: "property target is not mutable".to_owned(),
+        }),
     }
 }
 
@@ -2074,6 +2148,33 @@ mod tests {
             Ok(Value::String("function".to_owned()))
         );
         assert_eq!(eval("Object.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("Object.assign.length;"), Ok(Value::Number(2.0)));
+        assert_eq!(
+            eval(
+                "let target = { foo: 1 }; let result = Object.assign(target, { a: 2 }); result === target;"
+            ),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("let target = { foo: 1 }; Object.assign(target, { a: 2 }); target.a;"),
+            Ok(Value::Number(2.0))
+        );
+        assert_eq!(
+            eval(
+                "let target = { a: 1 }; Object.assign(target, { a: 5 }, { b: 6 }); target.a + target.b;"
+            ),
+            Ok(Value::Number(11.0))
+        );
+        assert_eq!(
+            eval("let target = {}; Object.assign(target, 'ab', null, undefined); target[1];"),
+            Ok(Value::String("b".to_owned()))
+        );
+        assert_eq!(
+            eval(
+                "let target = {}; Object.assign(target, Object.create({ inherited: 1 })); Object.keys(target).length;"
+            ),
+            Ok(Value::Number(0.0))
+        );
         assert_eq!(eval("Object.create.length;"), Ok(Value::Number(1.0)));
         assert_eq!(
             eval("let proto = { value: 7 }; let object = Object.create(proto); object.value;"),
