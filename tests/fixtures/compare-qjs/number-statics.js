@@ -1,0 +1,1 @@
+Number("10") + ":" + Number(true) + ":" + Number(null) + ":" + (Number("abc") === Number("abc")) + ":" + (Number.POSITIVE_INFINITY === Infinity) + ":" + Number.isFinite(10) + ":" + Number.isFinite("10") + ":" + Number.isNaN(NaN) + ":" + Number.isInteger(6.75) + ":" + Number.isSafeInteger(9007199254740991)
