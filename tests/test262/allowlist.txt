@@ -14,3 +14,8 @@ cases/in-basic.js
 cases/in-undefined-vs-missing.js
 cases/delete-basic.js
 cases/delete-object-property.js
+cases/object-property-values.js
+cases/object-property-names.js
+cases/missing-property-undefined.js
+cases/object-reference-alias.js
+cases/object-reference-function-argument.js
