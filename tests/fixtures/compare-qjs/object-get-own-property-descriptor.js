@@ -1,0 +1,1 @@
+Object.getOwnPropertyDescriptor({ value: 1 }, "value").value + ":" + Object.getOwnPropertyDescriptor(Object.prototype, "toString").enumerable + ":" + Object.getOwnPropertyDescriptor([1, 2], "length").value

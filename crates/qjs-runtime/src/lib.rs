@@ -72,6 +72,8 @@ pub struct ObjectRef {
 struct Property {
     value: Value,
     enumerable: bool,
+    writable: bool,
+    configurable: bool,
 }
 
 impl Property {
@@ -79,6 +81,8 @@ impl Property {
         Self {
             value,
             enumerable: true,
+            writable: true,
+            configurable: true,
         }
     }
 
@@ -86,6 +90,8 @@ impl Property {
         Self {
             value,
             enumerable: false,
+            writable: true,
+            configurable: true,
         }
     }
 }
@@ -153,6 +159,10 @@ impl ObjectRef {
         self.properties.borrow().contains_key(key)
     }
 
+    fn own_property(&self, key: &str) -> Option<Property> {
+        self.properties.borrow().get(key).cloned()
+    }
+
     fn own_property_keys(&self) -> Vec<String> {
         let mut keys: Vec<_> = self
             .properties
@@ -186,6 +196,7 @@ impl ObjectRef {
 enum NativeFunction {
     Object,
     ObjectCreate,
+    ObjectGetOwnPropertyDescriptor,
     ObjectGetPrototypeOf,
     ObjectGetOwnPropertyNames,
     ObjectKeys,
@@ -393,6 +404,15 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
             Some("getPrototypeOf"),
             1,
             NativeFunction::ObjectGetPrototypeOf,
+            false,
+        ))),
+    );
+    object_function.properties.borrow_mut().insert(
+        "getOwnPropertyDescriptor".to_owned(),
+        Property::non_enumerable(Value::Function(Function::new_native(
+            Some("getOwnPropertyDescriptor"),
+            2,
+            NativeFunction::ObjectGetOwnPropertyDescriptor,
             false,
         ))),
     );
@@ -921,7 +941,14 @@ fn call_function(
         });
     };
     if let Some(native) = function.native {
-        return call_native_function(&function, native, this_value, argument_values, is_construct);
+        return call_native_function(
+            &function,
+            native,
+            this_value,
+            argument_values,
+            is_construct,
+            env,
+        );
     }
     let mut local_env = env.clone();
     for (name, value) in &function.env {
@@ -966,12 +993,16 @@ fn call_native_function(
     this_value: Value,
     argument_values: Vec<Value>,
     is_construct: bool,
+    env: &HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     match native {
         NativeFunction::Object => {
             native_object(function, this_value, &argument_values, is_construct)
         }
         NativeFunction::ObjectCreate => native_object_create(&argument_values),
+        NativeFunction::ObjectGetOwnPropertyDescriptor => {
+            native_object_get_own_property_descriptor(&argument_values, env)
+        }
         NativeFunction::ObjectGetPrototypeOf => native_object_get_prototype_of(&argument_values),
         NativeFunction::ObjectGetOwnPropertyNames => {
             native_object_get_own_property_names(&argument_values)
@@ -1026,6 +1057,46 @@ fn native_object_get_prototype_of(argument_values: &[Value]) -> Result<Value, Ru
             message: "Object.getPrototypeOf target must be an object".to_owned(),
         }),
     }
+}
+
+fn native_object_get_own_property_descriptor(
+    argument_values: &[Value],
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let key = to_property_key(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
+    let Some(property) = own_property_descriptor(target, &key)? else {
+        return Ok(Value::Undefined);
+    };
+    Ok(Value::Object(property_descriptor_object(
+        property,
+        object_prototype(env),
+    )))
+}
+
+fn own_property_descriptor(value: Value, key: &str) -> Result<Option<Property>, RuntimeError> {
+    match value {
+        Value::Object(object) => Ok(object.own_property(key)),
+        Value::Function(function) => Ok(function.properties.borrow().get(key).cloned()),
+        Value::Array(elements) => Ok(array_own_property_descriptor(&elements, key)),
+        Value::String(value) => Ok(string_own_property_descriptor(&value, key)),
+        Value::Number(_) | Value::Boolean(_) | Value::Null | Value::Undefined => Ok(None),
+    }
+}
+
+fn property_descriptor_object(property: Property, prototype: Option<ObjectRef>) -> ObjectRef {
+    ObjectRef::with_prototype(
+        HashMap::from([
+            ("value".to_owned(), property.value),
+            ("writable".to_owned(), Value::Boolean(property.writable)),
+            ("enumerable".to_owned(), Value::Boolean(property.enumerable)),
+            (
+                "configurable".to_owned(),
+                Value::Boolean(property.configurable),
+            ),
+        ]),
+        prototype,
+    )
 }
 
 fn native_object_keys(argument_values: &[Value]) -> Result<Value, RuntimeError> {
@@ -1483,6 +1554,18 @@ fn string_has_own_property(value: &str, key: &str) -> bool {
         || canonical_string_index(key).is_some_and(|index| index < value.chars().count())
 }
 
+fn string_own_property_descriptor(value: &str, key: &str) -> Option<Property> {
+    if key == "length" {
+        return Some(Property {
+            value: Value::Number(value.chars().count() as f64),
+            enumerable: false,
+            writable: false,
+            configurable: false,
+        });
+    }
+    string_property(value, key).map(Property::enumerable)
+}
+
 fn string_own_property_keys(value: &str) -> Vec<String> {
     (0..value.chars().count())
         .map(|index| index.to_string())
@@ -1513,6 +1596,19 @@ fn array_has_own_property(elements: &[Value], key: &str) -> bool {
         || key
             .parse::<usize>()
             .is_ok_and(|index| index < elements.len())
+}
+
+fn array_own_property_descriptor(elements: &[Value], key: &str) -> Option<Property> {
+    if key == "length" {
+        return Some(Property {
+            value: Value::Number(elements.len() as f64),
+            enumerable: false,
+            writable: true,
+            configurable: false,
+        });
+    }
+    let index = key.parse::<usize>().ok()?;
+    elements.get(index).cloned().map(Property::enumerable)
 }
 
 fn array_own_property_keys(elements: &[Value]) -> Vec<String> {
@@ -1971,6 +2067,32 @@ mod tests {
         assert_eq!(
             eval("Object.getOwnPropertyNames(Object.prototype)[0];"),
             Ok(Value::String("constructor".to_owned()))
+        );
+        assert_eq!(
+            eval("Object.getOwnPropertyDescriptor.length;"),
+            Ok(Value::Number(2.0))
+        );
+        assert_eq!(
+            eval(
+                "let object = { value: 1 }; Object.getOwnPropertyDescriptor(object, 'value').value;"
+            ),
+            Ok(Value::Number(1.0))
+        );
+        assert_eq!(
+            eval("Object.getOwnPropertyDescriptor({ value: 1 }, 'value').enumerable;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("Object.getOwnPropertyDescriptor(Object.prototype, 'toString').enumerable;"),
+            Ok(Value::Boolean(false))
+        );
+        assert_eq!(
+            eval("Object.getOwnPropertyDescriptor([1, 2], 'length').value;"),
+            Ok(Value::Number(2.0))
+        );
+        assert_eq!(
+            eval("Object.getOwnPropertyDescriptor({}, 'missing');"),
+            Ok(Value::Undefined)
         );
         assert_eq!(
             eval("Object.keys('ab')[1];"),
