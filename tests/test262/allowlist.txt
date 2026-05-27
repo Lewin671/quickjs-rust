@@ -23,6 +23,8 @@ cases/nullish-assignment-basic.js
 cases/logical-assignment-short-circuit.js
 cases/logical-and-basic.js
 cases/undefined-basic.js
+cases/void-basic.js
+cases/void-evaluates-operand.js
 cases/object-literal-basic.js
 cases/object-put-basic.js
 cases/typeof-basic.js

@@ -443,6 +443,8 @@ pub enum UnaryOp {
     BitwiseNot,
     /// Type query.
     Typeof,
+    /// Undefined result after evaluating the operand.
+    Void,
     /// Property deletion.
     Delete,
 }

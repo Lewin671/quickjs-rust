@@ -659,6 +659,7 @@ fn eval_unary(op: UnaryOp, argument: Value) -> Result<Value, RuntimeError> {
         UnaryOp::Plus => Ok(Value::Number(to_number(argument)?)),
         UnaryOp::Minus => Ok(Value::Number(-to_number(argument)?)),
         UnaryOp::BitwiseNot => Ok(Value::Number(f64::from(!to_int32(argument)?))),
+        UnaryOp::Void => Ok(Value::Undefined),
         UnaryOp::Typeof | UnaryOp::Delete => {
             unreachable!("operator requires unevaluated operand handling")
         }
@@ -1119,6 +1120,8 @@ mod tests {
         assert_eq!(eval("-1 + 3;"), Ok(Value::Number(2.0)));
         assert_eq!(eval("!0;"), Ok(Value::Boolean(true)));
         assert_eq!(eval("+true;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("void 0;"), Ok(Value::Undefined));
+        assert_eq!(eval("let x = 0; void (x = 1); x;"), Ok(Value::Number(1.0)));
     }
 
     #[test]

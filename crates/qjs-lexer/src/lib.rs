@@ -54,6 +54,8 @@ pub enum TokenKind {
     Throw,
     /// `typeof`.
     Typeof,
+    /// `void`.
+    Void,
     /// `in`.
     In,
     /// `delete`.
@@ -577,6 +579,7 @@ impl<'src> Lexer<'src> {
             "return" => TokenKind::Return,
             "throw" => TokenKind::Throw,
             "typeof" => TokenKind::Typeof,
+            "void" => TokenKind::Void,
             "in" => TokenKind::In,
             "delete" => TokenKind::Delete,
             _ => TokenKind::Identifier(text.to_owned()),
@@ -703,7 +706,7 @@ mod tests {
     fn lexes_declaration_keywords() {
         let tokens =
             lex(
-                "var let const if else while do for break continue function return throw typeof in delete variable",
+                "var let const if else while do for break continue function return throw typeof void in delete variable",
             )
             .expect("source should lex");
         let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
@@ -724,6 +727,7 @@ mod tests {
                 TokenKind::Return,
                 TokenKind::Throw,
                 TokenKind::Typeof,
+                TokenKind::Void,
                 TokenKind::In,
                 TokenKind::Delete,
                 TokenKind::Identifier("variable".to_owned()),
