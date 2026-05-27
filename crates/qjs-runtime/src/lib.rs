@@ -203,6 +203,8 @@ impl ObjectRef {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum NativeFunction {
+    Array,
+    ArrayIsArray,
     Object,
     ObjectAssign,
     ObjectCreate,
@@ -436,7 +438,7 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
     );
     object_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
-        Property::non_enumerable(Value::Object(object_prototype)),
+        Property::non_enumerable(Value::Object(object_prototype.clone())),
     );
     object_function.properties.borrow_mut().insert(
         "assign".to_owned(),
@@ -524,6 +526,32 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
     env.insert("Object".to_owned(), object_value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.set("Object".to_owned(), object_value);
+    }
+
+    let array_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype.clone()));
+    let array_function = Function::new_native(Some("Array"), 1, NativeFunction::Array, true);
+    array_prototype.define_non_enumerable(
+        "constructor".to_owned(),
+        Value::Function(array_function.clone()),
+    );
+    array_function.properties.borrow_mut().insert(
+        "prototype".to_owned(),
+        Property::non_enumerable(Value::Object(array_prototype)),
+    );
+    array_function.properties.borrow_mut().insert(
+        "isArray".to_owned(),
+        Property::non_enumerable(Value::Function(Function::new_native(
+            Some("isArray"),
+            1,
+            NativeFunction::ArrayIsArray,
+            false,
+        ))),
+    );
+
+    let array_value = Value::Function(array_function);
+    env.insert("Array".to_owned(), array_value.clone());
+    if let Value::Object(global_object) = global_this {
+        global_object.set("Array".to_owned(), array_value);
     }
 }
 
@@ -1002,6 +1030,13 @@ fn object_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef> {
     function_prototype(object_function)
 }
 
+fn array_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+    let Some(Value::Function(array_function)) = env.get("Array") else {
+        return None;
+    };
+    function_prototype(array_function)
+}
+
 fn eval_arguments(
     arguments: &[Expr],
     env: &mut HashMap<String, Value>,
@@ -1081,6 +1116,8 @@ fn call_native_function(
     env: &HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     match native {
+        NativeFunction::Array => native_array(&argument_values),
+        NativeFunction::ArrayIsArray => native_array_is_array(&argument_values),
         NativeFunction::Object => {
             native_object(function, this_value, &argument_values, is_construct)
         }
@@ -1091,7 +1128,9 @@ fn call_native_function(
         NativeFunction::ObjectGetOwnPropertyDescriptor => {
             native_object_get_own_property_descriptor(&argument_values, env)
         }
-        NativeFunction::ObjectGetPrototypeOf => native_object_get_prototype_of(&argument_values),
+        NativeFunction::ObjectGetPrototypeOf => {
+            native_object_get_prototype_of(&argument_values, env)
+        }
         NativeFunction::ObjectGetOwnPropertyNames => {
             native_object_get_own_property_names(&argument_values)
         }
@@ -1109,6 +1148,23 @@ fn call_native_function(
         NativeFunction::ObjectPrototypeToString => native_object_prototype_to_string(this_value),
         NativeFunction::ObjectPrototypeValueOf => native_object_prototype_value_of(this_value),
     }
+}
+
+fn native_array(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    if argument_values.len() == 1 && matches!(argument_values[0], Value::Number(_)) {
+        return Err(RuntimeError {
+            message: "Array length construction requires sparse array support".to_owned(),
+        });
+    }
+
+    Ok(Value::Array(argument_values.to_vec()))
+}
+
+fn native_array_is_array(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    Ok(Value::Boolean(matches!(
+        argument_values.first(),
+        Some(Value::Array(_))
+    )))
 }
 
 fn native_object_assign(argument_values: &[Value]) -> Result<Value, RuntimeError> {
@@ -1302,12 +1358,18 @@ fn to_property_descriptor(value: Value) -> Result<Property, RuntimeError> {
     })
 }
 
-fn native_object_get_prototype_of(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+fn native_object_get_prototype_of(
+    argument_values: &[Value],
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
     match argument_values.first() {
         Some(Value::Object(object)) => {
             Ok(object.prototype().map(Value::Object).unwrap_or(Value::Null))
         }
-        Some(Value::Array(_) | Value::Function(_)) => Ok(Value::Null),
+        Some(Value::Array(_)) => Ok(array_prototype(env)
+            .map(Value::Object)
+            .unwrap_or(Value::Null)),
+        Some(Value::Function(_)) => Ok(Value::Null),
         _ => Err(RuntimeError {
             message: "Object.getPrototypeOf target must be an object".to_owned(),
         }),
@@ -1446,7 +1508,8 @@ fn native_object_prototype_is_prototype_of(
 fn value_prototype(value: Value, env: &HashMap<String, Value>) -> Option<ObjectRef> {
     match value {
         Value::Object(object) => object.prototype(),
-        Value::Array(_) | Value::Function(_) => object_prototype(env),
+        Value::Array(_) => array_prototype(env),
+        Value::Function(_) => object_prototype(env),
         Value::String(_) | Value::Number(_) | Value::Boolean(_) => None,
         Value::Null | Value::Undefined => None,
     }
@@ -1606,7 +1669,7 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, Run
         } => {
             let left = eval_expr(left, env)?;
             let right = eval_expr(right, env)?;
-            eval_binary(left, *op, right)
+            eval_binary(left, *op, right, env)
         }
     }
 }
@@ -1679,23 +1742,41 @@ fn eval_assignment(
     let right = eval_expr(right, env)?;
     let value = match op {
         AssignmentOp::Assign => right,
-        AssignmentOp::AddAssign => eval_binary(read_target(target, env)?, BinaryOp::Add, right)?,
-        AssignmentOp::SubAssign => eval_binary(read_target(target, env)?, BinaryOp::Sub, right)?,
-        AssignmentOp::MulAssign => eval_binary(read_target(target, env)?, BinaryOp::Mul, right)?,
-        AssignmentOp::PowAssign => eval_binary(read_target(target, env)?, BinaryOp::Pow, right)?,
-        AssignmentOp::DivAssign => eval_binary(read_target(target, env)?, BinaryOp::Div, right)?,
-        AssignmentOp::RemAssign => eval_binary(read_target(target, env)?, BinaryOp::Rem, right)?,
-        AssignmentOp::ShlAssign => eval_binary(read_target(target, env)?, BinaryOp::Shl, right)?,
-        AssignmentOp::ShrAssign => eval_binary(read_target(target, env)?, BinaryOp::Shr, right)?,
-        AssignmentOp::UShrAssign => eval_binary(read_target(target, env)?, BinaryOp::UShr, right)?,
+        AssignmentOp::AddAssign => {
+            eval_binary(read_target(target, env)?, BinaryOp::Add, right, env)?
+        }
+        AssignmentOp::SubAssign => {
+            eval_binary(read_target(target, env)?, BinaryOp::Sub, right, env)?
+        }
+        AssignmentOp::MulAssign => {
+            eval_binary(read_target(target, env)?, BinaryOp::Mul, right, env)?
+        }
+        AssignmentOp::PowAssign => {
+            eval_binary(read_target(target, env)?, BinaryOp::Pow, right, env)?
+        }
+        AssignmentOp::DivAssign => {
+            eval_binary(read_target(target, env)?, BinaryOp::Div, right, env)?
+        }
+        AssignmentOp::RemAssign => {
+            eval_binary(read_target(target, env)?, BinaryOp::Rem, right, env)?
+        }
+        AssignmentOp::ShlAssign => {
+            eval_binary(read_target(target, env)?, BinaryOp::Shl, right, env)?
+        }
+        AssignmentOp::ShrAssign => {
+            eval_binary(read_target(target, env)?, BinaryOp::Shr, right, env)?
+        }
+        AssignmentOp::UShrAssign => {
+            eval_binary(read_target(target, env)?, BinaryOp::UShr, right, env)?
+        }
         AssignmentOp::BitwiseAndAssign => {
-            eval_binary(read_target(target, env)?, BinaryOp::BitwiseAnd, right)?
+            eval_binary(read_target(target, env)?, BinaryOp::BitwiseAnd, right, env)?
         }
         AssignmentOp::BitwiseXorAssign => {
-            eval_binary(read_target(target, env)?, BinaryOp::BitwiseXor, right)?
+            eval_binary(read_target(target, env)?, BinaryOp::BitwiseXor, right, env)?
         }
         AssignmentOp::BitwiseOrAssign => {
-            eval_binary(read_target(target, env)?, BinaryOp::BitwiseOr, right)?
+            eval_binary(read_target(target, env)?, BinaryOp::BitwiseOr, right, env)?
         }
         AssignmentOp::LogicalAndAssign
         | AssignmentOp::LogicalOrAssign
@@ -1749,7 +1830,7 @@ fn eval_member(
             Ok(Value::Number(elements.len() as f64))
         }
         (Value::Array(_), MemberProperty::Named(name)) => {
-            Ok(inherited_object_prototype_property(env, name).unwrap_or(Value::Undefined))
+            Ok(inherited_array_prototype_property(env, name).unwrap_or(Value::Undefined))
         }
         (Value::Function(function), MemberProperty::Named(name)) if name == "length" => {
             Ok(Value::Number(function.params.len() as f64))
@@ -1804,6 +1885,12 @@ fn inherited_object_prototype_property(env: &HashMap<String, Value>, key: &str) 
     } else {
         None
     }
+}
+
+fn inherited_array_prototype_property(env: &HashMap<String, Value>, key: &str) -> Option<Value> {
+    array_prototype(env)
+        .and_then(|prototype| prototype.get(key))
+        .or_else(|| inherited_object_prototype_property(env, key))
 }
 
 fn assign_member(
@@ -2028,12 +2115,17 @@ fn eval_typeof(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, R
     Ok(Value::String(type_name.to_owned()))
 }
 
-fn eval_binary(left: Value, op: BinaryOp, right: Value) -> Result<Value, RuntimeError> {
+fn eval_binary(
+    left: Value,
+    op: BinaryOp,
+    right: Value,
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
     if op == BinaryOp::In {
         return eval_in(left, right);
     }
     if op == BinaryOp::Instanceof {
-        return eval_instanceof(left, right);
+        return eval_instanceof(left, right, env);
     }
 
     match op {
@@ -2106,13 +2198,17 @@ fn eval_binary(left: Value, op: BinaryOp, right: Value) -> Result<Value, Runtime
     Ok(Value::Number(value))
 }
 
-fn eval_instanceof(left: Value, right: Value) -> Result<Value, RuntimeError> {
+fn eval_instanceof(
+    left: Value,
+    right: Value,
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
     let Value::Function(constructor) = right else {
         return Err(RuntimeError {
             message: "right-hand side of instanceof is not callable".to_owned(),
         });
     };
-    let Value::Object(object) = left else {
+    let Some(left_prototype) = value_prototype(left, env) else {
         return Ok(Value::Boolean(false));
     };
     let Some(Property {
@@ -2124,7 +2220,9 @@ fn eval_instanceof(left: Value, right: Value) -> Result<Value, RuntimeError> {
             message: "function prototype is not an object".to_owned(),
         });
     };
-    Ok(Value::Boolean(object.has_prototype(&prototype)))
+    Ok(Value::Boolean(
+        left_prototype.ptr_eq(&prototype) || left_prototype.has_prototype(&prototype),
+    ))
 }
 
 fn to_js_string(value: Value) -> Result<String, RuntimeError> {
@@ -2648,6 +2746,39 @@ mod tests {
         assert!(eval("Object.create(1);").is_err());
         assert!(eval("new Object.create({});").is_err());
         assert!(eval("new Object.prototype.hasOwnProperty('value');").is_err());
+    }
+
+    #[test]
+    fn evaluates_array_builtins() {
+        assert_eq!(
+            eval("typeof Array;"),
+            Ok(Value::String("function".to_owned()))
+        );
+        assert_eq!(eval("Array.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("Array.isArray.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("Array().length;"), Ok(Value::Number(0.0)));
+        assert_eq!(eval("Array(1, 2)[1];"), Ok(Value::Number(2.0)));
+        assert_eq!(
+            eval("let array = new Array('x'); array[0];"),
+            Ok(Value::String("x".to_owned()))
+        );
+        assert_eq!(eval("Array.isArray([]);"), Ok(Value::Boolean(true)));
+        assert_eq!(eval("Array.isArray({});"), Ok(Value::Boolean(false)));
+        assert_eq!(eval("Array.isArray('abc');"), Ok(Value::Boolean(false)));
+        assert_eq!(
+            eval("Array.prototype.constructor === Array;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(eval("[] instanceof Array;"), Ok(Value::Boolean(true)));
+        assert_eq!(
+            eval("Array.prototype.isPrototypeOf([]);"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("Object.getPrototypeOf([]) === Array.prototype;"),
+            Ok(Value::Boolean(true))
+        );
+        assert!(eval("Array(3);").is_err());
     }
 
     #[test]
