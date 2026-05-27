@@ -375,6 +375,7 @@ impl Parser {
                 (TokenKind::LessEqual, BinaryOp::Le),
                 (TokenKind::Greater, BinaryOp::Gt),
                 (TokenKind::GreaterEqual, BinaryOp::Ge),
+                (TokenKind::In, BinaryOp::In),
             ],
         )
     }
@@ -669,6 +670,7 @@ fn property_name(kind: TokenKind) -> Option<String> {
         TokenKind::Return => Some("return".to_owned()),
         TokenKind::Throw => Some("throw".to_owned()),
         TokenKind::Typeof => Some("typeof".to_owned()),
+        TokenKind::In => Some("in".to_owned()),
         _ => None,
     }
 }
@@ -713,6 +715,12 @@ mod tests {
             panic!("expected comparison on left side");
         };
         assert_eq!(*left_op, BinaryOp::Ge);
+
+        let script = parse_script("'x' in object;").expect("source should parse");
+        let [Stmt::Expr(Expr::Binary { op, .. })] = script.body.as_slice() else {
+            panic!("expected one binary expression statement");
+        };
+        assert_eq!(*op, BinaryOp::In);
     }
 
     #[test]

@@ -307,6 +307,8 @@ pub enum BinaryOp {
     Gt,
     /// Greater than or equal.
     Ge,
+    /// Property existence.
+    In,
     /// Logical and.
     LogicalAnd,
     /// Logical or.

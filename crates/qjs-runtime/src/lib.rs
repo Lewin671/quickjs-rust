@@ -436,6 +436,10 @@ fn eval_typeof(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, R
 }
 
 fn eval_binary(left: Value, op: BinaryOp, right: Value) -> Result<Value, RuntimeError> {
+    if op == BinaryOp::In {
+        return eval_in(left, right);
+    }
+
     match op {
         BinaryOp::Eq | BinaryOp::StrictEq => return Ok(Value::Boolean(left == right)),
         BinaryOp::Ne | BinaryOp::StrictNe => return Ok(Value::Boolean(left != right)),
@@ -462,10 +466,29 @@ fn eval_binary(left: Value, op: BinaryOp, right: Value) -> Result<Value, Runtime
         | BinaryOp::StrictEq
         | BinaryOp::Ne
         | BinaryOp::StrictNe
+        | BinaryOp::In
         | BinaryOp::LogicalAnd
         | BinaryOp::LogicalOr => unreachable!("handled before numeric binary evaluation"),
     };
     Ok(Value::Number(value))
+}
+
+fn eval_in(left: Value, right: Value) -> Result<Value, RuntimeError> {
+    let key = to_property_key(left)?;
+    match right {
+        Value::Object(object) => Ok(Value::Boolean(
+            object.properties.borrow().contains_key(&key),
+        )),
+        Value::Array(elements) => {
+            let index = key.parse::<usize>().ok();
+            Ok(Value::Boolean(
+                index.is_some_and(|index| index < elements.len()) || key == "length",
+            ))
+        }
+        _ => Err(RuntimeError {
+            message: "right operand of in is not an object".to_owned(),
+        }),
+    }
 }
 
 fn to_number(value: Value) -> Result<f64, RuntimeError> {
@@ -588,6 +611,23 @@ mod tests {
             eval("function f() { return 1; } typeof f;"),
             Ok(Value::String("function".to_owned()))
         );
+    }
+
+    #[test]
+    fn evaluates_in_operator() {
+        assert_eq!(
+            eval("'answer' in { answer: 42 };"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("'missing' in { answer: 42 };"),
+            Ok(Value::Boolean(false))
+        );
+        assert_eq!(
+            eval("let o = {}; o.present = undefined; 'present' in o;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(eval("'length' in [1, 2];"), Ok(Value::Boolean(true)));
     }
 
     #[test]

@@ -46,6 +46,8 @@ pub enum TokenKind {
     Throw,
     /// `typeof`.
     Typeof,
+    /// `in`.
+    In,
     /// `+`.
     Plus,
     /// `++`.
@@ -561,6 +563,7 @@ impl<'src> Lexer<'src> {
             "return" => TokenKind::Return,
             "throw" => TokenKind::Throw,
             "typeof" => TokenKind::Typeof,
+            "in" => TokenKind::In,
             _ => TokenKind::Identifier(text.to_owned()),
         };
         self.tokens.push(Token {
@@ -683,7 +686,7 @@ mod tests {
 
     #[test]
     fn lexes_declaration_keywords() {
-        let tokens = lex("var let const if else while function return throw typeof variable")
+        let tokens = lex("var let const if else while function return throw typeof in variable")
             .expect("source should lex");
         let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
         assert_eq!(
@@ -699,6 +702,7 @@ mod tests {
                 TokenKind::Return,
                 TokenKind::Throw,
                 TokenKind::Typeof,
+                TokenKind::In,
                 TokenKind::Identifier("variable".to_owned()),
                 TokenKind::Eof,
             ]
