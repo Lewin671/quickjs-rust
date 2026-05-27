@@ -3,7 +3,8 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use qjs_ast::{
-    AssignmentTarget, BinaryOp, Expr, ForInit, Literal, MemberProperty, Script, Stmt, UnaryOp,
+    AssignmentOp, AssignmentTarget, BinaryOp, Expr, ForInit, Literal, MemberProperty, Script, Stmt,
+    UnaryOp, UpdateOp,
 };
 use qjs_parser::parse_script;
 
@@ -274,11 +275,15 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, Run
             let argument = eval_expr(argument, env)?;
             eval_unary(*op, argument)
         }
-        Expr::Assignment { target, value, .. } => {
+        Expr::Assignment {
+            target, op, value, ..
+        } => {
             let value = eval_expr(value, env)?;
-            assign_target(target, value.clone(), env)?;
-            Ok(value)
+            eval_assignment(target, *op, value, env)
         }
+        Expr::Update {
+            target, op, prefix, ..
+        } => eval_update(target, *op, *prefix, env),
         Expr::Call {
             callee, arguments, ..
         } => {
@@ -375,6 +380,62 @@ fn assign_target(
             let object = eval_expr(object, env)?;
             assign_member(object, property, value, env)
         }
+    }
+}
+
+fn read_target(
+    target: &AssignmentTarget,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    match target {
+        AssignmentTarget::Identifier { name, .. } => {
+            env.get(name).cloned().ok_or_else(|| RuntimeError {
+                message: format!("undefined identifier `{name}`"),
+            })
+        }
+        AssignmentTarget::Member {
+            object, property, ..
+        } => {
+            let object = eval_expr(object, env)?;
+            eval_member(object, property, env)
+        }
+    }
+}
+
+fn eval_assignment(
+    target: &AssignmentTarget,
+    op: AssignmentOp,
+    right: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let value = match op {
+        AssignmentOp::Assign => right,
+        AssignmentOp::AddAssign => eval_binary(read_target(target, env)?, BinaryOp::Add, right)?,
+        AssignmentOp::SubAssign => eval_binary(read_target(target, env)?, BinaryOp::Sub, right)?,
+        AssignmentOp::MulAssign => eval_binary(read_target(target, env)?, BinaryOp::Mul, right)?,
+        AssignmentOp::DivAssign => eval_binary(read_target(target, env)?, BinaryOp::Div, right)?,
+        AssignmentOp::RemAssign => eval_binary(read_target(target, env)?, BinaryOp::Rem, right)?,
+    };
+    assign_target(target, value.clone(), env)?;
+    Ok(value)
+}
+
+fn eval_update(
+    target: &AssignmentTarget,
+    op: UpdateOp,
+    prefix: bool,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let old_number = to_number(read_target(target, env)?)?;
+    let new = match op {
+        UpdateOp::Increment => Value::Number(old_number + 1.0),
+        UpdateOp::Decrement => Value::Number(old_number - 1.0),
+    };
+    assign_target(target, new.clone(), env)?;
+    if prefix {
+        Ok(new)
+    } else {
+        Ok(Value::Number(old_number))
     }
 }
 
@@ -543,11 +604,8 @@ fn eval_binary(left: Value, op: BinaryOp, right: Value) -> Result<Value, Runtime
         _ => {}
     }
 
-    let (Value::Number(left), Value::Number(right)) = (left, right) else {
-        return Err(RuntimeError {
-            message: "only numeric binary operations are supported".to_owned(),
-        });
-    };
+    let left = to_number(left)?;
+    let right = to_number(right)?;
 
     let value = match op {
         BinaryOp::Add => left + right,
@@ -638,6 +696,8 @@ mod tests {
     #[test]
     fn evaluates_arithmetic() {
         assert_eq!(eval("1 + 2 * 3;"), Ok(Value::Number(7.0)));
+        assert_eq!(eval("true + true;"), Ok(Value::Number(2.0)));
+        assert_eq!(eval("true * 2;"), Ok(Value::Number(2.0)));
     }
 
     #[test]
@@ -677,6 +737,24 @@ mod tests {
     #[test]
     fn evaluates_assignment_expressions() {
         assert_eq!(eval("let x = 2; x = x + 3; x;"), Ok(Value::Number(5.0)));
+    }
+
+    #[test]
+    fn evaluates_update_and_compound_assignment() {
+        assert_eq!(eval("let x = 1; x++; x;"), Ok(Value::Number(2.0)));
+        assert_eq!(eval("let x = 1; ++x;"), Ok(Value::Number(2.0)));
+        assert_eq!(eval("let x = 1; x++;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("let x = false; x++;"), Ok(Value::Number(0.0)));
+        assert_eq!(eval("let x = 3; x--; x;"), Ok(Value::Number(2.0)));
+        assert_eq!(eval("let x = 1; x += 2; x;"), Ok(Value::Number(3.0)));
+        assert_eq!(
+            eval("let x = 'a'; x += 1; x;"),
+            Ok(Value::String("a1".to_owned()))
+        );
+        assert_eq!(
+            eval("let o = { count: 1 }; o.count++; o.count;"),
+            Ok(Value::Number(2.0))
+        );
     }
 
     #[test]

@@ -1,8 +1,8 @@
 //! Parser for a small JavaScript subset.
 
 use qjs_ast::{
-    AssignmentTarget, BinaryOp, Expr, ForInit, Literal, MemberProperty, ObjectProperty, Script,
-    Span, Stmt, UnaryOp, VarKind,
+    AssignmentOp, AssignmentTarget, BinaryOp, Expr, ForInit, Literal, MemberProperty,
+    ObjectProperty, Script, Span, Stmt, UnaryOp, UpdateOp, VarKind,
 };
 use qjs_lexer::{Token, TokenKind, lex};
 
@@ -396,33 +396,29 @@ impl Parser {
 
     fn assignment(&mut self) -> Result<Expr, ParseError> {
         let expr = self.logical_or()?;
-        if !self.match_kind(&TokenKind::Equal) {
+        let op = if self.match_kind(&TokenKind::Equal) {
+            AssignmentOp::Assign
+        } else if self.match_kind(&TokenKind::PlusEqual) {
+            AssignmentOp::AddAssign
+        } else if self.match_kind(&TokenKind::MinusEqual) {
+            AssignmentOp::SubAssign
+        } else if self.match_kind(&TokenKind::StarEqual) {
+            AssignmentOp::MulAssign
+        } else if self.match_kind(&TokenKind::SlashEqual) {
+            AssignmentOp::DivAssign
+        } else if self.match_kind(&TokenKind::PercentEqual) {
+            AssignmentOp::RemAssign
+        } else {
             return Ok(expr);
-        }
-
-        let target = match expr {
-            Expr::Identifier { name, span } => AssignmentTarget::Identifier { name, span },
-            Expr::Member {
-                object,
-                property,
-                span,
-            } => AssignmentTarget::Member {
-                object,
-                property,
-                span,
-            },
-            other => {
-                return Err(ParseError {
-                    message: "invalid assignment target".to_owned(),
-                    span: other.span(),
-                });
-            }
         };
+
+        let target = assignment_target(expr)?;
 
         let value = self.assignment()?;
         let assignment_span = Span::new(target.span().start, value.span().end);
         Ok(Expr::Assignment {
             target,
+            op,
             value: Box::new(value),
             span: assignment_span,
         })
@@ -493,13 +489,29 @@ impl Parser {
             .peek()
             .expect("parser should always have eof token")
             .clone();
+        if token.kind == TokenKind::PlusPlus || token.kind == TokenKind::MinusMinus {
+            self.advance();
+            let target = assignment_target(self.unary()?)?;
+            let span = Span::new(token.span.start, target.span().end);
+            return Ok(Expr::Update {
+                target,
+                op: if token.kind == TokenKind::PlusPlus {
+                    UpdateOp::Increment
+                } else {
+                    UpdateOp::Decrement
+                },
+                prefix: true,
+                span,
+            });
+        }
+
         let op = match token.kind {
             TokenKind::Plus => UnaryOp::Plus,
             TokenKind::Minus => UnaryOp::Minus,
             TokenKind::Bang => UnaryOp::Not,
             TokenKind::Typeof => UnaryOp::Typeof,
             TokenKind::Delete => UnaryOp::Delete,
-            _ => return self.call(),
+            _ => return self.postfix(),
         };
         self.advance();
         let argument = self.unary()?;
@@ -508,6 +520,27 @@ impl Parser {
             op,
             argument: Box::new(argument),
             span,
+        })
+    }
+
+    fn postfix(&mut self) -> Result<Expr, ParseError> {
+        let expr = self.call()?;
+        let Some(token) = self.peek().cloned() else {
+            return Ok(expr);
+        };
+        let op = match token.kind {
+            TokenKind::PlusPlus => UpdateOp::Increment,
+            TokenKind::MinusMinus => UpdateOp::Decrement,
+            _ => return Ok(expr),
+        };
+        self.advance();
+        let start = expr.span().start;
+        let target = assignment_target(expr)?;
+        Ok(Expr::Update {
+            target,
+            op,
+            prefix: false,
+            span: Span::new(start, token.span.end),
         })
     }
 
@@ -767,6 +800,25 @@ fn property_name(kind: TokenKind) -> Option<String> {
     }
 }
 
+fn assignment_target(expr: Expr) -> Result<AssignmentTarget, ParseError> {
+    match expr {
+        Expr::Identifier { name, span } => Ok(AssignmentTarget::Identifier { name, span }),
+        Expr::Member {
+            object,
+            property,
+            span,
+        } => Ok(AssignmentTarget::Member {
+            object,
+            property,
+            span,
+        }),
+        other => Err(ParseError {
+            message: "invalid assignment target".to_owned(),
+            span: other.span(),
+        }),
+    }
+}
+
 fn stmt_end(stmt: &Stmt) -> usize {
     match stmt {
         Stmt::Expr(expr) => expr.span().end,
@@ -787,7 +839,8 @@ fn stmt_end(stmt: &Stmt) -> usize {
 #[cfg(test)]
 mod tests {
     use qjs_ast::{
-        AssignmentTarget, BinaryOp, Expr, ForInit, MemberProperty, Stmt, UnaryOp, VarKind,
+        AssignmentOp, AssignmentTarget, BinaryOp, Expr, ForInit, MemberProperty, Stmt, UnaryOp,
+        UpdateOp, VarKind,
     };
 
     use super::parse_script;
@@ -864,9 +917,15 @@ mod tests {
     #[test]
     fn parses_assignment_as_right_associative() {
         let script = parse_script("a = b = 1;").expect("source should parse");
-        let [Stmt::Expr(Expr::Assignment { target, value, .. })] = script.body.as_slice() else {
+        let [
+            Stmt::Expr(Expr::Assignment {
+                target, op, value, ..
+            }),
+        ] = script.body.as_slice()
+        else {
             panic!("expected one assignment expression statement");
         };
+        assert_eq!(*op, AssignmentOp::Assign);
         let AssignmentTarget::Identifier { name, .. } = target else {
             panic!("expected identifier assignment target");
         };
@@ -885,6 +944,35 @@ mod tests {
             panic!("expected identifier assignment target");
         };
         assert_eq!(inner_name, "b");
+    }
+
+    #[test]
+    fn parses_update_and_compound_assignment() {
+        let script = parse_script("++i; i++; i += 2; obj.count--;").expect("source should parse");
+        let [
+            Stmt::Expr(Expr::Update {
+                op: UpdateOp::Increment,
+                prefix: true,
+                ..
+            }),
+            Stmt::Expr(Expr::Update {
+                op: UpdateOp::Increment,
+                prefix: false,
+                ..
+            }),
+            Stmt::Expr(Expr::Assignment {
+                op: AssignmentOp::AddAssign,
+                ..
+            }),
+            Stmt::Expr(Expr::Update {
+                op: UpdateOp::Decrement,
+                prefix: false,
+                ..
+            }),
+        ] = script.body.as_slice()
+        else {
+            panic!("expected update and compound assignment statements");
+        };
     }
 
     #[test]
