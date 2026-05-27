@@ -1,0 +1,1 @@
+(function () { var proto = { inherited: 1 }; var object = Object.create(proto, { own: { value: 2, enumerable: true }, hidden: { value: 3 } }); return object.inherited + ":" + object.own + ":" + object.hidden + ":" + Object.keys(object)[0] + ":" + Object.getOwnPropertyDescriptor(object, "hidden").enumerable; })()

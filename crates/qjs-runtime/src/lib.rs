@@ -1182,16 +1182,26 @@ fn native_object(
 }
 
 fn native_object_create(argument_values: &[Value]) -> Result<Value, RuntimeError> {
-    match argument_values.first() {
-        Some(Value::Object(prototype)) => Ok(Value::Object(ObjectRef::with_prototype(
+    let object = match argument_values.first() {
+        Some(Value::Object(prototype)) => Value::Object(ObjectRef::with_prototype(
             HashMap::new(),
             Some(prototype.clone()),
-        ))),
-        Some(Value::Null) => Ok(Value::Object(ObjectRef::new(HashMap::new()))),
-        _ => Err(RuntimeError {
-            message: "Object.create prototype must be an object or null".to_owned(),
-        }),
+        )),
+        Some(Value::Null) => Value::Object(ObjectRef::new(HashMap::new())),
+        _ => {
+            return Err(RuntimeError {
+                message: "Object.create prototype must be an object or null".to_owned(),
+            });
+        }
+    };
+
+    if !matches!(argument_values.get(1), None | Some(Value::Undefined)) {
+        native_object_define_properties(&[
+            object.clone(),
+            argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        ])?;
     }
+    Ok(object)
 }
 
 fn native_object_define_property(argument_values: &[Value]) -> Result<Value, RuntimeError> {
@@ -2359,6 +2369,28 @@ mod tests {
         assert_eq!(
             eval("let proto = { value: 7 }; let object = Object.create(proto); object.value;"),
             Ok(Value::Number(7.0))
+        );
+        assert_eq!(
+            eval(
+                "let proto = { inherited: 1 }; let object = Object.create(proto, { own: { value: 2, enumerable: true } }); object.inherited + object.own;"
+            ),
+            Ok(Value::Number(3.0))
+        );
+        assert_eq!(
+            eval(
+                "let object = Object.create(null, { own: { value: 2, enumerable: true } }); Object.keys(object)[0];"
+            ),
+            Ok(Value::String("own".to_owned()))
+        );
+        assert_eq!(
+            eval("Object.create({}, undefined) instanceof Object;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval(
+                "let object = Object.create({}, { hidden: { value: 4 } }); Object.keys(object).length;"
+            ),
+            Ok(Value::Number(0.0))
         );
         assert_eq!(
             eval(
