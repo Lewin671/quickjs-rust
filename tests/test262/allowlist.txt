@@ -90,6 +90,13 @@ cases/math-transcendental-basic.js
 cases/math-transcendental-length.js
 cases/math-transcendental-nan.js
 cases/math-log-special-values.js
+cases/math-hyperbolic-basic.js
+cases/math-hyperbolic-length.js
+cases/math-hyperbolic-special-values.js
+cases/math-hypot-basic.js
+cases/math-hypot-length.js
+cases/math-precision-basic.js
+cases/math-precision-length.js
 cases/object-assign-length.js
 cases/object-assign-target-object.js
 cases/object-assign-override.js

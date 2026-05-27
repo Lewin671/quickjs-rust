@@ -1,0 +1,1 @@
+Math.acosh(1) + ":" + Math.asinh(0) + ":" + Math.atanh(1) + ":" + Math.cosh(0) + ":" + Math.expm1(0) + ":" + Math.fround(1.5) + ":" + Math.hypot(3, 4) + ":" + Math.log1p(-1) + ":" + Math.tanh(Infinity) + ":" + (1 / Math.sinh(-0) === -Infinity)
