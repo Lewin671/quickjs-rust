@@ -136,9 +136,18 @@ impl ObjectRef {
     }
 
     fn set(&self, key: String, value: Value) {
-        self.properties
-            .borrow_mut()
-            .insert(key, Property::enumerable(value));
+        let mut properties = self.properties.borrow_mut();
+        if properties
+            .get(&key)
+            .is_some_and(|property| !property.writable)
+        {
+            return;
+        }
+        properties.insert(key, Property::enumerable(value));
+    }
+
+    fn define_property(&self, key: String, property: Property) {
+        self.properties.borrow_mut().insert(key, property);
     }
 
     fn define_non_enumerable(&self, key: String, value: Value) {
@@ -197,6 +206,7 @@ enum NativeFunction {
     Object,
     ObjectAssign,
     ObjectCreate,
+    ObjectDefineProperty,
     ObjectGetOwnPropertyDescriptor,
     ObjectGetPrototypeOf,
     ObjectGetOwnPropertyNames,
@@ -441,6 +451,15 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
             Some("create"),
             1,
             NativeFunction::ObjectCreate,
+            false,
+        ))),
+    );
+    object_function.properties.borrow_mut().insert(
+        "defineProperty".to_owned(),
+        Property::non_enumerable(Value::Function(Function::new_native(
+            Some("defineProperty"),
+            3,
+            NativeFunction::ObjectDefineProperty,
             false,
         ))),
     );
@@ -1047,6 +1066,7 @@ fn call_native_function(
         }
         NativeFunction::ObjectAssign => native_object_assign(&argument_values),
         NativeFunction::ObjectCreate => native_object_create(&argument_values),
+        NativeFunction::ObjectDefineProperty => native_object_define_property(&argument_values),
         NativeFunction::ObjectGetOwnPropertyDescriptor => {
             native_object_get_own_property_descriptor(&argument_values, env)
         }
@@ -1161,6 +1181,59 @@ fn native_object_create(argument_values: &[Value]) -> Result<Value, RuntimeError
             message: "Object.create prototype must be an object or null".to_owned(),
         }),
     }
+}
+
+fn native_object_define_property(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let key = to_property_key(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
+    let descriptor =
+        to_property_descriptor(argument_values.get(2).cloned().unwrap_or(Value::Undefined))?;
+
+    match &target {
+        Value::Object(object) => {
+            object.define_property(key, descriptor);
+            Ok(target)
+        }
+        Value::Function(function) => {
+            function.properties.borrow_mut().insert(key, descriptor);
+            Ok(target)
+        }
+        Value::Array(_) | Value::String(_) | Value::Number(_) | Value::Boolean(_) => {
+            Err(RuntimeError {
+                message: "Object.defineProperty primitive targets are not implemented".to_owned(),
+            })
+        }
+        Value::Null | Value::Undefined => Err(RuntimeError {
+            message: "Object.defineProperty target must be an object".to_owned(),
+        }),
+    }
+}
+
+fn to_property_descriptor(value: Value) -> Result<Property, RuntimeError> {
+    let Value::Object(descriptor) = value else {
+        return Err(RuntimeError {
+            message: "property descriptor must be an object".to_owned(),
+        });
+    };
+
+    if descriptor.contains_property("get") || descriptor.contains_property("set") {
+        return Err(RuntimeError {
+            message: "accessor property descriptors are not implemented".to_owned(),
+        });
+    }
+
+    Ok(Property {
+        value: descriptor.get("value").unwrap_or(Value::Undefined),
+        writable: descriptor
+            .get("writable")
+            .is_some_and(|value| is_truthy(&value)),
+        enumerable: descriptor
+            .get("enumerable")
+            .is_some_and(|value| is_truthy(&value)),
+        configurable: descriptor
+            .get("configurable")
+            .is_some_and(|value| is_truthy(&value)),
+    })
 }
 
 fn native_object_get_prototype_of(argument_values: &[Value]) -> Result<Value, RuntimeError> {
@@ -2174,6 +2247,46 @@ mod tests {
                 "let target = {}; Object.assign(target, Object.create({ inherited: 1 })); Object.keys(target).length;"
             ),
             Ok(Value::Number(0.0))
+        );
+        assert_eq!(
+            eval("Object.defineProperty.length;"),
+            Ok(Value::Number(3.0))
+        );
+        assert_eq!(
+            eval(
+                "let object = {}; Object.defineProperty(object, 'value', { value: 7 }); object.value;"
+            ),
+            Ok(Value::Number(7.0))
+        );
+        assert_eq!(
+            eval(
+                "let object = {}; Object.defineProperty(object, 'value', { value: 7 }); Object.keys(object).length;"
+            ),
+            Ok(Value::Number(0.0))
+        );
+        assert_eq!(
+            eval(
+                "let object = {}; Object.defineProperty(object, 'value', { value: 7, enumerable: true, writable: true, configurable: true }); Object.keys(object)[0];"
+            ),
+            Ok(Value::String("value".to_owned()))
+        );
+        assert_eq!(
+            eval(
+                "let object = {}; Object.defineProperty(object, 'value', { value: 7 }); object.value = 9; object.value;"
+            ),
+            Ok(Value::Number(7.0))
+        );
+        assert_eq!(
+            eval(
+                "let object = {}; Object.defineProperty(object, 'value', { value: 7, writable: true }); object.value = 9; object.value;"
+            ),
+            Ok(Value::Number(9.0))
+        );
+        assert_eq!(
+            eval(
+                "let object = {}; Object.defineProperty(object, 'value', { value: 7, configurable: true }); Object.getOwnPropertyDescriptor(object, 'value').configurable;"
+            ),
+            Ok(Value::Boolean(true))
         );
         assert_eq!(eval("Object.create.length;"), Ok(Value::Number(1.0)));
         assert_eq!(
