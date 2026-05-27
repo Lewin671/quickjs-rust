@@ -1,0 +1,1 @@
+Math.pow(2, 8) + ":" + Math.sqrt(81) + ":" + Math.round(-1.5) + ":" + (1 / Math.round(-0.4) === -Infinity) + ":" + Math.sign(-7) + ":" + (1 / Math.sign(-0) === -Infinity) + ":" + Math.clz32(1) + ":" + Math.imul(4294967295, 5)
