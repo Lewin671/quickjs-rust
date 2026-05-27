@@ -97,6 +97,10 @@ pub fn eval(source: &str) -> Result<Value, RuntimeError> {
 /// Returns runtime failures for unsupported operations.
 pub fn eval_script(script: &Script) -> Result<Value, RuntimeError> {
     let mut env = HashMap::new();
+    env.insert(
+        "this".to_owned(),
+        Value::Object(ObjectRef::new(HashMap::new())),
+    );
     env.insert("undefined".to_owned(), Value::Undefined);
     let mut last = Value::Undefined;
     for stmt in &script.body {
@@ -446,6 +450,9 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, Run
             }
             Ok(last)
         }
+        Expr::This { .. } => env.get("this").cloned().ok_or_else(|| RuntimeError {
+            message: "missing this binding".to_owned(),
+        }),
         Expr::Identifier { name, .. } => env.get(name).cloned().ok_or_else(|| RuntimeError {
             message: format!("undefined identifier `{name}`"),
         }),
@@ -1347,6 +1354,7 @@ mod tests {
         assert_eq!(eval("typeof 'x';"), Ok(Value::String("string".to_owned())));
         assert_eq!(eval("typeof null;"), Ok(Value::String("object".to_owned())));
         assert_eq!(eval("typeof {};"), Ok(Value::String("object".to_owned())));
+        assert_eq!(eval("typeof this;"), Ok(Value::String("object".to_owned())));
         assert_eq!(
             eval("function f() { return 1; } typeof f;"),
             Ok(Value::String("function".to_owned()))
@@ -1430,6 +1438,11 @@ mod tests {
             eval("let key = 'answer'; let o = {}; o[key] = 7; o.answer;"),
             Ok(Value::Number(7.0))
         );
+        assert_eq!(
+            eval("this.answer = 42; this.answer;"),
+            Ok(Value::Number(42.0))
+        );
+        assert_eq!(eval("this === this;"), Ok(Value::Boolean(true)));
     }
 
     #[test]

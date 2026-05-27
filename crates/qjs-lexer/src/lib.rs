@@ -26,6 +26,8 @@ pub enum TokenKind {
     False,
     /// `null`.
     Null,
+    /// `this`.
+    This,
     /// `var`.
     Var,
     /// `let`.
@@ -579,6 +581,7 @@ impl<'src> Lexer<'src> {
             "true" => TokenKind::True,
             "false" => TokenKind::False,
             "null" => TokenKind::Null,
+            "this" => TokenKind::This,
             "var" => TokenKind::Var,
             "let" => TokenKind::Let,
             "const" => TokenKind::Const,
@@ -727,13 +730,14 @@ mod tests {
     fn lexes_declaration_keywords() {
         let tokens =
             lex(
-                "var let const if else while do for switch case default try catch finally break continue function return throw debugger typeof void in delete variable",
+                "this var let const if else while do for switch case default try catch finally break continue function return throw debugger typeof void in delete variable",
             )
             .expect("source should lex");
         let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
         assert_eq!(
             kinds,
             vec![
+                TokenKind::This,
                 TokenKind::Var,
                 TokenKind::Let,
                 TokenKind::Const,
