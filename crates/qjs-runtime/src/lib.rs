@@ -205,6 +205,7 @@ impl ObjectRef {
 enum NativeFunction {
     Array,
     ArrayIsArray,
+    ArrayPrototypeAt,
     ArrayPrototypeConcat,
     ArrayPrototypeIncludes,
     ArrayPrototypeIndexOf,
@@ -540,6 +541,15 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
     array_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(array_function.clone()),
+    );
+    array_prototype.define_non_enumerable(
+        "at".to_owned(),
+        Value::Function(Function::new_native(
+            Some("at"),
+            1,
+            NativeFunction::ArrayPrototypeAt,
+            false,
+        )),
     );
     array_prototype.define_non_enumerable(
         "concat".to_owned(),
@@ -1188,6 +1198,7 @@ fn call_native_function(
     match native {
         NativeFunction::Array => native_array(&argument_values),
         NativeFunction::ArrayIsArray => native_array_is_array(&argument_values),
+        NativeFunction::ArrayPrototypeAt => native_array_prototype_at(this_value, &argument_values),
         NativeFunction::ArrayPrototypeConcat => {
             native_array_prototype_concat(this_value, &argument_values)
         }
@@ -1272,6 +1283,47 @@ fn concat_array_item(result: &mut Vec<Value>, value: Value) {
     match value {
         Value::Array(elements) => result.extend(elements),
         value => result.push(value),
+    }
+}
+
+fn native_array_prototype_at(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let Value::Array(elements) = this_value else {
+        return Err(RuntimeError {
+            message: "Array.prototype.at called on non-array".to_owned(),
+        });
+    };
+    let Some(index) = array_at_index(
+        elements.len(),
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+    )?
+    else {
+        return Ok(Value::Undefined);
+    };
+    Ok(elements.get(index).cloned().unwrap_or(Value::Undefined))
+}
+
+fn array_at_index(length: usize, index: Value) -> Result<Option<usize>, RuntimeError> {
+    let number = match index {
+        Value::Undefined => 0.0,
+        value => to_number(value)?,
+    };
+    if number.is_nan() {
+        return Ok(Some(0));
+    }
+
+    let integer = number.trunc();
+    let resolved = if integer < 0.0 {
+        length as f64 + integer
+    } else {
+        integer
+    };
+    if resolved < 0.0 || resolved >= length as f64 {
+        Ok(None)
+    } else {
+        Ok(Some(resolved as usize))
     }
 }
 
@@ -3085,6 +3137,7 @@ mod tests {
         );
         assert_eq!(eval("Array.length;"), Ok(Value::Number(1.0)));
         assert_eq!(eval("Array.isArray.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("Array.prototype.at.length;"), Ok(Value::Number(1.0)));
         assert_eq!(
             eval("Array.prototype.concat.length;"),
             Ok(Value::Number(1.0))
@@ -3206,6 +3259,15 @@ mod tests {
             Ok(Value::Number(4.0))
         );
         assert_eq!(eval("[0].concat('x', true)[2];"), Ok(Value::Boolean(true)));
+        assert_eq!(eval("[1, 2, 3].at(0);"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("[1, 2, 3].at(2);"), Ok(Value::Number(3.0)));
+        assert_eq!(eval("[1, 2, 3].at(-1);"), Ok(Value::Number(3.0)));
+        assert_eq!(eval("[1, 2, 3].at(-3);"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("[1, 2, 3].at(3);"), Ok(Value::Undefined));
+        assert_eq!(eval("[1, 2, 3].at(-4);"), Ok(Value::Undefined));
+        assert_eq!(eval("[1, 2, 3].at();"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("[1, 2, 3].at(1.9);"), Ok(Value::Number(2.0)));
+        assert_eq!(eval("[1, 2, 3].at(-1.9);"), Ok(Value::Number(3.0)));
         assert_eq!(eval("[1, 2, 3].includes(2);"), Ok(Value::Boolean(true)));
         assert_eq!(eval("[1, 2, 3].includes(4);"), Ok(Value::Boolean(false)));
         assert_eq!(eval("[1, 2, 3].includes(1, 1);"), Ok(Value::Boolean(false)));

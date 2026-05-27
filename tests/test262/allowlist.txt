@@ -4,6 +4,11 @@
 # enough support for the test to provide useful signal.
 cases/array-constructor-basic.js
 cases/array-constructor-multiple-arguments.js
+cases/array-at-basic.js
+cases/array-at-length.js
+cases/array-at-out-of-range.js
+cases/array-at-relative-index.js
+cases/array-at-to-integer.js
 cases/array-concat-array-arguments.js
 cases/array-concat-basic.js
 cases/array-concat-length.js
