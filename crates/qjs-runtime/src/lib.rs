@@ -277,6 +277,13 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, Run
             }
             Ok(Value::Object(ObjectRef::new(values)))
         }
+        Expr::Sequence { expressions, .. } => {
+            let mut last = Value::Undefined;
+            for expression in expressions {
+                last = eval_expr(expression, env)?;
+            }
+            Ok(last)
+        }
         Expr::Identifier { name, .. } => env.get(name).cloned().ok_or_else(|| RuntimeError {
             message: format!("undefined identifier `{name}`"),
         }),
@@ -767,6 +774,19 @@ mod tests {
         );
         assert_eq!(eval("true ? 1 : missing;"), Ok(Value::Number(1.0)));
         assert_eq!(eval("false ? missing : 2;"), Ok(Value::Number(2.0)));
+    }
+
+    #[test]
+    fn evaluates_sequence_expressions() {
+        assert_eq!(eval("1, 2;"), Ok(Value::Number(2.0)));
+        assert_eq!(
+            eval("let x = 0; x = 1, x = x + 2, x;"),
+            Ok(Value::Number(3.0))
+        );
+        assert_eq!(
+            eval("let x = 0; while ((x = x + 1, x < 3)) { } x;"),
+            Ok(Value::Number(3.0))
+        );
     }
 
     #[test]

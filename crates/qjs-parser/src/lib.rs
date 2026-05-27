@@ -410,7 +410,7 @@ impl Parser {
             };
 
             let init = if self.match_kind(&TokenKind::Equal) {
-                Some(self.expression()?)
+                Some(self.assignment()?)
             } else {
                 if kind == VarKind::Const {
                     return Err(ParseError {
@@ -437,7 +437,25 @@ impl Parser {
     }
 
     fn expression(&mut self) -> Result<Expr, ParseError> {
-        self.assignment()
+        let first = self.assignment()?;
+        if !self.match_kind(&TokenKind::Comma) {
+            return Ok(first);
+        }
+
+        let start = first.span().start;
+        let mut expressions = vec![first, self.assignment()?];
+        while self.match_kind(&TokenKind::Comma) {
+            expressions.push(self.assignment()?);
+        }
+        let end = expressions
+            .last()
+            .expect("sequence expression should have expressions")
+            .span()
+            .end;
+        Ok(Expr::Sequence {
+            expressions,
+            span: Span::new(start, end),
+        })
     }
 
     fn assignment(&mut self) -> Result<Expr, ParseError> {
@@ -670,7 +688,7 @@ impl Parser {
         let mut elements = Vec::new();
         if !self.at(&TokenKind::RightBracket) {
             loop {
-                elements.push(self.expression()?);
+                elements.push(self.assignment()?);
                 if !self.match_kind(&TokenKind::Comma) {
                     break;
                 }
@@ -711,7 +729,7 @@ impl Parser {
                     }
                 };
                 self.expect(&TokenKind::Colon)?;
-                let value = self.expression()?;
+                let value = self.assignment()?;
                 let span = Span::new(key_token.span.start, value.span().end);
                 properties.push(ObjectProperty { key, value, span });
                 if !self.match_kind(&TokenKind::Comma) {
@@ -741,7 +759,7 @@ impl Parser {
                 let mut arguments = Vec::new();
                 if !self.at(&TokenKind::RightParen) {
                     loop {
-                        arguments.push(self.expression()?);
+                        arguments.push(self.assignment()?);
                         if !self.match_kind(&TokenKind::Comma) {
                             break;
                         }
@@ -959,6 +977,17 @@ mod tests {
             panic!("expected one conditional expression statement");
         };
         assert!(matches!(alternate.as_ref(), Expr::Conditional { .. }));
+    }
+
+    #[test]
+    fn parses_sequence_expression() {
+        let script = parse_script("a = 1, b = 2, b;").expect("source should parse");
+        let [Stmt::Expr(Expr::Sequence { expressions, .. })] = script.body.as_slice() else {
+            panic!("expected one sequence expression statement");
+        };
+        assert_eq!(expressions.len(), 3);
+        assert!(matches!(expressions[0], Expr::Assignment { .. }));
+        assert!(matches!(expressions[1], Expr::Assignment { .. }));
     }
 
     #[test]
