@@ -82,3 +82,6 @@ cases/compound-assignment-basic.js
 cases/bitwise-compound-assignment-basic.js
 cases/shift-compound-assignment-basic.js
 cases/variable-multiple-basic.js
+cases/var-hoist-before-declaration-basic.js
+cases/var-hoist-unentered-block-basic.js
+cases/var-hoist-function-body-basic.js
