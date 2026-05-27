@@ -4,7 +4,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use qjs_ast::{
     AssignmentOp, AssignmentTarget, BinaryOp, CatchClause, Expr, ForInLeft, ForInit, Literal,
-    MemberProperty, Script, Stmt, SwitchCase, UnaryOp, UpdateOp,
+    MemberProperty, Script, Stmt, SwitchCase, UnaryOp, UpdateOp, VarKind,
 };
 use qjs_parser::parse_script;
 
@@ -111,7 +111,7 @@ pub fn eval_script(script: &Script) -> Result<Value, RuntimeError> {
     env.insert("this".to_owned(), global_this.clone());
     env.insert(GLOBAL_THIS_BINDING.to_owned(), global_this);
     env.insert("undefined".to_owned(), Value::Undefined);
-    hoist_function_declarations(&script.body, &mut env);
+    hoist_declarations(&script.body, &mut env);
     let mut last = Value::Undefined;
     for stmt in &script.body {
         match eval_stmt(stmt, &mut env)? {
@@ -294,7 +294,7 @@ fn eval_statement_list(
     body: &[Stmt],
     env: &mut HashMap<String, Value>,
 ) -> Result<Completion, RuntimeError> {
-    hoist_function_declarations(body, env);
+    hoist_declarations(body, env);
     let mut last = Value::Undefined;
     for stmt in body {
         match eval_stmt(stmt, env)? {
@@ -306,6 +306,88 @@ fn eval_statement_list(
         }
     }
     Ok(Completion::Normal(last))
+}
+
+fn hoist_declarations(body: &[Stmt], env: &mut HashMap<String, Value>) {
+    hoist_var_declarations(body, env);
+    hoist_function_declarations(body, env);
+}
+
+fn hoist_var_declarations(body: &[Stmt], env: &mut HashMap<String, Value>) {
+    for stmt in body {
+        match stmt {
+            Stmt::VarDecl {
+                kind: VarKind::Var,
+                declarations,
+                ..
+            } => {
+                for declaration in declarations {
+                    env.entry(declaration.name.clone())
+                        .or_insert(Value::Undefined);
+                }
+            }
+            Stmt::Block { body, .. } => hoist_var_declarations(body, env),
+            Stmt::If {
+                consequent,
+                alternate,
+                ..
+            } => {
+                hoist_var_declarations(std::slice::from_ref(consequent.as_ref()), env);
+                if let Some(alternate) = alternate {
+                    hoist_var_declarations(std::slice::from_ref(alternate.as_ref()), env);
+                }
+            }
+            Stmt::While { body, .. } | Stmt::DoWhile { body, .. } => {
+                hoist_var_declarations(std::slice::from_ref(body.as_ref()), env);
+            }
+            Stmt::For { init, body, .. } => {
+                if let Some(ForInit::VarDecl {
+                    kind: VarKind::Var,
+                    declarations,
+                    ..
+                }) = init
+                {
+                    for declaration in declarations {
+                        env.entry(declaration.name.clone())
+                            .or_insert(Value::Undefined);
+                    }
+                }
+                hoist_var_declarations(std::slice::from_ref(body.as_ref()), env);
+            }
+            Stmt::ForIn { left, body, .. } => {
+                if let ForInLeft::VarDecl {
+                    kind: VarKind::Var,
+                    name,
+                    ..
+                } = left
+                {
+                    env.entry(name.clone()).or_insert(Value::Undefined);
+                }
+                hoist_var_declarations(std::slice::from_ref(body.as_ref()), env);
+            }
+            Stmt::Switch { cases, .. } => {
+                for case in cases {
+                    hoist_var_declarations(&case.consequent, env);
+                }
+            }
+            Stmt::Try {
+                block,
+                handler,
+                finalizer,
+                ..
+            } => {
+                hoist_var_declarations(block, env);
+                if let Some(handler) = handler {
+                    hoist_var_declarations(&handler.body, env);
+                }
+                if let Some(finalizer) = finalizer {
+                    hoist_var_declarations(finalizer, env);
+                }
+            }
+            Stmt::FunctionDecl { .. } => {}
+            _ => {}
+        }
+    }
 }
 
 fn hoist_function_declarations(body: &[Stmt], env: &mut HashMap<String, Value>) {
@@ -1170,6 +1252,14 @@ mod tests {
             Ok(Value::Number(6.0))
         );
         assert_eq!(eval("var missing; missing;"), Ok(Value::Undefined));
+        assert_eq!(eval("x; var x;"), Ok(Value::Undefined));
+        assert_eq!(eval("x; var x = 1; x;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("if (false) { var x = 1; } x;"), Ok(Value::Undefined));
+        assert_eq!(
+            eval("function f() { return x; var x = 2; } f();"),
+            Ok(Value::Undefined)
+        );
+        assert!(eval("x; let x;").is_err());
         assert_eq!(
             eval("var x = 1, y = 2, missing; x + y;"),
             Ok(Value::Number(3.0))
