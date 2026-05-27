@@ -581,6 +581,7 @@ fn eval_unary(op: UnaryOp, argument: Value) -> Result<Value, RuntimeError> {
         UnaryOp::Not => Ok(Value::Boolean(!is_truthy(&argument))),
         UnaryOp::Plus => Ok(Value::Number(to_number(argument)?)),
         UnaryOp::Minus => Ok(Value::Number(-to_number(argument)?)),
+        UnaryOp::BitwiseNot => Ok(Value::Number(f64::from(!to_int32(argument)?))),
         UnaryOp::Typeof | UnaryOp::Delete => {
             unreachable!("operator requires unevaluated operand handling")
         }
@@ -652,6 +653,36 @@ fn eval_binary(left: Value, op: BinaryOp, right: Value) -> Result<Value, Runtime
         BinaryOp::Mul => left * right,
         BinaryOp::Div => left / right,
         BinaryOp::Rem => left % right,
+        BinaryOp::Shl => {
+            return Ok(Value::Number(f64::from(
+                to_int32_number(left) << (to_uint32_number(right) & 0x1f),
+            )));
+        }
+        BinaryOp::Shr => {
+            return Ok(Value::Number(f64::from(
+                to_int32_number(left) >> (to_uint32_number(right) & 0x1f),
+            )));
+        }
+        BinaryOp::UShr => {
+            return Ok(Value::Number(f64::from(
+                to_uint32_number(left) >> (to_uint32_number(right) & 0x1f),
+            )));
+        }
+        BinaryOp::BitwiseAnd => {
+            return Ok(Value::Number(f64::from(
+                to_int32_number(left) & to_int32_number(right),
+            )));
+        }
+        BinaryOp::BitwiseXor => {
+            return Ok(Value::Number(f64::from(
+                to_int32_number(left) ^ to_int32_number(right),
+            )));
+        }
+        BinaryOp::BitwiseOr => {
+            return Ok(Value::Number(f64::from(
+                to_int32_number(left) | to_int32_number(right),
+            )));
+        }
         BinaryOp::Lt => return Ok(Value::Boolean(left < right)),
         BinaryOp::Le => return Ok(Value::Boolean(left <= right)),
         BinaryOp::Gt => return Ok(Value::Boolean(left > right)),
@@ -718,6 +749,27 @@ fn to_number(value: Value) -> Result<f64, RuntimeError> {
     }
 }
 
+fn to_int32(value: Value) -> Result<i32, RuntimeError> {
+    to_number(value).map(to_int32_number)
+}
+
+fn to_int32_number(number: f64) -> i32 {
+    let int = to_uint32_number(number);
+    if int >= 0x8000_0000 {
+        (i64::from(int) - 0x1_0000_0000) as i32
+    } else {
+        int as i32
+    }
+}
+
+fn to_uint32_number(number: f64) -> u32 {
+    if !number.is_finite() || number == 0.0 {
+        return 0;
+    }
+    const TWO_32: f64 = 4_294_967_296.0;
+    number.trunc().rem_euclid(TWO_32) as u32
+}
+
 fn is_truthy(value: &Value) -> bool {
     match value {
         Value::Number(number) => *number != 0.0 && !number.is_nan(),
@@ -737,6 +789,18 @@ mod tests {
         assert_eq!(eval("1 + 2 * 3;"), Ok(Value::Number(7.0)));
         assert_eq!(eval("true + true;"), Ok(Value::Number(2.0)));
         assert_eq!(eval("true * 2;"), Ok(Value::Number(2.0)));
+    }
+
+    #[test]
+    fn evaluates_bitwise_and_shift_expressions() {
+        assert_eq!(eval("5 & 3;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("5 | 2;"), Ok(Value::Number(7.0)));
+        assert_eq!(eval("5 ^ 3;"), Ok(Value::Number(6.0)));
+        assert_eq!(eval("2 << 3;"), Ok(Value::Number(16.0)));
+        assert_eq!(eval("-8 >> 1;"), Ok(Value::Number(-4.0)));
+        assert_eq!(eval("-1 >>> 0;"), Ok(Value::Number(4_294_967_295.0)));
+        assert_eq!(eval("~false;"), Ok(Value::Number(-1.0)));
+        assert_eq!(eval("1 + 2 << 3;"), Ok(Value::Number(24.0)));
     }
 
     #[test]

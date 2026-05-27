@@ -391,6 +391,8 @@ pub enum UnaryOp {
     Minus,
     /// Logical negation.
     Not,
+    /// Bitwise complement.
+    BitwiseNot,
     /// Type query.
     Typeof,
     /// Property deletion.
@@ -410,6 +412,12 @@ pub enum BinaryOp {
     Div,
     /// Remainder.
     Rem,
+    /// Left shift.
+    Shl,
+    /// Signed right shift.
+    Shr,
+    /// Unsigned right shift.
+    UShr,
     /// Loose equality.
     Eq,
     /// Strict equality.
@@ -418,6 +426,12 @@ pub enum BinaryOp {
     Ne,
     /// Strict inequality.
     StrictNe,
+    /// Bitwise and.
+    BitwiseAnd,
+    /// Bitwise xor.
+    BitwiseXor,
+    /// Bitwise or.
+    BitwiseOr,
     /// Less than.
     Lt,
     /// Less than or equal.

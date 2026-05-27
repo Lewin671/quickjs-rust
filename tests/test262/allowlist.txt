@@ -8,6 +8,10 @@ cases/conditional-basic.js
 cases/conditional-short-circuit.js
 cases/comma-basic.js
 cases/comma-side-effects.js
+cases/bitwise-and-basic.js
+cases/bitwise-or-basic.js
+cases/bitwise-not-basic.js
+cases/left-shift-basic.js
 cases/logical-and-basic.js
 cases/undefined-basic.js
 cases/object-literal-basic.js
