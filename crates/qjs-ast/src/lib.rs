@@ -98,6 +98,17 @@ pub enum Stmt {
         /// Source span.
         span: Span,
     },
+    /// A try statement.
+    Try {
+        /// Protected block statements.
+        block: Vec<Stmt>,
+        /// Optional catch clause.
+        handler: Option<CatchClause>,
+        /// Optional finally block statements.
+        finalizer: Option<Vec<Stmt>>,
+        /// Source span.
+        span: Span,
+    },
     /// A function declaration.
     FunctionDecl {
         /// Function name.
@@ -158,6 +169,17 @@ pub struct SwitchCase {
     pub test: Option<Expr>,
     /// Clause statements.
     pub consequent: Vec<Stmt>,
+    /// Source span.
+    pub span: Span,
+}
+
+/// A catch clause.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CatchClause {
+    /// Optional catch binding.
+    pub param: Option<String>,
+    /// Catch block statements.
+    pub body: Vec<Stmt>,
     /// Source span.
     pub span: Span,
 }
