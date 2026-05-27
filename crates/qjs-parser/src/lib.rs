@@ -54,44 +54,81 @@ impl Parser {
     }
 
     fn expression(&mut self) -> Result<Expr, ParseError> {
-        self.additive()
+        self.logical_or()
+    }
+
+    fn logical_or(&mut self) -> Result<Expr, ParseError> {
+        self.binary_left_assoc(
+            Self::logical_and,
+            &[(TokenKind::PipePipe, BinaryOp::LogicalOr)],
+        )
+    }
+
+    fn logical_and(&mut self) -> Result<Expr, ParseError> {
+        self.binary_left_assoc(
+            Self::equality,
+            &[(TokenKind::AmpersandAmpersand, BinaryOp::LogicalAnd)],
+        )
+    }
+
+    fn equality(&mut self) -> Result<Expr, ParseError> {
+        self.binary_left_assoc(
+            Self::comparison,
+            &[
+                (TokenKind::EqualEqual, BinaryOp::Eq),
+                (TokenKind::EqualEqualEqual, BinaryOp::StrictEq),
+                (TokenKind::BangEqual, BinaryOp::Ne),
+                (TokenKind::BangEqualEqual, BinaryOp::StrictNe),
+            ],
+        )
+    }
+
+    fn comparison(&mut self) -> Result<Expr, ParseError> {
+        self.binary_left_assoc(
+            Self::additive,
+            &[
+                (TokenKind::Less, BinaryOp::Lt),
+                (TokenKind::LessEqual, BinaryOp::Le),
+                (TokenKind::Greater, BinaryOp::Gt),
+                (TokenKind::GreaterEqual, BinaryOp::Ge),
+            ],
+        )
     }
 
     fn additive(&mut self) -> Result<Expr, ParseError> {
-        let mut expr = self.multiplicative()?;
-        while self.at(&TokenKind::Plus) || self.at(&TokenKind::Minus) {
-            let op = if self.match_kind(&TokenKind::Plus) {
-                BinaryOp::Add
-            } else {
-                self.expect(&TokenKind::Minus)?;
-                BinaryOp::Sub
-            };
-            let right = self.multiplicative()?;
-            let span = Span::new(expr.span().start, right.span().end);
-            expr = Expr::Binary {
-                left: Box::new(expr),
-                op,
-                right: Box::new(right),
-                span,
-            };
-        }
-        Ok(expr)
+        self.binary_left_assoc(
+            Self::multiplicative,
+            &[
+                (TokenKind::Plus, BinaryOp::Add),
+                (TokenKind::Minus, BinaryOp::Sub),
+            ],
+        )
     }
 
     fn multiplicative(&mut self) -> Result<Expr, ParseError> {
-        let mut expr = self.primary()?;
-        while self.at(&TokenKind::Star) || self.at(&TokenKind::Slash) {
-            let op = if self.match_kind(&TokenKind::Star) {
-                BinaryOp::Mul
-            } else {
-                self.expect(&TokenKind::Slash)?;
-                BinaryOp::Div
-            };
-            let right = self.primary()?;
+        self.binary_left_assoc(
+            Self::primary,
+            &[
+                (TokenKind::Star, BinaryOp::Mul),
+                (TokenKind::Slash, BinaryOp::Div),
+                (TokenKind::Percent, BinaryOp::Rem),
+            ],
+        )
+    }
+
+    fn binary_left_assoc(
+        &mut self,
+        next: fn(&mut Self) -> Result<Expr, ParseError>,
+        operators: &[(TokenKind, BinaryOp)],
+    ) -> Result<Expr, ParseError> {
+        let mut expr = next(self)?;
+        while let Some((kind, op)) = operators.iter().find(|(kind, _)| self.at(kind)) {
+            self.expect(kind)?;
+            let right = next(self)?;
             let span = Span::new(expr.span().start, right.span().end);
             expr = Expr::Binary {
                 left: Box::new(expr),
-                op,
+                op: *op,
                 right: Box::new(right),
                 span,
             };
@@ -186,5 +223,31 @@ mod tests {
             panic!("expected one binary expression statement");
         };
         assert_eq!(*op, BinaryOp::Add);
+    }
+
+    #[test]
+    fn parses_comparison_before_equality() {
+        let script = parse_script("1 + 2 >= 3 === true;").expect("source should parse");
+        let [Stmt::Expr(Expr::Binary { op, left, .. })] = script.body.as_slice() else {
+            panic!("expected one binary expression statement");
+        };
+        assert_eq!(*op, BinaryOp::StrictEq);
+        let Expr::Binary { op: left_op, .. } = left.as_ref() else {
+            panic!("expected comparison on left side");
+        };
+        assert_eq!(*left_op, BinaryOp::Ge);
+    }
+
+    #[test]
+    fn parses_logical_precedence() {
+        let script = parse_script("true || false && false;").expect("source should parse");
+        let [Stmt::Expr(Expr::Binary { op, right, .. })] = script.body.as_slice() else {
+            panic!("expected one binary expression statement");
+        };
+        assert_eq!(*op, BinaryOp::LogicalOr);
+        let Expr::Binary { op: right_op, .. } = right.as_ref() else {
+            panic!("expected logical and on right side");
+        };
+        assert_eq!(*right_op, BinaryOp::LogicalAnd);
     }
 }
