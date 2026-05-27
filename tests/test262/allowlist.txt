@@ -31,6 +31,7 @@ cases/typeof-basic.js
 cases/typeof-unresolvable.js
 cases/in-basic.js
 cases/in-undefined-vs-missing.js
+cases/in-prototype-chain-basic.js
 cases/delete-basic.js
 cases/delete-object-property.js
 cases/object-property-values.js
@@ -53,6 +54,9 @@ cases/new-expression-this-basic.js
 cases/new-expression-no-args-basic.js
 cases/new-expression-return-object-basic.js
 cases/new-expression-return-primitive-basic.js
+cases/new-expression-prototype-property-basic.js
+cases/new-expression-prototype-own-shadow-basic.js
+cases/new-expression-reassigned-prototype-basic.js
 cases/arguments-empty-basic.js
 cases/arguments-index-basic.js
 cases/function-extra-arguments-basic.js
