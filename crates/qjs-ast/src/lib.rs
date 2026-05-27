@@ -29,8 +29,30 @@ pub struct Script {
 pub enum Stmt {
     /// An expression used as a statement.
     Expr(Expr),
+    /// A variable declaration.
+    VarDecl {
+        /// Declaration kind.
+        kind: VarKind,
+        /// Binding name.
+        name: String,
+        /// Optional initializer.
+        init: Option<Expr>,
+        /// Source span.
+        span: Span,
+    },
     /// An empty statement represented by `;`.
     Empty,
+}
+
+/// Variable declaration kind.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum VarKind {
+    /// `var`.
+    Var,
+    /// `let`.
+    Let,
+    /// `const`.
+    Const,
 }
 
 /// An expression node.
