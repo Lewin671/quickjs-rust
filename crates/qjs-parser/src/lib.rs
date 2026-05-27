@@ -87,6 +87,10 @@ impl Parser {
             return self.throw_statement();
         }
 
+        if self.at(&TokenKind::Debugger) {
+            return Ok(self.debugger_statement());
+        }
+
         if self.at(&TokenKind::Break) {
             return Ok(self.break_or_continue_statement(TokenKind::Break));
         }
@@ -468,6 +472,15 @@ impl Parser {
             argument,
             span: Span::new(start, end),
         })
+    }
+
+    fn debugger_statement(&mut self) -> Stmt {
+        let token = self.advance();
+        self.match_kind(&TokenKind::Semicolon);
+        let end = self.tokens[self.cursor.saturating_sub(1)].span.end;
+        Stmt::Debugger {
+            span: Span::new(token.span.start, end),
+        }
     }
 
     fn break_or_continue_statement(&mut self, kind: TokenKind) -> Stmt {
@@ -1081,6 +1094,7 @@ fn property_name(kind: TokenKind) -> Option<String> {
         TokenKind::Function => Some("function".to_owned()),
         TokenKind::Return => Some("return".to_owned()),
         TokenKind::Throw => Some("throw".to_owned()),
+        TokenKind::Debugger => Some("debugger".to_owned()),
         TokenKind::Typeof => Some("typeof".to_owned()),
         TokenKind::Void => Some("void".to_owned()),
         TokenKind::In => Some("in".to_owned()),
@@ -1130,6 +1144,7 @@ fn stmt_end(stmt: &Stmt) -> usize {
         | Stmt::FunctionDecl { span, .. }
         | Stmt::Return { span, .. }
         | Stmt::Throw { span, .. }
+        | Stmt::Debugger { span }
         | Stmt::Break { span }
         | Stmt::Continue { span }
         | Stmt::VarDecl { span, .. } => span.end,
@@ -1535,6 +1550,15 @@ mod tests {
                 argument: Some(_),
                 ..
             }]
+        ));
+    }
+
+    #[test]
+    fn parses_debugger_statement() {
+        let script = parse_script("debugger; 1;").expect("source should parse");
+        assert!(matches!(
+            script.body.as_slice(),
+            [Stmt::Debugger { .. }, Stmt::Expr(_)]
         ));
     }
 

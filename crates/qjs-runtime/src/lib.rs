@@ -255,6 +255,7 @@ fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Completion
             };
             Err(RuntimeError { message })
         }
+        Stmt::Debugger { .. } => Ok(Completion::Normal(Value::Undefined)),
         Stmt::Break { .. } => Ok(Completion::Break),
         Stmt::Continue { .. } => Ok(Completion::Continue),
         Stmt::VarDecl { declarations, .. } => {
@@ -1205,6 +1206,15 @@ mod tests {
         assert_eq!(error.message, "throw statement executed: expected");
         let error = eval("throw 42;").expect_err("throw should fail evaluation");
         assert_eq!(error.message, "throw statement executed: 42");
+    }
+
+    #[test]
+    fn evaluates_debugger_statement_as_noop() {
+        assert_eq!(eval("debugger; 1;"), Ok(Value::Number(1.0)));
+        assert_eq!(
+            eval("let x = 0; if (true) debugger; x = 2; x;"),
+            Ok(Value::Number(2.0))
+        );
     }
 
     #[test]

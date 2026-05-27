@@ -52,6 +52,7 @@ cases/do-while-continue-basic.js
 cases/switch-case-basic.js
 cases/switch-default-fallthrough.js
 cases/switch-strict-match.js
+cases/debugger-statement-basic.js
 cases/throw-argument-not-reached.js
 cases/postfix-increment-basic.js
 cases/prefix-increment-basic.js
