@@ -1,8 +1,8 @@
 //! Parser for a small JavaScript subset.
 
 use qjs_ast::{
-    AssignmentTarget, BinaryOp, Expr, Literal, MemberProperty, ObjectProperty, Script, Span, Stmt,
-    UnaryOp, VarKind,
+    AssignmentTarget, BinaryOp, Expr, ForInit, Literal, MemberProperty, ObjectProperty, Script,
+    Span, Stmt, UnaryOp, VarKind,
 };
 use qjs_lexer::{Token, TokenKind, lex};
 
@@ -61,6 +61,10 @@ impl Parser {
 
         if self.at(&TokenKind::While) {
             return self.while_statement();
+        }
+
+        if self.at(&TokenKind::For) {
+            return self.for_statement();
         }
 
         if self.at(&TokenKind::Function) {
@@ -148,6 +152,51 @@ impl Parser {
         let end = stmt_end(&body);
         Ok(Stmt::While {
             test,
+            body: Box::new(body),
+            span: Span::new(start, end),
+        })
+    }
+
+    fn for_statement(&mut self) -> Result<Stmt, ParseError> {
+        let start = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .start;
+        self.expect(&TokenKind::For)?;
+        self.expect(&TokenKind::LeftParen)?;
+        let init = if self.match_kind(&TokenKind::Semicolon) {
+            None
+        } else if self.at(&TokenKind::Var) || self.at(&TokenKind::Let) || self.at(&TokenKind::Const)
+        {
+            let init = self.for_variable_declaration()?;
+            self.expect(&TokenKind::Semicolon)?;
+            Some(init)
+        } else {
+            let init = self.expression()?;
+            self.expect(&TokenKind::Semicolon)?;
+            Some(ForInit::Expr(init))
+        };
+
+        let test = if self.at(&TokenKind::Semicolon) {
+            None
+        } else {
+            Some(self.expression()?)
+        };
+        self.expect(&TokenKind::Semicolon)?;
+
+        let update = if self.at(&TokenKind::RightParen) {
+            None
+        } else {
+            Some(self.expression()?)
+        };
+        self.expect(&TokenKind::RightParen)?;
+        let body = self.statement()?;
+        let end = stmt_end(&body);
+        Ok(Stmt::For {
+            init,
+            test,
+            update,
             body: Box::new(body),
             span: Span::new(start, end),
         })
@@ -257,6 +306,25 @@ impl Parser {
     }
 
     fn variable_declaration(&mut self) -> Result<Stmt, ParseError> {
+        let ForInit::VarDecl {
+            kind,
+            name,
+            init,
+            span,
+        } = self.for_variable_declaration()?
+        else {
+            unreachable!("for variable declaration helper always returns VarDecl");
+        };
+        self.match_kind(&TokenKind::Semicolon);
+        Ok(Stmt::VarDecl {
+            kind,
+            name,
+            init,
+            span,
+        })
+    }
+
+    fn for_variable_declaration(&mut self) -> Result<ForInit, ParseError> {
         let start = self
             .peek()
             .expect("parser should always have eof token")
@@ -291,11 +359,10 @@ impl Parser {
             None
         };
 
-        self.match_kind(&TokenKind::Semicolon);
         let end = init
             .as_ref()
             .map_or(name_token.span.end, |expr| expr.span().end);
-        Ok(Stmt::VarDecl {
+        Ok(ForInit::VarDecl {
             kind,
             name,
             init,
@@ -667,6 +734,7 @@ fn property_name(kind: TokenKind) -> Option<String> {
         TokenKind::If => Some("if".to_owned()),
         TokenKind::Else => Some("else".to_owned()),
         TokenKind::While => Some("while".to_owned()),
+        TokenKind::For => Some("for".to_owned()),
         TokenKind::Function => Some("function".to_owned()),
         TokenKind::Return => Some("return".to_owned()),
         TokenKind::Throw => Some("throw".to_owned()),
@@ -683,6 +751,7 @@ fn stmt_end(stmt: &Stmt) -> usize {
         Stmt::Block { span, .. }
         | Stmt::If { span, .. }
         | Stmt::While { span, .. }
+        | Stmt::For { span, .. }
         | Stmt::FunctionDecl { span, .. }
         | Stmt::Return { span, .. }
         | Stmt::Throw { span }
@@ -693,7 +762,9 @@ fn stmt_end(stmt: &Stmt) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use qjs_ast::{AssignmentTarget, BinaryOp, Expr, MemberProperty, Stmt, UnaryOp, VarKind};
+    use qjs_ast::{
+        AssignmentTarget, BinaryOp, Expr, ForInit, MemberProperty, Stmt, UnaryOp, VarKind,
+    };
 
     use super::parse_script;
 
@@ -822,6 +893,34 @@ mod tests {
         let [Stmt::While { body, .. }] = script.body.as_slice() else {
             panic!("expected one while statement");
         };
+        assert!(matches!(body.as_ref(), Stmt::Block { .. }));
+    }
+
+    #[test]
+    fn parses_for_statement() {
+        let script =
+            parse_script("for (var i = 0; i < 3; i = i + 1) { i; }").expect("source should parse");
+        let [
+            Stmt::For {
+                init,
+                test,
+                update,
+                body,
+                ..
+            },
+        ] = script.body.as_slice()
+        else {
+            panic!("expected one for statement");
+        };
+        assert!(matches!(init, Some(ForInit::VarDecl { name, .. }) if name == "i"));
+        assert!(matches!(
+            test,
+            Some(Expr::Binary {
+                op: BinaryOp::Lt,
+                ..
+            })
+        ));
+        assert!(matches!(update, Some(Expr::Assignment { .. })));
         assert!(matches!(body.as_ref(), Stmt::Block { .. }));
     }
 
