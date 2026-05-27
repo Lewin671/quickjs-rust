@@ -525,6 +525,7 @@ fn eval_assignment(
         AssignmentOp::AddAssign => eval_binary(read_target(target, env)?, BinaryOp::Add, right)?,
         AssignmentOp::SubAssign => eval_binary(read_target(target, env)?, BinaryOp::Sub, right)?,
         AssignmentOp::MulAssign => eval_binary(read_target(target, env)?, BinaryOp::Mul, right)?,
+        AssignmentOp::PowAssign => eval_binary(read_target(target, env)?, BinaryOp::Pow, right)?,
         AssignmentOp::DivAssign => eval_binary(read_target(target, env)?, BinaryOp::Div, right)?,
         AssignmentOp::RemAssign => eval_binary(read_target(target, env)?, BinaryOp::Rem, right)?,
         AssignmentOp::LogicalAndAssign
@@ -727,6 +728,7 @@ fn eval_binary(left: Value, op: BinaryOp, right: Value) -> Result<Value, Runtime
         BinaryOp::Add => left + right,
         BinaryOp::Sub => left - right,
         BinaryOp::Mul => left * right,
+        BinaryOp::Pow => left.powf(right),
         BinaryOp::Div => left / right,
         BinaryOp::Rem => left % right,
         BinaryOp::Shl => {
@@ -881,6 +883,10 @@ mod tests {
         assert_eq!(eval("1 + 2 * 3;"), Ok(Value::Number(7.0)));
         assert_eq!(eval("true + true;"), Ok(Value::Number(2.0)));
         assert_eq!(eval("true * 2;"), Ok(Value::Number(2.0)));
+        assert_eq!(eval("2 ** 3;"), Ok(Value::Number(8.0)));
+        assert_eq!(eval("2 ** 3 ** 2;"), Ok(Value::Number(512.0)));
+        assert_eq!(eval("3 * 2 ** 3;"), Ok(Value::Number(24.0)));
+        assert_eq!(eval("2 ** -1 * 2;"), Ok(Value::Number(1.0)));
     }
 
     #[test]
@@ -981,6 +987,7 @@ mod tests {
         assert_eq!(eval("let x = false; x++;"), Ok(Value::Number(0.0)));
         assert_eq!(eval("let x = 3; x--; x;"), Ok(Value::Number(2.0)));
         assert_eq!(eval("let x = 1; x += 2; x;"), Ok(Value::Number(3.0)));
+        assert_eq!(eval("let x = -3; x **= 3; x;"), Ok(Value::Number(-27.0)));
         assert_eq!(
             eval("let x = 'a'; x += 1; x;"),
             Ok(Value::String("a1".to_owned()))

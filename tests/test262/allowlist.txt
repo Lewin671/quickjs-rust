@@ -12,6 +12,8 @@ cases/bitwise-and-basic.js
 cases/bitwise-or-basic.js
 cases/bitwise-not-basic.js
 cases/left-shift-basic.js
+cases/exponentiation-basic.js
+cases/exponentiation-assignment-basic.js
 cases/nullish-follows-null.js
 cases/nullish-follows-undefined.js
 cases/nullish-short-circuit.js
