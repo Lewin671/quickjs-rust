@@ -528,6 +528,18 @@ fn eval_assignment(
         AssignmentOp::PowAssign => eval_binary(read_target(target, env)?, BinaryOp::Pow, right)?,
         AssignmentOp::DivAssign => eval_binary(read_target(target, env)?, BinaryOp::Div, right)?,
         AssignmentOp::RemAssign => eval_binary(read_target(target, env)?, BinaryOp::Rem, right)?,
+        AssignmentOp::ShlAssign => eval_binary(read_target(target, env)?, BinaryOp::Shl, right)?,
+        AssignmentOp::ShrAssign => eval_binary(read_target(target, env)?, BinaryOp::Shr, right)?,
+        AssignmentOp::UShrAssign => eval_binary(read_target(target, env)?, BinaryOp::UShr, right)?,
+        AssignmentOp::BitwiseAndAssign => {
+            eval_binary(read_target(target, env)?, BinaryOp::BitwiseAnd, right)?
+        }
+        AssignmentOp::BitwiseXorAssign => {
+            eval_binary(read_target(target, env)?, BinaryOp::BitwiseXor, right)?
+        }
+        AssignmentOp::BitwiseOrAssign => {
+            eval_binary(read_target(target, env)?, BinaryOp::BitwiseOr, right)?
+        }
         AssignmentOp::LogicalAndAssign
         | AssignmentOp::LogicalOrAssign
         | AssignmentOp::NullishAssign => right,
@@ -989,6 +1001,15 @@ mod tests {
         assert_eq!(eval("let x = 3; x--; x;"), Ok(Value::Number(2.0)));
         assert_eq!(eval("let x = 1; x += 2; x;"), Ok(Value::Number(3.0)));
         assert_eq!(eval("let x = -3; x **= 3; x;"), Ok(Value::Number(-27.0)));
+        assert_eq!(eval("let x = 2; x <<= 3; x;"), Ok(Value::Number(16.0)));
+        assert_eq!(eval("let x = -8; x >>= 1; x;"), Ok(Value::Number(-4.0)));
+        assert_eq!(
+            eval("let x = -1; x >>>= 0; x;"),
+            Ok(Value::Number(4_294_967_295.0))
+        );
+        assert_eq!(eval("let x = 5; x &= 3; x;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("let x = 5; x ^= 3; x;"), Ok(Value::Number(6.0)));
+        assert_eq!(eval("let x = 5; x |= 2; x;"), Ok(Value::Number(7.0)));
         assert_eq!(
             eval("let x = 'a'; x += 1; x;"),
             Ok(Value::String("a1".to_owned()))

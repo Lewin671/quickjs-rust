@@ -525,6 +525,18 @@ impl Parser {
             AssignmentOp::DivAssign
         } else if self.match_kind(&TokenKind::PercentEqual) {
             AssignmentOp::RemAssign
+        } else if self.match_kind(&TokenKind::LessLessEqual) {
+            AssignmentOp::ShlAssign
+        } else if self.match_kind(&TokenKind::GreaterGreaterEqual) {
+            AssignmentOp::ShrAssign
+        } else if self.match_kind(&TokenKind::GreaterGreaterGreaterEqual) {
+            AssignmentOp::UShrAssign
+        } else if self.match_kind(&TokenKind::AmpersandEqual) {
+            AssignmentOp::BitwiseAndAssign
+        } else if self.match_kind(&TokenKind::CaretEqual) {
+            AssignmentOp::BitwiseXorAssign
+        } else if self.match_kind(&TokenKind::PipeEqual) {
+            AssignmentOp::BitwiseOrAssign
         } else if self.match_kind(&TokenKind::AmpersandAmpersandEqual) {
             AssignmentOp::LogicalAndAssign
         } else if self.match_kind(&TokenKind::PipePipeEqual) {
@@ -1237,7 +1249,9 @@ mod tests {
 
     #[test]
     fn parses_update_and_compound_assignment() {
-        let script = parse_script("++i; i++; i += 2; obj.count--; a &&= b; c ||= d; e ??= f;")
+        let script = parse_script(
+            "++i; i++; i += 2; obj.count--; a <<= b; c >>= d; e >>>= f; g &= h; i ^= j; k |= l; m &&= n; o ||= p; q ??= r;",
+        )
             .expect("source should parse");
         let [
             Stmt::Expr(Expr::Update {
@@ -1257,6 +1271,30 @@ mod tests {
             Stmt::Expr(Expr::Update {
                 op: UpdateOp::Decrement,
                 prefix: false,
+                ..
+            }),
+            Stmt::Expr(Expr::Assignment {
+                op: AssignmentOp::ShlAssign,
+                ..
+            }),
+            Stmt::Expr(Expr::Assignment {
+                op: AssignmentOp::ShrAssign,
+                ..
+            }),
+            Stmt::Expr(Expr::Assignment {
+                op: AssignmentOp::UShrAssign,
+                ..
+            }),
+            Stmt::Expr(Expr::Assignment {
+                op: AssignmentOp::BitwiseAndAssign,
+                ..
+            }),
+            Stmt::Expr(Expr::Assignment {
+                op: AssignmentOp::BitwiseXorAssign,
+                ..
+            }),
+            Stmt::Expr(Expr::Assignment {
+                op: AssignmentOp::BitwiseOrAssign,
                 ..
             }),
             Stmt::Expr(Expr::Assignment {

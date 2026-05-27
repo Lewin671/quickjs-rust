@@ -54,4 +54,6 @@ cases/postfix-increment-basic.js
 cases/prefix-increment-basic.js
 cases/postfix-decrement-basic.js
 cases/compound-assignment-basic.js
+cases/bitwise-compound-assignment-basic.js
+cases/shift-compound-assignment-basic.js
 cases/variable-multiple-basic.js
