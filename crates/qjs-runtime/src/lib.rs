@@ -285,6 +285,19 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, Run
             let value = eval_expr(value, env)?;
             eval_assignment(target, *op, value, env)
         }
+        Expr::Conditional {
+            test,
+            consequent,
+            alternate,
+            ..
+        } => {
+            let test = eval_expr(test, env)?;
+            if is_truthy(&test) {
+                eval_expr(consequent, env)
+            } else {
+                eval_expr(alternate, env)
+            }
+        }
         Expr::Update {
             target, op, prefix, ..
         } => eval_update(target, *op, *prefix, env),
@@ -727,6 +740,18 @@ mod tests {
     fn evaluates_logical_expressions() {
         assert_eq!(eval("0 || 5;"), Ok(Value::Number(5.0)));
         assert_eq!(eval("1 && 7;"), Ok(Value::Number(7.0)));
+    }
+
+    #[test]
+    fn evaluates_conditional_expressions() {
+        assert_eq!(eval("true ? 1 : 2;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("false ? 1 : 2;"), Ok(Value::Number(2.0)));
+        assert_eq!(
+            eval("let x = true ? 'yes' : 'no'; x;"),
+            Ok(Value::String("yes".to_owned()))
+        );
+        assert_eq!(eval("true ? 1 : missing;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("false ? missing : 2;"), Ok(Value::Number(2.0)));
     }
 
     #[test]
