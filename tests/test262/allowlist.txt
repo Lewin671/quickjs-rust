@@ -5,3 +5,6 @@
 cases/strict-equals-basic.js
 cases/less-than-basic.js
 cases/logical-and-basic.js
+cases/undefined-basic.js
+cases/object-literal-basic.js
+cases/object-put-basic.js

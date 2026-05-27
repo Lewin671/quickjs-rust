@@ -19,7 +19,7 @@ boundaries and make each change verifiable with focused tests.
 - Test only: `cargo test --workspace`
 - CLI smoke test: `cargo run -p qjs-cli -- -e "1 + 2;"`
 - QuickJS comparison smoke tests: `./scripts/compare-qjs.sh`
-- Test262 subset metadata: `./scripts/test262-subset.sh`
+- Test262 subset runner: `./scripts/test262-subset.sh`
 
 If Rust is not installed, report that clearly and do not fake test results.
 Both `scripts/bootstrap.sh` and `scripts/check.sh` fall back to
@@ -141,15 +141,21 @@ workspace configuration, global error models, or broad architecture documents.
   layer.
 - Use QuickJS-NG comparisons for selected smoke programs when semantics are
   unclear.
-- Use Test262 through curated subsets with explicit expected failures; do not
-  treat full-suite failure counts as useful signal during early development.
+- Use Test262 through curated runnable subsets with explicit provenance and
+  expected failures; do not treat full-suite failure counts as useful signal
+  during early development.
 - When a Test262 case is expected to fail, record the reason near the allowlist
   or expected-failure list rather than relying on tribal knowledge.
 - Prefer small fixtures that are easy to inspect over broad generated tests for
   early parser and runtime work.
 - Add simple QuickJS comparison programs under `tests/fixtures/compare-qjs/`.
-- Add Test262 paths to `tests/test262/allowlist.txt` only when the current
-  harness can run them deterministically.
+- Add Test262-derived cases under `tests/test262/cases/` only when the current
+  harness can run them deterministically. Each case must start with
+  `// Derived from: <official Test262 path>` so the runner can validate
+  provenance.
+- Add those local case paths to `tests/test262/allowlist.txt`; do not list raw
+  upstream Test262 files unless the runner is intentionally changed to execute
+  them.
 - Run `./scripts/test262-subset.sh` after editing Test262 allowlists or expected
   failures.
 
