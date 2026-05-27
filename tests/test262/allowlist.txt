@@ -30,6 +30,10 @@ cases/object-constructor-object-identity.js
 cases/object-create-basic.js
 cases/object-create-null-prototype-basic.js
 cases/object-get-prototype-of-basic.js
+cases/object-has-own-property-basic.js
+cases/object-has-own-property-length.js
+cases/object-has-own-property-missing.js
+cases/object-has-own-property-prototype-negative.js
 cases/object-literal-basic.js
 cases/object-literal-object-instanceof-basic.js
 cases/object-put-basic.js

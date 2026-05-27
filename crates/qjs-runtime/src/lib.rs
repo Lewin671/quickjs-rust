@@ -110,6 +110,10 @@ impl ObjectRef {
                 .is_some_and(|proto| proto.contains_property(key))
     }
 
+    fn has_own_property(&self, key: &str) -> bool {
+        self.properties.borrow().contains_key(key)
+    }
+
     fn has_prototype(&self, prototype: &ObjectRef) -> bool {
         self.prototype
             .as_deref()
@@ -126,6 +130,7 @@ enum NativeFunction {
     Object,
     ObjectCreate,
     ObjectGetPrototypeOf,
+    ObjectPrototypeHasOwnProperty,
 }
 
 /// User-defined function value.
@@ -282,6 +287,15 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
     object_prototype.properties.borrow_mut().insert(
         "constructor".to_owned(),
         Value::Function(object_function.clone()),
+    );
+    object_prototype.properties.borrow_mut().insert(
+        "hasOwnProperty".to_owned(),
+        Value::Function(Function::new_native(
+            Some("hasOwnProperty"),
+            1,
+            NativeFunction::ObjectPrototypeHasOwnProperty,
+            false,
+        )),
     );
     object_function
         .properties
@@ -867,6 +881,9 @@ fn call_native_function(
         }
         NativeFunction::ObjectCreate => native_object_create(&argument_values),
         NativeFunction::ObjectGetPrototypeOf => native_object_get_prototype_of(&argument_values),
+        NativeFunction::ObjectPrototypeHasOwnProperty => {
+            native_object_prototype_has_own_property(this_value, &argument_values)
+        }
     }
 }
 
@@ -910,6 +927,25 @@ fn native_object_get_prototype_of(argument_values: &[Value]) -> Result<Value, Ru
         _ => Err(RuntimeError {
             message: "Object.getPrototypeOf target must be an object".to_owned(),
         }),
+    }
+}
+
+fn native_object_prototype_has_own_property(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let key = to_property_key(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    match this_value {
+        Value::Object(object) => Ok(Value::Boolean(object.has_own_property(&key))),
+        Value::Function(function) => Ok(Value::Boolean(
+            function.properties.borrow().contains_key(&key),
+        )),
+        Value::Array(elements) => Ok(Value::Boolean(array_has_own_property(&elements, &key))),
+        Value::String(value) => Ok(Value::Boolean(string_has_own_property(&value, &key))),
+        Value::Null | Value::Undefined => Err(RuntimeError {
+            message: "hasOwnProperty called on null or undefined".to_owned(),
+        }),
+        Value::Number(_) | Value::Boolean(_) => Ok(Value::Boolean(false)),
     }
 }
 
@@ -1183,6 +1219,9 @@ fn eval_member(
         (Value::Array(elements), MemberProperty::Named(name)) if name == "length" => {
             Ok(Value::Number(elements.len() as f64))
         }
+        (Value::Array(_), MemberProperty::Named(name)) => {
+            Ok(object_prototype_property(env, name).unwrap_or(Value::Undefined))
+        }
         (Value::Function(function), MemberProperty::Named(name)) if name == "length" => {
             Ok(Value::Number(function.params.len() as f64))
         }
@@ -1193,6 +1232,7 @@ fn eval_member(
                 .borrow()
                 .get(&key)
                 .cloned()
+                .or_else(|| object_prototype_property(env, &key))
                 .unwrap_or(Value::Undefined))
         }
         (Value::String(value), MemberProperty::Named(name)) if name == "length" => {
@@ -1200,7 +1240,9 @@ fn eval_member(
         }
         (Value::String(value), property) => {
             let key = property_key(property, env)?;
-            Ok(string_property(&value, &key).unwrap_or(Value::Undefined))
+            Ok(string_property(&value, &key)
+                .or_else(|| object_prototype_property(env, &key))
+                .unwrap_or(Value::Undefined))
         }
         (Value::Array(elements), MemberProperty::Computed(index)) => {
             let index = eval_expr(index, env)?;
@@ -1218,6 +1260,10 @@ fn eval_member(
             message: "unsupported computed member access".to_owned(),
         }),
     }
+}
+
+fn object_prototype_property(env: &HashMap<String, Value>, key: &str) -> Option<Value> {
+    object_prototype(env).and_then(|prototype| prototype.get(key))
 }
 
 fn assign_member(
@@ -1275,6 +1321,11 @@ fn string_property(value: &str, key: &str) -> Option<Value> {
         .map(|character| Value::String(character.to_string()))
 }
 
+fn string_has_own_property(value: &str, key: &str) -> bool {
+    key == "length"
+        || canonical_string_index(key).is_some_and(|index| index < value.chars().count())
+}
+
 fn canonical_string_index(key: &str) -> Option<usize> {
     if key.is_empty() {
         return None;
@@ -1286,6 +1337,13 @@ fn canonical_string_index(key: &str) -> Option<usize> {
     } else {
         None
     }
+}
+
+fn array_has_own_property(elements: &[Value], key: &str) -> bool {
+    key == "length"
+        || key
+            .parse::<usize>()
+            .is_ok_and(|index| index < elements.len())
 }
 
 fn to_array_index(value: Value) -> Result<usize, RuntimeError> {
@@ -1651,8 +1709,28 @@ mod tests {
             eval("let object = { value: 3 }; new Object(object) === object;"),
             Ok(Value::Boolean(true))
         );
+        assert_eq!(
+            eval("({ value: 1 }).hasOwnProperty('value');"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("({ value: 1 }).hasOwnProperty('missing');"),
+            Ok(Value::Boolean(false))
+        );
+        assert_eq!(
+            eval(
+                "let proto = { value: 1 }; let object = Object.create(proto); object.hasOwnProperty('value');"
+            ),
+            Ok(Value::Boolean(false))
+        );
+        assert_eq!(
+            eval("[1, 2].hasOwnProperty('1');"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(eval("'ab'.hasOwnProperty('1');"), Ok(Value::Boolean(true)));
         assert!(eval("Object.create(1);").is_err());
         assert!(eval("new Object.create({});").is_err());
+        assert!(eval("new Object.prototype.hasOwnProperty('value');").is_err());
     }
 
     #[test]
