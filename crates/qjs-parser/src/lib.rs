@@ -105,7 +105,32 @@ impl Parser {
     }
 
     fn expression(&mut self) -> Result<Expr, ParseError> {
-        self.logical_or()
+        self.assignment()
+    }
+
+    fn assignment(&mut self) -> Result<Expr, ParseError> {
+        let expr = self.logical_or()?;
+        if !self.match_kind(&TokenKind::Equal) {
+            return Ok(expr);
+        }
+
+        let (name, span) = match expr {
+            Expr::Identifier { name, span } => (name, span),
+            other => {
+                return Err(ParseError {
+                    message: "invalid assignment target".to_owned(),
+                    span: other.span(),
+                });
+            }
+        };
+
+        let value = self.assignment()?;
+        let assignment_span = Span::new(span.start, value.span().end);
+        Ok(Expr::Assignment {
+            name,
+            value: Box::new(value),
+            span: assignment_span,
+        })
     }
 
     fn logical_or(&mut self) -> Result<Expr, ParseError> {
@@ -328,5 +353,27 @@ mod tests {
     fn rejects_const_without_initializer() {
         let error = parse_script("const answer;").expect_err("const should require initializer");
         assert_eq!(error.message, "const declarations require an initializer");
+    }
+
+    #[test]
+    fn parses_assignment_as_right_associative() {
+        let script = parse_script("a = b = 1;").expect("source should parse");
+        let [Stmt::Expr(Expr::Assignment { name, value, .. })] = script.body.as_slice() else {
+            panic!("expected one assignment expression statement");
+        };
+        assert_eq!(name, "a");
+        let Expr::Assignment {
+            name: inner_name, ..
+        } = value.as_ref()
+        else {
+            panic!("expected nested assignment");
+        };
+        assert_eq!(inner_name, "b");
+    }
+
+    #[test]
+    fn rejects_invalid_assignment_target() {
+        let error = parse_script("(1 + 2) = 3;").expect_err("assignment target should fail");
+        assert_eq!(error.message, "invalid assignment target");
     }
 }

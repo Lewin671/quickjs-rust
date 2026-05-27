@@ -71,6 +71,15 @@ pub enum Expr {
         /// Source span.
         span: Span,
     },
+    /// An assignment expression.
+    Assignment {
+        /// Binding name.
+        name: String,
+        /// Assigned value.
+        value: Box<Expr>,
+        /// Source span.
+        span: Span,
+    },
     /// An identifier reference.
     Identifier { name: String, span: Span },
 }
@@ -81,7 +90,9 @@ impl Expr {
     pub const fn span(&self) -> Span {
         match self {
             Self::Literal(literal) => literal.span(),
-            Self::Binary { span, .. } | Self::Identifier { span, .. } => *span,
+            Self::Binary { span, .. }
+            | Self::Assignment { span, .. }
+            | Self::Identifier { span, .. } => *span,
         }
     }
 }
