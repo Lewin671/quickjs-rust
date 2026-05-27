@@ -206,6 +206,7 @@ enum NativeFunction {
     Array,
     ArrayIsArray,
     ArrayPrototypeConcat,
+    ArrayPrototypeIncludes,
     ArrayPrototypeIndexOf,
     ArrayPrototypeLastIndexOf,
     ArrayPrototypeJoin,
@@ -546,6 +547,15 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
             Some("concat"),
             1,
             NativeFunction::ArrayPrototypeConcat,
+            false,
+        )),
+    );
+    array_prototype.define_non_enumerable(
+        "includes".to_owned(),
+        Value::Function(Function::new_native(
+            Some("includes"),
+            1,
+            NativeFunction::ArrayPrototypeIncludes,
             false,
         )),
     );
@@ -1181,6 +1191,9 @@ fn call_native_function(
         NativeFunction::ArrayPrototypeConcat => {
             native_array_prototype_concat(this_value, &argument_values)
         }
+        NativeFunction::ArrayPrototypeIncludes => {
+            native_array_prototype_includes(this_value, &argument_values)
+        }
         NativeFunction::ArrayPrototypeIndexOf => {
             native_array_prototype_index_of(this_value, &argument_values)
         }
@@ -1259,6 +1272,41 @@ fn concat_array_item(result: &mut Vec<Value>, value: Value) {
     match value {
         Value::Array(elements) => result.extend(elements),
         value => result.push(value),
+    }
+}
+
+fn native_array_prototype_includes(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let Value::Array(elements) = this_value else {
+        return Err(RuntimeError {
+            message: "Array.prototype.includes called on non-array".to_owned(),
+        });
+    };
+    if elements.is_empty() {
+        return Ok(Value::Boolean(false));
+    }
+
+    let search_element = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let start = array_search_start_index(
+        elements.len(),
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+    )?;
+    Ok(Value::Boolean(
+        elements
+            .iter()
+            .skip(start)
+            .any(|element| same_value_zero(element, &search_element)),
+    ))
+}
+
+fn same_value_zero(left: &Value, right: &Value) -> bool {
+    match (left, right) {
+        (Value::Number(left), Value::Number(right)) => {
+            left == right || (left.is_nan() && right.is_nan())
+        }
+        _ => left == right,
     }
 }
 
@@ -3042,6 +3090,10 @@ mod tests {
             Ok(Value::Number(1.0))
         );
         assert_eq!(
+            eval("Array.prototype.includes.length;"),
+            Ok(Value::Number(1.0))
+        );
+        assert_eq!(
             eval("Array.prototype.indexOf.length;"),
             Ok(Value::Number(1.0))
         );
@@ -3154,6 +3206,11 @@ mod tests {
             Ok(Value::Number(4.0))
         );
         assert_eq!(eval("[0].concat('x', true)[2];"), Ok(Value::Boolean(true)));
+        assert_eq!(eval("[1, 2, 3].includes(2);"), Ok(Value::Boolean(true)));
+        assert_eq!(eval("[1, 2, 3].includes(4);"), Ok(Value::Boolean(false)));
+        assert_eq!(eval("[1, 2, 3].includes(1, 1);"), Ok(Value::Boolean(false)));
+        assert_eq!(eval("[1, 2, 3].includes(3, -1);"), Ok(Value::Boolean(true)));
+        assert_eq!(eval("[0 / 0].includes(0 / 0);"), Ok(Value::Boolean(true)));
         assert!(eval("Array(3);").is_err());
     }
 
