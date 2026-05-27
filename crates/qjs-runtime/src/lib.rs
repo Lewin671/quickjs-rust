@@ -132,6 +132,7 @@ enum NativeFunction {
     ObjectGetPrototypeOf,
     ObjectPrototypeHasOwnProperty,
     ObjectPrototypeToString,
+    ObjectPrototypeValueOf,
 }
 
 /// User-defined function value.
@@ -304,6 +305,15 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
             Some("toString"),
             0,
             NativeFunction::ObjectPrototypeToString,
+            false,
+        )),
+    );
+    object_prototype.properties.borrow_mut().insert(
+        "valueOf".to_owned(),
+        Value::Function(Function::new_native(
+            Some("valueOf"),
+            0,
+            NativeFunction::ObjectPrototypeValueOf,
             false,
         )),
     );
@@ -895,6 +905,7 @@ fn call_native_function(
             native_object_prototype_has_own_property(this_value, &argument_values)
         }
         NativeFunction::ObjectPrototypeToString => native_object_prototype_to_string(this_value),
+        NativeFunction::ObjectPrototypeValueOf => native_object_prototype_value_of(this_value),
     }
 }
 
@@ -972,6 +983,15 @@ fn native_object_prototype_to_string(this_value: Value) -> Result<Value, Runtime
         Value::Object(_) => "Object",
     };
     Ok(Value::String(format!("[object {tag}]")))
+}
+
+fn native_object_prototype_value_of(this_value: Value) -> Result<Value, RuntimeError> {
+    match this_value {
+        Value::Null | Value::Undefined => Err(RuntimeError {
+            message: "valueOf called on null or undefined".to_owned(),
+        }),
+        _ => Ok(this_value),
+    }
 }
 
 fn function_prototype(function: &Function) -> Option<ObjectRef> {
@@ -1757,6 +1777,18 @@ mod tests {
         assert_eq!(
             eval("({}).toString();"),
             Ok(Value::String("[object Object]".to_owned()))
+        );
+        assert_eq!(
+            eval("Object.prototype.valueOf.length;"),
+            Ok(Value::Number(0.0))
+        );
+        assert_eq!(
+            eval("let object = { value: 1 }; object.valueOf() === object;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("Object.prototype.valueOf() === Object.prototype;"),
+            Ok(Value::Boolean(true))
         );
         assert_eq!(
             eval("({ value: 1 }).hasOwnProperty('missing');"),
