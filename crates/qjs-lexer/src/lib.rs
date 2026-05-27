@@ -76,6 +76,8 @@ pub enum TokenKind {
     In,
     /// `delete`.
     Delete,
+    /// `new`.
+    New,
     /// `+`.
     Plus,
     /// `++`.
@@ -606,6 +608,7 @@ impl<'src> Lexer<'src> {
             "void" => TokenKind::Void,
             "in" => TokenKind::In,
             "delete" => TokenKind::Delete,
+            "new" => TokenKind::New,
             _ => TokenKind::Identifier(text.to_owned()),
         };
         self.tokens.push(Token {
@@ -730,7 +733,7 @@ mod tests {
     fn lexes_declaration_keywords() {
         let tokens =
             lex(
-                "this var let const if else while do for switch case default try catch finally break continue function return throw debugger typeof void in delete variable",
+                "this var let const if else while do for switch case default try catch finally break continue function return throw debugger typeof void in delete new variable",
             )
             .expect("source should lex");
         let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
@@ -762,6 +765,7 @@ mod tests {
                 TokenKind::Void,
                 TokenKind::In,
                 TokenKind::Delete,
+                TokenKind::New,
                 TokenKind::Identifier("variable".to_owned()),
                 TokenKind::Eof,
             ]

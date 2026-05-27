@@ -924,6 +924,7 @@ impl Parser {
             TokenKind::Typeof => UnaryOp::Typeof,
             TokenKind::Void => UnaryOp::Void,
             TokenKind::Delete => UnaryOp::Delete,
+            TokenKind::New => return self.new_expression(token.span.start),
             _ => return self.postfix(),
         };
         self.advance();
@@ -954,6 +955,27 @@ impl Parser {
             op,
             prefix: false,
             span: Span::new(start, token.span.end),
+        })
+    }
+
+    fn new_expression(&mut self, start: usize) -> Result<Expr, ParseError> {
+        self.expect(&TokenKind::New)?;
+        let expr = self.call()?;
+        let (callee, arguments, end) = match expr {
+            Expr::Call {
+                callee,
+                arguments,
+                span,
+            } => (callee, arguments, span.end),
+            other => {
+                let end = other.span().end;
+                (Box::new(other), Vec::new(), end)
+            }
+        };
+        Ok(Expr::New {
+            callee,
+            arguments,
+            span: Span::new(start, end),
         })
     }
 
@@ -1796,6 +1818,21 @@ mod tests {
         };
         assert_eq!(name.as_deref(), Some("named"));
         assert_eq!(params, &["value"]);
+    }
+
+    #[test]
+    fn parses_new_expression() {
+        let script = parse_script("new Point(1, 2);").expect("source should parse");
+        let [
+            Stmt::Expr(Expr::New {
+                callee, arguments, ..
+            }),
+        ] = script.body.as_slice()
+        else {
+            panic!("expected one new expression statement");
+        };
+        assert!(matches!(callee.as_ref(), Expr::Identifier { name, .. } if name == "Point"));
+        assert_eq!(arguments.len(), 2);
     }
 
     #[test]
