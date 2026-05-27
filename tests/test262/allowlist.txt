@@ -39,6 +39,11 @@ cases/object-define-property-data-enumerable.js
 cases/object-define-property-data-writable.js
 cases/object-define-property-function-basic.js
 cases/object-define-property-length.js
+cases/object-define-properties-data-basic.js
+cases/object-define-properties-data-defaults.js
+cases/object-define-properties-function-basic.js
+cases/object-define-properties-length.js
+cases/object-define-properties-nonenumerable-descriptor-ignored.js
 cases/object-get-prototype-of-basic.js
 cases/object-get-own-property-names-array-basic.js
 cases/object-get-own-property-names-basic.js

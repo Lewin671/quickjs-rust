@@ -206,6 +206,7 @@ enum NativeFunction {
     Object,
     ObjectAssign,
     ObjectCreate,
+    ObjectDefineProperties,
     ObjectDefineProperty,
     ObjectGetOwnPropertyDescriptor,
     ObjectGetPrototypeOf,
@@ -460,6 +461,15 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
             Some("defineProperty"),
             3,
             NativeFunction::ObjectDefineProperty,
+            false,
+        ))),
+    );
+    object_function.properties.borrow_mut().insert(
+        "defineProperties".to_owned(),
+        Property::non_enumerable(Value::Function(Function::new_native(
+            Some("defineProperties"),
+            2,
+            NativeFunction::ObjectDefineProperties,
             false,
         ))),
     );
@@ -1066,6 +1076,7 @@ fn call_native_function(
         }
         NativeFunction::ObjectAssign => native_object_assign(&argument_values),
         NativeFunction::ObjectCreate => native_object_create(&argument_values),
+        NativeFunction::ObjectDefineProperties => native_object_define_properties(&argument_values),
         NativeFunction::ObjectDefineProperty => native_object_define_property(&argument_values),
         NativeFunction::ObjectGetOwnPropertyDescriptor => {
             native_object_get_own_property_descriptor(&argument_values, env)
@@ -1189,15 +1200,49 @@ fn native_object_define_property(argument_values: &[Value]) -> Result<Value, Run
     let descriptor =
         to_property_descriptor(argument_values.get(2).cloned().unwrap_or(Value::Undefined))?;
 
+    define_property_on_value(target.clone(), key, descriptor)?;
+    Ok(target)
+}
+
+fn native_object_define_properties(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    ensure_define_property_target(&target)?;
+
+    let descriptors = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
+    if !matches!(descriptors, Value::Object(_) | Value::Function(_)) {
+        return Err(RuntimeError {
+            message: "property descriptors must be an object".to_owned(),
+        });
+    }
+
+    for (key, descriptor_value) in enumerable_property_entries(descriptors)? {
+        let descriptor = to_property_descriptor(descriptor_value)?;
+        define_property_on_value(target.clone(), key, descriptor)?;
+    }
+    Ok(target)
+}
+
+fn define_property_on_value(
+    target: Value,
+    key: String,
+    descriptor: Property,
+) -> Result<(), RuntimeError> {
     match &target {
         Value::Object(object) => {
             object.define_property(key, descriptor);
-            Ok(target)
+            Ok(())
         }
         Value::Function(function) => {
             function.properties.borrow_mut().insert(key, descriptor);
-            Ok(target)
+            Ok(())
         }
+        _ => ensure_define_property_target(&target),
+    }
+}
+
+fn ensure_define_property_target(target: &Value) -> Result<(), RuntimeError> {
+    match target {
+        Value::Object(_) | Value::Function(_) => Ok(()),
         Value::Array(_) | Value::String(_) | Value::Number(_) | Value::Boolean(_) => {
             Err(RuntimeError {
                 message: "Object.defineProperty primitive targets are not implemented".to_owned(),
@@ -2287,6 +2332,28 @@ mod tests {
                 "let object = {}; Object.defineProperty(object, 'value', { value: 7, configurable: true }); Object.getOwnPropertyDescriptor(object, 'value').configurable;"
             ),
             Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("Object.defineProperties.length;"),
+            Ok(Value::Number(2.0))
+        );
+        assert_eq!(
+            eval(
+                "let object = {}; Object.defineProperties(object, { first: { value: 1, enumerable: true }, second: { value: 2 } }); object.first + object.second;"
+            ),
+            Ok(Value::Number(3.0))
+        );
+        assert_eq!(
+            eval(
+                "let object = {}; Object.defineProperties(object, { first: { value: 1, enumerable: true }, second: { value: 2 } }); Object.keys(object).length;"
+            ),
+            Ok(Value::Number(1.0))
+        );
+        assert_eq!(
+            eval(
+                "function fn() {} Object.defineProperties(fn, { value: { value: 9, enumerable: true } }); fn.value;"
+            ),
+            Ok(Value::Number(9.0))
         );
         assert_eq!(eval("Object.create.length;"), Ok(Value::Number(1.0)));
         assert_eq!(
