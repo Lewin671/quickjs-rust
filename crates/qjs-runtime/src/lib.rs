@@ -1,12 +1,12 @@
 //! Early interpreter for the Rust QuickJS rewrite.
 
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use qjs_ast::{BinaryOp, Expr, Literal, MemberProperty, Script, Stmt, UnaryOp};
+use qjs_ast::{AssignmentTarget, BinaryOp, Expr, Literal, MemberProperty, Script, Stmt, UnaryOp};
 use qjs_parser::parse_script;
 
 /// A JavaScript value supported by the current runtime subset.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum Value {
     /// Number value.
     Number(f64),
@@ -22,6 +22,41 @@ pub enum Value {
     Function(Function),
     /// Array value.
     Array(Vec<Value>),
+    /// Object value.
+    Object(ObjectRef),
+}
+
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Number(left), Self::Number(right)) => left == right,
+            (Self::String(left), Self::String(right)) => left == right,
+            (Self::Boolean(left), Self::Boolean(right)) => left == right,
+            (Self::Null, Self::Null) | (Self::Undefined, Self::Undefined) => true,
+            (Self::Function(left), Self::Function(right)) => left == right,
+            (Self::Array(left), Self::Array(right)) => left == right,
+            (Self::Object(left), Self::Object(right)) => left.ptr_eq(right),
+            _ => false,
+        }
+    }
+}
+
+/// Object storage reference.
+#[derive(Clone, Debug)]
+pub struct ObjectRef {
+    properties: Rc<RefCell<HashMap<String, Value>>>,
+}
+
+impl ObjectRef {
+    fn new(properties: HashMap<String, Value>) -> Self {
+        Self {
+            properties: Rc::new(RefCell::new(properties)),
+        }
+    }
+
+    fn ptr_eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.properties, &other.properties)
+    }
 }
 
 /// User-defined function value.
@@ -59,6 +94,7 @@ pub fn eval(source: &str) -> Result<Value, RuntimeError> {
 /// Returns runtime failures for unsupported operations.
 pub fn eval_script(script: &Script) -> Result<Value, RuntimeError> {
     let mut env = HashMap::new();
+    env.insert("undefined".to_owned(), Value::Undefined);
     let mut last = Value::Undefined;
     for stmt in &script.body {
         match eval_stmt(stmt, &mut env)? {
@@ -158,6 +194,13 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, Run
             }
             Ok(Value::Array(values))
         }
+        Expr::Object { properties, .. } => {
+            let mut values = HashMap::new();
+            for property in properties {
+                values.insert(property.key.clone(), eval_expr(&property.value, env)?);
+            }
+            Ok(Value::Object(ObjectRef::new(values)))
+        }
         Expr::Identifier { name, .. } => env.get(name).cloned().ok_or_else(|| RuntimeError {
             message: format!("undefined identifier `{name}`"),
         }),
@@ -165,14 +208,9 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, Run
             let argument = eval_expr(argument, env)?;
             eval_unary(*op, argument)
         }
-        Expr::Assignment { name, value, .. } => {
-            if !env.contains_key(name) {
-                return Err(RuntimeError {
-                    message: format!("undefined identifier `{name}`"),
-                });
-            }
+        Expr::Assignment { target, value, .. } => {
             let value = eval_expr(value, env)?;
-            env.insert(name.clone(), value.clone());
+            assign_target(target, value.clone(), env)?;
             Ok(value)
         }
         Expr::Call {
@@ -245,6 +283,30 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, Run
     }
 }
 
+fn assign_target(
+    target: &AssignmentTarget,
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
+    match target {
+        AssignmentTarget::Identifier { name, .. } => {
+            if !env.contains_key(name) {
+                return Err(RuntimeError {
+                    message: format!("undefined identifier `{name}`"),
+                });
+            }
+            env.insert(name.clone(), value);
+            Ok(())
+        }
+        AssignmentTarget::Member {
+            object, property, ..
+        } => {
+            let object = eval_expr(object, env)?;
+            assign_member(object, property, value, env)
+        }
+    }
+}
+
 fn eval_literal(literal: &Literal) -> Result<Value, RuntimeError> {
     match literal {
         Literal::Number { raw, .. } => {
@@ -274,11 +336,61 @@ fn eval_member(
             let index = to_array_index(index)?;
             Ok(elements.get(index).cloned().unwrap_or(Value::Undefined))
         }
+        (Value::Object(object), property) => {
+            let key = property_key(property, env)?;
+            Ok(object
+                .properties
+                .borrow()
+                .get(&key)
+                .cloned()
+                .unwrap_or(Value::Undefined))
+        }
         (_, MemberProperty::Named(name)) => Err(RuntimeError {
             message: format!("unsupported property `{name}`"),
         }),
         (_, MemberProperty::Computed(_)) => Err(RuntimeError {
             message: "unsupported computed member access".to_owned(),
+        }),
+    }
+}
+
+fn assign_member(
+    object: Value,
+    property: &MemberProperty,
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
+    let Value::Object(object) = object else {
+        return Err(RuntimeError {
+            message: "member assignment target is not an object".to_owned(),
+        });
+    };
+    let key = property_key(property, env)?;
+    object.properties.borrow_mut().insert(key, value);
+    Ok(())
+}
+
+fn property_key(
+    property: &MemberProperty,
+    env: &mut HashMap<String, Value>,
+) -> Result<String, RuntimeError> {
+    match property {
+        MemberProperty::Named(name) => Ok(name.clone()),
+        MemberProperty::Computed(expr) => to_property_key(eval_expr(expr, env)?),
+    }
+}
+
+fn to_property_key(value: Value) -> Result<String, RuntimeError> {
+    match value {
+        Value::String(value) => Ok(value),
+        Value::Number(number) if number.fract() == 0.0 => Ok(format!("{number:.0}")),
+        Value::Number(number) => Ok(number.to_string()),
+        Value::Boolean(true) => Ok("true".to_owned()),
+        Value::Boolean(false) => Ok("false".to_owned()),
+        Value::Null => Ok("null".to_owned()),
+        Value::Undefined => Ok("undefined".to_owned()),
+        Value::Function(_) | Value::Array(_) | Value::Object(_) => Err(RuntimeError {
+            message: "unsupported property key".to_owned(),
         }),
     }
 }
@@ -346,8 +458,8 @@ fn to_number(value: Value) -> Result<f64, RuntimeError> {
         Value::Function(_) => Err(RuntimeError {
             message: "cannot convert function to number".to_owned(),
         }),
-        Value::Array(_) => Err(RuntimeError {
-            message: "cannot convert array to number".to_owned(),
+        Value::Array(_) | Value::Object(_) => Err(RuntimeError {
+            message: "cannot convert object to number".to_owned(),
         }),
     }
 }
@@ -358,7 +470,7 @@ fn is_truthy(value: &Value) -> bool {
         Value::String(value) => !value.is_empty(),
         Value::Boolean(value) => *value,
         Value::Null | Value::Undefined => false,
-        Value::Function(_) | Value::Array(_) => true,
+        Value::Function(_) | Value::Array(_) | Value::Object(_) => true,
     }
 }
 
@@ -456,5 +568,34 @@ mod tests {
     fn evaluates_array_member_access() {
         assert_eq!(eval("let xs = [1, 2 + 3]; xs[1];"), Ok(Value::Number(5.0)));
         assert_eq!(eval("[1, 2, 3].length;"), Ok(Value::Number(3.0)));
+    }
+
+    #[test]
+    fn evaluates_object_literals_and_member_access() {
+        assert_eq!(
+            eval("let o = { answer: 40 + 2 }; o.answer;"),
+            Ok(Value::Number(42.0))
+        );
+        assert_eq!(eval("({ 'a': 1 })['a'];"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("({ true: 1 }).true;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("({}).missing;"), Ok(Value::Undefined));
+    }
+
+    #[test]
+    fn evaluates_member_assignment() {
+        assert_eq!(
+            eval("let o = {}; o.answer = 42; o.answer;"),
+            Ok(Value::Number(42.0))
+        );
+        assert_eq!(
+            eval("let key = 'answer'; let o = {}; o[key] = 7; o.answer;"),
+            Ok(Value::Number(7.0))
+        );
+    }
+
+    #[test]
+    fn evaluates_global_undefined_binding() {
+        assert_eq!(eval("undefined;"), Ok(Value::Undefined));
+        assert_eq!(eval("undefined === undefined;"), Ok(Value::Boolean(true)));
     }
 }

@@ -1,6 +1,9 @@
 //! Parser for a small JavaScript subset.
 
-use qjs_ast::{BinaryOp, Expr, Literal, MemberProperty, Script, Span, Stmt, UnaryOp, VarKind};
+use qjs_ast::{
+    AssignmentTarget, BinaryOp, Expr, Literal, MemberProperty, ObjectProperty, Script, Span, Stmt,
+    UnaryOp, VarKind,
+};
 use qjs_lexer::{Token, TokenKind, lex};
 
 /// A parse error.
@@ -310,8 +313,17 @@ impl Parser {
             return Ok(expr);
         }
 
-        let (name, span) = match expr {
-            Expr::Identifier { name, span } => (name, span),
+        let target = match expr {
+            Expr::Identifier { name, span } => AssignmentTarget::Identifier { name, span },
+            Expr::Member {
+                object,
+                property,
+                span,
+            } => AssignmentTarget::Member {
+                object,
+                property,
+                span,
+            },
             other => {
                 return Err(ParseError {
                     message: "invalid assignment target".to_owned(),
@@ -321,9 +333,9 @@ impl Parser {
         };
 
         let value = self.assignment()?;
-        let assignment_span = Span::new(span.start, value.span().end);
+        let assignment_span = Span::new(target.span().start, value.span().end);
         Ok(Expr::Assignment {
-            name,
+            target,
             value: Box::new(value),
             span: assignment_span,
         })
@@ -454,6 +466,7 @@ impl Parser {
             })),
             TokenKind::Null => Ok(Expr::Literal(Literal::Null { span: token.span })),
             TokenKind::LeftBracket => self.array_literal(token.span.start),
+            TokenKind::LeftBrace => self.object_literal(token.span.start),
             TokenKind::LeftParen => {
                 let expr = self.expression()?;
                 self.expect(&TokenKind::RightParen)?;
@@ -487,6 +500,49 @@ impl Parser {
         self.expect(&TokenKind::RightBracket)?;
         Ok(Expr::Array {
             elements,
+            span: Span::new(start, end),
+        })
+    }
+
+    fn object_literal(&mut self, start: usize) -> Result<Expr, ParseError> {
+        let mut properties = Vec::new();
+        if !self.at(&TokenKind::RightBrace) {
+            loop {
+                let key_token = self.advance();
+                let key = match key_token.kind {
+                    TokenKind::Identifier(name)
+                    | TokenKind::String(name)
+                    | TokenKind::Number(name) => name,
+                    TokenKind::True => "true".to_owned(),
+                    TokenKind::False => "false".to_owned(),
+                    TokenKind::Null => "null".to_owned(),
+                    _ => {
+                        return Err(ParseError {
+                            message: "expected property name".to_owned(),
+                            span: key_token.span,
+                        });
+                    }
+                };
+                self.expect(&TokenKind::Colon)?;
+                let value = self.expression()?;
+                let span = Span::new(key_token.span.start, value.span().end);
+                properties.push(ObjectProperty { key, value, span });
+                if !self.match_kind(&TokenKind::Comma) {
+                    break;
+                }
+                if self.at(&TokenKind::RightBrace) {
+                    break;
+                }
+            }
+        }
+        let end = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .end;
+        self.expect(&TokenKind::RightBrace)?;
+        Ok(Expr::Object {
+            properties,
             span: Span::new(start, end),
         })
     }
@@ -538,7 +594,7 @@ impl Parser {
 
             if self.match_kind(&TokenKind::Dot) {
                 let property_token = self.advance();
-                let TokenKind::Identifier(name) = property_token.kind else {
+                let Some(name) = property_name(property_token.kind) else {
                     return Err(ParseError {
                         message: "expected property name".to_owned(),
                         span: property_token.span,
@@ -596,6 +652,25 @@ impl Parser {
     }
 }
 
+fn property_name(kind: TokenKind) -> Option<String> {
+    match kind {
+        TokenKind::Identifier(name) => Some(name),
+        TokenKind::True => Some("true".to_owned()),
+        TokenKind::False => Some("false".to_owned()),
+        TokenKind::Null => Some("null".to_owned()),
+        TokenKind::Var => Some("var".to_owned()),
+        TokenKind::Let => Some("let".to_owned()),
+        TokenKind::Const => Some("const".to_owned()),
+        TokenKind::If => Some("if".to_owned()),
+        TokenKind::Else => Some("else".to_owned()),
+        TokenKind::While => Some("while".to_owned()),
+        TokenKind::Function => Some("function".to_owned()),
+        TokenKind::Return => Some("return".to_owned()),
+        TokenKind::Throw => Some("throw".to_owned()),
+        _ => None,
+    }
+}
+
 fn stmt_end(stmt: &Stmt) -> usize {
     match stmt {
         Stmt::Expr(expr) => expr.span().end,
@@ -612,7 +687,7 @@ fn stmt_end(stmt: &Stmt) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use qjs_ast::{BinaryOp, Expr, MemberProperty, Stmt, UnaryOp, VarKind};
+    use qjs_ast::{AssignmentTarget, BinaryOp, Expr, MemberProperty, Stmt, UnaryOp, VarKind};
 
     use super::parse_script;
 
@@ -682,15 +757,25 @@ mod tests {
     #[test]
     fn parses_assignment_as_right_associative() {
         let script = parse_script("a = b = 1;").expect("source should parse");
-        let [Stmt::Expr(Expr::Assignment { name, value, .. })] = script.body.as_slice() else {
+        let [Stmt::Expr(Expr::Assignment { target, value, .. })] = script.body.as_slice() else {
             panic!("expected one assignment expression statement");
+        };
+        let AssignmentTarget::Identifier { name, .. } = target else {
+            panic!("expected identifier assignment target");
         };
         assert_eq!(name, "a");
         let Expr::Assignment {
-            name: inner_name, ..
+            target: inner_target,
+            ..
         } = value.as_ref()
         else {
             panic!("expected nested assignment");
+        };
+        let AssignmentTarget::Identifier {
+            name: inner_name, ..
+        } = inner_target
+        else {
+            panic!("expected identifier assignment target");
         };
         assert_eq!(inner_name, "b");
     }
@@ -786,6 +871,35 @@ mod tests {
             panic!("expected one array expression");
         };
         assert_eq!(elements.len(), 2);
+    }
+
+    #[test]
+    fn parses_object_literal_and_member_assignment() {
+        let script = parse_script("let object = { answer: 42, 'name': 7, }; object.answer = 43;")
+            .expect("source should parse");
+        let [
+            Stmt::VarDecl {
+                init: Some(Expr::Object { properties, .. }),
+                ..
+            },
+            Stmt::Expr(Expr::Assignment { target, .. }),
+        ] = script.body.as_slice()
+        else {
+            panic!("expected object declaration followed by member assignment");
+        };
+        assert_eq!(properties.len(), 2);
+        assert_eq!(properties[0].key, "answer");
+        assert_eq!(properties[1].key, "name");
+        assert!(matches!(target, AssignmentTarget::Member { .. }));
+
+        let script =
+            parse_script("({ true: 1, false: 2, null: 3 });").expect("source should parse");
+        let [Stmt::Expr(Expr::Object { properties, .. })] = script.body.as_slice() else {
+            panic!("expected one object expression");
+        };
+        assert_eq!(properties[0].key, "true");
+        assert_eq!(properties[1].key, "false");
+        assert_eq!(properties[2].key, "null");
     }
 
     #[test]

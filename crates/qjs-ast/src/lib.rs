@@ -117,6 +117,13 @@ pub enum Expr {
         /// Source span.
         span: Span,
     },
+    /// An object literal.
+    Object {
+        /// Object properties.
+        properties: Vec<ObjectProperty>,
+        /// Source span.
+        span: Span,
+    },
     /// A unary expression.
     Unary {
         /// Unary operator.
@@ -139,8 +146,8 @@ pub enum Expr {
     },
     /// An assignment expression.
     Assignment {
-        /// Binding name.
-        name: String,
+        /// Assigned target.
+        target: AssignmentTarget,
         /// Assigned value.
         value: Box<Expr>,
         /// Source span.
@@ -175,12 +182,50 @@ impl Expr {
         match self {
             Self::Literal(literal) => literal.span(),
             Self::Array { span, .. }
+            | Self::Object { span, .. }
             | Self::Unary { span, .. }
             | Self::Binary { span, .. }
             | Self::Assignment { span, .. }
             | Self::Call { span, .. }
             | Self::Member { span, .. }
             | Self::Identifier { span, .. } => *span,
+        }
+    }
+}
+
+/// Object literal property.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ObjectProperty {
+    /// Property key after syntactic normalization.
+    pub key: String,
+    /// Property value expression.
+    pub value: Expr,
+    /// Source span.
+    pub span: Span,
+}
+
+/// An assignment target.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum AssignmentTarget {
+    /// Identifier assignment.
+    Identifier { name: String, span: Span },
+    /// Member assignment.
+    Member {
+        /// Object expression.
+        object: Box<Expr>,
+        /// Property expression or name.
+        property: MemberProperty,
+        /// Source span.
+        span: Span,
+    },
+}
+
+impl AssignmentTarget {
+    /// Returns the source span for this assignment target.
+    #[must_use]
+    pub const fn span(&self) -> Span {
+        match self {
+            Self::Identifier { span, .. } | Self::Member { span, .. } => *span,
         }
     }
 }
