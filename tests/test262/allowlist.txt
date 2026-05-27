@@ -40,6 +40,10 @@ cases/object-put-basic.js
 cases/object-to-string-direct-basic.js
 cases/object-to-string-length.js
 cases/object-to-string-own-property.js
+cases/object-value-of-basic.js
+cases/object-value-of-length.js
+cases/object-value-of-no-prototype.js
+cases/object-value-of-object-prototype.js
 cases/typeof-basic.js
 cases/typeof-unresolvable.js
 cases/in-basic.js
