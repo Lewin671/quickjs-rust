@@ -87,6 +87,15 @@ pub enum VarKind {
 pub enum Expr {
     /// A literal value.
     Literal(Literal),
+    /// A unary expression.
+    Unary {
+        /// Unary operator.
+        op: UnaryOp,
+        /// Operand expression.
+        argument: Box<Expr>,
+        /// Source span.
+        span: Span,
+    },
     /// A binary expression.
     Binary {
         /// Left-hand expression.
@@ -117,7 +126,8 @@ impl Expr {
     pub const fn span(&self) -> Span {
         match self {
             Self::Literal(literal) => literal.span(),
-            Self::Binary { span, .. }
+            Self::Unary { span, .. }
+            | Self::Binary { span, .. }
             | Self::Assignment { span, .. }
             | Self::Identifier { span, .. } => *span,
         }
@@ -148,6 +158,17 @@ impl Literal {
             | Self::Null { span } => *span,
         }
     }
+}
+
+/// Unary operators currently supported by the parser and runtime.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UnaryOp {
+    /// Numeric positive.
+    Plus,
+    /// Numeric negation.
+    Minus,
+    /// Logical negation.
+    Not,
 }
 
 /// Binary operators currently supported by the parser and runtime.
