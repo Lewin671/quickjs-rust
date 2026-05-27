@@ -970,6 +970,7 @@ impl Parser {
                 span: token.span,
             })),
             TokenKind::Null => Ok(Expr::Literal(Literal::Null { span: token.span })),
+            TokenKind::This => Ok(Expr::This { span: token.span }),
             TokenKind::LeftBracket => self.array_literal(token.span.start),
             TokenKind::LeftBrace => self.object_literal(token.span.start),
             TokenKind::LeftParen => {
@@ -1163,6 +1164,7 @@ fn property_name(kind: TokenKind) -> Option<String> {
         TokenKind::True => Some("true".to_owned()),
         TokenKind::False => Some("false".to_owned()),
         TokenKind::Null => Some("null".to_owned()),
+        TokenKind::This => Some("this".to_owned()),
         TokenKind::Var => Some("var".to_owned()),
         TokenKind::Let => Some("let".to_owned()),
         TokenKind::Const => Some("const".to_owned()),
@@ -1725,6 +1727,12 @@ mod tests {
             panic!("expected one unary expression");
         };
         assert_eq!(*op, UnaryOp::Delete);
+
+        let script = parse_script("this.value;").expect("source should parse");
+        let [Stmt::Expr(Expr::Member { object, .. })] = script.body.as_slice() else {
+            panic!("expected one member expression");
+        };
+        assert!(matches!(object.as_ref(), Expr::This { .. }));
     }
 
     #[test]

@@ -346,6 +346,8 @@ pub enum Expr {
         /// Source span.
         span: Span,
     },
+    /// A `this` expression.
+    This { span: Span },
     /// An identifier reference.
     Identifier { name: String, span: Span },
 }
@@ -366,6 +368,7 @@ impl Expr {
             | Self::Update { span, .. }
             | Self::Call { span, .. }
             | Self::Member { span, .. }
+            | Self::This { span }
             | Self::Identifier { span, .. } => *span,
         }
     }
