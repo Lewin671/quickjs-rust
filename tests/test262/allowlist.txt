@@ -51,6 +51,8 @@ cases/arguments-index-basic.js
 cases/function-extra-arguments-basic.js
 cases/function-missing-parameter-basic.js
 cases/function-length-basic.js
+cases/function-closure-return-basic.js
+cases/function-closure-argument-basic.js
 cases/string-addition-basic.js
 cases/string-number-addition.js
 cases/for-var-basic.js
