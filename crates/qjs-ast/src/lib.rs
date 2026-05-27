@@ -56,6 +56,24 @@ pub enum Stmt {
         /// Source span.
         span: Span,
     },
+    /// A function declaration.
+    FunctionDecl {
+        /// Function name.
+        name: String,
+        /// Parameter names.
+        params: Vec<String>,
+        /// Function body statements.
+        body: Vec<Stmt>,
+        /// Source span.
+        span: Span,
+    },
+    /// A return statement.
+    Return {
+        /// Optional return value.
+        argument: Option<Expr>,
+        /// Source span.
+        span: Span,
+    },
     /// A variable declaration.
     VarDecl {
         /// Declaration kind.
@@ -116,6 +134,15 @@ pub enum Expr {
         /// Source span.
         span: Span,
     },
+    /// A call expression.
+    Call {
+        /// Callee expression.
+        callee: Box<Expr>,
+        /// Argument expressions.
+        arguments: Vec<Expr>,
+        /// Source span.
+        span: Span,
+    },
     /// An identifier reference.
     Identifier { name: String, span: Span },
 }
@@ -129,6 +156,7 @@ impl Expr {
             Self::Unary { span, .. }
             | Self::Binary { span, .. }
             | Self::Assignment { span, .. }
+            | Self::Call { span, .. }
             | Self::Identifier { span, .. } => *span,
         }
     }
