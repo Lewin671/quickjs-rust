@@ -181,6 +181,13 @@ pub enum Expr {
         /// Source span.
         span: Span,
     },
+    /// A comma-separated sequence expression.
+    Sequence {
+        /// Expressions evaluated from left to right.
+        expressions: Vec<Expr>,
+        /// Source span.
+        span: Span,
+    },
     /// A unary expression.
     Unary {
         /// Unary operator.
@@ -264,6 +271,7 @@ impl Expr {
             Self::Literal(literal) => literal.span(),
             Self::Array { span, .. }
             | Self::Object { span, .. }
+            | Self::Sequence { span, .. }
             | Self::Unary { span, .. }
             | Self::Binary { span, .. }
             | Self::Conditional { span, .. }

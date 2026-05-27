@@ -6,6 +6,8 @@ cases/strict-equals-basic.js
 cases/less-than-basic.js
 cases/conditional-basic.js
 cases/conditional-short-circuit.js
+cases/comma-basic.js
+cases/comma-side-effects.js
 cases/logical-and-basic.js
 cases/undefined-basic.js
 cases/object-literal-basic.js
