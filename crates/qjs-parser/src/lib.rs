@@ -48,6 +48,14 @@ impl Parser {
             return Ok(Stmt::Empty);
         }
 
+        if self.at(&TokenKind::LeftBrace) {
+            return self.block_statement();
+        }
+
+        if self.at(&TokenKind::If) {
+            return self.if_statement();
+        }
+
         if self.at(&TokenKind::Var) || self.at(&TokenKind::Let) || self.at(&TokenKind::Const) {
             return self.variable_declaration();
         }
@@ -55,6 +63,56 @@ impl Parser {
         let expr = self.expression()?;
         self.match_kind(&TokenKind::Semicolon);
         Ok(Stmt::Expr(expr))
+    }
+
+    fn block_statement(&mut self) -> Result<Stmt, ParseError> {
+        let start = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .start;
+        self.expect(&TokenKind::LeftBrace)?;
+        let mut body = Vec::new();
+        while !self.at(&TokenKind::RightBrace) && !self.at(&TokenKind::Eof) {
+            body.push(self.statement()?);
+        }
+        let end = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .end;
+        self.expect(&TokenKind::RightBrace)?;
+        Ok(Stmt::Block {
+            body,
+            span: Span::new(start, end),
+        })
+    }
+
+    fn if_statement(&mut self) -> Result<Stmt, ParseError> {
+        let start = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .start;
+        self.expect(&TokenKind::If)?;
+        self.expect(&TokenKind::LeftParen)?;
+        let test = self.expression()?;
+        self.expect(&TokenKind::RightParen)?;
+        let consequent = self.statement()?;
+        let alternate = if self.match_kind(&TokenKind::Else) {
+            Some(Box::new(self.statement()?))
+        } else {
+            None
+        };
+        let end = alternate
+            .as_deref()
+            .map_or_else(|| stmt_end(&consequent), stmt_end);
+        Ok(Stmt::If {
+            test,
+            consequent: Box::new(consequent),
+            alternate,
+            span: Span::new(start, end),
+        })
     }
 
     fn variable_declaration(&mut self) -> Result<Stmt, ParseError> {
@@ -286,6 +344,14 @@ impl Parser {
     }
 }
 
+fn stmt_end(stmt: &Stmt) -> usize {
+    match stmt {
+        Stmt::Expr(expr) => expr.span().end,
+        Stmt::Block { span, .. } | Stmt::If { span, .. } | Stmt::VarDecl { span, .. } => span.end,
+        Stmt::Empty => 0,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use qjs_ast::{BinaryOp, Expr, Stmt, VarKind};
@@ -375,5 +441,23 @@ mod tests {
     fn rejects_invalid_assignment_target() {
         let error = parse_script("(1 + 2) = 3;").expect_err("assignment target should fail");
         assert_eq!(error.message, "invalid assignment target");
+    }
+
+    #[test]
+    fn parses_if_else_statement() {
+        let script = parse_script("if (true) { let x = 1; } else { let x = 2; }")
+            .expect("source should parse");
+        let [
+            Stmt::If {
+                consequent,
+                alternate,
+                ..
+            },
+        ] = script.body.as_slice()
+        else {
+            panic!("expected one if statement");
+        };
+        assert!(matches!(consequent.as_ref(), Stmt::Block { .. }));
+        assert!(matches!(alternate.as_deref(), Some(Stmt::Block { .. })));
     }
 }

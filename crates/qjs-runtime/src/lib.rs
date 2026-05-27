@@ -56,6 +56,28 @@ pub fn eval_script(script: &Script) -> Result<Value, RuntimeError> {
 fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Value, RuntimeError> {
     match stmt {
         Stmt::Expr(expr) => eval_expr(expr, env),
+        Stmt::Block { body, .. } => {
+            let mut last = Value::Undefined;
+            for stmt in body {
+                last = eval_stmt(stmt, env)?;
+            }
+            Ok(last)
+        }
+        Stmt::If {
+            test,
+            consequent,
+            alternate,
+            ..
+        } => {
+            let test = eval_expr(test, env)?;
+            if is_truthy(&test) {
+                eval_stmt(consequent, env)
+            } else if let Some(alternate) = alternate {
+                eval_stmt(alternate, env)
+            } else {
+                Ok(Value::Undefined)
+            }
+        }
         Stmt::VarDecl { name, init, .. } => {
             let value = if let Some(init) = init {
                 eval_expr(init, env)?
@@ -206,5 +228,17 @@ mod tests {
     #[test]
     fn evaluates_assignment_expressions() {
         assert_eq!(eval("let x = 2; x = x + 3; x;"), Ok(Value::Number(5.0)));
+    }
+
+    #[test]
+    fn evaluates_if_else_statements() {
+        assert_eq!(
+            eval("let x = 1; if (x > 0) { x = 7; } else { x = 3; } x;"),
+            Ok(Value::Number(7.0))
+        );
+        assert_eq!(
+            eval("let x = 1; if (x < 0) x = 7; else x = 3; x;"),
+            Ok(Value::Number(3.0))
+        );
     }
 }

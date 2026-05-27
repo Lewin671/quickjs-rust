@@ -29,6 +29,24 @@ pub struct Script {
 pub enum Stmt {
     /// An expression used as a statement.
     Expr(Expr),
+    /// A block statement.
+    Block {
+        /// Statements in the block.
+        body: Vec<Stmt>,
+        /// Source span.
+        span: Span,
+    },
+    /// An if statement.
+    If {
+        /// Condition expression.
+        test: Expr,
+        /// Consequent statement.
+        consequent: Box<Stmt>,
+        /// Optional alternate statement.
+        alternate: Option<Box<Stmt>>,
+        /// Source span.
+        span: Span,
+    },
     /// A variable declaration.
     VarDecl {
         /// Declaration kind.
