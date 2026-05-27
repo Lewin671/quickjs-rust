@@ -67,6 +67,8 @@ impl ObjectRef {
 /// User-defined function value.
 #[derive(Clone, Debug)]
 pub struct Function {
+    /// Optional internal function name.
+    pub name: Option<String>,
     /// Parameter names.
     pub params: Vec<String>,
     /// Function body statements.
@@ -77,7 +79,7 @@ pub struct Function {
 
 impl PartialEq for Function {
     fn eq(&self, other: &Self) -> bool {
-        self.params == other.params && self.body == other.body
+        self.name == other.name && self.params == other.params && self.body == other.body
     }
 }
 
@@ -249,6 +251,7 @@ fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Completion
             env.insert(
                 name.clone(),
                 Value::Function(Function {
+                    name: Some(name.clone()),
                     params: params.clone(),
                     body: body.clone(),
                     env: env.clone(),
@@ -399,6 +402,7 @@ fn hoist_function_declarations(body: &[Stmt], env: &mut HashMap<String, Value>) 
             env.insert(
                 name.clone(),
                 Value::Function(Function {
+                    name: Some(name.clone()),
                     params: params.clone(),
                     body: body.clone(),
                     env: env.clone(),
@@ -561,7 +565,7 @@ fn eval_call(
         }
     };
 
-    let Value::Function(function) = callee else {
+    let Value::Function(function) = callee.clone() else {
         return Err(RuntimeError {
             message: "value is not callable".to_owned(),
         });
@@ -579,6 +583,9 @@ fn eval_call(
     }
     if let Some(global_this) = env.get(GLOBAL_THIS_BINDING).cloned() {
         local_env.insert(GLOBAL_THIS_BINDING.to_owned(), global_this);
+    }
+    if let Some(name) = &function.name {
+        local_env.insert(name.clone(), callee);
     }
     local_env.insert("this".to_owned(), this_value);
     local_env.insert(
@@ -622,7 +629,10 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, Run
             }
             Ok(Value::Object(ObjectRef::new(values)))
         }
-        Expr::Function { params, body, .. } => Ok(Value::Function(Function {
+        Expr::Function {
+            name, params, body, ..
+        } => Ok(Value::Function(Function {
+            name: name.clone(),
             params: params.clone(),
             body: body.clone(),
             env: env.clone(),
@@ -1610,6 +1620,24 @@ mod tests {
         assert_eq!(
             eval("let add = function(a, b) { return a + b; }; add(2, 3);"),
             Ok(Value::Number(5.0))
+        );
+        assert_eq!(
+            eval("let f = function named() { return typeof named; }; f();"),
+            Ok(Value::String("function".to_owned()))
+        );
+        assert_eq!(
+            eval("let f = function named() { return named === f; }; f();"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("let f = function hidden() { return 1; }; typeof hidden;"),
+            Ok(Value::String("undefined".to_owned()))
+        );
+        assert_eq!(
+            eval(
+                "let factorial = function fact(n) { return n <= 1 ? 1 : n * fact(n - 1); }; factorial(5);"
+            ),
+            Ok(Value::Number(120.0))
         );
         assert_eq!(
             eval("(function(value) { return value + 1; })(2);"),
