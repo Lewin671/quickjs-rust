@@ -34,6 +34,12 @@ cases/object-has-own-property-basic.js
 cases/object-has-own-property-length.js
 cases/object-has-own-property-missing.js
 cases/object-has-own-property-prototype-negative.js
+cases/object-keys-array-basic.js
+cases/object-keys-basic.js
+cases/object-keys-length.js
+cases/object-keys-primitive-number-basic.js
+cases/object-keys-primitive-string-basic.js
+cases/object-keys-prototype-negative.js
 cases/object-literal-basic.js
 cases/object-literal-object-instanceof-basic.js
 cases/object-put-basic.js

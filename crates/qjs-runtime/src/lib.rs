@@ -64,8 +64,30 @@ impl PartialEq for Value {
 /// Object storage reference.
 #[derive(Clone)]
 pub struct ObjectRef {
-    properties: Rc<RefCell<HashMap<String, Value>>>,
+    properties: Rc<RefCell<HashMap<String, Property>>>,
     prototype: Option<Box<ObjectRef>>,
+}
+
+#[derive(Clone, Debug)]
+struct Property {
+    value: Value,
+    enumerable: bool,
+}
+
+impl Property {
+    fn enumerable(value: Value) -> Self {
+        Self {
+            value,
+            enumerable: true,
+        }
+    }
+
+    fn non_enumerable(value: Value) -> Self {
+        Self {
+            value,
+            enumerable: false,
+        }
+    }
 }
 
 impl fmt::Debug for ObjectRef {
@@ -85,7 +107,12 @@ impl ObjectRef {
 
     fn with_prototype(properties: HashMap<String, Value>, prototype: Option<ObjectRef>) -> Self {
         Self {
-            properties: Rc::new(RefCell::new(properties)),
+            properties: Rc::new(RefCell::new(
+                properties
+                    .into_iter()
+                    .map(|(key, value)| (key, Property::enumerable(value)))
+                    .collect(),
+            )),
             prototype: prototype.map(Box::new),
         }
     }
@@ -98,8 +125,20 @@ impl ObjectRef {
         self.properties
             .borrow()
             .get(key)
-            .cloned()
+            .map(|property| property.value.clone())
             .or_else(|| self.prototype.as_deref().and_then(|proto| proto.get(key)))
+    }
+
+    fn set(&self, key: String, value: Value) {
+        self.properties
+            .borrow_mut()
+            .insert(key, Property::enumerable(value));
+    }
+
+    fn define_non_enumerable(&self, key: String, value: Value) {
+        self.properties
+            .borrow_mut()
+            .insert(key, Property::non_enumerable(value));
     }
 
     fn contains_property(&self, key: &str) -> bool {
@@ -112,6 +151,18 @@ impl ObjectRef {
 
     fn has_own_property(&self, key: &str) -> bool {
         self.properties.borrow().contains_key(key)
+    }
+
+    fn own_property_keys(&self) -> Vec<String> {
+        let mut keys: Vec<_> = self
+            .properties
+            .borrow()
+            .iter()
+            .filter(|(_, property)| property.enumerable)
+            .map(|(key, _)| key.clone())
+            .collect();
+        keys.sort();
+        keys
     }
 
     fn has_prototype(&self, prototype: &ObjectRef) -> bool {
@@ -130,6 +181,7 @@ enum NativeFunction {
     Object,
     ObjectCreate,
     ObjectGetPrototypeOf,
+    ObjectKeys,
     ObjectPrototypeHasOwnProperty,
     ObjectPrototypeToString,
     ObjectPrototypeValueOf,
@@ -149,7 +201,7 @@ pub struct Function {
     native: Option<NativeFunction>,
     constructable: bool,
     /// Function object properties.
-    properties: Rc<RefCell<HashMap<String, Value>>>,
+    properties: Rc<RefCell<HashMap<String, Property>>>,
 }
 
 impl fmt::Debug for Function {
@@ -210,13 +262,11 @@ impl Function {
         };
         if constructable {
             prototype
-                .properties
-                .borrow_mut()
-                .insert("constructor".to_owned(), Value::Function(function.clone()));
-            function
-                .properties
-                .borrow_mut()
-                .insert("prototype".to_owned(), Value::Object(prototype));
+                .define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
+            function.properties.borrow_mut().insert(
+                "prototype".to_owned(),
+                Property::non_enumerable(Value::Object(prototype)),
+            );
         }
         function
     }
@@ -286,11 +336,11 @@ pub fn eval_script(script: &Script) -> Result<Value, RuntimeError> {
 fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
     let object_prototype = ObjectRef::new(HashMap::new());
     let object_function = Function::new_native(Some("Object"), 1, NativeFunction::Object, true);
-    object_prototype.properties.borrow_mut().insert(
+    object_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(object_function.clone()),
     );
-    object_prototype.properties.borrow_mut().insert(
+    object_prototype.define_non_enumerable(
         "hasOwnProperty".to_owned(),
         Value::Function(Function::new_native(
             Some("hasOwnProperty"),
@@ -299,7 +349,7 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
             false,
         )),
     );
-    object_prototype.properties.borrow_mut().insert(
+    object_prototype.define_non_enumerable(
         "toString".to_owned(),
         Value::Function(Function::new_native(
             Some("toString"),
@@ -308,7 +358,7 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
             false,
         )),
     );
-    object_prototype.properties.borrow_mut().insert(
+    object_prototype.define_non_enumerable(
         "valueOf".to_owned(),
         Value::Function(Function::new_native(
             Some("valueOf"),
@@ -317,36 +367,42 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
             false,
         )),
     );
-    object_function
-        .properties
-        .borrow_mut()
-        .insert("prototype".to_owned(), Value::Object(object_prototype));
+    object_function.properties.borrow_mut().insert(
+        "prototype".to_owned(),
+        Property::non_enumerable(Value::Object(object_prototype)),
+    );
     object_function.properties.borrow_mut().insert(
         "create".to_owned(),
-        Value::Function(Function::new_native(
+        Property::non_enumerable(Value::Function(Function::new_native(
             Some("create"),
             1,
             NativeFunction::ObjectCreate,
             false,
-        )),
+        ))),
     );
     object_function.properties.borrow_mut().insert(
         "getPrototypeOf".to_owned(),
-        Value::Function(Function::new_native(
+        Property::non_enumerable(Value::Function(Function::new_native(
             Some("getPrototypeOf"),
             1,
             NativeFunction::ObjectGetPrototypeOf,
             false,
-        )),
+        ))),
+    );
+    object_function.properties.borrow_mut().insert(
+        "keys".to_owned(),
+        Property::non_enumerable(Value::Function(Function::new_native(
+            Some("keys"),
+            1,
+            NativeFunction::ObjectKeys,
+            false,
+        ))),
     );
 
     let object_value = Value::Function(object_function);
     env.insert("Object".to_owned(), object_value.clone());
     if let Value::Object(global_object) = global_this {
-        global_object
-            .properties
-            .borrow_mut()
-            .insert("Object".to_owned(), object_value);
+        global_object.set("Object".to_owned(), object_value);
     }
 }
 
@@ -749,7 +805,7 @@ fn assign_for_in_left(
 
 fn enumerable_keys(value: Value) -> Result<Vec<String>, RuntimeError> {
     match value {
-        Value::Object(object) => Ok(object.properties.borrow().keys().cloned().collect()),
+        Value::Object(object) => Ok(object.own_property_keys()),
         Value::Array(elements) => Ok((0..elements.len()).map(|index| index.to_string()).collect()),
         Value::Null | Value::Undefined => Ok(Vec::new()),
         _ => Err(RuntimeError {
@@ -901,6 +957,7 @@ fn call_native_function(
         }
         NativeFunction::ObjectCreate => native_object_create(&argument_values),
         NativeFunction::ObjectGetPrototypeOf => native_object_get_prototype_of(&argument_values),
+        NativeFunction::ObjectKeys => native_object_keys(&argument_values),
         NativeFunction::ObjectPrototypeHasOwnProperty => {
             native_object_prototype_has_own_property(this_value, &argument_values)
         }
@@ -952,6 +1009,17 @@ fn native_object_get_prototype_of(argument_values: &[Value]) -> Result<Value, Ru
     }
 }
 
+fn native_object_keys(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    let keys = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
+        Value::Object(object) => object.own_property_keys(),
+        Value::Array(elements) => array_own_property_keys(&elements),
+        Value::Function(function) => function_own_property_keys(&function),
+        Value::String(value) => string_own_property_keys(&value),
+        Value::Number(_) | Value::Boolean(_) | Value::Null | Value::Undefined => Vec::new(),
+    };
+    Ok(Value::Array(keys.into_iter().map(Value::String).collect()))
+}
+
 fn native_object_prototype_has_own_property(
     this_value: Value,
     argument_values: &[Value],
@@ -996,7 +1064,10 @@ fn native_object_prototype_value_of(this_value: Value) -> Result<Value, RuntimeE
 
 fn function_prototype(function: &Function) -> Option<ObjectRef> {
     match function.properties.borrow().get("prototype") {
-        Some(Value::Object(prototype)) => Some(prototype.clone()),
+        Some(Property {
+            value: Value::Object(prototype),
+            ..
+        }) => Some(prototype.clone()),
         _ => None,
     }
 }
@@ -1276,7 +1347,7 @@ fn eval_member(
                 .properties
                 .borrow()
                 .get(&key)
-                .cloned()
+                .map(|property| property.value.clone())
                 .or_else(|| inherited_object_prototype_property(env, &key))
                 .unwrap_or(Value::Undefined))
         }
@@ -1328,11 +1399,14 @@ fn assign_member(
     let key = property_key(property, env)?;
     match object {
         Value::Object(object) => {
-            object.properties.borrow_mut().insert(key, value);
+            object.set(key, value);
             Ok(())
         }
         Value::Function(function) => {
-            function.properties.borrow_mut().insert(key, value);
+            function
+                .properties
+                .borrow_mut()
+                .insert(key, Property::enumerable(value));
             Ok(())
         }
         _ => Err(RuntimeError {
@@ -1379,6 +1453,12 @@ fn string_has_own_property(value: &str, key: &str) -> bool {
         || canonical_string_index(key).is_some_and(|index| index < value.chars().count())
 }
 
+fn string_own_property_keys(value: &str) -> Vec<String> {
+    (0..value.chars().count())
+        .map(|index| index.to_string())
+        .collect()
+}
+
 fn canonical_string_index(key: &str) -> Option<usize> {
     if key.is_empty() {
         return None;
@@ -1397,6 +1477,22 @@ fn array_has_own_property(elements: &[Value], key: &str) -> bool {
         || key
             .parse::<usize>()
             .is_ok_and(|index| index < elements.len())
+}
+
+fn array_own_property_keys(elements: &[Value]) -> Vec<String> {
+    (0..elements.len()).map(|index| index.to_string()).collect()
+}
+
+fn function_own_property_keys(function: &Function) -> Vec<String> {
+    let mut keys: Vec<_> = function
+        .properties
+        .borrow()
+        .iter()
+        .filter(|(_, property)| property.enumerable)
+        .map(|(key, _)| key.clone())
+        .collect();
+    keys.sort();
+    keys
 }
 
 fn to_array_index(value: Value) -> Result<usize, RuntimeError> {
@@ -1547,7 +1643,10 @@ fn eval_instanceof(left: Value, right: Value) -> Result<Value, RuntimeError> {
     let Value::Object(object) = left else {
         return Ok(Value::Boolean(false));
     };
-    let Some(Value::Object(prototype)) = constructor.properties.borrow().get("prototype").cloned()
+    let Some(Property {
+        value: Value::Object(prototype),
+        ..
+    }) = constructor.properties.borrow().get("prototype").cloned()
     else {
         return Err(RuntimeError {
             message: "function prototype is not an object".to_owned(),
@@ -1790,6 +1889,26 @@ mod tests {
             eval("Object.prototype.valueOf() === Object.prototype;"),
             Ok(Value::Boolean(true))
         );
+        assert_eq!(eval("Object.keys.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(
+            eval("Object.keys({ value: 1 })[0];"),
+            Ok(Value::String("value".to_owned()))
+        );
+        assert_eq!(eval("Object.keys([1, 2]).length;"), Ok(Value::Number(2.0)));
+        assert_eq!(
+            eval("Object.keys(Object.create({ value: 1 })).length;"),
+            Ok(Value::Number(0.0))
+        );
+        assert_eq!(eval("Object.keys(Object).length;"), Ok(Value::Number(0.0)));
+        assert_eq!(
+            eval("Object.keys(Object.prototype).length;"),
+            Ok(Value::Number(0.0))
+        );
+        assert_eq!(
+            eval("Object.keys('ab')[1];"),
+            Ok(Value::String("1".to_owned()))
+        );
+        assert_eq!(eval("Object.keys(0).length;"), Ok(Value::Number(0.0)));
         assert_eq!(
             eval("({ value: 1 }).hasOwnProperty('missing');"),
             Ok(Value::Boolean(false))
