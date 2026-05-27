@@ -274,6 +274,8 @@ cases/string-prototype-includes-basic.js
 cases/string-prototype-includes-length.js
 cases/string-prototype-index-of-basic.js
 cases/string-prototype-index-of-length.js
+cases/string-prototype-repeat-basic.js
+cases/string-prototype-repeat-length.js
 cases/string-prototype-slice-basic.js
 cases/string-prototype-slice-length.js
 cases/string-prototype-starts-with-basic.js
@@ -281,3 +283,9 @@ cases/string-prototype-starts-with-length.js
 cases/string-prototype-starts-with-position.js
 cases/string-prototype-to-string-basic.js
 cases/string-prototype-to-string-length.js
+cases/string-prototype-trim-basic.js
+cases/string-prototype-trim-end-basic.js
+cases/string-prototype-trim-end-length.js
+cases/string-prototype-trim-length.js
+cases/string-prototype-trim-start-basic.js
+cases/string-prototype-trim-start-length.js
