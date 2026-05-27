@@ -150,6 +150,15 @@ pub enum Expr {
         /// Source span.
         span: Span,
     },
+    /// A member access expression.
+    Member {
+        /// Object expression.
+        object: Box<Expr>,
+        /// Property expression or name.
+        property: MemberProperty,
+        /// Source span.
+        span: Span,
+    },
     /// An identifier reference.
     Identifier { name: String, span: Span },
 }
@@ -165,9 +174,19 @@ impl Expr {
             | Self::Binary { span, .. }
             | Self::Assignment { span, .. }
             | Self::Call { span, .. }
+            | Self::Member { span, .. }
             | Self::Identifier { span, .. } => *span,
         }
     }
+}
+
+/// Member access property.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum MemberProperty {
+    /// Dot property name, as in `object.name`.
+    Named(String),
+    /// Computed property expression, as in `object[index]`.
+    Computed(Box<Expr>),
 }
 
 /// A literal expression.
