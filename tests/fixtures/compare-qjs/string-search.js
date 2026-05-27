@@ -1,0 +1,1 @@
+"a".concat("b", 3, true) + ":" + "test262".startsWith("test") + ":" + "test262".startsWith("262", 4) + ":" + "test262".startsWith("262", 5) + ":" + "test262".endsWith("262") + ":" + "test262".endsWith("test", 4) + ":" + "test262".endsWith("262", 5)
