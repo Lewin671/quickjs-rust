@@ -89,6 +89,15 @@ pub enum Stmt {
         /// Source span.
         span: Span,
     },
+    /// A switch statement.
+    Switch {
+        /// Discriminant expression.
+        discriminant: Expr,
+        /// Switch clauses in source order.
+        cases: Vec<SwitchCase>,
+        /// Source span.
+        span: Span,
+    },
     /// A function declaration.
     FunctionDecl {
         /// Function name.
@@ -135,6 +144,17 @@ pub enum Stmt {
     },
     /// An empty statement represented by `;`.
     Empty,
+}
+
+/// A switch case or default clause.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SwitchCase {
+    /// Optional case test; `None` represents `default`.
+    pub test: Option<Expr>,
+    /// Clause statements.
+    pub consequent: Vec<Stmt>,
+    /// Source span.
+    pub span: Span,
 }
 
 /// A for statement initializer.

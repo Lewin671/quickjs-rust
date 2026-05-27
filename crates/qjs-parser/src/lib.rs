@@ -2,7 +2,7 @@
 
 use qjs_ast::{
     AssignmentOp, AssignmentTarget, BinaryOp, Expr, ForInLeft, ForInit, Literal, MemberProperty,
-    ObjectProperty, Script, Span, Stmt, UnaryOp, UpdateOp, VarDeclarator, VarKind,
+    ObjectProperty, Script, Span, Stmt, SwitchCase, UnaryOp, UpdateOp, VarDeclarator, VarKind,
 };
 use qjs_lexer::{Token, TokenKind, lex};
 
@@ -69,6 +69,10 @@ impl Parser {
 
         if self.at(&TokenKind::For) {
             return self.for_statement();
+        }
+
+        if self.at(&TokenKind::Switch) {
+            return self.switch_statement();
         }
 
         if self.at(&TokenKind::Function) {
@@ -281,6 +285,79 @@ impl Parser {
             test,
             update,
             body: Box::new(body),
+            span: Span::new(start, end),
+        })
+    }
+
+    fn switch_statement(&mut self) -> Result<Stmt, ParseError> {
+        let start = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .start;
+        self.expect(&TokenKind::Switch)?;
+        self.expect(&TokenKind::LeftParen)?;
+        let discriminant = self.expression()?;
+        self.expect(&TokenKind::RightParen)?;
+        self.expect(&TokenKind::LeftBrace)?;
+
+        let mut cases = Vec::new();
+        let mut seen_default = false;
+        while !self.at(&TokenKind::RightBrace) && !self.at(&TokenKind::Eof) {
+            let clause_start = self
+                .peek()
+                .expect("parser should always have eof token")
+                .span
+                .start;
+            let test = if self.match_kind(&TokenKind::Case) {
+                let test = self.expression()?;
+                self.expect(&TokenKind::Colon)?;
+                Some(test)
+            } else if self.match_kind(&TokenKind::Default) {
+                if seen_default {
+                    return Err(ParseError {
+                        message: "switch statement cannot have multiple default clauses".to_owned(),
+                        span: Span::new(clause_start, clause_start + "default".len()),
+                    });
+                }
+                seen_default = true;
+                self.expect(&TokenKind::Colon)?;
+                None
+            } else {
+                let token = self.peek().expect("parser should always have eof token");
+                return Err(ParseError {
+                    message: "expected switch case or default clause".to_owned(),
+                    span: token.span,
+                });
+            };
+
+            let mut consequent = Vec::new();
+            while !self.at(&TokenKind::Case)
+                && !self.at(&TokenKind::Default)
+                && !self.at(&TokenKind::RightBrace)
+                && !self.at(&TokenKind::Eof)
+            {
+                consequent.push(self.statement()?);
+            }
+            let end = consequent
+                .last()
+                .map_or_else(|| self.tokens[self.cursor - 1].span.end, stmt_end);
+            cases.push(SwitchCase {
+                test,
+                consequent,
+                span: Span::new(clause_start, end),
+            });
+        }
+
+        let end = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .end;
+        self.expect(&TokenKind::RightBrace)?;
+        Ok(Stmt::Switch {
+            discriminant,
+            cases,
             span: Span::new(start, end),
         })
     }
@@ -996,6 +1073,9 @@ fn property_name(kind: TokenKind) -> Option<String> {
         TokenKind::While => Some("while".to_owned()),
         TokenKind::Do => Some("do".to_owned()),
         TokenKind::For => Some("for".to_owned()),
+        TokenKind::Switch => Some("switch".to_owned()),
+        TokenKind::Case => Some("case".to_owned()),
+        TokenKind::Default => Some("default".to_owned()),
         TokenKind::Break => Some("break".to_owned()),
         TokenKind::Continue => Some("continue".to_owned()),
         TokenKind::Function => Some("function".to_owned()),
@@ -1046,6 +1126,7 @@ fn stmt_end(stmt: &Stmt) -> usize {
         | Stmt::DoWhile { span, .. }
         | Stmt::For { span, .. }
         | Stmt::ForIn { span, .. }
+        | Stmt::Switch { span, .. }
         | Stmt::FunctionDecl { span, .. }
         | Stmt::Return { span, .. }
         | Stmt::Throw { span, .. }
@@ -1406,6 +1487,21 @@ mod tests {
             panic!("expected one for-in statement");
         };
         assert!(matches!(left, ForInLeft::Target(_)));
+    }
+
+    #[test]
+    fn parses_switch_statement() {
+        let script =
+            parse_script("switch (x) { case 1: x += 1; break; default: x = 0; case 2: x += 2; }")
+                .expect("source should parse");
+        let [Stmt::Switch { cases, .. }] = script.body.as_slice() else {
+            panic!("expected one switch statement");
+        };
+        assert_eq!(cases.len(), 3);
+        assert!(cases[0].test.is_some());
+        assert!(cases[1].test.is_none());
+        assert!(cases[2].test.is_some());
+        assert_eq!(cases[0].consequent.len(), 2);
     }
 
     #[test]
