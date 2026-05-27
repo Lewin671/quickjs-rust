@@ -7,7 +7,13 @@ cases/array-constructor-multiple-arguments.js
 cases/array-instanceof-basic.js
 cases/array-is-array-basic.js
 cases/array-is-array-length.js
+cases/array-join-basic.js
+cases/array-join-empty.js
+cases/array-join-length.js
+cases/array-join-null-undefined.js
 cases/array-prototype-constructor.js
+cases/array-to-string-basic.js
+cases/array-to-string-length.js
 cases/strict-equals-basic.js
 cases/less-than-basic.js
 cases/conditional-basic.js
