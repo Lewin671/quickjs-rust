@@ -8,6 +8,11 @@ cases/array-concat-array-arguments.js
 cases/array-concat-basic.js
 cases/array-concat-length.js
 cases/array-concat-primitive-arguments.js
+cases/array-includes-basic.js
+cases/array-includes-from-index.js
+cases/array-includes-length.js
+cases/array-includes-same-value-zero.js
+cases/array-includes-search-not-found.js
 cases/array-index-of-basic.js
 cases/array-index-of-empty.js
 cases/array-index-of-from-index.js
