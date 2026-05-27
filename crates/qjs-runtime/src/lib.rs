@@ -4,7 +4,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use qjs_ast::{
     AssignmentOp, AssignmentTarget, BinaryOp, Expr, ForInLeft, ForInit, Literal, MemberProperty,
-    Script, Stmt, UnaryOp, UpdateOp,
+    Script, Stmt, SwitchCase, UnaryOp, UpdateOp,
 };
 use qjs_parser::parse_script;
 
@@ -219,6 +219,11 @@ fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Completion
             }
             Ok(Completion::Normal(last))
         }
+        Stmt::Switch {
+            discriminant,
+            cases,
+            ..
+        } => eval_switch(discriminant, cases, env),
         Stmt::FunctionDecl {
             name, params, body, ..
         } => {
@@ -265,6 +270,44 @@ fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Completion
         }
         Stmt::Empty => Ok(Completion::Normal(Value::Undefined)),
     }
+}
+
+fn eval_switch(
+    discriminant: &Expr,
+    cases: &[SwitchCase],
+    env: &mut HashMap<String, Value>,
+) -> Result<Completion, RuntimeError> {
+    let discriminant = eval_expr(discriminant, env)?;
+    let mut default_index = None;
+    let mut selected_index = None;
+
+    for (index, case) in cases.iter().enumerate() {
+        if let Some(test) = &case.test {
+            if eval_expr(test, env)? == discriminant {
+                selected_index = Some(index);
+                break;
+            }
+        } else {
+            default_index = Some(index);
+        }
+    }
+
+    let Some(start_index) = selected_index.or(default_index) else {
+        return Ok(Completion::Normal(Value::Undefined));
+    };
+
+    let mut last = Value::Undefined;
+    for case in &cases[start_index..] {
+        for stmt in &case.consequent {
+            match eval_stmt(stmt, env)? {
+                Completion::Normal(value) => last = value,
+                Completion::Break => return Ok(Completion::Normal(last)),
+                Completion::Return(value) => return Ok(Completion::Return(value)),
+                Completion::Continue => return Ok(Completion::Continue),
+            }
+        }
+    }
+    Ok(Completion::Normal(last))
 }
 
 fn eval_for_init(init: &ForInit, env: &mut HashMap<String, Value>) -> Result<(), RuntimeError> {
@@ -1118,6 +1161,34 @@ mod tests {
                 "let sum = 0; for (var i = 0; i < 5; i = i + 1) { if (i === 2) continue; sum = sum + i; } sum;"
             ),
             Ok(Value::Number(8.0))
+        );
+    }
+
+    #[test]
+    fn evaluates_switch_statements() {
+        assert_eq!(
+            eval(
+                "let x = 2; let out = 0; switch (x) { case 1: out = 1; break; case 2: out = 2; break; default: out = 3; } out;"
+            ),
+            Ok(Value::Number(2.0))
+        );
+        assert_eq!(
+            eval(
+                "let x = 4; let out = 0; switch (x) { case 1: out = 1; break; default: out = 3; } out;"
+            ),
+            Ok(Value::Number(3.0))
+        );
+        assert_eq!(
+            eval(
+                "let x = 1; let out = 0; switch (x) { case 1: out += 1; case 2: out += 2; default: out += 4; } out;"
+            ),
+            Ok(Value::Number(7.0))
+        );
+        assert_eq!(
+            eval(
+                "let x = '1'; let out = 0; switch (x) { case 1: out = 1; break; default: out = 2; } out;"
+            ),
+            Ok(Value::Number(2.0))
         );
     }
 

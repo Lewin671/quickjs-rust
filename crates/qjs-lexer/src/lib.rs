@@ -42,6 +42,12 @@ pub enum TokenKind {
     Do,
     /// `for`.
     For,
+    /// `switch`.
+    Switch,
+    /// `case`.
+    Case,
+    /// `default`.
+    Default,
     /// `break`.
     Break,
     /// `continue`.
@@ -573,6 +579,9 @@ impl<'src> Lexer<'src> {
             "while" => TokenKind::While,
             "do" => TokenKind::Do,
             "for" => TokenKind::For,
+            "switch" => TokenKind::Switch,
+            "case" => TokenKind::Case,
+            "default" => TokenKind::Default,
             "break" => TokenKind::Break,
             "continue" => TokenKind::Continue,
             "function" => TokenKind::Function,
@@ -706,7 +715,7 @@ mod tests {
     fn lexes_declaration_keywords() {
         let tokens =
             lex(
-                "var let const if else while do for break continue function return throw typeof void in delete variable",
+                "var let const if else while do for switch case default break continue function return throw typeof void in delete variable",
             )
             .expect("source should lex");
         let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
@@ -721,6 +730,9 @@ mod tests {
                 TokenKind::While,
                 TokenKind::Do,
                 TokenKind::For,
+                TokenKind::Switch,
+                TokenKind::Case,
+                TokenKind::Default,
                 TokenKind::Break,
                 TokenKind::Continue,
                 TokenKind::Function,
