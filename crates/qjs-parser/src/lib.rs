@@ -68,6 +68,10 @@ impl Parser {
             return self.return_statement();
         }
 
+        if self.at(&TokenKind::Throw) {
+            return Ok(self.throw_statement());
+        }
+
         if self.at(&TokenKind::Var) || self.at(&TokenKind::Let) || self.at(&TokenKind::Const) {
             return self.variable_declaration();
         }
@@ -225,6 +229,28 @@ impl Parser {
             argument,
             span: Span::new(start, end),
         })
+    }
+
+    fn throw_statement(&mut self) -> Stmt {
+        let start = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .start;
+        let throw = self.advance();
+        let mut end = throw.span.end;
+        while !self.at(&TokenKind::Semicolon)
+            && !self.at(&TokenKind::RightBrace)
+            && !self.at(&TokenKind::Eof)
+        {
+            end = self.advance().span.end;
+        }
+        if self.match_kind(&TokenKind::Semicolon) {
+            end = self.tokens[self.cursor - 1].span.end;
+        }
+        Stmt::Throw {
+            span: Span::new(start, end),
+        }
     }
 
     fn variable_declaration(&mut self) -> Result<Stmt, ParseError> {
@@ -578,6 +604,7 @@ fn stmt_end(stmt: &Stmt) -> usize {
         | Stmt::While { span, .. }
         | Stmt::FunctionDecl { span, .. }
         | Stmt::Return { span, .. }
+        | Stmt::Throw { span }
         | Stmt::VarDecl { span, .. } => span.end,
         Stmt::Empty => 0,
     }
@@ -699,6 +726,19 @@ mod tests {
             panic!("expected one while statement");
         };
         assert!(matches!(body.as_ref(), Stmt::Block { .. }));
+    }
+
+    #[test]
+    fn parses_throw_statement_without_throw_expression_support() {
+        let script = parse_script("if (false) { throw new Test262Error('fail'); }")
+            .expect("source should parse");
+        let [Stmt::If { consequent, .. }] = script.body.as_slice() else {
+            panic!("expected one if statement");
+        };
+        let Stmt::Block { body, .. } = consequent.as_ref() else {
+            panic!("expected block consequent");
+        };
+        assert!(matches!(body.as_slice(), [Stmt::Throw { .. }]));
     }
 
     #[test]
