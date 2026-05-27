@@ -13,6 +13,8 @@ boundaries and make each change verifiable with focused tests.
 
 - Fresh checkout setup: `./scripts/bootstrap.sh`
 - Full check: `./scripts/check.sh`
+- Create agent worktree: `./scripts/create-agent-worktree.sh <task-slug> <owner-id> [base-ref]`
+- Validate agent branch: `./scripts/validate-agent-branch.sh <branch> <base-sha> <allowed-path>...`
 - Format only: `cargo fmt --all`
 - Test only: `cargo test --workspace`
 - CLI smoke test: `cargo run -p qjs-cli -- -e "1 + 2;"`
@@ -105,11 +107,13 @@ into clear, non-overlapping ownership boundaries.
   `crates/qjs-runtime/**`, or `scripts/compare-qjs.sh`.
 - Global files default to main-agent ownership: `Cargo.toml`, `Cargo.lock`,
   `rust-toolchain.toml`, `.gitmodules`, `AGENTS.md`, `README.md`,
-  `docs/architecture.md`, and shared CI or bootstrap scripts.
+  `docs/architecture.md`, `docs/harness.md`, and shared CI or bootstrap
+  scripts.
 - Coding owners must not merge each other's branches. The main agent integrates
   owner results one branch at a time.
 - Before integration, inspect the owner branch's changed files against its path
-  boundary and confirm the reported base sha.
+  boundary and confirm the reported base sha. Use
+  `./scripts/validate-agent-branch.sh` for this check.
 - After each integration, run `./scripts/check.sh` before integrating another
   owner branch.
 - Delete merged temporary worktrees and short-lived branches unless they are
@@ -169,7 +173,7 @@ For documentation-only changes:
 ## Suggested Autonomous Loop
 
 1. Pick one task from `tasks/`.
-2. Read the related crate and docs.
+2. Read the related crate, `docs/architecture.md`, and `docs/harness.md`.
 3. Implement the smallest useful slice.
 4. Add or update tests.
 5. Run `./scripts/check.sh`.

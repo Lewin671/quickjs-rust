@@ -1,8 +1,17 @@
 # Tasks
 
 Use these as agent-sized work items. Keep each task independently testable.
-For new tasks, copy `tasks/TEMPLATE.md` and fill in scope, owner boundary,
-acceptance criteria, and verification commands before assigning an agent.
+Concrete task files live next to this index. For new tasks, copy
+`tasks/TEMPLATE.md` and fill in scope, owner boundary, acceptance criteria, and
+verification commands before assigning an agent.
+
+## Task Files
+
+- `T001-lexer-coverage.md`
+- `T002-parser-expressions.md`
+- `T003-runtime-values.md`
+- `T004-quickjs-comparison.md`
+- `T005-test262-subset.md`
 
 ## T001: Lexer Coverage
 

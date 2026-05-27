@@ -28,6 +28,7 @@ boundaries.
 - `crates/qjs-cli`: command-line entry point for smoke tests.
 - `docs/`: architecture and implementation notes for humans and agents.
 - `tasks/`: small, agent-sized work items.
+- `docs/harness.md`: autonomous agent runbook.
 - `scripts/check.sh`: standard verification command.
 - `scripts/compare-qjs.sh`: smoke comparison against QuickJS-NG.
 - `scripts/test262-subset.sh`: validates curated Test262 subset metadata.
@@ -88,3 +89,5 @@ To validate the curated Test262 allowlist metadata:
 Codex, Harness, and other autonomous agents should start with `AGENTS.md`. That
 file defines repository-specific execution rules, task boundaries, commit
 discipline, parallel worktree policy, and verification expectations.
+Use `docs/harness.md` for the concrete worktree, handoff, integration, and
+cleanup runbook.
