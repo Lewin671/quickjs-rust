@@ -111,6 +111,7 @@ pub fn eval_script(script: &Script) -> Result<Value, RuntimeError> {
     env.insert("this".to_owned(), global_this.clone());
     env.insert(GLOBAL_THIS_BINDING.to_owned(), global_this);
     env.insert("undefined".to_owned(), Value::Undefined);
+    hoist_function_declarations(&script.body, &mut env);
     let mut last = Value::Undefined;
     for stmt in &script.body {
         match eval_stmt(stmt, &mut env)? {
@@ -293,6 +294,7 @@ fn eval_statement_list(
     body: &[Stmt],
     env: &mut HashMap<String, Value>,
 ) -> Result<Completion, RuntimeError> {
+    hoist_function_declarations(body, env);
     let mut last = Value::Undefined;
     for stmt in body {
         match eval_stmt(stmt, env)? {
@@ -304,6 +306,24 @@ fn eval_statement_list(
         }
     }
     Ok(Completion::Normal(last))
+}
+
+fn hoist_function_declarations(body: &[Stmt], env: &mut HashMap<String, Value>) {
+    for stmt in body {
+        if let Stmt::FunctionDecl {
+            name, params, body, ..
+        } = stmt
+        {
+            env.insert(
+                name.clone(),
+                Value::Function(Function {
+                    params: params.clone(),
+                    body: body.clone(),
+                    env: env.clone(),
+                }),
+            );
+        }
+    }
 }
 
 fn eval_switch(
@@ -491,24 +511,16 @@ fn eval_call(
         local_env.insert(param.clone(), value);
     }
 
-    let mut last = Value::Undefined;
-    for stmt in &function.body {
-        match eval_stmt(stmt, &mut local_env)? {
-            Completion::Normal(value) => last = value,
-            Completion::Return(value) => return Ok(value),
-            Completion::Break | Completion::Continue => {
-                return Err(RuntimeError {
-                    message: "break or continue outside loop".to_owned(),
-                });
-            }
-            Completion::Throw(value) => {
-                return Err(RuntimeError {
-                    message: format!("throw statement executed: {}", error_value(value)),
-                });
-            }
-        }
+    match eval_statement_list(&function.body, &mut local_env)? {
+        Completion::Normal(value) => Ok(value),
+        Completion::Return(value) => Ok(value),
+        Completion::Break | Completion::Continue => Err(RuntimeError {
+            message: "break or continue outside loop".to_owned(),
+        }),
+        Completion::Throw(value) => Err(RuntimeError {
+            message: format!("throw statement executed: {}", error_value(value)),
+        }),
     }
-    Ok(last)
 }
 
 fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, RuntimeError> {
@@ -1448,6 +1460,20 @@ mod tests {
         assert_eq!(
             eval("function add(a, b) { return a + b; } add(2, 3);"),
             Ok(Value::Number(5.0))
+        );
+        assert_eq!(
+            eval(
+                "let result = callBeforeDeclaration(); function callBeforeDeclaration() { return 11; } result;"
+            ),
+            Ok(Value::Number(11.0))
+        );
+        assert_eq!(
+            eval("function outer() { return inner(); function inner() { return 13; } } outer();"),
+            Ok(Value::Number(13.0))
+        );
+        assert_eq!(
+            eval("let result; { result = inside(); function inside() { return 17; } } result;"),
+            Ok(Value::Number(17.0))
         );
         assert_eq!(
             eval("function first(a) { return a; } first();"),
