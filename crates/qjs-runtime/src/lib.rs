@@ -390,6 +390,16 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, Run
         }
         Expr::Binary {
             left, op, right, ..
+        } if *op == BinaryOp::NullishCoalescing => {
+            let left = eval_expr(left, env)?;
+            if matches!(left, Value::Null | Value::Undefined) {
+                eval_expr(right, env)
+            } else {
+                Ok(left)
+            }
+        }
+        Expr::Binary {
+            left, op, right, ..
         } => {
             let left = eval_expr(left, env)?;
             let right = eval_expr(right, env)?;
@@ -693,7 +703,8 @@ fn eval_binary(left: Value, op: BinaryOp, right: Value) -> Result<Value, Runtime
         | BinaryOp::StrictNe
         | BinaryOp::In
         | BinaryOp::LogicalAnd
-        | BinaryOp::LogicalOr => unreachable!("handled before numeric binary evaluation"),
+        | BinaryOp::LogicalOr
+        | BinaryOp::NullishCoalescing => unreachable!("handled before numeric binary evaluation"),
     };
     Ok(Value::Number(value))
 }
@@ -826,6 +837,16 @@ mod tests {
     fn evaluates_logical_expressions() {
         assert_eq!(eval("0 || 5;"), Ok(Value::Number(5.0)));
         assert_eq!(eval("1 && 7;"), Ok(Value::Number(7.0)));
+    }
+
+    #[test]
+    fn evaluates_nullish_coalescing_expressions() {
+        assert_eq!(eval("null ?? 42;"), Ok(Value::Number(42.0)));
+        assert_eq!(eval("undefined ?? 42;"), Ok(Value::Number(42.0)));
+        assert_eq!(eval("0 ?? 42;"), Ok(Value::Number(0.0)));
+        assert_eq!(eval("false ?? 42;"), Ok(Value::Boolean(false)));
+        assert_eq!(eval("42 ?? missing;"), Ok(Value::Number(42.0)));
+        assert_eq!(eval("null ?? 0 ?? 1;"), Ok(Value::Number(0.0)));
     }
 
     #[test]

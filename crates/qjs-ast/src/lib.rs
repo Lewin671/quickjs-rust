@@ -446,4 +446,6 @@ pub enum BinaryOp {
     LogicalAnd,
     /// Logical or.
     LogicalOr,
+    /// Nullish coalescing.
+    NullishCoalescing,
 }
