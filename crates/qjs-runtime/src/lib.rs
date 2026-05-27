@@ -75,6 +75,16 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, Run
         Expr::Identifier { name, .. } => env.get(name).cloned().ok_or_else(|| RuntimeError {
             message: format!("undefined identifier `{name}`"),
         }),
+        Expr::Assignment { name, value, .. } => {
+            if !env.contains_key(name) {
+                return Err(RuntimeError {
+                    message: format!("undefined identifier `{name}`"),
+                });
+            }
+            let value = eval_expr(value, env)?;
+            env.insert(name.clone(), value.clone());
+            Ok(value)
+        }
         Expr::Binary {
             left, op, right, ..
         } if *op == BinaryOp::LogicalAnd => {
@@ -191,5 +201,10 @@ mod tests {
             Ok(Value::Number(6.0))
         );
         assert_eq!(eval("var missing; missing;"), Ok(Value::Undefined));
+    }
+
+    #[test]
+    fn evaluates_assignment_expressions() {
+        assert_eq!(eval("let x = 2; x = x + 3; x;"), Ok(Value::Number(5.0)));
     }
 }
