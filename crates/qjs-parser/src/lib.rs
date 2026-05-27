@@ -843,6 +843,7 @@ impl Parser {
                 (TokenKind::Greater, BinaryOp::Gt),
                 (TokenKind::GreaterEqual, BinaryOp::Ge),
                 (TokenKind::In, BinaryOp::In),
+                (TokenKind::Instanceof, BinaryOp::Instanceof),
             ],
         )
     }
@@ -1243,6 +1244,7 @@ fn property_name(kind: TokenKind) -> Option<String> {
         TokenKind::Void => Some("void".to_owned()),
         TokenKind::In => Some("in".to_owned()),
         TokenKind::Delete => Some("delete".to_owned()),
+        TokenKind::Instanceof => Some("instanceof".to_owned()),
         _ => None,
     }
 }
@@ -1332,6 +1334,12 @@ mod tests {
             panic!("expected one binary expression statement");
         };
         assert_eq!(*op, BinaryOp::In);
+
+        let script = parse_script("object instanceof Constructor;").expect("source should parse");
+        let [Stmt::Expr(Expr::Binary { op, .. })] = script.body.as_slice() else {
+            panic!("expected one binary expression statement");
+        };
+        assert_eq!(*op, BinaryOp::Instanceof);
     }
 
     #[test]

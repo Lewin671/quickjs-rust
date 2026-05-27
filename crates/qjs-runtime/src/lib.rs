@@ -84,6 +84,12 @@ impl ObjectRef {
                 .as_deref()
                 .is_some_and(|proto| proto.contains_property(key))
     }
+
+    fn has_prototype(&self, prototype: &ObjectRef) -> bool {
+        self.prototype
+            .as_deref()
+            .is_some_and(|proto| proto.ptr_eq(prototype) || proto.has_prototype(prototype))
+    }
 }
 
 /// User-defined function value.
@@ -1102,6 +1108,9 @@ fn eval_binary(left: Value, op: BinaryOp, right: Value) -> Result<Value, Runtime
     if op == BinaryOp::In {
         return eval_in(left, right);
     }
+    if op == BinaryOp::Instanceof {
+        return eval_instanceof(left, right);
+    }
 
     match op {
         BinaryOp::Eq | BinaryOp::StrictEq => return Ok(Value::Boolean(left == right)),
@@ -1165,11 +1174,30 @@ fn eval_binary(left: Value, op: BinaryOp, right: Value) -> Result<Value, Runtime
         | BinaryOp::Ne
         | BinaryOp::StrictNe
         | BinaryOp::In
+        | BinaryOp::Instanceof
         | BinaryOp::LogicalAnd
         | BinaryOp::LogicalOr
         | BinaryOp::NullishCoalescing => unreachable!("handled before numeric binary evaluation"),
     };
     Ok(Value::Number(value))
+}
+
+fn eval_instanceof(left: Value, right: Value) -> Result<Value, RuntimeError> {
+    let Value::Function(constructor) = right else {
+        return Err(RuntimeError {
+            message: "right-hand side of instanceof is not callable".to_owned(),
+        });
+    };
+    let Value::Object(object) = left else {
+        return Ok(Value::Boolean(false));
+    };
+    let Some(Value::Object(prototype)) = constructor.properties.borrow().get("prototype").cloned()
+    else {
+        return Err(RuntimeError {
+            message: "function prototype is not an object".to_owned(),
+        });
+    };
+    Ok(Value::Boolean(object.has_prototype(&prototype)))
 }
 
 fn to_js_string(value: Value) -> Result<String, RuntimeError> {
@@ -1311,6 +1339,22 @@ mod tests {
         assert_eq!(eval("1 + 2 * 3 >= 7;"), Ok(Value::Boolean(true)));
         assert_eq!(eval("1 + 1 === 2;"), Ok(Value::Boolean(true)));
         assert_eq!(eval("1 !== 2;"), Ok(Value::Boolean(true)));
+        assert_eq!(
+            eval("function C() {} let instance = new C(); instance instanceof C;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("function C() {} function D() {} let instance = new C(); instance instanceof D;"),
+            Ok(Value::Boolean(false))
+        );
+        assert_eq!(
+            eval("function C() {} 1 instanceof C;"),
+            Ok(Value::Boolean(false))
+        );
+        assert!(eval("let object = {}; object instanceof {};").is_err());
+        assert!(
+            eval("function C() {} C.prototype = 1; let object = {}; object instanceof C;").is_err()
+        );
     }
 
     #[test]

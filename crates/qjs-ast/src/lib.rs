@@ -578,6 +578,8 @@ pub enum BinaryOp {
     Ge,
     /// Property existence.
     In,
+    /// Prototype-chain instance test.
+    Instanceof,
     /// Logical and.
     LogicalAnd,
     /// Logical or.
