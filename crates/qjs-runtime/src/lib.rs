@@ -165,6 +165,12 @@ impl ObjectRef {
         keys
     }
 
+    fn own_property_names(&self) -> Vec<String> {
+        let mut names: Vec<_> = self.properties.borrow().keys().cloned().collect();
+        names.sort();
+        names
+    }
+
     fn has_prototype(&self, prototype: &ObjectRef) -> bool {
         self.prototype
             .as_deref()
@@ -181,6 +187,7 @@ enum NativeFunction {
     Object,
     ObjectCreate,
     ObjectGetPrototypeOf,
+    ObjectGetOwnPropertyNames,
     ObjectKeys,
     ObjectPrototypeHasOwnProperty,
     ObjectPrototypeToString,
@@ -386,6 +393,15 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
             Some("getPrototypeOf"),
             1,
             NativeFunction::ObjectGetPrototypeOf,
+            false,
+        ))),
+    );
+    object_function.properties.borrow_mut().insert(
+        "getOwnPropertyNames".to_owned(),
+        Property::non_enumerable(Value::Function(Function::new_native(
+            Some("getOwnPropertyNames"),
+            1,
+            NativeFunction::ObjectGetOwnPropertyNames,
             false,
         ))),
     );
@@ -957,6 +973,9 @@ fn call_native_function(
         }
         NativeFunction::ObjectCreate => native_object_create(&argument_values),
         NativeFunction::ObjectGetPrototypeOf => native_object_get_prototype_of(&argument_values),
+        NativeFunction::ObjectGetOwnPropertyNames => {
+            native_object_get_own_property_names(&argument_values)
+        }
         NativeFunction::ObjectKeys => native_object_keys(&argument_values),
         NativeFunction::ObjectPrototypeHasOwnProperty => {
             native_object_prototype_has_own_property(this_value, &argument_values)
@@ -1018,6 +1037,17 @@ fn native_object_keys(argument_values: &[Value]) -> Result<Value, RuntimeError> 
         Value::Number(_) | Value::Boolean(_) | Value::Null | Value::Undefined => Vec::new(),
     };
     Ok(Value::Array(keys.into_iter().map(Value::String).collect()))
+}
+
+fn native_object_get_own_property_names(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    let names = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
+        Value::Object(object) => object.own_property_names(),
+        Value::Array(elements) => array_own_property_names(&elements),
+        Value::Function(function) => function_own_property_names(&function),
+        Value::String(value) => string_own_property_names(&value),
+        Value::Number(_) | Value::Boolean(_) | Value::Null | Value::Undefined => Vec::new(),
+    };
+    Ok(Value::Array(names.into_iter().map(Value::String).collect()))
 }
 
 fn native_object_prototype_has_own_property(
@@ -1459,6 +1489,12 @@ fn string_own_property_keys(value: &str) -> Vec<String> {
         .collect()
 }
 
+fn string_own_property_names(value: &str) -> Vec<String> {
+    let mut names = string_own_property_keys(value);
+    names.push("length".to_owned());
+    names
+}
+
 fn canonical_string_index(key: &str) -> Option<usize> {
     if key.is_empty() {
         return None;
@@ -1483,6 +1519,12 @@ fn array_own_property_keys(elements: &[Value]) -> Vec<String> {
     (0..elements.len()).map(|index| index.to_string()).collect()
 }
 
+fn array_own_property_names(elements: &[Value]) -> Vec<String> {
+    let mut names = array_own_property_keys(elements);
+    names.push("length".to_owned());
+    names
+}
+
 fn function_own_property_keys(function: &Function) -> Vec<String> {
     let mut keys: Vec<_> = function
         .properties
@@ -1493,6 +1535,12 @@ fn function_own_property_keys(function: &Function) -> Vec<String> {
         .collect();
     keys.sort();
     keys
+}
+
+fn function_own_property_names(function: &Function) -> Vec<String> {
+    let mut names: Vec<_> = function.properties.borrow().keys().cloned().collect();
+    names.sort();
+    names
 }
 
 fn to_array_index(value: Value) -> Result<usize, RuntimeError> {
@@ -1903,6 +1951,26 @@ mod tests {
         assert_eq!(
             eval("Object.keys(Object.prototype).length;"),
             Ok(Value::Number(0.0))
+        );
+        assert_eq!(
+            eval("Object.getOwnPropertyNames.length;"),
+            Ok(Value::Number(1.0))
+        );
+        assert_eq!(
+            eval("Object.getOwnPropertyNames({ value: 1 })[0];"),
+            Ok(Value::String("value".to_owned()))
+        );
+        assert_eq!(
+            eval("Object.getOwnPropertyNames([1, 2]).length;"),
+            Ok(Value::Number(3.0))
+        );
+        assert_eq!(
+            eval("Object.getOwnPropertyNames(Object.prototype).length;"),
+            Ok(Value::Number(4.0))
+        );
+        assert_eq!(
+            eval("Object.getOwnPropertyNames(Object.prototype)[0];"),
+            Ok(Value::String("constructor".to_owned()))
         );
         assert_eq!(
             eval("Object.keys('ab')[1];"),
