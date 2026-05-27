@@ -8,6 +8,8 @@ use qjs_ast::{
 };
 use qjs_parser::parse_script;
 
+const GLOBAL_THIS_BINDING: &str = "\0global_this";
+
 /// A JavaScript value supported by the current runtime subset.
 #[derive(Clone, Debug)]
 pub enum Value {
@@ -97,10 +99,9 @@ pub fn eval(source: &str) -> Result<Value, RuntimeError> {
 /// Returns runtime failures for unsupported operations.
 pub fn eval_script(script: &Script) -> Result<Value, RuntimeError> {
     let mut env = HashMap::new();
-    env.insert(
-        "this".to_owned(),
-        Value::Object(ObjectRef::new(HashMap::new())),
-    );
+    let global_this = Value::Object(ObjectRef::new(HashMap::new()));
+    env.insert("this".to_owned(), global_this.clone());
+    env.insert(GLOBAL_THIS_BINDING.to_owned(), global_this);
     env.insert("undefined".to_owned(), Value::Undefined);
     let mut last = Value::Undefined;
     for stmt in &script.body {
@@ -426,6 +427,71 @@ fn enumerable_keys(value: Value) -> Result<Vec<String>, RuntimeError> {
     }
 }
 
+fn eval_call(
+    callee: &Expr,
+    arguments: &[Expr],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let (callee, this_value) = match callee {
+        Expr::Member {
+            object, property, ..
+        } => {
+            let object = eval_expr(object, env)?;
+            let callee = eval_member(object.clone(), property, env)?;
+            (callee, object)
+        }
+        _ => {
+            let callee = eval_expr(callee, env)?;
+            let this_value = env
+                .get(GLOBAL_THIS_BINDING)
+                .cloned()
+                .unwrap_or(Value::Undefined);
+            (callee, this_value)
+        }
+    };
+
+    let Value::Function(function) = callee else {
+        return Err(RuntimeError {
+            message: "value is not callable".to_owned(),
+        });
+    };
+    if arguments.len() != function.params.len() {
+        return Err(RuntimeError {
+            message: format!(
+                "expected {} arguments, got {}",
+                function.params.len(),
+                arguments.len()
+            ),
+        });
+    }
+
+    let mut local_env = env.clone();
+    local_env.insert("this".to_owned(), this_value);
+    for (param, argument) in function.params.iter().zip(arguments) {
+        let value = eval_expr(argument, env)?;
+        local_env.insert(param.clone(), value);
+    }
+
+    let mut last = Value::Undefined;
+    for stmt in &function.body {
+        match eval_stmt(stmt, &mut local_env)? {
+            Completion::Normal(value) => last = value,
+            Completion::Return(value) => return Ok(value),
+            Completion::Break | Completion::Continue => {
+                return Err(RuntimeError {
+                    message: "break or continue outside loop".to_owned(),
+                });
+            }
+            Completion::Throw(value) => {
+                return Err(RuntimeError {
+                    message: format!("throw statement executed: {}", error_value(value)),
+                });
+            }
+        }
+    }
+    Ok(last)
+}
+
 fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, RuntimeError> {
     match expr {
         Expr::Literal(literal) => eval_literal(literal),
@@ -491,48 +557,7 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, Run
         } => eval_update(target, *op, *prefix, env),
         Expr::Call {
             callee, arguments, ..
-        } => {
-            let callee = eval_expr(callee, env)?;
-            let Value::Function(function) = callee else {
-                return Err(RuntimeError {
-                    message: "value is not callable".to_owned(),
-                });
-            };
-            if arguments.len() != function.params.len() {
-                return Err(RuntimeError {
-                    message: format!(
-                        "expected {} arguments, got {}",
-                        function.params.len(),
-                        arguments.len()
-                    ),
-                });
-            }
-
-            let mut local_env = env.clone();
-            for (param, argument) in function.params.iter().zip(arguments) {
-                let value = eval_expr(argument, env)?;
-                local_env.insert(param.clone(), value);
-            }
-
-            let mut last = Value::Undefined;
-            for stmt in &function.body {
-                match eval_stmt(stmt, &mut local_env)? {
-                    Completion::Normal(value) => last = value,
-                    Completion::Return(value) => return Ok(value),
-                    Completion::Break | Completion::Continue => {
-                        return Err(RuntimeError {
-                            message: "break or continue outside loop".to_owned(),
-                        });
-                    }
-                    Completion::Throw(value) => {
-                        return Err(RuntimeError {
-                            message: format!("throw statement executed: {}", error_value(value)),
-                        });
-                    }
-                }
-            }
-            Ok(last)
-        }
+        } => eval_call(callee, arguments, env),
         Expr::Member {
             object, property, ..
         } => {
@@ -1396,6 +1421,22 @@ mod tests {
         assert_eq!(
             eval("function add(a, b) { return a + b; } add(2, 3);"),
             Ok(Value::Number(5.0))
+        );
+        assert_eq!(
+            eval("function getThis() { return this; } getThis() === this;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval(
+                "function getThis() { return this; } let o = {}; o.getThis = getThis; o.getThis() === o;"
+            ),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval(
+                "function getGlobal() { return this; } function method() { return getGlobal(); } let o = {}; o.method = method; o.method() === this;"
+            ),
+            Ok(Value::Boolean(true))
         );
     }
 
