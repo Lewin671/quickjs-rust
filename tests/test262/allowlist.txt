@@ -59,6 +59,12 @@ cases/object-get-own-property-descriptor-basic.js
 cases/object-get-own-property-descriptor-function-basic.js
 cases/object-get-own-property-descriptor-missing.js
 cases/object-get-own-property-descriptor-nonenumerable-basic.js
+cases/object-has-own-basic.js
+cases/object-has-own-inherited-negative.js
+cases/object-has-own-length.js
+cases/object-has-own-missing.js
+cases/object-has-own-null-prototype.js
+cases/object-has-own-string-basic.js
 cases/object-has-own-property-basic.js
 cases/object-has-own-property-length.js
 cases/object-has-own-property-missing.js

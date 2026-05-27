@@ -211,6 +211,7 @@ enum NativeFunction {
     ObjectGetOwnPropertyDescriptor,
     ObjectGetPrototypeOf,
     ObjectGetOwnPropertyNames,
+    ObjectHasOwn,
     ObjectKeys,
     ObjectPrototypeHasOwnProperty,
     ObjectPrototypeIsPrototypeOf,
@@ -497,6 +498,15 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
             Some("getOwnPropertyNames"),
             1,
             NativeFunction::ObjectGetOwnPropertyNames,
+            false,
+        ))),
+    );
+    object_function.properties.borrow_mut().insert(
+        "hasOwn".to_owned(),
+        Property::non_enumerable(Value::Function(Function::new_native(
+            Some("hasOwn"),
+            2,
+            NativeFunction::ObjectHasOwn,
             false,
         ))),
     );
@@ -1085,6 +1095,7 @@ fn call_native_function(
         NativeFunction::ObjectGetOwnPropertyNames => {
             native_object_get_own_property_names(&argument_values)
         }
+        NativeFunction::ObjectHasOwn => native_object_has_own(&argument_values),
         NativeFunction::ObjectKeys => native_object_keys(&argument_values),
         NativeFunction::ObjectPrototypeHasOwnProperty => {
             native_object_prototype_has_own_property(this_value, &argument_values)
@@ -1363,6 +1374,20 @@ fn native_object_get_own_property_names(argument_values: &[Value]) -> Result<Val
         Value::Number(_) | Value::Boolean(_) | Value::Null | Value::Undefined => Vec::new(),
     };
     Ok(Value::Array(names.into_iter().map(Value::String).collect()))
+}
+
+fn native_object_has_own(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    if matches!(target, Value::Null | Value::Undefined) {
+        return Err(RuntimeError {
+            message: "Object.hasOwn target must not be null or undefined".to_owned(),
+        });
+    }
+
+    let key = to_property_key(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
+    Ok(Value::Boolean(
+        own_property_descriptor(target, &key)?.is_some(),
+    ))
 }
 
 fn native_object_prototype_has_own_property(
@@ -2482,6 +2507,32 @@ mod tests {
             eval("Object.getOwnPropertyNames(Object.prototype)[0];"),
             Ok(Value::String("constructor".to_owned()))
         );
+        assert_eq!(eval("Object.hasOwn.length;"), Ok(Value::Number(2.0)));
+        assert_eq!(
+            eval("Object.hasOwn({ value: 1 }, 'value');"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("Object.hasOwn({ value: 1 }, 'missing');"),
+            Ok(Value::Boolean(false))
+        );
+        assert_eq!(
+            eval(
+                "let proto = { value: 1 }; let object = Object.create(proto); Object.hasOwn(object, 'value');"
+            ),
+            Ok(Value::Boolean(false))
+        );
+        assert_eq!(
+            eval(
+                "let object = Object.create(null, { value: { value: 1 } }); Object.hasOwn(object, 'value');"
+            ),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("Object.hasOwn([1, 2], '1');"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(eval("Object.hasOwn('ab', '1');"), Ok(Value::Boolean(true)));
         assert_eq!(
             eval("Object.getOwnPropertyDescriptor.length;"),
             Ok(Value::Number(2.0))
