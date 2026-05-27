@@ -1,0 +1,21 @@
+[workspace]
+members = [
+    "crates/qjs-ast",
+    "crates/qjs-lexer",
+    "crates/qjs-parser",
+    "crates/qjs-runtime",
+    "crates/qjs-cli",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/Lewin671/quickjs-rust"
+rust-version = "1.85"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = "warn"
