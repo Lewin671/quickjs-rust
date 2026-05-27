@@ -44,6 +44,11 @@ cases/object-has-own-property-basic.js
 cases/object-has-own-property-length.js
 cases/object-has-own-property-missing.js
 cases/object-has-own-property-prototype-negative.js
+cases/object-property-is-enumerable-array-length.js
+cases/object-property-is-enumerable-basic.js
+cases/object-property-is-enumerable-length.js
+cases/object-property-is-enumerable-prototype-negative.js
+cases/object-property-is-enumerable-string-index.js
 cases/object-keys-array-basic.js
 cases/object-keys-basic.js
 cases/object-keys-length.js
