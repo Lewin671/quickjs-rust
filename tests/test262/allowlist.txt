@@ -4,6 +4,11 @@
 # enough support for the test to provide useful signal.
 cases/array-constructor-basic.js
 cases/array-constructor-multiple-arguments.js
+cases/array-index-of-basic.js
+cases/array-index-of-empty.js
+cases/array-index-of-from-index.js
+cases/array-index-of-from-index-negative.js
+cases/array-index-of-length.js
 cases/array-instanceof-basic.js
 cases/array-is-array-basic.js
 cases/array-is-array-length.js
