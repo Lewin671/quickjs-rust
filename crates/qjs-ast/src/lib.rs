@@ -56,6 +56,15 @@ pub enum Stmt {
         /// Source span.
         span: Span,
     },
+    /// A do-while statement.
+    DoWhile {
+        /// Loop body.
+        body: Box<Stmt>,
+        /// Loop condition.
+        test: Expr,
+        /// Source span.
+        span: Span,
+    },
     /// A for statement.
     For {
         /// Optional initializer.

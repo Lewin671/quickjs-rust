@@ -162,6 +162,21 @@ fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Completion
             }
             Ok(Completion::Normal(last))
         }
+        Stmt::DoWhile { body, test, .. } => {
+            let mut last = Value::Undefined;
+            loop {
+                match eval_stmt(body, env)? {
+                    Completion::Normal(value) => last = value,
+                    Completion::Return(value) => return Ok(Completion::Return(value)),
+                    Completion::Break => break,
+                    Completion::Continue => {}
+                }
+                if !is_truthy(&eval_expr(test, env)?) {
+                    break;
+                }
+            }
+            Ok(Completion::Normal(last))
+        }
         Stmt::For {
             init,
             test,
@@ -806,6 +821,22 @@ mod tests {
     fn evaluates_while_statements() {
         assert_eq!(
             eval("let x = 0; while (x < 3) { x = x + 1; } x;"),
+            Ok(Value::Number(3.0))
+        );
+    }
+
+    #[test]
+    fn evaluates_do_while_statements() {
+        assert_eq!(
+            eval("let x = 0; do { x = x + 1; } while (false); x;"),
+            Ok(Value::Number(1.0))
+        );
+        assert_eq!(
+            eval("let x = 0; do { x++; } while (x < 3); x;"),
+            Ok(Value::Number(3.0))
+        );
+        assert_eq!(
+            eval("let x = 0; do { x++; if (x === 2) continue; } while (x < 3); x;"),
             Ok(Value::Number(3.0))
         );
     }

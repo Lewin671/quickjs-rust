@@ -63,6 +63,10 @@ impl Parser {
             return self.while_statement();
         }
 
+        if self.at(&TokenKind::Do) {
+            return self.do_while_statement();
+        }
+
         if self.at(&TokenKind::For) {
             return self.for_statement();
         }
@@ -161,6 +165,31 @@ impl Parser {
         Ok(Stmt::While {
             test,
             body: Box::new(body),
+            span: Span::new(start, end),
+        })
+    }
+
+    fn do_while_statement(&mut self) -> Result<Stmt, ParseError> {
+        let start = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .start;
+        self.expect(&TokenKind::Do)?;
+        let body = self.statement()?;
+        self.expect(&TokenKind::While)?;
+        self.expect(&TokenKind::LeftParen)?;
+        let test = self.expression()?;
+        self.expect(&TokenKind::RightParen)?;
+        let end = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .end;
+        self.match_kind(&TokenKind::Semicolon);
+        Ok(Stmt::DoWhile {
+            body: Box::new(body),
+            test,
             span: Span::new(start, end),
         })
     }
@@ -822,6 +851,7 @@ fn property_name(kind: TokenKind) -> Option<String> {
         TokenKind::If => Some("if".to_owned()),
         TokenKind::Else => Some("else".to_owned()),
         TokenKind::While => Some("while".to_owned()),
+        TokenKind::Do => Some("do".to_owned()),
         TokenKind::For => Some("for".to_owned()),
         TokenKind::Break => Some("break".to_owned()),
         TokenKind::Continue => Some("continue".to_owned()),
@@ -860,6 +890,7 @@ fn stmt_end(stmt: &Stmt) -> usize {
         Stmt::Block { span, .. }
         | Stmt::If { span, .. }
         | Stmt::While { span, .. }
+        | Stmt::DoWhile { span, .. }
         | Stmt::For { span, .. }
         | Stmt::FunctionDecl { span, .. }
         | Stmt::Return { span, .. }
@@ -1051,6 +1082,15 @@ mod tests {
         let script = parse_script("while (x < 3) { x = x + 1; }").expect("source should parse");
         let [Stmt::While { body, .. }] = script.body.as_slice() else {
             panic!("expected one while statement");
+        };
+        assert!(matches!(body.as_ref(), Stmt::Block { .. }));
+    }
+
+    #[test]
+    fn parses_do_while_statement() {
+        let script = parse_script("do { x++; } while (x < 3);").expect("source should parse");
+        let [Stmt::DoWhile { body, .. }] = script.body.as_slice() else {
+            panic!("expected one do-while statement");
         };
         assert!(matches!(body.as_ref(), Stmt::Block { .. }));
     }
