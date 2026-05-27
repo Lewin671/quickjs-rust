@@ -1,6 +1,6 @@
 //! Parser for a small JavaScript subset.
 
-use qjs_ast::{BinaryOp, Expr, Literal, Script, Span, Stmt};
+use qjs_ast::{BinaryOp, Expr, Literal, Script, Span, Stmt, VarKind};
 use qjs_lexer::{Token, TokenKind, lex};
 
 /// A parse error.
@@ -48,9 +48,60 @@ impl Parser {
             return Ok(Stmt::Empty);
         }
 
+        if self.at(&TokenKind::Var) || self.at(&TokenKind::Let) || self.at(&TokenKind::Const) {
+            return self.variable_declaration();
+        }
+
         let expr = self.expression()?;
         self.match_kind(&TokenKind::Semicolon);
         Ok(Stmt::Expr(expr))
+    }
+
+    fn variable_declaration(&mut self) -> Result<Stmt, ParseError> {
+        let start = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .start;
+        let kind = if self.match_kind(&TokenKind::Var) {
+            VarKind::Var
+        } else if self.match_kind(&TokenKind::Let) {
+            VarKind::Let
+        } else {
+            self.expect(&TokenKind::Const)?;
+            VarKind::Const
+        };
+
+        let name_token = self.advance();
+        let TokenKind::Identifier(name) = name_token.kind else {
+            return Err(ParseError {
+                message: "expected binding identifier".to_owned(),
+                span: name_token.span,
+            });
+        };
+
+        let init = if self.match_kind(&TokenKind::Equal) {
+            Some(self.expression()?)
+        } else {
+            if kind == VarKind::Const {
+                return Err(ParseError {
+                    message: "const declarations require an initializer".to_owned(),
+                    span: name_token.span,
+                });
+            }
+            None
+        };
+
+        self.match_kind(&TokenKind::Semicolon);
+        let end = init
+            .as_ref()
+            .map_or(name_token.span.end, |expr| expr.span().end);
+        Ok(Stmt::VarDecl {
+            kind,
+            name,
+            init,
+            span: Span::new(start, end),
+        })
     }
 
     fn expression(&mut self) -> Result<Expr, ParseError> {
@@ -212,7 +263,7 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
-    use qjs_ast::{BinaryOp, Expr, Stmt};
+    use qjs_ast::{BinaryOp, Expr, Stmt, VarKind};
 
     use super::parse_script;
 
@@ -249,5 +300,33 @@ mod tests {
             panic!("expected logical and on right side");
         };
         assert_eq!(*right_op, BinaryOp::LogicalAnd);
+    }
+
+    #[test]
+    fn parses_variable_declaration() {
+        let script = parse_script("let answer = 40 + 2;").expect("source should parse");
+        let [
+            Stmt::VarDecl {
+                kind, name, init, ..
+            },
+        ] = script.body.as_slice()
+        else {
+            panic!("expected one variable declaration");
+        };
+        assert_eq!(*kind, VarKind::Let);
+        assert_eq!(name, "answer");
+        assert!(matches!(
+            init,
+            Some(Expr::Binary {
+                op: BinaryOp::Add,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn rejects_const_without_initializer() {
+        let error = parse_script("const answer;").expect_err("const should require initializer");
+        assert_eq!(error.message, "const declarations require an initializer");
     }
 }

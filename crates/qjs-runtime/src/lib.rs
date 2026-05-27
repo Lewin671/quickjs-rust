@@ -1,5 +1,7 @@
 //! Early interpreter for the Rust QuickJS rewrite.
 
+use std::collections::HashMap;
+
 use qjs_ast::{BinaryOp, Expr, Literal, Script, Stmt};
 use qjs_parser::parse_script;
 
@@ -43,32 +45,42 @@ pub fn eval(source: &str) -> Result<Value, RuntimeError> {
 ///
 /// Returns runtime failures for unsupported operations.
 pub fn eval_script(script: &Script) -> Result<Value, RuntimeError> {
+    let mut env = HashMap::new();
     let mut last = Value::Undefined;
     for stmt in &script.body {
-        last = eval_stmt(stmt)?;
+        last = eval_stmt(stmt, &mut env)?;
     }
     Ok(last)
 }
 
-fn eval_stmt(stmt: &Stmt) -> Result<Value, RuntimeError> {
+fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Value, RuntimeError> {
     match stmt {
-        Stmt::Expr(expr) => eval_expr(expr),
+        Stmt::Expr(expr) => eval_expr(expr, env),
+        Stmt::VarDecl { name, init, .. } => {
+            let value = if let Some(init) = init {
+                eval_expr(init, env)?
+            } else {
+                Value::Undefined
+            };
+            env.insert(name.clone(), value);
+            Ok(Value::Undefined)
+        }
         Stmt::Empty => Ok(Value::Undefined),
     }
 }
 
-fn eval_expr(expr: &Expr) -> Result<Value, RuntimeError> {
+fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, RuntimeError> {
     match expr {
         Expr::Literal(literal) => eval_literal(literal),
-        Expr::Identifier { name, .. } => Err(RuntimeError {
+        Expr::Identifier { name, .. } => env.get(name).cloned().ok_or_else(|| RuntimeError {
             message: format!("undefined identifier `{name}`"),
         }),
         Expr::Binary {
             left, op, right, ..
         } if *op == BinaryOp::LogicalAnd => {
-            let left = eval_expr(left)?;
+            let left = eval_expr(left, env)?;
             if is_truthy(&left) {
-                eval_expr(right)
+                eval_expr(right, env)
             } else {
                 Ok(left)
             }
@@ -76,18 +88,18 @@ fn eval_expr(expr: &Expr) -> Result<Value, RuntimeError> {
         Expr::Binary {
             left, op, right, ..
         } if *op == BinaryOp::LogicalOr => {
-            let left = eval_expr(left)?;
+            let left = eval_expr(left, env)?;
             if is_truthy(&left) {
                 Ok(left)
             } else {
-                eval_expr(right)
+                eval_expr(right, env)
             }
         }
         Expr::Binary {
             left, op, right, ..
         } => {
-            let left = eval_expr(left)?;
-            let right = eval_expr(right)?;
+            let left = eval_expr(left, env)?;
+            let right = eval_expr(right, env)?;
             eval_binary(left, *op, right)
         }
     }
@@ -170,5 +182,14 @@ mod tests {
     fn evaluates_logical_expressions() {
         assert_eq!(eval("0 || 5;"), Ok(Value::Number(5.0)));
         assert_eq!(eval("1 && 7;"), Ok(Value::Number(7.0)));
+    }
+
+    #[test]
+    fn evaluates_variable_declarations() {
+        assert_eq!(
+            eval("let x = 2; const y = 3; x * y;"),
+            Ok(Value::Number(6.0))
+        );
+        assert_eq!(eval("var missing; missing;"), Ok(Value::Undefined));
     }
 }

@@ -26,6 +26,12 @@ pub enum TokenKind {
     False,
     /// `null`.
     Null,
+    /// `var`.
+    Var,
+    /// `let`.
+    Let,
+    /// `const`.
+    Const,
     /// `+`.
     Plus,
     /// `++`.
@@ -531,6 +537,9 @@ impl<'src> Lexer<'src> {
             "true" => TokenKind::True,
             "false" => TokenKind::False,
             "null" => TokenKind::Null,
+            "var" => TokenKind::Var,
+            "let" => TokenKind::Let,
+            "const" => TokenKind::Const,
             _ => TokenKind::Identifier(text.to_owned()),
         };
         self.tokens.push(Token {
@@ -646,6 +655,22 @@ mod tests {
             vec![
                 TokenKind::Identifier("one".to_owned()),
                 TokenKind::Identifier("two".to_owned()),
+                TokenKind::Eof,
+            ]
+        );
+    }
+
+    #[test]
+    fn lexes_declaration_keywords() {
+        let tokens = lex("var let const variable").expect("source should lex");
+        let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::Var,
+                TokenKind::Let,
+                TokenKind::Const,
+                TokenKind::Identifier("variable".to_owned()),
                 TokenKind::Eof,
             ]
         );
