@@ -1,7 +1,7 @@
 //! Parser for a small JavaScript subset.
 
 use qjs_ast::{
-    AssignmentOp, AssignmentTarget, BinaryOp, Expr, ForInit, Literal, MemberProperty,
+    AssignmentOp, AssignmentTarget, BinaryOp, Expr, ForInLeft, ForInit, Literal, MemberProperty,
     ObjectProperty, Script, Span, Stmt, UnaryOp, UpdateOp, VarDeclarator, VarKind,
 };
 use qjs_lexer::{Token, TokenKind, lex};
@@ -202,6 +202,52 @@ impl Parser {
             .start;
         self.expect(&TokenKind::For)?;
         self.expect(&TokenKind::LeftParen)?;
+        if self.at(&TokenKind::Var) || self.at(&TokenKind::Let) || self.at(&TokenKind::Const) {
+            let kind_token = self.advance();
+            let kind = var_kind(&kind_token.kind).expect("token should be declaration kind");
+            let name_token = self.advance();
+            let TokenKind::Identifier(name) = name_token.kind else {
+                return Err(ParseError {
+                    message: "expected binding identifier".to_owned(),
+                    span: name_token.span,
+                });
+            };
+            if self.match_kind(&TokenKind::In) {
+                let right = self.expression()?;
+                self.expect(&TokenKind::RightParen)?;
+                let body = self.statement()?;
+                let end = stmt_end(&body);
+                return Ok(Stmt::ForIn {
+                    left: ForInLeft::VarDecl {
+                        kind,
+                        name,
+                        span: Span::new(kind_token.span.start, name_token.span.end),
+                    },
+                    right,
+                    body: Box::new(body),
+                    span: Span::new(start, end),
+                });
+            }
+            self.cursor -= 2;
+        } else if !self.at(&TokenKind::Semicolon) {
+            let cursor = self.cursor;
+            let left = self.call()?;
+            if self.match_kind(&TokenKind::In) {
+                let left = assignment_target(left)?;
+                let right = self.expression()?;
+                self.expect(&TokenKind::RightParen)?;
+                let body = self.statement()?;
+                let end = stmt_end(&body);
+                return Ok(Stmt::ForIn {
+                    left: ForInLeft::Target(left),
+                    right,
+                    body: Box::new(body),
+                    span: Span::new(start, end),
+                });
+            }
+            self.cursor = cursor;
+        }
+
         let init = if self.match_kind(&TokenKind::Semicolon) {
             None
         } else if self.at(&TokenKind::Var) || self.at(&TokenKind::Let) || self.at(&TokenKind::Const)
@@ -926,6 +972,15 @@ fn property_name(kind: TokenKind) -> Option<String> {
     }
 }
 
+fn var_kind(kind: &TokenKind) -> Option<VarKind> {
+    match kind {
+        TokenKind::Var => Some(VarKind::Var),
+        TokenKind::Let => Some(VarKind::Let),
+        TokenKind::Const => Some(VarKind::Const),
+        _ => None,
+    }
+}
+
 fn assignment_target(expr: Expr) -> Result<AssignmentTarget, ParseError> {
     match expr {
         Expr::Identifier { name, span } => Ok(AssignmentTarget::Identifier { name, span }),
@@ -953,6 +1008,7 @@ fn stmt_end(stmt: &Stmt) -> usize {
         | Stmt::While { span, .. }
         | Stmt::DoWhile { span, .. }
         | Stmt::For { span, .. }
+        | Stmt::ForIn { span, .. }
         | Stmt::FunctionDecl { span, .. }
         | Stmt::Return { span, .. }
         | Stmt::Throw { span }
@@ -966,8 +1022,8 @@ fn stmt_end(stmt: &Stmt) -> usize {
 #[cfg(test)]
 mod tests {
     use qjs_ast::{
-        AssignmentOp, AssignmentTarget, BinaryOp, Expr, ForInit, MemberProperty, Stmt, UnaryOp,
-        UpdateOp, VarKind,
+        AssignmentOp, AssignmentTarget, BinaryOp, Expr, ForInLeft, ForInit, MemberProperty, Stmt,
+        UnaryOp, UpdateOp, VarKind,
     };
 
     use super::parse_script;
@@ -1252,6 +1308,25 @@ mod tests {
         ));
         assert!(matches!(update, Some(Expr::Assignment { .. })));
         assert!(matches!(body.as_ref(), Stmt::Block { .. }));
+    }
+
+    #[test]
+    fn parses_for_in_statement() {
+        let script = parse_script("for (var key in object) { key; }").expect("source should parse");
+        let [Stmt::ForIn { left, body, .. }] = script.body.as_slice() else {
+            panic!("expected one for-in statement");
+        };
+        assert!(matches!(
+            left,
+            ForInLeft::VarDecl { name, .. } if name == "key"
+        ));
+        assert!(matches!(body.as_ref(), Stmt::Block { .. }));
+
+        let script = parse_script("for (key in object) key;").expect("source should parse");
+        let [Stmt::ForIn { left, .. }] = script.body.as_slice() else {
+            panic!("expected one for-in statement");
+        };
+        assert!(matches!(left, ForInLeft::Target(_)));
     }
 
     #[test]

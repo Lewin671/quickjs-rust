@@ -3,8 +3,8 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use qjs_ast::{
-    AssignmentOp, AssignmentTarget, BinaryOp, Expr, ForInit, Literal, MemberProperty, Script, Stmt,
-    UnaryOp, UpdateOp,
+    AssignmentOp, AssignmentTarget, BinaryOp, Expr, ForInLeft, ForInit, Literal, MemberProperty,
+    Script, Stmt, UnaryOp, UpdateOp,
 };
 use qjs_parser::parse_script;
 
@@ -203,6 +203,22 @@ fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Completion
             }
             Ok(Completion::Normal(last))
         }
+        Stmt::ForIn {
+            left, right, body, ..
+        } => {
+            let keys = enumerable_keys(eval_expr(right, env)?)?;
+            let mut last = Value::Undefined;
+            for key in keys {
+                assign_for_in_left(left, Value::String(key), env)?;
+                match eval_stmt(body, env)? {
+                    Completion::Normal(value) => last = value,
+                    Completion::Return(value) => return Ok(Completion::Return(value)),
+                    Completion::Break => break,
+                    Completion::Continue => {}
+                }
+            }
+            Ok(Completion::Normal(last))
+        }
         Stmt::FunctionDecl {
             name, params, body, ..
         } => {
@@ -257,6 +273,31 @@ fn eval_for_init(init: &ForInit, env: &mut HashMap<String, Value>) -> Result<(),
             Ok(())
         }
         ForInit::Expr(expr) => eval_expr(expr, env).map(|_| ()),
+    }
+}
+
+fn assign_for_in_left(
+    left: &ForInLeft,
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
+    match left {
+        ForInLeft::VarDecl { name, .. } => {
+            env.insert(name.clone(), value);
+            Ok(())
+        }
+        ForInLeft::Target(target) => assign_target(target, value, env),
+    }
+}
+
+fn enumerable_keys(value: Value) -> Result<Vec<String>, RuntimeError> {
+    match value {
+        Value::Object(object) => Ok(object.properties.borrow().keys().cloned().collect()),
+        Value::Array(elements) => Ok((0..elements.len()).map(|index| index.to_string()).collect()),
+        Value::Null | Value::Undefined => Ok(Vec::new()),
+        _ => Err(RuntimeError {
+            message: "for-in target is not enumerable".to_owned(),
+        }),
     }
 }
 
@@ -993,6 +1034,24 @@ mod tests {
         assert_eq!(
             eval("let i = 0; for (; i < 3; ) i = i + 1; i;"),
             Ok(Value::Number(3.0))
+        );
+    }
+
+    #[test]
+    fn evaluates_for_in_statements() {
+        assert_eq!(
+            eval("let count = 0; for (var key in { a: 1, b: 2 }) { count++; } count;"),
+            Ok(Value::Number(2.0))
+        );
+        assert_eq!(
+            eval(
+                "let total = 0; let item; let values = [1, 2, 3]; for (item in values) { total += values[item]; } total;"
+            ),
+            Ok(Value::Number(6.0))
+        );
+        assert_eq!(
+            eval("let count = 0; for (var key in null) { count++; } count;"),
+            Ok(Value::Number(0.0))
         );
     }
 

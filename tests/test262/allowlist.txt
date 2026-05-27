@@ -38,6 +38,9 @@ cases/string-addition-basic.js
 cases/string-number-addition.js
 cases/for-var-basic.js
 cases/for-omitted-init-update.js
+cases/for-in-var-basic.js
+cases/for-in-assignment-basic.js
+cases/for-in-member-head.js
 cases/break-basic.js
 cases/continue-basic.js
 cases/do-while-runs-before-test.js
