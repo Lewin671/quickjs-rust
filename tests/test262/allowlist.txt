@@ -19,3 +19,5 @@ cases/object-property-names.js
 cases/missing-property-undefined.js
 cases/object-reference-alias.js
 cases/object-reference-function-argument.js
+cases/string-addition-basic.js
+cases/string-number-addition.js
