@@ -205,6 +205,7 @@ impl ObjectRef {
 enum NativeFunction {
     Array,
     ArrayIsArray,
+    ArrayPrototypeConcat,
     ArrayPrototypeIndexOf,
     ArrayPrototypeLastIndexOf,
     ArrayPrototypeJoin,
@@ -538,6 +539,15 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
     array_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(array_function.clone()),
+    );
+    array_prototype.define_non_enumerable(
+        "concat".to_owned(),
+        Value::Function(Function::new_native(
+            Some("concat"),
+            1,
+            NativeFunction::ArrayPrototypeConcat,
+            false,
+        )),
     );
     array_prototype.define_non_enumerable(
         "join".to_owned(),
@@ -1168,6 +1178,9 @@ fn call_native_function(
     match native {
         NativeFunction::Array => native_array(&argument_values),
         NativeFunction::ArrayIsArray => native_array_is_array(&argument_values),
+        NativeFunction::ArrayPrototypeConcat => {
+            native_array_prototype_concat(this_value, &argument_values)
+        }
         NativeFunction::ArrayPrototypeIndexOf => {
             native_array_prototype_index_of(this_value, &argument_values)
         }
@@ -1228,6 +1241,25 @@ fn native_array_is_array(argument_values: &[Value]) -> Result<Value, RuntimeErro
         argument_values.first(),
         Some(Value::Array(_))
     )))
+}
+
+fn native_array_prototype_concat(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let mut result = Vec::new();
+    concat_array_item(&mut result, this_value);
+    for value in argument_values.iter().cloned() {
+        concat_array_item(&mut result, value);
+    }
+    Ok(Value::Array(result))
+}
+
+fn concat_array_item(result: &mut Vec<Value>, value: Value) {
+    match value {
+        Value::Array(elements) => result.extend(elements),
+        value => result.push(value),
+    }
 }
 
 fn native_array_prototype_index_of(
@@ -3006,6 +3038,10 @@ mod tests {
         assert_eq!(eval("Array.length;"), Ok(Value::Number(1.0)));
         assert_eq!(eval("Array.isArray.length;"), Ok(Value::Number(1.0)));
         assert_eq!(
+            eval("Array.prototype.concat.length;"),
+            Ok(Value::Number(1.0))
+        );
+        assert_eq!(
             eval("Array.prototype.indexOf.length;"),
             Ok(Value::Number(1.0))
         );
@@ -3109,6 +3145,15 @@ mod tests {
             eval("let copy = [1, 2].slice(); Array.isArray(copy) && copy[1] === 2;"),
             Ok(Value::Boolean(true))
         );
+        assert_eq!(
+            eval("[0].concat([1, 2], 3, [4]).join();"),
+            Ok(Value::String("0,1,2,3,4".to_owned()))
+        );
+        assert_eq!(
+            eval("[].concat([0, 1], [2, 3]).length;"),
+            Ok(Value::Number(4.0))
+        );
+        assert_eq!(eval("[0].concat('x', true)[2];"), Ok(Value::Boolean(true)));
         assert!(eval("Array(3);").is_err());
     }
 
