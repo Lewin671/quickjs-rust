@@ -36,6 +36,8 @@ pub enum TokenKind {
     If,
     /// `else`.
     Else,
+    /// `while`.
+    While,
     /// `+`.
     Plus,
     /// `++`.
@@ -546,6 +548,7 @@ impl<'src> Lexer<'src> {
             "const" => TokenKind::Const,
             "if" => TokenKind::If,
             "else" => TokenKind::Else,
+            "while" => TokenKind::While,
             _ => TokenKind::Identifier(text.to_owned()),
         };
         self.tokens.push(Token {
@@ -668,7 +671,7 @@ mod tests {
 
     #[test]
     fn lexes_declaration_keywords() {
-        let tokens = lex("var let const if else variable").expect("source should lex");
+        let tokens = lex("var let const if else while variable").expect("source should lex");
         let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
         assert_eq!(
             kinds,
@@ -678,6 +681,7 @@ mod tests {
                 TokenKind::Const,
                 TokenKind::If,
                 TokenKind::Else,
+                TokenKind::While,
                 TokenKind::Identifier("variable".to_owned()),
                 TokenKind::Eof,
             ]

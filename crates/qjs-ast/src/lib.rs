@@ -47,6 +47,15 @@ pub enum Stmt {
         /// Source span.
         span: Span,
     },
+    /// A while statement.
+    While {
+        /// Loop condition.
+        test: Expr,
+        /// Loop body.
+        body: Box<Stmt>,
+        /// Source span.
+        span: Span,
+    },
     /// A variable declaration.
     VarDecl {
         /// Declaration kind.

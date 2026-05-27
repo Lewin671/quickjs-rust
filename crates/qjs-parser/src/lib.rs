@@ -56,6 +56,10 @@ impl Parser {
             return self.if_statement();
         }
 
+        if self.at(&TokenKind::While) {
+            return self.while_statement();
+        }
+
         if self.at(&TokenKind::Var) || self.at(&TokenKind::Let) || self.at(&TokenKind::Const) {
             return self.variable_declaration();
         }
@@ -111,6 +115,25 @@ impl Parser {
             test,
             consequent: Box::new(consequent),
             alternate,
+            span: Span::new(start, end),
+        })
+    }
+
+    fn while_statement(&mut self) -> Result<Stmt, ParseError> {
+        let start = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .start;
+        self.expect(&TokenKind::While)?;
+        self.expect(&TokenKind::LeftParen)?;
+        let test = self.expression()?;
+        self.expect(&TokenKind::RightParen)?;
+        let body = self.statement()?;
+        let end = stmt_end(&body);
+        Ok(Stmt::While {
+            test,
+            body: Box::new(body),
             span: Span::new(start, end),
         })
     }
@@ -347,7 +370,10 @@ impl Parser {
 fn stmt_end(stmt: &Stmt) -> usize {
     match stmt {
         Stmt::Expr(expr) => expr.span().end,
-        Stmt::Block { span, .. } | Stmt::If { span, .. } | Stmt::VarDecl { span, .. } => span.end,
+        Stmt::Block { span, .. }
+        | Stmt::If { span, .. }
+        | Stmt::While { span, .. }
+        | Stmt::VarDecl { span, .. } => span.end,
         Stmt::Empty => 0,
     }
 }
@@ -459,5 +485,14 @@ mod tests {
         };
         assert!(matches!(consequent.as_ref(), Stmt::Block { .. }));
         assert!(matches!(alternate.as_deref(), Some(Stmt::Block { .. })));
+    }
+
+    #[test]
+    fn parses_while_statement() {
+        let script = parse_script("while (x < 3) { x = x + 1; }").expect("source should parse");
+        let [Stmt::While { body, .. }] = script.body.as_slice() else {
+            panic!("expected one while statement");
+        };
+        assert!(matches!(body.as_ref(), Stmt::Block { .. }));
     }
 }

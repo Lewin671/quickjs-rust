@@ -78,6 +78,13 @@ fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Value, Run
                 Ok(Value::Undefined)
             }
         }
+        Stmt::While { test, body, .. } => {
+            let mut last = Value::Undefined;
+            while is_truthy(&eval_expr(test, env)?) {
+                last = eval_stmt(body, env)?;
+            }
+            Ok(last)
+        }
         Stmt::VarDecl { name, init, .. } => {
             let value = if let Some(init) = init {
                 eval_expr(init, env)?
@@ -238,6 +245,14 @@ mod tests {
         );
         assert_eq!(
             eval("let x = 1; if (x < 0) x = 7; else x = 3; x;"),
+            Ok(Value::Number(3.0))
+        );
+    }
+
+    #[test]
+    fn evaluates_while_statements() {
+        assert_eq!(
+            eval("let x = 0; while (x < 3) { x = x + 1; } x;"),
             Ok(Value::Number(3.0))
         );
     }
