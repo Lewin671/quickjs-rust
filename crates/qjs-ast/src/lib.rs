@@ -192,6 +192,17 @@ pub enum Expr {
         /// Source span.
         span: Span,
     },
+    /// A conditional expression.
+    Conditional {
+        /// Test expression.
+        test: Box<Expr>,
+        /// Expression evaluated when the test is truthy.
+        consequent: Box<Expr>,
+        /// Expression evaluated when the test is falsy.
+        alternate: Box<Expr>,
+        /// Source span.
+        span: Span,
+    },
     /// An assignment expression.
     Assignment {
         /// Assigned target.
@@ -246,6 +257,7 @@ impl Expr {
             | Self::Object { span, .. }
             | Self::Unary { span, .. }
             | Self::Binary { span, .. }
+            | Self::Conditional { span, .. }
             | Self::Assignment { span, .. }
             | Self::Update { span, .. }
             | Self::Call { span, .. }

@@ -4,6 +4,8 @@
 # enough support for the test to provide useful signal.
 cases/strict-equals-basic.js
 cases/less-than-basic.js
+cases/conditional-basic.js
+cases/conditional-short-circuit.js
 cases/logical-and-basic.js
 cases/undefined-basic.js
 cases/object-literal-basic.js

@@ -412,7 +412,7 @@ impl Parser {
     }
 
     fn assignment(&mut self) -> Result<Expr, ParseError> {
-        let expr = self.logical_or()?;
+        let expr = self.conditional()?;
         let op = if self.match_kind(&TokenKind::Equal) {
             AssignmentOp::Assign
         } else if self.match_kind(&TokenKind::PlusEqual) {
@@ -438,6 +438,24 @@ impl Parser {
             op,
             value: Box::new(value),
             span: assignment_span,
+        })
+    }
+
+    fn conditional(&mut self) -> Result<Expr, ParseError> {
+        let test = self.logical_or()?;
+        if !self.match_kind(&TokenKind::Question) {
+            return Ok(test);
+        }
+
+        let consequent = self.assignment()?;
+        self.expect(&TokenKind::Colon)?;
+        let alternate = self.assignment()?;
+        let span = Span::new(test.span().start, alternate.span().end);
+        Ok(Expr::Conditional {
+            test: Box::new(test),
+            consequent: Box::new(consequent),
+            alternate: Box::new(alternate),
+            span,
         })
     }
 
@@ -901,6 +919,15 @@ mod tests {
             panic!("expected logical and on right side");
         };
         assert_eq!(*right_op, BinaryOp::LogicalAnd);
+    }
+
+    #[test]
+    fn parses_conditional_expression_as_right_associative() {
+        let script = parse_script("false ? 1 : true ? 2 : 3;").expect("source should parse");
+        let [Stmt::Expr(Expr::Conditional { alternate, .. })] = script.body.as_slice() else {
+            panic!("expected one conditional expression statement");
+        };
+        assert!(matches!(alternate.as_ref(), Expr::Conditional { .. }));
     }
 
     #[test]
