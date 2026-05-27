@@ -205,6 +205,8 @@ impl ObjectRef {
 enum NativeFunction {
     Array,
     ArrayIsArray,
+    ArrayPrototypeJoin,
+    ArrayPrototypeToString,
     Object,
     ObjectAssign,
     ObjectCreate,
@@ -533,6 +535,24 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
     array_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(array_function.clone()),
+    );
+    array_prototype.define_non_enumerable(
+        "join".to_owned(),
+        Value::Function(Function::new_native(
+            Some("join"),
+            1,
+            NativeFunction::ArrayPrototypeJoin,
+            false,
+        )),
+    );
+    array_prototype.define_non_enumerable(
+        "toString".to_owned(),
+        Value::Function(Function::new_native(
+            Some("toString"),
+            0,
+            NativeFunction::ArrayPrototypeToString,
+            false,
+        )),
     );
     array_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
@@ -1118,6 +1138,10 @@ fn call_native_function(
     match native {
         NativeFunction::Array => native_array(&argument_values),
         NativeFunction::ArrayIsArray => native_array_is_array(&argument_values),
+        NativeFunction::ArrayPrototypeJoin => {
+            native_array_prototype_join(this_value, &argument_values)
+        }
+        NativeFunction::ArrayPrototypeToString => native_array_prototype_to_string(this_value),
         NativeFunction::Object => {
             native_object(function, this_value, &argument_values, is_construct)
         }
@@ -1165,6 +1189,40 @@ fn native_array_is_array(argument_values: &[Value]) -> Result<Value, RuntimeErro
         argument_values.first(),
         Some(Value::Array(_))
     )))
+}
+
+fn native_array_prototype_join(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let separator = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
+        Value::Undefined => ",".to_owned(),
+        value => to_js_string(value)?,
+    };
+    Ok(Value::String(array_join(this_value, &separator)?))
+}
+
+fn native_array_prototype_to_string(this_value: Value) -> Result<Value, RuntimeError> {
+    Ok(Value::String(array_join(this_value, ",")?))
+}
+
+fn array_join(value: Value, separator: &str) -> Result<String, RuntimeError> {
+    let Value::Array(elements) = value else {
+        return Err(RuntimeError {
+            message: "Array.prototype.join called on non-array".to_owned(),
+        });
+    };
+
+    let mut parts = Vec::with_capacity(elements.len());
+    for element in elements {
+        let part = match element {
+            Value::Null | Value::Undefined => String::new(),
+            Value::Array(_) => array_join(element, ",")?,
+            value => to_js_string(value)?,
+        };
+        parts.push(part);
+    }
+    Ok(parts.join(separator))
 }
 
 fn native_object_assign(argument_values: &[Value]) -> Result<Value, RuntimeError> {
@@ -2756,6 +2814,11 @@ mod tests {
         );
         assert_eq!(eval("Array.length;"), Ok(Value::Number(1.0)));
         assert_eq!(eval("Array.isArray.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("Array.prototype.join.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(
+            eval("Array.prototype.toString.length;"),
+            Ok(Value::Number(0.0))
+        );
         assert_eq!(eval("Array().length;"), Ok(Value::Number(0.0)));
         assert_eq!(eval("Array(1, 2)[1];"), Ok(Value::Number(2.0)));
         assert_eq!(
@@ -2777,6 +2840,26 @@ mod tests {
         assert_eq!(
             eval("Object.getPrototypeOf([]) === Array.prototype;"),
             Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("[1, 'x', true].join();"),
+            Ok(Value::String("1,x,true".to_owned()))
+        );
+        assert_eq!(
+            eval("[1, 2, 3].join('|');"),
+            Ok(Value::String("1|2|3".to_owned()))
+        );
+        assert_eq!(
+            eval("[1, null, undefined, 4].join('-');"),
+            Ok(Value::String("1---4".to_owned()))
+        );
+        assert_eq!(
+            eval("[1, 'x', true].toString();"),
+            Ok(Value::String("1,x,true".to_owned()))
+        );
+        assert_eq!(
+            eval("[1, [2, 3], 4].join(';');"),
+            Ok(Value::String("1;2,3;4".to_owned()))
         );
         assert!(eval("Array(3);").is_err());
     }
