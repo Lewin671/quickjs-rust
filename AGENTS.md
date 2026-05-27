@@ -88,6 +88,34 @@ Both `scripts/bootstrap.sh` and `scripts/check.sh` fall back to
 - Commit messages should describe the behavior or policy change, for example
   `Add lexer support for comments` or `Tighten agent workflow docs`.
 
+## Parallel Agent Workflow
+
+Use isolated git worktrees for parallel coding only when the task can be split
+into clear, non-overlapping ownership boundaries.
+
+- Keep `main` as the stable integration branch.
+- Create one short-lived branch and one worktree per coding owner.
+- Branch names should follow `agent/<task-slug>/<owner-id>`.
+- Every coding owner must start from the same recorded `base sha`, unless the
+  main agent explicitly re-baselines that owner.
+- Every coding owner must have a path boundary before editing. Examples:
+  `crates/qjs-lexer/**`, `crates/qjs-parser/**`,
+  `crates/qjs-runtime/**`, or `scripts/compare-qjs.sh`.
+- Global files default to main-agent ownership: `Cargo.toml`, `Cargo.lock`,
+  `rust-toolchain.toml`, `.gitmodules`, `AGENTS.md`, `README.md`,
+  `docs/architecture.md`, and shared CI or bootstrap scripts.
+- Coding owners must not merge each other's branches. The main agent integrates
+  owner results one branch at a time.
+- Before integration, inspect the owner branch's changed files against its path
+  boundary and confirm the reported base sha.
+- After each integration, run `./scripts/check.sh` before integrating another
+  owner branch.
+- Delete merged temporary worktrees and short-lived branches unless they are
+  intentionally retained for diagnosis.
+
+Prefer serialized work on one branch when a task changes shared AST types,
+workspace configuration, global error models, or broad architecture documents.
+
 ## Architecture Expectations
 
 - `qjs-ast` owns shared syntax and span types. It should not depend on lexer,

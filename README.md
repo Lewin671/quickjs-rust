@@ -71,4 +71,4 @@ cargo run -p qjs-cli -- -e "1 + 2;"
 
 Codex, Harness, and other autonomous agents should start with `AGENTS.md`. That
 file defines repository-specific execution rules, task boundaries, commit
-discipline, and verification expectations.
+discipline, parallel worktree policy, and verification expectations.
