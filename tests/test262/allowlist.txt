@@ -1,4 +1,7 @@
-# Curated Test262 files that the local harness is expected to run.
+# Curated Test262-derived files that the local harness is expected to run.
 #
 # Keep this list small and feature-scoped. Add entries only when the engine has
 # enough support for the test to provide useful signal.
+cases/strict-equals-basic.js
+cases/less-than-basic.js
+cases/logical-and-basic.js

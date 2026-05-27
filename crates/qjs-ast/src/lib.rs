@@ -74,6 +74,11 @@ pub enum Stmt {
         /// Source span.
         span: Span,
     },
+    /// A throw statement.
+    Throw {
+        /// Source span.
+        span: Span,
+    },
     /// A variable declaration.
     VarDecl {
         /// Declaration kind.

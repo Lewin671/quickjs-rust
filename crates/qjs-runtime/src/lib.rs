@@ -132,6 +132,9 @@ fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Completion
             };
             Ok(Completion::Return(value))
         }
+        Stmt::Throw { .. } => Err(RuntimeError {
+            message: "throw statement executed".to_owned(),
+        }),
         Stmt::VarDecl { name, init, .. } => {
             let value = if let Some(init) = init {
                 eval_expr(init, env)?
@@ -413,6 +416,13 @@ mod tests {
             eval("let x = 0; while (x < 3) { x = x + 1; } x;"),
             Ok(Value::Number(3.0))
         );
+    }
+
+    #[test]
+    fn evaluates_throw_statement_only_when_reached() {
+        assert_eq!(eval("if (false) { throw; } 1;"), Ok(Value::Number(1.0)));
+        let error = eval("throw;").expect_err("throw should fail evaluation");
+        assert_eq!(error.message, "throw statement executed");
     }
 
     #[test]

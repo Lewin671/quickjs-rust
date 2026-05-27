@@ -42,6 +42,8 @@ pub enum TokenKind {
     Function,
     /// `return`.
     Return,
+    /// `throw`.
+    Throw,
     /// `+`.
     Plus,
     /// `++`.
@@ -555,6 +557,7 @@ impl<'src> Lexer<'src> {
             "while" => TokenKind::While,
             "function" => TokenKind::Function,
             "return" => TokenKind::Return,
+            "throw" => TokenKind::Throw,
             _ => TokenKind::Identifier(text.to_owned()),
         };
         self.tokens.push(Token {
@@ -677,8 +680,8 @@ mod tests {
 
     #[test]
     fn lexes_declaration_keywords() {
-        let tokens =
-            lex("var let const if else while function return variable").expect("source should lex");
+        let tokens = lex("var let const if else while function return throw variable")
+            .expect("source should lex");
         let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
         assert_eq!(
             kinds,
@@ -691,6 +694,7 @@ mod tests {
                 TokenKind::While,
                 TokenKind::Function,
                 TokenKind::Return,
+                TokenKind::Throw,
                 TokenKind::Identifier("variable".to_owned()),
                 TokenKind::Eof,
             ]

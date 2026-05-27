@@ -1,4 +1,4 @@
-# Test262 files that are intentionally expected to fail.
+# Test262-derived subset cases that are intentionally expected to fail.
 #
 # Format:
 # path/to/test.js # reason
