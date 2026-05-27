@@ -37,6 +37,9 @@ cases/object-has-own-property-prototype-negative.js
 cases/object-literal-basic.js
 cases/object-literal-object-instanceof-basic.js
 cases/object-put-basic.js
+cases/object-to-string-direct-basic.js
+cases/object-to-string-length.js
+cases/object-to-string-own-property.js
 cases/typeof-basic.js
 cases/typeof-unresolvable.js
 cases/in-basic.js
