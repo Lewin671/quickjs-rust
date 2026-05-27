@@ -472,6 +472,13 @@ fn eval_binary(left: Value, op: BinaryOp, right: Value) -> Result<Value, Runtime
     match op {
         BinaryOp::Eq | BinaryOp::StrictEq => return Ok(Value::Boolean(left == right)),
         BinaryOp::Ne | BinaryOp::StrictNe => return Ok(Value::Boolean(left != right)),
+        BinaryOp::Add if matches!(left, Value::String(_)) || matches!(right, Value::String(_)) => {
+            return Ok(Value::String(format!(
+                "{}{}",
+                to_js_string(left)?,
+                to_js_string(right)?
+            )));
+        }
         _ => {}
     }
 
@@ -500,6 +507,21 @@ fn eval_binary(left: Value, op: BinaryOp, right: Value) -> Result<Value, Runtime
         | BinaryOp::LogicalOr => unreachable!("handled before numeric binary evaluation"),
     };
     Ok(Value::Number(value))
+}
+
+fn to_js_string(value: Value) -> Result<String, RuntimeError> {
+    match value {
+        Value::Number(number) if number.fract() == 0.0 => Ok(format!("{number:.0}")),
+        Value::Number(number) => Ok(number.to_string()),
+        Value::String(value) => Ok(value),
+        Value::Boolean(true) => Ok("true".to_owned()),
+        Value::Boolean(false) => Ok("false".to_owned()),
+        Value::Null => Ok("null".to_owned()),
+        Value::Undefined => Ok("undefined".to_owned()),
+        Value::Function(_) | Value::Array(_) | Value::Object(_) => Err(RuntimeError {
+            message: "cannot convert object to string".to_owned(),
+        }),
+    }
 }
 
 fn eval_in(left: Value, right: Value) -> Result<Value, RuntimeError> {
@@ -555,6 +577,18 @@ mod tests {
     #[test]
     fn evaluates_arithmetic() {
         assert_eq!(eval("1 + 2 * 3;"), Ok(Value::Number(7.0)));
+    }
+
+    #[test]
+    fn evaluates_string_addition() {
+        assert_eq!(eval("'x' + 1;"), Ok(Value::String("x1".to_owned())));
+        assert_eq!(eval("1 + 'x';"), Ok(Value::String("1x".to_owned())));
+        assert_eq!(eval("'x' + true;"), Ok(Value::String("xtrue".to_owned())));
+        assert_eq!(eval("'x' + null;"), Ok(Value::String("xnull".to_owned())));
+        assert_eq!(
+            eval("'x' + undefined;"),
+            Ok(Value::String("xundefined".to_owned()))
+        );
     }
 
     #[test]
