@@ -56,6 +56,19 @@ pub enum Stmt {
         /// Source span.
         span: Span,
     },
+    /// A for statement.
+    For {
+        /// Optional initializer.
+        init: Option<ForInit>,
+        /// Optional loop condition.
+        test: Option<Expr>,
+        /// Optional update expression.
+        update: Option<Expr>,
+        /// Loop body.
+        body: Box<Stmt>,
+        /// Source span.
+        span: Span,
+    },
     /// A function declaration.
     FunctionDecl {
         /// Function name.
@@ -92,6 +105,24 @@ pub enum Stmt {
     },
     /// An empty statement represented by `;`.
     Empty,
+}
+
+/// A for statement initializer.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ForInit {
+    /// Variable declaration initializer.
+    VarDecl {
+        /// Declaration kind.
+        kind: VarKind,
+        /// Binding name.
+        name: String,
+        /// Optional initializer.
+        init: Option<Expr>,
+        /// Source span.
+        span: Span,
+    },
+    /// Expression initializer.
+    Expr(Expr),
 }
 
 /// Variable declaration kind.

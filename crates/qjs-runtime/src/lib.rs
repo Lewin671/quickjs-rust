@@ -2,7 +2,9 @@
 
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use qjs_ast::{AssignmentTarget, BinaryOp, Expr, Literal, MemberProperty, Script, Stmt, UnaryOp};
+use qjs_ast::{
+    AssignmentTarget, BinaryOp, Expr, ForInit, Literal, MemberProperty, Script, Stmt, UnaryOp,
+};
 use qjs_parser::parse_script;
 
 /// A JavaScript value supported by the current runtime subset.
@@ -148,6 +150,30 @@ fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Completion
             }
             Ok(Completion::Normal(last))
         }
+        Stmt::For {
+            init,
+            test,
+            update,
+            body,
+            ..
+        } => {
+            if let Some(init) = init {
+                eval_for_init(init, env)?;
+            }
+            let mut last = Value::Undefined;
+            while test.as_ref().map_or(Ok(true), |test| {
+                eval_expr(test, env).map(|value| is_truthy(&value))
+            })? {
+                match eval_stmt(body, env)? {
+                    Completion::Normal(value) => last = value,
+                    Completion::Return(value) => return Ok(Completion::Return(value)),
+                }
+                if let Some(update) = update {
+                    eval_expr(update, env)?;
+                }
+            }
+            Ok(Completion::Normal(last))
+        }
         Stmt::FunctionDecl {
             name, params, body, ..
         } => {
@@ -181,6 +207,21 @@ fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Completion
             Ok(Completion::Normal(Value::Undefined))
         }
         Stmt::Empty => Ok(Completion::Normal(Value::Undefined)),
+    }
+}
+
+fn eval_for_init(init: &ForInit, env: &mut HashMap<String, Value>) -> Result<(), RuntimeError> {
+    match init {
+        ForInit::VarDecl { name, init, .. } => {
+            let value = if let Some(init) = init {
+                eval_expr(init, env)?
+            } else {
+                Value::Undefined
+            };
+            env.insert(name.clone(), value);
+            Ok(())
+        }
+        ForInit::Expr(expr) => eval_expr(expr, env).map(|_| ()),
     }
 }
 
@@ -634,6 +675,18 @@ mod tests {
     fn evaluates_while_statements() {
         assert_eq!(
             eval("let x = 0; while (x < 3) { x = x + 1; } x;"),
+            Ok(Value::Number(3.0))
+        );
+    }
+
+    #[test]
+    fn evaluates_for_statements() {
+        assert_eq!(
+            eval("let sum = 0; for (var i = 0; i < 4; i = i + 1) { sum = sum + i; } sum;"),
+            Ok(Value::Number(6.0))
+        );
+        assert_eq!(
+            eval("let i = 0; for (; i < 3; ) i = i + 1; i;"),
             Ok(Value::Number(3.0))
         );
     }

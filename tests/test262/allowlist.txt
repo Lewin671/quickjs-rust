@@ -21,3 +21,5 @@ cases/object-reference-alias.js
 cases/object-reference-function-argument.js
 cases/string-addition-basic.js
 cases/string-number-addition.js
+cases/for-var-basic.js
+cases/for-omitted-init-update.js
