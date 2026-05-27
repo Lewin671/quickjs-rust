@@ -372,6 +372,8 @@ pub enum AssignmentOp {
     SubAssign,
     /// `*=`.
     MulAssign,
+    /// `**=`.
+    PowAssign,
     /// `/=`.
     DivAssign,
     /// `%=`.
@@ -458,6 +460,8 @@ pub enum BinaryOp {
     Div,
     /// Remainder.
     Rem,
+    /// Exponentiation.
+    Pow,
     /// Left shift.
     Shl,
     /// Signed right shift.

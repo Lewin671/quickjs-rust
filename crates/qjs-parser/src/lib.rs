@@ -519,6 +519,8 @@ impl Parser {
             AssignmentOp::SubAssign
         } else if self.match_kind(&TokenKind::StarEqual) {
             AssignmentOp::MulAssign
+        } else if self.match_kind(&TokenKind::StarStarEqual) {
+            AssignmentOp::PowAssign
         } else if self.match_kind(&TokenKind::SlashEqual) {
             AssignmentOp::DivAssign
         } else if self.match_kind(&TokenKind::PercentEqual) {
@@ -650,13 +652,29 @@ impl Parser {
 
     fn multiplicative(&mut self) -> Result<Expr, ParseError> {
         self.binary_left_assoc(
-            Self::unary,
+            Self::exponentiation,
             &[
                 (TokenKind::Star, BinaryOp::Mul),
                 (TokenKind::Slash, BinaryOp::Div),
                 (TokenKind::Percent, BinaryOp::Rem),
             ],
         )
+    }
+
+    fn exponentiation(&mut self) -> Result<Expr, ParseError> {
+        let left = self.unary()?;
+        if !self.match_kind(&TokenKind::StarStar) {
+            return Ok(left);
+        }
+
+        let right = self.exponentiation()?;
+        let span = Span::new(left.span().start, right.span().end);
+        Ok(Expr::Binary {
+            left: Box::new(left),
+            op: BinaryOp::Pow,
+            right: Box::new(right),
+            span,
+        })
     }
 
     fn unary(&mut self) -> Result<Expr, ParseError> {
@@ -1082,6 +1100,22 @@ mod tests {
             left.as_ref(),
             Expr::Binary {
                 op: BinaryOp::Shl,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn parses_exponentiation_as_right_associative() {
+        let script = parse_script("2 ** 3 ** 2;").expect("source should parse");
+        let [Stmt::Expr(Expr::Binary { op, right, .. })] = script.body.as_slice() else {
+            panic!("expected one binary expression statement");
+        };
+        assert_eq!(*op, BinaryOp::Pow);
+        assert!(matches!(
+            right.as_ref(),
+            Expr::Binary {
+                op: BinaryOp::Pow,
                 ..
             }
         ));
