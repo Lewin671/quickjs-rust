@@ -51,9 +51,11 @@ cases/call-member-nested-function-this-basic.js
 cases/function-expression-basic.js
 cases/function-expression-iife-basic.js
 cases/function-expression-object-member-basic.js
+cases/function-expression-prototype-constructor-basic.js
 cases/named-function-expression-internal-name-basic.js
 cases/named-function-expression-name-not-leaked.js
 cases/named-function-expression-recursion-basic.js
+cases/function-prototype-constructor-basic.js
 cases/new-expression-this-basic.js
 cases/new-expression-no-args-basic.js
 cases/new-expression-return-object-basic.js
@@ -61,6 +63,8 @@ cases/new-expression-return-primitive-basic.js
 cases/new-expression-prototype-property-basic.js
 cases/new-expression-prototype-own-shadow-basic.js
 cases/new-expression-reassigned-prototype-basic.js
+cases/new-expression-instance-constructor-basic.js
+cases/new-expression-reassigned-prototype-constructor-missing.js
 cases/arguments-empty-basic.js
 cases/arguments-index-basic.js
 cases/function-extra-arguments-basic.js

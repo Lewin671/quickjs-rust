@@ -114,18 +114,23 @@ impl Function {
         body: Vec<Stmt>,
         env: HashMap<String, Value>,
     ) -> Self {
-        let mut properties = HashMap::new();
-        properties.insert(
-            "prototype".to_owned(),
-            Value::Object(ObjectRef::new(HashMap::new())),
-        );
-        Self {
+        let prototype = ObjectRef::new(HashMap::new());
+        let function = Self {
             name,
             params,
             body,
             env,
-            properties: Rc::new(RefCell::new(properties)),
-        }
+            properties: Rc::new(RefCell::new(HashMap::new())),
+        };
+        prototype
+            .properties
+            .borrow_mut()
+            .insert("constructor".to_owned(), Value::Function(function.clone()));
+        function
+            .properties
+            .borrow_mut()
+            .insert("prototype".to_owned(), Value::Object(prototype));
+        function
     }
 }
 
@@ -1857,6 +1862,24 @@ mod tests {
                 "function C() {} C.prototype.value = 4; let instance = new C(); 'value' in instance;"
             ),
             Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("function C() {} C.prototype.constructor === C;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("function C() {} let instance = new C(); instance.constructor === C;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("let C = function Named() {}; C.prototype.constructor === C;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval(
+                "function C() {} C.prototype = { value: 1 }; let instance = new C(); instance.constructor;"
+            ),
+            Ok(Value::Undefined)
         );
         assert!(eval("new 1;").is_err());
     }
