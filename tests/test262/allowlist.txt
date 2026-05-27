@@ -25,6 +25,11 @@ cases/logical-and-basic.js
 cases/undefined-basic.js
 cases/void-basic.js
 cases/void-evaluates-operand.js
+cases/object-assign-length.js
+cases/object-assign-target-object.js
+cases/object-assign-override.js
+cases/object-assign-source-string.js
+cases/object-assign-null-undefined-source.js
 cases/object-constructor-basic.js
 cases/object-constructor-object-identity.js
 cases/object-create-basic.js
