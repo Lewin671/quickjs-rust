@@ -489,7 +489,7 @@ impl Parser {
     }
 
     fn conditional(&mut self) -> Result<Expr, ParseError> {
-        let test = self.logical_or()?;
+        let test = self.nullish_coalescing()?;
         if !self.match_kind(&TokenKind::Question) {
             return Ok(test);
         }
@@ -504,6 +504,13 @@ impl Parser {
             alternate: Box::new(alternate),
             span,
         })
+    }
+
+    fn nullish_coalescing(&mut self) -> Result<Expr, ParseError> {
+        self.binary_left_assoc(
+            Self::logical_or,
+            &[(TokenKind::QuestionQuestion, BinaryOp::NullishCoalescing)],
+        )
     }
 
     fn logical_or(&mut self) -> Result<Expr, ParseError> {
@@ -1024,6 +1031,22 @@ mod tests {
             panic!("expected logical and on right side");
         };
         assert_eq!(*right_op, BinaryOp::LogicalAnd);
+    }
+
+    #[test]
+    fn parses_nullish_coalescing_expression() {
+        let script = parse_script("null ?? 1 ?? 2;").expect("source should parse");
+        let [Stmt::Expr(Expr::Binary { op, left, .. })] = script.body.as_slice() else {
+            panic!("expected one binary expression statement");
+        };
+        assert_eq!(*op, BinaryOp::NullishCoalescing);
+        assert!(matches!(
+            left.as_ref(),
+            Expr::Binary {
+                op: BinaryOp::NullishCoalescing,
+                ..
+            }
+        ));
     }
 
     #[test]
