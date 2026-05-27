@@ -123,6 +123,11 @@ pub enum Stmt {
         /// Source span.
         span: Span,
     },
+    /// A debugger statement.
+    Debugger {
+        /// Source span.
+        span: Span,
+    },
     /// A break statement.
     Break {
         /// Source span.
