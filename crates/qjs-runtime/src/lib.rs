@@ -205,6 +205,7 @@ impl ObjectRef {
 enum NativeFunction {
     Array,
     ArrayIsArray,
+    ArrayPrototypeIndexOf,
     ArrayPrototypeJoin,
     ArrayPrototypeToString,
     Object,
@@ -542,6 +543,15 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
             Some("join"),
             1,
             NativeFunction::ArrayPrototypeJoin,
+            false,
+        )),
+    );
+    array_prototype.define_non_enumerable(
+        "indexOf".to_owned(),
+        Value::Function(Function::new_native(
+            Some("indexOf"),
+            1,
+            NativeFunction::ArrayPrototypeIndexOf,
             false,
         )),
     );
@@ -1138,6 +1148,9 @@ fn call_native_function(
     match native {
         NativeFunction::Array => native_array(&argument_values),
         NativeFunction::ArrayIsArray => native_array_is_array(&argument_values),
+        NativeFunction::ArrayPrototypeIndexOf => {
+            native_array_prototype_index_of(this_value, &argument_values)
+        }
         NativeFunction::ArrayPrototypeJoin => {
             native_array_prototype_join(this_value, &argument_values)
         }
@@ -1189,6 +1202,55 @@ fn native_array_is_array(argument_values: &[Value]) -> Result<Value, RuntimeErro
         argument_values.first(),
         Some(Value::Array(_))
     )))
+}
+
+fn native_array_prototype_index_of(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let Value::Array(elements) = this_value else {
+        return Err(RuntimeError {
+            message: "Array.prototype.indexOf called on non-array".to_owned(),
+        });
+    };
+    if elements.is_empty() {
+        return Ok(Value::Number(-1.0));
+    }
+
+    let search_element = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let start = array_search_start_index(
+        elements.len(),
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+    )?;
+    for (index, element) in elements.iter().enumerate().skip(start) {
+        if *element == search_element {
+            return Ok(Value::Number(index as f64));
+        }
+    }
+    Ok(Value::Number(-1.0))
+}
+
+fn array_search_start_index(length: usize, from_index: Value) -> Result<usize, RuntimeError> {
+    let number = match from_index {
+        Value::Undefined => 0.0,
+        value => to_number(value)?,
+    };
+    if number.is_nan() {
+        return Ok(0);
+    }
+    if number >= length as f64 {
+        return Ok(length);
+    }
+    if number >= 0.0 {
+        return Ok(number.trunc() as usize);
+    }
+
+    let start = length as f64 + number.trunc();
+    if start <= 0.0 {
+        Ok(0)
+    } else {
+        Ok(start as usize)
+    }
 }
 
 fn native_array_prototype_join(
@@ -2814,6 +2876,10 @@ mod tests {
         );
         assert_eq!(eval("Array.length;"), Ok(Value::Number(1.0)));
         assert_eq!(eval("Array.isArray.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(
+            eval("Array.prototype.indexOf.length;"),
+            Ok(Value::Number(1.0))
+        );
         assert_eq!(eval("Array.prototype.join.length;"), Ok(Value::Number(1.0)));
         assert_eq!(
             eval("Array.prototype.toString.length;"),
@@ -2860,6 +2926,19 @@ mod tests {
         assert_eq!(
             eval("[1, [2, 3], 4].join(';');"),
             Ok(Value::String("1;2,3;4".to_owned()))
+        );
+        assert_eq!(eval("[1, 2, 1].indexOf(1);"), Ok(Value::Number(0.0)));
+        assert_eq!(eval("[1, 2, 1].indexOf(1, 1);"), Ok(Value::Number(2.0)));
+        assert_eq!(eval("[1, 2, 1].indexOf(1, -1);"), Ok(Value::Number(2.0)));
+        assert_eq!(eval("[1, 2, 1].indexOf(1, -5);"), Ok(Value::Number(0.0)));
+        assert_eq!(eval("[1, 2, 3].indexOf(4);"), Ok(Value::Number(-1.0)));
+        assert_eq!(
+            eval("[false, 'false'].indexOf(false);"),
+            Ok(Value::Number(0.0))
+        );
+        assert_eq!(
+            eval("[false, 'false'].indexOf('false');"),
+            Ok(Value::Number(1.0))
         );
         assert!(eval("Array(3);").is_err());
     }
