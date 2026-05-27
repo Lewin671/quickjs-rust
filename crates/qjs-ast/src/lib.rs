@@ -274,6 +274,8 @@ pub enum UnaryOp {
     Minus,
     /// Logical negation.
     Not,
+    /// Type query.
+    Typeof,
 }
 
 /// Binary operators currently supported by the parser and runtime.

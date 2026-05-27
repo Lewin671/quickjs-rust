@@ -409,6 +409,7 @@ impl Parser {
             TokenKind::Plus => UnaryOp::Plus,
             TokenKind::Minus => UnaryOp::Minus,
             TokenKind::Bang => UnaryOp::Not,
+            TokenKind::Typeof => UnaryOp::Typeof,
             _ => return self.call(),
         };
         self.advance();
@@ -667,6 +668,7 @@ fn property_name(kind: TokenKind) -> Option<String> {
         TokenKind::Function => Some("function".to_owned()),
         TokenKind::Return => Some("return".to_owned()),
         TokenKind::Throw => Some("throw".to_owned()),
+        TokenKind::Typeof => Some("typeof".to_owned()),
         _ => None,
     }
 }
@@ -846,6 +848,12 @@ mod tests {
                 ..
             }
         ));
+
+        let script = parse_script("typeof missing;").expect("source should parse");
+        let [Stmt::Expr(Expr::Unary { op, .. })] = script.body.as_slice() else {
+            panic!("expected one unary expression");
+        };
+        assert_eq!(*op, UnaryOp::Typeof);
     }
 
     #[test]
