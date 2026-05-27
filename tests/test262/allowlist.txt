@@ -75,6 +75,11 @@ cases/function-closure-argument-basic.js
 cases/function-hoist-before-declaration-basic.js
 cases/function-hoist-inside-body-basic.js
 cases/string-addition-basic.js
+cases/string-empty-length-basic.js
+cases/string-index-basic.js
+cases/string-index-missing-basic.js
+cases/string-index-noncanonical-basic.js
+cases/string-length-basic.js
 cases/string-number-addition.js
 cases/for-var-basic.js
 cases/for-omitted-init-update.js

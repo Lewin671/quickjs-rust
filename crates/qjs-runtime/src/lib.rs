@@ -983,6 +983,13 @@ fn eval_member(
                 .cloned()
                 .unwrap_or(Value::Undefined))
         }
+        (Value::String(value), MemberProperty::Named(name)) if name == "length" => {
+            Ok(Value::Number(value.chars().count() as f64))
+        }
+        (Value::String(value), property) => {
+            let key = property_key(property, env)?;
+            Ok(string_property(&value, &key).unwrap_or(Value::Undefined))
+        }
         (Value::Array(elements), MemberProperty::Computed(index)) => {
             let index = eval_expr(index, env)?;
             let index = to_array_index(index)?;
@@ -1045,6 +1052,27 @@ fn to_property_key(value: Value) -> Result<String, RuntimeError> {
         Value::Function(_) | Value::Array(_) | Value::Object(_) => Err(RuntimeError {
             message: "unsupported property key".to_owned(),
         }),
+    }
+}
+
+fn string_property(value: &str, key: &str) -> Option<Value> {
+    let index = canonical_string_index(key)?;
+    value
+        .chars()
+        .nth(index)
+        .map(|character| Value::String(character.to_string()))
+}
+
+fn canonical_string_index(key: &str) -> Option<usize> {
+    if key.is_empty() {
+        return None;
+    }
+
+    let index = key.parse::<usize>().ok()?;
+    if index.to_string() == key {
+        Some(index)
+    } else {
+        None
     }
 }
 
@@ -1337,6 +1365,16 @@ mod tests {
             eval("'x' + undefined;"),
             Ok(Value::String("xundefined".to_owned()))
         );
+    }
+
+    #[test]
+    fn evaluates_string_member_access() {
+        assert_eq!(eval("'abc'.length;"), Ok(Value::Number(3.0)));
+        assert_eq!(eval("''.length;"), Ok(Value::Number(0.0)));
+        assert_eq!(eval("'abc'[0];"), Ok(Value::String("a".to_owned())));
+        assert_eq!(eval("'abc'['1'];"), Ok(Value::String("b".to_owned())));
+        assert_eq!(eval("'abc'[3];"), Ok(Value::Undefined));
+        assert_eq!(eval("'abc'['01'];"), Ok(Value::Undefined));
     }
 
     #[test]
