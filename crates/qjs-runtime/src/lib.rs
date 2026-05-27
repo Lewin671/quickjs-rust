@@ -208,6 +208,7 @@ enum NativeFunction {
     ArrayPrototypeIndexOf,
     ArrayPrototypeLastIndexOf,
     ArrayPrototypeJoin,
+    ArrayPrototypeSlice,
     ArrayPrototypeToString,
     Object,
     ObjectAssign,
@@ -562,6 +563,15 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
             Some("lastIndexOf"),
             1,
             NativeFunction::ArrayPrototypeLastIndexOf,
+            false,
+        )),
+    );
+    array_prototype.define_non_enumerable(
+        "slice".to_owned(),
+        Value::Function(Function::new_native(
+            Some("slice"),
+            2,
+            NativeFunction::ArrayPrototypeSlice,
             false,
         )),
     );
@@ -1167,6 +1177,9 @@ fn call_native_function(
         NativeFunction::ArrayPrototypeJoin => {
             native_array_prototype_join(this_value, &argument_values)
         }
+        NativeFunction::ArrayPrototypeSlice => {
+            native_array_prototype_slice(this_value, &argument_values)
+        }
         NativeFunction::ArrayPrototypeToString => native_array_prototype_to_string(this_value),
         NativeFunction::Object => {
             native_object(function, this_value, &argument_values, is_construct)
@@ -1312,6 +1325,60 @@ fn array_search_end_index(length: usize, from_index: Value) -> Result<Option<usi
         Ok(None)
     } else {
         Ok(Some(start as usize))
+    }
+}
+
+fn native_array_prototype_slice(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let Value::Array(elements) = this_value else {
+        return Err(RuntimeError {
+            message: "Array.prototype.slice called on non-array".to_owned(),
+        });
+    };
+
+    let length = elements.len();
+    let start = array_slice_start(
+        length,
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+    )?;
+    let end = array_slice_end(
+        length,
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+    )?;
+
+    if end <= start {
+        return Ok(Value::Array(Vec::new()));
+    }
+    Ok(Value::Array(elements[start..end].to_vec()))
+}
+
+fn array_slice_start(length: usize, start: Value) -> Result<usize, RuntimeError> {
+    let number = match start {
+        Value::Undefined => 0.0,
+        value => to_number(value)?,
+    };
+    Ok(relative_array_index(length, number))
+}
+
+fn array_slice_end(length: usize, end: Value) -> Result<usize, RuntimeError> {
+    let number = match end {
+        Value::Undefined => return Ok(length),
+        value => to_number(value)?,
+    };
+    Ok(relative_array_index(length, number))
+}
+
+fn relative_array_index(length: usize, number: f64) -> usize {
+    if number.is_nan() {
+        return 0;
+    }
+    let integer = number.trunc();
+    if integer < 0.0 {
+        (length as f64 + integer).max(0.0) as usize
+    } else {
+        integer.min(length as f64) as usize
     }
 }
 
@@ -2948,6 +3015,10 @@ mod tests {
         );
         assert_eq!(eval("Array.prototype.join.length;"), Ok(Value::Number(1.0)));
         assert_eq!(
+            eval("Array.prototype.slice.length;"),
+            Ok(Value::Number(2.0))
+        );
+        assert_eq!(
             eval("Array.prototype.toString.length;"),
             Ok(Value::Number(0.0))
         );
@@ -3020,6 +3091,23 @@ mod tests {
         assert_eq!(
             eval("[false, 'false'].lastIndexOf(false);"),
             Ok(Value::Number(0.0))
+        );
+        assert_eq!(
+            eval("[0, 1, 2, 3, 4].slice(1, 4).join();"),
+            Ok(Value::String("1,2,3".to_owned()))
+        );
+        assert_eq!(
+            eval("[0, 1, 2, 3, 4].slice(2).join('|');"),
+            Ok(Value::String("2|3|4".to_owned()))
+        );
+        assert_eq!(
+            eval("[0, 1, 2, 3, 4].slice(-3, -1).join();"),
+            Ok(Value::String("2,3".to_owned()))
+        );
+        assert_eq!(eval("[0, 1, 2].slice(5).length;"), Ok(Value::Number(0.0)));
+        assert_eq!(
+            eval("let copy = [1, 2].slice(); Array.isArray(copy) && copy[1] === 2;"),
+            Ok(Value::Boolean(true))
         );
         assert!(eval("Array(3);").is_err());
     }
