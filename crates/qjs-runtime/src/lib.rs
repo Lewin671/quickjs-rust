@@ -77,6 +77,15 @@ struct Property {
 }
 
 impl Property {
+    fn data(value: Value, enumerable: bool, writable: bool, configurable: bool) -> Self {
+        Self {
+            value,
+            enumerable,
+            writable,
+            configurable,
+        }
+    }
+
     fn enumerable(value: Value) -> Self {
         Self {
             value,
@@ -213,6 +222,12 @@ enum NativeFunction {
     ArrayPrototypeJoin,
     ArrayPrototypeSlice,
     ArrayPrototypeToString,
+    MathAbs,
+    MathCeil,
+    MathFloor,
+    MathMax,
+    MathMin,
+    MathTrunc,
     Object,
     ObjectAssign,
     ObjectCreate,
@@ -536,6 +551,40 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
         global_object.set("Object".to_owned(), object_value);
     }
 
+    env.insert("NaN".to_owned(), Value::Number(f64::NAN));
+    env.insert("Infinity".to_owned(), Value::Number(f64::INFINITY));
+    if let Value::Object(global_object) = global_this {
+        global_object.define_property(
+            "NaN".to_owned(),
+            Property::data(Value::Number(f64::NAN), false, false, false),
+        );
+        global_object.define_property(
+            "Infinity".to_owned(),
+            Property::data(Value::Number(f64::INFINITY), false, false, false),
+        );
+    }
+
+    let math_object = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype.clone()));
+    define_math_constant(&math_object, "E", std::f64::consts::E);
+    define_math_constant(&math_object, "LN10", std::f64::consts::LN_10);
+    define_math_constant(&math_object, "LN2", std::f64::consts::LN_2);
+    define_math_constant(&math_object, "LOG10E", std::f64::consts::LOG10_E);
+    define_math_constant(&math_object, "LOG2E", std::f64::consts::LOG2_E);
+    define_math_constant(&math_object, "PI", std::f64::consts::PI);
+    define_math_constant(&math_object, "SQRT1_2", std::f64::consts::FRAC_1_SQRT_2);
+    define_math_constant(&math_object, "SQRT2", std::f64::consts::SQRT_2);
+    define_math_function(&math_object, "abs", 1, NativeFunction::MathAbs);
+    define_math_function(&math_object, "ceil", 1, NativeFunction::MathCeil);
+    define_math_function(&math_object, "floor", 1, NativeFunction::MathFloor);
+    define_math_function(&math_object, "max", 2, NativeFunction::MathMax);
+    define_math_function(&math_object, "min", 2, NativeFunction::MathMin);
+    define_math_function(&math_object, "trunc", 1, NativeFunction::MathTrunc);
+    let math_value = Value::Object(math_object);
+    env.insert("Math".to_owned(), math_value.clone());
+    if let Value::Object(global_object) = global_this {
+        global_object.set("Math".to_owned(), math_value);
+    }
+
     let array_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype.clone()));
     let array_function = Function::new_native(Some("Array"), 1, NativeFunction::Array, true);
     array_prototype.define_non_enumerable(
@@ -633,6 +682,20 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
     if let Value::Object(global_object) = global_this {
         global_object.set("Array".to_owned(), array_value);
     }
+}
+
+fn define_math_constant(object: &ObjectRef, key: &str, value: f64) {
+    object.define_property(
+        key.to_owned(),
+        Property::data(Value::Number(value), false, false, false),
+    );
+}
+
+fn define_math_function(object: &ObjectRef, key: &str, length: usize, native: NativeFunction) {
+    object.define_non_enumerable(
+        key.to_owned(),
+        Value::Function(Function::new_native(Some(key), length, native, false)),
+    );
 }
 
 enum Completion {
@@ -1218,6 +1281,12 @@ fn call_native_function(
             native_array_prototype_slice(this_value, &argument_values)
         }
         NativeFunction::ArrayPrototypeToString => native_array_prototype_to_string(this_value),
+        NativeFunction::MathAbs => native_math_unary(&argument_values, f64::abs),
+        NativeFunction::MathCeil => native_math_unary(&argument_values, f64::ceil),
+        NativeFunction::MathFloor => native_math_unary(&argument_values, f64::floor),
+        NativeFunction::MathMax => native_math_max(&argument_values),
+        NativeFunction::MathMin => native_math_min(&argument_values),
+        NativeFunction::MathTrunc => native_math_unary(&argument_values, f64::trunc),
         NativeFunction::Object => {
             native_object(function, this_value, &argument_values, is_construct)
         }
@@ -1546,6 +1615,50 @@ fn array_join(value: Value, separator: &str) -> Result<String, RuntimeError> {
         parts.push(part);
     }
     Ok(parts.join(separator))
+}
+
+fn native_math_unary(
+    argument_values: &[Value],
+    operation: fn(f64) -> f64,
+) -> Result<Value, RuntimeError> {
+    let argument = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    Ok(Value::Number(operation(to_number(argument)?)))
+}
+
+fn native_math_max(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    if argument_values.is_empty() {
+        return Ok(Value::Number(f64::NEG_INFINITY));
+    }
+
+    let mut maximum = f64::NEG_INFINITY;
+    for value in argument_values.iter().cloned() {
+        let number = to_number(value)?;
+        if number.is_nan() {
+            return Ok(Value::Number(f64::NAN));
+        }
+        if number > maximum || (number == 0.0 && maximum == 0.0 && number.is_sign_positive()) {
+            maximum = number;
+        }
+    }
+    Ok(Value::Number(maximum))
+}
+
+fn native_math_min(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    if argument_values.is_empty() {
+        return Ok(Value::Number(f64::INFINITY));
+    }
+
+    let mut minimum = f64::INFINITY;
+    for value in argument_values.iter().cloned() {
+        let number = to_number(value)?;
+        if number.is_nan() {
+            return Ok(Value::Number(f64::NAN));
+        }
+        if number < minimum || (number == 0.0 && minimum == 0.0 && number.is_sign_negative()) {
+            minimum = number;
+        }
+    }
+    Ok(Value::Number(minimum))
 }
 
 fn native_object_assign(argument_values: &[Value]) -> Result<Value, RuntimeError> {
@@ -2608,8 +2721,7 @@ fn eval_instanceof(
 
 fn to_js_string(value: Value) -> Result<String, RuntimeError> {
     match value {
-        Value::Number(number) if number.fract() == 0.0 => Ok(format!("{number:.0}")),
-        Value::Number(number) => Ok(number.to_string()),
+        Value::Number(number) => Ok(number_to_js_string(number)),
         Value::String(value) => Ok(value),
         Value::Boolean(true) => Ok("true".to_owned()),
         Value::Boolean(false) => Ok("false".to_owned()),
@@ -2623,8 +2735,7 @@ fn to_js_string(value: Value) -> Result<String, RuntimeError> {
 
 fn error_value(value: Value) -> String {
     match value {
-        Value::Number(number) if number.fract() == 0.0 => format!("{number:.0}"),
-        Value::Number(number) => number.to_string(),
+        Value::Number(number) => number_to_js_string(number),
         Value::String(value) => value,
         Value::Boolean(true) => "true".to_owned(),
         Value::Boolean(false) => "false".to_owned(),
@@ -2633,6 +2744,22 @@ fn error_value(value: Value) -> String {
         Value::Function(_) => "function".to_owned(),
         Value::Array(_) => "array".to_owned(),
         Value::Object(_) => "object".to_owned(),
+    }
+}
+
+fn number_to_js_string(number: f64) -> String {
+    if number.is_nan() {
+        "NaN".to_owned()
+    } else if number == f64::INFINITY {
+        "Infinity".to_owned()
+    } else if number == f64::NEG_INFINITY {
+        "-Infinity".to_owned()
+    } else if number == 0.0 {
+        "0".to_owned()
+    } else if number.fract() == 0.0 {
+        format!("{number:.0}")
+    } else {
+        number.to_string()
     }
 }
 
@@ -3848,5 +3975,57 @@ mod tests {
     fn evaluates_global_undefined_binding() {
         assert_eq!(eval("undefined;"), Ok(Value::Undefined));
         assert_eq!(eval("undefined === undefined;"), Ok(Value::Boolean(true)));
+    }
+
+    #[test]
+    fn evaluates_math_builtins() {
+        assert_eq!(eval("typeof Math;"), Ok(Value::String("object".to_owned())));
+        assert_eq!(
+            eval("typeof Math.PI;"),
+            Ok(Value::String("number".to_owned()))
+        );
+        assert_eq!(eval("NaN === NaN;"), Ok(Value::Boolean(false)));
+        assert_eq!(eval("Infinity === 1 / 0;"), Ok(Value::Boolean(true)));
+        assert_eq!(eval("Math.abs.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("Math.max.length;"), Ok(Value::Number(2.0)));
+        assert_eq!(eval("Math.min.length;"), Ok(Value::Number(2.0)));
+        assert_eq!(eval("Math.trunc.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("Math.abs(-7);"), Ok(Value::Number(7.0)));
+        assert_eq!(
+            eval("1 / Math.abs(-0) === Infinity;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(eval("Math.ceil(1.2);"), Ok(Value::Number(2.0)));
+        assert_eq!(eval("Math.floor(1.8);"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("Math.trunc(-1.8);"), Ok(Value::Number(-1.0)));
+        assert_eq!(eval("Math.max(1, 9, 3);"), Ok(Value::Number(9.0)));
+        assert_eq!(eval("Math.max() === -Infinity;"), Ok(Value::Boolean(true)));
+        assert_eq!(eval("Math.min(1, -9, 3);"), Ok(Value::Number(-9.0)));
+        assert_eq!(eval("Math.min() === Infinity;"), Ok(Value::Boolean(true)));
+        assert_eq!(
+            eval("1 / Math.max(-0, 0) === Infinity;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("1 / Math.min(-0, 0) === -Infinity;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("Math.max(1, NaN) === Math.max(1, NaN);"),
+            Ok(Value::Boolean(false))
+        );
+        assert_eq!(
+            eval("Math.min(1, NaN) === Math.min(1, NaN);"),
+            Ok(Value::Boolean(false))
+        );
+        assert_eq!(
+            eval("Math.propertyIsEnumerable('PI');"),
+            Ok(Value::Boolean(false))
+        );
+        assert_eq!(
+            eval("Object.getOwnPropertyDescriptor(Math, 'PI').writable;"),
+            Ok(Value::Boolean(false))
+        );
+        assert!(eval("new Math.abs(1);").is_err());
     }
 }
