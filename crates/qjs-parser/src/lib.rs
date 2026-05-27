@@ -466,6 +466,60 @@ impl Parser {
             });
         };
 
+        let params = self.function_parameters()?;
+        let body_start = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .start;
+        let body = self.block_body()?;
+        let end = self
+            .tokens
+            .get(self.cursor.saturating_sub(1))
+            .expect("parser should always have eof token")
+            .span
+            .end;
+
+        Ok(Stmt::FunctionDecl {
+            name,
+            params,
+            body,
+            span: Span::new(start.min(body_start), end),
+        })
+    }
+
+    fn function_expression(&mut self, start: usize) -> Result<Expr, ParseError> {
+        let name = if let Some(Token {
+            kind: TokenKind::Identifier(_),
+            ..
+        }) = self.peek()
+        {
+            let token = self.advance();
+            let TokenKind::Identifier(name) = token.kind else {
+                unreachable!("peek checked identifier");
+            };
+            Some(name)
+        } else {
+            None
+        };
+
+        let params = self.function_parameters()?;
+        let body = self.block_body()?;
+        let end = self
+            .tokens
+            .get(self.cursor.saturating_sub(1))
+            .expect("parser should always have eof token")
+            .span
+            .end;
+        Ok(Expr::Function {
+            name,
+            params,
+            body,
+            span: Span::new(start, end),
+        })
+    }
+
+    fn function_parameters(&mut self) -> Result<Vec<String>, ParseError> {
         self.expect(&TokenKind::LeftParen)?;
         let mut params = Vec::new();
         if !self.at(&TokenKind::RightParen) {
@@ -484,30 +538,7 @@ impl Parser {
             }
         }
         self.expect(&TokenKind::RightParen)?;
-
-        let body_start = self
-            .peek()
-            .expect("parser should always have eof token")
-            .span
-            .start;
-        self.expect(&TokenKind::LeftBrace)?;
-        let mut body = Vec::new();
-        while !self.at(&TokenKind::RightBrace) && !self.at(&TokenKind::Eof) {
-            body.push(self.statement()?);
-        }
-        let end = self
-            .peek()
-            .expect("parser should always have eof token")
-            .span
-            .end;
-        self.expect(&TokenKind::RightBrace)?;
-
-        Ok(Stmt::FunctionDecl {
-            name,
-            params,
-            body,
-            span: Span::new(start.min(body_start), end),
-        })
+        Ok(params)
     }
 
     fn return_statement(&mut self) -> Result<Stmt, ParseError> {
@@ -971,6 +1002,7 @@ impl Parser {
             })),
             TokenKind::Null => Ok(Expr::Literal(Literal::Null { span: token.span })),
             TokenKind::This => Ok(Expr::This { span: token.span }),
+            TokenKind::Function => self.function_expression(token.span.start),
             TokenKind::LeftBracket => self.array_literal(token.span.start),
             TokenKind::LeftBrace => self.object_literal(token.span.start),
             TokenKind::LeftParen => {
@@ -1749,6 +1781,21 @@ mod tests {
         assert_eq!(name, "add");
         assert_eq!(params, &["a", "b"]);
         assert_eq!(arguments.len(), 2);
+
+        let script = parse_script("let f = function named(value) { return value; }; f(1);")
+            .expect("source should parse");
+        let [
+            Stmt::VarDecl { declarations, .. },
+            Stmt::Expr(Expr::Call { .. }),
+        ] = script.body.as_slice()
+        else {
+            panic!("expected function expression assignment followed by call");
+        };
+        let Some(Expr::Function { name, params, .. }) = &declarations[0].init else {
+            panic!("expected function expression initializer");
+        };
+        assert_eq!(name.as_deref(), Some("named"));
+        assert_eq!(params, &["value"]);
     }
 
     #[test]

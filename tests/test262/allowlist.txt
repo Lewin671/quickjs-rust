@@ -43,6 +43,9 @@ cases/this-member-update-basic.js
 cases/function-this-global-basic.js
 cases/call-member-this-basic.js
 cases/call-member-nested-function-this-basic.js
+cases/function-expression-basic.js
+cases/function-expression-iife-basic.js
+cases/function-expression-object-member-basic.js
 cases/string-addition-basic.js
 cases/string-number-addition.js
 cases/for-var-basic.js
