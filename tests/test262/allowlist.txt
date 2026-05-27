@@ -8,3 +8,5 @@ cases/logical-and-basic.js
 cases/undefined-basic.js
 cases/object-literal-basic.js
 cases/object-put-basic.js
+cases/typeof-basic.js
+cases/typeof-unresolvable.js

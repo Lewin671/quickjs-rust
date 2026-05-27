@@ -204,6 +204,11 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, Run
         Expr::Identifier { name, .. } => env.get(name).cloned().ok_or_else(|| RuntimeError {
             message: format!("undefined identifier `{name}`"),
         }),
+        Expr::Unary {
+            op: UnaryOp::Typeof,
+            argument,
+            ..
+        } => eval_typeof(argument, env),
         Expr::Unary { op, argument, .. } => {
             let argument = eval_expr(argument, env)?;
             eval_unary(*op, argument)
@@ -410,7 +415,24 @@ fn eval_unary(op: UnaryOp, argument: Value) -> Result<Value, RuntimeError> {
         UnaryOp::Not => Ok(Value::Boolean(!is_truthy(&argument))),
         UnaryOp::Plus => Ok(Value::Number(to_number(argument)?)),
         UnaryOp::Minus => Ok(Value::Number(-to_number(argument)?)),
+        UnaryOp::Typeof => unreachable!("typeof requires unevaluated operand handling"),
     }
+}
+
+fn eval_typeof(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, RuntimeError> {
+    let value = match expr {
+        Expr::Identifier { name, .. } => env.get(name).cloned().unwrap_or(Value::Undefined),
+        _ => eval_expr(expr, env)?,
+    };
+    let type_name = match value {
+        Value::Undefined => "undefined",
+        Value::Boolean(_) => "boolean",
+        Value::Number(_) => "number",
+        Value::String(_) => "string",
+        Value::Function(_) => "function",
+        Value::Null | Value::Array(_) | Value::Object(_) => "object",
+    };
+    Ok(Value::String(type_name.to_owned()))
 }
 
 fn eval_binary(left: Value, op: BinaryOp, right: Value) -> Result<Value, RuntimeError> {
@@ -542,6 +564,30 @@ mod tests {
         assert_eq!(eval("-1 + 3;"), Ok(Value::Number(2.0)));
         assert_eq!(eval("!0;"), Ok(Value::Boolean(true)));
         assert_eq!(eval("+true;"), Ok(Value::Number(1.0)));
+    }
+
+    #[test]
+    fn evaluates_typeof_expressions() {
+        assert_eq!(
+            eval("typeof undefined;"),
+            Ok(Value::String("undefined".to_owned()))
+        );
+        assert_eq!(
+            eval("typeof neverDeclared;"),
+            Ok(Value::String("undefined".to_owned()))
+        );
+        assert_eq!(
+            eval("typeof true;"),
+            Ok(Value::String("boolean".to_owned()))
+        );
+        assert_eq!(eval("typeof 1;"), Ok(Value::String("number".to_owned())));
+        assert_eq!(eval("typeof 'x';"), Ok(Value::String("string".to_owned())));
+        assert_eq!(eval("typeof null;"), Ok(Value::String("object".to_owned())));
+        assert_eq!(eval("typeof {};"), Ok(Value::String("object".to_owned())));
+        assert_eq!(
+            eval("function f() { return 1; } typeof f;"),
+            Ok(Value::String("function".to_owned()))
+        );
     }
 
     #[test]
