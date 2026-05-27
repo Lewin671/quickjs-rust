@@ -201,6 +201,7 @@ enum NativeFunction {
     ObjectGetOwnPropertyNames,
     ObjectKeys,
     ObjectPrototypeHasOwnProperty,
+    ObjectPrototypePropertyIsEnumerable,
     ObjectPrototypeToString,
     ObjectPrototypeValueOf,
 }
@@ -364,6 +365,15 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
             Some("hasOwnProperty"),
             1,
             NativeFunction::ObjectPrototypeHasOwnProperty,
+            false,
+        )),
+    );
+    object_prototype.define_non_enumerable(
+        "propertyIsEnumerable".to_owned(),
+        Value::Function(Function::new_native(
+            Some("propertyIsEnumerable"),
+            1,
+            NativeFunction::ObjectPrototypePropertyIsEnumerable,
             false,
         )),
     );
@@ -1011,6 +1021,9 @@ fn call_native_function(
         NativeFunction::ObjectPrototypeHasOwnProperty => {
             native_object_prototype_has_own_property(this_value, &argument_values)
         }
+        NativeFunction::ObjectPrototypePropertyIsEnumerable => {
+            native_object_prototype_property_is_enumerable(this_value, &argument_values)
+        }
         NativeFunction::ObjectPrototypeToString => native_object_prototype_to_string(this_value),
         NativeFunction::ObjectPrototypeValueOf => native_object_prototype_value_of(this_value),
     }
@@ -1077,7 +1090,7 @@ fn native_object_get_own_property_descriptor(
 fn own_property_descriptor(value: Value, key: &str) -> Result<Option<Property>, RuntimeError> {
     match value {
         Value::Object(object) => Ok(object.own_property(key)),
-        Value::Function(function) => Ok(function.properties.borrow().get(key).cloned()),
+        Value::Function(function) => Ok(function_own_property_descriptor(&function, key)),
         Value::Array(elements) => Ok(array_own_property_descriptor(&elements, key)),
         Value::String(value) => Ok(string_own_property_descriptor(&value, key)),
         Value::Number(_) | Value::Boolean(_) | Value::Null | Value::Undefined => Ok(None),
@@ -1129,7 +1142,7 @@ fn native_object_prototype_has_own_property(
     match this_value {
         Value::Object(object) => Ok(Value::Boolean(object.has_own_property(&key))),
         Value::Function(function) => Ok(Value::Boolean(
-            function.properties.borrow().contains_key(&key),
+            function_own_property_descriptor(&function, &key).is_some(),
         )),
         Value::Array(elements) => Ok(Value::Boolean(array_has_own_property(&elements, &key))),
         Value::String(value) => Ok(Value::Boolean(string_has_own_property(&value, &key))),
@@ -1137,6 +1150,21 @@ fn native_object_prototype_has_own_property(
             message: "hasOwnProperty called on null or undefined".to_owned(),
         }),
         Value::Number(_) | Value::Boolean(_) => Ok(Value::Boolean(false)),
+    }
+}
+
+fn native_object_prototype_property_is_enumerable(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let key = to_property_key(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    match this_value {
+        Value::Null | Value::Undefined => Err(RuntimeError {
+            message: "propertyIsEnumerable called on null or undefined".to_owned(),
+        }),
+        value => Ok(Value::Boolean(
+            own_property_descriptor(value, &key)?.is_some_and(|property| property.enumerable),
+        )),
     }
 }
 
@@ -1484,7 +1512,7 @@ fn object_prototype_property(env: &HashMap<String, Value>, key: &str) -> Option<
 }
 
 fn inherited_object_prototype_property(env: &HashMap<String, Value>, key: &str) -> Option<Value> {
-    if key == "hasOwnProperty" {
+    if matches!(key, "hasOwnProperty" | "propertyIsEnumerable") {
         object_prototype_property(env, key)
     } else {
         None
@@ -1633,8 +1661,21 @@ fn function_own_property_keys(function: &Function) -> Vec<String> {
     keys
 }
 
+fn function_own_property_descriptor(function: &Function, key: &str) -> Option<Property> {
+    if key == "length" {
+        return Some(Property {
+            value: Value::Number(function.params.len() as f64),
+            enumerable: false,
+            writable: false,
+            configurable: true,
+        });
+    }
+    function.properties.borrow().get(key).cloned()
+}
+
 fn function_own_property_names(function: &Function) -> Vec<String> {
     let mut names: Vec<_> = function.properties.borrow().keys().cloned().collect();
+    names.push("length".to_owned());
     names.sort();
     names
 }
@@ -2062,7 +2103,7 @@ mod tests {
         );
         assert_eq!(
             eval("Object.getOwnPropertyNames(Object.prototype).length;"),
-            Ok(Value::Number(4.0))
+            Ok(Value::Number(5.0))
         );
         assert_eq!(
             eval("Object.getOwnPropertyNames(Object.prototype)[0];"),
@@ -2114,6 +2155,36 @@ mod tests {
             Ok(Value::Boolean(true))
         );
         assert_eq!(eval("'ab'.hasOwnProperty('1');"), Ok(Value::Boolean(true)));
+        assert_eq!(
+            eval("Object.prototype.propertyIsEnumerable.length;"),
+            Ok(Value::Number(1.0))
+        );
+        assert_eq!(
+            eval("({ value: 1 }).propertyIsEnumerable('value');"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("Object.prototype.propertyIsEnumerable('toString');"),
+            Ok(Value::Boolean(false))
+        );
+        assert_eq!(
+            eval("Object.prototype.propertyIsEnumerable('propertyIsEnumerable');"),
+            Ok(Value::Boolean(false))
+        );
+        assert_eq!(
+            eval(
+                "let proto = { value: 1 }; let object = Object.create(proto); object.propertyIsEnumerable('value');"
+            ),
+            Ok(Value::Boolean(false))
+        );
+        assert_eq!(
+            eval("[1, 2].propertyIsEnumerable('length');"),
+            Ok(Value::Boolean(false))
+        );
+        assert_eq!(
+            eval("'ab'.propertyIsEnumerable('1');"),
+            Ok(Value::Boolean(true))
+        );
         assert!(eval("Object.create(1);").is_err());
         assert!(eval("new Object.create({});").is_err());
         assert!(eval("new Object.prototype.hasOwnProperty('value');").is_err());
