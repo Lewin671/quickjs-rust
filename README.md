@@ -29,12 +29,16 @@ boundaries.
 - `docs/`: architecture and implementation notes for humans and agents.
 - `tasks/`: small, agent-sized work items.
 - `scripts/check.sh`: standard verification command.
+- `third_party/quickjs-ng`: pinned QuickJS-NG reference implementation.
+- `third_party/test262`: pinned TC39 ECMAScript conformance tests.
 
 ## Setup
 
-Install Rust with `rustup`, then run:
+Install Rust with `rustup`, then initialize third-party references and run the
+workspace checks:
 
 ```sh
+./scripts/bootstrap.sh
 ./scripts/check.sh
 ```
 
@@ -54,3 +58,7 @@ Before making changes, read:
 
 Keep changes scoped to one subsystem when possible, add tests with behavior
 changes, and finish by running `./scripts/check.sh`.
+
+The `third_party/` directory is reference material and test input. Do not edit
+vendored upstream code for engine changes; update the submodule pointer when an
+upstream refresh is needed.

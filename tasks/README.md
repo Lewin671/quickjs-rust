@@ -26,3 +26,8 @@ structured runtime errors.
 
 Create a small test harness that can run local fixtures and later import slices
 of Test262.
+
+## T006: QuickJS Comparison Runner
+
+Build `third_party/quickjs-ng` locally and add a script that compares selected
+`qjs-cli` output with QuickJS-NG output for simple smoke programs.

@@ -10,6 +10,7 @@ boundaries and make each change verifiable with focused tests.
 ## Standard Commands
 
 - Full check: `./scripts/check.sh`
+- Bootstrap checkout: `./scripts/bootstrap.sh`
 - Format only: `cargo fmt --all`
 - Test only: `cargo test --workspace`
 - CLI smoke test: `cargo run -p qjs-cli -- -e "1 + 2;"`
@@ -24,6 +25,12 @@ If Rust is not installed, report that clearly and do not fake test results.
 - Lexer tokens must carry spans.
 - Public APIs should stay small and documented.
 - Avoid `unsafe`; the workspace forbids it.
+- Do not edit files under `third_party/` unless the task is explicitly to update
+  a submodule pointer.
+- Use `third_party/quickjs-ng` as a reference implementation, not as a Rust build
+  dependency.
+- Use `third_party/test262` as conformance input. Prefer small allowlisted
+  subsets over running the entire suite during early engine work.
 
 ## Definition of Done
 

@@ -19,6 +19,18 @@ qjs-runtime
 qjs-cli / tests
 ```
 
+## Third-Party References
+
+This repository pins upstream references as git submodules:
+
+- `third_party/quickjs-ng`: mature QuickJS-derived engine used as a behavioral
+  oracle and implementation reference.
+- `third_party/test262`: official ECMAScript conformance tests used as input for
+  future subset runners.
+
+These directories are intentionally outside the Cargo workspace. They should not
+be imported by library crates or edited as part of normal engine work.
+
 ## Crates
 
 ### qjs-ast
@@ -51,3 +63,8 @@ crates rather than the CLI.
 Add language features vertically when useful: token support, AST type, parser
 tests, runtime behavior, and CLI smoke coverage. This keeps Harness tasks
 self-contained and makes regressions easier to localize.
+
+When a feature is large enough to need conformance coverage, start with a small
+allowlist from `third_party/test262`, compare selected behavior against
+`third_party/quickjs-ng`, then expand the allowlist as implementation coverage
+improves.
