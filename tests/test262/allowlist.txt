@@ -46,6 +46,9 @@ cases/call-member-nested-function-this-basic.js
 cases/function-expression-basic.js
 cases/function-expression-iife-basic.js
 cases/function-expression-object-member-basic.js
+cases/named-function-expression-internal-name-basic.js
+cases/named-function-expression-name-not-leaked.js
+cases/named-function-expression-recursion-basic.js
 cases/arguments-empty-basic.js
 cases/arguments-index-basic.js
 cases/function-extra-arguments-basic.js
