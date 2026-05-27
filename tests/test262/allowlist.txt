@@ -259,3 +259,17 @@ cases/variable-multiple-basic.js
 cases/var-hoist-before-declaration-basic.js
 cases/var-hoist-unentered-block-basic.js
 cases/var-hoist-function-body-basic.js
+cases/string-constructor-basic.js
+cases/string-constructor-length.js
+cases/string-from-char-code-basic.js
+cases/string-from-char-code-length.js
+cases/string-prototype-char-at-basic.js
+cases/string-prototype-char-at-length.js
+cases/string-prototype-includes-basic.js
+cases/string-prototype-includes-length.js
+cases/string-prototype-index-of-basic.js
+cases/string-prototype-index-of-length.js
+cases/string-prototype-slice-basic.js
+cases/string-prototype-slice-length.js
+cases/string-prototype-to-string-basic.js
+cases/string-prototype-to-string-length.js

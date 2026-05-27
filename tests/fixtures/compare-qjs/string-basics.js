@@ -1,0 +1,1 @@
+String(123) + ":" + String.fromCharCode(65, 66) + ":" + "abcdef".charAt(2) + ":" + "abcdef".indexOf("cd") + ":" + "abcdef".includes("de", 3) + ":" + "abcdef".slice(1, 4) + ":" + "abc".toString() + ":" + (String.prototype.constructor === String)
