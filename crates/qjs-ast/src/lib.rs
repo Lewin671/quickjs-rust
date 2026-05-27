@@ -378,6 +378,18 @@ pub enum AssignmentOp {
     DivAssign,
     /// `%=`.
     RemAssign,
+    /// `<<=`.
+    ShlAssign,
+    /// `>>=`.
+    ShrAssign,
+    /// `>>>=`.
+    UShrAssign,
+    /// `&=`.
+    BitwiseAndAssign,
+    /// `^=`.
+    BitwiseXorAssign,
+    /// `|=`.
+    BitwiseOrAssign,
     /// `&&=`.
     LogicalAndAssign,
     /// `||=`.
