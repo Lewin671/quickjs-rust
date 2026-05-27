@@ -1,6 +1,6 @@
 //! Parser for a small JavaScript subset.
 
-use qjs_ast::{BinaryOp, Expr, Literal, Script, Span, Stmt, VarKind};
+use qjs_ast::{BinaryOp, Expr, Literal, Script, Span, Stmt, UnaryOp, VarKind};
 use qjs_lexer::{Token, TokenKind, lex};
 
 /// A parse error.
@@ -264,13 +264,34 @@ impl Parser {
 
     fn multiplicative(&mut self) -> Result<Expr, ParseError> {
         self.binary_left_assoc(
-            Self::primary,
+            Self::unary,
             &[
                 (TokenKind::Star, BinaryOp::Mul),
                 (TokenKind::Slash, BinaryOp::Div),
                 (TokenKind::Percent, BinaryOp::Rem),
             ],
         )
+    }
+
+    fn unary(&mut self) -> Result<Expr, ParseError> {
+        let token = self
+            .peek()
+            .expect("parser should always have eof token")
+            .clone();
+        let op = match token.kind {
+            TokenKind::Plus => UnaryOp::Plus,
+            TokenKind::Minus => UnaryOp::Minus,
+            TokenKind::Bang => UnaryOp::Not,
+            _ => return self.primary(),
+        };
+        self.advance();
+        let argument = self.unary()?;
+        let span = Span::new(token.span.start, argument.span().end);
+        Ok(Expr::Unary {
+            op,
+            argument: Box::new(argument),
+            span,
+        })
     }
 
     fn binary_left_assoc(
@@ -380,7 +401,7 @@ fn stmt_end(stmt: &Stmt) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use qjs_ast::{BinaryOp, Expr, Stmt, VarKind};
+    use qjs_ast::{BinaryOp, Expr, Stmt, UnaryOp, VarKind};
 
     use super::parse_script;
 
@@ -494,5 +515,27 @@ mod tests {
             panic!("expected one while statement");
         };
         assert!(matches!(body.as_ref(), Stmt::Block { .. }));
+    }
+
+    #[test]
+    fn parses_unary_before_multiplicative() {
+        let script = parse_script("-1 * !false;").expect("source should parse");
+        let [Stmt::Expr(Expr::Binary { left, right, .. })] = script.body.as_slice() else {
+            panic!("expected one binary expression");
+        };
+        assert!(matches!(
+            left.as_ref(),
+            Expr::Unary {
+                op: UnaryOp::Minus,
+                ..
+            }
+        ));
+        assert!(matches!(
+            right.as_ref(),
+            Expr::Unary {
+                op: UnaryOp::Not,
+                ..
+            }
+        ));
     }
 }

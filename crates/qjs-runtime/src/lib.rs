@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use qjs_ast::{BinaryOp, Expr, Literal, Script, Stmt};
+use qjs_ast::{BinaryOp, Expr, Literal, Script, Stmt, UnaryOp};
 use qjs_parser::parse_script;
 
 /// A JavaScript value supported by the current runtime subset.
@@ -104,6 +104,10 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, Run
         Expr::Identifier { name, .. } => env.get(name).cloned().ok_or_else(|| RuntimeError {
             message: format!("undefined identifier `{name}`"),
         }),
+        Expr::Unary { op, argument, .. } => {
+            let argument = eval_expr(argument, env)?;
+            eval_unary(*op, argument)
+        }
         Expr::Assignment { name, value, .. } => {
             if !env.contains_key(name) {
                 return Err(RuntimeError {
@@ -159,6 +163,14 @@ fn eval_literal(literal: &Literal) -> Result<Value, RuntimeError> {
     }
 }
 
+fn eval_unary(op: UnaryOp, argument: Value) -> Result<Value, RuntimeError> {
+    match op {
+        UnaryOp::Not => Ok(Value::Boolean(!is_truthy(&argument))),
+        UnaryOp::Plus => Ok(Value::Number(to_number(argument)?)),
+        UnaryOp::Minus => Ok(Value::Number(-to_number(argument)?)),
+    }
+}
+
 fn eval_binary(left: Value, op: BinaryOp, right: Value) -> Result<Value, RuntimeError> {
     match op {
         BinaryOp::Eq | BinaryOp::StrictEq => return Ok(Value::Boolean(left == right)),
@@ -190,6 +202,18 @@ fn eval_binary(left: Value, op: BinaryOp, right: Value) -> Result<Value, Runtime
         | BinaryOp::LogicalOr => unreachable!("handled before numeric binary evaluation"),
     };
     Ok(Value::Number(value))
+}
+
+fn to_number(value: Value) -> Result<f64, RuntimeError> {
+    match value {
+        Value::Number(number) => Ok(number),
+        Value::Boolean(true) => Ok(1.0),
+        Value::Boolean(false) | Value::Null => Ok(0.0),
+        Value::String(value) => value.parse::<f64>().map_err(|_| RuntimeError {
+            message: format!("cannot convert string `{value}` to number"),
+        }),
+        Value::Undefined => Ok(f64::NAN),
+    }
 }
 
 fn is_truthy(value: &Value) -> bool {
@@ -255,5 +279,12 @@ mod tests {
             eval("let x = 0; while (x < 3) { x = x + 1; } x;"),
             Ok(Value::Number(3.0))
         );
+    }
+
+    #[test]
+    fn evaluates_unary_expressions() {
+        assert_eq!(eval("-1 + 3;"), Ok(Value::Number(2.0)));
+        assert_eq!(eval("!0;"), Ok(Value::Boolean(true)));
+        assert_eq!(eval("+true;"), Ok(Value::Number(1.0)));
     }
 }
