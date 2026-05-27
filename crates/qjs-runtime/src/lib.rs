@@ -1,6 +1,6 @@
 //! Early interpreter for the Rust QuickJS rewrite.
 
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, fmt, rc::Rc};
 
 use qjs_ast::{
     AssignmentOp, AssignmentTarget, BinaryOp, CatchClause, Expr, ForInLeft, ForInit, Literal,
@@ -11,7 +11,7 @@ use qjs_parser::parse_script;
 const GLOBAL_THIS_BINDING: &str = "\0global_this";
 
 /// A JavaScript value supported by the current runtime subset.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum Value {
     /// Number value.
     Number(f64),
@@ -31,6 +31,21 @@ pub enum Value {
     Object(ObjectRef),
 }
 
+impl fmt::Debug for Value {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Number(value) => formatter.debug_tuple("Number").field(value).finish(),
+            Self::String(value) => formatter.debug_tuple("String").field(value).finish(),
+            Self::Boolean(value) => formatter.debug_tuple("Boolean").field(value).finish(),
+            Self::Null => formatter.write_str("Null"),
+            Self::Undefined => formatter.write_str("Undefined"),
+            Self::Function(function) => formatter.debug_tuple("Function").field(function).finish(),
+            Self::Array(elements) => formatter.debug_tuple("Array").field(elements).finish(),
+            Self::Object(object) => formatter.debug_tuple("Object").field(object).finish(),
+        }
+    }
+}
+
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -47,10 +62,20 @@ impl PartialEq for Value {
 }
 
 /// Object storage reference.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ObjectRef {
     properties: Rc<RefCell<HashMap<String, Value>>>,
     prototype: Option<Box<ObjectRef>>,
+}
+
+impl fmt::Debug for ObjectRef {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ObjectRef")
+            .field("properties", &self.properties.borrow().len())
+            .field("has_prototype", &self.prototype.is_some())
+            .finish()
+    }
 }
 
 impl ObjectRef {
@@ -90,10 +115,21 @@ impl ObjectRef {
             .as_deref()
             .is_some_and(|proto| proto.ptr_eq(prototype) || proto.has_prototype(prototype))
     }
+
+    fn prototype(&self) -> Option<ObjectRef> {
+        self.prototype.as_deref().cloned()
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NativeFunction {
+    Object,
+    ObjectCreate,
+    ObjectGetPrototypeOf,
 }
 
 /// User-defined function value.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Function {
     /// Optional internal function name.
     pub name: Option<String>,
@@ -103,16 +139,57 @@ pub struct Function {
     pub body: Vec<Stmt>,
     /// Environment captured when the function was created.
     pub env: HashMap<String, Value>,
+    native: Option<NativeFunction>,
+    constructable: bool,
     /// Function object properties.
     properties: Rc<RefCell<HashMap<String, Value>>>,
 }
 
+impl fmt::Debug for Function {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("Function")
+            .field("name", &self.name)
+            .field("length", &self.params.len())
+            .field("native", &self.native)
+            .field("constructable", &self.constructable)
+            .finish()
+    }
+}
+
 impl Function {
+    fn new_user(
+        name: Option<String>,
+        params: Vec<String>,
+        body: Vec<Stmt>,
+        env: HashMap<String, Value>,
+    ) -> Self {
+        Self::new(name, params, body, env, None, true)
+    }
+
+    fn new_native(
+        name: Option<&str>,
+        length: usize,
+        native: NativeFunction,
+        constructable: bool,
+    ) -> Self {
+        Self::new(
+            name.map(str::to_owned),
+            vec![String::new(); length],
+            Vec::new(),
+            HashMap::new(),
+            Some(native),
+            constructable,
+        )
+    }
+
     fn new(
         name: Option<String>,
         params: Vec<String>,
         body: Vec<Stmt>,
         env: HashMap<String, Value>,
+        native: Option<NativeFunction>,
+        constructable: bool,
     ) -> Self {
         let prototype = ObjectRef::new(HashMap::new());
         let function = Self {
@@ -120,23 +197,30 @@ impl Function {
             params,
             body,
             env,
+            native,
+            constructable,
             properties: Rc::new(RefCell::new(HashMap::new())),
         };
-        prototype
-            .properties
-            .borrow_mut()
-            .insert("constructor".to_owned(), Value::Function(function.clone()));
-        function
-            .properties
-            .borrow_mut()
-            .insert("prototype".to_owned(), Value::Object(prototype));
+        if constructable {
+            prototype
+                .properties
+                .borrow_mut()
+                .insert("constructor".to_owned(), Value::Function(function.clone()));
+            function
+                .properties
+                .borrow_mut()
+                .insert("prototype".to_owned(), Value::Object(prototype));
+        }
         function
     }
 }
 
 impl PartialEq for Function {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name && self.params == other.params && self.body == other.body
+        self.name == other.name
+            && self.params == other.params
+            && self.body == other.body
+            && self.native == other.native
     }
 }
 
@@ -168,8 +252,9 @@ pub fn eval_script(script: &Script) -> Result<Value, RuntimeError> {
     let mut env = HashMap::new();
     let global_this = Value::Object(ObjectRef::new(HashMap::new()));
     env.insert("this".to_owned(), global_this.clone());
-    env.insert(GLOBAL_THIS_BINDING.to_owned(), global_this);
+    env.insert(GLOBAL_THIS_BINDING.to_owned(), global_this.clone());
     env.insert("undefined".to_owned(), Value::Undefined);
+    initialize_builtins(&mut env, &global_this);
     hoist_declarations(&script.body, &mut env);
     let mut last = Value::Undefined;
     for stmt in &script.body {
@@ -189,6 +274,46 @@ pub fn eval_script(script: &Script) -> Result<Value, RuntimeError> {
         }
     }
     Ok(last)
+}
+
+fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
+    let object_prototype = ObjectRef::new(HashMap::new());
+    let object_function = Function::new_native(Some("Object"), 1, NativeFunction::Object, true);
+    object_prototype.properties.borrow_mut().insert(
+        "constructor".to_owned(),
+        Value::Function(object_function.clone()),
+    );
+    object_function
+        .properties
+        .borrow_mut()
+        .insert("prototype".to_owned(), Value::Object(object_prototype));
+    object_function.properties.borrow_mut().insert(
+        "create".to_owned(),
+        Value::Function(Function::new_native(
+            Some("create"),
+            1,
+            NativeFunction::ObjectCreate,
+            false,
+        )),
+    );
+    object_function.properties.borrow_mut().insert(
+        "getPrototypeOf".to_owned(),
+        Value::Function(Function::new_native(
+            Some("getPrototypeOf"),
+            1,
+            NativeFunction::ObjectGetPrototypeOf,
+            false,
+        )),
+    );
+
+    let object_value = Value::Function(object_function);
+    env.insert("Object".to_owned(), object_value.clone());
+    if let Value::Object(global_object) = global_this {
+        global_object
+            .properties
+            .borrow_mut()
+            .insert("Object".to_owned(), object_value);
+    }
 }
 
 enum Completion {
@@ -307,7 +432,7 @@ fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Completion
         } => {
             env.insert(
                 name.clone(),
-                Value::Function(Function::new(
+                Value::Function(Function::new_user(
                     Some(name.clone()),
                     params.clone(),
                     body.clone(),
@@ -458,7 +583,7 @@ fn hoist_function_declarations(body: &[Stmt], env: &mut HashMap<String, Value>) 
         {
             env.insert(
                 name.clone(),
-                Value::Function(Function::new(
+                Value::Function(Function::new_user(
                     Some(name.clone()),
                     params.clone(),
                     body.clone(),
@@ -623,7 +748,7 @@ fn eval_call(
     };
 
     let argument_values = eval_arguments(arguments, env)?;
-    call_function(callee, this_value, argument_values, env)
+    call_function(callee, this_value, argument_values, env, false)
 }
 
 fn eval_new(
@@ -632,10 +757,20 @@ fn eval_new(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let callee = eval_expr(callee, env)?;
+    let Value::Function(function) = &callee else {
+        return Err(RuntimeError {
+            message: "value is not a constructor".to_owned(),
+        });
+    };
+    if !function.constructable {
+        return Err(RuntimeError {
+            message: "value is not a constructor".to_owned(),
+        });
+    }
     let argument_values = eval_arguments(arguments, env)?;
     let prototype = constructor_prototype(&callee);
     let this_value = Value::Object(ObjectRef::with_prototype(HashMap::new(), prototype));
-    let result = call_function(callee, this_value.clone(), argument_values, env)?;
+    let result = call_function(callee, this_value.clone(), argument_values, env, true)?;
     match result {
         Value::Array(_) | Value::Function(_) | Value::Object(_) => Ok(result),
         _ => Ok(this_value),
@@ -646,10 +781,14 @@ fn constructor_prototype(callee: &Value) -> Option<ObjectRef> {
     let Value::Function(function) = callee else {
         return None;
     };
-    match function.properties.borrow().get("prototype") {
-        Some(Value::Object(prototype)) => Some(prototype.clone()),
-        _ => None,
-    }
+    function_prototype(function)
+}
+
+fn object_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+    let Some(Value::Function(object_function)) = env.get("Object") else {
+        return None;
+    };
+    function_prototype(object_function)
 }
 
 fn eval_arguments(
@@ -668,12 +807,16 @@ fn call_function(
     this_value: Value,
     argument_values: Vec<Value>,
     env: &mut HashMap<String, Value>,
+    is_construct: bool,
 ) -> Result<Value, RuntimeError> {
     let Value::Function(function) = callee.clone() else {
         return Err(RuntimeError {
             message: "value is not callable".to_owned(),
         });
     };
+    if let Some(native) = function.native {
+        return call_native_function(&function, native, this_value, argument_values, is_construct);
+    }
     let mut local_env = env.clone();
     for (name, value) in &function.env {
         local_env
@@ -711,6 +854,72 @@ fn call_function(
     }
 }
 
+fn call_native_function(
+    function: &Function,
+    native: NativeFunction,
+    this_value: Value,
+    argument_values: Vec<Value>,
+    is_construct: bool,
+) -> Result<Value, RuntimeError> {
+    match native {
+        NativeFunction::Object => {
+            native_object(function, this_value, &argument_values, is_construct)
+        }
+        NativeFunction::ObjectCreate => native_object_create(&argument_values),
+        NativeFunction::ObjectGetPrototypeOf => native_object_get_prototype_of(&argument_values),
+    }
+}
+
+fn native_object(
+    function: &Function,
+    this_value: Value,
+    argument_values: &[Value],
+    is_construct: bool,
+) -> Result<Value, RuntimeError> {
+    match argument_values.first() {
+        Some(Value::Array(_) | Value::Function(_) | Value::Object(_)) => {
+            Ok(argument_values[0].clone())
+        }
+        _ if is_construct => Ok(this_value),
+        _ => Ok(Value::Object(ObjectRef::with_prototype(
+            HashMap::new(),
+            function_prototype(function),
+        ))),
+    }
+}
+
+fn native_object_create(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    match argument_values.first() {
+        Some(Value::Object(prototype)) => Ok(Value::Object(ObjectRef::with_prototype(
+            HashMap::new(),
+            Some(prototype.clone()),
+        ))),
+        Some(Value::Null) => Ok(Value::Object(ObjectRef::new(HashMap::new()))),
+        _ => Err(RuntimeError {
+            message: "Object.create prototype must be an object or null".to_owned(),
+        }),
+    }
+}
+
+fn native_object_get_prototype_of(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    match argument_values.first() {
+        Some(Value::Object(object)) => {
+            Ok(object.prototype().map(Value::Object).unwrap_or(Value::Null))
+        }
+        Some(Value::Array(_) | Value::Function(_)) => Ok(Value::Null),
+        _ => Err(RuntimeError {
+            message: "Object.getPrototypeOf target must be an object".to_owned(),
+        }),
+    }
+}
+
+fn function_prototype(function: &Function) -> Option<ObjectRef> {
+    match function.properties.borrow().get("prototype") {
+        Some(Value::Object(prototype)) => Some(prototype.clone()),
+        _ => None,
+    }
+}
+
 fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, RuntimeError> {
     match expr {
         Expr::Literal(literal) => eval_literal(literal),
@@ -726,11 +935,14 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, Run
             for property in properties {
                 values.insert(property.key.clone(), eval_expr(&property.value, env)?);
             }
-            Ok(Value::Object(ObjectRef::new(values)))
+            Ok(Value::Object(ObjectRef::with_prototype(
+                values,
+                object_prototype(env),
+            )))
         }
         Expr::Function {
             name, params, body, ..
-        } => Ok(Value::Function(Function::new(
+        } => Ok(Value::Function(Function::new_user(
             name.clone(),
             params.clone(),
             body.clone(),
@@ -1401,6 +1613,49 @@ mod tests {
     }
 
     #[test]
+    fn evaluates_object_builtins() {
+        assert_eq!(
+            eval("typeof Object;"),
+            Ok(Value::String("function".to_owned()))
+        );
+        assert_eq!(eval("Object.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("Object.create.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(
+            eval("let proto = { value: 7 }; let object = Object.create(proto); object.value;"),
+            Ok(Value::Number(7.0))
+        );
+        assert_eq!(
+            eval(
+                "let proto = {}; let object = Object.create(proto); Object.getPrototypeOf(object) === proto;"
+            ),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("Object.getPrototypeOf(Object.create(null));"),
+            Ok(Value::Null)
+        );
+        assert_eq!(eval("({}) instanceof Object;"), Ok(Value::Boolean(true)));
+        assert_eq!(
+            eval("Object() instanceof Object;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("(new Object()).constructor === Object;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("let object = { value: 3 }; Object(object) === object;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("let object = { value: 3 }; new Object(object) === object;"),
+            Ok(Value::Boolean(true))
+        );
+        assert!(eval("Object.create(1);").is_err());
+        assert!(eval("new Object.create({});").is_err());
+    }
+
+    #[test]
     fn evaluates_logical_expressions() {
         assert_eq!(eval("0 || 5;"), Ok(Value::Number(5.0)));
         assert_eq!(eval("1 && 7;"), Ok(Value::Number(7.0)));
@@ -1915,9 +2170,9 @@ mod tests {
         );
         assert_eq!(
             eval(
-                "function C() {} C.prototype = { value: 1 }; let instance = new C(); instance.constructor;"
+                "function C() {} C.prototype = { value: 1 }; let instance = new C(); instance.constructor === Object;"
             ),
-            Ok(Value::Undefined)
+            Ok(Value::Boolean(true))
         );
         assert!(eval("new 1;").is_err());
     }

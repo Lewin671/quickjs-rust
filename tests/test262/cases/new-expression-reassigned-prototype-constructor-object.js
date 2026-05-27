@@ -3,4 +3,4 @@ function C() {}
 C.prototype = { value: 1 };
 
 var instance = new C();
-if (instance.constructor !== undefined) { throw; }
+if (instance.constructor !== Object) { throw; }
