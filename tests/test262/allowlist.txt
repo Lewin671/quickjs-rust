@@ -35,6 +35,11 @@ cases/object-get-own-property-names-basic.js
 cases/object-get-own-property-names-function-basic.js
 cases/object-get-own-property-names-nonenumerable-basic.js
 cases/object-get-own-property-names-prototype-negative.js
+cases/object-get-own-property-descriptor-array-length.js
+cases/object-get-own-property-descriptor-basic.js
+cases/object-get-own-property-descriptor-function-basic.js
+cases/object-get-own-property-descriptor-missing.js
+cases/object-get-own-property-descriptor-nonenumerable-basic.js
 cases/object-has-own-property-basic.js
 cases/object-has-own-property-length.js
 cases/object-has-own-property-missing.js
