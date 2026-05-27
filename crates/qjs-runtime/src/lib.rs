@@ -102,6 +102,11 @@ pub fn eval_script(script: &Script) -> Result<Value, RuntimeError> {
         match eval_stmt(stmt, &mut env)? {
             Completion::Normal(value) => last = value,
             Completion::Return(value) => return Ok(value),
+            Completion::Break | Completion::Continue => {
+                return Err(RuntimeError {
+                    message: "break or continue outside loop".to_owned(),
+                });
+            }
         }
     }
     Ok(last)
@@ -110,6 +115,8 @@ pub fn eval_script(script: &Script) -> Result<Value, RuntimeError> {
 enum Completion {
     Normal(Value),
     Return(Value),
+    Break,
+    Continue,
 }
 
 fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Completion, RuntimeError> {
@@ -121,6 +128,8 @@ fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Completion
                 match eval_stmt(stmt, env)? {
                     Completion::Normal(value) => last = value,
                     Completion::Return(value) => return Ok(Completion::Return(value)),
+                    Completion::Break => return Ok(Completion::Break),
+                    Completion::Continue => return Ok(Completion::Continue),
                 }
             }
             Ok(Completion::Normal(last))
@@ -146,6 +155,8 @@ fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Completion
                 match eval_stmt(body, env)? {
                     Completion::Normal(value) => last = value,
                     Completion::Return(value) => return Ok(Completion::Return(value)),
+                    Completion::Break => break,
+                    Completion::Continue => {}
                 }
             }
             Ok(Completion::Normal(last))
@@ -167,6 +178,8 @@ fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Completion
                 match eval_stmt(body, env)? {
                     Completion::Normal(value) => last = value,
                     Completion::Return(value) => return Ok(Completion::Return(value)),
+                    Completion::Break => break,
+                    Completion::Continue => {}
                 }
                 if let Some(update) = update {
                     eval_expr(update, env)?;
@@ -197,6 +210,8 @@ fn eval_stmt(stmt: &Stmt, env: &mut HashMap<String, Value>) -> Result<Completion
         Stmt::Throw { .. } => Err(RuntimeError {
             message: "throw statement executed".to_owned(),
         }),
+        Stmt::Break { .. } => Ok(Completion::Break),
+        Stmt::Continue { .. } => Ok(Completion::Continue),
         Stmt::VarDecl { name, init, .. } => {
             let value = if let Some(init) = init {
                 eval_expr(init, env)?
@@ -294,6 +309,11 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, Run
                 match eval_stmt(stmt, &mut local_env)? {
                     Completion::Normal(value) => last = value,
                     Completion::Return(value) => return Ok(value),
+                    Completion::Break | Completion::Continue => {
+                        return Err(RuntimeError {
+                            message: "break or continue outside loop".to_owned(),
+                        });
+                    }
                 }
             }
             Ok(last)
@@ -688,6 +708,20 @@ mod tests {
         assert_eq!(
             eval("let i = 0; for (; i < 3; ) i = i + 1; i;"),
             Ok(Value::Number(3.0))
+        );
+    }
+
+    #[test]
+    fn evaluates_break_and_continue() {
+        assert_eq!(
+            eval("let i = 0; while (true) { i = i + 1; if (i === 3) break; } i;"),
+            Ok(Value::Number(3.0))
+        );
+        assert_eq!(
+            eval(
+                "let sum = 0; for (var i = 0; i < 5; i = i + 1) { if (i === 2) continue; sum = sum + i; } sum;"
+            ),
+            Ok(Value::Number(8.0))
         );
     }
 

@@ -79,6 +79,14 @@ impl Parser {
             return Ok(self.throw_statement());
         }
 
+        if self.at(&TokenKind::Break) {
+            return Ok(self.break_or_continue_statement(TokenKind::Break));
+        }
+
+        if self.at(&TokenKind::Continue) {
+            return Ok(self.break_or_continue_statement(TokenKind::Continue));
+        }
+
         if self.at(&TokenKind::Var) || self.at(&TokenKind::Let) || self.at(&TokenKind::Const) {
             return self.variable_declaration();
         }
@@ -302,6 +310,18 @@ impl Parser {
         }
         Stmt::Throw {
             span: Span::new(start, end),
+        }
+    }
+
+    fn break_or_continue_statement(&mut self, kind: TokenKind) -> Stmt {
+        let token = self.advance();
+        self.match_kind(&TokenKind::Semicolon);
+        let end = self.tokens[self.cursor.saturating_sub(1)].span.end;
+        let span = Span::new(token.span.start, end);
+        if kind == TokenKind::Break {
+            Stmt::Break { span }
+        } else {
+            Stmt::Continue { span }
         }
     }
 
@@ -735,6 +755,8 @@ fn property_name(kind: TokenKind) -> Option<String> {
         TokenKind::Else => Some("else".to_owned()),
         TokenKind::While => Some("while".to_owned()),
         TokenKind::For => Some("for".to_owned()),
+        TokenKind::Break => Some("break".to_owned()),
+        TokenKind::Continue => Some("continue".to_owned()),
         TokenKind::Function => Some("function".to_owned()),
         TokenKind::Return => Some("return".to_owned()),
         TokenKind::Throw => Some("throw".to_owned()),
@@ -755,6 +777,8 @@ fn stmt_end(stmt: &Stmt) -> usize {
         | Stmt::FunctionDecl { span, .. }
         | Stmt::Return { span, .. }
         | Stmt::Throw { span }
+        | Stmt::Break { span }
+        | Stmt::Continue { span }
         | Stmt::VarDecl { span, .. } => span.end,
         Stmt::Empty => 0,
     }
@@ -922,6 +946,22 @@ mod tests {
         ));
         assert!(matches!(update, Some(Expr::Assignment { .. })));
         assert!(matches!(body.as_ref(), Stmt::Block { .. }));
+    }
+
+    #[test]
+    fn parses_break_and_continue_statements() {
+        let script =
+            parse_script("while (true) { continue; break; }").expect("source should parse");
+        let [Stmt::While { body, .. }] = script.body.as_slice() else {
+            panic!("expected one while statement");
+        };
+        let Stmt::Block { body, .. } = body.as_ref() else {
+            panic!("expected block body");
+        };
+        assert!(matches!(
+            body.as_slice(),
+            [Stmt::Continue { .. }, Stmt::Break { .. }]
+        ));
     }
 
     #[test]

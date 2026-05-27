@@ -23,3 +23,5 @@ cases/string-addition-basic.js
 cases/string-number-addition.js
 cases/for-var-basic.js
 cases/for-omitted-init-update.js
+cases/break-basic.js
+cases/continue-basic.js

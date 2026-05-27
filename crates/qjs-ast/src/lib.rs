@@ -92,6 +92,16 @@ pub enum Stmt {
         /// Source span.
         span: Span,
     },
+    /// A break statement.
+    Break {
+        /// Source span.
+        span: Span,
+    },
+    /// A continue statement.
+    Continue {
+        /// Source span.
+        span: Span,
+    },
     /// A variable declaration.
     VarDecl {
         /// Declaration kind.
