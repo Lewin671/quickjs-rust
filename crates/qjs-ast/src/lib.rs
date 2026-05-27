@@ -337,6 +337,15 @@ pub enum Expr {
         /// Source span.
         span: Span,
     },
+    /// A constructor call expression.
+    New {
+        /// Constructor expression.
+        callee: Box<Expr>,
+        /// Argument expressions.
+        arguments: Vec<Expr>,
+        /// Source span.
+        span: Span,
+    },
     /// A function expression.
     Function {
         /// Optional function name.
@@ -378,6 +387,7 @@ impl Expr {
             | Self::Assignment { span, .. }
             | Self::Update { span, .. }
             | Self::Call { span, .. }
+            | Self::New { span, .. }
             | Self::Function { span, .. }
             | Self::Member { span, .. }
             | Self::This { span }

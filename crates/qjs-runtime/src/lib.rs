@@ -565,16 +565,47 @@ fn eval_call(
         }
     };
 
+    let argument_values = eval_arguments(arguments, env)?;
+    call_function(callee, this_value, argument_values, env)
+}
+
+fn eval_new(
+    callee: &Expr,
+    arguments: &[Expr],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let callee = eval_expr(callee, env)?;
+    let argument_values = eval_arguments(arguments, env)?;
+    let this_value = Value::Object(ObjectRef::new(HashMap::new()));
+    let result = call_function(callee, this_value.clone(), argument_values, env)?;
+    match result {
+        Value::Array(_) | Value::Function(_) | Value::Object(_) => Ok(result),
+        _ => Ok(this_value),
+    }
+}
+
+fn eval_arguments(
+    arguments: &[Expr],
+    env: &mut HashMap<String, Value>,
+) -> Result<Vec<Value>, RuntimeError> {
+    let mut argument_values = Vec::with_capacity(arguments.len());
+    for argument in arguments {
+        argument_values.push(eval_expr(argument, env)?);
+    }
+    Ok(argument_values)
+}
+
+fn call_function(
+    callee: Value,
+    this_value: Value,
+    argument_values: Vec<Value>,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
     let Value::Function(function) = callee.clone() else {
         return Err(RuntimeError {
             message: "value is not callable".to_owned(),
         });
     };
-    let mut argument_values = Vec::with_capacity(arguments.len());
-    for argument in arguments {
-        argument_values.push(eval_expr(argument, env)?);
-    }
-
     let mut local_env = env.clone();
     for (name, value) in &function.env {
         local_env
@@ -686,6 +717,9 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, Run
         Expr::Call {
             callee, arguments, ..
         } => eval_call(callee, arguments, env),
+        Expr::New {
+            callee, arguments, ..
+        } => eval_new(callee, arguments, env),
         Expr::Member {
             object, property, ..
         } => {
@@ -1663,6 +1697,37 @@ mod tests {
             eval("let o = { method: function() { return this.value; }, value: 7 }; o.method();"),
             Ok(Value::Number(7.0))
         );
+    }
+
+    #[test]
+    fn evaluates_new_expressions() {
+        assert_eq!(
+            eval(
+                "function Point(x, y) { this.x = x; this.y = y; } let p = new Point(2, 3); p.x + p.y;"
+            ),
+            Ok(Value::Number(5.0))
+        );
+        assert_eq!(
+            eval("function Empty() { this.value = 9; } let p = new Empty; p.value;"),
+            Ok(Value::Number(9.0))
+        );
+        assert_eq!(
+            eval(
+                "function Box() { this.value = 1; return { value: 4 }; } let box = new Box(); box.value;"
+            ),
+            Ok(Value::Number(4.0))
+        );
+        assert_eq!(
+            eval("function Box() { this.value = 6; return 1; } let box = new Box(); box.value;"),
+            Ok(Value::Number(6.0))
+        );
+        assert_eq!(
+            eval(
+                "function Args() { this.count = arguments.length; } let args = new Args(1, 2, 3); args.count;"
+            ),
+            Ok(Value::Number(3.0))
+        );
+        assert!(eval("new 1;").is_err());
     }
 
     #[test]
