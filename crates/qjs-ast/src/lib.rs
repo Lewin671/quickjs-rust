@@ -189,8 +189,21 @@ pub enum Expr {
     Assignment {
         /// Assigned target.
         target: AssignmentTarget,
+        /// Assignment operator.
+        op: AssignmentOp,
         /// Assigned value.
         value: Box<Expr>,
+        /// Source span.
+        span: Span,
+    },
+    /// An update expression.
+    Update {
+        /// Updated target.
+        target: AssignmentTarget,
+        /// Update operator.
+        op: UpdateOp,
+        /// Whether this is a prefix update.
+        prefix: bool,
         /// Source span.
         span: Span,
     },
@@ -227,6 +240,7 @@ impl Expr {
             | Self::Unary { span, .. }
             | Self::Binary { span, .. }
             | Self::Assignment { span, .. }
+            | Self::Update { span, .. }
             | Self::Call { span, .. }
             | Self::Member { span, .. }
             | Self::Identifier { span, .. } => *span,
@@ -269,6 +283,32 @@ impl AssignmentTarget {
             Self::Identifier { span, .. } | Self::Member { span, .. } => *span,
         }
     }
+}
+
+/// Assignment operator.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AssignmentOp {
+    /// `=`.
+    Assign,
+    /// `+=`.
+    AddAssign,
+    /// `-=`.
+    SubAssign,
+    /// `*=`.
+    MulAssign,
+    /// `/=`.
+    DivAssign,
+    /// `%=`.
+    RemAssign,
+}
+
+/// Update operator.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UpdateOp {
+    /// `++`.
+    Increment,
+    /// `--`.
+    Decrement,
 }
 
 /// Member access property.

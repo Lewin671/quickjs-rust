@@ -25,3 +25,7 @@ cases/for-var-basic.js
 cases/for-omitted-init-update.js
 cases/break-basic.js
 cases/continue-basic.js
+cases/postfix-increment-basic.js
+cases/prefix-increment-basic.js
+cases/postfix-decrement-basic.js
+cases/compound-assignment-basic.js
