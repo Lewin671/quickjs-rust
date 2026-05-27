@@ -78,6 +78,17 @@ pub enum Stmt {
         /// Source span.
         span: Span,
     },
+    /// A for-in statement.
+    ForIn {
+        /// Loop binding or assignment target.
+        left: ForInLeft,
+        /// Enumerated expression.
+        right: Expr,
+        /// Loop body.
+        body: Box<Stmt>,
+        /// Source span.
+        span: Span,
+    },
     /// A function declaration.
     FunctionDecl {
         /// Function name.
@@ -138,6 +149,33 @@ pub enum ForInit {
     },
     /// Expression initializer.
     Expr(Expr),
+}
+
+/// A for-in loop head.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ForInLeft {
+    /// Variable declaration loop binding.
+    VarDecl {
+        /// Declaration kind.
+        kind: VarKind,
+        /// Binding name.
+        name: String,
+        /// Source span.
+        span: Span,
+    },
+    /// Assignment target loop binding.
+    Target(AssignmentTarget),
+}
+
+impl ForInLeft {
+    /// Returns the source span for this for-in loop head.
+    #[must_use]
+    pub const fn span(&self) -> Span {
+        match self {
+            Self::VarDecl { span, .. } => *span,
+            Self::Target(target) => target.span(),
+        }
+    }
 }
 
 /// A variable declarator.
