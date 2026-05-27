@@ -1,0 +1,1 @@
+(function () { var object = {}; Object.defineProperty(object, "hidden", { value: 7 }); Object.defineProperty(object, "shown", { value: 3, enumerable: true, writable: true }); object.shown = 4; return object.hidden + ":" + object.shown + ":" + Object.keys(object)[0] + ":" + Object.getOwnPropertyDescriptor(object, "hidden").writable; })()

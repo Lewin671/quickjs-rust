@@ -34,6 +34,11 @@ cases/object-constructor-basic.js
 cases/object-constructor-object-identity.js
 cases/object-create-basic.js
 cases/object-create-null-prototype-basic.js
+cases/object-define-property-data-defaults.js
+cases/object-define-property-data-enumerable.js
+cases/object-define-property-data-writable.js
+cases/object-define-property-function-basic.js
+cases/object-define-property-length.js
 cases/object-get-prototype-of-basic.js
 cases/object-get-own-property-names-array-basic.js
 cases/object-get-own-property-names-basic.js
