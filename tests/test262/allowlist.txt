@@ -15,6 +15,10 @@ cases/left-shift-basic.js
 cases/nullish-follows-null.js
 cases/nullish-follows-undefined.js
 cases/nullish-short-circuit.js
+cases/logical-and-assignment-basic.js
+cases/logical-or-assignment-basic.js
+cases/nullish-assignment-basic.js
+cases/logical-assignment-short-circuit.js
 cases/logical-and-basic.js
 cases/undefined-basic.js
 cases/object-literal-basic.js

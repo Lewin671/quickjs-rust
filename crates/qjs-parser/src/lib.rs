@@ -472,6 +472,12 @@ impl Parser {
             AssignmentOp::DivAssign
         } else if self.match_kind(&TokenKind::PercentEqual) {
             AssignmentOp::RemAssign
+        } else if self.match_kind(&TokenKind::AmpersandAmpersandEqual) {
+            AssignmentOp::LogicalAndAssign
+        } else if self.match_kind(&TokenKind::PipePipeEqual) {
+            AssignmentOp::LogicalOrAssign
+        } else if self.match_kind(&TokenKind::QuestionQuestionEqual) {
+            AssignmentOp::NullishAssign
         } else {
             return Ok(expr);
         };
@@ -1134,7 +1140,8 @@ mod tests {
 
     #[test]
     fn parses_update_and_compound_assignment() {
-        let script = parse_script("++i; i++; i += 2; obj.count--;").expect("source should parse");
+        let script = parse_script("++i; i++; i += 2; obj.count--; a &&= b; c ||= d; e ??= f;")
+            .expect("source should parse");
         let [
             Stmt::Expr(Expr::Update {
                 op: UpdateOp::Increment,
@@ -1155,9 +1162,21 @@ mod tests {
                 prefix: false,
                 ..
             }),
+            Stmt::Expr(Expr::Assignment {
+                op: AssignmentOp::LogicalAndAssign,
+                ..
+            }),
+            Stmt::Expr(Expr::Assignment {
+                op: AssignmentOp::LogicalOrAssign,
+                ..
+            }),
+            Stmt::Expr(Expr::Assignment {
+                op: AssignmentOp::NullishAssign,
+                ..
+            }),
         ] = script.body.as_slice()
         else {
-            panic!("expected update and compound assignment statements");
+            panic!("expected update, compound assignment, and logical assignment statements");
         };
     }
 
