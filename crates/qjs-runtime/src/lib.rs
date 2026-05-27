@@ -283,8 +283,12 @@ enum NativeFunction {
     StringPrototypeEndsWith,
     StringPrototypeIncludes,
     StringPrototypeIndexOf,
+    StringPrototypeRepeat,
     StringPrototypeSlice,
     StringPrototypeStartsWith,
+    StringPrototypeTrim,
+    StringPrototypeTrimEnd,
+    StringPrototypeTrimStart,
     StringPrototypeToString,
     StringPrototypeValueOf,
 }
@@ -703,6 +707,15 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
         )),
     );
     string_prototype.define_non_enumerable(
+        "repeat".to_owned(),
+        Value::Function(Function::new_native(
+            Some("repeat"),
+            1,
+            NativeFunction::StringPrototypeRepeat,
+            false,
+        )),
+    );
+    string_prototype.define_non_enumerable(
         "slice".to_owned(),
         Value::Function(Function::new_native(
             Some("slice"),
@@ -717,6 +730,33 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
             Some("startsWith"),
             1,
             NativeFunction::StringPrototypeStartsWith,
+            false,
+        )),
+    );
+    string_prototype.define_non_enumerable(
+        "trim".to_owned(),
+        Value::Function(Function::new_native(
+            Some("trim"),
+            0,
+            NativeFunction::StringPrototypeTrim,
+            false,
+        )),
+    );
+    string_prototype.define_non_enumerable(
+        "trimEnd".to_owned(),
+        Value::Function(Function::new_native(
+            Some("trimEnd"),
+            0,
+            NativeFunction::StringPrototypeTrimEnd,
+            false,
+        )),
+    );
+    string_prototype.define_non_enumerable(
+        "trimStart".to_owned(),
+        Value::Function(Function::new_native(
+            Some("trimStart"),
+            0,
+            NativeFunction::StringPrototypeTrimStart,
             false,
         )),
     );
@@ -1610,11 +1650,19 @@ fn call_native_function(
         NativeFunction::StringPrototypeIndexOf => {
             native_string_prototype_index_of(this_value, &argument_values, env)
         }
+        NativeFunction::StringPrototypeRepeat => {
+            native_string_prototype_repeat(this_value, &argument_values, env)
+        }
         NativeFunction::StringPrototypeSlice => {
             native_string_prototype_slice(this_value, &argument_values, env)
         }
         NativeFunction::StringPrototypeStartsWith => {
             native_string_prototype_starts_with(this_value, &argument_values, env)
+        }
+        NativeFunction::StringPrototypeTrim => native_string_prototype_trim(this_value, env),
+        NativeFunction::StringPrototypeTrimEnd => native_string_prototype_trim_end(this_value, env),
+        NativeFunction::StringPrototypeTrimStart => {
+            native_string_prototype_trim_start(this_value, env)
         }
         NativeFunction::StringPrototypeToString | NativeFunction::StringPrototypeValueOf => {
             native_string_prototype_to_string(this_value, env)
@@ -2178,6 +2226,26 @@ fn native_string_prototype_index_of(
     Ok(Value::Number((start + char_offset) as f64))
 }
 
+fn native_string_prototype_repeat(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let value = this_string_value(this_value, env)?;
+    let count = to_number(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    if count.is_infinite() || count < 0.0 {
+        return Err(RuntimeError {
+            message: "repeat count must be a finite non-negative number".to_owned(),
+        });
+    }
+    if count.is_nan() || count == 0.0 {
+        return Ok(Value::String(String::new()));
+    }
+
+    let count = count.trunc() as usize;
+    Ok(Value::String(value.repeat(count)))
+}
+
 fn native_string_prototype_slice(
     this_value: Value,
     argument_values: &[Value],
@@ -2219,6 +2287,33 @@ fn native_string_prototype_starts_with(
             .skip(start)
             .collect::<String>()
             .starts_with(&search),
+    ))
+}
+
+fn native_string_prototype_trim(
+    this_value: Value,
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    Ok(Value::String(
+        this_string_value(this_value, env)?.trim().to_owned(),
+    ))
+}
+
+fn native_string_prototype_trim_end(
+    this_value: Value,
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    Ok(Value::String(
+        this_string_value(this_value, env)?.trim_end().to_owned(),
+    ))
+}
+
+fn native_string_prototype_trim_start(
+    this_value: Value,
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    Ok(Value::String(
+        this_string_value(this_value, env)?.trim_start().to_owned(),
     ))
 }
 
@@ -3562,6 +3657,17 @@ mod tests {
         assert_eq!(eval("'abc'.includes('b');"), Ok(Value::Boolean(true)));
         assert_eq!(eval("'abc'.includes('b', 2);"), Ok(Value::Boolean(false)));
         assert_eq!(
+            eval("'ab'.repeat(3);"),
+            Ok(Value::String("ababab".to_owned()))
+        );
+        assert_eq!(eval("'ab'.repeat(0);"), Ok(Value::String(String::new())));
+        assert_eq!(
+            eval("'ab'.repeat(2.8);"),
+            Ok(Value::String("abab".to_owned()))
+        );
+        assert!(eval("'ab'.repeat(-1);").is_err());
+        assert!(eval("'ab'.repeat(Infinity);").is_err());
+        assert_eq!(
             eval("'abcdef'.slice(1, 4);"),
             Ok(Value::String("bcd".to_owned()))
         );
@@ -3576,6 +3682,30 @@ mod tests {
         assert_eq!(
             eval("'abc'.valueOf();"),
             Ok(Value::String("abc".to_owned()))
+        );
+        assert_eq!(
+            eval("'  abc  '.trim();"),
+            Ok(Value::String("abc".to_owned()))
+        );
+        assert_eq!(
+            eval("'  abc  '.trimStart();"),
+            Ok(Value::String("abc  ".to_owned()))
+        );
+        assert_eq!(
+            eval("'  abc  '.trimEnd();"),
+            Ok(Value::String("  abc".to_owned()))
+        );
+        assert_eq!(
+            eval("String.prototype.trim.length;"),
+            Ok(Value::Number(0.0))
+        );
+        assert_eq!(
+            eval("String.prototype.trimStart.length;"),
+            Ok(Value::Number(0.0))
+        );
+        assert_eq!(
+            eval("String.prototype.trimEnd.length;"),
+            Ok(Value::Number(0.0))
         );
         assert_eq!(
             eval("Object.getOwnPropertyDescriptor(String.prototype, 'charAt').enumerable;"),
