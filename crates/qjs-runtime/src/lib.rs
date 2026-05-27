@@ -224,17 +224,25 @@ enum NativeFunction {
     ArrayPrototypeToString,
     MathAbs,
     MathAcos,
+    MathAcosh,
     MathAsin,
+    MathAsinh,
     MathAtan,
     MathAtan2,
+    MathAtanh,
     MathCbrt,
     MathCeil,
     MathClz32,
     MathCos,
+    MathCosh,
     MathExp,
+    MathExpm1,
     MathFloor,
+    MathFround,
+    MathHypot,
     MathImul,
     MathLog,
+    MathLog1p,
     MathLog10,
     MathLog2,
     MathMax,
@@ -243,8 +251,10 @@ enum NativeFunction {
     MathRound,
     MathSign,
     MathSin,
+    MathSinh,
     MathSqrt,
     MathTan,
+    MathTanh,
     MathTrunc,
     Object,
     ObjectAssign,
@@ -593,17 +603,25 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
     define_math_constant(&math_object, "SQRT2", std::f64::consts::SQRT_2);
     define_math_function(&math_object, "abs", 1, NativeFunction::MathAbs);
     define_math_function(&math_object, "acos", 1, NativeFunction::MathAcos);
+    define_math_function(&math_object, "acosh", 1, NativeFunction::MathAcosh);
     define_math_function(&math_object, "asin", 1, NativeFunction::MathAsin);
+    define_math_function(&math_object, "asinh", 1, NativeFunction::MathAsinh);
     define_math_function(&math_object, "atan", 1, NativeFunction::MathAtan);
     define_math_function(&math_object, "atan2", 2, NativeFunction::MathAtan2);
+    define_math_function(&math_object, "atanh", 1, NativeFunction::MathAtanh);
     define_math_function(&math_object, "cbrt", 1, NativeFunction::MathCbrt);
     define_math_function(&math_object, "ceil", 1, NativeFunction::MathCeil);
     define_math_function(&math_object, "clz32", 1, NativeFunction::MathClz32);
     define_math_function(&math_object, "cos", 1, NativeFunction::MathCos);
+    define_math_function(&math_object, "cosh", 1, NativeFunction::MathCosh);
     define_math_function(&math_object, "exp", 1, NativeFunction::MathExp);
+    define_math_function(&math_object, "expm1", 1, NativeFunction::MathExpm1);
     define_math_function(&math_object, "floor", 1, NativeFunction::MathFloor);
+    define_math_function(&math_object, "fround", 1, NativeFunction::MathFround);
+    define_math_function(&math_object, "hypot", 2, NativeFunction::MathHypot);
     define_math_function(&math_object, "imul", 2, NativeFunction::MathImul);
     define_math_function(&math_object, "log", 1, NativeFunction::MathLog);
+    define_math_function(&math_object, "log1p", 1, NativeFunction::MathLog1p);
     define_math_function(&math_object, "log10", 1, NativeFunction::MathLog10);
     define_math_function(&math_object, "log2", 1, NativeFunction::MathLog2);
     define_math_function(&math_object, "max", 2, NativeFunction::MathMax);
@@ -612,8 +630,10 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
     define_math_function(&math_object, "round", 1, NativeFunction::MathRound);
     define_math_function(&math_object, "sign", 1, NativeFunction::MathSign);
     define_math_function(&math_object, "sin", 1, NativeFunction::MathSin);
+    define_math_function(&math_object, "sinh", 1, NativeFunction::MathSinh);
     define_math_function(&math_object, "sqrt", 1, NativeFunction::MathSqrt);
     define_math_function(&math_object, "tan", 1, NativeFunction::MathTan);
+    define_math_function(&math_object, "tanh", 1, NativeFunction::MathTanh);
     define_math_function(&math_object, "trunc", 1, NativeFunction::MathTrunc);
     let math_value = Value::Object(math_object);
     env.insert("Math".to_owned(), math_value.clone());
@@ -1319,17 +1339,25 @@ fn call_native_function(
         NativeFunction::ArrayPrototypeToString => native_array_prototype_to_string(this_value),
         NativeFunction::MathAbs => native_math_unary(&argument_values, f64::abs),
         NativeFunction::MathAcos => native_math_unary(&argument_values, f64::acos),
+        NativeFunction::MathAcosh => native_math_unary(&argument_values, f64::acosh),
         NativeFunction::MathAsin => native_math_unary(&argument_values, f64::asin),
+        NativeFunction::MathAsinh => native_math_unary(&argument_values, f64::asinh),
         NativeFunction::MathAtan => native_math_unary(&argument_values, f64::atan),
         NativeFunction::MathAtan2 => native_math_atan2(&argument_values),
+        NativeFunction::MathAtanh => native_math_unary(&argument_values, f64::atanh),
         NativeFunction::MathCbrt => native_math_unary(&argument_values, f64::cbrt),
         NativeFunction::MathCeil => native_math_unary(&argument_values, f64::ceil),
         NativeFunction::MathClz32 => native_math_clz32(&argument_values),
         NativeFunction::MathCos => native_math_unary(&argument_values, f64::cos),
+        NativeFunction::MathCosh => native_math_unary(&argument_values, f64::cosh),
         NativeFunction::MathExp => native_math_unary(&argument_values, f64::exp),
+        NativeFunction::MathExpm1 => native_math_unary(&argument_values, f64::exp_m1),
         NativeFunction::MathFloor => native_math_unary(&argument_values, f64::floor),
+        NativeFunction::MathFround => native_math_fround(&argument_values),
+        NativeFunction::MathHypot => native_math_hypot(&argument_values),
         NativeFunction::MathImul => native_math_imul(&argument_values),
         NativeFunction::MathLog => native_math_unary(&argument_values, f64::ln),
+        NativeFunction::MathLog1p => native_math_unary(&argument_values, f64::ln_1p),
         NativeFunction::MathLog10 => native_math_unary(&argument_values, f64::log10),
         NativeFunction::MathLog2 => native_math_unary(&argument_values, f64::log2),
         NativeFunction::MathMax => native_math_max(&argument_values),
@@ -1338,8 +1366,10 @@ fn call_native_function(
         NativeFunction::MathRound => native_math_round(&argument_values),
         NativeFunction::MathSign => native_math_sign(&argument_values),
         NativeFunction::MathSin => native_math_unary(&argument_values, f64::sin),
+        NativeFunction::MathSinh => native_math_unary(&argument_values, f64::sinh),
         NativeFunction::MathSqrt => native_math_unary(&argument_values, f64::sqrt),
         NativeFunction::MathTan => native_math_unary(&argument_values, f64::tan),
+        NativeFunction::MathTanh => native_math_unary(&argument_values, f64::tanh),
         NativeFunction::MathTrunc => native_math_unary(&argument_values, f64::trunc),
         NativeFunction::Object => {
             native_object(function, this_value, &argument_values, is_construct)
@@ -1683,6 +1713,26 @@ fn native_math_atan2(argument_values: &[Value]) -> Result<Value, RuntimeError> {
     let y = to_number(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
     let x = to_number(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
     Ok(Value::Number(y.atan2(x)))
+}
+
+fn native_math_fround(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    let number = to_number(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    Ok(Value::Number(f64::from(number as f32)))
+}
+
+fn native_math_hypot(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    let mut sum = 0.0;
+    for value in argument_values.iter().cloned() {
+        let number = to_number(value)?;
+        if number.is_nan() {
+            return Ok(Value::Number(f64::NAN));
+        }
+        if number.is_infinite() {
+            return Ok(Value::Number(f64::INFINITY));
+        }
+        sum += number * number;
+    }
+    Ok(Value::Number(sum.sqrt()))
 }
 
 fn native_math_max(argument_values: &[Value]) -> Result<Value, RuntimeError> {
@@ -4093,13 +4143,21 @@ mod tests {
         assert_eq!(eval("Infinity === 1 / 0;"), Ok(Value::Boolean(true)));
         assert_eq!(eval("Math.abs.length;"), Ok(Value::Number(1.0)));
         assert_eq!(eval("Math.acos.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("Math.acosh.length;"), Ok(Value::Number(1.0)));
         assert_eq!(eval("Math.asin.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("Math.asinh.length;"), Ok(Value::Number(1.0)));
         assert_eq!(eval("Math.atan.length;"), Ok(Value::Number(1.0)));
         assert_eq!(eval("Math.atan2.length;"), Ok(Value::Number(2.0)));
+        assert_eq!(eval("Math.atanh.length;"), Ok(Value::Number(1.0)));
         assert_eq!(eval("Math.cbrt.length;"), Ok(Value::Number(1.0)));
         assert_eq!(eval("Math.cos.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("Math.cosh.length;"), Ok(Value::Number(1.0)));
         assert_eq!(eval("Math.exp.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("Math.expm1.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("Math.fround.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("Math.hypot.length;"), Ok(Value::Number(2.0)));
         assert_eq!(eval("Math.log.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("Math.log1p.length;"), Ok(Value::Number(1.0)));
         assert_eq!(eval("Math.log10.length;"), Ok(Value::Number(1.0)));
         assert_eq!(eval("Math.log2.length;"), Ok(Value::Number(1.0)));
         assert_eq!(eval("Math.max.length;"), Ok(Value::Number(2.0)));
@@ -4109,9 +4167,11 @@ mod tests {
         assert_eq!(eval("Math.round.length;"), Ok(Value::Number(1.0)));
         assert_eq!(eval("Math.sign.length;"), Ok(Value::Number(1.0)));
         assert_eq!(eval("Math.sin.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("Math.sinh.length;"), Ok(Value::Number(1.0)));
         assert_eq!(eval("Math.clz32.length;"), Ok(Value::Number(1.0)));
         assert_eq!(eval("Math.imul.length;"), Ok(Value::Number(2.0)));
         assert_eq!(eval("Math.tan.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("Math.tanh.length;"), Ok(Value::Number(1.0)));
         assert_eq!(eval("Math.trunc.length;"), Ok(Value::Number(1.0)));
         assert_eq!(eval("Math.abs(-7);"), Ok(Value::Number(7.0)));
         assert_eq!(
@@ -4198,6 +4258,37 @@ mod tests {
         );
         assert_eq!(
             eval("Math.log2(0) === -Infinity;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(eval("Math.acosh(1);"), Ok(Value::Number(0.0)));
+        assert_eq!(eval("Math.asinh(0);"), Ok(Value::Number(0.0)));
+        assert_eq!(eval("Math.atanh(0);"), Ok(Value::Number(0.0)));
+        assert_eq!(
+            eval("Math.atanh(1) === Infinity;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(eval("Math.cosh(0);"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("Math.expm1(0);"), Ok(Value::Number(0.0)));
+        assert_eq!(eval("Math.fround(1.5);"), Ok(Value::Number(1.5)));
+        assert_eq!(
+            eval("1 / Math.fround(-0) === -Infinity;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(eval("Math.hypot(3, 4);"), Ok(Value::Number(5.0)));
+        assert_eq!(eval("Math.hypot();"), Ok(Value::Number(0.0)));
+        assert_eq!(
+            eval("Math.hypot(Infinity, NaN) === Infinity;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(eval("Math.log1p(0);"), Ok(Value::Number(0.0)));
+        assert_eq!(
+            eval("Math.log1p(-1) === -Infinity;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(eval("Math.sinh(0);"), Ok(Value::Number(0.0)));
+        assert_eq!(eval("Math.tanh(Infinity);"), Ok(Value::Number(1.0)));
+        assert_eq!(
+            eval("1 / Math.tanh(-0) === -Infinity;"),
             Ok(Value::Boolean(true))
         );
         assert_eq!(
