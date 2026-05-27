@@ -31,7 +31,7 @@ boundaries.
 - `docs/harness.md`: autonomous agent runbook.
 - `scripts/check.sh`: standard verification command.
 - `scripts/compare-qjs.sh`: smoke comparison against QuickJS-NG.
-- `scripts/test262-subset.sh`: validates curated Test262 subset metadata.
+- `scripts/test262-subset.sh`: runs curated Test262-derived subset cases.
 - `tests/fixtures/`: local JavaScript smoke fixtures.
 - `tests/test262/`: curated Test262 allowlist and expected failures.
 - `third_party/quickjs-ng`: pinned QuickJS-NG reference implementation.
@@ -68,7 +68,7 @@ To compare the current runtime against QuickJS-NG on local smoke fixtures:
 ./scripts/compare-qjs.sh
 ```
 
-To validate the curated Test262 allowlist metadata:
+To run the curated Test262-derived subset:
 
 ```sh
 ./scripts/test262-subset.sh
@@ -81,8 +81,8 @@ To validate the curated Test262 allowlist metadata:
 - `qjs-runtime` should execute AST semantics rather than adding parser-specific
   shortcuts.
 - `third_party/quickjs-ng` is a behavioral oracle, not a build dependency.
-- `third_party/test262` should be consumed through small allowlisted subsets
-  until the engine is mature enough for broader conformance runs.
+- `third_party/test262` should be consumed through small allowlisted runnable
+  subsets until the engine is mature enough for broader conformance runs.
 
 ## Automation
 
