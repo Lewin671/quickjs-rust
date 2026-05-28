@@ -18,6 +18,7 @@ pub(crate) enum NativeFunction {
     ArrayPrototypePop,
     ArrayPrototypePush,
     ArrayPrototypeReduce,
+    ArrayPrototypeReduceRight,
     ArrayPrototypeReverse,
     ArrayPrototypeShift,
     ArrayPrototypeSlice,

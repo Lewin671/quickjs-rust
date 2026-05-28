@@ -226,3 +226,35 @@ pub(crate) fn native_array_prototype_reduce(
 
     Ok(accumulator)
 }
+
+pub(crate) fn native_array_prototype_reduce_right(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let reduction = prepare_array_reduction("reduceRight", this_value, argument_values)?;
+    if reduction.source.is_empty() && argument_values.len() < 2 {
+        return Err(RuntimeError {
+            message: "Reduce of empty array with no initial value".to_owned(),
+        });
+    }
+
+    let (mut accumulator, next_index) = if argument_values.len() >= 2 {
+        (argument_values[1].clone(), reduction.source.len())
+    } else {
+        let last_index = reduction.source.len() - 1;
+        (reduction.source[last_index].clone(), last_index)
+    };
+
+    for index in (0..next_index).rev() {
+        accumulator = call_reduction_callback(
+            &reduction,
+            accumulator,
+            reduction.source[index].clone(),
+            index,
+            env,
+        )?;
+    }
+
+    Ok(accumulator)
+}
