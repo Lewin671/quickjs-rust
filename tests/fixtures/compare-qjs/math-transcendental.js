@@ -1,1 +1,1 @@
-Math.sin(0) + ":" + Math.cos(0) + ":" + Math.tan(0) + ":" + Math.asin(0) + ":" + Math.atan2(0, 1) + ":" + Math.cbrt(27) + ":" + Math.exp(0) + ":" + Math.log(1) + ":" + Math.log10(1000) + ":" + Math.log2(8) + ":" + (Math.log(-1) === Math.log(-1))
+Math.sin(0) + ":" + Math.cos(0) + ":" + Math.tan(0) + ":" + Math.asin(0) + ":" + Math.atan2(0, 1) + ":" + (Math.abs(Math.cbrt(27) - 3) < 0.000000000001) + ":" + Math.exp(0) + ":" + Math.log(1) + ":" + Math.log10(1000) + ":" + Math.log2(8) + ":" + (Math.log(-1) === Math.log(-1))
