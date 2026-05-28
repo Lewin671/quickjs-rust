@@ -5,6 +5,7 @@ mod core;
 mod math;
 mod numbers;
 mod objects;
+mod reflect;
 mod strings;
 
 use crate::{Function, NativeFunction, RuntimeError, Value};
@@ -47,6 +48,10 @@ pub(crate) fn call_native_function(
         is_construct,
         env,
     )? {
+        return Ok(value);
+    }
+
+    if let Some(value) = reflect::call_reflect_native(native, &argument_values, env)? {
         return Ok(value);
     }
 

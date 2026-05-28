@@ -5,5 +5,6 @@ mod global;
 mod math;
 mod numbers;
 mod objects;
+mod reflect;
 mod statements;
 mod strings;

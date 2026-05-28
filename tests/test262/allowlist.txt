@@ -425,6 +425,11 @@ cases/variable-multiple-basic.js
 cases/var-hoist-before-declaration-basic.js
 cases/var-hoist-unentered-block-basic.js
 cases/var-hoist-function-body-basic.js
+cases/reflect-get-prototype-of-basic.js
+cases/reflect-get-prototype-of-length.js
+cases/reflect-set-prototype-of-basic.js
+cases/reflect-set-prototype-of-length.js
+cases/reflect-set-prototype-of-non-extensible.js
 cases/string-constructor-basic.js
 cases/string-constructor-length.js
 cases/string-from-char-code-basic.js
