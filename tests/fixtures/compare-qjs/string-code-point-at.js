@@ -1,0 +1,1 @@
+"abc".codePointAt(1) + ":" + ("abc".codePointAt(3) === undefined) + ":" + ("abc".codePointAt(-1) === undefined) + ":" + "😀".codePointAt(0) + ":" + "😀".codePointAt(1) + ":" + String.prototype.codePointAt.length
