@@ -312,6 +312,11 @@ cases/string-prototype-repeat-basic.js
 cases/string-prototype-repeat-length.js
 cases/string-prototype-slice-basic.js
 cases/string-prototype-slice-length.js
+cases/string-prototype-split-basic.js
+cases/string-prototype-split-empty-separator.js
+cases/string-prototype-split-length.js
+cases/string-prototype-split-limit.js
+cases/string-prototype-split-undefined-separator.js
 cases/string-prototype-starts-with-basic.js
 cases/string-prototype-starts-with-length.js
 cases/string-prototype-starts-with-position.js

@@ -1,0 +1,1 @@
+"hello".split("l").join("|") + ":" + "hello".split("l", 2).join("|") + ":" + "hello".split(undefined).join("|") + ":" + "abc".split("", 2).join("|") + ":" + "abc".split("x").length + ":" + "abc".split("b", 0).length + ":" + String.prototype.split.length
