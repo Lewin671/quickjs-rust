@@ -17,8 +17,8 @@ pub enum Value {
     Undefined,
     /// User-defined function.
     Function(Function),
-    /// Array value.
-    Array(Vec<Value>),
+    /// Array object value.
+    Array(ArrayRef),
     /// Object value.
     Object(ObjectRef),
 }
@@ -46,10 +46,75 @@ impl PartialEq for Value {
             (Self::Boolean(left), Self::Boolean(right)) => left == right,
             (Self::Null, Self::Null) | (Self::Undefined, Self::Undefined) => true,
             (Self::Function(left), Self::Function(right)) => left == right,
-            (Self::Array(left), Self::Array(right)) => left == right,
+            (Self::Array(left), Self::Array(right)) => left.ptr_eq(right),
             (Self::Object(left), Self::Object(right)) => left.ptr_eq(right),
             _ => false,
         }
+    }
+}
+
+/// Array storage reference.
+#[derive(Clone)]
+pub struct ArrayRef {
+    elements: Rc<RefCell<Vec<Value>>>,
+}
+
+impl ArrayRef {
+    pub(crate) fn new(elements: Vec<Value>) -> Self {
+        Self {
+            elements: Rc::new(RefCell::new(elements)),
+        }
+    }
+
+    pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.elements, &other.elements)
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.elements.borrow().len()
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.elements.borrow().is_empty()
+    }
+
+    pub(crate) fn get(&self, index: usize) -> Option<Value> {
+        self.elements.borrow().get(index).cloned()
+    }
+
+    pub(crate) fn to_vec(&self) -> Vec<Value> {
+        self.elements.borrow().clone()
+    }
+
+    pub(crate) fn push(&self, value: Value) -> usize {
+        let mut elements = self.elements.borrow_mut();
+        elements.push(value);
+        elements.len()
+    }
+
+    pub(crate) fn pop(&self) -> Option<Value> {
+        self.elements.borrow_mut().pop()
+    }
+
+    pub(crate) fn set(&self, index: usize, value: Value) {
+        let mut elements = self.elements.borrow_mut();
+        if index >= elements.len() {
+            elements.resize(index + 1, Value::Undefined);
+        }
+        elements[index] = value;
+    }
+
+    pub(crate) fn set_len(&self, length: usize) {
+        self.elements.borrow_mut().resize(length, Value::Undefined);
+    }
+}
+
+impl fmt::Debug for ArrayRef {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ArrayRef")
+            .field("len", &self.elements.borrow().len())
+            .finish()
     }
 }
 

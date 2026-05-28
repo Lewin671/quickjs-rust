@@ -35,7 +35,12 @@ cases/array-last-index-of-empty.js
 cases/array-last-index-of-from-index.js
 cases/array-last-index-of-from-index-negative.js
 cases/array-last-index-of-length.js
+cases/array-pop-basic.js
+cases/array-pop-length.js
 cases/array-prototype-constructor.js
+cases/array-push-basic.js
+cases/array-push-length.js
+cases/array-reference-identity-basic.js
 cases/array-slice-basic.js
 cases/array-slice-default-end.js
 cases/array-slice-length.js
@@ -43,6 +48,7 @@ cases/array-slice-negative-index.js
 cases/array-slice-start-past-length.js
 cases/array-to-string-basic.js
 cases/array-to-string-length.js
+cases/array-index-assignment-basic.js
 cases/boolean-constructor-basic.js
 cases/boolean-constructor-length.js
 cases/boolean-prototype-constructor.js

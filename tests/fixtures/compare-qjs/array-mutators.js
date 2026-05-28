@@ -1,0 +1,1 @@
+(function () { let xs = [1]; let ys = xs; let pushed = xs.push(2, 3); let popped = ys.pop(); xs[3] = 4; let grown = xs.length; xs.length = 2; return pushed + ":" + popped + ":" + grown + ":" + xs.length + ":" + xs.join() + ":" + (xs === ys) + ":" + ([] === []); })()
