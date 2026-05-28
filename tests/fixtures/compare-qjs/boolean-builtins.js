@@ -1,0 +1,1 @@
+Boolean() + ":" + Boolean(1) + ":" + Boolean("") + ":" + typeof new Boolean(true) + ":" + (new Boolean(true)).valueOf() + ":" + (new Boolean(0)).toString() + ":" + true.toString() + ":" + (Boolean.prototype.constructor === Boolean) + ":" + Boolean.length + ":" + Boolean.prototype.toString.length + ":" + Boolean.prototype.valueOf.length
