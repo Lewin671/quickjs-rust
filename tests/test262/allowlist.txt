@@ -247,6 +247,9 @@ cases/object-has-own-property-length.js
 cases/object-has-own-property-missing.js
 cases/object-has-own-property-prototype-negative.js
 cases/object-is-length.js
+cases/object-is-sealed-length.js
+cases/object-is-sealed-object.js
+cases/object-is-sealed-primitive.js
 cases/object-is-extensible-array.js
 cases/object-is-extensible-function.js
 cases/object-is-extensible-length.js
@@ -263,6 +266,12 @@ cases/object-prevent-extensions-function-no-new-property.js
 cases/object-prevent-extensions-length.js
 cases/object-prevent-extensions-no-new-properties.js
 cases/object-prevent-extensions-return.js
+cases/object-seal-array.js
+cases/object-seal-configurable-false.js
+cases/object-seal-existing-writable.js
+cases/object-seal-function.js
+cases/object-seal-length.js
+cases/object-seal-return.js
 cases/object-is-prototype-of-array-and-function.js
 cases/object-is-prototype-of-basic.js
 cases/object-is-prototype-of-length.js

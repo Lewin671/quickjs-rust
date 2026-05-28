@@ -91,10 +91,17 @@ pub(crate) fn install_object(env: &mut HashMap<String, Value>, global_this: &Val
     );
     define_object_function(
         &object_function,
+        "isSealed",
+        1,
+        NativeFunction::ObjectIsSealed,
+    );
+    define_object_function(
+        &object_function,
         "preventExtensions",
         1,
         NativeFunction::ObjectPreventExtensions,
     );
+    define_object_function(&object_function, "seal", 1, NativeFunction::ObjectSeal);
     define_object_function(
         &object_function,
         "entries",

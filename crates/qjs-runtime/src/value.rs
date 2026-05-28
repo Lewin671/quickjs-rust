@@ -80,6 +80,7 @@ impl Value {
 pub struct ArrayRef {
     elements: Rc<RefCell<Vec<Value>>>,
     extensible: Rc<Cell<bool>>,
+    sealed: Rc<Cell<bool>>,
 }
 
 impl ArrayRef {
@@ -87,6 +88,7 @@ impl ArrayRef {
         Self {
             elements: Rc::new(RefCell::new(elements)),
             extensible: Rc::new(Cell::new(true)),
+            sealed: Rc::new(Cell::new(false)),
         }
     }
 
@@ -172,6 +174,15 @@ impl ArrayRef {
     pub(crate) fn prevent_extensions(&self) {
         self.extensible.set(false);
     }
+
+    pub(crate) fn seal(&self) {
+        self.prevent_extensions();
+        self.sealed.set(true);
+    }
+
+    pub(crate) fn is_sealed(&self) -> bool {
+        !self.extensible.get() && self.sealed.get()
+    }
 }
 
 impl fmt::Debug for ArrayRef {
@@ -226,6 +237,10 @@ impl Property {
             configurable: true,
         }
     }
+
+    pub(crate) fn make_non_configurable(&mut self) {
+        self.configurable = false;
+    }
 }
 
 impl fmt::Debug for ObjectRef {
@@ -273,13 +288,13 @@ impl ObjectRef {
 
     pub(crate) fn set(&self, key: String, value: Value) {
         let mut properties = self.properties.borrow_mut();
-        if properties
-            .get(&key)
-            .is_some_and(|property| !property.writable)
-        {
+        if let Some(property) = properties.get_mut(&key) {
+            if property.writable {
+                property.value = value;
+            }
             return;
         }
-        if !properties.contains_key(&key) && !self.extensible.get() {
+        if !self.extensible.get() {
             return;
         }
         properties.insert(key, Property::enumerable(value));
@@ -315,12 +330,35 @@ impl ObjectRef {
         self.extensible.set(false);
     }
 
+    pub(crate) fn seal(&self) {
+        self.prevent_extensions();
+        for property in self.properties.borrow_mut().values_mut() {
+            property.make_non_configurable();
+        }
+    }
+
+    pub(crate) fn is_sealed(&self) -> bool {
+        !self.extensible.get()
+            && self
+                .properties
+                .borrow()
+                .values()
+                .all(|property| !property.configurable)
+    }
+
     pub(crate) fn own_property(&self, key: &str) -> Option<Property> {
         self.properties.borrow().get(key).cloned()
     }
 
     pub(crate) fn delete_own_property(&self, key: &str) {
-        self.properties.borrow_mut().remove(key);
+        let mut properties = self.properties.borrow_mut();
+        if properties
+            .get(key)
+            .is_some_and(|property| !property.configurable)
+        {
+            return;
+        }
+        properties.remove(key);
     }
 
     pub(crate) fn own_property_keys(&self) -> Vec<String> {

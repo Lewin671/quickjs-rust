@@ -137,7 +137,9 @@ pub(crate) fn array_own_property_descriptor(elements: &ArrayRef, key: &str) -> O
         });
     }
     let index = key.parse::<usize>().ok()?;
-    elements.get(index).map(Property::enumerable)
+    elements
+        .get(index)
+        .map(|value| Property::data(value, true, true, !elements.is_sealed()))
 }
 
 pub(crate) fn array_own_property_keys(elements: &ArrayRef) -> Vec<String> {
@@ -168,7 +170,7 @@ pub(crate) fn function_own_property_descriptor(function: &Function, key: &str) -
             value: Value::Number(function.params.len() as f64),
             enumerable: false,
             writable: false,
-            configurable: true,
+            configurable: !function.is_sealed(),
         });
     }
     function.properties.borrow().get(key).cloned()

@@ -108,15 +108,27 @@ fn define_property_on_value(
                     message: "object is not extensible".to_owned(),
                 });
             }
+            if object
+                .own_property(&key)
+                .is_some_and(|property| !property.configurable && descriptor.configurable)
+            {
+                return Err(RuntimeError {
+                    message: "property is not configurable".to_owned(),
+                });
+            }
             object.define_property(key, descriptor);
             Ok(())
         }
         Value::Function(function) => {
-            if function_own_property_descriptor(function, &key).is_none()
-                && !function.is_extensible()
-            {
+            let existing = function_own_property_descriptor(function, &key);
+            if existing.is_none() && !function.is_extensible() {
                 return Err(RuntimeError {
                     message: "function is not extensible".to_owned(),
+                });
+            }
+            if existing.is_some_and(|property| !property.configurable && descriptor.configurable) {
+                return Err(RuntimeError {
+                    message: "property is not configurable".to_owned(),
                 });
             }
             function.properties.borrow_mut().insert(key, descriptor);

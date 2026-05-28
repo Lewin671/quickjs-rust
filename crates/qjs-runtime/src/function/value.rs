@@ -26,6 +26,7 @@ pub struct Function {
     /// Function object properties.
     pub(crate) properties: Rc<RefCell<HashMap<String, Property>>>,
     extensible: Rc<Cell<bool>>,
+    sealed: Rc<Cell<bool>>,
 }
 
 /// Bound function internal slots.
@@ -77,6 +78,7 @@ impl Function {
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
             extensible: Rc::new(Cell::new(true)),
+            sealed: Rc::new(Cell::new(false)),
         };
         if constructable {
             prototype
@@ -129,6 +131,7 @@ impl Function {
             })),
             properties: Rc::new(RefCell::new(HashMap::new())),
             extensible: Rc::new(Cell::new(true)),
+            sealed: Rc::new(Cell::new(false)),
         }
     }
 
@@ -151,6 +154,7 @@ impl Function {
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
             extensible: Rc::new(Cell::new(true)),
+            sealed: Rc::new(Cell::new(false)),
         };
         if constructable {
             prototype
@@ -171,15 +175,33 @@ impl Function {
         self.extensible.set(false);
     }
 
+    pub(crate) fn seal(&self) {
+        self.prevent_extensions();
+        self.sealed.set(true);
+        for property in self.properties.borrow_mut().values_mut() {
+            property.make_non_configurable();
+        }
+    }
+
+    pub(crate) fn is_sealed(&self) -> bool {
+        !self.extensible.get()
+            && self.sealed.get()
+            && self
+                .properties
+                .borrow()
+                .values()
+                .all(|property| !property.configurable)
+    }
+
     pub(crate) fn set_property(&self, key: String, value: Value) {
         let mut properties = self.properties.borrow_mut();
-        if properties
-            .get(&key)
-            .is_some_and(|property| !property.writable)
-        {
+        if let Some(property) = properties.get_mut(&key) {
+            if property.writable {
+                property.value = value;
+            }
             return;
         }
-        if !properties.contains_key(&key) && !self.extensible.get() {
+        if !self.extensible.get() {
             return;
         }
         properties.insert(key, Property::enumerable(value));

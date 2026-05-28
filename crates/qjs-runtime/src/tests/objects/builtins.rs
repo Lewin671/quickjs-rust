@@ -343,6 +343,64 @@ fn evaluates_object_builtins() {
         eval("let object = {}; Object.preventExtensions(object); Object.defineProperty(object, 'value', { value: 1 });").is_err()
     );
     assert_eq!(eval("Object.preventExtensions(1);"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("Object.seal.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(
+        eval("typeof Object.seal;"),
+        Ok(Value::String("function".to_owned()))
+    );
+    assert_eq!(eval("Object.isSealed.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("Object.isSealed({});"), Ok(Value::Boolean(false)));
+    assert_eq!(
+        eval("let object = {}; Object.seal(object) === object;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("let object = {}; Object.seal(object); Object.isExtensible(object);"),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval("let object = { value: 1 }; Object.seal(object); Object.isSealed(object);"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let object = { value: 1 }; Object.seal(object); Object.getOwnPropertyDescriptor(object, 'value').configurable;"
+        ),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval("let object = { value: 1 }; Object.seal(object); object.value = 2; object.value;"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval("let object = { value: 1 }; Object.seal(object); delete object.value; object.value;"),
+        Ok(Value::Number(1.0))
+    );
+    assert!(
+        eval("let object = { value: 1 }; Object.seal(object); Object.defineProperty(object, 'value', { value: 2, configurable: true });").is_err()
+    );
+    assert_eq!(
+        eval("let array = [1]; Object.seal(array); Object.isSealed(array);"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let array = [1]; Object.seal(array); Object.getOwnPropertyDescriptor(array, '0').configurable;"
+        ),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval("function fn() {} Object.seal(fn); Object.isSealed(fn);"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "function fn() {} Object.seal(fn); Object.getOwnPropertyDescriptor(fn, 'length').configurable;"
+        ),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(eval("Object.isSealed(1);"), Ok(Value::Boolean(true)));
+    assert_eq!(eval("Object.seal(1);"), Ok(Value::Number(1.0)));
     assert_eq!(
         eval("Object.getOwnPropertyDescriptor.length;"),
         Ok(Value::Number(2.0))
