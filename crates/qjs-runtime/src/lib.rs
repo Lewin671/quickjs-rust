@@ -284,6 +284,7 @@ enum NativeFunction {
     StringFromCharCode,
     StringPrototypeCharAt,
     StringPrototypeCharCodeAt,
+    StringPrototypeCodePointAt,
     StringPrototypeConcat,
     StringPrototypeEndsWith,
     StringPrototypeIncludes,
@@ -738,6 +739,15 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
             Some("charCodeAt"),
             1,
             NativeFunction::StringPrototypeCharCodeAt,
+            false,
+        )),
+    );
+    string_prototype.define_non_enumerable(
+        "codePointAt".to_owned(),
+        Value::Function(Function::new_native(
+            Some("codePointAt"),
+            1,
+            NativeFunction::StringPrototypeCodePointAt,
             false,
         )),
     );
@@ -1761,6 +1771,9 @@ fn call_native_function(
         NativeFunction::StringPrototypeCharCodeAt => {
             native_string_prototype_char_code_at(this_value, &argument_values, env)
         }
+        NativeFunction::StringPrototypeCodePointAt => {
+            native_string_prototype_code_point_at(this_value, &argument_values, env)
+        }
         NativeFunction::StringPrototypeConcat => {
             native_string_prototype_concat(this_value, &argument_values, env)
         }
@@ -2450,6 +2463,36 @@ fn native_string_prototype_char_code_at(
         .get(index)
         .map(|code_unit| Value::Number(f64::from(*code_unit)))
         .unwrap_or(Value::Number(f64::NAN)))
+}
+
+fn native_string_prototype_code_point_at(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let value = this_string_value(this_value, env)?;
+    let position =
+        to_char_code_position(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    if position < 0.0 || !position.is_finite() {
+        return Ok(Value::Undefined);
+    }
+
+    let code_units: Vec<u16> = value.encode_utf16().collect();
+    let index = position as usize;
+    let Some(first) = code_units.get(index).copied() else {
+        return Ok(Value::Undefined);
+    };
+    if !(0xD800..=0xDBFF).contains(&first) || index + 1 == code_units.len() {
+        return Ok(Value::Number(f64::from(first)));
+    }
+
+    let second = code_units[index + 1];
+    if !(0xDC00..=0xDFFF).contains(&second) {
+        return Ok(Value::Number(f64::from(first)));
+    }
+
+    let code_point = (u32::from(first) - 0xD800) * 1024 + (u32::from(second) - 0xDC00) + 0x10000;
+    Ok(Value::Number(f64::from(code_point)))
 }
 
 fn native_string_prototype_concat(
@@ -4071,6 +4114,15 @@ mod tests {
         );
         assert_eq!(eval("'😀'.charCodeAt(0);"), Ok(Value::Number(55_357.0)));
         assert_eq!(eval("'😀'.charCodeAt(1);"), Ok(Value::Number(56_832.0)));
+        assert_eq!(
+            eval("String.prototype.codePointAt.length;"),
+            Ok(Value::Number(1.0))
+        );
+        assert_eq!(eval("'abc'.codePointAt(1);"), Ok(Value::Number(98.0)));
+        assert_eq!(eval("'abc'.codePointAt(-1);"), Ok(Value::Undefined));
+        assert_eq!(eval("'abc'.codePointAt(3);"), Ok(Value::Undefined));
+        assert_eq!(eval("'😀'.codePointAt(0);"), Ok(Value::Number(128_512.0)));
+        assert_eq!(eval("'😀'.codePointAt(1);"), Ok(Value::Number(56_832.0)));
         assert_eq!(
             eval("'a'.concat('b', 3, true);"),
             Ok(Value::String("ab3true".to_owned()))
