@@ -291,6 +291,7 @@ enum NativeFunction {
     StringPrototypeRepeat,
     StringPrototypeSlice,
     StringPrototypeStartsWith,
+    StringPrototypeSubstring,
     StringPrototypeToLowerCase,
     StringPrototypeTrim,
     StringPrototypeTrimEnd,
@@ -798,6 +799,15 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
             Some("startsWith"),
             1,
             NativeFunction::StringPrototypeStartsWith,
+            false,
+        )),
+    );
+    string_prototype.define_non_enumerable(
+        "substring".to_owned(),
+        Value::Function(Function::new_native(
+            Some("substring"),
+            2,
+            NativeFunction::StringPrototypeSubstring,
             false,
         )),
     );
@@ -1752,6 +1762,9 @@ fn call_native_function(
         NativeFunction::StringPrototypeStartsWith => {
             native_string_prototype_starts_with(this_value, &argument_values, env)
         }
+        NativeFunction::StringPrototypeSubstring => {
+            native_string_prototype_substring(this_value, &argument_values, env)
+        }
         NativeFunction::StringPrototypeToLowerCase => {
             native_string_prototype_to_lower_case(this_value, env)
         }
@@ -2543,6 +2556,32 @@ fn native_string_prototype_starts_with(
     ))
 }
 
+fn native_string_prototype_substring(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let value = this_string_value(this_value, env)?;
+    let chars: Vec<_> = value.chars().collect();
+    let length = chars.len();
+    let start = string_substring_index(
+        length,
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        0,
+    )?;
+    let end = string_substring_index(
+        length,
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        length,
+    )?;
+    let (from, to) = if start <= end {
+        (start, end)
+    } else {
+        (end, start)
+    };
+    Ok(Value::String(chars[from..to].iter().collect()))
+}
+
 fn native_string_prototype_to_lower_case(
     this_value: Value,
     env: &HashMap<String, Value>,
@@ -2656,6 +2695,22 @@ fn string_slice_index(length: usize, value: Value, default: usize) -> Result<usi
         Ok((length as f64 + integer).max(0.0) as usize)
     } else {
         Ok(integer.min(length as f64) as usize)
+    }
+}
+
+fn string_substring_index(
+    length: usize,
+    value: Value,
+    default: usize,
+) -> Result<usize, RuntimeError> {
+    if matches!(value, Value::Undefined) {
+        return Ok(default);
+    }
+    let number = to_number(value)?;
+    if number.is_nan() || number <= 0.0 {
+        Ok(0)
+    } else {
+        Ok(number.trunc().min(length as f64) as usize)
     }
 }
 
@@ -3972,6 +4027,26 @@ mod tests {
         );
         assert_eq!(
             eval("'abcdef'.slice(-3);"),
+            Ok(Value::String("def".to_owned()))
+        );
+        assert_eq!(
+            eval("String.prototype.substring.length;"),
+            Ok(Value::Number(2.0))
+        );
+        assert_eq!(
+            eval("'abcdef'.substring(1, 4);"),
+            Ok(Value::String("bcd".to_owned()))
+        );
+        assert_eq!(
+            eval("'abcdef'.substring(4, 1);"),
+            Ok(Value::String("bcd".to_owned()))
+        );
+        assert_eq!(
+            eval("'abcdef'.substring(-3, 2);"),
+            Ok(Value::String("ab".to_owned()))
+        );
+        assert_eq!(
+            eval("'abcdef'.substring(3);"),
             Ok(Value::String("def".to_owned()))
         );
         assert_eq!(
