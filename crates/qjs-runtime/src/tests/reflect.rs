@@ -14,7 +14,12 @@ fn evaluates_reflect_prototype_builtins() {
         eval("Reflect.getPrototypeOf.length;"),
         Ok(Value::Number(1.0))
     );
+    assert_eq!(
+        eval("Reflect.getOwnPropertyDescriptor.length;"),
+        Ok(Value::Number(2.0))
+    );
     assert_eq!(eval("Reflect.has.length;"), Ok(Value::Number(2.0)));
+    assert_eq!(eval("Reflect.ownKeys.length;"), Ok(Value::Number(1.0)));
     assert_eq!(
         eval("Reflect.setPrototypeOf.length;"),
         Ok(Value::Number(2.0))
@@ -87,8 +92,40 @@ fn evaluates_reflect_prototype_builtins() {
         eval("Reflect.has(function f() {}, 'call');"),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval("Reflect.getOwnPropertyDescriptor({ value: 1 }, 'value').value;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval("Reflect.getOwnPropertyDescriptor([1, 2], 'length').enumerable;"),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval("Reflect.getOwnPropertyDescriptor(function f(a, b) {}, 'length').value;"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval("Reflect.getOwnPropertyDescriptor({}, 'missing');"),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval("Reflect.ownKeys({ a: 1, b: 2 }).join();"),
+        Ok(Value::String("a,b".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; Object.defineProperty(object, 'hidden', { value: 1 }); object.shown = 2; Reflect.ownKeys(object).join();"
+        ),
+        Ok(Value::String("hidden,shown".to_owned()))
+    );
+    assert_eq!(
+        eval("Reflect.ownKeys([1, 2]).join();"),
+        Ok(Value::String("0,1,length".to_owned()))
+    );
     assert!(eval("Reflect.getPrototypeOf(1);").is_err());
+    assert!(eval("Reflect.getOwnPropertyDescriptor(1, 'toString');").is_err());
     assert!(eval("Reflect.has(1, 'toString');").is_err());
+    assert!(eval("Reflect.ownKeys(1);").is_err());
     assert!(eval("Reflect.setPrototypeOf(1, null);").is_err());
     assert!(eval("Reflect.setPrototypeOf({}, 1);").is_err());
 }

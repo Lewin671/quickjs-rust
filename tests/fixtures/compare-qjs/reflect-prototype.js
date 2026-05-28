@@ -25,8 +25,19 @@
     Reflect.has(Object.create({ inherited: 1 }), "inherited"),
     Reflect.has(array, "marker"),
     Reflect.has(fn, "marker"),
+    Reflect.getOwnPropertyDescriptor({ value: 17 }, "value").value,
+    Reflect.getOwnPropertyDescriptor([1, 2], "length").enumerable,
+    Reflect.ownKeys({ a: 1, b: 2 }).join("|"),
+    (function () {
+      var o = {};
+      Object.defineProperty(o, "hidden", { value: 1 });
+      o.shown = 2;
+      return Reflect.ownKeys(o).join("|");
+    })(),
     Reflect.setPrototypeOf(sealed, null),
+    Reflect.getOwnPropertyDescriptor.length,
     Reflect.has.length,
+    Reflect.ownKeys.length,
     Reflect.getPrototypeOf.length,
     Reflect.setPrototypeOf.length
   ].join(":");
