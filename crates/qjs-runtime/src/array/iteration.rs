@@ -151,6 +151,22 @@ pub(crate) fn native_array_prototype_find(
     Ok(Value::Undefined)
 }
 
+pub(crate) fn native_array_prototype_find_index(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let iteration = prepare_array_iteration("findIndex", this_value, argument_values)?;
+    for (index, value) in iteration.source.iter().cloned().enumerate() {
+        let selected = call_iteration_callback(&iteration, value, index, env)?;
+        if is_truthy(&selected) {
+            return Ok(Value::Number(index as f64));
+        }
+    }
+
+    Ok(Value::Number(-1.0))
+}
+
 pub(crate) fn native_array_prototype_for_each(
     this_value: Value,
     argument_values: &[Value],

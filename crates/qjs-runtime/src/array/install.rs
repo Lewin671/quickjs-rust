@@ -52,6 +52,12 @@ pub(crate) fn install_array(
     );
     define_array_prototype_function(
         &array_prototype,
+        "findIndex",
+        1,
+        NativeFunction::ArrayPrototypeFindIndex,
+    );
+    define_array_prototype_function(
+        &array_prototype,
         "forEach",
         1,
         NativeFunction::ArrayPrototypeForEach,
