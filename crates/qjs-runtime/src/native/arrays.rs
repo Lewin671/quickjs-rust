@@ -1,0 +1,92 @@
+use std::collections::HashMap;
+
+use crate::{NativeFunction, Value, array};
+
+use super::NativeCallResult;
+
+pub(super) fn call_array_native(
+    native: NativeFunction,
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> NativeCallResult {
+    let value = match native {
+        NativeFunction::Array => array::native_array(argument_values)?,
+        NativeFunction::ArrayIsArray => array::native_array_is_array(argument_values)?,
+        NativeFunction::ArrayPrototypeAt => {
+            array::native_array_prototype_at(this_value, argument_values)?
+        }
+        NativeFunction::ArrayPrototypeConcat => {
+            array::native_array_prototype_concat(this_value, argument_values)?
+        }
+        NativeFunction::ArrayPrototypeCopyWithin => {
+            array::native_array_prototype_copy_within(this_value, argument_values)?
+        }
+        NativeFunction::ArrayPrototypeEvery => {
+            array::native_array_prototype_every(this_value, argument_values, env)?
+        }
+        NativeFunction::ArrayPrototypeFill => {
+            array::native_array_prototype_fill(this_value, argument_values)?
+        }
+        NativeFunction::ArrayPrototypeFilter => {
+            array::native_array_prototype_filter(this_value, argument_values, env)?
+        }
+        NativeFunction::ArrayPrototypeFind => {
+            array::native_array_prototype_find(this_value, argument_values, env)?
+        }
+        NativeFunction::ArrayPrototypeFindIndex => {
+            array::native_array_prototype_find_index(this_value, argument_values, env)?
+        }
+        NativeFunction::ArrayPrototypeFindLast => {
+            array::native_array_prototype_find_last(this_value, argument_values, env)?
+        }
+        NativeFunction::ArrayPrototypeFindLastIndex => {
+            array::native_array_prototype_find_last_index(this_value, argument_values, env)?
+        }
+        NativeFunction::ArrayPrototypeForEach => {
+            array::native_array_prototype_for_each(this_value, argument_values, env)?
+        }
+        NativeFunction::ArrayPrototypeIncludes => {
+            array::native_array_prototype_includes(this_value, argument_values)?
+        }
+        NativeFunction::ArrayPrototypeIndexOf => {
+            array::native_array_prototype_index_of(this_value, argument_values)?
+        }
+        NativeFunction::ArrayPrototypeLastIndexOf => {
+            array::native_array_prototype_last_index_of(this_value, argument_values)?
+        }
+        NativeFunction::ArrayPrototypeJoin => {
+            array::native_array_prototype_join(this_value, argument_values)?
+        }
+        NativeFunction::ArrayPrototypeMap => {
+            array::native_array_prototype_map(this_value, argument_values, env)?
+        }
+        NativeFunction::ArrayPrototypePop => array::native_array_prototype_pop(this_value)?,
+        NativeFunction::ArrayPrototypePush => {
+            array::native_array_prototype_push(this_value, argument_values)?
+        }
+        NativeFunction::ArrayPrototypeReduce => {
+            array::native_array_prototype_reduce(this_value, argument_values, env)?
+        }
+        NativeFunction::ArrayPrototypeReduceRight => {
+            array::native_array_prototype_reduce_right(this_value, argument_values, env)?
+        }
+        NativeFunction::ArrayPrototypeReverse => array::native_array_prototype_reverse(this_value)?,
+        NativeFunction::ArrayPrototypeShift => array::native_array_prototype_shift(this_value)?,
+        NativeFunction::ArrayPrototypeSlice => {
+            array::native_array_prototype_slice(this_value, argument_values)?
+        }
+        NativeFunction::ArrayPrototypeSome => {
+            array::native_array_prototype_some(this_value, argument_values, env)?
+        }
+        NativeFunction::ArrayPrototypeToString => {
+            array::native_array_prototype_to_string(this_value)?
+        }
+        NativeFunction::ArrayPrototypeUnshift => {
+            array::native_array_prototype_unshift(this_value, argument_values)?
+        }
+        _ => return Ok(None),
+    };
+
+    Ok(Some(value))
+}
