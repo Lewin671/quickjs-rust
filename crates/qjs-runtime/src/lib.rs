@@ -11,6 +11,7 @@ use qjs_parser::parse_script;
 mod array;
 mod math;
 mod number;
+mod object;
 mod string;
 mod value;
 
@@ -288,148 +289,7 @@ pub fn eval_script(script: &Script) -> Result<Value, RuntimeError> {
 }
 
 fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
-    let object_prototype = ObjectRef::new(HashMap::new());
-    let object_function = Function::new_native(Some("Object"), 1, NativeFunction::Object, true);
-    object_prototype.define_non_enumerable(
-        "constructor".to_owned(),
-        Value::Function(object_function.clone()),
-    );
-    object_prototype.define_non_enumerable(
-        "hasOwnProperty".to_owned(),
-        Value::Function(Function::new_native(
-            Some("hasOwnProperty"),
-            1,
-            NativeFunction::ObjectPrototypeHasOwnProperty,
-            false,
-        )),
-    );
-    object_prototype.define_non_enumerable(
-        "propertyIsEnumerable".to_owned(),
-        Value::Function(Function::new_native(
-            Some("propertyIsEnumerable"),
-            1,
-            NativeFunction::ObjectPrototypePropertyIsEnumerable,
-            false,
-        )),
-    );
-    object_prototype.define_non_enumerable(
-        "isPrototypeOf".to_owned(),
-        Value::Function(Function::new_native(
-            Some("isPrototypeOf"),
-            1,
-            NativeFunction::ObjectPrototypeIsPrototypeOf,
-            false,
-        )),
-    );
-    object_prototype.define_non_enumerable(
-        "toString".to_owned(),
-        Value::Function(Function::new_native(
-            Some("toString"),
-            0,
-            NativeFunction::ObjectPrototypeToString,
-            false,
-        )),
-    );
-    object_prototype.define_non_enumerable(
-        "valueOf".to_owned(),
-        Value::Function(Function::new_native(
-            Some("valueOf"),
-            0,
-            NativeFunction::ObjectPrototypeValueOf,
-            false,
-        )),
-    );
-    object_function.properties.borrow_mut().insert(
-        "prototype".to_owned(),
-        Property::non_enumerable(Value::Object(object_prototype.clone())),
-    );
-    object_function.properties.borrow_mut().insert(
-        "assign".to_owned(),
-        Property::non_enumerable(Value::Function(Function::new_native(
-            Some("assign"),
-            2,
-            NativeFunction::ObjectAssign,
-            false,
-        ))),
-    );
-    object_function.properties.borrow_mut().insert(
-        "create".to_owned(),
-        Property::non_enumerable(Value::Function(Function::new_native(
-            Some("create"),
-            1,
-            NativeFunction::ObjectCreate,
-            false,
-        ))),
-    );
-    object_function.properties.borrow_mut().insert(
-        "defineProperty".to_owned(),
-        Property::non_enumerable(Value::Function(Function::new_native(
-            Some("defineProperty"),
-            3,
-            NativeFunction::ObjectDefineProperty,
-            false,
-        ))),
-    );
-    object_function.properties.borrow_mut().insert(
-        "defineProperties".to_owned(),
-        Property::non_enumerable(Value::Function(Function::new_native(
-            Some("defineProperties"),
-            2,
-            NativeFunction::ObjectDefineProperties,
-            false,
-        ))),
-    );
-    object_function.properties.borrow_mut().insert(
-        "getPrototypeOf".to_owned(),
-        Property::non_enumerable(Value::Function(Function::new_native(
-            Some("getPrototypeOf"),
-            1,
-            NativeFunction::ObjectGetPrototypeOf,
-            false,
-        ))),
-    );
-    object_function.properties.borrow_mut().insert(
-        "getOwnPropertyDescriptor".to_owned(),
-        Property::non_enumerable(Value::Function(Function::new_native(
-            Some("getOwnPropertyDescriptor"),
-            2,
-            NativeFunction::ObjectGetOwnPropertyDescriptor,
-            false,
-        ))),
-    );
-    object_function.properties.borrow_mut().insert(
-        "getOwnPropertyNames".to_owned(),
-        Property::non_enumerable(Value::Function(Function::new_native(
-            Some("getOwnPropertyNames"),
-            1,
-            NativeFunction::ObjectGetOwnPropertyNames,
-            false,
-        ))),
-    );
-    object_function.properties.borrow_mut().insert(
-        "hasOwn".to_owned(),
-        Property::non_enumerable(Value::Function(Function::new_native(
-            Some("hasOwn"),
-            2,
-            NativeFunction::ObjectHasOwn,
-            false,
-        ))),
-    );
-    object_function.properties.borrow_mut().insert(
-        "keys".to_owned(),
-        Property::non_enumerable(Value::Function(Function::new_native(
-            Some("keys"),
-            1,
-            NativeFunction::ObjectKeys,
-            false,
-        ))),
-    );
-
-    let object_value = Value::Function(object_function);
-    env.insert("Object".to_owned(), object_value.clone());
-    if let Value::Object(global_object) = global_this {
-        global_object.set("Object".to_owned(), object_value);
-    }
+    let object_prototype = object::install_object(env, global_this);
 
     env.insert("NaN".to_owned(), Value::Number(f64::NAN));
     env.insert("Infinity".to_owned(), Value::Number(f64::INFINITY));
@@ -1543,34 +1403,42 @@ fn call_native_function(
         NativeFunction::ParseFloat => native_parse_float(&argument_values),
         NativeFunction::ParseInt => native_parse_int(&argument_values),
         NativeFunction::Object => {
-            native_object(function, this_value, &argument_values, is_construct)
+            object::native_object(function, this_value, &argument_values, is_construct)
         }
-        NativeFunction::ObjectAssign => native_object_assign(&argument_values),
-        NativeFunction::ObjectCreate => native_object_create(&argument_values),
-        NativeFunction::ObjectDefineProperties => native_object_define_properties(&argument_values),
-        NativeFunction::ObjectDefineProperty => native_object_define_property(&argument_values),
+        NativeFunction::ObjectAssign => object::native_object_assign(&argument_values),
+        NativeFunction::ObjectCreate => object::native_object_create(&argument_values),
+        NativeFunction::ObjectDefineProperties => {
+            object::native_object_define_properties(&argument_values)
+        }
+        NativeFunction::ObjectDefineProperty => {
+            object::native_object_define_property(&argument_values)
+        }
         NativeFunction::ObjectGetOwnPropertyDescriptor => {
-            native_object_get_own_property_descriptor(&argument_values, env)
+            object::native_object_get_own_property_descriptor(&argument_values, env)
         }
         NativeFunction::ObjectGetPrototypeOf => {
-            native_object_get_prototype_of(&argument_values, env)
+            object::native_object_get_prototype_of(&argument_values, env)
         }
         NativeFunction::ObjectGetOwnPropertyNames => {
-            native_object_get_own_property_names(&argument_values)
+            object::native_object_get_own_property_names(&argument_values)
         }
-        NativeFunction::ObjectHasOwn => native_object_has_own(&argument_values),
-        NativeFunction::ObjectKeys => native_object_keys(&argument_values),
+        NativeFunction::ObjectHasOwn => object::native_object_has_own(&argument_values),
+        NativeFunction::ObjectKeys => object::native_object_keys(&argument_values),
         NativeFunction::ObjectPrototypeHasOwnProperty => {
-            native_object_prototype_has_own_property(this_value, &argument_values)
+            object::native_object_prototype_has_own_property(this_value, &argument_values)
         }
         NativeFunction::ObjectPrototypeIsPrototypeOf => {
-            native_object_prototype_is_prototype_of(this_value, &argument_values, env)
+            object::native_object_prototype_is_prototype_of(this_value, &argument_values, env)
         }
         NativeFunction::ObjectPrototypePropertyIsEnumerable => {
-            native_object_prototype_property_is_enumerable(this_value, &argument_values)
+            object::native_object_prototype_property_is_enumerable(this_value, &argument_values)
         }
-        NativeFunction::ObjectPrototypeToString => native_object_prototype_to_string(this_value),
-        NativeFunction::ObjectPrototypeValueOf => native_object_prototype_value_of(this_value),
+        NativeFunction::ObjectPrototypeToString => {
+            object::native_object_prototype_to_string(this_value)
+        }
+        NativeFunction::ObjectPrototypeValueOf => {
+            object::native_object_prototype_value_of(this_value)
+        }
         NativeFunction::String => string::native_string(&argument_values),
         NativeFunction::StringFromCharCode => {
             string::native_string_from_char_code(&argument_values)
@@ -1830,348 +1698,14 @@ fn parse_int_string(input: &str, radix: i32) -> f64 {
     if digits == 0 { f64::NAN } else { sign * value }
 }
 
-fn native_object_assign(argument_values: &[Value]) -> Result<Value, RuntimeError> {
-    let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    match target {
-        Value::Object(_) | Value::Function(_) => {}
-        Value::Null | Value::Undefined => {
-            return Err(RuntimeError {
-                message: "Object.assign target must not be null or undefined".to_owned(),
-            });
-        }
-        Value::Array(_) | Value::String(_) | Value::Number(_) | Value::Boolean(_) => {
-            return Err(RuntimeError {
-                message: "Object.assign primitive targets are not implemented".to_owned(),
-            });
-        }
+fn function_prototype(function: &Function) -> Option<ObjectRef> {
+    match function.properties.borrow().get("prototype") {
+        Some(Property {
+            value: Value::Object(prototype),
+            ..
+        }) => Some(prototype.clone()),
+        _ => None,
     }
-
-    for source in argument_values.iter().skip(1).cloned() {
-        if matches!(source, Value::Null | Value::Undefined) {
-            continue;
-        }
-        for (key, value) in enumerable_property_entries(source)? {
-            set_property(target.clone(), key, value)?;
-        }
-    }
-    Ok(target)
-}
-
-fn enumerable_property_entries(value: Value) -> Result<Vec<(String, Value)>, RuntimeError> {
-    let keys = match value.clone() {
-        Value::Object(object) => object.own_property_keys(),
-        Value::Array(elements) => array_own_property_keys(&elements),
-        Value::Function(function) => function_own_property_keys(&function),
-        Value::String(value) => string::string_own_property_keys(&value),
-        Value::Number(_) | Value::Boolean(_) | Value::Null | Value::Undefined => Vec::new(),
-    };
-    let mut entries = Vec::with_capacity(keys.len());
-    for key in keys {
-        if let Some(property) = own_property_descriptor(value.clone(), &key)? {
-            entries.push((key, property.value));
-        }
-    }
-    Ok(entries)
-}
-
-fn set_property(target: Value, key: String, value: Value) -> Result<(), RuntimeError> {
-    match target {
-        Value::Object(object) => {
-            object.set(key, value);
-            Ok(())
-        }
-        Value::Function(function) => {
-            function
-                .properties
-                .borrow_mut()
-                .insert(key, Property::enumerable(value));
-            Ok(())
-        }
-        _ => Err(RuntimeError {
-            message: "property target is not mutable".to_owned(),
-        }),
-    }
-}
-
-fn native_object(
-    function: &Function,
-    this_value: Value,
-    argument_values: &[Value],
-    is_construct: bool,
-) -> Result<Value, RuntimeError> {
-    match argument_values.first() {
-        Some(Value::Array(_) | Value::Function(_) | Value::Object(_)) => {
-            Ok(argument_values[0].clone())
-        }
-        _ if is_construct => Ok(this_value),
-        _ => Ok(Value::Object(ObjectRef::with_prototype(
-            HashMap::new(),
-            function_prototype(function),
-        ))),
-    }
-}
-
-fn native_object_create(argument_values: &[Value]) -> Result<Value, RuntimeError> {
-    let object = match argument_values.first() {
-        Some(Value::Object(prototype)) => Value::Object(ObjectRef::with_prototype(
-            HashMap::new(),
-            Some(prototype.clone()),
-        )),
-        Some(Value::Null) => Value::Object(ObjectRef::new(HashMap::new())),
-        _ => {
-            return Err(RuntimeError {
-                message: "Object.create prototype must be an object or null".to_owned(),
-            });
-        }
-    };
-
-    if !matches!(argument_values.get(1), None | Some(Value::Undefined)) {
-        native_object_define_properties(&[
-            object.clone(),
-            argument_values.get(1).cloned().unwrap_or(Value::Undefined),
-        ])?;
-    }
-    Ok(object)
-}
-
-fn native_object_define_property(argument_values: &[Value]) -> Result<Value, RuntimeError> {
-    let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    let key = to_property_key(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
-    let descriptor =
-        to_property_descriptor(argument_values.get(2).cloned().unwrap_or(Value::Undefined))?;
-
-    define_property_on_value(target.clone(), key, descriptor)?;
-    Ok(target)
-}
-
-fn native_object_define_properties(argument_values: &[Value]) -> Result<Value, RuntimeError> {
-    let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    ensure_define_property_target(&target)?;
-
-    let descriptors = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
-    if !matches!(descriptors, Value::Object(_) | Value::Function(_)) {
-        return Err(RuntimeError {
-            message: "property descriptors must be an object".to_owned(),
-        });
-    }
-
-    for (key, descriptor_value) in enumerable_property_entries(descriptors)? {
-        let descriptor = to_property_descriptor(descriptor_value)?;
-        define_property_on_value(target.clone(), key, descriptor)?;
-    }
-    Ok(target)
-}
-
-fn define_property_on_value(
-    target: Value,
-    key: String,
-    descriptor: Property,
-) -> Result<(), RuntimeError> {
-    match &target {
-        Value::Object(object) => {
-            object.define_property(key, descriptor);
-            Ok(())
-        }
-        Value::Function(function) => {
-            function.properties.borrow_mut().insert(key, descriptor);
-            Ok(())
-        }
-        _ => ensure_define_property_target(&target),
-    }
-}
-
-fn ensure_define_property_target(target: &Value) -> Result<(), RuntimeError> {
-    match target {
-        Value::Object(_) | Value::Function(_) => Ok(()),
-        Value::Array(_) | Value::String(_) | Value::Number(_) | Value::Boolean(_) => {
-            Err(RuntimeError {
-                message: "Object.defineProperty primitive targets are not implemented".to_owned(),
-            })
-        }
-        Value::Null | Value::Undefined => Err(RuntimeError {
-            message: "Object.defineProperty target must be an object".to_owned(),
-        }),
-    }
-}
-
-fn to_property_descriptor(value: Value) -> Result<Property, RuntimeError> {
-    let Value::Object(descriptor) = value else {
-        return Err(RuntimeError {
-            message: "property descriptor must be an object".to_owned(),
-        });
-    };
-
-    if descriptor.contains_property("get") || descriptor.contains_property("set") {
-        return Err(RuntimeError {
-            message: "accessor property descriptors are not implemented".to_owned(),
-        });
-    }
-
-    Ok(Property {
-        value: descriptor.get("value").unwrap_or(Value::Undefined),
-        writable: descriptor
-            .get("writable")
-            .is_some_and(|value| is_truthy(&value)),
-        enumerable: descriptor
-            .get("enumerable")
-            .is_some_and(|value| is_truthy(&value)),
-        configurable: descriptor
-            .get("configurable")
-            .is_some_and(|value| is_truthy(&value)),
-    })
-}
-
-fn native_object_get_prototype_of(
-    argument_values: &[Value],
-    env: &HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
-    match argument_values.first() {
-        Some(Value::Object(object)) => {
-            Ok(object.prototype().map(Value::Object).unwrap_or(Value::Null))
-        }
-        Some(Value::Array(_)) => Ok(array_prototype(env)
-            .map(Value::Object)
-            .unwrap_or(Value::Null)),
-        Some(Value::Function(_)) => Ok(Value::Null),
-        _ => Err(RuntimeError {
-            message: "Object.getPrototypeOf target must be an object".to_owned(),
-        }),
-    }
-}
-
-fn native_object_get_own_property_descriptor(
-    argument_values: &[Value],
-    env: &HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
-    let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    let key = to_property_key(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
-    let Some(property) = own_property_descriptor(target, &key)? else {
-        return Ok(Value::Undefined);
-    };
-    Ok(Value::Object(property_descriptor_object(
-        property,
-        object_prototype(env),
-    )))
-}
-
-fn own_property_descriptor(value: Value, key: &str) -> Result<Option<Property>, RuntimeError> {
-    match value {
-        Value::Object(object) => Ok(object.own_property(key)),
-        Value::Function(function) => Ok(function_own_property_descriptor(&function, key)),
-        Value::Array(elements) => Ok(array_own_property_descriptor(&elements, key)),
-        Value::String(value) => Ok(string::string_own_property_descriptor(&value, key)),
-        Value::Number(_) | Value::Boolean(_) | Value::Null | Value::Undefined => Ok(None),
-    }
-}
-
-fn property_descriptor_object(property: Property, prototype: Option<ObjectRef>) -> ObjectRef {
-    ObjectRef::with_prototype(
-        HashMap::from([
-            ("value".to_owned(), property.value),
-            ("writable".to_owned(), Value::Boolean(property.writable)),
-            ("enumerable".to_owned(), Value::Boolean(property.enumerable)),
-            (
-                "configurable".to_owned(),
-                Value::Boolean(property.configurable),
-            ),
-        ]),
-        prototype,
-    )
-}
-
-fn native_object_keys(argument_values: &[Value]) -> Result<Value, RuntimeError> {
-    let keys = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
-        Value::Object(object) => object.own_property_keys(),
-        Value::Array(elements) => array_own_property_keys(&elements),
-        Value::Function(function) => function_own_property_keys(&function),
-        Value::String(value) => string::string_own_property_keys(&value),
-        Value::Number(_) | Value::Boolean(_) | Value::Null | Value::Undefined => Vec::new(),
-    };
-    Ok(Value::Array(ArrayRef::new(
-        keys.into_iter().map(Value::String).collect(),
-    )))
-}
-
-fn native_object_get_own_property_names(argument_values: &[Value]) -> Result<Value, RuntimeError> {
-    let names = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
-        Value::Object(object) => object.own_property_names(),
-        Value::Array(elements) => array_own_property_names(&elements),
-        Value::Function(function) => function_own_property_names(&function),
-        Value::String(value) => string::string_own_property_names(&value),
-        Value::Number(_) | Value::Boolean(_) | Value::Null | Value::Undefined => Vec::new(),
-    };
-    Ok(Value::Array(ArrayRef::new(
-        names.into_iter().map(Value::String).collect(),
-    )))
-}
-
-fn native_object_has_own(argument_values: &[Value]) -> Result<Value, RuntimeError> {
-    let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    if matches!(target, Value::Null | Value::Undefined) {
-        return Err(RuntimeError {
-            message: "Object.hasOwn target must not be null or undefined".to_owned(),
-        });
-    }
-
-    let key = to_property_key(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
-    Ok(Value::Boolean(
-        own_property_descriptor(target, &key)?.is_some(),
-    ))
-}
-
-fn native_object_prototype_has_own_property(
-    this_value: Value,
-    argument_values: &[Value],
-) -> Result<Value, RuntimeError> {
-    let key = to_property_key(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
-    match this_value {
-        Value::Object(object) => Ok(Value::Boolean(object.has_own_property(&key))),
-        Value::Function(function) => Ok(Value::Boolean(
-            function_own_property_descriptor(&function, &key).is_some(),
-        )),
-        Value::Array(elements) => Ok(Value::Boolean(array_has_own_property(&elements, &key))),
-        Value::String(value) => Ok(Value::Boolean(string::string_has_own_property(
-            &value, &key,
-        ))),
-        Value::Null | Value::Undefined => Err(RuntimeError {
-            message: "hasOwnProperty called on null or undefined".to_owned(),
-        }),
-        Value::Number(_) | Value::Boolean(_) => Ok(Value::Boolean(false)),
-    }
-}
-
-fn native_object_prototype_property_is_enumerable(
-    this_value: Value,
-    argument_values: &[Value],
-) -> Result<Value, RuntimeError> {
-    let key = to_property_key(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
-    match this_value {
-        Value::Null | Value::Undefined => Err(RuntimeError {
-            message: "propertyIsEnumerable called on null or undefined".to_owned(),
-        }),
-        value => Ok(Value::Boolean(
-            own_property_descriptor(value, &key)?.is_some_and(|property| property.enumerable),
-        )),
-    }
-}
-
-fn native_object_prototype_is_prototype_of(
-    this_value: Value,
-    argument_values: &[Value],
-    env: &HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
-    let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    let Some(target_prototype) = value_prototype(target, env) else {
-        return Ok(Value::Boolean(false));
-    };
-    let Value::Object(prototype) = this_value else {
-        return Err(RuntimeError {
-            message: "isPrototypeOf called on non-object".to_owned(),
-        });
-    };
-    Ok(Value::Boolean(
-        target_prototype.ptr_eq(&prototype) || target_prototype.has_prototype(&prototype),
-    ))
 }
 
 fn value_prototype(value: Value, env: &HashMap<String, Value>) -> Option<ObjectRef> {
@@ -2181,53 +1715,6 @@ fn value_prototype(value: Value, env: &HashMap<String, Value>) -> Option<ObjectR
         Value::Function(_) => object_prototype(env),
         Value::String(_) | Value::Number(_) | Value::Boolean(_) => None,
         Value::Null | Value::Undefined => None,
-    }
-}
-
-fn native_object_prototype_to_string(this_value: Value) -> Result<Value, RuntimeError> {
-    let tag = match this_value {
-        Value::Undefined => "Undefined",
-        Value::Null => "Null",
-        Value::Array(_) => "Array",
-        Value::Function(_) => "Function",
-        Value::String(_) => "String",
-        Value::Number(_) => "Number",
-        Value::Boolean(_) => "Boolean",
-        Value::Object(object) => {
-            if matches!(
-                object.own_property(BOOLEAN_DATA_PROPERTY),
-                Some(Property {
-                    value: Value::Boolean(_),
-                    ..
-                })
-            ) {
-                "Boolean"
-            } else if number::is_number_object(&object) {
-                "Number"
-            } else {
-                "Object"
-            }
-        }
-    };
-    Ok(Value::String(format!("[object {tag}]")))
-}
-
-fn native_object_prototype_value_of(this_value: Value) -> Result<Value, RuntimeError> {
-    match this_value {
-        Value::Null | Value::Undefined => Err(RuntimeError {
-            message: "valueOf called on null or undefined".to_owned(),
-        }),
-        _ => Ok(this_value),
-    }
-}
-
-fn function_prototype(function: &Function) -> Option<ObjectRef> {
-    match function.properties.borrow().get("prototype") {
-        Some(Property {
-            value: Value::Object(prototype),
-            ..
-        }) => Some(prototype.clone()),
-        _ => None,
     }
 }
 
