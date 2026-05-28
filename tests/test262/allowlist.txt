@@ -41,6 +41,8 @@ cases/array-prototype-constructor.js
 cases/array-push-basic.js
 cases/array-push-length.js
 cases/array-reference-identity-basic.js
+cases/array-shift-basic.js
+cases/array-shift-length.js
 cases/array-slice-basic.js
 cases/array-slice-default-end.js
 cases/array-slice-length.js
@@ -48,6 +50,8 @@ cases/array-slice-negative-index.js
 cases/array-slice-start-past-length.js
 cases/array-to-string-basic.js
 cases/array-to-string-length.js
+cases/array-unshift-basic.js
+cases/array-unshift-length.js
 cases/array-index-assignment-basic.js
 cases/boolean-constructor-basic.js
 cases/boolean-constructor-length.js

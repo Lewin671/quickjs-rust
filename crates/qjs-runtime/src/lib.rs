@@ -29,8 +29,10 @@ enum NativeFunction {
     ArrayPrototypeJoin,
     ArrayPrototypePop,
     ArrayPrototypePush,
+    ArrayPrototypeShift,
     ArrayPrototypeSlice,
     ArrayPrototypeToString,
+    ArrayPrototypeUnshift,
     Boolean,
     BooleanPrototypeToString,
     BooleanPrototypeValueOf,
@@ -948,6 +950,15 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
         )),
     );
     array_prototype.define_non_enumerable(
+        "shift".to_owned(),
+        Value::Function(Function::new_native(
+            Some("shift"),
+            0,
+            NativeFunction::ArrayPrototypeShift,
+            false,
+        )),
+    );
+    array_prototype.define_non_enumerable(
         "slice".to_owned(),
         Value::Function(Function::new_native(
             Some("slice"),
@@ -962,6 +973,15 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
             Some("toString"),
             0,
             NativeFunction::ArrayPrototypeToString,
+            false,
+        )),
+    );
+    array_prototype.define_non_enumerable(
+        "unshift".to_owned(),
+        Value::Function(Function::new_native(
+            Some("unshift"),
+            1,
+            NativeFunction::ArrayPrototypeUnshift,
             false,
         )),
     );
@@ -1623,10 +1643,14 @@ fn call_native_function(
         NativeFunction::ArrayPrototypePush => {
             native_array_prototype_push(this_value, &argument_values)
         }
+        NativeFunction::ArrayPrototypeShift => native_array_prototype_shift(this_value),
         NativeFunction::ArrayPrototypeSlice => {
             native_array_prototype_slice(this_value, &argument_values)
         }
         NativeFunction::ArrayPrototypeToString => native_array_prototype_to_string(this_value),
+        NativeFunction::ArrayPrototypeUnshift => {
+            native_array_prototype_unshift(this_value, &argument_values)
+        }
         NativeFunction::Boolean => {
             native_boolean(function, this_value, &argument_values, is_construct)
         }
@@ -2128,6 +2152,27 @@ fn native_array_prototype_pop(this_value: Value) -> Result<Value, RuntimeError> 
         });
     };
     Ok(elements.pop().unwrap_or(Value::Undefined))
+}
+
+fn native_array_prototype_shift(this_value: Value) -> Result<Value, RuntimeError> {
+    let Value::Array(elements) = this_value else {
+        return Err(RuntimeError {
+            message: "Array.prototype.shift called on non-array".to_owned(),
+        });
+    };
+    Ok(elements.shift().unwrap_or(Value::Undefined))
+}
+
+fn native_array_prototype_unshift(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let Value::Array(elements) = this_value else {
+        return Err(RuntimeError {
+            message: "Array.prototype.unshift called on non-array".to_owned(),
+        });
+    };
+    Ok(Value::Number(elements.unshift(argument_values) as f64))
 }
 
 fn array_join(value: Value, separator: &str) -> Result<String, RuntimeError> {

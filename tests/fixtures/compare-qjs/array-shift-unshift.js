@@ -1,0 +1,1 @@
+(function () { let xs = [2, 3]; let ys = xs; let before = xs.unshift(0, 1); let first = ys.shift(); let second = xs.shift(); let empty = [].shift(); return before + ":" + first + ":" + second + ":" + xs.length + ":" + xs.join() + ":" + (empty === undefined) + ":" + (xs === ys); })()
