@@ -297,6 +297,7 @@ enum NativeFunction {
     StringPrototypePadStart,
     StringPrototypeRepeat,
     StringPrototypeSlice,
+    StringPrototypeSplit,
     StringPrototypeStartsWith,
     StringPrototypeSubstring,
     StringPrototypeToLowerCase,
@@ -824,6 +825,15 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
             Some("slice"),
             2,
             NativeFunction::StringPrototypeSlice,
+            false,
+        )),
+    );
+    string_prototype.define_non_enumerable(
+        "split".to_owned(),
+        Value::Function(Function::new_native(
+            Some("split"),
+            2,
+            NativeFunction::StringPrototypeSplit,
             false,
         )),
     );
@@ -1851,6 +1861,9 @@ fn call_native_function(
         NativeFunction::StringPrototypeSlice => {
             native_string_prototype_slice(this_value, &argument_values, env)
         }
+        NativeFunction::StringPrototypeSplit => {
+            native_string_prototype_split(this_value, &argument_values, env)
+        }
         NativeFunction::StringPrototypeStartsWith => {
             native_string_prototype_starts_with(this_value, &argument_values, env)
         }
@@ -2741,6 +2754,44 @@ fn native_string_prototype_slice(
         return Ok(Value::String(String::new()));
     }
     Ok(Value::String(chars[start..end].iter().collect()))
+}
+
+fn native_string_prototype_split(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let value = this_string_value(this_value, env)?;
+    let limit = string_split_limit(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
+    if limit == 0 {
+        return Ok(Value::Array(Vec::new()));
+    }
+    if matches!(argument_values.first(), None | Some(Value::Undefined)) {
+        return Ok(Value::Array(vec![Value::String(value)]));
+    }
+
+    let separator = to_js_string(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    let parts = if separator.is_empty() {
+        value
+            .chars()
+            .take(limit)
+            .map(|character| Value::String(character.to_string()))
+            .collect()
+    } else {
+        value
+            .split(&separator)
+            .take(limit)
+            .map(|part| Value::String(part.to_owned()))
+            .collect()
+    };
+    Ok(Value::Array(parts))
+}
+
+fn string_split_limit(value: Value) -> Result<usize, RuntimeError> {
+    if matches!(value, Value::Undefined) {
+        return Ok(u32::MAX as usize);
+    }
+    Ok(to_uint32(value)? as usize)
 }
 
 fn native_string_prototype_starts_with(
@@ -4087,6 +4138,10 @@ fn to_int32(value: Value) -> Result<i32, RuntimeError> {
     to_number(value).map(to_int32_number)
 }
 
+fn to_uint32(value: Value) -> Result<u32, RuntimeError> {
+    to_number(value).map(to_uint32_number)
+}
+
 fn to_int32_number(number: f64) -> i32 {
     let int = to_uint32_number(number);
     if int >= 0x8000_0000 {
@@ -4352,6 +4407,28 @@ mod tests {
             eval("'abcdef'.slice(-3);"),
             Ok(Value::String("def".to_owned()))
         );
+        assert_eq!(
+            eval("String.prototype.split.length;"),
+            Ok(Value::Number(2.0))
+        );
+        assert_eq!(
+            eval("'hello'.split('l').join('|');"),
+            Ok(Value::String("he||o".to_owned()))
+        );
+        assert_eq!(
+            eval("'hello'.split('l', 2).join('|');"),
+            Ok(Value::String("he|".to_owned()))
+        );
+        assert_eq!(
+            eval("'hello'.split(undefined).join('|');"),
+            Ok(Value::String("hello".to_owned()))
+        );
+        assert_eq!(
+            eval("'abc'.split('', 2).join('|');"),
+            Ok(Value::String("a|b".to_owned()))
+        );
+        assert_eq!(eval("'abc'.split('x').length;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("'abc'.split('b', 0).length;"), Ok(Value::Number(0.0)));
         assert_eq!(
             eval("String.prototype.substring.length;"),
             Ok(Value::Number(2.0))
