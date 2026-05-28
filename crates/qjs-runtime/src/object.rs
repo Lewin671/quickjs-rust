@@ -2,6 +2,7 @@ mod constructor;
 mod descriptor;
 mod enumeration;
 mod install;
+mod integrity;
 mod prototype;
 
 pub(crate) use constructor::{
@@ -16,6 +17,7 @@ pub(crate) use enumeration::{
     native_object_keys, native_object_values,
 };
 pub(crate) use install::install_object;
+pub(crate) use integrity::{native_object_is_extensible, native_object_prevent_extensions};
 pub(crate) use prototype::{
     native_object_get_prototype_of, native_object_prototype_has_own_property,
     native_object_prototype_is_prototype_of, native_object_prototype_property_is_enumerable,

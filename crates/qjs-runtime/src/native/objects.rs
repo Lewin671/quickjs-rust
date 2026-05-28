@@ -38,6 +38,10 @@ pub(super) fn call_object_native(
         }
         NativeFunction::ObjectHasOwn => object::native_object_has_own(argument_values)?,
         NativeFunction::ObjectIs => object::native_object_is(argument_values)?,
+        NativeFunction::ObjectIsExtensible => object::native_object_is_extensible(argument_values)?,
+        NativeFunction::ObjectPreventExtensions => {
+            object::native_object_prevent_extensions(argument_values)?
+        }
         NativeFunction::ObjectEntries => object::native_object_entries(argument_values)?,
         NativeFunction::ObjectKeys => object::native_object_keys(argument_values)?,
         NativeFunction::ObjectValues => object::native_object_values(argument_values)?,

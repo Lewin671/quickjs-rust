@@ -1,4 +1,9 @@
-use std::{cell::RefCell, collections::HashMap, fmt, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    collections::HashMap,
+    fmt,
+    rc::Rc,
+};
 
 use qjs_ast::Stmt;
 
@@ -20,6 +25,7 @@ pub struct Function {
     pub(crate) bound: Option<Box<BoundFunction>>,
     /// Function object properties.
     pub(crate) properties: Rc<RefCell<HashMap<String, Property>>>,
+    extensible: Rc<Cell<bool>>,
 }
 
 /// Bound function internal slots.
@@ -70,6 +76,7 @@ impl Function {
             constructable,
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
+            extensible: Rc::new(Cell::new(true)),
         };
         if constructable {
             prototype
@@ -121,6 +128,7 @@ impl Function {
                 arguments,
             })),
             properties: Rc::new(RefCell::new(HashMap::new())),
+            extensible: Rc::new(Cell::new(true)),
         }
     }
 
@@ -142,6 +150,7 @@ impl Function {
             constructable,
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
+            extensible: Rc::new(Cell::new(true)),
         };
         if constructable {
             prototype
@@ -152,6 +161,28 @@ impl Function {
             );
         }
         function
+    }
+
+    pub(crate) fn is_extensible(&self) -> bool {
+        self.extensible.get()
+    }
+
+    pub(crate) fn prevent_extensions(&self) {
+        self.extensible.set(false);
+    }
+
+    pub(crate) fn set_property(&self, key: String, value: Value) {
+        let mut properties = self.properties.borrow_mut();
+        if properties
+            .get(&key)
+            .is_some_and(|property| !property.writable)
+        {
+            return;
+        }
+        if !properties.contains_key(&key) && !self.extensible.get() {
+            return;
+        }
+        properties.insert(key, Property::enumerable(value));
     }
 }
 

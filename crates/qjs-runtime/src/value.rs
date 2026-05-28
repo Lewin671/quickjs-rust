@@ -1,4 +1,9 @@
-use std::{cell::RefCell, collections::HashMap, fmt, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    collections::HashMap,
+    fmt,
+    rc::Rc,
+};
 
 use crate::Function;
 
@@ -74,12 +79,14 @@ impl Value {
 #[derive(Clone)]
 pub struct ArrayRef {
     elements: Rc<RefCell<Vec<Value>>>,
+    extensible: Rc<Cell<bool>>,
 }
 
 impl ArrayRef {
     pub(crate) fn new(elements: Vec<Value>) -> Self {
         Self {
             elements: Rc::new(RefCell::new(elements)),
+            extensible: Rc::new(Cell::new(true)),
         }
     }
 
@@ -142,13 +149,28 @@ impl ArrayRef {
     pub(crate) fn set(&self, index: usize, value: Value) {
         let mut elements = self.elements.borrow_mut();
         if index >= elements.len() {
+            if !self.extensible.get() {
+                return;
+            }
             elements.resize(index + 1, Value::Undefined);
         }
         elements[index] = value;
     }
 
     pub(crate) fn set_len(&self, length: usize) {
-        self.elements.borrow_mut().resize(length, Value::Undefined);
+        let mut elements = self.elements.borrow_mut();
+        if length > elements.len() && !self.extensible.get() {
+            return;
+        }
+        elements.resize(length, Value::Undefined);
+    }
+
+    pub(crate) fn is_extensible(&self) -> bool {
+        self.extensible.get()
+    }
+
+    pub(crate) fn prevent_extensions(&self) {
+        self.extensible.set(false);
     }
 }
 
@@ -165,6 +187,7 @@ impl fmt::Debug for ArrayRef {
 #[derive(Clone)]
 pub struct ObjectRef {
     properties: Rc<RefCell<HashMap<String, Property>>>,
+    extensible: Rc<Cell<bool>>,
     prototype: Option<Box<ObjectRef>>,
 }
 
@@ -231,6 +254,7 @@ impl ObjectRef {
                     .map(|(key, value)| (key, Property::enumerable(value)))
                     .collect(),
             )),
+            extensible: Rc::new(Cell::new(true)),
             prototype: prototype.map(Box::new),
         }
     }
@@ -253,6 +277,9 @@ impl ObjectRef {
             .get(&key)
             .is_some_and(|property| !property.writable)
         {
+            return;
+        }
+        if !properties.contains_key(&key) && !self.extensible.get() {
             return;
         }
         properties.insert(key, Property::enumerable(value));
@@ -278,6 +305,14 @@ impl ObjectRef {
 
     pub(crate) fn has_own_property(&self, key: &str) -> bool {
         self.properties.borrow().contains_key(key)
+    }
+
+    pub(crate) fn is_extensible(&self) -> bool {
+        self.extensible.get()
+    }
+
+    pub(crate) fn prevent_extensions(&self) {
+        self.extensible.set(false);
     }
 
     pub(crate) fn own_property(&self, key: &str) -> Option<Property> {

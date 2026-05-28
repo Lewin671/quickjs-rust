@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use qjs_ast::{Expr, MemberProperty};
 
 use crate::{
-    Property, RuntimeError, Value, boolean, inherited_array_prototype_property,
+    RuntimeError, Value, boolean, inherited_array_prototype_property,
     inherited_function_prototype_property, inherited_string_prototype_property, number, string,
     to_array_index, to_length, to_property_key,
 };
@@ -81,10 +81,7 @@ pub(super) fn assign_member(
             Ok(())
         }
         Value::Function(function) => {
-            function
-                .properties
-                .borrow_mut()
-                .insert(key, Property::enumerable(value));
+            function.set_property(key, value);
             Ok(())
         }
         Value::Array(elements) => {

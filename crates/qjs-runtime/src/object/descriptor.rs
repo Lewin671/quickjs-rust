@@ -103,10 +103,22 @@ fn define_property_on_value(
 ) -> Result<(), RuntimeError> {
     match &target {
         Value::Object(object) => {
+            if !object.has_own_property(&key) && !object.is_extensible() {
+                return Err(RuntimeError {
+                    message: "object is not extensible".to_owned(),
+                });
+            }
             object.define_property(key, descriptor);
             Ok(())
         }
         Value::Function(function) => {
+            if function_own_property_descriptor(function, &key).is_none()
+                && !function.is_extensible()
+            {
+                return Err(RuntimeError {
+                    message: "function is not extensible".to_owned(),
+                });
+            }
             function.properties.borrow_mut().insert(key, descriptor);
             Ok(())
         }

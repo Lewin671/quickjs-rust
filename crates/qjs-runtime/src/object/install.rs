@@ -85,6 +85,18 @@ pub(crate) fn install_object(env: &mut HashMap<String, Value>, global_this: &Val
     define_object_function(&object_function, "is", 2, NativeFunction::ObjectIs);
     define_object_function(
         &object_function,
+        "isExtensible",
+        1,
+        NativeFunction::ObjectIsExtensible,
+    );
+    define_object_function(
+        &object_function,
+        "preventExtensions",
+        1,
+        NativeFunction::ObjectPreventExtensions,
+    );
+    define_object_function(
+        &object_function,
         "entries",
         1,
         NativeFunction::ObjectEntries,

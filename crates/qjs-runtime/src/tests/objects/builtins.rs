@@ -298,6 +298,51 @@ fn evaluates_object_builtins() {
     assert_eq!(eval("Object.is({}, {});"), Ok(Value::Boolean(false)));
     assert_eq!(eval("Object.is();"), Ok(Value::Boolean(true)));
     assert_eq!(eval("Object.is(0);"), Ok(Value::Boolean(false)));
+    assert_eq!(eval("Object.isExtensible.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("Object.isExtensible({});"), Ok(Value::Boolean(true)));
+    assert_eq!(
+        eval("let object = {}; Object.preventExtensions(object); Object.isExtensible(object);"),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(eval("Object.isExtensible(1);"), Ok(Value::Boolean(false)));
+    assert_eq!(
+        eval("Object.preventExtensions.length;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval("let object = {}; Object.preventExtensions(object) === object;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("let object = {}; Object.preventExtensions(object); object.added = 1; object.added;"),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval("let array = [1]; Object.preventExtensions(array); array[1] = 2; array.length;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval("let array = [1]; Object.preventExtensions(array); Object.isExtensible(array);"),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval("function fn() {} Object.preventExtensions(fn); fn.added = 1; fn.added;"),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval("function fn() {} Object.preventExtensions(fn); Object.isExtensible(fn);"),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval(
+            "let object = { value: 1 }; Object.preventExtensions(object); object.value = 2; object.value;"
+        ),
+        Ok(Value::Number(2.0))
+    );
+    assert!(
+        eval("let object = {}; Object.preventExtensions(object); Object.defineProperty(object, 'value', { value: 1 });").is_err()
+    );
+    assert_eq!(eval("Object.preventExtensions(1);"), Ok(Value::Number(1.0)));
     assert_eq!(
         eval("Object.getOwnPropertyDescriptor.length;"),
         Ok(Value::Number(2.0))

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{Function, ObjectRef, Property, RuntimeError, Value, function_prototype};
+use crate::{Function, ObjectRef, RuntimeError, Value, function_prototype};
 
 use super::descriptor::native_object_define_properties;
 use super::enumeration::enumerable_property_entries;
@@ -86,10 +86,7 @@ fn set_property(target: Value, key: String, value: Value) -> Result<(), RuntimeE
             Ok(())
         }
         Value::Function(function) => {
-            function
-                .properties
-                .borrow_mut()
-                .insert(key, Property::enumerable(value));
+            function.set_property(key, value);
             Ok(())
         }
         _ => Err(RuntimeError {
