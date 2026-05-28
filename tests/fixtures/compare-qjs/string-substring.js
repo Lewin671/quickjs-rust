@@ -1,0 +1,1 @@
+"abcdef".substring(1, 4) + ":" + "abcdef".substring(4, 1) + ":" + "abcdef".substring(-3, 2) + ":" + "abcdef".substring(3) + ":" + "abcdef".substring(Infinity, -Infinity) + ":" + String.prototype.substring.length
