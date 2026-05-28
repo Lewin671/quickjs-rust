@@ -726,6 +726,8 @@ fn evaluates_array_builtins() {
         eval("Array.prototype.slice.length;"),
         Ok(Value::Number(2.0))
     );
+    assert_eq!(eval("Array.prototype.pop.length;"), Ok(Value::Number(0.0)));
+    assert_eq!(eval("Array.prototype.push.length;"), Ok(Value::Number(1.0)));
     assert_eq!(
         eval("Array.prototype.toString.length;"),
         Ok(Value::Number(0.0))
@@ -835,6 +837,27 @@ fn evaluates_array_builtins() {
     assert_eq!(eval("[1, 2, 3].at();"), Ok(Value::Number(1.0)));
     assert_eq!(eval("[1, 2, 3].at(1.9);"), Ok(Value::Number(2.0)));
     assert_eq!(eval("[1, 2, 3].at(-1.9);"), Ok(Value::Number(3.0)));
+    assert_eq!(
+        eval("let xs = [1]; xs.push(2, 3) + ':' + xs.length + ':' + xs.join();"),
+        Ok(Value::String("3:3:1,2,3".to_owned()))
+    );
+    assert_eq!(
+        eval("let xs = [1, 2]; xs.pop() + ':' + xs.length + ':' + xs.join();"),
+        Ok(Value::String("2:1:1".to_owned()))
+    );
+    assert_eq!(eval("[].pop();"), Ok(Value::Undefined));
+    assert_eq!(
+        eval("let xs = [1]; let ys = xs; ys.push(2); xs.join();"),
+        Ok(Value::String("1,2".to_owned()))
+    );
+    assert_eq!(
+        eval("let xs = [1]; xs[2] = 3; xs.length + ':' + xs.join();"),
+        Ok(Value::String("3:1,,3".to_owned()))
+    );
+    assert_eq!(
+        eval("let xs = [1, 2, 3]; xs.length = 1; xs.join();"),
+        Ok(Value::String("1".to_owned()))
+    );
     assert_eq!(eval("[1, 2, 3].includes(2);"), Ok(Value::Boolean(true)));
     assert_eq!(eval("[1, 2, 3].includes(4);"), Ok(Value::Boolean(false)));
     assert_eq!(eval("[1, 2, 3].includes(1, 1);"), Ok(Value::Boolean(false)));
@@ -1362,12 +1385,13 @@ fn evaluates_new_expressions() {
 #[test]
 fn evaluates_array_literals() {
     assert_eq!(
-        eval("[1, 2 + 3, true];"),
-        Ok(Value::Array(vec![
-            Value::Number(1.0),
-            Value::Number(5.0),
-            Value::Boolean(true),
-        ]))
+        eval("let xs = [1, 2 + 3, true]; xs.length + ':' + xs[0] + ':' + xs[1] + ':' + xs[2];"),
+        Ok(Value::String("3:1:5:true".to_owned()))
+    );
+    assert_eq!(eval("[] === [];"), Ok(Value::Boolean(false)));
+    assert_eq!(
+        eval("let xs = []; let ys = xs; xs === ys;"),
+        Ok(Value::Boolean(true))
     );
 }
 

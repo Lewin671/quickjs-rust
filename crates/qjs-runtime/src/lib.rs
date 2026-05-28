@@ -11,7 +11,7 @@ use qjs_parser::parse_script;
 mod value;
 
 pub use value::Value;
-use value::{ObjectRef, Property};
+use value::{ArrayRef, ObjectRef, Property};
 
 const GLOBAL_THIS_BINDING: &str = "\0global_this";
 const BOOLEAN_DATA_PROPERTY: &str = "\0BooleanData";
@@ -27,6 +27,8 @@ enum NativeFunction {
     ArrayPrototypeIndexOf,
     ArrayPrototypeLastIndexOf,
     ArrayPrototypeJoin,
+    ArrayPrototypePop,
+    ArrayPrototypePush,
     ArrayPrototypeSlice,
     ArrayPrototypeToString,
     Boolean,
@@ -928,6 +930,24 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
         )),
     );
     array_prototype.define_non_enumerable(
+        "pop".to_owned(),
+        Value::Function(Function::new_native(
+            Some("pop"),
+            0,
+            NativeFunction::ArrayPrototypePop,
+            false,
+        )),
+    );
+    array_prototype.define_non_enumerable(
+        "push".to_owned(),
+        Value::Function(Function::new_native(
+            Some("push"),
+            1,
+            NativeFunction::ArrayPrototypePush,
+            false,
+        )),
+    );
+    array_prototype.define_non_enumerable(
         "slice".to_owned(),
         Value::Function(Function::new_native(
             Some("slice"),
@@ -1550,7 +1570,7 @@ fn call_function(
     local_env.insert("this".to_owned(), this_value);
     local_env.insert(
         "arguments".to_owned(),
-        Value::Array(argument_values.clone()),
+        Value::Array(ArrayRef::new(argument_values.clone())),
     );
     for (index, param) in function.params.iter().enumerate() {
         let value = argument_values
@@ -1598,6 +1618,10 @@ fn call_native_function(
         }
         NativeFunction::ArrayPrototypeJoin => {
             native_array_prototype_join(this_value, &argument_values)
+        }
+        NativeFunction::ArrayPrototypePop => native_array_prototype_pop(this_value),
+        NativeFunction::ArrayPrototypePush => {
+            native_array_prototype_push(this_value, &argument_values)
         }
         NativeFunction::ArrayPrototypeSlice => {
             native_array_prototype_slice(this_value, &argument_values)
@@ -1757,7 +1781,7 @@ fn native_array(argument_values: &[Value]) -> Result<Value, RuntimeError> {
         });
     }
 
-    Ok(Value::Array(argument_values.to_vec()))
+    Ok(Value::Array(ArrayRef::new(argument_values.to_vec())))
 }
 
 fn native_boolean(
@@ -1825,12 +1849,12 @@ fn native_array_prototype_concat(
     for value in argument_values.iter().cloned() {
         concat_array_item(&mut result, value);
     }
-    Ok(Value::Array(result))
+    Ok(Value::Array(ArrayRef::new(result)))
 }
 
 fn concat_array_item(result: &mut Vec<Value>, value: Value) {
     match value {
-        Value::Array(elements) => result.extend(elements),
+        Value::Array(elements) => result.extend(elements.to_vec()),
         value => result.push(value),
     }
 }
@@ -1851,7 +1875,7 @@ fn native_array_prototype_at(
     else {
         return Ok(Value::Undefined);
     };
-    Ok(elements.get(index).cloned().unwrap_or(Value::Undefined))
+    Ok(elements.get(index).unwrap_or(Value::Undefined))
 }
 
 fn array_at_index(length: usize, index: Value) -> Result<Option<usize>, RuntimeError> {
@@ -1896,6 +1920,7 @@ fn native_array_prototype_includes(
     )?;
     Ok(Value::Boolean(
         elements
+            .to_vec()
             .iter()
             .skip(start)
             .any(|element| same_value_zero(element, &search_element)),
@@ -1929,7 +1954,7 @@ fn native_array_prototype_index_of(
         elements.len(),
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
     )?;
-    for (index, element) in elements.iter().enumerate().skip(start) {
+    for (index, element) in elements.to_vec().iter().enumerate().skip(start) {
         if *element == search_element {
             return Ok(Value::Number(index as f64));
         }
@@ -1958,6 +1983,7 @@ fn native_array_prototype_last_index_of(
     else {
         return Ok(Value::Number(-1.0));
     };
+    let elements = elements.to_vec();
     for index in (0..=start).rev() {
         if elements[index] == search_element {
             return Ok(Value::Number(index as f64));
@@ -2030,9 +2056,11 @@ fn native_array_prototype_slice(
     )?;
 
     if end <= start {
-        return Ok(Value::Array(Vec::new()));
+        return Ok(Value::Array(ArrayRef::new(Vec::new())));
     }
-    Ok(Value::Array(elements[start..end].to_vec()))
+    Ok(Value::Array(ArrayRef::new(
+        elements.to_vec()[start..end].to_vec(),
+    )))
 }
 
 fn array_slice_start(length: usize, start: Value) -> Result<usize, RuntimeError> {
@@ -2078,6 +2106,30 @@ fn native_array_prototype_to_string(this_value: Value) -> Result<Value, RuntimeE
     Ok(Value::String(array_join(this_value, ",")?))
 }
 
+fn native_array_prototype_push(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let Value::Array(elements) = this_value else {
+        return Err(RuntimeError {
+            message: "Array.prototype.push called on non-array".to_owned(),
+        });
+    };
+    for value in argument_values.iter().cloned() {
+        elements.push(value);
+    }
+    Ok(Value::Number(elements.len() as f64))
+}
+
+fn native_array_prototype_pop(this_value: Value) -> Result<Value, RuntimeError> {
+    let Value::Array(elements) = this_value else {
+        return Err(RuntimeError {
+            message: "Array.prototype.pop called on non-array".to_owned(),
+        });
+    };
+    Ok(elements.pop().unwrap_or(Value::Undefined))
+}
+
 fn array_join(value: Value, separator: &str) -> Result<String, RuntimeError> {
     let Value::Array(elements) = value else {
         return Err(RuntimeError {
@@ -2085,6 +2137,7 @@ fn array_join(value: Value, separator: &str) -> Result<String, RuntimeError> {
         });
     };
 
+    let elements = elements.to_vec();
     let mut parts = Vec::with_capacity(elements.len());
     for element in elements {
         let part = match element {
@@ -2742,10 +2795,10 @@ fn native_string_prototype_split(
     let value = this_string_value(this_value, env)?;
     let limit = string_split_limit(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
     if limit == 0 {
-        return Ok(Value::Array(Vec::new()));
+        return Ok(Value::Array(ArrayRef::new(Vec::new())));
     }
     if matches!(argument_values.first(), None | Some(Value::Undefined)) {
-        return Ok(Value::Array(vec![Value::String(value)]));
+        return Ok(Value::Array(ArrayRef::new(vec![Value::String(value)])));
     }
 
     let separator = to_js_string(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
@@ -2762,7 +2815,7 @@ fn native_string_prototype_split(
             .map(|part| Value::String(part.to_owned()))
             .collect()
     };
-    Ok(Value::Array(parts))
+    Ok(Value::Array(ArrayRef::new(parts)))
 }
 
 fn string_split_limit(value: Value) -> Result<usize, RuntimeError> {
@@ -3221,7 +3274,9 @@ fn native_object_keys(argument_values: &[Value]) -> Result<Value, RuntimeError> 
         Value::String(value) => string_own_property_keys(&value),
         Value::Number(_) | Value::Boolean(_) | Value::Null | Value::Undefined => Vec::new(),
     };
-    Ok(Value::Array(keys.into_iter().map(Value::String).collect()))
+    Ok(Value::Array(ArrayRef::new(
+        keys.into_iter().map(Value::String).collect(),
+    )))
 }
 
 fn native_object_get_own_property_names(argument_values: &[Value]) -> Result<Value, RuntimeError> {
@@ -3232,7 +3287,9 @@ fn native_object_get_own_property_names(argument_values: &[Value]) -> Result<Val
         Value::String(value) => string_own_property_names(&value),
         Value::Number(_) | Value::Boolean(_) | Value::Null | Value::Undefined => Vec::new(),
     };
-    Ok(Value::Array(names.into_iter().map(Value::String).collect()))
+    Ok(Value::Array(ArrayRef::new(
+        names.into_iter().map(Value::String).collect(),
+    )))
 }
 
 fn native_object_has_own(argument_values: &[Value]) -> Result<Value, RuntimeError> {
@@ -3373,7 +3430,7 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, Run
             for element in elements {
                 values.push(eval_expr(element, env)?);
             }
-            Ok(Value::Array(values))
+            Ok(Value::Array(ArrayRef::new(values)))
         }
         Expr::Object { properties, .. } => {
             let mut values = HashMap::new();
@@ -3680,7 +3737,7 @@ fn eval_member(
         (Value::Array(elements), MemberProperty::Computed(index)) => {
             let index = eval_expr(index, env)?;
             let index = to_array_index(index)?;
-            Ok(elements.get(index).cloned().unwrap_or(Value::Undefined))
+            Ok(elements.get(index).unwrap_or(Value::Undefined))
         }
         (Value::Object(object), property) => {
             let key = property_key(property, env)?;
@@ -3751,6 +3808,17 @@ fn assign_member(
                 .properties
                 .borrow_mut()
                 .insert(key, Property::enumerable(value));
+            Ok(())
+        }
+        Value::Array(elements) => {
+            if key == "length" {
+                elements.set_len(to_length(value)?);
+            } else {
+                let index = key.parse::<usize>().map_err(|_| RuntimeError {
+                    message: "array property assignment requires an array index".to_owned(),
+                })?;
+                elements.set(index, value);
+            }
             Ok(())
         }
         _ => Err(RuntimeError {
@@ -3834,14 +3902,14 @@ fn canonical_string_index(key: &str) -> Option<usize> {
     }
 }
 
-fn array_has_own_property(elements: &[Value], key: &str) -> bool {
+fn array_has_own_property(elements: &ArrayRef, key: &str) -> bool {
     key == "length"
         || key
             .parse::<usize>()
             .is_ok_and(|index| index < elements.len())
 }
 
-fn array_own_property_descriptor(elements: &[Value], key: &str) -> Option<Property> {
+fn array_own_property_descriptor(elements: &ArrayRef, key: &str) -> Option<Property> {
     if key == "length" {
         return Some(Property {
             value: Value::Number(elements.len() as f64),
@@ -3851,14 +3919,14 @@ fn array_own_property_descriptor(elements: &[Value], key: &str) -> Option<Proper
         });
     }
     let index = key.parse::<usize>().ok()?;
-    elements.get(index).cloned().map(Property::enumerable)
+    elements.get(index).map(Property::enumerable)
 }
 
-fn array_own_property_keys(elements: &[Value]) -> Vec<String> {
+fn array_own_property_keys(elements: &ArrayRef) -> Vec<String> {
     (0..elements.len()).map(|index| index.to_string()).collect()
 }
 
-fn array_own_property_names(elements: &[Value]) -> Vec<String> {
+fn array_own_property_names(elements: &ArrayRef) -> Vec<String> {
     let mut names = array_own_property_keys(elements);
     names.push("length".to_owned());
     names
