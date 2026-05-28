@@ -1,0 +1,37 @@
+use crate::TokenKind;
+
+pub(super) fn identifier_or_keyword(text: &str) -> TokenKind {
+    match text {
+        "true" => TokenKind::True,
+        "false" => TokenKind::False,
+        "null" => TokenKind::Null,
+        "this" => TokenKind::This,
+        "var" => TokenKind::Var,
+        "let" => TokenKind::Let,
+        "const" => TokenKind::Const,
+        "if" => TokenKind::If,
+        "else" => TokenKind::Else,
+        "while" => TokenKind::While,
+        "do" => TokenKind::Do,
+        "for" => TokenKind::For,
+        "switch" => TokenKind::Switch,
+        "case" => TokenKind::Case,
+        "default" => TokenKind::Default,
+        "try" => TokenKind::Try,
+        "catch" => TokenKind::Catch,
+        "finally" => TokenKind::Finally,
+        "break" => TokenKind::Break,
+        "continue" => TokenKind::Continue,
+        "function" => TokenKind::Function,
+        "return" => TokenKind::Return,
+        "throw" => TokenKind::Throw,
+        "debugger" => TokenKind::Debugger,
+        "typeof" => TokenKind::Typeof,
+        "void" => TokenKind::Void,
+        "in" => TokenKind::In,
+        "delete" => TokenKind::Delete,
+        "new" => TokenKind::New,
+        "instanceof" => TokenKind::Instanceof,
+        _ => TokenKind::Identifier(text.to_owned()),
+    }
+}
