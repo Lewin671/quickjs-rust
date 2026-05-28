@@ -283,6 +283,7 @@ enum NativeFunction {
     String,
     StringFromCharCode,
     StringPrototypeCharAt,
+    StringPrototypeCharCodeAt,
     StringPrototypeConcat,
     StringPrototypeEndsWith,
     StringPrototypeIncludes,
@@ -723,6 +724,15 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
             Some("charAt"),
             1,
             NativeFunction::StringPrototypeCharAt,
+            false,
+        )),
+    );
+    string_prototype.define_non_enumerable(
+        "charCodeAt".to_owned(),
+        Value::Function(Function::new_native(
+            Some("charCodeAt"),
+            1,
+            NativeFunction::StringPrototypeCharCodeAt,
             false,
         )),
     );
@@ -1698,6 +1708,9 @@ fn call_native_function(
         NativeFunction::StringPrototypeCharAt => {
             native_string_prototype_char_at(this_value, &argument_values, env)
         }
+        NativeFunction::StringPrototypeCharCodeAt => {
+            native_string_prototype_char_code_at(this_value, &argument_values, env)
+        }
         NativeFunction::StringPrototypeConcat => {
             native_string_prototype_concat(this_value, &argument_values, env)
         }
@@ -2354,6 +2367,26 @@ fn native_string_prototype_char_at(
     ))
 }
 
+fn native_string_prototype_char_code_at(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let value = this_string_value(this_value, env)?;
+    let position =
+        to_char_code_position(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    if position < 0.0 {
+        return Ok(Value::Number(f64::NAN));
+    }
+
+    let code_units: Vec<u16> = value.encode_utf16().collect();
+    let index = position as usize;
+    Ok(code_units
+        .get(index)
+        .map(|code_unit| Value::Number(f64::from(*code_unit)))
+        .unwrap_or(Value::Number(f64::NAN)))
+}
+
 fn native_string_prototype_concat(
     this_value: Value,
     argument_values: &[Value],
@@ -2543,6 +2576,15 @@ fn to_string_position(value: Value) -> Result<usize, RuntimeError> {
         Ok(0)
     } else {
         Ok(number.trunc() as usize)
+    }
+}
+
+fn to_char_code_position(value: Value) -> Result<f64, RuntimeError> {
+    let number = to_number(value)?;
+    if number.is_nan() {
+        Ok(0.0)
+    } else {
+        Ok(number.trunc())
     }
 }
 
@@ -3833,6 +3875,25 @@ mod tests {
         );
         assert_eq!(eval("'abc'.charAt(1);"), Ok(Value::String("b".to_owned())));
         assert_eq!(eval("'abc'.charAt(9);"), Ok(Value::String(String::new())));
+        assert_eq!(
+            eval("String.prototype.charCodeAt.length;"),
+            Ok(Value::Number(1.0))
+        );
+        assert_eq!(eval("'abc'.charCodeAt(1);"), Ok(Value::Number(98.0)));
+        assert_eq!(
+            eval("'abc'.charCodeAt(undefined);"),
+            Ok(Value::Number(97.0))
+        );
+        assert_eq!(
+            eval("let x = 'abc'.charCodeAt(9); x !== x;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("let x = 'abc'.charCodeAt(-1); x !== x;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(eval("'😀'.charCodeAt(0);"), Ok(Value::Number(55_357.0)));
+        assert_eq!(eval("'😀'.charCodeAt(1);"), Ok(Value::Number(56_832.0)));
         assert_eq!(
             eval("'a'.concat('b', 3, true);"),
             Ok(Value::String("ab3true".to_owned()))
