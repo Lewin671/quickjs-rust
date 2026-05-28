@@ -327,6 +327,15 @@ fn install_array(
         )),
     );
     array_prototype.define_non_enumerable(
+        "reverse".to_owned(),
+        Value::Function(Function::new_native(
+            Some("reverse"),
+            0,
+            NativeFunction::ArrayPrototypeReverse,
+            false,
+        )),
+    );
+    array_prototype.define_non_enumerable(
         "shift".to_owned(),
         Value::Function(Function::new_native(
             Some("shift"),

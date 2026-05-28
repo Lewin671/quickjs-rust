@@ -41,6 +41,7 @@ cases/array-prototype-constructor.js
 cases/array-push-basic.js
 cases/array-push-length.js
 cases/array-reference-identity-basic.js
+cases/array-reverse-basic.js
 cases/array-shift-basic.js
 cases/array-shift-length.js
 cases/array-slice-basic.js

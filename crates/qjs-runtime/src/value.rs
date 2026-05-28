@@ -111,6 +111,10 @@ impl ArrayRef {
         elements.len()
     }
 
+    pub(crate) fn reverse(&self) {
+        self.elements.borrow_mut().reverse();
+    }
+
     pub(crate) fn set(&self, index: usize, value: Value) {
         let mut elements = self.elements.borrow_mut();
         if index >= elements.len() {

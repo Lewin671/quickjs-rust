@@ -733,6 +733,10 @@ fn evaluates_array_builtins() {
         Ok(Value::Number(0.0))
     );
     assert_eq!(
+        eval("Array.prototype.reverse.length;"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
         eval("Array.prototype.unshift.length;"),
         Ok(Value::Number(1.0))
     );
@@ -862,6 +866,14 @@ fn evaluates_array_builtins() {
     assert_eq!(
         eval("let xs = [3]; xs.unshift(1, 2) + ':' + xs.join();"),
         Ok(Value::String("3:1,2,3".to_owned()))
+    );
+    assert_eq!(
+        eval("let xs = [1, 2, 3]; let result = xs.reverse(); result === xs && xs.join();"),
+        Ok(Value::String("3,2,1".to_owned()))
+    );
+    assert_eq!(
+        eval("let xs = [1, undefined, 3]; xs.reverse(); xs.length + ':' + xs.join();"),
+        Ok(Value::String("3:3,,1".to_owned()))
     );
     assert_eq!(
         eval("let xs = [2]; let ys = xs; ys.unshift(1); xs.shift() + ':' + xs.join();"),

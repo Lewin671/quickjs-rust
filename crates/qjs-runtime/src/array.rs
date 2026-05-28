@@ -328,6 +328,16 @@ pub(super) fn native_array_prototype_unshift(
     Ok(Value::Number(elements.unshift(argument_values) as f64))
 }
 
+pub(super) fn native_array_prototype_reverse(this_value: Value) -> Result<Value, RuntimeError> {
+    let Value::Array(elements) = this_value.clone() else {
+        return Err(RuntimeError {
+            message: "Array.prototype.reverse called on non-array".to_owned(),
+        });
+    };
+    elements.reverse();
+    Ok(this_value)
+}
+
 fn array_join(value: Value, separator: &str) -> Result<String, RuntimeError> {
     let Value::Array(elements) = value else {
         return Err(RuntimeError {
