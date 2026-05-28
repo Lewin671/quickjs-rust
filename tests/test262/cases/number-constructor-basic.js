@@ -2,6 +2,12 @@
 if (typeof Number("10") !== "number") {
   throw "expected Number('10') to produce a number";
 }
+if (Number() !== 0) {
+  throw "expected Number() to return 0";
+}
+if (Number(undefined) === Number(undefined)) {
+  throw "expected Number(undefined) to return NaN";
+}
 if (Number("10") !== 10) {
   throw "expected Number('10') to return 10";
 }
