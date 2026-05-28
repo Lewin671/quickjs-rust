@@ -115,12 +115,32 @@ fn evaluates_function_declarations_and_calls() {
         Ok(Value::Number(9.0))
     );
     assert_eq!(
+        eval(
+            "function add(a, b) { return this.base + a + b; } let context = { base: 4 }; add.apply(context, [2, 3]);"
+        ),
+        Ok(Value::Number(9.0))
+    );
+    assert_eq!(
+        eval("function count() { return arguments.length; } count.apply(null, undefined);"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval(
+            "function add(a, b) { return a + b; } function caller() { return add.apply(null, arguments); } caller(2, 3);"
+        ),
+        Ok(Value::Number(5.0))
+    );
+    assert_eq!(
         eval("function getThis() { return this; } getThis.call(undefined) === this;"),
         Ok(Value::Boolean(true))
     );
     assert_eq!(
         eval("function add(a, b) { return a + b; } add.call.length;"),
         Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval("function add(a, b) { return a + b; } add.apply.length;"),
+        Ok(Value::Number(2.0))
     );
     assert_eq!(
         eval("function add(a, b) { return a + b; } add.call.propertyIsEnumerable('length');"),

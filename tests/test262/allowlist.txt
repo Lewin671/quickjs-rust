@@ -243,6 +243,10 @@ cases/function-prototype-call-basic.js
 cases/function-prototype-call-global-this.js
 cases/function-prototype-call-length.js
 cases/function-prototype-inheritance-basic.js
+cases/function-prototype-apply-basic.js
+cases/function-prototype-apply-null-args.js
+cases/function-prototype-apply-arguments-basic.js
+cases/function-prototype-apply-length.js
 cases/new-expression-this-basic.js
 cases/new-expression-no-args-basic.js
 cases/new-expression-return-object-basic.js

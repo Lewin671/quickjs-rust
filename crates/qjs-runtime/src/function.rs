@@ -63,6 +63,7 @@ pub(crate) enum NativeFunction {
     GlobalIsFinite,
     GlobalIsNaN,
     Function,
+    FunctionPrototypeApply,
     FunctionPrototypeCall,
     Number,
     NumberIsFinite,
@@ -128,6 +129,15 @@ pub(crate) fn install_function(
         Value::Function(function_constructor.clone()),
     );
     function_prototype.define_non_enumerable(
+        "apply".to_owned(),
+        Value::Function(Function::new_native(
+            Some("apply"),
+            2,
+            NativeFunction::FunctionPrototypeApply,
+            false,
+        )),
+    );
+    function_prototype.define_non_enumerable(
         "call".to_owned(),
         Value::Function(Function::new_native(
             Some("call"),
@@ -159,6 +169,33 @@ pub(crate) fn native_function(
     })
 }
 
+pub(crate) fn native_function_prototype_apply(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let Value::Function(_) = this_value else {
+        return Err(RuntimeError {
+            message: "Function.prototype.apply target is not callable".to_owned(),
+        });
+    };
+
+    let call_this = function_call_this(argument_values.first().cloned(), env);
+    let apply_arguments = match argument_values.get(1).cloned().unwrap_or(Value::Undefined) {
+        Value::Null | Value::Undefined => Vec::new(),
+        Value::Array(elements) => elements.to_vec(),
+        value => {
+            return Err(RuntimeError {
+                message: format!(
+                    "Function.prototype.apply argument list is not array-like: {value:?}"
+                ),
+            });
+        }
+    };
+
+    crate::call_function(this_value, call_this, apply_arguments, env, false)
+}
+
 pub(crate) fn native_function_prototype_call(
     this_value: Value,
     argument_values: &[Value],
@@ -170,13 +207,7 @@ pub(crate) fn native_function_prototype_call(
         });
     };
 
-    let call_this = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
-        Value::Null | Value::Undefined => env
-            .get(GLOBAL_THIS_BINDING)
-            .cloned()
-            .unwrap_or(Value::Undefined),
-        value => value,
-    };
+    let call_this = function_call_this(argument_values.first().cloned(), env);
     crate::call_function(
         this_value,
         call_this,
@@ -184,6 +215,16 @@ pub(crate) fn native_function_prototype_call(
         env,
         false,
     )
+}
+
+fn function_call_this(this_arg: Option<Value>, env: &HashMap<String, Value>) -> Value {
+    match this_arg.unwrap_or(Value::Undefined) {
+        Value::Null | Value::Undefined => env
+            .get(GLOBAL_THIS_BINDING)
+            .cloned()
+            .unwrap_or(Value::Undefined),
+        value => value,
+    }
 }
 
 /// User-defined or native function value.

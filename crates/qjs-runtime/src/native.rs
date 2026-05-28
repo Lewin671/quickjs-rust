@@ -103,6 +103,9 @@ pub(crate) fn call_native_function(
         NativeFunction::Function => {
             crate::function::native_function(function, this_value, &argument_values, is_construct)
         }
+        NativeFunction::FunctionPrototypeApply => {
+            crate::function::native_function_prototype_apply(this_value, &argument_values, env)
+        }
         NativeFunction::FunctionPrototypeCall => {
             crate::function::native_function_prototype_call(this_value, &argument_values, env)
         }
