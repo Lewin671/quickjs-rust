@@ -31,6 +31,11 @@ cases/array-find-index-callback-arguments.js
 cases/array-find-index-this-arg.js
 cases/array-find-index-length.js
 cases/array-find-index-not-found.js
+cases/array-find-last-basic.js
+cases/array-find-last-callback-arguments.js
+cases/array-find-last-this-arg.js
+cases/array-find-last-length.js
+cases/array-find-last-not-found.js
 cases/array-find-this-arg.js
 cases/array-find-length.js
 cases/array-find-not-found.js

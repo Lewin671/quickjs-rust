@@ -57,6 +57,20 @@ fn evaluates_array_iteration_builtins() {
         Ok(Value::Number(20.0))
     );
     assert_eq!(
+        eval("[1, 2, 3, 4].findLast(function(value) { return value > 2; });"),
+        Ok(Value::Number(4.0))
+    );
+    assert_eq!(
+        eval("[1, 2, 3].findLast(function(value) { return value > 5; });"),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval(
+            "let receiver = { target: 10 }; [10, 20].findLast(function(value, index, array) { return this === receiver && index === 0 && array[index] === value && value === this.target; }, receiver);"
+        ),
+        Ok(Value::Number(10.0))
+    );
+    assert_eq!(
         eval("[1, 2, 3, 4].findIndex(function(value) { return value > 2; });"),
         Ok(Value::Number(2.0))
     );

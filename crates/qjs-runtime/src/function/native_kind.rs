@@ -10,6 +10,7 @@ pub(crate) enum NativeFunction {
     ArrayPrototypeFilter,
     ArrayPrototypeFind,
     ArrayPrototypeFindIndex,
+    ArrayPrototypeFindLast,
     ArrayPrototypeForEach,
     ArrayPrototypeIncludes,
     ArrayPrototypeIndexOf,

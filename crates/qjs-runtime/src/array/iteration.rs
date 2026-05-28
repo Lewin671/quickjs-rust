@@ -151,6 +151,23 @@ pub(crate) fn native_array_prototype_find(
     Ok(Value::Undefined)
 }
 
+pub(crate) fn native_array_prototype_find_last(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let iteration = prepare_array_iteration("findLast", this_value, argument_values)?;
+    for index in (0..iteration.source.len()).rev() {
+        let value = iteration.source[index].clone();
+        let selected = call_iteration_callback(&iteration, value.clone(), index, env)?;
+        if is_truthy(&selected) {
+            return Ok(value);
+        }
+    }
+
+    Ok(Value::Undefined)
+}
+
 pub(crate) fn native_array_prototype_find_index(
     this_value: Value,
     argument_values: &[Value],

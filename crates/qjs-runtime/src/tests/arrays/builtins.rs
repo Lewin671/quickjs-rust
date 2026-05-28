@@ -32,6 +32,10 @@ fn evaluates_array_builtins() {
         Ok(Value::Number(1.0))
     );
     assert_eq!(
+        eval("Array.prototype.findLast.length;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
         eval("Array.prototype.forEach.length;"),
         Ok(Value::Number(1.0))
     );
