@@ -30,6 +30,13 @@ pub(crate) fn string_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef
     function_prototype(string_function)
 }
 
+pub(crate) fn function_intrinsic_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+    let Some(Value::Function(function_constructor)) = env.get("Function") else {
+        return None;
+    };
+    function_prototype(function_constructor)
+}
+
 pub(crate) fn function_prototype(function: &Function) -> Option<ObjectRef> {
     match function.properties.borrow().get("prototype") {
         Some(Property {
@@ -44,7 +51,7 @@ pub(crate) fn value_prototype(value: Value, env: &HashMap<String, Value>) -> Opt
     match value {
         Value::Object(object) => object.prototype(),
         Value::Array(_) => array_prototype(env),
-        Value::Function(_) => object_prototype(env),
+        Value::Function(_) => function_intrinsic_prototype(env),
         Value::String(_) | Value::Number(_) | Value::Boolean(_) => None,
         Value::Null | Value::Undefined => None,
     }
@@ -66,6 +73,15 @@ pub(crate) fn inherited_object_prototype_property(
     } else {
         None
     }
+}
+
+pub(crate) fn inherited_function_prototype_property(
+    env: &HashMap<String, Value>,
+    key: &str,
+) -> Option<Value> {
+    function_intrinsic_prototype(env)
+        .and_then(|prototype| prototype.get(key))
+        .or_else(|| inherited_object_prototype_property(env, key))
 }
 
 pub(crate) fn inherited_array_prototype_property(

@@ -239,6 +239,10 @@ cases/named-function-expression-internal-name-basic.js
 cases/named-function-expression-name-not-leaked.js
 cases/named-function-expression-recursion-basic.js
 cases/function-prototype-constructor-basic.js
+cases/function-prototype-call-basic.js
+cases/function-prototype-call-global-this.js
+cases/function-prototype-call-length.js
+cases/function-prototype-inheritance-basic.js
 cases/new-expression-this-basic.js
 cases/new-expression-no-args-basic.js
 cases/new-expression-return-object-basic.js

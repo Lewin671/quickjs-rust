@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 use crate::{
     RuntimeError, Value, array_has_own_property, array_prototype, boolean,
-    function_own_property_descriptor, number, to_property_key, value_prototype,
+    function_intrinsic_prototype, function_own_property_descriptor, number, to_property_key,
+    value_prototype,
 };
 
 use super::descriptor::own_property_descriptor;
@@ -18,7 +19,9 @@ pub(crate) fn native_object_get_prototype_of(
         Some(Value::Array(_)) => Ok(array_prototype(env)
             .map(Value::Object)
             .unwrap_or(Value::Null)),
-        Some(Value::Function(_)) => Ok(Value::Null),
+        Some(Value::Function(_)) => Ok(function_intrinsic_prototype(env)
+            .map(Value::Object)
+            .unwrap_or(Value::Null)),
         _ => Err(RuntimeError {
             message: "Object.getPrototypeOf target must be an object".to_owned(),
         }),

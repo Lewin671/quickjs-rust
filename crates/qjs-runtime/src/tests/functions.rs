@@ -108,6 +108,36 @@ fn evaluates_function_declarations_and_calls() {
         eval("let o = { method: function() { return this.value; }, value: 7 }; o.method();"),
         Ok(Value::Number(7.0))
     );
+    assert_eq!(
+        eval(
+            "function add(a, b) { return this.base + a + b; } let context = { base: 4 }; add.call(context, 2, 3);"
+        ),
+        Ok(Value::Number(9.0))
+    );
+    assert_eq!(
+        eval("function getThis() { return this; } getThis.call(undefined) === this;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("function add(a, b) { return a + b; } add.call.length;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval("function add(a, b) { return a + b; } add.call.propertyIsEnumerable('length');"),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval("Function.prototype.constructor === Function;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("Object.getPrototypeOf(function() {}) === Function.prototype;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("Function.prototype.isPrototypeOf(function() {});"),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]

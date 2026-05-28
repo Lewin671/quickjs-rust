@@ -8,6 +8,7 @@ use crate::{
 pub(crate) fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
     let object_prototype = object::install_object(env, global_this);
 
+    crate::function::install_function(env, global_this, object_prototype.clone());
     global::install_globals(env, global_this);
 
     number::install_number(env, global_this, object_prototype.clone());

@@ -11,7 +11,7 @@ pub(crate) fn call_native_function(
     this_value: Value,
     argument_values: Vec<Value>,
     is_construct: bool,
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     match native {
         NativeFunction::Array => array::native_array(&argument_values),
@@ -100,6 +100,12 @@ pub(crate) fn call_native_function(
         NativeFunction::MathTrunc => math::native_math_unary(&argument_values, f64::trunc),
         NativeFunction::GlobalIsFinite => global::native_global_is_finite(&argument_values),
         NativeFunction::GlobalIsNaN => global::native_global_is_nan(&argument_values),
+        NativeFunction::Function => {
+            crate::function::native_function(function, this_value, &argument_values, is_construct)
+        }
+        NativeFunction::FunctionPrototypeCall => {
+            crate::function::native_function_prototype_call(this_value, &argument_values, env)
+        }
         NativeFunction::Number => {
             number::native_number(function, this_value, &argument_values, is_construct)
         }

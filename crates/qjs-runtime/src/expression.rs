@@ -8,7 +8,7 @@ use qjs_ast::{
 use crate::{
     ArrayRef, Function, GLOBAL_THIS_BINDING, ObjectRef, Property, RuntimeError, Value, boolean,
     call_function, constructor_prototype, inherited_array_prototype_property,
-    inherited_object_prototype_property, inherited_string_prototype_property, is_truthy, number,
+    inherited_function_prototype_property, inherited_string_prototype_property, is_truthy, number,
     object_prototype, operations, string, to_array_index, to_length, to_number, to_property_key,
 };
 
@@ -382,7 +382,7 @@ fn eval_member(
                 .borrow()
                 .get(&key)
                 .map(|property| property.value.clone())
-                .or_else(|| inherited_object_prototype_property(env, &key))
+                .or_else(|| inherited_function_prototype_property(env, &key))
                 .unwrap_or(Value::Undefined))
         }
         (Value::String(value), MemberProperty::Named(name)) if name == "length" => {

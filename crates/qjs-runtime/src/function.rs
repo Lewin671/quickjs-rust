@@ -2,7 +2,7 @@ use std::{cell::RefCell, collections::HashMap, fmt, rc::Rc};
 
 use qjs_ast::Stmt;
 
-use crate::{ObjectRef, Property, Value, object_prototype};
+use crate::{GLOBAL_THIS_BINDING, ObjectRef, Property, RuntimeError, Value, object_prototype};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum NativeFunction {
@@ -62,6 +62,8 @@ pub(crate) enum NativeFunction {
     MathTrunc,
     GlobalIsFinite,
     GlobalIsNaN,
+    Function,
+    FunctionPrototypeCall,
     Number,
     NumberIsFinite,
     NumberIsInteger,
@@ -111,6 +113,77 @@ pub(crate) enum NativeFunction {
     StringPrototypeToString,
     StringPrototypeToUpperCase,
     StringPrototypeValueOf,
+}
+
+pub(crate) fn install_function(
+    env: &mut HashMap<String, Value>,
+    global_this: &Value,
+    object_prototype: ObjectRef,
+) {
+    let function_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let function_constructor =
+        Function::new_native(Some("Function"), 1, NativeFunction::Function, true);
+    function_prototype.define_non_enumerable(
+        "constructor".to_owned(),
+        Value::Function(function_constructor.clone()),
+    );
+    function_prototype.define_non_enumerable(
+        "call".to_owned(),
+        Value::Function(Function::new_native(
+            Some("call"),
+            1,
+            NativeFunction::FunctionPrototypeCall,
+            false,
+        )),
+    );
+    function_constructor.properties.borrow_mut().insert(
+        "prototype".to_owned(),
+        Property::non_enumerable(Value::Object(function_prototype)),
+    );
+
+    let function_value = Value::Function(function_constructor);
+    env.insert("Function".to_owned(), function_value.clone());
+    if let Value::Object(global_object) = global_this {
+        global_object.set("Function".to_owned(), function_value);
+    }
+}
+
+pub(crate) fn native_function(
+    _function: &Function,
+    _this_value: Value,
+    _argument_values: &[Value],
+    _is_construct: bool,
+) -> Result<Value, RuntimeError> {
+    Err(RuntimeError {
+        message: "Function constructor is not implemented".to_owned(),
+    })
+}
+
+pub(crate) fn native_function_prototype_call(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let Value::Function(_) = this_value else {
+        return Err(RuntimeError {
+            message: "Function.prototype.call target is not callable".to_owned(),
+        });
+    };
+
+    let call_this = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
+        Value::Null | Value::Undefined => env
+            .get(GLOBAL_THIS_BINDING)
+            .cloned()
+            .unwrap_or(Value::Undefined),
+        value => value,
+    };
+    crate::call_function(
+        this_value,
+        call_this,
+        argument_values.iter().skip(1).cloned().collect(),
+        env,
+        false,
+    )
 }
 
 /// User-defined or native function value.
