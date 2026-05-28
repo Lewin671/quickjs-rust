@@ -268,6 +268,35 @@ fn relative_array_index(length: usize, number: f64) -> usize {
     }
 }
 
+pub(super) fn native_array_prototype_fill(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let Value::Array(elements) = this_value.clone() else {
+        return Err(RuntimeError {
+            message: "Array.prototype.fill called on non-array".to_owned(),
+        });
+    };
+
+    let length = elements.len();
+    let start = array_slice_start(
+        length,
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+    )?;
+    let end = array_slice_end(
+        length,
+        argument_values.get(2).cloned().unwrap_or(Value::Undefined),
+    )?;
+    if start < end {
+        elements.fill(
+            start,
+            end,
+            argument_values.first().cloned().unwrap_or(Value::Undefined),
+        );
+    }
+    Ok(this_value)
+}
+
 pub(super) fn native_array_prototype_join(
     this_value: Value,
     argument_values: &[Value],

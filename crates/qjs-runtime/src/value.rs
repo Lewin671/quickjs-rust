@@ -115,6 +115,13 @@ impl ArrayRef {
         self.elements.borrow_mut().reverse();
     }
 
+    pub(crate) fn fill(&self, start: usize, end: usize, value: Value) {
+        let mut elements = self.elements.borrow_mut();
+        for element in &mut elements[start..end] {
+            *element = value.clone();
+        }
+    }
+
     pub(crate) fn set(&self, index: usize, value: Value) {
         let mut elements = self.elements.borrow_mut();
         if index >= elements.len() {

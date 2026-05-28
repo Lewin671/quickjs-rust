@@ -273,6 +273,15 @@ fn install_array(
         )),
     );
     array_prototype.define_non_enumerable(
+        "fill".to_owned(),
+        Value::Function(Function::new_native(
+            Some("fill"),
+            1,
+            NativeFunction::ArrayPrototypeFill,
+            false,
+        )),
+    );
+    array_prototype.define_non_enumerable(
         "includes".to_owned(),
         Value::Function(Function::new_native(
             Some("includes"),
