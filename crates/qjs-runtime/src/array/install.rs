@@ -34,6 +34,12 @@ pub(crate) fn install_array(
     );
     define_array_prototype_function(
         &array_prototype,
+        "filter",
+        1,
+        NativeFunction::ArrayPrototypeFilter,
+    );
+    define_array_prototype_function(
+        &array_prototype,
         "includes",
         1,
         NativeFunction::ArrayPrototypeIncludes,

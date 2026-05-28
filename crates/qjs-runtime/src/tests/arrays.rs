@@ -19,6 +19,10 @@ fn evaluates_array_builtins() {
     );
     assert_eq!(eval("Array.prototype.fill.length;"), Ok(Value::Number(1.0)));
     assert_eq!(
+        eval("Array.prototype.filter.length;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
         eval("Array.prototype.includes.length;"),
         Ok(Value::Number(1.0))
     );
@@ -105,6 +109,26 @@ fn evaluates_array_builtins() {
     assert_eq!(
         eval(
             "let xs = [1, 2]; let ys = xs.map(function(value) { return value + 1; }); xs !== ys && xs[0] === 1 && ys[0] === 2;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("[1, 2, 3, 4].filter(function(value) { return value > 2; }).join();"),
+        Ok(Value::String("3,4".to_owned()))
+    );
+    assert_eq!(
+        eval("[10, 20, 30].filter(function(value, index) { return index === 1; })[0];"),
+        Ok(Value::Number(20.0))
+    );
+    assert_eq!(
+        eval(
+            "let receiver = [2]; [1, 2].filter(function(value, index, array) { return this === receiver && array[index] === value && value === receiver[0]; }, receiver).join();"
+        ),
+        Ok(Value::String("2".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let xs = [1, 2, 3]; let ys = xs.filter(function(value) { return value < 3; }); xs !== ys && xs.join() === '1,2,3' && ys.join() === '1,2';"
         ),
         Ok(Value::Boolean(true))
     );

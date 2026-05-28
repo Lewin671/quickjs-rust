@@ -15,6 +15,10 @@ cases/array-concat-length.js
 cases/array-concat-primitive-arguments.js
 cases/array-copy-within-basic.js
 cases/array-fill-basic.js
+cases/array-filter-basic.js
+cases/array-filter-callback-arguments.js
+cases/array-filter-this-arg.js
+cases/array-filter-length.js
 cases/array-includes-basic.js
 cases/array-includes-from-index.js
 cases/array-includes-length.js
