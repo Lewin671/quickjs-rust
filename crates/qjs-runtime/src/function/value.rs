@@ -27,6 +27,7 @@ pub struct Function {
     pub(crate) properties: Rc<RefCell<HashMap<String, Property>>>,
     extensible: Rc<Cell<bool>>,
     sealed: Rc<Cell<bool>>,
+    frozen: Rc<Cell<bool>>,
 }
 
 /// Bound function internal slots.
@@ -79,6 +80,7 @@ impl Function {
             properties: Rc::new(RefCell::new(HashMap::new())),
             extensible: Rc::new(Cell::new(true)),
             sealed: Rc::new(Cell::new(false)),
+            frozen: Rc::new(Cell::new(false)),
         };
         if constructable {
             prototype
@@ -132,6 +134,7 @@ impl Function {
             properties: Rc::new(RefCell::new(HashMap::new())),
             extensible: Rc::new(Cell::new(true)),
             sealed: Rc::new(Cell::new(false)),
+            frozen: Rc::new(Cell::new(false)),
         }
     }
 
@@ -155,6 +158,7 @@ impl Function {
             properties: Rc::new(RefCell::new(HashMap::new())),
             extensible: Rc::new(Cell::new(true)),
             sealed: Rc::new(Cell::new(false)),
+            frozen: Rc::new(Cell::new(false)),
         };
         if constructable {
             prototype
@@ -191,6 +195,26 @@ impl Function {
                 .borrow()
                 .values()
                 .all(|property| !property.configurable)
+    }
+
+    pub(crate) fn freeze(&self) {
+        self.prevent_extensions();
+        self.sealed.set(true);
+        self.frozen.set(true);
+        for property in self.properties.borrow_mut().values_mut() {
+            property.freeze_data();
+        }
+    }
+
+    pub(crate) fn is_frozen(&self) -> bool {
+        !self.extensible.get()
+            && self.sealed.get()
+            && self.frozen.get()
+            && self
+                .properties
+                .borrow()
+                .values()
+                .all(|property| !property.configurable && !property.writable)
     }
 
     pub(crate) fn set_property(&self, key: String, value: Value) {

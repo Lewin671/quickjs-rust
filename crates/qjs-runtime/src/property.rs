@@ -132,14 +132,14 @@ pub(crate) fn array_own_property_descriptor(elements: &ArrayRef, key: &str) -> O
         return Some(Property {
             value: Value::Number(elements.len() as f64),
             enumerable: false,
-            writable: true,
+            writable: !elements.is_frozen(),
             configurable: false,
         });
     }
     let index = key.parse::<usize>().ok()?;
     elements
         .get(index)
-        .map(|value| Property::data(value, true, true, !elements.is_sealed()))
+        .map(|value| Property::data(value, true, !elements.is_frozen(), !elements.is_sealed()))
 }
 
 pub(crate) fn array_own_property_keys(elements: &ArrayRef) -> Vec<String> {

@@ -12,6 +12,7 @@ pub struct ArrayRef {
     elements: Rc<RefCell<Vec<Value>>>,
     extensible: Rc<Cell<bool>>,
     sealed: Rc<Cell<bool>>,
+    frozen: Rc<Cell<bool>>,
 }
 
 impl ArrayRef {
@@ -20,6 +21,7 @@ impl ArrayRef {
             elements: Rc::new(RefCell::new(elements)),
             extensible: Rc::new(Cell::new(true)),
             sealed: Rc::new(Cell::new(false)),
+            frozen: Rc::new(Cell::new(false)),
         }
     }
 
@@ -87,11 +89,17 @@ impl ArrayRef {
             }
             elements.resize(index + 1, Value::Undefined);
         }
+        if self.frozen.get() {
+            return;
+        }
         elements[index] = value;
     }
 
     pub(crate) fn set_len(&self, length: usize) {
         let mut elements = self.elements.borrow_mut();
+        if self.frozen.get() {
+            return;
+        }
         if length > elements.len() && !self.extensible.get() {
             return;
         }
@@ -113,6 +121,15 @@ impl ArrayRef {
 
     pub(crate) fn is_sealed(&self) -> bool {
         !self.extensible.get() && self.sealed.get()
+    }
+
+    pub(crate) fn freeze(&self) {
+        self.seal();
+        self.frozen.set(true);
+    }
+
+    pub(crate) fn is_frozen(&self) -> bool {
+        !self.extensible.get() && self.sealed.get() && self.frozen.get()
     }
 }
 

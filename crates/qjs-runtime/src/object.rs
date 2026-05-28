@@ -18,8 +18,8 @@ pub(crate) use enumeration::{
 };
 pub(crate) use install::install_object;
 pub(crate) use integrity::{
-    native_object_is_extensible, native_object_is_sealed, native_object_prevent_extensions,
-    native_object_seal,
+    native_object_freeze, native_object_is_extensible, native_object_is_frozen,
+    native_object_is_sealed, native_object_prevent_extensions, native_object_seal,
 };
 pub(crate) use prototype::{
     native_object_get_prototype_of, native_object_prototype_has_own_property,

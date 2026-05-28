@@ -110,10 +110,10 @@ fn define_property_on_value(
             }
             if object
                 .own_property(&key)
-                .is_some_and(|property| !property.configurable && descriptor.configurable)
+                .is_some_and(|property| !is_compatible_descriptor(&property, &descriptor))
             {
                 return Err(RuntimeError {
-                    message: "property is not configurable".to_owned(),
+                    message: "property descriptor is not compatible".to_owned(),
                 });
             }
             object.define_property(key, descriptor);
@@ -126,9 +126,9 @@ fn define_property_on_value(
                     message: "function is not extensible".to_owned(),
                 });
             }
-            if existing.is_some_and(|property| !property.configurable && descriptor.configurable) {
+            if existing.is_some_and(|property| !is_compatible_descriptor(&property, &descriptor)) {
                 return Err(RuntimeError {
-                    message: "property is not configurable".to_owned(),
+                    message: "property descriptor is not compatible".to_owned(),
                 });
             }
             function.properties.borrow_mut().insert(key, descriptor);
@@ -136,6 +136,16 @@ fn define_property_on_value(
         }
         _ => ensure_define_property_target(&target),
     }
+}
+
+fn is_compatible_descriptor(existing: &Property, descriptor: &Property) -> bool {
+    if existing.configurable {
+        return true;
+    }
+    if descriptor.configurable {
+        return false;
+    }
+    existing.writable || !descriptor.writable
 }
 
 fn ensure_define_property_target(target: &Value) -> Result<(), RuntimeError> {

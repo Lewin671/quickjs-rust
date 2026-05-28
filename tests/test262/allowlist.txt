@@ -246,6 +246,16 @@ cases/object-has-own-property-basic.js
 cases/object-has-own-property-length.js
 cases/object-has-own-property-missing.js
 cases/object-has-own-property-prototype-negative.js
+cases/object-freeze-array.js
+cases/object-freeze-configurable-false.js
+cases/object-freeze-existing-nonwritable.js
+cases/object-freeze-function.js
+cases/object-freeze-length.js
+cases/object-freeze-return.js
+cases/object-freeze-writable-false.js
+cases/object-is-frozen-length.js
+cases/object-is-frozen-object.js
+cases/object-is-frozen-primitive.js
 cases/object-is-length.js
 cases/object-is-sealed-length.js
 cases/object-is-sealed-object.js

@@ -36,9 +36,11 @@ pub(super) fn call_object_native(
         NativeFunction::ObjectGetOwnPropertyNames => {
             object::native_object_get_own_property_names(argument_values)?
         }
+        NativeFunction::ObjectFreeze => object::native_object_freeze(argument_values)?,
         NativeFunction::ObjectHasOwn => object::native_object_has_own(argument_values)?,
         NativeFunction::ObjectIs => object::native_object_is(argument_values)?,
         NativeFunction::ObjectIsExtensible => object::native_object_is_extensible(argument_values)?,
+        NativeFunction::ObjectIsFrozen => object::native_object_is_frozen(argument_values)?,
         NativeFunction::ObjectIsSealed => object::native_object_is_sealed(argument_values)?,
         NativeFunction::ObjectPreventExtensions => {
             object::native_object_prevent_extensions(argument_values)?

@@ -118,6 +118,22 @@ impl ObjectRef {
                 .all(|property| !property.configurable)
     }
 
+    pub(crate) fn freeze(&self) {
+        self.prevent_extensions();
+        for property in self.properties.borrow_mut().values_mut() {
+            property.freeze_data();
+        }
+    }
+
+    pub(crate) fn is_frozen(&self) -> bool {
+        !self.extensible.get()
+            && self
+                .properties
+                .borrow()
+                .values()
+                .all(|property| !property.configurable && !property.writable)
+    }
+
     pub(crate) fn own_property(&self, key: &str) -> Option<Property> {
         self.properties.borrow().get(key).cloned()
     }

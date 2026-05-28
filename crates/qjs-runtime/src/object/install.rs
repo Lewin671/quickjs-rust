@@ -81,6 +81,7 @@ pub(crate) fn install_object(env: &mut HashMap<String, Value>, global_this: &Val
         1,
         NativeFunction::ObjectGetOwnPropertyNames,
     );
+    define_object_function(&object_function, "freeze", 1, NativeFunction::ObjectFreeze);
     define_object_function(&object_function, "hasOwn", 2, NativeFunction::ObjectHasOwn);
     define_object_function(&object_function, "is", 2, NativeFunction::ObjectIs);
     define_object_function(
@@ -88,6 +89,12 @@ pub(crate) fn install_object(env: &mut HashMap<String, Value>, global_this: &Val
         "isExtensible",
         1,
         NativeFunction::ObjectIsExtensible,
+    );
+    define_object_function(
+        &object_function,
+        "isFrozen",
+        1,
+        NativeFunction::ObjectIsFrozen,
     );
     define_object_function(
         &object_function,
