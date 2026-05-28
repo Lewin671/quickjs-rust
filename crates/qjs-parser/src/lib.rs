@@ -1070,13 +1070,18 @@ impl Parser {
         if !self.at(&TokenKind::RightBrace) {
             loop {
                 let key_token = self.advance();
-                let key = match key_token.kind {
-                    TokenKind::Identifier(name)
-                    | TokenKind::String(name)
-                    | TokenKind::Number(name) => name,
-                    TokenKind::True => "true".to_owned(),
-                    TokenKind::False => "false".to_owned(),
-                    TokenKind::Null => "null".to_owned(),
+                let (key, shorthand_value) = match key_token.kind {
+                    TokenKind::Identifier(name) => {
+                        let value = Expr::Identifier {
+                            name: name.clone(),
+                            span: key_token.span,
+                        };
+                        (name, Some(value))
+                    }
+                    TokenKind::String(name) | TokenKind::Number(name) => (name, None),
+                    TokenKind::True => ("true".to_owned(), None),
+                    TokenKind::False => ("false".to_owned(), None),
+                    TokenKind::Null => ("null".to_owned(), None),
                     _ => {
                         return Err(ParseError {
                             message: "expected property name".to_owned(),
@@ -1084,8 +1089,16 @@ impl Parser {
                         });
                     }
                 };
-                self.expect(&TokenKind::Colon)?;
-                let value = self.assignment()?;
+                let value = if self.match_kind(&TokenKind::Colon) {
+                    self.assignment()?
+                } else if let Some(value) = shorthand_value {
+                    value
+                } else {
+                    return Err(ParseError {
+                        message: "expected `:` after property name".to_owned(),
+                        span: key_token.span,
+                    });
+                };
                 let span = Span::new(key_token.span.start, value.span().end);
                 properties.push(ObjectProperty { key, value, span });
                 if !self.match_kind(&TokenKind::Comma) {

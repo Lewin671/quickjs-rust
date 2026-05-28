@@ -572,6 +572,18 @@ fn parses_object_literal_and_member_assignment() {
     assert_eq!(properties[0].key, "true");
     assert_eq!(properties[1].key, "false");
     assert_eq!(properties[2].key, "null");
+
+    let script =
+        parse_script("let answer = 42; ({ answer, named: answer });").expect("source should parse");
+    let [_, Stmt::Expr(Expr::Object { properties, .. })] = script.body.as_slice() else {
+        panic!("expected object expression with shorthand property");
+    };
+    assert_eq!(properties.len(), 2);
+    assert_eq!(properties[0].key, "answer");
+    assert!(matches!(
+        properties[0].value,
+        Expr::Identifier { ref name, .. } if name == "answer"
+    ));
 }
 
 #[test]
