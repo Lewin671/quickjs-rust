@@ -10,6 +10,7 @@ use qjs_parser::parse_script;
 
 mod array;
 mod boolean;
+mod global;
 mod math;
 mod number;
 mod object;
@@ -291,40 +292,7 @@ pub fn eval_script(script: &Script) -> Result<Value, RuntimeError> {
 fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
     let object_prototype = object::install_object(env, global_this);
 
-    env.insert("NaN".to_owned(), Value::Number(f64::NAN));
-    env.insert("Infinity".to_owned(), Value::Number(f64::INFINITY));
-    if let Value::Object(global_object) = global_this {
-        global_object.define_property(
-            "NaN".to_owned(),
-            Property::data(Value::Number(f64::NAN), false, false, false),
-        );
-        global_object.define_property(
-            "Infinity".to_owned(),
-            Property::data(Value::Number(f64::INFINITY), false, false, false),
-        );
-    }
-
-    let is_finite_value = Value::Function(Function::new_native(
-        Some("isFinite"),
-        1,
-        NativeFunction::GlobalIsFinite,
-        false,
-    ));
-    env.insert("isFinite".to_owned(), is_finite_value.clone());
-    if let Value::Object(global_object) = global_this {
-        global_object.set("isFinite".to_owned(), is_finite_value);
-    }
-
-    let is_nan_value = Value::Function(Function::new_native(
-        Some("isNaN"),
-        1,
-        NativeFunction::GlobalIsNaN,
-        false,
-    ));
-    env.insert("isNaN".to_owned(), is_nan_value.clone());
-    if let Value::Object(global_object) = global_this {
-        global_object.set("isNaN".to_owned(), is_nan_value);
-    }
+    global::install_globals(env, global_this);
 
     number::install_number(env, global_this, object_prototype.clone());
 
@@ -1345,8 +1313,8 @@ fn call_native_function(
         NativeFunction::MathTan => math::native_math_unary(&argument_values, f64::tan),
         NativeFunction::MathTanh => math::native_math_unary(&argument_values, f64::tanh),
         NativeFunction::MathTrunc => math::native_math_unary(&argument_values, f64::trunc),
-        NativeFunction::GlobalIsFinite => native_global_is_finite(&argument_values),
-        NativeFunction::GlobalIsNaN => native_global_is_nan(&argument_values),
+        NativeFunction::GlobalIsFinite => global::native_global_is_finite(&argument_values),
+        NativeFunction::GlobalIsNaN => global::native_global_is_nan(&argument_values),
         NativeFunction::Number => {
             number::native_number(function, this_value, &argument_values, is_construct)
         }
@@ -1475,16 +1443,6 @@ fn call_native_function(
             string::native_string_prototype_to_upper_case(this_value, env)
         }
     }
-}
-
-fn native_global_is_finite(argument_values: &[Value]) -> Result<Value, RuntimeError> {
-    let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    Ok(Value::Boolean(to_number(value)?.is_finite()))
-}
-
-fn native_global_is_nan(argument_values: &[Value]) -> Result<Value, RuntimeError> {
-    let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    Ok(Value::Boolean(to_number(value)?.is_nan()))
 }
 
 fn native_parse_float(argument_values: &[Value]) -> Result<Value, RuntimeError> {
