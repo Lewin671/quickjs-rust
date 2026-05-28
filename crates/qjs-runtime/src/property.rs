@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{ArrayRef, Function, ObjectRef, Property, RuntimeError, Value, to_number};
+use crate::{ArrayRef, Function, ObjectRef, Property, RuntimeError, Value};
 
 pub(crate) fn constructor_prototype(callee: &Value) -> Option<ObjectRef> {
     let Value::Function(function) = callee else {
@@ -53,8 +53,12 @@ pub(crate) fn function_prototype(function: &Function) -> Option<ObjectRef> {
 pub(crate) fn value_prototype(value: Value, env: &HashMap<String, Value>) -> Option<ObjectRef> {
     match value {
         Value::Object(object) => object.prototype(),
-        Value::Array(_) => array_prototype(env),
-        Value::Function(_) => function_intrinsic_prototype(env),
+        Value::Array(elements) => elements
+            .prototype_override()
+            .unwrap_or_else(|| array_prototype(env)),
+        Value::Function(function) => function
+            .internal_prototype_override()
+            .unwrap_or_else(|| function_intrinsic_prototype(env)),
         Value::String(_) | Value::Number(_) | Value::Boolean(_) => None,
         Value::Null | Value::Undefined => None,
     }
@@ -78,22 +82,26 @@ pub(crate) fn inherited_object_prototype_property(
     }
 }
 
-pub(crate) fn inherited_function_prototype_property(
+pub(crate) fn function_prototype_property(
+    function: &Function,
     env: &HashMap<String, Value>,
     key: &str,
 ) -> Option<Value> {
-    function_intrinsic_prototype(env)
+    function
+        .internal_prototype_override()
+        .unwrap_or_else(|| function_intrinsic_prototype(env))
         .and_then(|prototype| prototype.get(key))
-        .or_else(|| inherited_object_prototype_property(env, key))
 }
 
-pub(crate) fn inherited_array_prototype_property(
+pub(crate) fn array_prototype_property(
+    elements: &ArrayRef,
     env: &HashMap<String, Value>,
     key: &str,
 ) -> Option<Value> {
-    array_prototype(env)
+    elements
+        .prototype_override()
+        .unwrap_or_else(|| array_prototype(env))
         .and_then(|prototype| prototype.get(key))
-        .or_else(|| inherited_object_prototype_property(env, key))
 }
 
 pub(crate) fn inherited_string_prototype_property(
@@ -181,14 +189,4 @@ pub(crate) fn function_own_property_names(function: &Function) -> Vec<String> {
     names.push("length".to_owned());
     names.sort();
     names
-}
-
-pub(crate) fn to_array_index(value: Value) -> Result<usize, RuntimeError> {
-    let number = to_number(value)?;
-    if !number.is_finite() || number < 0.0 || number.fract() != 0.0 {
-        return Err(RuntimeError {
-            message: "array index must be a non-negative integer".to_owned(),
-        });
-    }
-    Ok(number as usize)
 }

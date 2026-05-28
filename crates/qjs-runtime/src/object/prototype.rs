@@ -16,10 +16,14 @@ pub(crate) fn native_object_get_prototype_of(
         Some(Value::Object(object)) => {
             Ok(object.prototype().map(Value::Object).unwrap_or(Value::Null))
         }
-        Some(Value::Array(_)) => Ok(array_prototype(env)
+        Some(Value::Array(elements)) => Ok(elements
+            .prototype_override()
+            .unwrap_or_else(|| array_prototype(env))
             .map(Value::Object)
             .unwrap_or(Value::Null)),
-        Some(Value::Function(_)) => Ok(function_intrinsic_prototype(env)
+        Some(Value::Function(function)) => Ok(function
+            .internal_prototype_override()
+            .unwrap_or_else(|| function_intrinsic_prototype(env))
             .map(Value::Object)
             .unwrap_or(Value::Null)),
         _ => Err(RuntimeError {
@@ -46,12 +50,19 @@ pub(crate) fn native_object_set_prototype_of(
         Value::Object(object) => object.set_prototype(prototype).map_err(|()| RuntimeError {
             message: "Object.setPrototypeOf failed".to_owned(),
         })?,
-        Value::String(_) | Value::Number(_) | Value::Boolean(_) => {}
-        Value::Array(_) | Value::Function(_) => {
-            return Err(RuntimeError {
-                message: "Object.setPrototypeOf target kind is not implemented".to_owned(),
-            });
+        Value::Array(elements) => elements
+            .set_prototype(prototype)
+            .map_err(|()| RuntimeError {
+                message: "Object.setPrototypeOf failed".to_owned(),
+            })?,
+        Value::Function(function) => {
+            function
+                .set_internal_prototype(prototype)
+                .map_err(|()| RuntimeError {
+                    message: "Object.setPrototypeOf failed".to_owned(),
+                })?
         }
+        Value::String(_) | Value::Number(_) | Value::Boolean(_) => {}
         Value::Null | Value::Undefined => {
             return Err(RuntimeError {
                 message: "Object.setPrototypeOf target must not be null or undefined".to_owned(),
@@ -173,7 +184,7 @@ fn property_value(value: &Value, key: &str, env: &HashMap<String, Value>) -> Opt
             .borrow()
             .get(key)
             .map(|property| property.value.clone())
-            .or_else(|| crate::inherited_function_prototype_property(env, key)),
+            .or_else(|| crate::function_prototype_property(function, env, key)),
         Value::Array(elements) => {
             if key == "length" {
                 Some(Value::Number(elements.len() as f64))
@@ -181,7 +192,7 @@ fn property_value(value: &Value, key: &str, env: &HashMap<String, Value>) -> Opt
                 key.parse::<usize>()
                     .ok()
                     .and_then(|index| elements.get(index))
-                    .or_else(|| crate::inherited_array_prototype_property(env, key))
+                    .or_else(|| crate::array_prototype_property(elements, env, key))
             }
         }
         Value::String(value) => {

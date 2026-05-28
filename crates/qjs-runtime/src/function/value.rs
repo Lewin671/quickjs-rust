@@ -28,6 +28,7 @@ pub struct Function {
     extensible: Rc<Cell<bool>>,
     sealed: Rc<Cell<bool>>,
     frozen: Rc<Cell<bool>>,
+    internal_prototype: Rc<RefCell<Option<Option<ObjectRef>>>>,
 }
 
 /// Bound function internal slots.
@@ -81,6 +82,7 @@ impl Function {
             extensible: Rc::new(Cell::new(true)),
             sealed: Rc::new(Cell::new(false)),
             frozen: Rc::new(Cell::new(false)),
+            internal_prototype: Rc::new(RefCell::new(None)),
         };
         if constructable {
             prototype
@@ -135,6 +137,7 @@ impl Function {
             extensible: Rc::new(Cell::new(true)),
             sealed: Rc::new(Cell::new(false)),
             frozen: Rc::new(Cell::new(false)),
+            internal_prototype: Rc::new(RefCell::new(None)),
         }
     }
 
@@ -159,6 +162,7 @@ impl Function {
             extensible: Rc::new(Cell::new(true)),
             sealed: Rc::new(Cell::new(false)),
             frozen: Rc::new(Cell::new(false)),
+            internal_prototype: Rc::new(RefCell::new(None)),
         };
         if constructable {
             prototype
@@ -230,6 +234,24 @@ impl Function {
         }
         properties.insert(key, Property::enumerable(value));
     }
+
+    pub(crate) fn internal_prototype_override(&self) -> Option<Option<ObjectRef>> {
+        self.internal_prototype.borrow().clone()
+    }
+
+    pub(crate) fn set_internal_prototype(&self, prototype: Option<ObjectRef>) -> Result<(), ()> {
+        if matches!(
+            self.internal_prototype.borrow().as_ref(),
+            Some(current) if same_prototype(current, &prototype)
+        ) {
+            return Ok(());
+        }
+        if !self.extensible.get() {
+            return Err(());
+        }
+        *self.internal_prototype.borrow_mut() = Some(prototype);
+        Ok(())
+    }
 }
 
 impl PartialEq for Function {
@@ -239,5 +261,13 @@ impl PartialEq for Function {
             && self.body == other.body
             && self.native == other.native
             && self.bound.is_some() == other.bound.is_some()
+    }
+}
+
+fn same_prototype(left: &Option<ObjectRef>, right: &Option<ObjectRef>) -> bool {
+    match (left, right) {
+        (None, None) => true,
+        (Some(left), Some(right)) => left.ptr_eq(right),
+        _ => false,
     }
 }

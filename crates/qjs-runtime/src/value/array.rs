@@ -4,7 +4,7 @@ use std::{
     rc::Rc,
 };
 
-use super::Value;
+use super::{ObjectRef, Value};
 
 /// Array storage reference.
 #[derive(Clone)]
@@ -13,6 +13,7 @@ pub struct ArrayRef {
     extensible: Rc<Cell<bool>>,
     sealed: Rc<Cell<bool>>,
     frozen: Rc<Cell<bool>>,
+    prototype: Rc<RefCell<Option<Option<ObjectRef>>>>,
 }
 
 impl ArrayRef {
@@ -22,6 +23,7 @@ impl ArrayRef {
             extensible: Rc::new(Cell::new(true)),
             sealed: Rc::new(Cell::new(false)),
             frozen: Rc::new(Cell::new(false)),
+            prototype: Rc::new(RefCell::new(None)),
         }
     }
 
@@ -131,6 +133,24 @@ impl ArrayRef {
     pub(crate) fn is_frozen(&self) -> bool {
         !self.extensible.get() && self.sealed.get() && self.frozen.get()
     }
+
+    pub(crate) fn prototype_override(&self) -> Option<Option<ObjectRef>> {
+        self.prototype.borrow().clone()
+    }
+
+    pub(crate) fn set_prototype(&self, prototype: Option<ObjectRef>) -> Result<(), ()> {
+        if matches!(
+            self.prototype.borrow().as_ref(),
+            Some(current) if same_prototype(current, &prototype)
+        ) {
+            return Ok(());
+        }
+        if !self.extensible.get() {
+            return Err(());
+        }
+        *self.prototype.borrow_mut() = Some(prototype);
+        Ok(())
+    }
 }
 
 impl fmt::Debug for ArrayRef {
@@ -139,5 +159,13 @@ impl fmt::Debug for ArrayRef {
             .debug_struct("ArrayRef")
             .field("len", &self.elements.borrow().len())
             .finish()
+    }
+}
+
+fn same_prototype(left: &Option<ObjectRef>, right: &Option<ObjectRef>) -> bool {
+    match (left, right) {
+        (None, None) => true,
+        (Some(left), Some(right)) => left.ptr_eq(right),
+        _ => false,
     }
 }

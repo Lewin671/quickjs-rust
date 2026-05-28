@@ -3,9 +3,8 @@ use std::collections::HashMap;
 use qjs_ast::{Expr, MemberProperty};
 
 use crate::{
-    RuntimeError, Value, boolean, inherited_array_prototype_property,
-    inherited_function_prototype_property, inherited_string_prototype_property, number, string,
-    to_array_index, to_length, to_property_key,
+    RuntimeError, Value, array_prototype_property, boolean, function_prototype_property,
+    inherited_string_prototype_property, number, string, to_length, to_property_key,
 };
 
 use super::eval_expr;
@@ -19,8 +18,8 @@ pub(super) fn eval_member(
         (Value::Array(elements), MemberProperty::Named(name)) if name == "length" => {
             Ok(Value::Number(elements.len() as f64))
         }
-        (Value::Array(_), MemberProperty::Named(name)) => {
-            Ok(inherited_array_prototype_property(env, name).unwrap_or(Value::Undefined))
+        (Value::Array(elements), MemberProperty::Named(name)) => {
+            Ok(array_prototype_property(&elements, env, name).unwrap_or(Value::Undefined))
         }
         (Value::Function(function), MemberProperty::Named(name)) if name == "length" => {
             Ok(Value::Number(function.params.len() as f64))
@@ -32,7 +31,7 @@ pub(super) fn eval_member(
                 .borrow()
                 .get(&key)
                 .map(|property| property.value.clone())
-                .or_else(|| inherited_function_prototype_property(env, &key))
+                .or_else(|| function_prototype_property(&function, env, &key))
                 .unwrap_or(Value::Undefined))
         }
         (Value::String(value), MemberProperty::Named(name)) if name == "length" => {
@@ -52,8 +51,13 @@ pub(super) fn eval_member(
         }
         (Value::Array(elements), MemberProperty::Computed(index)) => {
             let index = eval_expr(index, env)?;
-            let index = to_array_index(index)?;
-            Ok(elements.get(index).unwrap_or(Value::Undefined))
+            let key = to_property_key(index)?;
+            Ok(key
+                .parse::<usize>()
+                .ok()
+                .and_then(|index| elements.get(index))
+                .or_else(|| array_prototype_property(&elements, env, &key))
+                .unwrap_or(Value::Undefined))
         }
         (Value::Object(object), property) => {
             let key = property_key(property, env)?;

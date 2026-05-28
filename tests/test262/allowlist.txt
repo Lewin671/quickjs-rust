@@ -283,6 +283,8 @@ cases/object-seal-function.js
 cases/object-seal-length.js
 cases/object-seal-return.js
 cases/object-set-prototype-of-length.js
+cases/object-set-prototype-of-array.js
+cases/object-set-prototype-of-function.js
 cases/object-set-prototype-of-null.js
 cases/object-set-prototype-of-primitive.js
 cases/object-set-prototype-of-success.js
