@@ -1,0 +1,1 @@
+"abcabc".lastIndexOf("bc") + ":" + "abcabc".lastIndexOf("bc", 3) + ":" + "abcabc".lastIndexOf("bc", 4) + ":" + "abcabc".lastIndexOf("z") + ":" + "abc".lastIndexOf("", 1) + ":" + "abc".lastIndexOf("", 99) + ":" + String.prototype.lastIndexOf.length
