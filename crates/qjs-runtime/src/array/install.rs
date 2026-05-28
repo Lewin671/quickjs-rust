@@ -112,6 +112,12 @@ pub(crate) fn install_array(
     );
     define_array_prototype_function(
         &array_prototype,
+        "some",
+        1,
+        NativeFunction::ArrayPrototypeSome,
+    );
+    define_array_prototype_function(
+        &array_prototype,
         "toString",
         0,
         NativeFunction::ArrayPrototypeToString,

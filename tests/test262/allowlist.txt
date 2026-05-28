@@ -68,6 +68,11 @@ cases/array-slice-default-end.js
 cases/array-slice-length.js
 cases/array-slice-negative-index.js
 cases/array-slice-start-past-length.js
+cases/array-some-basic.js
+cases/array-some-callback-arguments.js
+cases/array-some-this-arg.js
+cases/array-some-length.js
+cases/array-some-not-found.js
 cases/array-to-string-basic.js
 cases/array-to-string-length.js
 cases/array-unshift-basic.js

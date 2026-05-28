@@ -61,6 +61,9 @@ pub(crate) fn call_native_function(
         NativeFunction::ArrayPrototypeSlice => {
             array::native_array_prototype_slice(this_value, &argument_values)
         }
+        NativeFunction::ArrayPrototypeSome => {
+            array::native_array_prototype_some(this_value, &argument_values, env)
+        }
         NativeFunction::ArrayPrototypeToString => {
             array::native_array_prototype_to_string(this_value)
         }
