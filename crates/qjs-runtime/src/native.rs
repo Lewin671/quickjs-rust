@@ -25,6 +25,9 @@ pub(crate) fn call_native_function(
         NativeFunction::ArrayPrototypeCopyWithin => {
             array::native_array_prototype_copy_within(this_value, &argument_values)
         }
+        NativeFunction::ArrayPrototypeEvery => {
+            array::native_array_prototype_every(this_value, &argument_values, env)
+        }
         NativeFunction::ArrayPrototypeFill => {
             array::native_array_prototype_fill(this_value, &argument_values)
         }

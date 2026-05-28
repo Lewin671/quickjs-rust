@@ -2,38 +2,66 @@ use std::collections::HashMap;
 
 use crate::{ArrayRef, RuntimeError, Value, call_function, is_truthy};
 
-pub(crate) fn native_array_prototype_map(
+struct ArrayIteration {
+    elements: ArrayRef,
+    callback: Value,
+    callback_this: Value,
+    source: Vec<Value>,
+}
+
+fn prepare_array_iteration(
+    method: &str,
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
-    let Value::Array(elements) = this_value.clone() else {
+) -> Result<ArrayIteration, RuntimeError> {
+    let Value::Array(elements) = this_value else {
         return Err(RuntimeError {
-            message: "Array.prototype.map called on non-array".to_owned(),
+            message: format!("Array.prototype.{method} called on non-array"),
         });
     };
     let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if !matches!(callback, Value::Function(_)) {
         return Err(RuntimeError {
-            message: "Array.prototype.map callback is not callable".to_owned(),
+            message: format!("Array.prototype.{method} callback is not callable"),
         });
     }
 
-    let callback_this = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
-    let source = elements.to_vec();
-    let mut mapped = Vec::with_capacity(source.len());
-    for (index, value) in source.into_iter().enumerate() {
-        mapped.push(call_function(
-            callback.clone(),
-            callback_this.clone(),
-            vec![
-                value,
-                Value::Number(index as f64),
-                Value::Array(elements.clone()),
-            ],
-            env,
-            false,
-        )?);
+    Ok(ArrayIteration {
+        source: elements.to_vec(),
+        elements,
+        callback,
+        callback_this: argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+    })
+}
+
+fn call_iteration_callback(
+    iteration: &ArrayIteration,
+    value: Value,
+    index: usize,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    call_function(
+        iteration.callback.clone(),
+        iteration.callback_this.clone(),
+        vec![
+            value,
+            Value::Number(index as f64),
+            Value::Array(iteration.elements.clone()),
+        ],
+        env,
+        false,
+    )
+}
+
+pub(crate) fn native_array_prototype_map(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let iteration = prepare_array_iteration("map", this_value, argument_values)?;
+    let mut mapped = Vec::with_capacity(iteration.source.len());
+    for (index, value) in iteration.source.iter().cloned().enumerate() {
+        mapped.push(call_iteration_callback(&iteration, value, index, env)?);
     }
 
     Ok(Value::Array(ArrayRef::new(mapped)))
@@ -44,33 +72,10 @@ pub(crate) fn native_array_prototype_filter(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let Value::Array(elements) = this_value.clone() else {
-        return Err(RuntimeError {
-            message: "Array.prototype.filter called on non-array".to_owned(),
-        });
-    };
-    let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    if !matches!(callback, Value::Function(_)) {
-        return Err(RuntimeError {
-            message: "Array.prototype.filter callback is not callable".to_owned(),
-        });
-    }
-
-    let callback_this = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
-    let source = elements.to_vec();
+    let iteration = prepare_array_iteration("filter", this_value, argument_values)?;
     let mut filtered = Vec::new();
-    for (index, value) in source.into_iter().enumerate() {
-        let selected = call_function(
-            callback.clone(),
-            callback_this.clone(),
-            vec![
-                value.clone(),
-                Value::Number(index as f64),
-                Value::Array(elements.clone()),
-            ],
-            env,
-            false,
-        )?;
+    for (index, value) in iteration.source.iter().cloned().enumerate() {
+        let selected = call_iteration_callback(&iteration, value.clone(), index, env)?;
         if is_truthy(&selected) {
             filtered.push(value);
         }
@@ -84,32 +89,9 @@ pub(crate) fn native_array_prototype_find(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let Value::Array(elements) = this_value.clone() else {
-        return Err(RuntimeError {
-            message: "Array.prototype.find called on non-array".to_owned(),
-        });
-    };
-    let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    if !matches!(callback, Value::Function(_)) {
-        return Err(RuntimeError {
-            message: "Array.prototype.find callback is not callable".to_owned(),
-        });
-    }
-
-    let callback_this = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
-    let source = elements.to_vec();
-    for (index, value) in source.into_iter().enumerate() {
-        let selected = call_function(
-            callback.clone(),
-            callback_this.clone(),
-            vec![
-                value.clone(),
-                Value::Number(index as f64),
-                Value::Array(elements.clone()),
-            ],
-            env,
-            false,
-        )?;
+    let iteration = prepare_array_iteration("find", this_value, argument_values)?;
+    for (index, value) in iteration.source.iter().cloned().enumerate() {
+        let selected = call_iteration_callback(&iteration, value.clone(), index, env)?;
         if is_truthy(&selected) {
             return Ok(value);
         }
@@ -123,32 +105,9 @@ pub(crate) fn native_array_prototype_for_each(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let Value::Array(elements) = this_value.clone() else {
-        return Err(RuntimeError {
-            message: "Array.prototype.forEach called on non-array".to_owned(),
-        });
-    };
-    let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    if !matches!(callback, Value::Function(_)) {
-        return Err(RuntimeError {
-            message: "Array.prototype.forEach callback is not callable".to_owned(),
-        });
-    }
-
-    let callback_this = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
-    let source = elements.to_vec();
-    for (index, value) in source.into_iter().enumerate() {
-        call_function(
-            callback.clone(),
-            callback_this.clone(),
-            vec![
-                value,
-                Value::Number(index as f64),
-                Value::Array(elements.clone()),
-            ],
-            env,
-            false,
-        )?;
+    let iteration = prepare_array_iteration("forEach", this_value, argument_values)?;
+    for (index, value) in iteration.source.iter().cloned().enumerate() {
+        call_iteration_callback(&iteration, value, index, env)?;
     }
 
     Ok(Value::Undefined)
@@ -159,36 +118,29 @@ pub(crate) fn native_array_prototype_some(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let Value::Array(elements) = this_value.clone() else {
-        return Err(RuntimeError {
-            message: "Array.prototype.some called on non-array".to_owned(),
-        });
-    };
-    let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    if !matches!(callback, Value::Function(_)) {
-        return Err(RuntimeError {
-            message: "Array.prototype.some callback is not callable".to_owned(),
-        });
-    }
-
-    let callback_this = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
-    let source = elements.to_vec();
-    for (index, value) in source.into_iter().enumerate() {
-        let selected = call_function(
-            callback.clone(),
-            callback_this.clone(),
-            vec![
-                value,
-                Value::Number(index as f64),
-                Value::Array(elements.clone()),
-            ],
-            env,
-            false,
-        )?;
+    let iteration = prepare_array_iteration("some", this_value, argument_values)?;
+    for (index, value) in iteration.source.iter().cloned().enumerate() {
+        let selected = call_iteration_callback(&iteration, value, index, env)?;
         if is_truthy(&selected) {
             return Ok(Value::Boolean(true));
         }
     }
 
     Ok(Value::Boolean(false))
+}
+
+pub(crate) fn native_array_prototype_every(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let iteration = prepare_array_iteration("every", this_value, argument_values)?;
+    for (index, value) in iteration.source.iter().cloned().enumerate() {
+        let selected = call_iteration_callback(&iteration, value, index, env)?;
+        if !is_truthy(&selected) {
+            return Ok(Value::Boolean(false));
+        }
+    }
+
+    Ok(Value::Boolean(true))
 }

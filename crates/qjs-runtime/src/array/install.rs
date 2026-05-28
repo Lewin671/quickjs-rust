@@ -28,6 +28,12 @@ pub(crate) fn install_array(
     );
     define_array_prototype_function(
         &array_prototype,
+        "every",
+        1,
+        NativeFunction::ArrayPrototypeEvery,
+    );
+    define_array_prototype_function(
+        &array_prototype,
         "fill",
         1,
         NativeFunction::ArrayPrototypeFill,
