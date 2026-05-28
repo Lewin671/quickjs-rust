@@ -1,6 +1,6 @@
 use qjs_ast::{
-    AssignmentOp, AssignmentTarget, BinaryOp, Expr, ForInLeft, ForInit, MemberProperty, Stmt,
-    UnaryOp, UpdateOp, VarKind,
+    AssignmentOp, AssignmentTarget, BinaryOp, Expr, ForInLeft, ForInit, MemberProperty,
+    ObjectPropertyKey, Stmt, UnaryOp, UpdateOp, VarKind,
 };
 
 use super::parse_script;
@@ -561,17 +561,32 @@ fn parses_object_literal_and_member_assignment() {
         panic!("expected object initializer");
     };
     assert_eq!(properties.len(), 2);
-    assert_eq!(properties[0].key, "answer");
-    assert_eq!(properties[1].key, "name");
+    assert_eq!(
+        properties[0].key,
+        ObjectPropertyKey::Literal("answer".to_owned())
+    );
+    assert_eq!(
+        properties[1].key,
+        ObjectPropertyKey::Literal("name".to_owned())
+    );
     assert!(matches!(target, AssignmentTarget::Member { .. }));
 
     let script = parse_script("({ true: 1, false: 2, null: 3 });").expect("source should parse");
     let [Stmt::Expr(Expr::Object { properties, .. })] = script.body.as_slice() else {
         panic!("expected one object expression");
     };
-    assert_eq!(properties[0].key, "true");
-    assert_eq!(properties[1].key, "false");
-    assert_eq!(properties[2].key, "null");
+    assert_eq!(
+        properties[0].key,
+        ObjectPropertyKey::Literal("true".to_owned())
+    );
+    assert_eq!(
+        properties[1].key,
+        ObjectPropertyKey::Literal("false".to_owned())
+    );
+    assert_eq!(
+        properties[2].key,
+        ObjectPropertyKey::Literal("null".to_owned())
+    );
 
     let script =
         parse_script("let answer = 42; ({ answer, named: answer });").expect("source should parse");
@@ -579,10 +594,22 @@ fn parses_object_literal_and_member_assignment() {
         panic!("expected object expression with shorthand property");
     };
     assert_eq!(properties.len(), 2);
-    assert_eq!(properties[0].key, "answer");
+    assert_eq!(
+        properties[0].key,
+        ObjectPropertyKey::Literal("answer".to_owned())
+    );
     assert!(matches!(
         properties[0].value,
         Expr::Identifier { ref name, .. } if name == "answer"
+    ));
+
+    let script = parse_script("let key = 'answer'; ({ [key]: 42 });").expect("source should parse");
+    let [_, Stmt::Expr(Expr::Object { properties, .. })] = script.body.as_slice() else {
+        panic!("expected object expression with computed property");
+    };
+    assert!(matches!(
+        properties[0].key,
+        ObjectPropertyKey::Computed(Expr::Identifier { ref name, .. }) if name == "key"
     ));
 }
 

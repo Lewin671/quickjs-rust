@@ -1438,6 +1438,14 @@ fn evaluates_object_literals_and_member_access() {
         ),
         Ok(Value::Number(4.0))
     );
+    assert_eq!(
+        eval("let key = 'answer'; let o = { [key]: 42 }; o.answer;"),
+        Ok(Value::Number(42.0))
+    );
+    assert_eq!(
+        eval("let o = { [1 + 1]: 'two' }; o[2];"),
+        Ok(Value::String("two".to_owned()))
+    );
     assert_eq!(eval("({ 'a': 1 })['a'];"), Ok(Value::Number(1.0)));
     assert_eq!(eval("({ true: 1 }).true;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("({}).missing;"), Ok(Value::Undefined));

@@ -196,6 +196,7 @@ cases/object-keys-primitive-string-basic.js
 cases/object-keys-prototype-negative.js
 cases/object-literal-basic.js
 cases/object-literal-object-instanceof-basic.js
+cases/object-computed-property-basic.js
 cases/object-shorthand-property-basic.js
 cases/object-put-basic.js
 cases/object-to-string-direct-basic.js

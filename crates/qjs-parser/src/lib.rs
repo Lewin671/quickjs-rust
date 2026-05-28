@@ -2,8 +2,8 @@
 
 use qjs_ast::{
     AssignmentOp, AssignmentTarget, BinaryOp, CatchClause, Expr, ForInLeft, ForInit, Literal,
-    MemberProperty, ObjectProperty, Script, Span, Stmt, SwitchCase, UnaryOp, UpdateOp,
-    VarDeclarator, VarKind,
+    MemberProperty, ObjectProperty, ObjectPropertyKey, Script, Span, Stmt, SwitchCase, UnaryOp,
+    UpdateOp, VarDeclarator, VarKind,
 };
 use qjs_lexer::{Token, TokenKind, lex};
 
@@ -1076,12 +1076,19 @@ impl Parser {
                             name: name.clone(),
                             span: key_token.span,
                         };
-                        (name, Some(value))
+                        (ObjectPropertyKey::Literal(name), Some(value))
                     }
-                    TokenKind::String(name) | TokenKind::Number(name) => (name, None),
-                    TokenKind::True => ("true".to_owned(), None),
-                    TokenKind::False => ("false".to_owned(), None),
-                    TokenKind::Null => ("null".to_owned(), None),
+                    TokenKind::String(name) | TokenKind::Number(name) => {
+                        (ObjectPropertyKey::Literal(name), None)
+                    }
+                    TokenKind::True => (ObjectPropertyKey::Literal("true".to_owned()), None),
+                    TokenKind::False => (ObjectPropertyKey::Literal("false".to_owned()), None),
+                    TokenKind::Null => (ObjectPropertyKey::Literal("null".to_owned()), None),
+                    TokenKind::LeftBracket => {
+                        let name = self.assignment()?;
+                        self.expect(&TokenKind::RightBracket)?;
+                        (ObjectPropertyKey::Computed(name), None)
+                    }
                     _ => {
                         return Err(ParseError {
                             message: "expected property name".to_owned(),
@@ -1096,7 +1103,10 @@ impl Parser {
                 } else {
                     return Err(ParseError {
                         message: "expected `:` after property name".to_owned(),
-                        span: key_token.span,
+                        span: match &key {
+                            ObjectPropertyKey::Literal(_) => key_token.span,
+                            ObjectPropertyKey::Computed(expr) => expr.span(),
+                        },
                     });
                 };
                 let span = Span::new(key_token.span.start, value.span().end);

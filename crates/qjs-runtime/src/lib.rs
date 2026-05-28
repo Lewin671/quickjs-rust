@@ -4,7 +4,7 @@ use std::{cell::RefCell, collections::HashMap, fmt, rc::Rc};
 
 use qjs_ast::{
     AssignmentOp, AssignmentTarget, BinaryOp, CatchClause, Expr, ForInLeft, ForInit, Literal,
-    MemberProperty, Script, Stmt, SwitchCase, UnaryOp, UpdateOp, VarKind,
+    MemberProperty, ObjectPropertyKey, Script, Stmt, SwitchCase, UnaryOp, UpdateOp, VarKind,
 };
 use qjs_parser::parse_script;
 
@@ -1479,7 +1479,11 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, Run
         Expr::Object { properties, .. } => {
             let mut values = HashMap::new();
             for property in properties {
-                values.insert(property.key.clone(), eval_expr(&property.value, env)?);
+                let key = match &property.key {
+                    ObjectPropertyKey::Literal(key) => key.clone(),
+                    ObjectPropertyKey::Computed(expr) => to_property_key(eval_expr(expr, env)?)?,
+                };
+                values.insert(key, eval_expr(&property.value, env)?);
             }
             Ok(Value::Object(ObjectRef::with_prototype(
                 values,
