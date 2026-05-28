@@ -261,6 +261,8 @@ enum NativeFunction {
     NumberIsInteger,
     NumberIsNaN,
     NumberIsSafeInteger,
+    ParseFloat,
+    ParseInt,
     Object,
     ObjectAssign,
     ObjectCreate,
@@ -648,10 +650,40 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
         1,
         NativeFunction::NumberIsSafeInteger,
     );
+    let parse_float_value = Value::Function(Function::new_native(
+        Some("parseFloat"),
+        1,
+        NativeFunction::ParseFloat,
+        false,
+    ));
+    let parse_int_value = Value::Function(Function::new_native(
+        Some("parseInt"),
+        2,
+        NativeFunction::ParseInt,
+        false,
+    ));
+    number_function.properties.borrow_mut().insert(
+        "parseFloat".to_owned(),
+        Property::non_enumerable(parse_float_value.clone()),
+    );
+    number_function.properties.borrow_mut().insert(
+        "parseInt".to_owned(),
+        Property::non_enumerable(parse_int_value.clone()),
+    );
     let number_value = Value::Function(number_function);
     env.insert("Number".to_owned(), number_value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.set("Number".to_owned(), number_value);
+    }
+
+    env.insert("parseFloat".to_owned(), parse_float_value.clone());
+    if let Value::Object(global_object) = global_this {
+        global_object.set("parseFloat".to_owned(), parse_float_value);
+    }
+
+    env.insert("parseInt".to_owned(), parse_int_value.clone());
+    if let Value::Object(global_object) = global_this {
+        global_object.set("parseInt".to_owned(), parse_int_value);
     }
 
     let string_prototype =
@@ -1604,6 +1636,8 @@ fn call_native_function(
         NativeFunction::NumberIsInteger => native_number_is_integer(&argument_values),
         NativeFunction::NumberIsNaN => native_number_is_nan(&argument_values),
         NativeFunction::NumberIsSafeInteger => native_number_is_safe_integer(&argument_values),
+        NativeFunction::ParseFloat => native_parse_float(&argument_values),
+        NativeFunction::ParseInt => native_parse_int(&argument_values),
         NativeFunction::Object => {
             native_object(function, this_value, &argument_values, is_construct)
         }
@@ -2123,6 +2157,130 @@ fn native_number_is_safe_integer(argument_values: &[Value]) -> Result<Value, Run
         Some(Value::Number(number))
             if number.is_finite() && number.fract() == 0.0 && number.abs() <= MAX_SAFE_INTEGER
     )))
+}
+
+fn native_parse_float(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    let input = to_js_string(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    Ok(Value::Number(parse_float_string(&input)))
+}
+
+fn parse_float_string(input: &str) -> f64 {
+    let input = input.trim_start();
+    if input.starts_with("Infinity") {
+        return f64::INFINITY;
+    }
+    if input.starts_with("+Infinity") {
+        return f64::INFINITY;
+    }
+    if input.starts_with("-Infinity") {
+        return f64::NEG_INFINITY;
+    }
+
+    let bytes = input.as_bytes();
+    let mut end = 0;
+    if matches!(bytes.first(), Some(b'+') | Some(b'-')) {
+        end = 1;
+    }
+
+    let mut digits_before_dot = 0usize;
+    while bytes.get(end).is_some_and(u8::is_ascii_digit) {
+        digits_before_dot += 1;
+        end += 1;
+    }
+
+    let mut digits_after_dot = 0usize;
+    if bytes.get(end) == Some(&b'.') {
+        end += 1;
+        while bytes.get(end).is_some_and(u8::is_ascii_digit) {
+            digits_after_dot += 1;
+            end += 1;
+        }
+    }
+
+    if digits_before_dot + digits_after_dot == 0 {
+        return f64::NAN;
+    }
+
+    let exponent_marker = end;
+    if matches!(bytes.get(end), Some(b'e') | Some(b'E')) {
+        let mut exponent_end = end + 1;
+        if matches!(bytes.get(exponent_end), Some(b'+') | Some(b'-')) {
+            exponent_end += 1;
+        }
+        let exponent_digits_start = exponent_end;
+        while bytes.get(exponent_end).is_some_and(u8::is_ascii_digit) {
+            exponent_end += 1;
+        }
+        if exponent_end > exponent_digits_start {
+            end = exponent_end;
+        } else {
+            end = exponent_marker;
+        }
+    }
+
+    input[..end].parse::<f64>().unwrap_or(f64::NAN)
+}
+
+fn native_parse_int(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    let input = to_js_string(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    let radix = argument_values
+        .get(1)
+        .cloned()
+        .map(to_int32)
+        .transpose()?
+        .unwrap_or(0);
+    Ok(Value::Number(parse_int_string(&input, radix)))
+}
+
+fn parse_int_string(input: &str, radix: i32) -> f64 {
+    let mut input = input.trim_start();
+    let mut sign = 1.0;
+    if let Some(rest) = input.strip_prefix('-') {
+        sign = -1.0;
+        input = rest;
+    } else if let Some(rest) = input.strip_prefix('+') {
+        input = rest;
+    }
+
+    let mut radix = radix;
+    if radix != 0 && !(2..=36).contains(&radix) {
+        return f64::NAN;
+    }
+
+    if radix == 0 {
+        if let Some(rest) = input
+            .strip_prefix("0x")
+            .or_else(|| input.strip_prefix("0X"))
+        {
+            input = rest;
+            radix = 16;
+        } else {
+            radix = 10;
+        }
+    } else if radix == 16 {
+        if let Some(rest) = input
+            .strip_prefix("0x")
+            .or_else(|| input.strip_prefix("0X"))
+        {
+            input = rest;
+        }
+    }
+
+    let radix = radix as u32;
+    let mut value = 0.0;
+    let mut digits = 0usize;
+    for character in input.chars() {
+        let Some(digit) = character.to_digit(36) else {
+            break;
+        };
+        if digit >= radix {
+            break;
+        }
+        value = value * f64::from(radix) + f64::from(digit);
+        digits += 1;
+    }
+
+    if digits == 0 { f64::NAN } else { sign * value }
 }
 
 fn native_string(argument_values: &[Value]) -> Result<Value, RuntimeError> {
@@ -4874,7 +5032,32 @@ mod tests {
             eval("Object.getOwnPropertyDescriptor(Number, 'NaN').writable;"),
             Ok(Value::Boolean(false))
         );
+        assert_eq!(eval("parseInt.length;"), Ok(Value::Number(2.0)));
+        assert_eq!(eval("parseFloat.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("Number.parseInt.length;"), Ok(Value::Number(2.0)));
+        assert_eq!(eval("Number.parseFloat.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(
+            eval("Number.parseInt === parseInt;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(eval("parseInt('15px');"), Ok(Value::Number(15.0)));
+        assert_eq!(eval("parseInt('0x10');"), Ok(Value::Number(16.0)));
+        assert_eq!(eval("parseInt('10', 2);"), Ok(Value::Number(2.0)));
+        assert_eq!(eval("parseInt('-10', 10);"), Ok(Value::Number(-10.0)));
+        assert_eq!(eval("parseInt('z', 36);"), Ok(Value::Number(35.0)));
+        assert_eq!(
+            eval("parseInt('10', 37) === NaN;"),
+            Ok(Value::Boolean(false))
+        );
+        assert_eq!(eval("parseFloat('3.5px');"), Ok(Value::Number(3.5)));
+        assert_eq!(eval("parseFloat('-1.25e2x');"), Ok(Value::Number(-125.0)));
+        assert_eq!(
+            eval("parseFloat('Infinity');"),
+            Ok(Value::Number(f64::INFINITY))
+        );
+        assert_eq!(eval("parseFloat('x') === NaN;"), Ok(Value::Boolean(false)));
         assert!(eval("new Number.isNaN(NaN);").is_err());
+        assert!(eval("new parseInt('10');").is_err());
     }
 
     #[test]
