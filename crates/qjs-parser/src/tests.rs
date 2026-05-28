@@ -611,6 +611,28 @@ fn parses_object_literal_and_member_assignment() {
         properties[0].key,
         ObjectPropertyKey::Computed(Expr::Identifier { ref name, .. }) if name == "key"
     ));
+
+    let script =
+        parse_script("({ method(a, b) { return a + b; } });").expect("source should parse");
+    let [Stmt::Expr(Expr::Object { properties, .. })] = script.body.as_slice() else {
+        panic!("expected object expression with method definition");
+    };
+    assert_eq!(
+        properties[0].key,
+        ObjectPropertyKey::Literal("method".to_owned())
+    );
+    let Expr::Function {
+        name,
+        params,
+        constructable,
+        ..
+    } = &properties[0].value
+    else {
+        panic!("expected method value to parse as function expression");
+    };
+    assert_eq!(name.as_deref(), Some("method"));
+    assert_eq!(params, &["a".to_owned(), "b".to_owned()]);
+    assert!(!constructable);
 }
 
 #[test]

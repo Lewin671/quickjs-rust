@@ -1,6 +1,11 @@
 //! Early interpreter for the Rust QuickJS rewrite.
 
-use std::{cell::RefCell, collections::HashMap, fmt, rc::Rc};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    fmt,
+    rc::Rc,
+};
 
 use qjs_ast::{
     AssignmentOp, AssignmentTarget, BinaryOp, CatchClause, Expr, ForInLeft, ForInit, Literal,
@@ -164,6 +169,16 @@ impl Function {
         body: Vec<Stmt>,
         env: HashMap<String, Value>,
     ) -> Self {
+        Self::new_user_with_constructable(name, params, body, env, true)
+    }
+
+    fn new_user_with_constructable(
+        name: Option<String>,
+        params: Vec<String>,
+        body: Vec<Stmt>,
+        env: HashMap<String, Value>,
+        constructable: bool,
+    ) -> Self {
         let prototype = ObjectRef::with_prototype(HashMap::new(), object_prototype(&env));
         let function = Self {
             name,
@@ -171,15 +186,17 @@ impl Function {
             body,
             env,
             native: None,
-            constructable: true,
+            constructable,
             properties: Rc::new(RefCell::new(HashMap::new())),
         };
-        prototype
-            .define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
-        function.properties.borrow_mut().insert(
-            "prototype".to_owned(),
-            Property::non_enumerable(Value::Object(prototype)),
-        );
+        if constructable {
+            prototype
+                .define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
+            function.properties.borrow_mut().insert(
+                "prototype".to_owned(),
+                Property::non_enumerable(Value::Object(prototype)),
+            );
+        }
         function
     }
 
@@ -947,6 +964,88 @@ fn hoist_function_declarations(body: &[Stmt], env: &mut HashMap<String, Value>) 
     }
 }
 
+fn collect_function_local_names(function: &Function) -> HashSet<String> {
+    let mut names = HashSet::new();
+    names.insert("this".to_owned());
+    names.insert("arguments".to_owned());
+    names.extend(function.params.iter().cloned());
+    if let Some(name) = &function.name {
+        names.insert(name.clone());
+    }
+    collect_statement_local_names(&function.body, &mut names);
+    names
+}
+
+fn collect_statement_local_names(body: &[Stmt], names: &mut HashSet<String>) {
+    for stmt in body {
+        match stmt {
+            Stmt::VarDecl { declarations, .. } => {
+                names.extend(
+                    declarations
+                        .iter()
+                        .map(|declaration| declaration.name.clone()),
+                );
+            }
+            Stmt::FunctionDecl { name, .. } => {
+                names.insert(name.clone());
+            }
+            Stmt::Block { body, .. } => collect_statement_local_names(body, names),
+            Stmt::If {
+                consequent,
+                alternate,
+                ..
+            } => {
+                collect_statement_local_names(std::slice::from_ref(consequent.as_ref()), names);
+                if let Some(alternate) = alternate {
+                    collect_statement_local_names(std::slice::from_ref(alternate.as_ref()), names);
+                }
+            }
+            Stmt::While { body, .. } | Stmt::DoWhile { body, .. } => {
+                collect_statement_local_names(std::slice::from_ref(body.as_ref()), names);
+            }
+            Stmt::For { init, body, .. } => {
+                if let Some(ForInit::VarDecl { declarations, .. }) = init {
+                    names.extend(
+                        declarations
+                            .iter()
+                            .map(|declaration| declaration.name.clone()),
+                    );
+                }
+                collect_statement_local_names(std::slice::from_ref(body.as_ref()), names);
+            }
+            Stmt::ForIn { left, body, .. } => {
+                if let ForInLeft::VarDecl { name, .. } = left {
+                    names.insert(name.clone());
+                }
+                collect_statement_local_names(std::slice::from_ref(body.as_ref()), names);
+            }
+            Stmt::Switch { cases, .. } => {
+                for case in cases {
+                    collect_statement_local_names(&case.consequent, names);
+                }
+            }
+            Stmt::Try {
+                block,
+                handler,
+                finalizer,
+                ..
+            } => {
+                collect_statement_local_names(block, names);
+                if let Some(handler) = handler {
+                    if let Some(param) = &handler.param {
+                        names.insert(param.clone());
+                    }
+                    collect_statement_local_names(&handler.body, names);
+                }
+                if let Some(finalizer) = finalizer {
+                    collect_statement_local_names(finalizer, names);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 fn eval_switch(
     discriminant: &Expr,
     cases: &[SwitchCase],
@@ -1191,6 +1290,8 @@ fn call_function(
             env,
         );
     }
+    let caller_names: Vec<String> = env.keys().cloned().collect();
+    let function_local_names = collect_function_local_names(&function);
     let mut local_env = env.clone();
     for (name, value) in &function.env {
         local_env
@@ -1216,7 +1317,16 @@ fn call_function(
         local_env.insert(param.clone(), value);
     }
 
-    match eval_statement_list(&function.body, &mut local_env)? {
+    let completion = eval_statement_list(&function.body, &mut local_env)?;
+    for name in caller_names {
+        if name != GLOBAL_THIS_BINDING && !function_local_names.contains(&name) {
+            if let Some(value) = local_env.get(&name) {
+                env.insert(name, value.clone());
+            }
+        }
+    }
+
+    match completion {
         Completion::Normal(value) => Ok(value),
         Completion::Return(value) => Ok(value),
         Completion::Break | Completion::Continue => Err(RuntimeError {
@@ -1491,12 +1601,17 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, Run
             )))
         }
         Expr::Function {
-            name, params, body, ..
-        } => Ok(Value::Function(Function::new_user(
+            name,
+            params,
+            body,
+            constructable,
+            ..
+        } => Ok(Value::Function(Function::new_user_with_constructable(
             name.clone(),
             params.clone(),
             body.clone(),
             env.clone(),
+            *constructable,
         ))),
         Expr::Sequence { expressions, .. } => {
             let mut last = Value::Undefined;

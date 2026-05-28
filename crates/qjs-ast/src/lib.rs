@@ -354,6 +354,8 @@ pub enum Expr {
         params: Vec<String>,
         /// Function body statements.
         body: Vec<Stmt>,
+        /// Whether the function can be called with `new`.
+        constructable: bool,
         /// Source span.
         span: Span,
     },

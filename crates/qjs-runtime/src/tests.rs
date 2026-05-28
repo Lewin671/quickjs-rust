@@ -1446,6 +1446,19 @@ fn evaluates_object_literals_and_member_access() {
         eval("let o = { [1 + 1]: 'two' }; o[2];"),
         Ok(Value::String("two".to_owned()))
     );
+    assert_eq!(
+        eval("let object = { value: 7, method() { return this.value; } }; object.method();"),
+        Ok(Value::Number(7.0))
+    );
+    assert_eq!(
+        eval("let object = { add(a, b) { return a + b; } }; object.add(2, 3);"),
+        Ok(Value::Number(5.0))
+    );
+    assert_eq!(
+        eval("let method = { method() {} }.method; method.prototype;"),
+        Ok(Value::Undefined)
+    );
+    assert!(eval("let method = { method() {} }.method; new method();").is_err());
     assert_eq!(eval("({ 'a': 1 })['a'];"), Ok(Value::Number(1.0)));
     assert_eq!(eval("({ true: 1 }).true;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("({}).missing;"), Ok(Value::Undefined));

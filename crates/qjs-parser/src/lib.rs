@@ -515,6 +515,7 @@ impl Parser {
             name,
             params,
             body,
+            constructable: true,
             span: Span::new(start, end),
         })
     }
@@ -1096,7 +1097,28 @@ impl Parser {
                         });
                     }
                 };
-                let value = if self.match_kind(&TokenKind::Colon) {
+                let value = if self.at(&TokenKind::LeftParen) {
+                    let method_start = key_token.span.start;
+                    let method_name = match &key {
+                        ObjectPropertyKey::Literal(name) => Some(name.clone()),
+                        ObjectPropertyKey::Computed(_) => None,
+                    };
+                    let params = self.function_parameters()?;
+                    let body = self.block_body()?;
+                    let end = self
+                        .tokens
+                        .get(self.cursor.saturating_sub(1))
+                        .expect("parser should always have eof token")
+                        .span
+                        .end;
+                    Expr::Function {
+                        name: method_name,
+                        params,
+                        body,
+                        constructable: false,
+                        span: Span::new(method_start, end),
+                    }
+                } else if self.match_kind(&TokenKind::Colon) {
                     self.assignment()?
                 } else if let Some(value) = shorthand_value {
                     value
