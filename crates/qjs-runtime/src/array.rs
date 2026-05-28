@@ -12,8 +12,9 @@ pub(crate) use install::install_array;
 pub(crate) use iteration::{
     native_array_prototype_every, native_array_prototype_filter, native_array_prototype_find,
     native_array_prototype_find_index, native_array_prototype_find_last,
-    native_array_prototype_for_each, native_array_prototype_map, native_array_prototype_reduce,
-    native_array_prototype_reduce_right, native_array_prototype_some,
+    native_array_prototype_find_last_index, native_array_prototype_for_each,
+    native_array_prototype_map, native_array_prototype_reduce, native_array_prototype_reduce_right,
+    native_array_prototype_some,
 };
 pub(crate) use join::{native_array_prototype_join, native_array_prototype_to_string};
 pub(crate) use mutation::{

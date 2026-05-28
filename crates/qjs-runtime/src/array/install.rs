@@ -64,6 +64,12 @@ pub(crate) fn install_array(
     );
     define_array_prototype_function(
         &array_prototype,
+        "findLastIndex",
+        1,
+        NativeFunction::ArrayPrototypeFindLastIndex,
+    );
+    define_array_prototype_function(
+        &array_prototype,
         "forEach",
         1,
         NativeFunction::ArrayPrototypeForEach,

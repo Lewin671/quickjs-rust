@@ -11,6 +11,7 @@ pub(crate) enum NativeFunction {
     ArrayPrototypeFind,
     ArrayPrototypeFindIndex,
     ArrayPrototypeFindLast,
+    ArrayPrototypeFindLastIndex,
     ArrayPrototypeForEach,
     ArrayPrototypeIncludes,
     ArrayPrototypeIndexOf,
