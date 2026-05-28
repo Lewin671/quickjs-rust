@@ -167,6 +167,22 @@ fn evaluates_object_builtins() {
         Ok(Value::String("[object Object]".to_owned()))
     );
     assert_eq!(
+        eval("Object.prototype.toLocaleString.length;"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval("Object.prototype.toLocaleString();"),
+        Ok(Value::String("[object Object]".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let object = { toString: function() { return 'custom'; } }; object.toLocaleString();"
+        ),
+        Ok(Value::String("custom".to_owned()))
+    );
+    assert!(eval("Object.prototype.toLocaleString.call(null);").is_err());
+    assert!(eval("Object.prototype.toLocaleString.call(undefined);").is_err());
+    assert_eq!(
         eval("Object.prototype.valueOf.length;"),
         Ok(Value::Number(0.0))
     );
@@ -253,7 +269,7 @@ fn evaluates_object_builtins() {
     );
     assert_eq!(
         eval("Object.getOwnPropertyNames(Object.prototype).length;"),
-        Ok(Value::Number(6.0))
+        Ok(Value::Number(7.0))
     );
     assert_eq!(
         eval("Object.getOwnPropertyNames(Object.prototype)[0];"),

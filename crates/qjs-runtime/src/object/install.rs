@@ -35,6 +35,12 @@ pub(crate) fn install_object(env: &mut HashMap<String, Value>, global_this: &Val
     );
     define_object_prototype_function(
         &object_prototype,
+        "toLocaleString",
+        0,
+        NativeFunction::ObjectPrototypeToLocaleString,
+    );
+    define_object_prototype_function(
+        &object_prototype,
         "valueOf",
         0,
         NativeFunction::ObjectPrototypeValueOf,

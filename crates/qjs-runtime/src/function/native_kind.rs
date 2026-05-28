@@ -105,6 +105,7 @@ pub(crate) enum NativeFunction {
     ObjectPrototypeIsPrototypeOf,
     ObjectPrototypePropertyIsEnumerable,
     ObjectPrototypeToString,
+    ObjectPrototypeToLocaleString,
     ObjectPrototypeValueOf,
     String,
     StringFromCharCode,
