@@ -73,6 +73,12 @@ pub(crate) fn native_object_create(argument_values: &[Value]) -> Result<Value, R
     Ok(object)
 }
 
+pub(crate) fn native_object_is(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    let left = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let right = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
+    Ok(Value::Boolean(left.same_value(&right)))
+}
+
 fn set_property(target: Value, key: String, value: Value) -> Result<(), RuntimeError> {
     match target {
         Value::Object(object) => {

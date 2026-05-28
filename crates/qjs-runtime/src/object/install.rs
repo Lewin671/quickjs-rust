@@ -76,6 +76,7 @@ pub(crate) fn install_object(env: &mut HashMap<String, Value>, global_this: &Val
         NativeFunction::ObjectGetOwnPropertyNames,
     );
     define_object_function(&object_function, "hasOwn", 2, NativeFunction::ObjectHasOwn);
+    define_object_function(&object_function, "is", 2, NativeFunction::ObjectIs);
     define_object_function(
         &object_function,
         "entries",

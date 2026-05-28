@@ -240,6 +240,12 @@ cases/object-has-own-property-basic.js
 cases/object-has-own-property-length.js
 cases/object-has-own-property-missing.js
 cases/object-has-own-property-prototype-negative.js
+cases/object-is-length.js
+cases/object-is-not-same-value-number.js
+cases/object-is-not-same-value-primitive.js
+cases/object-is-object-identity.js
+cases/object-is-same-value-number.js
+cases/object-is-same-value-primitive.js
 cases/object-is-prototype-of-array-and-function.js
 cases/object-is-prototype-of-basic.js
 cases/object-is-prototype-of-length.js

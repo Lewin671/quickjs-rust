@@ -53,6 +53,23 @@ impl PartialEq for Value {
     }
 }
 
+impl Value {
+    pub(crate) fn same_value(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Number(left), Self::Number(right)) => {
+                (left.is_nan() && right.is_nan()) || left.to_bits() == right.to_bits()
+            }
+            (Self::String(left), Self::String(right)) => left == right,
+            (Self::Boolean(left), Self::Boolean(right)) => left == right,
+            (Self::Null, Self::Null) | (Self::Undefined, Self::Undefined) => true,
+            (Self::Function(left), Self::Function(right)) => left == right,
+            (Self::Array(left), Self::Array(right)) => left.ptr_eq(right),
+            (Self::Object(left), Self::Object(right)) => left.ptr_eq(right),
+            _ => false,
+        }
+    }
+}
+
 /// Array storage reference.
 #[derive(Clone)]
 pub struct ArrayRef {

@@ -4,7 +4,9 @@ mod enumeration;
 mod install;
 mod prototype;
 
-pub(crate) use constructor::{native_object, native_object_assign, native_object_create};
+pub(crate) use constructor::{
+    native_object, native_object_assign, native_object_create, native_object_is,
+};
 pub(crate) use descriptor::{
     native_object_define_properties, native_object_define_property,
     native_object_get_own_property_descriptor,

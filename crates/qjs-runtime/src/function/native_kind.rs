@@ -89,6 +89,7 @@ pub(crate) enum NativeFunction {
     ObjectGetPrototypeOf,
     ObjectGetOwnPropertyNames,
     ObjectHasOwn,
+    ObjectIs,
     ObjectEntries,
     ObjectKeys,
     ObjectValues,
