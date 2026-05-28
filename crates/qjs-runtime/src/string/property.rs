@@ -24,7 +24,12 @@ pub(crate) fn string_own_property_descriptor(value: &str, key: &str) -> Option<P
             configurable: false,
         });
     }
-    string_property(value, key).map(Property::enumerable)
+    string_property(value, key).map(|value| Property {
+        value,
+        enumerable: true,
+        writable: false,
+        configurable: false,
+    })
 }
 
 pub(crate) fn string_own_property_keys(value: &str) -> Vec<String> {

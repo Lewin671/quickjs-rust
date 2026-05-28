@@ -5,7 +5,7 @@ use crate::{
     object_prototype, to_property_key,
 };
 
-use super::enumeration::enumerable_property_entries;
+use super::enumeration::{enumerable_property_entries, own_property_names};
 
 pub(crate) fn native_object_define_property(
     argument_values: &[Value],
@@ -51,6 +51,35 @@ pub(crate) fn native_object_get_own_property_descriptor(
     Ok(Value::Object(property_descriptor_object(
         property,
         object_prototype(env),
+    )))
+}
+
+pub(crate) fn native_object_get_own_property_descriptors(
+    argument_values: &[Value],
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    if matches!(target, Value::Null | Value::Undefined) {
+        return Err(RuntimeError {
+            message: "Object.getOwnPropertyDescriptors target must not be null or undefined"
+                .to_owned(),
+        });
+    }
+
+    let prototype = object_prototype(env);
+    let mut descriptors = HashMap::new();
+    for key in own_property_names(target.clone()) {
+        if let Some(property) = own_property_descriptor(target.clone(), &key)? {
+            descriptors.insert(
+                key,
+                Value::Object(property_descriptor_object(property, prototype.clone())),
+            );
+        }
+    }
+
+    Ok(Value::Object(ObjectRef::with_prototype(
+        descriptors,
+        prototype,
     )))
 }
 

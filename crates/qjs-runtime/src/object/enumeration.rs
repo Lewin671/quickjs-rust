@@ -90,7 +90,7 @@ fn own_property_keys(value: Value) -> Vec<String> {
     }
 }
 
-fn own_property_names(value: Value) -> Vec<String> {
+pub(super) fn own_property_names(value: Value) -> Vec<String> {
     match value {
         Value::Object(object) => object.own_property_names(),
         Value::Array(elements) => array_own_property_names(&elements),

@@ -9,7 +9,7 @@ pub(crate) use constructor::{
 };
 pub(crate) use descriptor::{
     native_object_define_properties, native_object_define_property,
-    native_object_get_own_property_descriptor,
+    native_object_get_own_property_descriptor, native_object_get_own_property_descriptors,
 };
 pub(crate) use enumeration::{
     native_object_entries, native_object_get_own_property_names, native_object_has_own,

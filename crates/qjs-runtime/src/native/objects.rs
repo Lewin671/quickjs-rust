@@ -27,6 +27,9 @@ pub(super) fn call_object_native(
         NativeFunction::ObjectGetOwnPropertyDescriptor => {
             object::native_object_get_own_property_descriptor(argument_values, env)?
         }
+        NativeFunction::ObjectGetOwnPropertyDescriptors => {
+            object::native_object_get_own_property_descriptors(argument_values, env)?
+        }
         NativeFunction::ObjectGetPrototypeOf => {
             object::native_object_get_prototype_of(argument_values, env)?
         }

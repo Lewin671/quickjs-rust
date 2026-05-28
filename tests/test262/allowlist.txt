@@ -230,6 +230,12 @@ cases/object-get-own-property-descriptor-basic.js
 cases/object-get-own-property-descriptor-function-basic.js
 cases/object-get-own-property-descriptor-missing.js
 cases/object-get-own-property-descriptor-nonenumerable-basic.js
+cases/object-get-own-property-descriptors-data.js
+cases/object-get-own-property-descriptors-inherited-omitted.js
+cases/object-get-own-property-descriptors-length.js
+cases/object-get-own-property-descriptors-normal-object.js
+cases/object-get-own-property-descriptors-primitive-number.js
+cases/object-get-own-property-descriptors-primitive-string.js
 cases/object-has-own-basic.js
 cases/object-has-own-inherited-negative.js
 cases/object-has-own-length.js
