@@ -43,6 +43,10 @@ cases/array-slice-negative-index.js
 cases/array-slice-start-past-length.js
 cases/array-to-string-basic.js
 cases/array-to-string-length.js
+cases/global-is-finite-basic.js
+cases/global-is-finite-length.js
+cases/global-is-nan-basic.js
+cases/global-is-nan-length.js
 cases/strict-equals-basic.js
 cases/less-than-basic.js
 cases/conditional-basic.js

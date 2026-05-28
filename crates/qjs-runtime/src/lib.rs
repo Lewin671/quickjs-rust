@@ -256,6 +256,8 @@ enum NativeFunction {
     MathTan,
     MathTanh,
     MathTrunc,
+    GlobalIsFinite,
+    GlobalIsNaN,
     Number,
     NumberIsFinite,
     NumberIsInteger,
@@ -612,6 +614,28 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
             "Infinity".to_owned(),
             Property::data(Value::Number(f64::INFINITY), false, false, false),
         );
+    }
+
+    let is_finite_value = Value::Function(Function::new_native(
+        Some("isFinite"),
+        1,
+        NativeFunction::GlobalIsFinite,
+        false,
+    ));
+    env.insert("isFinite".to_owned(), is_finite_value.clone());
+    if let Value::Object(global_object) = global_this {
+        global_object.set("isFinite".to_owned(), is_finite_value);
+    }
+
+    let is_nan_value = Value::Function(Function::new_native(
+        Some("isNaN"),
+        1,
+        NativeFunction::GlobalIsNaN,
+        false,
+    ));
+    env.insert("isNaN".to_owned(), is_nan_value.clone());
+    if let Value::Object(global_object) = global_this {
+        global_object.set("isNaN".to_owned(), is_nan_value);
     }
 
     let number_function = Function::new_native(Some("Number"), 1, NativeFunction::Number, true);
@@ -1631,6 +1655,8 @@ fn call_native_function(
         NativeFunction::MathTan => native_math_unary(&argument_values, f64::tan),
         NativeFunction::MathTanh => native_math_unary(&argument_values, f64::tanh),
         NativeFunction::MathTrunc => native_math_unary(&argument_values, f64::trunc),
+        NativeFunction::GlobalIsFinite => native_global_is_finite(&argument_values),
+        NativeFunction::GlobalIsNaN => native_global_is_nan(&argument_values),
         NativeFunction::Number => native_number(&argument_values),
         NativeFunction::NumberIsFinite => native_number_is_finite(&argument_values),
         NativeFunction::NumberIsInteger => native_number_is_integer(&argument_values),
@@ -2157,6 +2183,16 @@ fn native_number_is_safe_integer(argument_values: &[Value]) -> Result<Value, Run
         Some(Value::Number(number))
             if number.is_finite() && number.fract() == 0.0 && number.abs() <= MAX_SAFE_INTEGER
     )))
+}
+
+fn native_global_is_finite(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    Ok(Value::Boolean(to_number(value)?.is_finite()))
+}
+
+fn native_global_is_nan(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    Ok(Value::Boolean(to_number(value)?.is_nan()))
 }
 
 fn native_parse_float(argument_values: &[Value]) -> Result<Value, RuntimeError> {
@@ -5040,6 +5076,17 @@ mod tests {
             eval("Number.parseInt === parseInt;"),
             Ok(Value::Boolean(true))
         );
+        assert_eq!(eval("isFinite.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("isNaN.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("isFinite(10);"), Ok(Value::Boolean(true)));
+        assert_eq!(eval("isFinite('10');"), Ok(Value::Boolean(true)));
+        assert_eq!(eval("isFinite(null);"), Ok(Value::Boolean(true)));
+        assert_eq!(eval("isFinite(Infinity);"), Ok(Value::Boolean(false)));
+        assert_eq!(eval("isFinite(undefined);"), Ok(Value::Boolean(false)));
+        assert_eq!(eval("isNaN(NaN);"), Ok(Value::Boolean(true)));
+        assert_eq!(eval("isNaN('abc');"), Ok(Value::Boolean(true)));
+        assert_eq!(eval("isNaN('10');"), Ok(Value::Boolean(false)));
+        assert_eq!(eval("isNaN(null);"), Ok(Value::Boolean(false)));
         assert_eq!(eval("parseInt('15px');"), Ok(Value::Number(15.0)));
         assert_eq!(eval("parseInt('0x10');"), Ok(Value::Number(16.0)));
         assert_eq!(eval("parseInt('10', 2);"), Ok(Value::Number(2.0)));
@@ -5058,6 +5105,7 @@ mod tests {
         assert_eq!(eval("parseFloat('x') === NaN;"), Ok(Value::Boolean(false)));
         assert!(eval("new Number.isNaN(NaN);").is_err());
         assert!(eval("new parseInt('10');").is_err());
+        assert!(eval("new isNaN(1);").is_err());
     }
 
     #[test]

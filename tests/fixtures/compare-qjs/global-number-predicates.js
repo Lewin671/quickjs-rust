@@ -1,0 +1,1 @@
+isFinite(10) + ":" + isFinite("10") + ":" + isFinite(null) + ":" + isFinite(Infinity) + ":" + isFinite(undefined) + ":" + isNaN(NaN) + ":" + isNaN("abc") + ":" + isNaN("10") + ":" + isNaN(null) + ":" + Number.isFinite("10") + ":" + Number.isNaN("abc")
