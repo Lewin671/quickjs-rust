@@ -276,6 +276,10 @@ cases/string-from-char-code-basic.js
 cases/string-from-char-code-length.js
 cases/string-prototype-char-at-basic.js
 cases/string-prototype-char-at-length.js
+cases/string-prototype-char-code-at-basic.js
+cases/string-prototype-char-code-at-length.js
+cases/string-prototype-char-code-at-negative.js
+cases/string-prototype-char-code-at-string-length.js
 cases/string-prototype-concat-basic.js
 cases/string-prototype-concat-length.js
 cases/string-prototype-ends-with-basic.js
