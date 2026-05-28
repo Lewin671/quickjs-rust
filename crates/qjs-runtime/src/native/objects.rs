@@ -46,6 +46,9 @@ pub(super) fn call_object_native(
             object::native_object_prevent_extensions(argument_values)?
         }
         NativeFunction::ObjectSeal => object::native_object_seal(argument_values)?,
+        NativeFunction::ObjectSetPrototypeOf => {
+            object::native_object_set_prototype_of(argument_values)?
+        }
         NativeFunction::ObjectEntries => object::native_object_entries(argument_values)?,
         NativeFunction::ObjectKeys => object::native_object_keys(argument_values)?,
         NativeFunction::ObjectValues => object::native_object_values(argument_values)?,

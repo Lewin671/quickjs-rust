@@ -25,4 +25,5 @@ pub(crate) use prototype::{
     native_object_get_prototype_of, native_object_prototype_has_own_property,
     native_object_prototype_is_prototype_of, native_object_prototype_property_is_enumerable,
     native_object_prototype_to_string, native_object_prototype_value_of,
+    native_object_set_prototype_of,
 };

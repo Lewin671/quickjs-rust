@@ -111,6 +111,12 @@ pub(crate) fn install_object(env: &mut HashMap<String, Value>, global_this: &Val
     define_object_function(&object_function, "seal", 1, NativeFunction::ObjectSeal);
     define_object_function(
         &object_function,
+        "setPrototypeOf",
+        2,
+        NativeFunction::ObjectSetPrototypeOf,
+    );
+    define_object_function(
+        &object_function,
         "entries",
         1,
         NativeFunction::ObjectEntries,

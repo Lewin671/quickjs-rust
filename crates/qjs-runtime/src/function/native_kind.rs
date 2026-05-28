@@ -97,6 +97,7 @@ pub(crate) enum NativeFunction {
     ObjectIsSealed,
     ObjectPreventExtensions,
     ObjectSeal,
+    ObjectSetPrototypeOf,
     ObjectEntries,
     ObjectKeys,
     ObjectValues,

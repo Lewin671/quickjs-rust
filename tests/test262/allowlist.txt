@@ -282,6 +282,10 @@ cases/object-seal-existing-writable.js
 cases/object-seal-function.js
 cases/object-seal-length.js
 cases/object-seal-return.js
+cases/object-set-prototype-of-length.js
+cases/object-set-prototype-of-null.js
+cases/object-set-prototype-of-primitive.js
+cases/object-set-prototype-of-success.js
 cases/object-is-prototype-of-array-and-function.js
 cases/object-is-prototype-of-basic.js
 cases/object-is-prototype-of-length.js

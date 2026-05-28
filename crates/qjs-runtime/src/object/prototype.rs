@@ -28,6 +28,39 @@ pub(crate) fn native_object_get_prototype_of(
     }
 }
 
+pub(crate) fn native_object_set_prototype_of(
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let prototype = match argument_values.get(1).cloned().unwrap_or(Value::Undefined) {
+        Value::Object(prototype) => Some(prototype),
+        Value::Null => None,
+        _ => {
+            return Err(RuntimeError {
+                message: "Object.setPrototypeOf prototype must be an object or null".to_owned(),
+            });
+        }
+    };
+
+    match &target {
+        Value::Object(object) => object.set_prototype(prototype).map_err(|()| RuntimeError {
+            message: "Object.setPrototypeOf failed".to_owned(),
+        })?,
+        Value::String(_) | Value::Number(_) | Value::Boolean(_) => {}
+        Value::Array(_) | Value::Function(_) => {
+            return Err(RuntimeError {
+                message: "Object.setPrototypeOf target kind is not implemented".to_owned(),
+            });
+        }
+        Value::Null | Value::Undefined => {
+            return Err(RuntimeError {
+                message: "Object.setPrototypeOf target must not be null or undefined".to_owned(),
+            });
+        }
+    }
+    Ok(target)
+}
+
 pub(crate) fn native_object_prototype_has_own_property(
     this_value: Value,
     argument_values: &[Value],

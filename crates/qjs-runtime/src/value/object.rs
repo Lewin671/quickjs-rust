@@ -12,7 +12,7 @@ use super::{Property, Value};
 pub struct ObjectRef {
     properties: Rc<RefCell<HashMap<String, Property>>>,
     extensible: Rc<Cell<bool>>,
-    prototype: Option<Box<ObjectRef>>,
+    prototype: Rc<RefCell<Option<ObjectRef>>>,
 }
 
 impl fmt::Debug for ObjectRef {
@@ -20,7 +20,7 @@ impl fmt::Debug for ObjectRef {
         formatter
             .debug_struct("ObjectRef")
             .field("properties", &self.properties.borrow().len())
-            .field("has_prototype", &self.prototype.is_some())
+            .field("has_prototype", &self.prototype.borrow().is_some())
             .finish()
     }
 }
@@ -42,7 +42,7 @@ impl ObjectRef {
                     .collect(),
             )),
             extensible: Rc::new(Cell::new(true)),
-            prototype: prototype.map(Box::new),
+            prototype: Rc::new(RefCell::new(prototype)),
         }
     }
 
@@ -55,7 +55,12 @@ impl ObjectRef {
             .borrow()
             .get(key)
             .map(|property| property.value.clone())
-            .or_else(|| self.prototype.as_deref().and_then(|proto| proto.get(key)))
+            .or_else(|| {
+                self.prototype
+                    .borrow()
+                    .as_ref()
+                    .and_then(|proto| proto.get(key))
+            })
     }
 
     pub(crate) fn set(&self, key: String, value: Value) {
@@ -86,7 +91,8 @@ impl ObjectRef {
         self.properties.borrow().contains_key(key)
             || self
                 .prototype
-                .as_deref()
+                .borrow()
+                .as_ref()
                 .is_some_and(|proto| proto.contains_property(key))
     }
 
@@ -169,11 +175,37 @@ impl ObjectRef {
 
     pub(crate) fn has_prototype(&self, prototype: &ObjectRef) -> bool {
         self.prototype
-            .as_deref()
+            .borrow()
+            .as_ref()
             .is_some_and(|proto| proto.ptr_eq(prototype) || proto.has_prototype(prototype))
     }
 
     pub(crate) fn prototype(&self) -> Option<ObjectRef> {
-        self.prototype.as_deref().cloned()
+        self.prototype.borrow().clone()
+    }
+
+    pub(crate) fn set_prototype(&self, prototype: Option<ObjectRef>) -> Result<(), ()> {
+        if self
+            .prototype()
+            .as_ref()
+            .map_or(prototype.is_none(), |current| {
+                prototype
+                    .as_ref()
+                    .is_some_and(|prototype| current.ptr_eq(prototype))
+            })
+        {
+            return Ok(());
+        }
+        if !self.extensible.get() {
+            return Err(());
+        }
+        if prototype
+            .as_ref()
+            .is_some_and(|prototype| prototype.ptr_eq(self) || prototype.has_prototype(self))
+        {
+            return Err(());
+        }
+        *self.prototype.borrow_mut() = prototype;
+        Ok(())
     }
 }
