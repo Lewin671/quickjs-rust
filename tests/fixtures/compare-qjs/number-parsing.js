@@ -1,0 +1,1 @@
+parseInt("15px") + ":" + parseInt("0x10") + ":" + parseInt("10", 2) + ":" + parseInt("z", 36) + ":" + (parseInt("x") === parseInt("x")) + ":" + parseFloat("3.5px") + ":" + parseFloat("-1.25e2x") + ":" + parseFloat("Infinity") + ":" + (parseFloat("x") === parseFloat("x")) + ":" + Number.parseInt("11", 2) + ":" + Number.parseFloat("4.25x")
