@@ -729,6 +729,14 @@ fn evaluates_array_builtins() {
     assert_eq!(eval("Array.prototype.pop.length;"), Ok(Value::Number(0.0)));
     assert_eq!(eval("Array.prototype.push.length;"), Ok(Value::Number(1.0)));
     assert_eq!(
+        eval("Array.prototype.shift.length;"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval("Array.prototype.unshift.length;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
         eval("Array.prototype.toString.length;"),
         Ok(Value::Number(0.0))
     );
@@ -846,6 +854,19 @@ fn evaluates_array_builtins() {
         Ok(Value::String("2:1:1".to_owned()))
     );
     assert_eq!(eval("[].pop();"), Ok(Value::Undefined));
+    assert_eq!(
+        eval("let xs = [1, 2]; xs.shift() + ':' + xs.length + ':' + xs.join();"),
+        Ok(Value::String("1:1:2".to_owned()))
+    );
+    assert_eq!(eval("[].shift();"), Ok(Value::Undefined));
+    assert_eq!(
+        eval("let xs = [3]; xs.unshift(1, 2) + ':' + xs.join();"),
+        Ok(Value::String("3:1,2,3".to_owned()))
+    );
+    assert_eq!(
+        eval("let xs = [2]; let ys = xs; ys.unshift(1); xs.shift() + ':' + xs.join();"),
+        Ok(Value::String("1:2".to_owned()))
+    );
     assert_eq!(
         eval("let xs = [1]; let ys = xs; ys.push(2); xs.join();"),
         Ok(Value::String("1,2".to_owned()))

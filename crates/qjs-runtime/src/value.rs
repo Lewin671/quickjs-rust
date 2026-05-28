@@ -96,6 +96,21 @@ impl ArrayRef {
         self.elements.borrow_mut().pop()
     }
 
+    pub(crate) fn shift(&self) -> Option<Value> {
+        let mut elements = self.elements.borrow_mut();
+        if elements.is_empty() {
+            None
+        } else {
+            Some(elements.remove(0))
+        }
+    }
+
+    pub(crate) fn unshift(&self, values: &[Value]) -> usize {
+        let mut elements = self.elements.borrow_mut();
+        elements.splice(0..0, values.iter().cloned());
+        elements.len()
+    }
+
     pub(crate) fn set(&self, index: usize, value: Value) {
         let mut elements = self.elements.borrow_mut();
         if index >= elements.len() {
