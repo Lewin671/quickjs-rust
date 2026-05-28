@@ -29,6 +29,19 @@ git switch -c agent/<task-slug>/<owner-id>
 Keep the commit focused on one reviewable unit. Run the task-specific checks and
 then `./scripts/check.sh`.
 
+Push the branch after it has a locally verified commit when early GitHub Actions
+signal is useful:
+
+```sh
+git push -u origin agent/<task-slug>/<owner-id>
+gh run list --branch agent/<task-slug>/<owner-id> --limit 1
+gh run watch <run-id> --exit-status
+```
+
+Remote CI is an additional signal, not a replacement for local verification.
+Do not merge or stack dependent work on a branch whose latest pushed CI run is
+red or still unexplained.
+
 ## Parallel Task
 
 Use isolated worktrees only when ownership boundaries are clear:
@@ -46,6 +59,11 @@ Each owner must receive:
 - allowed paths;
 - forbidden paths;
 - verification command.
+
+When an owner produces a locally verified commit, they may push their feature
+branch immediately to trigger branch CI while other owners continue in separate
+worktrees. The main agent should poll or watch those runs with `gh`, record any
+failed run URL in the handoff, and route fixes back to the same owner branch.
 
 Global files stay main-agent owned unless explicitly assigned:
 
@@ -67,6 +85,7 @@ Each coding owner must report:
 - base sha used;
 - changed files;
 - verification run;
+- pushed CI run URL and status, when the branch was pushed;
 - residual risks.
 
 ## Integration
@@ -94,7 +113,13 @@ Run additional checks when relevant:
 ./scripts/test262-subset.sh
 ```
 
-Do not integrate another owner branch until the target branch is green.
+Do not integrate another owner branch until the target branch is green. For
+pushed owner branches, also check the latest branch CI status before merging:
+
+```sh
+gh run list --branch <branch> --limit 1
+gh run view <run-id> --json status,conclusion,url,jobs
+```
 
 ## Cleanup
 

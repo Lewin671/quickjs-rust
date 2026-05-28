@@ -20,6 +20,8 @@ boundaries and make each change verifiable with focused tests.
 - CLI smoke test: `cargo run -p qjs-cli -- -e "1 + 2;"`
 - QuickJS comparison smoke tests: `./scripts/compare-qjs.sh`
 - Test262 subset runner: `./scripts/test262-subset.sh`
+- Watch a pushed branch CI run: `gh run list --branch <branch> --limit 1`
+  followed by `gh run watch <run-id> --exit-status`
 
 If Rust is not installed, report that clearly and do not fake test results.
 Both `scripts/bootstrap.sh` and `scripts/check.sh` fall back to
@@ -31,6 +33,8 @@ Both `scripts/bootstrap.sh` and `scripts/check.sh` fall back to
   update.
 - Prefer the existing crate boundaries and local APIs over introducing new
   abstractions.
+- Preserve module boundaries inside crates. Large implementation files should
+  be split by responsibility before adding unrelated behavior.
 - Add a new crate or third-party dependency only when it removes clear
   complexity and is justified in the final summary.
 - Parser work should not mutate runtime behavior unless the task explicitly
@@ -66,6 +70,8 @@ Both `scripts/bootstrap.sh` and `scripts/check.sh` fall back to
   task explicitly requires that design.
 - Keep CLI behavior thin. Library crates should own engine semantics and error
   models.
+- Keep tests in crate-local `tests` modules/files when they are large enough to
+  distract from implementation structure.
 - Keep performance changes evidence-based. Add a benchmark or explain the
   measured case before optimizing core engine paths.
 
@@ -105,6 +111,11 @@ into clear, non-overlapping ownership boundaries.
 - Every coding owner must have a path boundary before editing. Examples:
   `crates/qjs-lexer/**`, `crates/qjs-parser/**`,
   `crates/qjs-runtime/**`, or `scripts/compare-qjs.sh`.
+- Push locally verified `agent/**` branches when early GitHub Actions feedback
+  is useful. The workflow is configured to run CI for these branches.
+- Remote CI is additional evidence, not a substitute for local checks. Do not
+  integrate a branch with a red, missing, or unexplained latest branch CI run
+  when that branch was pushed for CI.
 - Global files default to main-agent ownership: `Cargo.toml`, `Cargo.lock`,
   `rust-toolchain.toml`, `.gitmodules`, `AGENTS.md`, `README.md`,
   `docs/architecture.md`, `docs/harness.md`, and shared CI or bootstrap
@@ -114,6 +125,8 @@ into clear, non-overlapping ownership boundaries.
 - Before integration, inspect the owner branch's changed files against its path
   boundary and confirm the reported base sha. Use
   `./scripts/validate-agent-branch.sh` for this check.
+- For pushed owner branches, inspect the latest branch CI run with `gh run list`
+  and `gh run view` before merging.
 - After each integration, run `./scripts/check.sh` before integrating another
   owner branch.
 - Delete merged temporary worktrees and short-lived branches unless they are

@@ -43,20 +43,48 @@ duplicated test trees.
 Owns syntax and span types shared by every higher layer. Keep this crate free of
 lexer, parser, and runtime dependencies.
 
+Internal organization target:
+
+- `span`: source byte ranges.
+- `stmt`: statement nodes and statement-adjacent types.
+- `expr`: expression nodes and operators.
+
 ### qjs-lexer
 
 Converts UTF-8 source text into tokens. Tokens preserve source spans for parser
 errors and future diagnostics.
+
+Internal organization target:
+
+- `token`: token and token-kind definitions.
+- `lexer`: scanner state machine and character handling.
+- `tests`: crate-local lexer behavior tests.
 
 ### qjs-parser
 
 Builds AST nodes from token streams. The parser should be deterministic and
 should return structured errors rather than panicking on user input.
 
+Internal organization target:
+
+- `parser`: parser state machine.
+- `error`: parse error type and helpers.
+- `tests`: crate-local syntax tests.
+
 ### qjs-runtime
 
 Executes AST nodes. Early runtime work is intentionally tiny; correctness and
 clear semantics matter more than breadth.
+
+Internal organization target:
+
+- `value`: JavaScript value, object storage, and property descriptors.
+- `function`: function objects and call metadata.
+- `builtins`: native builtin registration and dispatch, split by standard
+  object family as it grows.
+- `eval`: statement and expression evaluation.
+- `convert`: ECMAScript conversion helpers.
+- `tests`: crate-local runtime behavior tests.
 
 ### qjs-cli
 
