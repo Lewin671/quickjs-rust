@@ -1,9 +1,11 @@
 mod constructor;
 mod indexing;
+mod install;
 mod property;
 mod prototype;
 
 pub(super) use constructor::{native_string, native_string_from_char_code};
+pub(crate) use install::install_string;
 pub(super) use property::{
     string_has_own_property, string_own_property_descriptor, string_own_property_keys,
     string_own_property_names, string_property,
