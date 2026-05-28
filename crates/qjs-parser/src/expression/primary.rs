@@ -1,0 +1,176 @@
+use qjs_ast::{Expr, Literal, ObjectProperty, ObjectPropertyKey, Span};
+use qjs_lexer::TokenKind;
+
+use crate::{ParseError, Parser};
+
+impl Parser {
+    pub(crate) fn primary(&mut self) -> Result<Expr, ParseError> {
+        let token = self.advance();
+        match token.kind {
+            TokenKind::Identifier(name) => Ok(Expr::Identifier {
+                name,
+                span: token.span,
+            }),
+            TokenKind::Number(raw) => Ok(Expr::Literal(Literal::Number {
+                raw,
+                span: token.span,
+            })),
+            TokenKind::String(value) => Ok(Expr::Literal(Literal::String {
+                value,
+                span: token.span,
+            })),
+            TokenKind::True => Ok(Expr::Literal(Literal::Boolean {
+                value: true,
+                span: token.span,
+            })),
+            TokenKind::False => Ok(Expr::Literal(Literal::Boolean {
+                value: false,
+                span: token.span,
+            })),
+            TokenKind::Null => Ok(Expr::Literal(Literal::Null { span: token.span })),
+            TokenKind::This => Ok(Expr::This { span: token.span }),
+            TokenKind::Function => self.function_expression(token.span.start),
+            TokenKind::LeftBracket => self.array_literal(token.span.start),
+            TokenKind::LeftBrace => self.object_literal(token.span.start),
+            TokenKind::LeftParen => {
+                let expr = self.expression()?;
+                self.expect(&TokenKind::RightParen)?;
+                Ok(expr)
+            }
+            _ => Err(ParseError {
+                message: "expected expression".to_owned(),
+                span: token.span,
+            }),
+        }
+    }
+
+    fn array_literal(&mut self, start: usize) -> Result<Expr, ParseError> {
+        let mut elements = Vec::new();
+        if !self.at(&TokenKind::RightBracket) {
+            loop {
+                elements.push(self.assignment()?);
+                if !self.match_kind(&TokenKind::Comma) {
+                    break;
+                }
+                if self.at(&TokenKind::RightBracket) {
+                    break;
+                }
+            }
+        }
+        let end = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .end;
+        self.expect(&TokenKind::RightBracket)?;
+        Ok(Expr::Array {
+            elements,
+            span: Span::new(start, end),
+        })
+    }
+
+    fn object_literal(&mut self, start: usize) -> Result<Expr, ParseError> {
+        let mut properties = Vec::new();
+        if !self.at(&TokenKind::RightBrace) {
+            loop {
+                let key_token = self.advance();
+                let key_span = key_token.span;
+                let (key, shorthand_value) = self.object_property_key(key_token)?;
+                let value = self.object_property_value(key_span, &key, shorthand_value)?;
+                let span = Span::new(key_span.start, value.span().end);
+                properties.push(ObjectProperty { key, value, span });
+                if !self.match_kind(&TokenKind::Comma) {
+                    break;
+                }
+                if self.at(&TokenKind::RightBrace) {
+                    break;
+                }
+            }
+        }
+        let end = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .end;
+        self.expect(&TokenKind::RightBrace)?;
+        Ok(Expr::Object {
+            properties,
+            span: Span::new(start, end),
+        })
+    }
+
+    fn object_property_key(
+        &mut self,
+        key_token: qjs_lexer::Token,
+    ) -> Result<(ObjectPropertyKey, Option<Expr>), ParseError> {
+        match key_token.kind {
+            TokenKind::Identifier(name) => {
+                let value = Expr::Identifier {
+                    name: name.clone(),
+                    span: key_token.span,
+                };
+                Ok((ObjectPropertyKey::Literal(name), Some(value)))
+            }
+            TokenKind::String(name) | TokenKind::Number(name) => {
+                Ok((ObjectPropertyKey::Literal(name), None))
+            }
+            TokenKind::True => Ok((ObjectPropertyKey::Literal("true".to_owned()), None)),
+            TokenKind::False => Ok((ObjectPropertyKey::Literal("false".to_owned()), None)),
+            TokenKind::Null => Ok((ObjectPropertyKey::Literal("null".to_owned()), None)),
+            TokenKind::LeftBracket => {
+                let name = self.assignment()?;
+                self.expect(&TokenKind::RightBracket)?;
+                Ok((ObjectPropertyKey::Computed(name), None))
+            }
+            _ => Err(ParseError {
+                message: "expected property name".to_owned(),
+                span: key_token.span,
+            }),
+        }
+    }
+
+    fn object_property_value(
+        &mut self,
+        key_span: Span,
+        key: &ObjectPropertyKey,
+        shorthand_value: Option<Expr>,
+    ) -> Result<Expr, ParseError> {
+        if self.at(&TokenKind::LeftParen) {
+            let method_name = match key {
+                ObjectPropertyKey::Literal(name) => Some(name.clone()),
+                ObjectPropertyKey::Computed(_) => None,
+            };
+            let params = self.function_parameters()?;
+            let body = self.block_body()?;
+            let end = self
+                .tokens
+                .get(self.cursor.saturating_sub(1))
+                .expect("parser should always have eof token")
+                .span
+                .end;
+            return Ok(Expr::Function {
+                name: method_name,
+                params,
+                body,
+                constructable: false,
+                span: Span::new(key_span.start, end),
+            });
+        }
+
+        if self.match_kind(&TokenKind::Colon) {
+            return self.assignment();
+        }
+
+        if let Some(value) = shorthand_value {
+            return Ok(value);
+        }
+
+        Err(ParseError {
+            message: "expected `:` after property name".to_owned(),
+            span: match key {
+                ObjectPropertyKey::Literal(_) => key_span,
+                ObjectPropertyKey::Computed(expr) => expr.span(),
+            },
+        })
+    }
+}
