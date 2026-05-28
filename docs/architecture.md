@@ -115,6 +115,11 @@ Add language features vertically when useful: token support, AST type, parser
 tests, runtime behavior, and CLI smoke coverage. This keeps Harness tasks
 self-contained and makes regressions easier to localize.
 
+Keep files small enough for autonomous review. Implementation modules should
+stay focused on one engine concern, and tests should be split by behavior under
+test once a file becomes difficult to scan. The CI check in
+`scripts/check-file-size.sh` is an upper bound, not a target size.
+
 When a feature is large enough to need conformance coverage, start with a small
 allowlist from `third_party/test262`, compare selected behavior against
 `third_party/quickjs-ng`, then expand the allowlist as implementation coverage

@@ -13,3 +13,4 @@ fi
 "$CARGO_BIN" fmt --all -- --check
 "$CARGO_BIN" clippy --workspace --all-targets -- -D warnings
 "$CARGO_BIN" test --workspace
+"$(dirname "$0")/check-file-size.sh"

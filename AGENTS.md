@@ -35,6 +35,9 @@ Both `scripts/bootstrap.sh` and `scripts/check.sh` fall back to
   abstractions.
 - Preserve module boundaries inside crates. Large implementation files should
   be split by responsibility before adding unrelated behavior.
+- Keep implementation files reviewable. `scripts/check-file-size.sh` enforces
+  current upper bounds for Rust source files, Rust test files, and repository
+  scripts; split by subsystem responsibility before raising those limits.
 - Add a new crate or third-party dependency only when it removes clear
   complexity and is justified in the final summary.
 - Parser work should not mutate runtime behavior unless the task explicitly
@@ -72,6 +75,10 @@ Both `scripts/bootstrap.sh` and `scripts/check.sh` fall back to
   models.
 - Keep tests in crate-local `tests` modules/files when they are large enough to
   distract from implementation structure.
+- Split large test files by the behavior under test rather than by the feature
+  that happened to add them. For example, Object tests should separate
+  descriptors, enumeration, integrity, prototype operations, and constructor
+  behavior.
 - Keep performance changes evidence-based. Add a benchmark or explain the
   measured case before optimizing core engine paths.
 
