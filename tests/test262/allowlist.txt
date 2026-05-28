@@ -300,6 +300,10 @@ cases/string-prototype-includes-basic.js
 cases/string-prototype-includes-length.js
 cases/string-prototype-index-of-basic.js
 cases/string-prototype-index-of-length.js
+cases/string-prototype-last-index-of-basic.js
+cases/string-prototype-last-index-of-empty-search.js
+cases/string-prototype-last-index-of-length.js
+cases/string-prototype-last-index-of-position.js
 cases/string-prototype-pad-end-basic.js
 cases/string-prototype-pad-end-empty-fill.js
 cases/string-prototype-pad-end-length.js
