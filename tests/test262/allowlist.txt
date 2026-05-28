@@ -289,6 +289,14 @@ cases/string-prototype-includes-basic.js
 cases/string-prototype-includes-length.js
 cases/string-prototype-index-of-basic.js
 cases/string-prototype-index-of-length.js
+cases/string-prototype-pad-end-basic.js
+cases/string-prototype-pad-end-empty-fill.js
+cases/string-prototype-pad-end-length.js
+cases/string-prototype-pad-end-omitted-fill.js
+cases/string-prototype-pad-start-basic.js
+cases/string-prototype-pad-start-empty-fill.js
+cases/string-prototype-pad-start-length.js
+cases/string-prototype-pad-start-omitted-fill.js
 cases/string-prototype-repeat-basic.js
 cases/string-prototype-repeat-length.js
 cases/string-prototype-slice-basic.js
