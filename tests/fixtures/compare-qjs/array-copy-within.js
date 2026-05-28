@@ -1,0 +1,1 @@
+(function() { var xs = [1, 2, 3, 4, 5]; var result = xs.copyWithin(0, 3); var ys = [1, 2, 3, 4].copyWithin(1, 0, 3); var zs = [1, 2, 3, 4, 5].copyWithin(-2, 0, 2); return (result === xs) + ":" + xs.join() + ":" + ys.join() + ":" + zs.join(); })()

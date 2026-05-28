@@ -13,6 +13,10 @@ fn evaluates_array_builtins() {
         eval("Array.prototype.concat.length;"),
         Ok(Value::Number(1.0))
     );
+    assert_eq!(
+        eval("Array.prototype.copyWithin.length;"),
+        Ok(Value::Number(2.0))
+    );
     assert_eq!(eval("Array.prototype.fill.length;"), Ok(Value::Number(1.0)));
     assert_eq!(
         eval("Array.prototype.includes.length;"),
@@ -145,6 +149,24 @@ fn evaluates_array_builtins() {
         Ok(Value::Number(4.0))
     );
     assert_eq!(eval("[0].concat('x', true)[2];"), Ok(Value::Boolean(true)));
+    assert_eq!(
+        eval(
+            "let xs = [1, 2, 3, 4, 5]; let result = xs.copyWithin(0, 3); result === xs && xs.join();"
+        ),
+        Ok(Value::String("4,5,3,4,5".to_owned()))
+    );
+    assert_eq!(
+        eval("[1, 2, 3, 4, 5].copyWithin(1, 3, 4).join();"),
+        Ok(Value::String("1,4,3,4,5".to_owned()))
+    );
+    assert_eq!(
+        eval("[1, 2, 3, 4, 5].copyWithin(-2, 0, 2).join();"),
+        Ok(Value::String("1,2,3,1,2".to_owned()))
+    );
+    assert_eq!(
+        eval("[1, 2, 3, 4].copyWithin(1, 0, 3).join();"),
+        Ok(Value::String("1,1,2,3".to_owned()))
+    );
     assert_eq!(eval("[1, 2, 3].at(0);"), Ok(Value::Number(1.0)));
     assert_eq!(eval("[1, 2, 3].at(2);"), Ok(Value::Number(3.0)));
     assert_eq!(eval("[1, 2, 3].at(-1);"), Ok(Value::Number(3.0)));

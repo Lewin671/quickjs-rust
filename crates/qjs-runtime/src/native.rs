@@ -22,6 +22,9 @@ pub(crate) fn call_native_function(
         NativeFunction::ArrayPrototypeConcat => {
             array::native_array_prototype_concat(this_value, &argument_values)
         }
+        NativeFunction::ArrayPrototypeCopyWithin => {
+            array::native_array_prototype_copy_within(this_value, &argument_values)
+        }
         NativeFunction::ArrayPrototypeFill => {
             array::native_array_prototype_fill(this_value, &argument_values)
         }

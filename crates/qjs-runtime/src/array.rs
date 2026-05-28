@@ -297,6 +297,41 @@ pub(super) fn native_array_prototype_fill(
     Ok(this_value)
 }
 
+pub(super) fn native_array_prototype_copy_within(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let Value::Array(elements) = this_value.clone() else {
+        return Err(RuntimeError {
+            message: "Array.prototype.copyWithin called on non-array".to_owned(),
+        });
+    };
+
+    let length = elements.len();
+    let target = array_slice_start(
+        length,
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+    )?;
+    let start = array_slice_start(
+        length,
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+    )?;
+    let end = array_slice_end(
+        length,
+        argument_values.get(2).cloned().unwrap_or(Value::Undefined),
+    )?;
+    let count = (end.saturating_sub(start)).min(length.saturating_sub(target));
+    if count == 0 {
+        return Ok(this_value);
+    }
+
+    let snapshot = elements.to_vec();
+    for offset in 0..count {
+        elements.set(target + offset, snapshot[start + offset].clone());
+    }
+    Ok(this_value)
+}
+
 pub(super) fn native_array_prototype_join(
     this_value: Value,
     argument_values: &[Value],

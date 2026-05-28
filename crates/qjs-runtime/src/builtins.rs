@@ -273,6 +273,15 @@ fn install_array(
         )),
     );
     array_prototype.define_non_enumerable(
+        "copyWithin".to_owned(),
+        Value::Function(Function::new_native(
+            Some("copyWithin"),
+            2,
+            NativeFunction::ArrayPrototypeCopyWithin,
+            false,
+        )),
+    );
+    array_prototype.define_non_enumerable(
         "fill".to_owned(),
         Value::Function(Function::new_native(
             Some("fill"),
