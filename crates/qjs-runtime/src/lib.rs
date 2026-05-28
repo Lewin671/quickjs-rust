@@ -110,6 +110,22 @@ pub(crate) fn call_function(
             message: "value is not callable".to_owned(),
         });
     };
+    if let Some(bound) = &function.bound {
+        let mut bound_arguments = bound.arguments.clone();
+        bound_arguments.extend(argument_values);
+        let bound_this = if is_construct {
+            this_value
+        } else {
+            bound.this_value.clone()
+        };
+        return call_function(
+            bound.target.clone(),
+            bound_this,
+            bound_arguments,
+            env,
+            is_construct,
+        );
+    }
     if let Some(native) = function.native {
         return call_native_function(
             &function,

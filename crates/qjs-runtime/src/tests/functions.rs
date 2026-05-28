@@ -143,6 +143,36 @@ fn evaluates_function_declarations_and_calls() {
         Ok(Value::Number(2.0))
     );
     assert_eq!(
+        eval(
+            "function add(a, b) { return this.base + a + b; } let context = { base: 4 }; let bound = add.bind(context, 2); bound(3);"
+        ),
+        Ok(Value::Number(9.0))
+    );
+    assert_eq!(
+        eval("function join(a, b, c) { return '' + a + b + c; } join.bind(null, 'a').length;"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval("function add(a, b) { return a + b; } add.bind(null, 2).bind(null, 3)();"),
+        Ok(Value::Number(5.0))
+    );
+    assert_eq!(
+        eval(
+            "function Point(x, y) { this.x = x; this.y = y; } let Bound = Point.bind({ ignored: true }, 2); let point = new Bound(3); point.x + point.y;"
+        ),
+        Ok(Value::Number(5.0))
+    );
+    assert_eq!(
+        eval(
+            "function Point(x) { this.x = x; } let Bound = Point.bind(null, 2); let point = new Bound(); point instanceof Point;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("function add(a, b) { return a + b; } Object.hasOwn(add.bind(null), 'prototype');"),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
         eval("function add(a, b) { return a + b; } add.call.propertyIsEnumerable('length');"),
         Ok(Value::Boolean(false))
     );

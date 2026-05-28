@@ -247,6 +247,11 @@ cases/function-prototype-apply-basic.js
 cases/function-prototype-apply-null-args.js
 cases/function-prototype-apply-arguments-basic.js
 cases/function-prototype-apply-length.js
+cases/function-prototype-bind-basic.js
+cases/function-prototype-bind-length.js
+cases/function-prototype-bind-chained.js
+cases/function-prototype-bind-construct.js
+cases/function-prototype-bind-no-prototype.js
 cases/new-expression-this-basic.js
 cases/new-expression-no-args-basic.js
 cases/new-expression-return-object-basic.js

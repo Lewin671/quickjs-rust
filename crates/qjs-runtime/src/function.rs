@@ -64,6 +64,7 @@ pub(crate) enum NativeFunction {
     GlobalIsNaN,
     Function,
     FunctionPrototypeApply,
+    FunctionPrototypeBind,
     FunctionPrototypeCall,
     Number,
     NumberIsFinite,
@@ -146,6 +147,15 @@ pub(crate) fn install_function(
             false,
         )),
     );
+    function_prototype.define_non_enumerable(
+        "bind".to_owned(),
+        Value::Function(Function::new_native(
+            Some("bind"),
+            1,
+            NativeFunction::FunctionPrototypeBind,
+            false,
+        )),
+    );
     function_constructor.properties.borrow_mut().insert(
         "prototype".to_owned(),
         Property::non_enumerable(Value::Object(function_prototype)),
@@ -217,6 +227,23 @@ pub(crate) fn native_function_prototype_call(
     )
 }
 
+pub(crate) fn native_function_prototype_bind(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let Value::Function(target) = this_value.clone() else {
+        return Err(RuntimeError {
+            message: "Function.prototype.bind target is not callable".to_owned(),
+        });
+    };
+
+    let bound_this = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let bound_arguments = argument_values.iter().skip(1).cloned().collect::<Vec<_>>();
+    let length = target.params.len().saturating_sub(bound_arguments.len());
+    let bound = Function::new_bound(this_value, bound_this, bound_arguments, length);
+    Ok(Value::Function(bound))
+}
+
 fn function_call_this(this_arg: Option<Value>, env: &HashMap<String, Value>) -> Value {
     match this_arg.unwrap_or(Value::Undefined) {
         Value::Null | Value::Undefined => env
@@ -240,8 +267,17 @@ pub struct Function {
     pub env: HashMap<String, Value>,
     pub(crate) native: Option<NativeFunction>,
     pub(crate) constructable: bool,
+    pub(crate) bound: Option<Box<BoundFunction>>,
     /// Function object properties.
     pub(crate) properties: Rc<RefCell<HashMap<String, Property>>>,
+}
+
+/// Bound function internal slots.
+#[derive(Clone)]
+pub(crate) struct BoundFunction {
+    pub(crate) target: Value,
+    pub(crate) this_value: Value,
+    pub(crate) arguments: Vec<Value>,
 }
 
 impl fmt::Debug for Function {
@@ -252,6 +288,7 @@ impl fmt::Debug for Function {
             .field("length", &self.params.len())
             .field("native", &self.native)
             .field("constructable", &self.constructable)
+            .field("bound", &self.bound.is_some())
             .finish()
     }
 }
@@ -281,6 +318,7 @@ impl Function {
             env,
             native: None,
             constructable,
+            bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
         };
         if constructable {
@@ -310,6 +348,32 @@ impl Function {
         )
     }
 
+    pub(crate) fn new_bound(
+        target: Value,
+        this_value: Value,
+        arguments: Vec<Value>,
+        length: usize,
+    ) -> Self {
+        let constructable = match &target {
+            Value::Function(function) => function.constructable,
+            _ => false,
+        };
+        Self {
+            name: Some("bound".to_owned()),
+            params: vec![String::new(); length],
+            body: Vec::new(),
+            env: HashMap::new(),
+            native: None,
+            constructable,
+            bound: Some(Box::new(BoundFunction {
+                target,
+                this_value,
+                arguments,
+            })),
+            properties: Rc::new(RefCell::new(HashMap::new())),
+        }
+    }
+
     fn new(
         name: Option<String>,
         params: Vec<String>,
@@ -326,6 +390,7 @@ impl Function {
             env,
             native,
             constructable,
+            bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
         };
         if constructable {
@@ -346,5 +411,6 @@ impl PartialEq for Function {
             && self.params == other.params
             && self.body == other.body
             && self.native == other.native
+            && self.bound.is_some() == other.bound.is_some()
     }
 }

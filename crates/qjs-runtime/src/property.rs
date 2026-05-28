@@ -6,6 +6,9 @@ pub(crate) fn constructor_prototype(callee: &Value) -> Option<ObjectRef> {
     let Value::Function(function) = callee else {
         return None;
     };
+    if let Some(bound) = &function.bound {
+        return constructor_prototype(&bound.target);
+    }
     function_prototype(function)
 }
 
