@@ -30,6 +30,7 @@ fn evaluates_array_builtins() {
         eval("Array.prototype.lastIndexOf.length;"),
         Ok(Value::Number(1.0))
     );
+    assert_eq!(eval("Array.prototype.map.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("Array.prototype.join.length;"), Ok(Value::Number(1.0)));
     assert_eq!(
         eval("Array.prototype.slice.length;"),
@@ -86,6 +87,26 @@ fn evaluates_array_builtins() {
     assert_eq!(
         eval("[1, null, undefined, 4].join('-');"),
         Ok(Value::String("1---4".to_owned()))
+    );
+    assert_eq!(
+        eval("[1, 2, 3].map(function(value) { return value * 2; }).join();"),
+        Ok(Value::String("2,4,6".to_owned()))
+    );
+    assert_eq!(
+        eval("[10, 20].map(function(value, index) { return value + index; }).join('|');"),
+        Ok(Value::String("10|21".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let receiver = [5]; [5].map(function(value, index, array) { return this === receiver && array[0] === value && index === 0; }, receiver)[0];"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let xs = [1, 2]; let ys = xs.map(function(value) { return value + 1; }); xs !== ys && xs[0] === 1 && ys[0] === 2;"
+        ),
+        Ok(Value::Boolean(true))
     );
     assert_eq!(
         eval("[1, 'x', true].toString();"),

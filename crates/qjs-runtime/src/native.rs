@@ -37,6 +37,9 @@ pub(crate) fn call_native_function(
         NativeFunction::ArrayPrototypeLastIndexOf => {
             array::native_array_prototype_last_index_of(this_value, &argument_values)
         }
+        NativeFunction::ArrayPrototypeMap => {
+            array::native_array_prototype_map(this_value, &argument_values, env)
+        }
         NativeFunction::ArrayPrototypeJoin => {
             array::native_array_prototype_join(this_value, &argument_values)
         }

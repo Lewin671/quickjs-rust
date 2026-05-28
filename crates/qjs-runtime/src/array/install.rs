@@ -58,6 +58,12 @@ pub(crate) fn install_array(
     );
     define_array_prototype_function(
         &array_prototype,
+        "map",
+        1,
+        NativeFunction::ArrayPrototypeMap,
+    );
+    define_array_prototype_function(
+        &array_prototype,
         "pop",
         0,
         NativeFunction::ArrayPrototypePop,

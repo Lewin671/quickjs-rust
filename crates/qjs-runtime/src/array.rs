@@ -1,6 +1,7 @@
 mod constructor;
 mod indexing;
 mod install;
+mod iteration;
 mod join;
 mod mutation;
 mod search;
@@ -8,6 +9,7 @@ mod sequence;
 
 pub(crate) use constructor::{native_array, native_array_is_array};
 pub(crate) use install::install_array;
+pub(crate) use iteration::native_array_prototype_map;
 pub(crate) use join::{native_array_prototype_join, native_array_prototype_to_string};
 pub(crate) use mutation::{
     native_array_prototype_copy_within, native_array_prototype_fill, native_array_prototype_pop,
