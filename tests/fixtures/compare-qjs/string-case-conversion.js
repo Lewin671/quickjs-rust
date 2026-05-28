@@ -1,0 +1,1 @@
+"AbC123".toLowerCase() + ":" + "AbC123".toUpperCase() + ":" + String(true).toUpperCase() + ":" + "Straße".toUpperCase() + ":" + String.prototype.toLowerCase.length + ":" + String.prototype.toUpperCase.length

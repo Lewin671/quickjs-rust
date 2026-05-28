@@ -291,10 +291,12 @@ enum NativeFunction {
     StringPrototypeRepeat,
     StringPrototypeSlice,
     StringPrototypeStartsWith,
+    StringPrototypeToLowerCase,
     StringPrototypeTrim,
     StringPrototypeTrimEnd,
     StringPrototypeTrimStart,
     StringPrototypeToString,
+    StringPrototypeToUpperCase,
     StringPrototypeValueOf,
 }
 
@@ -800,6 +802,15 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
         )),
     );
     string_prototype.define_non_enumerable(
+        "toLowerCase".to_owned(),
+        Value::Function(Function::new_native(
+            Some("toLowerCase"),
+            0,
+            NativeFunction::StringPrototypeToLowerCase,
+            false,
+        )),
+    );
+    string_prototype.define_non_enumerable(
         "trim".to_owned(),
         Value::Function(Function::new_native(
             Some("trim"),
@@ -832,6 +843,15 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
             Some("toString"),
             0,
             NativeFunction::StringPrototypeToString,
+            false,
+        )),
+    );
+    string_prototype.define_non_enumerable(
+        "toUpperCase".to_owned(),
+        Value::Function(Function::new_native(
+            Some("toUpperCase"),
+            0,
+            NativeFunction::StringPrototypeToUpperCase,
             false,
         )),
     );
@@ -1732,6 +1752,9 @@ fn call_native_function(
         NativeFunction::StringPrototypeStartsWith => {
             native_string_prototype_starts_with(this_value, &argument_values, env)
         }
+        NativeFunction::StringPrototypeToLowerCase => {
+            native_string_prototype_to_lower_case(this_value, env)
+        }
         NativeFunction::StringPrototypeTrim => native_string_prototype_trim(this_value, env),
         NativeFunction::StringPrototypeTrimEnd => native_string_prototype_trim_end(this_value, env),
         NativeFunction::StringPrototypeTrimStart => {
@@ -1739,6 +1762,9 @@ fn call_native_function(
         }
         NativeFunction::StringPrototypeToString | NativeFunction::StringPrototypeValueOf => {
             native_string_prototype_to_string(this_value, env)
+        }
+        NativeFunction::StringPrototypeToUpperCase => {
+            native_string_prototype_to_upper_case(this_value, env)
         }
     }
 }
@@ -2517,6 +2543,15 @@ fn native_string_prototype_starts_with(
     ))
 }
 
+fn native_string_prototype_to_lower_case(
+    this_value: Value,
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    Ok(Value::String(
+        this_string_value(this_value, env)?.to_lowercase(),
+    ))
+}
+
 fn native_string_prototype_trim(
     this_value: Value,
     env: &HashMap<String, Value>,
@@ -2549,6 +2584,15 @@ fn native_string_prototype_to_string(
     env: &HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     Ok(Value::String(this_string_value(this_value, env)?))
+}
+
+fn native_string_prototype_to_upper_case(
+    this_value: Value,
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    Ok(Value::String(
+        this_string_value(this_value, env)?.to_uppercase(),
+    ))
 }
 
 fn this_string_value(value: Value, env: &HashMap<String, Value>) -> Result<String, RuntimeError> {
@@ -3937,6 +3981,22 @@ mod tests {
         assert_eq!(
             eval("'abc'.valueOf();"),
             Ok(Value::String("abc".to_owned()))
+        );
+        assert_eq!(
+            eval("String.prototype.toLowerCase.length;"),
+            Ok(Value::Number(0.0))
+        );
+        assert_eq!(
+            eval("String.prototype.toUpperCase.length;"),
+            Ok(Value::Number(0.0))
+        );
+        assert_eq!(
+            eval("'AbC123'.toLowerCase();"),
+            Ok(Value::String("abc123".to_owned()))
+        );
+        assert_eq!(
+            eval("'AbC123'.toUpperCase();"),
+            Ok(Value::String("ABC123".to_owned()))
         );
         assert_eq!(
             eval("'  abc  '.trim();"),

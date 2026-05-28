@@ -296,8 +296,12 @@ cases/string-prototype-slice-length.js
 cases/string-prototype-starts-with-basic.js
 cases/string-prototype-starts-with-length.js
 cases/string-prototype-starts-with-position.js
+cases/string-prototype-to-lower-case-basic.js
+cases/string-prototype-to-lower-case-length.js
 cases/string-prototype-to-string-basic.js
 cases/string-prototype-to-string-length.js
+cases/string-prototype-to-upper-case-basic.js
+cases/string-prototype-to-upper-case-length.js
 cases/string-prototype-trim-basic.js
 cases/string-prototype-trim-end-basic.js
 cases/string-prototype-trim-end-length.js
