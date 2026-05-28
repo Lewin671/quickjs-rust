@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use crate::{
-    ArrayRef, BOOLEAN_DATA_PROPERTY, Function, NativeFunction, ObjectRef, Property, RuntimeError,
-    Value, array_has_own_property, array_own_property_descriptor, array_own_property_keys,
-    array_own_property_names, array_prototype, function_own_property_descriptor,
+    ArrayRef, Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
+    array_has_own_property, array_own_property_descriptor, array_own_property_keys,
+    array_own_property_names, array_prototype, boolean, function_own_property_descriptor,
     function_own_property_keys, function_own_property_names, function_prototype, is_truthy, number,
     object_prototype, string, to_property_key, value_prototype,
 };
@@ -480,13 +480,7 @@ pub(super) fn native_object_prototype_to_string(this_value: Value) -> Result<Val
         Value::Number(_) => "Number",
         Value::Boolean(_) => "Boolean",
         Value::Object(object) => {
-            if matches!(
-                object.own_property(BOOLEAN_DATA_PROPERTY),
-                Some(Property {
-                    value: Value::Boolean(_),
-                    ..
-                })
-            ) {
+            if boolean::is_boolean_object(&object) {
                 "Boolean"
             } else if number::is_number_object(&object) {
                 "Number"
