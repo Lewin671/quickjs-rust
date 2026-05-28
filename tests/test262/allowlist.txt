@@ -202,6 +202,12 @@ cases/object-create-properties-basic.js
 cases/object-create-properties-null-prototype.js
 cases/object-create-properties-undefined.js
 cases/object-create-properties-writable.js
+cases/object-entries-array-basic.js
+cases/object-entries-basic.js
+cases/object-entries-inherited-omitted.js
+cases/object-entries-length.js
+cases/object-entries-primitive-number.js
+cases/object-entries-primitive-string.js
 cases/object-define-property-data-defaults.js
 cases/object-define-property-data-enumerable.js
 cases/object-define-property-data-writable.js

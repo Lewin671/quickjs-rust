@@ -213,6 +213,32 @@ fn evaluates_object_builtins() {
         Ok(Value::String("a,b".to_owned()))
     );
     assert_eq!(eval("Object.values(0).length;"), Ok(Value::Number(0.0)));
+    assert_eq!(eval("Object.entries.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(
+        eval(
+            "let entries = Object.entries({ first: 1, second: 2 }); entries[0][0] + ':' + entries[0][1] + '|' + entries[1][0] + ':' + entries[1][1];"
+        ),
+        Ok(Value::String("first:1|second:2".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let entries = Object.entries([4, 5]); entries[0][0] + ':' + entries[0][1] + '|' + entries[1][0] + ':' + entries[1][1];"
+        ),
+        Ok(Value::String("0:4|1:5".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let entries = Object.entries(Object.create({ inherited: 1 }, { own: { value: 2, enumerable: true } })); entries.length + ':' + entries[0][0] + ':' + entries[0][1];"
+        ),
+        Ok(Value::String("1:own:2".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let entries = Object.entries('ab'); entries[0][0] + ':' + entries[0][1] + '|' + entries[1][0] + ':' + entries[1][1];"
+        ),
+        Ok(Value::String("0:a|1:b".to_owned()))
+    );
+    assert_eq!(eval("Object.entries(0).length;"), Ok(Value::Number(0.0)));
     assert_eq!(
         eval("Object.getOwnPropertyNames.length;"),
         Ok(Value::Number(1.0))

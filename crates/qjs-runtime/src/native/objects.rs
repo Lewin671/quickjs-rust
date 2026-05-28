@@ -34,6 +34,7 @@ pub(super) fn call_object_native(
             object::native_object_get_own_property_names(argument_values)?
         }
         NativeFunction::ObjectHasOwn => object::native_object_has_own(argument_values)?,
+        NativeFunction::ObjectEntries => object::native_object_entries(argument_values)?,
         NativeFunction::ObjectKeys => object::native_object_keys(argument_values)?,
         NativeFunction::ObjectValues => object::native_object_values(argument_values)?,
         NativeFunction::ObjectPrototypeHasOwnProperty => {

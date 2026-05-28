@@ -10,8 +10,8 @@ pub(crate) use descriptor::{
     native_object_get_own_property_descriptor,
 };
 pub(crate) use enumeration::{
-    native_object_get_own_property_names, native_object_has_own, native_object_keys,
-    native_object_values,
+    native_object_entries, native_object_get_own_property_names, native_object_has_own,
+    native_object_keys, native_object_values,
 };
 pub(crate) use install::install_object;
 pub(crate) use prototype::{
