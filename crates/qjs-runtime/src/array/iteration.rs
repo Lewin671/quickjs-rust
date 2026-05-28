@@ -9,6 +9,12 @@ struct ArrayIteration {
     source: Vec<Value>,
 }
 
+struct ArrayReduction {
+    elements: ArrayRef,
+    callback: Value,
+    source: Vec<Value>,
+}
+
 fn prepare_array_iteration(
     method: &str,
     this_value: Value,
@@ -34,6 +40,30 @@ fn prepare_array_iteration(
     })
 }
 
+fn prepare_array_reduction(
+    method: &str,
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<ArrayReduction, RuntimeError> {
+    let Value::Array(elements) = this_value else {
+        return Err(RuntimeError {
+            message: format!("Array.prototype.{method} called on non-array"),
+        });
+    };
+    let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    if !matches!(callback, Value::Function(_)) {
+        return Err(RuntimeError {
+            message: format!("Array.prototype.{method} callback is not callable"),
+        });
+    }
+
+    Ok(ArrayReduction {
+        source: elements.to_vec(),
+        elements,
+        callback,
+    })
+}
+
 fn call_iteration_callback(
     iteration: &ArrayIteration,
     value: Value,
@@ -47,6 +77,27 @@ fn call_iteration_callback(
             value,
             Value::Number(index as f64),
             Value::Array(iteration.elements.clone()),
+        ],
+        env,
+        false,
+    )
+}
+
+fn call_reduction_callback(
+    reduction: &ArrayReduction,
+    accumulator: Value,
+    value: Value,
+    index: usize,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    call_function(
+        reduction.callback.clone(),
+        Value::Undefined,
+        vec![
+            accumulator,
+            value,
+            Value::Number(index as f64),
+            Value::Array(reduction.elements.clone()),
         ],
         env,
         false,
@@ -143,4 +194,35 @@ pub(crate) fn native_array_prototype_every(
     }
 
     Ok(Value::Boolean(true))
+}
+
+pub(crate) fn native_array_prototype_reduce(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let reduction = prepare_array_reduction("reduce", this_value, argument_values)?;
+    if reduction.source.is_empty() && argument_values.len() < 2 {
+        return Err(RuntimeError {
+            message: "Reduce of empty array with no initial value".to_owned(),
+        });
+    }
+
+    let (mut accumulator, start_index) = if argument_values.len() >= 2 {
+        (argument_values[1].clone(), 0)
+    } else {
+        (reduction.source[0].clone(), 1)
+    };
+
+    for (index, value) in reduction
+        .source
+        .iter()
+        .cloned()
+        .enumerate()
+        .skip(start_index)
+    {
+        accumulator = call_reduction_callback(&reduction, accumulator, value, index, env)?;
+    }
+
+    Ok(accumulator)
 }

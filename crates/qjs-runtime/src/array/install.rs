@@ -100,6 +100,12 @@ pub(crate) fn install_array(
     );
     define_array_prototype_function(
         &array_prototype,
+        "reduce",
+        1,
+        NativeFunction::ArrayPrototypeReduce,
+    );
+    define_array_prototype_function(
+        &array_prototype,
         "reverse",
         0,
         NativeFunction::ArrayPrototypeReverse,

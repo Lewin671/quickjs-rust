@@ -59,6 +59,9 @@ pub(crate) fn call_native_function(
         NativeFunction::ArrayPrototypePush => {
             array::native_array_prototype_push(this_value, &argument_values)
         }
+        NativeFunction::ArrayPrototypeReduce => {
+            array::native_array_prototype_reduce(this_value, &argument_values, env)
+        }
         NativeFunction::ArrayPrototypeReverse => array::native_array_prototype_reverse(this_value),
         NativeFunction::ArrayPrototypeShift => array::native_array_prototype_shift(this_value),
         NativeFunction::ArrayPrototypeSlice => {

@@ -64,6 +64,11 @@ cases/array-pop-length.js
 cases/array-prototype-constructor.js
 cases/array-push-basic.js
 cases/array-push-length.js
+cases/array-reduce-basic.js
+cases/array-reduce-callback-arguments.js
+cases/array-reduce-initial-value.js
+cases/array-reduce-length.js
+cases/array-reduce-empty-initial-value.js
 cases/array-reference-identity-basic.js
 cases/array-reverse-basic.js
 cases/array-shift-basic.js

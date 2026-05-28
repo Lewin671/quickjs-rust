@@ -53,6 +53,10 @@ fn evaluates_array_builtins() {
     assert_eq!(eval("Array.prototype.pop.length;"), Ok(Value::Number(0.0)));
     assert_eq!(eval("Array.prototype.push.length;"), Ok(Value::Number(1.0)));
     assert_eq!(
+        eval("Array.prototype.reduce.length;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
         eval("Array.prototype.shift.length;"),
         Ok(Value::Number(0.0))
     );
@@ -209,6 +213,27 @@ fn evaluates_array_builtins() {
     assert_eq!(
         eval("[].every(function() { return false; });"),
         Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("[1, 2, 3].reduce(function(accumulator, value) { return accumulator + value; });"),
+        Ok(Value::Number(6.0))
+    );
+    assert_eq!(
+        eval("[1, 2, 3].reduce(function(accumulator, value) { return accumulator + value; }, 10);"),
+        Ok(Value::Number(16.0))
+    );
+    assert_eq!(
+        eval(
+            "let seen = ''; [10, 20].reduce(function(accumulator, value, index, array) { seen = seen + accumulator + ':' + value + ':' + index + ':' + (array[index] === value) + '|'; return accumulator + value; }, 5); seen;"
+        ),
+        Ok(Value::String("5:10:0:true|15:20:1:true|".to_owned()))
+    );
+    assert_eq!(
+        eval("[].reduce(function(accumulator, value) { return accumulator + value; }, 7);"),
+        Ok(Value::Number(7.0))
+    );
+    assert!(
+        eval("[].reduce(function(accumulator, value) { return accumulator + value; });").is_err()
     );
     assert_eq!(
         eval("[1, 'x', true].toString();"),
