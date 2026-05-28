@@ -1,0 +1,1 @@
+"abc".padStart(7, "def") + ":" + "abc".padEnd(7, "def") + ":" + "abc".padStart(5) + ":" + "abc".padEnd(5, undefined) + ":" + "abc".padStart(5, "") + ":" + "abc".padEnd(2, "*") + ":" + String.prototype.padStart.length + ":" + String.prototype.padEnd.length

@@ -288,6 +288,8 @@ enum NativeFunction {
     StringPrototypeEndsWith,
     StringPrototypeIncludes,
     StringPrototypeIndexOf,
+    StringPrototypePadEnd,
+    StringPrototypePadStart,
     StringPrototypeRepeat,
     StringPrototypeSlice,
     StringPrototypeStartsWith,
@@ -772,6 +774,24 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
             Some("indexOf"),
             1,
             NativeFunction::StringPrototypeIndexOf,
+            false,
+        )),
+    );
+    string_prototype.define_non_enumerable(
+        "padEnd".to_owned(),
+        Value::Function(Function::new_native(
+            Some("padEnd"),
+            1,
+            NativeFunction::StringPrototypePadEnd,
+            false,
+        )),
+    );
+    string_prototype.define_non_enumerable(
+        "padStart".to_owned(),
+        Value::Function(Function::new_native(
+            Some("padStart"),
+            1,
+            NativeFunction::StringPrototypePadStart,
             false,
         )),
     );
@@ -1753,6 +1773,12 @@ fn call_native_function(
         NativeFunction::StringPrototypeIndexOf => {
             native_string_prototype_index_of(this_value, &argument_values, env)
         }
+        NativeFunction::StringPrototypePadEnd => {
+            native_string_prototype_pad(this_value, &argument_values, env, StringPadKind::End)
+        }
+        NativeFunction::StringPrototypePadStart => {
+            native_string_prototype_pad(this_value, &argument_values, env, StringPadKind::Start)
+        }
         NativeFunction::StringPrototypeRepeat => {
             native_string_prototype_repeat(this_value, &argument_values, env)
         }
@@ -2490,6 +2516,45 @@ fn native_string_prototype_index_of(
     };
     let char_offset = haystack[..byte_index].chars().count();
     Ok(Value::Number((start + char_offset) as f64))
+}
+
+#[derive(Clone, Copy)]
+enum StringPadKind {
+    Start,
+    End,
+}
+
+fn native_string_prototype_pad(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &HashMap<String, Value>,
+    kind: StringPadKind,
+) -> Result<Value, RuntimeError> {
+    let value = this_string_value(this_value, env)?;
+    let max_length = to_length(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    let string_length = value.chars().count();
+    if max_length <= string_length {
+        return Ok(Value::String(value));
+    }
+
+    let fill_string = match argument_values.get(1).cloned().unwrap_or(Value::Undefined) {
+        Value::Undefined => " ".to_owned(),
+        value => to_js_string(value)?,
+    };
+    if fill_string.is_empty() {
+        return Ok(Value::String(value));
+    }
+
+    let fill_length = max_length - string_length;
+    let filler = repeated_prefix(&fill_string, fill_length);
+    Ok(Value::String(match kind {
+        StringPadKind::Start => format!("{filler}{value}"),
+        StringPadKind::End => format!("{value}{filler}"),
+    }))
+}
+
+fn repeated_prefix(pattern: &str, length: usize) -> String {
+    pattern.chars().cycle().take(length).collect()
 }
 
 fn native_string_prototype_repeat(
@@ -3891,6 +3956,19 @@ fn to_uint16(value: Value) -> Result<u16, RuntimeError> {
     Ok(number.trunc().rem_euclid(TWO_16) as u16)
 }
 
+fn to_length(value: Value) -> Result<usize, RuntimeError> {
+    let number = to_number(value)?;
+    if number.is_nan() || number <= 0.0 {
+        return Ok(0);
+    }
+    if number.is_infinite() {
+        return Err(RuntimeError {
+            message: "string padding length must be finite".to_owned(),
+        });
+    }
+    Ok(number.trunc().min(9_007_199_254_740_991.0) as usize)
+}
+
 fn is_truthy(value: &Value) -> bool {
     match value {
         Value::Number(number) => *number != 0.0 && !number.is_nan(),
@@ -4010,6 +4088,38 @@ mod tests {
         assert_eq!(eval("'abc'.indexOf('b', 2);"), Ok(Value::Number(-1.0)));
         assert_eq!(eval("'abc'.includes('b');"), Ok(Value::Boolean(true)));
         assert_eq!(eval("'abc'.includes('b', 2);"), Ok(Value::Boolean(false)));
+        assert_eq!(
+            eval("String.prototype.padStart.length;"),
+            Ok(Value::Number(1.0))
+        );
+        assert_eq!(
+            eval("String.prototype.padEnd.length;"),
+            Ok(Value::Number(1.0))
+        );
+        assert_eq!(
+            eval("'abc'.padStart(7, 'def');"),
+            Ok(Value::String("defdabc".to_owned()))
+        );
+        assert_eq!(
+            eval("'abc'.padEnd(7, 'def');"),
+            Ok(Value::String("abcdefd".to_owned()))
+        );
+        assert_eq!(
+            eval("'abc'.padStart(5);"),
+            Ok(Value::String("  abc".to_owned()))
+        );
+        assert_eq!(
+            eval("'abc'.padEnd(5);"),
+            Ok(Value::String("abc  ".to_owned()))
+        );
+        assert_eq!(
+            eval("'abc'.padStart(5, '');"),
+            Ok(Value::String("abc".to_owned()))
+        );
+        assert_eq!(
+            eval("'abc'.padEnd(2, '*');"),
+            Ok(Value::String("abc".to_owned()))
+        );
         assert_eq!(
             eval("'ab'.repeat(3);"),
             Ok(Value::String("ababab".to_owned()))
