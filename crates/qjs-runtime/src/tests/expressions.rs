@@ -215,4 +215,12 @@ fn evaluates_in_operator() {
         Ok(Value::Boolean(true))
     );
     assert_eq!(eval("'length' in [1, 2];"), Ok(Value::Boolean(true)));
+    assert_eq!(eval("'call' in function f() {};"), Ok(Value::Boolean(true)));
+    assert_eq!(
+        eval(
+            "let proto = { marker: 1 }; let array = []; Object.setPrototypeOf(array, proto); 'marker' in array;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert!(eval("'a' in 1;").is_err());
 }

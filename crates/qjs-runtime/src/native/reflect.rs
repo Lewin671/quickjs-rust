@@ -13,6 +13,7 @@ pub(super) fn call_reflect_native(
         NativeFunction::ReflectGetPrototypeOf => {
             reflect::native_reflect_get_prototype_of(argument_values, env)?
         }
+        NativeFunction::ReflectHas => reflect::native_reflect_has(argument_values, env)?,
         NativeFunction::ReflectSetPrototypeOf => {
             reflect::native_reflect_set_prototype_of(argument_values)?
         }

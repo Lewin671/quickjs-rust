@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use qjs_ast::{BinaryOp, UnaryOp};
 
 use crate::{
-    Property, RuntimeError, Value, is_truthy, to_int32, to_int32_number, to_js_string, to_number,
-    to_property_key, to_uint32_number, value_prototype,
+    Property, RuntimeError, Value, has_property, is_truthy, to_int32, to_int32_number,
+    to_js_string, to_number, to_property_key, to_uint32_number, value_prototype,
 };
 
 pub(super) fn eval_unary(op: UnaryOp, argument: Value) -> Result<Value, RuntimeError> {
@@ -27,7 +27,7 @@ pub(super) fn eval_binary(
     env: &HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     if op == BinaryOp::In {
-        return eval_in(left, right);
+        return eval_in(left, right, env);
     }
     if op == BinaryOp::Instanceof {
         return eval_instanceof(left, right, env);
@@ -130,18 +130,11 @@ fn eval_instanceof(
     ))
 }
 
-fn eval_in(left: Value, right: Value) -> Result<Value, RuntimeError> {
+fn eval_in(left: Value, right: Value, env: &HashMap<String, Value>) -> Result<Value, RuntimeError> {
     let key = to_property_key(left)?;
-    match right {
-        Value::Object(object) => Ok(Value::Boolean(object.contains_property(&key))),
-        Value::Array(elements) => {
-            let index = key.parse::<usize>().ok();
-            Ok(Value::Boolean(
-                index.is_some_and(|index| index < elements.len()) || key == "length",
-            ))
-        }
-        _ => Err(RuntimeError {
+    has_property(right, env, &key)
+        .map(Value::Boolean)
+        .map_err(|_| RuntimeError {
             message: "right operand of in is not an object".to_owned(),
-        }),
-    }
+        })
 }

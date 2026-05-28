@@ -14,6 +14,7 @@ fn evaluates_reflect_prototype_builtins() {
         eval("Reflect.getPrototypeOf.length;"),
         Ok(Value::Number(1.0))
     );
+    assert_eq!(eval("Reflect.has.length;"), Ok(Value::Number(2.0)));
     assert_eq!(
         eval("Reflect.setPrototypeOf.length;"),
         Ok(Value::Number(2.0))
@@ -64,7 +65,30 @@ fn evaluates_reflect_prototype_builtins() {
         ),
         Ok(Value::Boolean(false))
     );
+    assert_eq!(
+        eval("Reflect.has({ own: 1 }, 'own');"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("Reflect.has(Object.create({ inherited: 1 }), 'inherited');"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("Reflect.has([1, 2], 'length') && Reflect.has([1, 2], '1');"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let proto = { marker: 11 }; let array = []; Object.setPrototypeOf(array, proto); Reflect.has(array, 'marker');"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("Reflect.has(function f() {}, 'call');"),
+        Ok(Value::Boolean(true))
+    );
     assert!(eval("Reflect.getPrototypeOf(1);").is_err());
+    assert!(eval("Reflect.has(1, 'toString');").is_err());
     assert!(eval("Reflect.setPrototypeOf(1, null);").is_err());
     assert!(eval("Reflect.setPrototypeOf({}, 1);").is_err());
 }

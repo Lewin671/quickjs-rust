@@ -14,6 +14,7 @@ pub(crate) fn install_reflect(
         1,
         NativeFunction::ReflectGetPrototypeOf,
     );
+    define_reflect_function(&reflect_object, "has", 2, NativeFunction::ReflectHas);
     define_reflect_function(
         &reflect_object,
         "setPrototypeOf",
@@ -40,6 +41,26 @@ pub(crate) fn native_reflect_get_prototype_of(
     env: &HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     object::native_object_get_prototype_of(argument_values, env)
+}
+
+pub(crate) fn native_reflect_has(
+    argument_values: &[Value],
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let key = crate::to_property_key(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
+    match target {
+        Value::Object(_) | Value::Array(_) | Value::Function(_) => {
+            Ok(Value::Boolean(crate::has_property(target, env, &key)?))
+        }
+        Value::String(_)
+        | Value::Number(_)
+        | Value::Boolean(_)
+        | Value::Null
+        | Value::Undefined => Err(RuntimeError {
+            message: "Reflect.has target must be an object".to_owned(),
+        }),
+    }
 }
 
 pub(crate) fn native_reflect_set_prototype_of(

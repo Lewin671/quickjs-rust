@@ -427,6 +427,10 @@ cases/var-hoist-unentered-block-basic.js
 cases/var-hoist-function-body-basic.js
 cases/reflect-get-prototype-of-basic.js
 cases/reflect-get-prototype-of-length.js
+cases/reflect-has-array-and-function.js
+cases/reflect-has-basic.js
+cases/reflect-has-length.js
+cases/reflect-has-return-boolean.js
 cases/reflect-set-prototype-of-basic.js
 cases/reflect-set-prototype-of-length.js
 cases/reflect-set-prototype-of-non-extensible.js

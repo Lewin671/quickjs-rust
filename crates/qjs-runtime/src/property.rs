@@ -128,6 +128,27 @@ pub(crate) fn to_property_key(value: Value) -> Result<String, RuntimeError> {
     }
 }
 
+pub(crate) fn has_property(
+    value: Value,
+    env: &HashMap<String, Value>,
+    key: &str,
+) -> Result<bool, RuntimeError> {
+    match value {
+        Value::Object(object) => Ok(object.contains_property(key)),
+        Value::Array(elements) => Ok(array_has_own_property(&elements, key)
+            || array_prototype_property(&elements, env, key).is_some()),
+        Value::Function(function) => Ok(function_own_property_descriptor(&function, key).is_some()
+            || function_prototype_property(&function, env, key).is_some()),
+        Value::String(_)
+        | Value::Number(_)
+        | Value::Boolean(_)
+        | Value::Null
+        | Value::Undefined => Err(RuntimeError {
+            message: "property target must be an object".to_owned(),
+        }),
+    }
+}
+
 pub(crate) fn array_has_own_property(elements: &ArrayRef, key: &str) -> bool {
     key == "length"
         || key

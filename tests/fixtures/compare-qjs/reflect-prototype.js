@@ -21,7 +21,12 @@
     array.marker,
     fnSet,
     fn.marker,
+    Reflect.has(object, "marker"),
+    Reflect.has(Object.create({ inherited: 1 }), "inherited"),
+    Reflect.has(array, "marker"),
+    Reflect.has(fn, "marker"),
     Reflect.setPrototypeOf(sealed, null),
+    Reflect.has.length,
     Reflect.getPrototypeOf.length,
     Reflect.setPrototypeOf.length
   ].join(":");
