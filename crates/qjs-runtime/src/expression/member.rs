@@ -130,8 +130,7 @@ pub(super) fn eval_delete(
     match object {
         Value::Object(object) => {
             let key = property_key(property, env)?;
-            object.delete_own_property(&key);
-            Ok(Value::Boolean(true))
+            Ok(Value::Boolean(object.delete_own_property(&key)))
         }
         Value::Array(_) => Ok(Value::Boolean(true)),
         _ => Err(RuntimeError {

@@ -34,10 +34,11 @@ use function::{Function, NativeFunction};
 pub(crate) use property::{
     array_has_own_property, array_own_property_descriptor, array_own_property_keys,
     array_own_property_names, array_prototype, array_prototype_property, constructor_prototype,
-    function_intrinsic_prototype, function_own_property_descriptor, function_own_property_keys,
-    function_own_property_names, function_prototype, function_prototype_property, has_property,
-    inherited_object_prototype_property, inherited_string_prototype_property, object_prototype,
-    string_prototype, to_property_key, value_prototype,
+    function_delete_own_property, function_intrinsic_prototype, function_own_property_descriptor,
+    function_own_property_keys, function_own_property_names, function_prototype,
+    function_prototype_property, has_property, inherited_object_prototype_property,
+    inherited_string_prototype_property, object_prototype, string_prototype, to_property_key,
+    value_prototype,
 };
 use statement::{Completion, eval_stmt, hoist_declarations};
 pub use value::Value;

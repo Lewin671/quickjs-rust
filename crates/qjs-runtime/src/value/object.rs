@@ -144,15 +144,16 @@ impl ObjectRef {
         self.properties.borrow().get(key).cloned()
     }
 
-    pub(crate) fn delete_own_property(&self, key: &str) {
+    pub(crate) fn delete_own_property(&self, key: &str) -> bool {
         let mut properties = self.properties.borrow_mut();
         if properties
             .get(key)
             .is_some_and(|property| !property.configurable)
         {
-            return;
+            return false;
         }
         properties.remove(key);
+        true
     }
 
     pub(crate) fn own_property_keys(&self) -> Vec<String> {

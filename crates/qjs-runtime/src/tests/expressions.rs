@@ -198,6 +198,10 @@ fn evaluates_delete_operator() {
         eval("let o = { 2: 2 }; delete o[2]; o['2'];"),
         Ok(Value::Undefined)
     );
+    assert_eq!(
+        eval("let o = {}; Object.defineProperty(o, 'fixed', { value: 1 }); delete o.fixed;"),
+        Ok(Value::Boolean(false))
+    );
 }
 
 #[test]

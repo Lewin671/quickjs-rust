@@ -205,6 +205,21 @@ pub(crate) fn function_own_property_descriptor(function: &Function, key: &str) -
     function.properties.borrow().get(key).cloned()
 }
 
+pub(crate) fn function_delete_own_property(function: &Function, key: &str) -> bool {
+    if key == "length" {
+        return false;
+    }
+    let mut properties = function.properties.borrow_mut();
+    if properties
+        .get(key)
+        .is_some_and(|property| !property.configurable)
+    {
+        return false;
+    }
+    properties.remove(key);
+    true
+}
+
 pub(crate) fn function_own_property_names(function: &Function) -> Vec<String> {
     let mut names: Vec<_> = function.properties.borrow().keys().cloned().collect();
     names.push("length".to_owned());

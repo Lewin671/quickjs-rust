@@ -22,6 +22,10 @@ fn evaluates_reflect_prototype_builtins() {
         eval("Reflect.defineProperty.length;"),
         Ok(Value::Number(3.0))
     );
+    assert_eq!(
+        eval("Reflect.deleteProperty.length;"),
+        Ok(Value::Number(2.0))
+    );
     assert_eq!(eval("Reflect.has.length;"), Ok(Value::Number(2.0)));
     assert_eq!(eval("Reflect.ownKeys.length;"), Ok(Value::Number(1.0)));
     assert_eq!(
@@ -143,6 +147,32 @@ fn evaluates_reflect_prototype_builtins() {
         Ok(Value::Boolean(false))
     );
     assert_eq!(
+        eval(
+            "let object = { value: 31 }; Reflect.deleteProperty(object, 'value') && !Reflect.has(object, 'value');"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; Object.defineProperty(object, 'fixed', { value: 1 }); Reflect.deleteProperty(object, 'fixed');"
+        ),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval("let object = {}; Reflect.deleteProperty(object, 'missing');"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "function f() {} f.value = 37; Reflect.deleteProperty(f, 'value') && !Reflect.has(f, 'value');"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("Reflect.deleteProperty(function f() {}, 'length');"),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
         eval("Reflect.ownKeys({ a: 1, b: 2 }).join();"),
         Ok(Value::String("a,b".to_owned()))
     );
@@ -158,6 +188,7 @@ fn evaluates_reflect_prototype_builtins() {
     );
     assert!(eval("Reflect.getPrototypeOf(1);").is_err());
     assert!(eval("Reflect.defineProperty(1, 'value', { value: 1 });").is_err());
+    assert!(eval("Reflect.deleteProperty(1, 'value');").is_err());
     assert!(eval("Reflect.getOwnPropertyDescriptor(1, 'toString');").is_err());
     assert!(eval("Reflect.has(1, 'toString');").is_err());
     assert!(eval("Reflect.ownKeys(1);").is_err());

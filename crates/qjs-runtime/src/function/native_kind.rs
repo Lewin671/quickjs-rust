@@ -108,6 +108,7 @@ pub(crate) enum NativeFunction {
     ObjectPrototypeToLocaleString,
     ObjectPrototypeValueOf,
     ReflectDefineProperty,
+    ReflectDeleteProperty,
     ReflectGetPrototypeOf,
     ReflectGetOwnPropertyDescriptor,
     ReflectHas,

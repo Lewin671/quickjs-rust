@@ -20,6 +20,14 @@
   var blocked = {};
   Object.preventExtensions(blocked);
   var blockedResult = Reflect.defineProperty(blocked, "value", { value: 1 });
+  var deleted = { value: 31 };
+  var deleteResult = Reflect.deleteProperty(deleted, "value");
+  var fixedDelete = {};
+  Object.defineProperty(fixedDelete, "fixed", { value: 1 });
+  var fixedDeleteResult = Reflect.deleteProperty(fixedDelete, "fixed");
+  function deleteFn() {}
+  deleteFn.value = 37;
+  var functionDeleteResult = Reflect.deleteProperty(deleteFn, "value");
   var sealed = {};
   Object.preventExtensions(sealed);
   return [
@@ -44,6 +52,11 @@
     Object.keys(hidden).length,
     hidden.hidden,
     blockedResult,
+    deleteResult,
+    Reflect.has(deleted, "value"),
+    fixedDeleteResult,
+    functionDeleteResult,
+    Reflect.has(deleteFn, "value"),
     Reflect.getOwnPropertyDescriptor({ value: 17 }, "value").value,
     Reflect.getOwnPropertyDescriptor([1, 2], "length").enumerable,
     Reflect.ownKeys({ a: 1, b: 2 }).join("|"),
@@ -56,6 +69,7 @@
     Reflect.setPrototypeOf(sealed, null),
     Reflect.getOwnPropertyDescriptor.length,
     Reflect.defineProperty.length,
+    Reflect.deleteProperty.length,
     Reflect.has.length,
     Reflect.ownKeys.length,
     Reflect.getPrototypeOf.length,
