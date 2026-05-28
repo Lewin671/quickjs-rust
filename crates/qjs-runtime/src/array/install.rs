@@ -40,6 +40,12 @@ pub(crate) fn install_array(
     );
     define_array_prototype_function(
         &array_prototype,
+        "find",
+        1,
+        NativeFunction::ArrayPrototypeFind,
+    );
+    define_array_prototype_function(
+        &array_prototype,
         "forEach",
         1,
         NativeFunction::ArrayPrototypeForEach,

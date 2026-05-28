@@ -10,7 +10,8 @@ mod sequence;
 pub(crate) use constructor::{native_array, native_array_is_array};
 pub(crate) use install::install_array;
 pub(crate) use iteration::{
-    native_array_prototype_filter, native_array_prototype_for_each, native_array_prototype_map,
+    native_array_prototype_filter, native_array_prototype_find, native_array_prototype_for_each,
+    native_array_prototype_map,
 };
 pub(crate) use join::{native_array_prototype_join, native_array_prototype_to_string};
 pub(crate) use mutation::{

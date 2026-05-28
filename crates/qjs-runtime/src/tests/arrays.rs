@@ -22,6 +22,7 @@ fn evaluates_array_builtins() {
         eval("Array.prototype.filter.length;"),
         Ok(Value::Number(1.0))
     );
+    assert_eq!(eval("Array.prototype.find.length;"), Ok(Value::Number(1.0)));
     assert_eq!(
         eval("Array.prototype.forEach.length;"),
         Ok(Value::Number(1.0))
@@ -135,6 +136,20 @@ fn evaluates_array_builtins() {
             "let xs = [1, 2, 3]; let ys = xs.filter(function(value) { return value < 3; }); xs !== ys && xs.join() === '1,2,3' && ys.join() === '1,2';"
         ),
         Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("[1, 2, 3, 4].find(function(value) { return value > 2; });"),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval("[1, 2, 3].find(function(value) { return value > 5; });"),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval(
+            "let receiver = { target: 20 }; [10, 20].find(function(value, index, array) { return this === receiver && index === 1 && array[index] === value && value === this.target; }, receiver);"
+        ),
+        Ok(Value::Number(20.0))
     );
     assert_eq!(
         eval(

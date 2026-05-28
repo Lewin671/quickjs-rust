@@ -19,6 +19,11 @@ cases/array-filter-basic.js
 cases/array-filter-callback-arguments.js
 cases/array-filter-this-arg.js
 cases/array-filter-length.js
+cases/array-find-basic.js
+cases/array-find-callback-arguments.js
+cases/array-find-this-arg.js
+cases/array-find-length.js
+cases/array-find-not-found.js
 cases/array-for-each-basic.js
 cases/array-for-each-callback-arguments.js
 cases/array-for-each-this-arg.js
