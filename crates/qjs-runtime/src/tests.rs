@@ -90,6 +90,7 @@ fn evaluates_boolean_builtins() {
         eval("(new Boolean(0)).valueOf();"),
         Ok(Value::Boolean(false))
     );
+    assert!(eval("let o = Object.create(Boolean.prototype); o.valueOf();").is_err());
 }
 
 #[test]
@@ -1417,9 +1418,45 @@ fn evaluates_number_builtins() {
         Ok(Value::String("function".to_owned()))
     );
     assert_eq!(eval("Number.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("Number();"), Ok(Value::Number(0.0)));
+    assert_eq!(
+        eval("Number(undefined) === Number(undefined);"),
+        Ok(Value::Boolean(false))
+    );
     assert_eq!(eval("Number('10');"), Ok(Value::Number(10.0)));
     assert_eq!(eval("Number(true);"), Ok(Value::Number(1.0)));
     assert_eq!(eval("Number(null);"), Ok(Value::Number(0.0)));
+    assert_eq!(
+        eval("Number.prototype.constructor === Number;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("Number.prototype.toString.length;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval("Number.prototype.valueOf.length;"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval("let n = 10; n.toString();"),
+        Ok(Value::String("10".to_owned()))
+    );
+    assert_eq!(
+        eval("let n = 255; n.toString(16);"),
+        Ok(Value::String("ff".to_owned()))
+    );
+    assert_eq!(eval("let n = 10; n.valueOf();"), Ok(Value::Number(10.0)));
+    assert_eq!(
+        eval("(new Number(7)).toString();"),
+        Ok(Value::String("7".to_owned()))
+    );
+    assert_eq!(eval("(new Number(7)).valueOf();"), Ok(Value::Number(7.0)));
+    assert_eq!(
+        eval("let n = new Number(7); n.tag = Object.prototype.toString; n.tag();"),
+        Ok(Value::String("[object Number]".to_owned()))
+    );
+    assert!(eval("let o = Object.create(Number.prototype); o.valueOf();").is_err());
     assert_eq!(
         eval("Number('abc') === Number('abc');"),
         Ok(Value::Boolean(false))

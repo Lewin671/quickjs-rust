@@ -1,0 +1,1 @@
+Number() + ":" + (Number(undefined) === Number(undefined)) + ":" + Number.prototype.toString.length + ":" + Number.prototype.valueOf.length + ":" + (Number.prototype.constructor === Number) + ":" + (255).toString(16) + ":" + (new Number(7)).valueOf() + ":" + (new Number(7)).toString()
