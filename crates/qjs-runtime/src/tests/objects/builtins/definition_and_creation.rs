@@ -1,0 +1,125 @@
+use crate::{Value, eval};
+
+#[test]
+fn evaluates_object_definition_and_creation_builtins() {
+    assert_eq!(
+        eval("Object.defineProperty.length;"),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; Object.defineProperty(object, 'value', { value: 7 }); object.value;"
+        ),
+        Ok(Value::Number(7.0))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; Object.defineProperty(object, 'value', { value: 7 }); Object.keys(object).length;"
+        ),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; Object.defineProperty(object, 'value', { value: 7, enumerable: true, writable: true, configurable: true }); Object.keys(object)[0];"
+        ),
+        Ok(Value::String("value".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; Object.defineProperty(object, 'value', { value: 7 }); object.value = 9; object.value;"
+        ),
+        Ok(Value::Number(7.0))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; Object.defineProperty(object, 'value', { value: 7, writable: true }); object.value = 9; object.value;"
+        ),
+        Ok(Value::Number(9.0))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; Object.defineProperty(object, 'value', { value: 7, configurable: true }); Object.getOwnPropertyDescriptor(object, 'value').configurable;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("Object.defineProperties.length;"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; Object.defineProperties(object, { first: { value: 1, enumerable: true }, second: { value: 2 } }); object.first + object.second;"
+        ),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; Object.defineProperties(object, { first: { value: 1, enumerable: true }, second: { value: 2 } }); Object.keys(object).length;"
+        ),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval(
+            "function fn() {} Object.defineProperties(fn, { value: { value: 9, enumerable: true } }); fn.value;"
+        ),
+        Ok(Value::Number(9.0))
+    );
+    assert_eq!(eval("Object.create.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(
+        eval("let proto = { value: 7 }; let object = Object.create(proto); object.value;"),
+        Ok(Value::Number(7.0))
+    );
+    assert_eq!(
+        eval(
+            "let proto = { inherited: 1 }; let object = Object.create(proto, { own: { value: 2, enumerable: true } }); object.inherited + object.own;"
+        ),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval(
+            "let object = Object.create(null, { own: { value: 2, enumerable: true } }); Object.keys(object)[0];"
+        ),
+        Ok(Value::String("own".to_owned()))
+    );
+    assert_eq!(
+        eval("Object.create({}, undefined) instanceof Object;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let object = Object.create({}, { hidden: { value: 4 } }); Object.keys(object).length;"
+        ),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval(
+            "let proto = {}; let object = Object.create(proto); Object.getPrototypeOf(object) === proto;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("Object.getPrototypeOf(Object.create(null));"),
+        Ok(Value::Null)
+    );
+    assert_eq!(eval("({}) instanceof Object;"), Ok(Value::Boolean(true)));
+    assert_eq!(
+        eval("Object() instanceof Object;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("(new Object()).constructor === Object;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("let object = { value: 3 }; Object(object) === object;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("let object = { value: 3 }; new Object(object) === object;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("({ value: 1 }).hasOwnProperty('value');"),
+        Ok(Value::Boolean(true))
+    );
+}
