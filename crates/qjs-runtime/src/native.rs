@@ -31,6 +31,9 @@ pub(crate) fn call_native_function(
         NativeFunction::ArrayPrototypeFilter => {
             array::native_array_prototype_filter(this_value, &argument_values, env)
         }
+        NativeFunction::ArrayPrototypeForEach => {
+            array::native_array_prototype_for_each(this_value, &argument_values, env)
+        }
         NativeFunction::ArrayPrototypeIncludes => {
             array::native_array_prototype_includes(this_value, &argument_values)
         }

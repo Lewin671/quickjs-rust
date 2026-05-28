@@ -23,6 +23,10 @@ fn evaluates_array_builtins() {
         Ok(Value::Number(1.0))
     );
     assert_eq!(
+        eval("Array.prototype.forEach.length;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
         eval("Array.prototype.includes.length;"),
         Ok(Value::Number(1.0))
     );
@@ -131,6 +135,28 @@ fn evaluates_array_builtins() {
             "let xs = [1, 2, 3]; let ys = xs.filter(function(value) { return value < 3; }); xs !== ys && xs.join() === '1,2,3' && ys.join() === '1,2';"
         ),
         Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let total = 0; [1, 2, 3].forEach(function(value) { total = total + value; }); total;"
+        ),
+        Ok(Value::Number(6.0))
+    );
+    assert_eq!(
+        eval(
+            "let seen = ''; [10, 20].forEach(function(value, index, array) { seen = seen + value + ':' + index + ':' + (array[index] === value) + '|'; }); seen;"
+        ),
+        Ok(Value::String("10:0:true|20:1:true|".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let receiver = { total: 0 }; [1, 2].forEach(function(value) { this.total = this.total + value; }, receiver); receiver.total;"
+        ),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval("[1].forEach(function() { return 42; });"),
+        Ok(Value::Undefined)
     );
     assert_eq!(
         eval("[1, 'x', true].toString();"),
