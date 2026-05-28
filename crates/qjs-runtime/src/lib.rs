@@ -14,6 +14,7 @@ mod global;
 mod math;
 mod number;
 mod object;
+mod operations;
 mod string;
 mod value;
 
@@ -1518,7 +1519,7 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, Run
         } => eval_delete(argument, env),
         Expr::Unary { op, argument, .. } => {
             let argument = eval_expr(argument, env)?;
-            eval_unary(*op, argument)
+            operations::eval_unary(*op, argument)
         }
         Expr::Assignment {
             target, op, value, ..
@@ -1586,7 +1587,7 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, Run
         } => {
             let left = eval_expr(left, env)?;
             let right = eval_expr(right, env)?;
-            eval_binary(left, *op, right, env)
+            operations::eval_binary(left, *op, right, env)
         }
     }
 }
@@ -1660,40 +1661,40 @@ fn eval_assignment(
     let value = match op {
         AssignmentOp::Assign => right,
         AssignmentOp::AddAssign => {
-            eval_binary(read_target(target, env)?, BinaryOp::Add, right, env)?
+            operations::eval_binary(read_target(target, env)?, BinaryOp::Add, right, env)?
         }
         AssignmentOp::SubAssign => {
-            eval_binary(read_target(target, env)?, BinaryOp::Sub, right, env)?
+            operations::eval_binary(read_target(target, env)?, BinaryOp::Sub, right, env)?
         }
         AssignmentOp::MulAssign => {
-            eval_binary(read_target(target, env)?, BinaryOp::Mul, right, env)?
+            operations::eval_binary(read_target(target, env)?, BinaryOp::Mul, right, env)?
         }
         AssignmentOp::PowAssign => {
-            eval_binary(read_target(target, env)?, BinaryOp::Pow, right, env)?
+            operations::eval_binary(read_target(target, env)?, BinaryOp::Pow, right, env)?
         }
         AssignmentOp::DivAssign => {
-            eval_binary(read_target(target, env)?, BinaryOp::Div, right, env)?
+            operations::eval_binary(read_target(target, env)?, BinaryOp::Div, right, env)?
         }
         AssignmentOp::RemAssign => {
-            eval_binary(read_target(target, env)?, BinaryOp::Rem, right, env)?
+            operations::eval_binary(read_target(target, env)?, BinaryOp::Rem, right, env)?
         }
         AssignmentOp::ShlAssign => {
-            eval_binary(read_target(target, env)?, BinaryOp::Shl, right, env)?
+            operations::eval_binary(read_target(target, env)?, BinaryOp::Shl, right, env)?
         }
         AssignmentOp::ShrAssign => {
-            eval_binary(read_target(target, env)?, BinaryOp::Shr, right, env)?
+            operations::eval_binary(read_target(target, env)?, BinaryOp::Shr, right, env)?
         }
         AssignmentOp::UShrAssign => {
-            eval_binary(read_target(target, env)?, BinaryOp::UShr, right, env)?
+            operations::eval_binary(read_target(target, env)?, BinaryOp::UShr, right, env)?
         }
         AssignmentOp::BitwiseAndAssign => {
-            eval_binary(read_target(target, env)?, BinaryOp::BitwiseAnd, right, env)?
+            operations::eval_binary(read_target(target, env)?, BinaryOp::BitwiseAnd, right, env)?
         }
         AssignmentOp::BitwiseXorAssign => {
-            eval_binary(read_target(target, env)?, BinaryOp::BitwiseXor, right, env)?
+            operations::eval_binary(read_target(target, env)?, BinaryOp::BitwiseXor, right, env)?
         }
         AssignmentOp::BitwiseOrAssign => {
-            eval_binary(read_target(target, env)?, BinaryOp::BitwiseOr, right, env)?
+            operations::eval_binary(read_target(target, env)?, BinaryOp::BitwiseOr, right, env)?
         }
         AssignmentOp::LogicalAndAssign
         | AssignmentOp::LogicalOrAssign
@@ -1954,19 +1955,6 @@ fn to_array_index(value: Value) -> Result<usize, RuntimeError> {
     Ok(number as usize)
 }
 
-fn eval_unary(op: UnaryOp, argument: Value) -> Result<Value, RuntimeError> {
-    match op {
-        UnaryOp::Not => Ok(Value::Boolean(!is_truthy(&argument))),
-        UnaryOp::Plus => Ok(Value::Number(to_number(argument)?)),
-        UnaryOp::Minus => Ok(Value::Number(-to_number(argument)?)),
-        UnaryOp::BitwiseNot => Ok(Value::Number(f64::from(!to_int32(argument)?))),
-        UnaryOp::Void => Ok(Value::Undefined),
-        UnaryOp::Typeof | UnaryOp::Delete => {
-            unreachable!("operator requires unevaluated operand handling")
-        }
-    }
-}
-
 fn eval_delete(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, RuntimeError> {
     let Expr::Member {
         object, property, ..
@@ -2005,116 +1993,6 @@ fn eval_typeof(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, R
     Ok(Value::String(type_name.to_owned()))
 }
 
-fn eval_binary(
-    left: Value,
-    op: BinaryOp,
-    right: Value,
-    env: &HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
-    if op == BinaryOp::In {
-        return eval_in(left, right);
-    }
-    if op == BinaryOp::Instanceof {
-        return eval_instanceof(left, right, env);
-    }
-
-    match op {
-        BinaryOp::Eq | BinaryOp::StrictEq => return Ok(Value::Boolean(left == right)),
-        BinaryOp::Ne | BinaryOp::StrictNe => return Ok(Value::Boolean(left != right)),
-        BinaryOp::Add if matches!(left, Value::String(_)) || matches!(right, Value::String(_)) => {
-            return Ok(Value::String(format!(
-                "{}{}",
-                to_js_string(left)?,
-                to_js_string(right)?
-            )));
-        }
-        _ => {}
-    }
-
-    let left = to_number(left)?;
-    let right = to_number(right)?;
-
-    let value = match op {
-        BinaryOp::Add => left + right,
-        BinaryOp::Sub => left - right,
-        BinaryOp::Mul => left * right,
-        BinaryOp::Pow => left.powf(right),
-        BinaryOp::Div => left / right,
-        BinaryOp::Rem => left % right,
-        BinaryOp::Shl => {
-            return Ok(Value::Number(f64::from(
-                to_int32_number(left) << (to_uint32_number(right) & 0x1f),
-            )));
-        }
-        BinaryOp::Shr => {
-            return Ok(Value::Number(f64::from(
-                to_int32_number(left) >> (to_uint32_number(right) & 0x1f),
-            )));
-        }
-        BinaryOp::UShr => {
-            return Ok(Value::Number(f64::from(
-                to_uint32_number(left) >> (to_uint32_number(right) & 0x1f),
-            )));
-        }
-        BinaryOp::BitwiseAnd => {
-            return Ok(Value::Number(f64::from(
-                to_int32_number(left) & to_int32_number(right),
-            )));
-        }
-        BinaryOp::BitwiseXor => {
-            return Ok(Value::Number(f64::from(
-                to_int32_number(left) ^ to_int32_number(right),
-            )));
-        }
-        BinaryOp::BitwiseOr => {
-            return Ok(Value::Number(f64::from(
-                to_int32_number(left) | to_int32_number(right),
-            )));
-        }
-        BinaryOp::Lt => return Ok(Value::Boolean(left < right)),
-        BinaryOp::Le => return Ok(Value::Boolean(left <= right)),
-        BinaryOp::Gt => return Ok(Value::Boolean(left > right)),
-        BinaryOp::Ge => return Ok(Value::Boolean(left >= right)),
-        BinaryOp::Eq
-        | BinaryOp::StrictEq
-        | BinaryOp::Ne
-        | BinaryOp::StrictNe
-        | BinaryOp::In
-        | BinaryOp::Instanceof
-        | BinaryOp::LogicalAnd
-        | BinaryOp::LogicalOr
-        | BinaryOp::NullishCoalescing => unreachable!("handled before numeric binary evaluation"),
-    };
-    Ok(Value::Number(value))
-}
-
-fn eval_instanceof(
-    left: Value,
-    right: Value,
-    env: &HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
-    let Value::Function(constructor) = right else {
-        return Err(RuntimeError {
-            message: "right-hand side of instanceof is not callable".to_owned(),
-        });
-    };
-    let Some(left_prototype) = value_prototype(left, env) else {
-        return Ok(Value::Boolean(false));
-    };
-    let Some(Property {
-        value: Value::Object(prototype),
-        ..
-    }) = constructor.properties.borrow().get("prototype").cloned()
-    else {
-        return Err(RuntimeError {
-            message: "function prototype is not an object".to_owned(),
-        });
-    };
-    Ok(Value::Boolean(
-        left_prototype.ptr_eq(&prototype) || left_prototype.has_prototype(&prototype),
-    ))
-}
-
 pub(crate) fn to_js_string(value: Value) -> Result<String, RuntimeError> {
     match value {
         Value::Number(number) => Ok(number::number_to_js_string(number)),
@@ -2140,22 +2018,6 @@ fn error_value(value: Value) -> String {
         Value::Function(_) => "function".to_owned(),
         Value::Array(_) => "array".to_owned(),
         Value::Object(_) => "object".to_owned(),
-    }
-}
-
-fn eval_in(left: Value, right: Value) -> Result<Value, RuntimeError> {
-    let key = to_property_key(left)?;
-    match right {
-        Value::Object(object) => Ok(Value::Boolean(object.contains_property(&key))),
-        Value::Array(elements) => {
-            let index = key.parse::<usize>().ok();
-            Ok(Value::Boolean(
-                index.is_some_and(|index| index < elements.len()) || key == "length",
-            ))
-        }
-        _ => Err(RuntimeError {
-            message: "right operand of in is not an object".to_owned(),
-        }),
     }
 }
 
