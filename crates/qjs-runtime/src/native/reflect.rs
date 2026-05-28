@@ -10,6 +10,9 @@ pub(super) fn call_reflect_native(
     env: &HashMap<String, Value>,
 ) -> NativeCallResult {
     let value = match native {
+        NativeFunction::ReflectDefineProperty => {
+            reflect::native_reflect_define_property(argument_values)?
+        }
         NativeFunction::ReflectGetPrototypeOf => {
             reflect::native_reflect_get_prototype_of(argument_values, env)?
         }

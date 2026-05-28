@@ -18,6 +18,10 @@ fn evaluates_reflect_prototype_builtins() {
         eval("Reflect.getOwnPropertyDescriptor.length;"),
         Ok(Value::Number(2.0))
     );
+    assert_eq!(
+        eval("Reflect.defineProperty.length;"),
+        Ok(Value::Number(3.0))
+    );
     assert_eq!(eval("Reflect.has.length;"), Ok(Value::Number(2.0)));
     assert_eq!(eval("Reflect.ownKeys.length;"), Ok(Value::Number(1.0)));
     assert_eq!(
@@ -109,6 +113,36 @@ fn evaluates_reflect_prototype_builtins() {
         Ok(Value::Undefined)
     );
     assert_eq!(
+        eval(
+            "let object = {}; Reflect.defineProperty(object, 'value', { value: 19, enumerable: true, writable: true, configurable: true }) && object.value;"
+        ),
+        Ok(Value::Number(19.0))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; Reflect.defineProperty(object, 'hidden', { value: 23 }); Object.keys(object).length + ':' + object.hidden;"
+        ),
+        Ok(Value::String("0:23".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "function f() {} Reflect.defineProperty(f, 'value', { value: 29, enumerable: true }) && f.value;"
+        ),
+        Ok(Value::Number(29.0))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; Object.preventExtensions(object); Reflect.defineProperty(object, 'value', { value: 1 });"
+        ),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; Object.defineProperty(object, 'value', { value: 1 }); Reflect.defineProperty(object, 'value', { configurable: true });"
+        ),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
         eval("Reflect.ownKeys({ a: 1, b: 2 }).join();"),
         Ok(Value::String("a,b".to_owned()))
     );
@@ -123,6 +157,7 @@ fn evaluates_reflect_prototype_builtins() {
         Ok(Value::String("0,1,length".to_owned()))
     );
     assert!(eval("Reflect.getPrototypeOf(1);").is_err());
+    assert!(eval("Reflect.defineProperty(1, 'value', { value: 1 });").is_err());
     assert!(eval("Reflect.getOwnPropertyDescriptor(1, 'toString');").is_err());
     assert!(eval("Reflect.has(1, 'toString');").is_err());
     assert!(eval("Reflect.ownKeys(1);").is_err());

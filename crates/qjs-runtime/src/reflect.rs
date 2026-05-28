@@ -10,6 +10,12 @@ pub(crate) fn install_reflect(
     let reflect_object = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
     define_reflect_function(
         &reflect_object,
+        "defineProperty",
+        3,
+        NativeFunction::ReflectDefineProperty,
+    );
+    define_reflect_function(
+        &reflect_object,
         "getPrototypeOf",
         1,
         NativeFunction::ReflectGetPrototypeOf,
@@ -46,6 +52,21 @@ fn define_reflect_function(object: &ObjectRef, key: &str, length: usize, native:
         key.to_owned(),
         Value::Function(Function::new_native(Some(key), length, native, false)),
     );
+}
+
+pub(crate) fn native_reflect_define_property(
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    ensure_reflect_object_target(&target, "Reflect.defineProperty")?;
+    let key = crate::to_property_key(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
+    let descriptor = object::to_property_descriptor(
+        argument_values.get(2).cloned().unwrap_or(Value::Undefined),
+    )?;
+
+    Ok(Value::Boolean(object::define_property_on_value(
+        target, key, descriptor,
+    )?))
 }
 
 pub(crate) fn native_reflect_get_prototype_of(

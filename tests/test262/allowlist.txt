@@ -425,6 +425,10 @@ cases/variable-multiple-basic.js
 cases/var-hoist-before-declaration-basic.js
 cases/var-hoist-unentered-block-basic.js
 cases/var-hoist-function-body-basic.js
+cases/reflect-define-property-basic.js
+cases/reflect-define-property-function-basic.js
+cases/reflect-define-property-length.js
+cases/reflect-define-property-return-boolean.js
 cases/reflect-get-own-property-descriptor-array-function.js
 cases/reflect-get-own-property-descriptor-basic.js
 cases/reflect-get-own-property-descriptor-length.js

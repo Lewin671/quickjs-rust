@@ -15,7 +15,11 @@ pub(crate) fn native_object_define_property(
     let descriptor =
         to_property_descriptor(argument_values.get(2).cloned().unwrap_or(Value::Undefined))?;
 
-    define_property_on_value(target.clone(), key, descriptor)?;
+    if !define_property_on_value(target.clone(), key, descriptor)? {
+        return Err(RuntimeError {
+            message: "Object.defineProperty failed".to_owned(),
+        });
+    }
     Ok(target)
 }
 
@@ -34,7 +38,11 @@ pub(crate) fn native_object_define_properties(
 
     for (key, descriptor_value) in enumerable_property_entries(descriptors)? {
         let descriptor = to_property_descriptor(descriptor_value)?;
-        define_property_on_value(target.clone(), key, descriptor)?;
+        if !define_property_on_value(target.clone(), key, descriptor)? {
+            return Err(RuntimeError {
+                message: "Object.defineProperties failed".to_owned(),
+            });
+        }
     }
     Ok(target)
 }
@@ -96,45 +104,40 @@ pub(super) fn own_property_descriptor(
     }
 }
 
-fn define_property_on_value(
+pub(crate) fn define_property_on_value(
     target: Value,
     key: String,
     descriptor: Property,
-) -> Result<(), RuntimeError> {
+) -> Result<bool, RuntimeError> {
     match &target {
         Value::Object(object) => {
             if !object.has_own_property(&key) && !object.is_extensible() {
-                return Err(RuntimeError {
-                    message: "object is not extensible".to_owned(),
-                });
+                return Ok(false);
             }
             if object
                 .own_property(&key)
                 .is_some_and(|property| !is_compatible_descriptor(&property, &descriptor))
             {
-                return Err(RuntimeError {
-                    message: "property descriptor is not compatible".to_owned(),
-                });
+                return Ok(false);
             }
             object.define_property(key, descriptor);
-            Ok(())
+            Ok(true)
         }
         Value::Function(function) => {
             let existing = function_own_property_descriptor(function, &key);
             if existing.is_none() && !function.is_extensible() {
-                return Err(RuntimeError {
-                    message: "function is not extensible".to_owned(),
-                });
+                return Ok(false);
             }
             if existing.is_some_and(|property| !is_compatible_descriptor(&property, &descriptor)) {
-                return Err(RuntimeError {
-                    message: "property descriptor is not compatible".to_owned(),
-                });
+                return Ok(false);
             }
             function.properties.borrow_mut().insert(key, descriptor);
-            Ok(())
+            Ok(true)
         }
-        _ => ensure_define_property_target(&target),
+        _ => {
+            ensure_define_property_target(&target)?;
+            unreachable!("define property target validation should reject unsupported values")
+        }
     }
 }
 
@@ -162,7 +165,7 @@ fn ensure_define_property_target(target: &Value) -> Result<(), RuntimeError> {
     }
 }
 
-fn to_property_descriptor(value: Value) -> Result<Property, RuntimeError> {
+pub(crate) fn to_property_descriptor(value: Value) -> Result<Property, RuntimeError> {
     let Value::Object(descriptor) = value else {
         return Err(RuntimeError {
             message: "property descriptor must be an object".to_owned(),
