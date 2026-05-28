@@ -43,6 +43,13 @@ cases/array-slice-negative-index.js
 cases/array-slice-start-past-length.js
 cases/array-to-string-basic.js
 cases/array-to-string-length.js
+cases/boolean-constructor-basic.js
+cases/boolean-constructor-length.js
+cases/boolean-prototype-constructor.js
+cases/boolean-prototype-to-string-basic.js
+cases/boolean-prototype-to-string-length.js
+cases/boolean-prototype-value-of-basic.js
+cases/boolean-prototype-value-of-length.js
 cases/global-is-finite-basic.js
 cases/global-is-finite-length.js
 cases/global-is-nan-basic.js

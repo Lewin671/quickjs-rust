@@ -9,6 +9,7 @@ use qjs_ast::{
 use qjs_parser::parse_script;
 
 const GLOBAL_THIS_BINDING: &str = "\0global_this";
+const BOOLEAN_DATA_PROPERTY: &str = "\0BooleanData";
 
 /// A JavaScript value supported by the current runtime subset.
 #[derive(Clone)]
@@ -222,6 +223,9 @@ enum NativeFunction {
     ArrayPrototypeJoin,
     ArrayPrototypeSlice,
     ArrayPrototypeToString,
+    Boolean,
+    BooleanPrototypeToString,
+    BooleanPrototypeValueOf,
     MathAbs,
     MathAcos,
     MathAcosh,
@@ -920,6 +924,43 @@ fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
         global_object.set("String".to_owned(), string_value);
     }
 
+    let boolean_prototype =
+        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype.clone()));
+    let boolean_function = Function::new_native(Some("Boolean"), 1, NativeFunction::Boolean, true);
+    boolean_prototype
+        .define_non_enumerable(BOOLEAN_DATA_PROPERTY.to_owned(), Value::Boolean(false));
+    boolean_prototype.define_non_enumerable(
+        "constructor".to_owned(),
+        Value::Function(boolean_function.clone()),
+    );
+    boolean_prototype.define_non_enumerable(
+        "toString".to_owned(),
+        Value::Function(Function::new_native(
+            Some("toString"),
+            0,
+            NativeFunction::BooleanPrototypeToString,
+            false,
+        )),
+    );
+    boolean_prototype.define_non_enumerable(
+        "valueOf".to_owned(),
+        Value::Function(Function::new_native(
+            Some("valueOf"),
+            0,
+            NativeFunction::BooleanPrototypeValueOf,
+            false,
+        )),
+    );
+    boolean_function.properties.borrow_mut().insert(
+        "prototype".to_owned(),
+        Property::non_enumerable(Value::Object(boolean_prototype)),
+    );
+    let boolean_value = Value::Function(boolean_function);
+    env.insert("Boolean".to_owned(), boolean_value.clone());
+    if let Value::Object(global_object) = global_this {
+        global_object.set("Boolean".to_owned(), boolean_value);
+    }
+
     let math_object = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype.clone()));
     define_math_constant(&math_object, "E", std::f64::consts::E);
     define_math_constant(&math_object, "LN10", std::f64::consts::LN_10);
@@ -1590,6 +1631,13 @@ fn string_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef> {
     function_prototype(string_function)
 }
 
+fn boolean_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+    let Some(Value::Function(boolean_function)) = env.get("Boolean") else {
+        return None;
+    };
+    function_prototype(boolean_function)
+}
+
 fn eval_arguments(
     arguments: &[Expr],
     env: &mut HashMap<String, Value>,
@@ -1691,6 +1739,11 @@ fn call_native_function(
             native_array_prototype_slice(this_value, &argument_values)
         }
         NativeFunction::ArrayPrototypeToString => native_array_prototype_to_string(this_value),
+        NativeFunction::Boolean => {
+            native_boolean(function, this_value, &argument_values, is_construct)
+        }
+        NativeFunction::BooleanPrototypeToString => native_boolean_prototype_to_string(this_value),
+        NativeFunction::BooleanPrototypeValueOf => native_boolean_prototype_value_of(this_value),
         NativeFunction::MathAbs => native_math_unary(&argument_values, f64::abs),
         NativeFunction::MathAcos => native_math_unary(&argument_values, f64::acos),
         NativeFunction::MathAcosh => native_math_unary(&argument_values, f64::acosh),
@@ -1829,6 +1882,52 @@ fn native_array(argument_values: &[Value]) -> Result<Value, RuntimeError> {
     }
 
     Ok(Value::Array(argument_values.to_vec()))
+}
+
+fn native_boolean(
+    function: &Function,
+    this_value: Value,
+    argument_values: &[Value],
+    is_construct: bool,
+) -> Result<Value, RuntimeError> {
+    let value = argument_values.first().is_some_and(is_truthy);
+    if !is_construct {
+        return Ok(Value::Boolean(value));
+    }
+
+    let object = match this_value {
+        Value::Object(object) => object,
+        _ => ObjectRef::with_prototype(HashMap::new(), function_prototype(function)),
+    };
+    object.define_non_enumerable(BOOLEAN_DATA_PROPERTY.to_owned(), Value::Boolean(value));
+    Ok(Value::Object(object))
+}
+
+fn native_boolean_prototype_to_string(this_value: Value) -> Result<Value, RuntimeError> {
+    Ok(Value::String(if this_boolean_value(this_value)? {
+        "true".to_owned()
+    } else {
+        "false".to_owned()
+    }))
+}
+
+fn native_boolean_prototype_value_of(this_value: Value) -> Result<Value, RuntimeError> {
+    Ok(Value::Boolean(this_boolean_value(this_value)?))
+}
+
+fn this_boolean_value(value: Value) -> Result<bool, RuntimeError> {
+    match value {
+        Value::Boolean(value) => Ok(value),
+        Value::Object(object) => match object.get(BOOLEAN_DATA_PROPERTY) {
+            Some(Value::Boolean(value)) => Ok(value),
+            _ => Err(RuntimeError {
+                message: "Boolean.prototype method called on non-boolean object".to_owned(),
+            }),
+        },
+        _ => Err(RuntimeError {
+            message: "Boolean.prototype method called on non-boolean".to_owned(),
+        }),
+    }
 }
 
 fn native_array_is_array(argument_values: &[Value]) -> Result<Value, RuntimeError> {
@@ -3179,7 +3278,13 @@ fn native_object_prototype_to_string(this_value: Value) -> Result<Value, Runtime
         Value::String(_) => "String",
         Value::Number(_) => "Number",
         Value::Boolean(_) => "Boolean",
-        Value::Object(_) => "Object",
+        Value::Object(object) => {
+            if matches!(object.get(BOOLEAN_DATA_PROPERTY), Some(Value::Boolean(_))) {
+                "Boolean"
+            } else {
+                "Object"
+            }
+        }
     };
     Ok(Value::String(format!("[object {tag}]")))
 }
@@ -3509,6 +3614,9 @@ fn eval_member(
                 .or_else(|| inherited_string_prototype_property(env, &key))
                 .unwrap_or(Value::Undefined))
         }
+        (Value::Boolean(_), MemberProperty::Named(name)) => {
+            Ok(inherited_boolean_prototype_property(env, name).unwrap_or(Value::Undefined))
+        }
         (Value::Array(elements), MemberProperty::Computed(index)) => {
             let index = eval_expr(index, env)?;
             let index = to_array_index(index)?;
@@ -3550,6 +3658,12 @@ fn inherited_array_prototype_property(env: &HashMap<String, Value>, key: &str) -
 
 fn inherited_string_prototype_property(env: &HashMap<String, Value>, key: &str) -> Option<Value> {
     string_prototype(env)
+        .and_then(|prototype| prototype.get(key))
+        .or_else(|| inherited_object_prototype_property(env, key))
+}
+
+fn inherited_boolean_prototype_property(env: &HashMap<String, Value>, key: &str) -> Option<Value> {
+    boolean_prototype(env)
         .and_then(|prototype| prototype.get(key))
         .or_else(|| inherited_object_prototype_property(env, key))
 }
@@ -4069,6 +4183,53 @@ mod tests {
         assert_eq!(eval("'abc'['1'];"), Ok(Value::String("b".to_owned())));
         assert_eq!(eval("'abc'[3];"), Ok(Value::Undefined));
         assert_eq!(eval("'abc'['01'];"), Ok(Value::Undefined));
+    }
+
+    #[test]
+    fn evaluates_boolean_builtins() {
+        assert_eq!(
+            eval("typeof Boolean;"),
+            Ok(Value::String("function".to_owned()))
+        );
+        assert_eq!(eval("Boolean.length;"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("Boolean();"), Ok(Value::Boolean(false)));
+        assert_eq!(eval("Boolean(0);"), Ok(Value::Boolean(false)));
+        assert_eq!(eval("Boolean(1);"), Ok(Value::Boolean(true)));
+        assert_eq!(eval("Boolean('');"), Ok(Value::Boolean(false)));
+        assert_eq!(eval("Boolean('x');"), Ok(Value::Boolean(true)));
+        assert_eq!(
+            eval("Boolean.prototype.constructor === Boolean;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("Boolean.prototype.toString.length;"),
+            Ok(Value::Number(0.0))
+        );
+        assert_eq!(
+            eval("Boolean.prototype.valueOf.length;"),
+            Ok(Value::Number(0.0))
+        );
+        assert_eq!(
+            eval("Boolean.prototype.toString();"),
+            Ok(Value::String("false".to_owned()))
+        );
+        assert_eq!(
+            eval("Boolean.prototype.valueOf();"),
+            Ok(Value::Boolean(false))
+        );
+        assert_eq!(
+            eval("true.toString();"),
+            Ok(Value::String("true".to_owned()))
+        );
+        assert_eq!(eval("false.valueOf();"), Ok(Value::Boolean(false)));
+        assert_eq!(
+            eval("(new Boolean(true)).toString();"),
+            Ok(Value::String("true".to_owned()))
+        );
+        assert_eq!(
+            eval("(new Boolean(0)).valueOf();"),
+            Ok(Value::Boolean(false))
+        );
     }
 
     #[test]
