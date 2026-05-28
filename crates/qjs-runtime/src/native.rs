@@ -184,6 +184,7 @@ pub(crate) fn call_native_function(
         }
         NativeFunction::ObjectHasOwn => object::native_object_has_own(&argument_values),
         NativeFunction::ObjectKeys => object::native_object_keys(&argument_values),
+        NativeFunction::ObjectValues => object::native_object_values(&argument_values),
         NativeFunction::ObjectPrototypeHasOwnProperty => {
             object::native_object_prototype_has_own_property(this_value, &argument_values)
         }

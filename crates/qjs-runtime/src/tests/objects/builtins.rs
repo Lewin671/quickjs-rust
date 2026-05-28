@@ -193,6 +193,26 @@ fn evaluates_object_builtins() {
         eval("Object.keys(Object.prototype).length;"),
         Ok(Value::Number(0.0))
     );
+    assert_eq!(eval("Object.values.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(
+        eval("Object.values({ first: 1, second: 2 }).join();"),
+        Ok(Value::String("1,2".to_owned()))
+    );
+    assert_eq!(
+        eval("Object.values([1, 2]).join();"),
+        Ok(Value::String("1,2".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "Object.values(Object.create({ inherited: 1 }, { own: { value: 2, enumerable: true } }))[0];"
+        ),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval("Object.values('ab').join();"),
+        Ok(Value::String("a,b".to_owned()))
+    );
+    assert_eq!(eval("Object.values(0).length;"), Ok(Value::Number(0.0)));
     assert_eq!(
         eval("Object.getOwnPropertyNames.length;"),
         Ok(Value::Number(1.0))

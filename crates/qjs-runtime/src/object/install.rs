@@ -77,6 +77,7 @@ pub(crate) fn install_object(env: &mut HashMap<String, Value>, global_this: &Val
     );
     define_object_function(&object_function, "hasOwn", 2, NativeFunction::ObjectHasOwn);
     define_object_function(&object_function, "keys", 1, NativeFunction::ObjectKeys);
+    define_object_function(&object_function, "values", 1, NativeFunction::ObjectValues);
 
     let object_value = Value::Function(object_function);
     env.insert("Object".to_owned(), object_value.clone());

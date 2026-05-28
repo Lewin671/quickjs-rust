@@ -12,6 +12,22 @@ pub(crate) fn native_object_keys(argument_values: &[Value]) -> Result<Value, Run
     )))
 }
 
+pub(crate) fn native_object_values(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    if matches!(target, Value::Null | Value::Undefined) {
+        return Err(RuntimeError {
+            message: "Object.values target must not be null or undefined".to_owned(),
+        });
+    }
+
+    Ok(Value::Array(ArrayRef::new(
+        enumerable_property_entries(target)?
+            .into_iter()
+            .map(|(_, value)| value)
+            .collect(),
+    )))
+}
+
 pub(crate) fn native_object_get_own_property_names(
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
