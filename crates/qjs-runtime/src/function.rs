@@ -88,6 +88,7 @@ pub(crate) enum NativeFunction {
     ObjectPrototypeValueOf,
     String,
     StringFromCharCode,
+    StringPrototypeAt,
     StringPrototypeCharAt,
     StringPrototypeCharCodeAt,
     StringPrototypeCodePointAt,

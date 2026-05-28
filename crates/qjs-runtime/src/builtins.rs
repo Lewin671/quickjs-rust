@@ -29,6 +29,15 @@ fn install_string(
         Value::Function(string_function.clone()),
     );
     string_prototype.define_non_enumerable(
+        "at".to_owned(),
+        Value::Function(Function::new_native(
+            Some("at"),
+            1,
+            NativeFunction::StringPrototypeAt,
+            false,
+        )),
+    );
+    string_prototype.define_non_enumerable(
         "charAt".to_owned(),
         Value::Function(Function::new_native(
             Some("charAt"),

@@ -28,6 +28,13 @@ fn evaluates_string_builtins() {
         eval("String.prototype.constructor === String;"),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(eval("String.prototype.at.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("'abc'.at(1);"), Ok(Value::String("b".to_owned())));
+    assert_eq!(eval("'abc'.at(-1);"), Ok(Value::String("c".to_owned())));
+    assert_eq!(eval("'abc'.at(3);"), Ok(Value::Undefined));
+    assert_eq!(eval("'abc'.at(-4);"), Ok(Value::Undefined));
+    assert_eq!(eval("'abc'.at();"), Ok(Value::String("a".to_owned())));
+    assert_eq!(eval("'abc'.at(1.9);"), Ok(Value::String("b".to_owned())));
     assert_eq!(
         eval("String.prototype.charAt.length;"),
         Ok(Value::Number(1.0))

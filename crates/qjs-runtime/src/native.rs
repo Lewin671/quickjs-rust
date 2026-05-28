@@ -158,6 +158,9 @@ pub(crate) fn call_native_function(
         NativeFunction::StringFromCharCode => {
             string::native_string_from_char_code(&argument_values)
         }
+        NativeFunction::StringPrototypeAt => {
+            string::native_string_prototype_at(this_value, &argument_values, env)
+        }
         NativeFunction::StringPrototypeCharAt => {
             string::native_string_prototype_char_at(this_value, &argument_values, env)
         }

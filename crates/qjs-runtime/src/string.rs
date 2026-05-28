@@ -26,6 +26,26 @@ pub(super) fn native_string_from_char_code(
     Ok(Value::String(result))
 }
 
+pub(super) fn native_string_prototype_at(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let value = this_string_value(this_value, env)?;
+    let code_units: Vec<u16> = value.encode_utf16().collect();
+    let Some(index) = relative_string_code_unit_index(
+        code_units.len(),
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+    )?
+    else {
+        return Ok(Value::Undefined);
+    };
+
+    Ok(String::from_utf16(&[code_units[index]])
+        .map(Value::String)
+        .unwrap_or_else(|_| Value::String(char::REPLACEMENT_CHARACTER.to_string())))
+}
+
 pub(super) fn native_string_prototype_char_at(
     this_value: Value,
     argument_values: &[Value],
@@ -441,6 +461,27 @@ fn to_char_code_position(value: Value) -> Result<f64, RuntimeError> {
         Ok(0.0)
     } else {
         Ok(number.trunc())
+    }
+}
+
+fn relative_string_code_unit_index(
+    length: usize,
+    value: Value,
+) -> Result<Option<usize>, RuntimeError> {
+    let number = match value {
+        Value::Undefined => 0.0,
+        value => to_number(value)?,
+    };
+    let integer = if number.is_nan() { 0.0 } else { number.trunc() };
+    let index = if integer < 0.0 {
+        length as f64 + integer
+    } else {
+        integer
+    };
+    if index < 0.0 || index >= length as f64 {
+        Ok(None)
+    } else {
+        Ok(Some(index as usize))
     }
 }
 

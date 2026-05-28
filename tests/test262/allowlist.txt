@@ -302,6 +302,7 @@ cases/string-constructor-basic.js
 cases/string-constructor-length.js
 cases/string-from-char-code-basic.js
 cases/string-from-char-code-length.js
+cases/string-prototype-at-basic.js
 cases/string-prototype-char-at-basic.js
 cases/string-prototype-char-at-length.js
 cases/string-prototype-char-code-at-basic.js
