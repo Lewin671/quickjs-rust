@@ -54,6 +54,9 @@ impl<'src> Lexer<'src> {
                 '[' => self.single(TokenKind::LeftBracket),
                 ']' => self.single(TokenKind::RightBracket),
                 ',' => self.single(TokenKind::Comma),
+                '.' if matches!(self.peek_nth(1), Some(ch) if ch.is_ascii_digit()) => {
+                    self.number_starting_with_dot()?;
+                }
                 '.' => self.dot(),
                 ':' => self.single(TokenKind::Colon),
                 '?' => self.question(),

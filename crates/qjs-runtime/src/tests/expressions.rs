@@ -5,6 +5,7 @@ fn evaluates_arithmetic() {
     assert_eq!(eval("1 + 2 * 3;"), Ok(Value::Number(7.0)));
     assert_eq!(eval("0x10 + 0b11 + 0o7;"), Ok(Value::Number(26.0)));
     assert_eq!(eval("0Xf + 0B10 + 0O10;"), Ok(Value::Number(25.0)));
+    assert_eq!(eval("1e3 + 1E+2 + 1e-1 + .5e1;"), Ok(Value::Number(1105.1)));
     assert_eq!(eval("true + true;"), Ok(Value::Number(2.0)));
     assert_eq!(eval("true * 2;"), Ok(Value::Number(2.0)));
     assert_eq!(eval("2 ** 3;"), Ok(Value::Number(8.0)));

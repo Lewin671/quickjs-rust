@@ -56,6 +56,23 @@ impl Lexer<'_> {
                 self.advance();
             }
         }
+        self.exponent_part(start)?;
+        self.reject_identifier_continue_after_number(start)?;
+        self.tokens.push(Token {
+            kind: TokenKind::Number(self.source[start..self.cursor].to_owned()),
+            span: Span::new(start, self.cursor),
+        });
+        Ok(())
+    }
+
+    pub(super) fn number_starting_with_dot(&mut self) -> Result<(), LexError> {
+        let start = self.cursor;
+        self.advance();
+        while matches!(self.peek(), Some(ch) if ch.is_ascii_digit()) {
+            self.advance();
+        }
+        self.exponent_part(start)?;
+        self.reject_identifier_continue_after_number(start)?;
         self.tokens.push(Token {
             kind: TokenKind::Number(self.source[start..self.cursor].to_owned()),
             span: Span::new(start, self.cursor),
@@ -70,6 +87,37 @@ impl Lexer<'_> {
             (Some('0'), Some('o' | 'O')) => Some(8),
             _ => None,
         }
+    }
+
+    fn exponent_part(&mut self, start: usize) -> Result<(), LexError> {
+        if !matches!(self.peek(), Some('e' | 'E')) {
+            return Ok(());
+        }
+        self.advance();
+        if matches!(self.peek(), Some('+' | '-')) {
+            self.advance();
+        }
+        let digits_start = self.cursor;
+        while matches!(self.peek(), Some(ch) if ch.is_ascii_digit()) {
+            self.advance();
+        }
+        if self.cursor == digits_start {
+            return Err(LexError {
+                message: "expected digits in numeric literal exponent".to_owned(),
+                span: Span::new(start, self.cursor),
+            });
+        }
+        Ok(())
+    }
+
+    fn reject_identifier_continue_after_number(&self, start: usize) -> Result<(), LexError> {
+        if matches!(self.peek(), Some(ch) if is_identifier_continue(ch)) {
+            return Err(LexError {
+                message: "invalid identifier after numeric literal".to_owned(),
+                span: Span::new(start, self.cursor + self.peek().map_or(0, char::len_utf8)),
+            });
+        }
+        Ok(())
     }
 
     pub(super) fn string(&mut self, quote: char) -> Result<(), LexError> {

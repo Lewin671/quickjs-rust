@@ -45,6 +45,33 @@ fn rejects_invalid_prefixed_numeric_literals() {
 }
 
 #[test]
+fn lexes_decimal_exponent_numeric_literals() {
+    let tokens = lex("1e3 1E+3 1e-3 1.25e2 .5e1 1.").expect("source should lex");
+    let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::Number("1e3".to_owned()),
+            TokenKind::Number("1E+3".to_owned()),
+            TokenKind::Number("1e-3".to_owned()),
+            TokenKind::Number("1.25e2".to_owned()),
+            TokenKind::Number(".5e1".to_owned()),
+            TokenKind::Number("1.".to_owned()),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn rejects_invalid_decimal_exponent_numeric_literals() {
+    assert!(lex("1e").is_err());
+    assert!(lex("1e+").is_err());
+    assert!(lex("1e-").is_err());
+    assert!(lex("1e1x").is_err());
+    assert!(lex("1abc").is_err());
+}
+
+#[test]
 fn skips_line_and_block_comments() {
     let tokens = lex("one // ignore\n/* skip */ two").expect("source should lex");
     let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
