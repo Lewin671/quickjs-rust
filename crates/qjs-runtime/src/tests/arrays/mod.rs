@@ -1,4 +1,5 @@
 mod builtins;
+mod flat_map;
 mod flatten;
 mod indexing;
 mod iteration;

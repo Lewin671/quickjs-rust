@@ -8,6 +8,7 @@ pub(crate) enum NativeFunction {
     ArrayPrototypeEvery,
     ArrayPrototypeFill,
     ArrayPrototypeFlat,
+    ArrayPrototypeFlatMap,
     ArrayPrototypeFilter,
     ArrayPrototypeFind,
     ArrayPrototypeFindIndex,

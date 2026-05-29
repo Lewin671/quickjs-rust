@@ -23,6 +23,11 @@ cases/array-fill-basic.js
 cases/array-flat-basic.js
 cases/array-flat-depth.js
 cases/array-flat-length.js
+cases/array-flat-map-basic.js
+cases/array-flat-map-callback-arguments.js
+cases/array-flat-map-depth.js
+cases/array-flat-map-length.js
+cases/array-flat-map-this-arg.js
 cases/array-flat-null-undefined.js
 cases/array-flat-string-depth.js
 cases/array-filter-basic.js

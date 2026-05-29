@@ -46,6 +46,12 @@ pub(crate) fn install_array(
     );
     define_array_prototype_function(
         &array_prototype,
+        "flatMap",
+        1,
+        NativeFunction::ArrayPrototypeFlatMap,
+    );
+    define_array_prototype_function(
+        &array_prototype,
         "filter",
         1,
         NativeFunction::ArrayPrototypeFilter,
