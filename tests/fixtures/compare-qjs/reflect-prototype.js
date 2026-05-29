@@ -8,6 +8,11 @@
   var fnProto = { marker: 13 };
   function fn() {}
   var fnSet = Reflect.setPrototypeOf(fn, fnProto);
+  var getObject = Object.create({ inherited: 17 });
+  getObject.own = 19;
+  var getArray = [23, 29];
+  function getFn(a, b) {}
+  getFn.value = 31;
   var defined = {};
   var defineResult = Reflect.defineProperty(defined, "value", {
     value: 19,
@@ -50,6 +55,13 @@
     array.marker,
     fnSet,
     fn.marker,
+    Reflect.get(getObject, "own"),
+    Reflect.get(getObject, "inherited"),
+    Reflect.get(getObject, "missing"),
+    Reflect.get(getArray, "1"),
+    Reflect.get(getArray, "length"),
+    Reflect.get(getFn, "value"),
+    Reflect.get(getFn, "length"),
     Reflect.has(object, "marker"),
     Reflect.has(Object.create({ inherited: 1 }), "inherited"),
     Reflect.has(array, "marker"),
@@ -87,6 +99,7 @@
     Reflect.getOwnPropertyDescriptor.length,
     Reflect.defineProperty.length,
     Reflect.deleteProperty.length,
+    Reflect.get.length,
     Reflect.has.length,
     Reflect.isExtensible.length,
     Reflect.ownKeys.length,

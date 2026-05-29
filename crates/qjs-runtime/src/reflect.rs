@@ -20,6 +20,7 @@ pub(crate) fn install_reflect(
         2,
         NativeFunction::ReflectDeleteProperty,
     );
+    define_reflect_function(&reflect_object, "get", 2, NativeFunction::ReflectGet);
     define_reflect_function(
         &reflect_object,
         "getPrototypeOf",
@@ -110,6 +111,39 @@ pub(crate) fn native_reflect_delete_property(
     };
 
     Ok(Value::Boolean(success))
+}
+
+pub(crate) fn native_reflect_get(
+    argument_values: &[Value],
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    ensure_reflect_object_target(&target, "Reflect.get")?;
+    let key = crate::to_property_key(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
+
+    Ok(match target {
+        Value::Object(object) => object.get(&key).unwrap_or(Value::Undefined),
+        Value::Array(elements) => {
+            if key == "length" {
+                Value::Number(elements.len() as f64)
+            } else {
+                key.parse::<usize>()
+                    .ok()
+                    .and_then(|index| elements.get(index))
+                    .or_else(|| crate::array_prototype_property(&elements, env, &key))
+                    .unwrap_or(Value::Undefined)
+            }
+        }
+        Value::Function(function) => crate::function_own_property_descriptor(&function, &key)
+            .map(|property| property.value)
+            .or_else(|| crate::function_prototype_property(&function, env, &key))
+            .unwrap_or(Value::Undefined),
+        Value::String(_)
+        | Value::Number(_)
+        | Value::Boolean(_)
+        | Value::Null
+        | Value::Undefined => unreachable!("target was validated before property get"),
+    })
 }
 
 pub(crate) fn native_reflect_get_prototype_of(

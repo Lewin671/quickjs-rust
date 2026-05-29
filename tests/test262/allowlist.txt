@@ -433,6 +433,9 @@ cases/reflect-delete-property-basic.js
 cases/reflect-delete-property-function-basic.js
 cases/reflect-delete-property-length.js
 cases/reflect-delete-property-non-configurable.js
+cases/reflect-get-array-function-basic.js
+cases/reflect-get-basic.js
+cases/reflect-get-length.js
 cases/reflect-get-own-property-descriptor-array-function.js
 cases/reflect-get-own-property-descriptor-basic.js
 cases/reflect-get-own-property-descriptor-length.js

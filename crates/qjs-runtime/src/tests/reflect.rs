@@ -26,6 +26,7 @@ fn evaluates_reflect_prototype_builtins() {
         eval("Reflect.deleteProperty.length;"),
         Ok(Value::Number(2.0))
     );
+    assert_eq!(eval("Reflect.get.length;"), Ok(Value::Number(2.0)));
     assert_eq!(eval("Reflect.has.length;"), Ok(Value::Number(2.0)));
     assert_eq!(eval("Reflect.isExtensible.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("Reflect.ownKeys.length;"), Ok(Value::Number(1.0)));
@@ -52,6 +53,27 @@ fn evaluates_reflect_prototype_builtins() {
     assert_eq!(
         eval("Reflect.getPrototypeOf(function f() {}) === Function.prototype;"),
         Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("Reflect.get({ value: 5 }, 'value');"),
+        Ok(Value::Number(5.0))
+    );
+    assert_eq!(
+        eval("Reflect.get(Object.create({ inherited: 7 }), 'inherited');"),
+        Ok(Value::Number(7.0))
+    );
+    assert_eq!(eval("Reflect.get({}, 'missing');"), Ok(Value::Undefined));
+    assert_eq!(
+        eval("Reflect.get([3, 4], '1') + Reflect.get([3, 4], 'length');"),
+        Ok(Value::Number(6.0))
+    );
+    assert_eq!(
+        eval("Reflect.get(function f(a, b) {}, 'length');"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval("function f() {} f.value = 11; Reflect.get(f, 'value');"),
+        Ok(Value::Number(11.0))
     );
     assert_eq!(
         eval(
@@ -212,6 +234,7 @@ fn evaluates_reflect_prototype_builtins() {
     assert!(eval("Reflect.getPrototypeOf(1);").is_err());
     assert!(eval("Reflect.defineProperty(1, 'value', { value: 1 });").is_err());
     assert!(eval("Reflect.deleteProperty(1, 'value');").is_err());
+    assert!(eval("Reflect.get(1, 'value');").is_err());
     assert!(eval("Reflect.getOwnPropertyDescriptor(1, 'toString');").is_err());
     assert!(eval("Reflect.has(1, 'toString');").is_err());
     assert!(eval("Reflect.isExtensible(1);").is_err());
