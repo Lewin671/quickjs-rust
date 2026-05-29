@@ -3,6 +3,7 @@ mod errors;
 mod expressions;
 mod functions;
 mod global;
+mod json;
 mod math;
 mod numbers;
 mod objects;

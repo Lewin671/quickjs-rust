@@ -126,6 +126,8 @@ cases/global-is-finite-basic.js
 cases/global-is-finite-length.js
 cases/global-is-nan-basic.js
 cases/global-is-nan-length.js
+cases/json-parse-basic.js
+cases/json-stringify-basic.js
 cases/equals-null-undefined-basic.js
 cases/equals-number-string-basic.js
 cases/equals-boolean-number-basic.js

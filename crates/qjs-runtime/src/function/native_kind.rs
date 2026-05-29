@@ -74,6 +74,8 @@ pub(crate) enum NativeFunction {
     FunctionPrototypeApply,
     FunctionPrototypeBind,
     FunctionPrototypeCall,
+    JsonParse,
+    JsonStringify,
     Number,
     NumberIsFinite,
     NumberIsInteger,

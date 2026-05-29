@@ -3,6 +3,7 @@ use std::collections::HashMap;
 mod arrays;
 mod core;
 mod errors;
+mod json;
 mod math;
 mod numbers;
 mod objects;
@@ -38,6 +39,10 @@ pub(crate) fn call_native_function(
         &argument_values,
         is_construct,
     )? {
+        return Ok(value);
+    }
+
+    if let Some(value) = json::call_json_native(native, &argument_values, env)? {
         return Ok(value);
     }
 

@@ -13,6 +13,7 @@ mod error;
 mod expression;
 mod function;
 mod global;
+mod json;
 mod math;
 mod native;
 mod number;
