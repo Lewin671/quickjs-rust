@@ -1,3 +1,4 @@
+mod array_like;
 mod constructor;
 mod flatten;
 mod indexing;
@@ -32,6 +33,8 @@ pub(crate) use search::{
     native_array_prototype_at, native_array_prototype_includes, native_array_prototype_index_of,
     native_array_prototype_last_index_of,
 };
-pub(crate) use sequence::{native_array_prototype_concat, native_array_prototype_slice};
+pub(crate) use sequence::{
+    native_array_prototype_concat, native_array_prototype_slice, native_array_prototype_to_reversed,
+};
 pub(crate) use sort::native_array_prototype_sort;
 pub(crate) use splice::native_array_prototype_splice;

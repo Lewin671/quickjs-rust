@@ -6,6 +6,8 @@ use crate::{
     statement::{Completion, collect_function_local_names, eval_statement_list},
 };
 
+use super::function_call_this;
+
 pub(crate) fn call_function(
     callee: Value,
     this_value: Value,
@@ -58,7 +60,7 @@ pub(crate) fn call_function(
     if let Some(name) = &function.name {
         local_env.insert(name.clone(), callee);
     }
-    local_env.insert("this".to_owned(), this_value);
+    local_env.insert("this".to_owned(), function_call_this(Some(this_value), env));
     local_env.insert(
         "arguments".to_owned(),
         Value::Array(ArrayRef::new(argument_values.clone())),

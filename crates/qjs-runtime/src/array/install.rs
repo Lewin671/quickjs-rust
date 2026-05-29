@@ -184,6 +184,12 @@ pub(crate) fn install_array(
     );
     define_array_prototype_function(
         &array_prototype,
+        "toReversed",
+        0,
+        NativeFunction::ArrayPrototypeToReversed,
+    );
+    define_array_prototype_function(
+        &array_prototype,
         "unshift",
         1,
         NativeFunction::ArrayPrototypeUnshift,

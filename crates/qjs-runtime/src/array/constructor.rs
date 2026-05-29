@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use crate::{ArrayRef, RuntimeError, Value, call_function, to_length};
+use crate::{ArrayRef, RuntimeError, Value, call_function};
+
+use super::array_like::array_like_values;
 
 pub(crate) fn native_array(argument_values: &[Value]) -> Result<Value, RuntimeError> {
     if argument_values.len() == 1 && matches!(argument_values[0], Value::Number(_)) {
@@ -36,7 +38,7 @@ pub(crate) fn native_array_from(
         }
     };
 
-    let values = array_from_values(items)?;
+    let values = array_like_values(items, "Array.from")?;
     let mut result = Vec::with_capacity(values.len());
     for (index, value) in values.into_iter().enumerate() {
         let value = if let Some(callback) = &mapping {
@@ -58,26 +60,4 @@ pub(crate) fn native_array_from(
 
 pub(crate) fn native_array_of(argument_values: &[Value]) -> Result<Value, RuntimeError> {
     Ok(Value::Array(ArrayRef::new(argument_values.to_vec())))
-}
-
-fn array_from_values(items: Value) -> Result<Vec<Value>, RuntimeError> {
-    match items {
-        Value::Array(array) => Ok(array.to_vec()),
-        Value::String(value) => Ok(value
-            .chars()
-            .map(|character| Value::String(character.to_string()))
-            .collect()),
-        Value::Object(object) => {
-            let length = to_length(object.get("length").unwrap_or(Value::Undefined))?;
-            Ok((0..length)
-                .map(|index| object.get(&index.to_string()).unwrap_or(Value::Undefined))
-                .collect())
-        }
-        Value::Null | Value::Undefined => Err(RuntimeError {
-            message: "Array.from requires an array-like value".to_owned(),
-        }),
-        _ => Err(RuntimeError {
-            message: "Array.from unsupported source value".to_owned(),
-        }),
-    }
 }

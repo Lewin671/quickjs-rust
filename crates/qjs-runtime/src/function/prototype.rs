@@ -61,7 +61,7 @@ pub(crate) fn native_function_prototype_apply(
         });
     };
 
-    let call_this = function_call_this(argument_values.first().cloned(), env);
+    let call_this = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let apply_arguments = match argument_values.get(1).cloned().unwrap_or(Value::Undefined) {
         Value::Null | Value::Undefined => Vec::new(),
         Value::Array(elements) => elements.to_vec(),
@@ -88,7 +88,7 @@ pub(crate) fn native_function_prototype_call(
         });
     };
 
-    let call_this = function_call_this(argument_values.first().cloned(), env);
+    let call_this = argument_values.first().cloned().unwrap_or(Value::Undefined);
     crate::call_function(
         this_value,
         call_this,

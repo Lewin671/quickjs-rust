@@ -1,5 +1,6 @@
 use crate::{ArrayRef, RuntimeError, Value};
 
+use super::array_like::array_like_values;
 use super::indexing::{array_slice_end, array_slice_start};
 
 pub(crate) fn native_array_prototype_concat(
@@ -40,6 +41,12 @@ pub(crate) fn native_array_prototype_slice(
     Ok(Value::Array(ArrayRef::new(
         elements.to_vec()[start..end].to_vec(),
     )))
+}
+
+pub(crate) fn native_array_prototype_to_reversed(this_value: Value) -> Result<Value, RuntimeError> {
+    let mut values = array_like_values(this_value, "Array.prototype.toReversed")?;
+    values.reverse();
+    Ok(Value::Array(ArrayRef::new(values)))
 }
 
 fn concat_array_item(result: &mut Vec<Value>, value: Value) {

@@ -96,6 +96,9 @@ pub(super) fn call_array_native(
         NativeFunction::ArrayPrototypeToString => {
             array::native_array_prototype_to_string(this_value)?
         }
+        NativeFunction::ArrayPrototypeToReversed => {
+            array::native_array_prototype_to_reversed(this_value)?
+        }
         NativeFunction::ArrayPrototypeUnshift => {
             array::native_array_prototype_unshift(this_value, argument_values)?
         }

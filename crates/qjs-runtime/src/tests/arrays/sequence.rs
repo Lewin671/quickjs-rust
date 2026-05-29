@@ -67,3 +67,28 @@ fn evaluates_array_sequence_builtins() {
         Ok(Value::String("1,1,2,3".to_owned()))
     );
 }
+
+#[test]
+fn evaluates_array_to_reversed() {
+    assert_eq!(
+        eval(
+            "let xs = [1, 2, 3]; let out = xs.toReversed(); out.join() + ':' + xs.join() + ':' + (out === xs);"
+        ),
+        Ok(Value::String("3,2,1:1,2,3:false".to_owned()))
+    );
+    assert_eq!(eval("[].toReversed().length;"), Ok(Value::Number(0.0)));
+    assert_eq!(eval("[7].toReversed()[0];"), Ok(Value::Number(7.0)));
+    assert_eq!(
+        eval("Array.prototype.toReversed.call({ length: 3, 0: 'a', 2: 'c' }).join('|');"),
+        Ok(Value::String("c||a".to_owned()))
+    );
+    assert_eq!(
+        eval("Array.prototype.toReversed.call('abc').join('');"),
+        Ok(Value::String("cba".to_owned()))
+    );
+    assert_eq!(
+        eval("Array.prototype.toReversed.length;"),
+        Ok(Value::Number(0.0))
+    );
+    assert!(eval("Array.prototype.toReversed.call(null);").is_err());
+}

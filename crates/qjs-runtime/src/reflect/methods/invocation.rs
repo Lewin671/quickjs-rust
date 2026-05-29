@@ -13,7 +13,7 @@ pub(crate) fn native_reflect_apply(
         });
     }
 
-    let this_value = crate::function::function_call_this(argument_values.get(1).cloned(), env);
+    let this_value = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
     let arguments = match argument_values.get(2).cloned().unwrap_or(Value::Undefined) {
         Value::Array(elements) => elements.to_vec(),
         value => {
