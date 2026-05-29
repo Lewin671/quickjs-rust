@@ -45,6 +45,7 @@ pub(crate) enum NativeFunction {
     DatePrototypeGetTime,
     DatePrototypeSetTime,
     DatePrototypeSetUtcFullYear,
+    DatePrototypeSetUtcMonth,
     DatePrototypeToISOString,
     DatePrototypeToJson,
     DatePrototypeToUtcString,

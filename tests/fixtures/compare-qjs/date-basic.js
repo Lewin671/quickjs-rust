@@ -9,6 +9,14 @@
   utcYearParts.setUTCFullYear(1, 1, 3);
   var utcYearInvalid = new Date(NaN);
   var utcYearInvalidResult = utcYearInvalid.setUTCFullYear(1);
+  var utcMonth = new Date("1970-01-31T03:04:05.006Z");
+  var utcMonthResult = utcMonth.setUTCMonth(1);
+  var utcMonthDate = new Date("1970-01-31T03:04:05.006Z");
+  var utcMonthDateResult = utcMonthDate.setUTCMonth(1, 1);
+  var utcMonthOverflow = new Date("1970-01-31T03:04:05.006Z");
+  utcMonthOverflow.setUTCMonth(-1);
+  var utcMonthInvalid = new Date(NaN);
+  var utcMonthInvalidResult = utcMonthInvalid.setUTCMonth(6, 7);
   var invalid = new Date(0);
   custom.toISOString = function () { return "custom"; };
   return [
@@ -21,6 +29,7 @@
     Date.prototype.toJSON.length,
     Date.prototype.setTime.length,
     Date.prototype.setUTCFullYear.length,
+    Date.prototype.setUTCMonth.length,
     value.getTime(),
     value.valueOf(),
     value.toISOString(),
@@ -56,6 +65,14 @@
     utcYearInvalidResult,
     utcYearInvalid.toISOString(),
     Number.isNaN(new Date(0).setUTCFullYear(undefined)),
+    utcMonthResult,
+    utcMonth.toISOString(),
+    utcMonthDateResult,
+    utcMonthDate.toISOString(),
+    utcMonthOverflow.toISOString(),
+    Number.isNaN(utcMonthInvalidResult),
+    Number.isNaN(utcMonthInvalid.getTime()),
+    Number.isNaN(new Date(0).setUTCMonth(undefined, 1)),
     Number.isNaN(invalid.setTime(8640000000000001)),
     Number.isNaN(invalid.getTime()),
     Number.isNaN(new Date(8640000000000001).getTime()),

@@ -85,6 +85,12 @@ pub(crate) fn install_date(
     );
     define_date_prototype_function(
         &date_prototype,
+        "setUTCMonth",
+        2,
+        NativeFunction::DatePrototypeSetUtcMonth,
+    );
+    define_date_prototype_function(
+        &date_prototype,
         "toISOString",
         0,
         NativeFunction::DatePrototypeToISOString,
