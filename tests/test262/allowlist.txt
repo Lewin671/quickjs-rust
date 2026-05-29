@@ -149,6 +149,13 @@ cases/array-to-reversed-basic.js
 cases/array-to-reversed-array-like.js
 cases/array-to-reversed-length.js
 cases/array-to-reversed-zero-or-one.js
+cases/array-to-spliced-array-like.js
+cases/array-to-spliced-basic.js
+cases/array-to-spliced-delete-count-missing.js
+cases/array-to-spliced-delete-count-undefined.js
+cases/array-to-spliced-length.js
+cases/array-to-spliced-negative-start.js
+cases/array-to-spliced-start-past-length.js
 cases/array-unshift-basic.js
 cases/array-unshift-length.js
 cases/array-index-assignment-basic.js

@@ -2,6 +2,7 @@ use crate::{ArrayRef, RuntimeError, Value};
 
 use super::array_like::array_like_values;
 use super::indexing::{array_at_index, array_slice_end, array_slice_start};
+use super::splice::{splice_delete_count, splice_start};
 
 pub(crate) fn native_array_prototype_concat(
     this_value: Value,
@@ -47,6 +48,30 @@ pub(crate) fn native_array_prototype_to_reversed(this_value: Value) -> Result<Va
     let mut values = array_like_values(this_value, "Array.prototype.toReversed")?;
     values.reverse();
     Ok(Value::Array(ArrayRef::new(values)))
+}
+
+pub(crate) fn native_array_prototype_to_spliced(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let values = array_like_values(this_value, "Array.prototype.toSpliced")?;
+    let length = values.len();
+    let start = splice_start(
+        length,
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+    )?;
+    let delete_count = splice_delete_count(length, start, argument_values)?;
+    let items = if argument_values.len() > 2 {
+        &argument_values[2..]
+    } else {
+        &[]
+    };
+
+    let mut result = Vec::with_capacity(length.saturating_sub(delete_count) + items.len());
+    result.extend_from_slice(&values[..start]);
+    result.extend_from_slice(items);
+    result.extend_from_slice(&values[start + delete_count..]);
+    Ok(Value::Array(ArrayRef::new(result)))
 }
 
 pub(crate) fn native_array_prototype_with(

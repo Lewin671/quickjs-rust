@@ -26,7 +26,7 @@ pub(crate) fn native_array_prototype_splice(
     Ok(Value::Array(ArrayRef::new(removed)))
 }
 
-fn splice_start(length: usize, start: Value) -> Result<usize, RuntimeError> {
+pub(super) fn splice_start(length: usize, start: Value) -> Result<usize, RuntimeError> {
     let number = match start {
         Value::Undefined => 0.0,
         value => to_number(value)?,
@@ -43,7 +43,7 @@ fn splice_start(length: usize, start: Value) -> Result<usize, RuntimeError> {
     }
 }
 
-fn splice_delete_count(
+pub(super) fn splice_delete_count(
     length: usize,
     start: usize,
     argument_values: &[Value],

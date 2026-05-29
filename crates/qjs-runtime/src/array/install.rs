@@ -190,6 +190,12 @@ pub(crate) fn install_array(
     );
     define_array_prototype_function(
         &array_prototype,
+        "toSpliced",
+        2,
+        NativeFunction::ArrayPrototypeToSpliced,
+    );
+    define_array_prototype_function(
+        &array_prototype,
         "toSorted",
         1,
         NativeFunction::ArrayPrototypeToSorted,

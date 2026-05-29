@@ -35,7 +35,8 @@ pub(crate) use search::{
 };
 pub(crate) use sequence::{
     native_array_prototype_concat, native_array_prototype_slice,
-    native_array_prototype_to_reversed, native_array_prototype_with,
+    native_array_prototype_to_reversed, native_array_prototype_to_spliced,
+    native_array_prototype_with,
 };
 pub(crate) use sort::{native_array_prototype_sort, native_array_prototype_to_sorted};
 pub(crate) use splice::native_array_prototype_splice;

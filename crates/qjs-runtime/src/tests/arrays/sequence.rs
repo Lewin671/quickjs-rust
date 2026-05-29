@@ -94,6 +94,45 @@ fn evaluates_array_to_reversed() {
 }
 
 #[test]
+fn evaluates_array_to_spliced() {
+    assert_eq!(
+        eval(
+            "let xs = [1, 2, 3, 4]; let out = xs.toSpliced(1, 2, 'a', 'b'); out.join() + ':' + xs.join() + ':' + (out === xs);"
+        ),
+        Ok(Value::String("1,a,b,4:1,2,3,4:false".to_owned()))
+    );
+    assert_eq!(
+        eval("[1, 2, 3].toSpliced(-1, 1, 9).join();"),
+        Ok(Value::String("1,2,9".to_owned()))
+    );
+    assert_eq!(
+        eval("[1, 2, 3].toSpliced(1).join();"),
+        Ok(Value::String("1".to_owned()))
+    );
+    assert_eq!(
+        eval("[1, 2, 3].toSpliced(1, undefined, 9).join();"),
+        Ok(Value::String("1,9,2,3".to_owned()))
+    );
+    assert_eq!(
+        eval("[1, 2, 3].toSpliced(8, 1, 4).join();"),
+        Ok(Value::String("1,2,3,4".to_owned()))
+    );
+    assert_eq!(
+        eval("Array.prototype.toSpliced.call({ length: 3, 0: 'a', 2: 'c' }, 1, 1, 'b').join('|');"),
+        Ok(Value::String("a|b|c".to_owned()))
+    );
+    assert_eq!(
+        eval("Array.prototype.toSpliced.call('abc', 1, 1, 'x').join('');"),
+        Ok(Value::String("axc".to_owned()))
+    );
+    assert_eq!(
+        eval("Array.prototype.toSpliced.length;"),
+        Ok(Value::Number(2.0))
+    );
+    assert!(eval("Array.prototype.toSpliced.call(null, 0, 0);").is_err());
+}
+
+#[test]
 fn evaluates_array_with() {
     assert_eq!(
         eval(
