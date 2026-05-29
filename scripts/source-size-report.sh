@@ -40,6 +40,10 @@ report_git_files() {
           ;;
       esac
 
+      if [ ! -f "$ROOT_DIR/$file" ]; then
+        continue
+      fi
+
       local lines
       lines="$(wc -l <"$ROOT_DIR/$file" | tr -d ' ')"
       printf '%8s %s\n' "$lines" "$file"

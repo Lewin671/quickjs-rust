@@ -1,0 +1,47 @@
+use crate::{Value, eval};
+
+#[test]
+fn evaluates_string_code_unit_builtins() {
+    assert_eq!(eval("String.prototype.at.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("'abc'.at(1);"), Ok(Value::String("b".to_owned())));
+    assert_eq!(eval("'abc'.at(-1);"), Ok(Value::String("c".to_owned())));
+    assert_eq!(eval("'abc'.at(3);"), Ok(Value::Undefined));
+    assert_eq!(eval("'abc'.at(-4);"), Ok(Value::Undefined));
+    assert_eq!(eval("'abc'.at();"), Ok(Value::String("a".to_owned())));
+    assert_eq!(eval("'abc'.at(1.9);"), Ok(Value::String("b".to_owned())));
+    assert_eq!(
+        eval("String.prototype.charAt.length;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(eval("'abc'.charAt(1);"), Ok(Value::String("b".to_owned())));
+    assert_eq!(eval("'abc'.charAt(9);"), Ok(Value::String(String::new())));
+    assert_eq!(
+        eval("String.prototype.charCodeAt.length;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(eval("'abc'.charCodeAt(1);"), Ok(Value::Number(98.0)));
+    assert_eq!(
+        eval("'abc'.charCodeAt(undefined);"),
+        Ok(Value::Number(97.0))
+    );
+    assert_eq!(
+        eval("let x = 'abc'.charCodeAt(9); x !== x;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("let x = 'abc'.charCodeAt(-1); x !== x;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(eval("'😀'.charCodeAt(0);"), Ok(Value::Number(55_357.0)));
+    assert_eq!(eval("'😀'.charCodeAt(1);"), Ok(Value::Number(56_832.0)));
+    assert_eq!(
+        eval("String.prototype.codePointAt.length;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(eval("'abc'.codePointAt(1);"), Ok(Value::Number(98.0)));
+    assert_eq!(eval("'abc'.codePointAt(-1);"), Ok(Value::Undefined));
+    assert_eq!(eval("'abc'.codePointAt(3);"), Ok(Value::Undefined));
+    assert_eq!(eval("'😀'.codePointAt(0);"), Ok(Value::Number(128_512.0)));
+    assert_eq!(eval("'😀'.codePointAt(1);"), Ok(Value::Number(56_832.0)));
+    assert!(eval("new String.prototype.charAt();").is_err());
+}
