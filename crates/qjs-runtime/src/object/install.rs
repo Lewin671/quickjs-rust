@@ -87,6 +87,12 @@ pub(crate) fn install_object(env: &mut HashMap<String, Value>, global_this: &Val
         1,
         NativeFunction::ObjectGetOwnPropertyNames,
     );
+    define_object_function(
+        &object_function,
+        "fromEntries",
+        1,
+        NativeFunction::ObjectFromEntries,
+    );
     define_object_function(&object_function, "freeze", 1, NativeFunction::ObjectFreeze);
     define_object_function(&object_function, "hasOwn", 2, NativeFunction::ObjectHasOwn);
     define_object_function(&object_function, "is", 2, NativeFunction::ObjectIs);

@@ -1,6 +1,7 @@
 mod constructor;
 mod descriptor;
 mod enumeration;
+mod from_entries;
 mod install;
 mod integrity;
 mod prototype;
@@ -17,6 +18,7 @@ pub(crate) use enumeration::{
     native_object_entries, native_object_get_own_property_names, native_object_has_own,
     native_object_keys, native_object_values,
 };
+pub(crate) use from_entries::native_object_from_entries;
 pub(crate) use install::install_object;
 pub(crate) use integrity::{
     native_object_freeze, native_object_is_extensible, native_object_is_frozen,

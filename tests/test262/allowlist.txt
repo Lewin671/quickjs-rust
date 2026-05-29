@@ -290,6 +290,12 @@ cases/object-entries-inherited-omitted.js
 cases/object-entries-length.js
 cases/object-entries-primitive-number.js
 cases/object-entries-primitive-string.js
+cases/object-from-entries-basic.js
+cases/object-from-entries-duplicate-keys.js
+cases/object-from-entries-empty.js
+cases/object-from-entries-length.js
+cases/object-from-entries-object-entry.js
+cases/object-from-entries-property-descriptor.js
 cases/object-define-property-data-defaults.js
 cases/object-define-property-data-enumerable.js
 cases/object-define-property-data-writable.js

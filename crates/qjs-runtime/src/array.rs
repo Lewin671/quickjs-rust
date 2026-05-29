@@ -11,6 +11,7 @@ mod sequence;
 mod sort;
 mod splice;
 
+pub(crate) use array_like::array_like_values;
 pub(crate) use constructor::{
     native_array, native_array_from, native_array_is_array, native_array_of,
 };

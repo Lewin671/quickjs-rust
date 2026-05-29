@@ -2,6 +2,7 @@ mod constructor_and_assign;
 mod definition_and_creation;
 mod descriptors;
 mod enumeration;
+mod from_entries;
 mod identity;
 mod integrity;
 mod prototype_chain;
