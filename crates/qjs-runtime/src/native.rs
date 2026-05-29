@@ -55,9 +55,14 @@ pub(crate) fn call_native_function(
         return Ok(value);
     }
 
-    if let Some(value) =
-        strings::call_string_native(native, this_value.clone(), &argument_values, env)?
-    {
+    if let Some(value) = strings::call_string_native(
+        function,
+        native,
+        this_value.clone(),
+        &argument_values,
+        is_construct,
+        env,
+    )? {
         return Ok(value);
     }
 

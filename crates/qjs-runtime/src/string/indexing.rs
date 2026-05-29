@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{RuntimeError, Value, string_prototype, to_js_string, to_number};
+use crate::{RuntimeError, Value, string_object_value, string_prototype, to_js_string, to_number};
 
 pub(super) fn this_string_value(
     value: Value,
@@ -9,7 +9,9 @@ pub(super) fn this_string_value(
     match value {
         Value::String(value) => Ok(value),
         Value::Object(object) => {
-            if string_prototype(env).is_some_and(|prototype| object.ptr_eq(&prototype)) {
+            if let Some(value) = string_object_value(&object) {
+                Ok(value)
+            } else if string_prototype(env).is_some_and(|prototype| object.ptr_eq(&prototype)) {
                 Ok(String::new())
             } else {
                 Err(RuntimeError {

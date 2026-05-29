@@ -479,6 +479,9 @@ cases/reflect-set-prototype-of-length.js
 cases/reflect-set-prototype-of-non-extensible.js
 cases/string-constructor-basic.js
 cases/string-constructor-length.js
+cases/string-constructor-object-basic.js
+cases/string-object-length-basic.js
+cases/string-object-index-properties.js
 cases/string-from-char-code-basic.js
 cases/string-from-char-code-length.js
 cases/string-from-code-point-basic.js

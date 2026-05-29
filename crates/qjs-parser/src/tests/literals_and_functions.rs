@@ -48,6 +48,29 @@ fn parses_new_expression() {
 }
 
 #[test]
+fn parses_member_access_after_new_expression() {
+    let script = parse_script("new String('abc').length;").expect("source should parse");
+    let [
+        Stmt::Expr(Expr::Member {
+            object, property, ..
+        }),
+    ] = script.body.as_slice()
+    else {
+        panic!("expected member access on new expression");
+    };
+
+    let Expr::New {
+        callee, arguments, ..
+    } = object.as_ref()
+    else {
+        panic!("expected member object to be a new expression");
+    };
+    assert!(matches!(callee.as_ref(), Expr::Identifier { name, .. } if name == "String"));
+    assert_eq!(arguments.len(), 1);
+    assert_eq!(property, &MemberProperty::Named("length".to_owned()));
+}
+
+#[test]
 fn parses_array_literal() {
     let script = parse_script("[1, 2 + 3,];").expect("source should parse");
     let [Stmt::Expr(Expr::Array { elements, .. })] = script.body.as_slice() else {

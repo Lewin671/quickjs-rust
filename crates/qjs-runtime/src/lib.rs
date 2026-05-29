@@ -41,6 +41,7 @@ pub(crate) use property::{
     value_prototype,
 };
 use statement::{Completion, eval_stmt, hoist_declarations};
+pub(crate) use string::string_object_value;
 pub use value::Value;
 use value::{ArrayRef, ObjectRef, Property};
 

@@ -6,7 +6,16 @@ use crate::{ParseError, Parser};
 
 impl Parser {
     pub(crate) fn call(&mut self) -> Result<Expr, ParseError> {
-        let mut expr = self.primary()?;
+        let expr = self.primary()?;
+        self.finish_call_member_chain(expr)
+    }
+
+    pub(crate) fn member_chain(&mut self) -> Result<Expr, ParseError> {
+        let expr = self.primary()?;
+        self.finish_member_chain(expr)
+    }
+
+    pub(crate) fn finish_call_member_chain(&mut self, mut expr: Expr) -> Result<Expr, ParseError> {
         loop {
             if self.match_kind(&TokenKind::LeftParen) {
                 expr = self.finish_call(expr)?;
@@ -28,7 +37,7 @@ impl Parser {
         Ok(expr)
     }
 
-    fn finish_call(&mut self, callee: Expr) -> Result<Expr, ParseError> {
+    pub(crate) fn finish_call(&mut self, callee: Expr) -> Result<Expr, ParseError> {
         let mut arguments = Vec::new();
         if !self.at(&TokenKind::RightParen) {
             loop {
@@ -50,6 +59,23 @@ impl Parser {
             arguments,
             span,
         })
+    }
+
+    fn finish_member_chain(&mut self, mut expr: Expr) -> Result<Expr, ParseError> {
+        loop {
+            if self.match_kind(&TokenKind::LeftBracket) {
+                expr = self.finish_computed_member(expr)?;
+                continue;
+            }
+
+            if self.match_kind(&TokenKind::Dot) {
+                expr = self.finish_named_member(expr)?;
+                continue;
+            }
+
+            break;
+        }
+        Ok(expr)
     }
 
     fn finish_computed_member(&mut self, object: Expr) -> Result<Expr, ParseError> {

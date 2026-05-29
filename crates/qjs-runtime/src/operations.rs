@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use qjs_ast::{BinaryOp, UnaryOp};
 
 use crate::{
-    Property, RuntimeError, Value, has_property, is_truthy, to_int32, to_int32_number,
-    to_js_string, to_number, to_property_key, to_uint32_number, value_prototype,
+    Property, RuntimeError, Value, has_property, is_truthy, string_object_value, to_int32,
+    to_int32_number, to_js_string, to_number, to_property_key, to_uint32_number, value_prototype,
 };
 
 pub(super) fn eval_unary(op: UnaryOp, argument: Value) -> Result<Value, RuntimeError> {
@@ -119,6 +119,18 @@ fn abstract_eq(left: &Value, right: &Value) -> Result<bool, RuntimeError> {
         }
         (_, Value::Boolean(value)) => {
             abstract_eq(left, &Value::Number(if *value { 1.0 } else { 0.0 }))
+        }
+        (Value::Object(object), Value::String(_) | Value::Number(_)) => {
+            match string_object_value(object) {
+                Some(value) => abstract_eq(&Value::String(value), right),
+                None => Ok(false),
+            }
+        }
+        (Value::String(_) | Value::Number(_), Value::Object(object)) => {
+            match string_object_value(object) {
+                Some(value) => abstract_eq(left, &Value::String(value)),
+                None => Ok(false),
+            }
         }
         _ => Ok(left == right),
     }

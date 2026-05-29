@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use crate::{
     RuntimeError, Value, array_has_own_property, array_prototype, boolean, call_function,
-    function_intrinsic_prototype, function_own_property_descriptor, number, to_property_key,
-    value_prototype,
+    function_intrinsic_prototype, function_own_property_descriptor, number, string,
+    to_property_key, value_prototype,
 };
 
 use super::descriptor::own_property_descriptor;
@@ -141,6 +141,8 @@ pub(crate) fn native_object_prototype_to_string(this_value: Value) -> Result<Val
                 "Boolean"
             } else if number::is_number_object(&object) {
                 "Number"
+            } else if string::is_string_object(&object) {
+                "String"
             } else {
                 "Object"
             }

@@ -5,7 +5,8 @@ mod property;
 mod prototype;
 
 pub(super) use constructor::{
-    native_string, native_string_from_char_code, native_string_from_code_point,
+    is_string_object, native_string, native_string_from_char_code, native_string_from_code_point,
+    string_object_value,
 };
 pub(crate) use install::install_string;
 pub(super) use property::{
@@ -24,3 +25,5 @@ pub(super) use prototype::{
     native_string_prototype_to_upper_case, native_string_prototype_trim,
     native_string_prototype_trim_end, native_string_prototype_trim_start,
 };
+
+pub(super) const STRING_DATA_PROPERTY: &str = "\0StringData";

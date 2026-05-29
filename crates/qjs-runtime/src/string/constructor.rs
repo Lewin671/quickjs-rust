@@ -1,10 +1,32 @@
-use crate::{RuntimeError, Value, to_js_string, to_number, to_uint16};
+use std::collections::HashMap;
 
-pub(crate) fn native_string(argument_values: &[Value]) -> Result<Value, RuntimeError> {
-    match argument_values.first().cloned() {
-        Some(value) => Ok(Value::String(to_js_string(value)?)),
-        None => Ok(Value::String(String::new())),
+use crate::{
+    Function, ObjectRef, Property, RuntimeError, Value, function_prototype, to_js_string,
+    to_number, to_uint16,
+};
+
+use super::STRING_DATA_PROPERTY;
+
+pub(crate) fn native_string(
+    function: &Function,
+    this_value: Value,
+    argument_values: &[Value],
+    is_construct: bool,
+) -> Result<Value, RuntimeError> {
+    let value = match argument_values.first().cloned() {
+        Some(value) => to_js_string(value)?,
+        None => String::new(),
+    };
+    if !is_construct {
+        return Ok(Value::String(value));
     }
+
+    let object = match this_value {
+        Value::Object(object) => object,
+        _ => ObjectRef::with_prototype(HashMap::new(), function_prototype(function)),
+    };
+    define_string_data(&object, &value);
+    Ok(Value::Object(object))
 }
 
 pub(crate) fn native_string_from_char_code(
@@ -44,4 +66,40 @@ fn to_code_point(value: Value) -> Result<u32, RuntimeError> {
         });
     }
     Ok(number as u32)
+}
+
+fn define_string_data(object: &ObjectRef, value: &str) {
+    object.define_non_enumerable(
+        STRING_DATA_PROPERTY.to_owned(),
+        Value::String(value.to_owned()),
+    );
+    object.define_property(
+        "length".to_owned(),
+        Property::data(
+            Value::Number(value.chars().count() as f64),
+            false,
+            false,
+            false,
+        ),
+    );
+    for (index, character) in value.chars().enumerate() {
+        object.define_property(
+            index.to_string(),
+            Property::data(Value::String(character.to_string()), true, false, false),
+        );
+    }
+}
+
+pub(crate) fn string_object_value(object: &ObjectRef) -> Option<String> {
+    match object.own_property(STRING_DATA_PROPERTY) {
+        Some(Property {
+            value: Value::String(value),
+            ..
+        }) => Some(value),
+        _ => None,
+    }
+}
+
+pub(crate) fn is_string_object(object: &ObjectRef) -> bool {
+    string_object_value(object).is_some()
 }

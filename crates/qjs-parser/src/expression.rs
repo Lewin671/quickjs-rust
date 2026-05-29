@@ -276,23 +276,32 @@ impl Parser {
 
     fn new_expression(&mut self, start: usize) -> Result<Expr, ParseError> {
         self.expect(&TokenKind::New)?;
-        let expr = self.call()?;
-        let (callee, arguments, end) = match expr {
-            Expr::Call {
+        let callee = self.member_chain()?;
+        let mut expr = if self.match_kind(&TokenKind::LeftParen) {
+            let call = self.finish_call(callee)?;
+            let Expr::Call {
                 callee,
                 arguments,
                 span,
-            } => (callee, arguments, span.end),
-            other => {
-                let end = other.span().end;
-                (Box::new(other), Vec::new(), end)
+            } = call
+            else {
+                unreachable!("finish_call must produce a call expression");
+            };
+            Expr::New {
+                callee,
+                arguments,
+                span: Span::new(start, span.end),
+            }
+        } else {
+            let end = callee.span().end;
+            Expr::New {
+                callee: Box::new(callee),
+                arguments: Vec::new(),
+                span: Span::new(start, end),
             }
         };
-        Ok(Expr::New {
-            callee,
-            arguments,
-            span: Span::new(start, end),
-        })
+        expr = self.finish_call_member_chain(expr)?;
+        Ok(expr)
     }
 
     fn binary_left_assoc(

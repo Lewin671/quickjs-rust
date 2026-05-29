@@ -8,7 +8,10 @@ pub(crate) fn to_js_string(value: Value) -> Result<String, RuntimeError> {
         Value::Boolean(false) => Ok("false".to_owned()),
         Value::Null => Ok("null".to_owned()),
         Value::Undefined => Ok("undefined".to_owned()),
-        Value::Function(_) | Value::Array(_) | Value::Object(_) => Err(RuntimeError {
+        Value::Object(object) => crate::string_object_value(&object).ok_or_else(|| RuntimeError {
+            message: "cannot convert object to string".to_owned(),
+        }),
+        Value::Function(_) | Value::Array(_) => Err(RuntimeError {
             message: "cannot convert object to string".to_owned(),
         }),
     }
@@ -42,10 +45,16 @@ pub(crate) fn to_number(value: Value) -> Result<f64, RuntimeError> {
             }
         }
         Value::Undefined => Ok(f64::NAN),
+        Value::Object(object) => match crate::string_object_value(&object) {
+            Some(value) => to_number(Value::String(value)),
+            None => Err(RuntimeError {
+                message: "cannot convert object to number".to_owned(),
+            }),
+        },
         Value::Function(_) => Err(RuntimeError {
             message: "cannot convert function to number".to_owned(),
         }),
-        Value::Array(_) | Value::Object(_) => Err(RuntimeError {
+        Value::Array(_) => Err(RuntimeError {
             message: "cannot convert object to number".to_owned(),
         }),
     }
