@@ -39,11 +39,17 @@ Both `scripts/bootstrap.sh` and `scripts/check.sh` fall back to
 - Keep implementation files reviewable. `scripts/check-file-size.sh` enforces
   current upper bounds for Rust source files, Rust test files, and repository
   scripts; split by subsystem responsibility before raising those limits.
+- First-party files should stay small enough for direct review. If a Rust
+  implementation file is trending toward the guard limit, split it by semantic
+  responsibility before adding more behavior; do not wait until it fails CI.
 - Treat large files under `third_party/` as vendored reference material, not as
   examples for first-party Rust structure. Use
   `./scripts/source-size-report.sh` for first-party size audits and
   `./scripts/source-size-report.sh --vendor` only when you need to inspect
   pinned upstream submodule files.
+- Thousands-line files are acceptable only in vendored upstream references or
+  generated conformance data under `third_party/`. New first-party code,
+  fixtures, scripts, and docs should remain modular and reviewable.
 - Add a new crate or third-party dependency only when it removes clear
   complexity and is justified in the final summary.
 - Parser work should not mutate runtime behavior unless the task explicitly
@@ -157,6 +163,9 @@ workspace configuration, global error models, or broad architecture documents.
 - `qjs-runtime` owns evaluation semantics and should not re-parse source except
   through public parser APIs.
 - `qjs-cli` is a thin smoke-test wrapper. Keep engine policy in library crates.
+- Runtime builtins should stay grouped by JavaScript object and behavior family
+  (`array/iteration`, `date/iso`, `object/descriptor`, and similar modules)
+  rather than accumulating unrelated native methods in a single file.
 
 ## Test Strategy
 

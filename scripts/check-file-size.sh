@@ -60,9 +60,9 @@ check_limit() {
   done < <(printf '%s\n' "$files" | sort)
 }
 
-check_limit "Rust source" 400 '*.rs' exclude '/src/tests/'
+check_limit "Rust source" 350 '*.rs' exclude '/src/tests/'
 
-check_limit "Rust test" 800 '*.rs' include '^(.*/)?crates/.*/src/tests/'
+check_limit "Rust test" 450 '*.rs' include '^(.*/)?crates/.*/src/tests/'
 
 check_limit "repository script" 250 '*.sh'
 

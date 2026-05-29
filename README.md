@@ -86,9 +86,9 @@ To run the curated Test262-derived subset:
 - `third_party/test262` should be consumed through small allowlisted runnable
   subsets until the engine is mature enough for broader conformance runs.
 - Large files in `third_party/` are pinned upstream references. First-party Rust
-  code is kept modular and is guarded by `scripts/check-file-size.sh`; use
-  `scripts/source-size-report.sh` to inspect size trends without conflating
-  vendored sources with engine modules.
+  code is intentionally split into small modules and guarded by
+  `scripts/check-file-size.sh`; use `scripts/source-size-report.sh` to inspect
+  size trends without conflating vendored sources with engine modules.
 
 ## Automation
 
