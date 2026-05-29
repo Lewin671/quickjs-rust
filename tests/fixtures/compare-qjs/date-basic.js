@@ -3,6 +3,12 @@
   var custom = new Date("1970-01-02T03:04:05.006Z");
   var mutable = new Date(0);
   var setResult = mutable.setTime(97445006.9);
+  var utcYear = new Date("1970-06-02T03:04:05.006Z");
+  var utcYearResult = utcYear.setUTCFullYear(2000);
+  var utcYearParts = new Date("1970-01-02T03:04:05.006Z");
+  utcYearParts.setUTCFullYear(1, 1, 3);
+  var utcYearInvalid = new Date(NaN);
+  var utcYearInvalidResult = utcYearInvalid.setUTCFullYear(1);
   var invalid = new Date(0);
   custom.toISOString = function () { return "custom"; };
   return [
@@ -14,6 +20,7 @@
     Date.prototype.getUTCFullYear.length,
     Date.prototype.toJSON.length,
     Date.prototype.setTime.length,
+    Date.prototype.setUTCFullYear.length,
     value.getTime(),
     value.valueOf(),
     value.toISOString(),
@@ -43,6 +50,12 @@
     setResult,
     mutable.getTime(),
     mutable.toISOString(),
+    utcYearResult,
+    utcYear.toISOString(),
+    utcYearParts.toISOString(),
+    utcYearInvalidResult,
+    utcYearInvalid.toISOString(),
+    Number.isNaN(new Date(0).setUTCFullYear(undefined)),
     Number.isNaN(invalid.setTime(8640000000000001)),
     Number.isNaN(invalid.getTime()),
     Number.isNaN(new Date(8640000000000001).getTime()),

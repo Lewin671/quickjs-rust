@@ -119,6 +119,7 @@ cases/date-basic.js
 cases/date-expanded-year-range.js
 cases/date-parse-utc-basic.js
 cases/date-set-time-basic.js
+cases/date-set-utc-full-year-basic.js
 cases/date-time-clip-basic.js
 cases/date-to-json-basic.js
 cases/date-to-utc-string-basic.js

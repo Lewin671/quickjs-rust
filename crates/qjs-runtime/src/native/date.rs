@@ -47,6 +47,9 @@ pub(super) fn call_date_native(
         NativeFunction::DatePrototypeSetTime => {
             date::native_date_prototype_set_time(this_value, argument_values)?
         }
+        NativeFunction::DatePrototypeSetUtcFullYear => {
+            date::native_date_prototype_set_utc_full_year(this_value, argument_values)?
+        }
         NativeFunction::DatePrototypeToISOString => {
             date::native_date_prototype_to_iso_string(this_value)?
         }

@@ -117,6 +117,27 @@ pub(crate) fn native_date_prototype_set_time(
     Ok(Value::Number(clipped))
 }
 
+pub(crate) fn native_date_prototype_set_utc_full_year(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let object = date_object(this_value)?;
+    let millis = date_value_from_object(&object)?;
+    let base = if millis.is_nan() { 0.0 } else { millis };
+    let components = utc_date_time(base);
+    let year = to_number(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    let month = optional_number(argument_values, 1, f64::from(components.month))?;
+    let date = optional_number(argument_values, 2, f64::from(components.date))?;
+    let updated = time_clip(utc_time_from_components(
+        year,
+        month,
+        date,
+        time_within_day(base),
+    ));
+    define_date_value(&object, updated);
+    Ok(Value::Number(updated))
+}
+
 pub(crate) fn native_date_prototype_to_iso_string(
     this_value: Value,
 ) -> Result<Value, RuntimeError> {
@@ -229,6 +250,10 @@ fn parse_date_string(source: &str) -> f64 {
 
 fn date_value(this_value: Value) -> Result<f64, RuntimeError> {
     let object = date_object(this_value)?;
+    date_value_from_object(&object)
+}
+
+fn date_value_from_object(object: &ObjectRef) -> Result<f64, RuntimeError> {
     match object.get(DATE_VALUE_PROPERTY) {
         Some(Value::Number(value)) => Ok(value),
         _ => Err(RuntimeError {
@@ -268,6 +293,23 @@ fn time_clip(time: f64) -> f64 {
     } else {
         time.trunc() + 0.0
     }
+}
+
+fn utc_time_from_components(year: f64, month: f64, date: f64, time_within_day: f64) -> f64 {
+    if [year, month, date, time_within_day]
+        .into_iter()
+        .any(|value| !value.is_finite())
+    {
+        return f64::NAN;
+    }
+    let month_index = month.trunc() as i32;
+    let year = year.trunc() as i32 + month_index.div_euclid(12);
+    let month = month_index.rem_euclid(12) + 1;
+    days_from_civil(year, month, date.trunc() as i32) as f64 * MS_PER_DAY + time_within_day
+}
+
+fn time_within_day(time: f64) -> f64 {
+    time - (time / MS_PER_DAY).floor() * MS_PER_DAY
 }
 
 fn current_time_ms() -> f64 {

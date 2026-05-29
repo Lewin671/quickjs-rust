@@ -79,6 +79,12 @@ pub(crate) fn install_date(
     );
     define_date_prototype_function(
         &date_prototype,
+        "setUTCFullYear",
+        3,
+        NativeFunction::DatePrototypeSetUtcFullYear,
+    );
+    define_date_prototype_function(
+        &date_prototype,
         "toISOString",
         0,
         NativeFunction::DatePrototypeToISOString,
