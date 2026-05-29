@@ -124,8 +124,8 @@ test once a file becomes difficult to scan. The CI check in
 
 Use `scripts/source-size-report.sh` when auditing structure. It reports
 first-party source files by default and scans vendored QuickJS-NG and Test262
-files only with `--vendor`, so agents can distinguish project architecture
-problems from pinned reference material.
+submodule files only with `--vendor`, so agents can distinguish project
+architecture problems from pinned reference material.
 
 When a feature is large enough to need conformance coverage, start with a small
 allowlist from `third_party/test262`, compare selected behavior against

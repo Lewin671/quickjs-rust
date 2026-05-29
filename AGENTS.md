@@ -41,8 +41,9 @@ Both `scripts/bootstrap.sh` and `scripts/check.sh` fall back to
   scripts; split by subsystem responsibility before raising those limits.
 - Treat large files under `third_party/` as vendored reference material, not as
   examples for first-party Rust structure. Use
-  `./scripts/source-size-report.sh` when judging whether the working codebase is
-  becoming too coarse.
+  `./scripts/source-size-report.sh` for first-party size audits and
+  `./scripts/source-size-report.sh --vendor` only when you need to inspect
+  pinned upstream submodule files.
 - Add a new crate or third-party dependency only when it removes clear
   complexity and is justified in the final summary.
 - Parser work should not mutate runtime behavior unless the task explicitly

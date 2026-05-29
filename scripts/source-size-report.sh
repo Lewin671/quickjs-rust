@@ -22,18 +22,12 @@ done
 
 report_git_files() {
   local title="$1"
-  local mode="$2"
 
   printf '%s\n' "$title"
   git -C "$ROOT_DIR" ls-files -z |
     while IFS= read -r -d '' file; do
-      case "$mode:$file" in
-        first:third_party/*|first:target/*|first:tests/test262/cases/*)
-          continue
-          ;;
-        vendor:third_party/*)
-          ;;
-        vendor:*)
+      case "$file" in
+        third_party/*|target/*|tests/test262/cases/*)
           continue
           ;;
       esac
@@ -51,14 +45,34 @@ report_git_files() {
       printf '%8s %s\n' "$lines" "$file"
     done |
     sort -nr |
-    head -n "$LIMIT"
+    awk -v limit="$LIMIT" 'NR <= limit'
   printf '\n'
 }
 
-report_git_files "First-party source, docs, and scripts:" first
+report_vendor_files() {
+  printf 'Vendored reference files:\n'
+
+  find "$ROOT_DIR/third_party" -mindepth 1 -maxdepth 1 -type d -print0 |
+    while IFS= read -r -d '' repo; do
+      local prefix
+      prefix="${repo#"$ROOT_DIR/"}/"
+      (
+        cd "$repo"
+        git ls-files -z -- \
+          '*.rs' '*.toml' '*.md' '*.sh' '*.yml' '*.yaml' '*.js' '*.c' '*.h' '*.json' |
+          xargs -0 wc -l
+      ) |
+        awk -v prefix="$prefix" '$2 != "total" { printf "%8s %s%s\n", $1, prefix, $2 }'
+    done |
+    sort -nr |
+    awk -v limit="$LIMIT" 'NR <= limit'
+  printf '\n'
+}
+
+report_git_files "First-party source, docs, and scripts:"
 
 if [ "$INCLUDE_VENDOR" -eq 1 ]; then
-  report_git_files "Vendored reference files:" vendor
+  report_vendor_files
 else
   printf 'Vendored reference files:\n'
   printf '  skipped by default; run %s [limit] --vendor to scan pinned upstream files\n' "$0"
