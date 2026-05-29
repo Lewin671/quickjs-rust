@@ -21,6 +21,10 @@ fn evaluates_date_builtins() {
         eval("Date.prototype.toJSON.length;"),
         Ok(Value::Number(1.0))
     );
+    assert_eq!(
+        eval("Date.prototype.setTime.length;"),
+        Ok(Value::Number(1.0))
+    );
     assert_eq!(eval("new Date(0).getTime();"), Ok(Value::Number(0.0)));
     assert_eq!(eval("new Date(0).valueOf();"), Ok(Value::Number(0.0)));
     assert_eq!(
@@ -46,6 +50,22 @@ fn evaluates_date_builtins() {
     assert_eq!(
         eval("new Date('1970-01-02T03:04:05.006Z').toJSON();"),
         Ok(Value::String("1970-01-02T03:04:05.006Z".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var d = new Date(0); var result = d.setTime(97445006.9); [result, d.getTime(), d.toISOString()].join('|');"
+        ),
+        Ok(Value::String(
+            "97445006|97445006|1970-01-02T03:04:05.006Z".to_owned()
+        ))
+    );
+    assert_eq!(
+        eval("var d = new Date(0); Number.isNaN(d.setTime(NaN)) && Number.isNaN(d.getTime());"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("var d = new Date(0); Number.isNaN(d.setTime(8640000000000001));"),
+        Ok(Value::Boolean(true))
     );
     assert_eq!(
         eval("new Date('0020-01-01T00:00:00Z').toUTCString();"),
@@ -88,6 +108,7 @@ fn evaluates_date_builtins() {
     );
     assert!(eval("Date.prototype.getTime.call({});").is_err());
     assert!(eval("Date.prototype.getUTCFullYear.call({});").is_err());
+    assert!(eval("Date.prototype.setTime.call({}, 0);").is_err());
     assert!(eval("Date.prototype.toJSON.call({});").is_err());
     assert!(eval("Date.prototype.toUTCString.call({});").is_err());
 }

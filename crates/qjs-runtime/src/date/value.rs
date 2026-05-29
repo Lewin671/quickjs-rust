@@ -106,6 +106,17 @@ pub(crate) fn native_date_prototype_value_of(this_value: Value) -> Result<Value,
     Ok(Value::Number(date_value(this_value)?))
 }
 
+pub(crate) fn native_date_prototype_set_time(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let object = date_object(this_value)?;
+    let time = to_number(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    let clipped = time_clip(time);
+    define_date_value(&object, clipped);
+    Ok(Value::Number(clipped))
+}
+
 pub(crate) fn native_date_prototype_to_iso_string(
     this_value: Value,
 ) -> Result<Value, RuntimeError> {
@@ -213,13 +224,23 @@ fn optional_number(
 }
 
 fn date_value(this_value: Value) -> Result<f64, RuntimeError> {
+    let object = date_object(this_value)?;
+    match object.get(DATE_VALUE_PROPERTY) {
+        Some(Value::Number(value)) => Ok(value),
+        _ => Err(RuntimeError {
+            message: "Date method receiver is not a Date object".to_owned(),
+        }),
+    }
+}
+
+fn date_object(this_value: Value) -> Result<ObjectRef, RuntimeError> {
     let Value::Object(object) = this_value else {
         return Err(RuntimeError {
             message: "Date method receiver is not an object".to_owned(),
         });
     };
     match object.get(DATE_VALUE_PROPERTY) {
-        Some(Value::Number(value)) => Ok(value),
+        Some(Value::Number(_)) => Ok(object),
         _ => Err(RuntimeError {
             message: "Date method receiver is not a Date object".to_owned(),
         }),
@@ -235,6 +256,14 @@ fn utc_component(
         return Ok(Value::Number(f64::NAN));
     }
     Ok(Value::Number(f64::from(component(utc_date_time(millis)))))
+}
+
+fn time_clip(time: f64) -> f64 {
+    if !time.is_finite() || time.abs() > 8_640_000_000_000_000.0 {
+        f64::NAN
+    } else {
+        time.trunc()
+    }
 }
 
 fn current_time_ms() -> f64 {

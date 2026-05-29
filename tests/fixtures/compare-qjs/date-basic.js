@@ -1,6 +1,9 @@
 (function () {
   var value = new Date("1970-01-02T03:04:05.006Z");
   var custom = new Date("1970-01-02T03:04:05.006Z");
+  var mutable = new Date(0);
+  var setResult = mutable.setTime(97445006.9);
+  var invalid = new Date(0);
   custom.toISOString = function () { return "custom"; };
   return [
     typeof Date,
@@ -10,6 +13,7 @@
     Date.prototype.getTime.length,
     Date.prototype.getUTCFullYear.length,
     Date.prototype.toJSON.length,
+    Date.prototype.setTime.length,
     value.getTime(),
     value.valueOf(),
     value.toISOString(),
@@ -31,6 +35,11 @@
     JSON.stringify({ when: value }) === '{"when":"1970-01-02T03:04:05.006Z"}',
     custom.toJSON(),
     JSON.stringify(custom) === '"custom"',
+    setResult,
+    mutable.getTime(),
+    mutable.toISOString(),
+    Number.isNaN(invalid.setTime(8640000000000001)),
+    Number.isNaN(invalid.getTime()),
     new Date(NaN).toJSON(),
     JSON.stringify(new Date(NaN)),
     new Date(NaN).toUTCString(),
