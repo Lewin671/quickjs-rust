@@ -121,6 +121,7 @@ pub(crate) enum NativeFunction {
     ReflectSetPrototypeOf,
     String,
     StringFromCharCode,
+    StringFromCodePoint,
     StringPrototypeAt,
     StringPrototypeCharAt,
     StringPrototypeCharCodeAt,

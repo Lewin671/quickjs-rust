@@ -15,6 +15,9 @@ pub(super) fn call_string_native(
         NativeFunction::StringFromCharCode => {
             string::native_string_from_char_code(argument_values)?
         }
+        NativeFunction::StringFromCodePoint => {
+            string::native_string_from_code_point(argument_values)?
+        }
         NativeFunction::StringPrototypeAt => {
             string::native_string_prototype_at(this_value, argument_values, env)?
         }

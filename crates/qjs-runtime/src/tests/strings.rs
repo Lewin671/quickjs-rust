@@ -25,6 +25,18 @@ fn evaluates_string_builtins() {
         Ok(Value::String("ABC".to_owned()))
     );
     assert_eq!(
+        eval("String.fromCodePoint(65, 128512, 67);"),
+        Ok(Value::String("A😀C".to_owned()))
+    );
+    assert_eq!(
+        eval("String.fromCodePoint();"),
+        Ok(Value::String(String::new()))
+    );
+    assert_eq!(eval("String.fromCodePoint.length;"), Ok(Value::Number(1.0)));
+    assert!(eval("String.fromCodePoint(-1);").is_err());
+    assert!(eval("String.fromCodePoint(1.5);").is_err());
+    assert!(eval("String.fromCodePoint(1114112);").is_err());
+    assert_eq!(
         eval("String.prototype.constructor === String;"),
         Ok(Value::Boolean(true))
     );
