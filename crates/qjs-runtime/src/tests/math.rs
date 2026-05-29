@@ -31,6 +31,7 @@ fn evaluates_math_builtins() {
     assert_eq!(eval("Math.max.length;"), Ok(Value::Number(2.0)));
     assert_eq!(eval("Math.min.length;"), Ok(Value::Number(2.0)));
     assert_eq!(eval("Math.pow.length;"), Ok(Value::Number(2.0)));
+    assert_eq!(eval("Math.random.length;"), Ok(Value::Number(0.0)));
     assert_eq!(eval("Math.sqrt.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("Math.round.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("Math.sign.length;"), Ok(Value::Number(1.0)));
@@ -70,6 +71,12 @@ fn evaluates_math_builtins() {
         Ok(Value::Boolean(false))
     );
     assert_eq!(eval("Math.pow(2, 8);"), Ok(Value::Number(256.0)));
+    assert_eq!(
+        eval(
+            "let random = Math.random(); typeof random === 'number' && random >= 0 && random < 1;"
+        ),
+        Ok(Value::Boolean(true))
+    );
     assert_eq!(
         eval("Math.pow(2, NaN) === Math.pow(2, NaN);"),
         Ok(Value::Boolean(false))
@@ -166,6 +173,12 @@ fn evaluates_math_builtins() {
     assert_eq!(
         eval("Object.getOwnPropertyDescriptor(Math, 'PI').writable;"),
         Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(Math, 'random'); d.enumerable + ':' + d.writable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("false:true:true".to_owned()))
     );
     assert!(eval("new Math.abs(1);").is_err());
 }

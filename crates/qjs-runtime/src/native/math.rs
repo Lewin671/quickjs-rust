@@ -35,6 +35,7 @@ pub(super) fn call_math_native(
         NativeFunction::MathMax => math_builtins::native_math_max(argument_values)?,
         NativeFunction::MathMin => math_builtins::native_math_min(argument_values)?,
         NativeFunction::MathPow => math_builtins::native_math_pow(argument_values)?,
+        NativeFunction::MathRandom => math_builtins::native_math_random()?,
         NativeFunction::MathRound => math_builtins::native_math_round(argument_values)?,
         NativeFunction::MathSign => math_builtins::native_math_sign(argument_values)?,
         NativeFunction::MathSin => math_builtins::native_math_unary(argument_values, f64::sin)?,

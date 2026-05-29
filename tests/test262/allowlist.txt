@@ -254,6 +254,9 @@ cases/math-min-basic.js
 cases/math-min-length.js
 cases/math-pow-basic.js
 cases/math-pow-length.js
+cases/math-random-length.js
+cases/math-random-prop-desc.js
+cases/math-random-range.js
 cases/math-round-basic.js
 cases/math-round-length.js
 cases/math-sign-basic.js

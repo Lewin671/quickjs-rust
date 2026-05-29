@@ -99,6 +99,7 @@ pub(crate) enum NativeFunction {
     MathMax,
     MathMin,
     MathPow,
+    MathRandom,
     MathRound,
     MathSign,
     MathSin,

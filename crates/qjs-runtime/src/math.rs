@@ -1,4 +1,8 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::atomic::{AtomicU64, Ordering},
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, to_number, to_uint32_number,
@@ -44,6 +48,7 @@ pub(super) fn install_math(
     define_math_function(&math_object, "max", 2, NativeFunction::MathMax);
     define_math_function(&math_object, "min", 2, NativeFunction::MathMin);
     define_math_function(&math_object, "pow", 2, NativeFunction::MathPow);
+    define_math_function(&math_object, "random", 0, NativeFunction::MathRandom);
     define_math_function(&math_object, "round", 1, NativeFunction::MathRound);
     define_math_function(&math_object, "sign", 1, NativeFunction::MathSign);
     define_math_function(&math_object, "sin", 1, NativeFunction::MathSin);
@@ -149,6 +154,10 @@ pub(super) fn native_math_pow(argument_values: &[Value]) -> Result<Value, Runtim
     Ok(Value::Number(base.powf(exponent)))
 }
 
+pub(super) fn native_math_random() -> Result<Value, RuntimeError> {
+    Ok(Value::Number(random_unit_interval()))
+}
+
 pub(super) fn native_math_round(argument_values: &[Value]) -> Result<Value, RuntimeError> {
     let number = to_number(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
     if number.is_nan() || number.is_infinite() || number == 0.0 {
@@ -186,4 +195,54 @@ pub(super) fn native_math_imul(argument_values: &[Value]) -> Result<Value, Runti
     let right = to_number(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
     let product = to_uint32_number(left).wrapping_mul(to_uint32_number(right));
     Ok(Value::Number(f64::from(product as i32)))
+}
+
+static RANDOM_STATE: AtomicU64 = AtomicU64::new(0);
+
+fn random_unit_interval() -> f64 {
+    let value = next_random_u64();
+    ((value >> 11) as f64) * (1.0 / ((1_u64 << 53) as f64))
+}
+
+fn next_random_u64() -> u64 {
+    let mut state = current_random_state();
+    loop {
+        let next = xorshift64star(state);
+        match RANDOM_STATE.compare_exchange(state, next, Ordering::AcqRel, Ordering::Acquire) {
+            Ok(_) => return next,
+            Err(actual) => state = actual,
+        }
+    }
+}
+
+fn current_random_state() -> u64 {
+    let state = RANDOM_STATE.load(Ordering::Acquire);
+    if state != 0 {
+        return state;
+    }
+
+    let seed = random_seed();
+    match RANDOM_STATE.compare_exchange(0, seed, Ordering::AcqRel, Ordering::Acquire) {
+        Ok(_) => seed,
+        Err(actual) => actual,
+    }
+}
+
+fn random_seed() -> u64 {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos() as u64)
+        .unwrap_or(0x9e37_79b9_7f4a_7c15);
+    if nanos == 0 {
+        0x9e37_79b9_7f4a_7c15
+    } else {
+        nanos
+    }
+}
+
+fn xorshift64star(mut value: u64) -> u64 {
+    value ^= value >> 12;
+    value ^= value << 25;
+    value ^= value >> 27;
+    value.wrapping_mul(0x2545_f491_4f6c_dd1d)
 }
