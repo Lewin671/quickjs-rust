@@ -1,4 +1,5 @@
 mod constructor;
+mod flatten;
 mod indexing;
 mod install;
 mod iteration;
@@ -10,6 +11,7 @@ mod sort;
 mod splice;
 
 pub(crate) use constructor::{native_array, native_array_is_array};
+pub(crate) use flatten::native_array_prototype_flat;
 pub(crate) use install::install_array;
 pub(crate) use iteration::{
     native_array_prototype_every, native_array_prototype_filter, native_array_prototype_find,

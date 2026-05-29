@@ -1,4 +1,5 @@
 mod builtins;
+mod flatten;
 mod indexing;
 mod iteration;
 mod mutation;

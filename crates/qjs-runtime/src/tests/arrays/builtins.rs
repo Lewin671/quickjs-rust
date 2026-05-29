@@ -22,6 +22,7 @@ fn evaluates_array_builtins() {
         Ok(Value::Number(1.0))
     );
     assert_eq!(eval("Array.prototype.fill.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("Array.prototype.flat.length;"), Ok(Value::Number(0.0)));
     assert_eq!(
         eval("Array.prototype.filter.length;"),
         Ok(Value::Number(1.0))

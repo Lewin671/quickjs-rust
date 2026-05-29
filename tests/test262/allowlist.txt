@@ -20,6 +20,11 @@ cases/array-every-this-arg.js
 cases/array-every-length.js
 cases/array-every-empty.js
 cases/array-fill-basic.js
+cases/array-flat-basic.js
+cases/array-flat-depth.js
+cases/array-flat-length.js
+cases/array-flat-null-undefined.js
+cases/array-flat-string-depth.js
 cases/array-filter-basic.js
 cases/array-filter-callback-arguments.js
 cases/array-filter-this-arg.js

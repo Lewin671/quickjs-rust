@@ -7,6 +7,7 @@ pub(crate) enum NativeFunction {
     ArrayPrototypeCopyWithin,
     ArrayPrototypeEvery,
     ArrayPrototypeFill,
+    ArrayPrototypeFlat,
     ArrayPrototypeFilter,
     ArrayPrototypeFind,
     ArrayPrototypeFindIndex,

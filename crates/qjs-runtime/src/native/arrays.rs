@@ -28,6 +28,9 @@ pub(super) fn call_array_native(
         NativeFunction::ArrayPrototypeFill => {
             array::native_array_prototype_fill(this_value, argument_values)?
         }
+        NativeFunction::ArrayPrototypeFlat => {
+            array::native_array_prototype_flat(this_value, argument_values)?
+        }
         NativeFunction::ArrayPrototypeFilter => {
             array::native_array_prototype_filter(this_value, argument_values, env)?
         }
