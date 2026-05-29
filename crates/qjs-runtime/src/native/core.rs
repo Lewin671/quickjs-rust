@@ -22,9 +22,13 @@ pub(super) fn call_core_native(
         }
         NativeFunction::GlobalIsFinite => global::native_global_is_finite(argument_values),
         NativeFunction::GlobalIsNaN => global::native_global_is_nan(argument_values),
-        NativeFunction::Function => {
-            crate::function::native_function(function, this_value, argument_values, is_construct)
-        }
+        NativeFunction::Function => crate::function::native_function(
+            function,
+            this_value,
+            argument_values,
+            is_construct,
+            env,
+        ),
         NativeFunction::FunctionPrototypeApply => {
             crate::function::native_function_prototype_apply(this_value, argument_values, env)
         }

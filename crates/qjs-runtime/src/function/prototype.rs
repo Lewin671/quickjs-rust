@@ -1,16 +1,53 @@
 use std::collections::HashMap;
 
-use crate::{Function, GLOBAL_THIS_BINDING, RuntimeError, Value};
+use qjs_ast::Stmt;
+use qjs_parser::parse_script;
+
+use crate::{Function, GLOBAL_THIS_BINDING, RuntimeError, Value, to_js_string};
 
 pub(crate) fn native_function(
     _function: &Function,
     _this_value: Value,
-    _argument_values: &[Value],
+    argument_values: &[Value],
     _is_construct: bool,
+    env: &HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    Err(RuntimeError {
-        message: "Function constructor is not implemented".to_owned(),
-    })
+    let (params, body) = function_source_parts(argument_values)?;
+    let source = format!("function anonymous({params}) {{\n{body}\n}}");
+    let script = parse_script(&source).map_err(|error| RuntimeError {
+        message: format!("invalid Function constructor source: {}", error.message),
+    })?;
+
+    let Some(Stmt::FunctionDecl {
+        name, params, body, ..
+    }) = script.body.into_iter().next()
+    else {
+        return Err(RuntimeError {
+            message: "Function constructor did not produce a function declaration".to_owned(),
+        });
+    };
+
+    Ok(Value::Function(Function::new_user(
+        Some(name),
+        params,
+        body,
+        env.clone(),
+    )))
+}
+
+fn function_source_parts(argument_values: &[Value]) -> Result<(String, String), RuntimeError> {
+    let Some((body, params)) = argument_values.split_last() else {
+        return Ok((String::new(), String::new()));
+    };
+
+    let params = params
+        .iter()
+        .cloned()
+        .map(to_js_string)
+        .collect::<Result<Vec<_>, _>>()?
+        .join(",");
+    let body = to_js_string(body.clone())?;
+    Ok((params, body))
 }
 
 pub(crate) fn native_function_prototype_apply(

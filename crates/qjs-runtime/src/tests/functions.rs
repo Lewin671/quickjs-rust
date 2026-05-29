@@ -188,6 +188,23 @@ fn evaluates_function_declarations_and_calls() {
         eval("Function.prototype.isPrototypeOf(function() {});"),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval("let add = Function('a', 'b', 'return a + b;'); add(2, 3);"),
+        Ok(Value::Number(5.0))
+    );
+    assert_eq!(
+        eval("let add = new Function('a,b', 'return a + b;'); add.length + ':' + add(2, 3);"),
+        Ok(Value::String("2:5".to_owned()))
+    );
+    assert_eq!(
+        eval("let f = Function('this.value = 7;'); let o = {}; f.call(o); o.value;"),
+        Ok(Value::Number(7.0))
+    );
+    assert_eq!(
+        eval("let C = Function('x', 'this.x = x;'); let c = new C(9); c.x;"),
+        Ok(Value::Number(9.0))
+    );
+    assert!(eval("Function('a +', 'return a;');").is_err());
 }
 
 #[test]
