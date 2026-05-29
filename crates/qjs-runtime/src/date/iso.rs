@@ -13,23 +13,26 @@ pub(super) struct UtcDateTime {
 
 pub(super) fn parse_iso_string(source: &str) -> Option<f64> {
     let bytes = source.as_bytes();
-    if bytes.len() < 20 || bytes.get(4) != Some(&b'-') || bytes.get(7) != Some(&b'-') {
+    let (year, cursor) = parse_iso_year(source)?;
+    if bytes.len() < cursor + 16
+        || bytes.get(cursor) != Some(&b'-')
+        || bytes.get(cursor + 3) != Some(&b'-')
+    {
         return None;
     }
-    let year = parse_i32(&source[0..4])?;
-    let month = parse_i32(&source[5..7])?;
-    let day = parse_i32(&source[8..10])?;
-    if bytes.get(10) != Some(&b'T') {
+    let month = parse_i32(&source[cursor + 1..cursor + 3])?;
+    let day = parse_i32(&source[cursor + 4..cursor + 6])?;
+    if bytes.get(cursor + 6) != Some(&b'T') {
         return None;
     }
-    let hours = parse_i32(&source[11..13])?;
-    let minutes = parse_i32(&source[14..16])?;
-    let seconds = parse_i32(&source[17..19])?;
-    if bytes.get(13) != Some(&b':') || bytes.get(16) != Some(&b':') {
+    let hours = parse_i32(&source[cursor + 7..cursor + 9])?;
+    let minutes = parse_i32(&source[cursor + 10..cursor + 12])?;
+    let seconds = parse_i32(&source[cursor + 13..cursor + 15])?;
+    if bytes.get(cursor + 9) != Some(&b':') || bytes.get(cursor + 12) != Some(&b':') {
         return None;
     }
 
-    let mut cursor = 19;
+    let mut cursor = cursor + 15;
     let mut millis = 0;
     if bytes.get(cursor) == Some(&b'.') {
         let start = cursor + 1;
@@ -67,8 +70,8 @@ pub(super) fn parse_iso_string(source: &str) -> Option<f64> {
 pub(super) fn format_iso_string(millis: f64) -> String {
     let components = utc_date_time(millis);
     format!(
-        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z",
-        components.year,
+        "{}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z",
+        format_iso_year(components.year),
         components.month + 1,
         components.date,
         components.hours,
@@ -139,6 +142,35 @@ fn parse_millis(digits: &str) -> i32 {
 
 fn parse_i32(source: &str) -> Option<i32> {
     source.parse::<i32>().ok()
+}
+
+fn parse_iso_year(source: &str) -> Option<(i32, usize)> {
+    let bytes = source.as_bytes();
+    match bytes.first() {
+        Some(b'+') | Some(b'-') => {
+            if bytes.len() < 7 || !bytes[1..7].iter().all(u8::is_ascii_digit) {
+                return None;
+            }
+            Some((parse_i32(&source[0..7])?, 7))
+        }
+        Some(_) => {
+            if bytes.len() < 4 || !bytes[0..4].iter().all(u8::is_ascii_digit) {
+                return None;
+            }
+            Some((parse_i32(&source[0..4])?, 4))
+        }
+        None => None,
+    }
+}
+
+fn format_iso_year(year: i32) -> String {
+    if (0..=9999).contains(&year) {
+        format!("{year:04}")
+    } else if year < 0 {
+        format!("-{:06}", year.abs())
+    } else {
+        format!("+{year:06}")
+    }
 }
 
 fn civil_from_days(days: i64) -> (i32, i32, i32) {
