@@ -100,6 +100,38 @@ pub(super) fn format_utc_string(millis: f64) -> String {
     )
 }
 
+pub(super) fn format_date_string(millis: f64) -> String {
+    const WEEKDAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const MONTHS: [&str; 12] = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ];
+
+    let components = utc_date_time(millis);
+    format!(
+        "{} {} {:02} {:04}",
+        WEEKDAYS[components.day as usize],
+        MONTHS[components.month as usize],
+        components.date,
+        components.year
+    )
+}
+
+pub(super) fn format_time_string(millis: f64) -> String {
+    let components = utc_date_time(millis);
+    format!(
+        "{:02}:{:02}:{:02} GMT+0000",
+        components.hours, components.minutes, components.seconds
+    )
+}
+
+pub(super) fn format_local_string(millis: f64) -> String {
+    format!(
+        "{} {}",
+        format_date_string(millis),
+        format_time_string(millis)
+    )
+}
+
 pub(super) fn utc_date_time(millis: f64) -> UtcDateTime {
     let time = millis.trunc();
     let days = (time / MS_PER_DAY).floor() as i64;

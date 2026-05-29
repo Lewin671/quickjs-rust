@@ -6,6 +6,16 @@ pub(crate) fn native_date_prototype_get_time(this_value: Value) -> Result<Value,
     Ok(Value::Number(date_value(this_value)?))
 }
 
+pub(crate) fn native_date_prototype_get_timezone_offset(
+    this_value: Value,
+) -> Result<Value, RuntimeError> {
+    let millis = date_value(this_value)?;
+    if !millis.is_finite() {
+        return Ok(Value::Number(f64::NAN));
+    }
+    Ok(Value::Number(0.0))
+}
+
 pub(crate) fn native_date_prototype_get_utc_date(this_value: Value) -> Result<Value, RuntimeError> {
     utc_component(this_value, |components| components.date)
 }

@@ -117,6 +117,7 @@ cases/boolean-prototype-value-of-basic.js
 cases/boolean-prototype-value-of-length.js
 cases/date-basic.js
 cases/date-expanded-year-range.js
+cases/date-local-format-basic.js
 cases/date-parse-utc-basic.js
 cases/date-set-time-basic.js
 cases/date-set-utc-date-basic.js

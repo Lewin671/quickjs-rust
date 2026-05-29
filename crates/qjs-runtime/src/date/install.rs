@@ -25,6 +25,12 @@ pub(crate) fn install_date(
     );
     define_date_prototype_function(
         &date_prototype,
+        "getTimezoneOffset",
+        0,
+        NativeFunction::DatePrototypeGetTimezoneOffset,
+    );
+    define_date_prototype_function(
+        &date_prototype,
         "getUTCDate",
         0,
         NativeFunction::DatePrototypeGetUtcDate,
@@ -121,6 +127,12 @@ pub(crate) fn install_date(
     );
     define_date_prototype_function(
         &date_prototype,
+        "toDateString",
+        0,
+        NativeFunction::DatePrototypeToDateString,
+    );
+    define_date_prototype_function(
+        &date_prototype,
         "toISOString",
         0,
         NativeFunction::DatePrototypeToISOString,
@@ -130,6 +142,18 @@ pub(crate) fn install_date(
         "toJSON",
         1,
         NativeFunction::DatePrototypeToJson,
+    );
+    define_date_prototype_function(
+        &date_prototype,
+        "toString",
+        0,
+        NativeFunction::DatePrototypeToString,
+    );
+    define_date_prototype_function(
+        &date_prototype,
+        "toTimeString",
+        0,
+        NativeFunction::DatePrototypeToTimeString,
     );
     define_date_prototype_function(
         &date_prototype,

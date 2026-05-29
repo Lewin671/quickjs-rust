@@ -37,6 +37,15 @@
   var utcMillisecondsResult = utcMilliseconds.setUTCMilliseconds(500);
   var utcNoArgs = new Date(0);
   var utcNoArgsResult = utcNoArgs.setUTCMilliseconds();
+  function hasDateShape(value) {
+    return value.length === 15 && value.charAt(3) === " " && value.charAt(7) === " " && value.charAt(10) === " ";
+  }
+  function hasTimeShape(value) {
+    return value.length >= 17 && value.charAt(2) === ":" && value.charAt(5) === ":" && value.indexOf(" GMT") === 8;
+  }
+  function hasLocalStringShape(value) {
+    return value.length >= 33 && hasDateShape(value.substring(0, 15)) && hasTimeShape(value.substring(16));
+  }
   var invalid = new Date(0);
   custom.toISOString = function () { return "custom"; };
   return [
@@ -55,6 +64,10 @@
     Date.prototype.setUTCMinutes.length,
     Date.prototype.setUTCMonth.length,
     Date.prototype.setUTCSeconds.length,
+    Date.prototype.getTimezoneOffset.length,
+    Date.prototype.toDateString.length,
+    Date.prototype.toString.length,
+    Date.prototype.toTimeString.length,
     value.getTime(),
     value.valueOf(),
     value.toISOString(),
@@ -121,6 +134,15 @@
     Number.isNaN(new Date(0).setUTCSeconds(undefined, 1)),
     Number.isNaN(utcNoArgsResult),
     Number.isNaN(utcNoArgs.getTime()),
+    typeof new Date(0).getTimezoneOffset() === "number",
+    Number.isNaN(new Date(NaN).getTimezoneOffset()),
+    hasDateShape(new Date(0).toDateString()),
+    hasDateShape(new Date("0020-01-01T00:00:00Z").toDateString()),
+    hasTimeShape(new Date(0).toTimeString()),
+    hasLocalStringShape(new Date(0).toString()),
+    new Date(NaN).toString(),
+    typeof Date() === "string",
+    hasLocalStringShape(Date()),
     Number.isNaN(invalid.setTime(8640000000000001)),
     Number.isNaN(invalid.getTime()),
     Number.isNaN(new Date(8640000000000001).getTime()),

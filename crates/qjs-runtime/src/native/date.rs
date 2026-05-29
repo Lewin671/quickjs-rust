@@ -19,6 +19,9 @@ pub(super) fn call_date_native(
         NativeFunction::DateNow => date::native_date_now()?,
         NativeFunction::DateParse => date::native_date_parse(argument_values)?,
         NativeFunction::DateUtc => date::native_date_utc(argument_values)?,
+        NativeFunction::DatePrototypeGetTimezoneOffset => {
+            date::native_date_prototype_get_timezone_offset(this_value)?
+        }
         NativeFunction::DatePrototypeGetUtcDate => {
             date::native_date_prototype_get_utc_date(this_value)?
         }
@@ -68,6 +71,9 @@ pub(super) fn call_date_native(
         NativeFunction::DatePrototypeSetUtcSeconds => {
             date::native_date_prototype_set_utc_seconds(this_value, argument_values)?
         }
+        NativeFunction::DatePrototypeToDateString => {
+            date::native_date_prototype_to_date_string(this_value)?
+        }
         NativeFunction::DatePrototypeToISOString => {
             date::native_date_prototype_to_iso_string(this_value)?
         }
@@ -76,6 +82,10 @@ pub(super) fn call_date_native(
             argument_values.first().cloned().unwrap_or(Value::Undefined),
             env,
         )?,
+        NativeFunction::DatePrototypeToString => date::native_date_prototype_to_string(this_value)?,
+        NativeFunction::DatePrototypeToTimeString => {
+            date::native_date_prototype_to_time_string(this_value)?
+        }
         NativeFunction::DatePrototypeToUtcString => {
             date::native_date_prototype_to_utc_string(this_value)?
         }

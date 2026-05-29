@@ -1,5 +1,6 @@
 mod arrays;
 mod date;
+mod date_format;
 mod date_setters;
 mod errors;
 mod expressions;

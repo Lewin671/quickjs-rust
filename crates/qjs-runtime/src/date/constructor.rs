@@ -17,7 +17,7 @@ pub(crate) fn native_date(
     is_construct: bool,
 ) -> Result<Value, RuntimeError> {
     if !is_construct {
-        return Ok(Value::String(super::iso::format_iso_string(
+        return Ok(Value::String(super::iso::format_local_string(
             current_time_ms(),
         )));
     }
