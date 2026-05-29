@@ -28,6 +28,15 @@
   function deleteFn() {}
   deleteFn.value = 37;
   var functionDeleteResult = Reflect.deleteProperty(deleteFn, "value");
+  var extensible = {};
+  var initiallyExtensible = Reflect.isExtensible(extensible);
+  var preventResult = Reflect.preventExtensions(extensible);
+  var finallyExtensible = Reflect.isExtensible(extensible);
+  var repeatPreventResult = Reflect.preventExtensions(extensible);
+  var preventArray = [];
+  var preventArrayResult = Reflect.preventExtensions(preventArray);
+  function preventFn() {}
+  var preventFunctionResult = Reflect.preventExtensions(preventFn);
   var sealed = {};
   Object.preventExtensions(sealed);
   return [
@@ -57,6 +66,14 @@
     fixedDeleteResult,
     functionDeleteResult,
     Reflect.has(deleteFn, "value"),
+    initiallyExtensible,
+    preventResult,
+    finallyExtensible,
+    repeatPreventResult,
+    preventArrayResult,
+    Reflect.isExtensible(preventArray),
+    preventFunctionResult,
+    Reflect.isExtensible(preventFn),
     Reflect.getOwnPropertyDescriptor({ value: 17 }, "value").value,
     Reflect.getOwnPropertyDescriptor([1, 2], "length").enumerable,
     Reflect.ownKeys({ a: 1, b: 2 }).join("|"),
@@ -71,7 +88,9 @@
     Reflect.defineProperty.length,
     Reflect.deleteProperty.length,
     Reflect.has.length,
+    Reflect.isExtensible.length,
     Reflect.ownKeys.length,
+    Reflect.preventExtensions.length,
     Reflect.getPrototypeOf.length,
     Reflect.setPrototypeOf.length
   ].join(":");

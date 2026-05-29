@@ -27,7 +27,12 @@ fn evaluates_reflect_prototype_builtins() {
         Ok(Value::Number(2.0))
     );
     assert_eq!(eval("Reflect.has.length;"), Ok(Value::Number(2.0)));
+    assert_eq!(eval("Reflect.isExtensible.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("Reflect.ownKeys.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(
+        eval("Reflect.preventExtensions.length;"),
+        Ok(Value::Number(1.0))
+    );
     assert_eq!(
         eval("Reflect.setPrototypeOf.length;"),
         Ok(Value::Number(2.0))
@@ -98,6 +103,24 @@ fn evaluates_reflect_prototype_builtins() {
     );
     assert_eq!(
         eval("Reflect.has(function f() {}, 'call');"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("let object = {}; Reflect.isExtensible(object);"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("let object = {}; Object.preventExtensions(object); Reflect.isExtensible(object);"),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval("let array = []; Reflect.preventExtensions(array) && !Reflect.isExtensible(array);"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "function f() {} Reflect.preventExtensions(f) && !Reflect.isExtensible(f) && Reflect.preventExtensions(f);"
+        ),
         Ok(Value::Boolean(true))
     );
     assert_eq!(
@@ -191,7 +214,9 @@ fn evaluates_reflect_prototype_builtins() {
     assert!(eval("Reflect.deleteProperty(1, 'value');").is_err());
     assert!(eval("Reflect.getOwnPropertyDescriptor(1, 'toString');").is_err());
     assert!(eval("Reflect.has(1, 'toString');").is_err());
+    assert!(eval("Reflect.isExtensible(1);").is_err());
     assert!(eval("Reflect.ownKeys(1);").is_err());
+    assert!(eval("Reflect.preventExtensions(1);").is_err());
     assert!(eval("Reflect.setPrototypeOf(1, null);").is_err());
     assert!(eval("Reflect.setPrototypeOf({}, 1);").is_err());
 }

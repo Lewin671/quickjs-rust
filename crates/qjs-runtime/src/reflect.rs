@@ -35,9 +35,21 @@ pub(crate) fn install_reflect(
     define_reflect_function(&reflect_object, "has", 2, NativeFunction::ReflectHas);
     define_reflect_function(
         &reflect_object,
+        "isExtensible",
+        1,
+        NativeFunction::ReflectIsExtensible,
+    );
+    define_reflect_function(
+        &reflect_object,
         "ownKeys",
         1,
         NativeFunction::ReflectOwnKeys,
+    );
+    define_reflect_function(
+        &reflect_object,
+        "preventExtensions",
+        1,
+        NativeFunction::ReflectPreventExtensions,
     );
     define_reflect_function(
         &reflect_object,
@@ -136,6 +148,23 @@ pub(crate) fn native_reflect_has(
     }
 }
 
+pub(crate) fn native_reflect_is_extensible(
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    ensure_reflect_object_target(&target, "Reflect.isExtensible")?;
+    Ok(Value::Boolean(match target {
+        Value::Object(object) => object.is_extensible(),
+        Value::Array(elements) => elements.is_extensible(),
+        Value::Function(function) => function.is_extensible(),
+        Value::String(_)
+        | Value::Number(_)
+        | Value::Boolean(_)
+        | Value::Null
+        | Value::Undefined => unreachable!("target was validated before extensibility check"),
+    }))
+}
+
 pub(crate) fn native_reflect_own_keys(argument_values: &[Value]) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     ensure_reflect_object_target(&target, "Reflect.ownKeys")?;
@@ -155,6 +184,24 @@ pub(crate) fn native_reflect_own_keys(argument_values: &[Value]) -> Result<Value
     Ok(Value::Array(crate::ArrayRef::new(
         keys.into_iter().map(Value::String).collect(),
     )))
+}
+
+pub(crate) fn native_reflect_prevent_extensions(
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    ensure_reflect_object_target(&target, "Reflect.preventExtensions")?;
+    match target {
+        Value::Object(object) => object.prevent_extensions(),
+        Value::Array(elements) => elements.prevent_extensions(),
+        Value::Function(function) => function.prevent_extensions(),
+        Value::String(_)
+        | Value::Number(_)
+        | Value::Boolean(_)
+        | Value::Null
+        | Value::Undefined => unreachable!("target was validated before preventing extensions"),
+    }
+    Ok(Value::Boolean(true))
 }
 
 pub(crate) fn native_reflect_set_prototype_of(

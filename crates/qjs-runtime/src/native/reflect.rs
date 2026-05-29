@@ -23,7 +23,13 @@ pub(super) fn call_reflect_native(
             reflect::native_reflect_get_own_property_descriptor(argument_values, env)?
         }
         NativeFunction::ReflectHas => reflect::native_reflect_has(argument_values, env)?,
+        NativeFunction::ReflectIsExtensible => {
+            reflect::native_reflect_is_extensible(argument_values)?
+        }
         NativeFunction::ReflectOwnKeys => reflect::native_reflect_own_keys(argument_values)?,
+        NativeFunction::ReflectPreventExtensions => {
+            reflect::native_reflect_prevent_extensions(argument_values)?
+        }
         NativeFunction::ReflectSetPrototypeOf => {
             reflect::native_reflect_set_prototype_of(argument_values)?
         }

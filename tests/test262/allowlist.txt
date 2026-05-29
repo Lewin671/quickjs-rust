@@ -442,10 +442,14 @@ cases/reflect-has-array-and-function.js
 cases/reflect-has-basic.js
 cases/reflect-has-length.js
 cases/reflect-has-return-boolean.js
+cases/reflect-is-extensible-basic.js
+cases/reflect-is-extensible-length.js
 cases/reflect-own-keys-array.js
 cases/reflect-own-keys-basic.js
 cases/reflect-own-keys-length.js
 cases/reflect-own-keys-nonenumerable.js
+cases/reflect-prevent-extensions-basic.js
+cases/reflect-prevent-extensions-length.js
 cases/reflect-set-prototype-of-basic.js
 cases/reflect-set-prototype-of-length.js
 cases/reflect-set-prototype-of-non-extensible.js
