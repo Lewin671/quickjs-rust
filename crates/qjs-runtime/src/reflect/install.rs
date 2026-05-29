@@ -52,6 +52,7 @@ pub(crate) fn install_reflect(
         1,
         NativeFunction::ReflectPreventExtensions,
     );
+    define_reflect_function(&reflect_object, "set", 3, NativeFunction::ReflectSet);
     define_reflect_function(
         &reflect_object,
         "setPrototypeOf",

@@ -116,6 +116,7 @@ pub(crate) enum NativeFunction {
     ReflectIsExtensible,
     ReflectOwnKeys,
     ReflectPreventExtensions,
+    ReflectSet,
     ReflectSetPrototypeOf,
     String,
     StringFromCharCode,

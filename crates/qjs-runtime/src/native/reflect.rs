@@ -31,6 +31,7 @@ pub(super) fn call_reflect_native(
         NativeFunction::ReflectPreventExtensions => {
             reflect::native_reflect_prevent_extensions(argument_values)?
         }
+        NativeFunction::ReflectSet => reflect::native_reflect_set(argument_values, env)?,
         NativeFunction::ReflectSetPrototypeOf => {
             reflect::native_reflect_set_prototype_of(argument_values)?
         }

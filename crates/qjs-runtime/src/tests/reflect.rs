@@ -34,6 +34,7 @@ fn evaluates_reflect_prototype_builtins() {
         eval("Reflect.preventExtensions.length;"),
         Ok(Value::Number(1.0))
     );
+    assert_eq!(eval("Reflect.set.length;"), Ok(Value::Number(3.0)));
     assert_eq!(
         eval("Reflect.setPrototypeOf.length;"),
         Ok(Value::Number(2.0))
@@ -74,6 +75,44 @@ fn evaluates_reflect_prototype_builtins() {
     assert_eq!(
         eval("function f() {} f.value = 11; Reflect.get(f, 'value');"),
         Ok(Value::Number(11.0))
+    );
+    assert_eq!(
+        eval("let object = {}; Reflect.set(object, 'value', 41) && object.value;"),
+        Ok(Value::Number(41.0))
+    );
+    assert_eq!(
+        eval(
+            "let target = { value: 1 }; let receiver = { value: 2 }; Reflect.set(target, 'value', 43, receiver) && target.value + receiver.value;"
+        ),
+        Ok(Value::Number(44.0))
+    );
+    assert_eq!(
+        eval(
+            "let target = Object.create({ inherited: 5 }); Reflect.set(target, 'inherited', 47) && target.inherited;"
+        ),
+        Ok(Value::Number(47.0))
+    );
+    assert_eq!(
+        eval("let array = [1]; Reflect.set(array, '1', 2) && array.length + array[1];"),
+        Ok(Value::Number(4.0))
+    );
+    assert_eq!(
+        eval("let array = [1, 2, 3]; Reflect.set(array, 'length', 1) && array.length;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval("function f() {} Reflect.set(f, 'value', 53) && f.value;"),
+        Ok(Value::Number(53.0))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; Object.defineProperty(object, 'fixed', { value: 1 }); Reflect.set(object, 'fixed', 2);"
+        ),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval("let object = {}; Object.preventExtensions(object); Reflect.set(object, 'value', 1);"),
+        Ok(Value::Boolean(false))
     );
     assert_eq!(
         eval(
@@ -240,6 +279,7 @@ fn evaluates_reflect_prototype_builtins() {
     assert!(eval("Reflect.isExtensible(1);").is_err());
     assert!(eval("Reflect.ownKeys(1);").is_err());
     assert!(eval("Reflect.preventExtensions(1);").is_err());
+    assert!(eval("Reflect.set(1, 'value', 1);").is_err());
     assert!(eval("Reflect.setPrototypeOf(1, null);").is_err());
     assert!(eval("Reflect.setPrototypeOf({}, 1);").is_err());
 }

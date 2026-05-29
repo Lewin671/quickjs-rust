@@ -453,6 +453,10 @@ cases/reflect-own-keys-length.js
 cases/reflect-own-keys-nonenumerable.js
 cases/reflect-prevent-extensions-basic.js
 cases/reflect-prevent-extensions-length.js
+cases/reflect-set-basic.js
+cases/reflect-set-data-descriptor.js
+cases/reflect-set-length.js
+cases/reflect-set-non-writable.js
 cases/reflect-set-prototype-of-basic.js
 cases/reflect-set-prototype-of-length.js
 cases/reflect-set-prototype-of-non-extensible.js

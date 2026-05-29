@@ -13,6 +13,21 @@
   var getArray = [23, 29];
   function getFn(a, b) {}
   getFn.value = 31;
+  var setObject = {};
+  var setObjectResult = Reflect.set(setObject, "value", 41);
+  var setReceiverTarget = { value: 1 };
+  var setReceiver = { value: 2 };
+  var setReceiverResult = Reflect.set(setReceiverTarget, "value", 43, setReceiver);
+  var setInherited = Object.create({ inherited: 5 });
+  var setInheritedResult = Reflect.set(setInherited, "inherited", 47);
+  var setArray = [1];
+  var setArrayResult = Reflect.set(setArray, "1", 2);
+  var setArrayLengthResult = Reflect.set(setArray, "length", 1);
+  function setFn() {}
+  var setFunctionResult = Reflect.set(setFn, "value", 53);
+  var setFixed = {};
+  Object.defineProperty(setFixed, "fixed", { value: 1 });
+  var setFixedResult = Reflect.set(setFixed, "fixed", 2);
   var defined = {};
   var defineResult = Reflect.defineProperty(defined, "value", {
     value: 19,
@@ -62,6 +77,21 @@
     Reflect.get(getArray, "length"),
     Reflect.get(getFn, "value"),
     Reflect.get(getFn, "length"),
+    setObjectResult,
+    setObject.value,
+    setReceiverResult,
+    setReceiverTarget.value,
+    setReceiver.value,
+    setInheritedResult,
+    setInherited.inherited,
+    setArrayResult,
+    setArray.length,
+    setArray[0],
+    setArrayLengthResult,
+    setFunctionResult,
+    setFn.value,
+    setFixedResult,
+    setFixed.fixed,
     Reflect.has(object, "marker"),
     Reflect.has(Object.create({ inherited: 1 }), "inherited"),
     Reflect.has(array, "marker"),
@@ -104,6 +134,7 @@
     Reflect.isExtensible.length,
     Reflect.ownKeys.length,
     Reflect.preventExtensions.length,
+    Reflect.set.length,
     Reflect.getPrototypeOf.length,
     Reflect.setPrototypeOf.length
   ].join(":");
