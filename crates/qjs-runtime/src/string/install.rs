@@ -18,6 +18,7 @@ const STRING_PROTOTYPE_METHODS: &[(&str, usize, NativeFunction)] = &[
     ("slice", 2, NativeFunction::StringPrototypeSlice),
     ("split", 2, NativeFunction::StringPrototypeSplit),
     ("startsWith", 1, NativeFunction::StringPrototypeStartsWith),
+    ("substr", 2, NativeFunction::StringPrototypeSubstr),
     ("substring", 2, NativeFunction::StringPrototypeSubstring),
     ("toLowerCase", 0, NativeFunction::StringPrototypeToLowerCase),
     ("trim", 0, NativeFunction::StringPrototypeTrim),

@@ -183,6 +183,7 @@ pub(crate) enum NativeFunction {
     StringPrototypeSlice,
     StringPrototypeSplit,
     StringPrototypeStartsWith,
+    StringPrototypeSubstr,
     StringPrototypeSubstring,
     StringPrototypeToLowerCase,
     StringPrototypeTrim,

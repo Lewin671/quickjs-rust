@@ -41,6 +41,10 @@ fn evaluates_string_sequence_builtins() {
         Ok(Value::Number(2.0))
     );
     assert_eq!(
+        eval("String.prototype.substr.length;"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
         eval("'abcdef'.substring(1, 4);"),
         Ok(Value::String("bcd".to_owned()))
     );
@@ -55,5 +59,29 @@ fn evaluates_string_sequence_builtins() {
     assert_eq!(
         eval("'abcdef'.substring(3);"),
         Ok(Value::String("def".to_owned()))
+    );
+    assert_eq!(
+        eval("'abcdef'.substr(1, 3);"),
+        Ok(Value::String("bcd".to_owned()))
+    );
+    assert_eq!(
+        eval("'abcdef'.substr(-2);"),
+        Ok(Value::String("ef".to_owned()))
+    );
+    assert_eq!(
+        eval("'abcdef'.substr(-20, 2);"),
+        Ok(Value::String("ab".to_owned()))
+    );
+    assert_eq!(
+        eval("'abcdef'.substr(2, -1);"),
+        Ok(Value::String(String::new()))
+    );
+    assert_eq!(
+        eval("'abcdef'.substr(2, 2.8);"),
+        Ok(Value::String("cd".to_owned()))
+    );
+    assert_eq!(
+        eval("'abcdef'.substr(Infinity, 1);"),
+        Ok(Value::String(String::new()))
     );
 }

@@ -20,7 +20,8 @@ pub(crate) use search::{
 };
 pub(crate) use sequence::{
     native_string_prototype_concat, native_string_prototype_repeat, native_string_prototype_slice,
-    native_string_prototype_split, native_string_prototype_substring,
+    native_string_prototype_split, native_string_prototype_substr,
+    native_string_prototype_substring,
 };
 pub(crate) use trim::{
     native_string_prototype_to_string, native_string_prototype_trim,

@@ -98,6 +98,26 @@ fn string_split_limit(value: Value) -> Result<usize, RuntimeError> {
     Ok(to_uint32(value)? as usize)
 }
 
+pub(crate) fn native_string_prototype_substr(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let value = this_string_value(this_value, env)?;
+    let chars: Vec<_> = value.chars().collect();
+    let length = chars.len();
+    let start = string_substr_start(
+        length,
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+    )?;
+    let count = string_substr_count(
+        length,
+        start,
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+    )?;
+    Ok(Value::String(chars[start..start + count].iter().collect()))
+}
+
 pub(crate) fn native_string_prototype_substring(
     this_value: Value,
     argument_values: &[Value],
@@ -122,4 +142,33 @@ pub(crate) fn native_string_prototype_substring(
         (end, start)
     };
     Ok(Value::String(chars[from..to].iter().collect()))
+}
+
+fn string_substr_start(length: usize, value: Value) -> Result<usize, RuntimeError> {
+    let number = to_number(value)?;
+    if number.is_nan() {
+        return Ok(0);
+    }
+    let integer = number.trunc();
+    if integer < 0.0 {
+        Ok((length as f64 + integer).max(0.0) as usize)
+    } else {
+        Ok(integer.min(length as f64) as usize)
+    }
+}
+
+fn string_substr_count(length: usize, start: usize, value: Value) -> Result<usize, RuntimeError> {
+    let remaining = length - start;
+    if matches!(value, Value::Undefined) {
+        return Ok(remaining);
+    }
+
+    let number = to_number(value)?;
+    if number.is_nan() || number <= 0.0 {
+        return Ok(0);
+    }
+    if number.is_infinite() {
+        return Ok(remaining);
+    }
+    Ok((number.trunc() as usize).min(remaining))
 }

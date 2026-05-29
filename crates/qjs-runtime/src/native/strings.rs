@@ -73,6 +73,9 @@ pub(super) fn call_string_native(
         NativeFunction::StringPrototypeStartsWith => {
             string::native_string_prototype_starts_with(this_value, argument_values, env)?
         }
+        NativeFunction::StringPrototypeSubstr => {
+            string::native_string_prototype_substr(this_value, argument_values, env)?
+        }
         NativeFunction::StringPrototypeSubstring => {
             string::native_string_prototype_substring(this_value, argument_values, env)?
         }
