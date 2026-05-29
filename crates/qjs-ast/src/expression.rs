@@ -1,6 +1,18 @@
 use crate::span::Span;
 use crate::statement::Stmt;
 
+mod assignment;
+mod literal;
+mod member;
+mod object;
+mod operator;
+
+pub use assignment::{AssignmentOp, AssignmentTarget};
+pub use literal::Literal;
+pub use member::MemberProperty;
+pub use object::{ObjectProperty, ObjectPropertyKey};
+pub use operator::{BinaryOp, UnaryOp, UpdateOp};
+
 /// An expression node.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Expr {
@@ -148,205 +160,4 @@ impl Expr {
             | Self::Identifier { span, .. } => *span,
         }
     }
-}
-
-/// Object literal property.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ObjectProperty {
-    /// Property key syntax.
-    pub key: ObjectPropertyKey,
-    /// Property value expression.
-    pub value: Expr,
-    /// Source span.
-    pub span: Span,
-}
-
-/// Object literal property key.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ObjectPropertyKey {
-    /// Literal property name after syntactic normalization.
-    Literal(String),
-    /// Computed property name expression, as in `{ [expr]: value }`.
-    Computed(Expr),
-}
-
-/// An assignment target.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum AssignmentTarget {
-    /// Identifier assignment.
-    Identifier { name: String, span: Span },
-    /// Member assignment.
-    Member {
-        /// Object expression.
-        object: Box<Expr>,
-        /// Property expression or name.
-        property: MemberProperty,
-        /// Source span.
-        span: Span,
-    },
-}
-
-impl AssignmentTarget {
-    /// Returns the source span for this assignment target.
-    #[must_use]
-    pub const fn span(&self) -> Span {
-        match self {
-            Self::Identifier { span, .. } | Self::Member { span, .. } => *span,
-        }
-    }
-}
-
-/// Assignment operator.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum AssignmentOp {
-    /// `=`.
-    Assign,
-    /// `+=`.
-    AddAssign,
-    /// `-=`.
-    SubAssign,
-    /// `*=`.
-    MulAssign,
-    /// `**=`.
-    PowAssign,
-    /// `/=`.
-    DivAssign,
-    /// `%=`.
-    RemAssign,
-    /// `<<=`.
-    ShlAssign,
-    /// `>>=`.
-    ShrAssign,
-    /// `>>>=`.
-    UShrAssign,
-    /// `&=`.
-    BitwiseAndAssign,
-    /// `^=`.
-    BitwiseXorAssign,
-    /// `|=`.
-    BitwiseOrAssign,
-    /// `&&=`.
-    LogicalAndAssign,
-    /// `||=`.
-    LogicalOrAssign,
-    /// `??=`.
-    NullishAssign,
-}
-
-/// Update operator.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum UpdateOp {
-    /// `++`.
-    Increment,
-    /// `--`.
-    Decrement,
-}
-
-/// Member access property.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum MemberProperty {
-    /// Dot property name, as in `object.name`.
-    Named(String),
-    /// Computed property expression, as in `object[index]`.
-    Computed(Box<Expr>),
-}
-
-/// A literal expression.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Literal {
-    /// Numeric literal text.
-    Number { raw: String, span: Span },
-    /// String literal contents after quote removal.
-    String { value: String, span: Span },
-    /// Boolean literal.
-    Boolean { value: bool, span: Span },
-    /// Null literal.
-    Null { span: Span },
-}
-
-impl Literal {
-    /// Returns the source span for this literal.
-    #[must_use]
-    pub const fn span(&self) -> Span {
-        match self {
-            Self::Number { span, .. }
-            | Self::String { span, .. }
-            | Self::Boolean { span, .. }
-            | Self::Null { span } => *span,
-        }
-    }
-}
-
-/// Unary operators currently supported by the parser and runtime.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum UnaryOp {
-    /// Numeric positive.
-    Plus,
-    /// Numeric negation.
-    Minus,
-    /// Logical negation.
-    Not,
-    /// Bitwise complement.
-    BitwiseNot,
-    /// Type query.
-    Typeof,
-    /// Undefined result after evaluating the operand.
-    Void,
-    /// Property deletion.
-    Delete,
-}
-
-/// Binary operators currently supported by the parser and runtime.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum BinaryOp {
-    /// Addition.
-    Add,
-    /// Subtraction.
-    Sub,
-    /// Multiplication.
-    Mul,
-    /// Division.
-    Div,
-    /// Remainder.
-    Rem,
-    /// Exponentiation.
-    Pow,
-    /// Left shift.
-    Shl,
-    /// Signed right shift.
-    Shr,
-    /// Unsigned right shift.
-    UShr,
-    /// Loose equality.
-    Eq,
-    /// Strict equality.
-    StrictEq,
-    /// Loose inequality.
-    Ne,
-    /// Strict inequality.
-    StrictNe,
-    /// Bitwise and.
-    BitwiseAnd,
-    /// Bitwise xor.
-    BitwiseXor,
-    /// Bitwise or.
-    BitwiseOr,
-    /// Less than.
-    Lt,
-    /// Less than or equal.
-    Le,
-    /// Greater than.
-    Gt,
-    /// Greater than or equal.
-    Ge,
-    /// Property existence.
-    In,
-    /// Prototype-chain instance test.
-    Instanceof,
-    /// Logical and.
-    LogicalAnd,
-    /// Logical or.
-    LogicalOr,
-    /// Nullish coalescing.
-    NullishCoalescing,
 }
