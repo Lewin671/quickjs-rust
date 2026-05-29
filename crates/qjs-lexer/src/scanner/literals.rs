@@ -123,10 +123,9 @@ impl Lexer<'_> {
     pub(super) fn string(&mut self, quote: char) -> Result<(), LexError> {
         let start = self.cursor;
         self.advance();
-        let content_start = self.cursor;
+        let mut value = String::new();
         while let Some(ch) = self.peek() {
             if ch == quote {
-                let value = self.source[content_start..self.cursor].to_owned();
                 self.advance();
                 self.tokens.push(Token {
                     kind: TokenKind::String(value),
@@ -134,6 +133,19 @@ impl Lexer<'_> {
                 });
                 return Ok(());
             }
+            if ch == '\\' {
+                if let Some(escaped) = self.escape_sequence(start)? {
+                    value.push(escaped);
+                }
+                continue;
+            }
+            if matches!(ch, '\n' | '\r') {
+                return Err(LexError {
+                    message: "unterminated string literal".to_owned(),
+                    span: Span::new(start, self.cursor),
+                });
+            }
+            value.push(ch);
             self.advance();
         }
 
@@ -146,10 +158,9 @@ impl Lexer<'_> {
     pub(super) fn template_no_substitution(&mut self) -> Result<(), LexError> {
         let start = self.cursor;
         self.advance();
-        let content_start = self.cursor;
+        let mut value = String::new();
         while let Some(ch) = self.peek() {
             if ch == '`' {
-                let value = self.source[content_start..self.cursor].to_owned();
                 self.advance();
                 self.tokens.push(Token {
                     kind: TokenKind::String(value),
@@ -163,12 +174,114 @@ impl Lexer<'_> {
                     span: Span::new(start, self.cursor + 2),
                 });
             }
+            if ch == '\\' {
+                if let Some(escaped) = self.escape_sequence(start)? {
+                    value.push(escaped);
+                }
+                continue;
+            }
+            value.push(ch);
             self.advance();
         }
 
         Err(LexError {
             message: "unterminated template literal".to_owned(),
             span: Span::new(start, self.cursor),
+        })
+    }
+
+    fn escape_sequence(&mut self, literal_start: usize) -> Result<Option<char>, LexError> {
+        self.advance();
+        let Some(ch) = self.advance() else {
+            return Err(LexError {
+                message: "unterminated escape sequence".to_owned(),
+                span: Span::new(literal_start, self.cursor),
+            });
+        };
+
+        let escaped = match ch {
+            '\'' => Some('\''),
+            '"' => Some('"'),
+            '`' => Some('`'),
+            '\\' => Some('\\'),
+            'b' => Some('\u{0008}'),
+            'f' => Some('\u{000c}'),
+            'n' => Some('\n'),
+            'r' => Some('\r'),
+            't' => Some('\t'),
+            'v' => Some('\u{000b}'),
+            '0' if !matches!(self.peek(), Some(next) if next.is_ascii_digit()) => Some('\0'),
+            '0' | '1'..='9' => {
+                return Err(LexError {
+                    message: "legacy octal escape sequence is not supported".to_owned(),
+                    span: Span::new(literal_start, self.cursor),
+                });
+            }
+            'x' => Some(self.fixed_hex_escape(literal_start, 2)?),
+            'u' => Some(self.unicode_escape(literal_start)?),
+            '\n' => None,
+            '\r' => {
+                if self.peek() == Some('\n') {
+                    self.advance();
+                }
+                None
+            }
+            other => Some(other),
+        };
+        Ok(escaped)
+    }
+
+    fn unicode_escape(&mut self, literal_start: usize) -> Result<char, LexError> {
+        if self.peek() == Some('{') {
+            self.advance();
+            let digits_start = self.cursor;
+            while matches!(self.peek(), Some(ch) if ch.is_ascii_hexdigit()) {
+                self.advance();
+            }
+            if self.cursor == digits_start || self.peek() != Some('}') {
+                return Err(LexError {
+                    message: "invalid unicode escape sequence".to_owned(),
+                    span: Span::new(literal_start, self.cursor),
+                });
+            }
+            let value =
+                u32::from_str_radix(&self.source[digits_start..self.cursor], 16).map_err(|_| {
+                    LexError {
+                        message: "invalid unicode escape sequence".to_owned(),
+                        span: Span::new(literal_start, self.cursor),
+                    }
+                })?;
+            self.advance();
+            return char::from_u32(value).ok_or_else(|| LexError {
+                message: "invalid unicode escape sequence".to_owned(),
+                span: Span::new(literal_start, self.cursor),
+            });
+        }
+
+        self.fixed_hex_escape(literal_start, 4)
+    }
+
+    fn fixed_hex_escape(&mut self, literal_start: usize, digits: usize) -> Result<char, LexError> {
+        let digits_start = self.cursor;
+        for _ in 0..digits {
+            if !matches!(self.peek(), Some(ch) if ch.is_ascii_hexdigit()) {
+                return Err(LexError {
+                    message: "invalid escape sequence".to_owned(),
+                    span: Span::new(literal_start, self.cursor),
+                });
+            }
+            self.advance();
+        }
+        let value =
+            u32::from_str_radix(&self.source[digits_start..self.cursor], 16).map_err(|_| {
+                LexError {
+                    message: "invalid escape sequence".to_owned(),
+                    span: Span::new(literal_start, self.cursor),
+                }
+            })?;
+        char::from_u32(value).ok_or_else(|| LexError {
+            message: "invalid escape sequence".to_owned(),
+            span: Span::new(literal_start, self.cursor),
         })
     }
 }

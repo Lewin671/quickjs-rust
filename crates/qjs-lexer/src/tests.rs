@@ -118,6 +118,53 @@ fn reports_unterminated_template_literal() {
 }
 
 #[test]
+fn lexes_string_escape_sequences() {
+    let tokens = lex(r#""\n\t\b\f\r\v\\\"\'\0\x41\u0042\u{43}\A""#).expect("source should lex");
+    let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::String("\n\t\u{0008}\u{000c}\r\u{000b}\\\"'\0ABC A".replace(" ", "")),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn skips_string_line_continuations() {
+    let tokens = lex("\"a\\\nb\"").expect("source should lex");
+    let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![TokenKind::String("ab".to_owned()), TokenKind::Eof]
+    );
+}
+
+#[test]
+fn rejects_invalid_string_escape_sequences() {
+    assert!(lex(r#""\xG0""#).is_err());
+    assert!(lex(r#""\u00G0""#).is_err());
+    assert!(lex(r#""\u{}""#).is_err());
+    assert!(lex(r#""\8""#).is_err());
+}
+
+#[test]
+fn rejects_unescaped_line_terminators_in_strings() {
+    let error = lex("\"a\nb\"").expect_err("string should fail");
+    assert_eq!(error.message, "unterminated string literal");
+}
+
+#[test]
+fn lexes_template_escape_sequences() {
+    let tokens = lex(r#"`\n\x41\u0042\u{43}\``"#).expect("source should lex");
+    let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![TokenKind::String("\nABC`".to_owned()), TokenKind::Eof]
+    );
+}
+
+#[test]
 fn lexes_declaration_keywords() {
     let tokens =
             lex(
