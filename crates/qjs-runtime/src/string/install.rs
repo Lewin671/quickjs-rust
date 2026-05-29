@@ -43,6 +43,8 @@ pub(crate) fn install_string(
     for (name, length, native) in STRING_PROTOTYPE_METHODS {
         define_object_method(&string_prototype, name, *length, *native);
     }
+    define_object_alias(&string_prototype, "trimLeft", "trimStart");
+    define_object_alias(&string_prototype, "trimRight", "trimEnd");
     string_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
         Property::non_enumerable(Value::Object(string_prototype)),
@@ -71,6 +73,12 @@ fn define_object_method(object: &ObjectRef, key: &str, length: usize, native: Na
         key.to_owned(),
         Value::Function(Function::new_native(Some(key), length, native, false)),
     );
+}
+
+fn define_object_alias(object: &ObjectRef, key: &str, target: &str) {
+    if let Some(value) = object.get(target) {
+        object.define_non_enumerable(key.to_owned(), value);
+    }
 }
 
 fn define_function_property(function: &Function, key: &str, length: usize, native: NativeFunction) {

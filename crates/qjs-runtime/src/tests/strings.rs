@@ -233,7 +233,15 @@ fn evaluates_string_builtins() {
         Ok(Value::String("abc  ".to_owned()))
     );
     assert_eq!(
+        eval("'  abc  '.trimLeft();"),
+        Ok(Value::String("abc  ".to_owned()))
+    );
+    assert_eq!(
         eval("'  abc  '.trimEnd();"),
+        Ok(Value::String("  abc".to_owned()))
+    );
+    assert_eq!(
+        eval("'  abc  '.trimRight();"),
         Ok(Value::String("  abc".to_owned()))
     );
     assert_eq!(
@@ -247,6 +255,22 @@ fn evaluates_string_builtins() {
     assert_eq!(
         eval("String.prototype.trimEnd.length;"),
         Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval("String.prototype.trimLeft.length;"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval("String.prototype.trimRight.length;"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval("String.prototype.trimLeft === String.prototype.trimStart;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("String.prototype.trimRight === String.prototype.trimEnd;"),
+        Ok(Value::Boolean(true))
     );
     assert_eq!(
         eval("Object.getOwnPropertyDescriptor(String.prototype, 'charAt').enumerable;"),

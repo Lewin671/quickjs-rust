@@ -616,7 +616,9 @@ cases/string-prototype-to-upper-case-length.js
 cases/string-prototype-trim-basic.js
 cases/string-prototype-trim-end-basic.js
 cases/string-prototype-trim-end-length.js
+cases/string-prototype-trim-left-alias.js
 cases/string-prototype-trim-length.js
+cases/string-prototype-trim-right-alias.js
 cases/string-prototype-trim-start-basic.js
 cases/string-prototype-trim-start-length.js
 cases/template-literal-no-substitution-basic.js
