@@ -7,9 +7,10 @@ use super::NativeCallResult;
 pub(super) fn call_reflect_native(
     native: NativeFunction,
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
 ) -> NativeCallResult {
     let value = match native {
+        NativeFunction::ReflectApply => reflect::native_reflect_apply(argument_values, env)?,
         NativeFunction::ReflectDefineProperty => {
             reflect::native_reflect_define_property(argument_values)?
         }

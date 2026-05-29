@@ -10,6 +10,7 @@ fn evaluates_reflect_prototype_builtins() {
         eval("typeof Reflect.getPrototypeOf;"),
         Ok(Value::String("function".to_owned()))
     );
+    assert_eq!(eval("Reflect.apply.length;"), Ok(Value::Number(3.0)));
     assert_eq!(
         eval("Reflect.getPrototypeOf.length;"),
         Ok(Value::Number(1.0))
@@ -54,6 +55,24 @@ fn evaluates_reflect_prototype_builtins() {
     assert_eq!(
         eval("Reflect.getPrototypeOf(function f() {}) === Function.prototype;"),
         Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "function add(a, b) { return this.base + a + b; } let context = { base: 4 }; Reflect.apply(add, context, [2, 3]);"
+        ),
+        Ok(Value::Number(9.0))
+    );
+    assert_eq!(
+        eval("function count() { return arguments.length; } Reflect.apply(count, null, []);"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval("function getThis() { return this; } Reflect.apply(getThis, undefined, []) === this;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("function value() { return 57; } Reflect.apply(value, null, []);"),
+        Ok(Value::Number(57.0))
     );
     assert_eq!(
         eval("Reflect.get({ value: 5 }, 'value');"),
@@ -270,6 +289,8 @@ fn evaluates_reflect_prototype_builtins() {
         eval("Reflect.ownKeys([1, 2]).join();"),
         Ok(Value::String("0,1,length".to_owned()))
     );
+    assert!(eval("Reflect.apply(1, null, []);").is_err());
+    assert!(eval("Reflect.apply(function f() {}, null, 1);").is_err());
     assert!(eval("Reflect.getPrototypeOf(1);").is_err());
     assert!(eval("Reflect.defineProperty(1, 'value', { value: 1 });").is_err());
     assert!(eval("Reflect.deleteProperty(1, 'value');").is_err());

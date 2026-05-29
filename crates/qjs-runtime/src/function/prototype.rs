@@ -78,7 +78,7 @@ pub(crate) fn native_function_prototype_bind(
     Ok(Value::Function(bound))
 }
 
-fn function_call_this(this_arg: Option<Value>, env: &HashMap<String, Value>) -> Value {
+pub(crate) fn function_call_this(this_arg: Option<Value>, env: &HashMap<String, Value>) -> Value {
     match this_arg.unwrap_or(Value::Undefined) {
         Value::Null | Value::Undefined => env
             .get(GLOBAL_THIS_BINDING)

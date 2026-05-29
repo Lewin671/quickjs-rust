@@ -425,6 +425,9 @@ cases/variable-multiple-basic.js
 cases/var-hoist-before-declaration-basic.js
 cases/var-hoist-unentered-block-basic.js
 cases/var-hoist-function-body-basic.js
+cases/reflect-apply-call-target.js
+cases/reflect-apply-length.js
+cases/reflect-apply-return-target-result.js
 cases/reflect-define-property-basic.js
 cases/reflect-define-property-function-basic.js
 cases/reflect-define-property-length.js

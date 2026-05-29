@@ -8,6 +8,7 @@ pub(crate) fn install_reflect(
     object_prototype: ObjectRef,
 ) {
     let reflect_object = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    define_reflect_function(&reflect_object, "apply", 3, NativeFunction::ReflectApply);
     define_reflect_function(
         &reflect_object,
         "defineProperty",
