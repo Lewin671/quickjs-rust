@@ -30,6 +30,8 @@ This repository pins upstream references as git submodules:
 
 These directories are intentionally outside the Cargo workspace. They should not
 be imported by library crates or edited as part of normal engine work.
+Their large generated and monolithic upstream files are expected and should not
+drive first-party Rust module shape.
 
 Only top-level submodules are initialized by `scripts/bootstrap.sh`. QuickJS-NG
 also declares its own nested `test262` submodule, but this repository uses the
@@ -119,6 +121,11 @@ Keep files small enough for autonomous review. Implementation modules should
 stay focused on one engine concern, and tests should be split by behavior under
 test once a file becomes difficult to scan. The CI check in
 `scripts/check-file-size.sh` is an upper bound, not a target size.
+
+Use `scripts/source-size-report.sh` when auditing structure. It reports
+first-party source files by default and scans vendored QuickJS-NG and Test262
+files only with `--vendor`, so agents can distinguish project architecture
+problems from pinned reference material.
 
 When a feature is large enough to need conformance coverage, start with a small
 allowlist from `third_party/test262`, compare selected behavior against

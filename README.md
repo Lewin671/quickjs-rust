@@ -30,6 +30,8 @@ boundaries.
 - `tasks/`: small, agent-sized work items.
 - `docs/harness.md`: autonomous agent runbook.
 - `scripts/check.sh`: standard verification command.
+- `scripts/source-size-report.sh`: reports largest first-party and vendored
+  files separately.
 - `scripts/compare-qjs.sh`: smoke comparison against QuickJS-NG.
 - `scripts/test262-subset.sh`: runs curated Test262-derived subset cases.
 - `tests/fixtures/`: local JavaScript smoke fixtures.
@@ -83,6 +85,10 @@ To run the curated Test262-derived subset:
 - `third_party/quickjs-ng` is a behavioral oracle, not a build dependency.
 - `third_party/test262` should be consumed through small allowlisted runnable
   subsets until the engine is mature enough for broader conformance runs.
+- Large files in `third_party/` are pinned upstream references. First-party Rust
+  code is kept modular and is guarded by `scripts/check-file-size.sh`; use
+  `scripts/source-size-report.sh` to inspect size trends without conflating
+  vendored sources with engine modules.
 
 ## Automation
 

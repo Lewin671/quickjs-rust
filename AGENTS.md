@@ -13,6 +13,7 @@ boundaries and make each change verifiable with focused tests.
 
 - Fresh checkout setup: `./scripts/bootstrap.sh`
 - Full check: `./scripts/check.sh`
+- Source size report: `./scripts/source-size-report.sh [limit] [--vendor]`
 - Create agent worktree: `./scripts/create-agent-worktree.sh <task-slug> <owner-id> [base-ref]`
 - Validate agent branch: `./scripts/validate-agent-branch.sh <branch> <base-sha> <allowed-path>...`
 - Format only: `cargo fmt --all`
@@ -38,6 +39,10 @@ Both `scripts/bootstrap.sh` and `scripts/check.sh` fall back to
 - Keep implementation files reviewable. `scripts/check-file-size.sh` enforces
   current upper bounds for Rust source files, Rust test files, and repository
   scripts; split by subsystem responsibility before raising those limits.
+- Treat large files under `third_party/` as vendored reference material, not as
+  examples for first-party Rust structure. Use
+  `./scripts/source-size-report.sh` when judging whether the working codebase is
+  becoming too coarse.
 - Add a new crate or third-party dependency only when it removes clear
   complexity and is justified in the final summary.
 - Parser work should not mutate runtime behavior unless the task explicitly
