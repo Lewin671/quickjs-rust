@@ -86,6 +86,20 @@ impl ArrayRef {
         *self.elements.borrow_mut() = values;
     }
 
+    pub(crate) fn splice(&self, start: usize, delete_count: usize, items: &[Value]) -> Vec<Value> {
+        if self.frozen.get() {
+            return Vec::new();
+        }
+
+        let mut elements = self.elements.borrow_mut();
+        let end = start + delete_count.min(elements.len().saturating_sub(start));
+        let new_len = elements.len() - (end - start) + items.len();
+        if new_len > elements.len() && !self.extensible.get() {
+            return Vec::new();
+        }
+        elements.splice(start..end, items.iter().cloned()).collect()
+    }
+
     pub(crate) fn fill(&self, start: usize, end: usize, value: Value) {
         let mut elements = self.elements.borrow_mut();
         for element in &mut elements[start..end] {

@@ -63,6 +63,10 @@ fn evaluates_array_builtins() {
     );
     assert_eq!(eval("Array.prototype.some.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("Array.prototype.sort.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(
+        eval("Array.prototype.splice.length;"),
+        Ok(Value::Number(2.0))
+    );
     assert_eq!(eval("Array.prototype.pop.length;"), Ok(Value::Number(0.0)));
     assert_eq!(eval("Array.prototype.push.length;"), Ok(Value::Number(1.0)));
     assert_eq!(

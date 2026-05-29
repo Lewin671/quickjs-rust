@@ -107,6 +107,11 @@ cases/array-sort-basic.js
 cases/array-sort-comparefn.js
 cases/array-sort-length.js
 cases/array-sort-undefined.js
+cases/array-splice-delete-basic.js
+cases/array-splice-insert-basic.js
+cases/array-splice-length.js
+cases/array-splice-negative-start.js
+cases/array-splice-omitted-delete-count.js
 cases/array-to-string-basic.js
 cases/array-to-string-length.js
 cases/array-unshift-basic.js

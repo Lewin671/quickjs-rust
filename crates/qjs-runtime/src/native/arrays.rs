@@ -82,6 +82,9 @@ pub(super) fn call_array_native(
         NativeFunction::ArrayPrototypeSort => {
             array::native_array_prototype_sort(this_value, argument_values, env)?
         }
+        NativeFunction::ArrayPrototypeSplice => {
+            array::native_array_prototype_splice(this_value, argument_values)?
+        }
         NativeFunction::ArrayPrototypeToString => {
             array::native_array_prototype_to_string(this_value)?
         }

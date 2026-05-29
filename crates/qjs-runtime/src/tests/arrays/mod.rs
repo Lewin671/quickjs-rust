@@ -5,3 +5,4 @@ mod mutation;
 mod search;
 mod sequence;
 mod sort;
+mod splice;
