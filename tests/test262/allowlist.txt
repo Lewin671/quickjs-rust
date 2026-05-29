@@ -103,6 +103,10 @@ cases/array-some-callback-arguments.js
 cases/array-some-this-arg.js
 cases/array-some-length.js
 cases/array-some-not-found.js
+cases/array-sort-basic.js
+cases/array-sort-comparefn.js
+cases/array-sort-length.js
+cases/array-sort-undefined.js
 cases/array-to-string-basic.js
 cases/array-to-string-length.js
 cases/array-unshift-basic.js

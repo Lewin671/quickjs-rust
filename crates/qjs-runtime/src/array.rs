@@ -6,6 +6,7 @@ mod join;
 mod mutation;
 mod search;
 mod sequence;
+mod sort;
 
 pub(crate) use constructor::{native_array, native_array_is_array};
 pub(crate) use install::install_array;
@@ -27,3 +28,4 @@ pub(crate) use search::{
     native_array_prototype_last_index_of,
 };
 pub(crate) use sequence::{native_array_prototype_concat, native_array_prototype_slice};
+pub(crate) use sort::native_array_prototype_sort;

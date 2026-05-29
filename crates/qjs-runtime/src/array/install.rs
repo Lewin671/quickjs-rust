@@ -154,6 +154,12 @@ pub(crate) fn install_array(
     );
     define_array_prototype_function(
         &array_prototype,
+        "sort",
+        1,
+        NativeFunction::ArrayPrototypeSort,
+    );
+    define_array_prototype_function(
+        &array_prototype,
         "toString",
         0,
         NativeFunction::ArrayPrototypeToString,

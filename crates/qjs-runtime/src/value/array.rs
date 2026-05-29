@@ -76,6 +76,16 @@ impl ArrayRef {
         self.elements.borrow_mut().reverse();
     }
 
+    pub(crate) fn replace_with(&self, values: Vec<Value>) {
+        if self.frozen.get() {
+            return;
+        }
+        if values.len() > self.elements.borrow().len() && !self.extensible.get() {
+            return;
+        }
+        *self.elements.borrow_mut() = values;
+    }
+
     pub(crate) fn fill(&self, start: usize, end: usize, value: Value) {
         let mut elements = self.elements.borrow_mut();
         for element in &mut elements[start..end] {

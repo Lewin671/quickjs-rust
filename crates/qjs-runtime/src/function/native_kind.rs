@@ -26,6 +26,7 @@ pub(crate) enum NativeFunction {
     ArrayPrototypeShift,
     ArrayPrototypeSlice,
     ArrayPrototypeSome,
+    ArrayPrototypeSort,
     ArrayPrototypeToString,
     ArrayPrototypeUnshift,
     Boolean,
