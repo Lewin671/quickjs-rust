@@ -10,6 +10,7 @@
     value.getTime(),
     value.valueOf(),
     value.toISOString(),
+    value.toUTCString(),
     value.getUTCFullYear(),
     value.getUTCMonth(),
     value.getUTCDate(),
@@ -21,6 +22,8 @@
     Date.UTC(1970, 0, 2, 3, 4, 5, 6),
     Date.parse("1970-01-02T03:04:05.006Z"),
     new Date(0).toISOString(),
+    new Date("0020-01-01T00:00:00Z").toUTCString(),
+    new Date(NaN).toUTCString(),
     Number.isNaN(new Date(NaN).getUTCFullYear())
   ].join("|");
 })()

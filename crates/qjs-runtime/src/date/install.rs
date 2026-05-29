@@ -79,6 +79,12 @@ pub(crate) fn install_date(
     );
     define_date_prototype_function(
         &date_prototype,
+        "toUTCString",
+        0,
+        NativeFunction::DatePrototypeToUtcString,
+    );
+    define_date_prototype_function(
+        &date_prototype,
         "valueOf",
         0,
         NativeFunction::DatePrototypeValueOf,

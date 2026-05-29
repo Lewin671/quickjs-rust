@@ -4,7 +4,9 @@ use crate::{
     Function, ObjectRef, RuntimeError, Value,
     date::{
         DATE_VALUE_PROPERTY, MS_PER_DAY, MS_PER_HOUR, MS_PER_MINUTE, MS_PER_SECOND,
-        iso::{days_from_civil, format_iso_string, parse_iso_string, utc_date_time},
+        iso::{
+            days_from_civil, format_iso_string, format_utc_string, parse_iso_string, utc_date_time,
+        },
     },
     to_js_string, to_number,
 };
@@ -111,6 +113,16 @@ pub(crate) fn native_date_prototype_to_iso_string(
         });
     }
     Ok(Value::String(format_iso_string(millis)))
+}
+
+pub(crate) fn native_date_prototype_to_utc_string(
+    this_value: Value,
+) -> Result<Value, RuntimeError> {
+    let millis = date_value(this_value)?;
+    if !millis.is_finite() {
+        return Ok(Value::String("Invalid Date".to_owned()));
+    }
+    Ok(Value::String(format_utc_string(millis)))
 }
 
 pub(super) fn define_date_value(object: &ObjectRef, value: f64) {

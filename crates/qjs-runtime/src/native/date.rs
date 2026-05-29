@@ -44,6 +44,9 @@ pub(super) fn call_date_native(
         NativeFunction::DatePrototypeToISOString => {
             date::native_date_prototype_to_iso_string(this_value)?
         }
+        NativeFunction::DatePrototypeToUtcString => {
+            date::native_date_prototype_to_utc_string(this_value)?
+        }
         NativeFunction::DatePrototypeValueOf => date::native_date_prototype_value_of(this_value)?,
         _ => return Ok(None),
     };

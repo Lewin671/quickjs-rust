@@ -36,6 +36,18 @@ fn evaluates_date_builtins() {
         Ok(Value::String("1970-01-02T03:04:05.006Z".to_owned()))
     );
     assert_eq!(
+        eval("new Date('1970-01-02T03:04:05.006Z').toUTCString();"),
+        Ok(Value::String("Fri, 02 Jan 1970 03:04:05 GMT".to_owned()))
+    );
+    assert_eq!(
+        eval("new Date('0020-01-01T00:00:00Z').toUTCString();"),
+        Ok(Value::String("Wed, 01 Jan 0020 00:00:00 GMT".to_owned()))
+    );
+    assert_eq!(
+        eval("new Date(NaN).toUTCString();"),
+        Ok(Value::String("Invalid Date".to_owned()))
+    );
+    assert_eq!(
         eval(
             "[new Date('2016-12-31T23:59:59.999Z').getUTCFullYear(), new Date('2016-12-31T23:59:59.999Z').getUTCMonth(), new Date('2016-12-31T23:59:59.999Z').getUTCDate(), new Date('2016-12-31T23:59:59.999Z').getUTCDay(), new Date('2016-12-31T23:59:59.999Z').getUTCHours(), new Date('2016-12-31T23:59:59.999Z').getUTCMinutes(), new Date('2016-12-31T23:59:59.999Z').getUTCSeconds(), new Date('2016-12-31T23:59:59.999Z').getUTCMilliseconds()].join('|');"
         ),
@@ -47,4 +59,5 @@ fn evaluates_date_builtins() {
     );
     assert!(eval("Date.prototype.getTime.call({});").is_err());
     assert!(eval("Date.prototype.getUTCFullYear.call({});").is_err());
+    assert!(eval("Date.prototype.toUTCString.call({});").is_err());
 }
