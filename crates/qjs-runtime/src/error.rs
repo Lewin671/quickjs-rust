@@ -7,6 +7,15 @@ use crate::{
 
 const ERROR_DATA_PROPERTY: &str = "\0ErrorData";
 
+const NATIVE_ERRORS: &[(&str, NativeFunction)] = &[
+    ("EvalError", NativeFunction::EvalError),
+    ("RangeError", NativeFunction::RangeError),
+    ("ReferenceError", NativeFunction::ReferenceError),
+    ("SyntaxError", NativeFunction::SyntaxError),
+    ("TypeError", NativeFunction::TypeError),
+    ("URIError", NativeFunction::UriError),
+];
+
 pub(crate) fn install_error(
     env: &mut HashMap<String, Value>,
     global_this: &Value,
@@ -33,11 +42,28 @@ pub(crate) fn install_error(
         "prototype".to_owned(),
         Property::non_enumerable(Value::Object(error_prototype)),
     );
+    define_function_name(&error_function, "Error");
 
     let error_value = Value::Function(error_function);
     env.insert("Error".to_owned(), error_value.clone());
     if let Value::Object(global_object) = global_this {
-        global_object.set("Error".to_owned(), error_value);
+        global_object.set("Error".to_owned(), error_value.clone());
+    }
+
+    let Value::Function(error_function) = error_value else {
+        unreachable!("Error constructor must be a function");
+    };
+    let Some(Value::Object(error_prototype)) = error_function
+        .properties
+        .borrow()
+        .get("prototype")
+        .map(|property| property.value.clone())
+    else {
+        unreachable!("Error constructor must have a prototype");
+    };
+
+    for (name, native) in NATIVE_ERRORS {
+        install_native_error(env, global_this, &error_prototype, name, *native);
     }
 }
 
@@ -66,6 +92,10 @@ pub(crate) fn native_error(
         }
     }
     Ok(Value::Object(object))
+}
+
+pub(crate) fn is_native_error(native: NativeFunction) -> bool {
+    native_error_name(native).is_some()
 }
 
 pub(crate) fn native_error_prototype_to_string(this_value: Value) -> Result<Value, RuntimeError> {
@@ -118,6 +148,50 @@ pub(crate) fn error_object_to_string(object: &ObjectRef) -> Option<String> {
 
 fn define_error_data(object: &ObjectRef) {
     object.define_non_enumerable(ERROR_DATA_PROPERTY.to_owned(), Value::Boolean(true));
+}
+
+fn install_native_error(
+    env: &mut HashMap<String, Value>,
+    global_this: &Value,
+    error_prototype: &ObjectRef,
+    name: &str,
+    native: NativeFunction,
+) {
+    let prototype = ObjectRef::with_prototype(HashMap::new(), Some(error_prototype.clone()));
+    let function = Function::new_native(Some(name), 1, native, true);
+    prototype.define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
+    prototype.define_non_enumerable("name".to_owned(), Value::String(name.to_owned()));
+    prototype.define_non_enumerable("message".to_owned(), Value::String(String::new()));
+    function.properties.borrow_mut().insert(
+        "prototype".to_owned(),
+        Property::non_enumerable(Value::Object(prototype)),
+    );
+    define_function_name(&function, name);
+
+    let value = Value::Function(function);
+    env.insert(name.to_owned(), value.clone());
+    if let Value::Object(global_object) = global_this {
+        global_object.set(name.to_owned(), value);
+    }
+}
+
+fn native_error_name(native: NativeFunction) -> Option<&'static str> {
+    match native {
+        NativeFunction::EvalError => Some("EvalError"),
+        NativeFunction::RangeError => Some("RangeError"),
+        NativeFunction::ReferenceError => Some("ReferenceError"),
+        NativeFunction::SyntaxError => Some("SyntaxError"),
+        NativeFunction::TypeError => Some("TypeError"),
+        NativeFunction::UriError => Some("URIError"),
+        _ => None,
+    }
+}
+
+fn define_function_name(function: &Function, name: &str) {
+    function.properties.borrow_mut().insert(
+        "name".to_owned(),
+        Property::data(Value::String(name.to_owned()), false, false, true),
+    );
 }
 
 fn object_message(object: &ObjectRef) -> Option<String> {

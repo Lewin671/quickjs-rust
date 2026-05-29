@@ -58,3 +58,59 @@ fn evaluates_error_builtins() {
             .contains("Error: boom")
     );
 }
+
+#[test]
+fn evaluates_native_error_builtins() {
+    for name in [
+        "EvalError",
+        "RangeError",
+        "ReferenceError",
+        "SyntaxError",
+        "TypeError",
+        "URIError",
+    ] {
+        assert_eq!(
+            eval(&format!("typeof {name};")),
+            Ok(Value::String("function".to_owned()))
+        );
+        assert_eq!(eval(&format!("{name}.length;")), Ok(Value::Number(1.0)));
+        assert_eq!(
+            eval(&format!("{name}.name;")),
+            Ok(Value::String(name.to_owned()))
+        );
+        assert_eq!(
+            eval(&format!("{name}.prototype.name;")),
+            Ok(Value::String(name.to_owned()))
+        );
+        assert_eq!(
+            eval(&format!("{name}.prototype.message;")),
+            Ok(Value::String(String::new()))
+        );
+        assert_eq!(
+            eval(&format!("{name}.prototype.constructor === {name};")),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval(&format!("let error = new {name}('boom'); error.message;")),
+            Ok(Value::String("boom".to_owned()))
+        );
+        assert_eq!(
+            eval(&format!("new {name}('boom') instanceof {name};")),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval(&format!("new {name}('boom') instanceof Error;")),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval(&format!("{name}('boom').toString();")),
+            Ok(Value::String(format!("{name}: boom")))
+        );
+        assert_eq!(
+            eval(&format!(
+                "Object.prototype.toString.call(new {name}('boom'));"
+            )),
+            Ok(Value::String("[object Error]".to_owned()))
+        );
+    }
+}

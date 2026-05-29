@@ -118,6 +118,10 @@ cases/boolean-prototype-value-of-length.js
 cases/error-constructor-basic.js
 cases/error-message-property-basic.js
 cases/error-prototype-to-string-basic.js
+cases/native-errors-basic.js
+cases/native-errors-name-basic.js
+cases/native-errors-message-property-basic.js
+cases/native-errors-to-string-basic.js
 cases/global-is-finite-basic.js
 cases/global-is-finite-length.js
 cases/global-is-nan-basic.js

@@ -16,6 +16,9 @@ pub(super) fn call_error_native(
         NativeFunction::ErrorPrototypeToString => {
             error::native_error_prototype_to_string(this_value)?
         }
+        native if error::is_native_error(native) => {
+            error::native_error(function, this_value, argument_values, is_construct)?
+        }
         _ => return Ok(None),
     };
 
