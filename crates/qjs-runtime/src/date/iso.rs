@@ -1,5 +1,16 @@
 use crate::date::{MS_PER_DAY, MS_PER_HOUR, MS_PER_MINUTE, MS_PER_SECOND};
 
+pub(super) struct UtcDateTime {
+    pub(super) year: i32,
+    pub(super) month: i32,
+    pub(super) date: i32,
+    pub(super) day: i32,
+    pub(super) hours: i32,
+    pub(super) minutes: i32,
+    pub(super) seconds: i32,
+    pub(super) milliseconds: i32,
+}
+
 pub(super) fn parse_iso_string(source: &str) -> Option<f64> {
     let bytes = source.as_bytes();
     if bytes.len() < 20 || bytes.get(4) != Some(&b'-') || bytes.get(7) != Some(&b'-') {
@@ -54,6 +65,20 @@ pub(super) fn parse_iso_string(source: &str) -> Option<f64> {
 }
 
 pub(super) fn format_iso_string(millis: f64) -> String {
+    let components = utc_date_time(millis);
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z",
+        components.year,
+        components.month + 1,
+        components.date,
+        components.hours,
+        components.minutes,
+        components.seconds,
+        components.milliseconds
+    )
+}
+
+pub(super) fn utc_date_time(millis: f64) -> UtcDateTime {
     let time = millis.trunc();
     let days = (time / MS_PER_DAY).floor() as i64;
     let mut within_day = time - days as f64 * MS_PER_DAY;
@@ -61,11 +86,16 @@ pub(super) fn format_iso_string(millis: f64) -> String {
         within_day += MS_PER_DAY;
     }
     let (year, month, day) = civil_from_days(days);
-    let hour = (within_day / MS_PER_HOUR).floor() as i32;
-    let minute = ((within_day % MS_PER_HOUR) / MS_PER_MINUTE).floor() as i32;
-    let second = ((within_day % MS_PER_MINUTE) / MS_PER_SECOND).floor() as i32;
-    let millisecond = (within_day % MS_PER_SECOND).floor() as i32;
-    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{millisecond:03}Z")
+    UtcDateTime {
+        year,
+        month: month - 1,
+        date: day,
+        day: (days + 4).rem_euclid(7) as i32,
+        hours: (within_day / MS_PER_HOUR).floor() as i32,
+        minutes: ((within_day % MS_PER_HOUR) / MS_PER_MINUTE).floor() as i32,
+        seconds: ((within_day % MS_PER_MINUTE) / MS_PER_SECOND).floor() as i32,
+        milliseconds: (within_day % MS_PER_SECOND).floor() as i32,
+    }
 }
 
 pub(super) fn days_from_civil(year: i32, month: i32, day: i32) -> i64 {

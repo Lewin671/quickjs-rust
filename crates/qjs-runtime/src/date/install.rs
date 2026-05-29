@@ -25,6 +25,54 @@ pub(crate) fn install_date(
     );
     define_date_prototype_function(
         &date_prototype,
+        "getUTCDate",
+        0,
+        NativeFunction::DatePrototypeGetUtcDate,
+    );
+    define_date_prototype_function(
+        &date_prototype,
+        "getUTCDay",
+        0,
+        NativeFunction::DatePrototypeGetUtcDay,
+    );
+    define_date_prototype_function(
+        &date_prototype,
+        "getUTCFullYear",
+        0,
+        NativeFunction::DatePrototypeGetUtcFullYear,
+    );
+    define_date_prototype_function(
+        &date_prototype,
+        "getUTCHours",
+        0,
+        NativeFunction::DatePrototypeGetUtcHours,
+    );
+    define_date_prototype_function(
+        &date_prototype,
+        "getUTCMilliseconds",
+        0,
+        NativeFunction::DatePrototypeGetUtcMilliseconds,
+    );
+    define_date_prototype_function(
+        &date_prototype,
+        "getUTCMinutes",
+        0,
+        NativeFunction::DatePrototypeGetUtcMinutes,
+    );
+    define_date_prototype_function(
+        &date_prototype,
+        "getUTCMonth",
+        0,
+        NativeFunction::DatePrototypeGetUtcMonth,
+    );
+    define_date_prototype_function(
+        &date_prototype,
+        "getUTCSeconds",
+        0,
+        NativeFunction::DatePrototypeGetUtcSeconds,
+    );
+    define_date_prototype_function(
+        &date_prototype,
         "toISOString",
         0,
         NativeFunction::DatePrototypeToISOString,
