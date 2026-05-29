@@ -1,7 +1,10 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    collections::HashMap,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use crate::{
-    Function, ObjectRef, RuntimeError, Value,
+    Function, ObjectRef, RuntimeError, Value, call_function,
     date::{
         DATE_VALUE_PROPERTY, MS_PER_DAY, MS_PER_HOUR, MS_PER_MINUTE, MS_PER_SECOND,
         iso::{
@@ -123,6 +126,25 @@ pub(crate) fn native_date_prototype_to_utc_string(
         return Ok(Value::String("Invalid Date".to_owned()));
     }
     Ok(Value::String(format_utc_string(millis)))
+}
+
+pub(crate) fn native_date_prototype_to_json(
+    this_value: Value,
+    key: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    if !date_value(this_value.clone())?.is_finite() {
+        return Ok(Value::Null);
+    }
+
+    let to_iso_string = match &this_value {
+        Value::Object(object) => object.get("toISOString"),
+        _ => None,
+    }
+    .ok_or_else(|| RuntimeError {
+        message: "Date toJSON receiver does not have a toISOString method".to_owned(),
+    })?;
+    call_function(to_iso_string, this_value, vec![key], env, false)
 }
 
 pub(super) fn define_date_value(object: &ObjectRef, value: f64) {

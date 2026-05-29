@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{Function, NativeFunction, Value, date};
 
 use super::NativeCallResult;
@@ -8,6 +10,7 @@ pub(super) fn call_date_native(
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
+    env: &mut HashMap<String, Value>,
 ) -> NativeCallResult {
     let value = match native {
         NativeFunction::Date => {
@@ -44,6 +47,11 @@ pub(super) fn call_date_native(
         NativeFunction::DatePrototypeToISOString => {
             date::native_date_prototype_to_iso_string(this_value)?
         }
+        NativeFunction::DatePrototypeToJson => date::native_date_prototype_to_json(
+            this_value,
+            argument_values.first().cloned().unwrap_or(Value::Undefined),
+            env,
+        )?,
         NativeFunction::DatePrototypeToUtcString => {
             date::native_date_prototype_to_utc_string(this_value)?
         }
