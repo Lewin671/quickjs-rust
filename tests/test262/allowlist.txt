@@ -115,6 +115,8 @@ cases/boolean-prototype-to-string-basic.js
 cases/boolean-prototype-to-string-length.js
 cases/boolean-prototype-value-of-basic.js
 cases/boolean-prototype-value-of-length.js
+cases/date-basic.js
+cases/date-parse-utc-basic.js
 cases/error-constructor-basic.js
 cases/error-message-property-basic.js
 cases/error-prototype-to-string-basic.js

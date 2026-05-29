@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 mod arrays;
 mod core;
+mod date;
 mod errors;
 mod json;
 mod math;
@@ -25,6 +26,16 @@ pub(crate) fn call_native_function(
     if let Some(value) =
         arrays::call_array_native(native, this_value.clone(), &argument_values, env)?
     {
+        return Ok(value);
+    }
+
+    if let Some(value) = date::call_date_native(
+        function,
+        native,
+        this_value.clone(),
+        &argument_values,
+        is_construct,
+    )? {
         return Ok(value);
     }
 
