@@ -34,7 +34,23 @@ fn evaluates_date_builtins() {
         Ok(Value::Number(3.0))
     );
     assert_eq!(
+        eval("Date.prototype.setUTCHours.length;"),
+        Ok(Value::Number(4.0))
+    );
+    assert_eq!(
+        eval("Date.prototype.setUTCMilliseconds.length;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval("Date.prototype.setUTCMinutes.length;"),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
         eval("Date.prototype.setUTCMonth.length;"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval("Date.prototype.setUTCSeconds.length;"),
         Ok(Value::Number(2.0))
     );
     assert_eq!(eval("new Date(0).getTime();"), Ok(Value::Number(0.0)));

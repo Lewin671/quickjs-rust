@@ -25,6 +25,18 @@
   var utcDateUnderflowResult = utcDateUnderflow.setUTCDate(0);
   var utcDateInvalid = new Date(NaN);
   var utcDateInvalidResult = utcDateInvalid.setUTCDate(1);
+  var utcHours = new Date("1970-01-02T03:04:05.006Z");
+  var utcHoursResult = utcHours.setUTCHours(10);
+  var utcHoursParts = new Date("1970-01-02T03:04:05.006Z");
+  var utcHoursPartsResult = utcHoursParts.setUTCHours(10, 11, 12, 13);
+  var utcMinutes = new Date("1970-01-02T03:04:05.006Z");
+  var utcMinutesResult = utcMinutes.setUTCMinutes(30, 31, 32);
+  var utcSeconds = new Date("1970-01-02T03:04:05.006Z");
+  var utcSecondsResult = utcSeconds.setUTCSeconds(40, 41);
+  var utcMilliseconds = new Date("1970-01-02T03:04:05.006Z");
+  var utcMillisecondsResult = utcMilliseconds.setUTCMilliseconds(500);
+  var utcNoArgs = new Date(0);
+  var utcNoArgsResult = utcNoArgs.setUTCMilliseconds();
   var invalid = new Date(0);
   custom.toISOString = function () { return "custom"; };
   return [
@@ -38,7 +50,11 @@
     Date.prototype.setTime.length,
     Date.prototype.setUTCDate.length,
     Date.prototype.setUTCFullYear.length,
+    Date.prototype.setUTCHours.length,
+    Date.prototype.setUTCMilliseconds.length,
+    Date.prototype.setUTCMinutes.length,
     Date.prototype.setUTCMonth.length,
+    Date.prototype.setUTCSeconds.length,
     value.getTime(),
     value.valueOf(),
     value.toISOString(),
@@ -91,6 +107,20 @@
     Number.isNaN(utcDateInvalidResult),
     Number.isNaN(utcDateInvalid.getTime()),
     Number.isNaN(new Date(0).setUTCDate(undefined)),
+    utcHoursResult,
+    utcHours.toISOString(),
+    utcHoursPartsResult,
+    utcHoursParts.toISOString(),
+    utcMinutesResult,
+    utcMinutes.toISOString(),
+    utcSecondsResult,
+    utcSeconds.toISOString(),
+    utcMillisecondsResult,
+    utcMilliseconds.toISOString(),
+    Number.isNaN(new Date(NaN).setUTCHours(1, 2, 3, 4)),
+    Number.isNaN(new Date(0).setUTCSeconds(undefined, 1)),
+    Number.isNaN(utcNoArgsResult),
+    Number.isNaN(utcNoArgs.getTime()),
     Number.isNaN(invalid.setTime(8640000000000001)),
     Number.isNaN(invalid.getTime()),
     Number.isNaN(new Date(8640000000000001).getTime()),

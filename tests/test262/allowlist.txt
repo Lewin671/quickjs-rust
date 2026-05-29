@@ -121,6 +121,7 @@ cases/date-parse-utc-basic.js
 cases/date-set-time-basic.js
 cases/date-set-utc-date-basic.js
 cases/date-set-utc-full-year-basic.js
+cases/date-set-utc-time-fields-basic.js
 cases/date-set-utc-month-basic.js
 cases/date-time-clip-basic.js
 cases/date-to-json-basic.js

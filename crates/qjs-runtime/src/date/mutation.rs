@@ -4,7 +4,7 @@ use crate::{
         iso::utc_date_time,
         value::{
             date_object, date_value_from_object, define_date_value, optional_number, time_clip,
-            time_within_day, utc_time_from_components,
+            time_from_components, time_within_day, utc_time_from_components,
         },
     },
     to_number,
@@ -68,6 +68,27 @@ pub(crate) fn native_date_prototype_set_utc_date(
     Ok(Value::Number(updated))
 }
 
+pub(crate) fn native_date_prototype_set_utc_hours(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    set_utc_time_fields(this_value, argument_values, 0)
+}
+
+pub(crate) fn native_date_prototype_set_utc_milliseconds(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    set_utc_time_fields(this_value, argument_values, 3)
+}
+
+pub(crate) fn native_date_prototype_set_utc_minutes(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    set_utc_time_fields(this_value, argument_values, 1)
+}
+
 pub(crate) fn native_date_prototype_set_utc_month(
     this_value: Value,
     argument_values: &[Value],
@@ -88,6 +109,53 @@ pub(crate) fn native_date_prototype_set_utc_month(
             date,
             time_within_day(millis),
         ))
+    } else {
+        f64::NAN
+    };
+    define_date_value(&object, updated);
+    Ok(Value::Number(updated))
+}
+
+pub(crate) fn native_date_prototype_set_utc_seconds(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    set_utc_time_fields(this_value, argument_values, 2)
+}
+
+fn set_utc_time_fields(
+    this_value: Value,
+    argument_values: &[Value],
+    first_field: usize,
+) -> Result<Value, RuntimeError> {
+    let object = date_object(this_value)?;
+    let millis = date_value_from_object(&object)?;
+    let components = if millis.is_finite() {
+        utc_date_time(millis)
+    } else {
+        utc_date_time(0.0)
+    };
+    let mut time_fields = [
+        f64::from(components.hours),
+        f64::from(components.minutes),
+        f64::from(components.seconds),
+        f64::from(components.milliseconds),
+    ];
+    for (offset, argument) in argument_values.iter().take(4 - first_field).enumerate() {
+        time_fields[first_field + offset] = to_number(argument.clone())?.trunc();
+    }
+    let updated = if argument_values.is_empty() {
+        f64::NAN
+    } else if millis.is_finite() {
+        time_clip(
+            millis - time_within_day(millis)
+                + time_from_components(
+                    time_fields[0],
+                    time_fields[1],
+                    time_fields[2],
+                    time_fields[3],
+                ),
+        )
     } else {
         f64::NAN
     };

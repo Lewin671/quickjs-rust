@@ -91,9 +91,33 @@ pub(crate) fn install_date(
     );
     define_date_prototype_function(
         &date_prototype,
+        "setUTCHours",
+        4,
+        NativeFunction::DatePrototypeSetUtcHours,
+    );
+    define_date_prototype_function(
+        &date_prototype,
+        "setUTCMilliseconds",
+        1,
+        NativeFunction::DatePrototypeSetUtcMilliseconds,
+    );
+    define_date_prototype_function(
+        &date_prototype,
+        "setUTCMinutes",
+        3,
+        NativeFunction::DatePrototypeSetUtcMinutes,
+    );
+    define_date_prototype_function(
+        &date_prototype,
         "setUTCMonth",
         2,
         NativeFunction::DatePrototypeSetUtcMonth,
+    );
+    define_date_prototype_function(
+        &date_prototype,
+        "setUTCSeconds",
+        2,
+        NativeFunction::DatePrototypeSetUtcSeconds,
     );
     define_date_prototype_function(
         &date_prototype,

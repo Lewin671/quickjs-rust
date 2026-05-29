@@ -3,7 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::{
     ObjectRef, RuntimeError, Value,
     date::{
-        DATE_VALUE_PROPERTY, MS_PER_DAY,
+        DATE_VALUE_PROPERTY, MS_PER_DAY, MS_PER_HOUR, MS_PER_MINUTE, MS_PER_SECOND,
         iso::{days_from_civil, parse_iso_string},
     },
     to_number,
@@ -86,6 +86,19 @@ pub(super) fn utc_time_from_components(
 
 pub(super) fn time_within_day(time: f64) -> f64 {
     time - (time / MS_PER_DAY).floor() * MS_PER_DAY
+}
+
+pub(super) fn time_from_components(hours: f64, minutes: f64, seconds: f64, millis: f64) -> f64 {
+    if [hours, minutes, seconds, millis]
+        .into_iter()
+        .any(|value| !value.is_finite())
+    {
+        return f64::NAN;
+    }
+    hours.trunc() * MS_PER_HOUR
+        + minutes.trunc() * MS_PER_MINUTE
+        + seconds.trunc() * MS_PER_SECOND
+        + millis.trunc()
 }
 
 pub(super) fn current_time_ms() -> f64 {
