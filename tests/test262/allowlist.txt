@@ -155,6 +155,9 @@ cases/number-is-nan-length.js
 cases/number-is-safe-integer-basic.js
 cases/number-is-safe-integer-length.js
 cases/number-parse-int-float-basic.js
+cases/numeric-literal-binary.js
+cases/numeric-literal-hex.js
+cases/numeric-literal-octal.js
 cases/undefined-basic.js
 cases/void-basic.js
 cases/void-evaluates-operand.js

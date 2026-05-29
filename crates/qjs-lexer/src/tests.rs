@@ -19,6 +19,32 @@ fn lexes_expression() {
 }
 
 #[test]
+fn lexes_prefixed_numeric_literals() {
+    let tokens = lex("0x10 0Xf 0b101 0B11 0o77 0O10").expect("source should lex");
+    let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::Number("0x10".to_owned()),
+            TokenKind::Number("0Xf".to_owned()),
+            TokenKind::Number("0b101".to_owned()),
+            TokenKind::Number("0B11".to_owned()),
+            TokenKind::Number("0o77".to_owned()),
+            TokenKind::Number("0O10".to_owned()),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn rejects_invalid_prefixed_numeric_literals() {
+    assert!(lex("0xG").is_err());
+    assert!(lex("0b2").is_err());
+    assert!(lex("0o8").is_err());
+    assert!(lex("0x").is_err());
+}
+
+#[test]
 fn skips_line_and_block_comments() {
     let tokens = lex("one // ignore\n/* skip */ two").expect("source should lex");
     let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();

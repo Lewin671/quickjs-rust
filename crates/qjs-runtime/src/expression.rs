@@ -219,17 +219,31 @@ pub(crate) fn eval_expr(
 
 fn eval_literal(literal: &Literal) -> Result<Value, RuntimeError> {
     match literal {
-        Literal::Number { raw, .. } => {
-            raw.parse::<f64>()
-                .map(Value::Number)
-                .map_err(|_| RuntimeError {
-                    message: format!("invalid number literal `{raw}`"),
-                })
-        }
+        Literal::Number { raw, .. } => parse_number_literal(raw).map(Value::Number),
         Literal::String { value, .. } => Ok(Value::String(value.clone())),
         Literal::Boolean { value, .. } => Ok(Value::Boolean(*value)),
         Literal::Null { .. } => Ok(Value::Null),
     }
+}
+
+fn parse_number_literal(raw: &str) -> Result<f64, RuntimeError> {
+    if let Some(digits) = raw.strip_prefix("0x").or_else(|| raw.strip_prefix("0X")) {
+        Ok(parse_radix_number(digits, 16))
+    } else if let Some(digits) = raw.strip_prefix("0b").or_else(|| raw.strip_prefix("0B")) {
+        Ok(parse_radix_number(digits, 2))
+    } else if let Some(digits) = raw.strip_prefix("0o").or_else(|| raw.strip_prefix("0O")) {
+        Ok(parse_radix_number(digits, 8))
+    } else {
+        raw.parse::<f64>().map_err(|_| RuntimeError {
+            message: format!("invalid number literal `{raw}`"),
+        })
+    }
+}
+
+fn parse_radix_number(digits: &str, radix: u32) -> f64 {
+    digits.chars().fold(0.0, |value, digit| {
+        value * f64::from(radix) + f64::from(digit.to_digit(radix).unwrap_or(0))
+    })
 }
 
 fn eval_typeof(expr: &Expr, env: &mut HashMap<String, Value>) -> Result<Value, RuntimeError> {

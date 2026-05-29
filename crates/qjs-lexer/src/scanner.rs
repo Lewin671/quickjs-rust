@@ -32,7 +32,7 @@ impl<'src> Lexer<'src> {
                     self.advance();
                 }
                 c if is_identifier_start(c) => self.identifier(),
-                c if c.is_ascii_digit() => self.number(),
+                c if c.is_ascii_digit() => self.number()?,
                 '"' | '\'' => self.string(ch)?,
                 '+' => self.plus(),
                 '-' => self.minus(),

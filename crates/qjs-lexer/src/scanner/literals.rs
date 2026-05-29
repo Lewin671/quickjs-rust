@@ -17,8 +17,36 @@ impl Lexer<'_> {
         });
     }
 
-    pub(super) fn number(&mut self) {
+    pub(super) fn number(&mut self) -> Result<(), LexError> {
         let start = self.cursor;
+        if self.peek() == Some('0') {
+            if let Some(radix) = self.prefixed_number_radix() {
+                self.advance();
+                self.advance();
+                let digits_start = self.cursor;
+                while matches!(self.peek(), Some(ch) if is_digit_for_radix(ch, radix)) {
+                    self.advance();
+                }
+                if self.cursor == digits_start {
+                    return Err(LexError {
+                        message: "expected digits after numeric literal prefix".to_owned(),
+                        span: Span::new(start, self.cursor),
+                    });
+                }
+                if matches!(self.peek(), Some(ch) if is_identifier_continue(ch)) {
+                    return Err(LexError {
+                        message: "invalid digit in numeric literal".to_owned(),
+                        span: Span::new(start, self.cursor + self.peek().map_or(0, char::len_utf8)),
+                    });
+                }
+                self.tokens.push(Token {
+                    kind: TokenKind::Number(self.source[start..self.cursor].to_owned()),
+                    span: Span::new(start, self.cursor),
+                });
+                return Ok(());
+            }
+        }
+
         while matches!(self.peek(), Some(ch) if ch.is_ascii_digit()) {
             self.advance();
         }
@@ -32,6 +60,16 @@ impl Lexer<'_> {
             kind: TokenKind::Number(self.source[start..self.cursor].to_owned()),
             span: Span::new(start, self.cursor),
         });
+        Ok(())
+    }
+
+    fn prefixed_number_radix(&self) -> Option<u32> {
+        match (self.peek(), self.peek_nth(1)) {
+            (Some('0'), Some('x' | 'X')) => Some(16),
+            (Some('0'), Some('b' | 'B')) => Some(2),
+            (Some('0'), Some('o' | 'O')) => Some(8),
+            _ => None,
+        }
     }
 
     pub(super) fn string(&mut self, quote: char) -> Result<(), LexError> {
@@ -56,4 +94,8 @@ impl Lexer<'_> {
             span: Span::new(start, self.cursor),
         })
     }
+}
+
+fn is_digit_for_radix(ch: char, radix: u32) -> bool {
+    ch.is_digit(radix)
 }
