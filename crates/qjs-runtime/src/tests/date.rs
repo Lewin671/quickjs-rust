@@ -68,6 +68,30 @@ fn evaluates_date_builtins() {
         Ok(Value::Boolean(true))
     );
     assert_eq!(
+        eval("Number.isNaN(new Date(8640000000000001).getTime());"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("Number.isNaN(new Date(Infinity).getTime());"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("new Date(97445006.9).getTime();"),
+        Ok(Value::Number(97_445_006.0))
+    );
+    assert_eq!(
+        eval("Object.is(new Date(-0).getTime(), 0);"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("Number.isNaN(Date.UTC(275760, 8, 13, 0, 0, 0, 1));"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("Number.isNaN(new Date(275760, 8, 13, 0, 0, 0, 1).getTime());"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("new Date('0020-01-01T00:00:00Z').toUTCString();"),
         Ok(Value::String("Wed, 01 Jan 0020 00:00:00 GMT".to_owned()))
     );

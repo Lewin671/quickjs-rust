@@ -40,18 +40,18 @@ pub(crate) fn native_date_now() -> Result<Value, RuntimeError> {
 
 pub(crate) fn native_date_parse(argument_values: &[Value]) -> Result<Value, RuntimeError> {
     match argument_values.first() {
-        Some(Value::String(source)) => {
-            Ok(Value::Number(parse_iso_string(source).unwrap_or(f64::NAN)))
-        }
-        Some(value) => Ok(Value::Number(
-            parse_iso_string(&to_js_string(value.clone())?).unwrap_or(f64::NAN),
-        )),
+        Some(Value::String(source)) => Ok(Value::Number(parse_date_string(source))),
+        Some(value) => Ok(Value::Number(parse_date_string(&to_js_string(
+            value.clone(),
+        )?))),
         None => Ok(Value::Number(f64::NAN)),
     }
 }
 
 pub(crate) fn native_date_utc(argument_values: &[Value]) -> Result<Value, RuntimeError> {
-    Ok(Value::Number(date_utc_from_arguments(argument_values)?))
+    Ok(Value::Number(time_clip(date_utc_from_arguments(
+        argument_values,
+    )?)))
 }
 
 pub(crate) fn native_date_prototype_get_time(this_value: Value) -> Result<Value, RuntimeError> {
@@ -168,11 +168,11 @@ fn construct_date_value(argument_values: &[Value]) -> Result<f64, RuntimeError> 
     }
     if argument_values.len() == 1 {
         return match &argument_values[0] {
-            Value::String(source) => Ok(parse_iso_string(source).unwrap_or(f64::NAN)),
-            value => to_number(value.clone()),
+            Value::String(source) => Ok(parse_date_string(source)),
+            value => to_number(value.clone()).map(time_clip),
         };
     }
-    date_utc_from_arguments(argument_values)
+    date_utc_from_arguments(argument_values).map(time_clip)
 }
 
 fn date_utc_from_arguments(argument_values: &[Value]) -> Result<f64, RuntimeError> {
@@ -223,6 +223,10 @@ fn optional_number(
         .map(|value| value.unwrap_or(default))
 }
 
+fn parse_date_string(source: &str) -> f64 {
+    parse_iso_string(source).map(time_clip).unwrap_or(f64::NAN)
+}
+
 fn date_value(this_value: Value) -> Result<f64, RuntimeError> {
     let object = date_object(this_value)?;
     match object.get(DATE_VALUE_PROPERTY) {
@@ -262,7 +266,7 @@ fn time_clip(time: f64) -> f64 {
     if !time.is_finite() || time.abs() > 8_640_000_000_000_000.0 {
         f64::NAN
     } else {
-        time.trunc()
+        time.trunc() + 0.0
     }
 }
 
