@@ -1,6 +1,8 @@
 use std::{cmp::Ordering, collections::HashMap};
 
-use crate::{Function, RuntimeError, Value, call_function, to_js_string, to_number};
+use crate::{ArrayRef, Function, RuntimeError, Value, call_function, to_js_string, to_number};
+
+use super::array_like::array_like_values;
 
 pub(crate) fn native_array_prototype_sort(
     this_value: Value,
@@ -13,19 +15,34 @@ pub(crate) fn native_array_prototype_sort(
         });
     };
 
-    let comparator = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
-        Value::Undefined => None,
-        Value::Function(function) => Some(function),
-        _ => {
-            return Err(RuntimeError {
-                message: "Array.prototype.sort comparator must be callable".to_owned(),
-            });
-        }
-    };
+    let comparator = array_sort_comparator(argument_values, "Array.prototype.sort")?;
+    let sorted = sorted_array_values(array.to_vec(), comparator.as_ref(), env)?;
+    array.replace_with(sorted);
+    Ok(this_value)
+}
 
+pub(crate) fn native_array_prototype_to_sorted(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let comparator = array_sort_comparator(argument_values, "Array.prototype.toSorted")?;
+    let values = array_like_values(this_value, "Array.prototype.toSorted")?;
+    Ok(Value::Array(ArrayRef::new(sorted_array_values(
+        values,
+        comparator.as_ref(),
+        env,
+    )?)))
+}
+
+fn sorted_array_values(
+    values: Vec<Value>,
+    comparator: Option<&Function>,
+    env: &mut HashMap<String, Value>,
+) -> Result<Vec<Value>, RuntimeError> {
     let mut defined = Vec::new();
     let mut undefined_count = 0;
-    for value in array.to_vec() {
+    for value in values {
         if matches!(value, Value::Undefined) {
             undefined_count += 1;
         } else {
@@ -33,10 +50,22 @@ pub(crate) fn native_array_prototype_sort(
         }
     }
 
-    insertion_sort(&mut defined, comparator.as_ref(), env)?;
+    insertion_sort(&mut defined, comparator, env)?;
     defined.extend(std::iter::repeat_n(Value::Undefined, undefined_count));
-    array.replace_with(defined);
-    Ok(this_value)
+    Ok(defined)
+}
+
+fn array_sort_comparator(
+    argument_values: &[Value],
+    context: &str,
+) -> Result<Option<Function>, RuntimeError> {
+    match argument_values.first().cloned().unwrap_or(Value::Undefined) {
+        Value::Undefined => Ok(None),
+        Value::Function(function) => Ok(Some(function)),
+        _ => Err(RuntimeError {
+            message: format!("{context} comparator must be callable"),
+        }),
+    }
 }
 
 fn insertion_sort(
