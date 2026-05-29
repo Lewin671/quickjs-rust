@@ -42,6 +42,32 @@ pub(crate) fn native_date_prototype_set_utc_full_year(
     Ok(Value::Number(updated))
 }
 
+pub(crate) fn native_date_prototype_set_utc_date(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let object = date_object(this_value)?;
+    let millis = date_value_from_object(&object)?;
+    let components = if millis.is_finite() {
+        utc_date_time(millis)
+    } else {
+        utc_date_time(0.0)
+    };
+    let date = to_number(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    let updated = if millis.is_finite() {
+        time_clip(utc_time_from_components(
+            f64::from(components.year),
+            f64::from(components.month),
+            date,
+            time_within_day(millis),
+        ))
+    } else {
+        f64::NAN
+    };
+    define_date_value(&object, updated);
+    Ok(Value::Number(updated))
+}
+
 pub(crate) fn native_date_prototype_set_utc_month(
     this_value: Value,
     argument_values: &[Value],

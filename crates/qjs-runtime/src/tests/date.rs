@@ -26,6 +26,10 @@ fn evaluates_date_builtins() {
         Ok(Value::Number(1.0))
     );
     assert_eq!(
+        eval("Date.prototype.setUTCDate.length;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
         eval("Date.prototype.setUTCFullYear.length;"),
         Ok(Value::Number(3.0))
     );
@@ -149,6 +153,40 @@ fn evaluates_date_builtins() {
     );
     assert_eq!(
         eval("var d = new Date(0); Number.isNaN(d.setUTCMonth(undefined, 1));"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "var d = new Date('1970-01-31T03:04:05.006Z'); var result = d.setUTCDate(1); [result, d.toISOString()].join('|');"
+        ),
+        Ok(Value::String(
+            "11045006|1970-01-01T03:04:05.006Z".to_owned()
+        ))
+    );
+    assert_eq!(
+        eval(
+            "var d = new Date('1970-01-31T03:04:05.006Z'); var result = d.setUTCDate(32); [result, d.toISOString()].join('|');"
+        ),
+        Ok(Value::String(
+            "2689445006|1970-02-01T03:04:05.006Z".to_owned()
+        ))
+    );
+    assert_eq!(
+        eval(
+            "var d = new Date('1970-01-31T03:04:05.006Z'); var result = d.setUTCDate(0); [result, d.toISOString()].join('|');"
+        ),
+        Ok(Value::String(
+            "-75354994|1969-12-31T03:04:05.006Z".to_owned()
+        ))
+    );
+    assert_eq!(
+        eval("var d = new Date(NaN); Number.isNaN(d.setUTCDate(1)) && Number.isNaN(d.getTime());"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "var d = new Date(0); Number.isNaN(d.setUTCDate(undefined)) && Number.isNaN(d.getTime());"
+        ),
         Ok(Value::Boolean(true))
     );
     assert_eq!(

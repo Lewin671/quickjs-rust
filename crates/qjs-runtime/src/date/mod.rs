@@ -20,8 +20,8 @@ pub(crate) use format::{
 };
 pub(crate) use install::install_date;
 pub(crate) use mutation::{
-    native_date_prototype_set_time, native_date_prototype_set_utc_full_year,
-    native_date_prototype_set_utc_month,
+    native_date_prototype_set_time, native_date_prototype_set_utc_date,
+    native_date_prototype_set_utc_full_year, native_date_prototype_set_utc_month,
 };
 
 const DATE_VALUE_PROPERTY: &str = "\0DateValue";
