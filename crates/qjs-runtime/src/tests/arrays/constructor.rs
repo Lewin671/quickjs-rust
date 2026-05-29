@@ -16,3 +16,36 @@ fn evaluates_array_of_static_constructor() {
         Ok(Value::Boolean(true))
     );
 }
+
+#[test]
+fn evaluates_array_from_static_constructor() {
+    assert_eq!(eval("Array.from.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(
+        eval(
+            "let source = [0, 'foo', undefined, Infinity]; let result = Array.from(source); result.length + ':' + result[0] + ':' + result[1] + ':' + (result[2] === undefined) + ':' + result[3] + ':' + (result === source);"
+        ),
+        Ok(Value::String("4:0:foo:true:Infinity:false".to_owned()))
+    );
+    assert_eq!(
+        eval("Array.from('Test').join('');"),
+        Ok(Value::String("Test".to_owned()))
+    );
+    assert_eq!(
+        eval("Array.from({ length: 3, 0: 'a', 2: 'c' }).join('|');"),
+        Ok(Value::String("a||c".to_owned()))
+    );
+}
+
+#[test]
+fn evaluates_array_from_mapping() {
+    assert_eq!(
+        eval("Array.from([1, 2], function(value, index) { return value + index; }).join();"),
+        Ok(Value::String("1,3".to_owned()))
+    );
+    assert_eq!(
+        eval("Array.from([1], function(value) { return value + this.offset; }, { offset: 4 })[0];"),
+        Ok(Value::Number(5.0))
+    );
+    assert!(eval("Array.from([1], null);").is_err());
+    assert!(eval("Array.from(null);").is_err());
+}

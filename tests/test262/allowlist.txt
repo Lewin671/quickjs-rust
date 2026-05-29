@@ -71,6 +71,12 @@ cases/array-index-of-length.js
 cases/array-instanceof-basic.js
 cases/array-is-array-basic.js
 cases/array-is-array-length.js
+cases/array-from-array-basic.js
+cases/array-from-array-like-object.js
+cases/array-from-length.js
+cases/array-from-mapfn.js
+cases/array-from-mapfn-this-arg.js
+cases/array-from-string.js
 cases/array-of-basic.js
 cases/array-of-empty.js
 cases/array-of-length.js

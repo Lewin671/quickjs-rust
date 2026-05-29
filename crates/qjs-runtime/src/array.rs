@@ -10,7 +10,9 @@ mod sequence;
 mod sort;
 mod splice;
 
-pub(crate) use constructor::{native_array, native_array_is_array, native_array_of};
+pub(crate) use constructor::{
+    native_array, native_array_from, native_array_is_array, native_array_of,
+};
 pub(crate) use flatten::{native_array_prototype_flat, native_array_prototype_flat_map};
 pub(crate) use install::install_array;
 pub(crate) use iteration::{

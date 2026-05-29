@@ -7,6 +7,7 @@ fn evaluates_array_builtins() {
         Ok(Value::String("function".to_owned()))
     );
     assert_eq!(eval("Array.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("Array.from.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("Array.isArray.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("Array.of.length;"), Ok(Value::Number(0.0)));
     assert_eq!(eval("Array.prototype.at.length;"), Ok(Value::Number(1.0)));
