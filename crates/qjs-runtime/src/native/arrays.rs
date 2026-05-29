@@ -105,6 +105,9 @@ pub(super) fn call_array_native(
         NativeFunction::ArrayPrototypeUnshift => {
             array::native_array_prototype_unshift(this_value, argument_values)?
         }
+        NativeFunction::ArrayPrototypeWith => {
+            array::native_array_prototype_with(this_value, argument_values)?
+        }
         _ => return Ok(None),
     };
 

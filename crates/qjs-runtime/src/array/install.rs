@@ -200,6 +200,12 @@ pub(crate) fn install_array(
         1,
         NativeFunction::ArrayPrototypeUnshift,
     );
+    define_array_prototype_function(
+        &array_prototype,
+        "with",
+        2,
+        NativeFunction::ArrayPrototypeWith,
+    );
     array_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
         Property::non_enumerable(Value::Object(array_prototype)),

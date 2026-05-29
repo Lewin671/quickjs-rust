@@ -133,6 +133,11 @@ cases/array-to-sorted-default.js
 cases/array-to-sorted-immutable.js
 cases/array-to-sorted-length.js
 cases/array-to-sorted-zero-or-one.js
+cases/array-with-array-like.js
+cases/array-with-basic.js
+cases/array-with-length.js
+cases/array-with-negative-index.js
+cases/array-with-undefined-value.js
 cases/array-splice-delete-basic.js
 cases/array-splice-insert-basic.js
 cases/array-splice-length.js

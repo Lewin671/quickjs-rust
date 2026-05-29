@@ -1,7 +1,7 @@
 use crate::{ArrayRef, RuntimeError, Value};
 
 use super::array_like::array_like_values;
-use super::indexing::{array_slice_end, array_slice_start};
+use super::indexing::{array_at_index, array_slice_end, array_slice_start};
 
 pub(crate) fn native_array_prototype_concat(
     this_value: Value,
@@ -46,6 +46,22 @@ pub(crate) fn native_array_prototype_slice(
 pub(crate) fn native_array_prototype_to_reversed(this_value: Value) -> Result<Value, RuntimeError> {
     let mut values = array_like_values(this_value, "Array.prototype.toReversed")?;
     values.reverse();
+    Ok(Value::Array(ArrayRef::new(values)))
+}
+
+pub(crate) fn native_array_prototype_with(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let mut values = array_like_values(this_value, "Array.prototype.with")?;
+    let index = array_at_index(
+        values.len(),
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+    )?
+    .ok_or_else(|| RuntimeError {
+        message: "Array.prototype.with index out of range".to_owned(),
+    })?;
+    values[index] = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
     Ok(Value::Array(ArrayRef::new(values)))
 }
 

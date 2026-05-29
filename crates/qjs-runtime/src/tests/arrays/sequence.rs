@@ -92,3 +92,37 @@ fn evaluates_array_to_reversed() {
     );
     assert!(eval("Array.prototype.toReversed.call(null);").is_err());
 }
+
+#[test]
+fn evaluates_array_with() {
+    assert_eq!(
+        eval(
+            "let xs = [1, 2, 3]; let out = xs.with(1, 9); out.join() + ':' + xs.join() + ':' + (out === xs);"
+        ),
+        Ok(Value::String("1,9,3:1,2,3:false".to_owned()))
+    );
+    assert_eq!(
+        eval("[1, 2, 3].with(-1, 9).join();"),
+        Ok(Value::String("1,2,9".to_owned()))
+    );
+    assert_eq!(
+        eval("[1, 2, 3].with(undefined, 9).join();"),
+        Ok(Value::String("9,2,3".to_owned()))
+    );
+    assert_eq!(
+        eval("[1, 2, 3].with(1).join();"),
+        Ok(Value::String("1,,3".to_owned()))
+    );
+    assert_eq!(
+        eval("Array.prototype.with.call({ length: 3, 0: 'a', 2: 'c' }, 1, 'b').join('|');"),
+        Ok(Value::String("a|b|c".to_owned()))
+    );
+    assert_eq!(
+        eval("Array.prototype.with.call('abc', -2, 'x').join('');"),
+        Ok(Value::String("axc".to_owned()))
+    );
+    assert_eq!(eval("Array.prototype.with.length;"), Ok(Value::Number(2.0)));
+    assert!(eval("[].with(0, 1);").is_err());
+    assert!(eval("[1].with(1, 2);").is_err());
+    assert!(eval("Array.prototype.with.call(null, 0, 1);").is_err());
+}
