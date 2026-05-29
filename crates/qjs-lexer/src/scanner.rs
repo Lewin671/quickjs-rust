@@ -34,6 +34,7 @@ impl<'src> Lexer<'src> {
                 c if is_identifier_start(c) => self.identifier(),
                 c if c.is_ascii_digit() => self.number()?,
                 '"' | '\'' => self.string(ch)?,
+                '`' => self.template_no_substitution()?,
                 '+' => self.plus(),
                 '-' => self.minus(),
                 '*' => self.star(),

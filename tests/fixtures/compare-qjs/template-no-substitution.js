@@ -1,0 +1,1 @@
+`NoSubstitutionTemplate` + ":" + `` + ":" + `price $5`

@@ -536,3 +536,4 @@ cases/string-prototype-trim-end-length.js
 cases/string-prototype-trim-length.js
 cases/string-prototype-trim-start-basic.js
 cases/string-prototype-trim-start-length.js
+cases/template-literal-no-substitution-basic.js

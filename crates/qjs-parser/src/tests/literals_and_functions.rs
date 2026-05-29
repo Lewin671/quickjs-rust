@@ -1,4 +1,4 @@
-use qjs_ast::{AssignmentTarget, Expr, MemberProperty, ObjectPropertyKey, Stmt};
+use qjs_ast::{AssignmentTarget, Expr, Literal, MemberProperty, ObjectPropertyKey, Stmt};
 
 use crate::parse_script;
 
@@ -54,6 +54,15 @@ fn parses_array_literal() {
         panic!("expected one array expression");
     };
     assert_eq!(elements.len(), 2);
+}
+
+#[test]
+fn parses_no_substitution_template_literal_as_string_literal() {
+    let script = parse_script("`hello`;").expect("script should parse");
+    let [Stmt::Expr(Expr::Literal(Literal::String { value, .. }))] = script.body.as_slice() else {
+        panic!("expected one string literal expression");
+    };
+    assert_eq!(value, "hello");
 }
 
 #[test]

@@ -86,6 +86,38 @@ fn skips_line_and_block_comments() {
 }
 
 #[test]
+fn lexes_no_substitution_template_literals_as_strings() {
+    let tokens = lex("`hello` `` `price $5`").expect("source should lex");
+    let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::String("hello".to_owned()),
+            TokenKind::String(String::new()),
+            TokenKind::String("price $5".to_owned()),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn rejects_template_literals_with_substitution() {
+    let error = lex("`hello ${name}`").expect_err("substitution should fail");
+    assert_eq!(
+        error.message,
+        "template substitution is not supported yet".to_owned()
+    );
+    assert_eq!(error.span, Span::new(0, 9));
+}
+
+#[test]
+fn reports_unterminated_template_literal() {
+    let error = lex("`unfinished").expect_err("template should fail");
+    assert_eq!(error.message, "unterminated template literal");
+    assert_eq!(error.span, Span::new(0, 11));
+}
+
+#[test]
 fn lexes_declaration_keywords() {
     let tokens =
             lex(

@@ -29,6 +29,8 @@ fn evaluates_bitwise_and_shift_expressions() {
 #[test]
 fn evaluates_string_addition() {
     assert_eq!(eval("'x' + 1;"), Ok(Value::String("x1".to_owned())));
+    assert_eq!(eval("`x` + 1;"), Ok(Value::String("x1".to_owned())));
+    assert_eq!(eval("`` + `x`;"), Ok(Value::String("x".to_owned())));
     assert_eq!(eval("1 + 'x';"), Ok(Value::String("1x".to_owned())));
     assert_eq!(eval("'x' + true;"), Ok(Value::String("xtrue".to_owned())));
     assert_eq!(eval("'x' + null;"), Ok(Value::String("xnull".to_owned())));

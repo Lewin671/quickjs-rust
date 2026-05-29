@@ -142,6 +142,35 @@ impl Lexer<'_> {
             span: Span::new(start, self.cursor),
         })
     }
+
+    pub(super) fn template_no_substitution(&mut self) -> Result<(), LexError> {
+        let start = self.cursor;
+        self.advance();
+        let content_start = self.cursor;
+        while let Some(ch) = self.peek() {
+            if ch == '`' {
+                let value = self.source[content_start..self.cursor].to_owned();
+                self.advance();
+                self.tokens.push(Token {
+                    kind: TokenKind::String(value),
+                    span: Span::new(start, self.cursor),
+                });
+                return Ok(());
+            }
+            if ch == '$' && self.peek_nth(1) == Some('{') {
+                return Err(LexError {
+                    message: "template substitution is not supported yet".to_owned(),
+                    span: Span::new(start, self.cursor + 2),
+                });
+            }
+            self.advance();
+        }
+
+        Err(LexError {
+            message: "unterminated template literal".to_owned(),
+            span: Span::new(start, self.cursor),
+        })
+    }
 }
 
 fn is_digit_for_radix(ch: char, radix: u32) -> bool {
