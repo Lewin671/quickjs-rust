@@ -34,8 +34,10 @@ pub(super) fn eval_binary(
     }
 
     match op {
-        BinaryOp::Eq | BinaryOp::StrictEq => return Ok(Value::Boolean(left == right)),
-        BinaryOp::Ne | BinaryOp::StrictNe => return Ok(Value::Boolean(left != right)),
+        BinaryOp::Eq => return Ok(Value::Boolean(abstract_eq(&left, &right)?)),
+        BinaryOp::Ne => return Ok(Value::Boolean(!abstract_eq(&left, &right)?)),
+        BinaryOp::StrictEq => return Ok(Value::Boolean(left == right)),
+        BinaryOp::StrictNe => return Ok(Value::Boolean(left != right)),
         BinaryOp::Add if matches!(left, Value::String(_)) || matches!(right, Value::String(_)) => {
             return Ok(Value::String(format!(
                 "{}{}",
@@ -101,6 +103,25 @@ pub(super) fn eval_binary(
         | BinaryOp::NullishCoalescing => unreachable!("handled before numeric binary evaluation"),
     };
     Ok(Value::Number(value))
+}
+
+fn abstract_eq(left: &Value, right: &Value) -> Result<bool, RuntimeError> {
+    match (left, right) {
+        (Value::Null, Value::Undefined) | (Value::Undefined, Value::Null) => Ok(true),
+        (Value::Number(_), Value::String(value)) => {
+            Ok(left == &Value::Number(to_number(Value::String(value.clone()))?))
+        }
+        (Value::String(value), Value::Number(_)) => {
+            Ok(&Value::Number(to_number(Value::String(value.clone()))?) == right)
+        }
+        (Value::Boolean(value), _) => {
+            abstract_eq(&Value::Number(if *value { 1.0 } else { 0.0 }), right)
+        }
+        (_, Value::Boolean(value)) => {
+            abstract_eq(left, &Value::Number(if *value { 1.0 } else { 0.0 }))
+        }
+        _ => Ok(left == right),
+    }
 }
 
 fn eval_instanceof(

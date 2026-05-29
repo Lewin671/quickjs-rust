@@ -50,6 +50,16 @@ fn evaluates_comparison_and_equality() {
     assert_eq!(eval("1 + 2 * 3 >= 7;"), Ok(Value::Boolean(true)));
     assert_eq!(eval("1 + 1 === 2;"), Ok(Value::Boolean(true)));
     assert_eq!(eval("1 !== 2;"), Ok(Value::Boolean(true)));
+    assert_eq!(eval("null == undefined;"), Ok(Value::Boolean(true)));
+    assert_eq!(eval("null != undefined;"), Ok(Value::Boolean(false)));
+    assert_eq!(eval("'1' == 1;"), Ok(Value::Boolean(true)));
+    assert_eq!(eval("1 == '1';"), Ok(Value::Boolean(true)));
+    assert_eq!(eval("true == 1;"), Ok(Value::Boolean(true)));
+    assert_eq!(eval("false == 0;"), Ok(Value::Boolean(true)));
+    assert_eq!(eval("false == '';"), Ok(Value::Boolean(true)));
+    assert_eq!(eval("NaN == NaN;"), Ok(Value::Boolean(false)));
+    assert_eq!(eval("'x' == 1;"), Ok(Value::Boolean(false)));
+    assert_eq!(eval("'1' === 1;"), Ok(Value::Boolean(false)));
     assert_eq!(
         eval("function C() {} let instance = new C(); instance instanceof C;"),
         Ok(Value::Boolean(true))
