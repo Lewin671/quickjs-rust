@@ -9,6 +9,7 @@ mod array;
 mod boolean;
 mod builtins;
 mod conversion;
+mod error;
 mod expression;
 mod function;
 mod global;

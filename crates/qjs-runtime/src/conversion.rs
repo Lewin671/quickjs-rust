@@ -27,7 +27,9 @@ pub(crate) fn error_value(value: Value) -> String {
         Value::Undefined => "undefined".to_owned(),
         Value::Function(_) => "function".to_owned(),
         Value::Array(_) => "array".to_owned(),
-        Value::Object(_) => "object".to_owned(),
+        Value::Object(object) => {
+            crate::error::error_object_to_string(&object).unwrap_or_else(|| "object".to_owned())
+        }
     }
 }
 

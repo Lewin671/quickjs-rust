@@ -115,6 +115,9 @@ cases/boolean-prototype-to-string-basic.js
 cases/boolean-prototype-to-string-length.js
 cases/boolean-prototype-value-of-basic.js
 cases/boolean-prototype-value-of-length.js
+cases/error-constructor-basic.js
+cases/error-message-property-basic.js
+cases/error-prototype-to-string-basic.js
 cases/global-is-finite-basic.js
 cases/global-is-finite-length.js
 cases/global-is-nan-basic.js

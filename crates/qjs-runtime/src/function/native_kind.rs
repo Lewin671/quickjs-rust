@@ -31,6 +31,8 @@ pub(crate) enum NativeFunction {
     Boolean,
     BooleanPrototypeToString,
     BooleanPrototypeValueOf,
+    Error,
+    ErrorPrototypeToString,
     MathAbs,
     MathAcos,
     MathAcosh,

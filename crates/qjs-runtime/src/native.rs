@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 mod arrays;
 mod core;
+mod errors;
 mod math;
 mod numbers;
 mod objects;
@@ -27,6 +28,16 @@ pub(crate) fn call_native_function(
     }
 
     if let Some(value) = math::call_math_native(native, &argument_values)? {
+        return Ok(value);
+    }
+
+    if let Some(value) = errors::call_error_native(
+        function,
+        native,
+        this_value.clone(),
+        &argument_values,
+        is_construct,
+    )? {
         return Ok(value);
     }
 

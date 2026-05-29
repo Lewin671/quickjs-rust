@@ -1,4 +1,5 @@
 mod arrays;
+mod errors;
 mod expressions;
 mod functions;
 mod global;
