@@ -16,3 +16,7 @@ pub(crate) fn native_array_is_array(argument_values: &[Value]) -> Result<Value, 
         Some(Value::Array(_))
     )))
 }
+
+pub(crate) fn native_array_of(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    Ok(Value::Array(ArrayRef::new(argument_values.to_vec())))
+}

@@ -71,6 +71,10 @@ cases/array-index-of-length.js
 cases/array-instanceof-basic.js
 cases/array-is-array-basic.js
 cases/array-is-array-length.js
+cases/array-of-basic.js
+cases/array-of-empty.js
+cases/array-of-length.js
+cases/array-of-single-number.js
 cases/array-join-basic.js
 cases/array-join-empty.js
 cases/array-join-length.js

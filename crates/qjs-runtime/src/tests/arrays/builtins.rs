@@ -8,6 +8,7 @@ fn evaluates_array_builtins() {
     );
     assert_eq!(eval("Array.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("Array.isArray.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("Array.of.length;"), Ok(Value::Number(0.0)));
     assert_eq!(eval("Array.prototype.at.length;"), Ok(Value::Number(1.0)));
     assert_eq!(
         eval("Array.prototype.concat.length;"),

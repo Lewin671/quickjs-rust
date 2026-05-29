@@ -193,6 +193,7 @@ pub(crate) fn install_array(
         Property::non_enumerable(Value::Object(array_prototype)),
     );
     define_array_function(&array_function, "isArray", 1, NativeFunction::ArrayIsArray);
+    define_array_function(&array_function, "of", 0, NativeFunction::ArrayOf);
 
     let array_value = Value::Function(array_function);
     env.insert("Array".to_owned(), array_value.clone());
