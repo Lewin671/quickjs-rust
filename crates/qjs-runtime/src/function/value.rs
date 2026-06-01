@@ -1,6 +1,6 @@
 use std::{
     cell::{Cell, RefCell},
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fmt,
     rc::Rc,
 };
@@ -21,7 +21,7 @@ pub struct Function {
     pub params: Vec<String>,
     /// Environment captured when the function was created.
     pub env: HashMap<String, Value>,
-    pub(crate) local_names: HashSet<String>,
+    pub(crate) local_names: Vec<String>,
     pub(crate) bytecode: Option<Rc<Bytecode>>,
     pub(crate) native: Option<NativeFunction>,
     pub(crate) constructable: bool,
@@ -130,7 +130,7 @@ impl Function {
             name,
             params,
             env,
-            local_names: local_names.into_iter().collect(),
+            local_names,
             bytecode: Some(bytecode),
             native: None,
             constructable,
@@ -181,7 +181,7 @@ impl Function {
             name: Some("bound".to_owned()),
             params: vec![String::new(); length],
             env: HashMap::new(),
-            local_names: HashSet::new(),
+            local_names: Vec::new(),
             bytecode: None,
             native: None,
             constructable,
@@ -210,7 +210,7 @@ impl Function {
             name,
             params,
             env,
-            local_names: HashSet::new(),
+            local_names: Vec::new(),
             bytecode: None,
             native,
             constructable,

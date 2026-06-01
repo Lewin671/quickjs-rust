@@ -125,10 +125,7 @@ impl Compiler {
         };
         let slot = self.local_slot(name, true);
         let bytecode = super::compiler::compile_function_body(params, body)?;
-        let mut local_names = collect_function_local_names(Some(name), params, body)
-            .into_iter()
-            .collect::<Vec<_>>();
-        local_names.sort();
+        let local_names = collect_function_local_names(Some(name), params, body);
         self.emit(Op::NewFunction {
             name: Some(name.clone()),
             params: params.clone(),

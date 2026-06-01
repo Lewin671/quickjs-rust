@@ -6,7 +6,7 @@ pub(crate) fn collect_function_local_names(
     name: Option<&String>,
     params: &[String],
     body: &[Stmt],
-) -> HashSet<String> {
+) -> Vec<String> {
     let mut names = HashSet::new();
     names.insert("this".to_owned());
     names.insert("arguments".to_owned());
@@ -15,6 +15,8 @@ pub(crate) fn collect_function_local_names(
         names.insert(name.clone());
     }
     collect_statement_local_names(body, &mut names);
+    let mut names = names.into_iter().collect::<Vec<_>>();
+    names.sort();
     names
 }
 
@@ -91,5 +93,41 @@ fn collect_statement_local_names(body: &[Stmt], names: &mut HashSet<String>) {
             | Stmt::Continue { .. }
             | Stmt::Empty => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use qjs_ast::Stmt;
+    use qjs_parser::parse_script;
+
+    use super::collect_function_local_names;
+
+    #[test]
+    fn collects_function_local_names_in_sorted_order() {
+        let script = parse_script(
+            "function outer(param) { var z; let a; try {} catch (caught) {} function inner() {} }",
+        )
+        .expect("function should parse");
+        let Stmt::FunctionDecl {
+            name, params, body, ..
+        } = &script.body[0]
+        else {
+            panic!("expected function declaration");
+        };
+
+        assert_eq!(
+            collect_function_local_names(Some(name), params, body),
+            vec![
+                "a",
+                "arguments",
+                "caught",
+                "inner",
+                "outer",
+                "param",
+                "this",
+                "z"
+            ]
+        );
     }
 }
