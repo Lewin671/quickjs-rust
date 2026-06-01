@@ -22,6 +22,7 @@ pub(crate) fn native_array_prototype_slice(
 ) -> Result<Value, RuntimeError> {
     let Value::Array(elements) = this_value else {
         return Err(RuntimeError {
+            thrown: None,
             message: "Array.prototype.slice called on non-array".to_owned(),
         });
     };
@@ -84,6 +85,7 @@ pub(crate) fn native_array_prototype_with(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
     )?
     .ok_or_else(|| RuntimeError {
+        thrown: None,
         message: "Array.prototype.with index out of range".to_owned(),
     })?;
     values[index] = argument_values.get(1).cloned().unwrap_or(Value::Undefined);

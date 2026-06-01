@@ -51,10 +51,12 @@ fn this_number_value(value: Value) -> Result<f64, RuntimeError> {
                 ..
             }) => Ok(value),
             _ => Err(RuntimeError {
+                thrown: None,
                 message: "Number.prototype method called on non-number object".to_owned(),
             }),
         },
         _ => Err(RuntimeError {
+            thrown: None,
             message: "Number.prototype method called on non-number".to_owned(),
         }),
     }
@@ -67,6 +69,7 @@ fn number_to_string_radix(value: Value) -> Result<u32, RuntimeError> {
     let radix = to_int32(value)?;
     if !(2..=36).contains(&radix) {
         return Err(RuntimeError {
+            thrown: None,
             message: "radix must be between 2 and 36".to_owned(),
         });
     }
@@ -79,6 +82,7 @@ fn number_to_radix_string(number: f64, radix: u32) -> Result<String, RuntimeErro
     }
     if number.fract() != 0.0 {
         return Err(RuntimeError {
+            thrown: None,
             message: "non-decimal number formatting supports integers only".to_owned(),
         });
     }

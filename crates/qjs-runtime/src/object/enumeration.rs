@@ -16,6 +16,7 @@ pub(crate) fn native_object_values(argument_values: &[Value]) -> Result<Value, R
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if matches!(target, Value::Null | Value::Undefined) {
         return Err(RuntimeError {
+            thrown: None,
             message: "Object.values target must not be null or undefined".to_owned(),
         });
     }
@@ -32,6 +33,7 @@ pub(crate) fn native_object_entries(argument_values: &[Value]) -> Result<Value, 
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if matches!(target, Value::Null | Value::Undefined) {
         return Err(RuntimeError {
+            thrown: None,
             message: "Object.entries target must not be null or undefined".to_owned(),
         });
     }
@@ -57,6 +59,7 @@ pub(crate) fn native_object_has_own(argument_values: &[Value]) -> Result<Value, 
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if matches!(target, Value::Null | Value::Undefined) {
         return Err(RuntimeError {
+            thrown: None,
             message: "Object.hasOwn target must not be null or undefined".to_owned(),
         });
     }

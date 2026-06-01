@@ -42,6 +42,7 @@ pub(super) fn get_property(
         }
         Value::Object(object) => Ok(object.get(key).unwrap_or(Value::Undefined)),
         _ => Err(RuntimeError {
+            thrown: None,
             message: format!("unsupported property `{key}`"),
         }),
     }
@@ -62,6 +63,7 @@ pub(super) fn set_property(object: Value, key: String, value: Value) -> Result<(
                 elements.set_len(to_length(value)?);
             } else {
                 let index = key.parse::<usize>().map_err(|_| RuntimeError {
+                    thrown: None,
                     message: "array property assignment requires an array index".to_owned(),
                 })?;
                 elements.set(index, value);
@@ -69,6 +71,7 @@ pub(super) fn set_property(object: Value, key: String, value: Value) -> Result<(
             Ok(())
         }
         _ => Err(RuntimeError {
+            thrown: None,
             message: "member assignment target is not an object".to_owned(),
         }),
     }
@@ -79,6 +82,7 @@ pub(super) fn delete_property(object: Value, key: &str) -> Result<Value, Runtime
         Value::Object(object) => Ok(Value::Boolean(object.delete_own_property(key))),
         Value::Array(_) => Ok(Value::Boolean(true)),
         _ => Err(RuntimeError {
+            thrown: None,
             message: "delete target is not an object".to_owned(),
         }),
     }
@@ -91,6 +95,7 @@ pub(super) fn enumerable_keys(value: Value) -> Result<Vec<Value>, RuntimeError> 
         Value::Null | Value::Undefined => Vec::new(),
         _ => {
             return Err(RuntimeError {
+                thrown: None,
                 message: "for-in target is not enumerable".to_owned(),
             });
         }

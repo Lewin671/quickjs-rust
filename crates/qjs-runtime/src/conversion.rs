@@ -9,9 +9,11 @@ pub(crate) fn to_js_string(value: Value) -> Result<String, RuntimeError> {
         Value::Null => Ok("null".to_owned()),
         Value::Undefined => Ok("undefined".to_owned()),
         Value::Object(object) => crate::string_object_value(&object).ok_or_else(|| RuntimeError {
+            thrown: None,
             message: "cannot convert object to string".to_owned(),
         }),
         Value::Function(_) | Value::Array(_) => Err(RuntimeError {
+            thrown: None,
             message: "cannot convert object to string".to_owned(),
         }),
     }
@@ -50,13 +52,16 @@ pub(crate) fn to_number(value: Value) -> Result<f64, RuntimeError> {
         Value::Object(object) => match crate::string_object_value(&object) {
             Some(value) => to_number(Value::String(value)),
             None => Err(RuntimeError {
+                thrown: None,
                 message: "cannot convert object to number".to_owned(),
             }),
         },
         Value::Function(_) => Err(RuntimeError {
+            thrown: None,
             message: "cannot convert function to number".to_owned(),
         }),
         Value::Array(_) => Err(RuntimeError {
+            thrown: None,
             message: "cannot convert object to number".to_owned(),
         }),
     }
@@ -103,6 +108,7 @@ pub(crate) fn to_length(value: Value) -> Result<usize, RuntimeError> {
     }
     if number.is_infinite() {
         return Err(RuntimeError {
+            thrown: None,
             message: "string padding length must be finite".to_owned(),
         });
     }

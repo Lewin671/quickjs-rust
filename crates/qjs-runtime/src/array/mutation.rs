@@ -8,6 +8,7 @@ pub(crate) fn native_array_prototype_fill(
 ) -> Result<Value, RuntimeError> {
     let Value::Array(elements) = this_value.clone() else {
         return Err(RuntimeError {
+            thrown: None,
             message: "Array.prototype.fill called on non-array".to_owned(),
         });
     };
@@ -37,6 +38,7 @@ pub(crate) fn native_array_prototype_copy_within(
 ) -> Result<Value, RuntimeError> {
     let Value::Array(elements) = this_value.clone() else {
         return Err(RuntimeError {
+            thrown: None,
             message: "Array.prototype.copyWithin called on non-array".to_owned(),
         });
     };
@@ -72,6 +74,7 @@ pub(crate) fn native_array_prototype_push(
 ) -> Result<Value, RuntimeError> {
     let Value::Array(elements) = this_value else {
         return Err(RuntimeError {
+            thrown: None,
             message: "Array.prototype.push called on non-array".to_owned(),
         });
     };
@@ -84,6 +87,7 @@ pub(crate) fn native_array_prototype_push(
 pub(crate) fn native_array_prototype_pop(this_value: Value) -> Result<Value, RuntimeError> {
     let Value::Array(elements) = this_value else {
         return Err(RuntimeError {
+            thrown: None,
             message: "Array.prototype.pop called on non-array".to_owned(),
         });
     };
@@ -93,6 +97,7 @@ pub(crate) fn native_array_prototype_pop(this_value: Value) -> Result<Value, Run
 pub(crate) fn native_array_prototype_shift(this_value: Value) -> Result<Value, RuntimeError> {
     let Value::Array(elements) = this_value else {
         return Err(RuntimeError {
+            thrown: None,
             message: "Array.prototype.shift called on non-array".to_owned(),
         });
     };
@@ -105,6 +110,7 @@ pub(crate) fn native_array_prototype_unshift(
 ) -> Result<Value, RuntimeError> {
     let Value::Array(elements) = this_value else {
         return Err(RuntimeError {
+            thrown: None,
             message: "Array.prototype.unshift called on non-array".to_owned(),
         });
     };
@@ -114,6 +120,7 @@ pub(crate) fn native_array_prototype_unshift(
 pub(crate) fn native_array_prototype_reverse(this_value: Value) -> Result<Value, RuntimeError> {
     let Value::Array(elements) = this_value.clone() else {
         return Err(RuntimeError {
+            thrown: None,
             message: "Array.prototype.reverse called on non-array".to_owned(),
         });
     };

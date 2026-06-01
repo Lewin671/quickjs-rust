@@ -96,10 +96,12 @@ fn this_boolean_value(value: Value) -> Result<bool, RuntimeError> {
                 ..
             }) => Ok(value),
             _ => Err(RuntimeError {
+                thrown: None,
                 message: "Boolean.prototype method called on non-boolean object".to_owned(),
             }),
         },
         _ => Err(RuntimeError {
+            thrown: None,
             message: "Boolean.prototype method called on non-boolean".to_owned(),
         }),
     }

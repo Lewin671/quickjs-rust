@@ -16,6 +16,7 @@ pub(crate) fn native_date_prototype_to_iso_string(
     let millis = date_value(this_value)?;
     if !millis.is_finite() {
         return Err(RuntimeError {
+            thrown: None,
             message: "Invalid time value".to_owned(),
         });
     }
@@ -62,6 +63,7 @@ pub(crate) fn native_date_prototype_to_json(
         _ => None,
     }
     .ok_or_else(|| RuntimeError {
+        thrown: None,
         message: "Date toJSON receiver does not have a toISOString method".to_owned(),
     })?;
     call_function(to_iso_string, this_value, vec![key], env, false)

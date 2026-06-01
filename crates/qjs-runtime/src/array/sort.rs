@@ -11,6 +11,7 @@ pub(crate) fn native_array_prototype_sort(
 ) -> Result<Value, RuntimeError> {
     let Value::Array(array) = this_value.clone() else {
         return Err(RuntimeError {
+            thrown: None,
             message: "Array.prototype.sort called on non-array".to_owned(),
         });
     };
@@ -63,6 +64,7 @@ fn array_sort_comparator(
         Value::Undefined => Ok(None),
         Value::Function(function) => Ok(Some(function)),
         _ => Err(RuntimeError {
+            thrown: None,
             message: format!("{context} comparator must be callable"),
         }),
     }

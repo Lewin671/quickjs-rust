@@ -118,6 +118,12 @@ fn evaluates_branch_and_loop_bytecode_subset() {
             "native bridge must not rewrite JS throws".to_owned()
         ))
     );
+    assert_eq!(
+        eval_bytecode_source(
+            "function f() { throw { name: 'kept' }; } let caught; try { f(); } catch (error) { caught = error.name; } caught;"
+        ),
+        Ok(Value::String("kept".to_owned()))
+    );
 }
 
 #[test]

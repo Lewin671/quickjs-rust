@@ -18,6 +18,7 @@ pub(crate) fn native_array_prototype_to_string(this_value: Value) -> Result<Valu
 fn array_join(value: Value, separator: &str) -> Result<String, RuntimeError> {
     let Value::Array(elements) = value else {
         return Err(RuntimeError {
+            thrown: None,
             message: "Array.prototype.join called on non-array".to_owned(),
         });
     };

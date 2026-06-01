@@ -8,6 +8,7 @@ pub(crate) fn native_array_prototype_flat(
 ) -> Result<Value, RuntimeError> {
     let Value::Array(array) = this_value else {
         return Err(RuntimeError {
+            thrown: None,
             message: "Array.prototype.flat called on non-array".to_owned(),
         });
     };
@@ -25,12 +26,14 @@ pub(crate) fn native_array_prototype_flat_map(
 ) -> Result<Value, RuntimeError> {
     let Value::Array(array) = this_value else {
         return Err(RuntimeError {
+            thrown: None,
             message: "Array.prototype.flatMap called on non-array".to_owned(),
         });
     };
     let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if !matches!(callback, Value::Function(_)) {
         return Err(RuntimeError {
+            thrown: None,
             message: "Array.prototype.flatMap callback is not callable".to_owned(),
         });
     }

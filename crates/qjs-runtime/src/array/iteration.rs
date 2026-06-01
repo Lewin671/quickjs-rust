@@ -20,11 +20,13 @@ fn prepare_array_iteration(
     method: &str,
     this_value: Value,
     argument_values: &[Value],
+    env: &HashMap<String, Value>,
 ) -> Result<ArrayIteration, RuntimeError> {
-    let source = array_like(this_value, &format!("Array.prototype.{method}"))?;
+    let source = array_like(this_value, &format!("Array.prototype.{method}"), env)?;
     let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if !matches!(callback, Value::Function(_)) {
         return Err(RuntimeError {
+            thrown: None,
             message: format!("Array.prototype.{method} callback is not callable"),
         });
     }
@@ -41,11 +43,13 @@ fn prepare_array_reduction(
     method: &str,
     this_value: Value,
     argument_values: &[Value],
+    env: &HashMap<String, Value>,
 ) -> Result<ArrayReduction, RuntimeError> {
-    let source = array_like(this_value, &format!("Array.prototype.{method}"))?;
+    let source = array_like(this_value, &format!("Array.prototype.{method}"), env)?;
     let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if !matches!(callback, Value::Function(_)) {
         return Err(RuntimeError {
+            thrown: None,
             message: format!("Array.prototype.{method} callback is not callable"),
         });
     }
@@ -102,7 +106,7 @@ pub(crate) fn native_array_prototype_map(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let iteration = prepare_array_iteration("map", this_value, argument_values)?;
+    let iteration = prepare_array_iteration("map", this_value, argument_values, env)?;
     let mut mapped = Vec::with_capacity(iteration.source.len());
     for (index, value) in iteration.source.iter().cloned().enumerate() {
         mapped.push(call_iteration_callback(&iteration, value, index, env)?);
@@ -116,7 +120,7 @@ pub(crate) fn native_array_prototype_filter(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let iteration = prepare_array_iteration("filter", this_value, argument_values)?;
+    let iteration = prepare_array_iteration("filter", this_value, argument_values, env)?;
     let mut filtered = Vec::new();
     for (index, value) in iteration.source.iter().cloned().enumerate() {
         let selected = call_iteration_callback(&iteration, value.clone(), index, env)?;
@@ -133,7 +137,7 @@ pub(crate) fn native_array_prototype_find(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let iteration = prepare_array_iteration("find", this_value, argument_values)?;
+    let iteration = prepare_array_iteration("find", this_value, argument_values, env)?;
     for (index, value) in iteration.source.iter().cloned().enumerate() {
         let selected = call_iteration_callback(&iteration, value.clone(), index, env)?;
         if is_truthy(&selected) {
@@ -149,7 +153,7 @@ pub(crate) fn native_array_prototype_find_last(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let iteration = prepare_array_iteration("findLast", this_value, argument_values)?;
+    let iteration = prepare_array_iteration("findLast", this_value, argument_values, env)?;
     for index in (0..iteration.source.len()).rev() {
         let value = iteration.source[index].clone();
         let selected = call_iteration_callback(&iteration, value.clone(), index, env)?;
@@ -166,7 +170,7 @@ pub(crate) fn native_array_prototype_find_last_index(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let iteration = prepare_array_iteration("findLastIndex", this_value, argument_values)?;
+    let iteration = prepare_array_iteration("findLastIndex", this_value, argument_values, env)?;
     for index in (0..iteration.source.len()).rev() {
         let selected =
             call_iteration_callback(&iteration, iteration.source[index].clone(), index, env)?;
@@ -183,7 +187,7 @@ pub(crate) fn native_array_prototype_find_index(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let iteration = prepare_array_iteration("findIndex", this_value, argument_values)?;
+    let iteration = prepare_array_iteration("findIndex", this_value, argument_values, env)?;
     for (index, value) in iteration.source.iter().cloned().enumerate() {
         let selected = call_iteration_callback(&iteration, value, index, env)?;
         if is_truthy(&selected) {
@@ -199,7 +203,7 @@ pub(crate) fn native_array_prototype_for_each(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let iteration = prepare_array_iteration("forEach", this_value, argument_values)?;
+    let iteration = prepare_array_iteration("forEach", this_value, argument_values, env)?;
     for (index, value) in iteration.source.iter().cloned().enumerate() {
         call_iteration_callback(&iteration, value, index, env)?;
     }
@@ -212,7 +216,7 @@ pub(crate) fn native_array_prototype_some(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let iteration = prepare_array_iteration("some", this_value, argument_values)?;
+    let iteration = prepare_array_iteration("some", this_value, argument_values, env)?;
     for (index, value) in iteration.source.iter().cloned().enumerate() {
         let selected = call_iteration_callback(&iteration, value, index, env)?;
         if is_truthy(&selected) {
@@ -228,7 +232,7 @@ pub(crate) fn native_array_prototype_every(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let iteration = prepare_array_iteration("every", this_value, argument_values)?;
+    let iteration = prepare_array_iteration("every", this_value, argument_values, env)?;
     for (index, value) in iteration.source.iter().cloned().enumerate() {
         let selected = call_iteration_callback(&iteration, value, index, env)?;
         if !is_truthy(&selected) {
@@ -244,9 +248,10 @@ pub(crate) fn native_array_prototype_reduce(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let reduction = prepare_array_reduction("reduce", this_value, argument_values)?;
+    let reduction = prepare_array_reduction("reduce", this_value, argument_values, env)?;
     if reduction.source.is_empty() && argument_values.len() < 2 {
         return Err(RuntimeError {
+            thrown: None,
             message: "Reduce of empty array with no initial value".to_owned(),
         });
     }
@@ -275,9 +280,10 @@ pub(crate) fn native_array_prototype_reduce_right(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let reduction = prepare_array_reduction("reduceRight", this_value, argument_values)?;
+    let reduction = prepare_array_reduction("reduceRight", this_value, argument_values, env)?;
     if reduction.source.is_empty() && argument_values.len() < 2 {
         return Err(RuntimeError {
+            thrown: None,
             message: "Reduce of empty array with no initial value".to_owned(),
         });
     }

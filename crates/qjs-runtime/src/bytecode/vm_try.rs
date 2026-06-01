@@ -43,6 +43,7 @@ impl Vm<'_> {
             return Ok(());
         }
         Err(RuntimeError {
+            thrown: Some(Box::new(value.clone())),
             message: format!("throw statement executed: {}", error_value(value)),
         })
     }

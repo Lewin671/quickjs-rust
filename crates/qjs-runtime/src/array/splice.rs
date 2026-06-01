@@ -6,6 +6,7 @@ pub(crate) fn native_array_prototype_splice(
 ) -> Result<Value, RuntimeError> {
     let Value::Array(array) = this_value else {
         return Err(RuntimeError {
+            thrown: None,
             message: "Array.prototype.splice called on non-array".to_owned(),
         });
     };
