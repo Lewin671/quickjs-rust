@@ -11,11 +11,7 @@ use super::util::{stack_underflow, typeof_value};
 use super::vm_props::{delete_property, get_property, set_property};
 use super::vm_try::TryFrame;
 
-#[derive(Clone)]
-pub(super) enum Slot {
-    Uninitialized,
-    Value(Value),
-}
+pub(super) type Slot = Option<Value>;
 
 pub(super) fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> {
     let mut vm = Vm::new(bytecode);
@@ -72,11 +68,11 @@ impl<'a> Vm<'a> {
             .iter()
             .map(|local| {
                 if let Some(value) = globals.get(&local.name) {
-                    Slot::Value(value.clone())
+                    Some(value.clone())
                 } else if local.hoisted {
-                    Slot::Value(Value::Undefined)
+                    Some(Value::Undefined)
                 } else {
-                    Slot::Uninitialized
+                    None
                 }
             })
             .collect()
@@ -140,20 +136,19 @@ impl<'a> Vm<'a> {
                 Op::NewFunction {
                     name,
                     params,
-                    body,
+                    local_names,
                     bytecode,
                     constructable,
                 } => {
                     let env = self.current_env();
-                    self.stack
-                        .push(Value::Function(Function::new_user_with_bytecode(
-                            name,
-                            params,
-                            body,
-                            env,
-                            Some(bytecode),
-                            constructable,
-                        )));
+                    self.stack.push(Value::Function(Function::new_user_compiled(
+                        name,
+                        params,
+                        env,
+                        bytecode,
+                        local_names,
+                        constructable,
+                    )));
                 }
                 Op::Typeof => {
                     let value = self.pop()?;
@@ -312,7 +307,7 @@ impl<'a> Vm<'a> {
     pub(super) fn current_env(&self) -> HashMap<String, Value> {
         let mut env = self.globals.clone();
         for (index, local) in self.locals.iter().enumerate() {
-            if let Slot::Value(value) = local {
+            if let Some(value) = local {
                 env.insert(self.bytecode.locals[index].name.clone(), value.clone());
             }
         }
@@ -322,7 +317,7 @@ impl<'a> Vm<'a> {
     fn apply_env(&mut self, env: HashMap<String, Value>) {
         for (index, local) in self.bytecode.locals.iter().enumerate() {
             if let Some(value) = env.get(&local.name) {
-                self.locals[index] = Slot::Value(value.clone());
+                self.locals[index] = Some(value.clone());
             }
         }
         for (name, value) in env {
@@ -338,8 +333,8 @@ impl<'a> Vm<'a> {
 
     fn load_local(&self, slot: usize) -> Result<Value, RuntimeError> {
         match self.locals.get(slot) {
-            Some(Slot::Value(value)) => Ok(value.clone()),
-            Some(Slot::Uninitialized) => Err(RuntimeError {
+            Some(Some(value)) => Ok(value.clone()),
+            Some(None) => Err(RuntimeError {
                 message: format!("undefined identifier `{}`", self.bytecode.locals[slot].name),
             }),
             None => Err(RuntimeError {
@@ -352,7 +347,7 @@ impl<'a> Vm<'a> {
         let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
             message: "bytecode local index out of bounds".to_owned(),
         })?;
-        *local = Slot::Value(value);
+        *local = Some(value);
         Ok(())
     }
 }

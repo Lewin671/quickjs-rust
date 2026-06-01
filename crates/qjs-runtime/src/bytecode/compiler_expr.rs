@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use qjs_ast::{AssignmentOp, BinaryOp, Expr, ForInit, Literal, Stmt, UnaryOp, VarKind};
 
-use crate::{RuntimeError, Value};
+use crate::{RuntimeError, Value, function::collect_function_local_names};
 
 use super::compiler::Compiler;
 use super::ir::Op;
@@ -219,10 +219,14 @@ impl Compiler {
                 ..
             } => {
                 let bytecode = super::compiler::compile_function_body(params, body)?;
+                let mut local_names = collect_function_local_names(name.as_ref(), params, body)
+                    .into_iter()
+                    .collect::<Vec<_>>();
+                local_names.sort();
                 self.emit(Op::NewFunction {
                     name: name.clone(),
                     params: params.clone(),
-                    body: body.clone(),
+                    local_names,
                     bytecode: Rc::new(bytecode),
                     constructable: *constructable,
                 });

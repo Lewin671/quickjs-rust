@@ -2,17 +2,19 @@ use std::collections::HashSet;
 
 use qjs_ast::{ForInLeft, ForInit, Stmt};
 
-use crate::Function;
-
-pub(crate) fn collect_function_local_names(function: &Function) -> HashSet<String> {
+pub(crate) fn collect_function_local_names(
+    name: Option<&String>,
+    params: &[String],
+    body: &[Stmt],
+) -> HashSet<String> {
     let mut names = HashSet::new();
     names.insert("this".to_owned());
     names.insert("arguments".to_owned());
-    names.extend(function.params.iter().cloned());
-    if let Some(name) = &function.name {
+    names.extend(params.iter().cloned());
+    if let Some(name) = name {
         names.insert(name.clone());
     }
-    collect_statement_local_names(&function.body, &mut names);
+    collect_statement_local_names(body, &mut names);
     names
 }
 
