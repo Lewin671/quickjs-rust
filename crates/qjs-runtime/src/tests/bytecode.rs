@@ -127,6 +127,26 @@ fn evaluates_objects_arrays_members_and_calls_with_bytecode() {
 }
 
 #[test]
+fn seeds_bytecode_function_env_from_referenced_caller_bindings() {
+    assert_eq!(
+        eval_bytecode_source("let value = 1; function read() { return value; } value = 2; read();"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval_bytecode_source(
+            "let seen = ''; [1, 2].forEach(function(value) { seen = seen + value; }); seen;",
+        ),
+        Ok(Value::String("12".to_owned()))
+    );
+    assert_eq!(
+        eval_bytecode_source(
+            "(function() { function a() { return 1; } function b() { return 2; } function c() { return a() + b(); } return [a(), b(), c()].join('|'); })();",
+        ),
+        Ok(Value::String("1|2|3".to_owned()))
+    );
+}
+
+#[test]
 fn reports_unsupported_bytecode_surface() {
     let error = eval_bytecode_source("break;").expect_err("top-level break must not compile");
     assert_eq!(error.message, "break outside loop");

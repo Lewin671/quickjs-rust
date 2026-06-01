@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    ArrayRef, GLOBAL_THIS_BINDING, RuntimeError, Value, bytecode::eval_function_bytecode,
-    native::call_native_function,
+    ArrayRef, Bytecode, Function, GLOBAL_THIS_BINDING, RuntimeError, Value,
+    bytecode::eval_function_bytecode, native::call_native_function,
 };
 
 use super::function_call_this;
@@ -45,12 +45,47 @@ pub(crate) fn call_function(
             env,
         );
     }
-    let mut local_env = env.clone();
-    for (name, value) in &function.env {
-        local_env
-            .entry(name.clone())
-            .or_insert_with(|| value.clone());
+    if let Some(bytecode) = &function.bytecode {
+        let function_env = function_env(
+            &function,
+            bytecode,
+            callee,
+            this_value,
+            &argument_values,
+            env,
+        );
+        let result = eval_function_bytecode(bytecode, function_env.env)?;
+        propagate_caller_bindings(env, &function_env.caller_binding_names, &result);
+        return Ok(result.value);
     }
+
+    Err(RuntimeError {
+        message: "user function has no bytecode body".to_owned(),
+    })
+}
+
+struct FunctionCallEnv {
+    env: HashMap<String, Value>,
+    caller_binding_names: Vec<String>,
+}
+
+fn function_env(
+    function: &Function,
+    bytecode: &Bytecode,
+    callee: Value,
+    this_value: Value,
+    argument_values: &[Value],
+    env: &HashMap<String, Value>,
+) -> FunctionCallEnv {
+    let mut local_env = function.env.clone();
+    let mut caller_binding_names = Vec::new();
+    insert_caller_bytecode_bindings(
+        &mut local_env,
+        &mut caller_binding_names,
+        bytecode,
+        &function.local_names,
+        env,
+    );
     if let Some(global_this) = env.get(GLOBAL_THIS_BINDING).cloned() {
         local_env.insert(GLOBAL_THIS_BINDING.to_owned(), global_this);
     }
@@ -60,7 +95,7 @@ pub(crate) fn call_function(
     local_env.insert("this".to_owned(), function_call_this(Some(this_value), env));
     local_env.insert(
         "arguments".to_owned(),
-        Value::Array(ArrayRef::new(argument_values.clone())),
+        Value::Array(ArrayRef::new(argument_values.to_vec())),
     );
     for (index, param) in function.params.iter().enumerate() {
         let value = argument_values
@@ -69,26 +104,54 @@ pub(crate) fn call_function(
             .unwrap_or(Value::Undefined);
         local_env.insert(param.clone(), value);
     }
-
-    if let Some(bytecode) = &function.bytecode {
-        let result = eval_function_bytecode(bytecode, local_env)?;
-        propagate_caller_bindings(env, &function.local_names, &result);
-        return Ok(result.value);
+    FunctionCallEnv {
+        env: local_env,
+        caller_binding_names,
     }
+}
 
-    Err(RuntimeError {
-        message: "user function has no bytecode body".to_owned(),
-    })
+fn insert_caller_bytecode_bindings(
+    local_env: &mut HashMap<String, Value>,
+    caller_binding_names: &mut Vec<String>,
+    bytecode: &Bytecode,
+    function_local_names: &[String],
+    env: &HashMap<String, Value>,
+) {
+    for name in bytecode.global_names() {
+        insert_caller_binding(local_env, caller_binding_names, env, name);
+    }
+    for name in bytecode.local_names() {
+        if function_local_names
+            .binary_search_by(|local| local.as_str().cmp(name))
+            .is_err()
+        {
+            insert_caller_binding(local_env, caller_binding_names, env, name);
+        }
+    }
+}
+
+fn insert_caller_binding(
+    local_env: &mut HashMap<String, Value>,
+    caller_binding_names: &mut Vec<String>,
+    env: &HashMap<String, Value>,
+    name: &str,
+) {
+    if let Some(value) = env.get(name) {
+        local_env.insert(name.to_owned(), value.clone());
+        if !caller_binding_names.iter().any(|existing| existing == name) {
+            caller_binding_names.push(name.to_owned());
+        }
+    }
 }
 
 fn propagate_caller_bindings(
     env: &mut HashMap<String, Value>,
-    function_local_names: &[String],
+    caller_binding_names: &[String],
     result: &crate::bytecode::FunctionBytecodeResult<'_>,
 ) {
-    for (name, value) in env.iter_mut() {
+    for name in caller_binding_names {
         if name != GLOBAL_THIS_BINDING
-            && function_local_names.binary_search(name).is_err()
+            && let Some(value) = env.get_mut(name)
             && let Some(final_value) = result.binding(name)
         {
             *value = final_value.clone();
