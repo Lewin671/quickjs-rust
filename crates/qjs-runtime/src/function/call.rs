@@ -71,9 +71,9 @@ pub(crate) fn call_function(
     }
 
     if let Some(bytecode) = &function.bytecode {
-        let (value, final_env) = eval_function_bytecode(bytecode, local_env)?;
-        propagate_caller_bindings(env, &function.local_names, &final_env);
-        return Ok(value);
+        let result = eval_function_bytecode(bytecode, local_env)?;
+        propagate_caller_bindings(env, &function.local_names, &result);
+        return Ok(result.value);
     }
 
     Err(RuntimeError {
@@ -84,12 +84,12 @@ pub(crate) fn call_function(
 fn propagate_caller_bindings(
     env: &mut HashMap<String, Value>,
     function_local_names: &[String],
-    final_env: &HashMap<String, Value>,
+    result: &crate::bytecode::FunctionBytecodeResult<'_>,
 ) {
     for (name, value) in env.iter_mut() {
         if name != GLOBAL_THIS_BINDING
             && function_local_names.binary_search(name).is_err()
-            && let Some(final_value) = final_env.get(name)
+            && let Some(final_value) = result.binding(name)
         {
             *value = final_value.clone();
         }
