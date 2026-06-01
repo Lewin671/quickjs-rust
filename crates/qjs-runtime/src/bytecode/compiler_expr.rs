@@ -173,12 +173,37 @@ impl Compiler {
             Expr::Update {
                 target, op, prefix, ..
             } => self.compile_update(target, *op, *prefix),
-            Expr::Array { .. }
-            | Expr::Object { .. }
-            | Expr::Call { .. }
-            | Expr::New { .. }
-            | Expr::Function { .. }
-            | Expr::Member { .. } => Err(unsupported_expr(expr)),
+            Expr::Array { elements, .. } => self.compile_array(elements),
+            Expr::Object { properties, .. } => self.compile_object(properties),
+            Expr::Call {
+                callee, arguments, ..
+            } => self.compile_call(callee, arguments),
+            Expr::New {
+                callee, arguments, ..
+            } => self.compile_new(callee, arguments),
+            Expr::Function {
+                name,
+                params,
+                body,
+                constructable,
+                ..
+            } => {
+                self.emit(Op::NewFunction {
+                    name: name.clone(),
+                    params: params.clone(),
+                    body: body.clone(),
+                    constructable: *constructable,
+                });
+                Ok(())
+            }
+            Expr::Member {
+                object, property, ..
+            } => {
+                self.compile_expr(object)?;
+                self.compile_member_key(property)?;
+                self.emit(Op::GetProp);
+                Ok(())
+            }
         }
     }
 

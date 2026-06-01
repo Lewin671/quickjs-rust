@@ -12,14 +12,24 @@ impl Compiler {
         target: &AssignmentTarget,
         value: &Expr,
     ) -> Result<(), RuntimeError> {
-        let AssignmentTarget::Identifier { name, .. } = target else {
-            return Err(unsupported_target(target));
-        };
-        let slot = self.local_slot(name, false);
-        self.compile_expr(value)?;
-        self.emit(Op::Dup);
-        self.emit(Op::StoreLocal(slot));
-        Ok(())
+        match target {
+            AssignmentTarget::Identifier { name, .. } => {
+                let slot = self.local_slot(name, false);
+                self.compile_expr(value)?;
+                self.emit(Op::Dup);
+                self.emit(Op::StoreLocal(slot));
+                Ok(())
+            }
+            AssignmentTarget::Member {
+                object, property, ..
+            } => {
+                self.compile_expr(object)?;
+                self.compile_member_key(property)?;
+                self.compile_expr(value)?;
+                self.emit(Op::SetProp);
+                Ok(())
+            }
+        }
     }
 
     pub(super) fn compile_compound_assign(

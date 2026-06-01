@@ -3,9 +3,11 @@
 mod compiler;
 mod compiler_assign;
 mod compiler_expr;
+mod compiler_values;
 mod ir;
 mod util;
 mod vm;
+mod vm_props;
 
 use qjs_ast::Script;
 use qjs_parser::parse_script;

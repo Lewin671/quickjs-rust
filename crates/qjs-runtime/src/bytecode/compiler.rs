@@ -5,7 +5,6 @@ use qjs_ast::{ForInit, Script, Stmt, VarKind};
 use crate::{RuntimeError, Value};
 
 use super::ir::{Bytecode, Local, Op};
-use super::util::unsupported_stmt;
 
 #[derive(Default)]
 pub(super) struct Compiler {
@@ -217,7 +216,7 @@ impl Compiler {
             | Stmt::ForIn { .. }
             | Stmt::Switch { .. }
             | Stmt::Try { .. }
-            | Stmt::FunctionDecl { .. } => Err(unsupported_stmt(stmt)),
+            | Stmt::FunctionDecl { .. } => self.compile_function_decl(stmt),
         }
     }
 }
