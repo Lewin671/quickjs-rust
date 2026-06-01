@@ -49,6 +49,21 @@ impl Compiler {
         }
     }
 
+    pub(super) fn compile_delete(&mut self, argument: &Expr) -> Result<(), RuntimeError> {
+        let Expr::Member {
+            object, property, ..
+        } = argument
+        else {
+            let slot = self.const_slot(Value::Boolean(true));
+            self.emit(Op::LoadConst(slot));
+            return Ok(());
+        };
+        self.compile_expr(object)?;
+        self.compile_member_key(property)?;
+        self.emit(Op::DeleteProp);
+        Ok(())
+    }
+
     pub(super) fn compile_call(
         &mut self,
         callee: &Expr,

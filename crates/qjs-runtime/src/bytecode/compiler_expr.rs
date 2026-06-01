@@ -6,7 +6,7 @@ use crate::{RuntimeError, Value};
 
 use super::compiler::Compiler;
 use super::ir::Op;
-use super::util::{parse_number_literal, unsupported_expr};
+use super::util::parse_number_literal;
 
 impl Compiler {
     pub(super) fn compile_if(
@@ -174,8 +174,9 @@ impl Compiler {
             } => self.compile_typeof(argument),
             Expr::Unary {
                 op: UnaryOp::Delete,
+                argument,
                 ..
-            } => Err(unsupported_expr(expr)),
+            } => self.compile_delete(argument),
             Expr::Unary { op, argument, .. } => {
                 self.compile_expr(argument)?;
                 self.emit(Op::Unary(*op));

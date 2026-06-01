@@ -26,6 +26,19 @@ fn evaluates_slot_locals_with_bytecode() {
 }
 
 #[test]
+fn evaluates_delete_with_bytecode() {
+    assert_bytecode_matches_ast("let object = { value: 1 }; delete object.value;");
+    assert_bytecode_matches_ast("let object = { value: 1 }; delete object.value; object.value;");
+    assert_bytecode_matches_ast(
+        "let key = 'value'; let object = { value: 1 }; delete object[key]; object.value;",
+    );
+    assert_bytecode_matches_ast("let array = [1, 2]; delete array[0]; array[0];");
+    assert_bytecode_matches_ast("let x = 1; delete x;");
+    assert_bytecode_matches_ast("delete missing;");
+    assert_eq!(eval_bytecode_source("delete 1;"), eval("delete 1;"));
+}
+
+#[test]
 fn evaluates_branch_and_loop_bytecode_subset() {
     assert_bytecode_matches_ast("let x = 1; if (x > 0) { x = 7; } else { x = 3; } x;");
     assert_bytecode_matches_ast("if (false) { 1; }");

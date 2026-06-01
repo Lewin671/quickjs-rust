@@ -10,7 +10,7 @@ use crate::{
 
 use super::ir::{Bytecode, Op};
 use super::util::{stack_underflow, typeof_value};
-use super::vm_props::{fast_number_binary, get_property, set_property};
+use super::vm_props::{delete_property, fast_number_binary, get_property, set_property};
 
 #[derive(Clone)]
 enum Slot {
@@ -123,6 +123,7 @@ impl<'a> Vm<'a> {
                 Op::NewObject(count) => self.new_object(count)?,
                 Op::GetProp => self.get_prop()?,
                 Op::SetProp => self.set_prop()?,
+                Op::DeleteProp => self.delete_prop()?,
                 Op::Call(argc) => self.call(argc)?,
                 Op::CallMethod(argc) => self.call_method(argc)?,
                 Op::New(argc) => self.construct(argc)?,
@@ -229,6 +230,13 @@ impl<'a> Vm<'a> {
         let object = self.pop()?;
         set_property(object, key, value.clone())?;
         self.stack.push(value);
+        Ok(())
+    }
+
+    fn delete_prop(&mut self) -> Result<(), RuntimeError> {
+        let key = to_property_key(self.pop()?)?;
+        let object = self.pop()?;
+        self.stack.push(delete_property(object, &key)?);
         Ok(())
     }
 

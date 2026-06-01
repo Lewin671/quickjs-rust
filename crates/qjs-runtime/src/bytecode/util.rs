@@ -1,4 +1,4 @@
-use qjs_ast::{AssignmentOp, AssignmentTarget, BinaryOp, Expr, Stmt};
+use qjs_ast::{AssignmentOp, AssignmentTarget, BinaryOp, Stmt};
 
 use crate::{RuntimeError, Value};
 
@@ -66,12 +66,6 @@ pub(super) fn stack_underflow() -> RuntimeError {
 pub(super) fn unsupported_stmt(stmt: &Stmt) -> RuntimeError {
     RuntimeError {
         message: format!("unsupported bytecode statement: {stmt:?}"),
-    }
-}
-
-pub(super) fn unsupported_expr(expr: &Expr) -> RuntimeError {
-    RuntimeError {
-        message: format!("unsupported bytecode expression: {expr:?}"),
     }
 }
 
