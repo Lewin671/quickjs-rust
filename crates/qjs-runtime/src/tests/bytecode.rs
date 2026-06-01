@@ -104,6 +104,20 @@ fn evaluates_branch_and_loop_bytecode_subset() {
     assert_bytecode_evaluates(
         "function f() { try { throw 'a'; } finally { return 'final'; } } f();",
     );
+    assert_eq!(
+        eval_bytecode_source(
+            "let caught = false; try { Array.prototype.map.call(undefined, function() {}); } catch (error) { caught = error.constructor === TypeError && error.message === 'Array.prototype.map called on null or undefined'; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval_bytecode_source(
+            "function f() { throw 'native bridge must not rewrite JS throws'; } let caught; try { f(); } catch (error) { caught = error; } caught;"
+        ),
+        Ok(Value::String(
+            "native bridge must not rewrite JS throws".to_owned()
+        ))
+    );
 }
 
 #[test]

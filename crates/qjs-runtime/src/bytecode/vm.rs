@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use crate::{
     ArrayRef, Function, GLOBAL_THIS_BINDING, ObjectRef, RUNTIME_INTRINSIC_NAMES, RuntimeError,
-    Value, call_function, constructor_prototype, initialize_builtins, is_truthy, object_prototype,
-    operations, to_property_key,
+    Value, call_function, constructor_prototype, error, initialize_builtins, is_truthy,
+    object_prototype, operations, to_property_key,
 };
 
 use super::ir::{Bytecode, Op};
@@ -324,9 +324,11 @@ impl<'a> Vm<'a> {
             .cloned()
             .unwrap_or(Value::Undefined);
         let mut env = self.call_env(&callee);
-        let result = call_function(callee, this_value, arguments, &mut env.env, false)?;
+        let result = call_function(callee, this_value, arguments, &mut env.env, false);
         self.apply_call_env(env);
-        self.stack.push(result);
+        if let Some(result) = self.handle_call_result(result)? {
+            self.stack.push(result);
+        }
         Ok(())
     }
 
@@ -336,9 +338,11 @@ impl<'a> Vm<'a> {
         let this_value = self.pop()?;
         let callee = get_property(this_value.clone(), &key, &self.globals)?;
         let mut env = self.call_env(&callee);
-        let result = call_function(callee, this_value, arguments, &mut env.env, false)?;
+        let result = call_function(callee, this_value, arguments, &mut env.env, false);
         self.apply_call_env(env);
-        self.stack.push(result);
+        if let Some(result) = self.handle_call_result(result)? {
+            self.stack.push(result);
+        }
         Ok(())
     }
 
@@ -358,13 +362,74 @@ impl<'a> Vm<'a> {
         let prototype = constructor_prototype(&callee);
         let this_value = Value::Object(ObjectRef::with_prototype(HashMap::new(), prototype));
         let mut env = self.call_env(&callee);
-        let result = call_function(callee, this_value.clone(), arguments, &mut env.env, true)?;
+        let result = call_function(callee, this_value.clone(), arguments, &mut env.env, true);
         self.apply_call_env(env);
-        match result {
-            Value::Array(_) | Value::Function(_) | Value::Object(_) => self.stack.push(result),
-            _ => self.stack.push(this_value),
+        if let Some(result) = self.handle_call_result(result)? {
+            match result {
+                Value::Array(_) | Value::Function(_) | Value::Object(_) => self.stack.push(result),
+                _ => self.stack.push(this_value),
+            }
         }
         Ok(())
+    }
+
+    fn handle_call_result(
+        &mut self,
+        result: Result<Value, RuntimeError>,
+    ) -> Result<Option<Value>, RuntimeError> {
+        match result {
+            Ok(value) => Ok(Some(value)),
+            Err(error) if self.should_rethrow_js_error(&error) => {
+                self.throw_value(Value::String(
+                    error
+                        .message
+                        .trim_start_matches("throw statement executed: ")
+                        .to_owned(),
+                ))?;
+                Ok(None)
+            }
+            Err(error) if self.should_throw_native_error(&error) => {
+                let value = self.type_error_value(&error.message)?;
+                self.throw_value(value)?;
+                Ok(None)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    fn should_rethrow_js_error(&self, error: &RuntimeError) -> bool {
+        !self.try_stack.is_empty() && error.message.starts_with("throw statement executed: ")
+    }
+
+    fn should_throw_native_error(&self, error: &RuntimeError) -> bool {
+        !self.try_stack.is_empty() && !error.message.starts_with("throw statement executed:")
+    }
+
+    fn type_error_value(&self, message: &str) -> Result<Value, RuntimeError> {
+        let Value::Function(function) =
+            self.type_error_constructor().ok_or_else(|| RuntimeError {
+                message: "TypeError constructor is not available".to_owned(),
+            })?
+        else {
+            return Err(RuntimeError {
+                message: "TypeError constructor is not callable".to_owned(),
+            });
+        };
+        error::native_error(
+            &function,
+            Value::Undefined,
+            &[Value::String(message.to_owned())],
+            false,
+        )
+    }
+
+    fn type_error_constructor(&self) -> Option<Value> {
+        self.globals.get("TypeError").cloned().or_else(|| {
+            let Some(Value::Object(global_this)) = self.globals.get(GLOBAL_THIS_BINDING) else {
+                return None;
+            };
+            global_this.get("TypeError")
+        })
     }
 
     fn pop_arguments(&mut self, argc: usize) -> Result<Vec<Value>, RuntimeError> {
