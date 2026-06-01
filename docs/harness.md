@@ -111,7 +111,13 @@ Run additional checks when relevant:
 ```sh
 ./scripts/compare-qjs.sh
 ./scripts/test262-subset.sh
+./scripts/microbench.sh
 ```
+
+`scripts/microbench.sh` runs the repository's current QuickJS microbenchmark
+subset from `tests/benchmarks/quickjs/microbench.js`. Use `--engine quickjs-ng`
+or `--engine both` to compare the same subset against the pinned QuickJS-NG
+reference, and pass benchmark name prefixes to narrow a run.
 
 Do not integrate another owner branch until the target branch is green. For
 pushed owner branches, also check the latest branch CI status before merging:
