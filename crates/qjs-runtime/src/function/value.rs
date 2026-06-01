@@ -7,7 +7,7 @@ use std::{
 
 use qjs_ast::Stmt;
 
-use crate::{NativeFunction, ObjectRef, Property, Value, object_prototype};
+use crate::{Bytecode, NativeFunction, ObjectRef, Property, Value, object_prototype};
 
 /// User-defined or native function value.
 #[derive(Clone)]
@@ -20,6 +20,7 @@ pub struct Function {
     pub body: Vec<Stmt>,
     /// Environment captured when the function was created.
     pub env: HashMap<String, Value>,
+    pub(crate) bytecode: Option<Rc<Bytecode>>,
     pub(crate) native: Option<NativeFunction>,
     pub(crate) constructable: bool,
     pub(crate) bound: Option<Box<BoundFunction>>,
@@ -46,6 +47,7 @@ impl fmt::Debug for Function {
             .field("name", &self.name)
             .field("length", &self.params.len())
             .field("native", &self.native)
+            .field("bytecode", &self.bytecode.is_some())
             .field("constructable", &self.constructable)
             .field("bound", &self.bound.is_some())
             .finish()
@@ -69,12 +71,24 @@ impl Function {
         env: HashMap<String, Value>,
         constructable: bool,
     ) -> Self {
+        Self::new_user_with_bytecode(name, params, body, env, None, constructable)
+    }
+
+    pub(crate) fn new_user_with_bytecode(
+        name: Option<String>,
+        params: Vec<String>,
+        body: Vec<Stmt>,
+        env: HashMap<String, Value>,
+        bytecode: Option<Rc<Bytecode>>,
+        constructable: bool,
+    ) -> Self {
         let prototype = ObjectRef::with_prototype(HashMap::new(), object_prototype(&env));
         let function = Self {
             name,
             params,
             body,
             env,
+            bytecode,
             native: None,
             constructable,
             bound: None,
@@ -126,6 +140,7 @@ impl Function {
             params: vec![String::new(); length],
             body: Vec::new(),
             env: HashMap::new(),
+            bytecode: None,
             native: None,
             constructable,
             bound: Some(Box::new(BoundFunction {
@@ -155,6 +170,7 @@ impl Function {
             params,
             body,
             env,
+            bytecode: None,
             native,
             constructable,
             bound: None,

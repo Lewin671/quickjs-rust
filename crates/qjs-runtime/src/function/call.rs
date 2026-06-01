@@ -1,7 +1,9 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::{
-    ArrayRef, GLOBAL_THIS_BINDING, RuntimeError, Value, error_value,
+    ArrayRef, GLOBAL_THIS_BINDING, RuntimeError, Value,
+    bytecode::eval_function_bytecode,
+    error_value,
     native::call_native_function,
     statement::{Completion, collect_function_local_names, eval_statement_list},
 };
@@ -73,14 +75,14 @@ pub(crate) fn call_function(
         local_env.insert(param.clone(), value);
     }
 
-    let completion = eval_statement_list(&function.body, &mut local_env)?;
-    for name in caller_names {
-        if name != GLOBAL_THIS_BINDING && !function_local_names.contains(&name) {
-            if let Some(value) = local_env.get(&name) {
-                env.insert(name, value.clone());
-            }
-        }
+    if let Some(bytecode) = &function.bytecode {
+        let (value, final_env) = eval_function_bytecode(bytecode, local_env)?;
+        propagate_caller_bindings(env, &caller_names, &function_local_names, &final_env);
+        return Ok(value);
     }
+
+    let completion = eval_statement_list(&function.body, &mut local_env)?;
+    propagate_caller_bindings(env, &caller_names, &function_local_names, &local_env);
 
     match completion {
         Completion::Normal(value) => Ok(value),
@@ -91,5 +93,20 @@ pub(crate) fn call_function(
         Completion::Throw(value) => Err(RuntimeError {
             message: format!("throw statement executed: {}", error_value(value)),
         }),
+    }
+}
+
+fn propagate_caller_bindings(
+    env: &mut HashMap<String, Value>,
+    caller_names: &[String],
+    function_local_names: &HashSet<String>,
+    final_env: &HashMap<String, Value>,
+) {
+    for name in caller_names {
+        if name != GLOBAL_THIS_BINDING && !function_local_names.contains(name) {
+            if let Some(value) = final_env.get(name) {
+                env.insert(name.clone(), value.clone());
+            }
+        }
     }
 }

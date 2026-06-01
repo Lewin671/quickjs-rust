@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use qjs_ast::{AssignmentOp, BinaryOp, Expr, ForInit, Literal, Stmt, UnaryOp, VarKind};
 
 use crate::{RuntimeError, Value};
@@ -188,10 +190,12 @@ impl Compiler {
                 constructable,
                 ..
             } => {
+                let bytecode = super::compiler::compile_function_body(params, body)?;
                 self.emit(Op::NewFunction {
                     name: name.clone(),
                     params: params.clone(),
                     body: body.clone(),
+                    bytecode: Rc::new(bytecode),
                     constructable: *constructable,
                 });
                 Ok(())
