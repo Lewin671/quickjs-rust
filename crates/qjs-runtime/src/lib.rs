@@ -45,6 +45,27 @@ use value::{ArrayRef, ObjectRef, Property};
 pub use bytecode::{Bytecode, compile_script, eval_bytecode, eval_bytecode_source};
 
 pub(crate) const GLOBAL_THIS_BINDING: &str = "\0global_this";
+pub(crate) const RUNTIME_INTRINSIC_NAMES: &[&str] = &[
+    GLOBAL_THIS_BINDING,
+    "undefined",
+    "Object",
+    "Function",
+    "Array",
+    "Number",
+    "String",
+    "Boolean",
+    "Date",
+    "Error",
+    "JSON",
+    "Math",
+    "Reflect",
+    "NaN",
+    "Infinity",
+    "isFinite",
+    "isNaN",
+    "parseFloat",
+    "parseInt",
+];
 
 /// Runtime error.
 #[derive(Clone, Debug, PartialEq)]

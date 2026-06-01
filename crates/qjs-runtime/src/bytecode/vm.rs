@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use crate::{
-    ArrayRef, Function, GLOBAL_THIS_BINDING, ObjectRef, RuntimeError, Value, call_function,
-    constructor_prototype, initialize_builtins, is_truthy, object_prototype, operations,
-    to_property_key,
+    ArrayRef, Function, GLOBAL_THIS_BINDING, ObjectRef, RUNTIME_INTRINSIC_NAMES, RuntimeError,
+    Value, call_function, constructor_prototype, initialize_builtins, is_truthy, object_prototype,
+    operations, to_property_key,
 };
 
 use super::ir::{Bytecode, Op};
@@ -17,28 +17,6 @@ struct VmCallEnv {
     env: HashMap<String, Value>,
     binding_names: Option<Vec<String>>,
 }
-
-const RUNTIME_INTRINSIC_NAMES: &[&str] = &[
-    GLOBAL_THIS_BINDING,
-    "undefined",
-    "Object",
-    "Function",
-    "Array",
-    "Number",
-    "String",
-    "Boolean",
-    "Date",
-    "Error",
-    "JSON",
-    "Math",
-    "Reflect",
-    "NaN",
-    "Infinity",
-    "isFinite",
-    "isNaN",
-    "parseFloat",
-    "parseInt",
-];
 
 pub(super) fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> {
     let mut vm = Vm::new(bytecode);
