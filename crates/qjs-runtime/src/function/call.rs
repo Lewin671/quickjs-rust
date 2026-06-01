@@ -45,7 +45,6 @@ pub(crate) fn call_function(
             env,
         );
     }
-    let caller_names: Vec<String> = env.keys().cloned().collect();
     let mut local_env = env.clone();
     for (name, value) in &function.env {
         local_env
@@ -73,7 +72,7 @@ pub(crate) fn call_function(
 
     if let Some(bytecode) = &function.bytecode {
         let (value, final_env) = eval_function_bytecode(bytecode, local_env)?;
-        propagate_caller_bindings(env, &caller_names, &function.local_names, &final_env);
+        propagate_caller_bindings(env, &function.local_names, &final_env);
         return Ok(value);
     }
 
@@ -84,15 +83,15 @@ pub(crate) fn call_function(
 
 fn propagate_caller_bindings(
     env: &mut HashMap<String, Value>,
-    caller_names: &[String],
     function_local_names: &[String],
     final_env: &HashMap<String, Value>,
 ) {
-    for name in caller_names {
-        if name != GLOBAL_THIS_BINDING && function_local_names.binary_search(name).is_err() {
-            if let Some(value) = final_env.get(name) {
-                env.insert(name.clone(), value.clone());
-            }
+    for (name, value) in env.iter_mut() {
+        if name != GLOBAL_THIS_BINDING
+            && function_local_names.binary_search(name).is_err()
+            && let Some(final_value) = final_env.get(name)
+        {
+            *value = final_value.clone();
         }
     }
 }
