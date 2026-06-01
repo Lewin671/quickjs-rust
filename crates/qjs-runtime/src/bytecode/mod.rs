@@ -19,6 +19,7 @@ use qjs_parser::parse_script;
 use crate::{RuntimeError, Value};
 
 pub use ir::Bytecode;
+pub(crate) use vm::FunctionBytecodeResult;
 
 /// Compiles an AST script into runtime bytecode.
 ///
@@ -39,7 +40,7 @@ pub(crate) fn compile_function_body(
 pub(crate) fn eval_function_bytecode(
     bytecode: &Bytecode,
     env: std::collections::HashMap<String, Value>,
-) -> Result<(Value, std::collections::HashMap<String, Value>), RuntimeError> {
+) -> Result<FunctionBytecodeResult<'_>, RuntimeError> {
     vm::eval_function_bytecode(bytecode, env)
 }
 

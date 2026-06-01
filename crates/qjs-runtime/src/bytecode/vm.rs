@@ -21,10 +21,34 @@ pub(super) fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> 
 pub(super) fn eval_function_bytecode(
     bytecode: &Bytecode,
     env: HashMap<String, Value>,
-) -> Result<(Value, HashMap<String, Value>), RuntimeError> {
+) -> Result<FunctionBytecodeResult<'_>, RuntimeError> {
     let mut vm = Vm::new_with_globals(bytecode, env);
     let value = vm.run()?;
-    Ok((value, vm.current_env()))
+    Ok(FunctionBytecodeResult {
+        value,
+        bytecode,
+        globals: vm.globals,
+        locals: vm.locals,
+    })
+}
+
+pub(crate) struct FunctionBytecodeResult<'a> {
+    pub(crate) value: Value,
+    bytecode: &'a Bytecode,
+    globals: HashMap<String, Value>,
+    locals: Vec<Slot>,
+}
+
+impl FunctionBytecodeResult<'_> {
+    pub(crate) fn binding(&self, name: &str) -> Option<&Value> {
+        self.bytecode
+            .locals
+            .iter()
+            .position(|local| local.name == name)
+            .and_then(|index| self.locals.get(index))
+            .and_then(Option::as_ref)
+            .or_else(|| self.globals.get(name))
+    }
 }
 
 pub(super) struct Vm<'a> {
