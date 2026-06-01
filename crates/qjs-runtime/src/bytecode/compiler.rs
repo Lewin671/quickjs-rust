@@ -43,11 +43,7 @@ impl Compiler {
             self.compile_stmt(stmt)?;
         }
         self.code.push(Op::Return);
-        Ok(Bytecode {
-            constants: self.constants,
-            locals: self.locals,
-            code: self.code,
-        })
+        Ok(Bytecode::new(self.constants, self.locals, self.code))
     }
 
     fn compile_function(
@@ -64,11 +60,7 @@ impl Compiler {
             self.compile_stmt(stmt)?;
         }
         self.code.push(Op::Return);
-        Ok(Bytecode {
-            constants: self.constants,
-            locals: self.locals,
-            code: self.code,
-        })
+        Ok(Bytecode::new(self.constants, self.locals, self.code))
     }
 
     fn collect_hoisted_locals(&mut self, body: &[Stmt]) {

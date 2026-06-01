@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{collections::BTreeSet, rc::Rc};
 
 use qjs_ast::{BinaryOp, UnaryOp};
 
@@ -57,5 +57,36 @@ pub(super) struct Local {
 pub struct Bytecode {
     pub(super) constants: Vec<Value>,
     pub(super) locals: Vec<Local>,
+    global_names: Vec<String>,
     pub(super) code: Vec<Op>,
+}
+
+impl Bytecode {
+    pub(super) fn new(constants: Vec<Value>, locals: Vec<Local>, code: Vec<Op>) -> Self {
+        Self {
+            constants,
+            locals,
+            global_names: collect_global_names(&code),
+            code,
+        }
+    }
+
+    pub(crate) fn global_names(&self) -> &[String] {
+        &self.global_names
+    }
+
+    pub(crate) fn local_names(&self) -> impl Iterator<Item = &str> {
+        self.locals.iter().map(|local| local.name.as_str())
+    }
+}
+
+fn collect_global_names(code: &[Op]) -> Vec<String> {
+    code.iter()
+        .filter_map(|op| match op {
+            Op::LoadGlobal(name) | Op::TypeofGlobal(name) => Some(name.clone()),
+            _ => None,
+        })
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
 }
