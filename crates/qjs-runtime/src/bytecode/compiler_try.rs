@@ -60,12 +60,23 @@ impl Compiler {
     ) -> Result<usize, RuntimeError> {
         let target = self.code.len();
         if let Some(param) = &handler.param {
+            let saved_slot = self.local_slots.get(param).copied().map(|slot| {
+                let saved_slot = self.temp_local("catch_saved");
+                self.emit(Op::LoadLocal(slot));
+                self.emit(Op::StoreLocal(saved_slot));
+                saved_slot
+            });
             let slot = self.local_slot(param, false);
             self.emit(Op::StoreLocal(slot));
+            self.compile_try_body(&handler.body, result_slot)?;
+            if let Some(saved_slot) = saved_slot {
+                self.emit(Op::LoadLocal(saved_slot));
+                self.emit(Op::StoreLocal(slot));
+            }
         } else {
             self.emit(Op::Pop);
+            self.compile_try_body(&handler.body, result_slot)?;
         }
-        self.compile_try_body(&handler.body, result_slot)?;
         self.emit(Op::ExitTry);
         Ok(target)
     }
