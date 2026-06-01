@@ -10,6 +10,7 @@ pub(super) enum Op {
     LoadLocal(usize),
     StoreLocal(usize),
     LoadGlobal(String),
+    TypeofGlobal(String),
     Pop,
     Dup,
     NewArray(usize),

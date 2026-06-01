@@ -117,6 +117,10 @@ impl<'a> Vm<'a> {
                         })?;
                     self.stack.push(value);
                 }
+                Op::TypeofGlobal(name) => {
+                    let value = self.globals.get(&name).cloned().unwrap_or(Value::Undefined);
+                    self.stack.push(Value::String(typeof_value(value)));
+                }
                 Op::Pop => {
                     self.pop()?;
                 }
@@ -252,7 +256,9 @@ impl<'a> Vm<'a> {
             .get(GLOBAL_THIS_BINDING)
             .cloned()
             .unwrap_or(Value::Undefined);
-        let result = call_function(callee, this_value, arguments, &mut self.globals, false)?;
+        let mut env = self.current_env();
+        let result = call_function(callee, this_value, arguments, &mut env, false)?;
+        self.apply_env(env);
         self.stack.push(result);
         Ok(())
     }
@@ -262,7 +268,9 @@ impl<'a> Vm<'a> {
         let key = to_property_key(self.pop()?)?;
         let this_value = self.pop()?;
         let callee = get_property(this_value.clone(), &key, &self.globals)?;
-        let result = call_function(callee, this_value, arguments, &mut self.globals, false)?;
+        let mut env = self.current_env();
+        let result = call_function(callee, this_value, arguments, &mut env, false)?;
+        self.apply_env(env);
         self.stack.push(result);
         Ok(())
     }
@@ -282,13 +290,9 @@ impl<'a> Vm<'a> {
         }
         let prototype = constructor_prototype(&callee);
         let this_value = Value::Object(ObjectRef::with_prototype(HashMap::new(), prototype));
-        let result = call_function(
-            callee,
-            this_value.clone(),
-            arguments,
-            &mut self.globals,
-            true,
-        )?;
+        let mut env = self.current_env();
+        let result = call_function(callee, this_value.clone(), arguments, &mut env, true)?;
+        self.apply_env(env);
         match result {
             Value::Array(_) | Value::Function(_) | Value::Object(_) => self.stack.push(result),
             _ => self.stack.push(this_value),
@@ -313,6 +317,19 @@ impl<'a> Vm<'a> {
             }
         }
         env
+    }
+
+    fn apply_env(&mut self, env: HashMap<String, Value>) {
+        for (index, local) in self.bytecode.locals.iter().enumerate() {
+            if let Some(value) = env.get(&local.name) {
+                self.locals[index] = Slot::Value(value.clone());
+            }
+        }
+        for (name, value) in env {
+            if !self.bytecode.locals.iter().any(|local| local.name == name) {
+                self.globals.insert(name, value);
+            }
+        }
     }
 
     pub(super) fn pop(&mut self) -> Result<Value, RuntimeError> {

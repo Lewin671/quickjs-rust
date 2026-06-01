@@ -9,6 +9,19 @@ use super::ir::Op;
 use super::util::unsupported_stmt;
 
 impl Compiler {
+    pub(super) fn compile_hoisted_function_decls(
+        &mut self,
+        body: &[Stmt],
+    ) -> Result<(), RuntimeError> {
+        for stmt in body {
+            if let Stmt::FunctionDecl { .. } = stmt {
+                self.compile_function_decl(stmt)?;
+                self.emit(Op::Pop);
+            }
+        }
+        Ok(())
+    }
+
     pub(super) fn compile_array(&mut self, elements: &[Expr]) -> Result<(), RuntimeError> {
         for element in elements {
             self.compile_expr(element)?;

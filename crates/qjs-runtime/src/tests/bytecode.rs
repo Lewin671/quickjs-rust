@@ -1,7 +1,14 @@
-use crate::{Value, eval, eval_bytecode_source};
+use qjs_parser::parse_script;
+
+use crate::{Value, eval_bytecode_source, eval_script};
 
 fn assert_bytecode_matches_ast(source: &str) {
-    assert_eq!(eval_bytecode_source(source), eval(source), "{source}");
+    let script = parse_script(source).expect("test source should parse");
+    assert_eq!(
+        eval_bytecode_source(source),
+        eval_script(&script),
+        "{source}"
+    );
 }
 
 #[test]
@@ -35,7 +42,7 @@ fn evaluates_delete_with_bytecode() {
     assert_bytecode_matches_ast("let array = [1, 2]; delete array[0]; array[0];");
     assert_bytecode_matches_ast("let x = 1; delete x;");
     assert_bytecode_matches_ast("delete missing;");
-    assert_eq!(eval_bytecode_source("delete 1;"), eval("delete 1;"));
+    assert_bytecode_matches_ast("delete 1;");
 }
 
 #[test]

@@ -38,6 +38,7 @@ pub(super) fn compile_function_body(
 impl Compiler {
     fn compile(mut self, script: &Script) -> Result<Bytecode, RuntimeError> {
         self.collect_hoisted_locals(&script.body);
+        self.compile_hoisted_function_decls(&script.body)?;
         for stmt in &script.body {
             self.compile_stmt(stmt)?;
         }
@@ -58,6 +59,7 @@ impl Compiler {
             self.local_slot(param, true);
         }
         self.collect_hoisted_locals(body);
+        self.compile_hoisted_function_decls(body)?;
         for stmt in body {
             self.compile_stmt(stmt)?;
         }
@@ -271,6 +273,7 @@ impl Compiler {
                     self.emit_load_undefined();
                     return Ok(());
                 }
+                self.compile_hoisted_function_decls(body)?;
                 for (index, stmt) in body.iter().enumerate() {
                     self.compile_stmt(stmt)?;
                     if index + 1 != body.len() {

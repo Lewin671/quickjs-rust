@@ -1,4 +1,4 @@
-//! Early interpreter for the Rust QuickJS rewrite.
+//! Runtime for the Rust QuickJS rewrite.
 
 use std::collections::HashMap;
 
@@ -60,7 +60,7 @@ pub struct RuntimeError {
     pub message: String,
 }
 
-/// Evaluates source text and returns the last statement value.
+/// Evaluates source text through the bytecode VM and returns the last statement value.
 ///
 /// # Errors
 ///
@@ -69,7 +69,8 @@ pub fn eval(source: &str) -> Result<Value, RuntimeError> {
     let script = parse_script(source).map_err(|error| RuntimeError {
         message: error.message,
     })?;
-    eval_script(&script)
+    let bytecode = compile_script(&script)?;
+    eval_bytecode(&bytecode)
 }
 
 /// Evaluates an AST script.
