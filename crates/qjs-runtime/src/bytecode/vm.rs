@@ -10,7 +10,9 @@ use crate::{
 
 use super::ir::{Bytecode, Op};
 use super::util::{stack_underflow, typeof_value};
-use super::vm_props::{delete_property, fast_number_binary, get_property, set_property};
+use super::vm_props::{
+    delete_property, enumerable_keys, fast_number_binary, get_property, set_property,
+};
 
 #[derive(Clone)]
 enum Slot {
@@ -121,6 +123,7 @@ impl<'a> Vm<'a> {
                 }
                 Op::NewArray(count) => self.new_array(count)?,
                 Op::NewObject(count) => self.new_object(count)?,
+                Op::EnumerateKeys => self.enumerate_keys()?,
                 Op::GetProp => self.get_prop()?,
                 Op::SetProp => self.set_prop()?,
                 Op::DeleteProp => self.delete_prop()?,
@@ -214,6 +217,13 @@ impl<'a> Vm<'a> {
             values,
             object_prototype(&self.globals),
         )));
+        Ok(())
+    }
+
+    fn enumerate_keys(&mut self) -> Result<(), RuntimeError> {
+        let value = self.pop()?;
+        self.stack
+            .push(Value::Array(ArrayRef::new(enumerable_keys(value)?)));
         Ok(())
     }
 

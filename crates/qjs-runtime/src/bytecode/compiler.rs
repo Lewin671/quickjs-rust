@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use qjs_ast::{ForInit, Script, Stmt, VarKind};
+use qjs_ast::{ForInLeft, ForInit, Script, Stmt, VarKind};
 
 use crate::{RuntimeError, Value};
 
@@ -99,6 +99,17 @@ impl Compiler {
                     }
                     self.collect_hoisted_locals(std::slice::from_ref(body));
                 }
+                Stmt::ForIn { left, body, .. } => {
+                    if let ForInLeft::VarDecl {
+                        name,
+                        kind: VarKind::Var,
+                        ..
+                    } = left
+                    {
+                        self.local_slot(name, true);
+                    }
+                    self.collect_hoisted_locals(std::slice::from_ref(body));
+                }
                 Stmt::FunctionDecl { name, .. } => {
                     self.local_slot(name, true);
                 }
@@ -137,7 +148,6 @@ impl Compiler {
                 | Stmt::Break { .. }
                 | Stmt::Continue { .. }
                 | Stmt::VarDecl { .. }
-                | Stmt::ForIn { .. }
                 | Stmt::Empty => {}
             }
         }
@@ -284,6 +294,9 @@ impl Compiler {
                 body,
                 ..
             } => self.compile_for(init.as_ref(), test.as_ref(), update.as_ref(), body),
+            Stmt::ForIn {
+                left, right, body, ..
+            } => self.compile_for_in(left, right, body),
             Stmt::Return { argument, .. } => {
                 if let Some(argument) = argument {
                     self.compile_expr(argument)?;
@@ -329,9 +342,7 @@ impl Compiler {
                 cases,
                 ..
             } => self.compile_switch(discriminant, cases),
-            Stmt::ForIn { .. } | Stmt::Try { .. } | Stmt::FunctionDecl { .. } => {
-                self.compile_function_decl(stmt)
-            }
+            Stmt::Try { .. } | Stmt::FunctionDecl { .. } => self.compile_function_decl(stmt),
         }
     }
 }

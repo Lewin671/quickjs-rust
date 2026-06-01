@@ -1,11 +1,67 @@
-use qjs_ast::{BinaryOp, Expr, SwitchCase};
+use qjs_ast::{AssignmentTarget, BinaryOp, Expr, ForInLeft, Stmt, SwitchCase, VarKind};
 
-use crate::RuntimeError;
+use crate::{RuntimeError, Value};
 
 use super::compiler::Compiler;
 use super::ir::Op;
 
 impl Compiler {
+    pub(super) fn compile_for_in(
+        &mut self,
+        left: &ForInLeft,
+        right: &Expr,
+        body: &Stmt,
+    ) -> Result<(), RuntimeError> {
+        let result_slot = self.temp_local("for_in_result");
+        let keys_slot = self.temp_local("for_in_keys");
+        let index_slot = self.temp_local("for_in_index");
+        let key_slot = self.temp_local("for_in_key");
+
+        self.emit_load_undefined();
+        self.emit(Op::StoreLocal(result_slot));
+        self.compile_expr(right)?;
+        self.emit(Op::EnumerateKeys);
+        self.emit(Op::StoreLocal(keys_slot));
+        self.emit_number(0.0);
+        self.emit(Op::StoreLocal(index_slot));
+
+        let loop_start = self.code.len();
+        self.emit(Op::LoadLocal(index_slot));
+        self.emit(Op::LoadLocal(keys_slot));
+        self.emit_string("length");
+        self.emit(Op::GetProp);
+        self.emit(Op::Binary(BinaryOp::Lt));
+        let exit_jump = self.emit(Op::JumpIfFalse(usize::MAX));
+        self.emit(Op::Pop);
+
+        self.emit(Op::LoadLocal(keys_slot));
+        self.emit(Op::LoadLocal(index_slot));
+        self.emit(Op::GetProp);
+        self.emit(Op::StoreLocal(key_slot));
+        self.compile_for_in_left(left, key_slot)?;
+
+        self.push_loop(result_slot);
+        self.compile_stmt(body)?;
+        self.emit(Op::StoreLocal(result_slot));
+        let context = self.pop_loop();
+
+        let update_start = self.code.len();
+        self.emit(Op::LoadLocal(index_slot));
+        self.emit_number(1.0);
+        self.emit(Op::Binary(BinaryOp::Add));
+        self.emit(Op::StoreLocal(index_slot));
+        self.emit(Op::Jump(loop_start));
+
+        let exit = self.code.len();
+        self.patch_jump(exit_jump, exit);
+        self.emit(Op::Pop);
+        self.emit(Op::LoadLocal(result_slot));
+        let done = self.code.len();
+        self.patch_loop_breaks(&context, done);
+        self.patch_loop_continues(&context, update_start);
+        Ok(())
+    }
+
     pub(super) fn compile_switch(
         &mut self,
         discriminant: &Expr,
@@ -65,7 +121,7 @@ impl Compiler {
 
     fn compile_switch_case(
         &mut self,
-        body: &[qjs_ast::Stmt],
+        body: &[Stmt],
         result_slot: usize,
     ) -> Result<(), RuntimeError> {
         for stmt in body {
@@ -73,5 +129,44 @@ impl Compiler {
             self.emit(Op::StoreLocal(result_slot));
         }
         Ok(())
+    }
+
+    fn compile_for_in_left(
+        &mut self,
+        left: &ForInLeft,
+        key_slot: usize,
+    ) -> Result<(), RuntimeError> {
+        match left {
+            ForInLeft::VarDecl { name, kind, .. } => {
+                let slot = self.local_slot(name, *kind == VarKind::Var);
+                self.emit(Op::LoadLocal(key_slot));
+                self.emit(Op::StoreLocal(slot));
+            }
+            ForInLeft::Target(AssignmentTarget::Identifier { name, .. }) => {
+                let slot = self.local_slot(name, false);
+                self.emit(Op::LoadLocal(key_slot));
+                self.emit(Op::StoreLocal(slot));
+            }
+            ForInLeft::Target(AssignmentTarget::Member {
+                object, property, ..
+            }) => {
+                self.compile_expr(object)?;
+                self.compile_member_key(property)?;
+                self.emit(Op::LoadLocal(key_slot));
+                self.emit(Op::SetProp);
+                self.emit(Op::Pop);
+            }
+        }
+        Ok(())
+    }
+
+    fn emit_number(&mut self, value: f64) {
+        let slot = self.const_slot(Value::Number(value));
+        self.emit(Op::LoadConst(slot));
+    }
+
+    fn emit_string(&mut self, value: &str) {
+        let slot = self.const_slot(Value::String(value.to_owned()));
+        self.emit(Op::LoadConst(slot));
     }
 }

@@ -84,6 +84,20 @@ pub(super) fn delete_property(object: Value, key: &str) -> Result<Value, Runtime
     }
 }
 
+pub(super) fn enumerable_keys(value: Value) -> Result<Vec<Value>, RuntimeError> {
+    let keys = match value {
+        Value::Object(object) => object.own_property_keys(),
+        Value::Array(elements) => (0..elements.len()).map(|index| index.to_string()).collect(),
+        Value::Null | Value::Undefined => Vec::new(),
+        _ => {
+            return Err(RuntimeError {
+                message: "for-in target is not enumerable".to_owned(),
+            });
+        }
+    };
+    Ok(keys.into_iter().map(Value::String).collect())
+}
+
 pub(super) fn fast_number_binary(left: &Value, op: BinaryOp, right: &Value) -> Option<Value> {
     let (Value::Number(left), Value::Number(right)) = (left, right) else {
         return None;
