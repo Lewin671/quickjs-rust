@@ -189,6 +189,24 @@ fn evaluates_function_declarations_and_calls() {
         Ok(Value::Boolean(true))
     );
     assert_eq!(
+        eval(
+            "function make(value) { return function() { return ({ value: value }).hasOwnProperty('value'); }; } make(1)();"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "function make(value) { return function() { return [value, 2].join('|'); }; } make(1)();"
+        ),
+        Ok(Value::String("1|2".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "function outer(value) { return function inner() { function nested() { return value + 1; } return nested(); }; } outer(4)();"
+        ),
+        Ok(Value::Number(5.0))
+    );
+    assert_eq!(
         eval("let add = Function('a', 'b', 'return a + b;'); add(2, 3);"),
         Ok(Value::Number(5.0))
     );
