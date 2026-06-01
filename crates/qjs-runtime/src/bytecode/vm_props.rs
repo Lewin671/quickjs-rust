@@ -74,6 +74,16 @@ pub(super) fn set_property(object: Value, key: String, value: Value) -> Result<(
     }
 }
 
+pub(super) fn delete_property(object: Value, key: &str) -> Result<Value, RuntimeError> {
+    match object {
+        Value::Object(object) => Ok(Value::Boolean(object.delete_own_property(key))),
+        Value::Array(_) => Ok(Value::Boolean(true)),
+        _ => Err(RuntimeError {
+            message: "delete target is not an object".to_owned(),
+        }),
+    }
+}
+
 pub(super) fn fast_number_binary(left: &Value, op: BinaryOp, right: &Value) -> Option<Value> {
     let (Value::Number(left), Value::Number(right)) = (left, right) else {
         return None;

@@ -16,6 +16,7 @@ pub(super) enum Op {
     NewObject(usize),
     GetProp,
     SetProp,
+    DeleteProp,
     Call(usize),
     CallMethod(usize),
     New(usize),
