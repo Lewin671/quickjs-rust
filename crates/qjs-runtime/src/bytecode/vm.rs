@@ -3,12 +3,14 @@ use std::collections::HashMap;
 use qjs_ast::BinaryOp;
 
 use crate::{
-    GLOBAL_THIS_BINDING, ObjectRef, RuntimeError, Value, error_value, initialize_builtins,
-    is_truthy, operations,
+    ArrayRef, Function, GLOBAL_THIS_BINDING, ObjectRef, RuntimeError, Value, call_function,
+    constructor_prototype, error_value, initialize_builtins, is_truthy, object_prototype,
+    operations, to_property_key,
 };
 
 use super::ir::{Bytecode, Op};
 use super::util::{stack_underflow, typeof_value};
+use super::vm_props::{fast_number_binary, get_property, set_property};
 
 #[derive(Clone)]
 enum Slot {
@@ -98,6 +100,29 @@ impl<'a> Vm<'a> {
                     let value = self.stack.last().cloned().ok_or_else(stack_underflow)?;
                     self.stack.push(value);
                 }
+                Op::NewArray(count) => self.new_array(count)?,
+                Op::NewObject(count) => self.new_object(count)?,
+                Op::GetProp => self.get_prop()?,
+                Op::SetProp => self.set_prop()?,
+                Op::Call(argc) => self.call(argc)?,
+                Op::CallMethod(argc) => self.call_method(argc)?,
+                Op::New(argc) => self.construct(argc)?,
+                Op::NewFunction {
+                    name,
+                    params,
+                    body,
+                    constructable,
+                } => {
+                    let env = self.current_env();
+                    self.stack
+                        .push(Value::Function(Function::new_user_with_constructable(
+                            name,
+                            params,
+                            body,
+                            env,
+                            constructable,
+                        )));
+                }
                 Op::Typeof => {
                     let value = self.pop()?;
                     self.stack.push(Value::String(typeof_value(value)));
@@ -146,6 +171,117 @@ impl<'a> Vm<'a> {
         Ok(())
     }
 
+    fn new_array(&mut self, count: usize) -> Result<(), RuntimeError> {
+        let mut values = Vec::with_capacity(count);
+        for _ in 0..count {
+            values.push(self.pop()?);
+        }
+        values.reverse();
+        self.stack.push(Value::Array(ArrayRef::new(values)));
+        Ok(())
+    }
+
+    fn new_object(&mut self, count: usize) -> Result<(), RuntimeError> {
+        let mut values = HashMap::new();
+        for _ in 0..count {
+            let value = self.pop()?;
+            let key = to_property_key(self.pop()?)?;
+            values.insert(key, value);
+        }
+        self.stack.push(Value::Object(ObjectRef::with_prototype(
+            values,
+            object_prototype(&self.globals),
+        )));
+        Ok(())
+    }
+
+    fn get_prop(&mut self) -> Result<(), RuntimeError> {
+        let key = to_property_key(self.pop()?)?;
+        let object = self.pop()?;
+        self.stack.push(get_property(object, &key, &self.globals)?);
+        Ok(())
+    }
+
+    fn set_prop(&mut self) -> Result<(), RuntimeError> {
+        let value = self.pop()?;
+        let key = to_property_key(self.pop()?)?;
+        let object = self.pop()?;
+        set_property(object, key, value.clone())?;
+        self.stack.push(value);
+        Ok(())
+    }
+
+    fn call(&mut self, argc: usize) -> Result<(), RuntimeError> {
+        let arguments = self.pop_arguments(argc)?;
+        let callee = self.pop()?;
+        let this_value = self
+            .globals
+            .get(GLOBAL_THIS_BINDING)
+            .cloned()
+            .unwrap_or(Value::Undefined);
+        let result = call_function(callee, this_value, arguments, &mut self.globals, false)?;
+        self.stack.push(result);
+        Ok(())
+    }
+
+    fn call_method(&mut self, argc: usize) -> Result<(), RuntimeError> {
+        let arguments = self.pop_arguments(argc)?;
+        let key = to_property_key(self.pop()?)?;
+        let this_value = self.pop()?;
+        let callee = get_property(this_value.clone(), &key, &self.globals)?;
+        let result = call_function(callee, this_value, arguments, &mut self.globals, false)?;
+        self.stack.push(result);
+        Ok(())
+    }
+
+    fn construct(&mut self, argc: usize) -> Result<(), RuntimeError> {
+        let arguments = self.pop_arguments(argc)?;
+        let callee = self.pop()?;
+        let Value::Function(function) = &callee else {
+            return Err(RuntimeError {
+                message: "value is not a constructor".to_owned(),
+            });
+        };
+        if !function.constructable {
+            return Err(RuntimeError {
+                message: "value is not a constructor".to_owned(),
+            });
+        }
+        let prototype = constructor_prototype(&callee);
+        let this_value = Value::Object(ObjectRef::with_prototype(HashMap::new(), prototype));
+        let result = call_function(
+            callee,
+            this_value.clone(),
+            arguments,
+            &mut self.globals,
+            true,
+        )?;
+        match result {
+            Value::Array(_) | Value::Function(_) | Value::Object(_) => self.stack.push(result),
+            _ => self.stack.push(this_value),
+        }
+        Ok(())
+    }
+
+    fn pop_arguments(&mut self, argc: usize) -> Result<Vec<Value>, RuntimeError> {
+        let mut arguments = Vec::with_capacity(argc);
+        for _ in 0..argc {
+            arguments.push(self.pop()?);
+        }
+        arguments.reverse();
+        Ok(arguments)
+    }
+
+    fn current_env(&self) -> HashMap<String, Value> {
+        let mut env = self.globals.clone();
+        for (index, local) in self.locals.iter().enumerate() {
+            if let Slot::Value(value) = local {
+                env.insert(self.bytecode.locals[index].name.clone(), value.clone());
+            }
+        }
+        env
+    }
+
     fn pop(&mut self) -> Result<Value, RuntimeError> {
         self.stack.pop().ok_or_else(stack_underflow)
     }
@@ -169,26 +305,4 @@ impl<'a> Vm<'a> {
         *local = Slot::Value(value);
         Ok(())
     }
-}
-
-fn fast_number_binary(left: &Value, op: BinaryOp, right: &Value) -> Option<Value> {
-    let (Value::Number(left), Value::Number(right)) = (left, right) else {
-        return None;
-    };
-    let value = match op {
-        BinaryOp::Add => Value::Number(left + right),
-        BinaryOp::Sub => Value::Number(left - right),
-        BinaryOp::Mul => Value::Number(left * right),
-        BinaryOp::Div => Value::Number(left / right),
-        BinaryOp::Rem => Value::Number(left % right),
-        BinaryOp::Pow => Value::Number(left.powf(*right)),
-        BinaryOp::Lt => Value::Boolean(left < right),
-        BinaryOp::Le => Value::Boolean(left <= right),
-        BinaryOp::Gt => Value::Boolean(left > right),
-        BinaryOp::Ge => Value::Boolean(left >= right),
-        BinaryOp::StrictEq => Value::Boolean(left == right),
-        BinaryOp::StrictNe => Value::Boolean(left != right),
-        _ => return None,
-    };
-    Some(value)
 }

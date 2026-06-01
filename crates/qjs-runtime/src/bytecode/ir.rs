@@ -1,4 +1,4 @@
-use qjs_ast::{BinaryOp, UnaryOp};
+use qjs_ast::{BinaryOp, Stmt, UnaryOp};
 
 use crate::Value;
 
@@ -10,6 +10,19 @@ pub(super) enum Op {
     LoadGlobal(String),
     Pop,
     Dup,
+    NewArray(usize),
+    NewObject(usize),
+    GetProp,
+    SetProp,
+    Call(usize),
+    CallMethod(usize),
+    New(usize),
+    NewFunction {
+        name: Option<String>,
+        params: Vec<String>,
+        body: Vec<Stmt>,
+        constructable: bool,
+    },
     Typeof,
     Unary(UnaryOp),
     Binary(BinaryOp),

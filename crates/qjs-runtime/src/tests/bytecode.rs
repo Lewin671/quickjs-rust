@@ -40,13 +40,26 @@ fn evaluates_branch_and_loop_bytecode_subset() {
 }
 
 #[test]
-fn reports_unsupported_bytecode_surface() {
-    let error = eval_bytecode_source("let o = { count: 1 }; o.count;")
-        .expect_err("object literals are not in the first bytecode slice");
-    assert!(error.message.contains("unsupported bytecode expression"));
+fn evaluates_objects_arrays_members_and_calls_with_bytecode() {
+    assert_bytecode_matches_ast("let o = { count: 1 }; o.count;");
+    assert_bytecode_matches_ast("let o = { count: 1 }; o.count = 3; o.count;");
+    assert_bytecode_matches_ast("let key = 'count'; let o = { [key]: 2 }; o[key];");
+    assert_bytecode_matches_ast("let values = [1, 2, 3]; values[1];");
+    assert_bytecode_matches_ast("let values = [1, 2, 3]; values.length;");
+    assert_bytecode_matches_ast("'abc'.length;");
+    assert_bytecode_matches_ast("Math.max(1, 5, 3);");
+    assert_bytecode_matches_ast("let values = [1]; values.push(2); values.length;");
+    assert_bytecode_matches_ast("function f() { return 1; } f();");
+    assert_bytecode_matches_ast("let f = function() { return 2; }; f();");
+    assert_bytecode_matches_ast(
+        "function C() { this.value = 4; } let instance = new C(); instance.value;",
+    );
+}
 
-    let error = eval_bytecode_source("function f() { return 1; } f();")
-        .expect_err("functions are not in the first bytecode slice");
+#[test]
+fn reports_unsupported_bytecode_surface() {
+    let error = eval_bytecode_source("switch (1) { case 1: 2; }")
+        .expect_err("switch is not in this bytecode slice yet");
     assert!(error.message.contains("unsupported bytecode statement"));
 }
 
