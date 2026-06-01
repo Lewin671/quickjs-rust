@@ -14,6 +14,7 @@ pub(super) enum Op {
     Dup,
     NewArray(usize),
     NewObject(usize),
+    EnumerateKeys,
     GetProp,
     SetProp,
     DeleteProp,

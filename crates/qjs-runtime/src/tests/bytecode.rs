@@ -71,6 +71,20 @@ fn evaluates_branch_and_loop_bytecode_subset() {
     assert_bytecode_matches_ast(
         "function f(x) { switch (x) { case 1: return 'one'; default: return 'other'; } } f(1);",
     );
+    assert_bytecode_matches_ast(
+        "let out = ''; for (var key in { b: 2, a: 1 }) { out = out + key; } out;",
+    );
+    assert_bytecode_matches_ast(
+        "let out = ''; let key; for (key in ['x', 'y']) { out = out + key; } out;",
+    );
+    assert_bytecode_matches_ast("let out = ''; for (var key in null) { out = out + key; } out;");
+    assert_bytecode_matches_ast(
+        "let out = ''; for (var key in { a: 1, b: 2, c: 3 }) { if (key === 'b') continue; out = out + key; if (key === 'c') break; } out;",
+    );
+    assert_bytecode_matches_ast("let holder = {}; for (holder.key in { z: 1 }) {} holder.key;");
+    assert_bytecode_matches_ast(
+        "function keys(object) { let out = ''; for (var key in object) { out = out + key; } return out; } keys({ b: 2, a: 1 });",
+    );
 }
 
 #[test]
