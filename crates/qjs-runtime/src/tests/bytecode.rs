@@ -85,6 +85,25 @@ fn evaluates_branch_and_loop_bytecode_subset() {
     assert_bytecode_matches_ast(
         "function keys(object) { let out = ''; for (var key in object) { out = out + key; } return out; } keys({ b: 2, a: 1 });",
     );
+    assert_bytecode_matches_ast("try { 1; } catch (error) { 2; }");
+    assert_bytecode_matches_ast("try { throw 'hit'; } catch (error) { error; }");
+    assert_bytecode_matches_ast("let x = 1; try { x = 2; } finally { x = x + 3; } x;");
+    assert_bytecode_matches_ast(
+        "let x = ''; try { throw 'a'; } catch (error) { x = x + error; } finally { x = x + 'f'; } x;",
+    );
+    assert_bytecode_matches_ast(
+        "let x = ''; try { throw 'a'; } catch (error) { throw 'b'; } finally { x = x + 'f'; }",
+    );
+    assert_bytecode_matches_ast(
+        "function f() { let x = 1; try { return x; } finally { x = 3; } } f();",
+    );
+    assert_bytecode_matches_ast(
+        "function f() { try { throw 'a'; } catch (error) { return error; } finally { 2; } } f();",
+    );
+    assert_bytecode_matches_ast("function f() { try { return 1; } finally { return 2; } } f();");
+    assert_bytecode_matches_ast(
+        "function f() { try { throw 'a'; } finally { return 'final'; } } f();",
+    );
 }
 
 #[test]
@@ -109,10 +128,6 @@ fn evaluates_objects_arrays_members_and_calls_with_bytecode() {
 
 #[test]
 fn reports_unsupported_bytecode_surface() {
-    let error = eval_bytecode_source("try { 1; } finally { 2; }")
-        .expect_err("try is not in this bytecode slice yet");
-    assert!(error.message.contains("unsupported bytecode statement"));
-
     let error = eval_bytecode_source("break;").expect_err("top-level break must not compile");
     assert_eq!(error.message, "break outside loop");
 

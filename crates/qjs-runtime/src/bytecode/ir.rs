@@ -35,6 +35,12 @@ pub(super) enum Op {
     JumpIfFalse(usize),
     JumpIfTrue(usize),
     JumpIfNotNullish(usize),
+    EnterTry {
+        catch: Option<usize>,
+        finally: Option<usize>,
+    },
+    ExitTry,
+    EndFinally,
     Return,
     Throw,
 }
