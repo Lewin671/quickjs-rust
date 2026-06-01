@@ -25,6 +25,8 @@ impl Compiler {
         self.emit(Op::Pop);
         if let Some(alternate) = alternate {
             self.compile_stmt(alternate)?;
+        } else {
+            self.emit_load_undefined();
         }
         let end_target = self.code.len();
         self.patch_jump(end_jump, end_target);
@@ -32,17 +34,25 @@ impl Compiler {
     }
 
     pub(super) fn compile_while(&mut self, test: &Expr, body: &Stmt) -> Result<(), RuntimeError> {
+        let result_slot = self.temp_local("loop_result");
         self.emit_load_undefined();
+        self.emit(Op::StoreLocal(result_slot));
         let loop_start = self.code.len();
         self.compile_expr(test)?;
         let exit_jump = self.emit(Op::JumpIfFalse(usize::MAX));
         self.emit(Op::Pop);
-        self.emit(Op::Pop);
+        self.push_loop(result_slot);
         self.compile_stmt(body)?;
+        self.emit(Op::StoreLocal(result_slot));
+        let context = self.pop_loop();
         self.emit(Op::Jump(loop_start));
         let exit = self.code.len();
         self.patch_jump(exit_jump, exit);
         self.emit(Op::Pop);
+        self.emit(Op::LoadLocal(result_slot));
+        let done = self.code.len();
+        self.patch_loop_breaks(&context, done);
+        self.patch_loop_continues(&context, loop_start);
         Ok(())
     }
 
@@ -51,10 +61,15 @@ impl Compiler {
         body: &Stmt,
         test: &Expr,
     ) -> Result<(), RuntimeError> {
+        let result_slot = self.temp_local("loop_result");
         self.emit_load_undefined();
+        self.emit(Op::StoreLocal(result_slot));
         let loop_start = self.code.len();
-        self.emit(Op::Pop);
+        self.push_loop(result_slot);
         self.compile_stmt(body)?;
+        self.emit(Op::StoreLocal(result_slot));
+        let context = self.pop_loop();
+        let test_start = self.code.len();
         self.compile_expr(test)?;
         let exit_jump = self.emit(Op::JumpIfFalse(usize::MAX));
         self.emit(Op::Pop);
@@ -62,6 +77,10 @@ impl Compiler {
         let exit = self.code.len();
         self.patch_jump(exit_jump, exit);
         self.emit(Op::Pop);
+        self.emit(Op::LoadLocal(result_slot));
+        let done = self.code.len();
+        self.patch_loop_breaks(&context, done);
+        self.patch_loop_continues(&context, test_start);
         Ok(())
     }
 
@@ -76,19 +95,23 @@ impl Compiler {
             self.compile_for_init(init)?;
             self.emit(Op::Pop);
         }
+        let result_slot = self.temp_local("loop_result");
         self.emit_load_undefined();
+        self.emit(Op::StoreLocal(result_slot));
         let loop_start = self.code.len();
         let exit_jump = if let Some(test) = test {
             self.compile_expr(test)?;
             let jump = self.emit(Op::JumpIfFalse(usize::MAX));
             self.emit(Op::Pop);
-            self.emit(Op::Pop);
             Some(jump)
         } else {
-            self.emit(Op::Pop);
             None
         };
+        self.push_loop(result_slot);
         self.compile_stmt(body)?;
+        self.emit(Op::StoreLocal(result_slot));
+        let context = self.pop_loop();
+        let update_start = self.code.len();
         if let Some(update) = update {
             self.compile_expr(update)?;
             self.emit(Op::Pop);
@@ -99,6 +122,10 @@ impl Compiler {
             self.patch_jump(exit_jump, exit);
             self.emit(Op::Pop);
         }
+        self.emit(Op::LoadLocal(result_slot));
+        let done = self.code.len();
+        self.patch_loop_breaks(&context, done);
+        self.patch_loop_continues(&context, update_start);
         Ok(())
     }
 

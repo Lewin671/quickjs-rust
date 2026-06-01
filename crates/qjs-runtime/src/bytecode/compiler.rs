@@ -12,6 +12,15 @@ pub(super) struct Compiler {
     pub(super) locals: Vec<Local>,
     pub(super) local_slots: HashMap<String, usize>,
     pub(super) code: Vec<Op>,
+    loop_stack: Vec<LoopContext>,
+    next_temp: usize,
+}
+
+#[derive(Default)]
+pub(super) struct LoopContext {
+    result_slot: usize,
+    breaks: Vec<usize>,
+    continues: Vec<usize>,
 }
 
 pub(super) fn compile_script(script: &Script) -> Result<Bytecode, RuntimeError> {
@@ -169,6 +178,70 @@ impl Compiler {
         }
     }
 
+    pub(super) fn temp_local(&mut self, prefix: &str) -> usize {
+        let name = format!("\0{prefix}_{}", self.next_temp);
+        self.next_temp += 1;
+        self.local_slot(&name, true)
+    }
+
+    pub(super) fn push_loop(&mut self, result_slot: usize) {
+        self.loop_stack.push(LoopContext {
+            result_slot,
+            breaks: Vec::new(),
+            continues: Vec::new(),
+        });
+    }
+
+    pub(super) fn pop_loop(&mut self) -> LoopContext {
+        self.loop_stack
+            .pop()
+            .expect("loop context should be balanced")
+    }
+
+    pub(super) fn compile_break(&mut self) -> Result<(), RuntimeError> {
+        let Some(context) = self.loop_stack.last() else {
+            return Err(RuntimeError {
+                message: "break outside loop".to_owned(),
+            });
+        };
+        let result_slot = context.result_slot;
+        self.emit(Op::LoadLocal(result_slot));
+        let jump = self.emit(Op::Jump(usize::MAX));
+        self.loop_stack
+            .last_mut()
+            .expect("loop context should exist")
+            .breaks
+            .push(jump);
+        Ok(())
+    }
+
+    pub(super) fn compile_continue(&mut self) -> Result<(), RuntimeError> {
+        if self.loop_stack.is_empty() {
+            return Err(RuntimeError {
+                message: "continue outside loop".to_owned(),
+            });
+        }
+        let jump = self.emit(Op::Jump(usize::MAX));
+        self.loop_stack
+            .last_mut()
+            .expect("loop context should exist")
+            .continues
+            .push(jump);
+        Ok(())
+    }
+
+    pub(super) fn patch_loop_breaks(&mut self, context: &LoopContext, target: usize) {
+        for jump in &context.breaks {
+            self.patch_jump(*jump, target);
+        }
+    }
+
+    pub(super) fn patch_loop_continues(&mut self, context: &LoopContext, target: usize) {
+        for jump in &context.continues {
+            self.patch_jump(*jump, target);
+        }
+    }
+
     pub(super) fn compile_stmt(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
         match stmt {
             Stmt::Expr(expr) => self.compile_expr(expr),
@@ -238,9 +311,9 @@ impl Compiler {
                 self.emit_load_undefined();
                 Ok(())
             }
-            Stmt::Break { .. }
-            | Stmt::Continue { .. }
-            | Stmt::ForIn { .. }
+            Stmt::Break { .. } => self.compile_break(),
+            Stmt::Continue { .. } => self.compile_continue(),
+            Stmt::ForIn { .. }
             | Stmt::Switch { .. }
             | Stmt::Try { .. }
             | Stmt::FunctionDecl { .. } => self.compile_function_decl(stmt),
