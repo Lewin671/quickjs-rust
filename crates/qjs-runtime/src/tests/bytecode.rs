@@ -31,12 +31,20 @@ fn evaluates_branch_and_loop_bytecode_subset() {
     assert_bytecode_matches_ast("if (false) { 1; }");
     assert_bytecode_matches_ast("let x = 0; while (x < 3) { x = x + 1; } x;");
     assert_bytecode_matches_ast("let x = 0; while (x < 3) { x = x + 1; x; }");
+    assert_bytecode_matches_ast("let x = 0; while (true) { x++; if (x === 3) break; } x;");
+    assert_bytecode_matches_ast(
+        "let x = 0; let sum = 0; while (x < 5) { x++; if (x === 3) continue; sum = sum + x; } sum;",
+    );
     assert_bytecode_matches_ast("let x = 0; do { x++; } while (x < 3); x;");
     assert_bytecode_matches_ast("let x = 0; do { x++; x; } while (x < 3);");
+    assert_bytecode_matches_ast("let x = 0; do { x++; if (x < 3) continue; x; } while (x < 5);");
     assert_bytecode_matches_ast(
         "let sum = 0; for (var i = 0; i < 4; i = i + 1) { sum = sum + i; } sum;",
     );
     assert_bytecode_matches_ast("for (var i = 0; i < 3; i = i + 1) { i; }");
+    assert_bytecode_matches_ast(
+        "let sum = 0; for (var i = 0; i < 6; i = i + 1) { if (i === 2) continue; if (i === 5) break; sum = sum + i; } sum;",
+    );
 }
 
 #[test]
@@ -68,6 +76,12 @@ fn reports_unsupported_bytecode_surface() {
     let error = eval_bytecode_source("function f() { switch (1) { case 1: return 2; } } f();")
         .expect_err("function bodies must compile to bytecode");
     assert!(error.message.contains("unsupported bytecode statement"));
+
+    let error = eval_bytecode_source("break;").expect_err("top-level break must not compile");
+    assert_eq!(error.message, "break outside loop");
+
+    let error = eval_bytecode_source("continue;").expect_err("top-level continue must not compile");
+    assert_eq!(error.message, "continue outside loop");
 }
 
 #[test]
