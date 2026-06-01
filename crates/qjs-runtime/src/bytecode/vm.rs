@@ -13,6 +13,11 @@ use super::vm_try::TryFrame;
 
 pub(super) type Slot = Option<Value>;
 
+struct VmCallEnv {
+    env: HashMap<String, Value>,
+    binding_names: Option<Vec<String>>,
+}
+
 pub(super) fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> {
     let mut vm = Vm::new(bytecode);
     vm.run()
@@ -310,9 +315,9 @@ impl<'a> Vm<'a> {
             .get(GLOBAL_THIS_BINDING)
             .cloned()
             .unwrap_or(Value::Undefined);
-        let mut env = self.current_env();
-        let result = call_function(callee, this_value, arguments, &mut env, false)?;
-        self.apply_env(env);
+        let mut env = self.call_env(&callee);
+        let result = call_function(callee, this_value, arguments, &mut env.env, false)?;
+        self.apply_call_env(env);
         self.stack.push(result);
         Ok(())
     }
@@ -322,9 +327,9 @@ impl<'a> Vm<'a> {
         let key = to_property_key(self.pop()?)?;
         let this_value = self.pop()?;
         let callee = get_property(this_value.clone(), &key, &self.globals)?;
-        let mut env = self.current_env();
-        let result = call_function(callee, this_value, arguments, &mut env, false)?;
-        self.apply_env(env);
+        let mut env = self.call_env(&callee);
+        let result = call_function(callee, this_value, arguments, &mut env.env, false)?;
+        self.apply_call_env(env);
         self.stack.push(result);
         Ok(())
     }
@@ -344,9 +349,9 @@ impl<'a> Vm<'a> {
         }
         let prototype = constructor_prototype(&callee);
         let this_value = Value::Object(ObjectRef::with_prototype(HashMap::new(), prototype));
-        let mut env = self.current_env();
-        let result = call_function(callee, this_value.clone(), arguments, &mut env, true)?;
-        self.apply_env(env);
+        let mut env = self.call_env(&callee);
+        let result = call_function(callee, this_value.clone(), arguments, &mut env.env, true)?;
+        self.apply_call_env(env);
         match result {
             Value::Array(_) | Value::Function(_) | Value::Object(_) => self.stack.push(result),
             _ => self.stack.push(this_value),
@@ -371,6 +376,84 @@ impl<'a> Vm<'a> {
             }
         }
         env
+    }
+
+    fn call_env(&self, callee: &Value) -> VmCallEnv {
+        if let Some(function) = user_bytecode_function(callee) {
+            let mut env = self.globals.clone();
+            let mut binding_names = Vec::new();
+            if let Some(bytecode) = &function.bytecode {
+                self.insert_referenced_call_bindings(
+                    &mut env,
+                    &mut binding_names,
+                    bytecode,
+                    &function.local_names,
+                );
+            }
+            return VmCallEnv {
+                env,
+                binding_names: Some(binding_names),
+            };
+        }
+        VmCallEnv {
+            env: self.current_env(),
+            binding_names: None,
+        }
+    }
+
+    fn insert_referenced_call_bindings(
+        &self,
+        env: &mut HashMap<String, Value>,
+        binding_names: &mut Vec<String>,
+        function_bytecode: &Bytecode,
+        function_local_names: &[String],
+    ) {
+        for name in function_bytecode.global_names() {
+            self.insert_call_binding(env, binding_names, name);
+        }
+        for name in function_bytecode.local_names() {
+            if function_local_names
+                .binary_search_by(|local| local.as_str().cmp(name))
+                .is_err()
+            {
+                self.insert_call_binding(env, binding_names, name);
+            }
+        }
+    }
+
+    fn insert_call_binding(
+        &self,
+        env: &mut HashMap<String, Value>,
+        binding_names: &mut Vec<String>,
+        name: &str,
+    ) {
+        if let Some(value) = self.current_local_binding(name) {
+            env.insert(name.to_owned(), value.clone());
+            if !binding_names.iter().any(|existing| existing == name) {
+                binding_names.push(name.to_owned());
+            }
+        }
+    }
+
+    fn apply_call_env(&mut self, env: VmCallEnv) {
+        if let Some(binding_names) = env.binding_names {
+            self.apply_selected_env(env.env, &binding_names);
+        } else {
+            self.apply_env(env.env);
+        }
+    }
+
+    fn apply_selected_env(&mut self, env: HashMap<String, Value>, binding_names: &[String]) {
+        for name in binding_names {
+            let Some(value) = env.get(name) else {
+                continue;
+            };
+            if let Some(index) = self.local_slot_index(name) {
+                self.locals[index] = Some(value.clone());
+            } else {
+                self.globals.insert(name.clone(), value.clone());
+            }
+        }
     }
 
     fn apply_env(&mut self, env: HashMap<String, Value>) {
@@ -408,5 +491,26 @@ impl<'a> Vm<'a> {
         })?;
         *local = Some(value);
         Ok(())
+    }
+
+    fn local_slot_index(&self, name: &str) -> Option<usize> {
+        self.bytecode
+            .locals
+            .iter()
+            .position(|local| local.name == name)
+    }
+}
+
+fn user_bytecode_function(value: &Value) -> Option<&Function> {
+    let Value::Function(function) = value else {
+        return None;
+    };
+    if let Some(bound) = &function.bound {
+        return user_bytecode_function(&bound.target);
+    }
+    if function.native.is_none() && function.bytecode.is_some() {
+        Some(function)
+    } else {
+        None
     }
 }
