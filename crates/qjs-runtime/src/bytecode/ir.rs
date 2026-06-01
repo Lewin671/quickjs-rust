@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use qjs_ast::{BinaryOp, Stmt, UnaryOp};
 
 use crate::Value;
@@ -21,6 +23,7 @@ pub(super) enum Op {
         name: Option<String>,
         params: Vec<String>,
         body: Vec<Stmt>,
+        bytecode: Rc<Bytecode>,
         constructable: bool,
     },
     Typeof,

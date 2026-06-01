@@ -18,10 +18,37 @@ pub(super) fn compile_script(script: &Script) -> Result<Bytecode, RuntimeError> 
     Compiler::default().compile(script)
 }
 
+pub(super) fn compile_function_body(
+    params: &[String],
+    body: &[Stmt],
+) -> Result<Bytecode, RuntimeError> {
+    Compiler::default().compile_function(params, body)
+}
+
 impl Compiler {
     fn compile(mut self, script: &Script) -> Result<Bytecode, RuntimeError> {
         self.collect_hoisted_locals(&script.body);
         for stmt in &script.body {
+            self.compile_stmt(stmt)?;
+        }
+        self.code.push(Op::Return);
+        Ok(Bytecode {
+            constants: self.constants,
+            locals: self.locals,
+            code: self.code,
+        })
+    }
+
+    fn compile_function(
+        mut self,
+        params: &[String],
+        body: &[Stmt],
+    ) -> Result<Bytecode, RuntimeError> {
+        for param in params {
+            self.local_slot(param, true);
+        }
+        self.collect_hoisted_locals(body);
+        for stmt in body {
             self.compile_stmt(stmt)?;
         }
         self.code.push(Op::Return);

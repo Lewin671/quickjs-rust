@@ -23,6 +23,15 @@ pub(super) fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> 
     vm.run()
 }
 
+pub(super) fn eval_function_bytecode(
+    bytecode: &Bytecode,
+    env: HashMap<String, Value>,
+) -> Result<(Value, HashMap<String, Value>), RuntimeError> {
+    let mut vm = Vm::new_with_globals(bytecode, env);
+    let value = vm.run()?;
+    Ok((value, vm.current_env()))
+}
+
 struct Vm<'a> {
     bytecode: &'a Bytecode,
     ip: usize,
@@ -39,23 +48,33 @@ impl<'a> Vm<'a> {
         globals.insert(GLOBAL_THIS_BINDING.to_owned(), global_this.clone());
         globals.insert("undefined".to_owned(), Value::Undefined);
         initialize_builtins(&mut globals, &global_this);
+        Self::new_with_globals(bytecode, globals)
+    }
+
+    fn new_with_globals(bytecode: &'a Bytecode, globals: HashMap<String, Value>) -> Self {
         Self {
             bytecode,
             ip: 0,
             stack: Vec::with_capacity(64),
-            locals: bytecode
-                .locals
-                .iter()
-                .map(|local| {
-                    if local.hoisted {
-                        Slot::Value(Value::Undefined)
-                    } else {
-                        Slot::Uninitialized
-                    }
-                })
-                .collect(),
+            locals: Self::initial_slots(bytecode, &globals),
             globals,
         }
+    }
+
+    fn initial_slots(bytecode: &Bytecode, globals: &HashMap<String, Value>) -> Vec<Slot> {
+        bytecode
+            .locals
+            .iter()
+            .map(|local| {
+                if let Some(value) = globals.get(&local.name) {
+                    Slot::Value(value.clone())
+                } else if local.hoisted {
+                    Slot::Value(Value::Undefined)
+                } else {
+                    Slot::Uninitialized
+                }
+            })
+            .collect()
     }
 
     fn run(&mut self) -> Result<Value, RuntimeError> {
@@ -111,15 +130,17 @@ impl<'a> Vm<'a> {
                     name,
                     params,
                     body,
+                    bytecode,
                     constructable,
                 } => {
                     let env = self.current_env();
                     self.stack
-                        .push(Value::Function(Function::new_user_with_constructable(
+                        .push(Value::Function(Function::new_user_with_bytecode(
                             name,
                             params,
                             body,
                             env,
+                            Some(bytecode),
                             constructable,
                         )));
                 }

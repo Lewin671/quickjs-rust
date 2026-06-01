@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use qjs_ast::{Expr, MemberProperty, ObjectProperty, ObjectPropertyKey, Stmt};
 
 use crate::{RuntimeError, Value};
@@ -94,10 +96,12 @@ impl Compiler {
             return Err(unsupported_stmt(stmt));
         };
         let slot = self.local_slot(name, true);
+        let bytecode = super::compiler::compile_function_body(params, body)?;
         self.emit(Op::NewFunction {
             name: Some(name.clone()),
             params: params.clone(),
             body: body.clone(),
+            bytecode: Rc::new(bytecode),
             constructable: true,
         });
         self.emit(Op::StoreLocal(slot));

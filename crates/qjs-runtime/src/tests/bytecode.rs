@@ -50,7 +50,10 @@ fn evaluates_objects_arrays_members_and_calls_with_bytecode() {
     assert_bytecode_matches_ast("Math.max(1, 5, 3);");
     assert_bytecode_matches_ast("let values = [1]; values.push(2); values.length;");
     assert_bytecode_matches_ast("function f() { return 1; } f();");
+    assert_bytecode_matches_ast("function add(a, b) { return a + b; } add(2, 3);");
+    assert_bytecode_matches_ast("let base = 10; function add(x) { return base + x; } add(5);");
     assert_bytecode_matches_ast("let f = function() { return 2; }; f();");
+    assert_bytecode_matches_ast("let f = function(x) { return x * 2; }; f(4);");
     assert_bytecode_matches_ast(
         "function C() { this.value = 4; } let instance = new C(); instance.value;",
     );
@@ -60,6 +63,10 @@ fn evaluates_objects_arrays_members_and_calls_with_bytecode() {
 fn reports_unsupported_bytecode_surface() {
     let error = eval_bytecode_source("switch (1) { case 1: 2; }")
         .expect_err("switch is not in this bytecode slice yet");
+    assert!(error.message.contains("unsupported bytecode statement"));
+
+    let error = eval_bytecode_source("function f() { switch (1) { case 1: return 2; } } f();")
+        .expect_err("function bodies must compile to bytecode");
     assert!(error.message.contains("unsupported bytecode statement"));
 }
 
