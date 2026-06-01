@@ -1,11 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
-    ArrayRef, GLOBAL_THIS_BINDING, RuntimeError, Value,
-    bytecode::eval_function_bytecode,
-    error_value,
-    native::call_native_function,
-    statement::{Completion, collect_function_local_names, eval_statement_list},
+    ArrayRef, GLOBAL_THIS_BINDING, RuntimeError, Value, bytecode::eval_function_bytecode,
+    function::collect_function_local_names, native::call_native_function,
 };
 
 use super::function_call_this;
@@ -81,19 +78,9 @@ pub(crate) fn call_function(
         return Ok(value);
     }
 
-    let completion = eval_statement_list(&function.body, &mut local_env)?;
-    propagate_caller_bindings(env, &caller_names, &function_local_names, &local_env);
-
-    match completion {
-        Completion::Normal(value) => Ok(value),
-        Completion::Return(value) => Ok(value),
-        Completion::Break | Completion::Continue => Err(RuntimeError {
-            message: "break or continue outside loop".to_owned(),
-        }),
-        Completion::Throw(value) => Err(RuntimeError {
-            message: format!("throw statement executed: {}", error_value(value)),
-        }),
-    }
+    Err(RuntimeError {
+        message: "user function has no bytecode body".to_owned(),
+    })
 }
 
 fn propagate_caller_bindings(
