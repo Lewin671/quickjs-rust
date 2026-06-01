@@ -1,4 +1,7 @@
-use std::{collections::BTreeSet, rc::Rc};
+use std::{
+    collections::{BTreeSet, HashMap},
+    rc::Rc,
+};
 
 use qjs_ast::{BinaryOp, UnaryOp};
 
@@ -57,6 +60,7 @@ pub(super) struct Local {
 pub struct Bytecode {
     pub(super) constants: Vec<Value>,
     pub(super) locals: Vec<Local>,
+    local_slots: HashMap<String, usize>,
     global_names: Vec<String>,
     pub(super) code: Vec<Op>,
 }
@@ -65,6 +69,7 @@ impl Bytecode {
     pub(super) fn new(constants: Vec<Value>, locals: Vec<Local>, code: Vec<Op>) -> Self {
         Self {
             constants,
+            local_slots: collect_local_slots(&locals),
             locals,
             global_names: collect_global_names(&code),
             code,
@@ -78,6 +83,18 @@ impl Bytecode {
     pub(crate) fn local_names(&self) -> impl Iterator<Item = &str> {
         self.locals.iter().map(|local| local.name.as_str())
     }
+
+    pub(crate) fn local_slot(&self, name: &str) -> Option<usize> {
+        self.local_slots.get(name).copied()
+    }
+}
+
+fn collect_local_slots(locals: &[Local]) -> HashMap<String, usize> {
+    locals
+        .iter()
+        .enumerate()
+        .map(|(slot, local)| (local.name.clone(), slot))
+        .collect()
 }
 
 fn collect_global_names(code: &[Op]) -> Vec<String> {

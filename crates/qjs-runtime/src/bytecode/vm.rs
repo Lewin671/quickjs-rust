@@ -47,9 +47,7 @@ pub(crate) struct FunctionBytecodeResult<'a> {
 impl FunctionBytecodeResult<'_> {
     pub(crate) fn binding(&self, name: &str) -> Option<&Value> {
         self.bytecode
-            .locals
-            .iter()
-            .position(|local| local.name == name)
+            .local_slot(name)
             .and_then(|index| self.locals.get(index))
             .and_then(Option::as_ref)
             .or_else(|| self.globals.get(name))
@@ -253,9 +251,7 @@ impl<'a> Vm<'a> {
 
     fn current_local_binding(&self, name: &str) -> Option<&Value> {
         self.bytecode
-            .locals
-            .iter()
-            .position(|local| local.name == name)
+            .local_slot(name)
             .and_then(|index| self.locals.get(index))
             .and_then(Option::as_ref)
     }
@@ -448,7 +444,7 @@ impl<'a> Vm<'a> {
             let Some(value) = env.get(name) else {
                 continue;
             };
-            if let Some(index) = self.local_slot_index(name) {
+            if let Some(index) = self.bytecode.local_slot(name) {
                 self.locals[index] = Some(value.clone());
             } else {
                 self.globals.insert(name.clone(), value.clone());
@@ -491,13 +487,6 @@ impl<'a> Vm<'a> {
         })?;
         *local = Some(value);
         Ok(())
-    }
-
-    fn local_slot_index(&self, name: &str) -> Option<usize> {
-        self.bytecode
-            .locals
-            .iter()
-            .position(|local| local.name == name)
     }
 }
 
