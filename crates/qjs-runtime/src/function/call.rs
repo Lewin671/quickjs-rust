@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use crate::{
     ArrayRef, GLOBAL_THIS_BINDING, RuntimeError, Value, bytecode::eval_function_bytecode,
@@ -85,11 +85,11 @@ pub(crate) fn call_function(
 fn propagate_caller_bindings(
     env: &mut HashMap<String, Value>,
     caller_names: &[String],
-    function_local_names: &HashSet<String>,
+    function_local_names: &[String],
     final_env: &HashMap<String, Value>,
 ) {
     for name in caller_names {
-        if name != GLOBAL_THIS_BINDING && !function_local_names.contains(name) {
+        if name != GLOBAL_THIS_BINDING && function_local_names.binary_search(name).is_err() {
             if let Some(value) = final_env.get(name) {
                 env.insert(name.clone(), value.clone());
             }

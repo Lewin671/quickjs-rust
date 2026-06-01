@@ -219,10 +219,7 @@ impl Compiler {
                 ..
             } => {
                 let bytecode = super::compiler::compile_function_body(params, body)?;
-                let mut local_names = collect_function_local_names(name.as_ref(), params, body)
-                    .into_iter()
-                    .collect::<Vec<_>>();
-                local_names.sort();
+                let local_names = collect_function_local_names(name.as_ref(), params, body);
                 self.emit(Op::NewFunction {
                     name: name.clone(),
                     params: params.clone(),
