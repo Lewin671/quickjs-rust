@@ -3,6 +3,10 @@ use crate::{Value, eval};
 #[test]
 fn evaluates_json_builtins() {
     assert_eq!(eval("typeof JSON;"), Ok(Value::String("object".to_owned())));
+    assert_eq!(
+        eval("Object.prototype.toString.call(JSON);"),
+        Ok(Value::String("[object JSON]".to_owned()))
+    );
     assert_eq!(eval("JSON.parse.length;"), Ok(Value::Number(2.0)));
     assert_eq!(eval("JSON.stringify.length;"), Ok(Value::Number(3.0)));
     assert_eq!(eval("JSON.parse('null');"), Ok(Value::Null));

@@ -13,6 +13,7 @@ pub struct ObjectRef {
     properties: Rc<RefCell<HashMap<String, Property>>>,
     extensible: Rc<Cell<bool>>,
     prototype: Rc<RefCell<Option<ObjectRef>>>,
+    to_string_tag: Rc<RefCell<Option<String>>>,
 }
 
 impl fmt::Debug for ObjectRef {
@@ -21,6 +22,7 @@ impl fmt::Debug for ObjectRef {
             .debug_struct("ObjectRef")
             .field("properties", &self.properties.borrow().len())
             .field("has_prototype", &self.prototype.borrow().is_some())
+            .field("to_string_tag", &self.to_string_tag.borrow())
             .finish()
     }
 }
@@ -43,6 +45,7 @@ impl ObjectRef {
             )),
             extensible: Rc::new(Cell::new(true)),
             prototype: Rc::new(RefCell::new(prototype)),
+            to_string_tag: Rc::new(RefCell::new(None)),
         }
     }
 
@@ -208,5 +211,18 @@ impl ObjectRef {
         }
         *self.prototype.borrow_mut() = prototype;
         Ok(())
+    }
+
+    pub(crate) fn to_string_tag(&self) -> Option<String> {
+        self.to_string_tag.borrow().clone().or_else(|| {
+            self.prototype
+                .borrow()
+                .as_ref()
+                .and_then(ObjectRef::to_string_tag)
+        })
+    }
+
+    pub(crate) fn set_to_string_tag(&self, tag: &str) {
+        *self.to_string_tag.borrow_mut() = Some(tag.to_owned());
     }
 }

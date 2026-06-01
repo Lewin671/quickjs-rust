@@ -8,6 +8,7 @@ pub(crate) fn install_json(
     object_prototype: ObjectRef,
 ) {
     let json_object = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    json_object.set_to_string_tag("JSON");
     define_json_function(&json_object, "parse", 2, NativeFunction::JsonParse);
     define_json_function(&json_object, "stringify", 3, NativeFunction::JsonStringify);
 

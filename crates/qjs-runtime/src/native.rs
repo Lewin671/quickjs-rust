@@ -9,6 +9,7 @@ mod math;
 mod numbers;
 mod objects;
 mod reflect;
+mod regexp;
 mod strings;
 
 use crate::{Function, NativeFunction, RuntimeError, Value};
@@ -80,6 +81,12 @@ pub(crate) fn call_native_function(
     }
 
     if let Some(value) = reflect::call_reflect_native(native, &argument_values, env)? {
+        return Ok(value);
+    }
+
+    if let Some(value) =
+        regexp::call_regexp_native(function, native, this_value.clone(), is_construct)?
+    {
         return Ok(value);
     }
 

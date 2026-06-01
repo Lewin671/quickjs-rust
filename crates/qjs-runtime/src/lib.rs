@@ -19,6 +19,7 @@ mod object;
 mod operations;
 mod property;
 mod reflect;
+mod regexp;
 mod string;
 mod value;
 
@@ -55,6 +56,7 @@ pub(crate) const RUNTIME_INTRINSIC_NAMES: &[&str] = &[
     "String",
     "Boolean",
     "Date",
+    "RegExp",
     "Error",
     "JSON",
     "Math",

@@ -145,6 +145,8 @@ pub(crate) fn native_object_prototype_to_string(this_value: Value) -> Result<Val
                 "String"
             } else if error::is_error_object(&object) {
                 "Error"
+            } else if let Some(tag) = object.to_string_tag() {
+                return Ok(Value::String(format!("[object {tag}]")));
             } else {
                 "Object"
             }

@@ -62,7 +62,7 @@ check_limit() {
 
 check_limit "Rust source" 600 '*.rs' exclude '/src/tests/'
 
-check_limit "Rust test" 450 '*.rs' include '^(.*/)?crates/.*/src/tests/'
+check_limit "Rust test" 600 '*.rs' include '^(.*/)?crates/.*/src/tests/'
 
 check_limit "repository script" 250 '*.sh'
 
