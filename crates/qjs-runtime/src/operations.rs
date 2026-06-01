@@ -7,7 +7,7 @@ use crate::{
     to_int32_number, to_js_string, to_number, to_property_key, to_uint32_number, value_prototype,
 };
 
-pub(super) fn eval_unary(op: UnaryOp, argument: Value) -> Result<Value, RuntimeError> {
+pub(crate) fn eval_unary(op: UnaryOp, argument: Value) -> Result<Value, RuntimeError> {
     match op {
         UnaryOp::Not => Ok(Value::Boolean(!is_truthy(&argument))),
         UnaryOp::Plus => Ok(Value::Number(to_number(argument)?)),
@@ -20,7 +20,7 @@ pub(super) fn eval_unary(op: UnaryOp, argument: Value) -> Result<Value, RuntimeE
     }
 }
 
-pub(super) fn eval_binary(
+pub(crate) fn eval_binary(
     left: Value,
     op: BinaryOp,
     right: Value,
