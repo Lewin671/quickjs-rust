@@ -21,6 +21,8 @@ boundaries and make each change verifiable with focused tests.
 - CLI smoke test: `cargo run -p qjs-cli -- -e "1 + 2;"`
 - QuickJS comparison smoke tests: `./scripts/compare-qjs.sh`
 - Test262 subset runner: `./scripts/test262-subset.sh`
+- Upstream Test262 baseline runner:
+  `./scripts/test262-baseline.sh [--limit N | --all] [--filter test/<prefix>]`
 - Watch a pushed branch CI run: `gh run list --branch <branch> --limit 1`
   followed by `gh run watch <run-id> --exit-status`
 
@@ -195,6 +197,9 @@ workspace configuration, global error models, or broad architecture documents.
 - Use Test262 through curated runnable subsets with explicit provenance and
   expected failures; do not treat full-suite failure counts as useful signal
   during early development.
+- Use `./scripts/test262-baseline.sh` to enumerate upstream Test262 coverage
+  and classify unsupported harness metadata, parser/runtime failures, and
+  timeouts before expanding the curated subset.
 - When a Test262 case is expected to fail, record the reason near the allowlist
   or expected-failure list rather than relying on tribal knowledge.
 - Prefer small fixtures that are easy to inspect over broad generated tests for
