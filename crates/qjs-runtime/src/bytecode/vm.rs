@@ -496,7 +496,7 @@ impl<'a> Vm<'a> {
             }
         }
         for (name, value) in env {
-            if !self.bytecode.locals.iter().any(|local| local.name == name) {
+            if self.bytecode.local_slot(&name).is_none() {
                 self.globals.insert(name, value);
             }
         }
