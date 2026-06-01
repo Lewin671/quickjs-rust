@@ -7,7 +7,10 @@ use std::{
 
 use qjs_ast::Stmt;
 
-use crate::{Bytecode, NativeFunction, ObjectRef, Property, Value, object_prototype};
+use crate::{
+    Bytecode, NativeFunction, ObjectRef, Property, Value, bytecode::compile_function_body,
+    object_prototype,
+};
 
 /// User-defined or native function value.
 #[derive(Clone)]
@@ -83,6 +86,7 @@ impl Function {
         constructable: bool,
     ) -> Self {
         let prototype = ObjectRef::with_prototype(HashMap::new(), object_prototype(&env));
+        let bytecode = bytecode.or_else(|| compile_function_body(&params, &body).ok().map(Rc::new));
         let function = Self {
             name,
             params,

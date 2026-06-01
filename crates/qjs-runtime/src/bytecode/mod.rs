@@ -29,6 +29,13 @@ pub fn compile_script(script: &Script) -> Result<Bytecode, RuntimeError> {
     compiler::compile_script(script)
 }
 
+pub(crate) fn compile_function_body(
+    params: &[String],
+    body: &[qjs_ast::Stmt],
+) -> Result<Bytecode, RuntimeError> {
+    compiler::compile_function_body(params, body)
+}
+
 pub(crate) fn eval_function_bytecode(
     bytecode: &Bytecode,
     env: std::collections::HashMap<String, Value>,
