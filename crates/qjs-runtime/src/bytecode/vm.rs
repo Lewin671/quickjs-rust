@@ -1,21 +1,18 @@
 use std::collections::HashMap;
 
-use qjs_ast::BinaryOp;
-
 use crate::{
     ArrayRef, Function, GLOBAL_THIS_BINDING, ObjectRef, RuntimeError, Value, call_function,
-    constructor_prototype, error_value, initialize_builtins, is_truthy, object_prototype,
-    operations, to_property_key,
+    constructor_prototype, initialize_builtins, is_truthy, object_prototype, operations,
+    to_property_key,
 };
 
 use super::ir::{Bytecode, Op};
 use super::util::{stack_underflow, typeof_value};
-use super::vm_props::{
-    delete_property, enumerable_keys, fast_number_binary, get_property, set_property,
-};
+use super::vm_props::{delete_property, get_property, set_property};
+use super::vm_try::TryFrame;
 
 #[derive(Clone)]
-enum Slot {
+pub(super) enum Slot {
     Uninitialized,
     Value(Value),
 }
@@ -34,12 +31,15 @@ pub(super) fn eval_function_bytecode(
     Ok((value, vm.current_env()))
 }
 
-struct Vm<'a> {
-    bytecode: &'a Bytecode,
-    ip: usize,
-    stack: Vec<Value>,
-    locals: Vec<Slot>,
-    globals: HashMap<String, Value>,
+pub(super) struct Vm<'a> {
+    pub(super) bytecode: &'a Bytecode,
+    pub(super) ip: usize,
+    pub(super) stack: Vec<Value>,
+    pub(super) locals: Vec<Slot>,
+    pub(super) globals: HashMap<String, Value>,
+    pub(super) try_stack: Vec<TryFrame>,
+    pub(super) pending_throw: Option<Value>,
+    pub(super) pending_return: Option<Value>,
 }
 
 impl<'a> Vm<'a> {
@@ -60,6 +60,9 @@ impl<'a> Vm<'a> {
             stack: Vec::with_capacity(64),
             locals: Self::initial_slots(bytecode, &globals),
             globals,
+            try_stack: Vec::new(),
+            pending_throw: None,
+            pending_return: None,
         }
     }
 
@@ -173,27 +176,25 @@ impl<'a> Vm<'a> {
                         self.ip = target;
                     }
                 }
-                Op::Return => return Ok(self.stack.pop().unwrap_or(Value::Undefined)),
+                Op::EnterTry { catch, finally } => self.enter_try(catch, finally),
+                Op::ExitTry => self.exit_try(),
+                Op::EndFinally => {
+                    if let Some(value) = self.end_finally()? {
+                        return Ok(value);
+                    }
+                }
+                Op::Return => {
+                    let value = self.stack.pop().unwrap_or(Value::Undefined);
+                    if let Some(value) = self.return_value(value)? {
+                        return Ok(value);
+                    }
+                }
                 Op::Throw => {
                     let value = self.pop()?;
-                    return Err(RuntimeError {
-                        message: format!("throw statement executed: {}", error_value(value)),
-                    });
+                    self.throw_value(value)?;
                 }
             }
         }
-    }
-
-    fn eval_binary(&mut self, op: BinaryOp) -> Result<(), RuntimeError> {
-        let right = self.pop()?;
-        let left = self.pop()?;
-        if let Some(value) = fast_number_binary(&left, op, &right) {
-            self.stack.push(value);
-            return Ok(());
-        }
-        self.stack
-            .push(operations::eval_binary(left, op, right, &self.globals)?);
-        Ok(())
     }
 
     fn new_array(&mut self, count: usize) -> Result<(), RuntimeError> {
@@ -217,13 +218,6 @@ impl<'a> Vm<'a> {
             values,
             object_prototype(&self.globals),
         )));
-        Ok(())
-    }
-
-    fn enumerate_keys(&mut self) -> Result<(), RuntimeError> {
-        let value = self.pop()?;
-        self.stack
-            .push(Value::Array(ArrayRef::new(enumerable_keys(value)?)));
         Ok(())
     }
 
@@ -311,7 +305,7 @@ impl<'a> Vm<'a> {
         Ok(arguments)
     }
 
-    fn current_env(&self) -> HashMap<String, Value> {
+    pub(super) fn current_env(&self) -> HashMap<String, Value> {
         let mut env = self.globals.clone();
         for (index, local) in self.locals.iter().enumerate() {
             if let Slot::Value(value) = local {
@@ -321,7 +315,7 @@ impl<'a> Vm<'a> {
         env
     }
 
-    fn pop(&mut self) -> Result<Value, RuntimeError> {
+    pub(super) fn pop(&mut self) -> Result<Value, RuntimeError> {
         self.stack.pop().ok_or_else(stack_underflow)
     }
 

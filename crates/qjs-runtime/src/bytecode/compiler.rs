@@ -342,7 +342,13 @@ impl Compiler {
                 cases,
                 ..
             } => self.compile_switch(discriminant, cases),
-            Stmt::Try { .. } | Stmt::FunctionDecl { .. } => self.compile_function_decl(stmt),
+            Stmt::Try {
+                block,
+                handler,
+                finalizer,
+                ..
+            } => self.compile_try(block, handler.as_ref(), finalizer.as_deref()),
+            Stmt::FunctionDecl { .. } => self.compile_function_decl(stmt),
         }
     }
 }
