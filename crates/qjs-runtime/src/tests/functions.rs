@@ -59,6 +59,12 @@ fn evaluates_function_declarations_and_calls() {
         Ok(Value::Number(7.0))
     );
     assert_eq!(
+        eval(
+            "let value = 100; function make(value) { return function() { return value; }; } let get = make(7); get();"
+        ),
+        Ok(Value::Number(7.0))
+    );
+    assert_eq!(
         eval("let value = 1; function read() { return value; } value = 2; read();"),
         Ok(Value::Number(2.0))
     );

@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    ArrayRef, Bytecode, Function, GLOBAL_THIS_BINDING, RuntimeError, Value,
-    bytecode::eval_function_bytecode, native::call_native_function,
+    ArrayRef, Bytecode, Function, GLOBAL_THIS_BINDING, RUNTIME_INTRINSIC_NAMES, RuntimeError,
+    Value, bytecode::eval_function_bytecode, native::call_native_function,
 };
 
 use super::function_call_this;
@@ -77,7 +77,20 @@ fn function_env(
     argument_values: &[Value],
     env: &HashMap<String, Value>,
 ) -> FunctionCallEnv {
-    let mut local_env = function.env.clone();
+    let mut local_env = HashMap::with_capacity(
+        RUNTIME_INTRINSIC_NAMES.len()
+            + function.env.len()
+            + function.params.len()
+            + argument_values.len()
+            + 3,
+    );
+    insert_runtime_intrinsics(&mut local_env, &function.env, env);
+    insert_function_captures(
+        &mut local_env,
+        bytecode,
+        &function.local_names,
+        &function.env,
+    );
     let mut caller_binding_names = Vec::new();
     insert_caller_bytecode_bindings(
         &mut local_env,
@@ -107,6 +120,47 @@ fn function_env(
     FunctionCallEnv {
         env: local_env,
         caller_binding_names,
+    }
+}
+
+fn insert_runtime_intrinsics(
+    local_env: &mut HashMap<String, Value>,
+    function_env: &HashMap<String, Value>,
+    caller_env: &HashMap<String, Value>,
+) {
+    for name in RUNTIME_INTRINSIC_NAMES {
+        if let Some(value) = caller_env.get(*name).or_else(|| function_env.get(*name)) {
+            local_env.insert((*name).to_owned(), value.clone());
+        }
+    }
+}
+
+fn insert_function_captures(
+    local_env: &mut HashMap<String, Value>,
+    bytecode: &Bytecode,
+    function_local_names: &[String],
+    function_env: &HashMap<String, Value>,
+) {
+    for name in bytecode.global_names() {
+        insert_function_capture(local_env, function_env, name);
+    }
+    for name in bytecode.local_names() {
+        if function_local_names
+            .binary_search_by(|local| local.as_str().cmp(name))
+            .is_err()
+        {
+            insert_function_capture(local_env, function_env, name);
+        }
+    }
+}
+
+fn insert_function_capture(
+    local_env: &mut HashMap<String, Value>,
+    function_env: &HashMap<String, Value>,
+    name: &str,
+) {
+    if let Some(value) = function_env.get(name) {
+        local_env.insert(name.to_owned(), value.clone());
     }
 }
 
