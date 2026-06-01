@@ -164,7 +164,7 @@ impl<'a> Vm<'a> {
                     bytecode,
                     constructable,
                 } => {
-                    let env = self.current_env();
+                    let env = self.function_capture_env(&bytecode, &local_names);
                     self.stack.push(Value::Function(Function::new_user_compiled(
                         name,
                         params,
@@ -218,6 +218,41 @@ impl<'a> Vm<'a> {
                 }
             }
         }
+    }
+
+    fn function_capture_env(
+        &self,
+        function_bytecode: &Bytecode,
+        function_local_names: &[String],
+    ) -> HashMap<String, Value> {
+        let mut env = self.globals.clone();
+        for name in function_bytecode.global_names() {
+            self.insert_current_binding(&mut env, name);
+        }
+        for name in function_bytecode.local_names() {
+            if function_local_names
+                .binary_search_by(|local| local.as_str().cmp(name))
+                .is_err()
+            {
+                self.insert_current_binding(&mut env, name);
+            }
+        }
+        env
+    }
+
+    fn insert_current_binding(&self, env: &mut HashMap<String, Value>, name: &str) {
+        if let Some(value) = self.current_local_binding(name) {
+            env.insert(name.to_owned(), value.clone());
+        }
+    }
+
+    fn current_local_binding(&self, name: &str) -> Option<&Value> {
+        self.bytecode
+            .locals
+            .iter()
+            .position(|local| local.name == name)
+            .and_then(|index| self.locals.get(index))
+            .and_then(Option::as_ref)
     }
 
     fn new_array(&mut self, count: usize) -> Result<(), RuntimeError> {

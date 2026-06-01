@@ -144,6 +144,12 @@ fn seeds_bytecode_function_env_from_referenced_caller_bindings() {
         ),
         Ok(Value::String("1|2|3".to_owned()))
     );
+    assert_eq!(
+        eval_bytecode_source(
+            "(function() { function a() { return 1; } function b() { return 2; } function make() { return function() { return a() + b(); }; } return make()(); })();",
+        ),
+        Ok(Value::Number(3.0))
+    );
 }
 
 #[test]
