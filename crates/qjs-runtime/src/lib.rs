@@ -8,6 +8,7 @@ use qjs_parser::parse_script;
 mod array;
 mod boolean;
 mod builtins;
+mod bytecode;
 mod conversion;
 mod date;
 mod error;
@@ -47,6 +48,8 @@ use statement::{Completion, eval_stmt, hoist_declarations};
 pub(crate) use string::string_object_value;
 pub use value::Value;
 use value::{ArrayRef, ObjectRef, Property};
+
+pub use bytecode::{Bytecode, compile_script, eval_bytecode, eval_bytecode_source};
 
 pub(crate) const GLOBAL_THIS_BINDING: &str = "\0global_this";
 
