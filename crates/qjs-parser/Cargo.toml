@@ -1,6 +1,7 @@
 [package]
 name = "qjs-parser"
 version = "0.1.0"
+description = "JavaScript parser that builds quickjs-rust AST nodes from lexer tokens."
 edition.workspace = true
 license.workspace = true
 repository.workspace = true

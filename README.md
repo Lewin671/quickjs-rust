@@ -1,99 +1,139 @@
 # quickjs-rust
 
-An incremental Rust rewrite of the QuickJS JavaScript engine.
+`quickjs-rust` is an incremental Rust-native JavaScript engine project inspired
+by QuickJS. The repository is not a binding to the C runtime; it is a ground-up
+implementation that uses small Rust crates, explicit subsystem boundaries, and
+focused conformance checks to grow engine behavior safely.
 
-This repository is structured as small Rust crates with narrow interfaces and a
-single workspace check command. Human-facing project context lives here; agent
-execution rules live in `AGENTS.md`.
+The project is currently in early engine development. It has a working pipeline
+for tokenizing source text, parsing a growing JavaScript syntax subset into an
+AST, and evaluating selected runtime behavior through a thin CLI and crate-level
+tests.
 
-## Current Scope
+## Goals
 
-The first implementation target is a small but real JavaScript pipeline:
+- Build a JavaScript engine in safe Rust with clear ownership of lexer, parser,
+  AST, runtime, and CLI responsibilities.
+- Preserve source spans and structured errors so diagnostics can improve without
+  reshaping the core architecture.
+- Use QuickJS-NG as a behavioral reference and Test262 as curated conformance
+  input, without making either a Rust build dependency.
+- Keep each implementation step reviewable, testable, and small enough to
+  reason about independently.
 
-1. Lex source text into tokens.
-2. Parse a script into an AST.
-3. Execute a tiny expression subset.
-4. Grow conformance with focused tests.
+## Non-Goals
 
-The goal is not to bind to the C QuickJS runtime. The goal is a Rust-native
-engine that can be expanded gradually while preserving clear subsystem
-boundaries.
+- This is not a drop-in replacement for QuickJS today.
+- This project does not expose C FFI bindings to QuickJS.
+- The full Test262 suite is not expected to pass during early development.
+- Runtime shortcuts should not bypass the parser or shared AST model.
 
-## Workspace
+## Workspace Layout
 
-- `crates/qjs-ast`: shared syntax tree and source span types.
-- `crates/qjs-lexer`: tokenizer.
-- `crates/qjs-parser`: parser from tokens to AST.
-- `crates/qjs-runtime`: interpreter/runtime experiments.
-- `crates/qjs-cli`: command-line entry point for smoke tests.
-- `docs/`: architecture and implementation notes for humans and agents.
-- `tasks/`: small, agent-sized work items.
-- `docs/harness.md`: autonomous agent runbook.
-- `scripts/check.sh`: standard verification command.
-- `scripts/source-size-report.sh`: reports largest first-party and vendored
-  files separately.
-- `scripts/compare-qjs.sh`: smoke comparison against QuickJS-NG.
-- `scripts/test262-subset.sh`: runs curated Test262-derived subset cases.
-- `tests/fixtures/`: local JavaScript smoke fixtures.
-- `tests/test262/`: curated Test262 allowlist and expected failures.
+```text
+source text
+    |
+    v
+qjs-lexer  -> tokens with byte spans
+    |
+    v
+qjs-parser -> qjs-ast
+    |
+    v
+qjs-runtime
+    |
+    v
+qjs-cli / tests
+```
+
+- `crates/qjs-ast`: shared syntax tree, statement/expression nodes, and source
+  span types.
+- `crates/qjs-lexer`: tokenizer that emits span-preserving tokens.
+- `crates/qjs-parser`: parser that turns tokens into AST nodes and structured
+  parse errors.
+- `crates/qjs-runtime`: interpreter/runtime layer for JavaScript values,
+  operations, builtins, and evaluation semantics.
+- `crates/qjs-cli`: minimal command-line wrapper for smoke testing engine
+  behavior.
+- `docs/`: architecture notes and human-readable implementation guidance.
+- `scripts/`: bootstrap, verification, source-size, QuickJS comparison, and
+  Test262 subset tooling.
+- `tests/fixtures/`: local JavaScript programs used for smoke comparisons.
+- `tests/test262/`: curated Test262-derived cases, allowlists, and expected
+  failures.
 - `third_party/quickjs-ng`: pinned QuickJS-NG reference implementation.
-- `third_party/test262`: pinned TC39 ECMAScript conformance tests.
+- `third_party/test262`: pinned TC39 conformance test corpus.
 
-## Setup
+## Quick Start
 
-Install Rust with `rustup`, then initialize third-party references and run the
-workspace checks:
+Install Rust 1.85 or newer with `rustup`, then initialize the repository:
 
 ```sh
 ./scripts/bootstrap.sh
+```
+
+Run the full local verification suite:
+
+```sh
 ./scripts/check.sh
 ```
 
-For a fresh clone, either clone with submodules:
+Run a small JavaScript expression through the CLI:
+
+```sh
+cargo run -p qjs-cli -- -e "1 + 2;"
+```
+
+For a fresh clone, either clone submodules up front:
 
 ```sh
 git clone --recurse-submodules git@github.com:Lewin671/quickjs-rust.git
 ```
 
 or run `./scripts/bootstrap.sh` after cloning. The bootstrap script initializes
-the top-level upstream references and fetches Cargo dependencies.
+the top-level third-party references and fetches Cargo dependencies.
 
-For a quick local run:
+## Verification
+
+The standard project check is:
 
 ```sh
+./scripts/check.sh
+```
+
+Useful focused checks include:
+
+```sh
+cargo fmt --all
+cargo test --workspace
 cargo run -p qjs-cli -- -e "1 + 2;"
-```
-
-To compare the current runtime against QuickJS-NG on local smoke fixtures:
-
-```sh
 ./scripts/compare-qjs.sh
-```
-
-To run the curated Test262-derived subset:
-
-```sh
 ./scripts/test262-subset.sh
+./scripts/source-size-report.sh
 ```
 
-## Engineering Notes
+`./scripts/compare-qjs.sh` compares selected local fixtures against the pinned
+QuickJS-NG reference. `./scripts/test262-subset.sh` runs only curated
+Test262-derived cases that the current harness can execute deterministically.
 
-- `qjs-ast` is the shared contract between parser and runtime.
-- `qjs-lexer` and `qjs-parser` should return structured errors for user input.
-- `qjs-runtime` should execute AST semantics rather than adding parser-specific
-  shortcuts.
-- `third_party/quickjs-ng` is a behavioral oracle, not a build dependency.
-- `third_party/test262` should be consumed through small allowlisted runnable
-  subsets until the engine is mature enough for broader conformance runs.
-- Large files in `third_party/` are pinned upstream references. First-party Rust
-  code is intentionally split into small modules and guarded by
-  `scripts/check-file-size.sh`; use `scripts/source-size-report.sh` to inspect
-  size trends without conflating vendored sources with engine modules.
+## Development Model
 
-## Automation
+Engine work should grow vertically through the layers: token support, AST shape,
+parser coverage, runtime semantics, and targeted smoke/conformance tests. Public
+APIs should stay small and typed, user input failures should return structured
+errors, and all tokens or AST nodes that represent source text should preserve
+byte spans.
 
-Codex, Harness, and other autonomous agents should start with `AGENTS.md`. That
-file defines repository-specific execution rules, task boundaries, commit
-discipline, parallel worktree policy, and verification expectations.
-Use `docs/harness.md` for the concrete worktree, handoff, integration, and
-cleanup runbook.
+First-party source files are intentionally kept reviewable. Large files under
+`third_party/` are vendored upstream references and should not be used as
+examples for first-party Rust module structure.
+
+For deeper design context, see:
+
+- `docs/architecture.md` for crate boundaries, span policy, and growth strategy.
+- `docs/harness.md` for autonomous-agent worktree and integration procedures.
+- `AGENTS.md` for repository-specific agent instructions and commit discipline.
+
+## License
+
+This project is licensed under the MIT license.

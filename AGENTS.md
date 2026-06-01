@@ -104,6 +104,22 @@ Both `scripts/bootstrap.sh` and `scripts/check.sh` fall back to
 - Do not add dependencies from `third_party/quickjs-ng` or generated Test262
   artifacts to Cargo crates.
 
+## Documentation Sync
+
+- Treat docs as part of the change when behavior, architecture, setup,
+  verification commands, public APIs, supported syntax, runtime semantics, or
+  conformance status changes.
+- If an implementation change makes `README.md`, `docs/architecture.md`,
+  `docs/harness.md`, task files, crate metadata, examples, allowlists, or
+  expected-failure notes inaccurate or incomplete, update the relevant document
+  in the same reviewable unit.
+- Keep the audience boundaries intact: `README.md` is the human-facing overview,
+  `AGENTS.md` is the agent workflow contract, and detailed architecture or
+  harness mechanics belong under `docs/`.
+- If documentation appears stale but the correct update is outside the current
+  task boundary, call it out in the final response with the exact file and topic
+  that need follow-up.
+
 ## Commit Discipline
 
 - Prefer one commit per reviewable unit of work.
@@ -200,7 +216,8 @@ For code changes:
 
 1. The relevant crate has unit tests or integration coverage.
 2. `./scripts/check.sh` passes, or the failure is explained with exact output.
-3. Public docs are updated when behavior or architecture changes.
+3. Public docs and crate metadata are updated when behavior, architecture,
+   setup, commands, APIs, or conformance expectations change.
 4. New dependencies, public APIs, or architecture shifts are justified.
 5. The final response names changed files and verification performed.
 

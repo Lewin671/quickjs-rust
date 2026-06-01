@@ -1,6 +1,7 @@
 [package]
 name = "qjs-runtime"
 version = "0.1.0"
+description = "Experimental JavaScript runtime and evaluator for quickjs-rust."
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
