@@ -18,6 +18,28 @@ struct VmCallEnv {
     binding_names: Option<Vec<String>>,
 }
 
+const RUNTIME_INTRINSIC_NAMES: &[&str] = &[
+    GLOBAL_THIS_BINDING,
+    "undefined",
+    "Object",
+    "Function",
+    "Array",
+    "Number",
+    "String",
+    "Boolean",
+    "Date",
+    "Error",
+    "JSON",
+    "Math",
+    "Reflect",
+    "NaN",
+    "Infinity",
+    "isFinite",
+    "isNaN",
+    "parseFloat",
+    "parseInt",
+];
+
 pub(super) fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> {
     let mut vm = Vm::new(bytecode);
     vm.run()
@@ -228,23 +250,35 @@ impl<'a> Vm<'a> {
         function_bytecode: &Bytecode,
         function_local_names: &[String],
     ) -> HashMap<String, Value> {
-        let mut env = self.globals.clone();
+        let mut env =
+            HashMap::with_capacity(RUNTIME_INTRINSIC_NAMES.len() + function_bytecode.locals.len());
+        self.insert_runtime_intrinsics(&mut env);
         for name in function_bytecode.global_names() {
-            self.insert_current_binding(&mut env, name);
+            self.insert_referenced_binding(&mut env, name);
         }
         for name in function_bytecode.local_names() {
             if function_local_names
                 .binary_search_by(|local| local.as_str().cmp(name))
                 .is_err()
             {
-                self.insert_current_binding(&mut env, name);
+                self.insert_referenced_binding(&mut env, name);
             }
         }
         env
     }
 
-    fn insert_current_binding(&self, env: &mut HashMap<String, Value>, name: &str) {
+    fn insert_runtime_intrinsics(&self, env: &mut HashMap<String, Value>) {
+        for name in RUNTIME_INTRINSIC_NAMES {
+            if let Some(value) = self.globals.get(*name) {
+                env.insert((*name).to_owned(), value.clone());
+            }
+        }
+    }
+
+    fn insert_referenced_binding(&self, env: &mut HashMap<String, Value>, name: &str) {
         if let Some(value) = self.current_local_binding(name) {
+            env.insert(name.to_owned(), value.clone());
+        } else if let Some(value) = self.globals.get(name) {
             env.insert(name.to_owned(), value.clone());
         }
     }
@@ -376,7 +410,8 @@ impl<'a> Vm<'a> {
 
     fn call_env(&self, callee: &Value) -> VmCallEnv {
         if let Some(function) = user_bytecode_function(callee) {
-            let mut env = self.globals.clone();
+            let mut env = HashMap::with_capacity(RUNTIME_INTRINSIC_NAMES.len());
+            self.insert_runtime_intrinsics(&mut env);
             let mut binding_names = Vec::new();
             if let Some(bytecode) = &function.bytecode {
                 self.insert_referenced_call_bindings(
@@ -428,6 +463,8 @@ impl<'a> Vm<'a> {
             if !binding_names.iter().any(|existing| existing == name) {
                 binding_names.push(name.to_owned());
             }
+        } else if let Some(value) = self.globals.get(name) {
+            env.insert(name.to_owned(), value.clone());
         }
     }
 

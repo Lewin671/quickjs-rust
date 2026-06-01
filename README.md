@@ -7,8 +7,8 @@ focused conformance checks to grow engine behavior safely.
 
 The project is currently in early engine development. It has a working pipeline
 for tokenizing source text, parsing a growing JavaScript syntax subset into an
-AST, and evaluating selected runtime behavior through a thin CLI and crate-level
-tests.
+AST, compiling that AST to runtime bytecode, and executing selected behavior in
+the bytecode VM through a thin CLI and crate-level tests.
 
 ## Goals
 
@@ -40,7 +40,7 @@ qjs-lexer  -> tokens with byte spans
 qjs-parser -> qjs-ast
     |
     v
-qjs-runtime
+qjs-runtime -> bytecode compiler -> bytecode VM
     |
     v
 qjs-cli / tests
@@ -51,7 +51,7 @@ qjs-cli / tests
 - `crates/qjs-lexer`: tokenizer that emits span-preserving tokens.
 - `crates/qjs-parser`: parser that turns tokens into AST nodes and structured
   parse errors.
-- `crates/qjs-runtime`: interpreter/runtime layer for JavaScript values,
+- `crates/qjs-runtime`: bytecode compiler and VM for JavaScript values,
   operations, builtins, and evaluation semantics.
 - `crates/qjs-cli`: minimal command-line wrapper for smoke testing engine
   behavior.
@@ -119,10 +119,10 @@ Test262-derived cases that the current harness can execute deterministically.
 ## Development Model
 
 Engine work should grow vertically through the layers: token support, AST shape,
-parser coverage, runtime semantics, and targeted smoke/conformance tests. Public
-APIs should stay small and typed, user input failures should return structured
-errors, and all tokens or AST nodes that represent source text should preserve
-byte spans.
+parser coverage, bytecode lowering, VM/runtime semantics, and targeted
+smoke/conformance tests. Public APIs should stay small and typed, user input
+failures should return structured errors, and all tokens or AST nodes that
+represent source text should preserve byte spans.
 
 First-party source files are intentionally kept reviewable. Large files under
 `third_party/` are vendored upstream references and should not be used as

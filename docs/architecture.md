@@ -75,8 +75,9 @@ Internal organization target:
 
 ### qjs-runtime
 
-Executes AST nodes. Early runtime work is intentionally tiny; correctness and
-clear semantics matter more than breadth.
+Compiles parsed AST into runtime bytecode and executes it in the bytecode VM.
+The runtime should not evaluate AST nodes directly; AST remains the
+parser/compiler input boundary.
 
 Internal organization target:
 
@@ -84,7 +85,7 @@ Internal organization target:
 - `function`: function objects and call metadata.
 - `builtins`: native builtin registration and dispatch, split by standard
   object family as it grows.
-- `eval`: statement and expression evaluation.
+- `bytecode`: AST-to-bytecode lowering, bytecode IR, and VM dispatch.
 - `convert`: ECMAScript conversion helpers.
 - `tests`: crate-local runtime behavior tests.
 
@@ -114,8 +115,8 @@ small.
 ## Growth Strategy
 
 Add language features vertically when useful: token support, AST type, parser
-tests, runtime behavior, and CLI smoke coverage. This keeps Harness tasks
-self-contained and makes regressions easier to localize.
+tests, bytecode lowering, VM/runtime behavior, and CLI smoke coverage. This
+keeps Harness tasks self-contained and makes regressions easier to localize.
 
 Keep files small enough for autonomous review. Implementation modules should
 stay focused on one engine concern, and tests should be split by behavior under

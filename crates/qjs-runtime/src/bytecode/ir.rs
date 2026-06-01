@@ -98,12 +98,21 @@ fn collect_local_slots(locals: &[Local]) -> HashMap<String, usize> {
 }
 
 fn collect_global_names(code: &[Op]) -> Vec<String> {
-    code.iter()
-        .filter_map(|op| match op {
-            Op::LoadGlobal(name) | Op::TypeofGlobal(name) => Some(name.clone()),
-            _ => None,
-        })
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .collect()
+    let mut names = BTreeSet::new();
+    collect_global_names_from_ops(code, &mut names);
+    names.into_iter().collect()
+}
+
+fn collect_global_names_from_ops(code: &[Op], names: &mut BTreeSet<String>) {
+    for op in code {
+        match op {
+            Op::LoadGlobal(name) | Op::TypeofGlobal(name) => {
+                names.insert(name.clone());
+            }
+            Op::NewFunction { bytecode, .. } => {
+                names.extend(bytecode.global_names().iter().cloned());
+            }
+            _ => {}
+        }
+    }
 }
