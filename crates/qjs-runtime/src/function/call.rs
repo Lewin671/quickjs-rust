@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     ArrayRef, GLOBAL_THIS_BINDING, RuntimeError, Value, bytecode::eval_function_bytecode,
-    function::collect_function_local_names, native::call_native_function,
+    native::call_native_function,
 };
 
 use super::function_call_this;
@@ -46,7 +46,6 @@ pub(crate) fn call_function(
         );
     }
     let caller_names: Vec<String> = env.keys().cloned().collect();
-    let function_local_names = collect_function_local_names(&function);
     let mut local_env = env.clone();
     for (name, value) in &function.env {
         local_env
@@ -74,7 +73,7 @@ pub(crate) fn call_function(
 
     if let Some(bytecode) = &function.bytecode {
         let (value, final_env) = eval_function_bytecode(bytecode, local_env)?;
-        propagate_caller_bindings(env, &caller_names, &function_local_names, &final_env);
+        propagate_caller_bindings(env, &caller_names, &function.local_names, &final_env);
         return Ok(value);
     }
 

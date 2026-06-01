@@ -1,6 +1,6 @@
 use std::{
     cell::{Cell, RefCell},
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt,
     rc::Rc,
 };
@@ -9,7 +9,7 @@ use qjs_ast::Stmt;
 
 use crate::{
     Bytecode, NativeFunction, ObjectRef, Property, Value, bytecode::compile_function_body,
-    object_prototype,
+    function::collect_function_local_names, object_prototype,
 };
 
 /// User-defined or native function value.
@@ -19,10 +19,9 @@ pub struct Function {
     pub name: Option<String>,
     /// Parameter names.
     pub params: Vec<String>,
-    /// Function body statements.
-    pub body: Vec<Stmt>,
     /// Environment captured when the function was created.
     pub env: HashMap<String, Value>,
+    pub(crate) local_names: HashSet<String>,
     pub(crate) bytecode: Option<Rc<Bytecode>>,
     pub(crate) native: Option<NativeFunction>,
     pub(crate) constructable: bool,
@@ -50,6 +49,7 @@ impl fmt::Debug for Function {
             .field("name", &self.name)
             .field("length", &self.params.len())
             .field("native", &self.native)
+            .field("local_names", &self.local_names.len())
             .field("bytecode", &self.bytecode.is_some())
             .field("constructable", &self.constructable)
             .field("bound", &self.bound.is_some())
@@ -63,7 +63,7 @@ impl Function {
         params: Vec<String>,
         body: Vec<Stmt>,
         env: HashMap<String, Value>,
-    ) -> Self {
+    ) -> Result<Self, crate::RuntimeError> {
         Self::new_user_with_constructable(name, params, body, env, true)
     }
 
@@ -73,7 +73,7 @@ impl Function {
         body: Vec<Stmt>,
         env: HashMap<String, Value>,
         constructable: bool,
-    ) -> Self {
+    ) -> Result<Self, crate::RuntimeError> {
         Self::new_user_with_bytecode(name, params, body, env, None, constructable)
     }
 
@@ -84,15 +84,54 @@ impl Function {
         env: HashMap<String, Value>,
         bytecode: Option<Rc<Bytecode>>,
         constructable: bool,
-    ) -> Self {
+    ) -> Result<Self, crate::RuntimeError> {
         let prototype = ObjectRef::with_prototype(HashMap::new(), object_prototype(&env));
-        let bytecode = bytecode.or_else(|| compile_function_body(&params, &body).ok().map(Rc::new));
+        let local_names = collect_function_local_names(name.as_ref(), &params, &body);
+        let bytecode = match bytecode {
+            Some(bytecode) => bytecode,
+            None => Rc::new(compile_function_body(&params, &body)?),
+        };
         let function = Self {
             name,
             params,
-            body,
             env,
-            bytecode,
+            local_names,
+            bytecode: Some(bytecode),
+            native: None,
+            constructable,
+            bound: None,
+            properties: Rc::new(RefCell::new(HashMap::new())),
+            extensible: Rc::new(Cell::new(true)),
+            sealed: Rc::new(Cell::new(false)),
+            frozen: Rc::new(Cell::new(false)),
+            internal_prototype: Rc::new(RefCell::new(None)),
+        };
+        if constructable {
+            prototype
+                .define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
+            function.properties.borrow_mut().insert(
+                "prototype".to_owned(),
+                Property::non_enumerable(Value::Object(prototype)),
+            );
+        }
+        Ok(function)
+    }
+
+    pub(crate) fn new_user_compiled(
+        name: Option<String>,
+        params: Vec<String>,
+        env: HashMap<String, Value>,
+        bytecode: Rc<Bytecode>,
+        local_names: Vec<String>,
+        constructable: bool,
+    ) -> Self {
+        let prototype = ObjectRef::with_prototype(HashMap::new(), object_prototype(&env));
+        let function = Self {
+            name,
+            params,
+            env,
+            local_names: local_names.into_iter().collect(),
+            bytecode: Some(bytecode),
             native: None,
             constructable,
             bound: None,
@@ -122,7 +161,6 @@ impl Function {
         Self::new(
             name.map(str::to_owned),
             vec![String::new(); length],
-            Vec::new(),
             HashMap::new(),
             Some(native),
             constructable,
@@ -142,8 +180,8 @@ impl Function {
         Self {
             name: Some("bound".to_owned()),
             params: vec![String::new(); length],
-            body: Vec::new(),
             env: HashMap::new(),
+            local_names: HashSet::new(),
             bytecode: None,
             native: None,
             constructable,
@@ -163,7 +201,6 @@ impl Function {
     fn new(
         name: Option<String>,
         params: Vec<String>,
-        body: Vec<Stmt>,
         env: HashMap<String, Value>,
         native: Option<NativeFunction>,
         constructable: bool,
@@ -172,8 +209,8 @@ impl Function {
         let function = Self {
             name,
             params,
-            body,
             env,
+            local_names: HashSet::new(),
             bytecode: None,
             native,
             constructable,
@@ -278,7 +315,6 @@ impl PartialEq for Function {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
             && self.params == other.params
-            && self.body == other.body
             && self.native == other.native
             && self.bound.is_some() == other.bound.is_some()
     }

@@ -32,7 +32,7 @@ pub(crate) fn native_function(
         params,
         body,
         env.clone(),
-    )))
+    )?))
 }
 
 fn function_source_parts(argument_values: &[Value]) -> Result<(String, String), RuntimeError> {

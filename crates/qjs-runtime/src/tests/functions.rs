@@ -205,6 +205,7 @@ fn evaluates_function_declarations_and_calls() {
         Ok(Value::Number(9.0))
     );
     assert!(eval("Function('a +', 'return a;');").is_err());
+    assert!(eval("Function('break;');").is_err());
 }
 
 #[test]

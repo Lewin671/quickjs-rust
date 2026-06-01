@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use qjs_ast::{BinaryOp, Stmt, UnaryOp};
+use qjs_ast::{BinaryOp, UnaryOp};
 
 use crate::Value;
 
@@ -25,7 +25,7 @@ pub(super) enum Op {
     NewFunction {
         name: Option<String>,
         params: Vec<String>,
-        body: Vec<Stmt>,
+        local_names: Vec<String>,
         bytecode: Rc<Bytecode>,
         constructable: bool,
     },
