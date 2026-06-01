@@ -2,6 +2,7 @@
 
 mod compiler;
 mod compiler_assign;
+mod compiler_control;
 mod compiler_expr;
 mod compiler_values;
 mod ir;

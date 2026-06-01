@@ -19,6 +19,7 @@ pub(super) struct Compiler {
 #[derive(Default)]
 pub(super) struct LoopContext {
     result_slot: usize,
+    allows_continue: bool,
     breaks: Vec<usize>,
     continues: Vec<usize>,
 }
@@ -187,6 +188,16 @@ impl Compiler {
     pub(super) fn push_loop(&mut self, result_slot: usize) {
         self.loop_stack.push(LoopContext {
             result_slot,
+            allows_continue: true,
+            breaks: Vec::new(),
+            continues: Vec::new(),
+        });
+    }
+
+    pub(super) fn push_breakable(&mut self, result_slot: usize) {
+        self.loop_stack.push(LoopContext {
+            result_slot,
+            allows_continue: false,
             breaks: Vec::new(),
             continues: Vec::new(),
         });
@@ -216,17 +227,17 @@ impl Compiler {
     }
 
     pub(super) fn compile_continue(&mut self) -> Result<(), RuntimeError> {
-        if self.loop_stack.is_empty() {
+        let Some(index) = self
+            .loop_stack
+            .iter()
+            .rposition(|context| context.allows_continue)
+        else {
             return Err(RuntimeError {
                 message: "continue outside loop".to_owned(),
             });
-        }
+        };
         let jump = self.emit(Op::Jump(usize::MAX));
-        self.loop_stack
-            .last_mut()
-            .expect("loop context should exist")
-            .continues
-            .push(jump);
+        self.loop_stack[index].continues.push(jump);
         Ok(())
     }
 
@@ -313,10 +324,14 @@ impl Compiler {
             }
             Stmt::Break { .. } => self.compile_break(),
             Stmt::Continue { .. } => self.compile_continue(),
-            Stmt::ForIn { .. }
-            | Stmt::Switch { .. }
-            | Stmt::Try { .. }
-            | Stmt::FunctionDecl { .. } => self.compile_function_decl(stmt),
+            Stmt::Switch {
+                discriminant,
+                cases,
+                ..
+            } => self.compile_switch(discriminant, cases),
+            Stmt::ForIn { .. } | Stmt::Try { .. } | Stmt::FunctionDecl { .. } => {
+                self.compile_function_decl(stmt)
+            }
         }
     }
 }

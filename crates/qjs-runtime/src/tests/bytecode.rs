@@ -45,6 +45,19 @@ fn evaluates_branch_and_loop_bytecode_subset() {
     assert_bytecode_matches_ast(
         "let sum = 0; for (var i = 0; i < 6; i = i + 1) { if (i === 2) continue; if (i === 5) break; sum = sum + i; } sum;",
     );
+    assert_bytecode_matches_ast(
+        "let x = 2; switch (x) { case 1: 'one'; break; case 2: 'two'; break; default: 'other'; }",
+    );
+    assert_bytecode_matches_ast(
+        "let x = 3; switch (x) { case 1: 'one'; break; default: 'other'; }",
+    );
+    assert_bytecode_matches_ast("let x = 1; switch (x) { case 1: 'one'; case 2: 'two'; }");
+    assert_bytecode_matches_ast(
+        "let sum = 0; for (var i = 0; i < 4; i++) { switch (i) { case 1: continue; case 3: break; default: sum = sum + i; } sum = sum + 10; } sum;",
+    );
+    assert_bytecode_matches_ast(
+        "function f(x) { switch (x) { case 1: return 'one'; default: return 'other'; } } f(1);",
+    );
 }
 
 #[test]
@@ -69,12 +82,8 @@ fn evaluates_objects_arrays_members_and_calls_with_bytecode() {
 
 #[test]
 fn reports_unsupported_bytecode_surface() {
-    let error = eval_bytecode_source("switch (1) { case 1: 2; }")
-        .expect_err("switch is not in this bytecode slice yet");
-    assert!(error.message.contains("unsupported bytecode statement"));
-
-    let error = eval_bytecode_source("function f() { switch (1) { case 1: return 2; } } f();")
-        .expect_err("function bodies must compile to bytecode");
+    let error = eval_bytecode_source("try { 1; } finally { 2; }")
+        .expect_err("try is not in this bytecode slice yet");
     assert!(error.message.contains("unsupported bytecode statement"));
 
     let error = eval_bytecode_source("break;").expect_err("top-level break must not compile");
