@@ -14,12 +14,12 @@ pub(crate) fn function_own_property_keys(function: &Function) -> Vec<String> {
 
 pub(crate) fn function_own_property_descriptor(function: &Function, key: &str) -> Option<Property> {
     if key == "length" {
-        return Some(Property {
-            value: Value::Number(function.params.len() as f64),
-            enumerable: false,
-            writable: false,
-            configurable: !function.is_sealed(),
-        });
+        return Some(Property::data(
+            Value::Number(function.params.len() as f64),
+            false,
+            false,
+            !function.is_sealed(),
+        ));
     }
     function.properties.borrow().get(key).cloned()
 }

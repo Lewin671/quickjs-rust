@@ -4,7 +4,8 @@ use qjs_ast::Stmt;
 use qjs_parser::parse_script;
 
 use crate::{
-    Function, GLOBAL_THIS_BINDING, RuntimeError, Value, array::array_like_values, to_js_string,
+    Function, GLOBAL_THIS_BINDING, RuntimeError, Value, array::array_like_values_with_env,
+    to_js_string,
 };
 
 pub(crate) fn native_function(
@@ -70,7 +71,7 @@ pub(crate) fn native_function_prototype_apply(
     let apply_arguments = match argument_values.get(1).cloned().unwrap_or(Value::Undefined) {
         Value::Null | Value::Undefined => Vec::new(),
         Value::Array(elements) => elements.to_vec(),
-        value => array_like_values(value, "Function.prototype.apply argument list")?,
+        value => array_like_values_with_env(value, "Function.prototype.apply argument list", env)?,
     };
 
     crate::call_function(this_value, call_this, apply_arguments, env, false)

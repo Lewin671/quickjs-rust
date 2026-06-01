@@ -20,7 +20,7 @@ fn prepare_array_iteration(
     method: &str,
     this_value: Value,
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
 ) -> Result<ArrayIteration, RuntimeError> {
     let source = array_like(this_value, &format!("Array.prototype.{method}"), env)?;
     let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);
@@ -43,7 +43,7 @@ fn prepare_array_reduction(
     method: &str,
     this_value: Value,
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
 ) -> Result<ArrayReduction, RuntimeError> {
     let source = array_like(this_value, &format!("Array.prototype.{method}"), env)?;
     let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);

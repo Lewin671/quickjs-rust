@@ -66,6 +66,15 @@ impl ObjectRef {
             })
     }
 
+    pub(crate) fn property(&self, key: &str) -> Option<Property> {
+        self.properties.borrow().get(key).cloned().or_else(|| {
+            self.prototype
+                .borrow()
+                .as_ref()
+                .and_then(|proto| proto.property(key))
+        })
+    }
+
     pub(crate) fn set(&self, key: String, value: Value) {
         let mut properties = self.properties.borrow_mut();
         if let Some(property) = properties.get_mut(&key) {

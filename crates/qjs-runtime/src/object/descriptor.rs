@@ -179,15 +179,31 @@ pub(crate) fn to_property_descriptor(value: Value) -> Result<Property, RuntimeEr
         });
     };
 
-    if descriptor.contains_property("get") || descriptor.contains_property("set") {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "accessor property descriptors are not implemented".to_owned(),
-        });
+    let has_get = descriptor.contains_property("get");
+    let has_set = descriptor.contains_property("set");
+    if has_get || has_set {
+        if descriptor.contains_property("value") || descriptor.contains_property("writable") {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "property descriptor cannot mix accessor and data fields".to_owned(),
+            });
+        }
+        return Ok(Property::accessor(
+            accessor_function(descriptor.get("get").unwrap_or(Value::Undefined), "get")?,
+            accessor_function(descriptor.get("set").unwrap_or(Value::Undefined), "set")?,
+            descriptor
+                .get("enumerable")
+                .is_some_and(|value| is_truthy(&value)),
+            descriptor
+                .get("configurable")
+                .is_some_and(|value| is_truthy(&value)),
+        ));
     }
 
     Ok(Property {
         value: descriptor.get("value").unwrap_or(Value::Undefined),
+        get: None,
+        set: None,
         writable: descriptor
             .get("writable")
             .is_some_and(|value| is_truthy(&value)),
@@ -200,17 +216,31 @@ pub(crate) fn to_property_descriptor(value: Value) -> Result<Property, RuntimeEr
     })
 }
 
+fn accessor_function(value: Value, name: &str) -> Result<Option<Value>, RuntimeError> {
+    match value {
+        Value::Undefined => Ok(None),
+        Value::Function(_) => Ok(Some(value)),
+        _ => Err(RuntimeError {
+            thrown: None,
+            message: format!("property descriptor {name} must be callable or undefined"),
+        }),
+    }
+}
+
 fn property_descriptor_object(property: Property, prototype: Option<ObjectRef>) -> ObjectRef {
-    ObjectRef::with_prototype(
-        HashMap::from([
-            ("value".to_owned(), property.value),
-            ("writable".to_owned(), Value::Boolean(property.writable)),
-            ("enumerable".to_owned(), Value::Boolean(property.enumerable)),
-            (
-                "configurable".to_owned(),
-                Value::Boolean(property.configurable),
-            ),
-        ]),
-        prototype,
-    )
+    let mut properties = HashMap::from([
+        ("enumerable".to_owned(), Value::Boolean(property.enumerable)),
+        (
+            "configurable".to_owned(),
+            Value::Boolean(property.configurable),
+        ),
+    ]);
+    if property.is_accessor() {
+        properties.insert("get".to_owned(), property.get.unwrap_or(Value::Undefined));
+        properties.insert("set".to_owned(), property.set.unwrap_or(Value::Undefined));
+    } else {
+        properties.insert("value".to_owned(), property.value);
+        properties.insert("writable".to_owned(), Value::Boolean(property.writable));
+    }
+    ObjectRef::with_prototype(properties, prototype)
 }

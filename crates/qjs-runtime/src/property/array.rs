@@ -9,12 +9,12 @@ pub(crate) fn array_has_own_property(elements: &ArrayRef, key: &str) -> bool {
 
 pub(crate) fn array_own_property_descriptor(elements: &ArrayRef, key: &str) -> Option<Property> {
     if key == "length" {
-        return Some(Property {
-            value: Value::Number(elements.len() as f64),
-            enumerable: false,
-            writable: !elements.is_frozen(),
-            configurable: false,
-        });
+        return Some(Property::data(
+            Value::Number(elements.len() as f64),
+            false,
+            !elements.is_frozen(),
+            false,
+        ));
     }
     let index = key.parse::<usize>().ok()?;
     elements

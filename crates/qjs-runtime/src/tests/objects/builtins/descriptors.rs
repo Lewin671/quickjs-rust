@@ -66,6 +66,24 @@ fn evaluates_object_descriptor_queries() {
         eval("Object.keys(Object.getOwnPropertyDescriptors(0)).length;"),
         Ok(Value::Number(0.0))
     );
+    assert_eq!(
+        eval(
+            "let object = {}; Object.defineProperty(object, 'value', { get: function() { return 9; }, enumerable: true, configurable: true }); object.value;"
+        ),
+        Ok(Value::Number(9.0))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; let getter = function() { return 9; }; Object.defineProperty(object, 'value', { get: getter, enumerable: true, configurable: true }); let descriptor = Object.getOwnPropertyDescriptor(object, 'value'); descriptor.get === getter && descriptor.set === undefined && descriptor.enumerable && descriptor.configurable;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; Object.defineProperty(object, 'value', { set: function(_) {}, configurable: true }); object.value;"
+        ),
+        Ok(Value::Undefined)
+    );
     assert!(eval("Object.getOwnPropertyDescriptors(null);").is_err());
     assert!(eval("Object.getOwnPropertyDescriptors(undefined);").is_err());
 }

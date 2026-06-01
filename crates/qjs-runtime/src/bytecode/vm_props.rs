@@ -4,13 +4,13 @@ use qjs_ast::BinaryOp;
 
 use crate::{
     RuntimeError, Value, array_prototype_property, boolean, function_prototype_property,
-    inherited_string_prototype_property, number, string, to_length,
+    inherited_string_prototype_property, number, property_value, string, to_length,
 };
 
 pub(super) fn get_property(
     object: Value,
     key: &str,
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     match object {
         Value::Array(elements) if key == "length" => Ok(Value::Number(elements.len() as f64)),
@@ -40,7 +40,7 @@ pub(super) fn get_property(
         Value::Number(_) => {
             Ok(number::inherited_number_prototype_property(env, key).unwrap_or(Value::Undefined))
         }
-        Value::Object(object) => Ok(object.get(key).unwrap_or(Value::Undefined)),
+        Value::Object(_) => property_value(object, key, env),
         _ => Err(RuntimeError {
             thrown: None,
             message: format!("unsupported property `{key}`"),

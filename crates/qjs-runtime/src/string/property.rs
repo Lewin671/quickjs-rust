@@ -17,19 +17,14 @@ pub(crate) fn string_has_own_property(value: &str, key: &str) -> bool {
 
 pub(crate) fn string_own_property_descriptor(value: &str, key: &str) -> Option<Property> {
     if key == "length" {
-        return Some(Property {
-            value: Value::Number(value.chars().count() as f64),
-            enumerable: false,
-            writable: false,
-            configurable: false,
-        });
+        return Some(Property::data(
+            Value::Number(value.chars().count() as f64),
+            false,
+            false,
+            false,
+        ));
     }
-    string_property(value, key).map(|value| Property {
-        value,
-        enumerable: true,
-        writable: false,
-        configurable: false,
-    })
+    string_property(value, key).map(|value| Property::data(value, true, false, false))
 }
 
 pub(crate) fn string_own_property_keys(value: &str) -> Vec<String> {
