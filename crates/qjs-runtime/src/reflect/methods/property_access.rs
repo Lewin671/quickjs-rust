@@ -1,18 +1,18 @@
 use std::collections::HashMap;
 
 use crate::reflect::target::ensure_reflect_object_target;
-use crate::{RuntimeError, Value};
+use crate::{RuntimeError, Value, property_value};
 
 pub(crate) fn native_reflect_get(
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     ensure_reflect_object_target(&target, "Reflect.get")?;
     let key = crate::to_property_key(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
 
     Ok(match target {
-        Value::Object(object) => object.get(&key).unwrap_or(Value::Undefined),
+        Value::Object(_) => property_value(target, &key, env)?,
         Value::Array(elements) => {
             if key == "length" {
                 Value::Number(elements.len() as f64)

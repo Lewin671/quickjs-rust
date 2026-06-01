@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{RuntimeError, Value};
+use crate::{Property, RuntimeError, Value, call_function};
 
 mod array;
 mod function;
@@ -42,4 +42,59 @@ pub(crate) fn has_property(
             message: "property target must be an object".to_owned(),
         }),
     }
+}
+
+pub(crate) fn property_value(
+    receiver: Value,
+    key: &str,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    match receiver.clone() {
+        Value::Object(object) => property_descriptor_value(object.property(key), receiver, env),
+        Value::Function(function) => property_descriptor_value(
+            function_own_property_descriptor(&function, key).or_else(|| {
+                function_prototype_property(&function, env, key).map(Property::enumerable)
+            }),
+            receiver,
+            env,
+        ),
+        Value::Array(elements) => {
+            if key == "length" {
+                Ok(Value::Number(elements.len() as f64))
+            } else {
+                Ok(key
+                    .parse::<usize>()
+                    .ok()
+                    .and_then(|index| elements.get(index))
+                    .or_else(|| array_prototype_property(&elements, env, key))
+                    .unwrap_or(Value::Undefined))
+            }
+        }
+        Value::String(value) => {
+            if key == "length" {
+                Ok(Value::Number(value.chars().count() as f64))
+            } else {
+                Ok(crate::string::string_property(&value, key)
+                    .or_else(|| inherited_string_prototype_property(env, key))
+                    .unwrap_or(Value::Undefined))
+            }
+        }
+        Value::Boolean(_) | Value::Number(_) | Value::Null | Value::Undefined => {
+            Ok(Value::Undefined)
+        }
+    }
+}
+
+fn property_descriptor_value(
+    property: Option<Property>,
+    receiver: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let Some(property) = property else {
+        return Ok(Value::Undefined);
+    };
+    if let Some(getter) = property.get {
+        return call_function(getter, receiver, Vec::new(), env, false);
+    }
+    Ok(property.value)
 }

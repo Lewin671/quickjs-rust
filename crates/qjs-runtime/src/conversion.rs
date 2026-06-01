@@ -1,4 +1,6 @@
-use crate::{RuntimeError, Value, number};
+use std::collections::HashMap;
+
+use crate::{RuntimeError, Value, call_function, number, property_value};
 
 pub(crate) fn to_js_string(value: Value) -> Result<String, RuntimeError> {
     match value {
@@ -36,25 +38,23 @@ pub(crate) fn error_value(value: Value) -> String {
 }
 
 pub(crate) fn to_number(value: Value) -> Result<f64, RuntimeError> {
+    let mut env = HashMap::new();
+    to_number_with_env(value, &mut env)
+}
+
+pub(crate) fn to_number_with_env(
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<f64, RuntimeError> {
     match value {
         Value::Number(number) => Ok(number),
         Value::Boolean(true) => Ok(1.0),
         Value::Boolean(false) | Value::Null => Ok(0.0),
-        Value::String(value) => {
-            let trimmed = value.trim();
-            if trimmed.is_empty() {
-                Ok(0.0)
-            } else {
-                Ok(trimmed.parse::<f64>().unwrap_or(f64::NAN))
-            }
-        }
+        Value::String(value) => string_to_number(&value),
         Value::Undefined => Ok(f64::NAN),
         Value::Object(object) => match crate::string_object_value(&object) {
-            Some(value) => to_number(Value::String(value)),
-            None => Err(RuntimeError {
-                thrown: None,
-                message: "cannot convert object to number".to_owned(),
-            }),
+            Some(value) => string_to_number(&value),
+            None => object_to_number(Value::Object(object), env),
         },
         Value::Function(_) => Err(RuntimeError {
             thrown: None,
@@ -65,6 +65,47 @@ pub(crate) fn to_number(value: Value) -> Result<f64, RuntimeError> {
             message: "cannot convert object to number".to_owned(),
         }),
     }
+}
+
+fn string_to_number(value: &str) -> Result<f64, RuntimeError> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Ok(0.0);
+    }
+    if trimmed.eq_ignore_ascii_case("infinity") || trimmed == "+Infinity" {
+        return Ok(f64::INFINITY);
+    }
+    if trimmed == "-Infinity" {
+        return Ok(f64::NEG_INFINITY);
+    }
+    if let Some(hex) = trimmed
+        .strip_prefix("0x")
+        .or_else(|| trimmed.strip_prefix("0X"))
+    {
+        return Ok(u64::from_str_radix(hex, 16)
+            .map(|value| value as f64)
+            .unwrap_or(f64::NAN));
+    }
+    Ok(trimmed.parse::<f64>().unwrap_or(f64::NAN))
+}
+
+fn object_to_number(value: Value, env: &mut HashMap<String, Value>) -> Result<f64, RuntimeError> {
+    for method in ["valueOf", "toString"] {
+        let method_value = property_value(value.clone(), method, env)?;
+        if matches!(method_value, Value::Function(_)) {
+            let primitive = call_function(method_value, value.clone(), Vec::new(), env, false)?;
+            if !matches!(
+                primitive,
+                Value::Object(_) | Value::Function(_) | Value::Array(_)
+            ) {
+                return to_number_with_env(primitive, env);
+            }
+        }
+    }
+    Err(RuntimeError {
+        thrown: None,
+        message: "cannot convert object to number".to_owned(),
+    })
 }
 
 pub(crate) fn to_int32(value: Value) -> Result<i32, RuntimeError> {
@@ -102,14 +143,22 @@ pub(crate) fn to_uint16(value: Value) -> Result<u16, RuntimeError> {
 }
 
 pub(crate) fn to_length(value: Value) -> Result<usize, RuntimeError> {
-    let number = to_number(value)?;
+    let mut env = HashMap::new();
+    to_length_with_env(value, &mut env)
+}
+
+pub(crate) fn to_length_with_env(
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<usize, RuntimeError> {
+    let number = to_number_with_env(value, env)?;
     if number.is_nan() || number <= 0.0 {
         return Ok(0);
     }
     if number.is_infinite() {
         return Err(RuntimeError {
             thrown: None,
-            message: "string padding length must be finite".to_owned(),
+            message: "RangeError: invalid array length".to_owned(),
         });
     }
     Ok(number.trunc().min(9_007_199_254_740_991.0) as usize)

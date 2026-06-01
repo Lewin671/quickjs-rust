@@ -8,6 +8,7 @@ use crate::{
 
 use super::ir::{Bytecode, Op};
 use super::util::{stack_underflow, typeof_value};
+use super::vm_call::{native_error_message, user_bytecode_function};
 use super::vm_props::{delete_property, get_property, set_property};
 use super::vm_try::TryFrame;
 
@@ -298,7 +299,8 @@ impl<'a> Vm<'a> {
     fn get_prop(&mut self) -> Result<(), RuntimeError> {
         let key = to_property_key(self.pop()?)?;
         let object = self.pop()?;
-        self.stack.push(get_property(object, &key, &self.globals)?);
+        self.stack
+            .push(get_property(object, &key, &mut self.globals)?);
         Ok(())
     }
 
@@ -339,7 +341,7 @@ impl<'a> Vm<'a> {
         let arguments = self.pop_arguments(argc)?;
         let key = to_property_key(self.pop()?)?;
         let this_value = self.pop()?;
-        let callee = get_property(this_value.clone(), &key, &self.globals)?;
+        let callee = get_property(this_value.clone(), &key, &mut self.globals)?;
         let mut env = self.call_env(&callee);
         let result = call_function(callee, this_value, arguments, &mut env.env, false);
         self.apply_call_env(env);
@@ -397,7 +399,7 @@ impl<'a> Vm<'a> {
                 Ok(None)
             }
             Err(error) if self.should_throw_native_error(&error) => {
-                let value = self.type_error_value(&error.message)?;
+                let value = self.native_error_value(&error.message)?;
                 self.throw_value(value)?;
                 Ok(None)
             }
@@ -414,32 +416,34 @@ impl<'a> Vm<'a> {
         !self.try_stack.is_empty() && !error.message.starts_with("throw statement executed:")
     }
 
-    fn type_error_value(&self, message: &str) -> Result<Value, RuntimeError> {
-        let Value::Function(function) =
-            self.type_error_constructor().ok_or_else(|| RuntimeError {
+    fn native_error_value(&self, message: &str) -> Result<Value, RuntimeError> {
+        let (constructor_name, message) = native_error_message(message);
+        let Value::Function(function) = self
+            .native_error_constructor(constructor_name)
+            .ok_or_else(|| RuntimeError {
                 thrown: None,
-                message: "TypeError constructor is not available".to_owned(),
+                message: format!("{constructor_name} constructor is not available"),
             })?
         else {
             return Err(RuntimeError {
                 thrown: None,
-                message: "TypeError constructor is not callable".to_owned(),
+                message: format!("{constructor_name} constructor is not callable"),
             });
         };
         error::native_error(
             &function,
             Value::Undefined,
-            &[Value::String(message.to_owned())],
+            &[Value::String(message)],
             false,
         )
     }
 
-    fn type_error_constructor(&self) -> Option<Value> {
-        self.globals.get("TypeError").cloned().or_else(|| {
+    fn native_error_constructor(&self, name: &str) -> Option<Value> {
+        self.globals.get(name).cloned().or_else(|| {
             let Some(Value::Object(global_this)) = self.globals.get(GLOBAL_THIS_BINDING) else {
                 return None;
             };
-            global_this.get("TypeError")
+            global_this.get(name)
         })
     }
 
@@ -581,19 +585,5 @@ impl<'a> Vm<'a> {
         })?;
         *local = Some(value);
         Ok(())
-    }
-}
-
-fn user_bytecode_function(value: &Value) -> Option<&Function> {
-    let Value::Function(function) = value else {
-        return None;
-    };
-    if let Some(bound) = &function.bound {
-        return user_bytecode_function(&bound.target);
-    }
-    if function.native.is_none() && function.bytecode.is_some() {
-        Some(function)
-    } else {
-        None
     }
 }

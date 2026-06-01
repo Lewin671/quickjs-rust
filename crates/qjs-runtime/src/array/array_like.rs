@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use crate::{ObjectRef, RuntimeError, Value, function_prototype, string_prototype, to_length};
+use crate::{
+    ObjectRef, RuntimeError, Value, function_prototype, property_value, string_prototype,
+    to_length_with_env,
+};
 
 pub(crate) struct ArrayLike {
     pub(crate) receiver: Value,
@@ -10,14 +13,23 @@ pub(crate) struct ArrayLike {
 pub(crate) fn array_like(
     value: Value,
     context: &str,
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
 ) -> Result<ArrayLike, RuntimeError> {
     let receiver = array_like_receiver(value, env);
-    let values = array_like_values(receiver.clone(), context)?;
+    let values = array_like_values_with_env(receiver.clone(), context, env)?;
     Ok(ArrayLike { receiver, values })
 }
 
 pub(crate) fn array_like_values(value: Value, context: &str) -> Result<Vec<Value>, RuntimeError> {
+    let mut env = HashMap::new();
+    array_like_values_with_env(value, context, &mut env)
+}
+
+pub(crate) fn array_like_values_with_env(
+    value: Value,
+    context: &str,
+    env: &mut HashMap<String, Value>,
+) -> Result<Vec<Value>, RuntimeError> {
     match value {
         Value::Array(array) => Ok(array.to_vec()),
         Value::String(value) => Ok(value
@@ -25,10 +37,11 @@ pub(crate) fn array_like_values(value: Value, context: &str) -> Result<Vec<Value
             .map(|character| Value::String(character.to_string()))
             .collect()),
         Value::Object(object) => {
-            let length = to_length(object.get("length").unwrap_or(Value::Undefined))?;
+            let receiver = Value::Object(object);
+            let length = to_length_with_env(property_value(receiver.clone(), "length", env)?, env)?;
             Ok((0..length)
-                .map(|index| object.get(&index.to_string()).unwrap_or(Value::Undefined))
-                .collect())
+                .map(|index| property_value(receiver.clone(), &index.to_string(), env))
+                .collect::<Result<Vec<_>, _>>()?)
         }
         Value::Function(function) => {
             let length = function.params.len();

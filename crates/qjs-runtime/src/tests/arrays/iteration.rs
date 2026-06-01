@@ -59,6 +59,18 @@ fn evaluates_array_iteration_builtins() {
         Ok(Value::String("11|10".to_owned()))
     );
     assert_eq!(
+        eval(
+            "let proto = {}; Object.defineProperty(proto, 'length', { get: function() { return 2; }, configurable: true }); let object = Object.create(proto); object[0] = 5; object[1] = 7; Array.prototype.map.call(object, function(value) { return value + 1; }).join('|');"
+        ),
+        Ok(Value::String("6|8".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let object = { 0: 5, 1: 7 }; Object.defineProperty(object, 'length', { set: function(_) {}, configurable: true }); Array.prototype.map.call(object, function(value) { return value + 1; }).length;"
+        ),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
         eval("[1, 2, 3, 4].filter(function(value) { return value > 2; }).join();"),
         Ok(Value::String("3,4".to_owned()))
     );

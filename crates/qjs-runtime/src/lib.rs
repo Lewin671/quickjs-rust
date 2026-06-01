@@ -25,8 +25,8 @@ mod value;
 
 use builtins::initialize_builtins;
 pub(crate) use conversion::{
-    error_value, is_truthy, to_int32, to_int32_number, to_js_string, to_length, to_number,
-    to_uint16, to_uint32, to_uint32_number,
+    error_value, is_truthy, to_int32, to_int32_number, to_js_string, to_length, to_length_with_env,
+    to_number, to_uint16, to_uint32, to_uint32_number,
 };
 pub(crate) use function::call_function;
 use function::{Function, NativeFunction};
@@ -36,8 +36,8 @@ pub(crate) use property::{
     function_delete_own_property, function_intrinsic_prototype, function_own_property_descriptor,
     function_own_property_keys, function_own_property_names, function_prototype,
     function_prototype_property, has_property, inherited_object_prototype_property,
-    inherited_string_prototype_property, object_prototype, string_prototype, to_property_key,
-    value_prototype,
+    inherited_string_prototype_property, object_prototype, property_value, string_prototype,
+    to_property_key, value_prototype,
 };
 pub(crate) use string::string_object_value;
 pub use value::Value;
