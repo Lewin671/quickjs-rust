@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    ArrayRef, Bytecode, Function, GLOBAL_THIS_BINDING, RUNTIME_INTRINSIC_NAMES, RuntimeError,
-    Value, bytecode::eval_function_bytecode, native::call_native_function,
+    Bytecode, Function, GLOBAL_THIS_BINDING, ObjectRef, RUNTIME_INTRINSIC_NAMES, RuntimeError,
+    Value, bytecode::eval_function_bytecode, native::call_native_function, object_prototype,
 };
 
 use super::function_call_this;
@@ -16,6 +16,7 @@ pub(crate) fn call_function(
 ) -> Result<Value, RuntimeError> {
     let Value::Function(function) = callee.clone() else {
         return Err(RuntimeError {
+            thrown: None,
             message: "value is not callable".to_owned(),
         });
     };
@@ -60,6 +61,7 @@ pub(crate) fn call_function(
     }
 
     Err(RuntimeError {
+        thrown: None,
         message: "user function has no bytecode body".to_owned(),
     })
 }
@@ -108,7 +110,7 @@ fn function_env(
     local_env.insert("this".to_owned(), function_call_this(Some(this_value), env));
     local_env.insert(
         "arguments".to_owned(),
-        Value::Array(ArrayRef::new(argument_values.to_vec())),
+        arguments_object(argument_values, env),
     );
     for (index, param) in function.params.iter().enumerate() {
         let value = argument_values
@@ -121,6 +123,20 @@ fn function_env(
         env: local_env,
         caller_binding_names,
     }
+}
+
+fn arguments_object(argument_values: &[Value], env: &HashMap<String, Value>) -> Value {
+    let mut properties = HashMap::with_capacity(argument_values.len() + 1);
+    properties.insert(
+        "length".to_owned(),
+        Value::Number(argument_values.len() as f64),
+    );
+    for (index, value) in argument_values.iter().cloned().enumerate() {
+        properties.insert(index.to_string(), value);
+    }
+    let object = ObjectRef::with_prototype(properties, object_prototype(env));
+    object.set_to_string_tag("Arguments");
+    Value::Object(object)
 }
 
 fn insert_runtime_intrinsics(

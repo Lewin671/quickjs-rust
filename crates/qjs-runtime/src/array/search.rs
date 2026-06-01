@@ -8,6 +8,7 @@ pub(crate) fn native_array_prototype_at(
 ) -> Result<Value, RuntimeError> {
     let Value::Array(elements) = this_value else {
         return Err(RuntimeError {
+            thrown: None,
             message: "Array.prototype.at called on non-array".to_owned(),
         });
     };
@@ -27,6 +28,7 @@ pub(crate) fn native_array_prototype_includes(
 ) -> Result<Value, RuntimeError> {
     let Value::Array(elements) = this_value else {
         return Err(RuntimeError {
+            thrown: None,
             message: "Array.prototype.includes called on non-array".to_owned(),
         });
     };
@@ -54,6 +56,7 @@ pub(crate) fn native_array_prototype_index_of(
 ) -> Result<Value, RuntimeError> {
     let Value::Array(elements) = this_value else {
         return Err(RuntimeError {
+            thrown: None,
             message: "Array.prototype.indexOf called on non-array".to_owned(),
         });
     };
@@ -80,6 +83,7 @@ pub(crate) fn native_array_prototype_last_index_of(
 ) -> Result<Value, RuntimeError> {
     let Value::Array(elements) = this_value else {
         return Err(RuntimeError {
+            thrown: None,
             message: "Array.prototype.lastIndexOf called on non-array".to_owned(),
         });
     };

@@ -35,6 +35,30 @@ fn evaluates_array_iteration_builtins() {
         Ok(Value::Number(8.0))
     );
     assert_eq!(
+        eval(
+            "function capture() { return Array.prototype.map.call(arguments, function(value, index, receiver) { return Object.prototype.toString.call(receiver) === '[object Arguments]' ? value + index : 0; }).join('|'); } capture(4, 8);"
+        ),
+        Ok(Value::String("4|9".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "Boolean.prototype.length = 1; Boolean.prototype[0] = true; Array.prototype.map.call(true, function(value, index, receiver) { return receiver instanceof Boolean && index === 0 && value === true; })[0];"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "Number.prototype.length = 1; Number.prototype[0] = 6; Array.prototype.map.call(1, function(value, index, receiver) { return receiver instanceof Number && index === 0 ? value + 1 : 0; })[0];"
+        ),
+        Ok(Value::Number(7.0))
+    );
+    assert_eq!(
+        eval(
+            "function pair(a, b) {} pair[0] = 11; pair[1] = 9; Array.prototype.map.call(pair, function(value, index, receiver) { return receiver instanceof Function ? value + index : 0; }).join('|');"
+        ),
+        Ok(Value::String("11|10".to_owned()))
+    );
+    assert_eq!(
         eval("[1, 2, 3, 4].filter(function(value) { return value > 2; }).join();"),
         Ok(Value::String("3,4".to_owned()))
     );

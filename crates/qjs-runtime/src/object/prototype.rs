@@ -27,6 +27,7 @@ pub(crate) fn native_object_get_prototype_of(
             .map(Value::Object)
             .unwrap_or(Value::Null)),
         _ => Err(RuntimeError {
+            thrown: None,
             message: "Object.getPrototypeOf target must be an object".to_owned(),
         }),
     }
@@ -41,6 +42,7 @@ pub(crate) fn native_object_set_prototype_of(
         Value::Null => None,
         _ => {
             return Err(RuntimeError {
+                thrown: None,
                 message: "Object.setPrototypeOf prototype must be an object or null".to_owned(),
             });
         }
@@ -48,23 +50,27 @@ pub(crate) fn native_object_set_prototype_of(
 
     match &target {
         Value::Object(object) => object.set_prototype(prototype).map_err(|()| RuntimeError {
+            thrown: None,
             message: "Object.setPrototypeOf failed".to_owned(),
         })?,
         Value::Array(elements) => elements
             .set_prototype(prototype)
             .map_err(|()| RuntimeError {
+                thrown: None,
                 message: "Object.setPrototypeOf failed".to_owned(),
             })?,
         Value::Function(function) => {
             function
                 .set_internal_prototype(prototype)
                 .map_err(|()| RuntimeError {
+                    thrown: None,
                     message: "Object.setPrototypeOf failed".to_owned(),
                 })?
         }
         Value::String(_) | Value::Number(_) | Value::Boolean(_) => {}
         Value::Null | Value::Undefined => {
             return Err(RuntimeError {
+                thrown: None,
                 message: "Object.setPrototypeOf target must not be null or undefined".to_owned(),
             });
         }
@@ -87,6 +93,7 @@ pub(crate) fn native_object_prototype_has_own_property(
             &value, &key,
         ))),
         Value::Null | Value::Undefined => Err(RuntimeError {
+            thrown: None,
             message: "hasOwnProperty called on null or undefined".to_owned(),
         }),
         Value::Number(_) | Value::Boolean(_) => Ok(Value::Boolean(false)),
@@ -100,6 +107,7 @@ pub(crate) fn native_object_prototype_property_is_enumerable(
     let key = to_property_key(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
     match this_value {
         Value::Null | Value::Undefined => Err(RuntimeError {
+            thrown: None,
             message: "propertyIsEnumerable called on null or undefined".to_owned(),
         }),
         value => Ok(Value::Boolean(
@@ -119,6 +127,7 @@ pub(crate) fn native_object_prototype_is_prototype_of(
     };
     let Value::Object(prototype) = this_value else {
         return Err(RuntimeError {
+            thrown: None,
             message: "isPrototypeOf called on non-object".to_owned(),
         });
     };
@@ -161,11 +170,13 @@ pub(crate) fn native_object_prototype_to_locale_string(
 ) -> Result<Value, RuntimeError> {
     match this_value {
         Value::Null | Value::Undefined => Err(RuntimeError {
+            thrown: None,
             message: "toLocaleString called on null or undefined".to_owned(),
         }),
         value => {
             let to_string =
                 property_value(&value, "toString", env).ok_or_else(|| RuntimeError {
+                    thrown: None,
                     message: "toLocaleString target does not have a toString method".to_owned(),
                 })?;
             call_function(to_string, value, Vec::new(), env, false)
@@ -176,6 +187,7 @@ pub(crate) fn native_object_prototype_to_locale_string(
 pub(crate) fn native_object_prototype_value_of(this_value: Value) -> Result<Value, RuntimeError> {
     match this_value {
         Value::Null | Value::Undefined => Err(RuntimeError {
+            thrown: None,
             message: "valueOf called on null or undefined".to_owned(),
         }),
         _ => Ok(this_value),

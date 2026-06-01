@@ -143,6 +143,7 @@ fn eval_instanceof(
 ) -> Result<Value, RuntimeError> {
     let Value::Function(constructor) = right else {
         return Err(RuntimeError {
+            thrown: None,
             message: "right-hand side of instanceof is not callable".to_owned(),
         });
     };
@@ -155,6 +156,7 @@ fn eval_instanceof(
     }) = constructor.properties.borrow().get("prototype").cloned()
     else {
         return Err(RuntimeError {
+            thrown: None,
             message: "function prototype is not an object".to_owned(),
         });
     };
@@ -168,6 +170,7 @@ fn eval_in(left: Value, right: Value, env: &HashMap<String, Value>) -> Result<Va
     has_property(right, env, &key)
         .map(Value::Boolean)
         .map_err(|_| RuntimeError {
+            thrown: None,
             message: "right operand of in is not an object".to_owned(),
         })
 }

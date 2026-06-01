@@ -10,6 +10,7 @@ pub(crate) fn to_property_key(value: Value) -> Result<String, RuntimeError> {
         Value::Null => Ok("null".to_owned()),
         Value::Undefined => Ok("undefined".to_owned()),
         Value::Function(_) | Value::Array(_) | Value::Object(_) => Err(RuntimeError {
+            thrown: None,
             message: "unsupported property key".to_owned(),
         }),
     }

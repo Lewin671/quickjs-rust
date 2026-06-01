@@ -43,6 +43,7 @@ pub(crate) fn native_regexp(
 
     let Value::Object(object) = this_value else {
         return Err(RuntimeError {
+            thrown: None,
             message: "RegExp constructor requires an object receiver".to_owned(),
         });
     };

@@ -11,6 +11,7 @@ pub(super) fn ensure_reflect_object_target(
         | Value::Boolean(_)
         | Value::Null
         | Value::Undefined => Err(RuntimeError {
+            thrown: None,
             message: format!("{method} target must be an object"),
         }),
     }

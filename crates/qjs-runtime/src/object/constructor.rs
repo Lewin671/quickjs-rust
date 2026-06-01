@@ -11,11 +11,13 @@ pub(crate) fn native_object_assign(argument_values: &[Value]) -> Result<Value, R
         Value::Object(_) | Value::Function(_) => {}
         Value::Null | Value::Undefined => {
             return Err(RuntimeError {
+                thrown: None,
                 message: "Object.assign target must not be null or undefined".to_owned(),
             });
         }
         Value::Array(_) | Value::String(_) | Value::Number(_) | Value::Boolean(_) => {
             return Err(RuntimeError {
+                thrown: None,
                 message: "Object.assign primitive targets are not implemented".to_owned(),
             });
         }
@@ -59,6 +61,7 @@ pub(crate) fn native_object_create(argument_values: &[Value]) -> Result<Value, R
         Some(Value::Null) => Value::Object(ObjectRef::new(HashMap::new())),
         _ => {
             return Err(RuntimeError {
+                thrown: None,
                 message: "Object.create prototype must be an object or null".to_owned(),
             });
         }
@@ -90,6 +93,7 @@ fn set_property(target: Value, key: String, value: Value) -> Result<(), RuntimeE
             Ok(())
         }
         _ => Err(RuntimeError {
+            thrown: None,
             message: "property target is not mutable".to_owned(),
         }),
     }

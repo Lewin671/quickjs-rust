@@ -216,6 +216,7 @@ impl Compiler {
     pub(super) fn compile_break(&mut self) -> Result<(), RuntimeError> {
         let Some(context) = self.loop_stack.last() else {
             return Err(RuntimeError {
+                thrown: None,
                 message: "break outside loop".to_owned(),
             });
         };
@@ -237,6 +238,7 @@ impl Compiler {
             .rposition(|context| context.allows_continue)
         else {
             return Err(RuntimeError {
+                thrown: None,
                 message: "continue outside loop".to_owned(),
             });
         };

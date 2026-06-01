@@ -51,6 +51,7 @@ pub(crate) fn native_reflect_has(
         | Value::Boolean(_)
         | Value::Null
         | Value::Undefined => Err(RuntimeError {
+            thrown: None,
             message: "Reflect.has target must be an object".to_owned(),
         }),
     }

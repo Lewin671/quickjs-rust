@@ -7,6 +7,7 @@ use super::array_like::array_like_values;
 pub(crate) fn native_array(argument_values: &[Value]) -> Result<Value, RuntimeError> {
     if argument_values.len() == 1 && matches!(argument_values[0], Value::Number(_)) {
         return Err(RuntimeError {
+            thrown: None,
             message: "Array length construction requires sparse array support".to_owned(),
         });
     }
@@ -33,6 +34,7 @@ pub(crate) fn native_array_from(
         Value::Function(_) => Some(map_fn),
         _ => {
             return Err(RuntimeError {
+                thrown: None,
                 message: "Array.from map function is not callable".to_owned(),
             });
         }

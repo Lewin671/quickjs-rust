@@ -9,6 +9,7 @@ pub(crate) fn native_reflect_apply(
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if !matches!(target, Value::Function(_)) {
         return Err(RuntimeError {
+            thrown: None,
             message: "Reflect.apply target is not callable".to_owned(),
         });
     }
@@ -18,6 +19,7 @@ pub(crate) fn native_reflect_apply(
         Value::Array(elements) => elements.to_vec(),
         value => {
             return Err(RuntimeError {
+                thrown: None,
                 message: format!("Reflect.apply argument list is not array-like: {value:?}"),
             });
         }

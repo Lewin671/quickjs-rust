@@ -18,6 +18,7 @@ pub(crate) fn native_reflect_set_prototype_of(
         Value::Null => None,
         _ => {
             return Err(RuntimeError {
+                thrown: None,
                 message: "Reflect.setPrototypeOf prototype must be an object or null".to_owned(),
             });
         }
@@ -33,6 +34,7 @@ pub(crate) fn native_reflect_set_prototype_of(
         | Value::Null
         | Value::Undefined => {
             return Err(RuntimeError {
+                thrown: None,
                 message: "Reflect.setPrototypeOf target must be an object".to_owned(),
             });
         }

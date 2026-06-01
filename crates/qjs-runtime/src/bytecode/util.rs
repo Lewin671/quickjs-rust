@@ -20,6 +20,7 @@ pub(super) fn assignment_binary_op(op: AssignmentOp) -> Result<BinaryOp, Runtime
         | AssignmentOp::LogicalAndAssign
         | AssignmentOp::LogicalOrAssign
         | AssignmentOp::NullishAssign => Err(RuntimeError {
+            thrown: None,
             message: "assignment operator has no binary equivalent".to_owned(),
         }),
     }
@@ -34,6 +35,7 @@ pub(super) fn parse_number_literal(raw: &str) -> Result<f64, RuntimeError> {
         Ok(parse_radix_number(digits, 8))
     } else {
         raw.parse::<f64>().map_err(|_| RuntimeError {
+            thrown: None,
             message: format!("invalid number literal `{raw}`"),
         })
     }
@@ -59,18 +61,21 @@ pub(super) fn typeof_value(value: Value) -> String {
 
 pub(super) fn stack_underflow() -> RuntimeError {
     RuntimeError {
+        thrown: None,
         message: "bytecode stack underflow".to_owned(),
     }
 }
 
 pub(super) fn unsupported_stmt(stmt: &Stmt) -> RuntimeError {
     RuntimeError {
+        thrown: None,
         message: format!("unsupported bytecode statement: {stmt:?}"),
     }
 }
 
 pub(super) fn unsupported_target(target: &AssignmentTarget) -> RuntimeError {
     RuntimeError {
+        thrown: None,
         message: format!("unsupported bytecode assignment target: {target:?}"),
     }
 }

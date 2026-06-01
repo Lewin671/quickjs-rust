@@ -15,11 +15,13 @@ pub(super) fn this_string_value(
                 Ok(String::new())
             } else {
                 Err(RuntimeError {
+                    thrown: None,
                     message: "String.prototype method called on non-string object".to_owned(),
                 })
             }
         }
         Value::Null | Value::Undefined => Err(RuntimeError {
+            thrown: None,
             message: "String.prototype method called on null or undefined".to_owned(),
         }),
         value => to_js_string(value),

@@ -101,6 +101,7 @@ pub(crate) fn is_native_error(native: NativeFunction) -> bool {
 pub(crate) fn native_error_prototype_to_string(this_value: Value) -> Result<Value, RuntimeError> {
     let Value::Object(object) = this_value else {
         return Err(RuntimeError {
+            thrown: None,
             message: "Error.prototype.toString called on non-object".to_owned(),
         });
     };

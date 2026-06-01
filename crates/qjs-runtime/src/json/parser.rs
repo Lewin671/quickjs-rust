@@ -232,6 +232,7 @@ impl<'a> JsonParser<'a> {
 
     fn syntax_error(&self) -> RuntimeError {
         RuntimeError {
+            thrown: None,
             message: "JSON syntax error".to_owned(),
         }
     }

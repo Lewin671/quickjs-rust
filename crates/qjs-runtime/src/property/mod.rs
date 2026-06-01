@@ -38,6 +38,7 @@ pub(crate) fn has_property(
         | Value::Boolean(_)
         | Value::Null
         | Value::Undefined => Err(RuntimeError {
+            thrown: None,
             message: "property target must be an object".to_owned(),
         }),
     }

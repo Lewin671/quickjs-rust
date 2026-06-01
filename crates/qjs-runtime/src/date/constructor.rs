@@ -24,6 +24,7 @@ pub(crate) fn native_date(
 
     let Value::Object(object) = this_value else {
         return Err(RuntimeError {
+            thrown: None,
             message: "Date constructor requires an object receiver".to_owned(),
         });
     };

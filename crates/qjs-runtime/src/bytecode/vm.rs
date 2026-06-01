@@ -113,6 +113,7 @@ impl<'a> Vm<'a> {
                 .get(self.ip)
                 .cloned()
                 .ok_or_else(|| RuntimeError {
+                    thrown: None,
                     message: "bytecode instruction pointer out of bounds".to_owned(),
                 })?;
             self.ip += 1;
@@ -121,6 +122,7 @@ impl<'a> Vm<'a> {
                     self.stack
                         .push(self.bytecode.constants.get(index).cloned().ok_or_else(|| {
                             RuntimeError {
+                                thrown: None,
                                 message: "bytecode constant index out of bounds".to_owned(),
                             }
                         })?)
@@ -136,6 +138,7 @@ impl<'a> Vm<'a> {
                         .get(&name)
                         .cloned()
                         .ok_or_else(|| RuntimeError {
+                            thrown: None,
                             message: format!("undefined identifier `{name}`"),
                         })?;
                     self.stack.push(value);
@@ -351,11 +354,13 @@ impl<'a> Vm<'a> {
         let callee = self.pop()?;
         let Value::Function(function) = &callee else {
             return Err(RuntimeError {
+                thrown: None,
                 message: "value is not a constructor".to_owned(),
             });
         };
         if !function.constructable {
             return Err(RuntimeError {
+                thrown: None,
                 message: "value is not a constructor".to_owned(),
             });
         }
@@ -380,12 +385,15 @@ impl<'a> Vm<'a> {
         match result {
             Ok(value) => Ok(Some(value)),
             Err(error) if self.should_rethrow_js_error(&error) => {
-                self.throw_value(Value::String(
-                    error
-                        .message
-                        .trim_start_matches("throw statement executed: ")
-                        .to_owned(),
-                ))?;
+                let value = error.thrown.as_deref().cloned().unwrap_or_else(|| {
+                    Value::String(
+                        error
+                            .message
+                            .trim_start_matches("throw statement executed: ")
+                            .to_owned(),
+                    )
+                });
+                self.throw_value(value)?;
                 Ok(None)
             }
             Err(error) if self.should_throw_native_error(&error) => {
@@ -398,7 +406,8 @@ impl<'a> Vm<'a> {
     }
 
     fn should_rethrow_js_error(&self, error: &RuntimeError) -> bool {
-        !self.try_stack.is_empty() && error.message.starts_with("throw statement executed: ")
+        !self.try_stack.is_empty()
+            && (error.thrown.is_some() || error.message.starts_with("throw statement executed: "))
     }
 
     fn should_throw_native_error(&self, error: &RuntimeError) -> bool {
@@ -408,10 +417,12 @@ impl<'a> Vm<'a> {
     fn type_error_value(&self, message: &str) -> Result<Value, RuntimeError> {
         let Value::Function(function) =
             self.type_error_constructor().ok_or_else(|| RuntimeError {
+                thrown: None,
                 message: "TypeError constructor is not available".to_owned(),
             })?
         else {
             return Err(RuntimeError {
+                thrown: None,
                 message: "TypeError constructor is not callable".to_owned(),
             });
         };
@@ -553,9 +564,11 @@ impl<'a> Vm<'a> {
         match self.locals.get(slot) {
             Some(Some(value)) => Ok(value.clone()),
             Some(None) => Err(RuntimeError {
+                thrown: None,
                 message: format!("undefined identifier `{}`", self.bytecode.locals[slot].name),
             }),
             None => Err(RuntimeError {
+                thrown: None,
                 message: "bytecode local index out of bounds".to_owned(),
             }),
         }
@@ -563,6 +576,7 @@ impl<'a> Vm<'a> {
 
     fn store_local(&mut self, slot: usize, value: Value) -> Result<(), RuntimeError> {
         let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
+            thrown: None,
             message: "bytecode local index out of bounds".to_owned(),
         })?;
         *local = Some(value);

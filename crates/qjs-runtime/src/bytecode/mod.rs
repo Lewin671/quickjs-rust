@@ -51,6 +51,7 @@ pub(crate) fn eval_function_bytecode(
 /// Returns parser, compiler, or VM runtime failures.
 pub fn eval_bytecode_source(source: &str) -> Result<Value, RuntimeError> {
     let script = parse_script(source).map_err(|error| RuntimeError {
+        thrown: None,
         message: error.message,
     })?;
     let bytecode = compile_script(&script)?;

@@ -61,6 +61,7 @@ fn to_code_point(value: Value) -> Result<u32, RuntimeError> {
     let number = to_number(value)?;
     if !number.is_finite() || number < 0.0 || number > 0x10FFFF as f64 || number.trunc() != number {
         return Err(RuntimeError {
+            thrown: None,
             message: "String.fromCodePoint code point must be an integer in [0, 0x10FFFF]"
                 .to_owned(),
         });

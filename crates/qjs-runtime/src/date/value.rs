@@ -39,6 +39,7 @@ pub(super) fn date_value_from_object(object: &ObjectRef) -> Result<f64, RuntimeE
     match object.get(DATE_VALUE_PROPERTY) {
         Some(Value::Number(value)) => Ok(value),
         _ => Err(RuntimeError {
+            thrown: None,
             message: "Date method receiver is not a Date object".to_owned(),
         }),
     }
@@ -47,12 +48,14 @@ pub(super) fn date_value_from_object(object: &ObjectRef) -> Result<f64, RuntimeE
 pub(super) fn date_object(this_value: Value) -> Result<ObjectRef, RuntimeError> {
     let Value::Object(object) = this_value else {
         return Err(RuntimeError {
+            thrown: None,
             message: "Date method receiver is not an object".to_owned(),
         });
     };
     match object.get(DATE_VALUE_PROPERTY) {
         Some(Value::Number(_)) => Ok(object),
         _ => Err(RuntimeError {
+            thrown: None,
             message: "Date method receiver is not a Date object".to_owned(),
         }),
     }

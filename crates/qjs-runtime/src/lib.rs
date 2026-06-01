@@ -78,6 +78,8 @@ pub(crate) const RUNTIME_INTRINSIC_NAMES: &[&str] = &[
 /// Runtime error.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RuntimeError {
+    /// Original JavaScript value thrown by a `throw` statement, when available.
+    pub(crate) thrown: Option<Box<Value>>,
     /// Human-readable message.
     pub message: String,
 }
@@ -89,6 +91,7 @@ pub struct RuntimeError {
 /// Returns parser or runtime failures.
 pub fn eval(source: &str) -> Result<Value, RuntimeError> {
     let script = parse_script(source).map_err(|error| RuntimeError {
+        thrown: None,
         message: error.message,
     })?;
     let bytecode = compile_script(&script)?;

@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use qjs_ast::Stmt;
 use qjs_parser::parse_script;
 
-use crate::{Function, GLOBAL_THIS_BINDING, RuntimeError, Value, to_js_string};
+use crate::{
+    Function, GLOBAL_THIS_BINDING, RuntimeError, Value, array::array_like_values, to_js_string,
+};
 
 pub(crate) fn native_function(
     _function: &Function,
@@ -15,6 +17,7 @@ pub(crate) fn native_function(
     let (params, body) = function_source_parts(argument_values)?;
     let source = format!("function anonymous({params}) {{\n{body}\n}}");
     let script = parse_script(&source).map_err(|error| RuntimeError {
+        thrown: None,
         message: format!("invalid Function constructor source: {}", error.message),
     })?;
 
@@ -23,6 +26,7 @@ pub(crate) fn native_function(
     }) = script.body.into_iter().next()
     else {
         return Err(RuntimeError {
+            thrown: None,
             message: "Function constructor did not produce a function declaration".to_owned(),
         });
     };
@@ -57,6 +61,7 @@ pub(crate) fn native_function_prototype_apply(
 ) -> Result<Value, RuntimeError> {
     let Value::Function(_) = this_value else {
         return Err(RuntimeError {
+            thrown: None,
             message: "Function.prototype.apply target is not callable".to_owned(),
         });
     };
@@ -65,13 +70,7 @@ pub(crate) fn native_function_prototype_apply(
     let apply_arguments = match argument_values.get(1).cloned().unwrap_or(Value::Undefined) {
         Value::Null | Value::Undefined => Vec::new(),
         Value::Array(elements) => elements.to_vec(),
-        value => {
-            return Err(RuntimeError {
-                message: format!(
-                    "Function.prototype.apply argument list is not array-like: {value:?}"
-                ),
-            });
-        }
+        value => array_like_values(value, "Function.prototype.apply argument list")?,
     };
 
     crate::call_function(this_value, call_this, apply_arguments, env, false)
@@ -84,6 +83,7 @@ pub(crate) fn native_function_prototype_call(
 ) -> Result<Value, RuntimeError> {
     let Value::Function(_) = this_value else {
         return Err(RuntimeError {
+            thrown: None,
             message: "Function.prototype.call target is not callable".to_owned(),
         });
     };
@@ -104,6 +104,7 @@ pub(crate) fn native_function_prototype_bind(
 ) -> Result<Value, RuntimeError> {
     let Value::Function(target) = this_value.clone() else {
         return Err(RuntimeError {
+            thrown: None,
             message: "Function.prototype.bind target is not callable".to_owned(),
         });
     };

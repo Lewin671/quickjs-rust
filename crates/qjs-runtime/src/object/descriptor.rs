@@ -17,6 +17,7 @@ pub(crate) fn native_object_define_property(
 
     if !define_property_on_value(target.clone(), key, descriptor)? {
         return Err(RuntimeError {
+            thrown: None,
             message: "Object.defineProperty failed".to_owned(),
         });
     }
@@ -32,6 +33,7 @@ pub(crate) fn native_object_define_properties(
     let descriptors = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
     if !matches!(descriptors, Value::Object(_) | Value::Function(_)) {
         return Err(RuntimeError {
+            thrown: None,
             message: "property descriptors must be an object".to_owned(),
         });
     }
@@ -40,6 +42,7 @@ pub(crate) fn native_object_define_properties(
         let descriptor = to_property_descriptor(descriptor_value)?;
         if !define_property_on_value(target.clone(), key, descriptor)? {
             return Err(RuntimeError {
+                thrown: None,
                 message: "Object.defineProperties failed".to_owned(),
             });
         }
@@ -69,6 +72,7 @@ pub(crate) fn native_object_get_own_property_descriptors(
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if matches!(target, Value::Null | Value::Undefined) {
         return Err(RuntimeError {
+            thrown: None,
             message: "Object.getOwnPropertyDescriptors target must not be null or undefined"
                 .to_owned(),
         });
@@ -156,10 +160,12 @@ fn ensure_define_property_target(target: &Value) -> Result<(), RuntimeError> {
         Value::Object(_) | Value::Function(_) => Ok(()),
         Value::Array(_) | Value::String(_) | Value::Number(_) | Value::Boolean(_) => {
             Err(RuntimeError {
+                thrown: None,
                 message: "Object.defineProperty primitive targets are not implemented".to_owned(),
             })
         }
         Value::Null | Value::Undefined => Err(RuntimeError {
+            thrown: None,
             message: "Object.defineProperty target must be an object".to_owned(),
         }),
     }
@@ -168,12 +174,14 @@ fn ensure_define_property_target(target: &Value) -> Result<(), RuntimeError> {
 pub(crate) fn to_property_descriptor(value: Value) -> Result<Property, RuntimeError> {
     let Value::Object(descriptor) = value else {
         return Err(RuntimeError {
+            thrown: None,
             message: "property descriptor must be an object".to_owned(),
         });
     };
 
     if descriptor.contains_property("get") || descriptor.contains_property("set") {
         return Err(RuntimeError {
+            thrown: None,
             message: "accessor property descriptors are not implemented".to_owned(),
         });
     }

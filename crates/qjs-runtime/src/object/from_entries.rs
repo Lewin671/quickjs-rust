@@ -33,6 +33,7 @@ fn entry_component(
         Value::Object(object) => Ok(object.get(&index.to_string()).unwrap_or(Value::Undefined)),
         Value::Function(function) => Ok(function_entry_component(&function, index, env)),
         _ => Err(RuntimeError {
+            thrown: None,
             message: "Object.fromEntries entry must be an object".to_owned(),
         }),
     }
