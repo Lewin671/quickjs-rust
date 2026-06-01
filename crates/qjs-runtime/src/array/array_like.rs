@@ -1,5 +1,18 @@
 use crate::{RuntimeError, Value, to_length};
 
+pub(crate) struct ArrayLike {
+    pub(crate) receiver: Value,
+    pub(crate) values: Vec<Value>,
+}
+
+pub(crate) fn array_like(value: Value, context: &str) -> Result<ArrayLike, RuntimeError> {
+    let values = array_like_values(value.clone(), context)?;
+    Ok(ArrayLike {
+        receiver: value,
+        values,
+    })
+}
+
 pub(crate) fn array_like_values(value: Value, context: &str) -> Result<Vec<Value>, RuntimeError> {
     match value {
         Value::Array(array) => Ok(array.to_vec()),

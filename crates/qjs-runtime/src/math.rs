@@ -14,6 +14,7 @@ pub(super) fn install_math(
     object_prototype: ObjectRef,
 ) {
     let math_object = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    math_object.set_to_string_tag("Math");
     define_math_constant(&math_object, "E", std::f64::consts::E);
     define_math_constant(&math_object, "LN10", std::f64::consts::LN_10);
     define_math_constant(&math_object, "LN2", std::f64::consts::LN_2);

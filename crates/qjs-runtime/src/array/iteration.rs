@@ -1,16 +1,17 @@
 use std::collections::HashMap;
 
+use super::array_like::array_like;
 use crate::{ArrayRef, RuntimeError, Value, call_function, is_truthy};
 
 struct ArrayIteration {
-    elements: ArrayRef,
+    receiver: Value,
     callback: Value,
     callback_this: Value,
     source: Vec<Value>,
 }
 
 struct ArrayReduction {
-    elements: ArrayRef,
+    receiver: Value,
     callback: Value,
     source: Vec<Value>,
 }
@@ -20,11 +21,7 @@ fn prepare_array_iteration(
     this_value: Value,
     argument_values: &[Value],
 ) -> Result<ArrayIteration, RuntimeError> {
-    let Value::Array(elements) = this_value else {
-        return Err(RuntimeError {
-            message: format!("Array.prototype.{method} called on non-array"),
-        });
-    };
+    let source = array_like(this_value, &format!("Array.prototype.{method}"))?;
     let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if !matches!(callback, Value::Function(_)) {
         return Err(RuntimeError {
@@ -33,8 +30,8 @@ fn prepare_array_iteration(
     }
 
     Ok(ArrayIteration {
-        source: elements.to_vec(),
-        elements,
+        receiver: source.receiver,
+        source: source.values,
         callback,
         callback_this: argument_values.get(1).cloned().unwrap_or(Value::Undefined),
     })
@@ -45,11 +42,7 @@ fn prepare_array_reduction(
     this_value: Value,
     argument_values: &[Value],
 ) -> Result<ArrayReduction, RuntimeError> {
-    let Value::Array(elements) = this_value else {
-        return Err(RuntimeError {
-            message: format!("Array.prototype.{method} called on non-array"),
-        });
-    };
+    let source = array_like(this_value, &format!("Array.prototype.{method}"))?;
     let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if !matches!(callback, Value::Function(_)) {
         return Err(RuntimeError {
@@ -58,8 +51,8 @@ fn prepare_array_reduction(
     }
 
     Ok(ArrayReduction {
-        source: elements.to_vec(),
-        elements,
+        receiver: source.receiver,
+        source: source.values,
         callback,
     })
 }
@@ -76,7 +69,7 @@ fn call_iteration_callback(
         vec![
             value,
             Value::Number(index as f64),
-            Value::Array(iteration.elements.clone()),
+            iteration.receiver.clone(),
         ],
         env,
         false,
@@ -97,7 +90,7 @@ fn call_reduction_callback(
             accumulator,
             value,
             Value::Number(index as f64),
-            Value::Array(reduction.elements.clone()),
+            reduction.receiver.clone(),
         ],
         env,
         false,

@@ -4,6 +4,10 @@ use crate::{Value, eval};
 fn evaluates_math_builtins() {
     assert_eq!(eval("typeof Math;"), Ok(Value::String("object".to_owned())));
     assert_eq!(
+        eval("Object.prototype.toString.call(Math);"),
+        Ok(Value::String("[object Math]".to_owned()))
+    );
+    assert_eq!(
         eval("typeof Math.PI;"),
         Ok(Value::String("number".to_owned()))
     );

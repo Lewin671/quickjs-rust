@@ -23,6 +23,18 @@ fn evaluates_array_iteration_builtins() {
         Ok(Value::Boolean(true))
     );
     assert_eq!(
+        eval(
+            "let object = {}; object.length = 2; object[0] = 3; object[1] = 4; Array.prototype.map.call(object, function(value, index, receiver) { return receiver === object ? value + index : 0; }).join('|');"
+        ),
+        Ok(Value::String("3|5".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "Math.length = 1; Math[0] = 7; Array.prototype.map.call(Math, function(value, index, receiver) { return receiver === Math && index === 0 ? value + 1 : 0; })[0];"
+        ),
+        Ok(Value::Number(8.0))
+    );
+    assert_eq!(
         eval("[1, 2, 3, 4].filter(function(value) { return value > 2; }).join();"),
         Ok(Value::String("3,4".to_owned()))
     );
@@ -165,6 +177,12 @@ fn evaluates_array_iteration_builtins() {
             "let seen = ''; [10, 20].reduce(function(accumulator, value, index, array) { seen = seen + accumulator + ':' + value + ':' + index + ':' + (array[index] === value) + '|'; return accumulator + value; }, 5); seen;"
         ),
         Ok(Value::String("5:10:0:true|15:20:1:true|".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; object.length = 2; object[0] = 5; object[1] = 7; Array.prototype.reduce.call(object, function(accumulator, value, index, receiver) { return accumulator + value + index + receiver.length; }, 0);"
+        ),
+        Ok(Value::Number(17.0))
     );
     assert_eq!(
         eval("[].reduce(function(accumulator, value) { return accumulator + value; }, 7);"),
