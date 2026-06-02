@@ -230,7 +230,7 @@ fn insert_caller_scope_bindings(
     env: &HashMap<String, Value>,
 ) {
     for name in env.keys() {
-        if name == GLOBAL_THIS_BINDING
+        if is_call_frame_binding(name)
             || RUNTIME_INTRINSIC_NAMES.contains(&name.as_str())
             || function_local_names
                 .binary_search_by(|local| local.as_str().cmp(name))
@@ -248,11 +248,15 @@ fn propagate_caller_bindings(
     result: &crate::bytecode::FunctionBytecodeResult<'_>,
 ) {
     for name in caller_binding_names {
-        if name != GLOBAL_THIS_BINDING
+        if !is_call_frame_binding(name)
             && let Some(value) = env.get_mut(name)
             && let Some(final_value) = result.binding(name)
         {
             *value = final_value.clone();
         }
     }
+}
+
+fn is_call_frame_binding(name: &str) -> bool {
+    matches!(name, GLOBAL_THIS_BINDING | "this" | "arguments")
 }

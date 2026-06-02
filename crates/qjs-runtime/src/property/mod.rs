@@ -53,7 +53,10 @@ pub(crate) fn property_value(
         Value::Object(object) => property_descriptor_value(object.property(key), receiver, env),
         Value::Function(function) => property_descriptor_value(
             function_own_property_descriptor(&function, key).or_else(|| {
-                function_prototype_property(&function, env, key).map(Property::enumerable)
+                function
+                    .internal_prototype_override()
+                    .unwrap_or_else(|| function_intrinsic_prototype(env))
+                    .and_then(|prototype| prototype.property(key))
             }),
             receiver,
             env,
