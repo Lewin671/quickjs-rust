@@ -12,6 +12,7 @@ const STRING_PROTOTYPE_METHODS: &[(&str, usize, NativeFunction)] = &[
     ("includes", 1, NativeFunction::StringPrototypeIncludes),
     ("indexOf", 1, NativeFunction::StringPrototypeIndexOf),
     ("lastIndexOf", 1, NativeFunction::StringPrototypeLastIndexOf),
+    ("match", 1, NativeFunction::StringPrototypeMatch),
     ("padEnd", 1, NativeFunction::StringPrototypePadEnd),
     ("padStart", 1, NativeFunction::StringPrototypePadStart),
     ("repeat", 1, NativeFunction::StringPrototypeRepeat),
