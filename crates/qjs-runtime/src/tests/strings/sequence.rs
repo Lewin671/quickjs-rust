@@ -43,6 +43,28 @@ fn evaluates_string_sequence_builtins() {
     assert_eq!(eval("'abc'.split('x').length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("'abc'.split('b', 0).length;"), Ok(Value::Number(0.0)));
     assert_eq!(
+        eval("'hello'.split(/l/).join('|');"),
+        Ok(Value::String("he||o".to_owned()))
+    );
+    assert_eq!(
+        eval("'hello'.split(/l/, 2).join('|');"),
+        Ok(Value::String("he|".to_owned()))
+    );
+    assert_eq!(
+        eval("'abc'.split(/[a-z]/).join('|');"),
+        Ok(Value::String("|||".to_owned()))
+    );
+    assert_eq!(
+        eval("'hello'.split(new RegExp).join('|');"),
+        Ok(Value::String("h|e|l|l|o".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let called = false; let separator = { toString: function() { called = true; return 'x'; } }; 'abc'.split(separator, 0); called;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("String.prototype.substring.length;"),
         Ok(Value::Number(2.0))
     );
