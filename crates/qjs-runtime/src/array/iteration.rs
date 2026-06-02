@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 use super::array_like::{array_like_length, array_like_values_from_receiver};
 use crate::{
-    ArrayRef, RuntimeError, Value, call_function, has_property, is_truthy, property_value,
+    ArrayRef, RuntimeError, Value, array_prototype, call_function, has_property, is_truthy,
+    property_value,
 };
 
 const MAX_ARRAY_LENGTH: usize = u32::MAX as usize;
@@ -122,15 +123,38 @@ pub(crate) fn native_array_prototype_map(
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_array_iteration("map", this_value, argument_values, env)?;
     let mut mapped = vec![Value::Undefined; iteration.source_len];
-    for (index, slot) in mapped.iter_mut().enumerate() {
+    let mut holes = (0..iteration.source_len).collect::<Vec<_>>();
+    for index in map_iteration_indices(&iteration, env) {
         let key = index.to_string();
         if has_property(iteration.receiver.clone(), env, &key)? {
             let value = property_value(iteration.receiver.clone(), &key, env)?;
-            *slot = call_iteration_callback(&iteration, value, index, env)?;
+            mapped[index] = call_iteration_callback(&iteration, value, index, env)?;
+            holes.retain(|hole| *hole != index);
         }
     }
 
-    Ok(Value::Array(ArrayRef::new(mapped)))
+    Ok(Value::Array(ArrayRef::new_sparse(mapped, holes)))
+}
+
+fn map_iteration_indices(iteration: &ArrayIteration, env: &HashMap<String, Value>) -> Vec<usize> {
+    match &iteration.receiver {
+        Value::Array(array) => {
+            let mut indices = array.present_indices();
+            if let Some(prototype) = array_prototype(env) {
+                indices.extend(
+                    prototype
+                        .own_property_names()
+                        .into_iter()
+                        .filter_map(|key| key.parse::<usize>().ok()),
+                );
+            }
+            indices.retain(|index| *index < iteration.source_len);
+            indices.sort_unstable();
+            indices.dedup();
+            indices
+        }
+        _ => (0..iteration.source_len).collect(),
+    }
 }
 
 pub(crate) fn native_array_prototype_filter(
