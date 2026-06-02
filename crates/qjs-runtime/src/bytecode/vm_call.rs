@@ -76,7 +76,7 @@ fn insert_binding(
     name: &str,
     value: &Value,
 ) {
-    env.insert(name.to_owned(), value.clone());
+    env.entry(name.to_owned()).or_insert_with(|| value.clone());
     if !binding_names.iter().any(|existing| existing == name) {
         binding_names.push(name.to_owned());
     }

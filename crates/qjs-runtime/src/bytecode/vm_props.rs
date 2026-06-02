@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use qjs_ast::BinaryOp;
 
 use crate::{
-    RuntimeError, Value, boolean, inherited_string_prototype_property, number, property_value,
-    string, to_length,
+    Property, RuntimeError, Value, array_prototype, boolean, call_function,
+    inherited_string_prototype_property, number, property_value, string, to_length,
 };
 
 pub(super) fn get_property(
@@ -37,13 +37,34 @@ pub(super) fn get_property(
     }
 }
 
-pub(super) fn set_property(object: Value, key: String, value: Value) -> Result<(), RuntimeError> {
+pub(super) fn set_property(
+    object: Value,
+    key: String,
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
     match object {
         Value::Object(object) => {
+            if apply_property_setter(
+                object.property(&key),
+                Value::Object(object.clone()),
+                value.clone(),
+                env,
+            )? {
+                return Ok(());
+            }
             object.set(key, value);
             Ok(())
         }
         Value::Function(function) => {
+            if apply_property_setter(
+                function.properties.borrow().get(&key).cloned(),
+                Value::Function(function.clone()),
+                value.clone(),
+                env,
+            )? {
+                return Ok(());
+            }
             function.set_property(key, value);
             Ok(())
         }
@@ -51,6 +72,20 @@ pub(super) fn set_property(object: Value, key: String, value: Value) -> Result<(
             if key == "length" {
                 elements.set_len(to_length(value)?);
             } else {
+                let property = elements.property(&key).or_else(|| {
+                    elements
+                        .prototype_override()
+                        .unwrap_or_else(|| array_prototype(env))
+                        .and_then(|prototype| prototype.property(&key))
+                });
+                if apply_property_setter(
+                    property,
+                    Value::Array(elements.clone()),
+                    value.clone(),
+                    env,
+                )? {
+                    return Ok(());
+                }
                 match key.parse::<usize>() {
                     Ok(index) => elements.set(index, value),
                     Err(_) => elements.set_property(key, value),
@@ -63,6 +98,22 @@ pub(super) fn set_property(object: Value, key: String, value: Value) -> Result<(
             message: "member assignment target is not an object".to_owned(),
         }),
     }
+}
+
+fn apply_property_setter(
+    property: Option<Property>,
+    receiver: Value,
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<bool, RuntimeError> {
+    let Some(property) = property else {
+        return Ok(false);
+    };
+    if let Some(setter) = property.set {
+        call_function(setter, receiver, vec![value], env, false)?;
+        return Ok(true);
+    }
+    Ok(property.is_accessor())
 }
 
 pub(super) fn delete_property(object: Value, key: &str) -> Result<Value, RuntimeError> {
