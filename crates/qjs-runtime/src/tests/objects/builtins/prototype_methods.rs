@@ -43,6 +43,14 @@ fn evaluates_object_prototype_methods() {
         Ok(Value::Boolean(true))
     );
     assert_eq!(
+        eval("typeof Object.prototype.valueOf.call(true);"),
+        Ok(Value::String("object".to_owned()))
+    );
+    assert_eq!(
+        eval("typeof Object.prototype.valueOf.call(false);"),
+        Ok(Value::String("object".to_owned()))
+    );
+    assert_eq!(
         eval("Object.prototype.valueOf() === Object.prototype;"),
         Ok(Value::Boolean(true))
     );

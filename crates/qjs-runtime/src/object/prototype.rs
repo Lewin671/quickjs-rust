@@ -186,12 +186,18 @@ pub(crate) fn native_object_prototype_to_locale_string(
     }
 }
 
-pub(crate) fn native_object_prototype_value_of(this_value: Value) -> Result<Value, RuntimeError> {
+pub(crate) fn native_object_prototype_value_of(
+    this_value: Value,
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
     match this_value {
         Value::Null | Value::Undefined => Err(RuntimeError {
             thrown: None,
             message: "valueOf called on null or undefined".to_owned(),
         }),
+        Value::Boolean(_) | Value::Number(_) | Value::String(_) => {
+            Ok(super::boxed_primitive(this_value, env).expect("primitive value should box"))
+        }
         _ => Ok(this_value),
     }
 }

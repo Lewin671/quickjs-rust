@@ -59,6 +59,15 @@ pub(crate) fn native_object(
     }
 }
 
+pub(crate) fn boxed_primitive(value: Value, env: &HashMap<String, Value>) -> Option<Value> {
+    match value {
+        Value::Boolean(value) => Some(boxed_boolean(value, env)),
+        Value::Number(value) => Some(boxed_number(value, env)),
+        Value::String(value) => Some(boxed_string(&value, env)),
+        _ => None,
+    }
+}
+
 fn boxed_boolean(value: bool, env: &HashMap<String, Value>) -> Value {
     let object = ObjectRef::with_prototype(HashMap::new(), constructor_prototype("Boolean", env));
     object.define_non_enumerable(BOOLEAN_DATA_PROPERTY.to_owned(), Value::Boolean(value));
