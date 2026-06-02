@@ -651,6 +651,10 @@ cases/string-prototype-slice-basic.js
 cases/string-prototype-slice-length.js
 cases/string-prototype-split-basic.js
 cases/string-prototype-split-empty-separator.js
+cases/string-prototype-split-regexp-comma.js
+cases/string-prototype-split-regexp-digit-plus.js
+cases/string-prototype-split-regexp-limit.js
+cases/string-prototype-split-regexp-literal.js
 cases/string-prototype-split-length.js
 cases/string-prototype-split-limit.js
 cases/string-prototype-split-undefined-separator.js
