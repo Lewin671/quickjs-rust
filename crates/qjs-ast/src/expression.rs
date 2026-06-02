@@ -20,8 +20,8 @@ pub enum Expr {
     Literal(Literal),
     /// An array literal.
     Array {
-        /// Array elements.
-        elements: Vec<Expr>,
+        /// Array elements, with `None` for elisions.
+        elements: Vec<Option<Expr>>,
         /// Source span.
         span: Span,
     },

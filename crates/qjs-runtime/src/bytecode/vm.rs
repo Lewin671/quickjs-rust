@@ -139,7 +139,7 @@ impl<'a> Vm<'a> {
                     let value = self.stack.last().cloned().ok_or_else(stack_underflow)?;
                     self.stack.push(value);
                 }
-                Op::NewArray(count) => self.new_array(count)?,
+                Op::NewArray { count, holes } => self.new_array(count, holes)?,
                 Op::NewObject(count) => self.new_object(count)?,
                 Op::EnumerateKeys => self.enumerate_keys()?,
                 Op::GetProp => self.get_prop()?,
@@ -258,13 +258,14 @@ impl<'a> Vm<'a> {
             .and_then(Option::as_ref)
     }
 
-    fn new_array(&mut self, count: usize) -> Result<(), RuntimeError> {
+    fn new_array(&mut self, count: usize, holes: Vec<usize>) -> Result<(), RuntimeError> {
         let mut values = Vec::with_capacity(count);
         for _ in 0..count {
             values.push(self.pop()?);
         }
         values.reverse();
-        self.stack.push(Value::Array(ArrayRef::new(values)));
+        self.stack
+            .push(Value::Array(ArrayRef::new_sparse(values, holes)));
         Ok(())
     }
 

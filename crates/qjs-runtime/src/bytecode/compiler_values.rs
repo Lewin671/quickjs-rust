@@ -25,11 +25,20 @@ impl Compiler {
         Ok(())
     }
 
-    pub(super) fn compile_array(&mut self, elements: &[Expr]) -> Result<(), RuntimeError> {
-        for element in elements {
-            self.compile_expr(element)?;
+    pub(super) fn compile_array(&mut self, elements: &[Option<Expr>]) -> Result<(), RuntimeError> {
+        let mut holes = Vec::new();
+        for (index, element) in elements.iter().enumerate() {
+            if let Some(element) = element {
+                self.compile_expr(element)?;
+            } else {
+                holes.push(index);
+                self.emit_load_undefined();
+            }
         }
-        self.emit(Op::NewArray(elements.len()));
+        self.emit(Op::NewArray {
+            count: elements.len(),
+            holes,
+        });
         Ok(())
     }
 

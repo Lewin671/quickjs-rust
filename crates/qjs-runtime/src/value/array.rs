@@ -1,6 +1,6 @@
 use std::{
     cell::{Cell, RefCell},
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     fmt,
     rc::Rc,
 };
@@ -11,6 +11,7 @@ use super::{ObjectRef, Property, Value};
 #[derive(Clone)]
 pub struct ArrayRef {
     elements: Rc<RefCell<Vec<Value>>>,
+    holes: Rc<RefCell<BTreeSet<usize>>>,
     properties: Rc<RefCell<HashMap<String, Property>>>,
     extensible: Rc<Cell<bool>>,
     sealed: Rc<Cell<bool>>,
@@ -20,8 +21,13 @@ pub struct ArrayRef {
 
 impl ArrayRef {
     pub(crate) fn new(elements: Vec<Value>) -> Self {
+        Self::new_sparse(elements, Vec::new())
+    }
+
+    pub(crate) fn new_sparse(elements: Vec<Value>, holes: Vec<usize>) -> Self {
         Self {
             elements: Rc::new(RefCell::new(elements)),
+            holes: Rc::new(RefCell::new(holes.into_iter().collect())),
             properties: Rc::new(RefCell::new(HashMap::new())),
             extensible: Rc::new(Cell::new(true)),
             sealed: Rc::new(Cell::new(false)),
@@ -43,7 +49,14 @@ impl ArrayRef {
     }
 
     pub(crate) fn get(&self, index: usize) -> Option<Value> {
+        if self.holes.borrow().contains(&index) {
+            return None;
+        }
         self.elements.borrow().get(index).cloned()
+    }
+
+    pub(crate) fn has_index(&self, index: usize) -> bool {
+        index < self.elements.borrow().len() && !self.holes.borrow().contains(&index)
     }
 
     pub(crate) fn property(&self, key: &str) -> Option<Property> {
@@ -61,7 +74,10 @@ impl ArrayRef {
     }
 
     pub(crate) fn pop(&self) -> Option<Value> {
-        self.elements.borrow_mut().pop()
+        let mut elements = self.elements.borrow_mut();
+        let index = elements.len().checked_sub(1)?;
+        self.holes.borrow_mut().remove(&index);
+        elements.pop()
     }
 
     pub(crate) fn shift(&self) -> Option<Value> {
@@ -69,18 +85,31 @@ impl ArrayRef {
         if elements.is_empty() {
             None
         } else {
+            let mut holes = self.holes.borrow_mut();
+            *holes = holes
+                .iter()
+                .filter_map(|index| index.checked_sub(1))
+                .collect();
             Some(elements.remove(0))
         }
     }
 
     pub(crate) fn unshift(&self, values: &[Value]) -> usize {
         let mut elements = self.elements.borrow_mut();
+        let offset = values.len();
+        if offset > 0 {
+            let mut holes = self.holes.borrow_mut();
+            *holes = holes.iter().map(|index| index + offset).collect();
+        }
         elements.splice(0..0, values.iter().cloned());
         elements.len()
     }
 
     pub(crate) fn reverse(&self) {
+        let len = self.elements.borrow().len();
         self.elements.borrow_mut().reverse();
+        let mut holes = self.holes.borrow_mut();
+        *holes = holes.iter().map(|index| len - 1 - index).collect();
     }
 
     pub(crate) fn replace_with(&self, values: Vec<Value>) {
@@ -91,6 +120,7 @@ impl ArrayRef {
             return;
         }
         *self.elements.borrow_mut() = values;
+        self.holes.borrow_mut().clear();
     }
 
     pub(crate) fn splice(&self, start: usize, delete_count: usize, items: &[Value]) -> Vec<Value> {
@@ -104,6 +134,7 @@ impl ArrayRef {
         if new_len > elements.len() && !self.extensible.get() {
             return Vec::new();
         }
+        self.holes.borrow_mut().clear();
         elements.splice(start..end, items.iter().cloned()).collect()
     }
 
@@ -116,6 +147,7 @@ impl ArrayRef {
 
     pub(crate) fn set(&self, index: usize, value: Value) {
         let mut elements = self.elements.borrow_mut();
+        let mut holes = self.holes.borrow_mut();
         if index >= elements.len() {
             if !self.extensible.get() {
                 return;
@@ -126,6 +158,14 @@ impl ArrayRef {
             return;
         }
         elements[index] = value;
+        holes.remove(&index);
+    }
+
+    pub(crate) fn delete_index(&self, index: usize) -> bool {
+        if index < self.elements.borrow().len() {
+            self.holes.borrow_mut().insert(index);
+        }
+        true
     }
 
     pub(crate) fn set_property(&self, key: String, value: Value) {
@@ -185,6 +225,7 @@ impl ArrayRef {
             return;
         }
         elements.resize(length, Value::Undefined);
+        self.holes.borrow_mut().retain(|index| *index < length);
     }
 
     pub(crate) fn is_extensible(&self) -> bool {

@@ -16,7 +16,10 @@ pub(super) enum Op {
     TypeofGlobal(String),
     Pop,
     Dup,
-    NewArray(usize),
+    NewArray {
+        count: usize,
+        holes: Vec<usize>,
+    },
     NewObject(usize),
     EnumerateKeys,
     GetProp,

@@ -77,6 +77,13 @@ fn parses_array_literal() {
         panic!("expected one array expression");
     };
     assert_eq!(elements.len(), 2);
+    assert!(elements.iter().all(Option::is_some));
+    let script = parse_script("[1, , 3];").expect("source should parse");
+    let [Stmt::Expr(Expr::Array { elements, .. })] = script.body.as_slice() else {
+        panic!("expected one array expression");
+    };
+    assert_eq!(elements.len(), 3);
+    assert!(elements[1].is_none());
 }
 
 #[test]

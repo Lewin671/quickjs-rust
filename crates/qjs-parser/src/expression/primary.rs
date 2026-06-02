@@ -48,11 +48,16 @@ impl Parser {
         let mut elements = Vec::new();
         if !self.at(&TokenKind::RightBracket) {
             loop {
-                elements.push(self.assignment()?);
-                if !self.match_kind(&TokenKind::Comma) {
-                    break;
+                if self.at(&TokenKind::Comma) {
+                    elements.push(None);
+                    self.advance();
+                    if self.at(&TokenKind::RightBracket) {
+                        break;
+                    }
+                    continue;
                 }
-                if self.at(&TokenKind::RightBracket) {
+                elements.push(Some(self.assignment()?));
+                if !self.match_kind(&TokenKind::Comma) || self.at(&TokenKind::RightBracket) {
                     break;
                 }
             }

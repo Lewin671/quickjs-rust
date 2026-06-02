@@ -4,7 +4,7 @@ pub(crate) fn array_has_own_property(elements: &ArrayRef, key: &str) -> bool {
     key == "length"
         || key
             .parse::<usize>()
-            .is_ok_and(|index| index < elements.len())
+            .is_ok_and(|index| elements.has_index(index))
         || elements.property(key).is_some()
 }
 
@@ -31,7 +31,10 @@ pub(crate) fn array_own_property_descriptor(elements: &ArrayRef, key: &str) -> O
 }
 
 pub(crate) fn array_own_property_keys(elements: &ArrayRef) -> Vec<String> {
-    let mut keys: Vec<_> = (0..elements.len()).map(|index| index.to_string()).collect();
+    let mut keys: Vec<_> = (0..elements.len())
+        .filter(|index| elements.has_index(*index))
+        .map(|index| index.to_string())
+        .collect();
     keys.extend(elements.property_keys());
     keys
 }

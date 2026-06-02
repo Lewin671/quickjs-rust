@@ -1,12 +1,15 @@
 use std::collections::HashMap;
 
 use super::array_like::{array_like_length, array_like_values_from_receiver};
-use crate::{ArrayRef, RuntimeError, Value, call_function, is_truthy};
+use crate::{
+    ArrayRef, RuntimeError, Value, call_function, has_property, is_truthy, property_value,
+};
 
 struct ArrayIteration {
     receiver: Value,
     callback: Value,
     callback_this: Value,
+    source_len: usize,
     source: Vec<Value>,
 }
 
@@ -34,6 +37,7 @@ fn prepare_array_iteration(
 
     Ok(ArrayIteration {
         receiver: source.receiver,
+        source_len: source.length,
         source: values,
         callback,
         callback_this: argument_values.get(1).cloned().unwrap_or(Value::Undefined),
@@ -109,9 +113,13 @@ pub(crate) fn native_array_prototype_map(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_array_iteration("map", this_value, argument_values, env)?;
-    let mut mapped = Vec::with_capacity(iteration.source.len());
-    for (index, value) in iteration.source.iter().cloned().enumerate() {
-        mapped.push(call_iteration_callback(&iteration, value, index, env)?);
+    let mut mapped = vec![Value::Undefined; iteration.source_len];
+    for (index, slot) in mapped.iter_mut().enumerate() {
+        let key = index.to_string();
+        if has_property(iteration.receiver.clone(), env, &key)? {
+            let value = property_value(iteration.receiver.clone(), &key, env)?;
+            *slot = call_iteration_callback(&iteration, value, index, env)?;
+        }
     }
 
     Ok(Value::Array(ArrayRef::new(mapped)))
