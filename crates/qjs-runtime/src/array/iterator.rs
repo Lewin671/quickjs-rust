@@ -10,16 +10,54 @@ use super::array_like::array_like_length;
 const ITERATED_OBJECT: &str = "\0array_iterator_object";
 const ITERATOR_NEXT_INDEX: &str = "\0array_iterator_next_index";
 const ITERATOR_DONE: &str = "\0array_iterator_done";
+const ITERATOR_KIND: &str = "\0array_iterator_kind";
+const ITERATOR_KIND_KEY: &str = "key";
+const ITERATOR_KIND_VALUE: &str = "value";
+const ITERATOR_KIND_KEY_VALUE: &str = "key+value";
 
 pub(crate) fn native_array_prototype_entries(
     this_value: Value,
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let source = array_like_length(this_value, "Array.prototype.entries", env)?;
+    array_iterator(
+        this_value,
+        env,
+        "Array.prototype.entries",
+        ITERATOR_KIND_KEY_VALUE,
+    )
+}
+
+pub(crate) fn native_array_prototype_keys(
+    this_value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    array_iterator(this_value, env, "Array.prototype.keys", ITERATOR_KIND_KEY)
+}
+
+pub(crate) fn native_array_prototype_values(
+    this_value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    array_iterator(
+        this_value,
+        env,
+        "Array.prototype.values",
+        ITERATOR_KIND_VALUE,
+    )
+}
+
+fn array_iterator(
+    this_value: Value,
+    env: &mut HashMap<String, Value>,
+    context: &str,
+    kind: &str,
+) -> Result<Value, RuntimeError> {
+    let source = array_like_length(this_value, context, env)?;
     let iterator = ObjectRef::new(HashMap::new());
     iterator.define_non_enumerable(ITERATED_OBJECT.to_owned(), source.receiver);
     iterator.define_non_enumerable(ITERATOR_NEXT_INDEX.to_owned(), Value::Number(0.0));
     iterator.define_non_enumerable(ITERATOR_DONE.to_owned(), Value::Boolean(false));
+    iterator.define_non_enumerable(ITERATOR_KIND.to_owned(), Value::String(kind.to_owned()));
     iterator.define_non_enumerable(
         "next".to_owned(),
         Value::Function(Function::new_native(
@@ -58,11 +96,22 @@ pub(crate) fn native_array_iterator_next(
         ITERATOR_NEXT_INDEX.to_owned(),
         Value::Number((index + 1) as f64),
     );
-    let value = property_value(target, &index.to_string(), env)?;
-    Ok(iterator_result(
-        Value::Array(ArrayRef::new(vec![Value::Number(index as f64), value])),
-        false,
-    ))
+    let key = Value::Number(index as f64);
+    let value = match iterator_kind(&iterator)?.as_str() {
+        ITERATOR_KIND_KEY => key,
+        ITERATOR_KIND_VALUE => property_value(target, &index.to_string(), env)?,
+        ITERATOR_KIND_KEY_VALUE => Value::Array(ArrayRef::new(vec![
+            key,
+            property_value(target, &index.to_string(), env)?,
+        ])),
+        _ => {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "Array iterator kind is invalid".to_owned(),
+            });
+        }
+    };
+    Ok(iterator_result(value, false))
 }
 
 fn iterator_done(iterator: &ObjectRef) -> bool {
@@ -92,6 +141,16 @@ fn iterator_slot(iterator: &ObjectRef, key: &str) -> Result<Value, RuntimeError>
             thrown: None,
             message: "Array iterator is missing internal state".to_owned(),
         })
+}
+
+fn iterator_kind(iterator: &ObjectRef) -> Result<String, RuntimeError> {
+    match iterator_slot(iterator, ITERATOR_KIND)? {
+        Value::String(kind) => Ok(kind),
+        _ => Err(RuntimeError {
+            thrown: None,
+            message: "Array iterator kind is invalid".to_owned(),
+        }),
+    }
 }
 
 fn iterator_result(value: Value, done: bool) -> Value {

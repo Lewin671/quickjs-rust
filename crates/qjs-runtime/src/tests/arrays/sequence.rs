@@ -134,8 +134,28 @@ fn evaluates_array_sequence_builtins() {
         ),
         Ok(Value::String("a:true:true".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "let iterator = ['a', 'b'].keys(); let first = iterator.next(); let second = iterator.next(); let last = iterator.next(); first.value + ':' + first.done + '|' + second.value + ':' + second.done + '|' + (last.value === undefined) + ':' + last.done;"
+        ),
+        Ok(Value::String("0:false|1:false|true:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let iterator = ['a', 'b'].values(); let first = iterator.next(); let second = iterator.next(); let last = iterator.next(); first.value + ':' + first.done + '|' + second.value + ':' + second.done + '|' + (last.value === undefined) + ':' + last.done;"
+        ),
+        Ok(Value::String("a:false|b:false|true:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let array = []; let keys = array.keys(); let values = array.values(); array.push('a'); let key = keys.next(); let value = values.next(); key.value + ':' + value.value + ':' + keys.next().done + ':' + values.next().done;"
+        ),
+        Ok(Value::String("0:a:true:true".to_owned()))
+    );
     assert!(eval("Array.prototype.entries.call(undefined);").is_err());
     assert!(eval("Array.prototype.entries.call(null);").is_err());
+    assert!(eval("Array.prototype.keys.call(undefined);").is_err());
+    assert!(eval("Array.prototype.values.call(null);").is_err());
 }
 
 #[test]
