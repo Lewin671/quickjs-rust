@@ -32,4 +32,20 @@ fn evaluates_array_member_access() {
     assert_eq!(eval("[1, , 3].length;"), Ok(Value::Number(3.0)));
     assert_eq!(eval("[1, , 3][1];"), Ok(Value::Undefined));
     assert_eq!(eval("1 in [1, , 3];"), Ok(Value::Boolean(false)));
+    assert_eq!(
+        eval(
+            "let xs = []; Object.defineProperty(xs, '0', { get: function() { return 9; }, configurable: true }); xs[0];"
+        ),
+        Ok(Value::Number(9.0))
+    );
+    assert_eq!(
+        eval(
+            "let xs = []; Object.defineProperty(xs, '0', { set: function(_) {}, configurable: true }); xs[0];"
+        ),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval("Array.prototype[1] = 13; let xs = [, ,]; xs[1];"),
+        Ok(Value::Number(13.0))
+    );
 }

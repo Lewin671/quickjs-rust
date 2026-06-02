@@ -7,6 +7,7 @@ use crate::{
 };
 
 const MAX_ARRAY_LENGTH: usize = u32::MAX as usize;
+const DYNAMIC_MAP_INDEX_LIMIT: usize = 100_000;
 
 struct ArrayIteration {
     receiver: Value,
@@ -137,6 +138,10 @@ pub(crate) fn native_array_prototype_map(
 }
 
 fn map_iteration_indices(iteration: &ArrayIteration, env: &HashMap<String, Value>) -> Vec<usize> {
+    if iteration.source_len <= DYNAMIC_MAP_INDEX_LIMIT {
+        return (0..iteration.source_len).collect();
+    }
+
     match &iteration.receiver {
         Value::Array(array) => {
             let mut indices = array.present_indices();

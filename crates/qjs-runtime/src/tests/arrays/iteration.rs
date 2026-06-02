@@ -60,6 +60,30 @@ fn evaluates_array_iteration_builtins() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "let xs = []; Object.defineProperty(xs, '0', { get: function() { return 'abc'; }, configurable: true }); xs.map(function(value) { return value === 'abc'; })[0];"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let xs = [0, , 2]; Object.defineProperty(xs, '0', { get: function() { Object.defineProperty(xs, '1', { get: function() { return 1; }, configurable: true }); return 0; }, configurable: true }); xs.map(function(value, index) { return index === 1 && value === 1 ? false : true; }).join('|');"
+        ),
+        Ok(Value::String("true|false|true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let xs = [0, , 2]; Object.defineProperty(xs, '0', { get: function() { Object.defineProperty(Array.prototype, '1', { get: function() { return 6.99; }, configurable: true }); return 0; }, configurable: true }); xs.map(function(value, index) { return index === 1 && value === 6.99 ? false : true; }).join('|');"
+        ),
+        Ok(Value::String("true|false|true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let xs = [1, 2]; Object.defineProperty(xs, '1', { get: function() { return '6.99'; }, configurable: true }); Object.defineProperty(xs, '0', { get: function() { delete xs[1]; return 0; }, configurable: true }); xs.map(function(value, index) { return index === 1 ? false : true; })[1];"
+        ),
+        Ok(Value::Undefined)
+    );
     assert!(eval("Array.prototype.map.call({ length: 4294967296 }, function() {});").is_err());
     assert!(eval("Array.prototype.map.call({ length: 4294967297 }, function() {});").is_err());
     assert_eq!(
@@ -107,6 +131,12 @@ fn evaluates_array_iteration_builtins() {
     assert_eq!(
         eval(
             "let object = { 0: 5, 1: 7 }; Object.defineProperty(object, 'length', { set: function(_) {}, configurable: true }); Array.prototype.map.call(object, function(value) { return value + 1; }).length;"
+        ),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval(
+            "let object = { 0: 5 }; object.length = []; Array.prototype.map.call(object, function() { return 1; }).length;"
         ),
         Ok(Value::Number(0.0))
     );

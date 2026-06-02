@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{RuntimeError, Value, call_function, number, property_value};
+use crate::{RuntimeError, Value, array::array_join, call_function, number, property_value};
 
 pub(crate) fn to_js_string(value: Value) -> Result<String, RuntimeError> {
     match value {
@@ -60,10 +60,7 @@ pub(crate) fn to_number_with_env(
             thrown: None,
             message: "cannot convert function to number".to_owned(),
         }),
-        Value::Array(_) => Err(RuntimeError {
-            thrown: None,
-            message: "cannot convert object to number".to_owned(),
-        }),
+        Value::Array(array) => string_to_number(&array_join(Value::Array(array), ",")?),
     }
 }
 

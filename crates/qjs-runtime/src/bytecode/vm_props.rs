@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use qjs_ast::BinaryOp;
 
 use crate::{
-    RuntimeError, Value, array_prototype_property, boolean, function_prototype_property,
-    inherited_string_prototype_property, number, property_value, string, to_length,
+    RuntimeError, Value, boolean, function_prototype_property, inherited_string_prototype_property,
+    number, property_value, string, to_length,
 };
 
 pub(super) fn get_property(
@@ -14,13 +14,7 @@ pub(super) fn get_property(
 ) -> Result<Value, RuntimeError> {
     match object {
         Value::Array(elements) if key == "length" => Ok(Value::Number(elements.len() as f64)),
-        Value::Array(elements) => Ok(key
-            .parse::<usize>()
-            .ok()
-            .and_then(|index| elements.get(index))
-            .or_else(|| elements.property(key).map(|property| property.value))
-            .or_else(|| array_prototype_property(&elements, env, key))
-            .unwrap_or(Value::Undefined)),
+        Value::Array(elements) => property_value(Value::Array(elements), key, env),
         Value::Function(function) if key == "length" => {
             Ok(Value::Number(function.params.len() as f64))
         }

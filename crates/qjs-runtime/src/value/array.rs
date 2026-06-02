@@ -180,6 +180,17 @@ impl ArrayRef {
     }
 
     pub(crate) fn delete_index(&self, index: usize) -> bool {
+        let key = index.to_string();
+        let mut properties = self.properties.borrow_mut();
+        if properties
+            .get(&key)
+            .is_some_and(|property| !property.configurable)
+        {
+            return false;
+        }
+        properties.remove(&key);
+        drop(properties);
+
         if index < self.elements.borrow().len() {
             self.holes.borrow_mut().insert(index);
         }
@@ -201,6 +212,20 @@ impl ArrayRef {
     }
 
     pub(crate) fn define_property(&self, key: String, property: Property) {
+        if let Ok(index) = key.parse::<usize>() {
+            let mut elements = self.elements.borrow_mut();
+            let mut holes = self.holes.borrow_mut();
+            if index >= elements.len() {
+                if !self.extensible.get() {
+                    return;
+                }
+                let old_len = elements.len();
+                elements.resize(index + 1, Value::Undefined);
+                holes.extend(old_len..=index);
+            } else {
+                holes.insert(index);
+            }
+        }
         self.properties.borrow_mut().insert(key, property);
     }
 
