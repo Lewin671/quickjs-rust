@@ -313,6 +313,7 @@ cases/object-entries-inherited-omitted.js
 cases/object-entries-length.js
 cases/object-entries-primitive-number.js
 cases/object-entries-primitive-string.js
+cases/object-entries-tamper-with-global-object.js
 cases/object-from-entries-basic.js
 cases/object-from-entries-duplicate-keys.js
 cases/object-from-entries-empty.js
@@ -424,6 +425,7 @@ cases/object-values-inherited-omitted.js
 cases/object-values-length.js
 cases/object-values-primitive-number.js
 cases/object-values-primitive-string.js
+cases/object-values-tamper-with-global-object.js
 cases/object-literal-basic.js
 cases/object-literal-object-instanceof-basic.js
 cases/object-computed-property-basic.js

@@ -51,6 +51,12 @@ fn evaluates_object_enumeration_builtins() {
         Ok(Value::Boolean(true))
     );
     assert_eq!(eval("Object.values(0).length;"), Ok(Value::Number(0.0)));
+    assert_eq!(
+        eval(
+            "function fakeObject() { throw 'called'; } fakeObject.values = Object.values; let global = Function('return this;')(); global.Object = fakeObject; Object === fakeObject && Object.values(1).length === 0;"
+        ),
+        Ok(Value::Boolean(true))
+    );
     assert_eq!(eval("Object.entries.length;"), Ok(Value::Number(1.0)));
     assert_eq!(
         eval(
@@ -83,6 +89,12 @@ fn evaluates_object_enumeration_builtins() {
         Ok(Value::String("2:a:A:b:B".to_owned()))
     );
     assert_eq!(eval("Object.entries(0).length;"), Ok(Value::Number(0.0)));
+    assert_eq!(
+        eval(
+            "function fakeObject() { throw 'called'; } fakeObject.entries = Object.entries; let global = Function('return this;')(); global.Object = fakeObject; Object === fakeObject && Object.entries(1).length === 0;"
+        ),
+        Ok(Value::Boolean(true))
+    );
     assert_eq!(
         eval("Object.getOwnPropertyNames.length;"),
         Ok(Value::Number(1.0))

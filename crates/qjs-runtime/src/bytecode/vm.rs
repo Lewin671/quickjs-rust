@@ -313,9 +313,23 @@ impl<'a> Vm<'a> {
         let value = self.pop()?;
         let key = to_property_key(self.pop()?)?;
         let object = self.pop()?;
-        set_property(object, key, value.clone(), &mut self.globals)?;
+        let updates_global_binding = self.is_global_object(&object);
+        set_property(object, key.clone(), value.clone(), &mut self.globals)?;
+        if updates_global_binding {
+            self.globals.insert(key, value.clone());
+        }
         self.stack.push(value);
         Ok(())
+    }
+
+    fn is_global_object(&self, value: &Value) -> bool {
+        let Value::Object(object) = value else {
+            return false;
+        };
+        matches!(
+            self.globals.get(GLOBAL_THIS_BINDING),
+            Some(Value::Object(global_object)) if object.ptr_eq(global_object)
+        )
     }
 
     fn delete_prop(&mut self) -> Result<(), RuntimeError> {

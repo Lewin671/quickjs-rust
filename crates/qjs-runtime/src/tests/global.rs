@@ -69,3 +69,21 @@ fn evaluates_global_eval_builtin() {
         Ok(Value::Number(3.0))
     );
 }
+
+#[test]
+fn keeps_global_object_properties_and_bindings_in_sync() {
+    assert_eq!(
+        eval("let global = Function('return this;')(); global === this;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("let global = Function('return this;')(); global.customGlobal = 7; customGlobal;"),
+        Ok(Value::Number(7.0))
+    );
+    assert_eq!(
+        eval(
+            "let global = Function('return this;')(); global.Object = function FakeObject() {}; Object === global.Object;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
