@@ -209,14 +209,142 @@ pub(crate) fn native_array_prototype_push(
     Ok(Value::Number(elements.len() as f64))
 }
 
-pub(crate) fn native_array_prototype_pop(this_value: Value) -> Result<Value, RuntimeError> {
-    let Value::Array(elements) = this_value else {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "Array.prototype.pop called on non-array".to_owned(),
-        });
+pub(crate) fn native_array_prototype_pop(
+    this_value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let source = array_like_length(this_value, "Array.prototype.pop", env)?;
+    let receiver = source.receiver;
+    let length = source.length;
+    if length == 0 {
+        if let Value::Array(elements) = receiver.clone() {
+            let _ = elements.pop();
+        }
+        pop_set_length(receiver, 0, env)?;
+        return Ok(Value::Undefined);
+    }
+
+    let new_length = length - 1;
+    let key = new_length.to_string();
+    let element = property_value(receiver.clone(), &key, env)?;
+    pop_delete_property(receiver.clone(), &key)?;
+    pop_set_length(receiver, new_length, env)?;
+    Ok(element)
+}
+
+fn pop_delete_property(receiver: Value, key: &str) -> Result<(), RuntimeError> {
+    let deleted = match receiver {
+        Value::Object(object) => object.delete_own_property(key),
+        Value::Array(elements) => {
+            if array_own_property_descriptor(&elements, key)
+                .is_some_and(|property| !property.configurable)
+            {
+                false
+            } else {
+                match key.parse::<usize>() {
+                    Ok(index) => elements.delete_index(index),
+                    Err(_) => elements.delete_property(key),
+                }
+            }
+        }
+        Value::Function(function) => function_delete_own_property(&function, key),
+        _ => true,
     };
-    Ok(elements.pop().unwrap_or(Value::Undefined))
+    if deleted {
+        Ok(())
+    } else {
+        Err(pop_delete_error())
+    }
+}
+
+fn pop_set_length(
+    receiver: Value,
+    length: usize,
+    env: &mut HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
+    let value = Value::Number(length as f64);
+    match receiver.clone() {
+        Value::Object(object) => {
+            if apply_pop_setter(object.property("length"), receiver, value.clone(), env)? {
+                return Ok(());
+            }
+            validate_pop_data_set(object.property("length"))?;
+            if object.own_property("length").is_none() && !object.is_extensible() {
+                return Err(pop_length_error());
+            }
+            object.set("length".to_owned(), value);
+            Ok(())
+        }
+        Value::Array(elements) => {
+            if array_own_property_descriptor(&elements, "length")
+                .is_some_and(|property| !property.writable)
+            {
+                return Err(pop_length_error());
+            }
+            elements.set_len(length);
+            if elements.len() == length {
+                Ok(())
+            } else {
+                Err(pop_length_error())
+            }
+        }
+        Value::Function(function) => {
+            if apply_pop_setter(
+                function_own_property_descriptor(&function, "length"),
+                receiver,
+                value.clone(),
+                env,
+            )? {
+                return Ok(());
+            }
+            validate_pop_data_set(function_own_property_descriptor(&function, "length"))?;
+            function.set_property("length".to_owned(), value);
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
+fn apply_pop_setter(
+    property: Option<Property>,
+    receiver: Value,
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<bool, RuntimeError> {
+    let Some(property) = property else {
+        return Ok(false);
+    };
+    if let Some(setter) = property.set {
+        call_function(setter, receiver, vec![value], env, false)?;
+        return Ok(true);
+    }
+    if property.is_accessor() {
+        Err(pop_length_error())
+    } else {
+        Ok(false)
+    }
+}
+
+fn validate_pop_data_set(property: Option<Property>) -> Result<(), RuntimeError> {
+    if property.is_some_and(|property| !property.writable || property.is_accessor()) {
+        Err(pop_length_error())
+    } else {
+        Ok(())
+    }
+}
+
+fn pop_delete_error() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "TypeError: Array.prototype.pop cannot delete property".to_owned(),
+    }
+}
+
+fn pop_length_error() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "TypeError: Array.prototype.pop cannot set length".to_owned(),
+    }
 }
 
 pub(crate) fn native_array_prototype_shift(this_value: Value) -> Result<Value, RuntimeError> {
