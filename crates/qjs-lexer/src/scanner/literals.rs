@@ -4,6 +4,8 @@ use crate::{LexError, Token, TokenKind};
 
 use super::{Lexer, char_class::is_identifier_continue, keywords::identifier_or_keyword};
 
+const SURROGATE_ESCAPE_SENTINEL_BASE: u32 = 0xF0000;
+
 impl Lexer<'_> {
     pub(super) fn identifier(&mut self) {
         let start = self.cursor;
@@ -279,6 +281,14 @@ impl Lexer<'_> {
                     span: Span::new(literal_start, self.cursor),
                 }
             })?;
+        if (0xD800..=0xDFFF).contains(&value) {
+            return char::from_u32(SURROGATE_ESCAPE_SENTINEL_BASE + value - 0xD800).ok_or_else(
+                || LexError {
+                    message: "invalid escape sequence".to_owned(),
+                    span: Span::new(literal_start, self.cursor),
+                },
+            );
+        }
         char::from_u32(value).ok_or_else(|| LexError {
             message: "invalid escape sequence".to_owned(),
             span: Span::new(literal_start, self.cursor),

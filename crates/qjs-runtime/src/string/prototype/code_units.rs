@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{RuntimeError, Value};
+use crate::{RuntimeError, Value, string::string_code_units, string::string_from_code_unit};
 
 use super::super::indexing::{
     relative_string_code_unit_index, this_string_value, to_char_code_position,
@@ -12,7 +12,7 @@ pub(crate) fn native_string_prototype_at(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
-    let code_units: Vec<u16> = value.encode_utf16().collect();
+    let code_units = string_code_units(&value);
     let Some(index) = relative_string_code_unit_index(
         code_units.len(),
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -22,9 +22,7 @@ pub(crate) fn native_string_prototype_at(
         return Ok(Value::Undefined);
     };
 
-    Ok(String::from_utf16(&[code_units[index]])
-        .map(Value::String)
-        .unwrap_or_else(|_| Value::String(char::REPLACEMENT_CHARACTER.to_string())))
+    Ok(Value::String(string_from_code_unit(code_units[index])))
 }
 
 pub(crate) fn native_string_prototype_char_at(
@@ -64,7 +62,7 @@ pub(crate) fn native_string_prototype_char_code_at(
         return Ok(Value::Number(f64::NAN));
     }
 
-    let code_units: Vec<u16> = value.encode_utf16().collect();
+    let code_units = string_code_units(&value);
     let index = position as usize;
     Ok(code_units
         .get(index)
@@ -86,7 +84,7 @@ pub(crate) fn native_string_prototype_code_point_at(
         return Ok(Value::Undefined);
     }
 
-    let code_units: Vec<u16> = value.encode_utf16().collect();
+    let code_units = string_code_units(&value);
     let index = position as usize;
     let Some(first) = code_units.get(index).copied() else {
         return Ok(Value::Undefined);

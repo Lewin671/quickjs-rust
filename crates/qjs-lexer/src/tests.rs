@@ -131,6 +131,16 @@ fn lexes_string_escape_sequences() {
 }
 
 #[test]
+fn lexes_surrogate_unicode_escapes() {
+    let tokens = lex(r#"'\uD800\uDC00'"#).expect("source should lex");
+    let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
+    let TokenKind::String(value) = &kinds[0] else {
+        panic!("expected string token");
+    };
+    assert_eq!(value.chars().count(), 2);
+}
+
+#[test]
 fn skips_string_line_continuations() {
     let tokens = lex("\"a\\\nb\"").expect("source should lex");
     let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();

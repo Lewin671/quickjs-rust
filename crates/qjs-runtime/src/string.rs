@@ -28,3 +28,32 @@ pub(super) use prototype::{
 };
 
 pub(crate) const STRING_DATA_PROPERTY: &str = "\0StringData";
+
+const SURROGATE_ESCAPE_SENTINEL_BASE: u32 = 0xF0000;
+
+pub(crate) fn string_code_units(value: &str) -> Vec<u16> {
+    value
+        .chars()
+        .flat_map(|character| {
+            let code = character as u32;
+            if (SURROGATE_ESCAPE_SENTINEL_BASE..SURROGATE_ESCAPE_SENTINEL_BASE + 0x800)
+                .contains(&code)
+            {
+                vec![(0xD800 + code - SURROGATE_ESCAPE_SENTINEL_BASE) as u16]
+            } else {
+                let mut buffer = [0; 2];
+                character.encode_utf16(&mut buffer).to_vec()
+            }
+        })
+        .collect()
+}
+
+pub(crate) fn string_from_code_unit(code_unit: u16) -> String {
+    if (0xD800..=0xDFFF).contains(&code_unit) {
+        char::from_u32(SURROGATE_ESCAPE_SENTINEL_BASE + u32::from(code_unit) - 0xD800)
+            .unwrap_or(char::REPLACEMENT_CHARACTER)
+            .to_string()
+    } else {
+        String::from_utf16(&[code_unit]).unwrap_or_else(|_| char::REPLACEMENT_CHARACTER.to_string())
+    }
+}
