@@ -345,7 +345,10 @@ impl Compiler {
                 finalizer,
                 ..
             } => self.compile_try(block, handler.as_ref(), finalizer.as_deref()),
-            Stmt::FunctionDecl { .. } => self.compile_function_decl(stmt),
+            Stmt::FunctionDecl { .. } => {
+                self.emit_load_undefined();
+                Ok(())
+            }
         }
     }
 }

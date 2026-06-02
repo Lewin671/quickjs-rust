@@ -1,15 +1,31 @@
 use std::collections::HashMap;
 
-use crate::{ArrayRef, Function, ObjectRef, Property, Value};
+use crate::{
+    ArrayRef, Function, ObjectRef, Property, Value, array_own_property_descriptor,
+    array_own_property_names,
+};
 
-pub(crate) fn constructor_prototype(callee: &Value) -> Option<ObjectRef> {
+pub(crate) fn constructor_prototype(
+    callee: &Value,
+    env: &HashMap<String, Value>,
+) -> Option<ObjectRef> {
     let Value::Function(function) = callee else {
         return None;
     };
     if let Some(bound) = &function.bound {
-        return constructor_prototype(&bound.target);
+        return constructor_prototype(&bound.target, env);
     }
-    function_prototype(function)
+    match function.properties.borrow().get("prototype") {
+        Some(Property {
+            value: Value::Object(prototype),
+            ..
+        }) => Some(prototype.clone()),
+        Some(Property {
+            value: Value::Array(array),
+            ..
+        }) => Some(array_as_object_prototype(array, env)),
+        _ => None,
+    }
 }
 
 pub(crate) fn object_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef> {
@@ -48,6 +64,21 @@ pub(crate) fn function_prototype(function: &Function) -> Option<ObjectRef> {
         }) => Some(prototype.clone()),
         _ => None,
     }
+}
+
+fn array_as_object_prototype(array: &ArrayRef, env: &HashMap<String, Value>) -> ObjectRef {
+    let prototype = ObjectRef::with_prototype(
+        HashMap::new(),
+        array
+            .prototype_override()
+            .unwrap_or_else(|| array_prototype(env)),
+    );
+    for key in array_own_property_names(array) {
+        if let Some(descriptor) = array_own_property_descriptor(array, &key) {
+            prototype.define_property(key, descriptor);
+        }
+    }
+    prototype
 }
 
 pub(crate) fn value_prototype(value: Value, env: &HashMap<String, Value>) -> Option<ObjectRef> {

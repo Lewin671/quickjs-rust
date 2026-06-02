@@ -303,6 +303,12 @@ fn evaluates_new_expressions() {
         Ok(Value::Number(8.0))
     );
     assert_eq!(
+        eval(
+            "C.prototype = { value: 10 }; function C() {} let instance = new C(); instance.value;"
+        ),
+        Ok(Value::Number(10.0))
+    );
+    assert_eq!(
         eval("function C() {} C.prototype.value = 4; let instance = new C(); 'value' in instance;"),
         Ok(Value::Boolean(true))
     );

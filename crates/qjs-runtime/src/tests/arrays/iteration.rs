@@ -84,6 +84,18 @@ fn evaluates_array_iteration_builtins() {
         ),
         Ok(Value::Undefined)
     );
+    assert_eq!(
+        eval(
+            "let calls = 0; let xs = []; xs.constructor = 1; let caught = false; try { xs.map(function() { calls = calls + 1; }); } catch (error) { caught = error.constructor === TypeError; } caught + ':' + calls;"
+        ),
+        Ok(Value::String("true:0".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let calls = 0; let marker = { ok: true }; let xs = []; Object.defineProperty(xs, 'constructor', { get: function() { throw marker; }, configurable: true }); let caught = false; try { xs.map(function() { calls = calls + 1; }); } catch (error) { caught = error === marker; } caught + ':' + calls;"
+        ),
+        Ok(Value::String("true:0".to_owned()))
+    );
     assert!(eval("Array.prototype.map.call({ length: 4294967296 }, function() {});").is_err());
     assert!(eval("Array.prototype.map.call({ length: 4294967297 }, function() {});").is_err());
     assert_eq!(
@@ -151,6 +163,12 @@ fn evaluates_array_iteration_builtins() {
             "let receiver = new Array(); receiver.res = true; [1].map(function(value) { return this.res; }, receiver)[0];"
         ),
         Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "function Foo() {} Foo.prototype = new Array(1, 2, 3); let receiver = new Foo(); receiver.length = 1; Array.isArray(receiver.map(function() {})) && receiver.map(function() {}).length;"
+        ),
+        Ok(Value::Number(1.0))
     );
     assert_eq!(
         eval("[1, 2, 3, 4].filter(function(value) { return value > 2; }).join();"),
