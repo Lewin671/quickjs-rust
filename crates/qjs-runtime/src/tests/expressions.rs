@@ -43,6 +43,20 @@ fn evaluates_string_addition() {
         eval("'x' + undefined;"),
         Ok(Value::String("xundefined".to_owned()))
     );
+    assert_eq!(
+        eval("'x' + { valueOf: function() { return 2; } };"),
+        Ok(Value::String("x2".to_owned()))
+    );
+    assert_eq!(
+        eval("({ valueOf: function() { return 2; } }) + 3;"),
+        Ok(Value::Number(5.0))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { 'str' + { valueOf: String.prototype.valueOf }; } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]
