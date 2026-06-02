@@ -82,10 +82,15 @@ impl Parser {
                             span: escaped.span,
                         });
                     }
-                    pattern.push_str(regexp_token_text(&escaped.kind).ok_or(ParseError {
-                        message: "unsupported regular expression escape".to_owned(),
-                        span: escaped.span,
-                    })?);
+                    match escaped.kind {
+                        TokenKind::Identifier(text)
+                        | TokenKind::Number(text)
+                        | TokenKind::String(text) => pattern.push_str(&text),
+                        kind => pattern.push_str(regexp_token_text(&kind).ok_or(ParseError {
+                            message: "unsupported regular expression escape".to_owned(),
+                            span: escaped.span,
+                        })?),
+                    }
                 }
                 TokenKind::Identifier(text) | TokenKind::Number(text) | TokenKind::String(text) => {
                     pattern.push_str(&text);

@@ -2,13 +2,13 @@ use std::collections::HashMap;
 
 use crate::{
     ArrayRef, Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
-    function_prototype, to_js_string_with_env,
+    function_prototype, to_js_string_with_env, to_length_with_env,
 };
+
+mod matcher;
 
 const REGEXP_SOURCE_PROPERTY: &str = "\0RegExpSource";
 const REGEXP_FLAGS_PROPERTY: &str = "\0RegExpFlags";
-const DATE_TO_STRING_FORMAT_PATTERN: &str = "^(Sun|Mon|Tue|Wed|Thu|Fri|Sat) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) [0-9]{2} [0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2} GMT[+-][0-9]{4}( \\(.+\\))?$";
-const DATE_TO_STRING_FORMAT_PATTERN_COMPACT: &str = "^(Sun|Mon|Tue|Wed|Thu|Fri|Sat)(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[0-9]{2}[0-9]{4}[0-9]{2}:[0-9]{2}:[0-9]{2}GMT[+-][0-9]{4}(\\(.+\\))?$";
 
 pub(crate) fn install_regexp(
     env: &mut HashMap<String, Value>,
@@ -101,15 +101,26 @@ pub(crate) fn native_regexp_prototype_exec(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
+    let global = regexp_flags_contains(&object, 'g');
+    let start = if global {
+        regexp_last_index(&object, env)?
+    } else {
+        0
+    };
 
-    let Some((index, end)) = regexp_match_range(&source, &input) else {
+    let Some(match_result) = matcher::regexp_match_range(&source, &input, start) else {
+        if global {
+            object.set("lastIndex".to_owned(), Value::Number(0.0));
+        }
         return Ok(Value::Null);
     };
-    let matched = input.chars().skip(index).take(end - index).collect();
-    let result = ArrayRef::new(vec![Value::String(matched)]);
-    result.set_property("index".to_owned(), Value::Number(index as f64));
-    result.set_property("input".to_owned(), Value::String(input));
-    Ok(Value::Array(result))
+    if global {
+        object.set(
+            "lastIndex".to_owned(),
+            Value::Number(match_result.end as f64),
+        );
+    }
+    Ok(regexp_match_array(&input, match_result))
 }
 
 pub(crate) fn native_regexp_prototype_to_string(this_value: Value) -> Result<Value, RuntimeError> {
@@ -135,6 +146,7 @@ fn define_regexp_data(object: &ObjectRef, source: &str, flags: &str) {
         REGEXP_FLAGS_PROPERTY.to_owned(),
         Value::String(flags.to_owned()),
     );
+    object.define_non_enumerable("lastIndex".to_owned(), Value::Number(0.0));
 }
 
 fn regexp_source(pattern: Value, env: &mut HashMap<String, Value>) -> Result<String, RuntimeError> {
@@ -177,181 +189,98 @@ fn regexp_string_data(object: &ObjectRef, key: &str) -> Option<String> {
     }
 }
 
-fn regexp_match_range(source: &str, input: &str) -> Option<(usize, usize)> {
-    let source = normalized_regexp_source(source);
-    let pattern: Vec<_> = source.chars().collect();
-    let text: Vec<_> = input.chars().collect();
-    let starts: Vec<_> = if pattern.first() == Some(&'^') {
-        vec![0]
+pub(crate) fn regexp_is_global(value: &Value) -> bool {
+    let Value::Object(object) = value else {
+        return false;
+    };
+    regexp_flags_contains(object, 'g')
+}
+
+pub(crate) fn regexp_is_regexp(value: &Value) -> bool {
+    matches!(
+        value,
+        Value::Object(object) if regexp_string_data(object, REGEXP_SOURCE_PROPERTY).is_some()
+    )
+}
+
+pub(crate) fn regexp_set_last_index(value: &Value, index: usize) {
+    if let Value::Object(object) = value {
+        if regexp_string_data(object, REGEXP_SOURCE_PROPERTY).is_some() {
+            object.set("lastIndex".to_owned(), Value::Number(index as f64));
+        }
+    }
+}
+
+pub(crate) fn native_regexp_global_match(
+    regexp: Value,
+    input: &str,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    regexp_set_last_index(&regexp, 0);
+    let mut matches = Vec::new();
+    loop {
+        let result =
+            native_regexp_prototype_exec(regexp.clone(), &[Value::String(input.to_owned())], env)?;
+        let Value::Array(array) = result else {
+            break;
+        };
+        let Some(Value::String(matched)) = array.get(0) else {
+            break;
+        };
+        let empty = matched.is_empty();
+        matches.push(Value::String(matched));
+        if empty {
+            let next = regexp_last_index_value(&regexp, env)?.saturating_add(1);
+            regexp_set_last_index(&regexp, next);
+        }
+    }
+
+    if matches.is_empty() {
+        Ok(Value::Null)
     } else {
-        (0..=text.len()).collect()
+        Ok(Value::Array(ArrayRef::new(matches)))
+    }
+}
+
+fn regexp_flags_contains(object: &ObjectRef, flag: char) -> bool {
+    regexp_string_data(object, REGEXP_FLAGS_PROPERTY).is_some_and(|flags| flags.contains(flag))
+}
+
+fn regexp_last_index(
+    object: &ObjectRef,
+    env: &mut HashMap<String, Value>,
+) -> Result<usize, RuntimeError> {
+    to_length_with_env(object.get("lastIndex").unwrap_or(Value::Undefined), env)
+}
+
+fn regexp_last_index_value(
+    value: &Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<usize, RuntimeError> {
+    let Value::Object(object) = value else {
+        return Ok(0);
     };
-
-    starts.into_iter().find_map(|start| {
-        match_pattern(&pattern, &text, 0, start)
-            .into_iter()
-            .next()
-            .map(|end| (start, end))
-    })
+    regexp_last_index(object, env)
 }
 
-fn normalized_regexp_source(source: &str) -> &str {
-    match source {
-        DATE_TO_STRING_FORMAT_PATTERN_COMPACT => DATE_TO_STRING_FORMAT_PATTERN,
-        _ => source,
-    }
+fn regexp_match_array(input: &str, match_result: matcher::RegexpMatch) -> Value {
+    let mut values = Vec::with_capacity(1 + match_result.captures.len());
+    values.push(Value::String(input_slice(
+        input,
+        match_result.start,
+        match_result.end,
+    )));
+    values.extend(match_result.captures.into_iter().map(|capture| {
+        capture
+            .map(|(start, end)| Value::String(input_slice(input, start, end)))
+            .unwrap_or(Value::Undefined)
+    }));
+    let result = ArrayRef::new(values);
+    result.set_property("index".to_owned(), Value::Number(match_result.start as f64));
+    result.set_property("input".to_owned(), Value::String(input.to_owned()));
+    Value::Array(result)
 }
 
-fn match_pattern(pattern: &[char], text: &[char], pc: usize, ic: usize) -> Vec<usize> {
-    if pc == pattern.len() {
-        return vec![ic];
-    }
-    match pattern[pc] {
-        '^' => {
-            if ic == 0 {
-                match_pattern(pattern, text, pc + 1, ic)
-            } else {
-                Vec::new()
-            }
-        }
-        '$' => {
-            if ic == text.len() {
-                match_pattern(pattern, text, pc + 1, ic)
-            } else {
-                Vec::new()
-            }
-        }
-        '\\' => match_literal(pattern, text, pc + 2, ic, pattern.get(pc + 1).copied()),
-        '[' => match_class(pattern, text, pc, ic),
-        '(' => match_group(pattern, text, pc, ic),
-        '.' if pattern.get(pc + 1) == Some(&'+') => (ic + 1..=text.len())
-            .flat_map(|end| match_pattern(pattern, text, pc + 2, end))
-            .collect(),
-        '.' => {
-            if ic < text.len() {
-                match_pattern(pattern, text, pc + 1, ic + 1)
-            } else {
-                Vec::new()
-            }
-        }
-        literal => match_literal(pattern, text, pc + 1, ic, Some(literal)),
-    }
-}
-
-fn match_literal(
-    pattern: &[char],
-    text: &[char],
-    next_pc: usize,
-    ic: usize,
-    literal: Option<char>,
-) -> Vec<usize> {
-    if literal.is_some_and(|value| text.get(ic) == Some(&value)) {
-        match_pattern(pattern, text, next_pc, ic + 1)
-    } else {
-        Vec::new()
-    }
-}
-
-fn match_class(pattern: &[char], text: &[char], pc: usize, ic: usize) -> Vec<usize> {
-    let Some(end) = pattern[pc + 1..].iter().position(|char| *char == ']') else {
-        return Vec::new();
-    };
-    let class_end = pc + 1 + end;
-    let class = &pattern[pc + 1..class_end];
-    let (count, next_pc) = repeat_count(pattern, class_end + 1);
-    if ic + count > text.len()
-        || !text[ic..ic + count]
-            .iter()
-            .all(|char| class_match(class, *char))
-    {
-        return Vec::new();
-    }
-    match_pattern(pattern, text, next_pc, ic + count)
-}
-
-fn class_match(class: &[char], value: char) -> bool {
-    match class {
-        ['0', '-', '9'] => value.is_ascii_digit(),
-        ['+', '-'] => value == '+' || value == '-',
-        _ => false,
-    }
-}
-
-fn repeat_count(pattern: &[char], pc: usize) -> (usize, usize) {
-    if pattern.get(pc) == Some(&'{')
-        && pattern
-            .get(pc + 2)
-            .is_some_and(|char| char.is_ascii_digit())
-        && pattern.get(pc + 3) == Some(&'}')
-        && pattern
-            .get(pc + 1)
-            .is_some_and(|char| char.is_ascii_digit())
-    {
-        let tens = pattern[pc + 1].to_digit(10).unwrap() as usize;
-        let ones = pattern[pc + 2].to_digit(10).unwrap() as usize;
-        return (tens * 10 + ones, pc + 4);
-    }
-    if pattern.get(pc) == Some(&'{')
-        && pattern
-            .get(pc + 1)
-            .is_some_and(|char| char.is_ascii_digit())
-        && pattern.get(pc + 2) == Some(&'}')
-    {
-        return (pattern[pc + 1].to_digit(10).unwrap() as usize, pc + 3);
-    }
-    (1, pc)
-}
-
-fn match_group(pattern: &[char], text: &[char], pc: usize, ic: usize) -> Vec<usize> {
-    let Some(end) = closing_group(pattern, pc) else {
-        return Vec::new();
-    };
-    let optional = pattern.get(end + 1) == Some(&'?');
-    let next_pc = end + 1 + usize::from(optional);
-    let mut positions = if optional {
-        match_pattern(pattern, text, next_pc, ic)
-    } else {
-        Vec::new()
-    };
-
-    for alternative in group_alternatives(&pattern[pc + 1..end]) {
-        positions.extend(
-            match_pattern(alternative, text, 0, ic)
-                .into_iter()
-                .flat_map(|end| match_pattern(pattern, text, next_pc, end)),
-        );
-    }
-    positions
-}
-
-fn closing_group(pattern: &[char], pc: usize) -> Option<usize> {
-    let mut escaped = false;
-    for (offset, char) in pattern[pc + 1..].iter().enumerate() {
-        if escaped {
-            escaped = false;
-        } else if *char == '\\' {
-            escaped = true;
-        } else if *char == ')' {
-            return Some(pc + 1 + offset);
-        }
-    }
-    None
-}
-
-fn group_alternatives(group: &[char]) -> Vec<&[char]> {
-    let mut alternatives = Vec::new();
-    let mut start = 0;
-    let mut escaped = false;
-    for (index, char) in group.iter().enumerate() {
-        if escaped {
-            escaped = false;
-        } else if *char == '\\' {
-            escaped = true;
-        } else if *char == '|' {
-            alternatives.push(&group[start..index]);
-            start = index + 1;
-        }
-    }
-    alternatives.push(&group[start..]);
-    alternatives
+fn input_slice(input: &str, start: usize, end: usize) -> String {
+    input.chars().skip(start).take(end - start).collect()
 }

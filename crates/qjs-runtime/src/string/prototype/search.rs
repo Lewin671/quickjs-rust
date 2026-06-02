@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{RuntimeError, Value, call_function, property_value, to_js_string_with_env};
+use crate::{RuntimeError, Value, call_function, property_value, regexp, to_js_string_with_env};
 
 use super::super::indexing::{
     string_end_position, string_last_search_position, string_search_start, this_string_value,
@@ -112,16 +112,19 @@ pub(crate) fn native_string_prototype_match(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let input = this_string_value(this_value, env)?;
-    let regexp = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
-        value @ Value::Object(_) => value,
-        value => {
-            let constructor = env.get("RegExp").cloned().ok_or_else(|| RuntimeError {
-                thrown: None,
-                message: "RegExp constructor is not available".to_owned(),
-            })?;
-            call_function(constructor, Value::Undefined, vec![value], env, false)?
-        }
+    let pattern = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let regexp = if regexp::regexp_is_regexp(&pattern) {
+        pattern
+    } else {
+        let constructor = env.get("RegExp").cloned().ok_or_else(|| RuntimeError {
+            thrown: None,
+            message: "RegExp constructor is not available".to_owned(),
+        })?;
+        call_function(constructor, Value::Undefined, vec![pattern], env, false)?
     };
+    if regexp::regexp_is_global(&regexp) {
+        return regexp::native_regexp_global_match(regexp, &input, env);
+    }
     let exec = property_value(regexp.clone(), "exec", env)?;
     call_function(exec, regexp, vec![Value::String(input)], env, false)
 }
