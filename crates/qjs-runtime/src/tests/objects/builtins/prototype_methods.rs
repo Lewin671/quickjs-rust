@@ -15,6 +15,10 @@ fn evaluates_object_prototype_methods() {
         Ok(Value::String("[object Object]".to_owned()))
     );
     assert_eq!(
+        eval("Object.prototype.toString.call(new Date(0));"),
+        Ok(Value::String("[object Date]".to_owned()))
+    );
+    assert_eq!(
         eval("Object.prototype.toLocaleString.length;"),
         Ok(Value::Number(0.0))
     );

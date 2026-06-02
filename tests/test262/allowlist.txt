@@ -407,6 +407,7 @@ cases/object-method-definition-basic.js
 cases/object-shorthand-property-basic.js
 cases/object-put-basic.js
 cases/object-to-string-direct-basic.js
+cases/object-to-string-date.js
 cases/object-to-string-length.js
 cases/object-to-string-own-property.js
 cases/object-to-locale-string-basic.js
