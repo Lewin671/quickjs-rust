@@ -82,9 +82,11 @@ cases/array-of-empty.js
 cases/array-of-length.js
 cases/array-of-single-number.js
 cases/array-join-basic.js
+cases/array-join-boolean-primitive.js
 cases/array-join-empty.js
 cases/array-join-length.js
 cases/array-join-null-undefined.js
+cases/array-join-object-generic.js
 cases/array-last-index-of-basic.js
 cases/array-last-index-of-empty.js
 cases/array-last-index-of-from-index.js
@@ -144,6 +146,7 @@ cases/array-splice-length.js
 cases/array-splice-negative-start.js
 cases/array-splice-omitted-delete-count.js
 cases/array-to-string-basic.js
+cases/array-to-string-boolean-primitive.js
 cases/array-to-string-length.js
 cases/array-to-reversed-basic.js
 cases/array-to-reversed-array-like.js

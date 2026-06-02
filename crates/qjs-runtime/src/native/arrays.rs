@@ -68,7 +68,7 @@ pub(super) fn call_array_native(
             array::native_array_prototype_last_index_of(this_value, argument_values)?
         }
         NativeFunction::ArrayPrototypeJoin => {
-            array::native_array_prototype_join(this_value, argument_values)?
+            array::native_array_prototype_join(this_value, argument_values, env)?
         }
         NativeFunction::ArrayPrototypeMap => {
             array::native_array_prototype_map(this_value, argument_values, env)?
@@ -98,7 +98,7 @@ pub(super) fn call_array_native(
             array::native_array_prototype_splice(this_value, argument_values)?
         }
         NativeFunction::ArrayPrototypeToString => {
-            array::native_array_prototype_to_string(this_value)?
+            array::native_array_prototype_to_string(this_value, env)?
         }
         NativeFunction::ArrayPrototypeToReversed => {
             array::native_array_prototype_to_reversed(this_value)?

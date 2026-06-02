@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    ObjectRef, RuntimeError, Value, function_prototype, property_value, string_prototype,
-    to_length_with_env,
+    ObjectRef, RuntimeError, Value, object, property_value, string_prototype, to_length_with_env,
 };
 
 pub(crate) struct ArrayLikeLength {
@@ -106,8 +105,9 @@ pub(crate) fn array_like_values_from_receiver(
 
 pub(super) fn array_like_receiver(value: Value, env: &HashMap<String, Value>) -> Value {
     match value {
-        Value::Boolean(_) => boxed_primitive("Boolean", env).unwrap_or(value),
-        Value::Number(_) => boxed_primitive("Number", env).unwrap_or(value),
+        Value::Boolean(_) | Value::Number(_) => {
+            object::boxed_primitive(value.clone(), env).unwrap_or(value)
+        }
         Value::String(value) => {
             let mut properties = HashMap::new();
             properties.insert(
@@ -122,14 +122,4 @@ pub(super) fn array_like_receiver(value: Value, env: &HashMap<String, Value>) ->
         }
         _ => value,
     }
-}
-
-fn boxed_primitive(constructor_name: &str, env: &HashMap<String, Value>) -> Option<Value> {
-    let Value::Function(function) = env.get(constructor_name)? else {
-        return None;
-    };
-    Some(Value::Object(ObjectRef::with_prototype(
-        HashMap::new(),
-        function_prototype(function),
-    )))
 }
