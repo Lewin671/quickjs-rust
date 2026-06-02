@@ -96,4 +96,16 @@ fn evaluates_string_sequence_builtins() {
         eval("'abcdef'.substr(Infinity, 1);"),
         Ok(Value::String(String::new()))
     );
+    assert_eq!(
+        eval(
+            "let caught = false; try { ''.repeat(Infinity); } catch (error) { caught = error instanceof RangeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { ''.repeat(-1); } catch (error) { caught = error instanceof RangeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
