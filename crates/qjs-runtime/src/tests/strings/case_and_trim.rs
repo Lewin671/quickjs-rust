@@ -11,6 +11,36 @@ fn evaluates_string_case_and_trim_builtins() {
         Ok(Value::String("abc".to_owned()))
     );
     assert_eq!(
+        eval("(new String('abc')).toString();"),
+        Ok(Value::String("abc".to_owned()))
+    );
+    assert_eq!(
+        eval("(new String('abc')).valueOf();"),
+        Ok(Value::String("abc".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { String.prototype.toString.call(false); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("typeof Symbol;"),
+        Ok(Value::String("function".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { String.prototype.toString.call(Symbol('desc')); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { String.prototype.valueOf.call({ toString: function() { return 'str'; } }); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("String.prototype.toLowerCase.length;"),
         Ok(Value::Number(0.0))
     );
