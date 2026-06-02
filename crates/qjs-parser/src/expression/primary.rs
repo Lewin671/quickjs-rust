@@ -156,6 +156,7 @@ impl Parser {
                 let (key, kind, value) = if is_get_accessor_start(&key_token.kind)
                     && !self.at(&TokenKind::Colon)
                     && !self.at(&TokenKind::Comma)
+                    && !self.at(&TokenKind::LeftParen)
                     && !self.at(&TokenKind::RightBrace)
                 {
                     self.object_getter_property(key_span)?
