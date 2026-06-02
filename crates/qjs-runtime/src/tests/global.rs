@@ -86,4 +86,12 @@ fn keeps_global_object_properties_and_bindings_in_sync() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "toString = Object.prototype.toString; typeof toString + ':' + typeof this.toString + ':' + this.toString();"
+        ),
+        Ok(Value::String(
+            "function:function:[object Object]".to_owned()
+        ))
+    );
 }
