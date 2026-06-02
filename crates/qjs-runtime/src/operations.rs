@@ -4,7 +4,8 @@ use qjs_ast::{BinaryOp, UnaryOp};
 
 use crate::{
     Property, RuntimeError, Value, has_property, is_truthy, string_object_value, to_int32,
-    to_int32_number, to_js_string, to_number, to_property_key, to_uint32_number, value_prototype,
+    to_int32_number, to_js_string_with_env, to_number, to_number_with_env, to_primitive_with_env,
+    to_property_key, to_uint32_number, value_prototype,
 };
 
 pub(crate) fn eval_unary(op: UnaryOp, argument: Value) -> Result<Value, RuntimeError> {
@@ -24,7 +25,7 @@ pub(crate) fn eval_binary(
     left: Value,
     op: BinaryOp,
     right: Value,
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     if op == BinaryOp::In {
         return eval_in(left, right, env);
@@ -38,12 +39,19 @@ pub(crate) fn eval_binary(
         BinaryOp::Ne => return Ok(Value::Boolean(!abstract_eq(&left, &right)?)),
         BinaryOp::StrictEq => return Ok(Value::Boolean(left == right)),
         BinaryOp::StrictNe => return Ok(Value::Boolean(left != right)),
-        BinaryOp::Add if matches!(left, Value::String(_)) || matches!(right, Value::String(_)) => {
-            return Ok(Value::String(format!(
-                "{}{}",
-                to_js_string(left)?,
-                to_js_string(right)?
-            )));
+        BinaryOp::Add => {
+            let left = to_primitive_with_env(left, env)?;
+            let right = to_primitive_with_env(right, env)?;
+            if matches!(left, Value::String(_)) || matches!(right, Value::String(_)) {
+                return Ok(Value::String(format!(
+                    "{}{}",
+                    to_js_string_with_env(left, env)?,
+                    to_js_string_with_env(right, env)?
+                )));
+            }
+            return Ok(Value::Number(
+                to_number_with_env(left, env)? + to_number_with_env(right, env)?,
+            ));
         }
         _ => {}
     }

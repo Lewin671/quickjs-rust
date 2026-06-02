@@ -66,6 +66,16 @@ pub(crate) fn to_number_with_env(
     }
 }
 
+pub(crate) fn to_primitive_with_env(
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    match value {
+        Value::Object(_) | Value::Function(_) | Value::Array(_) => object_to_primitive(value, env),
+        value => Ok(value),
+    }
+}
+
 fn string_to_number(value: &str) -> Result<f64, RuntimeError> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
@@ -86,6 +96,28 @@ fn string_to_number(value: &str) -> Result<f64, RuntimeError> {
             .unwrap_or(f64::NAN));
     }
     Ok(trimmed.parse::<f64>().unwrap_or(f64::NAN))
+}
+
+fn object_to_primitive(
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    for method in ["valueOf", "toString"] {
+        let method_value = property_value(value.clone(), method, env)?;
+        if matches!(method_value, Value::Function(_)) {
+            let primitive = call_function(method_value, value.clone(), Vec::new(), env, false)?;
+            if !matches!(
+                primitive,
+                Value::Object(_) | Value::Function(_) | Value::Array(_)
+            ) {
+                return Ok(primitive);
+            }
+        }
+    }
+    Err(RuntimeError {
+        thrown: None,
+        message: "TypeError: cannot convert object to primitive".to_owned(),
+    })
 }
 
 fn object_to_number(value: Value, env: &mut HashMap<String, Value>) -> Result<f64, RuntimeError> {

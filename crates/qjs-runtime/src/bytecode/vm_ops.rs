@@ -12,7 +12,7 @@ impl Vm<'_> {
         if let Some(value) = fast_number_binary(&left, op, &right) {
             return Ok(value);
         }
-        operations::eval_binary(left, op, right, &self.globals)
+        operations::eval_binary(left, op, right, &mut self.globals)
     }
 
     pub(super) fn enumerate_keys(&mut self) -> Result<(), RuntimeError> {
