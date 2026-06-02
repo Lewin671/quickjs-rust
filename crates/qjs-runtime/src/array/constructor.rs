@@ -12,10 +12,11 @@ pub(crate) fn native_array(argument_values: &[Value]) -> Result<Value, RuntimeEr
                 message: "RangeError: invalid array length".to_owned(),
             });
         }
-        return Ok(Value::Array(ArrayRef::new(vec![
-            Value::Undefined;
-            *length as usize
-        ])));
+        let length = *length as usize;
+        return Ok(Value::Array(ArrayRef::new_sparse(
+            vec![Value::Undefined; length],
+            (0..length).collect(),
+        )));
     }
 
     Ok(Value::Array(ArrayRef::new(argument_values.to_vec())))

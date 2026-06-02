@@ -42,6 +42,12 @@ fn evaluates_array_iteration_builtins() {
         ),
         Ok(Value::Undefined)
     );
+    assert_eq!(
+        eval(
+            "let calls = 0; let xs = new Array(10); xs[1] = 1; xs[2] = 2; xs.map(function(value) { calls = calls + 1; return value; }); calls;"
+        ),
+        Ok(Value::Number(2.0))
+    );
     assert!(eval("Array.prototype.map.call({ length: 4294967296 }, function() {});").is_err());
     assert!(eval("Array.prototype.map.call({ length: 4294967297 }, function() {});").is_err());
     assert_eq!(
