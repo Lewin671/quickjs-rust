@@ -35,6 +35,18 @@ fn evaluates_number_builtins() {
         eval("let n = 255; n.toString(16);"),
         Ok(Value::String("ff".to_owned()))
     );
+    assert_eq!(
+        eval("let n = 1e21; n.toString();"),
+        Ok(Value::String("1e+21".to_owned()))
+    );
+    assert_eq!(
+        eval("let n = 1e-7; n.toString();"),
+        Ok(Value::String("1e-7".to_owned()))
+    );
+    assert_eq!(
+        eval("String.prototype.trim.call(1000000000000000000000);"),
+        Ok(Value::String("1e+21".to_owned()))
+    );
     assert_eq!(eval("let n = 10; n.valueOf();"), Ok(Value::Number(10.0)));
     assert_eq!(
         eval("(new Number(7)).toString();"),

@@ -84,9 +84,14 @@ pub(crate) fn call_native_function(
         return Ok(value);
     }
 
-    if let Some(value) =
-        regexp::call_regexp_native(function, native, this_value.clone(), is_construct)?
-    {
+    if let Some(value) = regexp::call_regexp_native(
+        function,
+        native,
+        this_value.clone(),
+        &argument_values,
+        is_construct,
+        env,
+    )? {
         return Ok(value);
     }
 

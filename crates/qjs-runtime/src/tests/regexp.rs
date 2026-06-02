@@ -17,4 +17,12 @@ fn evaluates_regexp_constructor_identity() {
         eval("Object.prototype.toString.call(new RegExp());"),
         Ok(Value::String("[object RegExp]".to_owned()))
     );
+    assert_eq!(
+        eval("new RegExp('test').toString();"),
+        Ok(Value::String("/test/".to_owned()))
+    );
+    assert_eq!(
+        eval("/test/.toString();"),
+        Ok(Value::String("/test/".to_owned()))
+    );
 }
