@@ -52,6 +52,14 @@ fn evaluates_array_sequence_builtins() {
         eval("[0, 1, 2, 3, 4].slice(-3, -1).join();"),
         Ok(Value::String("2,3".to_owned()))
     );
+    assert_eq!(
+        eval("Array.prototype.slice.call({ length: 5, 0: 0, 1: 1, 2: 2, 4: 4 }, 1, 4).join('|');"),
+        Ok(Value::String("1|2|".to_owned()))
+    );
+    assert_eq!(
+        eval("Array.prototype.slice.call('abcd', 1, 3).join('');"),
+        Ok(Value::String("bc".to_owned()))
+    );
     assert_eq!(eval("[0, 1, 2].slice(5).length;"), Ok(Value::Number(0.0)));
     assert_eq!(
         eval("let copy = [1, 2].slice(); Array.isArray(copy) && copy[1] === 2;"),
