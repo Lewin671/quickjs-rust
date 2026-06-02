@@ -137,6 +137,7 @@ fn match_pattern(
 
 fn atom_end(pattern: &[char], pc: usize) -> Option<usize> {
     match pattern.get(pc)? {
+        '\\' if unicode_escape(pattern, pc).is_some() => Some(pc + 6),
         '\\' => Some(pc + 2),
         '[' => pattern[pc + 1..]
             .iter()
@@ -196,16 +197,22 @@ fn match_escape(
     let Some(value) = text.get(state.index).copied() else {
         return Vec::new();
     };
-    let matched = match escaped {
-        'd' => value.is_ascii_digit(),
-        'D' => !value.is_ascii_digit(),
-        literal => value == literal,
+    let (matched, next_pc) = match escaped {
+        'd' => (value.is_ascii_digit(), pc + 2),
+        'D' => (!value.is_ascii_digit(), pc + 2),
+        's' => (value.is_whitespace(), pc + 2),
+        'S' => (!value.is_whitespace(), pc + 2),
+        'u' => (
+            unicode_escape(pattern, pc).is_some_and(|unicode| value == unicode),
+            pc + 6,
+        ),
+        literal => (value == literal, pc + 2),
     };
     if !matched {
         return Vec::new();
     }
     state.index += 1;
-    vec![(pc + 2, state)]
+    vec![(next_pc, state)]
 }
 
 fn match_class(
@@ -233,15 +240,14 @@ fn class_match(class: &[char], value: char) -> bool {
     let mut index = 0;
     while index < class.len() {
         if class[index] == '\\' {
-            if let Some(escaped) = class.get(index + 1) {
-                if (*escaped == 'd' && value.is_ascii_digit())
-                    || (*escaped == 'D' && !value.is_ascii_digit())
-                    || *escaped == value
-                {
-                    return true;
-                }
+            if class.get(index + 1).is_some() && class_escape_matches(class, index, value) {
+                return true;
             }
-            index += 2;
+            index += if unicode_escape(class, index).is_some() {
+                6
+            } else {
+                2
+            };
         } else if class.get(index + 1) == Some(&'-') && class.get(index + 2).is_some() {
             let end = class[index + 2];
             if class[index] <= value && value <= end {
@@ -354,7 +360,31 @@ fn repeat_atom(
         current = next;
         count += 1;
     }
+    results.reverse();
     results
+}
+
+fn class_escape_matches(class: &[char], index: usize, value: char) -> bool {
+    match class.get(index + 1).copied() {
+        Some('d') => value.is_ascii_digit(),
+        Some('D') => !value.is_ascii_digit(),
+        Some('s') => value.is_whitespace(),
+        Some('S') => !value.is_whitespace(),
+        Some('u') => unicode_escape(class, index).is_some_and(|unicode| value == unicode),
+        Some(escaped) => escaped == value,
+        None => false,
+    }
+}
+
+fn unicode_escape(pattern: &[char], pc: usize) -> Option<char> {
+    if pattern.get(pc + 1) != Some(&'u') {
+        return None;
+    }
+    let mut value = 0;
+    for index in pc + 2..pc + 6 {
+        value = value * 16 + pattern.get(index)?.to_digit(16)?;
+    }
+    char::from_u32(value)
 }
 
 fn match_group(

@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use crate::{ArrayRef, RuntimeError, Value, to_js_string, to_number, to_uint32};
+use crate::{
+    ArrayRef, RuntimeError, Value, call_function, property_value, regexp, to_js_string,
+    to_js_string_with_env, to_number, to_number_with_env, to_uint32, to_uint32_number,
+};
 
 use super::super::indexing::{string_slice_index, string_substring_index, this_string_value};
 
@@ -69,15 +72,28 @@ pub(crate) fn native_string_prototype_split(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
-    let limit = string_split_limit(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
-    if limit == 0 {
-        return Ok(Value::Array(ArrayRef::new(Vec::new())));
-    }
-    if matches!(argument_values.first(), None | Some(Value::Undefined)) {
+    let separator_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let limit_value = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
+    let limit = string_split_limit(limit_value, env)?;
+
+    if matches!(separator_value, Value::Undefined) {
+        if limit == 0 {
+            return Ok(Value::Array(ArrayRef::new(Vec::new())));
+        }
         return Ok(Value::Array(ArrayRef::new(vec![Value::String(value)])));
     }
 
-    let separator = to_js_string(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    if regexp::regexp_is_regexp(&separator_value) {
+        if limit == 0 {
+            return Ok(Value::Array(ArrayRef::new(Vec::new())));
+        }
+        return string_split_regexp(value, separator_value, limit, env);
+    }
+
+    let separator = to_js_string_with_env(separator_value, env)?;
+    if limit == 0 {
+        return Ok(Value::Array(ArrayRef::new(Vec::new())));
+    }
     let parts = if separator.is_empty() {
         value
             .chars()
@@ -94,11 +110,127 @@ pub(crate) fn native_string_prototype_split(
     Ok(Value::Array(ArrayRef::new(parts)))
 }
 
-fn string_split_limit(value: Value) -> Result<usize, RuntimeError> {
+fn string_split_regexp(
+    input: String,
+    separator: Value,
+    limit: usize,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let regexp = string_split_regexp_clone(separator, env)?;
+    let mut parts = Vec::new();
+    let input_len = input.chars().count();
+    let mut next_search = 0usize;
+    let mut segment_start = 0usize;
+    let mut trailing_empty = true;
+
+    while next_search <= input_len {
+        regexp::regexp_set_last_index(&regexp, next_search);
+        let exec = property_value(regexp.clone(), "exec", env)?;
+        let result = call_function(
+            exec,
+            regexp.clone(),
+            vec![Value::String(input.clone())],
+            env,
+            false,
+        )?;
+        let Value::Array(match_array) = result else {
+            break;
+        };
+        let Some(Value::String(matched)) = match_array.get(0) else {
+            break;
+        };
+        let match_start = regexp_match_index(&Value::Array(match_array.clone()), env)?;
+        let match_len = matched.chars().count();
+        let match_end = match_start + match_len;
+        if match_start < next_search {
+            next_search += 1;
+            trailing_empty = false;
+            continue;
+        }
+
+        if match_start == match_end && match_start == segment_start {
+            next_search += 1;
+            trailing_empty = match_start == input_len;
+            continue;
+        }
+
+        parts.push(Value::String(input_char_slice(
+            &input,
+            segment_start,
+            match_start,
+        )));
+        if parts.len() == limit {
+            return Ok(Value::Array(ArrayRef::new(parts)));
+        }
+
+        segment_start = match_end;
+        next_search = if match_start == match_end {
+            match_end + 1
+        } else {
+            match_end
+        };
+        trailing_empty = match_start == match_end && match_end == input_len;
+    }
+
+    if segment_start < input_len || !trailing_empty {
+        parts.push(Value::String(input_char_slice(
+            &input,
+            segment_start,
+            input_len,
+        )));
+    }
+    Ok(Value::Array(ArrayRef::new(
+        parts.into_iter().take(limit).collect(),
+    )))
+}
+
+fn string_split_regexp_clone(
+    separator: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let constructor = env.get("RegExp").cloned().ok_or_else(|| RuntimeError {
+        thrown: None,
+        message: "RegExp constructor is not available".to_owned(),
+    })?;
+    call_function(
+        constructor,
+        Value::Undefined,
+        vec![separator, Value::String("g".to_owned())],
+        env,
+        false,
+    )
+}
+
+fn regexp_match_index(
+    match_value: &Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<usize, RuntimeError> {
+    let index = property_value(match_value.clone(), "index", env)?;
+    let number = to_number_with_env(index, env)?;
+    if number.is_nan() || number <= 0.0 {
+        Ok(0)
+    } else {
+        Ok(number.trunc() as usize)
+    }
+}
+
+fn input_char_slice(input: &str, start: usize, end: usize) -> String {
+    input.chars().skip(start).take(end - start).collect()
+}
+
+fn string_split_limit(
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<usize, RuntimeError> {
     if matches!(value, Value::Undefined) {
         return Ok(u32::MAX as usize);
     }
-    Ok(to_uint32(value)? as usize)
+    match value {
+        Value::Object(_) | Value::Function(_) | Value::Array(_) => {
+            Ok(to_uint32_number(to_number_with_env(value, env)?) as usize)
+        }
+        value => Ok(to_uint32(value)? as usize),
+    }
 }
 
 pub(crate) fn native_string_prototype_substr(

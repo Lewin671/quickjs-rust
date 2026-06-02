@@ -334,6 +334,7 @@ fn regexp_token_text(kind: &TokenKind) -> Option<&'static str> {
         TokenKind::RightBracket => Some("]"),
         TokenKind::LeftBrace => Some("{"),
         TokenKind::RightBrace => Some("}"),
+        TokenKind::Comma => Some(","),
         TokenKind::Colon => Some(":"),
         TokenKind::Pipe => Some("|"),
         TokenKind::Caret => Some("^"),

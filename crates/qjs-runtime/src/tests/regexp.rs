@@ -42,6 +42,14 @@ fn evaluates_regexp_exec_literal_match() {
         eval("/test/.exec('a test value').input;"),
         Ok(Value::String("a test value".to_owned()))
     );
+    assert_eq!(
+        eval("RegExp('\\\\u0037+').exec('a777b')[0];"),
+        Ok(Value::String("777".to_owned()))
+    );
+    assert_eq!(
+        eval("RegExp('\\\\s+').exec('a \\t b')[0].length;"),
+        Ok(Value::Number(3.0))
+    );
 }
 
 #[test]
