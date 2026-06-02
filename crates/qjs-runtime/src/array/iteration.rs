@@ -5,6 +5,8 @@ use crate::{
     ArrayRef, RuntimeError, Value, call_function, has_property, is_truthy, property_value,
 };
 
+const MAX_ARRAY_LENGTH: usize = u32::MAX as usize;
+
 struct ArrayIteration {
     receiver: Value,
     callback: Value,
@@ -31,6 +33,12 @@ fn prepare_array_iteration(
         return Err(RuntimeError {
             thrown: None,
             message: format!("Array.prototype.{method} callback is not callable"),
+        });
+    }
+    if method == "map" && source.length > MAX_ARRAY_LENGTH {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "RangeError: invalid array length".to_owned(),
         });
     }
     let values = array_like_values_from_receiver(source.receiver.clone(), source.length, env)?;
