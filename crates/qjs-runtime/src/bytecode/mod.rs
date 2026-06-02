@@ -10,6 +10,7 @@ mod ir;
 mod util;
 mod vm;
 mod vm_call;
+mod vm_errors;
 mod vm_ops;
 mod vm_props;
 mod vm_result;

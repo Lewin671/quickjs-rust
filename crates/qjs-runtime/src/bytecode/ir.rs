@@ -11,6 +11,7 @@ use crate::Value;
 pub(super) enum Op {
     LoadConst(usize),
     LoadLocal(usize),
+    LoadLocalOrUndefined(usize),
     StoreLocal(usize),
     LoadGlobal(String),
     TypeofGlobal(String),

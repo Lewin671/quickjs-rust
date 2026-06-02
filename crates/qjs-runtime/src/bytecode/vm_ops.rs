@@ -6,16 +6,13 @@ use super::vm::Vm;
 use super::vm_props::{enumerable_keys, fast_number_binary};
 
 impl Vm<'_> {
-    pub(super) fn eval_binary(&mut self, op: BinaryOp) -> Result<(), RuntimeError> {
+    pub(super) fn eval_binary(&mut self, op: BinaryOp) -> Result<Value, RuntimeError> {
         let right = self.pop()?;
         let left = self.pop()?;
         if let Some(value) = fast_number_binary(&left, op, &right) {
-            self.stack.push(value);
-            return Ok(());
+            return Ok(value);
         }
-        self.stack
-            .push(operations::eval_binary(left, op, right, &self.globals)?);
-        Ok(())
+        operations::eval_binary(left, op, right, &self.globals)
     }
 
     pub(super) fn enumerate_keys(&mut self) -> Result<(), RuntimeError> {

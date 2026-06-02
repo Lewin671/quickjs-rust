@@ -62,7 +62,7 @@ impl Compiler {
         if let Some(param) = &handler.param {
             let saved_slot = self.local_slots.get(param).copied().map(|slot| {
                 let saved_slot = self.temp_local("catch_saved");
-                self.emit(Op::LoadLocal(slot));
+                self.emit(Op::LoadLocalOrUndefined(slot));
                 self.emit(Op::StoreLocal(saved_slot));
                 saved_slot
             });

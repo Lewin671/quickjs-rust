@@ -2,13 +2,13 @@ use std::collections::HashMap;
 
 use crate::{
     ArrayRef, Function, GLOBAL_THIS_BINDING, ObjectRef, RUNTIME_INTRINSIC_NAMES, RuntimeError,
-    Value, call_function, constructor_prototype, error, initialize_builtins, is_truthy,
-    object_prototype, operations, to_property_key,
+    Value, call_function, constructor_prototype, initialize_builtins, is_truthy, object_prototype,
+    operations, to_property_key,
 };
 
 use super::ir::{Bytecode, Op};
 use super::util::{stack_underflow, typeof_value};
-use super::vm_call::{insert_scope_call_bindings, native_error_message, user_bytecode_function};
+use super::vm_call::{insert_scope_call_bindings, user_bytecode_function};
 use super::vm_props::{delete_property, get_property, set_property};
 use super::vm_result::FunctionBytecodeResult;
 use super::vm_try::TryFrame;
@@ -113,6 +113,9 @@ impl<'a> Vm<'a> {
                         })?)
                 }
                 Op::LoadLocal(slot) => self.stack.push(self.load_local(slot)?),
+                Op::LoadLocalOrUndefined(slot) => {
+                    self.stack.push(self.load_local_or_undefined(slot)?)
+                }
                 Op::StoreLocal(slot) => {
                     let value = self.pop()?;
                     self.store_local(slot, value)?;
@@ -175,7 +178,12 @@ impl<'a> Vm<'a> {
                     let value = self.pop()?;
                     self.stack.push(operations::eval_unary(op, value)?);
                 }
-                Op::Binary(op) => self.eval_binary(op)?,
+                Op::Binary(op) => {
+                    let result = self.eval_binary(op);
+                    if let Some(value) = self.handle_runtime_result(result)? {
+                        self.stack.push(value);
+                    }
+                }
                 Op::Jump(target) => self.ip = target,
                 Op::JumpIfFalse(target) => {
                     if !is_truthy(self.stack.last().ok_or_else(stack_underflow)?) {
@@ -364,73 +372,6 @@ impl<'a> Vm<'a> {
         Ok(())
     }
 
-    fn handle_call_result(
-        &mut self,
-        result: Result<Value, RuntimeError>,
-    ) -> Result<Option<Value>, RuntimeError> {
-        match result {
-            Ok(value) => Ok(Some(value)),
-            Err(error) if self.should_rethrow_js_error(&error) => {
-                let value = error.thrown.as_deref().cloned().unwrap_or_else(|| {
-                    Value::String(
-                        error
-                            .message
-                            .trim_start_matches("throw statement executed: ")
-                            .to_owned(),
-                    )
-                });
-                self.throw_value(value)?;
-                Ok(None)
-            }
-            Err(error) if self.should_throw_native_error(&error) => {
-                let value = self.native_error_value(&error.message)?;
-                self.throw_value(value)?;
-                Ok(None)
-            }
-            Err(error) => Err(error),
-        }
-    }
-
-    fn should_rethrow_js_error(&self, error: &RuntimeError) -> bool {
-        !self.try_stack.is_empty()
-            && (error.thrown.is_some() || error.message.starts_with("throw statement executed: "))
-    }
-
-    fn should_throw_native_error(&self, error: &RuntimeError) -> bool {
-        !self.try_stack.is_empty() && !error.message.starts_with("throw statement executed:")
-    }
-
-    fn native_error_value(&self, message: &str) -> Result<Value, RuntimeError> {
-        let (constructor_name, message) = native_error_message(message);
-        let Value::Function(function) = self
-            .native_error_constructor(constructor_name)
-            .ok_or_else(|| RuntimeError {
-                thrown: None,
-                message: format!("{constructor_name} constructor is not available"),
-            })?
-        else {
-            return Err(RuntimeError {
-                thrown: None,
-                message: format!("{constructor_name} constructor is not callable"),
-            });
-        };
-        error::native_error(
-            &function,
-            Value::Undefined,
-            &[Value::String(message)],
-            false,
-        )
-    }
-
-    fn native_error_constructor(&self, name: &str) -> Option<Value> {
-        self.globals.get(name).cloned().or_else(|| {
-            let Some(Value::Object(global_this)) = self.globals.get(GLOBAL_THIS_BINDING) else {
-                return None;
-            };
-            global_this.get(name)
-        })
-    }
-
     fn pop_arguments(&mut self, argc: usize) -> Result<Vec<Value>, RuntimeError> {
         let mut arguments = Vec::with_capacity(argc);
         for _ in 0..argc {
@@ -566,6 +507,17 @@ impl<'a> Vm<'a> {
                     self.bytecode.locals[slot].name
                 ),
             }),
+            None => Err(RuntimeError {
+                thrown: None,
+                message: "bytecode local index out of bounds".to_owned(),
+            }),
+        }
+    }
+
+    fn load_local_or_undefined(&self, slot: usize) -> Result<Value, RuntimeError> {
+        match self.locals.get(slot) {
+            Some(Some(value)) => Ok(value.clone()),
+            Some(None) => Ok(Value::Undefined),
             None => Err(RuntimeError {
                 thrown: None,
                 message: "bytecode local index out of bounds".to_owned(),
