@@ -411,6 +411,28 @@ fn evaluates_array_iteration_builtins() {
         Ok(Value::Number(17.0))
     );
     assert_eq!(
+        eval("[, 2, , 4].reduce(function(accumulator, value) { return accumulator + value; });"),
+        Ok(Value::Number(6.0))
+    );
+    assert_eq!(
+        eval(
+            "let xs = [, , 3]; Array.prototype[1] = 2; let result = xs.reduce(function(accumulator, value, index) { return accumulator + ':' + index + ':' + value; }); delete Array.prototype[1]; result;"
+        ),
+        Ok(Value::String("2:2:3".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let xs = [1, 2, 3]; let seen = ''; xs.reduce(function(accumulator, value, index) { if (index === 1) { delete xs[2]; } seen = seen + value + '|'; return accumulator + value; }, 0); seen;"
+        ),
+        Ok(Value::String("1|2|".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let xs = [1, , 3]; let seen = ''; xs.reduce(function(accumulator, value, index) { if (index === 0) { xs[1] = 2; } seen = seen + value + ':' + index + '|'; return accumulator + value; }, 0); seen;"
+        ),
+        Ok(Value::String("1:0|2:1|3:2|".to_owned()))
+    );
+    assert_eq!(
         eval("[].reduce(function(accumulator, value) { return accumulator + value; }, 7);"),
         Ok(Value::Number(7.0))
     );
@@ -434,6 +456,24 @@ fn evaluates_array_iteration_builtins() {
             "let seen = ''; [10, 20].reduceRight(function(accumulator, value, index, array) { seen = seen + accumulator + ':' + value + ':' + index + ':' + (array[index] === value) + '|'; return accumulator + value; }, 5); seen;"
         ),
         Ok(Value::String("5:20:1:true|25:10:0:true|".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "[1, , 3].reduceRight(function(accumulator, value, index) { return accumulator + ':' + index + ':' + value; });"
+        ),
+        Ok(Value::String("3:0:1".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let xs = [1, , 3]; let seen = ''; xs.reduceRight(function(accumulator, value, index) { if (index === 2) { xs[1] = 2; } seen = seen + value + ':' + index + '|'; return accumulator + value; }, 0); seen;"
+        ),
+        Ok(Value::String("3:2|2:1|1:0|".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let xs = [1, 2, 3]; let seen = ''; xs.reduceRight(function(accumulator, value, index) { if (index === 2) { delete xs[1]; } seen = seen + value + ':' + index + '|'; return accumulator + value; }, 0); seen;"
+        ),
+        Ok(Value::String("3:2|1:0|".to_owned()))
     );
     assert_eq!(
         eval("[].reduceRight(function(accumulator, value) { return accumulator + value; }, 7);"),

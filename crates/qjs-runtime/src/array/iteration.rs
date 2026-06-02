@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::array_like::{array_like_length, array_like_values_from_receiver};
+use super::array_like::array_like_length;
 use crate::{
     ArrayRef, RuntimeError, Value, array_prototype, call_function, has_property, is_truthy,
     property_value,
@@ -19,7 +19,7 @@ struct ArrayIteration {
 struct ArrayReduction {
     receiver: Value,
     callback: Value,
-    source: Vec<Value>,
+    source_len: usize,
 }
 
 fn prepare_array_iteration(
@@ -87,11 +87,9 @@ fn prepare_array_reduction(
             message: format!("Array.prototype.{method} callback is not callable"),
         });
     }
-    let values = array_like_values_from_receiver(source.receiver.clone(), source.length, env)?;
-
     Ok(ArrayReduction {
         receiver: source.receiver,
-        source: values,
+        source_len: source.length,
         callback,
     })
 }
@@ -354,27 +352,24 @@ pub(crate) fn native_array_prototype_reduce(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let reduction = prepare_array_reduction("reduce", this_value, argument_values, env)?;
-    if reduction.source.is_empty() && argument_values.len() < 2 {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "Reduce of empty array with no initial value".to_owned(),
-        });
-    }
-
     let (mut accumulator, start_index) = if argument_values.len() >= 2 {
         (argument_values[1].clone(), 0)
     } else {
-        (reduction.source[0].clone(), 1)
+        let Some((index, value)) = first_reduction_value(&reduction, env)? else {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "Reduce of empty array with no initial value".to_owned(),
+            });
+        };
+        (value, index + 1)
     };
 
-    for (index, value) in reduction
-        .source
-        .iter()
-        .cloned()
-        .enumerate()
-        .skip(start_index)
-    {
-        accumulator = call_reduction_callback(&reduction, accumulator, value, index, env)?;
+    for index in start_index..reduction.source_len {
+        let key = index.to_string();
+        if has_property(reduction.receiver.clone(), env, &key)? {
+            let value = property_value(reduction.receiver.clone(), &key, env)?;
+            accumulator = call_reduction_callback(&reduction, accumulator, value, index, env)?;
+        }
     }
 
     Ok(accumulator)
@@ -386,29 +381,57 @@ pub(crate) fn native_array_prototype_reduce_right(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let reduction = prepare_array_reduction("reduceRight", this_value, argument_values, env)?;
-    if reduction.source.is_empty() && argument_values.len() < 2 {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "Reduce of empty array with no initial value".to_owned(),
-        });
-    }
-
     let (mut accumulator, next_index) = if argument_values.len() >= 2 {
-        (argument_values[1].clone(), reduction.source.len())
+        (argument_values[1].clone(), reduction.source_len)
     } else {
-        let last_index = reduction.source.len() - 1;
-        (reduction.source[last_index].clone(), last_index)
+        let Some((index, value)) = last_reduction_value(&reduction, env)? else {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "Reduce of empty array with no initial value".to_owned(),
+            });
+        };
+        (value, index)
     };
 
     for index in (0..next_index).rev() {
-        accumulator = call_reduction_callback(
-            &reduction,
-            accumulator,
-            reduction.source[index].clone(),
-            index,
-            env,
-        )?;
+        let key = index.to_string();
+        if has_property(reduction.receiver.clone(), env, &key)? {
+            let value = property_value(reduction.receiver.clone(), &key, env)?;
+            accumulator = call_reduction_callback(&reduction, accumulator, value, index, env)?;
+        }
     }
 
     Ok(accumulator)
+}
+
+fn first_reduction_value(
+    reduction: &ArrayReduction,
+    env: &mut HashMap<String, Value>,
+) -> Result<Option<(usize, Value)>, RuntimeError> {
+    for index in 0..reduction.source_len {
+        let key = index.to_string();
+        if has_property(reduction.receiver.clone(), env, &key)? {
+            return Ok(Some((
+                index,
+                property_value(reduction.receiver.clone(), &key, env)?,
+            )));
+        }
+    }
+    Ok(None)
+}
+
+fn last_reduction_value(
+    reduction: &ArrayReduction,
+    env: &mut HashMap<String, Value>,
+) -> Result<Option<(usize, Value)>, RuntimeError> {
+    for index in (0..reduction.source_len).rev() {
+        let key = index.to_string();
+        if has_property(reduction.receiver.clone(), env, &key)? {
+            return Ok(Some((
+                index,
+                property_value(reduction.receiver.clone(), &key, env)?,
+            )));
+        }
+    }
+    Ok(None)
 }
