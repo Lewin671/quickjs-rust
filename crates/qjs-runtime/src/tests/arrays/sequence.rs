@@ -60,6 +60,18 @@ fn evaluates_array_sequence_builtins() {
         eval("Array.prototype.slice.call('abcd', 1, 3).join('');"),
         Ok(Value::String("bc".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "let a = []; a.constructor = 1; let caught = false; try { a.slice(); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let marker = { ok: true }; let a = []; Object.defineProperty(a, 'constructor', { get: function() { throw marker; } }); let caught = false; try { a.slice(); } catch (error) { caught = error === marker; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
     assert_eq!(eval("[0, 1, 2].slice(5).length;"), Ok(Value::Number(0.0)));
     assert_eq!(
         eval("let copy = [1, 2].slice(); Array.isArray(copy) && copy[1] === 2;"),

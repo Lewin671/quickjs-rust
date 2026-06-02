@@ -116,6 +116,8 @@ cases/array-reverse-basic.js
 cases/array-shift-basic.js
 cases/array-shift-length.js
 cases/array-slice-basic.js
+cases/array-slice-constructor-non-object.js
+cases/array-slice-constructor-poisoned.js
 cases/array-slice-default-end.js
 cases/array-slice-length.js
 cases/array-slice-negative-index.js
