@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{RuntimeError, Value, to_js_string, to_length};
+use crate::{RuntimeError, Value, to_js_string_with_env, to_length_with_env};
 
 use super::super::indexing::this_string_value;
 
@@ -17,7 +17,10 @@ pub(crate) fn native_string_prototype_pad(
     kind: StringPadKind,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
-    let max_length = to_length(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    let max_length = to_length_with_env(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     let string_length = value.chars().count();
     if max_length <= string_length {
         return Ok(Value::String(value));
@@ -25,7 +28,7 @@ pub(crate) fn native_string_prototype_pad(
 
     let fill_string = match argument_values.get(1).cloned().unwrap_or(Value::Undefined) {
         Value::Undefined => " ".to_owned(),
-        value => to_js_string(value)?,
+        value => to_js_string_with_env(value, env)?,
     };
     if fill_string.is_empty() {
         return Ok(Value::String(value));

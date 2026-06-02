@@ -45,4 +45,26 @@ fn evaluates_string_padding_and_repeat_builtins() {
     );
     assert!(eval("'ab'.repeat(-1);").is_err());
     assert!(eval("'ab'.repeat(Infinity);").is_err());
+    assert_eq!(
+        eval(
+            r#"
+            let log = "";
+            function observer(name, string, value) {
+                return {
+                    toString: function() { log = log + "|toString:" + name; return string; },
+                    valueOf: function() { log = log + "|valueOf:" + name; return value; }
+                };
+            }
+            let receiver = observer("receiver", {}, "abc");
+            let maxLength = observer("maxLength", 11, {});
+            let fillString = observer("fillString", {}, "def");
+            let result = String.prototype.padStart.call(receiver, maxLength, fillString);
+            result + log;
+            "#
+        ),
+        Ok(Value::String(
+            "defdefdeabc|toString:receiver|valueOf:receiver|valueOf:maxLength|toString:maxLength|toString:fillString|valueOf:fillString"
+                .to_owned()
+        ))
+    );
 }
