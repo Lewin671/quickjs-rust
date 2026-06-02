@@ -51,19 +51,42 @@ impl Parser {
             let token = self.advance();
             match token.kind {
                 TokenKind::Slash => {
+                    let end = token.span.end;
+                    let mut arguments = vec![Expr::Literal(Literal::String {
+                        value: pattern,
+                        span: Span::new(start, end),
+                    })];
+                    if let Some(flags) = self.regexp_flags() {
+                        arguments.push(Expr::Literal(Literal::String {
+                            span: flags.span,
+                            value: flags.value,
+                        }));
+                    }
+                    let span_end = arguments.last().map_or(end, |argument| argument.span().end);
                     return Ok(Expr::New {
                         callee: Box::new(Expr::Identifier {
                             name: "RegExp".to_owned(),
                             span: Span::new(start, start + 1),
                         }),
-                        arguments: vec![Expr::Literal(Literal::String {
-                            value: pattern,
-                            span: Span::new(start, token.span.end),
-                        })],
-                        span: Span::new(start, token.span.end),
+                        span: Span::new(start, span_end),
+                        arguments,
                     });
                 }
                 TokenKind::Dot => pattern.push('.'),
+                TokenKind::Backslash => {
+                    pattern.push('\\');
+                    let escaped = self.advance();
+                    if escaped.kind == TokenKind::Eof {
+                        return Err(ParseError {
+                            message: "unterminated regular expression literal".to_owned(),
+                            span: escaped.span,
+                        });
+                    }
+                    pattern.push_str(regexp_token_text(&escaped.kind).ok_or(ParseError {
+                        message: "unsupported regular expression escape".to_owned(),
+                        span: escaped.span,
+                    })?);
+                }
                 TokenKind::Identifier(text) | TokenKind::Number(text) | TokenKind::String(text) => {
                     pattern.push_str(&text);
                 }
@@ -73,12 +96,25 @@ impl Parser {
                         span: token.span,
                     });
                 }
-                kind => pattern.push_str(regexp_punctuator_text(&kind).ok_or(ParseError {
+                kind => pattern.push_str(regexp_token_text(&kind).ok_or(ParseError {
                     message: "unsupported regular expression literal".to_owned(),
                     span: token.span,
                 })?),
             }
         }
+    }
+
+    fn regexp_flags(&mut self) -> Option<RegexpFlags> {
+        let token = self.peek()?;
+        let TokenKind::Identifier(value) = &token.kind else {
+            return None;
+        };
+        let flags = RegexpFlags {
+            value: value.clone(),
+            span: token.span,
+        };
+        self.advance();
+        Some(flags)
     }
 
     fn array_literal(&mut self, start: usize) -> Result<Expr, ParseError> {
@@ -217,17 +253,26 @@ impl Parser {
     }
 }
 
-fn regexp_punctuator_text(kind: &TokenKind) -> Option<&'static str> {
+struct RegexpFlags {
+    value: String,
+    span: Span,
+}
+
+fn regexp_token_text(kind: &TokenKind) -> Option<&'static str> {
     match kind {
         TokenKind::Star => Some("*"),
         TokenKind::Plus => Some("+"),
+        TokenKind::Minus => Some("-"),
         TokenKind::Question => Some("?"),
+        TokenKind::Slash => Some("/"),
+        TokenKind::Backslash => Some("\\"),
         TokenKind::LeftParen => Some("("),
         TokenKind::RightParen => Some(")"),
         TokenKind::LeftBracket => Some("["),
         TokenKind::RightBracket => Some("]"),
         TokenKind::LeftBrace => Some("{"),
         TokenKind::RightBrace => Some("}"),
+        TokenKind::Colon => Some(":"),
         TokenKind::Pipe => Some("|"),
         TokenKind::Caret => Some("^"),
         _ => None,
