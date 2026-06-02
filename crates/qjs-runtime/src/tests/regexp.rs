@@ -45,6 +45,53 @@ fn evaluates_regexp_exec_literal_match() {
 }
 
 #[test]
+fn evaluates_regexp_exec_global_last_index() {
+    assert_eq!(
+        eval(
+            "let re = /34/g; let first = re.exec('343443444'); first[0] + ':' + first.index + ':' + re.lastIndex;"
+        ),
+        Ok(Value::String("34:0:2".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let re = /34/g; re.exec('343443444'); let second = re.exec('343443444'); second[0] + ':' + second.index + ':' + re.lastIndex;"
+        ),
+        Ok(Value::String("34:2:4".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let re = /34/g; re.lastIndex = 8; re.exec('343443444') === null && re.lastIndex === 0;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn evaluates_regexp_exec_captures() {
+    assert_eq!(
+        eval(r#"'Boston, MA 02134'.match(/([\d]{5})([-\ ]?[\d]{4})?$/).length;"#),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval(r#"'Boston, MA 02134'.match(/([\d]{5})([-\ ]?[\d]{4})?$/)[1];"#),
+        Ok(Value::String("02134".to_owned()))
+    );
+    assert_eq!(
+        eval(r#"'Boston, MA 02134'.match(/([\d]{5})([-\ ]?[\d]{4})?$/)[2];"#),
+        Ok(Value::Undefined)
+    );
+}
+
+#[test]
+fn evaluates_regexp_exec_empty_non_capturing_group() {
+    assert_eq!(eval("RegExp().exec('').length;"), Ok(Value::Number(1.0)));
+    assert_eq!(
+        eval("RegExp().exec('undefined').index;"),
+        Ok(Value::Number(0.0))
+    );
+}
+
+#[test]
 fn evaluates_regexp_exec_date_format_shape() {
     assert_eq!(
         eval(

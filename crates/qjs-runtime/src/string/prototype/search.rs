@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{RuntimeError, Value, call_function, property_value, to_js_string_with_env};
+use crate::{RuntimeError, Value, call_function, property_value, regexp, to_js_string_with_env};
 
 use super::super::indexing::{
     string_end_position, string_last_search_position, string_search_start, this_string_value,
@@ -122,6 +122,9 @@ pub(crate) fn native_string_prototype_match(
             call_function(constructor, Value::Undefined, vec![value], env, false)?
         }
     };
+    if regexp::regexp_is_global(&regexp) {
+        return regexp::native_regexp_global_match(regexp, &input, env);
+    }
     let exec = property_value(regexp.clone(), "exec", env)?;
     call_function(exec, regexp, vec![Value::String(input)], env, false)
 }

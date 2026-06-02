@@ -629,8 +629,12 @@ cases/string-prototype-last-index-of-empty-search.js
 cases/string-prototype-last-index-of-length.js
 cases/string-prototype-last-index-of-position.js
 cases/string-prototype-match-basic.js
+cases/string-prototype-match-captures.js
+cases/string-prototype-match-global.js
+cases/string-prototype-match-global-digit-escape.js
 cases/string-prototype-match-null-argument.js
 cases/string-prototype-match-this-not-coercible.js
+cases/string-prototype-match-undefined-argument.js
 cases/string-prototype-pad-end-basic.js
 cases/string-prototype-pad-end-empty-fill.js
 cases/string-prototype-pad-end-length.js

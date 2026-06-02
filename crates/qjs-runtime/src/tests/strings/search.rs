@@ -62,6 +62,23 @@ fn evaluates_string_match_basic_regexp() {
 }
 
 #[test]
+fn evaluates_string_match_global_regexp() {
+    assert_eq!(
+        eval("'343443444'.match(/34/g).length;"),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval("'343443444'.match(/34/g)[1];"),
+        Ok(Value::String("34".to_owned()))
+    );
+    assert_eq!(
+        eval("'123456abcde7890'.match(/\\d{2}/g).join(',');"),
+        Ok(Value::String("12,34,56,78,90".to_owned()))
+    );
+    assert_eq!(eval("'abc'.match(/\\d/g);"), Ok(Value::Null));
+}
+
+#[test]
 fn evaluates_string_match_coercions() {
     assert_eq!(
         eval("String.prototype.match.call(12345, /34/)[0];"),
@@ -72,6 +89,8 @@ fn evaluates_string_match_coercions() {
         Ok(Value::String("34".to_owned()))
     );
     assert_eq!(eval("'12345'.match(34).index;"), Ok(Value::Number(2.0)));
+    assert_eq!(eval("'undefined'.match().length;"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("'undefined'.match().index;"), Ok(Value::Number(0.0)));
 }
 
 #[test]

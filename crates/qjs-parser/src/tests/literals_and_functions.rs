@@ -327,6 +327,28 @@ fn parses_regexp_literal_with_character_class_range() {
 }
 
 #[test]
+fn parses_regexp_literal_with_digit_escape_and_flags() {
+    let script = parse_script(r#"/\d{2}/g;"#).expect("source should parse");
+    let [
+        Stmt::Expr(Expr::New {
+            arguments, span, ..
+        }),
+    ] = script.body.as_slice()
+    else {
+        panic!("expected RegExp constructor expression");
+    };
+
+    assert_eq!(*span, qjs_ast::Span::new(0, 8));
+    assert!(matches!(
+        arguments.as_slice(),
+        [
+            Expr::Literal(Literal::String { value: pattern, .. }),
+            Expr::Literal(Literal::String { value: flags, .. })
+        ] if pattern == r#"\d{2}"# && flags == "g"
+    ));
+}
+
+#[test]
 fn parses_date_format_regexp_literal_smoke() {
     let source = r#"/^(Sun|Mon) [0-9]{2}:[0-9]{2} GMT[+-][0-9]{4}( \(.+\))?$/;"#;
     let script = parse_script(source).expect("source should parse");
