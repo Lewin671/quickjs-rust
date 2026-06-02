@@ -13,6 +13,10 @@ pub(super) fn define_date_value(object: &ObjectRef, value: f64) {
     object.define_non_enumerable(DATE_VALUE_PROPERTY.to_owned(), Value::Number(value));
 }
 
+pub(crate) fn is_date_object(object: &ObjectRef) -> bool {
+    matches!(object.get(DATE_VALUE_PROPERTY), Some(Value::Number(_)))
+}
+
 pub(super) fn optional_number(
     argument_values: &[Value],
     index: usize,
@@ -52,12 +56,13 @@ pub(super) fn date_object(this_value: Value) -> Result<ObjectRef, RuntimeError> 
             message: "Date method receiver is not an object".to_owned(),
         });
     };
-    match object.get(DATE_VALUE_PROPERTY) {
-        Some(Value::Number(_)) => Ok(object),
-        _ => Err(RuntimeError {
+    if is_date_object(&object) {
+        Ok(object)
+    } else {
+        Err(RuntimeError {
             thrown: None,
             message: "Date method receiver is not a Date object".to_owned(),
-        }),
+        })
     }
 }
 

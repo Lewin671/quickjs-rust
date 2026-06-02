@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    RuntimeError, Value, array_has_own_property, array_prototype, boolean, call_function, error,
-    function_intrinsic_prototype, function_own_property_descriptor, number, string,
+    RuntimeError, Value, array_has_own_property, array_prototype, boolean, call_function, date,
+    error, function_intrinsic_prototype, function_own_property_descriptor, number, string,
     to_property_key, value_prototype,
 };
 
@@ -152,6 +152,8 @@ pub(crate) fn native_object_prototype_to_string(this_value: Value) -> Result<Val
                 "Number"
             } else if string::is_string_object(&object) {
                 "String"
+            } else if date::is_date_object(&object) {
+                "Date"
             } else if error::is_error_object(&object) {
                 "Error"
             } else if let Some(tag) = object.to_string_tag() {

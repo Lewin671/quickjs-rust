@@ -27,6 +27,7 @@ pub(crate) use mutation::{
     native_date_prototype_set_utc_milliseconds, native_date_prototype_set_utc_minutes,
     native_date_prototype_set_utc_month, native_date_prototype_set_utc_seconds,
 };
+pub(crate) use value::is_date_object;
 
 const DATE_VALUE_PROPERTY: &str = "\0DateValue";
 const MS_PER_DAY: f64 = 86_400_000.0;
