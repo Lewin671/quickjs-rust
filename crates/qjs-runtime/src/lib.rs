@@ -21,6 +21,7 @@ mod property;
 mod reflect;
 mod regexp;
 mod string;
+mod symbol;
 mod value;
 
 use builtins::initialize_builtins;
@@ -55,6 +56,7 @@ pub(crate) const RUNTIME_INTRINSIC_NAMES: &[&str] = &[
     "Array",
     "Number",
     "String",
+    "Symbol",
     "Boolean",
     "Date",
     "RegExp",

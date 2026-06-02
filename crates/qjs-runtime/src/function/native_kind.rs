@@ -201,6 +201,7 @@ pub(crate) enum NativeFunction {
     StringPrototypeToString,
     StringPrototypeToUpperCase,
     StringPrototypeValueOf,
+    Symbol,
     SyntaxError,
     TypeError,
     UriError,

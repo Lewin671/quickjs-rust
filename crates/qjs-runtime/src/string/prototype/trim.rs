@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{RuntimeError, Value};
+use crate::{RuntimeError, Value, string_object_value};
 
 use super::super::indexing::this_string_value;
 
@@ -31,9 +31,24 @@ pub(crate) fn native_string_prototype_trim_start(
 
 pub(crate) fn native_string_prototype_to_string(
     this_value: Value,
-    env: &mut HashMap<String, Value>,
+    _env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    Ok(Value::String(this_string_value(this_value, env)?))
+    Ok(Value::String(strict_this_string_value(this_value)?))
+}
+
+fn strict_this_string_value(value: Value) -> Result<String, RuntimeError> {
+    match value {
+        Value::String(value) => Ok(value),
+        Value::Object(object) => string_object_value(&object).ok_or_else(string_receiver_error),
+        _ => Err(string_receiver_error()),
+    }
+}
+
+fn string_receiver_error() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "TypeError: String.prototype.toString requires a string receiver".to_owned(),
+    }
 }
 
 fn trim_js(value: &str) -> String {
