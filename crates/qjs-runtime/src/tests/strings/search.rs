@@ -8,9 +8,21 @@ fn evaluates_string_search_builtins() {
         eval("'abc'.startsWith('bc', 2);"),
         Ok(Value::Boolean(false))
     );
+    assert_eq!(
+        eval(
+            "let caught = false; try { ''.startsWith(/./); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
     assert_eq!(eval("'abc'.endsWith('bc');"), Ok(Value::Boolean(true)));
     assert_eq!(eval("'abc'.endsWith('ab', 2);"), Ok(Value::Boolean(true)));
     assert_eq!(eval("'abc'.endsWith('bc', 2);"), Ok(Value::Boolean(false)));
+    assert_eq!(
+        eval(
+            "let caught = false; try { ''.endsWith(/./); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
     assert_eq!(eval("'abc'.indexOf('b');"), Ok(Value::Number(1.0)));
     assert_eq!(eval("'abc'.indexOf('b', 2);"), Ok(Value::Number(-1.0)));
     assert_eq!(
@@ -24,6 +36,12 @@ fn evaluates_string_search_builtins() {
     );
     assert_eq!(eval("'abc'.includes('b');"), Ok(Value::Boolean(true)));
     assert_eq!(eval("'abc'.includes('b', 2);"), Ok(Value::Boolean(false)));
+    assert_eq!(
+        eval(
+            "let caught = false; try { ''.includes(/./); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
     assert_eq!(
         eval("String.prototype.lastIndexOf.length;"),
         Ok(Value::Number(1.0))

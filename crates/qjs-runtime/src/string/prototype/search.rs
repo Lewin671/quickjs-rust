@@ -12,10 +12,9 @@ pub(crate) fn native_string_prototype_ends_with(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
-    let search = to_js_string_with_env(
-        argument_values.first().cloned().unwrap_or(Value::Undefined),
-        env,
-    )?;
+    let search_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    reject_regexp_search_value(&search_value, "String.prototype.endsWith")?;
+    let search = to_js_string_with_env(search_value, env)?;
     let end = string_end_position(
         value.chars().count(),
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
@@ -31,10 +30,9 @@ pub(crate) fn native_string_prototype_includes(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
-    let search = to_js_string_with_env(
-        argument_values.first().cloned().unwrap_or(Value::Undefined),
-        env,
-    )?;
+    let search_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    reject_regexp_search_value(&search_value, "String.prototype.includes")?;
+    let search = to_js_string_with_env(search_value, env)?;
     let start = string_search_start(
         value.chars().count(),
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
@@ -135,10 +133,9 @@ pub(crate) fn native_string_prototype_starts_with(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
-    let search = to_js_string_with_env(
-        argument_values.first().cloned().unwrap_or(Value::Undefined),
-        env,
-    )?;
+    let search_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    reject_regexp_search_value(&search_value, "String.prototype.startsWith")?;
+    let search = to_js_string_with_env(search_value, env)?;
     let start = string_search_start(
         value.chars().count(),
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
@@ -151,4 +148,14 @@ pub(crate) fn native_string_prototype_starts_with(
             .collect::<String>()
             .starts_with(&search),
     ))
+}
+
+fn reject_regexp_search_value(value: &Value, method: &str) -> Result<(), RuntimeError> {
+    if regexp::regexp_is_regexp(value) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: format!("TypeError: {method} search string must not be a RegExp"),
+        });
+    }
+    Ok(())
 }

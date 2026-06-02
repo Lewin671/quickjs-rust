@@ -662,6 +662,7 @@ cases/string-prototype-split-undefined-separator.js
 cases/string-prototype-starts-with-basic.js
 cases/string-prototype-starts-with-length.js
 cases/string-prototype-starts-with-position.js
+cases/string-prototype-starts-with-regexp-throws.js
 cases/string-prototype-substr-basic.js
 cases/string-prototype-substr-length.js
 cases/string-prototype-substr-negative-start.js
