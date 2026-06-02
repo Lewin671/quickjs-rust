@@ -12,6 +12,7 @@ mod vm;
 mod vm_call;
 mod vm_ops;
 mod vm_props;
+mod vm_result;
 mod vm_try;
 
 use qjs_ast::Script;
@@ -20,7 +21,7 @@ use qjs_parser::parse_script;
 use crate::{RuntimeError, Value};
 
 pub use ir::Bytecode;
-pub(crate) use vm::FunctionBytecodeResult;
+pub(crate) use vm_result::FunctionBytecodeResult;
 
 /// Compiles an AST script into runtime bytecode.
 ///

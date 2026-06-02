@@ -2,7 +2,10 @@ use std::rc::Rc;
 
 use qjs_ast::{AssignmentOp, BinaryOp, Expr, ForInit, Literal, Stmt, UnaryOp, VarKind};
 
-use crate::{RuntimeError, Value, function::collect_function_local_names};
+use crate::{
+    RuntimeError, Value,
+    function::{collect_function_local_names, is_strict_function_body},
+};
 
 use super::compiler::Compiler;
 use super::ir::Op;
@@ -226,6 +229,7 @@ impl Compiler {
                     local_names,
                     bytecode: Rc::new(bytecode),
                     constructable: *constructable,
+                    is_strict: is_strict_function_body(body),
                 });
                 Ok(())
             }

@@ -31,6 +31,7 @@ pub(super) enum Op {
         local_names: Vec<String>,
         bytecode: Rc<Bytecode>,
         constructable: bool,
+        is_strict: bool,
     },
     Typeof,
     Unary(UnaryOp),
