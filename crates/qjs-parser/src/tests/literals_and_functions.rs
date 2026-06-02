@@ -30,6 +30,35 @@ fn parses_function_declaration_and_call() {
     };
     assert_eq!(name.as_deref(), Some("named"));
     assert_eq!(params, &["value"]);
+
+    let script = parse_script("let f = (a, b) => a + b;").expect("source should parse");
+    let [Stmt::VarDecl { declarations, .. }] = script.body.as_slice() else {
+        panic!("expected arrow function declaration");
+    };
+    let Some(Expr::Function {
+        name,
+        params,
+        constructable,
+        body,
+        ..
+    }) = &declarations[0].init
+    else {
+        panic!("expected arrow function initializer");
+    };
+    assert_eq!(name, &None);
+    assert_eq!(params, &["a", "b"]);
+    assert!(!constructable);
+    assert!(matches!(body.as_slice(), [Stmt::Return { .. }]));
+
+    let script = parse_script("let f = value => { return value; };").expect("source should parse");
+    let [Stmt::VarDecl { declarations, .. }] = script.body.as_slice() else {
+        panic!("expected single-parameter arrow function declaration");
+    };
+    let Some(Expr::Function { params, body, .. }) = &declarations[0].init else {
+        panic!("expected arrow function initializer");
+    };
+    assert_eq!(params, &["value"]);
+    assert!(matches!(body.as_slice(), [Stmt::Return { .. }]));
 }
 
 #[test]

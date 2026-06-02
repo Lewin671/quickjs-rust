@@ -118,6 +118,10 @@ fn evaluates_function_declarations_and_calls() {
         eval("(function(value) { return value + 1; })(2);"),
         Ok(Value::Number(3.0))
     );
+    assert_eq!(eval("(() => {})();"), Ok(Value::Undefined));
+    assert_eq!(eval("(value => value + 1)(2);"), Ok(Value::Number(3.0)));
+    assert_eq!(eval("((a, b) => a + b)(2, 3);"), Ok(Value::Number(5.0)));
+    assert!(eval("new (() => {})();").is_err());
     assert_eq!(
         eval("function getThis() { return this; } getThis() === this;"),
         Ok(Value::Boolean(true))

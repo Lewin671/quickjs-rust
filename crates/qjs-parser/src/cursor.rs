@@ -35,6 +35,10 @@ impl Parser {
         self.tokens.get(self.cursor)
     }
 
+    pub(crate) fn peek_nth(&self, offset: usize) -> Option<&Token> {
+        self.tokens.get(self.cursor + offset)
+    }
+
     pub(crate) fn advance(&mut self) -> Token {
         let token = self
             .peek()
