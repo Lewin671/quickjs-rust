@@ -295,7 +295,7 @@ impl<'a> Vm<'a> {
         let value = self.pop()?;
         let key = to_property_key(self.pop()?)?;
         let object = self.pop()?;
-        set_property(object, key, value.clone())?;
+        set_property(object, key, value.clone(), &mut self.globals)?;
         self.stack.push(value);
         Ok(())
     }

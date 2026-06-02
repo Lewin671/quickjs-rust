@@ -46,7 +46,11 @@ fn prepare_array_iteration(
     if matches!(method, "filter" | "map") {
         validate_array_species_constructor(method, source.receiver.clone(), env)?;
     }
-    let values = array_like_values_from_receiver(source.receiver.clone(), source.length, env)?;
+    let values = if materializes_iteration_source(method) {
+        array_like_values_from_receiver(source.receiver.clone(), source.length, env)?
+    } else {
+        Vec::new()
+    };
 
     Ok(ArrayIteration {
         receiver: source.receiver,
@@ -55,6 +59,10 @@ fn prepare_array_iteration(
         callback,
         callback_this: argument_values.get(1).cloned().unwrap_or(Value::Undefined),
     })
+}
+
+fn materializes_iteration_source(method: &str) -> bool {
+    matches!(method, "find" | "findIndex" | "findLast" | "findLastIndex")
 }
 
 fn validate_array_species_constructor(
@@ -148,7 +156,7 @@ pub(crate) fn native_array_prototype_map(
     let iteration = prepare_array_iteration("map", this_value, argument_values, env)?;
     let mut mapped = vec![Value::Undefined; iteration.source_len];
     let mut holes = (0..iteration.source_len).collect::<Vec<_>>();
-    for index in map_iteration_indices(&iteration, env) {
+    for index in dynamic_iteration_indices(&iteration, env) {
         let key = index.to_string();
         if has_property(iteration.receiver.clone(), env, &key)? {
             let value = property_value(iteration.receiver.clone(), &key, env)?;
@@ -160,7 +168,10 @@ pub(crate) fn native_array_prototype_map(
     Ok(Value::Array(ArrayRef::new_sparse(mapped, holes)))
 }
 
-fn map_iteration_indices(iteration: &ArrayIteration, env: &HashMap<String, Value>) -> Vec<usize> {
+fn dynamic_iteration_indices(
+    iteration: &ArrayIteration,
+    env: &HashMap<String, Value>,
+) -> Vec<usize> {
     if iteration.source_len <= DYNAMIC_MAP_INDEX_LIMIT {
         return (0..iteration.source_len).collect();
     }
@@ -181,8 +192,26 @@ fn map_iteration_indices(iteration: &ArrayIteration, env: &HashMap<String, Value
             indices.dedup();
             indices
         }
+        Value::Object(object) => {
+            numeric_indices_from_names(object.own_property_names(), iteration.source_len)
+        }
+        Value::Function(function) => numeric_indices_from_names(
+            function.properties.borrow().keys().cloned().collect(),
+            iteration.source_len,
+        ),
         _ => (0..iteration.source_len).collect(),
     }
+}
+
+fn numeric_indices_from_names(names: Vec<String>, length: usize) -> Vec<usize> {
+    let mut indices: Vec<_> = names
+        .into_iter()
+        .filter_map(|key| key.parse::<usize>().ok())
+        .filter(|index| *index < length)
+        .collect();
+    indices.sort_unstable();
+    indices.dedup();
+    indices
 }
 
 pub(crate) fn native_array_prototype_filter(
@@ -192,7 +221,7 @@ pub(crate) fn native_array_prototype_filter(
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_array_iteration("filter", this_value, argument_values, env)?;
     let mut filtered = Vec::new();
-    for index in 0..iteration.source_len {
+    for index in dynamic_iteration_indices(&iteration, env) {
         let key = index.to_string();
         if has_property(iteration.receiver.clone(), env, &key)? {
             let value = property_value(iteration.receiver.clone(), &key, env)?;
@@ -278,8 +307,12 @@ pub(crate) fn native_array_prototype_for_each(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_array_iteration("forEach", this_value, argument_values, env)?;
-    for (index, value) in iteration.source.iter().cloned().enumerate() {
-        call_iteration_callback(&iteration, value, index, env)?;
+    for index in dynamic_iteration_indices(&iteration, env) {
+        let key = index.to_string();
+        if has_property(iteration.receiver.clone(), env, &key)? {
+            let value = property_value(iteration.receiver.clone(), &key, env)?;
+            call_iteration_callback(&iteration, value, index, env)?;
+        }
     }
 
     Ok(Value::Undefined)
@@ -291,10 +324,14 @@ pub(crate) fn native_array_prototype_some(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_array_iteration("some", this_value, argument_values, env)?;
-    for (index, value) in iteration.source.iter().cloned().enumerate() {
-        let selected = call_iteration_callback(&iteration, value, index, env)?;
-        if is_truthy(&selected) {
-            return Ok(Value::Boolean(true));
+    for index in dynamic_iteration_indices(&iteration, env) {
+        let key = index.to_string();
+        if has_property(iteration.receiver.clone(), env, &key)? {
+            let value = property_value(iteration.receiver.clone(), &key, env)?;
+            let selected = call_iteration_callback(&iteration, value, index, env)?;
+            if is_truthy(&selected) {
+                return Ok(Value::Boolean(true));
+            }
         }
     }
 
@@ -307,10 +344,14 @@ pub(crate) fn native_array_prototype_every(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_array_iteration("every", this_value, argument_values, env)?;
-    for (index, value) in iteration.source.iter().cloned().enumerate() {
-        let selected = call_iteration_callback(&iteration, value, index, env)?;
-        if !is_truthy(&selected) {
-            return Ok(Value::Boolean(false));
+    for index in dynamic_iteration_indices(&iteration, env) {
+        let key = index.to_string();
+        if has_property(iteration.receiver.clone(), env, &key)? {
+            let value = property_value(iteration.receiver.clone(), &key, env)?;
+            let selected = call_iteration_callback(&iteration, value, index, env)?;
+            if !is_truthy(&selected) {
+                return Ok(Value::Boolean(false));
+            }
         }
     }
 

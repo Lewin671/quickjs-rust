@@ -148,17 +148,15 @@ pub(crate) fn to_length_with_env(
     value: Value,
     env: &mut HashMap<String, Value>,
 ) -> Result<usize, RuntimeError> {
+    const MAX_SAFE_INTEGER_LENGTH: usize = 9_007_199_254_740_991;
     let number = to_number_with_env(value, env)?;
     if number.is_nan() || number <= 0.0 {
         return Ok(0);
     }
     if number.is_infinite() {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "RangeError: invalid array length".to_owned(),
-        });
+        return Ok(MAX_SAFE_INTEGER_LENGTH);
     }
-    Ok(number.trunc().min(9_007_199_254_740_991.0) as usize)
+    Ok(number.trunc().min(MAX_SAFE_INTEGER_LENGTH as f64) as usize)
 }
 
 pub(crate) fn is_truthy(value: &Value) -> bool {

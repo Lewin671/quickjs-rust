@@ -299,6 +299,18 @@ fn evaluates_array_iteration_builtins() {
         Ok(Value::Undefined)
     );
     assert_eq!(
+        eval(
+            "let calls = 0; let xs = new Array(10); xs[1] = undefined; xs.forEach(function() { calls = calls + 1; }); calls;"
+        ),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval(
+            "let seen = false; let xs = []; Object.defineProperty(xs, '2', { get: function() { return 12; }, configurable: true }); xs.forEach(function(value, index) { if (index === 2 && value === 12) { seen = true; } }); seen;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("[1, 2, 3].some(function(value) { return value > 2; });"),
         Ok(Value::Boolean(true))
     );
@@ -309,6 +321,18 @@ fn evaluates_array_iteration_builtins() {
     assert_eq!(
         eval(
             "let receiver = { target: 20 }; [10, 20].some(function(value, index, array) { return this === receiver && index === 1 && array[index] === value && value === this.target; }, receiver);"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let xs = [0, 1, true, null, {}, 'five']; xs[999999] = -6.6; let calls = 0; xs.some(function(value, index, array) { if (arguments.length === 3 && array[index] === value) { calls = calls + 1; } return false; }); calls;"
+        ),
+        Ok(Value::Number(7.0))
+    );
+    assert_eq!(
+        eval(
+            "let obj = { length: 2 }; let slot = 11; Object.defineProperty(obj, '1', { get: function() { return slot; }, set: function(value) { slot = value; }, configurable: true }); Object.defineProperty(obj, '0', { get: function() { obj[1] = 12; return 11; }, configurable: true }); Array.prototype.some.call(obj, function(value, index) { return index === 1 && value === 12; });"
         ),
         Ok(Value::Boolean(true))
     );
@@ -329,6 +353,12 @@ fn evaluates_array_iteration_builtins() {
     assert_eq!(
         eval("[].every(function() { return false; });"),
         Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let accessed = false; let obj = { 0: 9, length: 'Infinity' }; Array.prototype.every.call(obj, function(value) { accessed = true; return value > 10; }) + ':' + accessed;"
+        ),
+        Ok(Value::String("false:true".to_owned()))
     );
     assert_eq!(
         eval("[1, 2, 3].reduce(function(accumulator, value) { return accumulator + value; });"),

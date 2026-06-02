@@ -87,6 +87,12 @@ fn evaluates_function_declarations_and_calls() {
         Ok(Value::Boolean(true))
     );
     assert_eq!(
+        eval(
+            "let called = 0; function C() {} function callback() { called = called + 1; new C(); throw {}; } try { callback(); } catch (error) {} called;"
+        ),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
         eval("let add = function(a, b) { return a + b; }; add(2, 3);"),
         Ok(Value::Number(5.0))
     );
