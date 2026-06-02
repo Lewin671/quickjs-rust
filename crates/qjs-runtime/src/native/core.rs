@@ -22,6 +22,7 @@ pub(super) fn call_core_native(
         }
         NativeFunction::GlobalIsFinite => global::native_global_is_finite(argument_values),
         NativeFunction::GlobalIsNaN => global::native_global_is_nan(argument_values),
+        NativeFunction::Eval => global::native_global_eval(argument_values, env),
         NativeFunction::Function => crate::function::native_function(
             function,
             this_value,

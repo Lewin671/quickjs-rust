@@ -68,3 +68,10 @@ pub fn eval_bytecode_source(source: &str) -> Result<Value, RuntimeError> {
 pub fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> {
     vm::eval_bytecode(bytecode)
 }
+
+pub(crate) fn eval_bytecode_with_env(
+    bytecode: &Bytecode,
+    env: std::collections::HashMap<String, Value>,
+) -> FunctionBytecodeResult<'_> {
+    vm::eval_function_bytecode(bytecode, env)
+}

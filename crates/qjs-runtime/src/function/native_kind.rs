@@ -73,6 +73,7 @@ pub(crate) enum NativeFunction {
     Error,
     ErrorPrototypeToString,
     EvalError,
+    Eval,
     MathAbs,
     MathAcos,
     MathAcosh,
