@@ -122,6 +122,20 @@ fn evaluates_array_sequence_builtins() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "let iterator = ['a', 'b'].entries(); let first = iterator.next(); let second = iterator.next(); let last = iterator.next(); first.done + ':' + first.value[0] + ':' + first.value[1] + '|' + second.value[0] + ':' + second.value[1] + '|' + last.done + ':' + (last.value === undefined);"
+        ),
+        Ok(Value::String("false:0:a|1:b|true:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let array = []; let iterator = array.entries(); array.push('a'); let first = iterator.next(); let done = iterator.next(); array.push('b'); let stillDone = iterator.next(); first.value[1] + ':' + done.done + ':' + stillDone.done;"
+        ),
+        Ok(Value::String("a:true:true".to_owned()))
+    );
+    assert!(eval("Array.prototype.entries.call(undefined);").is_err());
+    assert!(eval("Array.prototype.entries.call(null);").is_err());
 }
 
 #[test]

@@ -24,6 +24,9 @@ pub(super) fn call_array_native(
         NativeFunction::ArrayPrototypeCopyWithin => {
             array::native_array_prototype_copy_within(this_value, argument_values, env)?
         }
+        NativeFunction::ArrayPrototypeEntries => {
+            array::native_array_prototype_entries(this_value, env)?
+        }
         NativeFunction::ArrayPrototypeEvery => {
             array::native_array_prototype_every(this_value, argument_values, env)?
         }
@@ -110,6 +113,9 @@ pub(super) fn call_array_native(
         }
         NativeFunction::ArrayPrototypeWith => {
             array::native_array_prototype_with(this_value, argument_values)?
+        }
+        NativeFunction::ArrayIteratorPrototypeNext => {
+            array::native_array_iterator_next(this_value, env)?
         }
         _ => return Ok(None),
     };

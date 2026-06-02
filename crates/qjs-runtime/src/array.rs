@@ -4,6 +4,7 @@ mod flatten;
 mod indexing;
 mod install;
 mod iteration;
+mod iterator;
 mod join;
 mod mutation;
 mod search;
@@ -24,6 +25,7 @@ pub(crate) use iteration::{
     native_array_prototype_map, native_array_prototype_reduce, native_array_prototype_reduce_right,
     native_array_prototype_some,
 };
+pub(crate) use iterator::{native_array_iterator_next, native_array_prototype_entries};
 pub(crate) use join::{array_join, native_array_prototype_join, native_array_prototype_to_string};
 pub(crate) use mutation::{
     native_array_prototype_copy_within, native_array_prototype_fill, native_array_prototype_pop,
