@@ -61,6 +61,40 @@ fn evaluates_array_mutation_builtins() {
     );
     assert_eq!(eval("[].shift();"), Ok(Value::Undefined));
     assert_eq!(
+        eval(
+            "let object = { 0: 1, 1: 2, 2: 3, length: 3 }; Array.prototype.shift.call(object) + ':' + object.length + ':' + object[0] + ':' + object[1] + ':' + object.hasOwnProperty('2');"
+        ),
+        Ok(Value::String("1:2:2:3:false".to_owned()))
+    );
+    assert_eq!(
+        eval("Array.prototype.shift.call(false);"),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { Array.prototype.shift.call('abc'); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; let array = [1, 2]; Object.freeze(array); try { Array.prototype.shift.call(array); } catch (error) { caught = error instanceof TypeError; } caught + ':' + array.length + ':' + array.join();"
+        ),
+        Ok(Value::String("true:2:1,2".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; let array = new Array(1); Object.defineProperty(Array.prototype, '0', { get: function() { Object.defineProperty(array, 'length', { writable: false }); }, configurable: true }); try { array.shift(); } catch (error) { caught = error instanceof TypeError; } delete Array.prototype[0]; caught + ':' + array.length;"
+        ),
+        Ok(Value::String("true:1".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; let object = { 0: 1, length: 1 }; Object.defineProperty(object, 'length', { value: 1 }); try { Array.prototype.shift.call(object); } catch (error) { caught = error instanceof TypeError; } caught + ':' + object.length;"
+        ),
+        Ok(Value::String("true:1".to_owned()))
+    );
+    assert_eq!(
         eval("let xs = [3]; xs.unshift(1, 2) + ':' + xs.join();"),
         Ok(Value::String("3:1,2,3".to_owned()))
     );

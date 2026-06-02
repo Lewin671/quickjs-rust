@@ -119,7 +119,10 @@ cases/array-reduce-right-empty-initial-value.js
 cases/array-reference-identity-basic.js
 cases/array-reverse-basic.js
 cases/array-shift-basic.js
+cases/array-shift-boolean-receiver.js
 cases/array-shift-length.js
+cases/array-shift-non-writable-length.js
+cases/array-shift-object-generic.js
 cases/array-slice-basic.js
 cases/array-slice-constructor-non-object.js
 cases/array-slice-constructor-poisoned.js

@@ -107,21 +107,6 @@ impl ArrayRef {
         }
     }
 
-    pub(crate) fn shift(&self) -> Option<Value> {
-        let mut elements = self.elements.borrow_mut();
-        if elements.is_empty() {
-            None
-        } else {
-            self.length.set(self.length.get().saturating_sub(1));
-            let mut holes = self.holes.borrow_mut();
-            *holes = holes
-                .iter()
-                .filter_map(|index| index.checked_sub(1))
-                .collect();
-            Some(elements.remove(0))
-        }
-    }
-
     pub(crate) fn unshift(&self, values: &[Value]) -> usize {
         let mut elements = self.elements.borrow_mut();
         let offset = values.len();
