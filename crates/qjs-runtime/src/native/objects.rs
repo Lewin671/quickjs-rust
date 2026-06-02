@@ -71,7 +71,7 @@ pub(super) fn call_object_native(
             object::native_object_prototype_to_locale_string(this_value, env)?
         }
         NativeFunction::ObjectPrototypeValueOf => {
-            object::native_object_prototype_value_of(this_value)?
+            object::native_object_prototype_value_of(this_value, env)?
         }
         _ => return Ok(None),
     };

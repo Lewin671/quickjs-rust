@@ -413,6 +413,8 @@ cases/object-to-string-own-property.js
 cases/object-to-locale-string-basic.js
 cases/object-to-locale-string-length.js
 cases/object-value-of-basic.js
+cases/object-value-of-boolean-false-box.js
+cases/object-value-of-boolean-true-box.js
 cases/object-value-of-length.js
 cases/object-value-of-no-prototype.js
 cases/object-value-of-object-prototype.js

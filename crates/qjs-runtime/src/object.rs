@@ -7,7 +7,7 @@ mod integrity;
 mod prototype;
 
 pub(crate) use constructor::{
-    native_object, native_object_assign, native_object_create, native_object_is,
+    boxed_primitive, native_object, native_object_assign, native_object_create, native_object_is,
 };
 pub(crate) use descriptor::{
     define_property_on_value, native_object_define_properties, native_object_define_property,
