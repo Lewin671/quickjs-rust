@@ -196,6 +196,13 @@ pub(crate) fn regexp_is_global(value: &Value) -> bool {
     regexp_flags_contains(object, 'g')
 }
 
+pub(crate) fn regexp_is_regexp(value: &Value) -> bool {
+    matches!(
+        value,
+        Value::Object(object) if regexp_string_data(object, REGEXP_SOURCE_PROPERTY).is_some()
+    )
+}
+
 pub(crate) fn regexp_set_last_index(value: &Value, index: usize) {
     if let Value::Object(object) = value {
         if regexp_string_data(object, REGEXP_SOURCE_PROPERTY).is_some() {

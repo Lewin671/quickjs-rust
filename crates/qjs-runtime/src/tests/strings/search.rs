@@ -91,6 +91,22 @@ fn evaluates_string_match_coercions() {
     assert_eq!(eval("'12345'.match(34).index;"), Ok(Value::Number(2.0)));
     assert_eq!(eval("'undefined'.match().length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("'undefined'.match().index;"), Ok(Value::Number(0.0)));
+    assert_eq!(
+        eval("'ABBABAB'.match({ toString: function() { return 'AB'; } })[0];"),
+        Ok(Value::String("AB".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "'ABBAB1ABAB1BBAA'.match({ toString: function() { return {}; }, valueOf: function() { return 1; } })[0];"
+        ),
+        Ok(Value::String("1".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let caught; try { 'ABBABAB'.match({ toString: function() { throw 'intostr'; } }); } catch (error) { caught = error; } caught;"
+        ),
+        Ok(Value::String("intostr".to_owned()))
+    );
 }
 
 #[test]
