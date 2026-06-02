@@ -59,6 +59,22 @@ impl ArrayRef {
         index < self.elements.borrow().len() && !self.holes.borrow().contains(&index)
     }
 
+    pub(crate) fn present_indices(&self) -> Vec<usize> {
+        let holes = self.holes.borrow();
+        let len = self.elements.borrow().len();
+        let mut indices: Vec<_> = (0..len).filter(|index| !holes.contains(index)).collect();
+        indices.extend(
+            self.properties
+                .borrow()
+                .keys()
+                .filter_map(|key| key.parse::<usize>().ok())
+                .filter(|index| *index < len),
+        );
+        indices.sort_unstable();
+        indices.dedup();
+        indices
+    }
+
     pub(crate) fn property(&self, key: &str) -> Option<Property> {
         self.properties.borrow().get(key).cloned()
     }
@@ -152,7 +168,9 @@ impl ArrayRef {
             if !self.extensible.get() {
                 return;
             }
+            let old_len = elements.len();
             elements.resize(index + 1, Value::Undefined);
+            holes.extend(old_len..index);
         }
         if self.frozen.get() {
             return;

@@ -48,6 +48,18 @@ fn evaluates_array_iteration_builtins() {
         ),
         Ok(Value::Number(2.0))
     );
+    assert_eq!(
+        eval(
+            "let xs = [0, 1, true, null, {}, 'five']; xs[999999] = -6.6; let calls = 0; xs.map(function(value, index, array) { if (array[index] === value) { calls = calls + 1; } }); calls;"
+        ),
+        Ok(Value::Number(7.0))
+    );
+    assert_eq!(
+        eval(
+            "Array.prototype[1] = 13; let result = [, , ,].map(function(value, index) { return index === 1 && value === 13; }); result[1];"
+        ),
+        Ok(Value::Boolean(true))
+    );
     assert!(eval("Array.prototype.map.call({ length: 4294967296 }, function() {});").is_err());
     assert!(eval("Array.prototype.map.call({ length: 4294967297 }, function() {});").is_err());
     assert_eq!(
