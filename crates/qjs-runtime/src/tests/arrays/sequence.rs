@@ -72,6 +72,18 @@ fn evaluates_array_sequence_builtins() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "let obj = { length: 4294967296 }; let caught = false; try { Array.prototype.slice.call(obj); } catch (error) { caught = error instanceof RangeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let calls = 0; let obj = Object.defineProperty({}, 'length', { get: function() { return 4294967296; }, set: function() { calls = calls + 1; } }); try { Array.prototype.slice.call(obj); } catch (error) {} calls;"
+        ),
+        Ok(Value::Number(0.0))
+    );
     assert_eq!(eval("[0, 1, 2].slice(5).length;"), Ok(Value::Number(0.0)));
     assert_eq!(
         eval("let copy = [1, 2].slice(); Array.isArray(copy) && copy[1] === 2;"),

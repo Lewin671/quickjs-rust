@@ -6,6 +6,8 @@ use super::array_like::{array_like_length, array_like_receiver, array_like_value
 use super::indexing::{array_at_index, array_slice_end, array_slice_start};
 use super::splice::{splice_delete_count, splice_start};
 
+const MAX_ARRAY_LENGTH: usize = u32::MAX as usize;
+
 pub(crate) fn native_array_prototype_concat(
     this_value: Value,
     argument_values: &[Value],
@@ -59,10 +61,17 @@ pub(crate) fn native_array_prototype_slice(
     )?;
     validate_array_species_constructor(array_like.receiver.clone(), "slice", env)?;
 
-    if end <= start {
+    let count = end.saturating_sub(start);
+    if count > MAX_ARRAY_LENGTH {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "RangeError: invalid array length".to_owned(),
+        });
+    }
+    if count == 0 {
         return Ok(Value::Array(ArrayRef::new(Vec::new())));
     }
-    let mut result = Vec::with_capacity(end - start);
+    let mut result = Vec::with_capacity(count);
     let mut holes = Vec::new();
     for index in start..end {
         if has_property(array_like.receiver.clone(), env, &index.to_string())? {
