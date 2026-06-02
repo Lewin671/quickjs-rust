@@ -214,6 +214,28 @@ fn parses_object_literal_and_member_assignment() {
 }
 
 #[test]
+fn parses_regexp_literal_as_regexp_constructor_expression() {
+    let script = parse_script("/./;").expect("source should parse");
+    let [
+        Stmt::Expr(Expr::New {
+            callee, arguments, ..
+        }),
+    ] = script.body.as_slice()
+    else {
+        panic!("expected RegExp constructor expression");
+    };
+
+    assert!(matches!(
+        callee.as_ref(),
+        Expr::Identifier { name, .. } if name == "RegExp"
+    ));
+    assert!(matches!(
+        arguments.as_slice(),
+        [Expr::Literal(Literal::String { value, .. })] if value == "."
+    ));
+}
+
+#[test]
 fn parses_member_access() {
     let script = parse_script("items[0].length;").expect("source should parse");
     let [

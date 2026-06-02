@@ -30,6 +30,7 @@ impl Parser {
             TokenKind::Null => Ok(Expr::Literal(Literal::Null { span: token.span })),
             TokenKind::This => Ok(Expr::This { span: token.span }),
             TokenKind::Function => self.function_expression(token.span.start),
+            TokenKind::Slash => self.regexp_literal(token.span.start),
             TokenKind::LeftBracket => self.array_literal(token.span.start),
             TokenKind::LeftBrace => self.object_literal(token.span.start),
             TokenKind::LeftParen => {
@@ -41,6 +42,42 @@ impl Parser {
                 message: "expected expression".to_owned(),
                 span: token.span,
             }),
+        }
+    }
+
+    fn regexp_literal(&mut self, start: usize) -> Result<Expr, ParseError> {
+        let mut pattern = String::new();
+        loop {
+            let token = self.advance();
+            match token.kind {
+                TokenKind::Slash => {
+                    return Ok(Expr::New {
+                        callee: Box::new(Expr::Identifier {
+                            name: "RegExp".to_owned(),
+                            span: Span::new(start, start + 1),
+                        }),
+                        arguments: vec![Expr::Literal(Literal::String {
+                            value: pattern,
+                            span: Span::new(start, token.span.end),
+                        })],
+                        span: Span::new(start, token.span.end),
+                    });
+                }
+                TokenKind::Dot => pattern.push('.'),
+                TokenKind::Identifier(text) | TokenKind::Number(text) | TokenKind::String(text) => {
+                    pattern.push_str(&text);
+                }
+                TokenKind::Eof => {
+                    return Err(ParseError {
+                        message: "unterminated regular expression literal".to_owned(),
+                        span: token.span,
+                    });
+                }
+                kind => pattern.push_str(regexp_punctuator_text(&kind).ok_or(ParseError {
+                    message: "unsupported regular expression literal".to_owned(),
+                    span: token.span,
+                })?),
+            }
         }
     }
 
@@ -177,5 +214,22 @@ impl Parser {
                 ObjectPropertyKey::Computed(expr) => expr.span(),
             },
         })
+    }
+}
+
+fn regexp_punctuator_text(kind: &TokenKind) -> Option<&'static str> {
+    match kind {
+        TokenKind::Star => Some("*"),
+        TokenKind::Plus => Some("+"),
+        TokenKind::Question => Some("?"),
+        TokenKind::LeftParen => Some("("),
+        TokenKind::RightParen => Some(")"),
+        TokenKind::LeftBracket => Some("["),
+        TokenKind::RightBracket => Some("]"),
+        TokenKind::LeftBrace => Some("{"),
+        TokenKind::RightBrace => Some("}"),
+        TokenKind::Pipe => Some("|"),
+        TokenKind::Caret => Some("^"),
+        _ => None,
     }
 }

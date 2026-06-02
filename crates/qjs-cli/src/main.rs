@@ -53,7 +53,20 @@ fn with_script_args(source: &str, script_args: &[String]) -> String {
         .map(|arg| format!("\"{}\"", escape_js_string(arg)))
         .collect::<Vec<_>>()
         .join(", ");
-    format!("var scriptArgs = [{args}];\n{source}")
+    let declaration = format!("var scriptArgs = [{args}];\n");
+    if let Some(rest) = source.strip_prefix("\"use strict\";\n") {
+        return format!("\"use strict\";\n{declaration}{rest}");
+    }
+    if let Some(rest) = source.strip_prefix("\"use strict\";") {
+        return format!("\"use strict\";\n{declaration}{rest}");
+    }
+    if let Some(rest) = source.strip_prefix("'use strict';\n") {
+        return format!("'use strict';\n{declaration}{rest}");
+    }
+    if let Some(rest) = source.strip_prefix("'use strict';") {
+        return format!("'use strict';\n{declaration}{rest}");
+    }
+    format!("{declaration}{source}")
 }
 
 fn escape_js_string(value: &str) -> String {
@@ -79,5 +92,26 @@ fn print_raw(value: &qjs_runtime::Value) {
         qjs_runtime::Value::Null => println!("null"),
         qjs_runtime::Value::Undefined => println!("undefined"),
         _ => println!("{value:?}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::with_script_args;
+
+    #[test]
+    fn inserts_script_args_after_use_strict_directive() {
+        let source = "\"use strict\";\nthis === undefined;";
+        let wrapped = with_script_args(source, &["case.js".to_owned()]);
+
+        assert!(wrapped.starts_with("\"use strict\";\nvar scriptArgs = [\"case.js\"];\n"));
+    }
+
+    #[test]
+    fn inserts_script_args_after_same_line_use_strict_directive() {
+        let source = "'use strict';this === undefined;";
+        let wrapped = with_script_args(source, &["case.js".to_owned()]);
+
+        assert!(wrapped.starts_with("'use strict';\nvar scriptArgs = [\"case.js\"];\n"));
     }
 }

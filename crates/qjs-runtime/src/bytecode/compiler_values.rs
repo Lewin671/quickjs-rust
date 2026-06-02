@@ -136,7 +136,8 @@ impl Compiler {
             return Err(unsupported_stmt(stmt));
         };
         let slot = self.local_slot(name, true);
-        let bytecode = super::compiler::compile_function_body(params, body)?;
+        let is_strict = self.strict || is_strict_function_body(body);
+        let bytecode = super::compiler::compile_function_body_with_strict(params, body, is_strict)?;
         let local_names = collect_function_local_names(Some(name), params, body);
         self.emit(Op::NewFunction {
             name: Some(name.clone()),
@@ -144,7 +145,7 @@ impl Compiler {
             local_names,
             bytecode: Rc::new(bytecode),
             constructable: true,
-            is_strict: is_strict_function_body(body),
+            is_strict,
         });
         self.emit(Op::StoreLocal(slot));
         self.emit_load_undefined();

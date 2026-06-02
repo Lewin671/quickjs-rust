@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use qjs_ast::{ForInLeft, ForInit, Script, Stmt, VarKind};
 
-use crate::{RuntimeError, Value};
+use crate::{RuntimeError, Value, function::is_strict_function_body};
 
 use super::ir::{Bytecode, Local, Op};
 
@@ -14,6 +14,7 @@ pub(super) struct Compiler {
     pub(super) code: Vec<Op>,
     loop_stack: Vec<LoopContext>,
     next_temp: usize,
+    pub(super) strict: bool,
 }
 
 #[derive(Default)]
@@ -32,11 +33,24 @@ pub(super) fn compile_function_body(
     params: &[String],
     body: &[Stmt],
 ) -> Result<Bytecode, RuntimeError> {
-    Compiler::default().compile_function(params, body)
+    compile_function_body_with_strict(params, body, false)
+}
+
+pub(super) fn compile_function_body_with_strict(
+    params: &[String],
+    body: &[Stmt],
+    parent_strict: bool,
+) -> Result<Bytecode, RuntimeError> {
+    Compiler {
+        strict: parent_strict,
+        ..Compiler::default()
+    }
+    .compile_function(params, body)
 }
 
 impl Compiler {
     fn compile(mut self, script: &Script) -> Result<Bytecode, RuntimeError> {
+        self.strict = is_strict_function_body(&script.body);
         self.collect_hoisted_locals(&script.body);
         self.compile_hoisted_function_decls(&script.body)?;
         for stmt in &script.body {
@@ -51,6 +65,7 @@ impl Compiler {
         params: &[String],
         body: &[Stmt],
     ) -> Result<Bytecode, RuntimeError> {
+        self.strict = self.strict || is_strict_function_body(body);
         for param in params {
             self.local_slot(param, true);
         }
@@ -59,6 +74,7 @@ impl Compiler {
         for stmt in body {
             self.compile_stmt(stmt)?;
         }
+        self.emit_load_undefined();
         self.code.push(Op::Return);
         Ok(Bytecode::new(self.constants, self.locals, self.code))
     }

@@ -14,7 +14,6 @@ struct ArrayIteration {
     callback: Value,
     callback_this: Value,
     source_len: usize,
-    source: Vec<Value>,
 }
 
 struct ArrayReduction {
@@ -46,23 +45,12 @@ fn prepare_array_iteration(
     if matches!(method, "filter" | "map") {
         validate_array_species_constructor(method, source.receiver.clone(), env)?;
     }
-    let values = if materializes_iteration_source(method) {
-        array_like_values_from_receiver(source.receiver.clone(), source.length, env)?
-    } else {
-        Vec::new()
-    };
-
     Ok(ArrayIteration {
         receiver: source.receiver,
         source_len: source.length,
-        source: values,
         callback,
         callback_this: argument_values.get(1).cloned().unwrap_or(Value::Undefined),
     })
-}
-
-fn materializes_iteration_source(method: &str) -> bool {
-    matches!(method, "find" | "findIndex" | "findLast" | "findLastIndex")
 }
 
 fn validate_array_species_constructor(
@@ -241,7 +229,8 @@ pub(crate) fn native_array_prototype_find(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_array_iteration("find", this_value, argument_values, env)?;
-    for (index, value) in iteration.source.iter().cloned().enumerate() {
+    for index in 0..iteration.source_len {
+        let value = property_value(iteration.receiver.clone(), &index.to_string(), env)?;
         let selected = call_iteration_callback(&iteration, value.clone(), index, env)?;
         if is_truthy(&selected) {
             return Ok(value);
@@ -257,8 +246,8 @@ pub(crate) fn native_array_prototype_find_last(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_array_iteration("findLast", this_value, argument_values, env)?;
-    for index in (0..iteration.source.len()).rev() {
-        let value = iteration.source[index].clone();
+    for index in (0..iteration.source_len).rev() {
+        let value = property_value(iteration.receiver.clone(), &index.to_string(), env)?;
         let selected = call_iteration_callback(&iteration, value.clone(), index, env)?;
         if is_truthy(&selected) {
             return Ok(value);
@@ -274,9 +263,9 @@ pub(crate) fn native_array_prototype_find_last_index(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_array_iteration("findLastIndex", this_value, argument_values, env)?;
-    for index in (0..iteration.source.len()).rev() {
-        let selected =
-            call_iteration_callback(&iteration, iteration.source[index].clone(), index, env)?;
+    for index in (0..iteration.source_len).rev() {
+        let value = property_value(iteration.receiver.clone(), &index.to_string(), env)?;
+        let selected = call_iteration_callback(&iteration, value, index, env)?;
         if is_truthy(&selected) {
             return Ok(Value::Number(index as f64));
         }
@@ -291,7 +280,8 @@ pub(crate) fn native_array_prototype_find_index(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_array_iteration("findIndex", this_value, argument_values, env)?;
-    for (index, value) in iteration.source.iter().cloned().enumerate() {
+    for index in 0..iteration.source_len {
+        let value = property_value(iteration.receiver.clone(), &index.to_string(), env)?;
         let selected = call_iteration_callback(&iteration, value, index, env)?;
         if is_truthy(&selected) {
             return Ok(Value::Number(index as f64));

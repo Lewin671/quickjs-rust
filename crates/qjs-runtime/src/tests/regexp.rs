@@ -11,6 +11,8 @@ fn evaluates_regexp_constructor_identity() {
         eval("new RegExp() instanceof RegExp;"),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(eval("/./ instanceof RegExp;"), Ok(Value::Boolean(true)));
+    assert!(eval("[].find(/./);").is_err());
     assert_eq!(
         eval("Object.prototype.toString.call(new RegExp());"),
         Ok(Value::String("[object RegExp]".to_owned()))
