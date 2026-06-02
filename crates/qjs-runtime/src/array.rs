@@ -24,7 +24,7 @@ pub(crate) use iteration::{
     native_array_prototype_map, native_array_prototype_reduce, native_array_prototype_reduce_right,
     native_array_prototype_some,
 };
-pub(crate) use join::{native_array_prototype_join, native_array_prototype_to_string};
+pub(crate) use join::{array_join, native_array_prototype_join, native_array_prototype_to_string};
 pub(crate) use mutation::{
     native_array_prototype_copy_within, native_array_prototype_fill, native_array_prototype_pop,
     native_array_prototype_push, native_array_prototype_reverse, native_array_prototype_shift,

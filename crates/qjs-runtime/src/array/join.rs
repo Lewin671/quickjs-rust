@@ -15,7 +15,7 @@ pub(crate) fn native_array_prototype_to_string(this_value: Value) -> Result<Valu
     Ok(Value::String(array_join(this_value, ",")?))
 }
 
-fn array_join(value: Value, separator: &str) -> Result<String, RuntimeError> {
+pub(crate) fn array_join(value: Value, separator: &str) -> Result<String, RuntimeError> {
     let Value::Array(elements) = value else {
         return Err(RuntimeError {
             thrown: None,

@@ -62,13 +62,18 @@ pub(crate) fn property_value(
             if key == "length" {
                 Ok(Value::Number(elements.len() as f64))
             } else {
-                Ok(key
+                let descriptor = key
                     .parse::<usize>()
                     .ok()
-                    .and_then(|index| elements.get(index))
-                    .or_else(|| elements.property(key).map(|property| property.value))
-                    .or_else(|| array_prototype_property(&elements, env, key))
-                    .unwrap_or(Value::Undefined))
+                    .and_then(|index| elements.get(index).map(Property::enumerable))
+                    .or_else(|| elements.property(key))
+                    .or_else(|| {
+                        elements
+                            .prototype_override()
+                            .unwrap_or_else(|| array_prototype(env))
+                            .and_then(|prototype| prototype.property(key))
+                    });
+                property_descriptor_value(descriptor, receiver, env)
             }
         }
         Value::String(value) => {
