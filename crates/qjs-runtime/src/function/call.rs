@@ -55,9 +55,9 @@ pub(crate) fn call_function(
             &argument_values,
             env,
         );
-        let result = eval_function_bytecode(bytecode, function_env.env)?;
+        let result = eval_function_bytecode(bytecode, function_env.env);
         propagate_caller_bindings(env, &function_env.caller_binding_names, &result);
-        return Ok(result.value);
+        return result.value;
     }
 
     Err(RuntimeError {
@@ -98,6 +98,12 @@ fn function_env(
         &mut local_env,
         &mut caller_binding_names,
         bytecode,
+        &function.local_names,
+        env,
+    );
+    insert_caller_scope_bindings(
+        &mut local_env,
+        &mut caller_binding_names,
         &function.local_names,
         env,
     );
@@ -211,6 +217,25 @@ fn insert_caller_binding(
         if !caller_binding_names.iter().any(|existing| existing == name) {
             caller_binding_names.push(name.to_owned());
         }
+    }
+}
+
+fn insert_caller_scope_bindings(
+    local_env: &mut HashMap<String, Value>,
+    caller_binding_names: &mut Vec<String>,
+    function_local_names: &[String],
+    env: &HashMap<String, Value>,
+) {
+    for name in env.keys() {
+        if name == GLOBAL_THIS_BINDING
+            || RUNTIME_INTRINSIC_NAMES.contains(&name.as_str())
+            || function_local_names
+                .binary_search_by(|local| local.as_str().cmp(name))
+                .is_ok()
+        {
+            continue;
+        }
+        insert_caller_binding(local_env, caller_binding_names, env, name);
     }
 }
 

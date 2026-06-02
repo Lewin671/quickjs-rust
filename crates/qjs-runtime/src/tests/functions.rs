@@ -69,6 +69,24 @@ fn evaluates_function_declarations_and_calls() {
         Ok(Value::Number(2.0))
     );
     assert_eq!(
+        eval(
+            "let changed = false; function outer() { function inner() { changed = true; } inner(); } outer(); changed;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let changed = false; function call(callback) { callback(); } call(function() { changed = true; }); changed;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let changed = false; function call(callback) { try { callback(); } catch (error) {} } call(function() { changed = true; throw 1; }); changed;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("let add = function(a, b) { return a + b; }; add(2, 3);"),
         Ok(Value::Number(5.0))
     );
