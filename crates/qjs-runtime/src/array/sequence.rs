@@ -12,7 +12,7 @@ pub(crate) fn native_array_prototype_concat(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let receiver = array_like_receiver(this_value, env);
-    validate_concat_species_constructor(receiver.clone(), env)?;
+    validate_array_species_constructor(receiver.clone(), "concat", env)?;
 
     let mut result = Vec::new();
     let mut holes = Vec::new();
@@ -23,8 +23,9 @@ pub(crate) fn native_array_prototype_concat(
     Ok(Value::Array(ArrayRef::new_sparse(result, holes)))
 }
 
-fn validate_concat_species_constructor(
+fn validate_array_species_constructor(
     receiver: Value,
+    method: &str,
     env: &mut HashMap<String, Value>,
 ) -> Result<(), RuntimeError> {
     if !matches!(receiver, Value::Array(_)) {
@@ -34,8 +35,9 @@ fn validate_concat_species_constructor(
         Value::Undefined | Value::Function(_) | Value::Object(_) => Ok(()),
         _ => Err(RuntimeError {
             thrown: None,
-            message: "TypeError: Array.prototype.concat constructor is not a constructor"
-                .to_owned(),
+            message: format!(
+                "TypeError: Array.prototype.{method} constructor is not a constructor"
+            ),
         }),
     }
 }
@@ -55,6 +57,7 @@ pub(crate) fn native_array_prototype_slice(
         length,
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
     )?;
+    validate_array_species_constructor(array_like.receiver.clone(), "slice", env)?;
 
     if end <= start {
         return Ok(Value::Array(ArrayRef::new(Vec::new())));
