@@ -41,7 +41,7 @@ pub(crate) fn compile_function_body(
 pub(crate) fn eval_function_bytecode(
     bytecode: &Bytecode,
     env: std::collections::HashMap<String, Value>,
-) -> Result<FunctionBytecodeResult<'_>, RuntimeError> {
+) -> FunctionBytecodeResult<'_> {
     vm::eval_function_bytecode(bytecode, env)
 }
 

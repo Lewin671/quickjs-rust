@@ -8,7 +8,7 @@ use crate::{
 
 use super::ir::{Bytecode, Op};
 use super::util::{stack_underflow, typeof_value};
-use super::vm_call::{native_error_message, user_bytecode_function};
+use super::vm_call::{insert_scope_call_bindings, native_error_message, user_bytecode_function};
 use super::vm_props::{delete_property, get_property, set_property};
 use super::vm_try::TryFrame;
 
@@ -27,19 +27,19 @@ pub(super) fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> 
 pub(super) fn eval_function_bytecode(
     bytecode: &Bytecode,
     env: HashMap<String, Value>,
-) -> Result<FunctionBytecodeResult<'_>, RuntimeError> {
+) -> FunctionBytecodeResult<'_> {
     let mut vm = Vm::new_with_globals(bytecode, env);
-    let value = vm.run()?;
-    Ok(FunctionBytecodeResult {
+    let value = vm.run();
+    FunctionBytecodeResult {
         value,
         bytecode,
         globals: vm.globals,
         locals: vm.locals,
-    })
+    }
 }
 
 pub(crate) struct FunctionBytecodeResult<'a> {
-    pub(crate) value: Value,
+    pub(crate) value: Result<Value, RuntimeError>,
     bytecode: &'a Bytecode,
     globals: HashMap<String, Value>,
     locals: Vec<Slot>,
@@ -479,6 +479,14 @@ impl<'a> Vm<'a> {
                     &function.local_names,
                 );
             }
+            insert_scope_call_bindings(
+                &mut env,
+                &mut binding_names,
+                self.bytecode,
+                &self.locals,
+                &self.globals,
+                &function.local_names,
+            );
             return VmCallEnv {
                 env,
                 binding_names: Some(binding_names),
