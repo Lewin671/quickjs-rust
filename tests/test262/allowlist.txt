@@ -119,7 +119,9 @@ cases/array-slice-basic.js
 cases/array-slice-default-end.js
 cases/array-slice-length.js
 cases/array-slice-negative-index.js
+cases/array-slice-object-generic.js
 cases/array-slice-start-past-length.js
+cases/array-slice-string-generic.js
 cases/array-some-basic.js
 cases/array-some-callback-arguments.js
 cases/array-some-this-arg.js
