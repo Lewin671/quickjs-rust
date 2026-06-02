@@ -418,8 +418,13 @@ fn group_alternatives(pattern: &[char], start_pc: usize, end_pc: usize) -> Vec<(
     let mut start = start_pc;
     let mut escaped = false;
     let mut depth = 0usize;
-    for index in start_pc..end_pc {
-        let char = pattern[index];
+    for (index, char) in pattern
+        .iter()
+        .enumerate()
+        .take(end_pc)
+        .skip(start_pc)
+        .map(|(index, char)| (index, *char))
+    {
         if escaped {
             escaped = false;
         } else if char == '\\' {
