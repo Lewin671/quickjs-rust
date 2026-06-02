@@ -61,10 +61,7 @@ pub(crate) fn to_number_with_env(
             Some(value) => string_to_number(&value),
             None => object_to_number(Value::Object(object), env),
         },
-        Value::Function(_) => Err(RuntimeError {
-            thrown: None,
-            message: "cannot convert function to number".to_owned(),
-        }),
+        Value::Function(_) => object_to_number(value, env),
         Value::Array(array) => string_to_number(&array_join(Value::Array(array), ",")?),
     }
 }
