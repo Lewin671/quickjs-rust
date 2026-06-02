@@ -26,3 +26,30 @@ fn evaluates_regexp_constructor_identity() {
         Ok(Value::String("/test/".to_owned()))
     );
 }
+
+#[test]
+fn evaluates_regexp_exec_literal_match() {
+    assert_eq!(
+        eval("/test/.exec('a test value')[0];"),
+        Ok(Value::String("test".to_owned()))
+    );
+    assert_eq!(eval("/missing/.exec('a test value');"), Ok(Value::Null));
+    assert_eq!(
+        eval("/test/.exec('a test value').index;"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval("/test/.exec('a test value').input;"),
+        Ok(Value::String("a test value".to_owned()))
+    );
+}
+
+#[test]
+fn evaluates_regexp_exec_date_format_shape() {
+    assert_eq!(
+        eval(
+            r#"/^(Sun|Mon|Tue|Wed|Thu|Fri|Sat) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) [0-9]{2} [0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2} GMT[+-][0-9]{4}( \(.+\))?$/.exec(new Date(0).toString()) !== null;"#
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
