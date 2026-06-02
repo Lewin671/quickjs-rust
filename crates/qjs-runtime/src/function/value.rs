@@ -112,6 +112,7 @@ impl Function {
             frozen: Rc::new(Cell::new(false)),
             internal_prototype: Rc::new(RefCell::new(None)),
         };
+        function.define_length_property();
         if constructable {
             prototype
                 .define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
@@ -149,6 +150,7 @@ impl Function {
             frozen: Rc::new(Cell::new(false)),
             internal_prototype: Rc::new(RefCell::new(None)),
         };
+        function.define_length_property();
         if constructable {
             prototype
                 .define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
@@ -185,7 +187,7 @@ impl Function {
             Value::Function(function) => function.constructable,
             _ => false,
         };
-        Self {
+        let function = Self {
             name: Some("bound".to_owned()),
             params: vec![String::new(); length],
             env: HashMap::new(),
@@ -204,7 +206,9 @@ impl Function {
             sealed: Rc::new(Cell::new(false)),
             frozen: Rc::new(Cell::new(false)),
             internal_prototype: Rc::new(RefCell::new(None)),
-        }
+        };
+        function.define_length_property();
+        function
     }
 
     fn new(
@@ -231,6 +235,7 @@ impl Function {
             frozen: Rc::new(Cell::new(false)),
             internal_prototype: Rc::new(RefCell::new(None)),
         };
+        function.define_length_property();
         if constructable {
             prototype
                 .define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
@@ -240,6 +245,13 @@ impl Function {
             );
         }
         function
+    }
+
+    fn define_length_property(&self) {
+        self.properties.borrow_mut().insert(
+            "length".to_owned(),
+            Property::data(Value::Number(self.params.len() as f64), false, false, true),
+        );
     }
 
     pub(crate) fn is_extensible(&self) -> bool {

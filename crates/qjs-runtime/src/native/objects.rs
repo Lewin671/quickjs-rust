@@ -14,7 +14,7 @@ pub(super) fn call_object_native(
 ) -> NativeCallResult {
     let value = match native {
         NativeFunction::Object => {
-            object::native_object(function, this_value, argument_values, is_construct)?
+            object::native_object(function, this_value, argument_values, is_construct, env)?
         }
         NativeFunction::ObjectAssign => object::native_object_assign(argument_values)?,
         NativeFunction::ObjectCreate => object::native_object_create(argument_values)?,

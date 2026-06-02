@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 
-use crate::{RuntimeError, Value, string_object_value, string_prototype, to_js_string, to_number};
+use crate::{
+    RuntimeError, Value, string_object_value, string_prototype, to_js_string_with_env, to_number,
+};
 
 pub(super) fn this_string_value(
     value: Value,
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
 ) -> Result<String, RuntimeError> {
     match value {
         Value::String(value) => Ok(value),
@@ -14,17 +16,14 @@ pub(super) fn this_string_value(
             } else if string_prototype(env).is_some_and(|prototype| object.ptr_eq(&prototype)) {
                 Ok(String::new())
             } else {
-                Err(RuntimeError {
-                    thrown: None,
-                    message: "String.prototype method called on non-string object".to_owned(),
-                })
+                to_js_string_with_env(Value::Object(object), env)
             }
         }
         Value::Null | Value::Undefined => Err(RuntimeError {
             thrown: None,
             message: "String.prototype method called on null or undefined".to_owned(),
         }),
-        value => to_js_string(value),
+        value => to_js_string_with_env(value, env),
     }
 }
 

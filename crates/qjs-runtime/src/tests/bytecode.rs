@@ -124,6 +124,12 @@ fn evaluates_branch_and_loop_bytecode_subset() {
         ),
         Ok(Value::String("kept".to_owned()))
     );
+    assert_eq!(
+        eval_bytecode_source(
+            "let caught = false; try { new String.prototype.charAt(); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]
@@ -143,6 +149,18 @@ fn evaluates_objects_arrays_members_and_calls_with_bytecode() {
     assert_bytecode_evaluates("let f = function(x) { return x * 2; }; f(4);");
     assert_bytecode_evaluates(
         "function C() { this.value = 4; } let instance = new C(); instance.value;",
+    );
+    assert_eq!(
+        eval_bytecode_source(
+            "delete String.prototype.charAt.length; String.prototype.charAt.hasOwnProperty('length');"
+        ),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval_bytecode_source(
+            "let out = ''; String.prototype.charAt.extra = true; for (var key in String.prototype.charAt) { out = out + key; } out;"
+        ),
+        Ok(Value::String("extra".to_owned()))
     );
 }
 

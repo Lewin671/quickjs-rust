@@ -3,6 +3,14 @@ use std::collections::HashMap;
 use crate::{RuntimeError, Value, array::array_join, call_function, number, property_value};
 
 pub(crate) fn to_js_string(value: Value) -> Result<String, RuntimeError> {
+    let mut env = HashMap::new();
+    to_js_string_with_env(value, &mut env)
+}
+
+pub(crate) fn to_js_string_with_env(
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<String, RuntimeError> {
     match value {
         Value::Number(number) => Ok(number::number_to_js_string(number)),
         Value::String(value) => Ok(value),
@@ -10,14 +18,11 @@ pub(crate) fn to_js_string(value: Value) -> Result<String, RuntimeError> {
         Value::Boolean(false) => Ok("false".to_owned()),
         Value::Null => Ok("null".to_owned()),
         Value::Undefined => Ok("undefined".to_owned()),
-        Value::Object(object) => crate::string_object_value(&object).ok_or_else(|| RuntimeError {
-            thrown: None,
-            message: "cannot convert object to string".to_owned(),
-        }),
-        Value::Function(_) | Value::Array(_) => Err(RuntimeError {
-            thrown: None,
-            message: "cannot convert object to string".to_owned(),
-        }),
+        Value::Object(object) => match crate::string_object_value(&object) {
+            Some(value) => Ok(value),
+            None => object_to_string(Value::Object(object), env),
+        },
+        Value::Function(_) | Value::Array(_) => object_to_string(value, env),
     }
 }
 
@@ -102,6 +107,28 @@ fn object_to_number(value: Value, env: &mut HashMap<String, Value>) -> Result<f6
     Err(RuntimeError {
         thrown: None,
         message: "cannot convert object to number".to_owned(),
+    })
+}
+
+fn object_to_string(
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<String, RuntimeError> {
+    for method in ["toString", "valueOf"] {
+        let method_value = property_value(value.clone(), method, env)?;
+        if matches!(method_value, Value::Function(_)) {
+            let primitive = call_function(method_value, value.clone(), Vec::new(), env, false)?;
+            if !matches!(
+                primitive,
+                Value::Object(_) | Value::Function(_) | Value::Array(_)
+            ) {
+                return to_js_string_with_env(primitive, env);
+            }
+        }
+    }
+    Err(RuntimeError {
+        thrown: None,
+        message: "cannot convert object to string".to_owned(),
     })
 }
 

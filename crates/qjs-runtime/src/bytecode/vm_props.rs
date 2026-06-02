@@ -4,7 +4,8 @@ use qjs_ast::BinaryOp;
 
 use crate::{
     Property, RuntimeError, Value, array_prototype, boolean, call_function,
-    inherited_string_prototype_property, number, property_value, string, to_length,
+    function_delete_own_property, function_own_property_keys, inherited_string_prototype_property,
+    number, property_value, string, to_length,
 };
 
 pub(super) fn get_property(
@@ -15,9 +16,6 @@ pub(super) fn get_property(
     match object {
         Value::Array(elements) if key == "length" => Ok(Value::Number(elements.len() as f64)),
         Value::Array(elements) => property_value(Value::Array(elements), key, env),
-        Value::Function(function) if key == "length" => {
-            Ok(Value::Number(function.params.len() as f64))
-        }
         Value::Function(function) => property_value(Value::Function(function), key, env),
         Value::String(value) if key == "length" => Ok(Value::Number(value.chars().count() as f64)),
         Value::String(value) => Ok(string::string_property(&value, key)
@@ -123,6 +121,9 @@ pub(super) fn delete_property(object: Value, key: &str) -> Result<Value, Runtime
             Ok(index) => elements.delete_index(index),
             Err(_) => elements.delete_property(key),
         })),
+        Value::Function(function) => {
+            Ok(Value::Boolean(function_delete_own_property(&function, key)))
+        }
         _ => Err(RuntimeError {
             thrown: None,
             message: "delete target is not an object".to_owned(),
@@ -141,6 +142,7 @@ pub(super) fn enumerable_keys(value: Value) -> Result<Vec<Value>, RuntimeError> 
             keys.extend(elements.property_keys());
             keys
         }
+        Value::Function(function) => function_own_property_keys(&function),
         Value::Null | Value::Undefined => Vec::new(),
         _ => {
             return Err(RuntimeError {

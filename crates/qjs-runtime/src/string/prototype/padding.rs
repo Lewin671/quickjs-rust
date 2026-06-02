@@ -13,7 +13,7 @@ pub(crate) enum StringPadKind {
 pub(crate) fn native_string_prototype_pad(
     this_value: Value,
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
     kind: StringPadKind,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;

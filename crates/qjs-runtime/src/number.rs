@@ -15,4 +15,4 @@ pub(super) use statics::{
     native_number_is_safe_integer,
 };
 
-pub(super) const NUMBER_DATA_PROPERTY: &str = "\0NumberData";
+pub(crate) const NUMBER_DATA_PROPERTY: &str = "\0NumberData";
