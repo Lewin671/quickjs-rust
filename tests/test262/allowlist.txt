@@ -119,6 +119,8 @@ cases/array-slice-basic.js
 cases/array-slice-constructor-non-object.js
 cases/array-slice-constructor-poisoned.js
 cases/array-slice-default-end.js
+cases/array-slice-invalid-result-length.js
+cases/array-slice-invalid-result-length-no-set.js
 cases/array-slice-length.js
 cases/array-slice-negative-index.js
 cases/array-slice-object-generic.js
