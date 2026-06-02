@@ -553,17 +553,32 @@ impl<'a> Vm<'a> {
     }
 
     fn store_local(&mut self, slot: usize, value: Value) -> Result<(), RuntimeError> {
+        let local_meta = self
+            .bytecode
+            .locals
+            .get(slot)
+            .cloned()
+            .ok_or_else(|| RuntimeError {
+                thrown: None,
+                message: "bytecode local index out of bounds".to_owned(),
+            })?;
         let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
             thrown: None,
             message: "bytecode local index out of bounds".to_owned(),
         })?;
-        if !self.bytecode.locals[slot].mutable && local.is_some() {
+        if !local_meta.mutable && local.is_some() {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: assignment to constant variable".to_owned(),
             });
         }
-        *local = Some(value);
+        *local = Some(value.clone());
+        if local_meta.from_env
+            && !local_meta.hoisted
+            && let Some(Value::Object(global_this)) = self.globals.get(GLOBAL_THIS_BINDING)
+        {
+            global_this.set(local_meta.name, value);
+        }
         Ok(())
     }
 }
