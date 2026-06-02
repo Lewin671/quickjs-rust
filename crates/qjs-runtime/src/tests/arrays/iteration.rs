@@ -230,6 +230,24 @@ fn evaluates_array_iteration_builtins() {
     );
     assert_eq!(
         eval(
+            "let calls = 0; [undefined, , , 'foo'].find(function() { calls = calls + 1; return false; }); calls;"
+        ),
+        Ok(Value::Number(4.0))
+    );
+    assert_eq!(
+        eval(
+            "let xs = ['Shoes', 'Car', 'Bike']; let seen = []; xs.find(function(value) { if (seen.length === 0) { xs.splice(1, 1); } seen.push(value); return false; }); seen.length + ':' + seen[0] + ':' + seen[1] + ':' + seen[2];"
+        ),
+        Ok(Value::String("3:Shoes:Bike:undefined".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let xs = ['Skateboard', 'Barefoot']; let seen = []; xs.find(function(value) { if (seen.length === 0) { xs.push('Motorcycle'); xs[1] = 'Magic Carpet'; } seen.push(value); return false; }); seen.length + ':' + seen[0] + ':' + seen[1];"
+        ),
+        Ok(Value::String("2:Skateboard:Magic Carpet".to_owned()))
+    );
+    assert_eq!(
+        eval(
             "let receiver = { target: 20 }; [10, 20].find(function(value, index, array) { return this === receiver && index === 1 && array[index] === value && value === this.target; }, receiver);"
         ),
         Ok(Value::Number(20.0))
@@ -241,6 +259,12 @@ fn evaluates_array_iteration_builtins() {
     assert_eq!(
         eval("[1, 2, 3].findLast(function(value) { return value > 5; });"),
         Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval(
+            "let xs = [1, 2, 3]; let seen = []; xs.findLast(function(value) { if (seen.length === 0) { delete xs[1]; xs[0] = 9; } seen.push(value); return false; }); seen.join('|');"
+        ),
+        Ok(Value::String("3||9".to_owned()))
     );
     assert_eq!(
         eval(
@@ -269,6 +293,12 @@ fn evaluates_array_iteration_builtins() {
     assert_eq!(
         eval("[1, 2, 3].findIndex(function(value) { return value > 5; });"),
         Ok(Value::Number(-1.0))
+    );
+    assert_eq!(
+        eval(
+            "let calls = 0; [undefined, , , 'foo'].findIndex(function() { calls = calls + 1; return false; }); calls;"
+        ),
+        Ok(Value::Number(4.0))
     );
     assert_eq!(
         eval(

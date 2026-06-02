@@ -123,7 +123,13 @@ skip_reason() {
 make_case() {
   local source="$1"
   local output="$2"
+  local metadata="$3"
+  local flags
+  flags="$(printf '%s\n' "$metadata" | metadata_value flags)"
   {
+    if [[ "$flags" == *onlyStrict* ]]; then
+      printf '"use strict";\n'
+    fi
     cat "$TEST262_DIR/harness/assert.js"
     printf '\n'
     cat "$TEST262_DIR/harness/sta.js"
@@ -134,11 +140,12 @@ make_case() {
 
 run_case() {
   local file="$1"
+  local metadata="$2"
   local temp_dir
   local temp
   temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/qjs-test262-baseline-XXXXXX")"
   temp="$temp_dir/case.js"
-  make_case "$file" "$temp"
+  make_case "$file" "$temp" "$metadata"
   set +e
   output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$CARGO_BIN" run -q -p qjs-cli -- "$temp" 2>&1)"
   status=$?
@@ -201,7 +208,7 @@ while IFS= read -r file; do
 
   run=$((run + 1))
   printf 'test262-baseline [%d]: %s\n' "$run" "$rel"
-  result="$(run_case "$file")"
+  result="$(run_case "$file" "$metadata")"
   case "$result" in
     pass)
       pass=$((pass + 1))

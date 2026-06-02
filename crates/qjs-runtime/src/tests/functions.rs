@@ -53,6 +53,11 @@ fn evaluates_function_declarations_and_calls() {
         Ok(Value::Number(2.0))
     );
     assert_eq!(
+        eval("function noReturn() { 1 + 2; } noReturn();"),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(eval("1 + 2;"), Ok(Value::Number(3.0)));
+    assert_eq!(
         eval(
             "function make(value) { return function() { return value; }; } let get = make(7); get();"
         ),
@@ -175,6 +180,20 @@ fn evaluates_function_declarations_and_calls() {
     assert_eq!(
         eval(
             "function getThis() { 'use strict'; return this; } getThis.call(undefined) === undefined;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("'use strict'; let getThis = function() { return this; }; getThis() === undefined;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("'use strict'; function getThis() { return this; } getThis() === undefined;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "'use strict'; function outer() { return function() { return this; }; } outer()() === undefined;"
         ),
         Ok(Value::Boolean(true))
     );
