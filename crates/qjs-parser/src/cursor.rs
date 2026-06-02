@@ -3,8 +3,12 @@ use qjs_lexer::{Token, TokenKind};
 use crate::{ParseError, Parser};
 
 impl Parser {
-    pub(crate) fn new(tokens: Vec<Token>) -> Self {
-        Self { tokens, cursor: 0 }
+    pub(crate) fn new(tokens: Vec<Token>, source: String) -> Self {
+        Self {
+            source,
+            tokens,
+            cursor: 0,
+        }
     }
 
     pub(crate) fn at(&self, kind: &TokenKind) -> bool {

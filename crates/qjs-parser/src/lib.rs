@@ -27,10 +27,11 @@ pub fn parse_script(source: &str) -> Result<Script, ParseError> {
         message: error.message,
         span: error.span,
     })?;
-    Parser::new(tokens).parse_script()
+    Parser::new(tokens, source.to_owned()).parse_script()
 }
 
 struct Parser {
+    source: String,
     tokens: Vec<Token>,
     cursor: usize,
 }
