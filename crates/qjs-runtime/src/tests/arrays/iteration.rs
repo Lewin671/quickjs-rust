@@ -17,6 +17,10 @@ fn evaluates_array_iteration_builtins() {
         Ok(Value::Boolean(true))
     );
     assert_eq!(
+        eval("[5].map(function() { 'use strict'; return this === undefined; })[0];"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval(
             "let xs = [1, 2]; let ys = xs.map(function(value) { return value + 1; }); xs !== ys && xs[0] === 1 && ys[0] === 2;"
         ),

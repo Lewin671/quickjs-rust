@@ -117,9 +117,13 @@ pub(crate) fn native_function_prototype_bind(
     Ok(Value::Function(bound))
 }
 
-pub(crate) fn function_call_this(this_arg: Option<Value>, env: &HashMap<String, Value>) -> Value {
+pub(crate) fn function_call_this(
+    this_arg: Option<Value>,
+    env: &HashMap<String, Value>,
+    is_strict: bool,
+) -> Value {
     match this_arg.unwrap_or(Value::Undefined) {
-        Value::Null | Value::Undefined => env
+        Value::Null | Value::Undefined if !is_strict => env
             .get(GLOBAL_THIS_BINDING)
             .cloned()
             .unwrap_or(Value::Undefined),

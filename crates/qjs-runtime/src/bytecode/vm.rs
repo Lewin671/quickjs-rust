@@ -10,6 +10,7 @@ use super::ir::{Bytecode, Op};
 use super::util::{stack_underflow, typeof_value};
 use super::vm_call::{insert_scope_call_bindings, native_error_message, user_bytecode_function};
 use super::vm_props::{delete_property, get_property, set_property};
+use super::vm_result::FunctionBytecodeResult;
 use super::vm_try::TryFrame;
 
 pub(super) type Slot = Option<Value>;
@@ -35,23 +36,6 @@ pub(super) fn eval_function_bytecode(
         bytecode,
         globals: vm.globals,
         locals: vm.locals,
-    }
-}
-
-pub(crate) struct FunctionBytecodeResult<'a> {
-    pub(crate) value: Result<Value, RuntimeError>,
-    bytecode: &'a Bytecode,
-    globals: HashMap<String, Value>,
-    locals: Vec<Slot>,
-}
-
-impl FunctionBytecodeResult<'_> {
-    pub(crate) fn binding(&self, name: &str) -> Option<&Value> {
-        self.bytecode
-            .local_slot(name)
-            .and_then(|index| self.locals.get(index))
-            .and_then(Option::as_ref)
-            .or_else(|| self.globals.get(name))
     }
 }
 
@@ -170,6 +154,7 @@ impl<'a> Vm<'a> {
                     local_names,
                     bytecode,
                     constructable,
+                    is_strict,
                 } => {
                     let env = self.function_capture_env(&bytecode, &local_names);
                     self.stack.push(Value::Function(Function::new_user_compiled(
@@ -179,6 +164,7 @@ impl<'a> Vm<'a> {
                         bytecode,
                         local_names,
                         constructable,
+                        is_strict,
                     )));
                 }
                 Op::Typeof => {
@@ -323,13 +309,8 @@ impl<'a> Vm<'a> {
     fn call(&mut self, argc: usize) -> Result<(), RuntimeError> {
         let arguments = self.pop_arguments(argc)?;
         let callee = self.pop()?;
-        let this_value = self
-            .globals
-            .get(GLOBAL_THIS_BINDING)
-            .cloned()
-            .unwrap_or(Value::Undefined);
         let mut env = self.call_env(&callee);
-        let result = call_function(callee, this_value, arguments, &mut env.env, false);
+        let result = call_function(callee, Value::Undefined, arguments, &mut env.env, false);
         self.apply_call_env(env);
         if let Some(result) = self.handle_call_result(result)? {
             self.stack.push(result);

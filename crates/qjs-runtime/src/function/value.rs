@@ -8,8 +8,10 @@ use std::{
 use qjs_ast::Stmt;
 
 use crate::{
-    Bytecode, NativeFunction, ObjectRef, Property, Value, bytecode::compile_function_body,
-    function::collect_function_local_names, object_prototype,
+    Bytecode, NativeFunction, ObjectRef, Property, Value,
+    bytecode::compile_function_body,
+    function::{collect_function_local_names, is_strict_function_body},
+    object_prototype,
 };
 
 /// User-defined or native function value.
@@ -25,6 +27,7 @@ pub struct Function {
     pub(crate) bytecode: Option<Rc<Bytecode>>,
     pub(crate) native: Option<NativeFunction>,
     pub(crate) constructable: bool,
+    pub(crate) is_strict: bool,
     pub(crate) bound: Option<Box<BoundFunction>>,
     /// Function object properties.
     pub(crate) properties: Rc<RefCell<HashMap<String, Property>>>,
@@ -52,6 +55,7 @@ impl fmt::Debug for Function {
             .field("local_names", &self.local_names.len())
             .field("bytecode", &self.bytecode.is_some())
             .field("constructable", &self.constructable)
+            .field("is_strict", &self.is_strict)
             .field("bound", &self.bound.is_some())
             .finish()
     }
@@ -87,6 +91,7 @@ impl Function {
     ) -> Result<Self, crate::RuntimeError> {
         let prototype = ObjectRef::with_prototype(HashMap::new(), object_prototype(&env));
         let local_names = collect_function_local_names(name.as_ref(), &params, &body);
+        let is_strict = is_strict_function_body(&body);
         let bytecode = match bytecode {
             Some(bytecode) => bytecode,
             None => Rc::new(compile_function_body(&params, &body)?),
@@ -99,6 +104,7 @@ impl Function {
             bytecode: Some(bytecode),
             native: None,
             constructable,
+            is_strict,
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
             extensible: Rc::new(Cell::new(true)),
@@ -124,6 +130,7 @@ impl Function {
         bytecode: Rc<Bytecode>,
         local_names: Vec<String>,
         constructable: bool,
+        is_strict: bool,
     ) -> Self {
         let prototype = ObjectRef::with_prototype(HashMap::new(), object_prototype(&env));
         let function = Self {
@@ -134,6 +141,7 @@ impl Function {
             bytecode: Some(bytecode),
             native: None,
             constructable,
+            is_strict,
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
             extensible: Rc::new(Cell::new(true)),
@@ -185,6 +193,7 @@ impl Function {
             bytecode: None,
             native: None,
             constructable,
+            is_strict: false,
             bound: Some(Box::new(BoundFunction {
                 target,
                 this_value,
@@ -214,6 +223,7 @@ impl Function {
             bytecode: None,
             native,
             constructable,
+            is_strict: false,
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
             extensible: Rc::new(Cell::new(true)),

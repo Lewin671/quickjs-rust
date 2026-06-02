@@ -2,7 +2,10 @@ use std::rc::Rc;
 
 use qjs_ast::{Expr, MemberProperty, ObjectProperty, ObjectPropertyKey, Stmt};
 
-use crate::{RuntimeError, Value, function::collect_function_local_names};
+use crate::{
+    RuntimeError, Value,
+    function::{collect_function_local_names, is_strict_function_body},
+};
 
 use super::compiler::Compiler;
 use super::ir::Op;
@@ -132,6 +135,7 @@ impl Compiler {
             local_names,
             bytecode: Rc::new(bytecode),
             constructable: true,
+            is_strict: is_strict_function_body(body),
         });
         self.emit(Op::StoreLocal(slot));
         self.emit_load_undefined();

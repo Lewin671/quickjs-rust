@@ -113,7 +113,10 @@ fn function_env(
     if let Some(name) = &function.name {
         local_env.insert(name.clone(), callee);
     }
-    local_env.insert("this".to_owned(), function_call_this(Some(this_value), env));
+    local_env.insert(
+        "this".to_owned(),
+        function_call_this(Some(this_value), env, function.is_strict),
+    );
     local_env.insert(
         "arguments".to_owned(),
         arguments_object(argument_values, env),
