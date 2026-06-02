@@ -528,6 +528,7 @@ cases/throw-argument-not-reached.js
 cases/try-catch-basic.js
 cases/try-finally-basic.js
 cases/try-catch-finally-basic.js
+cases/try-catch-parameter-scope.js
 cases/try-finally-abrupt-overrides.js
 cases/postfix-increment-basic.js
 cases/prefix-increment-basic.js

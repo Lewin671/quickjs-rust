@@ -202,8 +202,12 @@ impl<'a> Vm<'a> {
                         self.ip = target;
                     }
                 }
-                Op::EnterTry { catch, finally } => self.enter_try(catch, finally),
-                Op::ExitTry => self.exit_try(),
+                Op::EnterTry {
+                    catch,
+                    finally,
+                    catch_scope,
+                } => self.enter_try(catch, finally, catch_scope),
+                Op::ExitTry => self.exit_try()?,
                 Op::EndFinally => {
                     if let Some(value) = self.end_finally()? {
                         return Ok(value);

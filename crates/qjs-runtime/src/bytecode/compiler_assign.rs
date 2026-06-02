@@ -213,7 +213,7 @@ impl Compiler {
         match argument {
             Expr::Identifier { name, .. } => {
                 if let Some(slot) = self.local_slots.get(name) {
-                    self.emit(Op::LoadLocal(*slot));
+                    self.emit(Op::LoadLocalOrUndefined(*slot));
                 } else {
                     self.emit(Op::TypeofGlobal(name.clone()));
                     return Ok(());
