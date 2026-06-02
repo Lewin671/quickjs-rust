@@ -26,6 +26,7 @@ pub(crate) fn native_object_define_property(
 
 pub(crate) fn native_object_define_properties(
     argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     ensure_define_property_target(&target)?;
@@ -38,7 +39,7 @@ pub(crate) fn native_object_define_properties(
         });
     }
 
-    for (key, descriptor_value) in enumerable_property_entries(descriptors)? {
+    for (key, descriptor_value) in enumerable_property_entries(descriptors, env)? {
         let descriptor = to_property_descriptor(descriptor_value)?;
         if !define_property_on_value(target.clone(), key, descriptor)? {
             return Err(RuntimeError {

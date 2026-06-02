@@ -10,7 +10,7 @@ mod operator;
 pub use assignment::{AssignmentOp, AssignmentTarget};
 pub use literal::Literal;
 pub use member::MemberProperty;
-pub use object::{ObjectProperty, ObjectPropertyKey};
+pub use object::{ObjectProperty, ObjectPropertyKey, ObjectPropertyKind};
 pub use operator::{BinaryOp, UnaryOp, UpdateOp};
 
 /// An expression node.

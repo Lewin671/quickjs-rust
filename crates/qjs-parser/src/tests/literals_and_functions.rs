@@ -1,4 +1,6 @@
-use qjs_ast::{AssignmentTarget, Expr, Literal, MemberProperty, ObjectPropertyKey, Stmt};
+use qjs_ast::{
+    AssignmentTarget, Expr, Literal, MemberProperty, ObjectPropertyKey, ObjectPropertyKind, Stmt,
+};
 
 use crate::parse_script;
 
@@ -210,6 +212,28 @@ fn parses_object_literal_and_member_assignment() {
     };
     assert_eq!(name.as_deref(), Some("method"));
     assert_eq!(params, &["a".to_owned(), "b".to_owned()]);
+    assert!(!constructable);
+
+    let script = parse_script("({ get value() { return 42; } });").expect("source should parse");
+    let [Stmt::Expr(Expr::Object { properties, .. })] = script.body.as_slice() else {
+        panic!("expected object expression with getter");
+    };
+    assert_eq!(
+        properties[0].key,
+        ObjectPropertyKey::Literal("value".to_owned())
+    );
+    assert_eq!(properties[0].kind, ObjectPropertyKind::Getter);
+    let Expr::Function {
+        name,
+        params,
+        constructable,
+        ..
+    } = &properties[0].value
+    else {
+        panic!("expected getter value to parse as function expression");
+    };
+    assert_eq!(name.as_deref(), Some("value"));
+    assert!(params.is_empty());
     assert!(!constructable);
 }
 

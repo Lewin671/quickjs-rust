@@ -56,7 +56,9 @@ impl Compiler {
             }
             self.compile_expr(&property.value)?;
         }
-        self.emit(Op::NewObject(properties.len()));
+        self.emit(Op::NewObject(
+            properties.iter().map(|property| property.kind).collect(),
+        ));
         Ok(())
     }
 

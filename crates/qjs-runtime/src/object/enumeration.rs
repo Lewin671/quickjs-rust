@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use crate::{
     ArrayRef, Property, RuntimeError, Value, array_own_property_keys, array_own_property_names,
-    function_own_property_keys, function_own_property_names, to_property_key,
+    function_own_property_keys, function_own_property_names, property_value, to_property_key,
 };
 
 use super::descriptor::own_property_descriptor;
@@ -20,7 +22,10 @@ pub(crate) fn native_object_keys(argument_values: &[Value]) -> Result<Value, Run
     )))
 }
 
-pub(crate) fn native_object_values(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+pub(crate) fn native_object_values(
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if matches!(target, Value::Null | Value::Undefined) {
         return Err(RuntimeError {
@@ -30,14 +35,17 @@ pub(crate) fn native_object_values(argument_values: &[Value]) -> Result<Value, R
     }
 
     Ok(Value::Array(ArrayRef::new(
-        enumerable_property_entries(target)?
+        enumerable_property_entries(target, env)?
             .into_iter()
             .map(|(_, value)| value)
             .collect(),
     )))
 }
 
-pub(crate) fn native_object_entries(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+pub(crate) fn native_object_entries(
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if matches!(target, Value::Null | Value::Undefined) {
         return Err(RuntimeError {
@@ -47,7 +55,7 @@ pub(crate) fn native_object_entries(argument_values: &[Value]) -> Result<Value, 
     }
 
     Ok(Value::Array(ArrayRef::new(
-        enumerable_property_entries(target)?
+        enumerable_property_entries(target, env)?
             .into_iter()
             .map(|(key, value)| Value::Array(ArrayRef::new(vec![Value::String(key), value])))
             .collect(),
@@ -80,12 +88,16 @@ pub(crate) fn native_object_has_own(argument_values: &[Value]) -> Result<Value, 
 
 pub(super) fn enumerable_property_entries(
     value: Value,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Vec<(String, Value)>, RuntimeError> {
     let keys = own_property_keys(value.clone());
     let mut entries = Vec::with_capacity(keys.len());
     for key in keys {
-        if let Some(Property { value, .. }) = own_property_descriptor(value.clone(), &key)? {
-            entries.push((key, value));
+        if let Some(Property { enumerable, .. }) = own_property_descriptor(value.clone(), &key)?
+            && enumerable
+        {
+            let property = property_value(value.clone(), &key, env)?;
+            entries.push((key, property));
         }
     }
     Ok(entries)

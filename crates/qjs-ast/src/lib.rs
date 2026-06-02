@@ -6,7 +6,7 @@ mod statement;
 
 pub use expression::{
     AssignmentOp, AssignmentTarget, BinaryOp, Expr, Literal, MemberProperty, ObjectProperty,
-    ObjectPropertyKey, UnaryOp, UpdateOp,
+    ObjectPropertyKey, ObjectPropertyKind, UnaryOp, UpdateOp,
 };
 pub use span::Span;
 pub use statement::{

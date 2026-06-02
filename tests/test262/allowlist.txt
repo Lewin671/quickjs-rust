@@ -305,6 +305,7 @@ cases/object-create-properties-undefined.js
 cases/object-create-properties-writable.js
 cases/object-entries-array-basic.js
 cases/object-entries-basic.js
+cases/object-entries-getter-values.js
 cases/object-entries-inherited-omitted.js
 cases/object-entries-length.js
 cases/object-entries-primitive-number.js
@@ -414,6 +415,8 @@ cases/object-keys-prototype-negative.js
 cases/object-keys-undefined-throws.js
 cases/object-values-basic.js
 cases/object-values-array-basic.js
+cases/object-values-getter-adding-key.js
+cases/object-values-getter-throws.js
 cases/object-values-inherited-omitted.js
 cases/object-values-length.js
 cases/object-values-primitive-number.js

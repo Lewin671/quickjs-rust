@@ -3,7 +3,7 @@ use std::{
     rc::Rc,
 };
 
-use qjs_ast::{BinaryOp, UnaryOp};
+use qjs_ast::{BinaryOp, ObjectPropertyKind, UnaryOp};
 
 use crate::Value;
 
@@ -21,7 +21,7 @@ pub(super) enum Op {
         count: usize,
         holes: Vec<usize>,
     },
-    NewObject(usize),
+    NewObject(Vec<ObjectPropertyKind>),
     EnumerateKeys,
     GetProp,
     SetProp,
