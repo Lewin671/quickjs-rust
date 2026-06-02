@@ -62,7 +62,9 @@ pub(crate) fn to_number_with_env(
             None => object_to_number(Value::Object(object), env),
         },
         Value::Function(_) => object_to_number(value, env),
-        Value::Array(array) => string_to_number(&array_join(Value::Array(array), ",")?),
+        Value::Array(array) => {
+            string_to_number(&array_join(Value::Array(array), ",", &mut HashMap::new())?)
+        }
     }
 }
 

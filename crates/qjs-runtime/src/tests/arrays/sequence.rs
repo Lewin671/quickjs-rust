@@ -23,6 +23,24 @@ fn evaluates_array_sequence_builtins() {
         Ok(Value::String("1;2,3;4".to_owned()))
     );
     assert_eq!(
+        eval("Array.prototype.join.call({ length: 3, 0: 'a', 2: 'c' }, '|');"),
+        Ok(Value::String("a||c".to_owned()))
+    );
+    assert_eq!(
+        eval("Array.prototype.join.call('abc', '-');"),
+        Ok(Value::String("a-b-c".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "Array.prototype.toString.call({ length: 2, 0: 'x', 1: 'y', join: Array.prototype.join });"
+        ),
+        Ok(Value::String("x,y".to_owned()))
+    );
+    assert_eq!(
+        eval("Array.prototype.toString.call(true);"),
+        Ok(Value::String("[object Boolean]".to_owned()))
+    );
+    assert_eq!(
         eval("[0, 1, 2, 3, 4].slice(1, 4).join();"),
         Ok(Value::String("1,2,3".to_owned()))
     );
