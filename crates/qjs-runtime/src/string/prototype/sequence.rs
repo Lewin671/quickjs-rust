@@ -49,11 +49,13 @@ pub(crate) fn native_string_prototype_slice(
         length,
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         0,
+        env,
     )?;
     let end = string_slice_index(
         length,
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         length,
+        env,
     )?;
     if end <= start {
         return Ok(Value::String(String::new()));
@@ -131,11 +133,13 @@ pub(crate) fn native_string_prototype_substring(
         length,
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         0,
+        env,
     )?;
     let end = string_substring_index(
         length,
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         length,
+        env,
     )?;
     let (from, to) = if start <= end {
         (start, end)

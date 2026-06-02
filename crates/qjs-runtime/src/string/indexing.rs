@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    RuntimeError, Value, string_object_value, string_prototype, to_js_string_with_env, to_number,
+    RuntimeError, Value, string_object_value, string_prototype, to_js_string_with_env,
+    to_number_with_env,
 };
 
 pub(super) fn this_string_value(
@@ -27,17 +28,25 @@ pub(super) fn this_string_value(
     }
 }
 
-pub(super) fn to_string_position(value: Value) -> Result<usize, RuntimeError> {
-    let number = to_number(value)?;
-    if !number.is_finite() || number <= 0.0 {
+pub(super) fn to_string_position(
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<usize, RuntimeError> {
+    let number = to_number_with_env(value, env)?;
+    if number.is_nan() || number <= 0.0 {
         Ok(0)
+    } else if number.is_infinite() {
+        Ok(usize::MAX)
     } else {
         Ok(number.trunc() as usize)
     }
 }
 
-pub(super) fn to_char_code_position(value: Value) -> Result<f64, RuntimeError> {
-    let number = to_number(value)?;
+pub(super) fn to_char_code_position(
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<f64, RuntimeError> {
+    let number = to_number_with_env(value, env)?;
     if number.is_nan() {
         Ok(0.0)
     } else {
@@ -48,10 +57,11 @@ pub(super) fn to_char_code_position(value: Value) -> Result<f64, RuntimeError> {
 pub(super) fn relative_string_code_unit_index(
     length: usize,
     value: Value,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Option<usize>, RuntimeError> {
     let number = match value {
         Value::Undefined => 0.0,
-        value => to_number(value)?,
+        value => to_number_with_env(value, env)?,
     };
     let integer = if number.is_nan() { 0.0 } else { number.trunc() };
     let index = if integer < 0.0 {
@@ -66,19 +76,26 @@ pub(super) fn relative_string_code_unit_index(
     }
 }
 
-pub(super) fn string_search_start(length: usize, value: Value) -> Result<usize, RuntimeError> {
-    Ok(to_string_position(value)?.min(length))
+pub(super) fn string_search_start(
+    length: usize,
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<usize, RuntimeError> {
+    Ok(to_string_position(value, env)?.min(length))
 }
 
 pub(super) fn string_last_search_position(
     length: usize,
     value: Value,
+    env: &mut HashMap<String, Value>,
 ) -> Result<usize, RuntimeError> {
     if matches!(value, Value::Undefined) {
         return Ok(length);
     }
-    let number = to_number(value)?;
-    if number.is_nan() || number <= 0.0 {
+    let number = to_number_with_env(value, env)?;
+    if number.is_nan() {
+        Ok(length)
+    } else if number <= 0.0 {
         Ok(0)
     } else if number.is_infinite() {
         Ok(length)
@@ -87,22 +104,27 @@ pub(super) fn string_last_search_position(
     }
 }
 
-pub(super) fn string_end_position(length: usize, value: Value) -> Result<usize, RuntimeError> {
+pub(super) fn string_end_position(
+    length: usize,
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<usize, RuntimeError> {
     if matches!(value, Value::Undefined) {
         return Ok(length);
     }
-    Ok(to_string_position(value)?.min(length))
+    Ok(to_string_position(value, env)?.min(length))
 }
 
 pub(super) fn string_slice_index(
     length: usize,
     value: Value,
     default: usize,
+    env: &mut HashMap<String, Value>,
 ) -> Result<usize, RuntimeError> {
     if matches!(value, Value::Undefined) {
         return Ok(default);
     }
-    let number = to_number(value)?;
+    let number = to_number_with_env(value, env)?;
     if number.is_nan() {
         return Ok(0);
     }
@@ -118,11 +140,12 @@ pub(super) fn string_substring_index(
     length: usize,
     value: Value,
     default: usize,
+    env: &mut HashMap<String, Value>,
 ) -> Result<usize, RuntimeError> {
     if matches!(value, Value::Undefined) {
         return Ok(default);
     }
-    let number = to_number(value)?;
+    let number = to_number_with_env(value, env)?;
     if number.is_nan() || number <= 0.0 {
         Ok(0)
     } else {

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{RuntimeError, Value, to_js_string};
+use crate::{RuntimeError, Value, to_js_string_with_env};
 
 use super::super::indexing::{
     string_end_position, string_last_search_position, string_search_start, this_string_value,
@@ -12,10 +12,14 @@ pub(crate) fn native_string_prototype_ends_with(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
-    let search = to_js_string(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    let search = to_js_string_with_env(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     let end = string_end_position(
         value.chars().count(),
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
     )?;
     let prefix = value.chars().take(end).collect::<String>();
     Ok(Value::Boolean(prefix.ends_with(&search)))
@@ -27,10 +31,14 @@ pub(crate) fn native_string_prototype_includes(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
-    let search = to_js_string(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    let search = to_js_string_with_env(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     let start = string_search_start(
         value.chars().count(),
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
     )?;
     Ok(Value::Boolean(
         value
@@ -47,10 +55,14 @@ pub(crate) fn native_string_prototype_index_of(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
-    let search = to_js_string(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    let search = to_js_string_with_env(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     let start = string_search_start(
         value.chars().count(),
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
     )?;
     let haystack = value.chars().skip(start).collect::<String>();
     let Some(byte_index) = haystack.find(&search) else {
@@ -66,12 +78,16 @@ pub(crate) fn native_string_prototype_last_index_of(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
-    let search = to_js_string(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    let search = to_js_string_with_env(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     let chars: Vec<_> = value.chars().collect();
     let search_chars: Vec<_> = search.chars().collect();
     let position = string_last_search_position(
         chars.len(),
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
     )?;
 
     if search_chars.is_empty() {
@@ -96,10 +112,14 @@ pub(crate) fn native_string_prototype_starts_with(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
-    let search = to_js_string(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    let search = to_js_string_with_env(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     let start = string_search_start(
         value.chars().count(),
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
     )?;
     Ok(Value::Boolean(
         value
