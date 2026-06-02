@@ -53,3 +53,19 @@ fn evaluates_global_undefined_binding() {
     assert_eq!(eval("undefined;"), Ok(Value::Undefined));
     assert_eq!(eval("undefined === undefined;"), Ok(Value::Boolean(true)));
 }
+
+#[test]
+fn evaluates_global_eval_builtin() {
+    assert_eq!(
+        eval("typeof eval;"),
+        Ok(Value::String("function".to_owned()))
+    );
+    assert_eq!(eval("eval.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("this.eval === eval;"), Ok(Value::Boolean(true)));
+    assert_eq!(eval("eval(7);"), Ok(Value::Number(7.0)));
+    assert_eq!(eval("eval('1 + 2;');"), Ok(Value::Number(3.0)));
+    assert_eq!(
+        eval("let value = 1; eval('value = value + 2;'); value;"),
+        Ok(Value::Number(3.0))
+    );
+}

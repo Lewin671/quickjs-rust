@@ -1,6 +1,12 @@
 use std::collections::HashMap;
 
-use crate::{Function, NativeFunction, Property, RuntimeError, Value, to_number};
+use qjs_parser::parse_script;
+
+use crate::{
+    Function, NativeFunction, Property, RuntimeError, Value,
+    bytecode::{compile_script, eval_bytecode_with_env},
+    to_number,
+};
 
 pub(super) fn install_globals(env: &mut HashMap<String, Value>, global_this: &Value) {
     env.insert("NaN".to_owned(), Value::Number(f64::NAN));
@@ -24,6 +30,7 @@ pub(super) fn install_globals(env: &mut HashMap<String, Value>, global_this: &Va
         NativeFunction::GlobalIsFinite,
     );
     define_global_function(env, global_this, "isNaN", 1, NativeFunction::GlobalIsNaN);
+    define_global_function(env, global_this, "eval", 1, NativeFunction::Eval);
 }
 
 fn define_global_function(
@@ -48,4 +55,29 @@ pub(super) fn native_global_is_finite(argument_values: &[Value]) -> Result<Value
 pub(super) fn native_global_is_nan(argument_values: &[Value]) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     Ok(Value::Boolean(to_number(value)?.is_nan()))
+}
+
+pub(super) fn native_global_eval(
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let Value::String(source) = value else {
+        return Ok(value);
+    };
+    let script = parse_script(&source).map_err(|error| RuntimeError {
+        thrown: None,
+        message: error.message,
+    })?;
+    let bytecode = compile_script(&script)?;
+    let result = eval_bytecode_with_env(&bytecode, env.clone());
+    for name in bytecode
+        .local_names()
+        .chain(bytecode.global_names().iter().map(String::as_str))
+    {
+        if let Some(value) = result.binding(name) {
+            env.insert(name.to_owned(), value.clone());
+        }
+    }
+    result.value
 }
