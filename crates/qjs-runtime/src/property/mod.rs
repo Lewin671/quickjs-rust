@@ -66,6 +66,7 @@ pub(crate) fn property_value(
                     .parse::<usize>()
                     .ok()
                     .and_then(|index| elements.get(index))
+                    .or_else(|| elements.property(key).map(|property| property.value))
                     .or_else(|| array_prototype_property(&elements, env, key))
                     .unwrap_or(Value::Undefined))
             }

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::array_like::array_like;
+use super::array_like::{array_like_length, array_like_values_from_receiver};
 use crate::{ArrayRef, RuntimeError, Value, call_function, is_truthy};
 
 struct ArrayIteration {
@@ -22,7 +22,7 @@ fn prepare_array_iteration(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<ArrayIteration, RuntimeError> {
-    let source = array_like(this_value, &format!("Array.prototype.{method}"), env)?;
+    let source = array_like_length(this_value, &format!("Array.prototype.{method}"), env)?;
     let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if !matches!(callback, Value::Function(_)) {
         return Err(RuntimeError {
@@ -30,10 +30,11 @@ fn prepare_array_iteration(
             message: format!("Array.prototype.{method} callback is not callable"),
         });
     }
+    let values = array_like_values_from_receiver(source.receiver.clone(), source.length, env)?;
 
     Ok(ArrayIteration {
         receiver: source.receiver,
-        source: source.values,
+        source: values,
         callback,
         callback_this: argument_values.get(1).cloned().unwrap_or(Value::Undefined),
     })
@@ -45,7 +46,7 @@ fn prepare_array_reduction(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<ArrayReduction, RuntimeError> {
-    let source = array_like(this_value, &format!("Array.prototype.{method}"), env)?;
+    let source = array_like_length(this_value, &format!("Array.prototype.{method}"), env)?;
     let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if !matches!(callback, Value::Function(_)) {
         return Err(RuntimeError {
@@ -53,10 +54,11 @@ fn prepare_array_reduction(
             message: format!("Array.prototype.{method} callback is not callable"),
         });
     }
+    let values = array_like_values_from_receiver(source.receiver.clone(), source.length, env)?;
 
     Ok(ArrayReduction {
         receiver: source.receiver,
-        source: source.values,
+        source: values,
         callback,
     })
 }

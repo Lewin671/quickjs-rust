@@ -99,16 +99,18 @@ fn set_receiver_data_property(
                 elements.set_len(length);
                 Ok(true)
             } else {
-                let Some(index) = key.parse::<usize>().ok() else {
-                    return Ok(false);
-                };
-                if index >= elements.len() && !elements.is_extensible() {
-                    return Ok(false);
+                match key.parse::<usize>() {
+                    Ok(index) => {
+                        if index >= elements.len() && !elements.is_extensible() {
+                            return Ok(false);
+                        }
+                        if elements.is_frozen() {
+                            return Ok(false);
+                        }
+                        elements.set(index, value);
+                    }
+                    Err(_) => elements.set_property(key.to_owned(), value),
                 }
-                if elements.is_frozen() {
-                    return Ok(false);
-                }
-                elements.set(index, value);
                 Ok(true)
             }
         }

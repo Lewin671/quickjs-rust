@@ -5,6 +5,7 @@ pub(crate) fn array_has_own_property(elements: &ArrayRef, key: &str) -> bool {
         || key
             .parse::<usize>()
             .is_ok_and(|index| index < elements.len())
+        || elements.property(key).is_some()
 }
 
 pub(crate) fn array_own_property_descriptor(elements: &ArrayRef, key: &str) -> Option<Property> {
@@ -16,18 +17,30 @@ pub(crate) fn array_own_property_descriptor(elements: &ArrayRef, key: &str) -> O
             false,
         ));
     }
-    let index = key.parse::<usize>().ok()?;
-    elements
-        .get(index)
-        .map(|value| Property::data(value, true, !elements.is_frozen(), !elements.is_sealed()))
+    if let Ok(index) = key.parse::<usize>()
+        && let Some(value) = elements.get(index)
+    {
+        return Some(Property::data(
+            value,
+            true,
+            !elements.is_frozen(),
+            !elements.is_sealed(),
+        ));
+    }
+    elements.property(key)
 }
 
 pub(crate) fn array_own_property_keys(elements: &ArrayRef) -> Vec<String> {
-    (0..elements.len()).map(|index| index.to_string()).collect()
+    let mut keys: Vec<_> = (0..elements.len()).map(|index| index.to_string()).collect();
+    keys.extend(elements.property_keys());
+    keys
 }
 
 pub(crate) fn array_own_property_names(elements: &ArrayRef) -> Vec<String> {
     let mut names = array_own_property_keys(elements);
+    names.extend(elements.property_names());
     names.push("length".to_owned());
+    names.sort();
+    names.dedup();
     names
 }

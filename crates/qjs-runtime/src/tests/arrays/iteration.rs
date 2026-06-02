@@ -71,6 +71,18 @@ fn evaluates_array_iteration_builtins() {
         Ok(Value::Number(0.0))
     );
     assert_eq!(
+        eval(
+            "let object = { 10: 10 }; let lengthAccessed = false; let loopAccessed = false; Object.defineProperty(object, 'length', { get: function() { lengthAccessed = true; return 20; }, configurable: true }); Object.defineProperty(object, '0', { get: function() { loopAccessed = true; return 10; }, configurable: true }); try { Array.prototype.map.call(object); } catch (error) {} lengthAccessed + ':' + loopAccessed;"
+        ),
+        Ok(Value::String("true:false".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let receiver = new Array(); receiver.res = true; [1].map(function(value) { return this.res; }, receiver)[0];"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("[1, 2, 3, 4].filter(function(value) { return value > 2; }).join();"),
         Ok(Value::String("3,4".to_owned()))
     );

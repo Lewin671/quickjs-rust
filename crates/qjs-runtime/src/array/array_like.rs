@@ -5,19 +5,33 @@ use crate::{
     to_length_with_env,
 };
 
-pub(crate) struct ArrayLike {
+pub(crate) struct ArrayLikeLength {
     pub(crate) receiver: Value,
-    pub(crate) values: Vec<Value>,
+    pub(crate) length: usize,
 }
 
-pub(crate) fn array_like(
+pub(crate) fn array_like_length(
     value: Value,
     context: &str,
     env: &mut HashMap<String, Value>,
-) -> Result<ArrayLike, RuntimeError> {
+) -> Result<ArrayLikeLength, RuntimeError> {
     let receiver = array_like_receiver(value, env);
-    let values = array_like_values_with_env(receiver.clone(), context, env)?;
-    Ok(ArrayLike { receiver, values })
+    let length = match receiver.clone() {
+        Value::Array(array) => array.len(),
+        Value::String(value) => value.chars().count(),
+        Value::Object(_) => {
+            to_length_with_env(property_value(receiver.clone(), "length", env)?, env)?
+        }
+        Value::Function(function) => function.params.len(),
+        Value::Null | Value::Undefined => {
+            return Err(RuntimeError {
+                thrown: None,
+                message: format!("{context} called on null or undefined"),
+            });
+        }
+        _ => 0,
+    };
+    Ok(ArrayLikeLength { receiver, length })
 }
 
 pub(crate) fn array_like_values(value: Value, context: &str) -> Result<Vec<Value>, RuntimeError> {
@@ -39,9 +53,7 @@ pub(crate) fn array_like_values_with_env(
         Value::Object(object) => {
             let receiver = Value::Object(object);
             let length = to_length_with_env(property_value(receiver.clone(), "length", env)?, env)?;
-            Ok((0..length)
-                .map(|index| property_value(receiver.clone(), &index.to_string(), env))
-                .collect::<Result<Vec<_>, _>>()?)
+            array_like_values_from_receiver(receiver, length, env)
         }
         Value::Function(function) => {
             let length = function.params.len();
@@ -60,6 +72,34 @@ pub(crate) fn array_like_values_with_env(
             thrown: None,
             message: format!("{context} called on null or undefined"),
         }),
+        _ => Ok(Vec::new()),
+    }
+}
+
+pub(crate) fn array_like_values_from_receiver(
+    receiver: Value,
+    length: usize,
+    env: &mut HashMap<String, Value>,
+) -> Result<Vec<Value>, RuntimeError> {
+    match receiver {
+        Value::Object(_) => (0..length)
+            .map(|index| property_value(receiver.clone(), &index.to_string(), env))
+            .collect(),
+        Value::Array(array) => Ok(array.to_vec()),
+        Value::String(value) => Ok(value
+            .chars()
+            .map(|character| Value::String(character.to_string()))
+            .collect()),
+        Value::Function(function) => Ok((0..length)
+            .map(|index| {
+                function
+                    .properties
+                    .borrow()
+                    .get(&index.to_string())
+                    .map(|property| property.value.clone())
+                    .unwrap_or(Value::Undefined)
+            })
+            .collect()),
         _ => Ok(Vec::new()),
     }
 }
