@@ -138,6 +138,25 @@ pub(crate) fn define_property_on_value(
             function.properties.borrow_mut().insert(key, descriptor);
             Ok(true)
         }
+        Value::Array(elements) => {
+            let existing = crate::array_own_property_descriptor(elements, &key);
+            if existing.is_none() && !elements.is_extensible() {
+                return Ok(false);
+            }
+            if existing.is_some_and(|property| !is_compatible_descriptor(&property, &descriptor)) {
+                return Ok(false);
+            }
+            if key == "length" {
+                elements.set_len(crate::to_length(descriptor.value)?);
+            } else if !descriptor.is_accessor()
+                && let Ok(index) = key.parse::<usize>()
+            {
+                elements.set(index, descriptor.value);
+            } else {
+                elements.define_property(key, descriptor);
+            }
+            Ok(true)
+        }
         _ => {
             ensure_define_property_target(&target)?;
             unreachable!("define property target validation should reject unsupported values")
@@ -157,13 +176,11 @@ fn is_compatible_descriptor(existing: &Property, descriptor: &Property) -> bool 
 
 fn ensure_define_property_target(target: &Value) -> Result<(), RuntimeError> {
     match target {
-        Value::Object(_) | Value::Function(_) => Ok(()),
-        Value::Array(_) | Value::String(_) | Value::Number(_) | Value::Boolean(_) => {
-            Err(RuntimeError {
-                thrown: None,
-                message: "Object.defineProperty primitive targets are not implemented".to_owned(),
-            })
-        }
+        Value::Object(_) | Value::Function(_) | Value::Array(_) => Ok(()),
+        Value::String(_) | Value::Number(_) | Value::Boolean(_) => Err(RuntimeError {
+            thrown: None,
+            message: "Object.defineProperty primitive targets are not implemented".to_owned(),
+        }),
         Value::Null | Value::Undefined => Err(RuntimeError {
             thrown: None,
             message: "Object.defineProperty target must be an object".to_owned(),

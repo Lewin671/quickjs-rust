@@ -18,6 +18,7 @@ pub(super) fn get_property(
             .parse::<usize>()
             .ok()
             .and_then(|index| elements.get(index))
+            .or_else(|| elements.property(key).map(|property| property.value))
             .or_else(|| array_prototype_property(&elements, env, key))
             .unwrap_or(Value::Undefined)),
         Value::Function(function) if key == "length" => {
@@ -62,11 +63,10 @@ pub(super) fn set_property(object: Value, key: String, value: Value) -> Result<(
             if key == "length" {
                 elements.set_len(to_length(value)?);
             } else {
-                let index = key.parse::<usize>().map_err(|_| RuntimeError {
-                    thrown: None,
-                    message: "array property assignment requires an array index".to_owned(),
-                })?;
-                elements.set(index, value);
+                match key.parse::<usize>() {
+                    Ok(index) => elements.set(index, value),
+                    Err(_) => elements.set_property(key, value),
+                }
             }
             Ok(())
         }
@@ -80,7 +80,10 @@ pub(super) fn set_property(object: Value, key: String, value: Value) -> Result<(
 pub(super) fn delete_property(object: Value, key: &str) -> Result<Value, RuntimeError> {
     match object {
         Value::Object(object) => Ok(Value::Boolean(object.delete_own_property(key))),
-        Value::Array(_) => Ok(Value::Boolean(true)),
+        Value::Array(elements) => Ok(Value::Boolean(match key.parse::<usize>() {
+            Ok(_) => true,
+            Err(_) => elements.delete_property(key),
+        })),
         _ => Err(RuntimeError {
             thrown: None,
             message: "delete target is not an object".to_owned(),
@@ -91,7 +94,11 @@ pub(super) fn delete_property(object: Value, key: &str) -> Result<Value, Runtime
 pub(super) fn enumerable_keys(value: Value) -> Result<Vec<Value>, RuntimeError> {
     let keys = match value {
         Value::Object(object) => object.own_property_keys(),
-        Value::Array(elements) => (0..elements.len()).map(|index| index.to_string()).collect(),
+        Value::Array(elements) => {
+            let mut keys: Vec<_> = (0..elements.len()).map(|index| index.to_string()).collect();
+            keys.extend(elements.property_keys());
+            keys
+        }
         Value::Null | Value::Undefined => Vec::new(),
         _ => {
             return Err(RuntimeError {

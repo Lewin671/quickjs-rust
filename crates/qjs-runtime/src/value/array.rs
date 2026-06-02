@@ -1,15 +1,17 @@
 use std::{
     cell::{Cell, RefCell},
+    collections::HashMap,
     fmt,
     rc::Rc,
 };
 
-use super::{ObjectRef, Value};
+use super::{ObjectRef, Property, Value};
 
 /// Array storage reference.
 #[derive(Clone)]
 pub struct ArrayRef {
     elements: Rc<RefCell<Vec<Value>>>,
+    properties: Rc<RefCell<HashMap<String, Property>>>,
     extensible: Rc<Cell<bool>>,
     sealed: Rc<Cell<bool>>,
     frozen: Rc<Cell<bool>>,
@@ -20,6 +22,7 @@ impl ArrayRef {
     pub(crate) fn new(elements: Vec<Value>) -> Self {
         Self {
             elements: Rc::new(RefCell::new(elements)),
+            properties: Rc::new(RefCell::new(HashMap::new())),
             extensible: Rc::new(Cell::new(true)),
             sealed: Rc::new(Cell::new(false)),
             frozen: Rc::new(Cell::new(false)),
@@ -41,6 +44,10 @@ impl ArrayRef {
 
     pub(crate) fn get(&self, index: usize) -> Option<Value> {
         self.elements.borrow().get(index).cloned()
+    }
+
+    pub(crate) fn property(&self, key: &str) -> Option<Property> {
+        self.properties.borrow().get(key).cloned()
     }
 
     pub(crate) fn to_vec(&self) -> Vec<Value> {
@@ -119,6 +126,54 @@ impl ArrayRef {
             return;
         }
         elements[index] = value;
+    }
+
+    pub(crate) fn set_property(&self, key: String, value: Value) {
+        let mut properties = self.properties.borrow_mut();
+        if let Some(property) = properties.get_mut(&key) {
+            if property.writable {
+                property.value = value;
+            }
+            return;
+        }
+        if !self.extensible.get() {
+            return;
+        }
+        properties.insert(key, Property::enumerable(value));
+    }
+
+    pub(crate) fn define_property(&self, key: String, property: Property) {
+        self.properties.borrow_mut().insert(key, property);
+    }
+
+    pub(crate) fn delete_property(&self, key: &str) -> bool {
+        let mut properties = self.properties.borrow_mut();
+        if properties
+            .get(key)
+            .is_some_and(|property| !property.configurable)
+        {
+            return false;
+        }
+        properties.remove(key);
+        true
+    }
+
+    pub(crate) fn property_keys(&self) -> Vec<String> {
+        let mut keys: Vec<_> = self
+            .properties
+            .borrow()
+            .iter()
+            .filter(|(_, property)| property.enumerable)
+            .map(|(key, _)| key.clone())
+            .collect();
+        keys.sort();
+        keys
+    }
+
+    pub(crate) fn property_names(&self) -> Vec<String> {
+        let mut names: Vec<_> = self.properties.borrow().keys().cloned().collect();
+        names.sort();
+        names
     }
 
     pub(crate) fn set_len(&self, length: usize) {

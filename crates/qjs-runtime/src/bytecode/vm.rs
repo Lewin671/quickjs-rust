@@ -140,7 +140,7 @@ impl<'a> Vm<'a> {
                         .cloned()
                         .ok_or_else(|| RuntimeError {
                             thrown: None,
-                            message: format!("undefined identifier `{name}`"),
+                            message: format!("ReferenceError: undefined identifier `{name}`"),
                         })?;
                     self.stack.push(value);
                 }
@@ -569,7 +569,10 @@ impl<'a> Vm<'a> {
             Some(Some(value)) => Ok(value.clone()),
             Some(None) => Err(RuntimeError {
                 thrown: None,
-                message: format!("undefined identifier `{}`", self.bytecode.locals[slot].name),
+                message: format!(
+                    "ReferenceError: undefined identifier `{}`",
+                    self.bytecode.locals[slot].name
+                ),
             }),
             None => Err(RuntimeError {
                 thrown: None,

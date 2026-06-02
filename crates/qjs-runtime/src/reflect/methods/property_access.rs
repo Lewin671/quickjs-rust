@@ -13,17 +13,7 @@ pub(crate) fn native_reflect_get(
 
     Ok(match target {
         Value::Object(_) => property_value(target, &key, env)?,
-        Value::Array(elements) => {
-            if key == "length" {
-                Value::Number(elements.len() as f64)
-            } else {
-                key.parse::<usize>()
-                    .ok()
-                    .and_then(|index| elements.get(index))
-                    .or_else(|| crate::array_prototype_property(&elements, env, &key))
-                    .unwrap_or(Value::Undefined)
-            }
-        }
+        Value::Array(_) => property_value(target, &key, env)?,
         Value::Function(function) => crate::function_own_property_descriptor(&function, &key)
             .map(|property| property.value)
             .or_else(|| crate::function_prototype_property(&function, env, &key))

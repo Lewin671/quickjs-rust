@@ -122,5 +122,12 @@ fn evaluates_array_builtins() {
         eval("Object.getPrototypeOf([]) === Array.prototype;"),
         Ok(Value::Boolean(true))
     );
-    assert!(eval("Array(3);").is_err());
+    assert_eq!(eval("Array(3).length;"), Ok(Value::Number(3.0)));
+    assert_eq!(eval("new Array(3).length;"), Ok(Value::Number(3.0)));
+    assert_eq!(
+        eval("let array = new Array(); array.extra = 7; array.extra;"),
+        Ok(Value::Number(7.0))
+    );
+    assert!(eval("Array(-1);").is_err());
+    assert!(eval("Array(1.5);").is_err());
 }
