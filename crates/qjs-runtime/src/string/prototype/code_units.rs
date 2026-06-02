@@ -16,6 +16,7 @@ pub(crate) fn native_string_prototype_at(
     let Some(index) = relative_string_code_unit_index(
         code_units.len(),
         argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
     )?
     else {
         return Ok(Value::Undefined);
@@ -32,8 +33,10 @@ pub(crate) fn native_string_prototype_char_at(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
-    let position =
-        to_char_code_position(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    let position = to_char_code_position(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     if position < 0.0 {
         return Ok(Value::String(String::new()));
     }
@@ -53,8 +56,10 @@ pub(crate) fn native_string_prototype_char_code_at(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
-    let position =
-        to_char_code_position(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    let position = to_char_code_position(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     if position < 0.0 {
         return Ok(Value::Number(f64::NAN));
     }
@@ -73,8 +78,10 @@ pub(crate) fn native_string_prototype_code_point_at(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
-    let position =
-        to_char_code_position(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    let position = to_char_code_position(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     if position < 0.0 || !position.is_finite() {
         return Ok(Value::Undefined);
     }

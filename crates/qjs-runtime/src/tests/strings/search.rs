@@ -13,6 +13,15 @@ fn evaluates_string_search_builtins() {
     assert_eq!(eval("'abc'.endsWith('bc', 2);"), Ok(Value::Boolean(false)));
     assert_eq!(eval("'abc'.indexOf('b');"), Ok(Value::Number(1.0)));
     assert_eq!(eval("'abc'.indexOf('b', 2);"), Ok(Value::Number(-1.0)));
+    assert_eq!(
+        eval("'aaaa'.indexOf('aa', 'Infinity');"),
+        Ok(Value::Number(-1.0))
+    );
+    assert_eq!(eval("'aaaa'.indexOf('aa', {});"), Ok(Value::Number(0.0)));
+    assert_eq!(
+        eval("'abc'.indexOf({ toString: function() { return 'b'; } });"),
+        Ok(Value::Number(1.0))
+    );
     assert_eq!(eval("'abc'.includes('b');"), Ok(Value::Boolean(true)));
     assert_eq!(eval("'abc'.includes('b', 2);"), Ok(Value::Boolean(false)));
     assert_eq!(
@@ -24,4 +33,16 @@ fn evaluates_string_search_builtins() {
     assert_eq!(eval("'canal'.lastIndexOf('x');"), Ok(Value::Number(-1.0)));
     assert_eq!(eval("'abc'.lastIndexOf('', 1);"), Ok(Value::Number(1.0)));
     assert_eq!(eval("'abc'.lastIndexOf('', 99);"), Ok(Value::Number(3.0)));
+    assert_eq!(
+        eval(
+            "'ABBABAB'.lastIndexOf({ toString: function() { return 'AB'; } }, { valueOf: function() { return NaN; } });"
+        ),
+        Ok(Value::Number(5.0))
+    );
+    assert_eq!(
+        eval(
+            "'ABBABAB'.lastIndexOf('AB', { valueOf: function() { return {}; }, toString: function() {} });"
+        ),
+        Ok(Value::Number(5.0))
+    );
 }
