@@ -9,6 +9,12 @@ fn evaluates_object_enumeration_builtins() {
     );
     assert_eq!(eval("Object.keys([1, 2]).length;"), Ok(Value::Number(2.0)));
     assert_eq!(
+        eval(
+            "let xs = [1, , 3, , 5]; Object.defineProperty(xs, 5, { value: 7, enumerable: false, configurable: true }); Object.defineProperty(xs, 10000, { value: 'x', enumerable: true, configurable: true }); Object.keys(xs).join('|');"
+        ),
+        Ok(Value::String("0|2|4|10000".to_owned()))
+    );
+    assert_eq!(
         eval("Object.keys(Object.create({ value: 1 })).length;"),
         Ok(Value::Number(0.0))
     );

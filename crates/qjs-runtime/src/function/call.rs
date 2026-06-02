@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
 use crate::{
-    Bytecode, Function, GLOBAL_THIS_BINDING, ObjectRef, RUNTIME_INTRINSIC_NAMES, RuntimeError,
-    Value, bytecode::eval_function_bytecode, native::call_native_function, object_prototype,
+    Bytecode, Function, GLOBAL_THIS_BINDING, ObjectRef, Property, RUNTIME_INTRINSIC_NAMES,
+    RuntimeError, Value, bytecode::eval_function_bytecode, native::call_native_function,
+    object_prototype,
 };
 
 use super::function_call_this;
@@ -135,15 +136,19 @@ fn function_env(
 }
 
 fn arguments_object(argument_values: &[Value], env: &HashMap<String, Value>) -> Value {
-    let mut properties = HashMap::with_capacity(argument_values.len() + 1);
-    properties.insert(
+    let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
+    object.define_property(
         "length".to_owned(),
-        Value::Number(argument_values.len() as f64),
+        Property::data(
+            Value::Number(argument_values.len() as f64),
+            false,
+            true,
+            true,
+        ),
     );
     for (index, value) in argument_values.iter().cloned().enumerate() {
-        properties.insert(index.to_string(), value);
+        object.define_property(index.to_string(), Property::enumerable(value));
     }
-    let object = ObjectRef::with_prototype(properties, object_prototype(env));
     object.set_to_string_tag("Arguments");
     Value::Object(object)
 }
