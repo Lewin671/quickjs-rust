@@ -49,6 +49,34 @@ fn evaluates_array_sequence_builtins() {
     );
     assert_eq!(eval("[0].concat('x', true)[2];"), Ok(Value::Boolean(true)));
     assert_eq!(
+        eval("Array.prototype.concat.call(true)[0] instanceof Boolean;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let a = []; a.constructor = 1; let caught = false; try { a.concat(); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let marker = { ok: true }; let a = []; Object.defineProperty(a, 'constructor', { get: function() { throw marker; } }); let caught = false; try { a.concat(); } catch (error) { caught = error === marker; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "Array.prototype[1] = 1; let x = [0]; x.length = 2; let out = x.concat(); out[0] + ':' + out[1] + ':' + out.hasOwnProperty('1');"
+        ),
+        Ok(Value::String("0:1:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let a = [0]; a.length = 3; let b = a.concat(); b.length + ':' + b.hasOwnProperty('1') + ':' + (b[1] === undefined);"
+        ),
+        Ok(Value::String("3:false:true".to_owned()))
+    );
+    assert_eq!(
         eval(
             "let xs = [1, 2, 3, 4, 5]; let result = xs.copyWithin(0, 3); result === xs && xs.join();"
         ),

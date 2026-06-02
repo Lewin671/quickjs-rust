@@ -104,7 +104,7 @@ pub(crate) fn array_like_values_from_receiver(
     }
 }
 
-fn array_like_receiver(value: Value, env: &HashMap<String, Value>) -> Value {
+pub(super) fn array_like_receiver(value: Value, env: &HashMap<String, Value>) -> Value {
     match value {
         Value::Boolean(_) => boxed_primitive("Boolean", env).unwrap_or(value),
         Value::Number(_) => boxed_primitive("Number", env).unwrap_or(value),
