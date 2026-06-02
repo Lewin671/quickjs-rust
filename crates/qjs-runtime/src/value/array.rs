@@ -267,8 +267,13 @@ impl ArrayRef {
         if length > elements.len() && !self.extensible.get() {
             return;
         }
+        let old_len = elements.len();
         elements.resize(length, Value::Undefined);
-        self.holes.borrow_mut().retain(|index| *index < length);
+        let mut holes = self.holes.borrow_mut();
+        holes.retain(|index| *index < length);
+        if length > old_len {
+            holes.extend(old_len..length);
+        }
     }
 
     pub(crate) fn is_extensible(&self) -> bool {

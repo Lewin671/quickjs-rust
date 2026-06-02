@@ -1,19 +1,43 @@
-use crate::{ArrayRef, RuntimeError, Value};
+use std::collections::HashMap;
 
-use super::array_like::array_like_values;
+use crate::{ArrayRef, RuntimeError, Value, has_property, property_value, to_length_with_env};
+
+use super::array_like::{array_like_receiver, array_like_values};
 use super::indexing::{array_at_index, array_slice_end, array_slice_start};
 use super::splice::{splice_delete_count, splice_start};
 
 pub(crate) fn native_array_prototype_concat(
     this_value: Value,
     argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
+    let receiver = array_like_receiver(this_value, env);
+    validate_concat_species_constructor(receiver.clone(), env)?;
+
     let mut result = Vec::new();
-    concat_array_item(&mut result, this_value);
+    let mut holes = Vec::new();
+    concat_array_item(&mut result, &mut holes, receiver, env)?;
     for value in argument_values.iter().cloned() {
-        concat_array_item(&mut result, value);
+        concat_array_item(&mut result, &mut holes, value, env)?;
     }
-    Ok(Value::Array(ArrayRef::new(result)))
+    Ok(Value::Array(ArrayRef::new_sparse(result, holes)))
+}
+
+fn validate_concat_species_constructor(
+    receiver: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
+    if !matches!(receiver, Value::Array(_)) {
+        return Ok(());
+    }
+    match property_value(receiver, "constructor", env)? {
+        Value::Undefined | Value::Function(_) | Value::Object(_) => Ok(()),
+        _ => Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Array.prototype.concat constructor is not a constructor"
+                .to_owned(),
+        }),
+    }
 }
 
 pub(crate) fn native_array_prototype_slice(
@@ -92,9 +116,37 @@ pub(crate) fn native_array_prototype_with(
     Ok(Value::Array(ArrayRef::new(values)))
 }
 
-fn concat_array_item(result: &mut Vec<Value>, value: Value) {
+fn concat_array_item(
+    result: &mut Vec<Value>,
+    holes: &mut Vec<usize>,
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
     match value {
-        Value::Array(elements) => result.extend(elements.to_vec()),
-        value => result.push(value),
+        Value::Array(_) => concat_spread_array(result, holes, value, env),
+        value => {
+            result.push(value);
+            Ok(())
+        }
     }
+}
+
+fn concat_spread_array(
+    result: &mut Vec<Value>,
+    holes: &mut Vec<usize>,
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
+    let length = to_length_with_env(property_value(value.clone(), "length", env)?, env)?;
+    for index in 0..length {
+        let key = index.to_string();
+        let target_index = result.len();
+        if has_property(value.clone(), env, &key)? {
+            result.push(property_value(value.clone(), &key, env)?);
+        } else {
+            result.push(Value::Undefined);
+            holes.push(target_index);
+        }
+    }
+    Ok(())
 }
