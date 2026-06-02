@@ -124,6 +124,7 @@ fn evaluates_array_builtins() {
     );
     assert_eq!(eval("Array(3).length;"), Ok(Value::Number(3.0)));
     assert_eq!(eval("new Array(3).length;"), Ok(Value::Number(3.0)));
+    assert_eq!(eval("0 in new Array(3);"), Ok(Value::Boolean(false)));
     assert_eq!(
         eval("let array = new Array(); array.extra = 7; array.extra;"),
         Ok(Value::Number(7.0))
