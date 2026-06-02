@@ -188,6 +188,7 @@ cases/date-set-utc-time-fields-basic.js
 cases/date-set-utc-month-basic.js
 cases/date-time-clip-basic.js
 cases/date-to-json-basic.js
+cases/date-to-string-negative-year.js
 cases/date-to-utc-string-basic.js
 cases/date-utc-accessors-basic.js
 cases/error-constructor-basic.js

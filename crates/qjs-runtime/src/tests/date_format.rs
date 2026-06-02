@@ -41,6 +41,26 @@ fn evaluates_date_local_format_builtins() {
         Ok(Value::String("Wed Jan 01 0020".to_owned()))
     );
     assert_eq!(
+        eval("new Date('-000001-07-01T00:00Z').toDateString();"),
+        Ok(Value::String("Thu Jul 01 -0001".to_owned()))
+    );
+    assert_eq!(
+        eval("new Date('-000001-07-01T00:00:00Z').toDateString();"),
+        Ok(Value::String("Thu Jul 01 -0001".to_owned()))
+    );
+    assert_eq!(
+        eval("new Date('-000001-07-01T00:00:00Z').toString();"),
+        Ok(Value::String(
+            "Thu Jul 01 -0001 00:00:00 GMT+0000".to_owned()
+        ))
+    );
+    assert_eq!(
+        eval("new Date('-000012-07-01T00:00:00Z').toString();"),
+        Ok(Value::String(
+            "Fri Jul 01 -0012 00:00:00 GMT+0000".to_owned()
+        ))
+    );
+    assert_eq!(
         eval("new Date(NaN).toString();"),
         Ok(Value::String("Invalid Date".to_owned()))
     );
