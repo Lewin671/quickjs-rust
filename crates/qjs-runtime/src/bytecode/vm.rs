@@ -81,7 +81,9 @@ impl<'a> Vm<'a> {
             .locals
             .iter()
             .map(|local| {
-                if let Some(value) = globals.get(&local.name) {
+                if local.from_env
+                    && let Some(value) = globals.get(&local.name)
+                {
                     Some(value.clone())
                 } else if local.hoisted {
                     Some(Value::Undefined)
@@ -120,7 +122,8 @@ impl<'a> Vm<'a> {
                 }
                 Op::StoreLocal(slot) => {
                     let value = self.pop()?;
-                    self.store_local(slot, value)?;
+                    let result = self.store_local(slot, value);
+                    self.handle_runtime_result(result)?;
                 }
                 Op::LoadGlobal(name) => {
                     let value = self
@@ -554,6 +557,12 @@ impl<'a> Vm<'a> {
             thrown: None,
             message: "bytecode local index out of bounds".to_owned(),
         })?;
+        if !self.bytecode.locals[slot].mutable && local.is_some() {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: assignment to constant variable".to_owned(),
+            });
+        }
         *local = Some(value);
         Ok(())
     }

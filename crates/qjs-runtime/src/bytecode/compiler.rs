@@ -6,11 +6,11 @@ use crate::{RuntimeError, Value, function::is_strict_function_body};
 
 use super::ir::{Bytecode, Local, Op};
 
-#[derive(Default)]
 pub(super) struct Compiler {
     pub(super) constants: Vec<Value>,
     pub(super) locals: Vec<Local>,
     pub(super) local_slots: HashMap<String, usize>,
+    lexical_scopes: Vec<HashMap<String, usize>>,
     pub(super) code: Vec<Op>,
     loop_stack: Vec<LoopContext>,
     next_temp: usize,
@@ -23,6 +23,21 @@ pub(super) struct LoopContext {
     allows_continue: bool,
     breaks: Vec<usize>,
     continues: Vec<usize>,
+}
+
+impl Default for Compiler {
+    fn default() -> Self {
+        Self {
+            constants: Vec::new(),
+            locals: Vec::new(),
+            local_slots: HashMap::new(),
+            lexical_scopes: vec![HashMap::new()],
+            code: Vec::new(),
+            loop_stack: Vec::new(),
+            next_temp: 0,
+            strict: false,
+        }
+    }
 }
 
 pub(super) fn compile_script(script: &Script) -> Result<Bytecode, RuntimeError> {
@@ -174,9 +189,72 @@ impl Compiler {
         self.locals.push(Local {
             name: name.to_owned(),
             hoisted,
+            mutable: true,
+            from_env: true,
         });
         self.local_slots.insert(name.to_owned(), slot);
         slot
+    }
+
+    pub(super) fn declare_lexical_slot(&mut self, name: &str, mutable: bool) -> usize {
+        if let Some(slot) = self.current_lexical_scope().get(name) {
+            return *slot;
+        }
+        let slot = self.locals.len();
+        self.locals.push(Local {
+            name: name.to_owned(),
+            hoisted: false,
+            mutable,
+            from_env: false,
+        });
+        self.current_lexical_scope_mut()
+            .insert(name.to_owned(), slot);
+        slot
+    }
+
+    pub(super) fn declare_var_kind_slot(&mut self, name: &str, kind: VarKind) -> usize {
+        match kind {
+            VarKind::Var => self.local_slot(name, true),
+            VarKind::Let => self.declare_lexical_slot(name, true),
+            VarKind::Const => self.declare_lexical_slot(name, false),
+        }
+    }
+
+    pub(super) fn resolve_local_slot(&self, name: &str) -> Option<usize> {
+        self.lexical_scopes
+            .iter()
+            .rev()
+            .find_map(|scope| scope.get(name).copied())
+            .or_else(|| self.local_slots.get(name).copied())
+    }
+
+    pub(super) fn assignment_slot(&mut self, name: &str) -> usize {
+        self.resolve_local_slot(name)
+            .unwrap_or_else(|| self.local_slot(name, false))
+    }
+
+    pub(super) fn with_lexical_scope<T>(
+        &mut self,
+        compile: impl FnOnce(&mut Self) -> Result<T, RuntimeError>,
+    ) -> Result<T, RuntimeError> {
+        self.lexical_scopes.push(HashMap::new());
+        let result = compile(self);
+        self.lexical_scopes
+            .pop()
+            .expect("lexical scope stack should be balanced");
+        result
+    }
+
+    fn current_lexical_scope(&self) -> &HashMap<String, usize> {
+        self.lexical_scopes
+            .last()
+            .expect("compiler should always have a lexical scope")
+    }
+
+    fn current_lexical_scope_mut(&mut self) -> &mut HashMap<String, usize> {
+        self.lexical_scopes
+            .last_mut()
+            .expect("compiler should always have a lexical scope")
     }
 
     pub(super) fn const_slot(&mut self, value: Value) -> usize {
@@ -278,20 +356,20 @@ impl Compiler {
     pub(super) fn compile_stmt(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
         match stmt {
             Stmt::Expr(expr) => self.compile_expr(expr),
-            Stmt::Block { body, .. } => {
+            Stmt::Block { body, .. } => self.with_lexical_scope(|compiler| {
                 if body.is_empty() {
-                    self.emit_load_undefined();
+                    compiler.emit_load_undefined();
                     return Ok(());
                 }
-                self.compile_hoisted_function_decls(body)?;
+                compiler.compile_hoisted_function_decls(body)?;
                 for (index, stmt) in body.iter().enumerate() {
-                    self.compile_stmt(stmt)?;
+                    compiler.compile_stmt(stmt)?;
                     if index + 1 != body.len() {
-                        self.emit(Op::Pop);
+                        compiler.emit(Op::Pop);
                     }
                 }
                 Ok(())
-            }
+            }),
             Stmt::If {
                 test,
                 consequent,
@@ -335,9 +413,8 @@ impl Compiler {
             Stmt::VarDecl {
                 kind, declarations, ..
             } => {
-                let is_hoisted = *kind == VarKind::Var;
                 for declaration in declarations {
-                    let slot = self.local_slot(&declaration.name, is_hoisted);
+                    let slot = self.declare_var_kind_slot(&declaration.name, *kind);
                     if let Some(init) = &declaration.init {
                         self.compile_expr(init)?;
                     } else {

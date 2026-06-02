@@ -14,7 +14,7 @@ impl Compiler {
     ) -> Result<(), RuntimeError> {
         match target {
             AssignmentTarget::Identifier { name, .. } => {
-                let slot = self.local_slot(name, false);
+                let slot = self.assignment_slot(name);
                 self.compile_expr(value)?;
                 self.emit(Op::Dup);
                 self.emit(Op::StoreLocal(slot));
@@ -41,7 +41,7 @@ impl Compiler {
         let AssignmentTarget::Identifier { name, .. } = target else {
             return self.compile_member_compound_assign(target, op, value);
         };
-        let slot = self.local_slot(name, false);
+        let slot = self.assignment_slot(name);
         match op {
             AssignmentOp::LogicalAndAssign => {
                 self.emit(Op::LoadLocal(slot));
@@ -93,7 +93,7 @@ impl Compiler {
         let AssignmentTarget::Identifier { name, .. } = target else {
             return self.compile_member_update(target, op, prefix);
         };
-        let slot = self.local_slot(name, false);
+        let slot = self.assignment_slot(name);
         self.emit(Op::LoadLocal(slot));
         self.emit(Op::Unary(qjs_ast::UnaryOp::Plus));
         if !prefix {
@@ -212,8 +212,8 @@ impl Compiler {
     pub(super) fn compile_typeof(&mut self, argument: &Expr) -> Result<(), RuntimeError> {
         match argument {
             Expr::Identifier { name, .. } => {
-                if let Some(slot) = self.local_slots.get(name) {
-                    self.emit(Op::LoadLocalOrUndefined(*slot));
+                if let Some(slot) = self.resolve_local_slot(name) {
+                    self.emit(Op::LoadLocalOrUndefined(slot));
                 } else {
                     self.emit(Op::TypeofGlobal(name.clone()));
                     return Ok(());
