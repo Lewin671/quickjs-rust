@@ -47,8 +47,12 @@ impl Parser {
 
     fn regexp_literal(&mut self, start: usize) -> Result<Expr, ParseError> {
         let mut pattern = String::new();
+        let mut previous_end = start + 1;
         loop {
             let token = self.advance();
+            if token.span.start > previous_end {
+                pattern.push_str(&self.source[previous_end..token.span.start]);
+            }
             match token.kind {
                 TokenKind::Slash => {
                     let end = token.span.end;
@@ -91,6 +95,8 @@ impl Parser {
                             span: escaped.span,
                         })?),
                     }
+                    previous_end = escaped.span.end;
+                    continue;
                 }
                 TokenKind::Identifier(text) | TokenKind::Number(text) | TokenKind::String(text) => {
                     pattern.push_str(&text);
@@ -106,6 +112,7 @@ impl Parser {
                     span: token.span,
                 })?),
             }
+            previous_end = token.span.end;
         }
     }
 

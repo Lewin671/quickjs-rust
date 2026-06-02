@@ -51,6 +51,10 @@ fn evaluates_string_sequence_builtins() {
         Ok(Value::String("he|".to_owned()))
     );
     assert_eq!(
+        eval("'one two three'.split(/ /, 2).join('|');"),
+        Ok(Value::String("one|two".to_owned()))
+    );
+    assert_eq!(
         eval("'abc'.split(/[a-z]/).join('|');"),
         Ok(Value::String("|||".to_owned()))
     );
