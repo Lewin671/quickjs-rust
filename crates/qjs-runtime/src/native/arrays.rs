@@ -22,7 +22,7 @@ pub(super) fn call_array_native(
             array::native_array_prototype_concat(this_value, argument_values)?
         }
         NativeFunction::ArrayPrototypeCopyWithin => {
-            array::native_array_prototype_copy_within(this_value, argument_values)?
+            array::native_array_prototype_copy_within(this_value, argument_values, env)?
         }
         NativeFunction::ArrayPrototypeEvery => {
             array::native_array_prototype_every(this_value, argument_values, env)?

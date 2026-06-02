@@ -66,6 +66,34 @@ fn evaluates_array_sequence_builtins() {
         eval("[1, 2, 3, 4].copyWithin(1, 0, 3).join();"),
         Ok(Value::String("1,1,2,3".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "let o = { length: 4, 0: 'a', 2: 'c', 3: 'd' }; Array.prototype.copyWithin.call(o, 1, 2); o[0] + ':' + o[1] + ':' + o[2] + ':' + o[3];"
+        ),
+        Ok(Value::String("a:c:d:d".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let xs = [1, , 3]; xs.copyWithin(0, 1, 2); xs.hasOwnProperty('0') + ':' + (xs[0] === undefined);"
+        ),
+        Ok(Value::String("false:true".to_owned()))
+    );
+    assert_eq!(
+        eval("Array.prototype.copyWithin.call(true) instanceof Boolean;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let o = { length: 43 }; Object.defineProperty(o, '42', { configurable: false, writable: true }); let caught = false; try { Array.prototype.copyWithin.call(o, 42, 0); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let marker = { ok: true }; let o = { 0: true, length: 43 }; Object.defineProperty(o, '42', { set: function() { throw marker; } }); let caught = false; try { Array.prototype.copyWithin.call(o, 42, 0); } catch (error) { caught = error === marker; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]
