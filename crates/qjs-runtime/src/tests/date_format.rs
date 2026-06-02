@@ -76,6 +76,12 @@ fn evaluates_date_local_format_builtins() {
         eval("Number.isNaN(new Date(NaN).getTimezoneOffset());"),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "let caught = false; try { Date.prototype.toString(); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
     assert!(eval("Date.prototype.toString.call({});").is_err());
     assert!(eval("Date.prototype.getTimezoneOffset.call({});").is_err());
 }

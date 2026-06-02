@@ -13,7 +13,7 @@ pub(crate) fn array_own_property_descriptor(elements: &ArrayRef, key: &str) -> O
         return Some(Property::data(
             Value::Number(elements.len() as f64),
             false,
-            !elements.is_frozen(),
+            elements.is_length_writable(),
             false,
         ));
     }

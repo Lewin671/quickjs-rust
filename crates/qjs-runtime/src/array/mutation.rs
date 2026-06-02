@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    Property, RuntimeError, Value, array_own_property_descriptor, call_function,
+    Property, RuntimeError, Value, array_own_property_descriptor, array_prototype, call_function,
     function_delete_own_property, function_own_property_descriptor, has_property, property_value,
     to_length,
 };
@@ -10,6 +10,9 @@ use super::{
     array_like::array_like_length,
     indexing::{array_slice_end, array_slice_start},
 };
+
+const MAX_SAFE_INTEGER_LENGTH: usize = 9_007_199_254_740_991;
+const MAX_ARRAY_LENGTH: usize = u32::MAX as usize;
 
 pub(crate) fn native_array_prototype_fill(
     this_value: Value,
@@ -196,17 +199,173 @@ fn copy_within_delete_error() -> RuntimeError {
 pub(crate) fn native_array_prototype_push(
     this_value: Value,
     argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let Value::Array(elements) = this_value else {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "Array.prototype.push called on non-array".to_owned(),
-        });
-    };
-    for value in argument_values.iter().cloned() {
-        elements.push(value);
+    if matches!(this_value, Value::String(_)) {
+        return Err(push_length_error());
     }
-    Ok(Value::Number(elements.len() as f64))
+
+    let source = array_like_length(this_value, "Array.prototype.push", env)?;
+    let receiver = source.receiver;
+    let length = source.length;
+    let new_length = length
+        .checked_add(argument_values.len())
+        .filter(|length| *length <= MAX_SAFE_INTEGER_LENGTH)
+        .ok_or_else(push_length_error)?;
+    for (offset, value) in argument_values.iter().cloned().enumerate() {
+        push_set_property(receiver.clone(), length + offset, value, env)?;
+    }
+    push_set_length(receiver, new_length, env)?;
+    Ok(Value::Number(new_length as f64))
+}
+
+fn push_set_property(
+    receiver: Value,
+    index: usize,
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
+    let key = index.to_string();
+    match receiver.clone() {
+        Value::Object(object) => {
+            if apply_push_setter(object.property(&key), receiver, value.clone(), env)? {
+                return Ok(());
+            }
+            validate_push_data_set(object.property(&key))?;
+            if object.own_property(&key).is_none() && !object.is_extensible() {
+                return Err(push_property_error());
+            }
+            object.set(key, value);
+            Ok(())
+        }
+        Value::Array(elements) => {
+            let property = array_own_property_descriptor(&elements, &key)
+                .or_else(|| elements.property(&key))
+                .or_else(|| array_prototype(env).and_then(|prototype| prototype.property(&key)));
+            if apply_push_setter(property.clone(), receiver, value.clone(), env)? {
+                return Ok(());
+            }
+            validate_push_data_set(property)?;
+            if array_own_property_descriptor(&elements, &key)
+                .is_some_and(|property| !property.writable)
+                || !elements.is_extensible() && index >= elements.len()
+            {
+                return Err(push_property_error());
+            }
+            elements.set(index, value);
+            Ok(())
+        }
+        Value::Function(function) => {
+            if apply_push_setter(
+                function_own_property_descriptor(&function, &key),
+                receiver,
+                value.clone(),
+                env,
+            )? {
+                return Ok(());
+            }
+            validate_push_data_set(function_own_property_descriptor(&function, &key))?;
+            function.set_property(key, value);
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
+fn push_set_length(
+    receiver: Value,
+    length: usize,
+    env: &mut HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
+    let value = Value::Number(length as f64);
+    match receiver.clone() {
+        Value::Object(object) => {
+            if apply_push_setter(object.property("length"), receiver, value.clone(), env)? {
+                return Ok(());
+            }
+            validate_push_data_set(object.property("length"))?;
+            if object.own_property("length").is_none() && !object.is_extensible() {
+                return Err(push_length_error());
+            }
+            object.set("length".to_owned(), value);
+            Ok(())
+        }
+        Value::Array(elements) => {
+            if length > MAX_ARRAY_LENGTH {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: "RangeError: invalid array length".to_owned(),
+                });
+            }
+            if array_own_property_descriptor(&elements, "length")
+                .is_some_and(|property| !property.writable)
+            {
+                return Err(push_length_error());
+            }
+            elements.set_len(length);
+            if elements.len() == length {
+                Ok(())
+            } else {
+                Err(push_length_error())
+            }
+        }
+        Value::Function(function) => {
+            if apply_push_setter(
+                function_own_property_descriptor(&function, "length"),
+                receiver,
+                value.clone(),
+                env,
+            )? {
+                return Ok(());
+            }
+            validate_push_data_set(function_own_property_descriptor(&function, "length"))?;
+            function.set_property("length".to_owned(), value);
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
+fn apply_push_setter(
+    property: Option<Property>,
+    receiver: Value,
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<bool, RuntimeError> {
+    let Some(property) = property else {
+        return Ok(false);
+    };
+    if let Some(setter) = property.set {
+        call_function(setter, receiver, vec![value], env, false)?;
+        return Ok(true);
+    }
+    if property.is_accessor() {
+        Err(push_length_error())
+    } else {
+        Ok(false)
+    }
+}
+
+fn validate_push_data_set(property: Option<Property>) -> Result<(), RuntimeError> {
+    if property.is_some_and(|property| !property.writable || property.is_accessor()) {
+        Err(push_property_error())
+    } else {
+        Ok(())
+    }
+}
+
+fn push_property_error() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "TypeError: Array.prototype.push cannot set property".to_owned(),
+    }
+}
+
+fn push_length_error() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "TypeError: Array.prototype.push cannot set length".to_owned(),
+    }
 }
 
 pub(crate) fn native_array_prototype_pop(

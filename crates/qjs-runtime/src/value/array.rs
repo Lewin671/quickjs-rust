@@ -7,12 +7,17 @@ use std::{
 
 use super::{ObjectRef, Property, Value};
 
+const MAX_DENSE_STORAGE_LENGTH: usize = 1_000_000;
+const MAX_ARRAY_INDEX: usize = u32::MAX as usize - 1;
+
 /// Array storage reference.
 #[derive(Clone)]
 pub struct ArrayRef {
     elements: Rc<RefCell<Vec<Value>>>,
     holes: Rc<RefCell<BTreeSet<usize>>>,
     properties: Rc<RefCell<HashMap<String, Property>>>,
+    length: Rc<Cell<usize>>,
+    length_writable: Rc<Cell<bool>>,
     extensible: Rc<Cell<bool>>,
     sealed: Rc<Cell<bool>>,
     frozen: Rc<Cell<bool>>,
@@ -25,10 +30,13 @@ impl ArrayRef {
     }
 
     pub(crate) fn new_sparse(elements: Vec<Value>, holes: Vec<usize>) -> Self {
+        let length = elements.len();
         Self {
             elements: Rc::new(RefCell::new(elements)),
             holes: Rc::new(RefCell::new(holes.into_iter().collect())),
             properties: Rc::new(RefCell::new(HashMap::new())),
+            length: Rc::new(Cell::new(length)),
+            length_writable: Rc::new(Cell::new(true)),
             extensible: Rc::new(Cell::new(true)),
             sealed: Rc::new(Cell::new(false)),
             frozen: Rc::new(Cell::new(false)),
@@ -41,11 +49,11 @@ impl ArrayRef {
     }
 
     pub(crate) fn len(&self) -> usize {
-        self.elements.borrow().len()
+        self.length.get()
     }
 
     pub(crate) fn is_empty(&self) -> bool {
-        self.elements.borrow().is_empty()
+        self.length.get() == 0
     }
 
     pub(crate) fn get(&self, index: usize) -> Option<Value> {
@@ -61,8 +69,11 @@ impl ArrayRef {
 
     pub(crate) fn present_indices(&self) -> Vec<usize> {
         let holes = self.holes.borrow();
-        let len = self.elements.borrow().len();
-        let mut indices: Vec<_> = (0..len).filter(|index| !holes.contains(index)).collect();
+        let len = self.length.get();
+        let dense_len = self.elements.borrow().len();
+        let mut indices: Vec<_> = (0..dense_len)
+            .filter(|index| !holes.contains(index))
+            .collect();
         indices.extend(
             self.properties
                 .borrow()
@@ -83,17 +94,17 @@ impl ArrayRef {
         self.elements.borrow().clone()
     }
 
-    pub(crate) fn push(&self, value: Value) -> usize {
-        let mut elements = self.elements.borrow_mut();
-        elements.push(value);
-        elements.len()
-    }
-
     pub(crate) fn pop(&self) -> Option<Value> {
         let mut elements = self.elements.borrow_mut();
-        let index = elements.len().checked_sub(1)?;
+        let index = self.length.get().checked_sub(1)?;
+        self.length.set(index);
         self.holes.borrow_mut().remove(&index);
-        elements.pop()
+        self.properties.borrow_mut().remove(&index.to_string());
+        if index + 1 == elements.len() {
+            elements.pop()
+        } else {
+            None
+        }
     }
 
     pub(crate) fn shift(&self) -> Option<Value> {
@@ -101,6 +112,7 @@ impl ArrayRef {
         if elements.is_empty() {
             None
         } else {
+            self.length.set(self.length.get().saturating_sub(1));
             let mut holes = self.holes.borrow_mut();
             *holes = holes
                 .iter()
@@ -118,11 +130,12 @@ impl ArrayRef {
             *holes = holes.iter().map(|index| index + offset).collect();
         }
         elements.splice(0..0, values.iter().cloned());
-        elements.len()
+        self.length.set(self.length.get() + values.len());
+        self.length.get()
     }
 
     pub(crate) fn reverse(&self) {
-        let len = self.elements.borrow().len();
+        let len = self.length.get();
         self.elements.borrow_mut().reverse();
         let mut holes = self.holes.borrow_mut();
         *holes = holes.iter().map(|index| len - 1 - index).collect();
@@ -132,9 +145,10 @@ impl ArrayRef {
         if self.frozen.get() {
             return;
         }
-        if values.len() > self.elements.borrow().len() && !self.extensible.get() {
+        if values.len() > self.length.get() && !self.extensible.get() {
             return;
         }
+        self.length.set(values.len());
         *self.elements.borrow_mut() = values;
         self.holes.borrow_mut().clear();
     }
@@ -145,11 +159,17 @@ impl ArrayRef {
         }
 
         let mut elements = self.elements.borrow_mut();
-        let end = start + delete_count.min(elements.len().saturating_sub(start));
-        let new_len = elements.len() - (end - start) + items.len();
-        if new_len > elements.len() && !self.extensible.get() {
+        let length = self.length.get();
+        let end = start + delete_count.min(length.saturating_sub(start));
+        let new_len = length - (end - start) + items.len();
+        if new_len > length && !self.extensible.get() {
             return Vec::new();
         }
+        self.length.set(new_len);
+        if start > elements.len() {
+            return Vec::new();
+        }
+        let end = end.min(elements.len());
         self.holes.borrow_mut().clear();
         elements.splice(start..end, items.iter().cloned()).collect()
     }
@@ -162,10 +182,25 @@ impl ArrayRef {
     }
 
     pub(crate) fn set(&self, index: usize, value: Value) {
+        if index > MAX_ARRAY_INDEX {
+            self.set_property(index.to_string(), value);
+            return;
+        }
+        if index >= self.length.get() {
+            if self.frozen.get() || !self.extensible.get() || !self.length_writable.get() {
+                return;
+            }
+            self.length.set(index + 1);
+        }
         let mut elements = self.elements.borrow_mut();
         let mut holes = self.holes.borrow_mut();
         if index >= elements.len() {
-            if !self.extensible.get() {
+            if index >= MAX_DENSE_STORAGE_LENGTH {
+                drop(elements);
+                drop(holes);
+                self.properties
+                    .borrow_mut()
+                    .insert(index.to_string(), Property::enumerable(value));
                 return;
             }
             let old_len = elements.len();
@@ -213,10 +248,26 @@ impl ArrayRef {
 
     pub(crate) fn define_property(&self, key: String, property: Property) {
         if let Ok(index) = key.parse::<usize>() {
+            if index > MAX_ARRAY_INDEX {
+                self.properties.borrow_mut().insert(key, property);
+                return;
+            }
+            if index >= self.length.get() {
+                if !self.length_writable.get() {
+                    return;
+                }
+                self.length.set(index + 1);
+            }
             let mut elements = self.elements.borrow_mut();
             let mut holes = self.holes.borrow_mut();
             if index >= elements.len() {
                 if !self.extensible.get() {
+                    return;
+                }
+                if index >= MAX_DENSE_STORAGE_LENGTH {
+                    drop(elements);
+                    drop(holes);
+                    self.properties.borrow_mut().insert(key, property);
                     return;
                 }
                 let old_len = elements.len();
@@ -261,23 +312,36 @@ impl ArrayRef {
 
     pub(crate) fn set_len(&self, length: usize) {
         let mut elements = self.elements.borrow_mut();
-        if self.frozen.get() {
+        if self.frozen.get() || !self.length_writable.get() {
             return;
         }
-        if length > elements.len() && !self.extensible.get() {
+        let old_len = self.length.get();
+        if length > old_len && !self.extensible.get() {
             return;
         }
-        let old_len = elements.len();
-        elements.resize(length, Value::Undefined);
+        self.length.set(length);
+        if length < elements.len() {
+            elements.truncate(length);
+        } else if length <= MAX_DENSE_STORAGE_LENGTH {
+            elements.resize(length, Value::Undefined);
+        }
         let mut holes = self.holes.borrow_mut();
         holes.retain(|index| *index < length);
-        if length > old_len {
+        if length > old_len && length <= MAX_DENSE_STORAGE_LENGTH {
             holes.extend(old_len..length);
         }
     }
 
     pub(crate) fn is_extensible(&self) -> bool {
         self.extensible.get()
+    }
+
+    pub(crate) fn is_length_writable(&self) -> bool {
+        self.length_writable.get()
+    }
+
+    pub(crate) fn set_length_writable(&self, writable: bool) {
+        self.length_writable.set(writable);
     }
 
     pub(crate) fn prevent_extensions(&self) {
@@ -296,6 +360,7 @@ impl ArrayRef {
     pub(crate) fn freeze(&self) {
         self.seal();
         self.frozen.set(true);
+        self.length_writable.set(false);
     }
 
     pub(crate) fn is_frozen(&self) -> bool {
@@ -325,7 +390,7 @@ impl fmt::Debug for ArrayRef {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("ArrayRef")
-            .field("len", &self.elements.borrow().len())
+            .field("len", &self.length.get())
             .finish()
     }
 }

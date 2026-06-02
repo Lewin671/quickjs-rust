@@ -75,7 +75,7 @@ pub(super) fn call_array_native(
         }
         NativeFunction::ArrayPrototypePop => array::native_array_prototype_pop(this_value, env)?,
         NativeFunction::ArrayPrototypePush => {
-            array::native_array_prototype_push(this_value, argument_values)?
+            array::native_array_prototype_push(this_value, argument_values, env)?
         }
         NativeFunction::ArrayPrototypeReduce => {
             array::native_array_prototype_reduce(this_value, argument_values, env)?

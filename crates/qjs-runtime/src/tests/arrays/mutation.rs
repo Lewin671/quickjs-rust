@@ -7,6 +7,22 @@ fn evaluates_array_mutation_builtins() {
         Ok(Value::String("3:3:1,2,3".to_owned()))
     );
     assert_eq!(
+        eval(
+            "let object = { 0: 1, length: 1 }; Array.prototype.push.call(object, 2, 3) + ':' + object.length + ':' + object[2];"
+        ),
+        Ok(Value::String("3:3:3".to_owned()))
+    );
+    assert_eq!(
+        eval("Array.prototype.push.call(false);"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { Array.prototype.push.call('', 1); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("let xs = [1, 2]; xs.pop() + ':' + xs.length + ':' + xs.join();"),
         Ok(Value::String("2:1:1".to_owned()))
     );

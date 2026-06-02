@@ -2,15 +2,12 @@ use std::collections::HashMap;
 
 use crate::{Function, NativeFunction, ObjectRef, Property, Value};
 
-use super::value::define_date_value;
-
 pub(crate) fn install_date(
     env: &mut HashMap<String, Value>,
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
     let date_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
-    define_date_value(&date_prototype, f64::NAN);
 
     let date_function = Function::new_native(Some("Date"), 7, NativeFunction::Date, true);
     date_prototype.define_non_enumerable(
