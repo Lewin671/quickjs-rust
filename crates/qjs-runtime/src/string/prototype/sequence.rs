@@ -26,7 +26,7 @@ pub(crate) fn native_string_prototype_repeat(
     if count.is_infinite() || count < 0.0 {
         return Err(RuntimeError {
             thrown: None,
-            message: "repeat count must be a finite non-negative number".to_owned(),
+            message: "RangeError: repeat count must be a finite non-negative number".to_owned(),
         });
     }
     if count.is_nan() || count == 0.0 {
