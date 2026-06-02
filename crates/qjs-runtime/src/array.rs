@@ -12,6 +12,7 @@ mod sequence;
 mod shift;
 mod sort;
 mod splice;
+mod unshift;
 
 pub(crate) use array_like::{array_like_values, array_like_values_with_env};
 pub(crate) use constructor::{
@@ -33,7 +34,7 @@ pub(crate) use iterator::{
 pub(crate) use join::{array_join, native_array_prototype_join, native_array_prototype_to_string};
 pub(crate) use mutation::{
     native_array_prototype_copy_within, native_array_prototype_fill, native_array_prototype_pop,
-    native_array_prototype_push, native_array_prototype_reverse, native_array_prototype_unshift,
+    native_array_prototype_push, native_array_prototype_reverse,
 };
 pub(crate) use search::{
     native_array_prototype_at, native_array_prototype_includes, native_array_prototype_index_of,
@@ -47,3 +48,4 @@ pub(crate) use sequence::{
 pub(crate) use shift::native_array_prototype_shift;
 pub(crate) use sort::{native_array_prototype_sort, native_array_prototype_to_sorted};
 pub(crate) use splice::native_array_prototype_splice;
+pub(crate) use unshift::native_array_prototype_unshift;

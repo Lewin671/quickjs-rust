@@ -174,7 +174,11 @@ cases/array-to-spliced-length.js
 cases/array-to-spliced-negative-start.js
 cases/array-to-spliced-start-past-length.js
 cases/array-unshift-basic.js
+cases/array-unshift-boolean-receiver.js
 cases/array-unshift-length.js
+cases/array-unshift-object-generic.js
+cases/array-unshift-prototype-setter-length.js
+cases/array-unshift-read-only-property.js
 cases/array-index-assignment-basic.js
 cases/boolean-constructor-basic.js
 cases/boolean-constructor-length.js
