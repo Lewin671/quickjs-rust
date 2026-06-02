@@ -1,4 +1,4 @@
-use qjs_ast::{Expr, Literal, ObjectProperty, ObjectPropertyKey, Span};
+use qjs_ast::{Expr, Literal, ObjectProperty, ObjectPropertyKey, ObjectPropertyKind, Span};
 use qjs_lexer::TokenKind;
 
 use crate::{ParseError, Parser};
@@ -153,10 +153,25 @@ impl Parser {
             loop {
                 let key_token = self.advance();
                 let key_span = key_token.span;
-                let (key, shorthand_value) = self.object_property_key(key_token)?;
-                let value = self.object_property_value(key_span, &key, shorthand_value)?;
+                let (key, kind, value) = if is_get_accessor_start(&key_token.kind)
+                    && !self.at(&TokenKind::Colon)
+                    && !self.at(&TokenKind::Comma)
+                    && !self.at(&TokenKind::LeftParen)
+                    && !self.at(&TokenKind::RightBrace)
+                {
+                    self.object_getter_property(key_span)?
+                } else {
+                    let (key, shorthand_value) = self.object_property_key(key_token)?;
+                    let value = self.object_property_value(key_span, &key, shorthand_value)?;
+                    (key, ObjectPropertyKind::Data, value)
+                };
                 let span = Span::new(key_span.start, value.span().end);
-                properties.push(ObjectProperty { key, value, span });
+                properties.push(ObjectProperty {
+                    key,
+                    kind,
+                    value,
+                    span,
+                });
                 if !self.match_kind(&TokenKind::Comma) {
                     break;
                 }
@@ -251,6 +266,48 @@ impl Parser {
             },
         })
     }
+
+    fn object_getter_property(
+        &mut self,
+        start_span: Span,
+    ) -> Result<(ObjectPropertyKey, ObjectPropertyKind, Expr), ParseError> {
+        let key_token = self.advance();
+        let key_span = key_token.span;
+        let (key, _) = self.object_property_key(key_token)?;
+        let params = self.function_parameters()?;
+        if !params.is_empty() {
+            return Err(ParseError {
+                message: "getter must not have parameters".to_owned(),
+                span: key_span,
+            });
+        }
+        let body = self.block_body()?;
+        let end = self
+            .tokens
+            .get(self.cursor.saturating_sub(1))
+            .expect("parser should always have eof token")
+            .span
+            .end;
+        let name = match &key {
+            ObjectPropertyKey::Literal(name) => Some(name.clone()),
+            ObjectPropertyKey::Computed(_) => None,
+        };
+        Ok((
+            key,
+            ObjectPropertyKind::Getter,
+            Expr::Function {
+                name,
+                params,
+                body,
+                constructable: false,
+                span: Span::new(start_span.start, end),
+            },
+        ))
+    }
+}
+
+fn is_get_accessor_start(kind: &TokenKind) -> bool {
+    matches!(kind, TokenKind::Identifier(name) if name == "get")
 }
 
 struct RegexpFlags {

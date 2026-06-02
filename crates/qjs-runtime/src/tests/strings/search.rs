@@ -46,3 +46,46 @@ fn evaluates_string_search_builtins() {
         Ok(Value::Number(5.0))
     );
 }
+
+#[test]
+fn evaluates_string_match_basic_regexp() {
+    assert_eq!(
+        eval("'abc'.match(/b/)[0];"),
+        Ok(Value::String("b".to_owned()))
+    );
+    assert_eq!(eval("'abc'.match(/z/);"), Ok(Value::Null));
+    assert_eq!(eval("'abc'.match(/b/).index;"), Ok(Value::Number(1.0)));
+    assert_eq!(
+        eval("'abc'.match(/b/).input;"),
+        Ok(Value::String("abc".to_owned()))
+    );
+}
+
+#[test]
+fn evaluates_string_match_coercions() {
+    assert_eq!(
+        eval("String.prototype.match.call(12345, /34/)[0];"),
+        Ok(Value::String("34".to_owned()))
+    );
+    assert_eq!(
+        eval("'12345'.match(34)[0];"),
+        Ok(Value::String("34".to_owned()))
+    );
+    assert_eq!(eval("'12345'.match(34).index;"), Ok(Value::Number(2.0)));
+}
+
+#[test]
+fn rejects_string_match_null_or_undefined_this() {
+    assert_eq!(
+        eval(
+            "let caught = false; try { String.prototype.match.call(null, /./); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { String.prototype.match.call(undefined, /./); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}

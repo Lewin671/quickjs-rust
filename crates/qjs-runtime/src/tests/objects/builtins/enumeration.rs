@@ -38,6 +38,18 @@ fn evaluates_object_enumeration_builtins() {
         eval("Object.values('ab').join();"),
         Ok(Value::String("a,b".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "let object = { a: 'A', get b() { this.c = 'C'; return 'B'; } }; let values = Object.values(object); values.length + ':' + values[0] + ':' + values[1] + ':' + object.c;"
+        ),
+        Ok(Value::String("2:A:B:C".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { Object.values({ get a() { throw new RangeError('x'); } }); } catch (error) { caught = error instanceof RangeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
     assert_eq!(eval("Object.values(0).length;"), Ok(Value::Number(0.0)));
     assert_eq!(eval("Object.entries.length;"), Ok(Value::Number(1.0)));
     assert_eq!(
@@ -63,6 +75,12 @@ fn evaluates_object_enumeration_builtins() {
             "let entries = Object.entries('ab'); entries[0][0] + ':' + entries[0][1] + '|' + entries[1][0] + ':' + entries[1][1];"
         ),
         Ok(Value::String("0:a|1:b".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let object = { a: 'A', get b() { return 'B'; } }; let entries = Object.entries(object); entries.length + ':' + entries[0][0] + ':' + entries[0][1] + ':' + entries[1][0] + ':' + entries[1][1];"
+        ),
+        Ok(Value::String("2:a:A:b:B".to_owned()))
     );
     assert_eq!(eval("Object.entries(0).length;"), Ok(Value::Number(0.0)));
     assert_eq!(

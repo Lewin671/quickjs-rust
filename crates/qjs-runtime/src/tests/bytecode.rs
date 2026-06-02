@@ -85,6 +85,20 @@ fn evaluates_branch_and_loop_bytecode_subset() {
     );
     assert_bytecode_evaluates("try { 1; } catch (error) { 2; }");
     assert_bytecode_evaluates("try { throw 'hit'; } catch (error) { error; }");
+    assert_eq!(
+        eval_bytecode_source("try { throw 'x'; } catch (e) {} typeof e;"),
+        Ok(Value::String("undefined".to_owned()))
+    );
+    assert_eq!(
+        eval_bytecode_source("let e = 'outer'; try { throw 'x'; } catch (e) {} e;"),
+        Ok(Value::String("outer".to_owned()))
+    );
+    assert_eq!(
+        eval_bytecode_source(
+            "function f() { try { throw 'x'; } catch (e) { return 'catch'; } finally { return typeof e; } } f();"
+        ),
+        Ok(Value::String("undefined".to_owned()))
+    );
     assert_bytecode_evaluates("let x = 1; try { x = 2; } finally { x = x + 3; } x;");
     assert_bytecode_evaluates(
         "let x = ''; try { throw 'a'; } catch (error) { x = x + error; } finally { x = x + 'f'; } x;",

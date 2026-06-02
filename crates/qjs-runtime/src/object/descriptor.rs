@@ -26,6 +26,7 @@ pub(crate) fn native_object_define_property(
 
 pub(crate) fn native_object_define_properties(
     argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     ensure_define_property_target(&target)?;
@@ -38,7 +39,7 @@ pub(crate) fn native_object_define_properties(
         });
     }
 
-    for (key, descriptor_value) in enumerable_property_entries(descriptors)? {
+    for (key, descriptor_value) in enumerable_property_entries(descriptors, env)? {
         let descriptor = to_property_descriptor(descriptor_value)?;
         if !define_property_on_value(target.clone(), key, descriptor)? {
             return Err(RuntimeError {
@@ -147,7 +148,9 @@ pub(crate) fn define_property_on_value(
                 return Ok(false);
             }
             if key == "length" {
-                elements.set_len(crate::to_length(descriptor.value)?);
+                if !matches!(descriptor.value, Value::Undefined) {
+                    elements.set_len(crate::to_length(descriptor.value)?);
+                }
                 elements.set_length_writable(descriptor.writable);
             } else if !descriptor.is_accessor()
                 && let Ok(index) = key.parse::<usize>()

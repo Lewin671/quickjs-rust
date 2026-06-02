@@ -119,7 +119,10 @@ cases/array-reduce-right-empty-initial-value.js
 cases/array-reference-identity-basic.js
 cases/array-reverse-basic.js
 cases/array-shift-basic.js
+cases/array-shift-boolean-receiver.js
 cases/array-shift-length.js
+cases/array-shift-non-writable-length.js
+cases/array-shift-object-generic.js
 cases/array-slice-basic.js
 cases/array-slice-constructor-non-object.js
 cases/array-slice-constructor-poisoned.js
@@ -305,6 +308,7 @@ cases/object-create-properties-undefined.js
 cases/object-create-properties-writable.js
 cases/object-entries-array-basic.js
 cases/object-entries-basic.js
+cases/object-entries-getter-values.js
 cases/object-entries-inherited-omitted.js
 cases/object-entries-length.js
 cases/object-entries-primitive-number.js
@@ -414,6 +418,8 @@ cases/object-keys-prototype-negative.js
 cases/object-keys-undefined-throws.js
 cases/object-values-basic.js
 cases/object-values-array-basic.js
+cases/object-values-getter-adding-key.js
+cases/object-values-getter-throws.js
 cases/object-values-inherited-omitted.js
 cases/object-values-length.js
 cases/object-values-primitive-number.js
@@ -525,6 +531,7 @@ cases/throw-argument-not-reached.js
 cases/try-catch-basic.js
 cases/try-finally-basic.js
 cases/try-catch-finally-basic.js
+cases/try-catch-parameter-scope.js
 cases/try-finally-abrupt-overrides.js
 cases/postfix-increment-basic.js
 cases/prefix-increment-basic.js
@@ -613,6 +620,9 @@ cases/string-prototype-last-index-of-basic.js
 cases/string-prototype-last-index-of-empty-search.js
 cases/string-prototype-last-index-of-length.js
 cases/string-prototype-last-index-of-position.js
+cases/string-prototype-match-basic.js
+cases/string-prototype-match-null-argument.js
+cases/string-prototype-match-this-not-coercible.js
 cases/string-prototype-pad-end-basic.js
 cases/string-prototype-pad-end-empty-fill.js
 cases/string-prototype-pad-end-length.js

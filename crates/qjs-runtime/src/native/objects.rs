@@ -16,10 +16,10 @@ pub(super) fn call_object_native(
         NativeFunction::Object => {
             object::native_object(function, this_value, argument_values, is_construct, env)?
         }
-        NativeFunction::ObjectAssign => object::native_object_assign(argument_values)?,
-        NativeFunction::ObjectCreate => object::native_object_create(argument_values)?,
+        NativeFunction::ObjectAssign => object::native_object_assign(argument_values, env)?,
+        NativeFunction::ObjectCreate => object::native_object_create(argument_values, env)?,
         NativeFunction::ObjectDefineProperties => {
-            object::native_object_define_properties(argument_values)?
+            object::native_object_define_properties(argument_values, env)?
         }
         NativeFunction::ObjectDefineProperty => {
             object::native_object_define_property(argument_values)?
@@ -52,9 +52,9 @@ pub(super) fn call_object_native(
         NativeFunction::ObjectSetPrototypeOf => {
             object::native_object_set_prototype_of(argument_values)?
         }
-        NativeFunction::ObjectEntries => object::native_object_entries(argument_values)?,
+        NativeFunction::ObjectEntries => object::native_object_entries(argument_values, env)?,
         NativeFunction::ObjectKeys => object::native_object_keys(argument_values)?,
-        NativeFunction::ObjectValues => object::native_object_values(argument_values)?,
+        NativeFunction::ObjectValues => object::native_object_values(argument_values, env)?,
         NativeFunction::ObjectPrototypeHasOwnProperty => {
             object::native_object_prototype_has_own_property(this_value, argument_values)?
         }

@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 
+use qjs_ast::ObjectPropertyKind;
+
 use crate::{
-    ArrayRef, Function, GLOBAL_THIS_BINDING, ObjectRef, RUNTIME_INTRINSIC_NAMES, RuntimeError,
-    Value, call_function, constructor_prototype, initialize_builtins, is_truthy, object_prototype,
-    operations, to_property_key,
+    ArrayRef, Function, GLOBAL_THIS_BINDING, ObjectRef, Property, RUNTIME_INTRINSIC_NAMES,
+    RuntimeError, Value, call_function, constructor_prototype, initialize_builtins, is_truthy,
+    object_prototype, operations, to_property_key,
 };
 
 use super::ir::{Bytecode, Op};
@@ -143,7 +145,7 @@ impl<'a> Vm<'a> {
                     self.stack.push(value);
                 }
                 Op::NewArray { count, holes } => self.new_array(count, holes)?,
-                Op::NewObject(count) => self.new_object(count)?,
+                Op::NewObject(kinds) => self.new_object(&kinds)?,
                 Op::EnumerateKeys => self.enumerate_keys()?,
                 Op::GetProp => self.get_prop()?,
                 Op::SetProp => self.set_prop()?,
@@ -200,8 +202,12 @@ impl<'a> Vm<'a> {
                         self.ip = target;
                     }
                 }
-                Op::EnterTry { catch, finally } => self.enter_try(catch, finally),
-                Op::ExitTry => self.exit_try(),
+                Op::EnterTry {
+                    catch,
+                    finally,
+                    catch_scope,
+                } => self.enter_try(catch, finally, catch_scope),
+                Op::ExitTry => self.exit_try()?,
                 Op::EndFinally => {
                     if let Some(value) = self.end_finally()? {
                         return Ok(value);
@@ -277,17 +283,21 @@ impl<'a> Vm<'a> {
         Ok(())
     }
 
-    fn new_object(&mut self, count: usize) -> Result<(), RuntimeError> {
-        let mut values = HashMap::new();
-        for _ in 0..count {
+    fn new_object(&mut self, kinds: &[ObjectPropertyKind]) -> Result<(), RuntimeError> {
+        let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(&self.globals));
+        for kind in kinds.iter().rev() {
             let value = self.pop()?;
             let key = to_property_key(self.pop()?)?;
-            values.insert(key, value);
+            match kind {
+                ObjectPropertyKind::Data => {
+                    object.define_property(key, Property::enumerable(value))
+                }
+                ObjectPropertyKind::Getter => {
+                    object.define_property(key, Property::accessor(Some(value), None, true, true))
+                }
+            }
         }
-        self.stack.push(Value::Object(ObjectRef::with_prototype(
-            values,
-            object_prototype(&self.globals),
-        )));
+        self.stack.push(Value::Object(object));
         Ok(())
     }
 

@@ -8,7 +8,10 @@ use crate::{
 use super::descriptor::native_object_define_properties;
 use super::enumeration::enumerable_property_entries;
 
-pub(crate) fn native_object_assign(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+pub(crate) fn native_object_assign(
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     match target {
         Value::Object(_) | Value::Function(_) => {}
@@ -30,7 +33,7 @@ pub(crate) fn native_object_assign(argument_values: &[Value]) -> Result<Value, R
         if matches!(source, Value::Null | Value::Undefined) {
             continue;
         }
-        for (key, value) in enumerable_property_entries(source)? {
+        for (key, value) in enumerable_property_entries(source, env)? {
             set_property(target.clone(), key, value)?;
         }
     }
@@ -111,7 +114,10 @@ fn constructor_prototype(name: &str, env: &HashMap<String, Value>) -> Option<Obj
     function_prototype(function)
 }
 
-pub(crate) fn native_object_create(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+pub(crate) fn native_object_create(
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
     let object = match argument_values.first() {
         Some(Value::Object(prototype)) => Value::Object(ObjectRef::with_prototype(
             HashMap::new(),
@@ -127,10 +133,13 @@ pub(crate) fn native_object_create(argument_values: &[Value]) -> Result<Value, R
     };
 
     if !matches!(argument_values.get(1), None | Some(Value::Undefined)) {
-        native_object_define_properties(&[
-            object.clone(),
-            argument_values.get(1).cloned().unwrap_or(Value::Undefined),
-        ])?;
+        native_object_define_properties(
+            &[
+                object.clone(),
+                argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+            ],
+            env,
+        )?;
     }
     Ok(object)
 }

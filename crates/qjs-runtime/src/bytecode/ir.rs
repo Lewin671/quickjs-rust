@@ -3,7 +3,7 @@ use std::{
     rc::Rc,
 };
 
-use qjs_ast::{BinaryOp, UnaryOp};
+use qjs_ast::{BinaryOp, ObjectPropertyKind, UnaryOp};
 
 use crate::Value;
 
@@ -21,7 +21,7 @@ pub(super) enum Op {
         count: usize,
         holes: Vec<usize>,
     },
-    NewObject(usize),
+    NewObject(Vec<ObjectPropertyKind>),
     EnumerateKeys,
     GetProp,
     SetProp,
@@ -47,11 +47,18 @@ pub(super) enum Op {
     EnterTry {
         catch: Option<usize>,
         finally: Option<usize>,
+        catch_scope: Option<CatchScope>,
     },
     ExitTry,
     EndFinally,
     Return,
     Throw,
+}
+
+#[derive(Clone, Debug)]
+pub(super) enum CatchScope {
+    Clear { slot: usize },
+    Restore { slot: usize, saved_slot: usize },
 }
 
 #[derive(Clone, Debug)]

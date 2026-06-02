@@ -506,16 +506,6 @@ fn pop_length_error() -> RuntimeError {
     }
 }
 
-pub(crate) fn native_array_prototype_shift(this_value: Value) -> Result<Value, RuntimeError> {
-    let Value::Array(elements) = this_value else {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "Array.prototype.shift called on non-array".to_owned(),
-        });
-    };
-    Ok(elements.shift().unwrap_or(Value::Undefined))
-}
-
 pub(crate) fn native_array_prototype_unshift(
     this_value: Value,
     argument_values: &[Value],

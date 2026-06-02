@@ -84,7 +84,9 @@ pub(super) fn call_array_native(
             array::native_array_prototype_reduce_right(this_value, argument_values, env)?
         }
         NativeFunction::ArrayPrototypeReverse => array::native_array_prototype_reverse(this_value)?,
-        NativeFunction::ArrayPrototypeShift => array::native_array_prototype_shift(this_value)?,
+        NativeFunction::ArrayPrototypeShift => {
+            array::native_array_prototype_shift(this_value, env)?
+        }
         NativeFunction::ArrayPrototypeSlice => {
             array::native_array_prototype_slice(this_value, argument_values, env)?
         }
