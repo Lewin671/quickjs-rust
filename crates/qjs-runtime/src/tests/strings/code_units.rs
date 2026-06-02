@@ -35,6 +35,18 @@ fn evaluates_string_code_unit_builtins() {
     assert_eq!(eval("'😀'.charCodeAt(0);"), Ok(Value::Number(55_357.0)));
     assert_eq!(eval("'😀'.charCodeAt(1);"), Ok(Value::Number(56_832.0)));
     assert_eq!(
+        eval("'\\uD800\\uDC00'.codePointAt(0);"),
+        Ok(Value::Number(65_536.0))
+    );
+    assert_eq!(
+        eval("'\\uD800\\uE000'.codePointAt(0);"),
+        Ok(Value::Number(55_296.0))
+    );
+    assert_eq!(
+        eval("'\\uD800'.charCodeAt(0);"),
+        Ok(Value::Number(55_296.0))
+    );
+    assert_eq!(
         eval(
             "let object = new Object(42); object.charAt = String.prototype.charAt; object.charAt(false) + object.charAt(true);"
         ),
