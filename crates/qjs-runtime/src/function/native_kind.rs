@@ -173,6 +173,7 @@ pub(crate) enum NativeFunction {
     ReflectSet,
     ReflectSetPrototypeOf,
     RegExp,
+    RegExpPrototypeToString,
     String,
     StringFromCharCode,
     StringFromCodePoint,
