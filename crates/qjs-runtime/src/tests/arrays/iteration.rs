@@ -42,6 +42,8 @@ fn evaluates_array_iteration_builtins() {
         ),
         Ok(Value::Undefined)
     );
+    assert!(eval("Array.prototype.map.call({ length: 4294967296 }, function() {});").is_err());
+    assert!(eval("Array.prototype.map.call({ length: 4294967297 }, function() {});").is_err());
     assert_eq!(
         eval(
             "let object = {}; object.length = 2; object[0] = 3; object[1] = 4; Array.prototype.map.call(object, function(value, index, receiver) { return receiver === object ? value + index : 0; }).join('|');"
