@@ -112,6 +112,12 @@ pub(crate) fn install_array(
     );
     define_array_prototype_function(
         &array_prototype,
+        "keys",
+        0,
+        NativeFunction::ArrayPrototypeKeys,
+    );
+    define_array_prototype_function(
+        &array_prototype,
         "lastIndexOf",
         1,
         NativeFunction::ArrayPrototypeLastIndexOf,
@@ -211,6 +217,12 @@ pub(crate) fn install_array(
         "unshift",
         1,
         NativeFunction::ArrayPrototypeUnshift,
+    );
+    define_array_prototype_function(
+        &array_prototype,
+        "values",
+        0,
+        NativeFunction::ArrayPrototypeValues,
     );
     define_array_prototype_function(
         &array_prototype,

@@ -63,6 +63,7 @@ pub(super) fn call_array_native(
         NativeFunction::ArrayPrototypeIndexOf => {
             array::native_array_prototype_index_of(this_value, argument_values)?
         }
+        NativeFunction::ArrayPrototypeKeys => array::native_array_prototype_keys(this_value, env)?,
         NativeFunction::ArrayPrototypeLastIndexOf => {
             array::native_array_prototype_last_index_of(this_value, argument_values)?
         }
@@ -113,6 +114,9 @@ pub(super) fn call_array_native(
         }
         NativeFunction::ArrayPrototypeWith => {
             array::native_array_prototype_with(this_value, argument_values)?
+        }
+        NativeFunction::ArrayPrototypeValues => {
+            array::native_array_prototype_values(this_value, env)?
         }
         NativeFunction::ArrayIteratorPrototypeNext => {
             array::native_array_iterator_next(this_value, env)?
