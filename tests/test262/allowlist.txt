@@ -102,7 +102,10 @@ cases/array-pop-length.js
 cases/array-pop-object-generic.js
 cases/array-prototype-constructor.js
 cases/array-push-basic.js
+cases/array-push-boolean-receiver.js
 cases/array-push-length.js
+cases/array-push-max-length.js
+cases/array-push-object-generic.js
 cases/array-reduce-basic.js
 cases/array-reduce-callback-arguments.js
 cases/array-reduce-initial-value.js
@@ -189,6 +192,7 @@ cases/date-set-utc-month-basic.js
 cases/date-time-clip-basic.js
 cases/date-to-json-basic.js
 cases/date-to-string-negative-year.js
+cases/date-to-string-non-date-receiver.js
 cases/date-to-utc-string-basic.js
 cases/date-utc-accessors-basic.js
 cases/error-constructor-basic.js

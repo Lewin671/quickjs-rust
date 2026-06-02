@@ -148,6 +148,7 @@ pub(crate) fn define_property_on_value(
             }
             if key == "length" {
                 elements.set_len(crate::to_length(descriptor.value)?);
+                elements.set_length_writable(descriptor.writable);
             } else if !descriptor.is_accessor()
                 && let Ok(index) = key.parse::<usize>()
             {
