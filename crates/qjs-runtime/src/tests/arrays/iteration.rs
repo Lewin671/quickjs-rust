@@ -175,6 +175,36 @@ fn evaluates_array_iteration_builtins() {
         Ok(Value::String("3,4".to_owned()))
     );
     assert_eq!(
+        eval(
+            "let calls = 0; let xs = []; xs.constructor = 1; let caught = false; try { xs.filter(function() { calls = calls + 1; }); } catch (error) { caught = error.constructor === TypeError; } caught + ':' + calls;"
+        ),
+        Ok(Value::String("true:0".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "function Inner() { this.flag = true; function callback() { return this.flag; } let result = [1].filter(callback); this.retVal = result.length === 0; } new Inner().retVal;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let obj = new RegExp(); obj.length = 2; obj[1] = true; Array.prototype.filter.call(obj, function(value, index, receiver) { return receiver instanceof RegExp; })[0];"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let xs = [0, , 2]; Object.defineProperty(xs, '0', { get: function() { Object.defineProperty(xs, '1', { get: function() { return 1; }, configurable: true }); return 0; }, configurable: true }); xs.filter(function(value) { return value === 1; })[0];"
+        ),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval(
+            "let obj = { length: 2 }; Object.defineProperty(obj, '0', { get: function() { Object.defineProperty(Object.prototype, '1', { get: function() { return 6.99; }, configurable: true }); return 0; }, configurable: true }); let result = Array.prototype.filter.call(obj, function() { return true; }); result.length + ':' + Array[1];"
+        ),
+        Ok(Value::String("2:6.99".to_owned()))
+    );
+    assert_eq!(
         eval("[10, 20, 30].filter(function(value, index) { return index === 1; })[0];"),
         Ok(Value::Number(20.0))
     );

@@ -43,8 +43,8 @@ fn prepare_array_iteration(
             message: "RangeError: invalid array length".to_owned(),
         });
     }
-    if method == "map" {
-        validate_array_map_constructor(source.receiver.clone(), env)?;
+    if matches!(method, "filter" | "map") {
+        validate_array_species_constructor(method, source.receiver.clone(), env)?;
     }
     let values = array_like_values_from_receiver(source.receiver.clone(), source.length, env)?;
 
@@ -57,7 +57,8 @@ fn prepare_array_iteration(
     })
 }
 
-fn validate_array_map_constructor(
+fn validate_array_species_constructor(
+    method: &str,
     receiver: Value,
     env: &mut HashMap<String, Value>,
 ) -> Result<(), RuntimeError> {
@@ -69,7 +70,9 @@ fn validate_array_map_constructor(
         Value::Undefined | Value::Function(_) | Value::Object(_) => Ok(()),
         _ => Err(RuntimeError {
             thrown: None,
-            message: "TypeError: Array.prototype.map constructor is not a constructor".to_owned(),
+            message: format!(
+                "TypeError: Array.prototype.{method} constructor is not a constructor"
+            ),
         }),
     }
 }
@@ -189,10 +192,14 @@ pub(crate) fn native_array_prototype_filter(
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_array_iteration("filter", this_value, argument_values, env)?;
     let mut filtered = Vec::new();
-    for (index, value) in iteration.source.iter().cloned().enumerate() {
-        let selected = call_iteration_callback(&iteration, value.clone(), index, env)?;
-        if is_truthy(&selected) {
-            filtered.push(value);
+    for index in 0..iteration.source_len {
+        let key = index.to_string();
+        if has_property(iteration.receiver.clone(), env, &key)? {
+            let value = property_value(iteration.receiver.clone(), &key, env)?;
+            let selected = call_iteration_callback(&iteration, value.clone(), index, env)?;
+            if is_truthy(&selected) {
+                filtered.push(value);
+            }
         }
     }
 

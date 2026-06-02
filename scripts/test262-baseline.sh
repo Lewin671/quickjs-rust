@@ -134,14 +134,16 @@ make_case() {
 
 run_case() {
   local file="$1"
+  local temp_dir
   local temp
-  temp="$(mktemp "${TMPDIR:-/tmp}/qjs-test262-baseline-XXXXXX.js")"
+  temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/qjs-test262-baseline-XXXXXX")"
+  temp="$temp_dir/case.js"
   make_case "$file" "$temp"
   set +e
   output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$CARGO_BIN" run -q -p qjs-cli -- "$temp" 2>&1)"
   status=$?
   set -e
-  rm -f "$temp"
+  rm -rf "$temp_dir"
   if [ "$status" -eq 0 ]; then
     echo "pass"
   elif [ "$status" -eq 124 ]; then
