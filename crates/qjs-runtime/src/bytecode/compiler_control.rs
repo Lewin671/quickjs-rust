@@ -12,6 +12,25 @@ impl Compiler {
         right: &Expr,
         body: &Stmt,
     ) -> Result<(), RuntimeError> {
+        if matches!(
+            left,
+            ForInLeft::VarDecl {
+                kind: VarKind::Let | VarKind::Const,
+                ..
+            }
+        ) {
+            return self
+                .with_lexical_scope(|compiler| compiler.compile_for_in_scoped(left, right, body));
+        }
+        self.compile_for_in_scoped(left, right, body)
+    }
+
+    fn compile_for_in_scoped(
+        &mut self,
+        left: &ForInLeft,
+        right: &Expr,
+        body: &Stmt,
+    ) -> Result<(), RuntimeError> {
         let result_slot = self.temp_local("for_in_result");
         let keys_slot = self.temp_local("for_in_keys");
         let index_slot = self.temp_local("for_in_index");
@@ -63,6 +82,14 @@ impl Compiler {
     }
 
     pub(super) fn compile_switch(
+        &mut self,
+        discriminant: &Expr,
+        cases: &[SwitchCase],
+    ) -> Result<(), RuntimeError> {
+        self.with_lexical_scope(|compiler| compiler.compile_switch_scoped(discriminant, cases))
+    }
+
+    fn compile_switch_scoped(
         &mut self,
         discriminant: &Expr,
         cases: &[SwitchCase],
@@ -138,12 +165,12 @@ impl Compiler {
     ) -> Result<(), RuntimeError> {
         match left {
             ForInLeft::VarDecl { name, kind, .. } => {
-                let slot = self.local_slot(name, *kind == VarKind::Var);
+                let slot = self.declare_var_kind_slot(name, *kind);
                 self.emit(Op::LoadLocal(key_slot));
                 self.emit(Op::StoreLocal(slot));
             }
             ForInLeft::Target(AssignmentTarget::Identifier { name, .. }) => {
-                let slot = self.local_slot(name, false);
+                let slot = self.assignment_slot(name);
                 self.emit(Op::LoadLocal(key_slot));
                 self.emit(Op::StoreLocal(slot));
             }

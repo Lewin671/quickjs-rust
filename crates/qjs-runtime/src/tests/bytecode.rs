@@ -23,6 +23,36 @@ fn evaluates_slot_locals_with_bytecode() {
     assert_bytecode_evaluates("let x = 1; x += 2; x;");
     assert_bytecode_evaluates("let x = 1; x++; x;");
     assert_bytecode_evaluates("let x = 1; ++x;");
+    assert_eq!(
+        eval_bytecode_source(
+            "const x = 1; let ok = false; try { x = 2; } catch (error) { ok = error instanceof TypeError; } ok;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval_bytecode_source("function f(x) { { let x = 'inner'; } return x; } f('outer');"),
+        Ok(Value::String("outer".to_owned()))
+    );
+    assert_eq!(
+        eval_bytecode_source("function f(x) { { const x = 'inner'; } return x; } f('outer');"),
+        Ok(Value::String("outer".to_owned()))
+    );
+    assert_eq!(
+        eval_bytecode_source("let x = 'outer'; { let x = 'inner'; } x;"),
+        Ok(Value::String("outer".to_owned()))
+    );
+    assert_eq!(
+        eval_bytecode_source("let x = 'outer'; try { let x = 'inner'; } catch (e) {} x;"),
+        Ok(Value::String("outer".to_owned()))
+    );
+    assert_eq!(
+        eval_bytecode_source("let x = 'outer'; try { 1; } finally { let x = 'inner'; } x;"),
+        Ok(Value::String("outer".to_owned()))
+    );
+    assert_eq!(
+        eval_bytecode_source("let x = 'outer'; switch (1) { case 1: let x = 'inner'; } x;"),
+        Ok(Value::String("outer".to_owned()))
+    );
 }
 
 #[test]

@@ -94,6 +94,27 @@ impl Compiler {
         update: Option<&Expr>,
         body: &Stmt,
     ) -> Result<(), RuntimeError> {
+        if matches!(
+            init,
+            Some(ForInit::VarDecl {
+                kind: VarKind::Let | VarKind::Const,
+                ..
+            })
+        ) {
+            return self.with_lexical_scope(|compiler| {
+                compiler.compile_for_scoped(init, test, update, body)
+            });
+        }
+        self.compile_for_scoped(init, test, update, body)
+    }
+
+    fn compile_for_scoped(
+        &mut self,
+        init: Option<&ForInit>,
+        test: Option<&Expr>,
+        update: Option<&Expr>,
+        body: &Stmt,
+    ) -> Result<(), RuntimeError> {
         if let Some(init) = init {
             self.compile_for_init(init)?;
             self.emit(Op::Pop);
@@ -138,9 +159,8 @@ impl Compiler {
             ForInit::VarDecl {
                 kind, declarations, ..
             } => {
-                let is_hoisted = *kind == VarKind::Var;
                 for declaration in declarations {
-                    let slot = self.local_slot(&declaration.name, is_hoisted);
+                    let slot = self.declare_var_kind_slot(&declaration.name, *kind);
                     if let Some(init) = &declaration.init {
                         self.compile_expr(init)?;
                     } else {
@@ -158,8 +178,8 @@ impl Compiler {
         match expr {
             Expr::Literal(literal) => self.compile_literal(literal),
             Expr::Identifier { name, .. } => {
-                if let Some(slot) = self.local_slots.get(name) {
-                    self.emit(Op::LoadLocal(*slot));
+                if let Some(slot) = self.resolve_local_slot(name) {
+                    self.emit(Op::LoadLocal(slot));
                 } else {
                     self.emit(Op::LoadGlobal(name.clone()));
                 }

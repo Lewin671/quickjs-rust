@@ -174,7 +174,11 @@ cases/array-to-spliced-length.js
 cases/array-to-spliced-negative-start.js
 cases/array-to-spliced-start-past-length.js
 cases/array-unshift-basic.js
+cases/array-unshift-boolean-receiver.js
 cases/array-unshift-length.js
+cases/array-unshift-object-generic.js
+cases/array-unshift-prototype-setter-length.js
+cases/array-unshift-read-only-property.js
 cases/array-index-assignment-basic.js
 cases/boolean-constructor-basic.js
 cases/boolean-constructor-length.js
@@ -313,6 +317,7 @@ cases/object-entries-inherited-omitted.js
 cases/object-entries-length.js
 cases/object-entries-primitive-number.js
 cases/object-entries-primitive-string.js
+cases/object-entries-tamper-with-global-object.js
 cases/object-from-entries-basic.js
 cases/object-from-entries-duplicate-keys.js
 cases/object-from-entries-empty.js
@@ -347,6 +352,8 @@ cases/object-get-own-property-descriptors-length.js
 cases/object-get-own-property-descriptors-normal-object.js
 cases/object-get-own-property-descriptors-primitive-number.js
 cases/object-get-own-property-descriptors-primitive-string.js
+cases/object-get-own-property-descriptors-tamper-with-global-object.js
+cases/object-get-own-property-descriptors-tamper-with-object-get-own-property-descriptor.js
 cases/object-has-own-basic.js
 cases/object-has-own-inherited-negative.js
 cases/object-has-own-length.js
@@ -424,6 +431,7 @@ cases/object-values-inherited-omitted.js
 cases/object-values-length.js
 cases/object-values-primitive-number.js
 cases/object-values-primitive-string.js
+cases/object-values-tamper-with-global-object.js
 cases/object-literal-basic.js
 cases/object-literal-object-instanceof-basic.js
 cases/object-computed-property-basic.js

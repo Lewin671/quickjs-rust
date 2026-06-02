@@ -81,7 +81,9 @@ impl<'a> Vm<'a> {
             .locals
             .iter()
             .map(|local| {
-                if let Some(value) = globals.get(&local.name) {
+                if local.from_env
+                    && let Some(value) = globals.get(&local.name)
+                {
                     Some(value.clone())
                 } else if local.hoisted {
                     Some(Value::Undefined)
@@ -120,7 +122,8 @@ impl<'a> Vm<'a> {
                 }
                 Op::StoreLocal(slot) => {
                     let value = self.pop()?;
-                    self.store_local(slot, value)?;
+                    let result = self.store_local(slot, value);
+                    self.handle_runtime_result(result)?;
                 }
                 Op::LoadGlobal(name) => {
                     let value = self
@@ -313,9 +316,23 @@ impl<'a> Vm<'a> {
         let value = self.pop()?;
         let key = to_property_key(self.pop()?)?;
         let object = self.pop()?;
-        set_property(object, key, value.clone(), &mut self.globals)?;
+        let updates_global_binding = self.is_global_object(&object);
+        set_property(object, key.clone(), value.clone(), &mut self.globals)?;
+        if updates_global_binding {
+            self.globals.insert(key, value.clone());
+        }
         self.stack.push(value);
         Ok(())
+    }
+
+    fn is_global_object(&self, value: &Value) -> bool {
+        let Value::Object(object) = value else {
+            return false;
+        };
+        matches!(
+            self.globals.get(GLOBAL_THIS_BINDING),
+            Some(Value::Object(global_object)) if object.ptr_eq(global_object)
+        )
     }
 
     fn delete_prop(&mut self) -> Result<(), RuntimeError> {
@@ -540,6 +557,12 @@ impl<'a> Vm<'a> {
             thrown: None,
             message: "bytecode local index out of bounds".to_owned(),
         })?;
+        if !self.bytecode.locals[slot].mutable && local.is_some() {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: assignment to constant variable".to_owned(),
+            });
+        }
         *local = Some(value);
         Ok(())
     }

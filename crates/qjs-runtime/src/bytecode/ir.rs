@@ -58,13 +58,14 @@ pub(super) enum Op {
 #[derive(Clone, Debug)]
 pub(super) enum CatchScope {
     Clear { slot: usize },
-    Restore { slot: usize, saved_slot: usize },
 }
 
 #[derive(Clone, Debug)]
 pub(super) struct Local {
     pub(super) name: String,
     pub(super) hoisted: bool,
+    pub(super) mutable: bool,
+    pub(super) from_env: bool,
 }
 
 /// Compiled bytecode for a script.
@@ -102,11 +103,11 @@ impl Bytecode {
 }
 
 fn collect_local_slots(locals: &[Local]) -> HashMap<String, usize> {
-    locals
-        .iter()
-        .enumerate()
-        .map(|(slot, local)| (local.name.clone(), slot))
-        .collect()
+    let mut slots = HashMap::new();
+    for (slot, local) in locals.iter().enumerate() {
+        slots.entry(local.name.clone()).or_insert(slot);
+    }
+    slots
 }
 
 fn collect_global_names(code: &[Op]) -> Vec<String> {

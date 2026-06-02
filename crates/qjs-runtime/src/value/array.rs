@@ -107,18 +107,6 @@ impl ArrayRef {
         }
     }
 
-    pub(crate) fn unshift(&self, values: &[Value]) -> usize {
-        let mut elements = self.elements.borrow_mut();
-        let offset = values.len();
-        if offset > 0 {
-            let mut holes = self.holes.borrow_mut();
-            *holes = holes.iter().map(|index| index + offset).collect();
-        }
-        elements.splice(0..0, values.iter().cloned());
-        self.length.set(self.length.get() + values.len());
-        self.length.get()
-    }
-
     pub(crate) fn reverse(&self) {
         let len = self.length.get();
         self.elements.borrow_mut().reverse();

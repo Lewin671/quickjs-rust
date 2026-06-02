@@ -21,7 +21,7 @@ impl Compiler {
             finally: None,
             catch_scope: None,
         });
-        self.compile_try_body(block, result_slot)?;
+        self.with_lexical_scope(|compiler| compiler.compile_try_body(block, result_slot))?;
         self.emit(Op::ExitTry);
 
         let normal_jump = self.emit(Op::Jump(usize::MAX));
@@ -68,23 +68,14 @@ impl Compiler {
     ) -> Result<(usize, Option<CatchScope>), RuntimeError> {
         let target = self.code.len();
         if let Some(param) = &handler.param {
-            let existing_slot = self.local_slots.get(param).copied();
-            let saved_slot = existing_slot.map(|slot| {
-                let saved_slot = self.temp_local("catch_saved");
-                self.emit(Op::LoadLocalOrUndefined(slot));
-                self.emit(Op::StoreLocal(saved_slot));
-                saved_slot
-            });
-            let slot = self.local_slot(param, false);
-            self.emit(Op::StoreLocal(slot));
-            self.compile_try_body(&handler.body, result_slot)?;
-            self.emit(Op::ExitTry);
-            let catch_scope = if let Some(saved_slot) = saved_slot {
-                CatchScope::Restore { slot, saved_slot }
-            } else {
-                CatchScope::Clear { slot }
-            };
-            return Ok((target, Some(catch_scope)));
+            let slot = self.with_lexical_scope(|compiler| {
+                let slot = compiler.declare_lexical_slot(param, true);
+                compiler.emit(Op::StoreLocal(slot));
+                compiler.compile_try_body(&handler.body, result_slot)?;
+                compiler.emit(Op::ExitTry);
+                Ok(slot)
+            })?;
+            return Ok((target, Some(CatchScope::Clear { slot })));
         } else {
             self.emit(Op::Pop);
             self.compile_try_body(&handler.body, result_slot)?;
@@ -95,10 +86,13 @@ impl Compiler {
 
     fn compile_finally(&mut self, finalizer: &[Stmt]) -> Result<usize, RuntimeError> {
         let target = self.code.len();
-        for stmt in finalizer {
-            self.compile_stmt(stmt)?;
-            self.emit(Op::Pop);
-        }
+        self.with_lexical_scope(|compiler| {
+            for stmt in finalizer {
+                compiler.compile_stmt(stmt)?;
+                compiler.emit(Op::Pop);
+            }
+            Ok(())
+        })?;
         self.emit(Op::EndFinally);
         Ok(target)
     }

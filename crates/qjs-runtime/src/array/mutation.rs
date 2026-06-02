@@ -506,19 +506,6 @@ fn pop_length_error() -> RuntimeError {
     }
 }
 
-pub(crate) fn native_array_prototype_unshift(
-    this_value: Value,
-    argument_values: &[Value],
-) -> Result<Value, RuntimeError> {
-    let Value::Array(elements) = this_value else {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "Array.prototype.unshift called on non-array".to_owned(),
-        });
-    };
-    Ok(Value::Number(elements.unshift(argument_values) as f64))
-}
-
 pub(crate) fn native_array_prototype_reverse(this_value: Value) -> Result<Value, RuntimeError> {
     let Value::Array(elements) = this_value.clone() else {
         return Err(RuntimeError {

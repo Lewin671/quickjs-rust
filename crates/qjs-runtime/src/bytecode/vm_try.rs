@@ -97,17 +97,6 @@ impl Vm<'_> {
         }
         match scope {
             Some(CatchScope::Clear { slot }) => self.set_local_slot(slot, None),
-            Some(CatchScope::Restore { slot, saved_slot }) => {
-                let saved = self
-                    .locals
-                    .get(saved_slot)
-                    .cloned()
-                    .ok_or_else(|| RuntimeError {
-                        thrown: None,
-                        message: "bytecode local index out of bounds".to_owned(),
-                    })?;
-                self.set_local_slot(slot, saved)
-            }
             None => Ok(()),
         }
     }
