@@ -32,6 +32,18 @@ fn evaluates_array_iteration_builtins() {
     );
     assert_eq!(
         eval(
+            "let xs = [1, 2, 3, 4, 5]; xs.map(function(value) { xs[4] = -1; return value > 0 ? 1 : 0; })[4];"
+        ),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval(
+            "let xs = [1, 2, 3, 4, 5]; xs.map(function(value) { delete xs[4]; return value > 0 ? 1 : 0; })[4];"
+        ),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval(
             "let object = {}; object.length = 2; object[0] = 3; object[1] = 4; Array.prototype.map.call(object, function(value, index, receiver) { return receiver === object ? value + index : 0; }).join('|');"
         ),
         Ok(Value::String("3|5".to_owned()))

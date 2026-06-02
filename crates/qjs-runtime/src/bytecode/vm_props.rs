@@ -81,7 +81,7 @@ pub(super) fn delete_property(object: Value, key: &str) -> Result<Value, Runtime
     match object {
         Value::Object(object) => Ok(Value::Boolean(object.delete_own_property(key))),
         Value::Array(elements) => Ok(Value::Boolean(match key.parse::<usize>() {
-            Ok(_) => true,
+            Ok(index) => elements.delete_index(index),
             Err(_) => elements.delete_property(key),
         })),
         _ => Err(RuntimeError {
@@ -95,7 +95,10 @@ pub(super) fn enumerable_keys(value: Value) -> Result<Vec<Value>, RuntimeError> 
     let keys = match value {
         Value::Object(object) => object.own_property_keys(),
         Value::Array(elements) => {
-            let mut keys: Vec<_> = (0..elements.len()).map(|index| index.to_string()).collect();
+            let mut keys: Vec<_> = (0..elements.len())
+                .filter(|index| elements.has_index(*index))
+                .map(|index| index.to_string())
+                .collect();
             keys.extend(elements.property_keys());
             keys
         }
