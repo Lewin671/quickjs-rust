@@ -48,6 +48,7 @@ impl<'src> Lexer<'src> {
                 '|' => self.pipe(),
                 '^' => self.caret(),
                 '~' => self.single(TokenKind::Tilde),
+                '\\' => self.single(TokenKind::Backslash),
                 '(' => self.single(TokenKind::LeftParen),
                 ')' => self.single(TokenKind::RightParen),
                 '{' => self.single(TokenKind::LeftBrace),

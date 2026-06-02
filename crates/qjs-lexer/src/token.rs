@@ -162,6 +162,8 @@ pub enum TokenKind {
     CaretEqual,
     /// `~`.
     Tilde,
+    /// `\`.
+    Backslash,
     /// `(`.
     LeftParen,
     /// `)`.

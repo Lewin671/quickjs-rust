@@ -227,7 +227,7 @@ fn reports_unterminated_block_comment() {
 
 #[test]
 fn lexes_common_punctuators_with_spans() {
-    let tokens = lex("{}[](),.:?%!<>|&^~=").expect("source should lex");
+    let tokens = lex("{}[](),.:?%!<>|&^~\\=").expect("source should lex");
     let actual: Vec<_> = tokens
         .into_iter()
         .map(|token| (token.kind, token.span))
@@ -253,8 +253,9 @@ fn lexes_common_punctuators_with_spans() {
             (TokenKind::Ampersand, Span::new(15, 16)),
             (TokenKind::Caret, Span::new(16, 17)),
             (TokenKind::Tilde, Span::new(17, 18)),
-            (TokenKind::Equal, Span::new(18, 19)),
-            (TokenKind::Eof, Span::new(19, 19)),
+            (TokenKind::Backslash, Span::new(18, 19)),
+            (TokenKind::Equal, Span::new(19, 20)),
+            (TokenKind::Eof, Span::new(20, 20)),
         ]
     );
 }
