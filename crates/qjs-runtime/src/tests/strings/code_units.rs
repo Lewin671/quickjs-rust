@@ -35,6 +35,24 @@ fn evaluates_string_code_unit_builtins() {
     assert_eq!(eval("'😀'.charCodeAt(0);"), Ok(Value::Number(55_357.0)));
     assert_eq!(eval("'😀'.charCodeAt(1);"), Ok(Value::Number(56_832.0)));
     assert_eq!(
+        eval(
+            "let object = new Object(42); object.charAt = String.prototype.charAt; object.charAt(false) + object.charAt(true);"
+        ),
+        Ok(Value::String("42".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let object = new Object(42); object.charCodeAt = String.prototype.charCodeAt; object.charCodeAt(0) + object.charCodeAt(1);"
+        ),
+        Ok(Value::Number(102.0))
+    );
+    assert_eq!(
+        eval(
+            "let object = { valueOf: 1, toString: function() { throw 'marker'; }, charAt: String.prototype.charAt }; let caught = false; try { object.charAt(); } catch (error) { caught = error === 'marker'; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("String.prototype.codePointAt.length;"),
         Ok(Value::Number(1.0))
     );

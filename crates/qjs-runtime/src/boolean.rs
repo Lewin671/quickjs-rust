@@ -5,7 +5,7 @@ use crate::{
     inherited_object_prototype_property, is_truthy,
 };
 
-const BOOLEAN_DATA_PROPERTY: &str = "\0BooleanData";
+pub(crate) const BOOLEAN_DATA_PROPERTY: &str = "\0BooleanData";
 
 pub(super) fn install_boolean(
     env: &mut HashMap<String, Value>,

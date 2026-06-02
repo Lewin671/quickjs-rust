@@ -9,7 +9,7 @@ use super::super::indexing::{
 pub(crate) fn native_string_prototype_ends_with(
     this_value: Value,
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
     let search = to_js_string(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
@@ -24,7 +24,7 @@ pub(crate) fn native_string_prototype_ends_with(
 pub(crate) fn native_string_prototype_includes(
     this_value: Value,
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
     let search = to_js_string(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
@@ -44,7 +44,7 @@ pub(crate) fn native_string_prototype_includes(
 pub(crate) fn native_string_prototype_index_of(
     this_value: Value,
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
     let search = to_js_string(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
@@ -63,7 +63,7 @@ pub(crate) fn native_string_prototype_index_of(
 pub(crate) fn native_string_prototype_last_index_of(
     this_value: Value,
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
     let search = to_js_string(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
@@ -93,7 +93,7 @@ pub(crate) fn native_string_prototype_last_index_of(
 pub(crate) fn native_string_prototype_starts_with(
     this_value: Value,
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
     let search = to_js_string(argument_values.first().cloned().unwrap_or(Value::Undefined))?;

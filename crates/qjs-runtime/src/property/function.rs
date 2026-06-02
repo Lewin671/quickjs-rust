@@ -1,4 +1,4 @@
-use crate::{Function, Property, Value};
+use crate::{Function, Property};
 
 pub(crate) fn function_own_property_keys(function: &Function) -> Vec<String> {
     let mut keys: Vec<_> = function
@@ -13,21 +13,10 @@ pub(crate) fn function_own_property_keys(function: &Function) -> Vec<String> {
 }
 
 pub(crate) fn function_own_property_descriptor(function: &Function, key: &str) -> Option<Property> {
-    if key == "length" {
-        return Some(Property::data(
-            Value::Number(function.params.len() as f64),
-            false,
-            false,
-            !function.is_sealed(),
-        ));
-    }
     function.properties.borrow().get(key).cloned()
 }
 
 pub(crate) fn function_delete_own_property(function: &Function, key: &str) -> bool {
-    if key == "length" {
-        return false;
-    }
     let mut properties = function.properties.borrow_mut();
     if properties
         .get(key)
@@ -41,7 +30,6 @@ pub(crate) fn function_delete_own_property(function: &Function, key: &str) -> bo
 
 pub(crate) fn function_own_property_names(function: &Function) -> Vec<String> {
     let mut names: Vec<_> = function.properties.borrow().keys().cloned().collect();
-    names.push("length".to_owned());
     names.sort();
     names
 }

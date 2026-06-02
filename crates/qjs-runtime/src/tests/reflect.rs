@@ -273,7 +273,13 @@ fn evaluates_reflect_prototype_builtins() {
     );
     assert_eq!(
         eval("Reflect.deleteProperty(function f() {}, 'length');"),
-        Ok(Value::Boolean(false))
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let f = function() {}; Reflect.deleteProperty(f, 'length'); Reflect.getOwnPropertyDescriptor(f, 'length');"
+        ),
+        Ok(Value::Undefined)
     );
     assert_eq!(
         eval("Reflect.ownKeys({ a: 1, b: 2 }).join();"),

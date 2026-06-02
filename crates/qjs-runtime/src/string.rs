@@ -27,4 +27,4 @@ pub(super) use prototype::{
     native_string_prototype_trim_start,
 };
 
-pub(super) const STRING_DATA_PROPERTY: &str = "\0StringData";
+pub(crate) const STRING_DATA_PROPERTY: &str = "\0StringData";

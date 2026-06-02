@@ -3,13 +3,13 @@ use std::collections::HashMap;
 use crate::{RuntimeError, Value};
 
 use super::super::indexing::{
-    relative_string_code_unit_index, this_string_value, to_char_code_position, to_string_position,
+    relative_string_code_unit_index, this_string_value, to_char_code_position,
 };
 
 pub(crate) fn native_string_prototype_at(
     this_value: Value,
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
     let code_units: Vec<u16> = value.encode_utf16().collect();
@@ -29,10 +29,15 @@ pub(crate) fn native_string_prototype_at(
 pub(crate) fn native_string_prototype_char_at(
     this_value: Value,
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
-    let index = to_string_position(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    let position =
+        to_char_code_position(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    if position < 0.0 {
+        return Ok(Value::String(String::new()));
+    }
+    let index = position as usize;
     Ok(Value::String(
         value
             .chars()
@@ -45,7 +50,7 @@ pub(crate) fn native_string_prototype_char_at(
 pub(crate) fn native_string_prototype_char_code_at(
     this_value: Value,
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
     let position =
@@ -65,7 +70,7 @@ pub(crate) fn native_string_prototype_char_code_at(
 pub(crate) fn native_string_prototype_code_point_at(
     this_value: Value,
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
     let position =

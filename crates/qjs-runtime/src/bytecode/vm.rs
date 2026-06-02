@@ -337,16 +337,10 @@ impl<'a> Vm<'a> {
         let arguments = self.pop_arguments(argc)?;
         let callee = self.pop()?;
         let Value::Function(function) = &callee else {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "value is not a constructor".to_owned(),
-            });
+            return self.handle_construct_error();
         };
         if !function.constructable {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "value is not a constructor".to_owned(),
-            });
+            return self.handle_construct_error();
         }
         let prototype = constructor_prototype(&callee, &self.globals);
         let this_value = Value::Object(ObjectRef::with_prototype(HashMap::new(), prototype));
@@ -359,6 +353,14 @@ impl<'a> Vm<'a> {
                 _ => self.stack.push(this_value),
             }
         }
+        Ok(())
+    }
+
+    fn handle_construct_error(&mut self) -> Result<(), RuntimeError> {
+        self.handle_call_result(Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: value is not a constructor".to_owned(),
+        }))?;
         Ok(())
     }
 
