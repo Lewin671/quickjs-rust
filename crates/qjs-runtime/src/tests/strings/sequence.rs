@@ -15,6 +15,12 @@ fn evaluates_string_sequence_builtins() {
         Ok(Value::String("def".to_owned()))
     );
     assert_eq!(
+        eval(
+            "function f() {} f.valueOf = function() { return 'gnulluna'; }; f.toString = function() { return f; }; Function.prototype.slice = String.prototype.slice; f.slice(null, Function().slice(f, 5).length);"
+        ),
+        Ok(Value::String("gnull".to_owned()))
+    );
+    assert_eq!(
         eval("String.prototype.split.length;"),
         Ok(Value::Number(2.0))
     );
@@ -59,6 +65,12 @@ fn evaluates_string_sequence_builtins() {
     assert_eq!(
         eval("'abcdef'.substring(3);"),
         Ok(Value::String("def".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "function f() {} f.valueOf = function() { return 'gnulluna'; }; Function.prototype.substring = String.prototype.substring; f.substring(null, Function());"
+        ),
+        Ok(Value::String(String::new()))
     );
     assert_eq!(
         eval("'abcdef'.substr(1, 3);"),
