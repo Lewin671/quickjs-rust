@@ -348,7 +348,7 @@ impl<'a> Vm<'a> {
                 message: "value is not a constructor".to_owned(),
             });
         }
-        let prototype = constructor_prototype(&callee);
+        let prototype = constructor_prototype(&callee, &self.globals);
         let this_value = Value::Object(ObjectRef::with_prototype(HashMap::new(), prototype));
         let mut env = self.call_env(&callee);
         let result = call_function(callee, this_value.clone(), arguments, &mut env.env, true);

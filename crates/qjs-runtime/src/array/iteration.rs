@@ -43,6 +43,9 @@ fn prepare_array_iteration(
             message: "RangeError: invalid array length".to_owned(),
         });
     }
+    if method == "map" {
+        validate_array_map_constructor(source.receiver.clone(), env)?;
+    }
     let values = array_like_values_from_receiver(source.receiver.clone(), source.length, env)?;
 
     Ok(ArrayIteration {
@@ -52,6 +55,23 @@ fn prepare_array_iteration(
         callback,
         callback_this: argument_values.get(1).cloned().unwrap_or(Value::Undefined),
     })
+}
+
+fn validate_array_map_constructor(
+    receiver: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
+    if !matches!(receiver, Value::Array(_)) {
+        return Ok(());
+    }
+
+    match property_value(receiver, "constructor", env)? {
+        Value::Undefined | Value::Function(_) | Value::Object(_) => Ok(()),
+        _ => Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Array.prototype.map constructor is not a constructor".to_owned(),
+        }),
+    }
 }
 
 fn prepare_array_reduction(
