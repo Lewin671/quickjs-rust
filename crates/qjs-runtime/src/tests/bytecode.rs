@@ -264,6 +264,10 @@ fn evaluates_branch_and_loop_bytecode_subset() {
     assert_bytecode_evaluates(
         "let out = ''; for (var key in { b: 2, a: 1 }) { out = out + key; } out;",
     );
+    assert_eq!(
+        eval_bytecode_source("let object = {}; object.Infinity = 1; Infinity in object;"),
+        Ok(Value::Boolean(true))
+    );
     assert_bytecode_evaluates(
         "let out = ''; let key; for (key in ['x', 'y']) { out = out + key; } out;",
     );
