@@ -14,7 +14,17 @@ impl Compiler {
     ) -> Result<(), RuntimeError> {
         match target {
             AssignmentTarget::Identifier { name, .. } => {
-                let slot = self.assignment_slot(name);
+                let Some(slot) = self.resolve_local_slot(name) else {
+                    self.compile_expr(value)?;
+                    self.emit(Op::Dup);
+                    if self.strict {
+                        self.emit(Op::StoreGlobalStrict(name.clone()));
+                    } else {
+                        let slot = self.assignment_slot(name);
+                        self.emit(Op::StoreLocal(slot));
+                    }
+                    return Ok(());
+                };
                 self.compile_expr(value)?;
                 self.emit(Op::Dup);
                 self.emit(Op::StoreLocal(slot));

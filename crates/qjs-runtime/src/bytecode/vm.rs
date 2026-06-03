@@ -136,6 +136,11 @@ impl<'a> Vm<'a> {
                         })?;
                     self.stack.push(value);
                 }
+                Op::StoreGlobalStrict(name) => {
+                    let value = self.pop()?;
+                    let result = self.store_global_strict(name, value);
+                    self.handle_runtime_result(result)?;
+                }
                 Op::TypeofGlobal(name) => {
                     let value = self.globals.get(&name).cloned().unwrap_or(Value::Undefined);
                     self.stack.push(Value::String(typeof_value(value)));

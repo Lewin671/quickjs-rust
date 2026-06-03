@@ -3,10 +3,34 @@ use std::collections::HashMap;
 use qjs_ast::BinaryOp;
 
 use crate::{
-    Property, RuntimeError, Value, array_prototype, boolean, call_function,
+    GLOBAL_THIS_BINDING, Property, RuntimeError, Value, array_prototype, boolean, call_function,
     function_delete_own_property, function_own_property_keys, inherited_string_prototype_property,
     number, property_value, string, to_length,
 };
+
+use super::vm::Vm;
+
+impl Vm<'_> {
+    pub(super) fn store_global_strict(
+        &mut self,
+        name: String,
+        value: Value,
+    ) -> Result<(), RuntimeError> {
+        if !self.globals.contains_key(&name) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: format!("ReferenceError: undefined identifier `{name}`"),
+            });
+        }
+        self.globals.insert(name.clone(), value.clone());
+        if let Some(Value::Object(global_this)) = self.globals.get(GLOBAL_THIS_BINDING)
+            && global_this.has_own_property(&name)
+        {
+            global_this.set(name, value);
+        }
+        Ok(())
+    }
+}
 
 pub(super) fn get_property(
     object: Value,
