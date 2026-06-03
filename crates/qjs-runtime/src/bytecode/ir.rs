@@ -14,6 +14,7 @@ pub(super) enum Op {
     LoadLocalOrUndefined(usize),
     StoreLocal(usize),
     LoadGlobal(String),
+    StoreGlobalStrict(String),
     TypeofGlobal(String),
     Pop,
     Dup,
@@ -119,7 +120,7 @@ fn collect_global_names(code: &[Op]) -> Vec<String> {
 fn collect_global_names_from_ops(code: &[Op], names: &mut BTreeSet<String>) {
     for op in code {
         match op {
-            Op::LoadGlobal(name) | Op::TypeofGlobal(name) => {
+            Op::LoadGlobal(name) | Op::StoreGlobalStrict(name) | Op::TypeofGlobal(name) => {
                 names.insert(name.clone());
             }
             Op::NewFunction { bytecode, .. } => {

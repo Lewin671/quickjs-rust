@@ -56,6 +56,34 @@ fn evaluates_slot_locals_with_bytecode() {
 }
 
 #[test]
+fn evaluates_strict_identifier_assignment_with_bytecode() {
+    assert_eq!(
+        eval_bytecode_source(
+            "\"use strict\"; let hit = 0; try { missing = (hit = 1); } catch (error) { hit = hit + (error instanceof ReferenceError); } hit;"
+        ),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval_bytecode_source(
+            "let value = 1; function set() { \"use strict\"; value = 3; } set(); value;"
+        ),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval_bytecode_source(
+            "function set() { \"use strict\"; missing = 1; } let caught = false; try { set(); } catch (error) { caught = error instanceof ReferenceError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval_bytecode_source(
+            "this.strictGlobal = 1; function set() { \"use strict\"; strictGlobal = 4; } set(); this.strictGlobal + strictGlobal;"
+        ),
+        Ok(Value::Number(8.0))
+    );
+}
+
+#[test]
 fn evaluates_delete_with_bytecode() {
     assert_bytecode_evaluates("let object = { value: 1 }; delete object.value;");
     assert_bytecode_evaluates("let object = { value: 1 }; delete object.value; object.value;");
