@@ -39,11 +39,15 @@ pub(crate) fn install_object(env: &mut HashMap<String, Value>, global_this: &Val
         0,
         NativeFunction::ObjectPrototypeToLocaleString,
     );
-    define_object_prototype_function(
+    let value_of = define_object_prototype_function(
         &object_prototype,
         "valueOf",
         0,
         NativeFunction::ObjectPrototypeValueOf,
+    );
+    value_of.properties.borrow_mut().insert(
+        "name".to_owned(),
+        Property::data(Value::String("valueOf".to_owned()), false, false, true),
     );
     object_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
@@ -150,11 +154,10 @@ fn define_object_prototype_function(
     key: &str,
     length: usize,
     native: NativeFunction,
-) {
-    prototype.define_non_enumerable(
-        key.to_owned(),
-        Value::Function(Function::new_native(Some(key), length, native, false)),
-    );
+) -> Function {
+    let function = Function::new_native(Some(key), length, native, false);
+    prototype.define_non_enumerable(key.to_owned(), Value::Function(function.clone()));
+    function
 }
 
 fn define_object_function(function: &Function, key: &str, length: usize, native: NativeFunction) {

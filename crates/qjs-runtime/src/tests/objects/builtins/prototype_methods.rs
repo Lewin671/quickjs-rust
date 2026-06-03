@@ -51,6 +51,12 @@ fn evaluates_object_prototype_methods() {
         Ok(Value::Number(0.0))
     );
     assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(Object.prototype.valueOf, 'name'); d.value + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("valueOf:false:false:true".to_owned()))
+    );
+    assert_eq!(
         eval("let object = { value: 1 }; object.valueOf() === object;"),
         Ok(Value::Boolean(true))
     );
