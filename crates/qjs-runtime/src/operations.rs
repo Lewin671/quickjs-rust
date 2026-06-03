@@ -59,6 +59,9 @@ pub(crate) fn eval_binary(
                 to_number_with_env(left, env)? + to_number_with_env(right, env)?,
             ));
         }
+        BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
+            return eval_relational(left, op, right, env);
+        }
         _ => {}
     }
 
@@ -102,14 +105,14 @@ pub(crate) fn eval_binary(
                 to_int32_number(left) | to_int32_number(right),
             )));
         }
-        BinaryOp::Lt => return Ok(Value::Boolean(left < right)),
-        BinaryOp::Le => return Ok(Value::Boolean(left <= right)),
-        BinaryOp::Gt => return Ok(Value::Boolean(left > right)),
-        BinaryOp::Ge => return Ok(Value::Boolean(left >= right)),
         BinaryOp::Eq
         | BinaryOp::StrictEq
         | BinaryOp::Ne
         | BinaryOp::StrictNe
+        | BinaryOp::Lt
+        | BinaryOp::Le
+        | BinaryOp::Gt
+        | BinaryOp::Ge
         | BinaryOp::In
         | BinaryOp::Instanceof
         | BinaryOp::LogicalAnd
@@ -117,6 +120,37 @@ pub(crate) fn eval_binary(
         | BinaryOp::NullishCoalescing => unreachable!("handled before numeric binary evaluation"),
     };
     Ok(Value::Number(value))
+}
+
+fn eval_relational(
+    left: Value,
+    op: BinaryOp,
+    right: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let left = to_primitive_with_env(left, env)?;
+    let right = to_primitive_with_env(right, env)?;
+    if let (Value::String(left), Value::String(right)) = (&left, &right) {
+        let value = match op {
+            BinaryOp::Lt => left < right,
+            BinaryOp::Le => left <= right,
+            BinaryOp::Gt => left > right,
+            BinaryOp::Ge => left >= right,
+            _ => unreachable!("relational operator required"),
+        };
+        return Ok(Value::Boolean(value));
+    }
+
+    let left = to_number_with_env(left, env)?;
+    let right = to_number_with_env(right, env)?;
+    let value = match op {
+        BinaryOp::Lt => left < right,
+        BinaryOp::Le => left <= right,
+        BinaryOp::Gt => left > right,
+        BinaryOp::Ge => left >= right,
+        _ => unreachable!("relational operator required"),
+    };
+    Ok(Value::Boolean(value))
 }
 
 fn abstract_eq(left: &Value, right: &Value) -> Result<bool, RuntimeError> {
