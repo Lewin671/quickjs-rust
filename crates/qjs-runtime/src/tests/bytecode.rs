@@ -45,6 +45,18 @@ fn evaluates_number_unary_fast_paths_with_bytecode() {
         eval_bytecode_source("Object.is(-(0), -0);"),
         Ok(Value::Boolean(true))
     );
+    assert!(matches!(
+        eval_bytecode_source("+function() { return 1; };"),
+        Ok(Value::Number(value)) if value.is_nan()
+    ));
+    assert!(matches!(
+        eval_bytecode_source("-function() { return 1; };"),
+        Ok(Value::Number(value)) if value.is_nan()
+    ));
+    assert_eq!(
+        eval_bytecode_source("~function() { return 1; };"),
+        Ok(Value::Number(-1.0))
+    );
     assert_eq!(
         eval_bytecode_source(
             "let object = { hits: 0, valueOf: function() { this.hits = 1; return 4; } }; (+object) + object.hits;"
