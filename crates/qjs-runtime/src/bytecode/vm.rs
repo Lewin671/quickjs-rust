@@ -126,15 +126,10 @@ impl<'a> Vm<'a> {
                     self.handle_runtime_result(result)?;
                 }
                 Op::LoadGlobal(name) => {
-                    let value = self
-                        .globals
-                        .get(&name)
-                        .cloned()
-                        .ok_or_else(|| RuntimeError {
-                            thrown: None,
-                            message: format!("ReferenceError: undefined identifier `{name}`"),
-                        })?;
-                    self.stack.push(value);
+                    let result = self.load_global(&name);
+                    if let Some(value) = self.handle_runtime_result(result)? {
+                        self.stack.push(value);
+                    }
                 }
                 Op::StoreGlobalStrict(name) => {
                     let value = self.pop()?;
@@ -527,6 +522,13 @@ impl<'a> Vm<'a> {
 
     pub(super) fn pop(&mut self) -> Result<Value, RuntimeError> {
         self.stack.pop().ok_or_else(stack_underflow)
+    }
+
+    fn load_global(&self, name: &str) -> Result<Value, RuntimeError> {
+        self.globals.get(name).cloned().ok_or_else(|| RuntimeError {
+            thrown: None,
+            message: format!("ReferenceError: undefined identifier `{name}`"),
+        })
     }
 
     fn load_local(&self, slot: usize) -> Result<Value, RuntimeError> {

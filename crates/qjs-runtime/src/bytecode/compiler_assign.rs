@@ -51,44 +51,44 @@ impl Compiler {
         let AssignmentTarget::Identifier { name, .. } = target else {
             return self.compile_member_compound_assign(target, op, value);
         };
-        let slot = self.assignment_slot(name);
+        let slot = self.resolve_local_slot(name);
         match op {
             AssignmentOp::LogicalAndAssign => {
-                self.emit(Op::LoadLocal(slot));
+                self.emit_load_identifier(name, slot);
                 let end_jump = self.emit(Op::JumpIfFalse(usize::MAX));
                 self.emit(Op::Pop);
                 self.compile_expr(value)?;
                 self.emit(Op::Dup);
-                self.emit(Op::StoreLocal(slot));
+                self.emit_store_identifier(name, slot);
                 let end = self.code.len();
                 self.patch_jump(end_jump, end);
             }
             AssignmentOp::LogicalOrAssign => {
-                self.emit(Op::LoadLocal(slot));
+                self.emit_load_identifier(name, slot);
                 let end_jump = self.emit(Op::JumpIfTrue(usize::MAX));
                 self.emit(Op::Pop);
                 self.compile_expr(value)?;
                 self.emit(Op::Dup);
-                self.emit(Op::StoreLocal(slot));
+                self.emit_store_identifier(name, slot);
                 let end = self.code.len();
                 self.patch_jump(end_jump, end);
             }
             AssignmentOp::NullishAssign => {
-                self.emit(Op::LoadLocal(slot));
+                self.emit_load_identifier(name, slot);
                 let end_jump = self.emit(Op::JumpIfNotNullish(usize::MAX));
                 self.emit(Op::Pop);
                 self.compile_expr(value)?;
                 self.emit(Op::Dup);
-                self.emit(Op::StoreLocal(slot));
+                self.emit_store_identifier(name, slot);
                 let end = self.code.len();
                 self.patch_jump(end_jump, end);
             }
             _ => {
-                self.emit(Op::LoadLocal(slot));
+                self.emit_load_identifier(name, slot);
                 self.compile_expr(value)?;
                 self.emit(Op::Binary(assignment_binary_op(op)?));
                 self.emit(Op::Dup);
-                self.emit(Op::StoreLocal(slot));
+                self.emit_store_identifier(name, slot);
             }
         }
         Ok(())
@@ -103,8 +103,8 @@ impl Compiler {
         let AssignmentTarget::Identifier { name, .. } = target else {
             return self.compile_member_update(target, op, prefix);
         };
-        let slot = self.assignment_slot(name);
-        self.emit(Op::LoadLocal(slot));
+        let slot = self.resolve_local_slot(name);
+        self.emit_load_identifier(name, slot);
         self.emit(Op::Unary(qjs_ast::UnaryOp::Plus));
         if !prefix {
             self.emit(Op::Dup);
@@ -117,11 +117,27 @@ impl Compiler {
         }));
         if prefix {
             self.emit(Op::Dup);
-            self.emit(Op::StoreLocal(slot));
+            self.emit_store_identifier(name, slot);
         } else {
-            self.emit(Op::StoreLocal(slot));
+            self.emit_store_identifier(name, slot);
         }
         Ok(())
+    }
+
+    fn emit_load_identifier(&mut self, name: &str, slot: Option<usize>) {
+        if let Some(slot) = slot {
+            self.emit(Op::LoadLocal(slot));
+        } else {
+            self.emit(Op::LoadGlobal(name.to_owned()));
+        }
+    }
+
+    fn emit_store_identifier(&mut self, name: &str, slot: Option<usize>) {
+        if let Some(slot) = slot {
+            self.emit(Op::StoreLocal(slot));
+        } else {
+            self.emit(Op::StoreGlobalStrict(name.to_owned()));
+        }
     }
 
     fn compile_member_compound_assign(
