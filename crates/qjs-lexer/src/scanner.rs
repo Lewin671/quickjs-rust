@@ -8,7 +8,7 @@ mod keywords;
 mod literals;
 mod punctuators;
 
-use char_class::is_identifier_start;
+use char_class::{is_identifier_start, is_js_whitespace_or_line_terminator};
 
 pub(crate) struct Lexer<'src> {
     pub(in crate::scanner) source: &'src str,
@@ -28,7 +28,7 @@ impl<'src> Lexer<'src> {
     pub(crate) fn lex(mut self) -> Result<Vec<Token>, LexError> {
         while let Some(ch) = self.peek() {
             match ch {
-                c if c.is_ascii_whitespace() => {
+                c if is_js_whitespace_or_line_terminator(c) => {
                     self.advance();
                 }
                 c if is_identifier_start(c) => self.identifier(),
