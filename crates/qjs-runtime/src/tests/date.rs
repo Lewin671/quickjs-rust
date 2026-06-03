@@ -18,6 +18,10 @@ fn evaluates_date_builtins() {
         Ok(Value::Number(0.0))
     );
     assert_eq!(
+        eval("Date.prototype.getYear.length;"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
         eval("Date.prototype.getUTCFullYear.length;"),
         Ok(Value::Number(0.0))
     );
@@ -63,6 +67,24 @@ fn evaluates_date_builtins() {
         eval("new Date(0).toISOString();"),
         Ok(Value::String("1970-01-01T00:00:00.000Z".to_owned()))
     );
+    assert_eq!(
+        eval("new Date(1899, 0).getYear();"),
+        Ok(Value::Number(-1.0))
+    );
+    assert_eq!(eval("new Date(1900, 0).getYear();"), Ok(Value::Number(0.0)));
+    assert_eq!(
+        eval("new Date(1970, 0).getYear();"),
+        Ok(Value::Number(70.0))
+    );
+    assert_eq!(
+        eval("new Date(2000, 0).getYear();"),
+        Ok(Value::Number(100.0))
+    );
+    assert_eq!(
+        eval("Number.isNaN(new Date(NaN).getYear());"),
+        Ok(Value::Boolean(true))
+    );
+    assert!(eval("Date.prototype.getYear.call({});").is_err());
     assert_eq!(
         eval("new Date(8640000000000000).toISOString();"),
         Ok(Value::String("+275760-09-13T00:00:00.000Z".to_owned()))

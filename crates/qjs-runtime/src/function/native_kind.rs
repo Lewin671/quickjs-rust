@@ -49,6 +49,7 @@ pub(crate) enum NativeFunction {
     DateNow,
     DateParse,
     DatePrototypeGetTimezoneOffset,
+    DatePrototypeGetYear,
     DatePrototypeGetUtcDate,
     DatePrototypeGetUtcDay,
     DatePrototypeGetUtcFullYear,
