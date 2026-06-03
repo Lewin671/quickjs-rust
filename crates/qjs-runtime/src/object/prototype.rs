@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use crate::{
     RuntimeError, Value, array_has_own_property, array_prototype, boolean, call_function, date,
-    error, function_intrinsic_prototype, function_own_property_descriptor, number, string,
-    to_property_key, value_prototype,
+    error, function_intrinsic_prototype, function_own_property_descriptor, number, property_value,
+    string, to_property_key, value_prototype,
 };
 
 use super::descriptor::own_property_descriptor;
@@ -176,11 +176,7 @@ pub(crate) fn native_object_prototype_to_locale_string(
             message: "toLocaleString called on null or undefined".to_owned(),
         }),
         value => {
-            let to_string =
-                property_value(&value, "toString", env).ok_or_else(|| RuntimeError {
-                    thrown: None,
-                    message: "toLocaleString target does not have a toString method".to_owned(),
-                })?;
+            let to_string = property_value(value.clone(), "toString", env)?;
             call_function(to_string, value, Vec::new(), env, false)
         }
     }
@@ -199,38 +195,5 @@ pub(crate) fn native_object_prototype_value_of(
             Ok(super::boxed_primitive(this_value, env).expect("primitive value should box"))
         }
         _ => Ok(this_value),
-    }
-}
-
-fn property_value(value: &Value, key: &str, env: &HashMap<String, Value>) -> Option<Value> {
-    match value {
-        Value::Object(object) => object.get(key),
-        Value::Function(function) => function
-            .properties
-            .borrow()
-            .get(key)
-            .map(|property| property.value.clone())
-            .or_else(|| crate::function_prototype_property(function, env, key)),
-        Value::Array(elements) => {
-            if key == "length" {
-                Some(Value::Number(elements.len() as f64))
-            } else {
-                key.parse::<usize>()
-                    .ok()
-                    .and_then(|index| elements.get(index))
-                    .or_else(|| crate::array_prototype_property(elements, env, key))
-            }
-        }
-        Value::String(value) => {
-            if key == "length" {
-                Some(Value::Number(value.chars().count() as f64))
-            } else {
-                crate::string::string_property(value, key)
-                    .or_else(|| crate::inherited_string_prototype_property(env, key))
-            }
-        }
-        Value::Boolean(_) => boolean::inherited_boolean_prototype_property(env, key),
-        Value::Number(_) => number::inherited_number_prototype_property(env, key),
-        Value::Null | Value::Undefined => None,
     }
 }

@@ -444,6 +444,7 @@ cases/object-to-string-direct-basic.js
 cases/object-to-string-date.js
 cases/object-to-string-length.js
 cases/object-to-string-own-property.js
+cases/object-prototype-to-locale-string-primitive-getter.js
 cases/object-to-locale-string-basic.js
 cases/object-to-locale-string-length.js
 cases/object-value-of-basic.js

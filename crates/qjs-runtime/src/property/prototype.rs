@@ -99,6 +99,10 @@ fn object_prototype_property(env: &HashMap<String, Value>, key: &str) -> Option<
     object_prototype(env).and_then(|prototype| prototype.get(key))
 }
 
+fn object_prototype_descriptor(env: &HashMap<String, Value>, key: &str) -> Option<Property> {
+    object_prototype(env).and_then(|prototype| prototype.property(key))
+}
+
 pub(crate) fn inherited_object_prototype_property(
     env: &HashMap<String, Value>,
     key: &str,
@@ -108,6 +112,20 @@ pub(crate) fn inherited_object_prototype_property(
         "hasOwnProperty" | "isPrototypeOf" | "propertyIsEnumerable"
     ) {
         object_prototype_property(env, key)
+    } else {
+        None
+    }
+}
+
+pub(crate) fn inherited_object_prototype_descriptor(
+    env: &HashMap<String, Value>,
+    key: &str,
+) -> Option<Property> {
+    if matches!(
+        key,
+        "hasOwnProperty" | "isPrototypeOf" | "propertyIsEnumerable"
+    ) {
+        object_prototype_descriptor(env, key)
     } else {
         None
     }
@@ -133,6 +151,23 @@ pub(crate) fn array_prototype_property(
         .prototype_override()
         .unwrap_or_else(|| array_prototype(env))
         .and_then(|prototype| prototype.get(key))
+}
+
+fn constructor_named_prototype(env: &HashMap<String, Value>, name: &str) -> Option<ObjectRef> {
+    let Some(Value::Function(function)) = env.get(name) else {
+        return None;
+    };
+    function_prototype(function)
+}
+
+pub(crate) fn inherited_primitive_prototype_descriptor(
+    env: &HashMap<String, Value>,
+    constructor_name: &str,
+    key: &str,
+) -> Option<Property> {
+    constructor_named_prototype(env, constructor_name)
+        .and_then(|prototype| prototype.property(key))
+        .or_else(|| inherited_object_prototype_descriptor(env, key))
 }
 
 pub(crate) fn inherited_string_prototype_property(

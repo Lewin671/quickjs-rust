@@ -19,7 +19,8 @@ pub(crate) use key::to_property_key;
 pub(crate) use prototype::{
     array_prototype, array_prototype_property, constructor_prototype, function_intrinsic_prototype,
     function_prototype, function_prototype_property, inherited_object_prototype_property,
-    inherited_string_prototype_property, object_prototype, string_prototype, value_prototype,
+    inherited_primitive_prototype_descriptor, inherited_string_prototype_property,
+    object_prototype, string_prototype, value_prototype,
 };
 
 pub(crate) fn has_property(
@@ -83,14 +84,23 @@ pub(crate) fn property_value(
             if key == "length" {
                 Ok(Value::Number(value.chars().count() as f64))
             } else {
-                Ok(crate::string::string_property(&value, key)
-                    .or_else(|| inherited_string_prototype_property(env, key))
-                    .unwrap_or(Value::Undefined))
+                let descriptor = crate::string::string_property(&value, key)
+                    .map(|value| Property::data(value, true, false, false))
+                    .or_else(|| inherited_primitive_prototype_descriptor(env, "String", key));
+                property_descriptor_value(descriptor, receiver, env)
             }
         }
-        Value::Boolean(_) | Value::Number(_) | Value::Null | Value::Undefined => {
-            Ok(Value::Undefined)
-        }
+        Value::Boolean(_) => property_descriptor_value(
+            inherited_primitive_prototype_descriptor(env, "Boolean", key),
+            receiver,
+            env,
+        ),
+        Value::Number(_) => property_descriptor_value(
+            inherited_primitive_prototype_descriptor(env, "Number", key),
+            receiver,
+            env,
+        ),
+        Value::Null | Value::Undefined => Ok(Value::Undefined),
     }
 }
 
