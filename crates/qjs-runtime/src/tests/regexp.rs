@@ -130,6 +130,34 @@ fn evaluates_regexp_exec_global_last_index() {
 }
 
 #[test]
+fn evaluates_regexp_exec_and_test_sticky_last_index() {
+    assert_eq!(
+        eval("let re = /abc/y; re.test('abc') + ':' + re.lastIndex;"),
+        Ok(Value::String("true:3".to_owned()))
+    );
+    assert_eq!(
+        eval("let re = /b/y; re.test('ab') + ':' + re.lastIndex;"),
+        Ok(Value::String("false:0".to_owned()))
+    );
+    assert_eq!(
+        eval("let re = /./y; re.lastIndex = 1; re.test('a') + ':' + re.lastIndex;"),
+        Ok(Value::String("false:0".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let re = /b/y; re.lastIndex = 1; let result = re.exec('abc'); result[0] + ':' + result.index + ':' + re.lastIndex;"
+        ),
+        Ok(Value::String("b:1:2".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let re = /c/y; Object.defineProperty(re, 'lastIndex', { writable: false }); let caught = false; try { re.test('abc'); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn evaluates_regexp_exec_captures() {
     assert_eq!(
         eval(r#"'Boston, MA 02134'.match(/([\d]{5})([-\ ]?[\d]{4})?$/).length;"#),

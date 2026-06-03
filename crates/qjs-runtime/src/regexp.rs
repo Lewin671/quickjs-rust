@@ -168,25 +168,29 @@ pub(crate) fn native_regexp_prototype_exec(
         env,
     )?;
     let global = regexp_flags_contains(&object, 'g');
+    let sticky = regexp_flags_contains(&object, 'y');
     let ignore_case = regexp_flags_contains(&object, 'i');
-    let start = if global {
+    let stateful = global || sticky;
+    let start = if stateful {
         regexp_last_index(&object, env)?
     } else {
         0
     };
 
-    let Some(match_result) = matcher::regexp_match_range(&source, &input, start, ignore_case)
-    else {
-        if global {
-            object.set("lastIndex".to_owned(), Value::Number(0.0));
+    let match_result = if sticky {
+        matcher::regexp_match_at(&source, &input, start, ignore_case)
+    } else {
+        matcher::regexp_match_range(&source, &input, start, ignore_case)
+    };
+
+    let Some(match_result) = match_result else {
+        if stateful {
+            regexp_set_last_index_object(&object, 0)?;
         }
         return Ok(Value::Null);
     };
-    if global {
-        object.set(
-            "lastIndex".to_owned(),
-            Value::Number(match_result.end as f64),
-        );
+    if stateful {
+        regexp_set_last_index_object(&object, match_result.end)?;
     }
     Ok(regexp_match_array(&input, match_result))
 }
@@ -425,6 +429,21 @@ fn regexp_last_index_value(
         return Ok(0);
     };
     regexp_last_index(object, env)
+}
+
+fn regexp_set_last_index_object(object: &ObjectRef, index: usize) -> Result<(), RuntimeError> {
+    if object
+        .own_property("lastIndex")
+        .is_some_and(|property| property.is_accessor() || !property.writable)
+        || !object.has_own_property("lastIndex") && !object.is_extensible()
+    {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: RegExp.prototype.exec cannot set lastIndex".to_owned(),
+        });
+    }
+    object.set("lastIndex".to_owned(), Value::Number(index as f64));
+    Ok(())
 }
 
 fn regexp_match_array(input: &str, match_result: matcher::RegexpMatch) -> Value {
