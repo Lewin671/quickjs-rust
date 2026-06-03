@@ -5,7 +5,7 @@ use qjs_ast::ObjectPropertyKind;
 use crate::{
     ArrayRef, Function, GLOBAL_THIS_BINDING, ObjectRef, Property, RUNTIME_INTRINSIC_NAMES,
     RuntimeError, Value, call_function, constructor_prototype, initialize_builtins, is_truthy,
-    object_prototype, operations, to_property_key,
+    object_prototype, to_property_key,
 };
 
 use super::ir::{Bytecode, Op};
@@ -180,8 +180,8 @@ impl<'a> Vm<'a> {
                     self.stack.push(Value::String(typeof_value(value)));
                 }
                 Op::Unary(op) => {
-                    let value = self.pop()?;
-                    self.stack.push(operations::eval_unary(op, value)?);
+                    let value = self.eval_unary(op)?;
+                    self.stack.push(value);
                 }
                 Op::Binary(op) => {
                     let result = self.eval_binary(op);
