@@ -84,6 +84,32 @@ fn evaluates_strict_identifier_assignment_with_bytecode() {
 }
 
 #[test]
+fn rejects_unresolved_identifier_compound_assignment_with_bytecode() {
+    assert_eq!(
+        eval_bytecode_source(
+            "let hit = 0; try { missing += (hit = 1); } catch (error) { hit = hit + (error instanceof ReferenceError); } hit;"
+        ),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval_bytecode_source(
+            "let hit = 0; try { missing++; } catch (error) { hit = error instanceof ReferenceError; } hit;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval_bytecode_source("this.count = 1; count += 2; count++; ++count; this.count + count;"),
+        Ok(Value::Number(10.0))
+    );
+    assert_eq!(
+        eval_bytecode_source(
+            "this.flag = false; flag ||= 7; let first = flag; flag &&= 3; let second = flag; flag ??= 9; first + second + flag;"
+        ),
+        Ok(Value::Number(13.0))
+    );
+}
+
+#[test]
 fn evaluates_delete_with_bytecode() {
     assert_bytecode_evaluates("let object = { value: 1 }; delete object.value;");
     assert_bytecode_evaluates("let object = { value: 1 }; delete object.value; object.value;");
