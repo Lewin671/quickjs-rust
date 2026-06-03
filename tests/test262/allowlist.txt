@@ -489,9 +489,11 @@ cases/function-prototype-call-global-this.js
 cases/function-prototype-call-length.js
 cases/function-prototype-inheritance-basic.js
 cases/function-prototype-apply-basic.js
+cases/function-prototype-apply-arguments-object-params.js
 cases/function-prototype-apply-null-args.js
 cases/function-prototype-apply-arguments-basic.js
 cases/function-prototype-apply-length.js
+cases/function-prototype-apply-primitive-argarray-throws.js
 cases/function-prototype-bind-basic.js
 cases/function-prototype-bind-length.js
 cases/function-prototype-bind-chained.js

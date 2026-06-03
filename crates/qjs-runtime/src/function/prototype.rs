@@ -5,7 +5,7 @@ use qjs_parser::parse_script;
 
 use crate::{
     Function, GLOBAL_THIS_BINDING, RuntimeError, Value, array::array_like_values_with_env,
-    object::boxed_primitive, to_js_string,
+    object::boxed_primitive, property_value, to_js_string_with_env, to_length_with_env,
 };
 
 pub(crate) fn native_function(
@@ -13,9 +13,9 @@ pub(crate) fn native_function(
     _this_value: Value,
     argument_values: &[Value],
     _is_construct: bool,
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let (params, body) = function_source_parts(argument_values)?;
+    let (params, body) = function_source_parts(argument_values, env)?;
     let source = format!("function anonymous({params}) {{\n{body}\n}}");
     let script = parse_script(&source).map_err(|error| RuntimeError {
         thrown: None,
@@ -40,7 +40,10 @@ pub(crate) fn native_function(
     )?))
 }
 
-fn function_source_parts(argument_values: &[Value]) -> Result<(String, String), RuntimeError> {
+fn function_source_parts(
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<(String, String), RuntimeError> {
     let Some((body, params)) = argument_values.split_last() else {
         return Ok((String::new(), String::new()));
     };
@@ -48,10 +51,10 @@ fn function_source_parts(argument_values: &[Value]) -> Result<(String, String), 
     let params = params
         .iter()
         .cloned()
-        .map(to_js_string)
+        .map(|value| to_js_string_with_env(value, env))
         .collect::<Result<Vec<_>, _>>()?
         .join(",");
-    let body = to_js_string(body.clone())?;
+    let body = to_js_string_with_env(body.clone(), env)?;
     Ok((params, body))
 }
 
@@ -68,13 +71,50 @@ pub(crate) fn native_function_prototype_apply(
     };
 
     let call_this = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    let apply_arguments = match argument_values.get(1).cloned().unwrap_or(Value::Undefined) {
-        Value::Null | Value::Undefined => Vec::new(),
-        Value::Array(elements) => elements.to_vec(),
-        value => array_like_values_with_env(value, "Function.prototype.apply argument list", env)?,
-    };
+    let apply_arguments = apply_argument_list(
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
 
     crate::call_function(this_value, call_this, apply_arguments, env, false)
+}
+
+fn apply_argument_list(
+    arg_array: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Vec<Value>, RuntimeError> {
+    match arg_array {
+        Value::Null | Value::Undefined => Ok(Vec::new()),
+        Value::Array(array) => {
+            let receiver = Value::Array(array.clone());
+            (0..array.len())
+                .map(|index| property_value(receiver.clone(), &index.to_string(), env))
+                .collect()
+        }
+        Value::Object(object) if object.to_string_tag().as_deref() == Some("Symbol") => {
+            Err(apply_argument_list_type_error())
+        }
+        Value::Object(_) => {
+            array_like_values_with_env(arg_array, "Function.prototype.apply argument list", env)
+        }
+        Value::Function(_) => {
+            let length =
+                to_length_with_env(property_value(arg_array.clone(), "length", env)?, env)?;
+            (0..length)
+                .map(|index| property_value(arg_array.clone(), &index.to_string(), env))
+                .collect()
+        }
+        Value::String(_) | Value::Number(_) | Value::Boolean(_) => {
+            Err(apply_argument_list_type_error())
+        }
+    }
+}
+
+fn apply_argument_list_type_error() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "TypeError: Function.prototype.apply argument list must be an object".to_owned(),
+    }
 }
 
 pub(crate) fn native_function_prototype_call(
