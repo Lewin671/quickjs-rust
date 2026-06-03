@@ -383,6 +383,18 @@ fn evaluates_new_expressions() {
     );
     assert_eq!(
         eval(
+            "let proto = Function(); proto.value = 12; function C() {} C.prototype = proto; let instance = new C(); typeof instance.apply + ':' + instance.value;"
+        ),
+        Ok(Value::String("function:12".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let proto = Function(); function C() {} C.prototype = proto; let instance = new C(); let caught = false; try { instance.apply(); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
             "C.prototype = { value: 10 }; function C() {} let instance = new C(); instance.value;"
         ),
         Ok(Value::Number(10.0))

@@ -11,7 +11,7 @@ use crate::{
     Bytecode, NativeFunction, ObjectRef, Property, Value,
     bytecode::compile_function_body,
     function::{collect_function_local_names, is_strict_function_body},
-    object_prototype,
+    function_intrinsic_prototype, object_prototype,
 };
 
 /// User-defined or native function value.
@@ -301,6 +301,7 @@ impl Function {
     }
 
     pub(crate) fn set_property(&self, key: String, value: Value) {
+        let value = constructor_prototype_property_value(&key, value);
         let mut properties = self.properties.borrow_mut();
         if let Some(property) = properties.get_mut(&key) {
             if property.writable {
@@ -331,6 +332,26 @@ impl Function {
         *self.internal_prototype.borrow_mut() = Some(prototype);
         Ok(())
     }
+}
+
+fn constructor_prototype_property_value(key: &str, value: Value) -> Value {
+    match (key, value) {
+        ("prototype", Value::Function(function)) => {
+            Value::Object(function_as_object_prototype(&function))
+        }
+        (_, value) => value,
+    }
+}
+
+fn function_as_object_prototype(function: &Function) -> ObjectRef {
+    let prototype = function
+        .internal_prototype_override()
+        .unwrap_or_else(|| function_intrinsic_prototype(&function.env));
+    let object = ObjectRef::with_prototype(HashMap::new(), prototype);
+    for (key, property) in function.properties.borrow().iter() {
+        object.define_property(key.clone(), property.clone());
+    }
+    object
 }
 
 impl PartialEq for Function {
