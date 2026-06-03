@@ -192,6 +192,9 @@ fn evaluates_unary_expressions() {
     assert_eq!(eval("-1 + 3;"), Ok(Value::Number(2.0)));
     assert_eq!(eval("!0;"), Ok(Value::Boolean(true)));
     assert_eq!(eval("+true;"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("+'Infinity';"), Ok(Value::Number(f64::INFINITY)));
+    assert!(matches!(eval("+'INFINITY';"), Ok(Value::Number(value)) if value.is_nan()));
+    assert!(matches!(eval("+'infinity';"), Ok(Value::Number(value)) if value.is_nan()));
     assert_eq!(eval("void 0;"), Ok(Value::Undefined));
     assert_eq!(eval("let x = 0; void (x = 1); x;"), Ok(Value::Number(1.0)));
 }

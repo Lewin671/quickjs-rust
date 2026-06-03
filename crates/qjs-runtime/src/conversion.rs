@@ -83,11 +83,18 @@ fn string_to_number(value: &str) -> Result<f64, RuntimeError> {
     if trimmed.is_empty() {
         return Ok(0.0);
     }
-    if trimmed.eq_ignore_ascii_case("infinity") || trimmed == "+Infinity" {
+    if trimmed == "Infinity" || trimmed == "+Infinity" {
         return Ok(f64::INFINITY);
     }
     if trimmed == "-Infinity" {
         return Ok(f64::NEG_INFINITY);
+    }
+    if trimmed
+        .strip_prefix(['+', '-'])
+        .unwrap_or(trimmed)
+        .eq_ignore_ascii_case("infinity")
+    {
+        return Ok(f64::NAN);
     }
     if let Some(hex) = trimmed
         .strip_prefix("0x")
