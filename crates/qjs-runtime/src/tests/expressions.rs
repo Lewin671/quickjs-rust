@@ -24,6 +24,14 @@ fn evaluates_bitwise_and_shift_expressions() {
     assert_eq!(eval("-1 >>> 0;"), Ok(Value::Number(4_294_967_295.0)));
     assert_eq!(eval("~false;"), Ok(Value::Number(-1.0)));
     assert_eq!(eval("1 + 2 << 3;"), Ok(Value::Number(24.0)));
+    assert!(matches!(
+        eval("(function() { return 1; }) * {};"),
+        Ok(Value::Number(value)) if value.is_nan()
+    ));
+    assert!(matches!(
+        eval("({}) * (function() { return 1; });"),
+        Ok(Value::Number(value)) if value.is_nan()
+    ));
 }
 
 #[test]
