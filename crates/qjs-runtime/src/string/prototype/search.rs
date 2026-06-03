@@ -111,20 +111,28 @@ pub(crate) fn native_string_prototype_match(
 ) -> Result<Value, RuntimeError> {
     let input = this_string_value(this_value, env)?;
     let pattern = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    let regexp = if regexp::regexp_is_regexp(&pattern) {
-        pattern
-    } else {
-        let constructor = env.get("RegExp").cloned().ok_or_else(|| RuntimeError {
-            thrown: None,
-            message: "RegExp constructor is not available".to_owned(),
-        })?;
-        call_function(constructor, Value::Undefined, vec![pattern], env, false)?
-    };
+    let regexp = regexp_value(pattern, env)?;
     if regexp::regexp_is_global(&regexp) {
         return regexp::native_regexp_global_match(regexp, &input, env);
     }
     let exec = property_value(regexp.clone(), "exec", env)?;
     call_function(exec, regexp, vec![Value::String(input)], env, false)
+}
+
+pub(crate) fn native_string_prototype_search(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let input = this_string_value(this_value, env)?;
+    let pattern = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let regexp = regexp_value(pattern, env)?;
+    let exec = property_value(regexp.clone(), "exec", env)?;
+    match call_function(exec, regexp, vec![Value::String(input)], env, false)? {
+        Value::Array(array) => property_value(Value::Array(array), "index", env),
+        Value::Null => Ok(Value::Number(-1.0)),
+        _ => Ok(Value::Number(-1.0)),
+    }
 }
 
 pub(crate) fn native_string_prototype_starts_with(
@@ -148,6 +156,17 @@ pub(crate) fn native_string_prototype_starts_with(
             .collect::<String>()
             .starts_with(&search),
     ))
+}
+
+fn regexp_value(pattern: Value, env: &mut HashMap<String, Value>) -> Result<Value, RuntimeError> {
+    if regexp::regexp_is_regexp(&pattern) {
+        return Ok(pattern);
+    }
+    let constructor = env.get("RegExp").cloned().ok_or_else(|| RuntimeError {
+        thrown: None,
+        message: "RegExp constructor is not available".to_owned(),
+    })?;
+    call_function(constructor, Value::Undefined, vec![pattern], env, false)
 }
 
 fn reject_regexp_search_value(value: &Value, method: &str) -> Result<(), RuntimeError> {

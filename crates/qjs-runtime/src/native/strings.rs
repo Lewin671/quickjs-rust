@@ -67,6 +67,9 @@ pub(super) fn call_string_native(
         NativeFunction::StringPrototypeRepeat => {
             string::native_string_prototype_repeat(this_value, argument_values, env)?
         }
+        NativeFunction::StringPrototypeSearch => {
+            string::native_string_prototype_search(this_value, argument_values, env)?
+        }
         NativeFunction::StringPrototypeSlice => {
             string::native_string_prototype_slice(this_value, argument_values, env)?
         }

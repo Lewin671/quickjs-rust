@@ -16,7 +16,8 @@ pub(crate) use padding::{StringPadKind, native_string_prototype_pad};
 pub(crate) use search::{
     native_string_prototype_ends_with, native_string_prototype_includes,
     native_string_prototype_index_of, native_string_prototype_last_index_of,
-    native_string_prototype_match, native_string_prototype_starts_with,
+    native_string_prototype_match, native_string_prototype_search,
+    native_string_prototype_starts_with,
 };
 pub(crate) use sequence::{
     native_string_prototype_concat, native_string_prototype_repeat, native_string_prototype_slice,

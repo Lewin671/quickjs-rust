@@ -46,6 +46,17 @@ fn evaluates_string_search_builtins() {
         eval("String.prototype.lastIndexOf.length;"),
         Ok(Value::Number(1.0))
     );
+    assert_eq!(
+        eval("String.prototype.search.length;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(eval("'abc'.search(/b/);"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("'abc'.search(/z/);"), Ok(Value::Number(-1.0)));
+    assert_eq!(eval("'abc'.search('b');"), Ok(Value::Number(1.0)));
+    assert_eq!(
+        eval("new String('test string').search(/String/i);"),
+        Ok(Value::Number(5.0))
+    );
     assert_eq!(eval("'canal'.lastIndexOf('a');"), Ok(Value::Number(3.0)));
     assert_eq!(eval("'canal'.lastIndexOf('a', 2);"), Ok(Value::Number(1.0)));
     assert_eq!(eval("'canal'.lastIndexOf('x');"), Ok(Value::Number(-1.0)));
