@@ -29,6 +29,25 @@ pub(super) fn regexp_match_range(
     start_index: usize,
     ignore_case: bool,
 ) -> Option<RegexpMatch> {
+    regexp_match(source, input, start_index, ignore_case, false)
+}
+
+pub(super) fn regexp_match_at(
+    source: &str,
+    input: &str,
+    start_index: usize,
+    ignore_case: bool,
+) -> Option<RegexpMatch> {
+    regexp_match(source, input, start_index, ignore_case, true)
+}
+
+fn regexp_match(
+    source: &str,
+    input: &str,
+    start_index: usize,
+    ignore_case: bool,
+    exact_start: bool,
+) -> Option<RegexpMatch> {
     let source = normalized_regexp_source(source);
     let pattern: Vec<_> = source.chars().collect();
     let text: Vec<_> = input.chars().collect();
@@ -36,7 +55,9 @@ pub(super) fn regexp_match_range(
         return None;
     }
     let group_indices = capture_group_indices(&pattern);
-    let starts: Vec<_> = if pattern.first() == Some(&'^') {
+    let starts: Vec<_> = if exact_start {
+        vec![start_index]
+    } else if pattern.first() == Some(&'^') {
         if start_index == 0 {
             vec![0]
         } else {

@@ -604,6 +604,8 @@ cases/regexp-prototype-flag-accessors.js
 cases/regexp-literal-date-format-escaped-atoms.js
 cases/regexp-prototype-source-accessor.js
 cases/regexp-prototype-test-basic.js
+cases/regexp-prototype-test-sticky-fail-lastindex.js
+cases/regexp-prototype-test-sticky-set-lastindex.js
 cases/string-constructor-basic.js
 cases/string-constructor-length.js
 cases/string-constructor-object-basic.js
