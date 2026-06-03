@@ -82,6 +82,12 @@ fn evaluates_number_builtins() {
         eval("Number.MIN_SAFE_INTEGER;"),
         Ok(Value::Number(-9_007_199_254_740_991.0))
     );
+    assert_eq!(
+        eval(
+            "Number.MIN_VALUE > 0 && Number.MIN_VALUE < Number.EPSILON && Number.MIN_VALUE / 2 === 0;"
+        ),
+        Ok(Value::Boolean(true))
+    );
     assert_eq!(eval("Number.isFinite.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("Number.isInteger.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("Number.isNaN.length;"), Ok(Value::Number(1.0)));

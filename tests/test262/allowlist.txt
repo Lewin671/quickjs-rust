@@ -246,6 +246,7 @@ cases/logical-assignment-short-circuit.js
 cases/logical-and-basic.js
 cases/number-constructor-basic.js
 cases/number-constants-basic.js
+cases/number-min-value.js
 cases/number-is-finite-basic.js
 cases/number-is-finite-length.js
 cases/number-prototype-constructor.js
