@@ -9,6 +9,7 @@ mod compiler_values;
 mod ir;
 mod util;
 mod vm;
+mod vm_bindings;
 mod vm_call;
 mod vm_errors;
 mod vm_ops;
