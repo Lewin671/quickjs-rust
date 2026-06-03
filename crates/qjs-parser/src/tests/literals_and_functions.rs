@@ -283,7 +283,7 @@ fn parses_regexp_literal_as_regexp_constructor_expression() {
 
 #[test]
 fn parses_regexp_literal_with_escaped_atoms() {
-    let script = parse_script(r#"/\(/;"#).expect("source should parse");
+    let script = parse_script(r#"/\(\)/;"#).expect("source should parse");
     let [
         Stmt::Expr(Expr::New {
             arguments, span, ..
@@ -293,11 +293,11 @@ fn parses_regexp_literal_with_escaped_atoms() {
         panic!("expected RegExp constructor expression");
     };
 
-    assert_eq!(*span, qjs_ast::Span::new(0, 4));
+    assert_eq!(*span, qjs_ast::Span::new(0, 6));
     assert!(matches!(
         arguments.as_slice(),
         [Expr::Literal(Literal::String { value, span })]
-            if value == r#"\("# && *span == qjs_ast::Span::new(0, 4)
+            if value == r#"\(\)"# && *span == qjs_ast::Span::new(0, 6)
     ));
 }
 

@@ -601,6 +601,7 @@ cases/reflect-set-prototype-of-basic.js
 cases/reflect-set-prototype-of-length.js
 cases/reflect-set-prototype-of-non-extensible.js
 cases/regexp-prototype-flag-accessors.js
+cases/regexp-literal-date-format-escaped-atoms.js
 cases/regexp-prototype-source-accessor.js
 cases/regexp-prototype-test-basic.js
 cases/string-constructor-basic.js
