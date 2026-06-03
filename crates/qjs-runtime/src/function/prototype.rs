@@ -5,7 +5,7 @@ use qjs_parser::parse_script;
 
 use crate::{
     Function, GLOBAL_THIS_BINDING, RuntimeError, Value, array::array_like_values_with_env,
-    to_js_string,
+    object::boxed_primitive, to_js_string,
 };
 
 pub(crate) fn native_function(
@@ -122,11 +122,15 @@ pub(crate) fn function_call_this(
     env: &HashMap<String, Value>,
     is_strict: bool,
 ) -> Value {
-    match this_arg.unwrap_or(Value::Undefined) {
+    let this_value = this_arg.unwrap_or(Value::Undefined);
+    match this_value {
         Value::Null | Value::Undefined if !is_strict => env
             .get(GLOBAL_THIS_BINDING)
             .cloned()
             .unwrap_or(Value::Undefined),
+        Value::String(_) | Value::Number(_) | Value::Boolean(_) if !is_strict => {
+            boxed_primitive(this_value, env).expect("primitive value should box")
+        }
         value => value,
     }
 }
