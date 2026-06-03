@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use qjs_ast::BinaryOp;
+use qjs_ast::{BinaryOp, UnaryOp};
 
 use crate::{
     GLOBAL_THIS_BINDING, Property, RuntimeError, Value, array_prototype, boolean, call_function,
@@ -215,6 +215,19 @@ pub(super) fn fast_number_binary(left: &Value, op: BinaryOp, right: &Value) -> O
         BinaryOp::Ge => Value::Boolean(left >= right),
         BinaryOp::StrictEq => Value::Boolean(left == right),
         BinaryOp::StrictNe => Value::Boolean(left != right),
+        _ => return None,
+    };
+    Some(value)
+}
+
+pub(super) fn fast_number_unary(op: UnaryOp, argument: &Value) -> Option<Value> {
+    let Value::Number(number) = argument else {
+        return None;
+    };
+    let value = match op {
+        UnaryOp::Plus => Value::Number(*number),
+        UnaryOp::Minus => Value::Number(-*number),
+        UnaryOp::BitwiseNot => Value::Number(f64::from(!to_int32_number(*number))),
         _ => return None,
     };
     Some(value)

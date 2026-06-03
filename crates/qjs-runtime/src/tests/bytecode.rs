@@ -32,6 +32,28 @@ fn evaluates_number_binary_fast_paths_with_bytecode() {
 }
 
 #[test]
+fn evaluates_number_unary_fast_paths_with_bytecode() {
+    assert_eq!(
+        eval_bytecode_source("(+3) + (-4) + (~1);"),
+        Ok(Value::Number(-3.0))
+    );
+    assert_eq!(
+        eval_bytecode_source("let x = 2; ~x;"),
+        Ok(Value::Number(-3.0))
+    );
+    assert_eq!(
+        eval_bytecode_source("Object.is(-(0), -0);"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval_bytecode_source(
+            "let object = { hits: 0, valueOf: function() { this.hits = 1; return 4; } }; (+object) + object.hits;"
+        ),
+        Ok(Value::Number(5.0))
+    );
+}
+
+#[test]
 fn evaluates_slot_locals_with_bytecode() {
     assert_bytecode_evaluates("let x = 2; const y = 3; x * y;");
     assert_bytecode_evaluates("var x = 1, y = 2, missing; x + y;");
