@@ -18,6 +18,8 @@ pub enum TokenKind {
     Number(String),
     /// String literal value.
     String(String),
+    /// Regular expression literal raw pattern and flags.
+    RegularExpression { pattern: String, flags: String },
     /// `true`.
     True,
     /// `false`.

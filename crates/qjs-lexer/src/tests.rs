@@ -270,14 +270,45 @@ fn lexes_regexp_escaped_parens_with_spans() {
     assert_eq!(
         actual,
         vec![
-            (TokenKind::Slash, Span::new(0, 1)),
-            (TokenKind::Backslash, Span::new(1, 2)),
-            (TokenKind::LeftParen, Span::new(2, 3)),
-            (TokenKind::Backslash, Span::new(3, 4)),
-            (TokenKind::RightParen, Span::new(4, 5)),
-            (TokenKind::Slash, Span::new(5, 6)),
+            (
+                TokenKind::RegularExpression {
+                    pattern: r#"\(\)"#.to_owned(),
+                    flags: String::new(),
+                },
+                Span::new(0, 6)
+            ),
             (TokenKind::Semicolon, Span::new(6, 7)),
             (TokenKind::Eof, Span::new(7, 7)),
+        ]
+    );
+}
+
+#[test]
+fn lexes_regexp_literal_with_escaped_slash_and_braced_unicode_escape() {
+    let tokens = lex(r#"/\// + /\u{1d306}/u"#).expect("source should lex");
+    let actual: Vec<_> = tokens
+        .into_iter()
+        .map(|token| (token.kind, token.span))
+        .collect();
+    assert_eq!(
+        actual,
+        vec![
+            (
+                TokenKind::RegularExpression {
+                    pattern: r#"\/"#.to_owned(),
+                    flags: String::new(),
+                },
+                Span::new(0, 4)
+            ),
+            (TokenKind::Plus, Span::new(5, 6)),
+            (
+                TokenKind::RegularExpression {
+                    pattern: r#"\u{1d306}"#.to_owned(),
+                    flags: "u".to_owned(),
+                },
+                Span::new(7, 19)
+            ),
+            (TokenKind::Eof, Span::new(19, 19)),
         ]
     );
 }
