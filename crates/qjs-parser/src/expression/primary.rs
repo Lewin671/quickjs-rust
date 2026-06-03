@@ -30,6 +30,9 @@ impl Parser {
             TokenKind::Null => Ok(Expr::Literal(Literal::Null { span: token.span })),
             TokenKind::This => Ok(Expr::This { span: token.span }),
             TokenKind::Function => self.function_expression(token.span.start),
+            TokenKind::RegularExpression { pattern, flags } => {
+                Ok(regexp_constructor_expr(token.span, pattern, flags))
+            }
             TokenKind::Slash => self.regexp_literal(token.span.start),
             TokenKind::LeftBracket => self.array_literal(token.span.start),
             TokenKind::LeftBrace => self.object_literal(token.span.start),
@@ -315,6 +318,29 @@ impl Parser {
                 span: Span::new(start_span.start, end),
             },
         ))
+    }
+}
+
+fn regexp_constructor_expr(span: Span, pattern: String, flags: String) -> Expr {
+    let closing_slash = span.end - flags.len() - 1;
+    let mut arguments = vec![Expr::Literal(Literal::String {
+        value: pattern,
+        span: Span::new(span.start, closing_slash + 1),
+    })];
+    if !flags.is_empty() {
+        arguments.push(Expr::Literal(Literal::String {
+            value: flags,
+            span: Span::new(closing_slash + 1, span.end),
+        }));
+    }
+
+    Expr::New {
+        callee: Box::new(Expr::Identifier {
+            name: "RegExp".to_owned(),
+            span: Span::new(span.start, span.start + 1),
+        }),
+        span,
+        arguments,
     }
 }
 

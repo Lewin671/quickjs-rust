@@ -349,6 +349,51 @@ fn parses_regexp_literal_with_digit_escape_and_flags() {
 }
 
 #[test]
+fn parses_regexp_literal_with_escaped_slash() {
+    let script = parse_script(r#"/\//;"#).expect("source should parse");
+    let [
+        Stmt::Expr(Expr::New {
+            arguments, span, ..
+        }),
+    ] = script.body.as_slice()
+    else {
+        panic!("expected RegExp constructor expression");
+    };
+
+    assert_eq!(*span, qjs_ast::Span::new(0, 4));
+    assert!(matches!(
+        arguments.as_slice(),
+        [Expr::Literal(Literal::String { value, span })]
+            if value == r#"\/"# && *span == qjs_ast::Span::new(0, 4)
+    ));
+}
+
+#[test]
+fn parses_regexp_literal_with_braced_unicode_escape_and_u_flag() {
+    let script = parse_script(r#"/\u{1d306}/u;"#).expect("source should parse");
+    let [
+        Stmt::Expr(Expr::New {
+            arguments, span, ..
+        }),
+    ] = script.body.as_slice()
+    else {
+        panic!("expected RegExp constructor expression");
+    };
+
+    assert_eq!(*span, qjs_ast::Span::new(0, 12));
+    assert!(matches!(
+        arguments.as_slice(),
+        [
+            Expr::Literal(Literal::String { value: pattern, span: pattern_span }),
+            Expr::Literal(Literal::String { value: flags, span: flags_span })
+        ] if pattern == r#"\u{1d306}"#
+            && *pattern_span == qjs_ast::Span::new(0, 11)
+            && flags == "u"
+            && *flags_span == qjs_ast::Span::new(11, 12)
+    ));
+}
+
+#[test]
 fn parses_regexp_literal_with_comma() {
     let script = parse_script(r#"/,/;"#).expect("source should parse");
     let [Stmt::Expr(Expr::New { arguments, .. })] = script.body.as_slice() else {
