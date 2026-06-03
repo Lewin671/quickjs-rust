@@ -71,6 +71,39 @@ fn evaluates_global_eval_builtin() {
 }
 
 #[test]
+fn evaluates_annex_b_escape_builtins() {
+    assert_eq!(eval("escape.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("unescape.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("escape('');"), Ok(Value::String(String::new())));
+    assert_eq!(
+        eval("escape('AZaz09@*_+-./');"),
+        Ok(Value::String("AZaz09@*_+-./".to_owned()))
+    );
+    assert_eq!(
+        eval("escape(' #éĀ');"),
+        Ok(Value::String("%20%23%E9%u0100".to_owned()))
+    );
+    assert_eq!(
+        eval("escape(String.fromCodePoint(0x1D306));"),
+        Ok(Value::String("%uD834%uDF06".to_owned()))
+    );
+    assert_eq!(
+        eval("unescape('%20%23%E9%u0100');"),
+        Ok(Value::String(" #éĀ".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let value = unescape('%uD834%uDF06'); value.length === 2 && value.charCodeAt(0) === 0xD834 && value.charCodeAt(1) === 0xDF06;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("unescape('%zz%u12xz');"),
+        Ok(Value::String("%zz%u12xz".to_owned()))
+    );
+}
+
+#[test]
 fn keeps_global_object_properties_and_bindings_in_sync() {
     assert_eq!(
         eval("let global = Function('return this;')(); global === this;"),
