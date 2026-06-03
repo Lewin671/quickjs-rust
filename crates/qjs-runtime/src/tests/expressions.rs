@@ -75,6 +75,11 @@ fn evaluates_string_addition() {
 fn evaluates_comparison_and_equality() {
     assert_eq!(eval("1 + 2 * 3 >= 7;"), Ok(Value::Boolean(true)));
     assert_eq!(eval("'2' < '10';"), Ok(Value::Boolean(false)));
+    assert_eq!(eval("'\\u{10000}' <= '\\uFFFF';"), Ok(Value::Boolean(true)));
+    assert_eq!(
+        eval("'\\u{10000}' >= '\\uFFFF';"),
+        Ok(Value::Boolean(false))
+    );
     assert_eq!(
         eval(
             "let object = { valueOf: function() { return -2; }, toString: function() { return '-2'; } }; '-1' < object;"

@@ -42,6 +42,10 @@ fn evaluates_number_binary_fast_paths_with_bytecode() {
         Ok(Value::Boolean(false))
     );
     assert_eq!(
+        eval_bytecode_source("'\\u{10000}' <= '\\uFFFF';"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval_bytecode_source(
             "let object = { valueOf: function() { return -2; }, toString: function() { return '-2'; } }; '-1' < object;"
         ),
