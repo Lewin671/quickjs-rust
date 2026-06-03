@@ -191,6 +191,7 @@ pub(crate) enum NativeFunction {
     StringPrototypePadEnd,
     StringPrototypePadStart,
     StringPrototypeRepeat,
+    StringPrototypeSearch,
     StringPrototypeSlice,
     StringPrototypeSplit,
     StringPrototypeStartsWith,

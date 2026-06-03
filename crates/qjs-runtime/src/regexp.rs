@@ -102,13 +102,15 @@ pub(crate) fn native_regexp_prototype_exec(
         env,
     )?;
     let global = regexp_flags_contains(&object, 'g');
+    let ignore_case = regexp_flags_contains(&object, 'i');
     let start = if global {
         regexp_last_index(&object, env)?
     } else {
         0
     };
 
-    let Some(match_result) = matcher::regexp_match_range(&source, &input, start) else {
+    let Some(match_result) = matcher::regexp_match_range(&source, &input, start, ignore_case)
+    else {
         if global {
             object.set("lastIndex".to_owned(), Value::Number(0.0));
         }

@@ -50,6 +50,10 @@ fn evaluates_regexp_exec_literal_match() {
         eval("RegExp('\\\\s+').exec('a \\t b')[0].length;"),
         Ok(Value::Number(3.0))
     );
+    assert_eq!(
+        eval("/String/i.exec('test string')[0];"),
+        Ok(Value::String("string".to_owned()))
+    );
 }
 
 #[test]
