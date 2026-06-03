@@ -96,6 +96,16 @@ fn evaluates_comparison_and_equality() {
     assert_eq!(eval("true == 1;"), Ok(Value::Boolean(true)));
     assert_eq!(eval("false == 0;"), Ok(Value::Boolean(true)));
     assert_eq!(eval("false == '';"), Ok(Value::Boolean(true)));
+    assert_eq!(eval("new Boolean(true) == true;"), Ok(Value::Boolean(true)));
+    assert_eq!(eval("true == new String('+1');"), Ok(Value::Boolean(true)));
+    assert_eq!(
+        eval("({ valueOf: function() { return 1; } }) == true;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("'+1' == { valueOf: function() { return 1; }, toString: function() { return {}; } };"),
+        Ok(Value::Boolean(true))
+    );
     assert_eq!(eval("NaN == NaN;"), Ok(Value::Boolean(false)));
     assert_eq!(eval("'x' == 1;"), Ok(Value::Boolean(false)));
     assert_eq!(eval("'1' === 1;"), Ok(Value::Boolean(false)));
