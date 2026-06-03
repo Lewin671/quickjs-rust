@@ -34,6 +34,10 @@ fn evaluates_date_builtins() {
         Ok(Value::Number(1.0))
     );
     assert_eq!(
+        eval("Date.prototype.setYear.length;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
         eval("Date.prototype.setUTCDate.length;"),
         Ok(Value::Number(1.0))
     );
@@ -149,6 +153,35 @@ fn evaluates_date_builtins() {
         eval("var d = new Date(0); Number.isNaN(d.setTime(8640000000000001));"),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "var d = new Date(1970, 1, 2, 3, 4, 5); var result = d.setYear(71); [result, d.toISOString()].join('|');"
+        ),
+        Ok(Value::String(
+            "34311845000|1971-02-02T03:04:05.000Z".to_owned()
+        ))
+    );
+    assert_eq!(
+        eval("var d = new Date(1970, 0); d.setYear(50.999999); d.getFullYear();"),
+        Ok(Value::Number(1950.0))
+    );
+    assert_eq!(
+        eval("var d = new Date(1970, 0); d.setYear(100); d.getFullYear();"),
+        Ok(Value::Number(100.0))
+    );
+    assert_eq!(
+        eval(
+            "var d = new Date(NaN); var result = d.setYear(71); [result, d.toISOString()].join('|');"
+        ),
+        Ok(Value::String(
+            "31536000000|1971-01-01T00:00:00.000Z".to_owned()
+        ))
+    );
+    assert_eq!(
+        eval("var d = new Date(0); Number.isNaN(d.setYear()) && Number.isNaN(d.getTime());"),
+        Ok(Value::Boolean(true))
+    );
+    assert!(eval("Date.prototype.setYear.call({}, 0);").is_err());
     assert_eq!(
         eval(
             "var d = new Date('1970-06-02T03:04:05.006Z'); var result = d.setUTCFullYear(2000); [result, d.toISOString()].join('|');"

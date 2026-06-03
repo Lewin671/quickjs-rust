@@ -7,8 +7,9 @@ use crate::{
             time_from_components, time_within_day, utc_time_from_components,
         },
     },
-    to_number,
+    to_number, to_number_with_env,
 };
+use std::collections::HashMap;
 
 pub(crate) fn native_date_prototype_set_time(
     this_value: Value,
@@ -19,6 +20,40 @@ pub(crate) fn native_date_prototype_set_time(
     let clipped = time_clip(time);
     define_date_value(&object, clipped);
     Ok(Value::Number(clipped))
+}
+
+pub(crate) fn native_date_prototype_set_year(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let object = date_object(this_value)?;
+    let millis = date_value_from_object(&object)?;
+    let year = to_number_with_env(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
+    if year.is_nan() {
+        define_date_value(&object, f64::NAN);
+        return Ok(Value::Number(f64::NAN));
+    }
+
+    let base = if millis.is_nan() { 0.0 } else { millis };
+    let components = utc_date_time(base);
+    let integer_year = year.trunc();
+    let full_year = if (0.0..=99.0).contains(&integer_year) {
+        integer_year + 1900.0
+    } else {
+        year
+    };
+    let updated = time_clip(utc_time_from_components(
+        full_year,
+        f64::from(components.month),
+        f64::from(components.date),
+        time_within_day(base),
+    ));
+    define_date_value(&object, updated);
+    Ok(Value::Number(updated))
 }
 
 pub(crate) fn native_date_prototype_set_utc_full_year(
