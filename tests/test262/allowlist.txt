@@ -598,6 +598,9 @@ cases/reflect-set-non-writable.js
 cases/reflect-set-prototype-of-basic.js
 cases/reflect-set-prototype-of-length.js
 cases/reflect-set-prototype-of-non-extensible.js
+cases/regexp-prototype-flag-accessors.js
+cases/regexp-prototype-source-accessor.js
+cases/regexp-prototype-test-basic.js
 cases/string-constructor-basic.js
 cases/string-constructor-length.js
 cases/string-constructor-object-basic.js

@@ -25,6 +25,57 @@ fn evaluates_regexp_constructor_identity() {
         eval("/test/.toString();"),
         Ok(Value::String("/test/".to_owned()))
     );
+    assert_eq!(
+        eval("/test/.test('a test value');"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("/missing/.test('a test value');"),
+        Ok(Value::Boolean(false))
+    );
+}
+
+#[test]
+fn evaluates_regexp_prototype_accessors() {
+    assert_eq!(
+        eval("/test/g.source;"),
+        Ok(Value::String("test".to_owned()))
+    );
+    assert_eq!(eval("/test/g.global;"), Ok(Value::Boolean(true)));
+    assert_eq!(eval("/test/i.ignoreCase;"), Ok(Value::Boolean(true)));
+    assert_eq!(eval("/test/m.multiline;"), Ok(Value::Boolean(true)));
+    assert_eq!(eval("/test/.global;"), Ok(Value::Boolean(false)));
+    assert_eq!(
+        eval("new RegExp('').source;"),
+        Ok(Value::String("(?:)".to_owned()))
+    );
+    assert_eq!(
+        eval("new RegExp('/').source;"),
+        Ok(Value::String("\\/".to_owned()))
+    );
+    assert_eq!(
+        eval("Object.getOwnPropertyDescriptor(RegExp.prototype, 'global').set;"),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval("Object.getOwnPropertyDescriptor(RegExp.prototype, 'global').enumerable;"),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval("Object.getOwnPropertyDescriptor(RegExp.prototype, 'global').configurable;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("RegExp.prototype.source;"),
+        Ok(Value::String("(?:)".to_owned()))
+    );
+    assert_eq!(eval("RegExp.prototype.global;"), Ok(Value::Undefined));
+    assert_eq!(
+        eval(
+            "let get = Object.getOwnPropertyDescriptor(RegExp.prototype, 'source').get; let caught = false; try { get.call({}); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]
