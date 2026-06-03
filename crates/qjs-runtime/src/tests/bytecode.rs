@@ -16,6 +16,22 @@ fn evaluates_core_expressions_with_bytecode() {
 }
 
 #[test]
+fn evaluates_number_binary_fast_paths_with_bytecode() {
+    assert_eq!(
+        eval_bytecode_source("(8 << 2) + (32 >> 1) + (-1 >>> 31);"),
+        Ok(Value::Number(49.0))
+    );
+    assert_eq!(
+        eval_bytecode_source("(7 & 3) + (4 | 1) + (6 ^ 3);"),
+        Ok(Value::Number(13.0))
+    );
+    assert_eq!(
+        eval_bytecode_source("(1 == 1) && (1 != 2) && !(NaN == NaN);"),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn evaluates_slot_locals_with_bytecode() {
     assert_bytecode_evaluates("let x = 2; const y = 3; x * y;");
     assert_bytecode_evaluates("var x = 1, y = 2, missing; x + y;");
