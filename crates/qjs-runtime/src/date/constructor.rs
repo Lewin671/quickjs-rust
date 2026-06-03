@@ -69,7 +69,7 @@ fn construct_date_value(argument_values: &[Value]) -> Result<f64, RuntimeError> 
 fn date_utc_from_arguments(argument_values: &[Value]) -> Result<f64, RuntimeError> {
     let year = to_number(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
     let month = to_number(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
-    if year.is_nan() || month.is_nan() {
+    if !year.is_finite() || !month.is_finite() {
         return Ok(f64::NAN);
     }
 
@@ -80,7 +80,7 @@ fn date_utc_from_arguments(argument_values: &[Value]) -> Result<f64, RuntimeErro
     let millis = optional_number(argument_values, 6, 0.0)?;
     if [date, hours, minutes, seconds, millis]
         .into_iter()
-        .any(f64::is_nan)
+        .any(|value| !value.is_finite())
     {
         return Ok(f64::NAN);
     }
