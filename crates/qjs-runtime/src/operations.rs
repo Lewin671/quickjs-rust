@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{cmp::Ordering, collections::HashMap};
 
 use qjs_ast::{BinaryOp, UnaryOp};
 
@@ -131,11 +131,12 @@ fn eval_relational(
     let left = to_primitive_with_env(left, env)?;
     let right = to_primitive_with_env(right, env)?;
     if let (Value::String(left), Value::String(right)) = (&left, &right) {
+        let ordering = compare_utf16_code_units(left, right);
         let value = match op {
-            BinaryOp::Lt => left < right,
-            BinaryOp::Le => left <= right,
-            BinaryOp::Gt => left > right,
-            BinaryOp::Ge => left >= right,
+            BinaryOp::Lt => ordering == Ordering::Less,
+            BinaryOp::Le => ordering != Ordering::Greater,
+            BinaryOp::Gt => ordering == Ordering::Greater,
+            BinaryOp::Ge => ordering != Ordering::Less,
             _ => unreachable!("relational operator required"),
         };
         return Ok(Value::Boolean(value));
@@ -151,6 +152,10 @@ fn eval_relational(
         _ => unreachable!("relational operator required"),
     };
     Ok(Value::Boolean(value))
+}
+
+fn compare_utf16_code_units(left: &str, right: &str) -> Ordering {
+    left.encode_utf16().cmp(right.encode_utf16())
 }
 
 fn abstract_eq(
