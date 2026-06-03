@@ -86,6 +86,22 @@ fn skips_line_and_block_comments() {
 }
 
 #[test]
+fn skips_ecmascript_whitespace_and_line_terminators() {
+    let tokens =
+        lex("one\u{0009}\u{000B}\u{000C}\u{0020}\u{00A0}\u{000A}\u{000D}\u{2028}\u{2029}two")
+            .expect("source should lex");
+    let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::Identifier("one".to_owned()),
+            TokenKind::Identifier("two".to_owned()),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
 fn lexes_no_substitution_template_literals_as_strings() {
     let tokens = lex("`hello` `` `price $5`").expect("source should lex");
     let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
