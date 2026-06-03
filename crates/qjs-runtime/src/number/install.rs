@@ -53,7 +53,7 @@ pub(crate) fn install_number(
         "MIN_SAFE_INTEGER",
         -9_007_199_254_740_991.0,
     );
-    define_number_constant(&number_function, "MIN_VALUE", f64::MIN_POSITIVE);
+    define_number_constant(&number_function, "MIN_VALUE", f64::from_bits(1));
     define_number_constant(&number_function, "NaN", f64::NAN);
     define_number_constant(&number_function, "NEGATIVE_INFINITY", f64::NEG_INFINITY);
     define_number_constant(&number_function, "POSITIVE_INFINITY", f64::INFINITY);
