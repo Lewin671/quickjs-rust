@@ -23,6 +23,8 @@ pub(super) fn call_core_native(
         NativeFunction::GlobalIsFinite => global::native_global_is_finite(argument_values),
         NativeFunction::GlobalIsNaN => global::native_global_is_nan(argument_values),
         NativeFunction::Eval => global::native_global_eval(argument_values, env),
+        NativeFunction::Escape => global::native_global_escape(argument_values, env),
+        NativeFunction::Unescape => global::native_global_unescape(argument_values, env),
         NativeFunction::Symbol => symbol::native_symbol(function),
         NativeFunction::Function => crate::function::native_function(
             function,

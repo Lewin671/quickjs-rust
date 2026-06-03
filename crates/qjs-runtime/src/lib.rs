@@ -74,6 +74,8 @@ pub(crate) const RUNTIME_INTRINSIC_NAMES: &[&str] = &[
     "Infinity",
     "isFinite",
     "isNaN",
+    "escape",
+    "unescape",
     "parseFloat",
     "parseInt",
 ];

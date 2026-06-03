@@ -78,6 +78,7 @@ pub(crate) enum NativeFunction {
     ErrorPrototypeToString,
     EvalError,
     Eval,
+    Escape,
     MathAbs,
     MathAcos,
     MathAcosh,
@@ -216,5 +217,6 @@ pub(crate) enum NativeFunction {
     Symbol,
     SyntaxError,
     TypeError,
+    Unescape,
     UriError,
 }
