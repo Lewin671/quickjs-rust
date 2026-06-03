@@ -58,6 +58,18 @@ fn evaluates_number_unary_fast_paths_with_bytecode() {
         Ok(Value::Number(-1.0))
     );
     assert_eq!(
+        eval_bytecode_source("+'Infinity';"),
+        Ok(Value::Number(f64::INFINITY))
+    );
+    assert!(matches!(
+        eval_bytecode_source("+'INFINITY';"),
+        Ok(Value::Number(value)) if value.is_nan()
+    ));
+    assert!(matches!(
+        eval_bytecode_source("+'infinity';"),
+        Ok(Value::Number(value)) if value.is_nan()
+    ));
+    assert_eq!(
         eval_bytecode_source(
             "let object = { hits: 0, valueOf: function() { this.hits = 1; return 4; } }; (+object) + object.hits;"
         ),
