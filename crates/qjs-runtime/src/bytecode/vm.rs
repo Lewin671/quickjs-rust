@@ -491,7 +491,7 @@ impl<'a> Vm<'a> {
         }
     }
 
-    fn apply_env(&mut self, env: HashMap<String, Value>) {
+    pub(super) fn apply_env(&mut self, env: HashMap<String, Value>) {
         for (index, local) in self.bytecode.locals.iter().enumerate() {
             if let Some(value) = env.get(&local.name) {
                 self.locals[index] = Some(value.clone());

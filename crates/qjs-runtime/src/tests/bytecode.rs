@@ -51,6 +51,12 @@ fn evaluates_number_binary_fast_paths_with_bytecode() {
         ),
         Ok(Value::Boolean(false))
     );
+    assert_eq!(
+        eval_bytecode_source(
+            "let accessed = false; let left = { valueOf: function() { accessed = true; return 4; } }; let right = { valueOf: function() { return 2; } }; (left <= right) + ':' + accessed;"
+        ),
+        Ok(Value::String("false:true".to_owned()))
+    );
     assert!(matches!(
         eval_bytecode_source("(function() { return 1; }) * {};"),
         Ok(Value::Number(value)) if value.is_nan()
@@ -70,6 +76,12 @@ fn evaluates_number_unary_fast_paths_with_bytecode() {
     assert_eq!(
         eval_bytecode_source("let x = 2; ~x;"),
         Ok(Value::Number(-3.0))
+    );
+    assert_eq!(
+        eval_bytecode_source(
+            "let accessed = false; let object = { valueOf: function() { accessed = true; return 1; } }; (+object) + ':' + accessed;"
+        ),
+        Ok(Value::String("1:true".to_owned()))
     );
     assert_eq!(
         eval_bytecode_source("Object.is(-(0), -0);"),

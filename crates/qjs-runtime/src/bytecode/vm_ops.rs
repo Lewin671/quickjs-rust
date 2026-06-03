@@ -12,7 +12,10 @@ impl Vm<'_> {
         if let Some(value) = fast_number_binary(&left, op, &right) {
             return Ok(value);
         }
-        operations::eval_binary(left, op, right, &mut self.globals)
+        let mut env = self.current_env();
+        let result = operations::eval_binary(left, op, right, &mut env);
+        self.apply_env(env);
+        result
     }
 
     pub(super) fn eval_unary(&mut self, op: UnaryOp) -> Result<Value, RuntimeError> {
@@ -20,7 +23,10 @@ impl Vm<'_> {
         if let Some(value) = fast_number_unary(op, &value) {
             return Ok(value);
         }
-        operations::eval_unary(op, value, &mut self.globals)
+        let mut env = self.current_env();
+        let result = operations::eval_unary(op, value, &mut env);
+        self.apply_env(env);
+        result
     }
 
     pub(super) fn enumerate_keys(&mut self) -> Result<(), RuntimeError> {
