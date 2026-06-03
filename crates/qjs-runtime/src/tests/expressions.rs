@@ -292,6 +292,10 @@ fn evaluates_in_operator() {
         Ok(Value::Boolean(false))
     );
     assert_eq!(
+        eval("let object = {}; object.Infinity = 1; Infinity in object;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("let o = {}; o.present = undefined; 'present' in o;"),
         Ok(Value::Boolean(true))
     );
