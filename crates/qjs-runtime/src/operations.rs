@@ -62,8 +62,8 @@ pub(crate) fn eval_binary(
         _ => {}
     }
 
-    let left = to_number(left)?;
-    let right = to_number(right)?;
+    let left = to_number_with_env(left, env)?;
+    let right = to_number_with_env(right, env)?;
 
     let value = match op {
         BinaryOp::Add => left + right,

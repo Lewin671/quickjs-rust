@@ -29,6 +29,14 @@ fn evaluates_number_binary_fast_paths_with_bytecode() {
         eval_bytecode_source("(1 == 1) && (1 != 2) && !(NaN == NaN);"),
         Ok(Value::Boolean(true))
     );
+    assert!(matches!(
+        eval_bytecode_source("(function() { return 1; }) * {};"),
+        Ok(Value::Number(value)) if value.is_nan()
+    ));
+    assert!(matches!(
+        eval_bytecode_source("({}) * (function() { return 1; });"),
+        Ok(Value::Number(value)) if value.is_nan()
+    ));
 }
 
 #[test]
