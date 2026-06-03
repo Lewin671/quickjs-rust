@@ -29,6 +29,18 @@ fn evaluates_object_constructor_and_assign() {
         Ok(Value::String("b".to_owned()))
     );
     assert_eq!(
+        eval("let result = Object.assign('a'); typeof result + ':' + result.valueOf();"),
+        Ok(Value::String("object:a".to_owned()))
+    );
+    assert_eq!(
+        eval("let result = Object.assign(1, { a: 2 }); result.valueOf() + result.a;"),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval("let result = Object.assign(true, { a: 2 }); result.valueOf() && result.a === 2;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval(
             "let target = {}; Object.assign(target, Object.create({ inherited: 1 })); Object.keys(target).length;"
         ),

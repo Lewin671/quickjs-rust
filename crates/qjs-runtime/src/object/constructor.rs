@@ -12,22 +12,24 @@ pub(crate) fn native_object_assign(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    match target {
-        Value::Object(_) | Value::Function(_) => {}
+    let target = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
+        value @ (Value::Object(_) | Value::Function(_)) => value,
         Value::Null | Value::Undefined => {
             return Err(RuntimeError {
                 thrown: None,
                 message: "Object.assign target must not be null or undefined".to_owned(),
             });
         }
-        Value::Array(_) | Value::String(_) | Value::Number(_) | Value::Boolean(_) => {
+        value @ (Value::String(_) | Value::Number(_) | Value::Boolean(_)) => {
+            boxed_primitive(value, env).expect("primitive value should box")
+        }
+        Value::Array(_) => {
             return Err(RuntimeError {
                 thrown: None,
-                message: "Object.assign primitive targets are not implemented".to_owned(),
+                message: "Object.assign array targets are not implemented".to_owned(),
             });
         }
-    }
+    };
 
     for source in argument_values.iter().skip(1).cloned() {
         if matches!(source, Value::Null | Value::Undefined) {
