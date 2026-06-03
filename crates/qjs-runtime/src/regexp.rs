@@ -299,6 +299,8 @@ fn escape_regexp_source(source: &str) -> String {
             '/' => escaped.push_str("\\/"),
             '\n' => escaped.push_str("\\n"),
             '\r' => escaped.push_str("\\r"),
+            '\u{2028}' => escaped.push_str("\\u2028"),
+            '\u{2029}' => escaped.push_str("\\u2029"),
             _ => escaped.push(ch),
         }
     }

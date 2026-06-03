@@ -269,7 +269,10 @@ fn match_escape(
                 .is_some_and(|unicode| chars_equal(value, unicode, ignore_case)),
             pc + 6,
         ),
-        literal => (chars_equal(value, literal, ignore_case), pc + 2),
+        literal => (
+            chars_equal(value, regexp_control_escape(literal), ignore_case),
+            pc + 2,
+        ),
     };
     if !matched {
         return Vec::new();
@@ -439,8 +442,19 @@ fn class_escape_matches(class: &[char], index: usize, value: char, ignore_case: 
         Some('S') => !value.is_whitespace(),
         Some('u') => unicode_escape(class, index)
             .is_some_and(|unicode| chars_equal(value, unicode, ignore_case)),
-        Some(escaped) => chars_equal(escaped, value, ignore_case),
+        Some(escaped) => chars_equal(regexp_control_escape(escaped), value, ignore_case),
         None => false,
+    }
+}
+
+fn regexp_control_escape(escaped: char) -> char {
+    match escaped {
+        'f' => '\u{000c}',
+        'n' => '\n',
+        'r' => '\r',
+        't' => '\t',
+        'v' => '\u{000b}',
+        _ => escaped,
     }
 }
 
