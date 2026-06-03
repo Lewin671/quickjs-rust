@@ -75,6 +75,10 @@ fn evaluates_number_unary_fast_paths_with_bytecode() {
         ),
         Ok(Value::Number(5.0))
     );
+    assert_eq!(
+        eval_bytecode_source("let date = new Date(0); date + 0 === date.toString() + '0';"),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]
