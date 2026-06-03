@@ -32,6 +32,18 @@ fn evaluates_object_prototype_methods() {
         ),
         Ok(Value::String("custom".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "let receiver = null; let object = {}; Object.defineProperty(object, 'toString', { get: function() { receiver = this; return function() { return receiver === object ? 'getter' : 'bad'; }; }, configurable: true }); object.toLocaleString();"
+        ),
+        Ok(Value::String("getter".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let receiver = null; Object.defineProperty(Boolean.prototype, 'toString', { get: function() { 'use strict'; receiver = this; return function() { return receiver === true ? 'primitive' : 'bad'; }; }, configurable: true }); Object.prototype.toLocaleString.call(true);"
+        ),
+        Ok(Value::String("primitive".to_owned()))
+    );
     assert!(eval("Object.prototype.toLocaleString.call(null);").is_err());
     assert!(eval("Object.prototype.toLocaleString.call(undefined);").is_err());
     assert_eq!(
