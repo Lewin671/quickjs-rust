@@ -28,6 +28,12 @@ pub(crate) fn install_date(
     );
     define_date_prototype_function(
         &date_prototype,
+        "getFullYear",
+        0,
+        NativeFunction::DatePrototypeGetUtcFullYear,
+    );
+    define_date_prototype_function(
+        &date_prototype,
         "getUTCDate",
         0,
         NativeFunction::DatePrototypeGetUtcDate,
