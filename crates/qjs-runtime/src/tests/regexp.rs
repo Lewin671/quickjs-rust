@@ -62,6 +62,31 @@ fn evaluates_regexp_prototype_accessors() {
         Ok(Value::String("\\u{1d306}".to_owned()))
     );
     assert_eq!(
+        eval(r#"/\ud834\udf06/u.test("𝌆");"#),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(r#"/\ud834\udf06/u.test("\ud834\udf06");"#),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(eval(r#"/\u{1d306}/u.test("𝌆");"#), Ok(Value::Boolean(true)));
+    assert_eq!(
+        eval(r#"/\u{1d306}/u.test("\ud834\udf06");"#),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(r#"/\u{1d306}/u.test("x𝌆y");"#),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(r#"/\u{1d306}/u.exec("x𝌆y").index;"#),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval(r#"/[\u{1d306}]/u.test("𝌆");"#),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval(
             "let re = eval('/' + new RegExp('\\n').source + '/'); re.test('\\n') && re.test('_\\n_') && !re.test('n');"
         ),
