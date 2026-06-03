@@ -100,6 +100,14 @@ fn evaluates_date_builtins() {
         Ok(Value::String("Fri, 02 Jan 1970 03:04:05 GMT".to_owned()))
     );
     assert_eq!(
+        eval("Date.prototype.toGMTString === Date.prototype.toUTCString;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("new Date('1970-01-02T03:04:05.006Z').toGMTString();"),
+        Ok(Value::String("Fri, 02 Jan 1970 03:04:05 GMT".to_owned()))
+    );
+    assert_eq!(
         eval("new Date('1970-01-02T03:04:05.006Z').toJSON();"),
         Ok(Value::String("1970-01-02T03:04:05.006Z".to_owned()))
     );

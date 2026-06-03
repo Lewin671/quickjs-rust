@@ -158,12 +158,14 @@ pub(crate) fn install_date(
         0,
         NativeFunction::DatePrototypeToTimeString,
     );
-    define_date_prototype_function(
-        &date_prototype,
-        "toUTCString",
+    let to_utc_string = Value::Function(Function::new_native(
+        Some("toUTCString"),
         0,
         NativeFunction::DatePrototypeToUtcString,
-    );
+        false,
+    ));
+    date_prototype.define_non_enumerable("toUTCString".to_owned(), to_utc_string.clone());
+    date_prototype.define_non_enumerable("toGMTString".to_owned(), to_utc_string);
     define_date_prototype_function(
         &date_prototype,
         "valueOf",

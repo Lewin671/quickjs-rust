@@ -205,6 +205,7 @@ cases/date-to-iso-string-non-finite-year.js
 cases/date-to-json-basic.js
 cases/date-to-string-negative-year.js
 cases/date-to-string-non-date-receiver.js
+cases/date-prototype-to-gmt-string-alias.js
 cases/date-to-utc-string-basic.js
 cases/date-utc-accessors-basic.js
 cases/error-constructor-basic.js
