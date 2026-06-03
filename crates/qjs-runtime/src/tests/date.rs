@@ -14,6 +14,10 @@ fn evaluates_date_builtins() {
         Ok(Value::Number(0.0))
     );
     assert_eq!(
+        eval("Date.prototype.getFullYear.length;"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
         eval("Date.prototype.getUTCFullYear.length;"),
         Ok(Value::Number(0.0))
     );
@@ -219,6 +223,24 @@ fn evaluates_date_builtins() {
     );
     assert_eq!(
         eval("Object.is(new Date(-0).getTime(), 0);"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("new Date(2016, 0).getFullYear();"),
+        Ok(Value::Number(2016.0))
+    );
+    assert_eq!(
+        eval("new Date(2016, 0, 1, 0, 0, 0, -1).getFullYear();"),
+        Ok(Value::Number(2015.0))
+    );
+    assert_eq!(
+        eval("Number.isNaN(new Date(NaN).getFullYear());"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { Date.prototype.getFullYear.call({}); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
         Ok(Value::Boolean(true))
     );
     assert_eq!(
