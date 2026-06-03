@@ -180,8 +180,10 @@ impl<'a> Vm<'a> {
                     self.stack.push(Value::String(typeof_value(value)));
                 }
                 Op::Unary(op) => {
-                    let value = self.eval_unary(op)?;
-                    self.stack.push(value);
+                    let result = self.eval_unary(op);
+                    if let Some(value) = self.handle_runtime_result(result)? {
+                        self.stack.push(value);
+                    }
                 }
                 Op::Binary(op) => {
                     let result = self.eval_binary(op);

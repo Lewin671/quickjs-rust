@@ -274,7 +274,19 @@ fn evaluates_branch_and_loop_bytecode_subset() {
     );
     assert_eq!(
         eval_bytecode_source(
+            "let object = { valueOf: function() { throw 'unary'; }, toString: function() { return 1; } }; let caught; try { +object; } catch (error) { caught = error; } caught;"
+        ),
+        Ok(Value::String("unary".to_owned()))
+    );
+    assert_eq!(
+        eval_bytecode_source(
             "let object = { valueOf: function() { return {}; }, toString: function() { return {}; } }; let caught = false; try { object >>> 0; } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval_bytecode_source(
+            "let object = { valueOf: function() { return {}; }, toString: function() { return {}; } }; let caught = false; try { -object; } catch (error) { caught = error instanceof TypeError; } caught;"
         ),
         Ok(Value::Boolean(true))
     );
