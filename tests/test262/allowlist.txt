@@ -695,11 +695,14 @@ cases/string-prototype-substring-length.js
 cases/string-prototype-substring-negative.js
 cases/string-prototype-substring-swap.js
 cases/string-prototype-to-lower-case-basic.js
+cases/string-prototype-to-lower-case-final-sigma-supplementary.js
 cases/string-prototype-to-lower-case-length.js
+cases/string-prototype-to-lower-case-supplementary-plane.js
 cases/string-prototype-to-string-basic.js
 cases/string-prototype-to-string-length.js
 cases/string-prototype-to-upper-case-basic.js
 cases/string-prototype-to-upper-case-length.js
+cases/string-prototype-to-upper-case-supplementary-plane.js
 cases/string-prototype-trim-basic.js
 cases/string-prototype-trim-end-basic.js
 cases/string-prototype-trim-end-length.js
