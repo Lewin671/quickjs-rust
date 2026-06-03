@@ -52,6 +52,10 @@ fn evaluates_string_addition() {
         Ok(Value::Number(5.0))
     );
     assert_eq!(
+        eval("let date = new Date(0); date + 0 === date.toString() + '0';"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval(
             "let caught = false; try { 'str' + { valueOf: String.prototype.valueOf }; } catch (error) { caught = error instanceof TypeError; } caught;"
         ),

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{RuntimeError, Value, array::array_join, call_function, number, property_value};
+use crate::{RuntimeError, Value, array::array_join, call_function, date, number, property_value};
 
 pub(crate) fn to_js_string(value: Value) -> Result<String, RuntimeError> {
     let mut env = HashMap::new();
@@ -111,7 +111,11 @@ fn object_to_primitive(
     value: Value,
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    for method in ["valueOf", "toString"] {
+    let methods = match &value {
+        Value::Object(object) if date::is_date_object(object) => ["toString", "valueOf"],
+        _ => ["valueOf", "toString"],
+    };
+    for method in methods {
         let method_value = property_value(value.clone(), method, env)?;
         if matches!(method_value, Value::Function(_)) {
             let primitive = call_function(method_value, value.clone(), Vec::new(), env, false)?;
