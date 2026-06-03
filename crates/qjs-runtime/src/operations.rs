@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use qjs_ast::{BinaryOp, UnaryOp};
 
 use crate::{
-    Property, RuntimeError, Value, has_property, is_truthy, string_object_value, to_int32_number,
-    to_js_string_with_env, to_number, to_number_with_env, to_primitive_with_env, to_property_key,
-    to_uint32_number, value_prototype,
+    Property, RuntimeError, Value, has_property, is_truthy, to_int32_number, to_js_string_with_env,
+    to_number, to_number_with_env, to_primitive_with_env, to_property_key, to_uint32_number,
+    value_prototype,
 };
 
 pub(crate) fn eval_unary(
@@ -41,8 +41,8 @@ pub(crate) fn eval_binary(
     }
 
     match op {
-        BinaryOp::Eq => return Ok(Value::Boolean(abstract_eq(&left, &right)?)),
-        BinaryOp::Ne => return Ok(Value::Boolean(!abstract_eq(&left, &right)?)),
+        BinaryOp::Eq => return Ok(Value::Boolean(abstract_eq(&left, &right, env)?)),
+        BinaryOp::Ne => return Ok(Value::Boolean(!abstract_eq(&left, &right, env)?)),
         BinaryOp::StrictEq => return Ok(Value::Boolean(left == right)),
         BinaryOp::StrictNe => return Ok(Value::Boolean(left != right)),
         BinaryOp::Add => {
@@ -153,7 +153,11 @@ fn eval_relational(
     Ok(Value::Boolean(value))
 }
 
-fn abstract_eq(left: &Value, right: &Value) -> Result<bool, RuntimeError> {
+fn abstract_eq(
+    left: &Value,
+    right: &Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<bool, RuntimeError> {
     match (left, right) {
         (Value::Null, Value::Undefined) | (Value::Undefined, Value::Null) => Ok(true),
         (Value::Number(_), Value::String(value)) => {
@@ -163,22 +167,24 @@ fn abstract_eq(left: &Value, right: &Value) -> Result<bool, RuntimeError> {
             Ok(&Value::Number(to_number(Value::String(value.clone()))?) == right)
         }
         (Value::Boolean(value), _) => {
-            abstract_eq(&Value::Number(if *value { 1.0 } else { 0.0 }), right)
+            abstract_eq(&Value::Number(if *value { 1.0 } else { 0.0 }), right, env)
         }
         (_, Value::Boolean(value)) => {
-            abstract_eq(left, &Value::Number(if *value { 1.0 } else { 0.0 }))
+            abstract_eq(left, &Value::Number(if *value { 1.0 } else { 0.0 }), env)
         }
-        (Value::Object(object), Value::String(_) | Value::Number(_)) => {
-            match string_object_value(object) {
-                Some(value) => abstract_eq(&Value::String(value), right),
-                None => Ok(false),
-            }
+        (
+            Value::Object(_) | Value::Function(_) | Value::Array(_),
+            Value::String(_) | Value::Number(_),
+        ) => {
+            let primitive = to_primitive_with_env(left.clone(), env)?;
+            abstract_eq(&primitive, right, env)
         }
-        (Value::String(_) | Value::Number(_), Value::Object(object)) => {
-            match string_object_value(object) {
-                Some(value) => abstract_eq(left, &Value::String(value)),
-                None => Ok(false),
-            }
+        (
+            Value::String(_) | Value::Number(_),
+            Value::Object(_) | Value::Function(_) | Value::Array(_),
+        ) => {
+            let primitive = to_primitive_with_env(right.clone(), env)?;
+            abstract_eq(left, &primitive, env)
         }
         _ => Ok(left == right),
     }

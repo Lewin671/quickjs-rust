@@ -30,6 +30,14 @@ fn evaluates_number_binary_fast_paths_with_bytecode() {
         Ok(Value::Boolean(true))
     );
     assert_eq!(
+        eval_bytecode_source("new Boolean(true) == true;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval_bytecode_source("({ valueOf: function() { return 1; } }) == true;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval_bytecode_source("'2' < '10';"),
         Ok(Value::Boolean(false))
     );
