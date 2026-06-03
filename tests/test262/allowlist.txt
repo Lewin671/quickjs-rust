@@ -496,6 +496,7 @@ cases/function-prototype-apply-arguments-object-params.js
 cases/function-prototype-apply-null-args.js
 cases/function-prototype-apply-arguments-basic.js
 cases/function-prototype-apply-length.js
+cases/function-prototype-apply-inherited-non-callable.js
 cases/function-prototype-apply-primitive-argarray-throws.js
 cases/function-prototype-bind-basic.js
 cases/function-prototype-bind-length.js
@@ -518,6 +519,7 @@ cases/function-missing-parameter-basic.js
 cases/function-length-basic.js
 cases/function-closure-return-basic.js
 cases/function-closure-argument-basic.js
+cases/function-constructor-prototype-function-valued.js
 cases/function-constructor-basic.js
 cases/function-constructor-call-body.js
 cases/function-hoist-before-declaration-basic.js
