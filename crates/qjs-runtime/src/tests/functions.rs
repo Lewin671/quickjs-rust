@@ -178,6 +178,24 @@ fn evaluates_function_declarations_and_calls() {
         Ok(Value::Number(5.0))
     );
     assert_eq!(
+        eval(
+            "var i = 0; var p = { toString: function() { return 'a' + (++i); } }; var obj = {}; new Function(p, p, p, 'this.shifted = a3;').apply(obj, (function() { return arguments; })('a', 'b', 'c')); obj.shifted;"
+        ),
+        Ok(Value::String("c".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "function count(a, b, c) { return arguments.length + ':' + (a === undefined) + ':' + b + ':' + (c === undefined); } count.apply(null, [, 2, ,]);"
+        ),
+        Ok(Value::String("3:true:2:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "function fn() {} var caught = ''; for (var i = 0; i < 4; i = i + 1) { var value = i === 0 ? true : (i === 1 ? NaN : (i === 2 ? '1,2,3' : Symbol())); try { fn.apply(null, value); caught = caught + '0'; } catch (error) { caught = caught + (error instanceof TypeError ? '1' : '2'); } } caught;"
+        ),
+        Ok(Value::String("1111".to_owned()))
+    );
+    assert_eq!(
         eval("function getThis() { return this; } getThis.call(undefined) === this;"),
         Ok(Value::Boolean(true))
     );
@@ -302,6 +320,12 @@ fn evaluates_function_declarations_and_calls() {
     assert_eq!(
         eval("let add = new Function('a,b', 'return a + b;'); add.length + ':' + add(2, 3);"),
         Ok(Value::String("2:5".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var i = 0; var p = { toString: function() { return 'a' + (++i); } }; let f = new Function(p, p, p, 'return a1 + a2 + a3;'); f('a', 'b', 'c');"
+        ),
+        Ok(Value::String("abc".to_owned()))
     );
     assert_eq!(
         eval("let f = Function('this.value = 7;'); let o = {}; f.call(o); o.value;"),
