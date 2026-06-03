@@ -125,11 +125,21 @@ pub(crate) fn native_object_prototype_is_prototype_of(
     let Some(target_prototype) = value_prototype(target, env) else {
         return Ok(Value::Boolean(false));
     };
-    let Value::Object(prototype) = this_value else {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "isPrototypeOf called on non-object".to_owned(),
-        });
+    let prototype = match this_value {
+        Value::Object(prototype) => prototype,
+        Value::Null | Value::Undefined => {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "isPrototypeOf called on non-object".to_owned(),
+            });
+        }
+        Value::Function(_)
+        | Value::Array(_)
+        | Value::String(_)
+        | Value::Number(_)
+        | Value::Boolean(_) => {
+            return Ok(Value::Boolean(false));
+        }
     };
     Ok(Value::Boolean(
         target_prototype.ptr_eq(&prototype) || target_prototype.has_prototype(&prototype),
