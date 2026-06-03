@@ -41,6 +41,55 @@ pub(crate) fn install_regexp(
             false,
         )),
     );
+    regexp_prototype.define_non_enumerable(
+        "test".to_owned(),
+        Value::Function(Function::new_native(
+            Some("test"),
+            1,
+            NativeFunction::RegExpPrototypeTest,
+            false,
+        )),
+    );
+    define_regexp_accessor(
+        &regexp_prototype,
+        "source",
+        NativeFunction::RegExpPrototypeSource,
+    );
+    define_regexp_accessor(
+        &regexp_prototype,
+        "flags",
+        NativeFunction::RegExpPrototypeFlags,
+    );
+    define_regexp_accessor(
+        &regexp_prototype,
+        "global",
+        NativeFunction::RegExpPrototypeGlobal,
+    );
+    define_regexp_accessor(
+        &regexp_prototype,
+        "ignoreCase",
+        NativeFunction::RegExpPrototypeIgnoreCase,
+    );
+    define_regexp_accessor(
+        &regexp_prototype,
+        "multiline",
+        NativeFunction::RegExpPrototypeMultiline,
+    );
+    define_regexp_accessor(
+        &regexp_prototype,
+        "sticky",
+        NativeFunction::RegExpPrototypeSticky,
+    );
+    define_regexp_accessor(
+        &regexp_prototype,
+        "unicode",
+        NativeFunction::RegExpPrototypeUnicode,
+    );
+    define_regexp_accessor(
+        &regexp_prototype,
+        "hasIndices",
+        NativeFunction::RegExpPrototypeHasIndices,
+    );
     regexp_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
         Property::non_enumerable(Value::Object(regexp_prototype)),
@@ -51,6 +100,23 @@ pub(crate) fn install_regexp(
     if let Value::Object(global_object) = global_this {
         global_object.set("RegExp".to_owned(), regexp_value);
     }
+}
+
+fn define_regexp_accessor(prototype: &ObjectRef, name: &str, native: NativeFunction) {
+    prototype.define_property(
+        name.to_owned(),
+        Property::accessor(
+            Some(Value::Function(Function::new_native(
+                Some(&format!("get {name}")),
+                0,
+                native,
+                false,
+            ))),
+            None,
+            false,
+            true,
+        ),
+    );
 }
 
 pub(crate) fn native_regexp(
@@ -137,6 +203,102 @@ pub(crate) fn native_regexp_prototype_to_string(this_value: Value) -> Result<Val
         regexp_string_data(&object, REGEXP_SOURCE_PROPERTY).unwrap_or_default(),
         regexp_string_data(&object, REGEXP_FLAGS_PROPERTY).unwrap_or_default()
     )))
+}
+
+pub(crate) fn native_regexp_prototype_test(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let result = native_regexp_prototype_exec(this_value, argument_values, env)?;
+    Ok(Value::Boolean(!matches!(result, Value::Null)))
+}
+
+pub(crate) fn native_regexp_prototype_source(
+    this_value: Value,
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let source = regexp_accessor_data(&this_value, env, REGEXP_SOURCE_PROPERTY, "(?:)")?;
+    Ok(Value::String(escape_regexp_source(&source)))
+}
+
+pub(crate) fn native_regexp_prototype_flags(
+    this_value: Value,
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    regexp_accessor_data(&this_value, env, REGEXP_FLAGS_PROPERTY, "").map(|flags| {
+        Value::String(
+            flags
+                .chars()
+                .filter(|flag| "dgimsyu".contains(*flag))
+                .collect(),
+        )
+    })
+}
+
+pub(crate) fn native_regexp_prototype_flag(
+    this_value: Value,
+    env: &HashMap<String, Value>,
+    flag: char,
+) -> Result<Value, RuntimeError> {
+    let flags = regexp_accessor_data(&this_value, env, REGEXP_FLAGS_PROPERTY, "")?;
+    if flags.is_empty() && is_regexp_prototype_value(&this_value, env) {
+        return Ok(Value::Undefined);
+    }
+    Ok(Value::Boolean(flags.contains(flag)))
+}
+
+fn regexp_accessor_data(
+    this_value: &Value,
+    env: &HashMap<String, Value>,
+    key: &str,
+    prototype_value: &str,
+) -> Result<String, RuntimeError> {
+    let Value::Object(object) = &this_value else {
+        return Err(regexp_receiver_error());
+    };
+    if let Some(value) = regexp_string_data(object, key) {
+        return Ok(value);
+    }
+    if is_regexp_prototype_value(this_value, env) {
+        return Ok(prototype_value.to_owned());
+    }
+    Err(regexp_receiver_error())
+}
+
+fn is_regexp_prototype_value(value: &Value, env: &HashMap<String, Value>) -> bool {
+    let Value::Object(object) = value else {
+        return false;
+    };
+    env.get("RegExp")
+        .and_then(|constructor| match constructor {
+            Value::Function(function) => function_prototype(function),
+            _ => None,
+        })
+        .is_some_and(|prototype| object.ptr_eq(&prototype))
+}
+
+fn regexp_receiver_error() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "TypeError: RegExp prototype accessor requires a RegExp receiver".to_owned(),
+    }
+}
+
+fn escape_regexp_source(source: &str) -> String {
+    if source.is_empty() {
+        return "(?:)".to_owned();
+    }
+    let mut escaped = String::new();
+    for ch in source.chars() {
+        match ch {
+            '/' => escaped.push_str("\\/"),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            _ => escaped.push(ch),
+        }
+    }
+    escaped
 }
 
 fn define_regexp_data(object: &ObjectRef, source: &str, flags: &str) {
