@@ -54,6 +54,22 @@ fn evaluates_regexp_prototype_accessors() {
         Ok(Value::String("\\/".to_owned()))
     );
     assert_eq!(
+        eval(
+            "let re = eval('/' + new RegExp('\\n').source + '/'); re.test('\\n') && re.test('_\\n_') && !re.test('n');"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let re = eval('/' + new RegExp('\\r').source + '/'); re.test('\\r') && !re.test('r');"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("new RegExp(String.fromCharCode(0x2028)).source;"),
+        Ok(Value::String("\\u2028".to_owned()))
+    );
+    assert_eq!(
         eval("Object.getOwnPropertyDescriptor(RegExp.prototype, 'global').set;"),
         Ok(Value::Undefined)
     );
