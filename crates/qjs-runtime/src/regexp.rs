@@ -170,6 +170,7 @@ pub(crate) fn native_regexp_prototype_exec(
     let global = regexp_flags_contains(&object, 'g');
     let sticky = regexp_flags_contains(&object, 'y');
     let ignore_case = regexp_flags_contains(&object, 'i');
+    let unicode = regexp_flags_contains(&object, 'u');
     let stateful = global || sticky;
     let start = if stateful {
         regexp_last_index(&object, env)?
@@ -178,9 +179,9 @@ pub(crate) fn native_regexp_prototype_exec(
     };
 
     let match_result = if sticky {
-        matcher::regexp_match_at(&source, &input, start, ignore_case)
+        matcher::regexp_match_at(&source, &input, start, ignore_case, unicode)
     } else {
-        matcher::regexp_match_range(&source, &input, start, ignore_case)
+        matcher::regexp_match_range(&source, &input, start, ignore_case, unicode)
     };
 
     let Some(match_result) = match_result else {

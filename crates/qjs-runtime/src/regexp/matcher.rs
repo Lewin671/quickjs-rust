@@ -1,5 +1,13 @@
 use std::collections::HashMap;
 
+use crate::string::string_from_code_unit;
+
+mod escapes;
+mod groups;
+
+use escapes::{chars_equal, class_range_contains, regexp_control_escape, unicode_escape};
+use groups::{closing_group, group_alternatives, is_non_capturing_group};
+
 const DATE_TO_STRING_FORMAT_PATTERN: &str = "^(Sun|Mon|Tue|Wed|Thu|Fri|Sat) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) [0-9]{2} [0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2} GMT[+-][0-9]{4}( \\(.+\\))?$";
 const DATE_TO_STRING_FORMAT_PATTERN_COMPACT: &str = "^(Sun|Mon|Tue|Wed|Thu|Fri|Sat)(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[0-9]{2}[0-9]{4}[0-9]{2}:[0-9]{2}:[0-9]{2}GMT[+-][0-9]{4}(\\(.+\\))?$";
 
@@ -23,13 +31,20 @@ struct Quantifier {
     next_pc: usize,
 }
 
+#[derive(Clone, Copy)]
+struct MatchOptions {
+    ignore_case: bool,
+    unicode: bool,
+}
+
 pub(super) fn regexp_match_range(
     source: &str,
     input: &str,
     start_index: usize,
     ignore_case: bool,
+    unicode: bool,
 ) -> Option<RegexpMatch> {
-    regexp_match(source, input, start_index, ignore_case, false)
+    regexp_match(source, input, start_index, ignore_case, unicode, false)
 }
 
 pub(super) fn regexp_match_at(
@@ -37,8 +52,9 @@ pub(super) fn regexp_match_at(
     input: &str,
     start_index: usize,
     ignore_case: bool,
+    unicode: bool,
 ) -> Option<RegexpMatch> {
-    regexp_match(source, input, start_index, ignore_case, true)
+    regexp_match(source, input, start_index, ignore_case, unicode, true)
 }
 
 fn regexp_match(
@@ -46,6 +62,7 @@ fn regexp_match(
     input: &str,
     start_index: usize,
     ignore_case: bool,
+    unicode: bool,
     exact_start: bool,
 ) -> Option<RegexpMatch> {
     let source = normalized_regexp_source(source);
@@ -55,6 +72,10 @@ fn regexp_match(
         return None;
     }
     let group_indices = capture_group_indices(&pattern);
+    let options = MatchOptions {
+        ignore_case,
+        unicode,
+    };
     let starts: Vec<_> = if exact_start {
         vec![start_index]
     } else if pattern.first() == Some(&'^') {
@@ -79,7 +100,7 @@ fn regexp_match(
             pattern.len(),
             state,
             &group_indices,
-            ignore_case,
+            options,
         )
         .into_iter()
         .next()
@@ -125,7 +146,7 @@ fn match_pattern(
     end_pc: usize,
     state: MatchState,
     group_indices: &HashMap<usize, usize>,
-    ignore_case: bool,
+    options: MatchOptions,
 ) -> Vec<MatchState> {
     if pc == end_pc {
         return vec![state];
@@ -133,35 +154,19 @@ fn match_pattern(
     match pattern[pc] {
         '^' => {
             if state.index == 0 {
-                match_pattern(
-                    pattern,
-                    text,
-                    pc + 1,
-                    end_pc,
-                    state,
-                    group_indices,
-                    ignore_case,
-                )
+                match_pattern(pattern, text, pc + 1, end_pc, state, group_indices, options)
             } else {
                 Vec::new()
             }
         }
         '$' => {
             if state.index == text.len() {
-                match_pattern(
-                    pattern,
-                    text,
-                    pc + 1,
-                    end_pc,
-                    state,
-                    group_indices,
-                    ignore_case,
-                )
+                match_pattern(pattern, text, pc + 1, end_pc, state, group_indices, options)
             } else {
                 Vec::new()
             }
         }
-        _ => atom_end(pattern, pc)
+        _ => atom_end(pattern, pc, options.unicode)
             .into_iter()
             .flat_map(|atom_end| {
                 let quantifier = quantifier(pattern, atom_end);
@@ -172,7 +177,7 @@ fn match_pattern(
                     quantifier,
                     state.clone(),
                     group_indices,
-                    ignore_case,
+                    options,
                 )
                 .into_iter()
                 .flat_map(move |state| {
@@ -183,7 +188,7 @@ fn match_pattern(
                         end_pc,
                         state,
                         group_indices,
-                        ignore_case,
+                        options,
                     )
                 })
             })
@@ -191,9 +196,11 @@ fn match_pattern(
     }
 }
 
-fn atom_end(pattern: &[char], pc: usize) -> Option<usize> {
+fn atom_end(pattern: &[char], pc: usize, unicode: bool) -> Option<usize> {
     match pattern.get(pc)? {
-        '\\' if unicode_escape(pattern, pc).is_some() => Some(pc + 6),
+        '\\' if unicode_escape(pattern, pc, unicode).is_some() => {
+            unicode_escape(pattern, pc, unicode).map(|escape| escape.next_pc)
+        }
         '\\' => Some(pc + 2),
         '[' => pattern[pc + 1..]
             .iter()
@@ -210,14 +217,14 @@ fn match_atom(
     pc: usize,
     state: MatchState,
     group_indices: &HashMap<usize, usize>,
-    ignore_case: bool,
+    options: MatchOptions,
 ) -> Vec<(usize, MatchState)> {
     match pattern[pc] {
-        '\\' => match_escape(pattern, text, pc, state, ignore_case),
-        '[' => match_class(pattern, text, pc, state, ignore_case),
-        '(' => match_group(pattern, text, pc, state, group_indices, ignore_case),
+        '\\' => match_escape(pattern, text, pc, state, options),
+        '[' => match_class(pattern, text, pc, state, options),
+        '(' => match_group(pattern, text, pc, state, group_indices, options),
         '.' => match_any(text, pc + 1, state),
-        literal => match_literal(text, pc + 1, state, literal, ignore_case),
+        literal => match_literal(text, pc + 1, state, literal, options.ignore_case),
     }
 }
 
@@ -251,7 +258,7 @@ fn match_escape(
     text: &[char],
     pc: usize,
     mut state: MatchState,
-    ignore_case: bool,
+    options: MatchOptions,
 ) -> Vec<(usize, MatchState)> {
     let Some(escaped) = pattern.get(pc + 1).copied() else {
         return Vec::new();
@@ -264,13 +271,25 @@ fn match_escape(
         'D' => (!value.is_ascii_digit(), pc + 2),
         's' => (value.is_whitespace(), pc + 2),
         'S' => (!value.is_whitespace(), pc + 2),
-        'u' => (
-            unicode_escape(pattern, pc)
-                .is_some_and(|unicode| chars_equal(value, unicode, ignore_case)),
-            pc + 6,
-        ),
+        'u' => {
+            let Some(escape) = unicode_escape(pattern, pc, options.unicode) else {
+                let matched = chars_equal(value, 'u', options.ignore_case);
+                if matched {
+                    state.index += 1;
+                    return vec![(pc + 2, state)];
+                }
+                return Vec::new();
+            };
+            return match_unicode_escape(
+                text,
+                state,
+                escape.value,
+                escape.next_pc,
+                options.ignore_case,
+            );
+        }
         literal => (
-            chars_equal(value, regexp_control_escape(literal), ignore_case),
+            chars_equal(value, regexp_control_escape(literal), options.ignore_case),
             pc + 2,
         ),
     };
@@ -281,12 +300,49 @@ fn match_escape(
     vec![(next_pc, state)]
 }
 
+fn match_unicode_escape(
+    text: &[char],
+    state: MatchState,
+    value: char,
+    next_pc: usize,
+    ignore_case: bool,
+) -> Vec<(usize, MatchState)> {
+    let mut matches = Vec::new();
+    if text
+        .get(state.index)
+        .is_some_and(|current| chars_equal(*current, value, ignore_case))
+    {
+        let mut matched = state.clone();
+        matched.index += 1;
+        matches.push((next_pc, matched));
+    }
+
+    let mut buffer = [0u16; 2];
+    let code_units = value.encode_utf16(&mut buffer);
+    if code_units.len() == 2
+        && text.get(state.index) == Some(&code_unit_char(code_units[0]))
+        && text.get(state.index + 1) == Some(&code_unit_char(code_units[1]))
+    {
+        let mut matched = state;
+        matched.index += 2;
+        matches.push((next_pc, matched));
+    }
+    matches
+}
+
+fn code_unit_char(code_unit: u16) -> char {
+    string_from_code_unit(code_unit)
+        .chars()
+        .next()
+        .unwrap_or(char::REPLACEMENT_CHARACTER)
+}
+
 fn match_class(
     pattern: &[char],
     text: &[char],
     pc: usize,
     mut state: MatchState,
-    ignore_case: bool,
+    options: MatchOptions,
 ) -> Vec<(usize, MatchState)> {
     let Some(end) = pattern[pc + 1..].iter().position(|char| *char == ']') else {
         return Vec::new();
@@ -295,7 +351,7 @@ fn match_class(
     let class = &pattern[pc + 1..class_end];
     if !text
         .get(state.index)
-        .is_some_and(|value| class_match(class, *value, ignore_case))
+        .is_some_and(|value| class_match(class, *value, options))
     {
         return Vec::new();
     }
@@ -303,28 +359,27 @@ fn match_class(
     vec![(class_end + 1, state)]
 }
 
-fn class_match(class: &[char], value: char, ignore_case: bool) -> bool {
+fn class_match(class: &[char], value: char, options: MatchOptions) -> bool {
     let mut index = 0;
     while index < class.len() {
         if class[index] == '\\' {
-            if class.get(index + 1).is_some()
-                && class_escape_matches(class, index, value, ignore_case)
+            if class.get(index + 1).is_some() && class_escape_matches(class, index, value, options)
             {
                 return true;
             }
-            index += if unicode_escape(class, index).is_some() {
-                6
+            index += if let Some(escape) = unicode_escape(class, index, options.unicode) {
+                escape.next_pc - index
             } else {
                 2
             };
         } else if class.get(index + 1) == Some(&'-') && class.get(index + 2).is_some() {
             let end = class[index + 2];
-            if class_range_contains(class[index], end, value, ignore_case) {
+            if class_range_contains(class[index], end, value, options.ignore_case) {
                 return true;
             }
             index += 3;
         } else {
-            if chars_equal(class[index], value, ignore_case) {
+            if chars_equal(class[index], value, options.ignore_case) {
                 return true;
             }
             index += 1;
@@ -400,13 +455,13 @@ fn repeat_atom(
     quantifier: Quantifier,
     state: MatchState,
     group_indices: &HashMap<usize, usize>,
-    ignore_case: bool,
+    options: MatchOptions,
 ) -> Vec<MatchState> {
     let mut current = vec![state];
     for _ in 0..quantifier.min {
         current = current
             .into_iter()
-            .flat_map(|state| match_atom(pattern, text, atom_pc, state, group_indices, ignore_case))
+            .flat_map(|state| match_atom(pattern, text, atom_pc, state, group_indices, options))
             .map(|(_, state)| state)
             .collect();
         if current.is_empty() {
@@ -419,7 +474,7 @@ fn repeat_atom(
     while quantifier.max.is_none_or(|max| count < max) {
         let next: Vec<_> = current
             .into_iter()
-            .flat_map(|state| match_atom(pattern, text, atom_pc, state, group_indices, ignore_case))
+            .flat_map(|state| match_atom(pattern, text, atom_pc, state, group_indices, options))
             .map(|(_, state)| state)
             .filter(|state| results.iter().all(|result| result.index != state.index))
             .collect();
@@ -434,57 +489,17 @@ fn repeat_atom(
     results
 }
 
-fn class_escape_matches(class: &[char], index: usize, value: char, ignore_case: bool) -> bool {
+fn class_escape_matches(class: &[char], index: usize, value: char, options: MatchOptions) -> bool {
     match class.get(index + 1).copied() {
         Some('d') => value.is_ascii_digit(),
         Some('D') => !value.is_ascii_digit(),
         Some('s') => value.is_whitespace(),
         Some('S') => !value.is_whitespace(),
-        Some('u') => unicode_escape(class, index)
-            .is_some_and(|unicode| chars_equal(value, unicode, ignore_case)),
-        Some(escaped) => chars_equal(regexp_control_escape(escaped), value, ignore_case),
+        Some('u') => unicode_escape(class, index, options.unicode)
+            .is_some_and(|escape| chars_equal(value, escape.value, options.ignore_case)),
+        Some(escaped) => chars_equal(regexp_control_escape(escaped), value, options.ignore_case),
         None => false,
     }
-}
-
-fn regexp_control_escape(escaped: char) -> char {
-    match escaped {
-        'f' => '\u{000c}',
-        'n' => '\n',
-        'r' => '\r',
-        't' => '\t',
-        'v' => '\u{000b}',
-        _ => escaped,
-    }
-}
-
-fn chars_equal(left: char, right: char, ignore_case: bool) -> bool {
-    if ignore_case {
-        left.eq_ignore_ascii_case(&right)
-    } else {
-        left == right
-    }
-}
-
-fn class_range_contains(start: char, end: char, value: char, ignore_case: bool) -> bool {
-    if start <= value && value <= end {
-        return true;
-    }
-    ignore_case && {
-        let value = value.to_ascii_lowercase();
-        start.to_ascii_lowercase() <= value && value <= end.to_ascii_lowercase()
-    }
-}
-
-fn unicode_escape(pattern: &[char], pc: usize) -> Option<char> {
-    if pattern.get(pc + 1) != Some(&'u') {
-        return None;
-    }
-    let mut value = 0;
-    for index in pc + 2..pc + 6 {
-        value = value * 16 + pattern.get(index)?.to_digit(16)?;
-    }
-    char::from_u32(value)
 }
 
 fn match_group(
@@ -493,7 +508,7 @@ fn match_group(
     pc: usize,
     state: MatchState,
     group_indices: &HashMap<usize, usize>,
-    ignore_case: bool,
+    options: MatchOptions,
 ) -> Vec<(usize, MatchState)> {
     let Some(end) = closing_group(pattern, pc) else {
         return Vec::new();
@@ -513,7 +528,7 @@ fn match_group(
             end,
             state.clone(),
             group_indices,
-            ignore_case,
+            options,
         ));
     }
     matches
@@ -525,51 +540,4 @@ fn match_group(
             (end + 1, matched)
         })
         .collect()
-}
-
-fn is_non_capturing_group(pattern: &[char], pc: usize) -> bool {
-    pattern.get(pc + 1) == Some(&'?') && pattern.get(pc + 2) == Some(&':')
-}
-
-fn closing_group(pattern: &[char], pc: usize) -> Option<usize> {
-    let mut escaped = false;
-    for (offset, char) in pattern[pc + 1..].iter().enumerate() {
-        if escaped {
-            escaped = false;
-        } else if *char == '\\' {
-            escaped = true;
-        } else if *char == ')' {
-            return Some(pc + 1 + offset);
-        }
-    }
-    None
-}
-
-fn group_alternatives(pattern: &[char], start_pc: usize, end_pc: usize) -> Vec<(usize, usize)> {
-    let mut alternatives = Vec::new();
-    let mut start = start_pc;
-    let mut escaped = false;
-    let mut depth = 0usize;
-    for (index, char) in pattern
-        .iter()
-        .enumerate()
-        .take(end_pc)
-        .skip(start_pc)
-        .map(|(index, char)| (index, *char))
-    {
-        if escaped {
-            escaped = false;
-        } else if char == '\\' {
-            escaped = true;
-        } else if char == '(' {
-            depth += 1;
-        } else if char == ')' && depth > 0 {
-            depth -= 1;
-        } else if char == '|' && depth == 0 {
-            alternatives.push((start, index));
-            start = index + 1;
-        }
-    }
-    alternatives.push((start, end_pc));
-    alternatives
 }
