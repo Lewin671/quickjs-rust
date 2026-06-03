@@ -183,8 +183,30 @@ fn evaluates_function_declarations_and_calls() {
     );
     assert_eq!(
         eval(
+            "function touch() { this.touched = true; return this instanceof Number && this.touched; } touch.call(1);"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "function touch() { this.touched = true; return this instanceof Boolean && this.touched; } touch.call(true);"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "function touch() { this.touched = true; return this instanceof String && this.touched; } touch.call('x');"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
             "function getThis() { 'use strict'; return this; } getThis.call(undefined) === undefined;"
         ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("function getThis() { 'use strict'; return this; } getThis.call(1) === 1;"),
         Ok(Value::Boolean(true))
     );
     assert_eq!(
