@@ -5,7 +5,7 @@ use qjs_ast::BinaryOp;
 use crate::{
     GLOBAL_THIS_BINDING, Property, RuntimeError, Value, array_prototype, boolean, call_function,
     function_delete_own_property, function_own_property_keys, inherited_string_prototype_property,
-    number, property_value, string, to_length,
+    number, property_value, string, to_int32_number, to_length, to_uint32_number,
 };
 
 use super::vm::Vm;
@@ -189,6 +189,26 @@ pub(super) fn fast_number_binary(left: &Value, op: BinaryOp, right: &Value) -> O
         BinaryOp::Div => Value::Number(left / right),
         BinaryOp::Rem => Value::Number(left % right),
         BinaryOp::Pow => Value::Number(left.powf(*right)),
+        BinaryOp::Shl => Value::Number(f64::from(
+            to_int32_number(*left) << (to_uint32_number(*right) & 0x1f),
+        )),
+        BinaryOp::Shr => Value::Number(f64::from(
+            to_int32_number(*left) >> (to_uint32_number(*right) & 0x1f),
+        )),
+        BinaryOp::UShr => Value::Number(f64::from(
+            to_uint32_number(*left) >> (to_uint32_number(*right) & 0x1f),
+        )),
+        BinaryOp::BitwiseAnd => {
+            Value::Number(f64::from(to_int32_number(*left) & to_int32_number(*right)))
+        }
+        BinaryOp::BitwiseXor => {
+            Value::Number(f64::from(to_int32_number(*left) ^ to_int32_number(*right)))
+        }
+        BinaryOp::BitwiseOr => {
+            Value::Number(f64::from(to_int32_number(*left) | to_int32_number(*right)))
+        }
+        BinaryOp::Eq => Value::Boolean(left == right),
+        BinaryOp::Ne => Value::Boolean(left != right),
         BinaryOp::Lt => Value::Boolean(left < right),
         BinaryOp::Le => Value::Boolean(left <= right),
         BinaryOp::Gt => Value::Boolean(left > right),
