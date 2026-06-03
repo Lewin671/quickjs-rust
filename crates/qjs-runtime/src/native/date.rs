@@ -22,6 +22,7 @@ pub(super) fn call_date_native(
         NativeFunction::DatePrototypeGetTimezoneOffset => {
             date::native_date_prototype_get_timezone_offset(this_value)?
         }
+        NativeFunction::DatePrototypeGetYear => date::native_date_prototype_get_year(this_value)?,
         NativeFunction::DatePrototypeGetUtcDate => {
             date::native_date_prototype_get_utc_date(this_value)?
         }

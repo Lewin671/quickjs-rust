@@ -194,6 +194,7 @@ cases/date-get-full-year-non-date.js
 cases/date-get-full-year-valid-date.js
 cases/date-local-format-basic.js
 cases/date-parse-utc-basic.js
+cases/date-prototype-get-year-annex-b.js
 cases/date-set-time-basic.js
 cases/date-set-utc-date-basic.js
 cases/date-set-utc-full-year-basic.js

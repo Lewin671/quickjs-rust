@@ -16,6 +16,10 @@ pub(crate) fn native_date_prototype_get_timezone_offset(
     Ok(Value::Number(0.0))
 }
 
+pub(crate) fn native_date_prototype_get_year(this_value: Value) -> Result<Value, RuntimeError> {
+    utc_component(this_value, |components| components.year - 1900)
+}
+
 pub(crate) fn native_date_prototype_get_utc_date(this_value: Value) -> Result<Value, RuntimeError> {
     utc_component(this_value, |components| components.date)
 }

@@ -12,7 +12,7 @@ pub(crate) use accessors::{
     native_date_prototype_get_utc_full_year, native_date_prototype_get_utc_hours,
     native_date_prototype_get_utc_milliseconds, native_date_prototype_get_utc_minutes,
     native_date_prototype_get_utc_month, native_date_prototype_get_utc_seconds,
-    native_date_prototype_value_of,
+    native_date_prototype_get_year, native_date_prototype_value_of,
 };
 pub(crate) use constructor::{native_date, native_date_now, native_date_parse, native_date_utc};
 pub(crate) use format::{
