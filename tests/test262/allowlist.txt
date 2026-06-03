@@ -306,6 +306,7 @@ cases/math-precision-length.js
 cases/object-assign-length.js
 cases/object-assign-target-object.js
 cases/object-assign-override.js
+cases/object-assign-primitive-target.js
 cases/object-assign-source-string.js
 cases/object-assign-null-undefined-source.js
 cases/object-constructor-basic.js
