@@ -26,6 +26,7 @@ pub(crate) use mutation::{
     native_date_prototype_set_utc_full_year, native_date_prototype_set_utc_hours,
     native_date_prototype_set_utc_milliseconds, native_date_prototype_set_utc_minutes,
     native_date_prototype_set_utc_month, native_date_prototype_set_utc_seconds,
+    native_date_prototype_set_year,
 };
 pub(crate) use value::is_date_object;
 
