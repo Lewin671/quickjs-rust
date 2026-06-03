@@ -14,7 +14,7 @@ pub(super) struct UtcDateTime {
 pub(super) fn parse_iso_string(source: &str) -> Option<f64> {
     let bytes = source.as_bytes();
     let (year, cursor) = parse_iso_year(source)?;
-    if bytes.len() < cursor + 16
+    if bytes.len() < cursor + 12
         || bytes.get(cursor) != Some(&b'-')
         || bytes.get(cursor + 3) != Some(&b'-')
     {
@@ -27,14 +27,26 @@ pub(super) fn parse_iso_string(source: &str) -> Option<f64> {
     }
     let hours = parse_i32(&source[cursor + 7..cursor + 9])?;
     let minutes = parse_i32(&source[cursor + 10..cursor + 12])?;
-    let seconds = parse_i32(&source[cursor + 13..cursor + 15])?;
-    if bytes.get(cursor + 9) != Some(&b':') || bytes.get(cursor + 12) != Some(&b':') {
+    if bytes.get(cursor + 9) != Some(&b':') {
         return None;
     }
 
-    let mut cursor = cursor + 15;
+    let mut cursor = cursor + 12;
+    let mut seconds = 0;
+    let mut has_seconds = false;
+    if bytes.get(cursor) == Some(&b':') {
+        if bytes.len() < cursor + 3 {
+            return None;
+        }
+        seconds = parse_i32(&source[cursor + 1..cursor + 3])?;
+        cursor += 3;
+        has_seconds = true;
+    }
     let mut millis = 0;
     if bytes.get(cursor) == Some(&b'.') {
+        if !has_seconds {
+            return None;
+        }
         let start = cursor + 1;
         cursor = start;
         while cursor < bytes.len() && bytes[cursor].is_ascii_digit() {
@@ -89,11 +101,11 @@ pub(super) fn format_utc_string(millis: f64) -> String {
 
     let components = utc_date_time(millis);
     format!(
-        "{}, {:02} {} {:04} {:02}:{:02}:{:02} GMT",
+        "{}, {:02} {} {} {:02}:{:02}:{:02} GMT",
         WEEKDAYS[components.day as usize],
         components.date,
         MONTHS[components.month as usize],
-        components.year,
+        format_local_year(components.year),
         components.hours,
         components.minutes,
         components.seconds
@@ -108,11 +120,11 @@ pub(super) fn format_date_string(millis: f64) -> String {
 
     let components = utc_date_time(millis);
     format!(
-        "{} {} {:02} {:04}",
+        "{} {} {:02} {}",
         WEEKDAYS[components.day as usize],
         MONTHS[components.month as usize],
         components.date,
-        components.year
+        format_local_year(components.year)
     )
 }
 
@@ -202,6 +214,14 @@ fn format_iso_year(year: i32) -> String {
         format!("-{:06}", year.abs())
     } else {
         format!("+{year:06}")
+    }
+}
+
+fn format_local_year(year: i32) -> String {
+    if year < 0 {
+        format!("-{:04}", year.abs())
+    } else {
+        format!("{year:04}")
     }
 }
 

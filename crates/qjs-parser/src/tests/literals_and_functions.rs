@@ -236,6 +236,66 @@ fn parses_regexp_literal_as_regexp_constructor_expression() {
 }
 
 #[test]
+fn parses_regexp_literal_with_escaped_atoms() {
+    let script = parse_script(r#"/\(/;"#).expect("source should parse");
+    let [
+        Stmt::Expr(Expr::New {
+            arguments, span, ..
+        }),
+    ] = script.body.as_slice()
+    else {
+        panic!("expected RegExp constructor expression");
+    };
+
+    assert_eq!(*span, qjs_ast::Span::new(0, 4));
+    assert!(matches!(
+        arguments.as_slice(),
+        [Expr::Literal(Literal::String { value, span })]
+            if value == r#"\("# && *span == qjs_ast::Span::new(0, 4)
+    ));
+}
+
+#[test]
+fn parses_regexp_literal_with_character_class_range() {
+    let script = parse_script(r#"/[0-9]/g;"#).expect("source should parse");
+    let [
+        Stmt::Expr(Expr::New {
+            arguments, span, ..
+        }),
+    ] = script.body.as_slice()
+    else {
+        panic!("expected RegExp constructor expression");
+    };
+
+    assert_eq!(*span, qjs_ast::Span::new(0, 8));
+    assert!(matches!(
+        arguments.as_slice(),
+        [
+            Expr::Literal(Literal::String { value: pattern, span: pattern_span }),
+            Expr::Literal(Literal::String { value: flags, span: flags_span })
+        ] if pattern == "[0-9]"
+            && *pattern_span == qjs_ast::Span::new(0, 7)
+            && flags == "g"
+            && *flags_span == qjs_ast::Span::new(7, 8)
+    ));
+}
+
+#[test]
+fn parses_date_format_regexp_literal_smoke() {
+    let source = r#"/^(Sun|Mon) [0-9]{2}:[0-9]{2} GMT[+-][0-9]{4}( \(.+\))?$/;"#;
+    let script = parse_script(source).expect("source should parse");
+    let [Stmt::Expr(Expr::New { arguments, .. })] = script.body.as_slice() else {
+        panic!("expected RegExp constructor expression");
+    };
+
+    assert!(matches!(
+        arguments.as_slice(),
+        [Expr::Literal(Literal::String { value, .. })]
+            if value == r#"^(Sun|Mon)[0-9]{2}:[0-9]{2}GMT[+-][0-9]{4}(\(.+\))?$"#
+    ));
+}
+
+#[test]
 fn parses_member_access() {
     let script = parse_script("items[0].length;").expect("source should parse");
     let [

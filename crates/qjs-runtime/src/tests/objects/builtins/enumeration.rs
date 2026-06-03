@@ -17,6 +17,8 @@ fn evaluates_object_enumeration_builtins() {
         eval("Object.keys(Object.prototype).length;"),
         Ok(Value::Number(0.0))
     );
+    assert!(eval("Object.keys(null);").is_err());
+    assert!(eval("Object.keys(undefined);").is_err());
     assert_eq!(eval("Object.values.length;"), Ok(Value::Number(1.0)));
     assert_eq!(
         eval("Object.values({ first: 1, second: 2 }).join();"),

@@ -6,7 +6,15 @@ use crate::{
 use super::descriptor::own_property_descriptor;
 
 pub(crate) fn native_object_keys(argument_values: &[Value]) -> Result<Value, RuntimeError> {
-    let keys = own_property_keys(argument_values.first().cloned().unwrap_or(Value::Undefined));
+    let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    if matches!(target, Value::Null | Value::Undefined) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "Object.keys target must not be null or undefined".to_owned(),
+        });
+    }
+
+    let keys = own_property_keys(target);
     Ok(Value::Array(ArrayRef::new(
         keys.into_iter().map(Value::String).collect(),
     )))
