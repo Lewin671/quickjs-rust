@@ -78,6 +78,28 @@ fn evaluates_date_local_format_builtins() {
     );
     assert_eq!(
         eval(
+            "let caught = false; try { new Date(8640000000000001).toISOString(); } catch (error) { caught = error instanceof RangeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { new Date(Infinity, 1, 70).toISOString(); } catch (error) { caught = error instanceof RangeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { new Date(-Infinity, 1, 70).toISOString(); } catch (error) { caught = error instanceof RangeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("Number.isNaN(new Date(1970, 0, -99999999, 0, -60, 0, -1).getTime());"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
             "let caught = false; try { Date.prototype.toString(); } catch (error) { caught = error instanceof TypeError; } caught;"
         ),
         Ok(Value::Boolean(true))

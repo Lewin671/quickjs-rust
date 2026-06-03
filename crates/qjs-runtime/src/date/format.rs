@@ -17,7 +17,7 @@ pub(crate) fn native_date_prototype_to_iso_string(
     if !millis.is_finite() {
         return Err(RuntimeError {
             thrown: None,
-            message: "Invalid time value".to_owned(),
+            message: "RangeError: Invalid time value".to_owned(),
         });
     }
     Ok(Value::String(format_iso_string(millis)))
