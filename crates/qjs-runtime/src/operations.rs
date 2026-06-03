@@ -3,17 +3,23 @@ use std::collections::HashMap;
 use qjs_ast::{BinaryOp, UnaryOp};
 
 use crate::{
-    Property, RuntimeError, Value, has_property, is_truthy, string_object_value, to_int32,
-    to_int32_number, to_js_string_with_env, to_number, to_number_with_env, to_primitive_with_env,
-    to_property_key, to_uint32_number, value_prototype,
+    Property, RuntimeError, Value, has_property, is_truthy, string_object_value, to_int32_number,
+    to_js_string_with_env, to_number, to_number_with_env, to_primitive_with_env, to_property_key,
+    to_uint32_number, value_prototype,
 };
 
-pub(crate) fn eval_unary(op: UnaryOp, argument: Value) -> Result<Value, RuntimeError> {
+pub(crate) fn eval_unary(
+    op: UnaryOp,
+    argument: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
     match op {
         UnaryOp::Not => Ok(Value::Boolean(!is_truthy(&argument))),
-        UnaryOp::Plus => Ok(Value::Number(to_number(argument)?)),
-        UnaryOp::Minus => Ok(Value::Number(-to_number(argument)?)),
-        UnaryOp::BitwiseNot => Ok(Value::Number(f64::from(!to_int32(argument)?))),
+        UnaryOp::Plus => Ok(Value::Number(to_number_with_env(argument, env)?)),
+        UnaryOp::Minus => Ok(Value::Number(-to_number_with_env(argument, env)?)),
+        UnaryOp::BitwiseNot => Ok(Value::Number(f64::from(!to_int32_number(
+            to_number_with_env(argument, env)?,
+        )))),
         UnaryOp::Void => Ok(Value::Undefined),
         UnaryOp::Typeof | UnaryOp::Delete => {
             unreachable!("operator requires unevaluated operand handling")

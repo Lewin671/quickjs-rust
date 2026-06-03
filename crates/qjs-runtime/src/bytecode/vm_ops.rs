@@ -20,7 +20,7 @@ impl Vm<'_> {
         if let Some(value) = fast_number_unary(op, &value) {
             return Ok(value);
         }
-        operations::eval_unary(op, value)
+        operations::eval_unary(op, value, &mut self.globals)
     }
 
     pub(super) fn enumerate_keys(&mut self) -> Result<(), RuntimeError> {
