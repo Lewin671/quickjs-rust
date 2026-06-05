@@ -24,6 +24,10 @@ fn evaluates_number_builtins() {
         Ok(Value::Number(1.0))
     );
     assert_eq!(
+        eval("Number.prototype.toFixed.length;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
         eval("Number.prototype.valueOf.length;"),
         Ok(Value::Number(0.0))
     );
@@ -52,12 +56,40 @@ fn evaluates_number_builtins() {
         eval("(new Number(7)).toString();"),
         Ok(Value::String("7".to_owned()))
     );
+    assert_eq!(
+        eval("(1.25).toFixed(1);"),
+        Ok(Value::String("1.2".to_owned()))
+    );
+    assert_eq!(
+        eval("(1.25).toFixed(2);"),
+        Ok(Value::String("1.25".to_owned()))
+    );
+    assert_eq!(
+        eval("(new Number(7)).toFixed(2);"),
+        Ok(Value::String("7.00".to_owned()))
+    );
+    assert_eq!(
+        eval("Number.prototype.toFixed.call(-0, 2);"),
+        Ok(Value::String("0.00".to_owned()))
+    );
+    assert_eq!(
+        eval("(1e21).toFixed(2);"),
+        Ok(Value::String("1e+21".to_owned()))
+    );
+    assert_eq!(eval("NaN.toFixed(2);"), Ok(Value::String("NaN".to_owned())));
     assert_eq!(eval("(new Number(7)).valueOf();"), Ok(Value::Number(7.0)));
     assert_eq!(
         eval("let n = new Number(7); n.tag = Object.prototype.toString; n.tag();"),
         Ok(Value::String("[object Number]".to_owned()))
     );
     assert!(eval("let o = Object.create(Number.prototype); o.valueOf();").is_err());
+    assert!(eval("let o = Object.create(Number.prototype); o.toFixed();").is_err());
+    assert_eq!(
+        eval(
+            "let caught = false; try { (3).toFixed(101); } catch (error) { caught = error instanceof RangeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
     assert_eq!(
         eval("Number('abc') === Number('abc');"),
         Ok(Value::Boolean(false))

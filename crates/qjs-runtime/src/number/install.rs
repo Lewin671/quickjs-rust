@@ -20,6 +20,15 @@ pub(crate) fn install_number(
         Value::Function(number_function.clone()),
     );
     number_prototype.define_non_enumerable(
+        "toFixed".to_owned(),
+        Value::Function(Function::new_native(
+            Some("toFixed"),
+            1,
+            NativeFunction::NumberPrototypeToFixed,
+            false,
+        )),
+    );
+    number_prototype.define_non_enumerable(
         "toString".to_owned(),
         Value::Function(Function::new_native(
             Some("toString"),

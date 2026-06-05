@@ -168,6 +168,7 @@ pub(crate) enum NativeFunction {
     NumberIsInteger,
     NumberIsNaN,
     NumberIsSafeInteger,
+    NumberPrototypeToFixed,
     NumberPrototypeToString,
     NumberPrototypeValueOf,
     ParseFloat,

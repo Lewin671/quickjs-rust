@@ -19,6 +19,9 @@ pub(super) fn call_number_native(
         NativeFunction::NumberIsSafeInteger => {
             number::native_number_is_safe_integer(argument_values)?
         }
+        NativeFunction::NumberPrototypeToFixed => {
+            number::native_number_prototype_to_fixed(this_value, argument_values)?
+        }
         NativeFunction::NumberPrototypeToString => {
             number::native_number_prototype_to_string(this_value, argument_values)?
         }

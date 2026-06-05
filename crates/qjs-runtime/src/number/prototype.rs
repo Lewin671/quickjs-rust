@@ -38,6 +38,19 @@ pub(crate) fn native_number_prototype_to_string(
     Ok(Value::String(number_to_radix_string(number, radix)?))
 }
 
+pub(crate) fn native_number_prototype_to_fixed(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let number = this_number_value(this_value)?;
+    let fraction_digits =
+        fraction_digits(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    Ok(Value::String(number_to_fixed_string(
+        number,
+        fraction_digits,
+    )))
+}
+
 pub(crate) fn native_number_prototype_value_of(this_value: Value) -> Result<Value, RuntimeError> {
     Ok(Value::Number(this_number_value(this_value)?))
 }
@@ -74,6 +87,26 @@ fn number_to_string_radix(value: Value) -> Result<u32, RuntimeError> {
         });
     }
     Ok(radix as u32)
+}
+
+fn fraction_digits(value: Value) -> Result<usize, RuntimeError> {
+    let digits = to_number(value)?;
+    let digits = if digits.is_nan() { 0.0 } else { digits.trunc() };
+    if !(0.0..=100.0).contains(&digits) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "RangeError: toFixed fraction digits must be between 0 and 100".to_owned(),
+        });
+    }
+    Ok(digits as usize)
+}
+
+fn number_to_fixed_string(number: f64, fraction_digits: usize) -> String {
+    if !number.is_finite() || number.abs() >= 1e21 {
+        return number_to_js_string(number);
+    }
+    let number = if number == 0.0 { 0.0 } else { number };
+    format!("{number:.fraction_digits$}")
 }
 
 fn number_to_radix_string(number: f64, radix: u32) -> Result<String, RuntimeError> {
