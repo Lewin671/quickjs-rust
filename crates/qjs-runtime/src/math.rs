@@ -38,6 +38,7 @@ pub(super) fn install_math(
     define_math_function(&math_object, "cosh", 1, NativeFunction::MathCosh);
     define_math_function(&math_object, "exp", 1, NativeFunction::MathExp);
     define_math_function(&math_object, "expm1", 1, NativeFunction::MathExpm1);
+    define_math_function(&math_object, "f16round", 1, NativeFunction::MathF16round);
     define_math_function(&math_object, "floor", 1, NativeFunction::MathFloor);
     define_math_function(&math_object, "fround", 1, NativeFunction::MathFround);
     define_math_function(&math_object, "hypot", 2, NativeFunction::MathHypot);
@@ -96,6 +97,11 @@ pub(super) fn native_math_atan2(argument_values: &[Value]) -> Result<Value, Runt
 pub(super) fn native_math_fround(argument_values: &[Value]) -> Result<Value, RuntimeError> {
     let number = to_number(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
     Ok(Value::Number(f64::from(number as f32)))
+}
+
+pub(super) fn native_math_f16round(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    let number = to_number(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    Ok(Value::Number(round_to_binary16(number)))
 }
 
 pub(super) fn native_math_hypot(argument_values: &[Value]) -> Result<Value, RuntimeError> {
@@ -246,4 +252,46 @@ fn xorshift64star(mut value: u64) -> u64 {
     value ^= value << 25;
     value ^= value >> 27;
     value.wrapping_mul(0x2545_f491_4f6c_dd1d)
+}
+
+fn round_to_binary16(number: f64) -> f64 {
+    if number.is_nan() || number.is_infinite() || number == 0.0 {
+        return number;
+    }
+
+    let sign = if number.is_sign_negative() { -1.0 } else { 1.0 };
+    let magnitude = number.abs();
+    if magnitude >= 65520.0 {
+        return sign * f64::INFINITY;
+    }
+
+    const MIN_NORMAL: f64 = 0.00006103515625; // 2^-14
+    const MIN_SUBNORMAL: f64 = 0.000_000_059_604_644_775_390_63; // 2^-24
+
+    if magnitude < MIN_NORMAL {
+        return sign * (round_ties_to_even(magnitude / MIN_SUBNORMAL) * MIN_SUBNORMAL);
+    }
+
+    let exponent = magnitude.log2().floor();
+    let unit = 2.0_f64.powf(exponent - 10.0);
+    let significand = round_ties_to_even(magnitude / unit);
+    if significand == 2048.0 {
+        sign * 2.0_f64.powf(exponent + 1.0)
+    } else {
+        sign * significand * unit
+    }
+}
+
+fn round_ties_to_even(value: f64) -> f64 {
+    let lower = value.floor();
+    let fraction = value - lower;
+    if fraction < 0.5 {
+        lower
+    } else if fraction > 0.5 {
+        lower + 1.0
+    } else if lower % 2.0 == 0.0 {
+        lower
+    } else {
+        lower + 1.0
+    }
 }

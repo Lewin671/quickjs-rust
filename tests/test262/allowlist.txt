@@ -287,6 +287,8 @@ cases/math-abs-basic.js
 cases/math-abs-length.js
 cases/math-constants-basic.js
 cases/math-floor-ceil-trunc-basic.js
+cases/math-f16round-basic.js
+cases/math-f16round-length.js
 cases/math-clz32-basic.js
 cases/math-clz32-length.js
 cases/math-imul-basic.js

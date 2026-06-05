@@ -102,6 +102,7 @@ pub(crate) enum NativeFunction {
     MathCosh,
     MathExp,
     MathExpm1,
+    MathF16round,
     MathFloor,
     MathFround,
     MathHypot,

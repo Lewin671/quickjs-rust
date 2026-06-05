@@ -24,6 +24,7 @@ pub(super) fn call_math_native(
         NativeFunction::MathExpm1 => {
             math_builtins::native_math_unary(argument_values, f64::exp_m1)?
         }
+        NativeFunction::MathF16round => math_builtins::native_math_f16round(argument_values)?,
         NativeFunction::MathFloor => math_builtins::native_math_unary(argument_values, f64::floor)?,
         NativeFunction::MathFround => math_builtins::native_math_fround(argument_values)?,
         NativeFunction::MathHypot => math_builtins::native_math_hypot(argument_values)?,

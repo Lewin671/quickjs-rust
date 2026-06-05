@@ -26,6 +26,7 @@ fn evaluates_math_builtins() {
     assert_eq!(eval("Math.cosh.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("Math.exp.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("Math.expm1.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("Math.f16round.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("Math.fround.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("Math.hypot.length;"), Ok(Value::Number(2.0)));
     assert_eq!(eval("Math.log.length;"), Ok(Value::Number(1.0)));
@@ -148,6 +149,27 @@ fn evaluates_math_builtins() {
     );
     assert_eq!(eval("Math.cosh(0);"), Ok(Value::Number(1.0)));
     assert_eq!(eval("Math.expm1(0);"), Ok(Value::Number(0.0)));
+    assert_eq!(
+        eval("Math.f16round(1.00048828125);"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval("Math.f16round(1.0009765625);"),
+        Ok(Value::Number(1.0009765625))
+    );
+    assert_eq!(eval("Math.f16round(65519);"), Ok(Value::Number(65504.0)));
+    assert_eq!(
+        eval("Math.f16round(65520) === Infinity;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("1 / Math.f16round(-0) === -Infinity;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("Math.f16round(NaN) === Math.f16round(NaN);"),
+        Ok(Value::Boolean(false))
+    );
     assert_eq!(eval("Math.fround(1.5);"), Ok(Value::Number(1.5)));
     assert_eq!(
         eval("1 / Math.fround(-0) === -Infinity;"),
