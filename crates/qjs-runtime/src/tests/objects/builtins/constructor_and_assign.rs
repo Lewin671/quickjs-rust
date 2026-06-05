@@ -52,4 +52,14 @@ fn evaluates_object_constructor_and_assign() {
         ),
         Ok(Value::String("true:1|8|9".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "let result = Object.assign(12, 'aaa', 'bb2b', '1c'); Object.getOwnPropertyNames(result).join('|') + ':' + result.valueOf();"
+        ),
+        Ok(Value::String("0|1|2|3:12".to_owned()))
+    );
+    assert!(eval("Object.assign('a', [1]);").is_err());
+    assert!(
+        eval("let target = {}; Object.defineProperty(target, 'attr', { writable: false }); Object.assign(target, { attr: 1 });").is_err()
+    );
 }

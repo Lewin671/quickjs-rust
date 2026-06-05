@@ -114,11 +114,13 @@ fn own_property_keys(value: Value) -> Vec<String> {
 }
 
 pub(super) fn own_property_names(value: Value) -> Vec<String> {
-    match value {
+    let mut names = match value {
         Value::Object(object) => object.own_property_names(),
         Value::Array(elements) => array_own_property_names(&elements),
         Value::Function(function) => function_own_property_names(&function),
         Value::String(value) => crate::string::string_own_property_names(&value),
         Value::Number(_) | Value::Boolean(_) | Value::Null | Value::Undefined => Vec::new(),
-    }
+    };
+    names.retain(|name| !name.starts_with('\0'));
+    names
 }

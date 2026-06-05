@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 use crate::{
     Function, ObjectRef, Property, RuntimeError, Value, boolean::BOOLEAN_DATA_PROPERTY,
-    function_prototype, number::NUMBER_DATA_PROPERTY, string::STRING_DATA_PROPERTY,
+    call_function, function_intrinsic_prototype, function_prototype, number::NUMBER_DATA_PROPERTY,
+    string::STRING_DATA_PROPERTY,
 };
 
 use super::descriptor::native_object_define_properties;
@@ -33,7 +34,7 @@ pub(crate) fn native_object_assign(
             continue;
         }
         for (key, value) in enumerable_property_entries(source, env)? {
-            set_property(target.clone(), key, value)?;
+            set_property(target.clone(), key, value, env)?;
         }
     }
     Ok(target)
@@ -149,13 +150,51 @@ pub(crate) fn native_object_is(argument_values: &[Value]) -> Result<Value, Runti
     Ok(Value::Boolean(left.same_value(&right)))
 }
 
-fn set_property(target: Value, key: String, value: Value) -> Result<(), RuntimeError> {
+fn set_property(
+    target: Value,
+    key: String,
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
     match target {
         Value::Object(object) => {
+            let property = object.property(&key);
+            if apply_property_setter(
+                property.clone(),
+                Value::Object(object.clone()),
+                value.clone(),
+                env,
+            )? {
+                return Ok(());
+            }
+            if property.is_some_and(|property| property.is_accessor() || !property.writable)
+                || (object.own_property(&key).is_none() && !object.is_extensible())
+            {
+                return Err(assignment_type_error());
+            }
             object.set(key, value);
             Ok(())
         }
         Value::Function(function) => {
+            let property = function.properties.borrow().get(&key).cloned().or_else(|| {
+                function
+                    .internal_prototype_override()
+                    .unwrap_or_else(|| function_intrinsic_prototype(env))
+                    .and_then(|prototype| prototype.property(&key))
+            });
+            if apply_property_setter(
+                property.clone(),
+                Value::Function(function.clone()),
+                value.clone(),
+                env,
+            )? {
+                return Ok(());
+            }
+            if property.is_some_and(|property| property.is_accessor() || !property.writable)
+                || (!function.properties.borrow().contains_key(&key) && !function.is_extensible())
+            {
+                return Err(assignment_type_error());
+            }
             function.set_property(key, value);
             Ok(())
         }
@@ -171,14 +210,34 @@ fn set_property(target: Value, key: String, value: Value) -> Result<(), RuntimeE
             } else if elements.try_set_property(key, value) {
                 return Ok(());
             }
-            Err(RuntimeError {
-                thrown: None,
-                message: "TypeError: cannot assign to property".to_owned(),
-            })
+            Err(assignment_type_error())
         }
         _ => Err(RuntimeError {
             thrown: None,
             message: "property target is not mutable".to_owned(),
         }),
+    }
+}
+
+fn apply_property_setter(
+    property: Option<Property>,
+    receiver: Value,
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<bool, RuntimeError> {
+    let Some(property) = property else {
+        return Ok(false);
+    };
+    let Some(setter) = property.set else {
+        return Ok(false);
+    };
+    call_function(setter, receiver, vec![value], env, false)?;
+    Ok(true)
+}
+
+fn assignment_type_error() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "TypeError: cannot assign to property".to_owned(),
     }
 }
