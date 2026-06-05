@@ -110,6 +110,8 @@ The standard project check is:
 ./scripts/check.sh
 ```
 
+See `scripts/README.md` for the full script catalog and intended usage.
+
 Useful focused checks include:
 
 ```sh
