@@ -50,7 +50,7 @@ pub(crate) fn native_reflect_delete_property(
 
 pub(crate) fn native_reflect_get_own_property_descriptor(
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     ensure_reflect_object_target(&target, "Reflect.getOwnPropertyDescriptor")?;

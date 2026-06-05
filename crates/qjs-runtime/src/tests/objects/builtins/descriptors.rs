@@ -110,6 +110,12 @@ fn evaluates_object_descriptor_queries() {
     );
     assert_eq!(
         eval(
+            "let object = { abc: 1 }; let toStringAccessed = false; let valueOfAccessed = false; let key = { toString: function() { toStringAccessed = true; return {}; }, valueOf: function() { valueOfAccessed = true; return 'abc'; } }; let descriptor = Object.getOwnPropertyDescriptor(object, key); descriptor.value === 1 && toStringAccessed && valueOfAccessed;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
             "let object = {}; let descriptor = function() {}; descriptor.value = 7; Object.defineProperty(object, 'value', descriptor); object.value;"
         ),
         Ok(Value::Number(7.0))

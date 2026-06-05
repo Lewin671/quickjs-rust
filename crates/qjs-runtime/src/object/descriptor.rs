@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use crate::{
     ObjectRef, Property, RuntimeError, Value, function_own_property_descriptor, has_property,
-    is_truthy, object_prototype, property_value, to_number_with_env, to_property_key,
-    to_property_key_with_env, to_uint32_number,
+    is_truthy, object_prototype, property_value, to_number_with_env, to_property_key_with_env,
+    to_uint32_number,
 };
 
 use super::enumeration::{enumerable_property_entries, own_property_names};
@@ -97,7 +97,7 @@ pub(crate) fn native_object_define_properties(
 
 pub(crate) fn native_object_get_own_property_descriptor(
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if matches!(target, Value::Null | Value::Undefined) {
@@ -107,7 +107,10 @@ pub(crate) fn native_object_get_own_property_descriptor(
                 .to_owned(),
         });
     }
-    let key = to_property_key(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
+    let key = to_property_key_with_env(
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     let Some(property) = own_property_descriptor(target, &key)? else {
         return Ok(Value::Undefined);
     };
