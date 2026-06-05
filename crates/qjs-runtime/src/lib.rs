@@ -26,6 +26,7 @@ mod set;
 mod string;
 mod symbol;
 mod value;
+mod weak_map;
 
 use builtins::initialize_builtins;
 pub(crate) use conversion::{
@@ -75,6 +76,7 @@ pub(crate) const RUNTIME_INTRINSIC_NAMES: &[&str] = &[
     "JSON",
     "Promise",
     "Map",
+    "WeakMap",
     "Set",
     "Math",
     "Reflect",

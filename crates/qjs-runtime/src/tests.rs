@@ -19,3 +19,4 @@ mod regexp;
 mod sets;
 mod statements;
 mod strings;
+mod weak_maps;
