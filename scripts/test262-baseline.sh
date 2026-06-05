@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TEST262_DIR="$ROOT_DIR/third_party/test262"
 QUICKJS_NG_DIR="$ROOT_DIR/third_party/quickjs-ng"
 QUICKJS_NG_BIN="$QUICKJS_NG_DIR/build/qjs"
+QUICKJS_NG_RUNNER="$QUICKJS_NG_DIR/build/run-test262"
 RUN_WITH_TIMEOUT="$ROOT_DIR/scripts/run-with-timeout.sh"
 METADATA_PARSER="$ROOT_DIR/scripts/test262-baseline-metadata.awk"
 CASE_TIMEOUT_SECONDS="${TEST262_CASE_TIMEOUT_SECONDS:-10}"
@@ -163,9 +164,16 @@ if needs_quickjs_ng; then
     echo "error: missing $QUICKJS_NG_DIR; run ./scripts/bootstrap.sh first" >&2
     exit 1
   fi
-  if [ ! -x "$QUICKJS_NG_BIN" ]; then
+  if [ ! -x "$QUICKJS_NG_BIN" ] || [ ! -x "$QUICKJS_NG_RUNNER" ]; then
     make -C "$QUICKJS_NG_DIR" all
   fi
+  QUICKJS_NG_CONF="$(mktemp "${TMPDIR:-/tmp}/qjsng-test262-conf-XXXXXX")"
+  trap 'rm -f "$QUICKJS_NG_CONF"' EXIT
+  sed \
+    -e "s#^harnessdir=.*#harnessdir=$TEST262_DIR/harness#" \
+    -e "s#^testdir=.*#testdir=$TEST262_DIR/test#" \
+    -e 's#^errorfile=.*#errorfile=#' \
+    "$QUICKJS_NG_DIR/test262.conf" >"$QUICKJS_NG_CONF"
 fi
 
 metadata_for() {
@@ -220,6 +228,7 @@ make_case() {
 run_engine_case() {
   local engine="$1"
   local temp="$2"
+  local source="$3"
   local output
   local status
   local first_line
@@ -227,7 +236,7 @@ run_engine_case() {
   set +e
   case "$engine" in
     quickjs-rust) output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$QJS_CLI_BIN" "$temp" 2>&1)" ;;
-    quickjs-ng) output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$QUICKJS_NG_BIN" "$temp" 2>&1)" ;;
+    quickjs-ng) output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$QUICKJS_NG_RUNNER" -c "$QUICKJS_NG_CONF" -t 1 -f "$source" 2>&1)" ;;
   esac
   status=$?
   set -e
@@ -256,6 +265,7 @@ result_kind() {
   case "$1" in
     pass) echo "pass" ;;
     timeout) echo "timeout" ;;
+    skipped) echo "skipped" ;;
     *) echo "fail" ;;
   esac
 }
@@ -264,6 +274,7 @@ run_case() {
   local file="$1"
   local flags="$2"
   local rel="$3"
+  local rust_skip_reason="$4"
   local temp_dir
   local temp
   local rust_result="not-run"
@@ -274,16 +285,22 @@ run_case() {
   make_case "$file" "$temp" "$flags"
 
   if [ "$ENGINE" = "quickjs-rust" ] || [ "$ENGINE" = "both" ]; then
-    rust_result="$(run_engine_case quickjs-rust "$temp")"
-    count_engine_result rust "$rust_result"
+    if [ -n "$rust_skip_reason" ]; then
+      rust_result="skipped"
+      rust_skipped=$((rust_skipped + 1))
+    else
+      rust_result="$(run_engine_case quickjs-rust "$temp" "$file")"
+      count_engine_result rust "$rust_result"
+    fi
   fi
   if [ "$ENGINE" = "quickjs-ng" ] || [ "$ENGINE" = "both" ]; then
-    qjsng_result="$(run_engine_case quickjs-ng "$temp")"
+    qjsng_result="$(run_engine_case quickjs-ng "$temp" "$file")"
     count_engine_result qjsng "$qjsng_result"
   fi
   rm -rf "$temp_dir"
 
   case "$rust_result" in
+    skipped) echo "quickjs-rust skipped: $rel ($rust_skip_reason)" >&2 ;;
     timeout) echo "quickjs-rust timeout: $rel" >&2 ;;
     fail*) printf 'quickjs-rust fail: %s\t%s\n' "$rel" "${rust_result#fail	}" >&2 ;;
   esac
@@ -334,7 +351,7 @@ write_summary_json() {
     "negative": $skip_negative,
     "raw": $skip_raw
   },
-  "quickjs_rust": {"pass": $rust_pass, "fail": $rust_fail, "timeout": $rust_timeout},
+  "quickjs_rust": {"pass": $rust_pass, "fail": $rust_fail, "timeout": $rust_timeout, "skipped": $rust_skipped},
   "quickjs_ng": {"pass": $qjsng_pass, "fail": $qjsng_fail, "timeout": $qjsng_timeout},
   "comparison": {
     "both_pass": $both_pass,
@@ -362,6 +379,7 @@ skip_raw=0
 rust_pass=0
 rust_fail=0
 rust_timeout=0
+rust_skipped=0
 qjsng_pass=0
 qjsng_fail=0
 qjsng_timeout=0
@@ -401,17 +419,20 @@ while IFS= read -r file; do
       negative) skip_negative=$((skip_negative + 1)) ;;
       raw) skip_raw=$((skip_raw + 1)) ;;
     esac
-    continue
+    if [ "$ENGINE" = "quickjs-rust" ]; then
+      continue
+    fi
+  else
+    eligible=$((eligible + 1))
   fi
 
-  eligible=$((eligible + 1))
   if [ "$RUN_LIMIT" != "all" ] && [ "$run" -ge "$RUN_LIMIT" ]; then
     continue
   fi
 
   run=$((run + 1))
   printf 'test262-baseline [%d]: %s\n' "$run" "$rel"
-  run_case "$file" "$flags" "$rel"
+  run_case "$file" "$flags" "$rel" "$reason"
 done < <(find "$TEST262_DIR/test" -type f -name '*.js' | sort)
 
 echo "summary:"
@@ -433,6 +454,7 @@ if needs_rust; then
   echo "  quickjs-rust.pass: $rust_pass"
   echo "  quickjs-rust.fail: $rust_fail"
   echo "  quickjs-rust.timeout: $rust_timeout"
+  echo "  quickjs-rust.skipped: $rust_skipped"
 fi
 if needs_quickjs_ng; then
   echo "  quickjs-ng.pass: $qjsng_pass"

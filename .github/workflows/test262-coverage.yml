@@ -107,6 +107,7 @@ jobs:
               "rust_pass": 0,
               "rust_fail": 0,
               "rust_timeout": 0,
+              "rust_skipped": 0,
               "qjsng_pass": 0,
               "qjsng_fail": 0,
               "qjsng_timeout": 0,
@@ -138,6 +139,7 @@ jobs:
               totals["rust_pass"] += summary["quickjs_rust"]["pass"]
               totals["rust_fail"] += summary["quickjs_rust"]["fail"]
               totals["rust_timeout"] += summary["quickjs_rust"]["timeout"]
+              totals["rust_skipped"] += summary["quickjs_rust"]["skipped"]
               totals["qjsng_pass"] += summary["quickjs_ng"]["pass"]
               totals["qjsng_fail"] += summary["quickjs_ng"]["fail"]
               totals["qjsng_timeout"] += summary["quickjs_ng"]["timeout"]
@@ -156,28 +158,28 @@ jobs:
               "",
               f"Aggregated `{len(paths)}` shard summaries for `${{ github.event.workflow_run.head_sha }}`.",
               "",
-              "## Harness Coverage",
+              "## Full Corpus Coverage",
               "",
               "| Metric | Count | Share |",
               "| --- | ---: | ---: |",
               f"| Upstream cases | {totals['total']} | 100.00% |",
-              f"| Runnable by current harness | {totals['eligible']} | {pct(totals['eligible'], totals['total'])} |",
-              f"| Attempted | {totals['run']} | {pct(totals['run'], totals['total'])} |",
-              f"| Skipped by harness | {totals['skipped']} | {pct(totals['skipped'], totals['total'])} |",
+              f"| Runnable by quickjs-rust harness | {totals['eligible']} | {pct(totals['eligible'], totals['total'])} |",
+              f"| Compared against QuickJS-NG | {totals['run']} | {pct(totals['run'], totals['total'])} |",
+              f"| Skipped by quickjs-rust harness | {totals['skipped']} | {pct(totals['skipped'], totals['total'])} |",
               "",
               "## Engine Results",
               "",
-              "| Engine | Pass | Fail | Timeout | Pass Rate |",
-              "| --- | ---: | ---: | ---: | ---: |",
-              f"| quickjs-rust | {totals['rust_pass']} | {totals['rust_fail']} | {totals['rust_timeout']} | {pct(totals['rust_pass'], totals['run'])} |",
-              f"| QuickJS-NG | {totals['qjsng_pass']} | {totals['qjsng_fail']} | {totals['qjsng_timeout']} | {pct(totals['qjsng_pass'], totals['run'])} |",
+              "| Engine | Pass | Fail | Timeout | Skipped | Pass Rate |",
+              "| --- | ---: | ---: | ---: | ---: | ---: |",
+              f"| quickjs-rust | {totals['rust_pass']} | {totals['rust_fail']} | {totals['rust_timeout']} | {totals['rust_skipped']} | {pct(totals['rust_pass'], totals['run'])} |",
+              f"| QuickJS-NG | {totals['qjsng_pass']} | {totals['qjsng_fail']} | {totals['qjsng_timeout']} | 0 | {pct(totals['qjsng_pass'], totals['run'])} |",
               "",
               "## Coverage Difference",
               "",
               "| Comparison | Count | Share of Attempted |",
               "| --- | ---: | ---: |",
               f"| Both pass | {totals['both_pass']} | {pct(totals['both_pass'], totals['run'])} |",
-              f"| QuickJS-NG passes, quickjs-rust does not | {totals['qjsng_pass_rust_nonpass']} | {pct(totals['qjsng_pass_rust_nonpass'], totals['run'])} |",
+              f"| QuickJS-NG passes, quickjs-rust fails/timeouts/skips | {totals['qjsng_pass_rust_nonpass']} | {pct(totals['qjsng_pass_rust_nonpass'], totals['run'])} |",
               f"| quickjs-rust passes, QuickJS-NG does not | {totals['rust_pass_qjsng_nonpass']} | {pct(totals['rust_pass_qjsng_nonpass'], totals['run'])} |",
               f"| Neither passes | {totals['both_nonpass']} | {pct(totals['both_nonpass'], totals['run'])} |",
               "",
