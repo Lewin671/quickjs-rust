@@ -103,13 +103,7 @@ impl Parser {
             .start;
         self.expect(&TokenKind::For)?;
         self.expect(&TokenKind::LeftParen)?;
-        if self.at(&TokenKind::Var)
-            || self.at(&TokenKind::Const)
-            || (self.at(&TokenKind::Let)
-                && !self
-                    .peek_nth(1)
-                    .is_some_and(|token| token.kind == TokenKind::In))
-        {
+        if self.for_declaration_start() {
             let kind_token = self.advance();
             let kind = var_kind(&kind_token.kind).expect("token should be declaration kind");
             if self.at(&TokenKind::LeftBracket) || self.at(&TokenKind::LeftBrace) {
@@ -231,8 +225,7 @@ impl Parser {
 
         let init = if self.match_kind(&TokenKind::Semicolon) {
             None
-        } else if self.at(&TokenKind::Var) || self.at(&TokenKind::Let) || self.at(&TokenKind::Const)
-        {
+        } else if self.for_declaration_start() {
             let init = self.for_variable_declaration()?;
             self.expect(&TokenKind::Semicolon)?;
             Some(init)
@@ -264,6 +257,18 @@ impl Parser {
             body: Box::new(body),
             span: Span::new(start, end),
         })
+    }
+
+    fn for_declaration_start(&self) -> bool {
+        self.at(&TokenKind::Var)
+            || self.at(&TokenKind::Const)
+            || (self.at(&TokenKind::Let)
+                && self.peek_nth(1).is_some_and(|token| {
+                    matches!(
+                        token.kind,
+                        TokenKind::Identifier(_) | TokenKind::LeftBracket | TokenKind::LeftBrace
+                    )
+                }))
     }
 
     pub(super) fn switch_statement(&mut self) -> Result<Stmt, ParseError> {

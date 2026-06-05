@@ -28,6 +28,22 @@ fn parses_variable_declaration() {
 }
 
 #[test]
+fn parses_sloppy_let_identifier_expression() {
+    let script = parse_script("var let; let = 1;").expect("source should parse");
+    let [
+        Stmt::VarDecl { .. },
+        Stmt::Expr(Expr::Assignment { target, .. }),
+    ] = script.body.as_slice()
+    else {
+        panic!("expected var declaration followed by assignment expression");
+    };
+    assert!(matches!(
+        target,
+        qjs_ast::AssignmentTarget::Identifier { name, .. } if name == "let"
+    ));
+}
+
+#[test]
 fn rejects_const_without_initializer() {
     let error = parse_script("const answer;").expect_err("const should require initializer");
     assert_eq!(error.message, "const declarations require an initializer");
@@ -108,6 +124,42 @@ fn parses_for_statement() {
     ));
     assert!(matches!(update, Some(Expr::Assignment { .. })));
     assert!(matches!(body.as_ref(), Stmt::Block { .. }));
+}
+
+#[test]
+fn parses_for_head_sloppy_let_identifier_expression() {
+    let script = parse_script("for (let; ; ) break;").expect("source should parse");
+    let [
+        Stmt::For {
+            init,
+            test,
+            update,
+            body,
+            ..
+        },
+    ] = script.body.as_slice()
+    else {
+        panic!("expected one for statement");
+    };
+    assert!(matches!(
+        init,
+        Some(ForInit::Expr(Expr::Identifier { name, .. })) if name == "let"
+    ));
+    assert!(test.is_none());
+    assert!(update.is_none());
+    assert!(matches!(body.as_ref(), Stmt::Break { .. }));
+}
+
+#[test]
+fn parses_for_body_sloppy_let_before_newline_block() {
+    let script = parse_script("for (; false; ) let\n{}").expect("source should parse");
+    let [Stmt::For { body, .. }, Stmt::Block { .. }] = script.body.as_slice() else {
+        panic!("expected for body expression followed by block statement");
+    };
+    assert!(matches!(
+        body.as_ref(),
+        Stmt::Expr(Expr::Identifier { name, .. }) if name == "let"
+    ));
 }
 
 #[test]

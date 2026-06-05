@@ -82,13 +82,7 @@ impl Parser {
             return Ok(self.break_or_continue_statement(TokenKind::Continue));
         }
 
-        if self.at(&TokenKind::Var)
-            || self.at(&TokenKind::Const)
-            || (self.at(&TokenKind::Let)
-                && !self
-                    .peek_nth(1)
-                    .is_some_and(|token| token.kind == TokenKind::LeftBrace))
-        {
+        if self.statement_declaration_start() {
             return self.variable_declaration();
         }
 
@@ -105,6 +99,18 @@ impl Parser {
         let expr = self.expression()?;
         self.match_kind(&TokenKind::Semicolon);
         Ok(Stmt::Expr(expr))
+    }
+
+    fn statement_declaration_start(&self) -> bool {
+        self.at(&TokenKind::Var)
+            || self.at(&TokenKind::Const)
+            || (self.at(&TokenKind::Let)
+                && self.peek_nth(1).is_some_and(|token| {
+                    matches!(
+                        token.kind,
+                        TokenKind::Identifier(_) | TokenKind::LeftBracket
+                    )
+                }))
     }
 
     fn labelled_statement(&mut self) -> Result<Stmt, ParseError> {
