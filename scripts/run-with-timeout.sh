@@ -21,11 +21,7 @@ case "$timeout_seconds" in
 esac
 
 if command -v timeout >/dev/null 2>&1; then
-  if timeout --help 2>&1 | grep -q -- '--foreground'; then
-    timeout --foreground "$timeout_seconds" "$@"
-  else
-    timeout "$timeout_seconds" "$@"
-  fi
+  timeout "$timeout_seconds" "$@"
   exit $?
 fi
 

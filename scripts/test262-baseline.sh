@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TEST262_DIR="$ROOT_DIR/third_party/test262"
 RUN_WITH_TIMEOUT="$ROOT_DIR/scripts/run-with-timeout.sh"
@@ -9,7 +8,6 @@ CASE_TIMEOUT_SECONDS="${TEST262_CASE_TIMEOUT_SECONDS:-10}"
 RUN_LIMIT="${TEST262_BASELINE_LIMIT:-50}"
 FILTER_PREFIX=""
 CARGO_BIN="${CARGO:-cargo}"
-
 usage() {
   cat >&2 <<'USAGE'
 usage: scripts/test262-baseline.sh [--limit N | --all] [--filter test/<prefix>]
@@ -18,7 +16,6 @@ Enumerates the upstream Test262 tree, classifies cases the current harness
 cannot model yet, and executes a bounded baseline sample through qjs-cli.
 USAGE
 }
-
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --all)
@@ -45,7 +42,6 @@ while [ "$#" -gt 0 ]; do
       ;;
   esac
 done
-
 case "$RUN_LIMIT" in
   all) ;;
   ''|*[!0-9]*)
@@ -53,7 +49,6 @@ case "$RUN_LIMIT" in
     exit 2
     ;;
 esac
-
 if ! command -v "$CARGO_BIN" >/dev/null 2>&1 && [ -x "$HOME/.cargo/bin/cargo" ]; then
   CARGO_BIN="$HOME/.cargo/bin/cargo"
 fi
@@ -62,27 +57,33 @@ if [ ! -d "$TEST262_DIR/test" ]; then
   echo "error: missing $TEST262_DIR/test; run ./scripts/bootstrap.sh first" >&2
   exit 1
 fi
-
 if [ ! -x "$RUN_WITH_TIMEOUT" ]; then
   echo "error: missing executable $RUN_WITH_TIMEOUT" >&2
   exit 1
 fi
-
 echo "building qjs-cli for baseline"
-"$CARGO_BIN" build -q -p qjs-cli
-
-
+build_output="$(mktemp "${TMPDIR:-/tmp}/qjs-test262-cargo-build-XXXXXX")"
+set +e
+"$CARGO_BIN" build -q --message-format=json-render-diagnostics -p qjs-cli > "$build_output"
+build_status=$?
+set -e
+if [ "$build_status" -ne 0 ]; then
+  cat "$build_output" >&2
+  rm -f "$build_output"
+  exit "$build_status"
+fi
+QJS_CLI_BIN="$(sed -n 's/.*"executable":"\([^"]*\)".*/\1/p' "$build_output" | tail -n 1)"
+rm -f "$build_output"
 target_dir="$($CARGO_BIN metadata --format-version=1 --no-deps | sed -n 's/.*\"target_directory\":\"\([^\"]*\)\".*/\1/p' | head -n 1)"
-if [ -z "$target_dir" ]; then
-  target_dir="$ROOT_DIR/target"
+target_dir="${target_dir:-$ROOT_DIR/target}"
+if [ -z "$QJS_CLI_BIN" ]; then
+  QJS_CLI_BIN="$target_dir/debug/qjs"
 fi
 
-QJS_CLI_BIN="$target_dir/debug/qjs"
 if [ ! -x "$QJS_CLI_BIN" ]; then
   echo "error: built qjs-cli binary is missing or not executable: $QJS_CLI_BIN" >&2
   exit 1
 fi
-
 metadata_for() {
   awk -f "$METADATA_PARSER" "$1"
 }
@@ -225,7 +226,6 @@ while IFS= read -r file; do
       ;;
   esac
 done < <(find "$TEST262_DIR/test" -type f -name '*.js' | sort)
-
 echo "summary:"
 echo "  total: $total"
 echo "  eligible: $eligible"
@@ -242,7 +242,6 @@ echo "  skipped.intl402: $skip_intl402"
 echo "  skipped.module: $skip_module"
 echo "  skipped.negative: $skip_negative"
 echo "  skipped.raw: $skip_raw"
-
 if [ "$fail" -ne 0 ] || [ "$timeout" -ne 0 ]; then
   exit 1
 fi
