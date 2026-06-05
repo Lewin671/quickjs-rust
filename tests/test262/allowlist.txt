@@ -210,6 +210,8 @@ cases/date-to-string-non-date-receiver.js
 cases/date-prototype-to-gmt-string-alias.js
 cases/date-to-utc-string-basic.js
 cases/date-utc-accessors-basic.js
+cases/decode-uri-basic.js
+cases/decode-uri-component-basic.js
 cases/error-constructor-basic.js
 cases/error-message-property-basic.js
 cases/error-prototype-to-string-basic.js
@@ -228,6 +230,8 @@ cases/equals-null-undefined-basic.js
 cases/equals-number-string-basic.js
 cases/equals-boolean-number-basic.js
 cases/equals-nan-basic.js
+cases/encode-uri-basic.js
+cases/encode-uri-component-basic.js
 cases/strict-equals-basic.js
 cases/less-than-basic.js
 cases/conditional-basic.js

@@ -1,0 +1,1 @@
+encodeURI("https://example.test/a b?x=1&y=\u00E9#frag") + ":" + encodeURIComponent("a b?x=1&y=\u00E9") + ":" + decodeURI("https://example.test/a%20b?x=1&y=%C3%A9%23frag") + ":" + decodeURIComponent("a%20b%3Fx%3D1%26y%3D%C3%A9") + ":" + encodeURIComponent(decodeURIComponent("%F0%9D%8C%86"))

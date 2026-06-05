@@ -71,6 +71,48 @@ fn evaluates_global_eval_builtin() {
 }
 
 #[test]
+fn evaluates_uri_coding_builtins() {
+    assert_eq!(eval("encodeURI.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("decodeURI.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("encodeURIComponent.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("decodeURIComponent.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(
+        eval("encodeURI('https://example.test/a b?x=1&y=\\u00E9#frag');"),
+        Ok(Value::String(
+            "https://example.test/a%20b?x=1&y=%C3%A9#frag".to_owned()
+        ))
+    );
+    assert_eq!(
+        eval("encodeURIComponent('a b?x=1&y=\\u00E9');"),
+        Ok(Value::String("a%20b%3Fx%3D1%26y%3D%C3%A9".to_owned()))
+    );
+    assert_eq!(
+        eval("decodeURI('https://example.test/a%20b?x=1&y=%C3%A9%23frag');"),
+        Ok(Value::String(
+            "https://example.test/a b?x=1&y=\u{00E9}%23frag".to_owned()
+        ))
+    );
+    assert_eq!(
+        eval("decodeURIComponent('a%20b%3Fx%3D1%26y%3D%C3%A9');"),
+        Ok(Value::String("a b?x=1&y=\u{00E9}".to_owned()))
+    );
+    assert_eq!(
+        eval("encodeURIComponent(String.fromCodePoint(0x1D306));"),
+        Ok(Value::String("%F0%9D%8C%86".to_owned()))
+    );
+    assert_eq!(
+        eval("encodeURIComponent(decodeURIComponent('%F0%9D%8C%86'));"),
+        Ok(Value::String("%F0%9D%8C%86".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { decodeURIComponent('%E0%A4%A'); } catch (error) { caught = error instanceof URIError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn evaluates_annex_b_escape_builtins() {
     assert_eq!(eval("escape.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("unescape.length;"), Ok(Value::Number(1.0)));

@@ -20,6 +20,14 @@ pub(super) fn call_core_native(
         NativeFunction::BooleanPrototypeValueOf => {
             boolean::native_boolean_prototype_value_of(this_value)
         }
+        NativeFunction::DecodeUri => global::native_global_decode_uri(argument_values, env),
+        NativeFunction::DecodeUriComponent => {
+            global::native_global_decode_uri_component(argument_values, env)
+        }
+        NativeFunction::EncodeUri => global::native_global_encode_uri(argument_values, env),
+        NativeFunction::EncodeUriComponent => {
+            global::native_global_encode_uri_component(argument_values, env)
+        }
         NativeFunction::GlobalIsFinite => global::native_global_is_finite(argument_values),
         NativeFunction::GlobalIsNaN => global::native_global_is_nan(argument_values),
         NativeFunction::Eval => global::native_global_eval(argument_values, env),
