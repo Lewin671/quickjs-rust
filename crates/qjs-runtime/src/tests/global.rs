@@ -55,6 +55,31 @@ fn evaluates_global_undefined_binding() {
 }
 
 #[test]
+fn evaluates_global_this_binding() {
+    assert_eq!(eval("globalThis === this;"), Ok(Value::Boolean(true)));
+    assert_eq!(
+        eval("globalThis.Object === Object;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("this.globalThis === globalThis;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("Object.getOwnPropertyDescriptor(this, 'globalThis').writable;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("Object.getOwnPropertyDescriptor(this, 'globalThis').enumerable;"),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval("Object.getOwnPropertyDescriptor(this, 'globalThis').configurable;"),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn evaluates_global_eval_builtin() {
     assert_eq!(
         eval("typeof eval;"),

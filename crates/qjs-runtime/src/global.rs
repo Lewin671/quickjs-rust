@@ -12,7 +12,12 @@ use crate::{
 pub(super) fn install_globals(env: &mut HashMap<String, Value>, global_this: &Value) {
     env.insert("NaN".to_owned(), Value::Number(f64::NAN));
     env.insert("Infinity".to_owned(), Value::Number(f64::INFINITY));
+    env.insert("globalThis".to_owned(), global_this.clone());
     if let Value::Object(global_object) = global_this {
+        global_object.define_property(
+            "globalThis".to_owned(),
+            Property::data(global_this.clone(), false, true, true),
+        );
         global_object.define_property(
             "NaN".to_owned(),
             Property::data(Value::Number(f64::NAN), false, false, false),
