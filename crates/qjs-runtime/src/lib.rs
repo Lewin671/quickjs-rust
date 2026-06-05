@@ -12,6 +12,7 @@ mod error;
 mod function;
 mod global;
 mod json;
+mod map;
 mod math;
 mod native;
 mod number;
@@ -43,7 +44,7 @@ pub(crate) use property::{
 };
 pub(crate) use string::string_object_value;
 pub use value::Value;
-use value::{ArrayRef, ObjectRef, Property};
+use value::{ArrayRef, MapRef, ObjectRef, Property};
 
 pub use bytecode::{Bytecode, compile_script, eval_bytecode, eval_bytecode_source};
 
@@ -68,6 +69,7 @@ pub(crate) const RUNTIME_INTRINSIC_NAMES: &[&str] = &[
     "TypeError",
     "URIError",
     "JSON",
+    "Map",
     "Math",
     "Reflect",
     "NaN",

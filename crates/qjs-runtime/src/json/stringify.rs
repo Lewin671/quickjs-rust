@@ -34,6 +34,7 @@ fn stringify_value(
         Value::Boolean(false) => Ok(Some("false".to_owned())),
         Value::Array(array) => stringify_array(array, env).map(Some),
         Value::Object(object) => stringify_object(object, env).map(Some),
+        Value::Map(map) => stringify_object(&map.object(), env).map(Some),
         Value::Undefined | Value::Function(_) if in_array => Ok(Some("null".to_owned())),
         Value::Undefined | Value::Function(_) => Ok(None),
     }

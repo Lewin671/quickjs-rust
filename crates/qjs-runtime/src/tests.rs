@@ -8,6 +8,7 @@ mod expressions;
 mod functions;
 mod global;
 mod json;
+mod maps;
 mod math;
 mod numbers;
 mod objects;

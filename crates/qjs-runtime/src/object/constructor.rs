@@ -13,7 +13,7 @@ pub(crate) fn native_object_assign(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let target = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
-        value @ (Value::Object(_) | Value::Function(_)) => value,
+        value @ (Value::Object(_) | Value::Function(_) | Value::Map(_)) => value,
         Value::Null | Value::Undefined => {
             return Err(RuntimeError {
                 thrown: None,
@@ -50,7 +50,7 @@ pub(crate) fn native_object(
     env: &HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     match argument_values.first() {
-        Some(Value::Array(_) | Value::Function(_) | Value::Object(_)) => {
+        Some(Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Object(_)) => {
             Ok(argument_values[0].clone())
         }
         Some(Value::Boolean(value)) => Ok(boxed_boolean(*value, env)),
@@ -156,6 +156,10 @@ fn set_property(target: Value, key: String, value: Value) -> Result<(), RuntimeE
     match target {
         Value::Object(object) => {
             object.set(key, value);
+            Ok(())
+        }
+        Value::Map(map) => {
+            map.object().set(key, value);
             Ok(())
         }
         Value::Function(function) => {

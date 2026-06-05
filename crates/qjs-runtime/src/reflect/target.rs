@@ -5,7 +5,7 @@ pub(super) fn ensure_reflect_object_target(
     method: &str,
 ) -> Result<(), RuntimeError> {
     match target {
-        Value::Object(_) | Value::Array(_) | Value::Function(_) => Ok(()),
+        Value::Object(_) | Value::Array(_) | Value::Function(_) | Value::Map(_) => Ok(()),
         Value::String(_)
         | Value::Number(_)
         | Value::Boolean(_)

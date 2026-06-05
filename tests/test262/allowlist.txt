@@ -311,6 +311,10 @@ cases/math-hypot-basic.js
 cases/math-hypot-length.js
 cases/math-precision-basic.js
 cases/math-precision-length.js
+cases/map-constructor-basic.js
+cases/map-no-iterable-basic.js
+cases/map-prototype-constructor-basic.js
+cases/map-methods-basic.js
 cases/object-assign-length.js
 cases/object-assign-target-object.js
 cases/object-assign-override.js

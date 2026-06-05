@@ -6,6 +6,7 @@ pub(crate) fn native_reflect_own_keys(argument_values: &[Value]) -> Result<Value
     ensure_reflect_object_target(&target, "Reflect.ownKeys")?;
     let keys = match target {
         Value::Object(object) => object.own_property_names(),
+        Value::Map(map) => map.object().own_property_names(),
         Value::Array(elements) => crate::array_own_property_names(&elements),
         Value::Function(function) => crate::function_own_property_names(&function),
         Value::String(_)

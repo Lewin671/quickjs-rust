@@ -51,6 +51,7 @@ pub(super) fn get_property(
         Value::Number(_) => {
             Ok(number::inherited_number_prototype_property(env, key).unwrap_or(Value::Undefined))
         }
+        Value::Map(_) => property_value(object, key, env),
         Value::Object(_) => property_value(object, key, env),
         _ => Err(RuntimeError {
             thrown: None,
@@ -115,6 +116,18 @@ pub(super) fn set_property(
             }
             Ok(())
         }
+        Value::Map(map) => {
+            if apply_property_setter(
+                map.object().property(&key),
+                Value::Map(map.clone()),
+                value.clone(),
+                env,
+            )? {
+                return Ok(());
+            }
+            map.object().set(key, value);
+            Ok(())
+        }
         _ => Err(RuntimeError {
             thrown: None,
             message: "member assignment target is not an object".to_owned(),
@@ -141,6 +154,7 @@ fn apply_property_setter(
 pub(super) fn delete_property(object: Value, key: &str) -> Result<Value, RuntimeError> {
     match object {
         Value::Object(object) => Ok(Value::Boolean(object.delete_own_property(key))),
+        Value::Map(map) => Ok(Value::Boolean(map.object().delete_own_property(key))),
         Value::Array(elements) => Ok(Value::Boolean(match key.parse::<usize>() {
             Ok(index) => elements.delete_index(index),
             Err(_) => elements.delete_property(key),
@@ -167,6 +181,7 @@ pub(super) fn enumerable_keys(value: Value) -> Result<Vec<Value>, RuntimeError> 
             keys
         }
         Value::Function(function) => function_own_property_keys(&function),
+        Value::Map(map) => map.object().own_property_keys(),
         Value::Null | Value::Undefined => Vec::new(),
         _ => {
             return Err(RuntimeError {

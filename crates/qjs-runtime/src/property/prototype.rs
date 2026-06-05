@@ -84,6 +84,7 @@ fn array_as_object_prototype(array: &ArrayRef, env: &HashMap<String, Value>) -> 
 pub(crate) fn value_prototype(value: Value, env: &HashMap<String, Value>) -> Option<ObjectRef> {
     match value {
         Value::Object(object) => object.prototype(),
+        Value::Map(map) => map.object().prototype(),
         Value::Array(elements) => elements
             .prototype_override()
             .unwrap_or_else(|| array_prototype(env)),

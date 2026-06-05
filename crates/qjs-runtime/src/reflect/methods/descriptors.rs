@@ -27,6 +27,7 @@ pub(crate) fn native_reflect_delete_property(
 
     let success = match target {
         Value::Object(object) => object.delete_own_property(&key),
+        Value::Map(map) => map.object().delete_own_property(&key),
         Value::Function(function) => crate::function_delete_own_property(&function, &key),
         Value::Array(elements) => {
             key != "length"

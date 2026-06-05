@@ -16,6 +16,11 @@ pub(crate) fn native_object_get_prototype_of(
         Some(Value::Object(object)) => {
             Ok(object.prototype().map(Value::Object).unwrap_or(Value::Null))
         }
+        Some(Value::Map(map)) => Ok(map
+            .object()
+            .prototype()
+            .map(Value::Object)
+            .unwrap_or(Value::Null)),
         Some(Value::Array(elements)) => Ok(elements
             .prototype_override()
             .unwrap_or_else(|| array_prototype(env))
@@ -53,6 +58,13 @@ pub(crate) fn native_object_set_prototype_of(
             thrown: None,
             message: "Object.setPrototypeOf failed".to_owned(),
         })?,
+        Value::Map(map) => map
+            .object()
+            .set_prototype(prototype)
+            .map_err(|()| RuntimeError {
+                thrown: None,
+                message: "Object.setPrototypeOf failed".to_owned(),
+            })?,
         Value::Array(elements) => elements
             .set_prototype(prototype)
             .map_err(|()| RuntimeError {
@@ -85,6 +97,7 @@ pub(crate) fn native_object_prototype_has_own_property(
     let key = to_property_key(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
     match this_value {
         Value::Object(object) => Ok(Value::Boolean(object.has_own_property(&key))),
+        Value::Map(map) => Ok(Value::Boolean(map.object().has_own_property(&key))),
         Value::Function(function) => Ok(Value::Boolean(
             function_own_property_descriptor(&function, &key).is_some(),
         )),
@@ -135,6 +148,7 @@ pub(crate) fn native_object_prototype_is_prototype_of(
         }
         Value::Function(_)
         | Value::Array(_)
+        | Value::Map(_)
         | Value::String(_)
         | Value::Number(_)
         | Value::Boolean(_) => {
@@ -152,6 +166,7 @@ pub(crate) fn native_object_prototype_to_string(this_value: Value) -> Result<Val
         Value::Null => "Null",
         Value::Array(_) => "Array",
         Value::Function(_) => "Function",
+        Value::Map(_) => "Map",
         Value::String(_) => "String",
         Value::Number(_) => "Number",
         Value::Boolean(_) => "Boolean",

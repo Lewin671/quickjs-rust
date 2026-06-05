@@ -54,7 +54,7 @@ pub(super) fn typeof_value(value: Value) -> String {
         Value::Number(_) => "number",
         Value::String(_) => "string",
         Value::Function(_) => "function",
-        Value::Null | Value::Array(_) | Value::Object(_) => "object",
+        Value::Null | Value::Array(_) | Value::Map(_) | Value::Object(_) => "object",
     }
     .to_owned()
 }

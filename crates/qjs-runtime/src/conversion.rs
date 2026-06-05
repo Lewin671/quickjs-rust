@@ -22,7 +22,7 @@ pub(crate) fn to_js_string_with_env(
             Some(value) => Ok(value),
             None => object_to_string(Value::Object(object), env),
         },
-        Value::Function(_) | Value::Array(_) => object_to_string(value, env),
+        Value::Function(_) | Value::Array(_) | Value::Map(_) => object_to_string(value, env),
     }
 }
 
@@ -36,6 +36,7 @@ pub(crate) fn error_value(value: Value) -> String {
         Value::Undefined => "undefined".to_owned(),
         Value::Function(_) => "function".to_owned(),
         Value::Array(_) => "array".to_owned(),
+        Value::Map(_) => "object".to_owned(),
         Value::Object(object) => {
             crate::error::error_object_to_string(&object).unwrap_or_else(|| "object".to_owned())
         }
@@ -61,7 +62,7 @@ pub(crate) fn to_number_with_env(
             Some(value) => string_to_number(&value),
             None => object_to_number(Value::Object(object), env),
         },
-        Value::Function(_) => object_to_number(value, env),
+        Value::Function(_) | Value::Map(_) => object_to_number(value, env),
         Value::Array(array) => {
             string_to_number(&array_join(Value::Array(array), ",", &mut HashMap::new())?)
         }
@@ -73,7 +74,9 @@ pub(crate) fn to_primitive_with_env(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     match value {
-        Value::Object(_) | Value::Function(_) | Value::Array(_) => object_to_primitive(value, env),
+        Value::Object(_) | Value::Function(_) | Value::Array(_) | Value::Map(_) => {
+            object_to_primitive(value, env)
+        }
         value => Ok(value),
     }
 }
@@ -121,7 +124,7 @@ fn object_to_primitive(
             let primitive = call_function(method_value, value.clone(), Vec::new(), env, false)?;
             if !matches!(
                 primitive,
-                Value::Object(_) | Value::Function(_) | Value::Array(_)
+                Value::Object(_) | Value::Function(_) | Value::Array(_) | Value::Map(_)
             ) {
                 return Ok(primitive);
             }
@@ -140,7 +143,7 @@ fn object_to_number(value: Value, env: &mut HashMap<String, Value>) -> Result<f6
             let primitive = call_function(method_value, value.clone(), Vec::new(), env, false)?;
             if !matches!(
                 primitive,
-                Value::Object(_) | Value::Function(_) | Value::Array(_)
+                Value::Object(_) | Value::Function(_) | Value::Array(_) | Value::Map(_)
             ) {
                 return to_number_with_env(primitive, env);
             }
@@ -162,7 +165,7 @@ fn object_to_string(
             let primitive = call_function(method_value, value.clone(), Vec::new(), env, false)?;
             if !matches!(
                 primitive,
-                Value::Object(_) | Value::Function(_) | Value::Array(_)
+                Value::Object(_) | Value::Function(_) | Value::Array(_) | Value::Map(_)
             ) {
                 return to_js_string_with_env(primitive, env);
             }
@@ -234,6 +237,6 @@ pub(crate) fn is_truthy(value: &Value) -> bool {
         Value::String(value) => !value.is_empty(),
         Value::Boolean(value) => *value,
         Value::Null | Value::Undefined => false,
-        Value::Function(_) | Value::Array(_) | Value::Object(_) => true,
+        Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Object(_) => true,
     }
 }

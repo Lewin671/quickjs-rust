@@ -1,10 +1,12 @@
 use std::fmt;
 
 mod array;
+mod map;
 mod object;
 mod property;
 
 pub use array::ArrayRef;
+pub use map::MapRef;
 pub use object::ObjectRef;
 pub(crate) use property::Property;
 
@@ -29,6 +31,8 @@ pub enum Value {
     Array(ArrayRef),
     /// Object value.
     Object(ObjectRef),
+    /// Map object value.
+    Map(MapRef),
 }
 
 impl fmt::Debug for Value {
@@ -42,6 +46,7 @@ impl fmt::Debug for Value {
             Self::Function(function) => formatter.debug_tuple("Function").field(function).finish(),
             Self::Array(elements) => formatter.debug_tuple("Array").field(elements).finish(),
             Self::Object(object) => formatter.debug_tuple("Object").field(object).finish(),
+            Self::Map(map) => formatter.debug_tuple("Map").field(map).finish(),
         }
     }
 }
@@ -56,6 +61,7 @@ impl PartialEq for Value {
             (Self::Function(left), Self::Function(right)) => left == right,
             (Self::Array(left), Self::Array(right)) => left.ptr_eq(right),
             (Self::Object(left), Self::Object(right)) => left.ptr_eq(right),
+            (Self::Map(left), Self::Map(right)) => left.ptr_eq(right),
             _ => false,
         }
     }
@@ -73,7 +79,17 @@ impl Value {
             (Self::Function(left), Self::Function(right)) => left == right,
             (Self::Array(left), Self::Array(right)) => left.ptr_eq(right),
             (Self::Object(left), Self::Object(right)) => left.ptr_eq(right),
+            (Self::Map(left), Self::Map(right)) => left.ptr_eq(right),
             _ => false,
+        }
+    }
+
+    pub(crate) fn same_value_zero(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Number(left), Self::Number(right)) => {
+                (left.is_nan() && right.is_nan()) || left == right
+            }
+            _ => self.same_value(other),
         }
     }
 }

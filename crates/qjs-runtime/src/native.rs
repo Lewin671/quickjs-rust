@@ -5,6 +5,7 @@ mod core;
 mod date;
 mod errors;
 mod json;
+mod maps;
 mod math;
 mod numbers;
 mod objects;
@@ -56,6 +57,16 @@ pub(crate) fn call_native_function(
     }
 
     if let Some(value) = json::call_json_native(native, &argument_values, env)? {
+        return Ok(value);
+    }
+
+    if let Some(value) = maps::call_map_native(
+        function,
+        native,
+        this_value.clone(),
+        &argument_values,
+        is_construct,
+    )? {
         return Ok(value);
     }
 

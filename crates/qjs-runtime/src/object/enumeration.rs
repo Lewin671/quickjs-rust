@@ -106,6 +106,7 @@ pub(super) fn enumerable_property_entries(
 fn own_property_keys(value: Value) -> Vec<String> {
     match value {
         Value::Object(object) => object.own_property_keys(),
+        Value::Map(map) => map.object().own_property_keys(),
         Value::Array(elements) => array_own_property_keys(&elements),
         Value::Function(function) => function_own_property_keys(&function),
         Value::String(value) => crate::string::string_own_property_keys(&value),
@@ -116,6 +117,7 @@ fn own_property_keys(value: Value) -> Vec<String> {
 pub(super) fn own_property_names(value: Value) -> Vec<String> {
     match value {
         Value::Object(object) => object.own_property_names(),
+        Value::Map(map) => map.object().own_property_names(),
         Value::Array(elements) => array_own_property_names(&elements),
         Value::Function(function) => function_own_property_names(&function),
         Value::String(value) => crate::string::string_own_property_names(&value),

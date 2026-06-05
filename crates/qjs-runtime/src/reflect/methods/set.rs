@@ -42,6 +42,7 @@ fn ordinary_set(
 fn own_property_descriptor(target: &Value, key: &str) -> Option<Property> {
     match target {
         Value::Object(object) => object.own_property(key),
+        Value::Map(map) => map.object().own_property(key),
         Value::Array(elements) => crate::array_own_property_descriptor(elements, key),
         Value::Function(function) => crate::function_own_property_descriptor(function, key),
         Value::String(_)
@@ -130,6 +131,22 @@ fn set_receiver_data_property(
                 .properties
                 .borrow_mut()
                 .insert(key.to_owned(), descriptor);
+            Ok(true)
+        }
+        Value::Map(map) => {
+            let object = map.object();
+            let descriptor = match object.own_property(key) {
+                Some(existing) if !existing.writable => return Ok(false),
+                Some(existing) => Property::data(
+                    value,
+                    existing.enumerable,
+                    existing.writable,
+                    existing.configurable,
+                ),
+                None if !object.is_extensible() => return Ok(false),
+                None => Property::enumerable(value),
+            };
+            object.define_property(key.to_owned(), descriptor);
             Ok(true)
         }
         Value::String(_)
