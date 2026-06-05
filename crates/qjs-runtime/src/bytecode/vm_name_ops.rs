@@ -1,7 +1,7 @@
 use crate::{GLOBAL_THIS_BINDING, ObjectRef, RuntimeError, Value};
 
 use super::vm::Vm;
-use super::vm_props::{get_property, set_property};
+use super::vm_props::{delete_property, get_property, set_property};
 
 #[derive(Clone)]
 pub(super) enum NameReference {
@@ -169,6 +169,33 @@ impl Vm<'_> {
             thrown: None,
             message: "with stack underflow".to_owned(),
         })?;
+        Ok(())
+    }
+
+    pub(super) fn delete_name(&mut self, name: &str) -> Result<(), RuntimeError> {
+        if let Some(object) = self.resolve_with_object(name) {
+            let deleted = delete_property(object, name)?;
+            self.stack.push(deleted);
+            return Ok(());
+        }
+        if self.bytecode.local_slot(name).is_some() {
+            self.stack.push(Value::Boolean(false));
+            return Ok(());
+        }
+        if let Some(object) = self.global_object_with_property(name) {
+            let deleted = delete_property(Value::Object(object), name)?;
+            self.globals.remove(name);
+            self.stack.push(deleted);
+            return Ok(());
+        }
+        if self.globals.remove(name).is_some() {
+            if let Some(Value::Object(global_object)) = self.globals.get(GLOBAL_THIS_BINDING) {
+                global_object.delete_own_property(name);
+            }
+            self.stack.push(Value::Boolean(true));
+            return Ok(());
+        }
+        self.stack.push(Value::Boolean(true));
         Ok(())
     }
 

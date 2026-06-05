@@ -85,6 +85,18 @@ fn evaluates_with_statements() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval("var scope = { x: 1 }; with (scope) { var x = 2; } scope.x;"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval("var scope = {}; with (scope) { var x = 2; } scope.x === undefined && x === 2;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("var scope = { x: 1 }; with (scope) { delete x; } scope.x;"),
+        Ok(Value::Undefined)
+    );
 }
 
 #[test]

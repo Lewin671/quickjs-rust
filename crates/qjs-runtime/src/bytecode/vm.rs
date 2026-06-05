@@ -175,6 +175,7 @@ impl<'a> Vm<'a> {
                 Op::GetProp => self.get_prop()?,
                 Op::SetProp { strict } => self.set_prop(strict)?,
                 Op::DeleteProp => self.delete_prop()?,
+                Op::DeleteName(name) => self.delete_name(&name)?,
                 Op::Call(argc) => self.call(argc)?,
                 Op::CallMethod(argc) => self.call_method(argc)?,
                 Op::New(argc) => self.construct(argc)?,

@@ -172,7 +172,14 @@ impl Compiler {
                     let slot = self.local_slot(&declaration.name, is_hoisted);
                     if let Some(init) = &declaration.init {
                         self.compile_expr(init)?;
-                        self.emit(Op::StoreLocal(slot));
+                        if self.dynamic_scope_depth > 0 {
+                            self.emit(Op::StoreName {
+                                name: declaration.name.clone(),
+                                strict: self.strict,
+                            });
+                        } else {
+                            self.emit(Op::StoreLocal(slot));
+                        }
                     } else if *kind != VarKind::Var || self.direct_eval {
                         self.emit_load_undefined();
                         self.emit(Op::StoreLocal(slot));

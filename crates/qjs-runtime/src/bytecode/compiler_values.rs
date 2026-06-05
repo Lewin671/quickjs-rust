@@ -77,11 +77,13 @@ impl Compiler {
     }
 
     pub(super) fn compile_delete(&mut self, argument: &Expr) -> Result<(), RuntimeError> {
-        if let Expr::Identifier { name, .. } = argument
-            && self.local_slots.contains_key(name)
-        {
-            let slot = self.const_slot(Value::Boolean(false));
-            self.emit(Op::LoadConst(slot));
+        if let Expr::Identifier { name, .. } = argument {
+            if self.dynamic_scope_depth == 0 && self.local_slots.contains_key(name) {
+                let slot = self.const_slot(Value::Boolean(false));
+                self.emit(Op::LoadConst(slot));
+            } else {
+                self.emit(Op::DeleteName(name.clone()));
+            }
             return Ok(());
         }
         let Expr::Member {

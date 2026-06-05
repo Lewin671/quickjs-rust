@@ -38,6 +38,7 @@ pub(super) enum Op {
         strict: bool,
     },
     DeleteProp,
+    DeleteName(String),
     Call(usize),
     CallMethod(usize),
     New(usize),
@@ -143,6 +144,7 @@ fn collect_global_names_from_ops(code: &[Op], names: &mut BTreeSet<String>) {
     for op in code {
         match op {
             Op::LoadName(name)
+            | Op::DeleteName(name)
             | Op::ResolveName(name)
             | Op::LoadGlobal(name)
             | Op::TypeofGlobal(name)
