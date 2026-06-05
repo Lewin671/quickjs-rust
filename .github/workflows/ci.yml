@@ -21,7 +21,7 @@ jobs:
         run: rustup show
 
       - name: Init submodules
-        run: git submodule update --init third_party/quickjs-ng third_party/test262
+        run: git submodule update --init --depth 1 third_party/quickjs-ng third_party/test262
 
       - name: QuickJS-NG cache key
         id: quickjs-ng
