@@ -1,6 +1,9 @@
 name: Test262 Coverage
 
 on:
+  push:
+    branches:
+      - 'agent/**'
   workflow_run:
     workflows: ["CI"]
     types: [completed]
