@@ -1,6 +1,8 @@
 use std::rc::Rc;
 
-use qjs_ast::{AssignmentOp, BinaryOp, Expr, ForInit, Literal, Stmt, UnaryOp, VarKind};
+use qjs_ast::{
+    AssignmentOp, AssignmentTarget, BinaryOp, Expr, ForInit, Literal, Stmt, UnaryOp, VarKind,
+};
 
 use crate::{
     RuntimeError, Value,
@@ -135,6 +137,9 @@ impl Compiler {
         update: Option<&Expr>,
         body: &Stmt,
     ) -> Result<(), RuntimeError> {
+        let restores = init
+            .map(|init| self.for_init_shadow_saves(init))
+            .unwrap_or_default();
         let cleanup_slots = init
             .map(|init| self.for_init_cleanup_slots(init))
             .unwrap_or_default();
@@ -173,6 +178,7 @@ impl Compiler {
         }
         let cleanup_start = self.code.len();
         self.emit_clear_locals(&cleanup_slots);
+        self.emit_restores(&restores);
         self.emit(Op::LoadLocal(result_slot));
         self.patch_loop_breaks(&context, cleanup_start);
         self.patch_loop_continues(&context, update_start);
@@ -245,6 +251,58 @@ impl Compiler {
         slots.sort_unstable();
         slots.dedup();
         slots
+    }
+
+    fn for_init_shadow_saves(&mut self, init: &ForInit) -> Vec<(usize, usize)> {
+        let mut restores = Vec::new();
+        match init {
+            ForInit::VarDecl {
+                kind, declarations, ..
+            } if *kind != VarKind::Var => {
+                for declaration in declarations {
+                    self.save_for_init_shadow(&declaration.name, &mut restores);
+                }
+            }
+            ForInit::Binding { kind, target, .. } if *kind != VarKind::Var => {
+                self.collect_target_shadow_saves(target, &mut restores);
+            }
+            _ => {}
+        }
+        restores
+    }
+
+    fn collect_target_shadow_saves(
+        &mut self,
+        target: &AssignmentTarget,
+        restores: &mut Vec<(usize, usize)>,
+    ) {
+        match target {
+            AssignmentTarget::Identifier { name, .. } => {
+                self.save_for_init_shadow(name, restores);
+            }
+            AssignmentTarget::Array { elements, .. } => {
+                for element in elements.iter().flatten() {
+                    self.collect_target_shadow_saves(&element.target, restores);
+                }
+            }
+            AssignmentTarget::Object { properties, .. } => {
+                for property in properties {
+                    self.collect_target_shadow_saves(&property.target, restores);
+                }
+            }
+            AssignmentTarget::Member { .. } => {}
+        }
+    }
+
+    fn save_for_init_shadow(&mut self, name: &str, restores: &mut Vec<(usize, usize)>) {
+        if let Some(slot) = self.local_slots.get(name).copied()
+            && !restores.iter().any(|(candidate, _)| *candidate == slot)
+        {
+            let saved_slot = self.temp_local("for_init_shadow");
+            self.emit(Op::LoadLocalOrUndefined(slot));
+            self.emit(Op::StoreLocal(saved_slot));
+            restores.push((slot, saved_slot));
+        }
     }
 
     pub(super) fn compile_expr(&mut self, expr: &Expr) -> Result<(), RuntimeError> {

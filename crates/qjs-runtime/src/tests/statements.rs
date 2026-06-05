@@ -208,6 +208,12 @@ fn evaluates_for_statements() {
         ),
         Ok(Value::Number(10.0))
     );
+    assert_eq!(
+        eval(
+            "let x = 'outer'; let y = 'outer'; for (let x = 'inner', i = 0; i < 1; i++) { let y = 'inner'; } x + ':' + y;"
+        ),
+        Ok(Value::String("outer:outer".to_owned()))
+    );
 }
 
 #[test]

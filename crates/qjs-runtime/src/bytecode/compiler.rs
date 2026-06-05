@@ -553,7 +553,7 @@ impl Compiler {
         }
     }
 
-    fn emit_restores(&mut self, restores: &[(usize, usize)]) {
+    pub(super) fn emit_restores(&mut self, restores: &[(usize, usize)]) {
         for (slot, saved_slot) in restores.iter().rev() {
             self.emit(Op::LoadLocal(*saved_slot));
             self.emit(Op::StoreLocal(*slot));
