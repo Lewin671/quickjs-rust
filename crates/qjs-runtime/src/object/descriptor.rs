@@ -76,10 +76,7 @@ pub(crate) fn native_object_define_properties(
     ensure_define_property_target(&target)?;
 
     let descriptors = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
-    if !matches!(
-        descriptors,
-        Value::Object(_) | Value::Function(_) | Value::Array(_)
-    ) {
+    if matches!(descriptors, Value::Null | Value::Undefined) {
         return Err(RuntimeError {
             thrown: None,
             message: "property descriptors must be an object".to_owned(),
