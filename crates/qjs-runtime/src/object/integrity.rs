@@ -6,6 +6,7 @@ pub(crate) fn native_object_is_extensible(
     Ok(Value::Boolean(match argument_values.first() {
         Some(Value::Object(object)) => object.is_extensible(),
         Some(Value::Map(map)) => map.object().is_extensible(),
+        Some(Value::Set(set)) => set.object().is_extensible(),
         Some(Value::Array(elements)) => elements.is_extensible(),
         Some(Value::Function(function)) => function.is_extensible(),
         Some(Value::String(_) | Value::Number(_) | Value::Boolean(_) | Value::Null)
@@ -21,6 +22,7 @@ pub(crate) fn native_object_prevent_extensions(
     match &target {
         Value::Object(object) => object.prevent_extensions(),
         Value::Map(map) => map.object().prevent_extensions(),
+        Value::Set(set) => set.object().prevent_extensions(),
         Value::Array(elements) => elements.prevent_extensions(),
         Value::Function(function) => function.prevent_extensions(),
         _ => {}
@@ -32,6 +34,7 @@ pub(crate) fn native_object_is_sealed(argument_values: &[Value]) -> Result<Value
     Ok(Value::Boolean(match argument_values.first() {
         Some(Value::Object(object)) => object.is_sealed(),
         Some(Value::Map(map)) => map.object().is_sealed(),
+        Some(Value::Set(set)) => set.object().is_sealed(),
         Some(Value::Array(elements)) => elements.is_sealed(),
         Some(Value::Function(function)) => function.is_sealed(),
         Some(Value::String(_) | Value::Number(_) | Value::Boolean(_) | Value::Null)
@@ -44,6 +47,7 @@ pub(crate) fn native_object_is_frozen(argument_values: &[Value]) -> Result<Value
     Ok(Value::Boolean(match argument_values.first() {
         Some(Value::Object(object)) => object.is_frozen(),
         Some(Value::Map(map)) => map.object().is_frozen(),
+        Some(Value::Set(set)) => set.object().is_frozen(),
         Some(Value::Array(elements)) => elements.is_frozen(),
         Some(Value::Function(function)) => function.is_frozen(),
         Some(Value::String(_) | Value::Number(_) | Value::Boolean(_) | Value::Null)
@@ -57,6 +61,7 @@ pub(crate) fn native_object_seal(argument_values: &[Value]) -> Result<Value, Run
     match &target {
         Value::Object(object) => object.seal(),
         Value::Map(map) => map.object().seal(),
+        Value::Set(set) => set.object().seal(),
         Value::Array(elements) => elements.seal(),
         Value::Function(function) => function.seal(),
         _ => {}
@@ -69,6 +74,7 @@ pub(crate) fn native_object_freeze(argument_values: &[Value]) -> Result<Value, R
     match &target {
         Value::Object(object) => object.freeze(),
         Value::Map(map) => map.object().freeze(),
+        Value::Set(set) => set.object().freeze(),
         Value::Array(elements) => elements.freeze(),
         Value::Function(function) => function.freeze(),
         _ => {}

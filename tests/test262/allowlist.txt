@@ -315,6 +315,10 @@ cases/map-constructor-basic.js
 cases/map-no-iterable-basic.js
 cases/map-prototype-constructor-basic.js
 cases/map-methods-basic.js
+cases/set-constructor-basic.js
+cases/set-no-iterable-basic.js
+cases/set-prototype-constructor-basic.js
+cases/set-methods-basic.js
 cases/object-assign-length.js
 cases/object-assign-target-object.js
 cases/object-assign-override.js

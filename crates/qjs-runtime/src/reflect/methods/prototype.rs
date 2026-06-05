@@ -27,6 +27,7 @@ pub(crate) fn native_reflect_set_prototype_of(
     let success = match target {
         Value::Object(object) => object.set_prototype(prototype).is_ok(),
         Value::Map(map) => map.object().set_prototype(prototype).is_ok(),
+        Value::Set(set) => set.object().set_prototype(prototype).is_ok(),
         Value::Array(elements) => elements.set_prototype(prototype).is_ok(),
         Value::Function(function) => function.set_internal_prototype(prototype).is_ok(),
         Value::String(_)

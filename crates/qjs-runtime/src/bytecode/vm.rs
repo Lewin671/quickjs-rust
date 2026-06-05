@@ -368,9 +368,11 @@ impl<'a> Vm<'a> {
         self.apply_call_env(env);
         if let Some(result) = self.handle_call_result(result)? {
             match result {
-                Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Object(_) => {
-                    self.stack.push(result)
-                }
+                Value::Array(_)
+                | Value::Function(_)
+                | Value::Map(_)
+                | Value::Set(_)
+                | Value::Object(_) => self.stack.push(result),
                 _ => self.stack.push(this_value),
             }
         }

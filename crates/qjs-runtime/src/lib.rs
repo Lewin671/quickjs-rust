@@ -21,6 +21,7 @@ mod operations;
 mod property;
 mod reflect;
 mod regexp;
+mod set;
 mod string;
 mod symbol;
 mod value;
@@ -44,7 +45,7 @@ pub(crate) use property::{
 };
 pub(crate) use string::string_object_value;
 pub use value::Value;
-use value::{ArrayRef, MapRef, ObjectRef, Property};
+use value::{ArrayRef, MapRef, ObjectRef, Property, SetRef};
 
 pub use bytecode::{Bytecode, compile_script, eval_bytecode, eval_bytecode_source};
 
@@ -70,6 +71,7 @@ pub(crate) const RUNTIME_INTRINSIC_NAMES: &[&str] = &[
     "URIError",
     "JSON",
     "Map",
+    "Set",
     "Math",
     "Reflect",
     "NaN",

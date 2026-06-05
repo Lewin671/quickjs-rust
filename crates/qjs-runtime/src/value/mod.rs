@@ -4,11 +4,13 @@ mod array;
 mod map;
 mod object;
 mod property;
+mod set;
 
 pub use array::ArrayRef;
 pub use map::MapRef;
 pub use object::ObjectRef;
 pub(crate) use property::Property;
+pub use set::SetRef;
 
 use crate::Function;
 
@@ -33,6 +35,8 @@ pub enum Value {
     Object(ObjectRef),
     /// Map object value.
     Map(MapRef),
+    /// Set object value.
+    Set(SetRef),
 }
 
 impl fmt::Debug for Value {
@@ -47,6 +51,7 @@ impl fmt::Debug for Value {
             Self::Array(elements) => formatter.debug_tuple("Array").field(elements).finish(),
             Self::Object(object) => formatter.debug_tuple("Object").field(object).finish(),
             Self::Map(map) => formatter.debug_tuple("Map").field(map).finish(),
+            Self::Set(set) => formatter.debug_tuple("Set").field(set).finish(),
         }
     }
 }
@@ -62,6 +67,7 @@ impl PartialEq for Value {
             (Self::Array(left), Self::Array(right)) => left.ptr_eq(right),
             (Self::Object(left), Self::Object(right)) => left.ptr_eq(right),
             (Self::Map(left), Self::Map(right)) => left.ptr_eq(right),
+            (Self::Set(left), Self::Set(right)) => left.ptr_eq(right),
             _ => false,
         }
     }
@@ -80,6 +86,7 @@ impl Value {
             (Self::Array(left), Self::Array(right)) => left.ptr_eq(right),
             (Self::Object(left), Self::Object(right)) => left.ptr_eq(right),
             (Self::Map(left), Self::Map(right)) => left.ptr_eq(right),
+            (Self::Set(left), Self::Set(right)) => left.ptr_eq(right),
             _ => false,
         }
     }

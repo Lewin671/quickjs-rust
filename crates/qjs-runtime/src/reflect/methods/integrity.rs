@@ -9,6 +9,7 @@ pub(crate) fn native_reflect_is_extensible(
     Ok(Value::Boolean(match target {
         Value::Object(object) => object.is_extensible(),
         Value::Map(map) => map.object().is_extensible(),
+        Value::Set(set) => set.object().is_extensible(),
         Value::Array(elements) => elements.is_extensible(),
         Value::Function(function) => function.is_extensible(),
         Value::String(_)
@@ -27,6 +28,7 @@ pub(crate) fn native_reflect_prevent_extensions(
     match target {
         Value::Object(object) => object.prevent_extensions(),
         Value::Map(map) => map.object().prevent_extensions(),
+        Value::Set(set) => set.object().prevent_extensions(),
         Value::Array(elements) => elements.prevent_extensions(),
         Value::Function(function) => function.prevent_extensions(),
         Value::String(_)

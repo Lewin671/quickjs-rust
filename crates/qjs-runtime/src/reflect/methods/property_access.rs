@@ -12,7 +12,7 @@ pub(crate) fn native_reflect_get(
     let key = crate::to_property_key(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
 
     Ok(match target {
-        Value::Object(_) | Value::Map(_) => property_value(target, &key, env)?,
+        Value::Object(_) | Value::Map(_) | Value::Set(_) => property_value(target, &key, env)?,
         Value::Array(_) => property_value(target, &key, env)?,
         Value::Function(function) => crate::function_own_property_descriptor(&function, &key)
             .map(|property| property.value)
@@ -33,7 +33,7 @@ pub(crate) fn native_reflect_has(
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let key = crate::to_property_key(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
     match target {
-        Value::Object(_) | Value::Array(_) | Value::Function(_) | Value::Map(_) => {
+        Value::Object(_) | Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) => {
             Ok(Value::Boolean(crate::has_property(target, env, &key)?))
         }
         Value::String(_)

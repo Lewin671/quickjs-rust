@@ -31,6 +31,7 @@ pub(crate) fn has_property(
     match value {
         Value::Object(object) => Ok(object.contains_property(key)),
         Value::Map(map) => Ok(map.object().contains_property(key)),
+        Value::Set(set) => Ok(set.object().contains_property(key)),
         Value::Array(elements) => Ok(array_has_own_property(&elements, key)
             || array_prototype_property(&elements, env, key).is_some()),
         Value::Function(function) => Ok(function_own_property_descriptor(&function, key).is_some()
@@ -54,6 +55,7 @@ pub(crate) fn property_value(
     match receiver.clone() {
         Value::Object(object) => property_descriptor_value(object.property(key), receiver, env),
         Value::Map(map) => property_descriptor_value(map.object().property(key), receiver, env),
+        Value::Set(set) => property_descriptor_value(set.object().property(key), receiver, env),
         Value::Function(function) => property_descriptor_value(
             function_own_property_descriptor(&function, key).or_else(|| {
                 function

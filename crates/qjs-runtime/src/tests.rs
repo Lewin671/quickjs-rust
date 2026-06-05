@@ -14,5 +14,6 @@ mod numbers;
 mod objects;
 mod reflect;
 mod regexp;
+mod sets;
 mod statements;
 mod strings;

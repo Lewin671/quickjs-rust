@@ -32,7 +32,10 @@ pub(crate) fn native_object_define_properties(
     ensure_define_property_target(&target)?;
 
     let descriptors = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
-    if !matches!(descriptors, Value::Object(_) | Value::Function(_)) {
+    if !matches!(
+        descriptors,
+        Value::Object(_) | Value::Function(_) | Value::Map(_) | Value::Set(_)
+    ) {
         return Err(RuntimeError {
             thrown: None,
             message: "property descriptors must be an object".to_owned(),
@@ -103,6 +106,7 @@ pub(super) fn own_property_descriptor(
     match value {
         Value::Object(object) => Ok(object.own_property(key)),
         Value::Map(map) => Ok(map.object().own_property(key)),
+        Value::Set(set) => Ok(set.object().own_property(key)),
         Value::Function(function) => Ok(function_own_property_descriptor(&function, key)),
         Value::Array(elements) => Ok(crate::array_own_property_descriptor(&elements, key)),
         Value::String(value) => Ok(crate::string::string_own_property_descriptor(&value, key)),
@@ -131,6 +135,20 @@ pub(crate) fn define_property_on_value(
         }
         Value::Map(map) => {
             let object = map.object();
+            if !object.has_own_property(&key) && !object.is_extensible() {
+                return Ok(false);
+            }
+            if object
+                .own_property(&key)
+                .is_some_and(|property| !is_compatible_descriptor(&property, &descriptor))
+            {
+                return Ok(false);
+            }
+            object.define_property(key, descriptor);
+            Ok(true)
+        }
+        Value::Set(set) => {
+            let object = set.object();
             if !object.has_own_property(&key) && !object.is_extensible() {
                 return Ok(false);
             }
@@ -191,7 +209,9 @@ fn is_compatible_descriptor(existing: &Property, descriptor: &Property) -> bool 
 
 fn ensure_define_property_target(target: &Value) -> Result<(), RuntimeError> {
     match target {
-        Value::Object(_) | Value::Function(_) | Value::Array(_) | Value::Map(_) => Ok(()),
+        Value::Object(_) | Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_) => {
+            Ok(())
+        }
         Value::String(_) | Value::Number(_) | Value::Boolean(_) => Err(RuntimeError {
             thrown: None,
             message: "Object.defineProperty primitive targets are not implemented".to_owned(),
