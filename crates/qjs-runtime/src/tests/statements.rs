@@ -35,6 +35,9 @@ fn evaluates_variable_declarations() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(eval("eval('7; var x;');"), Ok(Value::Number(7.0)));
+    assert_eq!(eval("eval('9; let x = 10;');"), Ok(Value::Number(9.0)));
+    assert_eq!(eval("eval('11; const x = 12;');"), Ok(Value::Number(11.0)));
 }
 
 #[test]

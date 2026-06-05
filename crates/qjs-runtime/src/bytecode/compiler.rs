@@ -71,9 +71,18 @@ impl Compiler {
         self.strict = self.strict || is_strict_function_body(&script.body);
         self.collect_hoisted_locals(&script.body);
         self.compile_hoisted_function_decls(&script.body)?;
+        let result_slot = self.temp_local("script_result");
+        self.emit_load_undefined();
+        self.emit(Op::StoreLocal(result_slot));
         for stmt in &script.body {
             self.compile_stmt(stmt)?;
+            if statement_has_empty_completion(stmt) {
+                self.emit(Op::Pop);
+            } else {
+                self.emit(Op::StoreLocal(result_slot));
+            }
         }
+        self.emit(Op::LoadLocal(result_slot));
         self.code.push(Op::Return);
         Ok(Bytecode::new(self.constants, self.locals, self.code))
     }
@@ -575,4 +584,11 @@ impl Compiler {
         self.patch_loop_breaks(&context, done);
         Ok(())
     }
+}
+
+fn statement_has_empty_completion(stmt: &Stmt) -> bool {
+    matches!(
+        stmt,
+        Stmt::VarDecl { .. } | Stmt::FunctionDecl { .. } | Stmt::Empty
+    )
 }
