@@ -13,6 +13,37 @@ if ! command -v "$CARGO_BIN" >/dev/null 2>&1 && [ -x "$HOME/.cargo/bin/cargo" ];
   CARGO_BIN="$HOME/.cargo/bin/cargo"
 fi
 
+detect_jobs() {
+  local jobs
+  jobs=""
+  if command -v getconf >/dev/null 2>&1; then
+    jobs="$(getconf _NPROCESSORS_ONLN 2>/dev/null || true)"
+  fi
+  case "$jobs" in
+    ''|*[!0-9]*|0)
+      if command -v sysctl >/dev/null 2>&1; then
+        jobs="$(sysctl -n hw.ncpu 2>/dev/null || true)"
+      fi
+      ;;
+  esac
+  case "$jobs" in
+    ''|*[!0-9]*|0) jobs=1 ;;
+  esac
+  echo "$jobs"
+}
+
+TEST262_JOBS="${TEST262_JOBS:-$(detect_jobs)}"
+case "$TEST262_JOBS" in
+  ''|*[!0-9]*)
+    echo "error: TEST262_JOBS must be a positive integer: $TEST262_JOBS" >&2
+    exit 2
+    ;;
+  0)
+    echo "error: TEST262_JOBS must be greater than zero" >&2
+    exit 2
+    ;;
+esac
+
 if [ ! -d "$TEST262_DIR" ]; then
   echo "error: missing $TEST262_DIR; run ./scripts/bootstrap.sh first" >&2
   exit 1
@@ -30,6 +61,11 @@ fi
 
 if [ ! -x "$RUN_WITH_TIMEOUT" ]; then
   echo "error: missing executable $RUN_WITH_TIMEOUT" >&2
+  exit 1
+fi
+
+if ! xargs -P 1 -n 1 true </dev/null >/dev/null 2>&1; then
+  echo "error: xargs does not support -P; parallel Test262 subset execution is unavailable" >&2
   exit 1
 fi
 
@@ -67,28 +103,6 @@ while IFS= read -r line; do
 
 done < "$ALLOWLIST"
 
-for index in "${!allowlist_entries[@]}"; do
-  entry="${allowlist_entries[$index]}"
-  case_path="$LOCAL_CASE_DIR/$entry"
-  current=$((index + 1))
-  printf 'test262 [%d/%d]: %s\n' "$current" "$allowlist_count" "$entry"
-  set +e
-  output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$CARGO_BIN" run -q -p qjs-cli -- "$case_path" 2>&1)"
-  status=$?
-  set -e
-  if [ "$status" -ne 0 ]; then
-    if [ "$status" -eq 124 ]; then
-      echo "error: Test262 case timed out after ${CASE_TIMEOUT_SECONDS}s: tests/test262/$entry" >&2
-    else
-      echo "error: Test262 case failed: tests/test262/$entry" >&2
-    fi
-    if [ -n "$output" ]; then
-      echo "$output" >&2
-    fi
-    exit "$status"
-  fi
-done
-
 while IFS= read -r line; do
   trimmed="$(echo "$line" | xargs)"
   [ -z "$trimmed" ] && continue
@@ -112,6 +126,87 @@ done < "$EXPECTED_FAILURES"
 if [ "$allowlist_count" -eq 0 ]; then
   echo "error: Test262 allowlist is empty; add at least one runnable subset case" >&2
   exit 1
+fi
+
+echo "building qjs-cli for Test262 subset"
+"$CARGO_BIN" build -q -p qjs-cli
+
+target_dir="$("$CARGO_BIN" metadata --format-version=1 --no-deps \
+  | sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p' \
+  | head -n 1)"
+if [ -z "$target_dir" ]; then
+  target_dir="$ROOT_DIR/target"
+fi
+
+QJS_CLI_BIN="$target_dir/debug/qjs"
+if [ ! -x "$QJS_CLI_BIN" ]; then
+  echo "error: built qjs-cli binary is missing or not executable: $QJS_CLI_BIN" >&2
+  exit 1
+fi
+
+RESULT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/qjs-test262-subset-XXXXXX")"
+trap 'rm -rf "$RESULT_DIR"' EXIT
+
+run_test262_case() {
+  local current="$1"
+  local entry="$2"
+  local case_path="$LOCAL_CASE_DIR/$entry"
+  local log_path="$RESULT_DIR/$current.log"
+  local status_path="$RESULT_DIR/$current.status"
+  local output
+  local status
+
+  printf 'test262 [%d/%d]: %s\n' "$current" "$ALLOWLIST_COUNT" "$entry"
+  set +e
+  output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$QJS_CLI_BIN" "$case_path" 2>&1)"
+  status=$?
+  set -e
+
+  if [ "$status" -ne 0 ]; then
+    printf '%s\n' "$entry" >"$status_path"
+    printf '%s\n' "$status" >>"$status_path"
+    printf '%s\n' "$output" >"$log_path"
+    exit "$status"
+  fi
+}
+
+export ALLOWLIST_COUNT="$allowlist_count"
+export CASE_TIMEOUT_SECONDS
+export LOCAL_CASE_DIR
+export QJS_CLI_BIN
+export RESULT_DIR
+export RUN_WITH_TIMEOUT
+export -f run_test262_case
+
+set +e
+for index in "${!allowlist_entries[@]}"; do
+  current=$((index + 1))
+  printf '%s\0%s\0' "$current" "${allowlist_entries[$index]}"
+done | xargs -0 -n 2 -P "$TEST262_JOBS" bash -c 'run_test262_case "$1" "$2"' _
+run_status=$?
+set -e
+
+if [ "$run_status" -ne 0 ]; then
+  first_status="$(find "$RESULT_DIR" -name '*.status' -print | sort | head -n 1)"
+  if [ -z "$first_status" ]; then
+    echo "error: Test262 subset failed before recording the failing case" >&2
+    exit "$run_status"
+  fi
+
+  failed_entry="$(sed -n '1p' "$first_status")"
+  failed_status="$(sed -n '2p' "$first_status")"
+  failed_index="$(basename "$first_status" .status)"
+  failed_log="$RESULT_DIR/$failed_index.log"
+
+  if [ "$failed_status" -eq 124 ]; then
+    echo "error: Test262 case timed out after ${CASE_TIMEOUT_SECONDS}s: tests/test262/$failed_entry" >&2
+  else
+    echo "error: Test262 case failed: tests/test262/$failed_entry" >&2
+  fi
+  if [ -s "$failed_log" ]; then
+    cat "$failed_log" >&2
+  fi
+  exit "$failed_status"
 fi
 
 echo "ok: ran $allowlist_count Test262 subset cases"
