@@ -1,50 +1,88 @@
 # quickjs-rust
 
-`quickjs-rust` is an incremental Rust-native JavaScript engine project inspired
-by QuickJS. The repository is not a binding to the C runtime; it is a ground-up
-implementation that uses small Rust crates, explicit subsystem boundaries, and
-focused conformance checks to grow engine behavior safely.
+A Rust-native JavaScript engine aiming for QuickJS-class embeddability,
+correctness, and performance without binding to the C runtime.
 
-The project is currently in early engine development. It has a working pipeline
-for tokenizing source text, parsing a growing JavaScript syntax subset into an
-AST, compiling that AST to runtime bytecode, and executing selected behavior in
-the bytecode VM through a thin CLI and crate-level tests.
+`quickjs-rust` is a from-scratch JavaScript engine written in safe Rust. It uses
+QuickJS-NG as a behavioral reference, but the goal is not to wrap, translate, or
+clone QuickJS. The goal is to build a mature embeddable runtime with Rust
+ownership, modular internals, span-preserving diagnostics, and conformance-driven
+development from the beginning.
 
-## Goals
-
-- Build a JavaScript engine in safe Rust with clear ownership of lexer, parser,
-  AST, runtime, and CLI responsibilities.
-- Preserve source spans and structured errors so diagnostics can improve without
-  reshaping the core architecture.
-- Use QuickJS-NG as a behavioral reference and Test262 as curated conformance
-  input, without making either a Rust build dependency.
-- Keep each implementation step reviewable, testable, and small enough to
-  reason about independently.
-
-## Non-Goals
-
-- This is not a drop-in replacement for QuickJS today.
-- This project does not expose C FFI bindings to QuickJS.
-- The full Test262 suite is not expected to pass during early development.
-- Runtime shortcuts should not bypass the parser or shared AST model.
-
-## Workspace Layout
+The project is still early, but it is not a demo. The repository already has a
+working engine pipeline:
 
 ```text
 source text
     |
     v
-qjs-lexer  -> tokens with byte spans
-    |
-    v
-qjs-parser -> qjs-ast
-    |
-    v
-qjs-runtime -> bytecode compiler -> bytecode VM
-    |
-    v
-qjs-cli / tests
+lexer -> parser -> AST -> bytecode compiler -> bytecode VM -> CLI / tests
 ```
+
+That pipeline is being expanded vertically: syntax, AST representation,
+bytecode lowering, runtime semantics, builtins, QuickJS comparison fixtures, and
+curated Test262 coverage move together so each feature can be reviewed and
+verified as engine behavior rather than isolated parser or runtime shortcuts.
+
+## Why This Exists
+
+QuickJS and QuickJS-NG prove that a compact, embeddable JavaScript engine can be
+practical. `quickjs-rust` takes that target seriously while choosing a different
+implementation foundation:
+
+- Safe Rust instead of C runtime ownership and memory management.
+- Small crate boundaries for AST, lexer, parser, runtime, and CLI layers.
+- Source spans and structured errors preserved from the lexer upward.
+- A bytecode VM architecture that can grow into a production runtime.
+- QuickJS-NG comparisons and Test262-derived cases as regular development
+  inputs, not late-stage afterthoughts.
+
+The long-term bar is a real embeddable JavaScript engine: small enough to reason
+about, strict enough to test, and ergonomic enough for Rust applications to
+embed directly.
+
+## Current Status
+
+The engine currently supports a focused JavaScript subset across the full
+pipeline. It can tokenize source text, parse supported syntax into shared AST
+types, compile AST nodes into runtime bytecode, execute selected semantics in
+the VM, and expose that behavior through a thin command-line wrapper.
+
+It is not yet a drop-in replacement for QuickJS or QuickJS-NG. Conformance work
+is intentionally incremental: unsupported syntax and runtime behavior are added
+with focused tests, QuickJS comparison fixtures where useful, and curated
+Test262-derived cases when the harness can run them deterministically.
+
+## Try It
+
+Install Rust 1.85 or newer with `rustup`, then initialize the repository:
+
+```sh
+./scripts/bootstrap.sh
+```
+
+Run a small JavaScript expression through the CLI:
+
+```sh
+cargo run -p qjs-cli -- -e "1 + 2;"
+```
+
+Run the standard local verification suite:
+
+```sh
+./scripts/check.sh
+```
+
+For a fresh clone, either clone submodules up front:
+
+```sh
+git clone --recurse-submodules git@github.com:Lewin671/quickjs-rust.git
+```
+
+or run `./scripts/bootstrap.sh` after cloning. The bootstrap script initializes
+the top-level third-party references and fetches Cargo dependencies.
+
+## Workspace
 
 - `crates/qjs-ast`: shared syntax tree, statement/expression nodes, and source
   span types.
@@ -63,35 +101,6 @@ qjs-cli / tests
   failures.
 - `third_party/quickjs-ng`: pinned QuickJS-NG reference implementation.
 - `third_party/test262`: pinned TC39 conformance test corpus.
-
-## Quick Start
-
-Install Rust 1.85 or newer with `rustup`, then initialize the repository:
-
-```sh
-./scripts/bootstrap.sh
-```
-
-Run the full local verification suite:
-
-```sh
-./scripts/check.sh
-```
-
-Run a small JavaScript expression through the CLI:
-
-```sh
-cargo run -p qjs-cli -- -e "1 + 2;"
-```
-
-For a fresh clone, either clone submodules up front:
-
-```sh
-git clone --recurse-submodules git@github.com:Lewin671/quickjs-rust.git
-```
-
-or run `./scripts/bootstrap.sh` after cloning. The bootstrap script initializes
-the top-level third-party references and fetches Cargo dependencies.
 
 ## Verification
 
@@ -116,19 +125,20 @@ cargo run -p qjs-cli -- -e "1 + 2;"
 QuickJS-NG reference. `./scripts/test262-subset.sh` runs only curated
 Test262-derived cases that the current harness can execute deterministically.
 
-## Development Model
+## Design Principles
 
-Engine work should grow vertically through the layers: token support, AST shape,
-parser coverage, bytecode lowering, VM/runtime semantics, and targeted
-smoke/conformance tests. Public APIs should stay small and typed, user input
-failures should return structured errors, and all tokens or AST nodes that
-represent source text should preserve byte spans.
+- Build vertically through the engine stack instead of adding parser-only or
+  runtime-only shortcuts.
+- Keep public APIs small, typed, and documented when they cross crate
+  boundaries.
+- Return structured errors for source input failures rather than panicking on
+  malformed JavaScript.
+- Preserve byte-offset source spans for future diagnostics.
+- Keep QuickJS-NG and Test262 as references and conformance inputs, not Rust
+  dependencies.
+- Keep first-party modules small enough for direct review.
 
-First-party source files are intentionally kept reviewable. Large files under
-`third_party/` are vendored upstream references and should not be used as
-examples for first-party Rust module structure.
-
-For deeper design context, see:
+For deeper design and workflow context, see:
 
 - `docs/architecture.md` for crate boundaries, span policy, and growth strategy.
 - `docs/harness.md` for autonomous-agent worktree and integration procedures.
