@@ -17,7 +17,7 @@ pub struct SwitchCase {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CatchClause {
     /// Optional catch binding.
-    pub param: Option<String>,
+    pub param: Option<AssignmentTarget>,
     /// Catch block statements.
     pub body: Vec<Stmt>,
     /// Source span.

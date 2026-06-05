@@ -1,9 +1,9 @@
-use qjs_ast::{CatchClause, Stmt};
+use qjs_ast::{AssignmentTarget, CatchClause, Stmt};
 
 use crate::{CATCH_CAPTURE_PREFIX, RuntimeError, Value};
 
 use super::compiler::Compiler;
-use super::ir::{CatchScope, Op};
+use super::ir::{CatchBinding, CatchScope, Op};
 
 impl Compiler {
     pub(super) fn compile_try(
@@ -68,32 +68,15 @@ impl Compiler {
     ) -> Result<(usize, Option<CatchScope>), RuntimeError> {
         let target = self.code.len();
         if let Some(param) = &handler.param {
-            if self.strict && matches!(param.as_str(), "eval" | "arguments") {
-                return Err(RuntimeError {
-                    thrown: None,
-                    message: format!("invalid strict catch binding `{param}`"),
-                });
-            }
-            let existing_slot = self.local_slots.get(param).copied();
-            let saved_slot = existing_slot.map(|slot| {
-                let saved_slot = self.temp_local("catch_saved");
-                self.emit(Op::LoadLocalOrUndefined(slot));
-                self.emit(Op::StoreLocal(saved_slot));
-                saved_slot
-            });
-            let slot = self.local_slot(param, false);
-            self.emit(Op::StoreLocal(slot));
-            let marker_slot = self.local_slot(&catch_capture_marker(param), true);
-            let marker_const = self.const_slot(Value::Boolean(true));
-            self.emit(Op::LoadConst(marker_const));
-            self.emit(Op::StoreLocal(marker_slot));
+            self.validate_catch_binding(param)?;
+            let bindings = self.prepare_catch_bindings(param);
+            let thrown_slot = self.temp_local("catch_thrown");
+            self.emit(Op::StoreLocal(thrown_slot));
+            self.compile_store_value(param, thrown_slot)?;
+            self.emit(Op::Pop);
             self.compile_try_body(&handler.body, result_slot)?;
             self.emit(Op::ExitTry);
-            let catch_scope = CatchScope::Param {
-                slot,
-                saved_slot,
-                marker_slot,
-            };
+            let catch_scope = CatchScope::Bindings(bindings);
             return Ok((target, Some(catch_scope)));
         } else {
             self.emit(Op::Pop);
@@ -101,6 +84,53 @@ impl Compiler {
         }
         self.emit(Op::ExitTry);
         Ok((target, None))
+    }
+
+    fn validate_catch_binding(&mut self, target: &AssignmentTarget) -> Result<(), RuntimeError> {
+        if !self.strict {
+            return Ok(());
+        }
+        let mut names = Vec::new();
+        collect_target_names(target, &mut names);
+        if let Some(name) = names
+            .iter()
+            .find(|name| matches!(name.as_str(), "eval" | "arguments"))
+        {
+            return Err(RuntimeError {
+                thrown: None,
+                message: format!("invalid strict catch binding `{name}`"),
+            });
+        }
+        Ok(())
+    }
+
+    fn prepare_catch_bindings(&mut self, target: &AssignmentTarget) -> Vec<CatchBinding> {
+        let mut names = Vec::new();
+        collect_target_names(target, &mut names);
+        names.sort();
+        names.dedup();
+        names
+            .into_iter()
+            .map(|name| {
+                let existing_slot = self.local_slots.get(&name).copied();
+                let saved_slot = existing_slot.map(|slot| {
+                    let saved_slot = self.temp_local("catch_saved");
+                    self.emit(Op::LoadLocalOrUndefined(slot));
+                    self.emit(Op::StoreLocal(saved_slot));
+                    saved_slot
+                });
+                let slot = self.local_slot(&name, false);
+                let marker_slot = self.local_slot(&catch_capture_marker(&name), true);
+                let marker_const = self.const_slot(Value::Boolean(true));
+                self.emit(Op::LoadConst(marker_const));
+                self.emit(Op::StoreLocal(marker_slot));
+                CatchBinding {
+                    slot,
+                    saved_slot,
+                    marker_slot,
+                }
+            })
+            .collect()
     }
 
     fn compile_finally(&mut self, finalizer: &[Stmt]) -> Result<usize, RuntimeError> {
@@ -125,4 +155,21 @@ impl Compiler {
 
 fn catch_capture_marker(name: &str) -> String {
     format!("{CATCH_CAPTURE_PREFIX}{name}")
+}
+
+fn collect_target_names(target: &AssignmentTarget, names: &mut Vec<String>) {
+    match target {
+        AssignmentTarget::Identifier { name, .. } => names.push(name.clone()),
+        AssignmentTarget::Array { elements, .. } => {
+            for element in elements.iter().flatten() {
+                collect_target_names(&element.target, names);
+            }
+        }
+        AssignmentTarget::Object { properties, .. } => {
+            for property in properties {
+                collect_target_names(&property.target, names);
+            }
+        }
+        AssignmentTarget::Member { .. } => {}
+    }
 }

@@ -435,15 +435,10 @@ impl Parser {
             .start;
         self.expect(&TokenKind::Catch)?;
         let param = if self.match_kind(&TokenKind::LeftParen) {
-            let token = self.advance();
-            let TokenKind::Identifier(name) = token.kind else {
-                return Err(ParseError {
-                    message: "expected catch binding identifier".to_owned(),
-                    span: token.span,
-                });
-            };
+            let expr = self.expression()?;
+            let target = assignment_target(expr)?;
             self.expect(&TokenKind::RightParen)?;
-            Some(name)
+            Some(target)
         } else {
             None
         };

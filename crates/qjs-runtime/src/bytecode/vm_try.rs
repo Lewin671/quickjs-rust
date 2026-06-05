@@ -125,24 +125,23 @@ impl Vm<'_> {
             return Ok(());
         }
         match scope {
-            Some(CatchScope::Param {
-                slot,
-                saved_slot,
-                marker_slot,
-            }) => {
-                let saved = if let Some(saved_slot) = saved_slot {
-                    self.locals
-                        .get(saved_slot)
-                        .cloned()
-                        .ok_or_else(|| RuntimeError {
-                            thrown: None,
-                            message: "bytecode local index out of bounds".to_owned(),
-                        })?
-                } else {
-                    None
-                };
-                self.set_local_slot(slot, saved)?;
-                self.set_local_slot(marker_slot, None)
+            Some(CatchScope::Bindings(bindings)) => {
+                for binding in bindings {
+                    let saved = if let Some(saved_slot) = binding.saved_slot {
+                        self.locals
+                            .get(saved_slot)
+                            .cloned()
+                            .ok_or_else(|| RuntimeError {
+                                thrown: None,
+                                message: "bytecode local index out of bounds".to_owned(),
+                            })?
+                    } else {
+                        None
+                    };
+                    self.set_local_slot(binding.slot, saved)?;
+                    self.set_local_slot(binding.marker_slot, None)?;
+                }
+                Ok(())
             }
             None => Ok(()),
         }

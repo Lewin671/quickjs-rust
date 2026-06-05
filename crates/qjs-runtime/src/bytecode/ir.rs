@@ -75,11 +75,14 @@ pub(super) enum Op {
 
 #[derive(Clone, Debug)]
 pub(super) enum CatchScope {
-    Param {
-        slot: usize,
-        saved_slot: Option<usize>,
-        marker_slot: usize,
-    },
+    Bindings(Vec<CatchBinding>),
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct CatchBinding {
+    pub(super) slot: usize,
+    pub(super) saved_slot: Option<usize>,
+    pub(super) marker_slot: usize,
 }
 
 #[derive(Clone, Debug)]

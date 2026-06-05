@@ -1,4 +1,4 @@
-use qjs_ast::{BinaryOp, Expr, ForInLeft, ForInit, Stmt, VarKind};
+use qjs_ast::{AssignmentTarget, BinaryOp, Expr, ForInLeft, ForInit, Stmt, VarKind};
 
 use crate::parse_script;
 
@@ -284,7 +284,10 @@ fn parses_try_catch_finally_statement() {
     };
     assert!(matches!(block.as_slice(), [Stmt::Throw { .. }]));
     let handler = handler.as_ref().expect("expected catch clause");
-    assert_eq!(handler.param.as_deref(), Some("error"));
+    assert!(matches!(
+        handler.param,
+        Some(AssignmentTarget::Identifier { ref name, .. }) if name == "error"
+    ));
     assert_eq!(handler.body.len(), 1);
     assert!(matches!(
         finalizer.as_deref(),
@@ -299,6 +302,22 @@ fn parses_try_catch_finally_statement() {
             finalizer: Some(_),
             ..
         }]
+    ));
+
+    let script = parse_script("try { throw [1]; } catch ([value = 2]) { value; }")
+        .expect("source should parse");
+    let [
+        Stmt::Try {
+            handler: Some(handler),
+            ..
+        },
+    ] = script.body.as_slice()
+    else {
+        panic!("expected one try statement");
+    };
+    assert!(matches!(
+        handler.param,
+        Some(AssignmentTarget::Array { .. })
     ));
 }
 

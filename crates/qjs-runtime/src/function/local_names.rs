@@ -100,7 +100,7 @@ fn collect_statement_local_names(body: &[Stmt], names: &mut HashSet<String>) {
                 collect_statement_local_names(block, names);
                 if let Some(handler) = handler {
                     if let Some(param) = &handler.param {
-                        names.insert(param.clone());
+                        collect_target_local_names(param, names);
                     }
                     collect_statement_local_names(&handler.body, names);
                 }

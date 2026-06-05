@@ -289,6 +289,16 @@ fn evaluates_try_catch_finally_statements() {
         ),
         Ok(Value::String("inside:outside".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "var probe, x = 'outside'; try { throw ['inside']; } catch ([x, _ = probe = function() { return x; }]) {} probe() + ':' + x;"
+        ),
+        Ok(Value::String("inside:outside".to_owned()))
+    );
+    assert_eq!(
+        eval("var x = 'outside'; try { throw ['inside']; } catch ([x]) {} x;"),
+        Ok(Value::String("outside".to_owned()))
+    );
 }
 
 #[test]
