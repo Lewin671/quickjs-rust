@@ -16,6 +16,7 @@ pub(super) fn call_regexp_native(
         NativeFunction::RegExp => {
             regexp::native_regexp(function, this_value, argument_values, is_construct, env)?
         }
+        NativeFunction::RegExpEscape => regexp::native_regexp_escape(argument_values)?,
         NativeFunction::RegExpPrototypeExec => {
             regexp::native_regexp_prototype_exec(this_value, argument_values, env)?
         }

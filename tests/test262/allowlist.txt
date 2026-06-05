@@ -688,6 +688,9 @@ cases/reflect-set-non-writable.js
 cases/reflect-set-prototype-of-basic.js
 cases/reflect-set-prototype-of-length.js
 cases/reflect-set-prototype-of-non-extensible.js
+cases/regexp-escape-basic.js
+cases/regexp-escape-non-string-inputs.js
+cases/regexp-escape-punctuators-whitespace.js
 cases/regexp-prototype-flag-accessors.js
 cases/regexp-literal-date-format-escaped-atoms.js
 cases/regexp-prototype-source-accessor.js

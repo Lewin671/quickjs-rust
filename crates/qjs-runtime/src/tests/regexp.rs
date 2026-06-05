@@ -36,6 +36,50 @@ fn evaluates_regexp_constructor_identity() {
 }
 
 #[test]
+fn evaluates_regexp_escape() {
+    assert_eq!(
+        eval("typeof RegExp.escape;"),
+        Ok(Value::String("function".to_owned()))
+    );
+    assert_eq!(eval("RegExp.escape.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(
+        eval("RegExp.escape('abc123');"),
+        Ok(Value::String("\\x61bc123".to_owned()))
+    );
+    assert_eq!(
+        eval(r#"RegExp.escape('^$\\.*+?()[]{}|/');"#),
+        Ok(Value::String(
+            "\\^\\$\\\\\\.\\*\\+\\?\\(\\)\\[\\]\\{\\}\\|\\/".to_owned()
+        ))
+    );
+    assert_eq!(
+        eval(r#"RegExp.escape(",-=<>#&!%:;@~'`\"");"#),
+        Ok(Value::String(
+            "\\x2c\\x2d\\x3d\\x3c\\x3e\\x23\\x26\\x21\\x25\\x3a\\x3b\\x40\\x7e\\x27\\x60\\x22"
+                .to_owned()
+        ))
+    );
+    assert_eq!(
+        eval("RegExp.escape('\\t\\n\\v\\f\\r ');"),
+        Ok(Value::String("\\t\\n\\v\\f\\r\\x20".to_owned()))
+    );
+    assert_eq!(
+        eval("RegExp.escape(String.fromCharCode(0x00a0, 0x2028, 0xfeff));"),
+        Ok(Value::String("\\xa0\\u2028\\ufeff".to_owned()))
+    );
+    assert_eq!(
+        eval(r#"RegExp.escape("\ud800\udc00");"#),
+        Ok(Value::String("\\ud800\\udc00".to_owned()))
+    );
+    assert_eq!(
+        eval("RegExp.escape(String.fromCharCode(0x100));"),
+        Ok(Value::String(String::from_utf16(&[0x100]).unwrap()))
+    );
+    assert!(eval("RegExp.escape(123);").is_err());
+    assert!(eval("RegExp.escape(null);").is_err());
+}
+
+#[test]
 fn evaluates_regexp_prototype_accessors() {
     assert_eq!(
         eval("/test/g.source;"),
