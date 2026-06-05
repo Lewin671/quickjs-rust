@@ -306,6 +306,8 @@ fn evaluates_delete_operator() {
         eval("let o = {}; Object.defineProperty(o, 'fixed', { value: 1 }); delete o.fixed;"),
         Ok(Value::Boolean(false))
     );
+    assert_eq!(eval("let x = 1; delete x;"), Ok(Value::Boolean(false)));
+    assert_eq!(eval("delete missing;"), Ok(Value::Boolean(true)));
 }
 
 #[test]

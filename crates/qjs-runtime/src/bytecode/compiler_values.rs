@@ -77,6 +77,13 @@ impl Compiler {
     }
 
     pub(super) fn compile_delete(&mut self, argument: &Expr) -> Result<(), RuntimeError> {
+        if let Expr::Identifier { name, .. } = argument
+            && self.local_slots.contains_key(name)
+        {
+            let slot = self.const_slot(Value::Boolean(false));
+            self.emit(Op::LoadConst(slot));
+            return Ok(());
+        }
         let Expr::Member {
             object, property, ..
         } = argument
