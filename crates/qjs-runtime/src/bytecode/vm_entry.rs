@@ -25,6 +25,7 @@ pub(super) fn eval_function_bytecode_with_stack(
 ) -> FunctionBytecodeResult<'_> {
     let mut vm = Vm::new_with_globals(bytecode, env, false);
     vm.with_stack = with_stack;
+    vm.with_cleanup_stack = vec![usize::MAX; vm.with_stack.len()];
     let value = vm.run();
     FunctionBytecodeResult {
         value,

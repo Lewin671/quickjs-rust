@@ -39,6 +39,7 @@ pub(super) struct Vm<'a> {
     pub(super) pending_return: Option<Value>,
     pub(super) pending_jump: Option<usize>,
     pub(super) with_stack: Vec<Value>,
+    pub(super) with_cleanup_stack: Vec<usize>,
     pub(super) name_references: Vec<NameReference>,
     pub(super) binding_overrides: HashMap<String, Value>,
     pub(super) sync_var_to_global_object: bool,
@@ -71,6 +72,7 @@ impl<'a> Vm<'a> {
             pending_return: None,
             pending_jump: None,
             with_stack: Vec::new(),
+            with_cleanup_stack: Vec::new(),
             name_references: Vec::new(),
             binding_overrides: HashMap::new(),
             sync_var_to_global_object,
@@ -240,7 +242,7 @@ impl<'a> Vm<'a> {
                 Op::IteratorCloseForThrow(iterator_slot) => {
                     self.iterator_close_for_throw(iterator_slot)?;
                 }
-                Op::EnterWith => self.enter_with()?,
+                Op::EnterWith(cleanup_ip) => self.enter_with(cleanup_ip)?,
                 Op::ExitWith => self.exit_with()?,
                 Op::EnterTry {
                     catch,

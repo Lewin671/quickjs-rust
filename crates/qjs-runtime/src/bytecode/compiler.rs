@@ -13,6 +13,7 @@ pub(super) struct Compiler {
     pub(super) local_slots: HashMap<String, usize>,
     pub(super) code: Vec<Op>,
     loop_stack: Vec<LoopContext>,
+    completion_stack: Vec<usize>,
     label_stack: Vec<String>,
     block_restore_stack: Vec<Vec<(usize, usize)>>,
     next_temp: usize,
@@ -296,7 +297,20 @@ impl Compiler {
     }
 
     pub(super) fn current_result_slot(&self) -> Option<usize> {
-        self.loop_stack.last().map(|context| context.result_slot)
+        self.completion_stack
+            .last()
+            .copied()
+            .or_else(|| self.loop_stack.last().map(|context| context.result_slot))
+    }
+
+    pub(super) fn push_completion(&mut self, result_slot: usize) {
+        self.completion_stack.push(result_slot);
+    }
+
+    pub(super) fn pop_completion(&mut self) {
+        self.completion_stack
+            .pop()
+            .expect("completion context should be balanced");
     }
 
     pub(super) fn compile_break(&mut self, label: Option<&str>) -> Result<(), RuntimeError> {
@@ -314,7 +328,7 @@ impl Compiler {
             });
         };
         if let (Some(source), target) = (
-            self.loop_stack.last().map(|context| context.result_slot),
+            self.current_result_slot(),
             self.loop_stack[index].result_slot,
         ) && source != target
         {
@@ -346,7 +360,7 @@ impl Compiler {
             });
         };
         if let (Some(source), target) = (
-            self.loop_stack.last().map(|context| context.result_slot),
+            self.current_result_slot(),
             self.loop_stack[index].result_slot,
         ) && source != target
         {
@@ -385,9 +399,7 @@ impl Compiler {
                 for (index, stmt) in body.iter().enumerate() {
                     self.compile_stmt(stmt)?;
                     if index + 1 != body.len() {
-                        if let Some(result_slot) =
-                            self.loop_stack.last().map(|context| context.result_slot)
-                        {
+                        if let Some(result_slot) = self.current_result_slot() {
                             self.emit(Op::StoreLocal(result_slot));
                         } else {
                             self.emit(Op::Pop);

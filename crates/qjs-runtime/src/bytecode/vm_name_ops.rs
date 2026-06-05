@@ -147,7 +147,7 @@ impl Vm<'_> {
         }
     }
 
-    pub(super) fn enter_with(&mut self) -> Result<(), RuntimeError> {
+    pub(super) fn enter_with(&mut self, cleanup_ip: usize) -> Result<(), RuntimeError> {
         let object = self.pop()?;
         if matches!(object, Value::Null | Value::Undefined)
             && self
@@ -160,16 +160,43 @@ impl Vm<'_> {
             return Ok(());
         }
         self.with_stack.push(object);
+        self.with_cleanup_stack.push(cleanup_ip);
         self.stack.push(Value::Undefined);
         Ok(())
     }
 
     pub(super) fn exit_with(&mut self) -> Result<(), RuntimeError> {
+        self.with_cleanup_stack.pop().ok_or_else(|| RuntimeError {
+            thrown: None,
+            message: "with cleanup stack underflow".to_owned(),
+        })?;
         self.with_stack.pop().ok_or_else(|| RuntimeError {
             thrown: None,
             message: "with stack underflow".to_owned(),
         })?;
         Ok(())
+    }
+
+    pub(super) fn cleanup_with_for_jump(&mut self, target: usize) {
+        while self
+            .with_cleanup_stack
+            .last()
+            .is_some_and(|cleanup_ip| *cleanup_ip != usize::MAX && target >= *cleanup_ip)
+        {
+            self.with_cleanup_stack.pop();
+            self.with_stack.pop();
+        }
+    }
+
+    pub(super) fn cleanup_active_with_scopes(&mut self) {
+        while self
+            .with_cleanup_stack
+            .last()
+            .is_some_and(|cleanup_ip| *cleanup_ip != usize::MAX)
+        {
+            self.with_cleanup_stack.pop();
+            self.with_stack.pop();
+        }
     }
 
     pub(super) fn delete_name(&mut self, name: &str) -> Result<(), RuntimeError> {

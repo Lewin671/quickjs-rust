@@ -109,6 +109,34 @@ fn evaluates_with_statements() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "this.x = 1; let scope = { x: 2, value: 'boom' }; let result; try { with (scope) { x = 3; throw value; } } catch (error) { result = x; } result + ':' + x + ':' + scope.x;"
+        ),
+        Ok(Value::String("1:1:3".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let scope = {}; let result = 0; do { with (scope) { result = 4; break; } result = 5; } while (false); result;"
+        ),
+        Ok(Value::Number(4.0))
+    );
+    assert_eq!(
+        eval("eval('1; do { 2; with({}) { 3; break; } 4; } while (false);');"),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval("eval('5; do { 6; with({}) { break; } 7; } while (false);');"),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval("eval('8; do { 9; with({}) { 10; continue; } 11; } while (false)');"),
+        Ok(Value::Number(10.0))
+    );
+    assert_eq!(
+        eval("eval('12; do { 13; with({}) { continue; } 14; } while (false)');"),
+        Ok(Value::Undefined)
+    );
 }
 
 #[test]

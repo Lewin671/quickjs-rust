@@ -78,11 +78,23 @@ impl Compiler {
             });
         }
         self.compile_expr(object)?;
-        self.emit(Op::EnterWith);
+        let enter = self.emit(Op::EnterWith(usize::MAX));
+        let result_slot = self.temp_local("with_result");
+        self.emit_load_undefined();
+        self.emit(Op::StoreLocal(result_slot));
         self.dynamic_scope_depth += 1;
-        self.compile_stmt(body)?;
+        self.push_completion(result_slot);
+        let result = self.compile_stmt(body);
+        self.pop_completion();
         self.dynamic_scope_depth -= 1;
+        result?;
+        self.emit(Op::StoreLocal(result_slot));
         self.emit(Op::ExitWith);
+        self.emit(Op::LoadLocal(result_slot));
+        let after = self.code.len();
+        if let Op::EnterWith(target) = &mut self.code[enter] {
+            *target = after;
+        }
         Ok(())
     }
 

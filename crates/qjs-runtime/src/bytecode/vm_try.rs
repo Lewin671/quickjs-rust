@@ -41,20 +41,28 @@ impl Vm<'_> {
         self.pending_throw = None;
         self.pending_return = None;
         self.pending_jump = None;
-        if let Some(frame) = self.try_stack.last_mut() {
+        let catch_target = if let Some(frame) = self.try_stack.last_mut() {
             self.stack.truncate(frame.stack_depth);
-            if let Some(catch) = frame.catch.take() {
+            let catch = frame.catch.take();
+            if catch.is_some() {
                 frame.catch_scope_active = true;
-                self.stack.push(value);
-                self.ip = catch;
-                return Ok(());
             }
+            catch
+        } else {
+            None
+        };
+        if let Some(catch) = catch_target {
+            self.cleanup_with_for_jump(catch);
+            self.stack.push(value);
+            self.ip = catch;
+            return Ok(());
         }
 
         if let Some(frame) = self.try_stack.pop() {
             self.stack.truncate(frame.stack_depth);
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
             if let Some(finally) = frame.finally {
+                self.cleanup_with_for_jump(finally);
                 self.pending_throw = Some(value);
                 self.pending_return = None;
                 self.pending_jump = None;
@@ -78,6 +86,7 @@ impl Vm<'_> {
             self.stack.truncate(frame.stack_depth);
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
             if let Some(finally) = frame.finally {
+                self.cleanup_with_for_jump(finally);
                 self.pending_return = Some(value);
                 self.pending_throw = None;
                 self.pending_jump = None;
@@ -85,6 +94,7 @@ impl Vm<'_> {
                 return Ok(None);
             }
         }
+        self.cleanup_active_with_scopes();
         Ok(Some(value))
     }
 
@@ -96,11 +106,13 @@ impl Vm<'_> {
             self.stack.truncate(frame.stack_depth);
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
             if let Some(finally) = frame.finally {
+                self.cleanup_with_for_jump(finally);
                 self.ip = finally;
                 return Ok(());
             }
         }
         self.pending_jump = None;
+        self.cleanup_with_for_jump(target);
         self.ip = target;
         Ok(())
     }

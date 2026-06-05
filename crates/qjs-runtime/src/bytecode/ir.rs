@@ -60,7 +60,7 @@ pub(super) enum Op {
     JumpIfNotNullish(usize),
     JumpIfNotUndefined(usize),
     IteratorCloseForThrow(usize),
-    EnterWith,
+    EnterWith(usize),
     ExitWith,
     EnterTry {
         catch: Option<usize>,
