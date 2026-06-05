@@ -114,3 +114,46 @@ fn evaluates_native_error_builtins() {
         );
     }
 }
+
+#[test]
+fn evaluates_aggregate_error_builtin() {
+    assert_eq!(
+        eval("typeof AggregateError;"),
+        Ok(Value::String("function".to_owned()))
+    );
+    assert_eq!(eval("AggregateError.length;"), Ok(Value::Number(2.0)));
+    assert_eq!(
+        eval("AggregateError.prototype.name;"),
+        Ok(Value::String("AggregateError".to_owned()))
+    );
+    assert_eq!(
+        eval("AggregateError.prototype.constructor === AggregateError;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("let error = new AggregateError([1, 2], 'boom'); error.message;"),
+        Ok(Value::String("boom".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let error = new AggregateError([1, 2], 'boom'); error.errors.length + ':' + error.errors[0] + ':' + error.errors[1];"
+        ),
+        Ok(Value::String("2:1:2".to_owned()))
+    );
+    assert_eq!(
+        eval("new AggregateError([], 'boom') instanceof AggregateError;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("new AggregateError([], 'boom') instanceof Error;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("new AggregateError([], 'boom').toString();"),
+        Ok(Value::String("AggregateError: boom".to_owned()))
+    );
+    assert_eq!(
+        eval("Object.prototype.toString.call(new AggregateError([], 'boom'));"),
+        Ok(Value::String("[object Error]".to_owned()))
+    );
+}

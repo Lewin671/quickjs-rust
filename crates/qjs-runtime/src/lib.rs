@@ -64,6 +64,7 @@ pub(crate) const RUNTIME_INTRINSIC_NAMES: &[&str] = &[
     "Date",
     "RegExp",
     "Error",
+    "AggregateError",
     "EvalError",
     "RangeError",
     "ReferenceError",

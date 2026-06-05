@@ -62,6 +62,21 @@ fn evaluates_promise_all_shell() {
 }
 
 #[test]
+fn evaluates_promise_any_shell() {
+    assert_eval("typeof Promise.any;", Value::String("function".to_owned()));
+    assert_eval("Promise.any.length;", Value::Number(1.0));
+    assert_eval(
+        "Promise.propertyIsEnumerable('any');",
+        Value::Boolean(false),
+    );
+    assert_eval("Promise.any([]) instanceof Promise;", Value::Boolean(true));
+    assert_eval(
+        "Object.prototype.toString.call(Promise.any([]));",
+        Value::String("[object Promise]".to_owned()),
+    );
+}
+
+#[test]
 fn evaluates_promise_all_settled_shell() {
     assert_eval(
         "typeof Promise.allSettled;",
@@ -348,6 +363,65 @@ fn drains_promise_all_rejections_after_script() {
     assert_eq!(
         promise::promise_debug_state_result(&rejected),
         Some(("fulfilled".to_owned(), Value::Number(3.0)))
+    );
+}
+
+#[test]
+fn drains_promise_any_jobs_after_script() {
+    let resolved = eval(
+        "Promise.any([Promise.reject(1), Promise.resolve(2)]).then(function(value) { return value + 1; });",
+    )
+    .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&resolved),
+        Some(("fulfilled".to_owned(), Value::Number(3.0)))
+    );
+
+    let non_promise =
+        eval("Promise.any([1, Promise.reject(2)]).then(function(value) { return value; });")
+            .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&non_promise),
+        Some(("fulfilled".to_owned(), Value::Number(1.0)))
+    );
+
+    let thenable = eval(
+        "Promise.any([{ then: function(resolve, reject) { resolve(4); reject(5); } }]).then(function(value) { return value; });",
+    )
+    .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&thenable),
+        Some(("fulfilled".to_owned(), Value::Number(4.0)))
+    );
+}
+
+#[test]
+fn drains_promise_any_rejections_after_script() {
+    let empty = eval(
+        "Promise.any([]).catch(function(error) { return (error instanceof AggregateError) + ':' + error.errors.length; });",
+    )
+    .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&empty),
+        Some(("fulfilled".to_owned(), Value::String("true:0".to_owned())))
+    );
+
+    let rejected = eval(
+        "Promise.any([Promise.reject('a'), Promise.reject('b')]).catch(function(error) { return (error instanceof AggregateError) + ':' + error.errors.join(''); });",
+    )
+    .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&rejected),
+        Some(("fulfilled".to_owned(), Value::String("true:ab".to_owned())))
+    );
+
+    let poisoned = eval(
+        "var value = {}; Object.defineProperty(value, 'then', { get: function() { throw 8; } }); Promise.any([value]).catch(function(error) { return (error instanceof AggregateError) + ':' + error.errors[0]; });",
+    )
+    .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&poisoned),
+        Some(("fulfilled".to_owned(), Value::String("true:8".to_owned())))
     );
 }
 

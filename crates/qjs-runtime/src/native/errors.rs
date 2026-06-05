@@ -13,6 +13,9 @@ pub(super) fn call_error_native(
         NativeFunction::Error => {
             error::native_error(function, this_value, argument_values, is_construct)?
         }
+        NativeFunction::AggregateError => {
+            error::native_aggregate_error(function, this_value, argument_values, is_construct)?
+        }
         NativeFunction::ErrorPrototypeToString => {
             error::native_error_prototype_to_string(this_value)?
         }

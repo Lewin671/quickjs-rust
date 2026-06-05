@@ -6,15 +6,12 @@ use crate::{
 };
 
 mod all;
-mod all_settled;
+pub(crate) mod all_settled;
+pub(crate) mod any;
 mod jobs;
 mod race;
 
 pub(crate) use all::{native_promise_all, native_promise_all_resolve_element};
-pub(crate) use all_settled::{
-    native_promise_all_settled, native_promise_all_settled_reject_element,
-    native_promise_all_settled_resolve_element,
-};
 pub(crate) use jobs::drain_promise_jobs;
 use jobs::{enqueue_promise_reaction_job, enqueue_promise_thenable_job};
 pub(crate) use race::native_promise_race;
@@ -25,6 +22,7 @@ const PROMISE_HANDLER: &str = "\0PromiseHandler";
 const PROMISE_ALL_INDEX: &str = "\0PromiseAllIndex";
 const PROMISE_ALL_REMAINING: &str = "\0PromiseAllRemaining";
 const PROMISE_ALL_VALUES: &str = "\0PromiseAllValues";
+const PROMISE_AGGREGATE_ERROR: &str = "\0PromiseAggregateError";
 const PROMISE_JOBS: &str = "\0PromiseJobs";
 const PROMISE_REACTIONS: &str = "\0PromiseReactions";
 const PROMISE_REACTION_ARGUMENT: &str = "\0PromiseReactionArgument";
@@ -93,6 +91,21 @@ pub(crate) fn install_promise(
     promise_function.properties.borrow_mut().insert(
         "all".to_owned(),
         Property::non_enumerable(Value::Function(promise_all)),
+    );
+
+    let mut promise_any = Function::new_native(Some("any"), 1, NativeFunction::PromiseAny, false);
+    promise_any.env.insert(
+        PROMISE_PROTOTYPE.to_owned(),
+        Value::Object(promise_prototype.clone()),
+    );
+    if let Some(aggregate_error) = env.get("AggregateError").cloned() {
+        promise_any
+            .env
+            .insert(PROMISE_AGGREGATE_ERROR.to_owned(), aggregate_error);
+    }
+    promise_function.properties.borrow_mut().insert(
+        "any".to_owned(),
+        Property::non_enumerable(Value::Function(promise_any)),
     );
 
     let mut promise_all_settled = Function::new_native(

@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, function_prototype,
-    to_js_string,
+    ArrayRef, Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
+    function_prototype, to_js_string,
 };
 
 const ERROR_DATA_PROPERTY: &str = "\0ErrorData";
@@ -65,6 +65,13 @@ pub(crate) fn install_error(
     for (name, native) in NATIVE_ERRORS {
         install_native_error(env, global_this, &error_prototype, name, *native);
     }
+    install_native_error(
+        env,
+        global_this,
+        &error_prototype,
+        "AggregateError",
+        NativeFunction::AggregateError,
+    );
 }
 
 pub(crate) fn native_error(
@@ -79,6 +86,42 @@ pub(crate) fn native_error(
     };
     define_error_data(&object);
     if let Some(message) = argument_values.first() {
+        if !matches!(message, Value::Undefined) {
+            object.define_property(
+                "message".to_owned(),
+                Property::data(
+                    Value::String(to_js_string(message.clone())?),
+                    false,
+                    true,
+                    true,
+                ),
+            );
+        }
+    }
+    Ok(Value::Object(object))
+}
+
+pub(crate) fn native_aggregate_error(
+    function: &Function,
+    this_value: Value,
+    argument_values: &[Value],
+    is_construct: bool,
+) -> Result<Value, RuntimeError> {
+    let object = match (is_construct, this_value) {
+        (true, Value::Object(object)) => object,
+        _ => ObjectRef::with_prototype(HashMap::new(), function_prototype(function)),
+    };
+    define_error_data(&object);
+    let errors = match argument_values.first() {
+        Some(Value::Array(errors)) => Value::Array(errors.clone()),
+        Some(Value::Undefined) | None => Value::Array(ArrayRef::new(Vec::new())),
+        Some(value) => Value::Array(ArrayRef::new(vec![value.clone()])),
+    };
+    object.define_property(
+        "errors".to_owned(),
+        Property::data(errors, false, true, true),
+    );
+    if let Some(message) = argument_values.get(1) {
         if !matches!(message, Value::Undefined) {
             object.define_property(
                 "message".to_owned(),
@@ -159,7 +202,8 @@ fn install_native_error(
     native: NativeFunction,
 ) {
     let prototype = ObjectRef::with_prototype(HashMap::new(), Some(error_prototype.clone()));
-    let function = Function::new_native(Some(name), 1, native, true);
+    let length = if name == "AggregateError" { 2 } else { 1 };
+    let function = Function::new_native(Some(name), length, native, true);
     prototype.define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
     prototype.define_non_enumerable("name".to_owned(), Value::String(name.to_owned()));
     prototype.define_non_enumerable("message".to_owned(), Value::String(String::new()));
@@ -184,6 +228,7 @@ fn native_error_name(native: NativeFunction) -> Option<&'static str> {
         NativeFunction::SyntaxError => Some("SyntaxError"),
         NativeFunction::TypeError => Some("TypeError"),
         NativeFunction::UriError => Some("URIError"),
+        NativeFunction::AggregateError => Some("AggregateError"),
         _ => None,
     }
 }
