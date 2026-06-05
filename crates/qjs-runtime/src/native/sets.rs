@@ -13,7 +13,7 @@ pub(super) fn call_set_native(
     env: &mut HashMap<String, Value>,
 ) -> NativeCallResult {
     let value = match native {
-        NativeFunction::Set => set::native_set(function, argument_values, is_construct)?,
+        NativeFunction::Set => set::native_set(function, argument_values, is_construct, env)?,
         NativeFunction::SetPrototypeAdd => {
             set::native_set_prototype_add(this_value, argument_values)?
         }

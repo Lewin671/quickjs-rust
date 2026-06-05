@@ -317,12 +317,16 @@ cases/math-hypot-length.js
 cases/math-precision-basic.js
 cases/math-precision-length.js
 cases/map-constructor-basic.js
+cases/map-iterable-basic.js
+cases/map-iterable-non-object-entry.js
 cases/map-no-iterable-basic.js
 cases/map-prototype-constructor-basic.js
 cases/map-methods-basic.js
 cases/map-iterator-basic.js
 cases/map-for-each-basic.js
 cases/set-constructor-basic.js
+cases/set-iterable-basic.js
+cases/set-iterable-duplicates.js
 cases/set-no-iterable-basic.js
 cases/set-prototype-constructor-basic.js
 cases/set-methods-basic.js

@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use crate::{ArrayRef, Function, MapRef, NativeFunction, ObjectRef, Property, RuntimeError, Value};
+use crate::{
+    ArrayRef, Function, MapRef, NativeFunction, ObjectRef, Property, RuntimeError, Value,
+    array::array_like_values_with_env, property_value,
+};
 
 const MAP_ITERATOR: &str = "\0map_iterator";
 const MAP_ITERATOR_NEXT_INDEX: &str = "\0map_iterator_next_index";
@@ -86,6 +89,7 @@ pub(crate) fn native_map(
     function: &Function,
     argument_values: &[Value],
     is_construct: bool,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     if !is_construct {
         return Err(RuntimeError {
@@ -93,13 +97,37 @@ pub(crate) fn native_map(
             message: "TypeError: Constructor Map requires 'new'".to_owned(),
         });
     }
-    if !matches!(argument_values.first(), None | Some(Value::Undefined)) {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "Map iterable constructor arguments are not implemented".to_owned(),
-        });
+    let map = MapRef::new(crate::function_prototype(function));
+    if let Some(iterable) = argument_values.first().cloned()
+        && !matches!(iterable, Value::Undefined | Value::Null)
+    {
+        for entry in array_like_values_with_env(iterable, "Map constructor", env)? {
+            let (key, value) = map_entry(entry, env)?;
+            map.set(key, value);
+        }
     }
-    Ok(Value::Map(MapRef::new(crate::function_prototype(function))))
+    Ok(Value::Map(map))
+}
+
+fn map_entry(
+    entry: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<(Value, Value), RuntimeError> {
+    match entry {
+        Value::Object(_) | Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) => {
+            let key = property_value(entry.clone(), "0", env)?;
+            let value = property_value(entry, "1", env)?;
+            Ok((key, value))
+        }
+        Value::Null
+        | Value::Undefined
+        | Value::String(_)
+        | Value::Number(_)
+        | Value::Boolean(_) => Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Map constructor entry must be an object".to_owned(),
+        }),
+    }
 }
 
 pub(crate) fn native_map_prototype_size(this_value: Value) -> Result<Value, RuntimeError> {

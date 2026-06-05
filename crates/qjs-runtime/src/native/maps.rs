@@ -13,7 +13,7 @@ pub(super) fn call_map_native(
     env: &mut HashMap<String, Value>,
 ) -> NativeCallResult {
     let value = match native {
-        NativeFunction::Map => map::native_map(function, argument_values, is_construct)?,
+        NativeFunction::Map => map::native_map(function, argument_values, is_construct, env)?,
         NativeFunction::MapPrototypeClear => map::native_map_prototype_clear(this_value)?,
         NativeFunction::MapPrototypeDelete => {
             map::native_map_prototype_delete(this_value, argument_values)?

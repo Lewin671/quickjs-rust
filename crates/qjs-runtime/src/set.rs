@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use crate::{ArrayRef, Function, NativeFunction, ObjectRef, Property, RuntimeError, SetRef, Value};
+use crate::{
+    ArrayRef, Function, NativeFunction, ObjectRef, Property, RuntimeError, SetRef, Value,
+    array::array_like_values_with_env,
+};
 
 const SET_ITERATOR: &str = "\0set_iterator";
 const SET_ITERATOR_NEXT_INDEX: &str = "\0set_iterator_next_index";
@@ -84,6 +87,7 @@ pub(crate) fn native_set(
     function: &Function,
     argument_values: &[Value],
     is_construct: bool,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     if !is_construct {
         return Err(RuntimeError {
@@ -91,13 +95,15 @@ pub(crate) fn native_set(
             message: "TypeError: Constructor Set requires 'new'".to_owned(),
         });
     }
-    if !matches!(argument_values.first(), None | Some(Value::Undefined)) {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "Set iterable constructor arguments are not implemented".to_owned(),
-        });
+    let set = SetRef::new(crate::function_prototype(function));
+    if let Some(iterable) = argument_values.first().cloned()
+        && !matches!(iterable, Value::Undefined | Value::Null)
+    {
+        for value in array_like_values_with_env(iterable, "Set constructor", env)? {
+            set.add(value);
+        }
     }
-    Ok(Value::Set(SetRef::new(crate::function_prototype(function))))
+    Ok(Value::Set(set))
 }
 
 pub(crate) fn native_set_prototype_size(this_value: Value) -> Result<Value, RuntimeError> {

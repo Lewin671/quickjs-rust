@@ -24,6 +24,27 @@ fn evaluates_map_constructor_and_prototype() {
 }
 
 #[test]
+fn evaluates_map_iterable_constructor_arguments() {
+    assert_eq!(
+        eval(
+            "let map = new Map([['attr', 1], ['foo', 2]]); map.size + ':' + map.get('attr') + ':' + map.get('foo');"
+        ),
+        Ok(Value::String("2:1:2".to_owned()))
+    );
+    assert_eq!(
+        eval("let map = new Map({ 0: ['a', 1], 1: ['b', 2], length: 2 }); map.get('b');"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval("let map = new Map([['a', 1], ['a', 2]]); map.size + ':' + map.get('a');"),
+        Ok(Value::String("1:2".to_owned()))
+    );
+    assert!(eval("new Map([1]);").is_err());
+    assert!(eval("new Map(['']);").is_err());
+    assert!(eval("new Map([null]);").is_err());
+}
+
+#[test]
 fn evaluates_map_basic_methods() {
     assert_eq!(
         eval("let map = new Map(); map.size;"),

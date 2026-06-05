@@ -19,7 +19,26 @@ fn evaluates_set_constructor_and_prototype() {
         Value::Number(11.0),
     );
     assert!(eval("Set();").is_err());
-    assert!(eval("new Set([1, 2]);").is_err());
+}
+
+#[test]
+fn evaluates_set_iterable_constructor_arguments() {
+    assert_eval(
+        "var set = new Set([1, 2]); set.size + ':' + set.has(1) + ':' + set.has(2);",
+        Value::String("2:true:true".to_owned()),
+    );
+    assert_eval(
+        "var set = new Set([1, 1, 2]); set.size + ':' + set.has(1) + ':' + set.has(2);",
+        Value::String("2:true:true".to_owned()),
+    );
+    assert_eval(
+        "var set = new Set('aba'); set.size + ':' + set.has('a') + ':' + set.has('b');",
+        Value::String("2:true:true".to_owned()),
+    );
+    assert_eval(
+        "var set = new Set({ 0: 'x', 1: 'y', length: 2 }); set.size + ':' + set.has('x') + ':' + set.has('y');",
+        Value::String("2:true:true".to_owned()),
+    );
 }
 
 #[test]
