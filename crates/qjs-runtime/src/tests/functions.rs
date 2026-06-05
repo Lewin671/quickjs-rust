@@ -37,6 +37,10 @@ fn evaluates_function_declarations_and_calls() {
         Ok(Value::Number(3.0))
     );
     assert_eq!(
+        eval("function names() { return Object.keys(arguments).join('|'); } names(1, 2);"),
+        Ok(Value::String("0|1".to_owned()))
+    );
+    assert_eq!(
         eval("function none() { return arguments.length; } none();"),
         Ok(Value::Number(0.0))
     );

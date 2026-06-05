@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     Bytecode, CATCH_CAPTURE_PREFIX, Function, GLOBAL_THIS_BINDING, LOCAL_CAPTURE_PREFIX, ObjectRef,
-    RUNTIME_INTRINSIC_NAMES, RuntimeError, STRICT_MODE_BINDING, Value,
+    Property, RUNTIME_INTRINSIC_NAMES, RuntimeError, STRICT_MODE_BINDING, Value,
     bytecode::eval_function_bytecode_with_stack, native::call_native_function, object_prototype,
 };
 
@@ -149,15 +149,20 @@ fn arguments_object(
     strict: bool,
     env: &HashMap<String, Value>,
 ) -> Value {
-    let mut properties = HashMap::with_capacity(argument_values.len() + 1);
-    properties.insert(
-        "length".to_owned(),
-        Value::Number(argument_values.len() as f64),
-    );
+    let mut properties = HashMap::with_capacity(argument_values.len());
     for (index, value) in argument_values.iter().cloned().enumerate() {
         properties.insert(index.to_string(), value);
     }
     let object = ObjectRef::with_prototype(properties, object_prototype(env));
+    object.define_property(
+        "length".to_owned(),
+        Property::data(
+            Value::Number(argument_values.len() as f64),
+            false,
+            true,
+            true,
+        ),
+    );
     if !strict {
         for (index, param) in params.iter().enumerate().take(argument_values.len()) {
             object.map_argument(index.to_string(), param.clone());

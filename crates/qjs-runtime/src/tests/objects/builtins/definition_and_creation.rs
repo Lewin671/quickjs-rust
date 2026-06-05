@@ -64,7 +64,7 @@ fn evaluates_object_definition_and_creation_builtins() {
         ),
         Ok(Value::Number(9.0))
     );
-    assert_eq!(eval("Object.create.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("Object.create.length;"), Ok(Value::Number(2.0)));
     assert_eq!(
         eval("let proto = { value: 7 }; let object = Object.create(proto); object.value;"),
         Ok(Value::Number(7.0))
@@ -74,6 +74,12 @@ fn evaluates_object_definition_and_creation_builtins() {
             "let proto = { inherited: 1 }; let object = Object.create(proto, { own: { value: 2, enumerable: true } }); object.inherited + object.own;"
         ),
         Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval(
+            "let args = (function() { return arguments; })(); Object.defineProperty(args, 'own', { value: { value: 2, enumerable: true }, enumerable: true }); Object.create({}, args).own;"
+        ),
+        Ok(Value::Number(2.0))
     );
     assert_eq!(
         eval(

@@ -50,7 +50,7 @@ pub(crate) fn install_object(env: &mut HashMap<String, Value>, global_this: &Val
         Property::non_enumerable(Value::Object(object_prototype.clone())),
     );
     define_object_function(&object_function, "assign", 2, NativeFunction::ObjectAssign);
-    define_object_function(&object_function, "create", 1, NativeFunction::ObjectCreate);
+    define_object_function(&object_function, "create", 2, NativeFunction::ObjectCreate);
     define_object_function(
         &object_function,
         "defineProperty",
