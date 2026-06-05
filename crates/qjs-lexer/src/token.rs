@@ -7,6 +7,8 @@ pub struct Token {
     pub kind: TokenKind,
     /// Source span.
     pub span: Span,
+    /// Whether a line terminator appears between this token and the previous token.
+    pub preceded_by_line_terminator: bool,
 }
 
 /// Token categories recognized by the lexer.

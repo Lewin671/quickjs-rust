@@ -303,6 +303,25 @@ fn lexes_common_punctuators_with_spans() {
 }
 
 #[test]
+fn tracks_line_terminators_before_tokens() {
+    let tokens = lex("break label\ncontinue /*\n*/ other").expect("source should lex");
+    let actual: Vec<_> = tokens
+        .into_iter()
+        .map(|token| (token.kind, token.preceded_by_line_terminator))
+        .collect();
+    assert_eq!(
+        actual,
+        vec![
+            (TokenKind::Break, false),
+            (TokenKind::Identifier("label".to_owned()), false),
+            (TokenKind::Continue, true),
+            (TokenKind::Identifier("other".to_owned()), true),
+            (TokenKind::Eof, false),
+        ]
+    );
+}
+
+#[test]
 fn lexes_multi_character_punctuators_with_longest_match() {
     let tokens = lex(
             "++ += -- -= => ** **= *= /= %= == === != !== <= << <<= >= >> >>= >>> >>>= && &&= &= || ||= |= ^= ... ?? ??= ?.",

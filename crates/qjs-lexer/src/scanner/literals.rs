@@ -1,6 +1,6 @@
 use qjs_ast::Span;
 
-use crate::{LexError, Token, TokenKind};
+use crate::{LexError, TokenKind};
 
 use super::{
     Lexer,
@@ -47,10 +47,7 @@ impl Lexer<'_> {
         } else {
             TokenKind::Identifier(text)
         };
-        self.tokens.push(Token {
-            kind,
-            span: Span::new(start, self.cursor),
-        });
+        self.push(kind, start);
         Ok(())
     }
 
@@ -87,10 +84,7 @@ impl Lexer<'_> {
             }
         }
         text.push_str(&self.source[segment_start..self.cursor]);
-        self.tokens.push(Token {
-            kind: TokenKind::Identifier(text),
-            span: Span::new(start, self.cursor),
-        });
+        self.push(TokenKind::Identifier(text), start);
         Ok(())
     }
 
@@ -123,10 +117,10 @@ impl Lexer<'_> {
                 }
                 if self.peek() == Some('n') {
                     self.advance();
-                    self.tokens.push(Token {
-                        kind: TokenKind::Number(self.source[start..self.cursor].to_owned()),
-                        span: Span::new(start, self.cursor),
-                    });
+                    self.push(
+                        TokenKind::Number(self.source[start..self.cursor].to_owned()),
+                        start,
+                    );
                     return Ok(());
                 }
                 if matches!(self.peek(), Some(ch) if is_identifier_continue(ch)) {
@@ -135,10 +129,10 @@ impl Lexer<'_> {
                         span: Span::new(start, self.cursor + self.peek().map_or(0, char::len_utf8)),
                     });
                 }
-                self.tokens.push(Token {
-                    kind: TokenKind::Number(self.source[start..self.cursor].to_owned()),
-                    span: Span::new(start, self.cursor),
-                });
+                self.push(
+                    TokenKind::Number(self.source[start..self.cursor].to_owned()),
+                    start,
+                );
                 return Ok(());
             }
         }
@@ -153,18 +147,18 @@ impl Lexer<'_> {
             }
         } else if self.peek() == Some('n') {
             self.advance();
-            self.tokens.push(Token {
-                kind: TokenKind::Number(self.source[start..self.cursor].to_owned()),
-                span: Span::new(start, self.cursor),
-            });
+            self.push(
+                TokenKind::Number(self.source[start..self.cursor].to_owned()),
+                start,
+            );
             return Ok(());
         }
         self.exponent_part(start)?;
         self.reject_identifier_continue_after_number(start)?;
-        self.tokens.push(Token {
-            kind: TokenKind::Number(self.source[start..self.cursor].to_owned()),
-            span: Span::new(start, self.cursor),
-        });
+        self.push(
+            TokenKind::Number(self.source[start..self.cursor].to_owned()),
+            start,
+        );
         Ok(())
     }
 
@@ -176,10 +170,10 @@ impl Lexer<'_> {
         }
         self.exponent_part(start)?;
         self.reject_identifier_continue_after_number(start)?;
-        self.tokens.push(Token {
-            kind: TokenKind::Number(self.source[start..self.cursor].to_owned()),
-            span: Span::new(start, self.cursor),
-        });
+        self.push(
+            TokenKind::Number(self.source[start..self.cursor].to_owned()),
+            start,
+        );
         Ok(())
     }
 
@@ -230,10 +224,7 @@ impl Lexer<'_> {
         while let Some(ch) = self.peek() {
             if ch == quote {
                 self.advance();
-                self.tokens.push(Token {
-                    kind: TokenKind::String(value),
-                    span: Span::new(start, self.cursor),
-                });
+                self.push(TokenKind::String(value), start);
                 return Ok(());
             }
             if ch == '\\' {
@@ -265,10 +256,7 @@ impl Lexer<'_> {
         while let Some(ch) = self.peek() {
             if ch == '`' {
                 self.advance();
-                self.tokens.push(Token {
-                    kind: TokenKind::String(value),
-                    span: Span::new(start, self.cursor),
-                });
+                self.push(TokenKind::String(value), start);
                 return Ok(());
             }
             if ch == '$' && self.peek_nth(1) == Some('{') {

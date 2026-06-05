@@ -75,9 +75,11 @@ impl<'src> Lexer<'src> {
             }
         }
 
+        let preceded_by_line_terminator = self.preceded_by_line_terminator(self.cursor);
         self.tokens.push(Token {
             kind: TokenKind::Eof,
             span: Span::new(self.cursor, self.cursor),
+            preceded_by_line_terminator,
         });
         Ok(self.tokens)
     }
@@ -89,10 +91,19 @@ impl<'src> Lexer<'src> {
     }
 
     pub(in crate::scanner) fn push(&mut self, kind: TokenKind, start: usize) {
+        let preceded_by_line_terminator = self.preceded_by_line_terminator(start);
         self.tokens.push(Token {
             kind,
             span: Span::new(start, self.cursor),
+            preceded_by_line_terminator,
         });
+    }
+
+    fn preceded_by_line_terminator(&self, start: usize) -> bool {
+        let previous_end = self.tokens.last().map_or(0, |token| token.span.end);
+        self.source[previous_end..start]
+            .chars()
+            .any(is_line_terminator)
     }
 
     pub(in crate::scanner) fn peek(&self) -> Option<char> {
@@ -108,4 +119,8 @@ impl<'src> Lexer<'src> {
         self.cursor += ch.len_utf8();
         Some(ch)
     }
+}
+
+fn is_line_terminator(ch: char) -> bool {
+    matches!(ch, '\n' | '\r' | '\u{2028}' | '\u{2029}')
 }

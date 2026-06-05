@@ -64,10 +64,9 @@ impl Parser {
 
     pub(super) fn break_or_continue_statement(&mut self, kind: TokenKind) -> Stmt {
         let token = self.advance();
-        let label = if matches!(
-            self.peek().map(|token| &token.kind),
-            Some(TokenKind::Identifier(_))
-        ) {
+        let label = if self.peek().is_some_and(|token| {
+            matches!(token.kind, TokenKind::Identifier(_)) && !token.preceded_by_line_terminator
+        }) {
             let label_token = self.advance();
             let TokenKind::Identifier(label) = label_token.kind else {
                 unreachable!("peek checked label identifier");

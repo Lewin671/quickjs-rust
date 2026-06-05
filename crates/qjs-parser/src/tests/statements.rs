@@ -226,6 +226,27 @@ fn parses_break_and_continue_statements() {
         body.as_slice(),
         [Stmt::Continue { .. }, Stmt::Break { .. }]
     ));
+
+    let script = parse_script("while (true) { break\nlabel; continue\nlabel; }")
+        .expect("source should parse");
+    let [Stmt::While { body, .. }] = script.body.as_slice() else {
+        panic!("expected one while statement");
+    };
+    let Stmt::Block { body, .. } = body.as_ref() else {
+        panic!("expected block body");
+    };
+    assert!(matches!(
+        body.as_slice(),
+        [
+            Stmt::Break { label: None, .. },
+            Stmt::Expr(Expr::Identifier { name: break_name, .. }),
+            Stmt::Continue { label: None, .. },
+            Stmt::Expr(Expr::Identifier {
+                name: continue_name,
+                ..
+            }),
+        ] if break_name == "label" && continue_name == "label"
+    ));
 }
 
 #[test]
