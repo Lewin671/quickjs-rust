@@ -333,6 +333,13 @@ cases/set-iterable-duplicates.js
 cases/set-no-iterable-basic.js
 cases/set-prototype-constructor-basic.js
 cases/set-methods-basic.js
+cases/set-union-basic.js
+cases/set-intersection-basic.js
+cases/set-difference-basic.js
+cases/set-symmetric-difference-basic.js
+cases/set-is-subset-of-basic.js
+cases/set-is-superset-of-basic.js
+cases/set-is-disjoint-from-basic.js
 cases/set-iterator-basic.js
 cases/set-for-each-basic.js
 cases/object-assign-length.js

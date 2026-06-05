@@ -67,6 +67,41 @@ fn evaluates_set_basic_methods() {
 }
 
 #[test]
+fn evaluates_set_composition_methods_with_sets() {
+    assert_eval(
+        "var a = new Set([1, 2]); var b = new Set([2, 3]); var result = a.union(b); var seen = ''; result.forEach(function(value) { seen = seen + value; }); (result instanceof Set) + ':' + result.size + ':' + seen;",
+        Value::String("true:3:123".to_owned()),
+    );
+    assert_eval(
+        "var result = new Set([1, 2]).intersection(new Set([2, 3])); var seen = ''; result.forEach(function(value) { seen = seen + value; }); result.size + ':' + seen;",
+        Value::String("1:2".to_owned()),
+    );
+    assert_eval(
+        "var result = new Set([1, 2]).difference(new Set([2, 3])); var seen = ''; result.forEach(function(value) { seen = seen + value; }); result.size + ':' + seen;",
+        Value::String("1:1".to_owned()),
+    );
+    assert_eval(
+        "var result = new Set([1, 2]).symmetricDifference(new Set([2, 3])); var seen = ''; result.forEach(function(value) { seen = seen + value; }); result.size + ':' + seen;",
+        Value::String("2:13".to_owned()),
+    );
+    assert_eval(
+        "new Set([1]).isSubsetOf(new Set([1, 2])) + ':' + new Set([1, 3]).isSubsetOf(new Set([1, 2]));",
+        Value::String("true:false".to_owned()),
+    );
+    assert_eval(
+        "new Set([1, 2]).isSupersetOf(new Set([1])) + ':' + new Set([1, 2]).isSupersetOf(new Set([1, 3]));",
+        Value::String("true:false".to_owned()),
+    );
+    assert_eval(
+        "new Set([1, 2]).isDisjointFrom(new Set([3])) + ':' + new Set([1, 2]).isDisjointFrom(new Set([2, 3]));",
+        Value::String("true:false".to_owned()),
+    );
+    assert_eval("Set.prototype.union.length;", Value::Number(1.0));
+    assert!(eval("Set.prototype.union.call({}, new Set());").is_err());
+    assert!(eval("new Set().union({});").is_err());
+}
+
+#[test]
 fn evaluates_set_same_value_zero_values() {
     assert_eval(
         "var set = new Set(); set.add(NaN); set.add(NaN); set.size + ':' + set.has(NaN);",

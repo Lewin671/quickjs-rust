@@ -53,6 +53,12 @@ pub(crate) fn install_set(
     );
     define_set_prototype_function(
         &set_prototype,
+        "difference",
+        1,
+        NativeFunction::SetPrototypeDifference,
+    );
+    define_set_prototype_function(
+        &set_prototype,
         "entries",
         0,
         NativeFunction::SetPrototypeEntries,
@@ -64,7 +70,43 @@ pub(crate) fn install_set(
         NativeFunction::SetPrototypeForEach,
     );
     define_set_prototype_function(&set_prototype, "has", 1, NativeFunction::SetPrototypeHas);
+    define_set_prototype_function(
+        &set_prototype,
+        "intersection",
+        1,
+        NativeFunction::SetPrototypeIntersection,
+    );
+    define_set_prototype_function(
+        &set_prototype,
+        "isDisjointFrom",
+        1,
+        NativeFunction::SetPrototypeIsDisjointFrom,
+    );
+    define_set_prototype_function(
+        &set_prototype,
+        "isSubsetOf",
+        1,
+        NativeFunction::SetPrototypeIsSubsetOf,
+    );
+    define_set_prototype_function(
+        &set_prototype,
+        "isSupersetOf",
+        1,
+        NativeFunction::SetPrototypeIsSupersetOf,
+    );
     define_set_prototype_function(&set_prototype, "keys", 0, NativeFunction::SetPrototypeKeys);
+    define_set_prototype_function(
+        &set_prototype,
+        "symmetricDifference",
+        1,
+        NativeFunction::SetPrototypeSymmetricDifference,
+    );
+    define_set_prototype_function(
+        &set_prototype,
+        "union",
+        1,
+        NativeFunction::SetPrototypeUnion,
+    );
     define_set_prototype_function(
         &set_prototype,
         "values",
@@ -138,6 +180,105 @@ pub(crate) fn native_set_prototype_delete(
 
 pub(crate) fn native_set_prototype_entries(this_value: Value) -> Result<Value, RuntimeError> {
     set_iterator(this_value, SET_ITERATOR_KIND_KEY_VALUE)
+}
+
+pub(crate) fn native_set_prototype_union(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let set = this_set(this_value)?;
+    let other = other_set(argument_values)?;
+    let result = new_set_like(&set);
+    for value in set.values() {
+        result.add(value);
+    }
+    for value in other.values() {
+        result.add(value);
+    }
+    Ok(Value::Set(result))
+}
+
+pub(crate) fn native_set_prototype_intersection(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let set = this_set(this_value)?;
+    let other = other_set(argument_values)?;
+    let result = new_set_like(&set);
+    for value in set.values() {
+        if other.has(&value) {
+            result.add(value);
+        }
+    }
+    Ok(Value::Set(result))
+}
+
+pub(crate) fn native_set_prototype_difference(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let set = this_set(this_value)?;
+    let other = other_set(argument_values)?;
+    let result = new_set_like(&set);
+    for value in set.values() {
+        if !other.has(&value) {
+            result.add(value);
+        }
+    }
+    Ok(Value::Set(result))
+}
+
+pub(crate) fn native_set_prototype_symmetric_difference(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let set = this_set(this_value)?;
+    let other = other_set(argument_values)?;
+    let result = new_set_like(&set);
+    for value in set.values() {
+        if !other.has(&value) {
+            result.add(value);
+        }
+    }
+    for value in other.values() {
+        if !set.has(&value) {
+            result.add(value);
+        }
+    }
+    Ok(Value::Set(result))
+}
+
+pub(crate) fn native_set_prototype_is_subset_of(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let set = this_set(this_value)?;
+    let other = other_set(argument_values)?;
+    Ok(Value::Boolean(
+        set.values().into_iter().all(|value| other.has(&value)),
+    ))
+}
+
+pub(crate) fn native_set_prototype_is_superset_of(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let set = this_set(this_value)?;
+    let other = other_set(argument_values)?;
+    Ok(Value::Boolean(
+        other.values().into_iter().all(|value| set.has(&value)),
+    ))
+}
+
+pub(crate) fn native_set_prototype_is_disjoint_from(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let set = this_set(this_value)?;
+    let other = other_set(argument_values)?;
+    Ok(Value::Boolean(
+        set.values().into_iter().all(|value| !other.has(&value)),
+    ))
 }
 
 pub(crate) fn native_set_prototype_for_each(
@@ -236,6 +377,20 @@ fn this_set(this_value: Value) -> Result<SetRef, RuntimeError> {
             message: "TypeError: incompatible Set receiver".to_owned(),
         }),
     }
+}
+
+fn other_set(argument_values: &[Value]) -> Result<SetRef, RuntimeError> {
+    match argument_values.first() {
+        Some(Value::Set(set)) => Ok(set.clone()),
+        _ => Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Set composition argument must be a Set".to_owned(),
+        }),
+    }
+}
+
+fn new_set_like(set: &SetRef) -> SetRef {
+    SetRef::new(set.object().prototype())
 }
 
 fn set_iterator(this_value: Value, kind: &str) -> Result<Value, RuntimeError> {
