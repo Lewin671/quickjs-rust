@@ -47,6 +47,21 @@ fn evaluates_promise_resolve_reject_shell() {
 }
 
 #[test]
+fn evaluates_promise_all_shell() {
+    assert_eval("typeof Promise.all;", Value::String("function".to_owned()));
+    assert_eval("Promise.all.length;", Value::Number(1.0));
+    assert_eval(
+        "Promise.propertyIsEnumerable('all');",
+        Value::Boolean(false),
+    );
+    assert_eval("Promise.all([]) instanceof Promise;", Value::Boolean(true));
+    assert_eval(
+        "Object.prototype.toString.call(Promise.all([]));",
+        Value::String("[object Promise]".to_owned()),
+    );
+}
+
+#[test]
 fn evaluates_promise_then_shell() {
     assert_eval(
         "typeof Promise.prototype.then;",
@@ -257,5 +272,45 @@ fn fulfills_non_callable_then_values_after_script() {
     assert_eq!(
         promise::promise_debug_state_result(&fulfilled),
         Some(("fulfilled".to_owned(), Value::Number(52.0)))
+    );
+}
+
+#[test]
+fn drains_promise_all_jobs_after_script() {
+    let empty = eval("Promise.all([]);").unwrap();
+    let Some((state, Value::Array(values))) = promise::promise_debug_state_result(&empty) else {
+        panic!("Promise.all([]) should fulfill with an array");
+    };
+    assert_eq!(state, "fulfilled");
+    assert_eq!(values.len(), 0);
+
+    let mixed = eval(
+        "Promise.all([Promise.resolve(1), 2, { then: function(resolve) { resolve(3); } }]).then(function(values) { return values.join(':'); });",
+    )
+    .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&mixed),
+        Some(("fulfilled".to_owned(), Value::String("1:2:3".to_owned())))
+    );
+
+    let first_settlement = eval(
+        "Promise.all([{ then: function(resolve, reject) { resolve(4); reject(5); } }]).then(function(values) { return values[0]; });",
+    )
+    .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&first_settlement),
+        Some(("fulfilled".to_owned(), Value::Number(4.0)))
+    );
+}
+
+#[test]
+fn drains_promise_all_rejections_after_script() {
+    let rejected = eval(
+        "Promise.all([Promise.resolve(1), Promise.reject(2)]).catch(function(reason) { return reason + 1; });",
+    )
+    .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&rejected),
+        Some(("fulfilled".to_owned(), Value::Number(3.0)))
     );
 }

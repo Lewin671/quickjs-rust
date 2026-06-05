@@ -16,6 +16,10 @@ pub(super) fn call_promise_native(
         NativeFunction::Promise => {
             promise::native_promise(function, this_value, argument_values, is_construct, env)?
         }
+        NativeFunction::PromiseAll => promise::native_promise_all(function, argument_values, env)?,
+        NativeFunction::PromiseAllResolveElement => {
+            promise::native_promise_all_resolve_element(function, argument_values, env)?
+        }
         NativeFunction::PromisePrototypeCatch => {
             promise::native_promise_catch(function, this_value, argument_values, env)?
         }

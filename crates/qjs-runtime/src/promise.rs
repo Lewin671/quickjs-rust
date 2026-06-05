@@ -5,14 +5,19 @@ use crate::{
     property_value,
 };
 
+mod all;
 mod jobs;
 
+pub(crate) use all::{native_promise_all, native_promise_all_resolve_element};
 pub(crate) use jobs::drain_promise_jobs;
 use jobs::{enqueue_promise_reaction_job, enqueue_promise_thenable_job};
 
 const PROMISE_FULFILL_REACTION: &str = "\0PromiseFulfillReaction";
 const PROMISE_FINALLY_HANDLER: &str = "\0PromiseFinallyHandler";
 const PROMISE_HANDLER: &str = "\0PromiseHandler";
+const PROMISE_ALL_INDEX: &str = "\0PromiseAllIndex";
+const PROMISE_ALL_REMAINING: &str = "\0PromiseAllRemaining";
+const PROMISE_ALL_VALUES: &str = "\0PromiseAllValues";
 const PROMISE_JOBS: &str = "\0PromiseJobs";
 const PROMISE_REACTIONS: &str = "\0PromiseReactions";
 const PROMISE_REACTION_ARGUMENT: &str = "\0PromiseReactionArgument";
@@ -73,6 +78,16 @@ pub(crate) fn install_promise(
         "prototype".to_owned(),
         Property::non_enumerable(Value::Object(promise_prototype.clone())),
     );
+    let mut promise_all = Function::new_native(Some("all"), 1, NativeFunction::PromiseAll, false);
+    promise_all.env.insert(
+        PROMISE_PROTOTYPE.to_owned(),
+        Value::Object(promise_prototype.clone()),
+    );
+    promise_function.properties.borrow_mut().insert(
+        "all".to_owned(),
+        Property::non_enumerable(Value::Function(promise_all)),
+    );
+
     let mut promise_resolve =
         Function::new_native(Some("resolve"), 1, NativeFunction::PromiseResolve, false);
     promise_resolve.env.insert(
