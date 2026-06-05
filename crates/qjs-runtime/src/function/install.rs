@@ -47,7 +47,7 @@ pub(crate) fn install_function(
     );
     function_constructor.properties.borrow_mut().insert(
         "prototype".to_owned(),
-        Property::non_enumerable(Value::Object(function_prototype)),
+        Property::data(Value::Object(function_prototype), false, false, false),
     );
 
     let function_value = Value::Function(function_constructor);

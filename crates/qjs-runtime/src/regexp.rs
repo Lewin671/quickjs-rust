@@ -43,7 +43,7 @@ pub(crate) fn install_regexp(
     );
     regexp_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
-        Property::non_enumerable(Value::Object(regexp_prototype)),
+        Property::data(Value::Object(regexp_prototype), false, false, false),
     );
 
     let regexp_value = Value::Function(regexp_function);

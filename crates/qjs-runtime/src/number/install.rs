@@ -42,7 +42,7 @@ pub(crate) fn install_number(
     );
     number_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
-        Property::non_enumerable(Value::Object(number_prototype)),
+        Property::data(Value::Object(number_prototype), false, false, false),
     );
     define_number_constant(&number_function, "EPSILON", f64::EPSILON);
     define_number_constant(

@@ -21,7 +21,7 @@ pub(crate) fn install_symbol(
     );
     symbol_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
-        Property::non_enumerable(Value::Object(symbol_prototype)),
+        Property::data(Value::Object(symbol_prototype), false, false, false),
     );
 
     let symbol_value = Value::Function(symbol_function);

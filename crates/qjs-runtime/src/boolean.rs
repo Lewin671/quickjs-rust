@@ -40,7 +40,7 @@ pub(super) fn install_boolean(
     );
     boolean_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
-        Property::non_enumerable(Value::Object(boolean_prototype)),
+        Property::data(Value::Object(boolean_prototype), false, false, false),
     );
     let boolean_value = Value::Function(boolean_function);
     env.insert("Boolean".to_owned(), boolean_value.clone());

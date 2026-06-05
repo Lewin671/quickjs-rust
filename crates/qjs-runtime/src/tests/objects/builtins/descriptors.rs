@@ -58,6 +58,12 @@ fn evaluates_object_descriptor_queries() {
     );
     assert_eq!(
         eval(
+            "let constructors = [Object, Function, Array, String, Boolean, Number, Date, RegExp, Error, EvalError, RangeError, ReferenceError, SyntaxError, TypeError, URIError]; constructors.every(function (ctor) { let d = Object.getOwnPropertyDescriptor(ctor, 'prototype'); return d.value === ctor.prototype && !d.writable && !d.enumerable && !d.configurable; });"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
             "let descriptors = Object.getOwnPropertyDescriptors('ab'); descriptors.length.value + ':' + descriptors[0].value + ':' + descriptors[0].writable + ':' + descriptors[0].configurable;"
         ),
         Ok(Value::String("2:a:false:false".to_owned()))
