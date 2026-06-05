@@ -83,42 +83,51 @@ if [ ! -x "$QJS_CLI_BIN" ]; then
 fi
 
 metadata_for() {
-  awk '/\/\*---/{inside=1; next} /---\*\//{exit} inside {print}' "$1"
-}
-
-metadata_value() {
-  local key="$1"
-  awk -v key="$key" '
-    $0 ~ "^[[:space:]]*" key ":" {
-      sub("^[[:space:]]*" key ":[[:space:]]*", "")
-      print
-      exit
+  awk '
+    /\/\*---/{inside=1; next}
+    /---\*\//{exit}
+    inside {
+      if (sub(/^[[:space:]]*flags:[[:space:]]*/, "", $0)) {
+        gsub(/^[[:space:]]*|[[:space:]]*$/, "", $0)
+        flags=$0
+        next
+      }
+      if (sub(/^[[:space:]]*includes:[[:space:]]*/, "", $0)) {
+        gsub(/^[[:space:]]*|[[:space:]]*$/, "", $0)
+        includes=$0
+        next
+      }
+      if (sub(/^[[:space:]]*features:[[:space:]]*/, "", $0)) {
+        gsub(/^[[:space:]]*|[[:space:]]*$/, "", $0)
+        features=$0
+        next
+      }
+      if ($0 ~ /^[[:space:]]*negative[[:space:]]*:/) {
+        negative=1
+      }
     }
-  '
-}
-
-metadata_has_key() {
-  local key="$1"
-  awk -v key="$key" '$0 ~ "^[[:space:]]*" key ":" { found=1 } END { exit found ? 0 : 1 }'
+    END {
+      print flags
+      print includes
+      print features
+      print (negative ? "1" : "")
+    }
+  ' "$1"
 }
 
 skip_reason() {
   local rel="$1"
-  local metadata="$2"
-  local flags
-  local includes
-  local features
+  local flags="$2"
+  local includes="$3"
+  local features="$4"
+  local has_negative="$5"
 
   case "$rel" in
     *_FIXTURE.js) echo "fixture"; return ;;
     test/intl402/*|test/staging/intl402/*) echo "intl402"; return ;;
   esac
 
-  flags="$(printf '%s\n' "$metadata" | metadata_value flags)"
-  includes="$(printf '%s\n' "$metadata" | metadata_value includes)"
-  features="$(printf '%s\n' "$metadata" | metadata_value features)"
-
-  if printf '%s\n' "$metadata" | metadata_has_key negative; then
+  if [ -n "$has_negative" ]; then
     echo "negative"
   elif [[ "$flags" == *module* ]]; then
     echo "module"
@@ -138,9 +147,7 @@ skip_reason() {
 make_case() {
   local source="$1"
   local output="$2"
-  local metadata="$3"
-  local flags
-  flags="$(printf '%s\n' "$metadata" | metadata_value flags)"
+  local flags="$3"
   {
     if [[ "$flags" == *onlyStrict* ]]; then
       printf '"use strict";\n'
@@ -155,14 +162,17 @@ make_case() {
 
 run_case() {
   local file="$1"
-  local metadata="$2"
+  local flags="$2"
   local temp_dir
   local temp
+  local output
+  local status
+  local first_line
   temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/qjs-test262-baseline-XXXXXX")"
   temp="$temp_dir/case.js"
-  make_case "$file" "$temp" "$metadata"
+  make_case "$file" "$temp" "$flags"
   set +e
-  output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$QJS_CLI_BIN" "$temp" 2>&1)"
+  output="$($RUN_WITH_TIMEOUT "$CASE_TIMEOUT_SECONDS" "$QJS_CLI_BIN" "$temp" 2>&1)"
   status=$?
   set -e
   rm -rf "$temp_dir"
@@ -172,7 +182,7 @@ run_case() {
     echo "timeout"
   else
     first_line="$(printf '%s\n' "$output" | sed -n '1p')"
-    echo "fail	$first_line"
+    echo "fail\t$first_line"
   fi
 }
 
@@ -199,8 +209,8 @@ while IFS= read -r file; do
   fi
 
   total=$((total + 1))
-  metadata="$(metadata_for "$file")"
-  reason="$(skip_reason "$rel" "$metadata")"
+  IFS=$'\n' read -r flags includes features has_negative < <(metadata_for "$file")
+  reason="$(skip_reason "$rel" "$flags" "$includes" "$features" "$has_negative")"
   if [ -n "$reason" ]; then
     skipped=$((skipped + 1))
     case "$reason" in
@@ -223,7 +233,7 @@ while IFS= read -r file; do
 
   run=$((run + 1))
   printf 'test262-baseline [%d]: %s\n' "$run" "$rel"
-  result="$(run_case "$file" "$metadata")"
+  result="$(run_case "$file" "$flags")"
   case "$result" in
     pass)
       pass=$((pass + 1))
