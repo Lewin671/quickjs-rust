@@ -167,6 +167,23 @@ impl Compiler {
         target: &AssignmentTarget,
         value_slot: usize,
     ) -> Result<(), RuntimeError> {
+        self.compile_store_value_with_mode(target, value_slot, false)
+    }
+
+    pub(super) fn compile_init_value(
+        &mut self,
+        target: &AssignmentTarget,
+        value_slot: usize,
+    ) -> Result<(), RuntimeError> {
+        self.compile_store_value_with_mode(target, value_slot, true)
+    }
+
+    fn compile_store_value_with_mode(
+        &mut self,
+        target: &AssignmentTarget,
+        value_slot: usize,
+        initializing: bool,
+    ) -> Result<(), RuntimeError> {
         match target {
             AssignmentTarget::Identifier { name, .. } => {
                 if self.dynamic_scope_depth == 0
@@ -174,7 +191,11 @@ impl Compiler {
                 {
                     self.emit(Op::LoadLocal(value_slot));
                     self.emit(Op::Dup);
-                    self.emit(Op::StoreLocal(slot));
+                    self.emit(if initializing {
+                        Op::InitLocal(slot)
+                    } else {
+                        Op::StoreLocal(slot)
+                    });
                 } else {
                     self.emit(Op::ResolveName(name.clone()));
                     self.emit(Op::LoadLocal(value_slot));
@@ -198,12 +219,12 @@ impl Compiler {
                 Ok(())
             }
             AssignmentTarget::Object { properties, .. } => {
-                self.compile_object_pattern_from_slot(properties, value_slot)?;
+                self.compile_object_pattern_from_slot(properties, value_slot, initializing)?;
                 self.emit(Op::LoadLocal(value_slot));
                 Ok(())
             }
             AssignmentTarget::Array { elements, .. } => {
-                self.compile_array_pattern_from_slot(elements, value_slot)?;
+                self.compile_array_pattern_from_slot(elements, value_slot, initializing)?;
                 self.emit(Op::LoadLocal(value_slot));
                 Ok(())
             }
@@ -214,6 +235,7 @@ impl Compiler {
         &mut self,
         elements: &[Option<ArrayAssignmentElement>],
         source_slot: usize,
+        initializing: bool,
     ) -> Result<(), RuntimeError> {
         let value_slot = self.temp_local("array_pattern_value");
         for (index, element) in elements.iter().enumerate() {
@@ -238,7 +260,7 @@ impl Compiler {
                 let after = self.code.len();
                 self.patch_jump(after_selection, after);
             }
-            self.compile_store_value(&element.target, value_slot)?;
+            self.compile_store_value_with_mode(&element.target, value_slot, initializing)?;
             self.emit(Op::Pop);
         }
         Ok(())
@@ -248,6 +270,7 @@ impl Compiler {
         &mut self,
         properties: &[ObjectAssignmentProperty],
         source_slot: usize,
+        initializing: bool,
     ) -> Result<(), RuntimeError> {
         let value_slot = self.temp_local("object_pattern_value");
         for property in properties {
@@ -261,7 +284,7 @@ impl Compiler {
             }
             self.emit(Op::GetProp);
             self.emit(Op::StoreLocal(value_slot));
-            self.compile_store_value(&property.target, value_slot)?;
+            self.compile_store_value_with_mode(&property.target, value_slot, initializing)?;
             self.emit(Op::Pop);
         }
         Ok(())

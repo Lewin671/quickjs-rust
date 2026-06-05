@@ -1,4 +1,4 @@
-use crate::{GLOBAL_THIS_BINDING, ObjectRef, RuntimeError, Value};
+use crate::{GLOBAL_THIS_BINDING, LOCAL_CAPTURE_PREFIX, ObjectRef, RuntimeError, Value};
 
 use super::vm::Vm;
 use super::vm_props::{delete_property, get_property, set_property};
@@ -60,6 +60,9 @@ impl Vm<'_> {
                 slot,
             });
             return Ok(value);
+        }
+        if self.is_uninitialized_captured_binding(name) {
+            return Err(reference_error(name));
         }
         if let Some(value) = self.globals.get(name).cloned() {
             self.name_references.push(NameReference::Global {
@@ -267,6 +270,9 @@ impl Vm<'_> {
         if let Some(slot) = self.bytecode.local_slot(name) {
             return self.store_local(slot, value);
         }
+        if self.is_uninitialized_captured_binding(name) {
+            return Err(reference_error(name));
+        }
         if let Some(object) = self.global_object_with_property(name) {
             let mut env = self.current_env();
             let updated = set_property(Value::Object(object), name.to_owned(), value, &mut env)?;
@@ -299,6 +305,13 @@ impl Vm<'_> {
         object.contains_property(name).then(|| object.clone())
     }
 
+    fn is_uninitialized_captured_binding(&self, name: &str) -> bool {
+        self.globals
+            .get(&format!("{LOCAL_CAPTURE_PREFIX}{name}"))
+            .is_some_and(|value| matches!(value, Value::Boolean(true)))
+            && !self.globals.contains_key(name)
+    }
+
     fn resolve_with_object(&self, name: &str) -> Option<Value> {
         self.with_stack
             .iter()
@@ -321,5 +334,12 @@ impl Vm<'_> {
             }
             _ => false,
         }
+    }
+}
+
+fn reference_error(name: &str) -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: format!("ReferenceError: undefined identifier `{name}`"),
     }
 }

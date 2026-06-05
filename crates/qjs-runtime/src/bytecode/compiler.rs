@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use qjs_ast::{AssignmentTarget, ForInLeft, ForInit, Script, Stmt, VarKind};
+use qjs_ast::{Script, Stmt, VarKind};
 
 use crate::{RuntimeError, STRICT_MODE_BINDING, Value, function::is_strict_function_body};
 
@@ -71,6 +71,7 @@ impl Compiler {
     fn compile(mut self, script: &Script) -> Result<Bytecode, RuntimeError> {
         self.strict = self.strict || is_strict_function_body(&script.body);
         self.collect_hoisted_locals(&script.body);
+        self.collect_lexical_locals(&script.body);
         self.compile_hoisted_function_decls(&script.body)?;
         if self.strict {
             let strict_slot = self.local_slot(STRICT_MODE_BINDING, true);
@@ -104,6 +105,7 @@ impl Compiler {
             self.local_slot(param, true);
         }
         self.collect_hoisted_locals(body);
+        self.collect_lexical_locals(body);
         self.compile_hoisted_function_decls(body)?;
         for stmt in body {
             self.compile_stmt(stmt)?;
@@ -113,139 +115,21 @@ impl Compiler {
         Ok(Bytecode::new(self.constants, self.locals, self.code))
     }
 
-    fn collect_hoisted_locals(&mut self, body: &[Stmt]) {
-        for stmt in body {
-            match stmt {
-                Stmt::Block { body, .. } => self.collect_hoisted_locals(body),
-                Stmt::If {
-                    consequent,
-                    alternate,
-                    ..
-                } => {
-                    self.collect_hoisted_locals(std::slice::from_ref(consequent));
-                    if let Some(alternate) = alternate {
-                        self.collect_hoisted_locals(std::slice::from_ref(alternate));
-                    }
-                }
-                Stmt::While { body, .. } | Stmt::With { body, .. } | Stmt::DoWhile { body, .. } => {
-                    self.collect_hoisted_locals(std::slice::from_ref(body));
-                }
-                Stmt::For { init, body, .. } => {
-                    if let Some(init) = init {
-                        match init {
-                            ForInit::VarDecl {
-                                declarations,
-                                kind: VarKind::Var,
-                                ..
-                            } => {
-                                for declaration in declarations {
-                                    self.local_slot(&declaration.name, true);
-                                }
-                            }
-                            ForInit::Binding {
-                                target,
-                                kind: VarKind::Var,
-                                ..
-                            } => {
-                                self.ensure_target_local_slots(target, true);
-                            }
-                            _ => {}
-                        }
-                    }
-                    self.collect_hoisted_locals(std::slice::from_ref(body));
-                }
-                Stmt::ForIn { left, body, .. } | Stmt::ForOf { left, body, .. } => {
-                    match left {
-                        ForInLeft::VarDecl {
-                            name,
-                            kind: VarKind::Var,
-                            ..
-                        } => {
-                            self.local_slot(name, true);
-                        }
-                        ForInLeft::Binding {
-                            kind: VarKind::Var,
-                            target,
-                            ..
-                        } => {
-                            self.collect_hoisted_target_locals(target);
-                        }
-                        _ => {}
-                    }
-                    self.collect_hoisted_locals(std::slice::from_ref(body));
-                }
-                Stmt::FunctionDecl { name, .. } => {
-                    self.local_slot(name, true);
-                }
-                Stmt::ClassDecl { name, .. } => {
-                    self.local_slot(name, true);
-                }
-                Stmt::Label { body, .. } => {
-                    self.collect_hoisted_locals(std::slice::from_ref(body));
-                }
-                Stmt::VarDecl {
-                    kind: VarKind::Var,
-                    declarations,
-                    ..
-                } => {
-                    for declaration in declarations {
-                        self.local_slot(&declaration.name, true);
-                    }
-                }
-                Stmt::Switch { cases, .. } => {
-                    for case in cases {
-                        self.collect_hoisted_locals(&case.consequent);
-                    }
-                }
-                Stmt::Try {
-                    block,
-                    handler,
-                    finalizer,
-                    ..
-                } => {
-                    self.collect_hoisted_locals(block);
-                    if let Some(handler) = handler {
-                        self.collect_hoisted_locals(&handler.body);
-                    }
-                    if let Some(finalizer) = finalizer {
-                        self.collect_hoisted_locals(finalizer);
-                    }
-                }
-                Stmt::Expr(_)
-                | Stmt::Return { .. }
-                | Stmt::Throw { .. }
-                | Stmt::Debugger { .. }
-                | Stmt::Break { .. }
-                | Stmt::Continue { .. }
-                | Stmt::VarDecl { .. }
-                | Stmt::Empty => {}
-            }
-        }
-    }
-
-    fn collect_hoisted_target_locals(&mut self, target: &AssignmentTarget) {
-        match target {
-            AssignmentTarget::Identifier { name, .. } => {
-                self.local_slot(name, true);
-            }
-            AssignmentTarget::Array { elements, .. } => {
-                for element in elements.iter().flatten() {
-                    self.collect_hoisted_target_locals(&element.target);
-                }
-            }
-            AssignmentTarget::Object { properties, .. } => {
-                for property in properties {
-                    self.collect_hoisted_target_locals(&property.target);
-                }
-            }
-            AssignmentTarget::Member { .. } => {}
-        }
-    }
-
     pub(super) fn local_slot(&mut self, name: &str, hoisted: bool) -> usize {
+        self.local_slot_with_mutability(name, hoisted, true)
+    }
+
+    pub(super) fn immutable_local_slot(&mut self, name: &str, hoisted: bool) -> usize {
+        self.local_slot_with_mutability(name, hoisted, false)
+    }
+
+    fn local_slot_with_mutability(&mut self, name: &str, hoisted: bool, mutable: bool) -> usize {
         if let Some(slot) = self.local_slots.get(name) {
             if hoisted {
                 self.locals[*slot].hoisted = true;
+            }
+            if !mutable {
+                self.locals[*slot].mutable = false;
             }
             return *slot;
         }
@@ -253,6 +137,7 @@ impl Compiler {
         self.locals.push(Local {
             name: name.to_owned(),
             hoisted,
+            mutable,
         });
         self.local_slots.insert(name.to_owned(), slot);
         slot
@@ -411,6 +296,7 @@ impl Compiler {
                 }
                 let restores = self.compile_block_shadow_saves(body);
                 self.block_restore_stack.push(restores.clone());
+                self.collect_lexical_locals(body);
                 self.compile_hoisted_function_decls(body)?;
                 for (index, stmt) in body.iter().enumerate() {
                     self.compile_stmt(stmt)?;
@@ -476,7 +362,11 @@ impl Compiler {
                 let is_hoisted = *kind == VarKind::Var;
                 for declaration in declarations {
                     self.validate_strict_binding_name(&declaration.name)?;
-                    let slot = self.local_slot(&declaration.name, is_hoisted);
+                    let slot = if *kind == VarKind::Const {
+                        self.immutable_local_slot(&declaration.name, is_hoisted)
+                    } else {
+                        self.local_slot(&declaration.name, is_hoisted)
+                    };
                     if let Some(init) = &declaration.init {
                         if self.dynamic_scope_depth > 0 {
                             self.emit(Op::ResolveName(declaration.name.clone()));
@@ -488,11 +378,11 @@ impl Compiler {
                                 strict: self.strict,
                             });
                         } else {
-                            self.emit(Op::StoreLocal(slot));
+                            self.emit(Op::InitLocal(slot));
                         }
                     } else if *kind != VarKind::Var || self.direct_eval {
                         self.emit_load_undefined();
-                        self.emit(Op::StoreLocal(slot));
+                        self.emit(Op::InitLocal(slot));
                     }
                 }
                 self.emit_load_undefined();
@@ -556,7 +446,7 @@ impl Compiler {
     pub(super) fn emit_restores(&mut self, restores: &[(usize, usize)]) {
         for (slot, saved_slot) in restores.iter().rev() {
             self.emit(Op::LoadLocal(*saved_slot));
-            self.emit(Op::StoreLocal(*slot));
+            self.emit(Op::InitLocal(*slot));
         }
     }
 

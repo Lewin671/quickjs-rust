@@ -12,6 +12,7 @@ pub(super) enum Op {
     LoadConst(usize),
     LoadLocal(usize),
     LoadLocalOrUndefined(usize),
+    InitLocal(usize),
     StoreLocal(usize),
     ClearLocal(usize),
     LoadName(String),
@@ -90,6 +91,7 @@ pub(super) struct CatchBinding {
 pub(super) struct Local {
     pub(super) name: String,
     pub(super) hoisted: bool,
+    pub(super) mutable: bool,
 }
 
 /// Compiled bytecode for a script.

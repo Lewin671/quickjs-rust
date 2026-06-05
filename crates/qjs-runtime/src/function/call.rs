@@ -258,11 +258,19 @@ fn insert_caller_binding(
         .get(&local_capture_marker(name))
         .is_some_and(|value| matches!(value, Value::Boolean(true)))
     {
-        if let (Some(captured), Some(caller)) = (local_env.get(name), env.get(name))
-            && captured == caller
-            && !caller_binding_names.iter().any(|existing| existing == name)
-        {
-            caller_binding_names.push(name.to_owned());
+        match (local_env.get(name), env.get(name)) {
+            (Some(captured), Some(caller)) if captured == caller => {
+                if !caller_binding_names.iter().any(|existing| existing == name) {
+                    caller_binding_names.push(name.to_owned());
+                }
+            }
+            (None, Some(caller)) => {
+                local_env.insert(name.to_owned(), caller.clone());
+                if !caller_binding_names.iter().any(|existing| existing == name) {
+                    caller_binding_names.push(name.to_owned());
+                }
+            }
+            _ => {}
         }
         return;
     }

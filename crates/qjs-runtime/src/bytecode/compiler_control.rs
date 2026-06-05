@@ -219,12 +219,16 @@ impl Compiler {
     ) -> Result<(), RuntimeError> {
         match left {
             ForInLeft::VarDecl { name, kind, .. } => {
-                let slot = self.local_slot(name, *kind == VarKind::Var);
+                let slot = if *kind == VarKind::Const {
+                    self.immutable_local_slot(name, false)
+                } else {
+                    self.local_slot(name, *kind == VarKind::Var)
+                };
                 self.emit(Op::LoadLocal(key_slot));
-                self.emit(Op::StoreLocal(slot));
+                self.emit(Op::InitLocal(slot));
             }
             ForInLeft::Binding { target, .. } => {
-                self.compile_store_value(target, key_slot)?;
+                self.compile_init_value(target, key_slot)?;
                 self.emit(Op::Pop);
             }
             ForInLeft::Target(AssignmentTarget::Identifier { name, .. }) => {

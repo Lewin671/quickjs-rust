@@ -72,7 +72,7 @@ impl Compiler {
             let bindings = self.prepare_catch_bindings(param);
             let thrown_slot = self.temp_local("catch_thrown");
             self.emit(Op::StoreLocal(thrown_slot));
-            self.compile_store_value(param, thrown_slot)?;
+            self.compile_init_value(param, thrown_slot)?;
             self.emit(Op::Pop);
             self.compile_try_body(&handler.body, result_slot)?;
             self.emit(Op::ExitTry);

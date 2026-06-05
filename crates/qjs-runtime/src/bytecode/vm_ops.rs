@@ -40,6 +40,30 @@ impl Vm<'_> {
     }
 
     pub(super) fn store_local(&mut self, slot: usize, value: Value) -> Result<(), RuntimeError> {
+        if self.locals.get(slot).is_some_and(Option::is_none) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: format!(
+                    "ReferenceError: undefined identifier `{}`",
+                    self.bytecode.locals[slot].name
+                ),
+            });
+        }
+        if self
+            .bytecode
+            .locals
+            .get(slot)
+            .is_some_and(|local| !local.mutable)
+        {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: assignment to constant variable".to_owned(),
+            });
+        }
+        self.init_local(slot, value)
+    }
+
+    pub(super) fn init_local(&mut self, slot: usize, value: Value) -> Result<(), RuntimeError> {
         let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
             thrown: None,
             message: "bytecode local index out of bounds".to_owned(),

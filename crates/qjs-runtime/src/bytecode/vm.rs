@@ -132,6 +132,10 @@ impl<'a> Vm<'a> {
                     let value = self.pop()?;
                     self.store_local(slot, value)?;
                 }
+                Op::InitLocal(slot) => {
+                    let value = self.pop()?;
+                    self.init_local(slot, value)?;
+                }
                 Op::ClearLocal(slot) => {
                     self.clear_local(slot)?;
                 }
@@ -312,6 +316,11 @@ impl<'a> Vm<'a> {
                     Value::Boolean(true),
                 );
             }
+        } else if self.bytecode.local_slot(name).is_some() {
+            env.insert(
+                format!("{LOCAL_CAPTURE_PREFIX}{name}"),
+                Value::Boolean(true),
+            );
         } else if let Some(value) = self.globals.get(name) {
             env.insert(name.to_owned(), value.clone());
         }
@@ -532,6 +541,11 @@ impl<'a> Vm<'a> {
             if !binding_names.iter().any(|existing| existing == name) {
                 binding_names.push(name.to_owned());
             }
+        } else if self.bytecode.local_slot(name).is_some() {
+            env.insert(
+                format!("{LOCAL_CAPTURE_PREFIX}{name}"),
+                Value::Boolean(true),
+            );
         } else if let Some(value) = self.globals.get(name) {
             env.insert(name.to_owned(), value.clone());
         }

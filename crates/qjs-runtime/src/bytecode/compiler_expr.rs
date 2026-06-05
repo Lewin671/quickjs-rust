@@ -194,7 +194,11 @@ impl Compiler {
                 let is_hoisted = *kind == VarKind::Var;
                 for declaration in declarations {
                     self.validate_strict_binding_name(&declaration.name)?;
-                    let slot = self.local_slot(&declaration.name, is_hoisted);
+                    let slot = if *kind == VarKind::Const {
+                        self.immutable_local_slot(&declaration.name, is_hoisted)
+                    } else {
+                        self.local_slot(&declaration.name, is_hoisted)
+                    };
                     if let Some(init) = &declaration.init {
                         if self.dynamic_scope_depth > 0 {
                             self.emit(Op::ResolveName(declaration.name.clone()));
@@ -206,11 +210,11 @@ impl Compiler {
                                 strict: self.strict,
                             });
                         } else {
-                            self.emit(Op::StoreLocal(slot));
+                            self.emit(Op::InitLocal(slot));
                         }
                     } else if *kind != VarKind::Var || self.direct_eval {
                         self.emit_load_undefined();
-                        self.emit(Op::StoreLocal(slot));
+                        self.emit(Op::InitLocal(slot));
                     }
                 }
                 self.emit_load_undefined();
@@ -223,7 +227,7 @@ impl Compiler {
                 let value_slot = self.temp_local("for_init_binding");
                 self.compile_expr(init)?;
                 self.emit(Op::StoreLocal(value_slot));
-                self.compile_store_value(target, value_slot)?;
+                self.compile_init_value(target, value_slot)?;
                 self.emit(Op::Pop);
                 self.emit_load_undefined();
                 Ok(())
