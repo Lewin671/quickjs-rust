@@ -42,6 +42,7 @@ pub(super) fn call_object_native(
         NativeFunction::ObjectFromEntries => {
             object::native_object_from_entries(argument_values, env)?
         }
+        NativeFunction::ObjectGroupBy => object::native_object_group_by(argument_values, env)?,
         NativeFunction::ObjectFreeze => object::native_object_freeze(argument_values)?,
         NativeFunction::ObjectHasOwn => object::native_object_has_own(argument_values)?,
         NativeFunction::ObjectIs => object::native_object_is(argument_values)?,

@@ -21,6 +21,7 @@ pub(crate) fn install_map(
     let map_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
     map_prototype.set_to_string_tag("Map");
     let map_function = Function::new_native(Some("Map"), 0, NativeFunction::Map, true);
+    define_map_function(&map_function, "groupBy", 2, NativeFunction::MapGroupBy);
     map_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(map_function.clone()),
@@ -118,6 +119,37 @@ pub(crate) fn native_map(
             map.set(key, value);
         }
     }
+    Ok(Value::Map(map))
+}
+
+pub(crate) fn native_map_group_by(
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let items = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let callback = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
+    if !matches!(callback, Value::Function(_)) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Map.groupBy callback must be callable".to_owned(),
+        });
+    }
+
+    let map = MapRef::new(map_prototype(env));
+    for (index, value) in array_like_values_with_env(items, "Map.groupBy", env)?
+        .into_iter()
+        .enumerate()
+    {
+        let key = crate::call_function(
+            callback.clone(),
+            Value::Undefined,
+            vec![value.clone(), Value::Number(index as f64)],
+            env,
+            false,
+        )?;
+        append_map_group(&map, key, value);
+    }
+
     Ok(Value::Map(map))
 }
 
@@ -401,6 +433,32 @@ fn canonical_map_key_value(key: Value) -> Value {
     } else {
         key
     }
+}
+
+fn append_map_group(map: &MapRef, key: Value, value: Value) {
+    match map.get(&key) {
+        Some(Value::Array(group)) => group.set(group.len(), value),
+        _ => map.set(key, Value::Array(ArrayRef::new(vec![value]))),
+    }
+}
+
+fn map_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+    match env.get("Map") {
+        Some(Value::Function(function)) => crate::function_prototype(function),
+        _ => None,
+    }
+}
+
+fn define_map_function(function: &Function, key: &str, length: usize, native: NativeFunction) {
+    function.properties.borrow_mut().insert(
+        key.to_owned(),
+        Property::non_enumerable(Value::Function(Function::new_native(
+            Some(key),
+            length,
+            native,
+            false,
+        ))),
+    );
 }
 
 fn define_map_prototype_function(

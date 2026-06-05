@@ -3,6 +3,7 @@ mod definition_and_creation;
 mod descriptors;
 mod enumeration;
 mod from_entries;
+mod group_by;
 mod identity;
 mod integrity;
 mod prototype_chain;

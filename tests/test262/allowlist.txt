@@ -407,6 +407,7 @@ cases/object-get-own-property-descriptors-primitive-number.js
 cases/object-get-own-property-descriptors-primitive-string.js
 cases/object-get-own-property-descriptors-tamper-with-global-object.js
 cases/object-get-own-property-descriptors-tamper-with-object-get-own-property-descriptor.js
+cases/object-map-group-by-basic.js
 cases/object-has-own-basic.js
 cases/object-has-own-inherited-negative.js
 cases/object-has-own-length.js

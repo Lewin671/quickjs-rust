@@ -14,6 +14,7 @@ pub(super) fn call_map_native(
 ) -> NativeCallResult {
     let value = match native {
         NativeFunction::Map => map::native_map(function, argument_values, is_construct, env)?,
+        NativeFunction::MapGroupBy => map::native_map_group_by(argument_values, env)?,
         NativeFunction::MapPrototypeClear => map::native_map_prototype_clear(this_value)?,
         NativeFunction::MapPrototypeDelete => {
             map::native_map_prototype_delete(this_value, argument_values)?

@@ -45,6 +45,31 @@ fn evaluates_map_iterable_constructor_arguments() {
 }
 
 #[test]
+fn evaluates_map_group_by_arrays() {
+    assert_eq!(eval("Map.groupBy.length;"), Ok(Value::Number(2.0)));
+    assert_eq!(
+        eval(
+            "let groups = Map.groupBy([1, 2, 3, 4], function(value) { return value % 2; }); groups instanceof Map && groups.get(1).join('|') + ':' + groups.get(0).join('|');"
+        ),
+        Ok(Value::String("1|3:2|4".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let seen = ''; let groups = Map.groupBy({ 0: 'a', 1: 'b', length: 2 }, function(value, index) { seen = seen + value + index; return index; }); groups.size + ':' + groups.get(0)[0] + ':' + groups.get(1)[0] + ':' + seen;"
+        ),
+        Ok(Value::String("2:a:b:a0b1".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let key = {}; let groups = Map.groupBy(['x', 'y'], function(value) { return value === 'x' ? key : {}; }); groups.get(key)[0] + ':' + groups.size;"
+        ),
+        Ok(Value::String("x:2".to_owned()))
+    );
+    assert!(eval("Map.groupBy([1], 1);").is_err());
+    assert!(eval("Map.groupBy(undefined, function(value) { return value; });").is_err());
+}
+
+#[test]
 fn evaluates_map_basic_methods() {
     assert_eq!(
         eval("let map = new Map(); map.size;"),
