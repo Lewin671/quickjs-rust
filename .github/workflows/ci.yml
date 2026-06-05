@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           submodules: false
@@ -22,6 +22,16 @@ jobs:
 
       - name: Bootstrap
         run: ./scripts/bootstrap.sh
+
+      - name: QuickJS-NG cache key
+        id: quickjs-ng
+        run: echo "sha=$(git -C third_party/quickjs-ng rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore QuickJS-NG build
+        uses: actions/cache@v5
+        with:
+          path: third_party/quickjs-ng/build
+          key: quickjs-ng-${{ runner.os }}-${{ steps.quickjs-ng.outputs.sha }}
 
       - name: Check
         run: ./scripts/check.sh
