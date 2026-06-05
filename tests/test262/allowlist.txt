@@ -714,6 +714,7 @@ cases/string-object-length-basic.js
 cases/string-object-index-properties.js
 cases/string-from-char-code-basic.js
 cases/string-from-char-code-length.js
+cases/string-from-char-code-surrogates.js
 cases/string-from-code-point-basic.js
 cases/string-from-code-point-length.js
 cases/string-raw-basic.js

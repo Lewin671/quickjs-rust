@@ -5,7 +5,7 @@ use crate::{
     to_js_string, to_js_string_with_env, to_length_with_env, to_number, to_uint16,
 };
 
-use super::STRING_DATA_PROPERTY;
+use super::{STRING_DATA_PROPERTY, string_from_code_unit};
 
 pub(crate) fn native_string(
     function: &Function,
@@ -35,10 +35,7 @@ pub(crate) fn native_string_from_char_code(
     let mut result = String::new();
     for value in argument_values.iter().cloned() {
         let code_unit = to_uint16(value)?;
-        match char::from_u32(u32::from(code_unit)) {
-            Some(character) => result.push(character),
-            None => result.push(char::REPLACEMENT_CHARACTER),
-        }
+        result.push_str(&string_from_code_unit(code_unit));
     }
     Ok(Value::String(result))
 }
