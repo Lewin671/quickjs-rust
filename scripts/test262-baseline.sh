@@ -67,6 +67,21 @@ if [ ! -x "$RUN_WITH_TIMEOUT" ]; then
   exit 1
 fi
 
+echo "building qjs-cli for baseline"
+"$CARGO_BIN" build -q -p qjs-cli
+
+
+target_dir="$($CARGO_BIN metadata --format-version=1 --no-deps | sed -n 's/.*\"target_directory\":\"\([^\"]*\)\".*/\1/p' | head -n 1)"
+if [ -z "$target_dir" ]; then
+  target_dir="$ROOT_DIR/target"
+fi
+
+QJS_CLI_BIN="$target_dir/debug/qjs"
+if [ ! -x "$QJS_CLI_BIN" ]; then
+  echo "error: built qjs-cli binary is missing or not executable: $QJS_CLI_BIN" >&2
+  exit 1
+fi
+
 metadata_for() {
   awk '/\/\*---/{inside=1; next} /---\*\//{exit} inside {print}' "$1"
 }
@@ -147,7 +162,7 @@ run_case() {
   temp="$temp_dir/case.js"
   make_case "$file" "$temp" "$metadata"
   set +e
-  output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$CARGO_BIN" run -q -p qjs-cli -- "$temp" 2>&1)"
+  output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$QJS_CLI_BIN" "$temp" 2>&1)"
   status=$?
   set -e
   rm -rf "$temp_dir"
