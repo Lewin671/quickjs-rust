@@ -28,6 +28,14 @@ fn evaluates_string_search_builtins() {
         eval("String.prototype.lastIndexOf.length;"),
         Ok(Value::Number(1.0))
     );
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(String.prototype, 'search'); d.value === String.prototype.search && !d.enumerable && d.writable && d.configurable;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(eval("'abc'.search(/b/);"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("'abc'.search(/z/);"), Ok(Value::Number(-1.0)));
     assert_eq!(eval("'canal'.lastIndexOf('a');"), Ok(Value::Number(3.0)));
     assert_eq!(eval("'canal'.lastIndexOf('a', 2);"), Ok(Value::Number(1.0)));
     assert_eq!(eval("'canal'.lastIndexOf('x');"), Ok(Value::Number(-1.0)));

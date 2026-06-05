@@ -126,6 +126,33 @@ pub(crate) fn native_string_prototype_match(
     call_function(exec, regexp, vec![Value::String(input)], env, false)
 }
 
+pub(crate) fn native_string_prototype_search(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let input = this_string_value(this_value, env)?;
+    let regexp = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
+        value @ Value::Object(_) => value,
+        value => {
+            let constructor = env.get("RegExp").cloned().ok_or_else(|| RuntimeError {
+                thrown: None,
+                message: "RegExp constructor is not available".to_owned(),
+            })?;
+            call_function(constructor, Value::Undefined, vec![value], env, false)?
+        }
+    };
+    let exec = property_value(regexp.clone(), "exec", env)?;
+    match call_function(exec, regexp, vec![Value::String(input)], env, false)? {
+        Value::Null => Ok(Value::Number(-1.0)),
+        Value::Array(result) => Ok(result
+            .get(0)
+            .and_then(|_| result.property("index"))
+            .map_or(Value::Number(-1.0), |property| property.value)),
+        _ => Ok(Value::Number(-1.0)),
+    }
+}
+
 pub(crate) fn native_string_prototype_starts_with(
     this_value: Value,
     argument_values: &[Value],

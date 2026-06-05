@@ -25,6 +25,12 @@ fn evaluates_regexp_constructor_identity() {
         eval("/test/.toString();"),
         Ok(Value::String("/test/".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(RegExp.prototype, 'test'); d.value === RegExp.prototype.test && !d.enumerable && d.writable && d.configurable;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]
@@ -41,6 +47,14 @@ fn evaluates_regexp_exec_literal_match() {
     assert_eq!(
         eval("/test/.exec('a test value').input;"),
         Ok(Value::String("a test value".to_owned()))
+    );
+    assert_eq!(
+        eval("/test/.test('a test value');"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("/missing/.test('a test value');"),
+        Ok(Value::Boolean(false))
     );
 }
 

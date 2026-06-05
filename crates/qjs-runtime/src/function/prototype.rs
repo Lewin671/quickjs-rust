@@ -117,6 +117,21 @@ pub(crate) fn native_function_prototype_bind(
     Ok(Value::Function(bound))
 }
 
+pub(crate) fn native_function_prototype_to_string(
+    this_value: Value,
+) -> Result<Value, RuntimeError> {
+    let Value::Function(function) = this_value else {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "Function.prototype.toString target is not callable".to_owned(),
+        });
+    };
+    let name = function.name.as_deref().unwrap_or("");
+    Ok(Value::String(format!(
+        "function {name}() {{ [native code] }}"
+    )))
+}
+
 pub(crate) fn function_call_this(
     this_arg: Option<Value>,
     env: &HashMap<String, Value>,

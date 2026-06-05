@@ -41,6 +41,15 @@ pub(crate) fn install_regexp(
             false,
         )),
     );
+    regexp_prototype.define_non_enumerable(
+        "test".to_owned(),
+        Value::Function(Function::new_native(
+            Some("test"),
+            1,
+            NativeFunction::RegExpPrototypeTest,
+            false,
+        )),
+    );
     regexp_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
         Property::data(Value::Object(regexp_prototype), false, false, false),
@@ -110,6 +119,17 @@ pub(crate) fn native_regexp_prototype_exec(
     result.set_property("index".to_owned(), Value::Number(index as f64));
     result.set_property("input".to_owned(), Value::String(input));
     Ok(Value::Array(result))
+}
+
+pub(crate) fn native_regexp_prototype_test(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    Ok(Value::Boolean(!matches!(
+        native_regexp_prototype_exec(this_value, argument_values, env)?,
+        Value::Null
+    )))
 }
 
 pub(crate) fn native_regexp_prototype_to_string(this_value: Value) -> Result<Value, RuntimeError> {

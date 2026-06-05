@@ -45,6 +45,15 @@ pub(crate) fn install_function(
             false,
         )),
     );
+    function_prototype.define_non_enumerable(
+        "toString".to_owned(),
+        Value::Function(Function::new_native(
+            Some("toString"),
+            0,
+            NativeFunction::FunctionPrototypeToString,
+            false,
+        )),
+    );
     function_constructor.properties.borrow_mut().insert(
         "prototype".to_owned(),
         Property::data(Value::Object(function_prototype), false, false, false),
