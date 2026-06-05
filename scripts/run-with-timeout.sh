@@ -20,6 +20,11 @@ case "$timeout_seconds" in
     ;;
 esac
 
+if command -v timeout >/dev/null 2>&1; then
+  timeout "$timeout_seconds" "$@"
+  exit $?
+fi
+
 perl -MPOSIX=':sys_wait_h' -e '
   my $timeout = shift @ARGV;
   my @command = @ARGV;
