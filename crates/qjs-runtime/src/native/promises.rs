@@ -35,6 +35,9 @@ pub(super) fn call_promise_native(
         NativeFunction::PromisePrototypeThen => {
             promise::native_promise_then(function, this_value, argument_values, env)?
         }
+        NativeFunction::PromiseRace => {
+            promise::native_promise_race(function, argument_values, env)?
+        }
         NativeFunction::PromiseReject => {
             promise::native_promise_reject(function, argument_values, env)?
         }

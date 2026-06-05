@@ -7,10 +7,12 @@ use crate::{
 
 mod all;
 mod jobs;
+mod race;
 
 pub(crate) use all::{native_promise_all, native_promise_all_resolve_element};
 pub(crate) use jobs::drain_promise_jobs;
 use jobs::{enqueue_promise_reaction_job, enqueue_promise_thenable_job};
+pub(crate) use race::native_promise_race;
 
 const PROMISE_FULFILL_REACTION: &str = "\0PromiseFulfillReaction";
 const PROMISE_FINALLY_HANDLER: &str = "\0PromiseFinallyHandler";
@@ -86,6 +88,17 @@ pub(crate) fn install_promise(
     promise_function.properties.borrow_mut().insert(
         "all".to_owned(),
         Property::non_enumerable(Value::Function(promise_all)),
+    );
+
+    let mut promise_race =
+        Function::new_native(Some("race"), 1, NativeFunction::PromiseRace, false);
+    promise_race.env.insert(
+        PROMISE_PROTOTYPE.to_owned(),
+        Value::Object(promise_prototype.clone()),
+    );
+    promise_function.properties.borrow_mut().insert(
+        "race".to_owned(),
+        Property::non_enumerable(Value::Function(promise_race)),
     );
 
     let mut promise_resolve =
