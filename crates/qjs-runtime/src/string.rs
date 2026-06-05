@@ -20,12 +20,13 @@ pub(super) use prototype::{
     native_string_prototype_includes, native_string_prototype_index_of,
     native_string_prototype_last_index_of, native_string_prototype_locale_compare,
     native_string_prototype_match, native_string_prototype_normalize, native_string_prototype_pad,
-    native_string_prototype_repeat, native_string_prototype_search, native_string_prototype_slice,
-    native_string_prototype_split, native_string_prototype_starts_with,
-    native_string_prototype_substr, native_string_prototype_substring,
-    native_string_prototype_to_lower_case, native_string_prototype_to_string,
-    native_string_prototype_to_upper_case, native_string_prototype_trim,
-    native_string_prototype_trim_end, native_string_prototype_trim_start,
+    native_string_prototype_repeat, native_string_prototype_replace,
+    native_string_prototype_search, native_string_prototype_slice, native_string_prototype_split,
+    native_string_prototype_starts_with, native_string_prototype_substr,
+    native_string_prototype_substring, native_string_prototype_to_lower_case,
+    native_string_prototype_to_string, native_string_prototype_to_upper_case,
+    native_string_prototype_trim, native_string_prototype_trim_end,
+    native_string_prototype_trim_start,
 };
 
 pub(crate) const STRING_DATA_PROPERTY: &str = "\0StringData";

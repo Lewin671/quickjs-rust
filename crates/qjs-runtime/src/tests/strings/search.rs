@@ -34,6 +34,20 @@ fn evaluates_string_search_builtins() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(String.prototype, 'replace'); d.value === String.prototype.replace && !d.enumerable && d.writable && d.configurable;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("'abcabc'.replace('b', 'x');"),
+        Ok(Value::String("axcabc".to_owned()))
+    );
+    assert_eq!(
+        eval("'abcabc'.replace(/b/, '$&x');"),
+        Ok(Value::String("abxcabc".to_owned()))
+    );
     assert_eq!(eval("'abc'.search(/b/);"), Ok(Value::Number(1.0)));
     assert_eq!(eval("'abc'.search(/z/);"), Ok(Value::Number(-1.0)));
     assert_eq!(eval("'canal'.lastIndexOf('a');"), Ok(Value::Number(3.0)));

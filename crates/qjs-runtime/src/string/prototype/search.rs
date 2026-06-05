@@ -126,6 +126,96 @@ pub(crate) fn native_string_prototype_match(
     call_function(exec, regexp, vec![Value::String(input)], env, false)
 }
 
+pub(crate) fn native_string_prototype_replace(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let input = this_string_value(this_value, env)?;
+    let replacement = to_js_string_with_env(
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
+    let search_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+
+    let Some((start, matched)) = replacement_match(&input, search_value, env)? else {
+        return Ok(Value::String(input));
+    };
+    let end = start + matched.chars().count();
+    let prefix = input.chars().take(start).collect::<String>();
+    let suffix = input.chars().skip(end).collect::<String>();
+    let replacement = replacement_text(&replacement, &matched, &prefix, &suffix);
+    Ok(Value::String(format!("{prefix}{replacement}{suffix}")))
+}
+
+fn replacement_match(
+    input: &str,
+    search_value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Option<(usize, String)>, RuntimeError> {
+    if matches!(search_value, Value::Object(_)) {
+        let exec = property_value(search_value.clone(), "exec", env)?;
+        match call_function(
+            exec,
+            search_value,
+            vec![Value::String(input.to_owned())],
+            env,
+            false,
+        )? {
+            Value::Null => Ok(None),
+            Value::Array(result) => {
+                let matched = match result.get(0) {
+                    Some(value) => to_js_string_with_env(value, env)?,
+                    None => String::new(),
+                };
+                let index = match result.property("index").map(|property| property.value) {
+                    Some(Value::Number(index)) if index >= 0.0 => index as usize,
+                    _ => 0,
+                };
+                Ok(Some((index, matched)))
+            }
+            _ => Ok(None),
+        }
+    } else {
+        let search = to_js_string_with_env(search_value, env)?;
+        Ok(input.find(&search).map(|byte_index| {
+            let index = input[..byte_index].chars().count();
+            (index, search)
+        }))
+    }
+}
+
+fn replacement_text(replacement: &str, matched: &str, prefix: &str, suffix: &str) -> String {
+    let mut output = String::new();
+    let mut chars = replacement.chars().peekable();
+    while let Some(character) = chars.next() {
+        if character != '$' {
+            output.push(character);
+            continue;
+        }
+        match chars.peek().copied() {
+            Some('$') => {
+                chars.next();
+                output.push('$');
+            }
+            Some('&') => {
+                chars.next();
+                output.push_str(matched);
+            }
+            Some('`') => {
+                chars.next();
+                output.push_str(prefix);
+            }
+            Some('\'') => {
+                chars.next();
+                output.push_str(suffix);
+            }
+            _ => output.push('$'),
+        }
+    }
+    output
+}
+
 pub(crate) fn native_string_prototype_search(
     this_value: Value,
     argument_values: &[Value],
