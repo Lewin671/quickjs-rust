@@ -28,6 +28,14 @@ fn evaluates_number_builtins() {
         Ok(Value::Number(1.0))
     );
     assert_eq!(
+        eval("Number.prototype.toExponential.length;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval("Number.prototype.toPrecision.length;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
         eval("Number.prototype.valueOf.length;"),
         Ok(Value::Number(0.0))
     );
@@ -77,6 +85,62 @@ fn evaluates_number_builtins() {
         Ok(Value::String("1e+21".to_owned()))
     );
     assert_eq!(eval("NaN.toFixed(2);"), Ok(Value::String("NaN".to_owned())));
+    assert_eq!(
+        eval("(12.345).toExponential();"),
+        Ok(Value::String("1.2345e+1".to_owned()))
+    );
+    assert_eq!(
+        eval("(12.345).toExponential(2);"),
+        Ok(Value::String("1.23e+1".to_owned()))
+    );
+    assert_eq!(
+        eval("(1).toExponential(0);"),
+        Ok(Value::String("1e+0".to_owned()))
+    );
+    assert_eq!(
+        eval("Number.prototype.toExponential.call(-0, 2);"),
+        Ok(Value::String("0.00e+0".to_owned()))
+    );
+    assert_eq!(
+        eval("(new Number(7)).toExponential(1);"),
+        Ok(Value::String("7.0e+0".to_owned()))
+    );
+    assert_eq!(
+        eval("NaN.toExponential(101);"),
+        Ok(Value::String("NaN".to_owned()))
+    );
+    assert_eq!(
+        eval("Infinity.toExponential(101);"),
+        Ok(Value::String("Infinity".to_owned()))
+    );
+    assert_eq!(
+        eval("(123.456).toPrecision();"),
+        Ok(Value::String("123.456".to_owned()))
+    );
+    assert_eq!(
+        eval("(123.456).toPrecision(5);"),
+        Ok(Value::String("123.46".to_owned()))
+    );
+    assert_eq!(
+        eval("(123.456).toPrecision(2);"),
+        Ok(Value::String("1.2e+2".to_owned()))
+    );
+    assert_eq!(
+        eval("(0.0001234).toPrecision(5);"),
+        Ok(Value::String("0.00012340".to_owned()))
+    );
+    assert_eq!(
+        eval("(1e-7).toPrecision(2);"),
+        Ok(Value::String("1.0e-7".to_owned()))
+    );
+    assert_eq!(
+        eval("(new Number(7)).toPrecision(3);"),
+        Ok(Value::String("7.00".to_owned()))
+    );
+    assert_eq!(
+        eval("NaN.toPrecision(101);"),
+        Ok(Value::String("NaN".to_owned()))
+    );
     assert_eq!(eval("(new Number(7)).valueOf();"), Ok(Value::Number(7.0)));
     assert_eq!(
         eval("let n = new Number(7); n.tag = Object.prototype.toString; n.tag();"),
@@ -84,9 +148,23 @@ fn evaluates_number_builtins() {
     );
     assert!(eval("let o = Object.create(Number.prototype); o.valueOf();").is_err());
     assert!(eval("let o = Object.create(Number.prototype); o.toFixed();").is_err());
+    assert!(eval("let o = Object.create(Number.prototype); o.toExponential();").is_err());
+    assert!(eval("let o = Object.create(Number.prototype); o.toPrecision();").is_err());
     assert_eq!(
         eval(
             "let caught = false; try { (3).toFixed(101); } catch (error) { caught = error instanceof RangeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { (3).toExponential(101); } catch (error) { caught = error instanceof RangeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { (3).toPrecision(0); } catch (error) { caught = error instanceof RangeError; } caught;"
         ),
         Ok(Value::Boolean(true))
     );

@@ -20,11 +20,29 @@ pub(crate) fn install_number(
         Value::Function(number_function.clone()),
     );
     number_prototype.define_non_enumerable(
+        "toExponential".to_owned(),
+        Value::Function(Function::new_native(
+            Some("toExponential"),
+            1,
+            NativeFunction::NumberPrototypeToExponential,
+            false,
+        )),
+    );
+    number_prototype.define_non_enumerable(
         "toFixed".to_owned(),
         Value::Function(Function::new_native(
             Some("toFixed"),
             1,
             NativeFunction::NumberPrototypeToFixed,
+            false,
+        )),
+    );
+    number_prototype.define_non_enumerable(
+        "toPrecision".to_owned(),
+        Value::Function(Function::new_native(
+            Some("toPrecision"),
+            1,
+            NativeFunction::NumberPrototypeToPrecision,
             false,
         )),
     );

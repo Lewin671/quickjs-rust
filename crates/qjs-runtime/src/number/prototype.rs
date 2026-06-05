@@ -51,6 +51,43 @@ pub(crate) fn native_number_prototype_to_fixed(
     )))
 }
 
+pub(crate) fn native_number_prototype_to_exponential(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let number = this_number_value(this_value)?;
+    if !number.is_finite() {
+        return Ok(Value::String(number_to_js_string(number)));
+    }
+    let fraction_digits = optional_digits(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        0,
+        100,
+        "RangeError: toExponential fraction digits must be between 0 and 100",
+    )?;
+    Ok(Value::String(number_to_exponential_string(
+        number,
+        fraction_digits,
+    )))
+}
+
+pub(crate) fn native_number_prototype_to_precision(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let number = this_number_value(this_value)?;
+    if !number.is_finite() {
+        return Ok(Value::String(number_to_js_string(number)));
+    }
+    let precision = optional_digits(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        1,
+        100,
+        "RangeError: toPrecision precision must be between 1 and 100",
+    )?;
+    Ok(Value::String(number_to_precision_string(number, precision)))
+}
+
 pub(crate) fn native_number_prototype_value_of(this_value: Value) -> Result<Value, RuntimeError> {
     Ok(Value::Number(this_number_value(this_value)?))
 }
@@ -90,15 +127,35 @@ fn number_to_string_radix(value: Value) -> Result<u32, RuntimeError> {
 }
 
 fn fraction_digits(value: Value) -> Result<usize, RuntimeError> {
+    match optional_digits(
+        value,
+        0,
+        100,
+        "RangeError: toFixed fraction digits must be between 0 and 100",
+    )? {
+        Some(digits) => Ok(digits),
+        None => Ok(0),
+    }
+}
+
+fn optional_digits(
+    value: Value,
+    min: usize,
+    max: usize,
+    range_message: &str,
+) -> Result<Option<usize>, RuntimeError> {
+    if matches!(value, Value::Undefined) {
+        return Ok(None);
+    }
     let digits = to_number(value)?;
     let digits = if digits.is_nan() { 0.0 } else { digits.trunc() };
-    if !(0.0..=100.0).contains(&digits) {
+    if digits < min as f64 || digits > max as f64 {
         return Err(RuntimeError {
             thrown: None,
-            message: "RangeError: toFixed fraction digits must be between 0 and 100".to_owned(),
+            message: range_message.to_owned(),
         });
     }
-    Ok(digits as usize)
+    Ok(Some(digits as usize))
 }
 
 fn number_to_fixed_string(number: f64, fraction_digits: usize) -> String {
@@ -107,6 +164,86 @@ fn number_to_fixed_string(number: f64, fraction_digits: usize) -> String {
     }
     let number = if number == 0.0 { 0.0 } else { number };
     format!("{number:.fraction_digits$}")
+}
+
+fn number_to_exponential_string(number: f64, fraction_digits: Option<usize>) -> String {
+    if !number.is_finite() {
+        return number_to_js_string(number);
+    }
+    let number = if number == 0.0 { 0.0 } else { number };
+    let formatted = match fraction_digits {
+        Some(fraction_digits) => format!("{number:.fraction_digits$e}"),
+        None => format!("{number:e}"),
+    };
+    normalize_exponential_string(&formatted)
+}
+
+fn number_to_precision_string(number: f64, precision: Option<usize>) -> String {
+    if !number.is_finite() || precision.is_none() {
+        return number_to_js_string(number);
+    }
+    let precision = precision.expect("precision checked above");
+    let number = if number == 0.0 { 0.0 } else { number };
+    let formatted = format!(
+        "{number:.fraction_digits$e}",
+        fraction_digits = precision - 1
+    );
+    let (sign, digits, exponent) = exponential_parts(&formatted);
+    if exponent < -6 || exponent >= precision as i32 {
+        return normalize_exponential_string(&formatted);
+    }
+
+    let decimal_position = exponent + 1;
+    if decimal_position <= 0 {
+        return format!(
+            "{sign}0.{}{}",
+            "0".repeat((-decimal_position) as usize),
+            digits
+        );
+    }
+    let decimal_position = decimal_position as usize;
+    if decimal_position >= digits.len() {
+        return format!(
+            "{sign}{}{}",
+            digits,
+            "0".repeat(decimal_position - digits.len())
+        );
+    }
+    format!(
+        "{sign}{}.{}",
+        &digits[..decimal_position],
+        &digits[decimal_position..]
+    )
+}
+
+fn normalize_exponential_string(value: &str) -> String {
+    let Some((mantissa, exponent)) = value.split_once('e') else {
+        return value.to_owned();
+    };
+    let exponent = normalize_exponent(exponent);
+    format!("{mantissa}e{exponent}")
+}
+
+fn exponential_parts(value: &str) -> (&str, String, i32) {
+    let Some((mantissa, exponent)) = value.split_once('e') else {
+        return ("", value.to_owned(), 0);
+    };
+    let (sign, mantissa) = mantissa
+        .strip_prefix('-')
+        .map_or(("", mantissa), |mantissa| ("-", mantissa));
+    let digits = mantissa.replace('.', "");
+    let exponent = exponent.parse::<i32>().unwrap_or(0);
+    (sign, digits, exponent)
+}
+
+fn normalize_exponent(exponent: &str) -> String {
+    if let Some(unsigned) = exponent.strip_prefix('-') {
+        let trimmed = unsigned.trim_start_matches('0');
+        format!("-{}", if trimmed.is_empty() { "0" } else { trimmed })
+    } else {
+        let trimmed = exponent.trim_start_matches('0');
+        format!("+{}", if trimmed.is_empty() { "0" } else { trimmed })
+    }
 }
 
 fn number_to_radix_string(number: f64, radix: u32) -> Result<String, RuntimeError> {

@@ -264,6 +264,7 @@ cases/number-min-value.js
 cases/number-is-finite-basic.js
 cases/number-is-finite-length.js
 cases/number-prototype-constructor.js
+cases/number-prototype-to-exponential-basic.js
 cases/number-prototype-to-string-basic.js
 cases/number-prototype-to-string-length.js
 cases/number-prototype-value-of-basic.js
@@ -276,6 +277,7 @@ cases/number-is-safe-integer-basic.js
 cases/number-is-safe-integer-length.js
 cases/number-parse-int-float-basic.js
 cases/number-prototype-to-fixed-basic.js
+cases/number-prototype-to-precision-basic.js
 cases/numeric-literal-binary.js
 cases/numeric-literal-exponent-decimal.js
 cases/numeric-literal-exponent-integer.js
