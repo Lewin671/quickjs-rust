@@ -7,6 +7,10 @@ on:
       - main
       - 'agent/**'
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -14,11 +18,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           submodules: false
 
       - name: Install Rust toolchain
         run: rustup show
+
+      - name: Restore Rust build cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/git/db
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/index
+            target
+          key: rust-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          restore-keys: |
+            rust-${{ runner.os }}-
+
+      - name: Check
+        run: ./scripts/check.sh
 
       - name: Init submodules
         run: git submodule update --init --depth 1 third_party/quickjs-ng third_party/test262
@@ -32,9 +51,6 @@ jobs:
         with:
           path: third_party/quickjs-ng/build
           key: quickjs-ng-${{ runner.os }}-${{ steps.quickjs-ng.outputs.sha }}
-
-      - name: Check
-        run: ./scripts/check.sh
 
       - name: QuickJS comparison smoke tests
         run: ./scripts/compare-qjs.sh
