@@ -4,6 +4,7 @@ mod padding;
 mod search;
 mod sequence;
 mod trim;
+mod well_formed;
 
 pub(crate) use case::{
     native_string_prototype_to_lower_case, native_string_prototype_to_upper_case,
@@ -27,4 +28,7 @@ pub(crate) use sequence::{
 pub(crate) use trim::{
     native_string_prototype_to_string, native_string_prototype_trim,
     native_string_prototype_trim_end, native_string_prototype_trim_start,
+};
+pub(crate) use well_formed::{
+    native_string_prototype_is_well_formed, native_string_prototype_to_well_formed,
 };

@@ -57,6 +57,33 @@ fn evaluates_string_case_and_trim_builtins() {
         Ok(Value::String("ABC123".to_owned()))
     );
     assert_eq!(
+        eval("String.prototype.isWellFormed.length;"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval("String.prototype.toWellFormed.length;"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(eval("'abc'.isWellFormed();"), Ok(Value::Boolean(true)));
+    assert_eq!(
+        eval("'\\uD83D\\uDCA9'.isWellFormed();"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(eval("'\\uD83D'.isWellFormed();"), Ok(Value::Boolean(false)));
+    assert_eq!(eval("'\\uDCA9'.isWellFormed();"), Ok(Value::Boolean(false)));
+    assert_eq!(
+        eval("'\\uD83D'.toWellFormed().charCodeAt(0);"),
+        Ok(Value::Number(0xFFFD as f64))
+    );
+    assert_eq!(
+        eval("'\\uDCA9A'.toWellFormed().charCodeAt(0);"),
+        Ok(Value::Number(0xFFFD as f64))
+    );
+    assert_eq!(
+        eval("'\\uD83D\\uDCA9'.toWellFormed() === '\\uD83D\\uDCA9';"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("'  abc  '.trim();"),
         Ok(Value::String("abc".to_owned()))
     );

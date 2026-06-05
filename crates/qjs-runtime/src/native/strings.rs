@@ -47,6 +47,9 @@ pub(super) fn call_string_native(
         NativeFunction::StringPrototypeIndexOf => {
             string::native_string_prototype_index_of(this_value, argument_values, env)?
         }
+        NativeFunction::StringPrototypeIsWellFormed => {
+            string::native_string_prototype_is_well_formed(this_value, env)?
+        }
         NativeFunction::StringPrototypeLastIndexOf => {
             string::native_string_prototype_last_index_of(this_value, argument_values, env)?
         }
@@ -103,6 +106,9 @@ pub(super) fn call_string_native(
         }
         NativeFunction::StringPrototypeToUpperCase => {
             string::native_string_prototype_to_upper_case(this_value, env)?
+        }
+        NativeFunction::StringPrototypeToWellFormed => {
+            string::native_string_prototype_to_well_formed(this_value, env)?
         }
         _ => return Ok(None),
     };

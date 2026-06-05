@@ -11,6 +11,11 @@ const STRING_PROTOTYPE_METHODS: &[(&str, usize, NativeFunction)] = &[
     ("endsWith", 1, NativeFunction::StringPrototypeEndsWith),
     ("includes", 1, NativeFunction::StringPrototypeIncludes),
     ("indexOf", 1, NativeFunction::StringPrototypeIndexOf),
+    (
+        "isWellFormed",
+        0,
+        NativeFunction::StringPrototypeIsWellFormed,
+    ),
     ("lastIndexOf", 1, NativeFunction::StringPrototypeLastIndexOf),
     ("match", 1, NativeFunction::StringPrototypeMatch),
     ("padEnd", 1, NativeFunction::StringPrototypePadEnd),
@@ -23,6 +28,11 @@ const STRING_PROTOTYPE_METHODS: &[(&str, usize, NativeFunction)] = &[
     ("substr", 2, NativeFunction::StringPrototypeSubstr),
     ("substring", 2, NativeFunction::StringPrototypeSubstring),
     ("toLowerCase", 0, NativeFunction::StringPrototypeToLowerCase),
+    (
+        "toWellFormed",
+        0,
+        NativeFunction::StringPrototypeToWellFormed,
+    ),
     ("trim", 0, NativeFunction::StringPrototypeTrim),
     ("trimEnd", 0, NativeFunction::StringPrototypeTrimEnd),
     ("trimStart", 0, NativeFunction::StringPrototypeTrimStart),
