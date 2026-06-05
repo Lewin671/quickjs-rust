@@ -97,6 +97,18 @@ fn evaluates_with_statements() {
         eval("var scope = { x: 1 }; with (scope) { delete x; } scope.x;"),
         Ok(Value::Undefined)
     );
+    assert_eq!(
+        eval(
+            "let caught = false; try { eval(\"'use strict'; with ({}) {}\"); } catch (error) { caught = error instanceof SyntaxError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { Function(\"'use strict'; with ({}) {}\"); } catch (error) { caught = error instanceof SyntaxError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]

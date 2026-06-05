@@ -71,6 +71,12 @@ impl Compiler {
     }
 
     pub(super) fn compile_with(&mut self, object: &Expr, body: &Stmt) -> Result<(), RuntimeError> {
+        if self.strict {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "SyntaxError: with statements are not allowed in strict mode".to_owned(),
+            });
+        }
         self.compile_expr(object)?;
         self.emit(Op::EnterWith);
         self.dynamic_scope_depth += 1;
