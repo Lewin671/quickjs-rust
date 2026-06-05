@@ -29,7 +29,8 @@ maintenance, or agent workflow isolation.
   curated local cases. Use `--engine both --all --shard I/N --summary-json PATH
   --no-fail` for asynchronous full-corpus comparisons against QuickJS-NG. In
   that mode quickjs-rust records unsupported metadata as skipped while
-  QuickJS-NG runs the same upstream files through its Test262 runner.
+  QuickJS-NG applies its own Test262 runner configuration to the same upstream
+  files.
 - `test262-baseline-metadata.awk`: Internal helper used by
   `test262-baseline.sh` to read Test262 metadata blocks.
 

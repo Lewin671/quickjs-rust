@@ -25,8 +25,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          repository: ${{ github.event.workflow_run.head_repository.full_name }}
-          ref: ${{ github.event.workflow_run.head_sha }}
+          repository: ${{ github.event.workflow_run.head_repository.full_name || github.repository }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 1
           submodules: false
 
@@ -89,6 +89,8 @@ jobs:
           merge-multiple: true
 
       - name: Write coverage summary
+        env:
+          COVERAGE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           python3 - <<'PY'
           import glob
@@ -111,6 +113,7 @@ jobs:
               "qjsng_pass": 0,
               "qjsng_fail": 0,
               "qjsng_timeout": 0,
+              "qjsng_skipped": 0,
               "both_pass": 0,
               "qjsng_pass_rust_nonpass": 0,
               "rust_pass_qjsng_nonpass": 0,
@@ -143,6 +146,7 @@ jobs:
               totals["qjsng_pass"] += summary["quickjs_ng"]["pass"]
               totals["qjsng_fail"] += summary["quickjs_ng"]["fail"]
               totals["qjsng_timeout"] += summary["quickjs_ng"]["timeout"]
+              totals["qjsng_skipped"] += summary["quickjs_ng"]["skipped"]
               totals["both_pass"] += summary["comparison"]["both_pass"]
               totals["qjsng_pass_rust_nonpass"] += summary["comparison"]["quickjs_ng_pass_rust_nonpass"]
               totals["rust_pass_qjsng_nonpass"] += summary["comparison"]["rust_pass_quickjs_ng_nonpass"]
@@ -156,7 +160,7 @@ jobs:
           lines = [
               "# Test262 Coverage",
               "",
-              f"Aggregated `{len(paths)}` shard summaries for `${{ github.event.workflow_run.head_sha }}`.",
+              f"Aggregated `{len(paths)}` shard summaries for `{os.environ['COVERAGE_SHA']}`.",
               "",
               "## Full Corpus Coverage",
               "",
@@ -172,7 +176,7 @@ jobs:
               "| Engine | Pass | Fail | Timeout | Skipped | Pass Rate |",
               "| --- | ---: | ---: | ---: | ---: | ---: |",
               f"| quickjs-rust | {totals['rust_pass']} | {totals['rust_fail']} | {totals['rust_timeout']} | {totals['rust_skipped']} | {pct(totals['rust_pass'], totals['run'])} |",
-              f"| QuickJS-NG | {totals['qjsng_pass']} | {totals['qjsng_fail']} | {totals['qjsng_timeout']} | 0 | {pct(totals['qjsng_pass'], totals['run'])} |",
+              f"| QuickJS-NG | {totals['qjsng_pass']} | {totals['qjsng_fail']} | {totals['qjsng_timeout']} | {totals['qjsng_skipped']} | {pct(totals['qjsng_pass'], totals['run'])} |",
               "",
               "## Coverage Difference",
               "",

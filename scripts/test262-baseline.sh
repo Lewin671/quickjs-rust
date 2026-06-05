@@ -168,12 +168,44 @@ if needs_quickjs_ng; then
     make -C "$QUICKJS_NG_DIR" all
   fi
   QUICKJS_NG_CONF="$(mktemp "${TMPDIR:-/tmp}/qjsng-test262-conf-XXXXXX")"
-  trap 'rm -f "$QUICKJS_NG_CONF"' EXIT
+  QUICKJS_NG_FEATURES="$(mktemp "${TMPDIR:-/tmp}/qjsng-test262-features-XXXXXX")"
+  QUICKJS_NG_SKIP_FEATURES="$(mktemp "${TMPDIR:-/tmp}/qjsng-test262-skip-features-XXXXXX")"
+  QUICKJS_NG_EXCLUDES="$(mktemp "${TMPDIR:-/tmp}/qjsng-test262-excludes-XXXXXX")"
+  trap 'rm -f "$QUICKJS_NG_CONF" "$QUICKJS_NG_FEATURES" "$QUICKJS_NG_SKIP_FEATURES" "$QUICKJS_NG_EXCLUDES"' EXIT
   sed \
     -e "s#^harnessdir=.*#harnessdir=$TEST262_DIR/harness#" \
     -e "s#^testdir=.*#testdir=$TEST262_DIR/test#" \
     -e 's#^errorfile=.*#errorfile=#' \
     "$QUICKJS_NG_DIR/test262.conf" >"$QUICKJS_NG_CONF"
+  awk \
+    -v features="$QUICKJS_NG_FEATURES" \
+    -v skip_features="$QUICKJS_NG_SKIP_FEATURES" \
+    -v excludes="$QUICKJS_NG_EXCLUDES" '
+      /^\[features\]/{section="features"; next}
+      /^\[exclude\]/{section="exclude"; next}
+      /^\[/{section=""; next}
+      section=="features" {
+        line=$0
+        sub(/#.*/, "", line)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+        if (line == "") next
+        split(line, parts, "=")
+        feature=parts[1]
+        gsub(/[[:space:]]+$/, "", feature)
+        print feature > features
+        if (line ~ /=skip([[:space:]]*$|[[:space:]]+#)/) {
+          print feature > skip_features
+        }
+      }
+      section=="exclude" {
+        line=$0
+        sub(/#.*/, "", line)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+        if (line == "") next
+        sub(/^test262\//, "", line)
+        print line > excludes
+      }
+    ' "$QUICKJS_NG_CONF"
 fi
 
 metadata_for() {
@@ -207,6 +239,53 @@ skip_reason() {
   else
     echo ""
   fi
+}
+
+feature_entries() {
+  printf '%s\n' "$1" \
+    | tr -d '[]' \
+    | tr ',' '\n' \
+    | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' \
+    | sed '/^$/d'
+}
+
+prefix_list_contains() {
+  local rel="$1"
+  local list="$2"
+  local prefix
+  while IFS= read -r prefix; do
+    [ -n "$prefix" ] || continue
+    if [[ "$rel" == "$prefix"* ]]; then
+      return 0
+    fi
+  done <"$list"
+  return 1
+}
+
+quickjs_ng_skip_reason() {
+  local rel="$1"
+  local features="$2"
+  local feature
+
+  case "$rel" in
+    *_FIXTURE.js) echo "fixture"; return ;;
+  esac
+  if prefix_list_contains "$rel" "$QUICKJS_NG_EXCLUDES"; then
+    echo "exclude"
+    return
+  fi
+
+  while IFS= read -r feature; do
+    if grep -Fx -- "$feature" "$QUICKJS_NG_SKIP_FEATURES" >/dev/null 2>&1; then
+      echo "feature"
+      return
+    fi
+    if ! grep -Fx -- "$feature" "$QUICKJS_NG_FEATURES" >/dev/null 2>&1; then
+      echo "unknown-feature"
+      return
+    fi
+  done < <(feature_entries "$features")
+  echo ""
 }
 
 make_case() {
@@ -275,6 +354,7 @@ run_case() {
   local flags="$2"
   local rel="$3"
   local rust_skip_reason="$4"
+  local qjsng_skip_reason="$5"
   local temp_dir
   local temp
   local rust_result="not-run"
@@ -294,8 +374,13 @@ run_case() {
     fi
   fi
   if [ "$ENGINE" = "quickjs-ng" ] || [ "$ENGINE" = "both" ]; then
-    qjsng_result="$(run_engine_case quickjs-ng "$temp" "$file")"
-    count_engine_result qjsng "$qjsng_result"
+    if [ -n "$qjsng_skip_reason" ]; then
+      qjsng_result="skipped"
+      qjsng_skipped=$((qjsng_skipped + 1))
+    else
+      qjsng_result="$(run_engine_case quickjs-ng "$temp" "$file")"
+      count_engine_result qjsng "$qjsng_result"
+    fi
   fi
   rm -rf "$temp_dir"
 
@@ -305,6 +390,7 @@ run_case() {
     fail*) printf 'quickjs-rust fail: %s\t%s\n' "$rel" "${rust_result#fail	}" >&2 ;;
   esac
   case "$qjsng_result" in
+    skipped) echo "quickjs-ng skipped: $rel ($qjsng_skip_reason)" >&2 ;;
     timeout) echo "quickjs-ng timeout: $rel" >&2 ;;
     fail*) printf 'quickjs-ng fail: %s\t%s\n' "$rel" "${qjsng_result#fail	}" >&2 ;;
   esac
@@ -352,7 +438,7 @@ write_summary_json() {
     "raw": $skip_raw
   },
   "quickjs_rust": {"pass": $rust_pass, "fail": $rust_fail, "timeout": $rust_timeout, "skipped": $rust_skipped},
-  "quickjs_ng": {"pass": $qjsng_pass, "fail": $qjsng_fail, "timeout": $qjsng_timeout},
+  "quickjs_ng": {"pass": $qjsng_pass, "fail": $qjsng_fail, "timeout": $qjsng_timeout, "skipped": $qjsng_skipped},
   "comparison": {
     "both_pass": $both_pass,
     "quickjs_ng_pass_rust_nonpass": $qjsng_pass_rust_nonpass,
@@ -383,6 +469,7 @@ rust_skipped=0
 qjsng_pass=0
 qjsng_fail=0
 qjsng_timeout=0
+qjsng_skipped=0
 both_pass=0
 qjsng_pass_rust_nonpass=0
 rust_pass_qjsng_nonpass=0
@@ -407,6 +494,10 @@ while IFS= read -r file; do
     read -r has_negative
   } < <(metadata_for "$file")
   reason="$(skip_reason "$rel" "$flags" "$includes" "$features" "$has_negative")"
+  qjsng_reason=""
+  if needs_quickjs_ng; then
+    qjsng_reason="$(quickjs_ng_skip_reason "$rel" "$features")"
+  fi
   if [ -n "$reason" ]; then
     skipped=$((skipped + 1))
     case "$reason" in
@@ -432,7 +523,7 @@ while IFS= read -r file; do
 
   run=$((run + 1))
   printf 'test262-baseline [%d]: %s\n' "$run" "$rel"
-  run_case "$file" "$flags" "$rel" "$reason"
+  run_case "$file" "$flags" "$rel" "$reason" "$qjsng_reason"
 done < <(find "$TEST262_DIR/test" -type f -name '*.js' | sort)
 
 echo "summary:"
@@ -460,6 +551,7 @@ if needs_quickjs_ng; then
   echo "  quickjs-ng.pass: $qjsng_pass"
   echo "  quickjs-ng.fail: $qjsng_fail"
   echo "  quickjs-ng.timeout: $qjsng_timeout"
+  echo "  quickjs-ng.skipped: $qjsng_skipped"
 fi
 if [ "$ENGINE" = "both" ]; then
   echo "  both.pass: $both_pass"
