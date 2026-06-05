@@ -39,8 +39,32 @@ jobs:
       - name: Check
         run: ./scripts/check.sh
 
+  compare-qjs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          submodules: false
+
+      - name: Install Rust toolchain
+        run: rustup show
+
+      - name: Restore Rust build cache
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            ~/.cargo/git/db
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/index
+            target
+          key: rust-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          restore-keys: |
+            rust-${{ runner.os }}-
+
       - name: Init submodules
-        run: git submodule update --init --depth 1 third_party/quickjs-ng third_party/test262
+        run: git submodule update --init --depth 1 third_party/quickjs-ng
 
       - name: QuickJS-NG cache key
         id: quickjs-ng
@@ -54,6 +78,33 @@ jobs:
 
       - name: QuickJS comparison smoke tests
         run: ./scripts/compare-qjs.sh
+
+  test262-subset:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          submodules: false
+
+      - name: Install Rust toolchain
+        run: rustup show
+
+      - name: Restore Rust build cache
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            ~/.cargo/git/db
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/index
+            target
+          key: rust-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          restore-keys: |
+            rust-${{ runner.os }}-
+
+      - name: Init submodules
+        run: git submodule update --init --depth 1 third_party/test262
 
       - name: Test262 subset metadata
         run: ./scripts/test262-subset.sh
