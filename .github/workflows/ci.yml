@@ -20,8 +20,8 @@ jobs:
       - name: Install Rust toolchain
         run: rustup show
 
-      - name: Bootstrap
-        run: ./scripts/bootstrap.sh
+      - name: Init submodules
+        run: git submodule update --init third_party/quickjs-ng third_party/test262
 
       - name: QuickJS-NG cache key
         id: quickjs-ng
