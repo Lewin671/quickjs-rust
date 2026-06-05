@@ -13,21 +13,20 @@ pub(crate) fn native_object_assign(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    match target {
-        Value::Object(_) | Value::Function(_) => {}
+    let target = match target {
+        Value::Array(_) | Value::Object(_) | Value::Function(_) => target,
         Value::Null | Value::Undefined => {
             return Err(RuntimeError {
                 thrown: None,
                 message: "Object.assign target must not be null or undefined".to_owned(),
             });
         }
-        Value::Array(_) | Value::String(_) | Value::Number(_) | Value::Boolean(_) => {
-            return Err(RuntimeError {
+        Value::String(_) | Value::Number(_) | Value::Boolean(_) => boxed_primitive(target, env)
+            .ok_or_else(|| RuntimeError {
                 thrown: None,
-                message: "Object.assign primitive targets are not implemented".to_owned(),
-            });
-        }
-    }
+                message: "Object.assign target could not be boxed".to_owned(),
+            })?,
+    };
 
     for source in argument_values.iter().skip(1).cloned() {
         if matches!(source, Value::Null | Value::Undefined) {
@@ -159,6 +158,23 @@ fn set_property(target: Value, key: String, value: Value) -> Result<(), RuntimeE
         Value::Function(function) => {
             function.set_property(key, value);
             Ok(())
+        }
+        Value::Array(elements) => {
+            if key == "length" {
+                if elements.try_set_len(crate::to_length(value)?) {
+                    return Ok(());
+                }
+            } else if let Ok(index) = key.parse::<usize>() {
+                if elements.try_set(index, value) {
+                    return Ok(());
+                }
+            } else if elements.try_set_property(key, value) {
+                return Ok(());
+            }
+            Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: cannot assign to property".to_owned(),
+            })
         }
         _ => Err(RuntimeError {
             thrown: None,
