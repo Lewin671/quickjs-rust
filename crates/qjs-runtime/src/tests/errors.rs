@@ -7,6 +7,11 @@ fn evaluates_error_builtins() {
         Ok(Value::String("function".to_owned()))
     );
     assert_eq!(eval("Error.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("Error.isError.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(
+        eval("Error.isError.name;"),
+        Ok(Value::String("isError".to_owned()))
+    );
     assert_eq!(
         eval("Error.prototype.constructor === Error;"),
         Ok(Value::Boolean(true))
@@ -51,6 +56,18 @@ fn evaluates_error_builtins() {
         eval("Object.prototype.toString.call(new Error('boom'));"),
         Ok(Value::String("[object Error]".to_owned()))
     );
+    assert_eq!(
+        eval("Error.isError(new Error('boom'));"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("Error.isError(Error('boom'));"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(eval("Error.isError({});"), Ok(Value::Boolean(false)));
+    assert_eq!(eval("Error.isError(Error);"), Ok(Value::Boolean(false)));
+    assert_eq!(eval("Error.isError();"), Ok(Value::Boolean(false)));
+    assert_eq!(eval("Error.isError('boom');"), Ok(Value::Boolean(false)));
     assert!(
         eval("throw new Error('boom');")
             .expect_err("throwing an Error should fail evaluation")
@@ -112,6 +129,10 @@ fn evaluates_native_error_builtins() {
             )),
             Ok(Value::String("[object Error]".to_owned()))
         );
+        assert_eq!(
+            eval(&format!("Error.isError(new {name}('boom'));")),
+            Ok(Value::Boolean(true))
+        );
     }
 }
 
@@ -155,5 +176,9 @@ fn evaluates_aggregate_error_builtin() {
     assert_eq!(
         eval("Object.prototype.toString.call(new AggregateError([], 'boom'));"),
         Ok(Value::String("[object Error]".to_owned()))
+    );
+    assert_eq!(
+        eval("Error.isError(new AggregateError([], 'boom'));"),
+        Ok(Value::Boolean(true))
     );
 }

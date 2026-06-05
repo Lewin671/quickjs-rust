@@ -77,6 +77,7 @@ pub(crate) enum NativeFunction {
     DatePrototypeValueOf,
     DateUtc,
     Error,
+    ErrorIsError,
     ErrorPrototypeToString,
     AggregateError,
     DecodeUri,

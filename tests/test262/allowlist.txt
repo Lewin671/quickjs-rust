@@ -213,6 +213,7 @@ cases/date-utc-accessors-basic.js
 cases/decode-uri-basic.js
 cases/decode-uri-component-basic.js
 cases/error-constructor-basic.js
+cases/error-is-error-basic.js
 cases/error-message-property-basic.js
 cases/error-prototype-to-string-basic.js
 cases/aggregate-error-basic.js

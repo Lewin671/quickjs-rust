@@ -38,6 +38,13 @@ pub(crate) fn install_error(
             false,
         )),
     );
+    let is_error_function =
+        Function::new_native(Some("isError"), 1, NativeFunction::ErrorIsError, false);
+    define_function_name(&is_error_function, "isError");
+    error_function.properties.borrow_mut().insert(
+        "isError".to_owned(),
+        Property::non_enumerable(Value::Function(is_error_function)),
+    );
     error_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
         Property::non_enumerable(Value::Object(error_prototype)),
@@ -164,6 +171,13 @@ pub(crate) fn native_error_prototype_to_string(this_value: Value) -> Result<Valu
         (false, true) => name,
         (false, false) => format!("{name}: {message}"),
     }))
+}
+
+pub(crate) fn native_error_is_error(argument_values: &[Value]) -> Value {
+    Value::Boolean(matches!(
+        argument_values.first(),
+        Some(Value::Object(object)) if is_error_object(object)
+    ))
 }
 
 pub(crate) fn is_error_object(object: &ObjectRef) -> bool {
