@@ -187,6 +187,12 @@ fn evaluates_break_and_continue() {
         eval("let i = 0; woohoo: { while (true) { i++; if (i === 10) break woohoo; } i = 99; } i;"),
         Ok(Value::Number(10.0))
     );
+    assert_eq!(
+        eval(
+            "var count = 0; for (let x = 0; x < 10;) { x++; count++; { let x = 'hello'; continue; } } count;"
+        ),
+        Ok(Value::Number(10.0))
+    );
 }
 
 #[test]

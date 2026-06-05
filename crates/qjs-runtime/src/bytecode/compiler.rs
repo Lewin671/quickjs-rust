@@ -14,6 +14,7 @@ pub(super) struct Compiler {
     pub(super) code: Vec<Op>,
     loop_stack: Vec<LoopContext>,
     label_stack: Vec<String>,
+    block_restore_stack: Vec<Vec<(usize, usize)>>,
     next_temp: usize,
     pub(super) strict: bool,
     pub(super) dynamic_scope_depth: usize,
@@ -315,6 +316,7 @@ impl Compiler {
             self.emit(Op::LoadLocal(source));
             self.emit(Op::StoreLocal(target));
         }
+        self.emit_block_restores();
         let result_slot = self.loop_stack[index].result_slot;
         self.emit(Op::LoadLocal(result_slot));
         let jump = self.emit(Op::Jump(usize::MAX));
@@ -346,6 +348,7 @@ impl Compiler {
             self.emit(Op::LoadLocal(source));
             self.emit(Op::StoreLocal(target));
         }
+        self.emit_block_restores();
         let jump = self.emit(Op::Jump(usize::MAX));
         self.loop_stack[index].continues.push(jump);
         Ok(())
@@ -371,6 +374,8 @@ impl Compiler {
                     self.emit_load_undefined();
                     return Ok(());
                 }
+                let restores = self.compile_block_shadow_saves(body);
+                self.block_restore_stack.push(restores.clone());
                 self.compile_hoisted_function_decls(body)?;
                 for (index, stmt) in body.iter().enumerate() {
                     self.compile_stmt(stmt)?;
@@ -384,6 +389,8 @@ impl Compiler {
                         }
                     }
                 }
+                self.block_restore_stack.pop();
+                self.emit_restores(&restores);
                 Ok(())
             }
             Stmt::If {
@@ -466,6 +473,46 @@ impl Compiler {
                 Ok(())
             }
             Stmt::ClassDecl { name, methods, .. } => self.compile_class_decl(name, methods),
+        }
+    }
+
+    fn compile_block_shadow_saves(&mut self, body: &[Stmt]) -> Vec<(usize, usize)> {
+        let mut restores = Vec::new();
+        for stmt in body {
+            let Stmt::VarDecl {
+                kind, declarations, ..
+            } = stmt
+            else {
+                continue;
+            };
+            if *kind == VarKind::Var {
+                continue;
+            }
+            for declaration in declarations {
+                if let Some(slot) = self.local_slots.get(&declaration.name).copied()
+                    && !restores.iter().any(|(candidate, _)| *candidate == slot)
+                {
+                    let saved_slot = self.temp_local("block_shadow");
+                    self.emit(Op::LoadLocalOrUndefined(slot));
+                    self.emit(Op::StoreLocal(saved_slot));
+                    restores.push((slot, saved_slot));
+                }
+            }
+        }
+        restores
+    }
+
+    fn emit_block_restores(&mut self) {
+        let restores: Vec<_> = self.block_restore_stack.to_vec();
+        for scope in restores.iter().rev() {
+            self.emit_restores(scope);
+        }
+    }
+
+    fn emit_restores(&mut self, restores: &[(usize, usize)]) {
+        for (slot, saved_slot) in restores.iter().rev() {
+            self.emit(Op::LoadLocal(*saved_slot));
+            self.emit(Op::StoreLocal(*slot));
         }
     }
 
