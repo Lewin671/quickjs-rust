@@ -74,6 +74,18 @@ fn evaluates_global_eval_builtin() {
         eval("let value = 1; eval('value = value + 2;'); value;"),
         Ok(Value::Number(3.0))
     );
+    assert_eq!(
+        eval(
+            "let caught = false; try { eval('break label'); } catch (error) { caught = error instanceof SyntaxError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { while (true) { eval('continue label'); } } catch (error) { caught = error instanceof SyntaxError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]

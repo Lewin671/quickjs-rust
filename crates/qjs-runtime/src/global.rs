@@ -5,7 +5,7 @@ use qjs_parser::parse_script;
 use crate::{
     Function, NativeFunction, Property, RuntimeError, Value,
     bytecode::{compile_eval_script, eval_bytecode_with_env},
-    to_js_string_with_env, to_number,
+    call_function, to_js_string_with_env, to_number,
 };
 
 pub(super) fn install_globals(env: &mut HashMap<String, Value>, global_this: &Value) {
@@ -86,11 +86,9 @@ pub(super) fn native_global_eval(
     let Value::String(source) = value else {
         return Ok(value);
     };
-    let script = parse_script(&source).map_err(|error| RuntimeError {
-        thrown: None,
-        message: error.message,
-    })?;
-    let bytecode = compile_eval_script(&script)?;
+    let script = parse_script(&source).map_err(|error| eval_syntax_error(error.message, env))?;
+    let bytecode =
+        compile_eval_script(&script).map_err(|error| eval_syntax_error(error.message, env))?;
     let result = eval_bytecode_with_env(&bytecode, env.clone());
     for name in bytecode
         .local_names()
@@ -101,6 +99,21 @@ pub(super) fn native_global_eval(
         }
     }
     result.value
+}
+
+fn eval_syntax_error(message: String, env: &mut HashMap<String, Value>) -> RuntimeError {
+    let thrown = env.get("SyntaxError").cloned().and_then(|constructor| {
+        call_function(
+            constructor,
+            Value::Undefined,
+            vec![Value::String(message.clone())],
+            env,
+            false,
+        )
+        .ok()
+        .map(Box::new)
+    });
+    RuntimeError { thrown, message }
 }
 
 pub(super) fn native_encode_uri(
