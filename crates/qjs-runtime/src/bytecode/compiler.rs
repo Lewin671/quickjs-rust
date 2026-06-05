@@ -34,9 +34,13 @@ pub(super) fn compile_script(script: &Script) -> Result<Bytecode, RuntimeError> 
     Compiler::default().compile(script)
 }
 
-pub(super) fn compile_eval_script(script: &Script) -> Result<Bytecode, RuntimeError> {
+pub(super) fn compile_eval_script_with_strict(
+    script: &Script,
+    parent_strict: bool,
+) -> Result<Bytecode, RuntimeError> {
     Compiler {
         direct_eval: true,
+        strict: parent_strict,
         ..Compiler::default()
     }
     .compile(script)
@@ -63,7 +67,7 @@ pub(super) fn compile_function_body_with_strict(
 
 impl Compiler {
     fn compile(mut self, script: &Script) -> Result<Bytecode, RuntimeError> {
-        self.strict = is_strict_function_body(&script.body);
+        self.strict = self.strict || is_strict_function_body(&script.body);
         self.collect_hoisted_locals(&script.body);
         self.compile_hoisted_function_decls(&script.body)?;
         for stmt in &script.body {

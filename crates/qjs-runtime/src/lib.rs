@@ -48,6 +48,7 @@ use value::{ArrayRef, ObjectRef, Property};
 pub use bytecode::{Bytecode, compile_script, eval_bytecode, eval_bytecode_source};
 
 pub(crate) const GLOBAL_THIS_BINDING: &str = "\0global_this";
+pub(crate) const STRICT_MODE_BINDING: &str = "\0strict_mode";
 pub(crate) const RUNTIME_INTRINSIC_NAMES: &[&str] = &[
     GLOBAL_THIS_BINDING,
     "undefined",

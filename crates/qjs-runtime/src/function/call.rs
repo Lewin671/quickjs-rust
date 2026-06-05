@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use crate::{
     Bytecode, Function, GLOBAL_THIS_BINDING, ObjectRef, RUNTIME_INTRINSIC_NAMES, RuntimeError,
-    Value, bytecode::eval_function_bytecode_with_stack, native::call_native_function,
-    object_prototype,
+    STRICT_MODE_BINDING, Value, bytecode::eval_function_bytecode_with_stack,
+    native::call_native_function, object_prototype,
 };
 
 use super::function_call_this;
@@ -115,6 +115,10 @@ fn function_env(
     if let Some(global_this) = env.get(GLOBAL_THIS_BINDING).cloned() {
         local_env.insert(GLOBAL_THIS_BINDING.to_owned(), global_this);
     }
+    local_env.insert(
+        STRICT_MODE_BINDING.to_owned(),
+        Value::Boolean(function.is_strict),
+    );
     if let Some(name) = &function.name {
         local_env.insert(name.clone(), callee);
     }

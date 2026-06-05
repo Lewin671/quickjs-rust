@@ -86,6 +86,16 @@ fn evaluates_global_eval_builtin() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "'use strict'; let caught = false; (function() { try { eval('try {} catch (eval) {}'); } catch (error) { caught = error instanceof SyntaxError; } })(); caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("(function() { return eval('try { throw 1; } catch (eval) { eval; }'); })();"),
+        Ok(Value::Number(1.0))
+    );
 }
 
 #[test]

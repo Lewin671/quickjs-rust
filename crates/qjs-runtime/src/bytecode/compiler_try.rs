@@ -68,6 +68,12 @@ impl Compiler {
     ) -> Result<(usize, Option<CatchScope>), RuntimeError> {
         let target = self.code.len();
         if let Some(param) = &handler.param {
+            if self.strict && matches!(param.as_str(), "eval" | "arguments") {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: format!("invalid strict catch binding `{param}`"),
+                });
+            }
             let existing_slot = self.local_slots.get(param).copied();
             let saved_slot = existing_slot.map(|slot| {
                 let saved_slot = self.temp_local("catch_saved");

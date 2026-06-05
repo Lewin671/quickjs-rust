@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use qjs_parser::parse_script;
 
 use crate::{
-    Function, NativeFunction, Property, RuntimeError, Value,
-    bytecode::{compile_eval_script, eval_bytecode_with_env},
+    Function, NativeFunction, Property, RuntimeError, STRICT_MODE_BINDING, Value,
+    bytecode::{compile_eval_script_with_strict, eval_bytecode_with_env},
     call_function, to_js_string_with_env, to_number,
 };
 
@@ -87,8 +87,9 @@ pub(super) fn native_global_eval(
         return Ok(value);
     };
     let script = parse_script(&source).map_err(|error| eval_syntax_error(error.message, env))?;
-    let bytecode =
-        compile_eval_script(&script).map_err(|error| eval_syntax_error(error.message, env))?;
+    let parent_strict = matches!(env.get(STRICT_MODE_BINDING), Some(Value::Boolean(true)));
+    let bytecode = compile_eval_script_with_strict(&script, parent_strict)
+        .map_err(|error| eval_syntax_error(error.message, env))?;
     let result = eval_bytecode_with_env(&bytecode, env.clone());
     for name in bytecode
         .local_names()

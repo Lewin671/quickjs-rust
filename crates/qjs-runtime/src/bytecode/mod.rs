@@ -37,8 +37,11 @@ pub fn compile_script(script: &Script) -> Result<Bytecode, RuntimeError> {
     compiler::compile_script(script)
 }
 
-pub(crate) fn compile_eval_script(script: &Script) -> Result<Bytecode, RuntimeError> {
-    compiler::compile_eval_script(script)
+pub(crate) fn compile_eval_script_with_strict(
+    script: &Script,
+    parent_strict: bool,
+) -> Result<Bytecode, RuntimeError> {
+    compiler::compile_eval_script_with_strict(script, parent_strict)
 }
 
 pub(crate) fn compile_function_body(
