@@ -190,6 +190,9 @@ impl Compiler {
                     self.validate_strict_binding_name(&declaration.name)?;
                     let slot = self.local_slot(&declaration.name, is_hoisted);
                     if let Some(init) = &declaration.init {
+                        if self.dynamic_scope_depth > 0 {
+                            self.emit(Op::ResolveName(declaration.name.clone()));
+                        }
                         self.compile_expr(init)?;
                         if self.dynamic_scope_depth > 0 {
                             self.emit(Op::StoreName {
