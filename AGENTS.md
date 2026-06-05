@@ -22,7 +22,7 @@ boundaries and make each change verifiable with focused tests.
 - QuickJS comparison smoke tests: `./scripts/compare-qjs.sh`
 - Test262 subset runner: `./scripts/test262-subset.sh`
 - Upstream Test262 baseline runner:
-  `./scripts/test262-baseline.sh [--limit N | --all] [--filter test/<prefix>]`
+  `./scripts/test262-baseline.sh [--limit N | --all] [--filter test/<prefix>] [--engine quickjs-rust|quickjs-ng|both] [--shard I/N] [--summary-json PATH] [--no-fail]`
 - Watch a pushed branch CI run: `gh run list --branch <branch> --limit 1`
   followed by `gh run watch <run-id> --exit-status`
 

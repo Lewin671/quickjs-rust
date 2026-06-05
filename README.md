@@ -110,6 +110,8 @@ The standard project check is:
 ./scripts/check.sh
 ```
 
+See `scripts/README.md` for the full script catalog and intended usage.
+
 Useful focused checks include:
 
 ```sh
@@ -123,7 +125,10 @@ cargo run -p qjs-cli -- -e "1 + 2;"
 
 `./scripts/compare-qjs.sh` compares selected local fixtures against the pinned
 QuickJS-NG reference. `./scripts/test262-subset.sh` runs only curated
-Test262-derived cases that the current harness can execute deterministically.
+Test262-derived cases that the current harness can execute deterministically;
+cases listed in `tests/test262/expected-failures.txt` may fail until the named
+support gap is implemented, and passing expected-failure cases are reported as
+stale entries.
 
 ## Design Principles
 

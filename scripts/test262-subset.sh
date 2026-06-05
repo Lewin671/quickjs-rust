@@ -2,11 +2,11 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TEST262_DIR="$ROOT_DIR/third_party/test262"
-ALLOWLIST="$ROOT_DIR/tests/test262/allowlist.txt"
-EXPECTED_FAILURES="$ROOT_DIR/tests/test262/expected-failures.txt"
-LOCAL_CASE_DIR="$ROOT_DIR/tests/test262"
-RUN_WITH_TIMEOUT="$ROOT_DIR/scripts/run-with-timeout.sh"
+TEST262_DIR="${TEST262_DIR:-$ROOT_DIR/third_party/test262}"
+ALLOWLIST="${TEST262_ALLOWLIST:-$ROOT_DIR/tests/test262/allowlist.txt}"
+EXPECTED_FAILURES="${TEST262_EXPECTED_FAILURES:-$ROOT_DIR/tests/test262/expected-failures.txt}"
+LOCAL_CASE_DIR="${TEST262_LOCAL_CASE_DIR:-$ROOT_DIR/tests/test262}"
+RUN_WITH_TIMEOUT="${RUN_WITH_TIMEOUT:-$ROOT_DIR/scripts/run-with-timeout.sh}"
 CASE_TIMEOUT_SECONDS="${TEST262_CASE_TIMEOUT_SECONDS:-10}"
 CARGO_BIN="${CARGO:-cargo}"
 if ! command -v "$CARGO_BIN" >/dev/null 2>&1 && [ -x "$HOME/.cargo/bin/cargo" ]; then
@@ -78,6 +78,7 @@ fi
 
 allowlist_count=0
 allowlist_entries=()
+expected_failure_entries=()
 while IFS= read -r line; do
   entry="${line%%#*}"
   entry="$(trim_ws "$entry")"
@@ -110,6 +111,30 @@ while IFS= read -r line; do
 
 done < "$ALLOWLIST"
 
+entry_in_allowlist() {
+  local wanted="$1"
+  local allowlist_entry
+  for allowlist_entry in "${allowlist_entries[@]}"; do
+    if [ "$allowlist_entry" = "$wanted" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+entry_in_expected_failures() {
+  local wanted="$1"
+  local expected_failure_entry
+  if [ "${#expected_failure_entries[@]}" -gt 0 ]; then
+    for expected_failure_entry in "${expected_failure_entries[@]}"; do
+      if [ "$expected_failure_entry" = "$wanted" ]; then
+        return 0
+      fi
+    done
+  fi
+  return 1
+}
+
 while IFS= read -r line; do
   trimmed="$(trim_ws "$line")"
   [ -z "$trimmed" ] && continue
@@ -128,6 +153,16 @@ while IFS= read -r line; do
     echo "error: expected failure entry does not exist: tests/test262/$entry" >&2
     exit 1
   fi
+  if ! entry_in_allowlist "$entry"; then
+    echo "error: expected failure entry is not in allowlist: tests/test262/$entry" >&2
+    exit 1
+  fi
+  if entry_in_expected_failures "$entry"; then
+    echo "error: duplicate expected failure entry: tests/test262/$entry" >&2
+    exit 1
+  fi
+
+  expected_failure_entries+=("$entry")
 done < "$EXPECTED_FAILURES"
 
 if [ "$allowlist_count" -eq 0 ]; then
@@ -153,6 +188,19 @@ fi
 
 RESULT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/qjs-test262-subset-XXXXXX")"
 trap 'rm -rf "$RESULT_DIR"' EXIT
+EXPECTED_FAILURE_LIST="$RESULT_DIR/expected-failures.list"
+if [ "${#expected_failure_entries[@]}" -gt 0 ]; then
+  for entry in "${expected_failure_entries[@]}"; do
+    printf '%s\n' "$entry"
+  done
+else
+  true
+fi >"$EXPECTED_FAILURE_LIST"
+
+is_expected_failure() {
+  local wanted="$1"
+  grep -Fx -- "$wanted" "$EXPECTED_FAILURE_LIST" >/dev/null 2>&1
+}
 
 run_test262_case() {
   local current="$1"
@@ -160,6 +208,7 @@ run_test262_case() {
   local case_path="$LOCAL_CASE_DIR/$entry"
   local log_path="$RESULT_DIR/$current.log"
   local status_path="$RESULT_DIR/$current.status"
+  local result_path="$RESULT_DIR/$current.result"
   local output
   local status
 
@@ -170,19 +219,34 @@ run_test262_case() {
   set -e
 
   if [ "$status" -ne 0 ]; then
+    if is_expected_failure "$entry"; then
+      printf '%s\n' "xfail" >"$result_path"
+    else
+      printf '%s\n' "fail" >"$result_path"
+    fi
     printf '%s\n' "$entry" >"$status_path"
     printf '%s\n' "$status" >>"$status_path"
     printf '%s\n' "$output" >"$log_path"
-    exit "$status"
+    return 0
+  fi
+
+  if is_expected_failure "$entry"; then
+    printf '%s\n' "xpass" >"$result_path"
+    printf '%s\n' "$entry" >"$status_path"
+    printf '%s\n' 0 >>"$status_path"
+  else
+    printf '%s\n' "pass" >"$result_path"
   fi
 }
 
 export ALLOWLIST_COUNT="$allowlist_count"
 export CASE_TIMEOUT_SECONDS
+export EXPECTED_FAILURE_LIST
 export LOCAL_CASE_DIR
 export QJS_CLI_BIN
 export RESULT_DIR
 export RUN_WITH_TIMEOUT
+export -f is_expected_failure
 export -f run_test262_case
 
 set +e
@@ -194,12 +258,19 @@ run_status=$?
 set -e
 
 if [ "$run_status" -ne 0 ]; then
-  first_status="$(find "$RESULT_DIR" -name '*.status' -print | sort | head -n 1)"
-  if [ -z "$first_status" ]; then
-    echo "error: Test262 subset failed before recording the failing case" >&2
-    exit "$run_status"
-  fi
+  echo "error: Test262 subset runner failed before completing all cases" >&2
+  exit "$run_status"
+fi
 
+first_status=""
+first_status="$( (find "$RESULT_DIR" -name '*.result' -exec grep -l '^fail$' {} + || true) | sort | head -n 1)"
+
+if [ -n "$first_status" ]; then
+  failed_index="$(basename "$first_status" .result)"
+  first_status="$RESULT_DIR/$failed_index.status"
+fi
+
+if [ -n "$first_status" ]; then
   failed_entry="$(sed -n '1p' "$first_status")"
   failed_status="$(sed -n '2p' "$first_status")"
   failed_index="$(basename "$first_status" .status)"
@@ -216,4 +287,30 @@ if [ "$run_status" -ne 0 ]; then
   exit "$failed_status"
 fi
 
-echo "ok: ran $allowlist_count Test262 subset cases"
+first_status=""
+first_status="$( (find "$RESULT_DIR" -name '*.result' -exec grep -l '^xpass$' {} + || true) | sort | head -n 1)"
+
+if [ -n "$first_status" ]; then
+  passed_index="$(basename "$first_status" .result)"
+  first_status="$RESULT_DIR/$passed_index.status"
+fi
+
+if [ -n "$first_status" ]; then
+  passed_entry="$(sed -n '1p' "$first_status")"
+  echo "error: expected-failure case passed; remove it from tests/test262/expected-failures.txt: tests/test262/$passed_entry" >&2
+  exit 1
+fi
+
+xfail_count="$( (find "$RESULT_DIR" -name '*.result' -exec grep -l '^xfail$' {} + || true) | wc -l | tr -d '[:space:]')"
+
+if [ -z "$xfail_count" ]; then
+  xfail_count=0
+fi
+
+if [ "$xfail_count" -gt 0 ]; then
+  echo "ok: ran $allowlist_count Test262 subset cases ($xfail_count expected failures)"
+else
+  echo "ok: ran $allowlist_count Test262 subset cases"
+fi
+
+exit 0
