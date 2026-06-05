@@ -23,6 +23,26 @@ pub(crate) fn install_regexp(
         "constructor".to_owned(),
         Value::Function(regexp_function.clone()),
     );
+    define_regexp_prototype_getter(
+        &regexp_prototype,
+        "source",
+        NativeFunction::RegExpPrototypeSource,
+    );
+    define_regexp_prototype_getter(
+        &regexp_prototype,
+        "global",
+        NativeFunction::RegExpPrototypeGlobal,
+    );
+    define_regexp_prototype_getter(
+        &regexp_prototype,
+        "ignoreCase",
+        NativeFunction::RegExpPrototypeIgnoreCase,
+    );
+    define_regexp_prototype_getter(
+        &regexp_prototype,
+        "multiline",
+        NativeFunction::RegExpPrototypeMultiline,
+    );
     regexp_prototype.define_non_enumerable(
         "toString".to_owned(),
         Value::Function(Function::new_native(
@@ -60,6 +80,23 @@ pub(crate) fn install_regexp(
     if let Value::Object(global_object) = global_this {
         global_object.set("RegExp".to_owned(), regexp_value);
     }
+}
+
+fn define_regexp_prototype_getter(prototype: &ObjectRef, key: &str, native: NativeFunction) {
+    prototype.define_property(
+        key.to_owned(),
+        Property::accessor(
+            Some(Value::Function(Function::new_native(
+                Some(key),
+                0,
+                native,
+                false,
+            ))),
+            None,
+            false,
+            true,
+        ),
+    );
 }
 
 pub(crate) fn native_regexp(
@@ -130,6 +167,45 @@ pub(crate) fn native_regexp_prototype_test(
         native_regexp_prototype_exec(this_value, argument_values, env)?,
         Value::Null
     )))
+}
+
+pub(crate) fn native_regexp_prototype_source(this_value: Value) -> Result<Value, RuntimeError> {
+    let object = regexp_receiver(this_value, "RegExp.prototype.source")?;
+    Ok(Value::String(
+        regexp_string_data(&object, REGEXP_SOURCE_PROPERTY).unwrap_or_else(|| "(?:)".to_owned()),
+    ))
+}
+
+pub(crate) fn native_regexp_prototype_global(this_value: Value) -> Result<Value, RuntimeError> {
+    regexp_flag_getter(this_value, "g", "RegExp.prototype.global")
+}
+
+pub(crate) fn native_regexp_prototype_ignore_case(
+    this_value: Value,
+) -> Result<Value, RuntimeError> {
+    regexp_flag_getter(this_value, "i", "RegExp.prototype.ignoreCase")
+}
+
+pub(crate) fn native_regexp_prototype_multiline(this_value: Value) -> Result<Value, RuntimeError> {
+    regexp_flag_getter(this_value, "m", "RegExp.prototype.multiline")
+}
+
+fn regexp_flag_getter(this_value: Value, flag: &str, method: &str) -> Result<Value, RuntimeError> {
+    let object = regexp_receiver(this_value, method)?;
+    Ok(Value::Boolean(
+        regexp_string_data(&object, REGEXP_FLAGS_PROPERTY)
+            .is_some_and(|flags| flags.contains(flag)),
+    ))
+}
+
+fn regexp_receiver(this_value: Value, method: &str) -> Result<ObjectRef, RuntimeError> {
+    let Value::Object(object) = this_value else {
+        return Err(RuntimeError {
+            thrown: None,
+            message: format!("{method} requires an object receiver"),
+        });
+    };
+    Ok(object)
 }
 
 pub(crate) fn native_regexp_prototype_to_string(this_value: Value) -> Result<Value, RuntimeError> {

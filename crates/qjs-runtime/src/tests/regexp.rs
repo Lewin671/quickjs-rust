@@ -31,6 +31,19 @@ fn evaluates_regexp_constructor_identity() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(RegExp.prototype, 'source'); typeof d.get === 'function' && d.set === undefined && !d.enumerable && d.configurable && !d.hasOwnProperty('writable');"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("/test/gim.source;"),
+        Ok(Value::String("test".to_owned()))
+    );
+    assert_eq!(eval("/test/gim.global;"), Ok(Value::Boolean(true)));
+    assert_eq!(eval("/test/gim.ignoreCase;"), Ok(Value::Boolean(true)));
+    assert_eq!(eval("/test/gim.multiline;"), Ok(Value::Boolean(true)));
 }
 
 #[test]
