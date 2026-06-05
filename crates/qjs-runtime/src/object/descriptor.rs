@@ -100,6 +100,13 @@ pub(crate) fn native_object_get_own_property_descriptor(
     env: &HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    if matches!(target, Value::Null | Value::Undefined) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "Object.getOwnPropertyDescriptor target must not be null or undefined"
+                .to_owned(),
+        });
+    }
     let key = to_property_key(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
     let Some(property) = own_property_descriptor(target, &key)? else {
         return Ok(Value::Undefined);

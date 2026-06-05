@@ -200,4 +200,6 @@ fn evaluates_object_descriptor_queries() {
     );
     assert!(eval("Object.getOwnPropertyDescriptors(null);").is_err());
     assert!(eval("Object.getOwnPropertyDescriptors(undefined);").is_err());
+    assert!(eval("Object.getOwnPropertyDescriptor(null, 'value');").is_err());
+    assert!(eval("Object.getOwnPropertyDescriptor(undefined, 'value');").is_err());
 }
