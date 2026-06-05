@@ -103,9 +103,11 @@ jobs:
 
           totals = {
               "total": 0,
+              "configured": 0,
               "eligible": 0,
               "run": 0,
               "skipped": 0,
+              "rust_harness_gap": 0,
               "rust_pass": 0,
               "rust_fail": 0,
               "rust_timeout": 0,
@@ -134,9 +136,11 @@ jobs:
               with open(path, "r", encoding="utf-8") as handle:
                   summary = json.load(handle)
               totals["total"] += summary["total"]
+              totals["configured"] += summary["configured"]
               totals["eligible"] += summary["eligible"]
               totals["run"] += summary["run"]
               totals["skipped"] += summary["skipped"]["total"]
+              totals["rust_harness_gap"] += summary["rust_harness_gap"]
               for key in skipped:
                   skipped[key] += summary["skipped"][key]
               totals["rust_pass"] += summary["quickjs_rust"]["pass"]
@@ -167,9 +171,11 @@ jobs:
               "| Metric | Count | Share |",
               "| --- | ---: | ---: |",
               f"| Upstream cases | {totals['total']} | 100.00% |",
-              f"| Runnable by quickjs-rust harness | {totals['eligible']} | {pct(totals['eligible'], totals['total'])} |",
-              f"| Compared against QuickJS-NG | {totals['run']} | {pct(totals['run'], totals['total'])} |",
-              f"| Skipped by quickjs-rust harness | {totals['skipped']} | {pct(totals['skipped'], totals['total'])} |",
+              f"| Skipped by QuickJS-NG config | {totals['skipped']} | {pct(totals['skipped'], totals['total'])} |",
+              f"| Configured runnable by QuickJS-NG | {totals['configured']} | {pct(totals['configured'], totals['total'])} |",
+              f"| Runnable by quickjs-rust harness | {totals['eligible']} | {pct(totals['eligible'], totals['configured'])} |",
+              f"| quickjs-rust harness gap | {totals['rust_harness_gap']} | {pct(totals['rust_harness_gap'], totals['configured'])} |",
+              f"| Compared | {totals['run']} | {pct(totals['run'], totals['configured'])} |",
               "",
               "## Engine Results",
               "",

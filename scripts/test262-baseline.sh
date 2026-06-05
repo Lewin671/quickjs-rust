@@ -424,6 +424,7 @@ write_summary_json() {
   "limit": "$(json_escape "$RUN_LIMIT")",
   "shard": {"index": $SHARD_INDEX, "total": $SHARD_TOTAL},
   "total": $total,
+  "configured": $configured,
   "eligible": $eligible,
   "run": $run,
   "skipped": {
@@ -437,6 +438,7 @@ write_summary_json() {
     "negative": $skip_negative,
     "raw": $skip_raw
   },
+  "rust_harness_gap": $rust_harness_gap,
   "quickjs_rust": {"pass": $rust_pass, "fail": $rust_fail, "timeout": $rust_timeout, "skipped": $rust_skipped},
   "quickjs_ng": {"pass": $qjsng_pass, "fail": $qjsng_fail, "timeout": $qjsng_timeout, "skipped": $qjsng_skipped},
   "comparison": {
@@ -451,6 +453,7 @@ JSON
 
 scanned=0
 total=0
+configured=0
 eligible=0
 run=0
 skipped=0
@@ -462,6 +465,7 @@ skip_intl402=0
 skip_module=0
 skip_negative=0
 skip_raw=0
+rust_harness_gap=0
 rust_pass=0
 rust_fail=0
 rust_timeout=0
@@ -498,7 +502,25 @@ while IFS= read -r file; do
   if needs_quickjs_ng; then
     qjsng_reason="$(quickjs_ng_skip_reason "$rel" "$features")"
   fi
-  if [ -n "$reason" ]; then
+
+  if [ "$ENGINE" = "both" ] && [ -n "$qjsng_reason" ]; then
+    skipped=$((skipped + 1))
+    case "$qjsng_reason" in
+      exclude) skip_features=$((skip_features + 1)) ;;
+      feature|unknown-feature) skip_features=$((skip_features + 1)) ;;
+      fixture) skip_fixture=$((skip_fixture + 1)) ;;
+    esac
+    continue
+  fi
+
+  if [ "$ENGINE" = "both" ]; then
+    configured=$((configured + 1))
+    if [ -n "$reason" ]; then
+      rust_harness_gap=$((rust_harness_gap + 1))
+    else
+      eligible=$((eligible + 1))
+    fi
+  elif [ -n "$reason" ]; then
     skipped=$((skipped + 1))
     case "$reason" in
       async) skip_async=$((skip_async + 1)) ;;
@@ -530,6 +552,7 @@ echo "summary:"
 echo "  engine: $ENGINE"
 echo "  shard: $SHARD_INDEX/$SHARD_TOTAL"
 echo "  total: $total"
+echo "  configured: $configured"
 echo "  eligible: $eligible"
 echo "  run: $run"
 echo "  skipped: $skipped"
@@ -541,6 +564,7 @@ echo "  skipped.intl402: $skip_intl402"
 echo "  skipped.module: $skip_module"
 echo "  skipped.negative: $skip_negative"
 echo "  skipped.raw: $skip_raw"
+echo "  rust.harness_gap: $rust_harness_gap"
 if needs_rust; then
   echo "  quickjs-rust.pass: $rust_pass"
   echo "  quickjs-rust.fail: $rust_fail"

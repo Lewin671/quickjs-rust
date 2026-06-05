@@ -27,10 +27,9 @@ maintenance, or agent workflow isolation.
 - `test262-baseline.sh`: Samples or scans upstream Test262 files to classify
   unsupported metadata, parser or runtime failures, and timeouts before adding
   curated local cases. Use `--engine both --all --shard I/N --summary-json PATH
-  --no-fail` for asynchronous full-corpus comparisons against QuickJS-NG. In
-  that mode quickjs-rust records unsupported metadata as skipped while
-  QuickJS-NG applies its own Test262 runner configuration to the same upstream
-  files.
+  --no-fail` for asynchronous comparisons against QuickJS-NG's Test262 config.
+  In that mode QuickJS-NG config skips are applied as the shared baseline, and
+  quickjs-rust unsupported metadata is reported as a separate harness gap.
 - `test262-baseline-metadata.awk`: Internal helper used by
   `test262-baseline.sh` to read Test262 metadata blocks.
 

@@ -122,12 +122,12 @@ removed.
 
 `scripts/test262-baseline.sh` scans upstream Test262 coverage. It can run a
 bounded sample, a full scan with `--all`, a shard with `--shard I/N`, and a
-full-corpus quickjs-rust/QuickJS-NG comparison with `--engine both`. In that
-mode quickjs-rust records unsupported metadata as skipped, while QuickJS-NG
-applies its own Test262 runner configuration to the same upstream files. The
-`Test262 Coverage` GitHub Actions workflow runs the sharded comparison after
-the main `CI` workflow completes, uploads shard summaries, and aggregates the
-result into the workflow summary without delaying the main CI workflow.
+quickjs-rust/QuickJS-NG comparison with `--engine both`. In that mode QuickJS-NG
+config skips are applied as the shared baseline, and quickjs-rust unsupported
+metadata is reported separately as a harness gap. The `Test262 Coverage`
+GitHub Actions workflow runs the sharded comparison after the main `CI`
+workflow completes, uploads shard summaries, and aggregates the result into the
+workflow summary without delaying the main CI workflow.
 
 `scripts/microbench.sh` runs the repository's current QuickJS microbenchmark
 subset from `tests/benchmarks/quickjs/microbench.js`. Use `--engine quickjs-ng`
