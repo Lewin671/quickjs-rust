@@ -109,14 +109,25 @@ impl Compiler {
                     self.collect_hoisted_locals(std::slice::from_ref(body));
                 }
                 Stmt::For { init, body, .. } => {
-                    if let Some(ForInit::VarDecl {
-                        declarations, kind, ..
-                    }) = init
-                    {
-                        for declaration in declarations {
-                            if *kind == VarKind::Var {
-                                self.local_slot(&declaration.name, true);
+                    if let Some(init) = init {
+                        match init {
+                            ForInit::VarDecl {
+                                declarations,
+                                kind: VarKind::Var,
+                                ..
+                            } => {
+                                for declaration in declarations {
+                                    self.local_slot(&declaration.name, true);
+                                }
                             }
+                            ForInit::Binding {
+                                target,
+                                kind: VarKind::Var,
+                                ..
+                            } => {
+                                self.ensure_target_local_slots(target, true);
+                            }
+                            _ => {}
                         }
                     }
                     self.collect_hoisted_locals(std::slice::from_ref(body));

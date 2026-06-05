@@ -54,12 +54,20 @@ fn collect_statement_local_names(body: &[Stmt], names: &mut HashSet<String>) {
                 collect_statement_local_names(std::slice::from_ref(body.as_ref()), names);
             }
             Stmt::For { init, body, .. } => {
-                if let Some(ForInit::VarDecl { declarations, .. }) = init {
-                    names.extend(
-                        declarations
-                            .iter()
-                            .map(|declaration| declaration.name.clone()),
-                    );
+                if let Some(init) = init {
+                    match init {
+                        ForInit::VarDecl { declarations, .. } => {
+                            names.extend(
+                                declarations
+                                    .iter()
+                                    .map(|declaration| declaration.name.clone()),
+                            );
+                        }
+                        ForInit::Binding { target, .. } => {
+                            collect_target_local_names(target, names);
+                        }
+                        ForInit::Expr(_) => {}
+                    }
                 }
                 collect_statement_local_names(std::slice::from_ref(body.as_ref()), names);
             }

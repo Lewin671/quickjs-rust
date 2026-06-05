@@ -108,6 +108,9 @@ impl Compiler {
         update: Option<&Expr>,
         body: &Stmt,
     ) -> Result<(), RuntimeError> {
+        let cleanup_slots = init
+            .map(|init| self.for_init_cleanup_slots(init))
+            .unwrap_or_default();
         if let Some(init) = init {
             self.compile_for_init(init)?;
             self.emit(Op::Pop);
@@ -141,9 +144,10 @@ impl Compiler {
             self.patch_jump(exit_jump, exit);
             self.emit(Op::Pop);
         }
+        let cleanup_start = self.code.len();
+        self.emit_clear_locals(&cleanup_slots);
         self.emit(Op::LoadLocal(result_slot));
-        let done = self.code.len();
-        self.patch_loop_breaks(&context, done);
+        self.patch_loop_breaks(&context, cleanup_start);
         self.patch_loop_continues(&context, update_start);
         Ok(())
     }
@@ -168,7 +172,41 @@ impl Compiler {
                 self.emit_load_undefined();
                 Ok(())
             }
+            ForInit::Binding {
+                kind, target, init, ..
+            } => {
+                self.ensure_target_local_slots(target, *kind == VarKind::Var);
+                let value_slot = self.temp_local("for_init_binding");
+                self.compile_expr(init)?;
+                self.emit(Op::StoreLocal(value_slot));
+                self.compile_store_value(target, value_slot)?;
+                self.emit(Op::Pop);
+                self.emit_load_undefined();
+                Ok(())
+            }
         }
+    }
+
+    fn for_init_cleanup_slots(&mut self, init: &ForInit) -> Vec<usize> {
+        let mut slots = Vec::new();
+        match init {
+            ForInit::VarDecl {
+                kind, declarations, ..
+            } if *kind != VarKind::Var => {
+                slots.extend(
+                    declarations
+                        .iter()
+                        .map(|declaration| self.local_slot(&declaration.name, false)),
+                );
+            }
+            ForInit::Binding { kind, target, .. } if *kind != VarKind::Var => {
+                self.collect_target_local_slots(target, false, &mut slots);
+            }
+            _ => {}
+        }
+        slots.sort_unstable();
+        slots.dedup();
+        slots
     }
 
     pub(super) fn compile_expr(&mut self, expr: &Expr) -> Result<(), RuntimeError> {

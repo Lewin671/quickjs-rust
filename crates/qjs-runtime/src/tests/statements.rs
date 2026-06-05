@@ -105,6 +105,12 @@ fn evaluates_for_statements() {
         eval("let i = 0; for (; i < 3; ) i = i + 1; i;"),
         Ok(Value::Number(3.0))
     );
+    assert_eq!(
+        eval(
+            "var value; for (let [x] = [23]; ; ) { value = x; break; } typeof x === 'undefined' && value === 23;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]

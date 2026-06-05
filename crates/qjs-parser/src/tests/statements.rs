@@ -151,6 +151,23 @@ fn parses_for_head_sloppy_let_identifier_expression() {
 }
 
 #[test]
+fn parses_for_head_lexical_destructuring_initializer() {
+    let script = parse_script("for (let [x] = [23]; ; ) break;").expect("source should parse");
+    let [Stmt::For { init, .. }] = script.body.as_slice() else {
+        panic!("expected one for statement");
+    };
+    assert!(matches!(
+        init,
+        Some(ForInit::Binding {
+            kind: VarKind::Let,
+            target: qjs_ast::AssignmentTarget::Array { .. },
+            init: Expr::Array { .. },
+            ..
+        })
+    ));
+}
+
+#[test]
 fn parses_for_body_sloppy_let_before_newline_block() {
     let script = parse_script("for (; false; ) let\n{}").expect("source should parse");
     let [Stmt::For { body, .. }, Stmt::Block { .. }] = script.body.as_slice() else {

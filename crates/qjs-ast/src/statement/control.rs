@@ -51,6 +51,17 @@ pub enum ForInit {
         /// Source span.
         span: Span,
     },
+    /// Destructuring binding initializer.
+    Binding {
+        /// Declaration kind.
+        kind: VarKind,
+        /// Binding target.
+        target: AssignmentTarget,
+        /// Initializer expression.
+        init: Expr,
+        /// Source span.
+        span: Span,
+    },
     /// Expression initializer.
     Expr(Expr),
 }

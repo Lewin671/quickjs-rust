@@ -281,7 +281,7 @@ impl Compiler {
         slots
     }
 
-    fn ensure_target_local_slots(&mut self, target: &AssignmentTarget, hoisted: bool) {
+    pub(super) fn ensure_target_local_slots(&mut self, target: &AssignmentTarget, hoisted: bool) {
         match target {
             AssignmentTarget::Identifier { name, .. } => {
                 self.local_slot(name, hoisted);
@@ -300,7 +300,7 @@ impl Compiler {
         }
     }
 
-    fn collect_target_local_slots(
+    pub(super) fn collect_target_local_slots(
         &mut self,
         target: &AssignmentTarget,
         hoisted: bool,
@@ -324,7 +324,7 @@ impl Compiler {
         }
     }
 
-    fn emit_clear_locals(&mut self, slots: &[usize]) {
+    pub(super) fn emit_clear_locals(&mut self, slots: &[usize]) {
         for slot in slots {
             self.emit(Op::ClearLocal(*slot));
         }

@@ -142,6 +142,36 @@ impl Parser {
                         span: Span::new(start, end),
                     });
                 }
+                if self.match_kind(&TokenKind::Equal) {
+                    let init_expr = self.assignment()?;
+                    self.expect(&TokenKind::Semicolon)?;
+                    let test = if self.at(&TokenKind::Semicolon) {
+                        None
+                    } else {
+                        Some(self.expression()?)
+                    };
+                    self.expect(&TokenKind::Semicolon)?;
+                    let update = if self.at(&TokenKind::RightParen) {
+                        None
+                    } else {
+                        Some(self.expression()?)
+                    };
+                    self.expect(&TokenKind::RightParen)?;
+                    let body = self.statement()?;
+                    let end = stmt_end(&body);
+                    return Ok(Stmt::For {
+                        init: Some(ForInit::Binding {
+                            kind,
+                            target,
+                            span: Span::new(kind_token.span.start, pattern_end),
+                            init: init_expr,
+                        }),
+                        test,
+                        update,
+                        body: Box::new(body),
+                        span: Span::new(start, end),
+                    });
+                }
                 return Err(ParseError {
                     message: "expected `in` or `of` after loop binding pattern".to_owned(),
                     span: Span::new(kind_token.span.start, pattern_end),
