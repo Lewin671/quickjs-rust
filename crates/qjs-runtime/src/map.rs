@@ -64,6 +64,18 @@ pub(crate) fn install_map(
         NativeFunction::MapPrototypeForEach,
     );
     define_map_prototype_function(&map_prototype, "get", 1, NativeFunction::MapPrototypeGet);
+    define_map_prototype_function(
+        &map_prototype,
+        "getOrInsert",
+        2,
+        NativeFunction::MapPrototypeGetOrInsert,
+    );
+    define_map_prototype_function(
+        &map_prototype,
+        "getOrInsertComputed",
+        2,
+        NativeFunction::MapPrototypeGetOrInsertComputed,
+    );
     define_map_prototype_function(&map_prototype, "has", 1, NativeFunction::MapPrototypeHas);
     define_map_prototype_function(&map_prototype, "keys", 0, NativeFunction::MapPrototypeKeys);
     define_map_prototype_function(&map_prototype, "set", 2, NativeFunction::MapPrototypeSet);
@@ -157,6 +169,51 @@ pub(crate) fn native_map_prototype_get(
     let map = this_map(this_value)?;
     let key = argument_values.first().cloned().unwrap_or(Value::Undefined);
     Ok(map.get(&key).unwrap_or(Value::Undefined))
+}
+
+pub(crate) fn native_map_prototype_get_or_insert(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let map = this_map(this_value)?;
+    let key = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    if let Some(value) = map.get(&key) {
+        return Ok(value);
+    }
+    let value = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
+    map.set(key, value.clone());
+    Ok(value)
+}
+
+pub(crate) fn native_map_prototype_get_or_insert_computed(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let map = this_map(this_value)?;
+    let key = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let callback = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
+    if !matches!(callback, Value::Function(_)) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Map.prototype.getOrInsertComputed callback must be callable"
+                .to_owned(),
+        });
+    }
+    if let Some(value) = map.get(&key) {
+        return Ok(value);
+    }
+    let canonical_key = canonical_map_key_value(key);
+    let value = crate::call_function(
+        callback,
+        Value::Undefined,
+        vec![canonical_key.clone()],
+        env,
+        false,
+    )?;
+    map.delete(&canonical_key);
+    map.set(canonical_key, value.clone());
+    Ok(value)
 }
 
 pub(crate) fn native_map_prototype_entries(this_value: Value) -> Result<Value, RuntimeError> {
@@ -336,6 +393,14 @@ fn iterator_result(value: Value, done: bool) -> Value {
     properties.insert("value".to_owned(), value);
     properties.insert("done".to_owned(), Value::Boolean(done));
     Value::Object(ObjectRef::new(properties))
+}
+
+fn canonical_map_key_value(key: Value) -> Value {
+    if matches!(key, Value::Number(value) if value == 0.0) {
+        Value::Number(0.0)
+    } else {
+        key
+    }
 }
 
 fn define_map_prototype_function(

@@ -323,6 +323,8 @@ cases/map-iterable-non-object-entry.js
 cases/map-no-iterable-basic.js
 cases/map-prototype-constructor-basic.js
 cases/map-methods-basic.js
+cases/map-get-or-insert-basic.js
+cases/map-get-or-insert-computed-basic.js
 cases/map-iterator-basic.js
 cases/map-for-each-basic.js
 cases/set-constructor-basic.js

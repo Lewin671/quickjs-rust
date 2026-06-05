@@ -25,6 +25,12 @@ pub(super) fn call_map_native(
         NativeFunction::MapPrototypeGet => {
             map::native_map_prototype_get(this_value, argument_values)?
         }
+        NativeFunction::MapPrototypeGetOrInsert => {
+            map::native_map_prototype_get_or_insert(this_value, argument_values)?
+        }
+        NativeFunction::MapPrototypeGetOrInsertComputed => {
+            map::native_map_prototype_get_or_insert_computed(this_value, argument_values, env)?
+        }
         NativeFunction::MapPrototypeHas => {
             map::native_map_prototype_has(this_value, argument_values)?
         }

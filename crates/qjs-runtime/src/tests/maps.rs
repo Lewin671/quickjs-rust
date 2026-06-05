@@ -81,6 +81,48 @@ fn evaluates_map_basic_methods() {
 }
 
 #[test]
+fn evaluates_map_get_or_insert_methods() {
+    assert_eq!(
+        eval(
+            "let map = new Map(); map.set('a', 1); map.getOrInsert('a', 2) + ':' + map.get('a') + ':' + map.size;"
+        ),
+        Ok(Value::String("1:1:1".to_owned()))
+    );
+    assert_eq!(
+        eval("let map = new Map(); map.getOrInsert('a', 2) + ':' + map.get('a') + ':' + map.size;"),
+        Ok(Value::String("2:2:1".to_owned()))
+    );
+    assert_eq!(
+        eval("Map.prototype.getOrInsert.length;"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval(
+            "let calls = 0; let map = new Map(); map.set('a', 1); map.getOrInsertComputed('a', function(key) { calls = calls + 1; return 2; }) + ':' + calls + ':' + map.get('a');"
+        ),
+        Ok(Value::String("1:0:1".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let seen = ''; let map = new Map(); map.getOrInsertComputed(-0, function(key) { seen = String(1 / key); return 3; }) + ':' + map.get(0) + ':' + seen;"
+        ),
+        Ok(Value::String("3:3:Infinity".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let map = new Map(); map.getOrInsertComputed('a', function(key) { map.set(key, 1); return 2; }); map.get('a') + ':' + map.size;"
+        ),
+        Ok(Value::String("2:1".to_owned()))
+    );
+    assert_eq!(
+        eval("Map.prototype.getOrInsertComputed.length;"),
+        Ok(Value::Number(2.0))
+    );
+    assert!(eval("Map.prototype.getOrInsert.call({}, 'a', 1);").is_err());
+    assert!(eval("new Map().getOrInsertComputed('a', 1);").is_err());
+}
+
+#[test]
 fn evaluates_map_same_value_zero_keys() {
     assert_eq!(
         eval("let map = new Map(); map.set(NaN, 1); map.get(NaN);"),

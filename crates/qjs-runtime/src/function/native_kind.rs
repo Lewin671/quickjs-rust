@@ -136,6 +136,8 @@ pub(crate) enum NativeFunction {
     MapPrototypeEntries,
     MapPrototypeForEach,
     MapPrototypeGet,
+    MapPrototypeGetOrInsert,
+    MapPrototypeGetOrInsertComputed,
     MapPrototypeHas,
     MapPrototypeKeys,
     MapPrototypeSet,
