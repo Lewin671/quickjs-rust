@@ -2,10 +2,11 @@ use std::collections::HashMap;
 
 use crate::{
     ArrayRef, Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, Property, RuntimeError,
-    Value, call_function,
+    Value, call_function, property_value,
 };
 
 const PROMISE_FULFILL_REACTION: &str = "\0PromiseFulfillReaction";
+const PROMISE_FINALLY_HANDLER: &str = "\0PromiseFinallyHandler";
 const PROMISE_HANDLER: &str = "\0PromiseHandler";
 const PROMISE_JOBS: &str = "\0PromiseJobs";
 const PROMISE_REACTIONS: &str = "\0PromiseReactions";
@@ -43,11 +44,22 @@ pub(crate) fn install_promise(
         PROMISE_PROTOTYPE.to_owned(),
         Value::Object(promise_prototype.clone()),
     );
+    let mut promise_finally = Function::new_native(
+        Some("finally"),
+        1,
+        NativeFunction::PromisePrototypeFinally,
+        false,
+    );
+    promise_finally.env.insert(
+        PROMISE_PROTOTYPE.to_owned(),
+        Value::Object(promise_prototype.clone()),
+    );
     promise_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(promise_function.clone()),
     );
     promise_prototype.define_non_enumerable("catch".to_owned(), Value::Function(promise_catch));
+    promise_prototype.define_non_enumerable("finally".to_owned(), Value::Function(promise_finally));
     promise_prototype.define_non_enumerable("then".to_owned(), Value::Function(promise_then));
     promise_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
@@ -203,13 +215,62 @@ pub(crate) fn native_promise_then(
 }
 
 pub(crate) fn native_promise_catch(
-    function: &Function,
+    _function: &Function,
     this_value: Value,
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let on_rejected = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    native_promise_then(function, this_value, &[Value::Undefined, on_rejected], env)
+    call_promise_then(this_value, vec![Value::Undefined, on_rejected], env)
+}
+
+pub(crate) fn native_promise_finally(
+    _function: &Function,
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let on_finally = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let (on_fulfilled, on_rejected) = if matches!(on_finally, Value::Function(_)) {
+        (
+            promise_finally_function(
+                "thenFinally",
+                NativeFunction::PromisePrototypeFinallyFulfilled,
+                on_finally.clone(),
+            ),
+            promise_finally_function(
+                "catchFinally",
+                NativeFunction::PromisePrototypeFinallyRejected,
+                on_finally,
+            ),
+        )
+    } else {
+        (on_finally.clone(), on_finally)
+    };
+    call_promise_then(this_value, vec![on_fulfilled, on_rejected], env)
+}
+
+pub(crate) fn native_promise_finally_fulfilled(
+    function: &Function,
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    call_finally_handler(function, env)?;
+    Ok(value)
+}
+
+pub(crate) fn native_promise_finally_rejected(
+    function: &Function,
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let reason = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    call_finally_handler(function, env)?;
+    Err(RuntimeError {
+        thrown: Some(Box::new(reason)),
+        message: "Promise finally rejected".to_owned(),
+    })
 }
 
 pub(crate) fn native_promise_resolve_function(
@@ -286,6 +347,36 @@ fn resolving_function(name: &str, native: NativeFunction, promise: Value) -> Val
     let mut function = Function::new_native(Some(name), 1, native, false);
     function.env.insert(PROMISE_TARGET.to_owned(), promise);
     Value::Function(function)
+}
+
+fn promise_finally_function(name: &str, native: NativeFunction, handler: Value) -> Value {
+    let mut function = Function::new_native(Some(name), 1, native, false);
+    function
+        .env
+        .insert(PROMISE_FINALLY_HANDLER.to_owned(), handler);
+    Value::Function(function)
+}
+
+fn call_finally_handler(
+    function: &Function,
+    env: &mut HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
+    let handler = function
+        .env
+        .get(PROMISE_FINALLY_HANDLER)
+        .cloned()
+        .unwrap_or(Value::Undefined);
+    call_function(handler, Value::Undefined, Vec::new(), env, false)?;
+    Ok(())
+}
+
+fn call_promise_then(
+    this_value: Value,
+    argument_values: Vec<Value>,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let then = property_value(this_value.clone(), "then", env)?;
+    call_function(then, this_value, argument_values, env, false)
 }
 
 fn promise_from_resolving_function(function: &Function) -> Result<ObjectRef, RuntimeError> {

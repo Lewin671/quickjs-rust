@@ -92,8 +92,43 @@ fn evaluates_promise_catch_shell() {
         "Object.prototype.toString.call(Promise.reject(1).catch(function() {}));",
         Value::String("[object Promise]".to_owned()),
     );
+    assert_eval(
+        "var receiver = { then: function(onFulfilled, onRejected) { return typeof onFulfilled + ':' + typeof onRejected + ':' + (this === receiver); } }; Promise.prototype.catch.call(receiver, function() {});",
+        Value::String("undefined:function:true".to_owned()),
+    );
     assert!(eval("Promise.prototype.catch.call({});").is_err());
     assert!(eval("Promise.prototype.catch.call(3);").is_err());
+}
+
+#[test]
+fn evaluates_promise_finally_shell() {
+    assert_eval(
+        "typeof Promise.prototype.finally;",
+        Value::String("function".to_owned()),
+    );
+    assert_eval("Promise.prototype.finally.length;", Value::Number(1.0));
+    assert_eval(
+        "Promise.prototype.propertyIsEnumerable('finally');",
+        Value::Boolean(false),
+    );
+    assert_eval(
+        "var p = Promise.resolve(1); var q = p.finally(function() {}); q instanceof Promise && q !== p;",
+        Value::Boolean(true),
+    );
+    assert_eval(
+        "Object.prototype.toString.call(Promise.resolve(1).finally(function() {}));",
+        Value::String("[object Promise]".to_owned()),
+    );
+    assert_eval(
+        "var receiver = { then: function(onFulfilled, onRejected) { return typeof onFulfilled + ':' + typeof onRejected + ':' + (this === receiver); } }; Promise.prototype.finally.call(receiver, function() {});",
+        Value::String("function:function:true".to_owned()),
+    );
+    assert_eval(
+        "var receiver = { then: function(onFulfilled, onRejected) { return (onFulfilled === 1) + ':' + (onRejected === 1); } }; Promise.prototype.finally.call(receiver, 1);",
+        Value::String("true:true".to_owned()),
+    );
+    assert!(eval("Promise.prototype.finally.call({});").is_err());
+    assert!(eval("Promise.prototype.finally.call(3);").is_err());
 }
 
 #[test]
@@ -121,5 +156,34 @@ fn drains_promise_catch_jobs_after_script() {
     assert_eq!(
         promise::promise_debug_state_result(&promise),
         Some(("fulfilled".to_owned(), Value::Number(3.0)))
+    );
+}
+
+#[test]
+fn drains_promise_finally_jobs_after_script() {
+    let fulfilled =
+        eval("var calls = 0; Promise.resolve(5).finally(function() { calls = calls + 1; });")
+            .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&fulfilled),
+        Some(("fulfilled".to_owned(), Value::Number(5.0)))
+    );
+
+    let recovered = eval(
+        "var calls = 0; Promise.reject(7).finally(function() { calls = calls + 1; }).catch(function(reason) { return reason + calls; });",
+    )
+    .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&recovered),
+        Some(("fulfilled".to_owned(), Value::Number(8.0)))
+    );
+
+    let thrown = eval(
+        "Promise.resolve(1).finally(function() { throw 9; }).catch(function(reason) { return reason; });",
+    )
+    .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&thrown),
+        Some(("fulfilled".to_owned(), Value::Number(9.0)))
     );
 }

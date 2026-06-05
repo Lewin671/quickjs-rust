@@ -19,6 +19,15 @@ pub(super) fn call_promise_native(
         NativeFunction::PromisePrototypeCatch => {
             promise::native_promise_catch(function, this_value, argument_values, env)?
         }
+        NativeFunction::PromisePrototypeFinally => {
+            promise::native_promise_finally(function, this_value, argument_values, env)?
+        }
+        NativeFunction::PromisePrototypeFinallyFulfilled => {
+            promise::native_promise_finally_fulfilled(function, argument_values, env)?
+        }
+        NativeFunction::PromisePrototypeFinallyRejected => {
+            promise::native_promise_finally_rejected(function, argument_values, env)?
+        }
         NativeFunction::PromisePrototypeThen => {
             promise::native_promise_then(function, this_value, argument_values, env)?
         }
