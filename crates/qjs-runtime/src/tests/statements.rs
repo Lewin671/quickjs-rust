@@ -149,6 +149,14 @@ fn evaluates_break_and_continue() {
         ),
         Ok(Value::Number(8.0))
     );
+    assert_eq!(
+        eval("eval('for(;;) { 1; break; }');"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval("eval('var c = 0; for (; c < 3; c++) { if (c === 2) break; else c; }');"),
+        Ok(Value::Undefined)
+    );
 }
 
 #[test]

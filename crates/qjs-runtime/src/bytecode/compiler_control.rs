@@ -51,6 +51,8 @@ impl Compiler {
         self.emit(Op::Pop);
         self.compile_for_in_left(left, key_slot)?;
 
+        self.emit_load_undefined();
+        self.emit(Op::StoreLocal(result_slot));
         self.push_loop(result_slot);
         self.compile_stmt(body)?;
         self.emit(Op::StoreLocal(result_slot));
@@ -116,6 +118,8 @@ impl Compiler {
         self.emit(Op::StoreLocal(value_slot));
         self.compile_for_in_left(left, value_slot)?;
 
+        self.emit_load_undefined();
+        self.emit(Op::StoreLocal(result_slot));
         self.push_loop(result_slot);
         self.compile_stmt(body)?;
         self.emit(Op::StoreLocal(result_slot));

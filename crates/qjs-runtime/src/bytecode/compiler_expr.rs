@@ -44,6 +44,8 @@ impl Compiler {
         self.compile_expr(test)?;
         let exit_jump = self.emit(Op::JumpIfFalse(usize::MAX));
         self.emit(Op::Pop);
+        self.emit_load_undefined();
+        self.emit(Op::StoreLocal(result_slot));
         self.push_loop(result_slot);
         self.compile_stmt(body)?;
         self.emit(Op::StoreLocal(result_slot));
@@ -78,6 +80,8 @@ impl Compiler {
         self.emit_load_undefined();
         self.emit(Op::StoreLocal(result_slot));
         let loop_start = self.code.len();
+        self.emit_load_undefined();
+        self.emit(Op::StoreLocal(result_slot));
         self.push_loop(result_slot);
         self.compile_stmt(body)?;
         self.emit(Op::StoreLocal(result_slot));
@@ -120,6 +124,8 @@ impl Compiler {
         } else {
             None
         };
+        self.emit_load_undefined();
+        self.emit(Op::StoreLocal(result_slot));
         self.push_loop(result_slot);
         self.compile_stmt(body)?;
         self.emit(Op::StoreLocal(result_slot));
