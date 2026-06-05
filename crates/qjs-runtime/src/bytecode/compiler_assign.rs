@@ -17,6 +17,7 @@ impl Compiler {
     ) -> Result<(), RuntimeError> {
         match target {
             AssignmentTarget::Identifier { name, .. } => {
+                self.validate_strict_binding_name(name)?;
                 if self.dynamic_scope_depth == 0
                     && let Some(slot) = self.local_slots.get(name).copied()
                 {
@@ -275,6 +276,7 @@ impl Compiler {
         let AssignmentTarget::Identifier { name, .. } = target else {
             return self.compile_member_compound_assign(target, op, value);
         };
+        self.validate_strict_binding_name(name)?;
         match op {
             AssignmentOp::LogicalAndAssign => {
                 self.emit_load_binding(name);
@@ -326,6 +328,7 @@ impl Compiler {
         let AssignmentTarget::Identifier { name, .. } = target else {
             return self.compile_member_update(target, op, prefix);
         };
+        self.validate_strict_binding_name(name)?;
         self.emit_load_binding(name);
         self.emit(Op::Unary(qjs_ast::UnaryOp::Plus));
         if !prefix {

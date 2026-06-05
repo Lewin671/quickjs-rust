@@ -2,8 +2,9 @@ use std::collections::HashMap;
 
 use qjs_ast::{AssignmentTarget, ForInLeft, ForInit, Script, Stmt, VarKind};
 
-use crate::{RuntimeError, Value, function::is_strict_function_body};
+use crate::{RuntimeError, STRICT_MODE_BINDING, Value, function::is_strict_function_body};
 
+use super::compiler_completion::statement_has_empty_completion;
 use super::ir::{Bytecode, Local, Op};
 
 #[derive(Default)]
@@ -71,6 +72,12 @@ impl Compiler {
         self.strict = self.strict || is_strict_function_body(&script.body);
         self.collect_hoisted_locals(&script.body);
         self.compile_hoisted_function_decls(&script.body)?;
+        if self.strict {
+            let strict_slot = self.local_slot(STRICT_MODE_BINDING, true);
+            let value_slot = self.const_slot(Value::Boolean(true));
+            self.emit(Op::LoadConst(value_slot));
+            self.emit(Op::StoreLocal(strict_slot));
+        }
         let result_slot = self.temp_local("script_result");
         self.emit_load_undefined();
         self.emit(Op::StoreLocal(result_slot));
@@ -468,6 +475,7 @@ impl Compiler {
             } => {
                 let is_hoisted = *kind == VarKind::Var;
                 for declaration in declarations {
+                    self.validate_strict_binding_name(&declaration.name)?;
                     let slot = self.local_slot(&declaration.name, is_hoisted);
                     if let Some(init) = &declaration.init {
                         self.compile_expr(init)?;
@@ -584,11 +592,4 @@ impl Compiler {
         self.patch_loop_breaks(&context, done);
         Ok(())
     }
-}
-
-fn statement_has_empty_completion(stmt: &Stmt) -> bool {
-    matches!(
-        stmt,
-        Stmt::VarDecl { .. } | Stmt::FunctionDecl { .. } | Stmt::Empty
-    )
 }

@@ -187,6 +187,7 @@ impl Compiler {
             } => {
                 let is_hoisted = *kind == VarKind::Var;
                 for declaration in declarations {
+                    self.validate_strict_binding_name(&declaration.name)?;
                     let slot = self.local_slot(&declaration.name, is_hoisted);
                     if let Some(init) = &declaration.init {
                         self.compile_expr(init)?;
