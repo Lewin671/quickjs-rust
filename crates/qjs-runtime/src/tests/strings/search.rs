@@ -74,6 +74,38 @@ fn evaluates_string_search_builtins() {
         ),
         Ok(Value::Number(5.0))
     );
+    assert_eq!(
+        eval("String.prototype.replaceAll.length;"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval("'foo foo'.replaceAll('foo', 'bar');"),
+        Ok(Value::String("bar bar".to_owned()))
+    );
+    assert_eq!(
+        eval("'abc'.replaceAll('', '-');"),
+        Ok(Value::String("-a-b-c-".to_owned()))
+    );
+    assert_eq!(
+        eval("'aba'.replaceAll('a', '[$&:$`:$\\']');"),
+        Ok(Value::String("[a::ba]b[a:ab:]".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "'a-b-a'.replaceAll('a', function(match, position, input) { return match + position + input.length; });"
+        ),
+        Ok(Value::String("a05-b-a45".to_owned()))
+    );
+    assert_eq!(
+        eval("'a1b2'.replaceAll(/(\\d)/g, '[$1:$&]');"),
+        Ok(Value::String("a[1:1]b[2:2]".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { 'abc'.replaceAll(/a/, 'x'); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]

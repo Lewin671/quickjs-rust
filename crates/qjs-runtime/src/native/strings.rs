@@ -71,6 +71,9 @@ pub(super) fn call_string_native(
         NativeFunction::StringPrototypeRepeat => {
             string::native_string_prototype_repeat(this_value, argument_values, env)?
         }
+        NativeFunction::StringPrototypeReplaceAll => {
+            string::native_string_prototype_replace_all(this_value, argument_values, env)?
+        }
         NativeFunction::StringPrototypeSearch => {
             string::native_string_prototype_search(this_value, argument_values, env)?
         }

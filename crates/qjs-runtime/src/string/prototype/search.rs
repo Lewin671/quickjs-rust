@@ -119,6 +119,39 @@ pub(crate) fn native_string_prototype_match(
     call_function(exec, regexp, vec![Value::String(input)], env, false)
 }
 
+pub(crate) fn native_string_prototype_replace_all(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let input = this_string_value(this_value, env)?;
+    let search_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    if regexp::regexp_is_regexp(&search_value) {
+        if !regexp::regexp_is_global(&search_value) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: String.prototype.replaceAll called with a non-global RegExp"
+                    .to_owned(),
+            });
+        }
+        return regexp_replace_all(
+            input,
+            search_value,
+            argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+            env,
+        );
+    }
+
+    let search = to_js_string_with_env(search_value, env)?;
+    let replacement_value = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
+    let replacement = if matches!(replacement_value, Value::Function(_)) {
+        Replacement::Function(replacement_value)
+    } else {
+        Replacement::String(to_js_string_with_env(replacement_value, env)?)
+    };
+    string_replace_all(input, search, replacement, env)
+}
+
 pub(crate) fn native_string_prototype_search(
     this_value: Value,
     argument_values: &[Value],
@@ -156,6 +189,240 @@ pub(crate) fn native_string_prototype_starts_with(
             .collect::<String>()
             .starts_with(&search),
     ))
+}
+
+enum Replacement {
+    Function(Value),
+    String(String),
+}
+
+struct StringMatch {
+    start: usize,
+    end: usize,
+    matched: String,
+    captures: Vec<Value>,
+}
+
+fn string_replace_all(
+    input: String,
+    search: String,
+    replacement: Replacement,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let matches = string_match_positions(&input, &search);
+    replace_matches(input, matches, replacement, env)
+}
+
+fn regexp_replace_all(
+    input: String,
+    regexp: Value,
+    replacement_value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let replacement = if matches!(replacement_value, Value::Function(_)) {
+        Replacement::Function(replacement_value)
+    } else {
+        Replacement::String(to_js_string_with_env(replacement_value, env)?)
+    };
+    let matches = regexp_match_positions(&input, regexp, env)?;
+    replace_matches(input, matches, replacement, env)
+}
+
+fn string_match_positions(input: &str, search: &str) -> Vec<StringMatch> {
+    let input_len = input.chars().count();
+    if search.is_empty() {
+        return (0..=input_len)
+            .map(|position| StringMatch {
+                start: position,
+                end: position,
+                matched: String::new(),
+                captures: Vec::new(),
+            })
+            .collect();
+    }
+
+    let search_len = search.chars().count();
+    let mut matches = Vec::new();
+    let mut next_search = 0usize;
+    while next_search <= input_len {
+        let suffix = input_char_slice(input, next_search, input_len);
+        let Some(byte_index) = suffix.find(search) else {
+            break;
+        };
+        let start = next_search + suffix[..byte_index].chars().count();
+        let end = start + search_len;
+        matches.push(StringMatch {
+            start,
+            end,
+            matched: search.to_owned(),
+            captures: Vec::new(),
+        });
+        next_search = end;
+    }
+    matches
+}
+
+fn regexp_match_positions(
+    input: &str,
+    regexp: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Vec<StringMatch>, RuntimeError> {
+    regexp::regexp_set_last_index(&regexp, 0);
+    let mut matches = Vec::new();
+    loop {
+        let exec = property_value(regexp.clone(), "exec", env)?;
+        let result = call_function(
+            exec,
+            regexp.clone(),
+            vec![Value::String(input.to_owned())],
+            env,
+            false,
+        )?;
+        let Value::Array(array) = result else {
+            break;
+        };
+        let Some(Value::String(matched)) = array.get(0) else {
+            break;
+        };
+        let start = regexp_match_index(&Value::Array(array.clone()), env)?;
+        let end = start + matched.chars().count();
+        let captures = (1..array.len())
+            .map(|index| array.get(index).unwrap_or(Value::Undefined))
+            .collect();
+        let empty = matched.is_empty();
+        matches.push(StringMatch {
+            start,
+            end,
+            matched,
+            captures,
+        });
+        if empty {
+            regexp::regexp_set_last_index(&regexp, end.saturating_add(1));
+        }
+    }
+    Ok(matches)
+}
+
+fn replace_matches(
+    input: String,
+    matches: Vec<StringMatch>,
+    replacement: Replacement,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let mut result = String::new();
+    let mut copied_until = 0usize;
+    for string_match in matches {
+        result.push_str(&input_char_slice(&input, copied_until, string_match.start));
+        let replacement_string = match &replacement {
+            Replacement::Function(function) => {
+                functional_replacement(function.clone(), &string_match, input.clone(), env)?
+            }
+            Replacement::String(replacement) => get_substitution(
+                replacement,
+                &string_match.matched,
+                string_match.start,
+                &input,
+                &string_match.captures,
+            ),
+        };
+        result.push_str(&replacement_string);
+        copied_until = string_match.end;
+    }
+    result.push_str(&input_char_slice(
+        &input,
+        copied_until,
+        input.chars().count(),
+    ));
+    Ok(Value::String(result))
+}
+
+fn functional_replacement(
+    function: Value,
+    string_match: &StringMatch,
+    input: String,
+    env: &mut HashMap<String, Value>,
+) -> Result<String, RuntimeError> {
+    let mut arguments = Vec::with_capacity(3 + string_match.captures.len());
+    arguments.push(Value::String(string_match.matched.clone()));
+    arguments.extend(string_match.captures.iter().cloned());
+    arguments.push(Value::Number(string_match.start as f64));
+    arguments.push(Value::String(input));
+    let value = call_function(function, Value::Undefined, arguments, env, false)?;
+    to_js_string_with_env(value, env)
+}
+
+fn get_substitution(
+    replacement: &str,
+    matched: &str,
+    position: usize,
+    input: &str,
+    captures: &[Value],
+) -> String {
+    let mut result = String::new();
+    let mut chars = replacement.chars().peekable();
+    while let Some(character) = chars.next() {
+        if character != '$' {
+            result.push(character);
+            continue;
+        }
+        let Some(next) = chars.next() else {
+            result.push('$');
+            break;
+        };
+        match next {
+            '$' => result.push('$'),
+            '&' => result.push_str(matched),
+            '`' => result.push_str(&input_char_slice(input, 0, position)),
+            '\'' => result.push_str(&input_char_slice(
+                input,
+                position + matched.chars().count(),
+                input.chars().count(),
+            )),
+            '1'..='9' => {
+                let first = next.to_digit(10).unwrap() as usize;
+                if let Some(second) = chars.peek().and_then(|value| value.to_digit(10)) {
+                    let two_digit = first * 10 + second as usize;
+                    if two_digit <= captures.len() {
+                        chars.next();
+                        push_capture(&mut result, captures, two_digit);
+                        continue;
+                    }
+                }
+                if first <= captures.len() {
+                    push_capture(&mut result, captures, first);
+                } else {
+                    result.push('$');
+                    result.push(next);
+                }
+            }
+            _ => {
+                result.push('$');
+                result.push(next);
+            }
+        }
+    }
+    result
+}
+
+fn push_capture(result: &mut String, captures: &[Value], index: usize) {
+    if let Some(Value::String(capture)) = captures.get(index - 1) {
+        result.push_str(capture);
+    }
+}
+
+fn regexp_match_index(
+    match_value: &Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<usize, RuntimeError> {
+    let index = property_value(match_value.clone(), "index", env)?;
+    match index {
+        Value::Number(number) if number.is_finite() && number > 0.0 => Ok(number.trunc() as usize),
+        _ => Ok(0),
+    }
+}
+
+fn input_char_slice(input: &str, start: usize, end: usize) -> String {
+    input.chars().skip(start).take(end - start).collect()
 }
 
 fn regexp_value(pattern: Value, env: &mut HashMap<String, Value>) -> Result<Value, RuntimeError> {

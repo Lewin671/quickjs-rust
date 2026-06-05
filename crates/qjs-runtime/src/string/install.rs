@@ -21,6 +21,7 @@ const STRING_PROTOTYPE_METHODS: &[(&str, usize, NativeFunction)] = &[
     ("padEnd", 1, NativeFunction::StringPrototypePadEnd),
     ("padStart", 1, NativeFunction::StringPrototypePadStart),
     ("repeat", 1, NativeFunction::StringPrototypeRepeat),
+    ("replaceAll", 2, NativeFunction::StringPrototypeReplaceAll),
     ("search", 1, NativeFunction::StringPrototypeSearch),
     ("slice", 2, NativeFunction::StringPrototypeSlice),
     ("split", 2, NativeFunction::StringPrototypeSplit),

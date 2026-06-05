@@ -776,6 +776,7 @@ cases/string-prototype-pad-start-length.js
 cases/string-prototype-pad-start-omitted-fill.js
 cases/string-prototype-repeat-basic.js
 cases/string-prototype-repeat-length.js
+cases/string-prototype-replace-all-basic.js
 cases/string-prototype-search-basic.js
 cases/string-prototype-search-ignore-case.js
 cases/string-prototype-slice-basic.js
