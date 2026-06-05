@@ -16,15 +16,20 @@ pub(super) fn call_promise_native(
         NativeFunction::Promise => {
             promise::native_promise(function, this_value, argument_values, is_construct, env)?
         }
-        NativeFunction::PromiseReject => promise::native_promise_reject(function, argument_values)?,
+        NativeFunction::PromisePrototypeThen => {
+            promise::native_promise_then(function, this_value, argument_values, env)?
+        }
+        NativeFunction::PromiseReject => {
+            promise::native_promise_reject(function, argument_values, env)?
+        }
         NativeFunction::PromiseResolve => {
-            promise::native_promise_resolve(function, argument_values)?
+            promise::native_promise_resolve(function, argument_values, env)?
         }
         NativeFunction::PromiseRejectFunction => {
-            promise::native_promise_reject_function(function, argument_values)?
+            promise::native_promise_reject_function(function, argument_values, env)?
         }
         NativeFunction::PromiseResolveFunction => {
-            promise::native_promise_resolve_function(function, argument_values)?
+            promise::native_promise_resolve_function(function, argument_values, env)?
         }
         _ => return Ok(None),
     };

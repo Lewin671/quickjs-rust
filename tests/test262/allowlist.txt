@@ -588,6 +588,9 @@ cases/parse-int-invalid.js
 cases/parse-int-length.js
 cases/promise-constructor-basic.js
 cases/promise-resolve-reject-basic.js
+cases/promise-then-basic.js
+cases/promise-then-context-check.js
+cases/promise-then-property-descriptor.js
 cases/compound-assignment-basic.js
 cases/bitwise-compound-assignment-basic.js
 cases/shift-compound-assignment-basic.js

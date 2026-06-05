@@ -5,7 +5,7 @@ use qjs_ast::ObjectPropertyKind;
 use crate::{
     ArrayRef, Function, GLOBAL_THIS_BINDING, ObjectRef, Property, RUNTIME_INTRINSIC_NAMES,
     RuntimeError, Value, call_function, constructor_prototype, initialize_builtins, is_truthy,
-    object_prototype, to_property_key,
+    object_prototype, promise, to_property_key,
 };
 
 use super::ir::{Bytecode, Op};
@@ -24,7 +24,9 @@ struct VmCallEnv {
 
 pub(super) fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> {
     let mut vm = Vm::new(bytecode);
-    vm.run()
+    let value = vm.run()?;
+    vm.drain_promise_jobs()?;
+    Ok(value)
 }
 
 pub(super) fn eval_function_bytecode(
@@ -510,5 +512,12 @@ impl<'a> Vm<'a> {
 
     pub(super) fn pop(&mut self) -> Result<Value, RuntimeError> {
         self.stack.pop().ok_or_else(stack_underflow)
+    }
+
+    fn drain_promise_jobs(&mut self) -> Result<(), RuntimeError> {
+        let mut env = self.current_env();
+        promise::drain_promise_jobs(&mut env)?;
+        self.apply_env(env);
+        Ok(())
     }
 }
