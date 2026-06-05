@@ -47,6 +47,14 @@ fn evaluates_if_else_statements() {
         eval("let x = 1; if (x < 0) x = 7; else x = 3; x;"),
         Ok(Value::Number(3.0))
     );
+    assert_eq!(
+        eval("eval('1; do { 2; if (true) { 3; break; } 4; } while (false)');"),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval("eval('5; do { 6; if (true) { break; } 7; } while (false)');"),
+        Ok(Value::Undefined)
+    );
 }
 
 #[test]

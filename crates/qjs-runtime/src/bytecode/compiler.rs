@@ -289,6 +289,10 @@ impl Compiler {
             .expect("loop context should be balanced")
     }
 
+    pub(super) fn current_result_slot(&self) -> Option<usize> {
+        self.loop_stack.last().map(|context| context.result_slot)
+    }
+
     pub(super) fn compile_break(&mut self, label: Option<&str>) -> Result<(), RuntimeError> {
         let index = if let Some(label) = label {
             self.loop_stack
