@@ -588,6 +588,9 @@ cases/parse-int-invalid.js
 cases/parse-int-length.js
 cases/promise-constructor-basic.js
 cases/promise-resolve-reject-basic.js
+cases/promise-resolve-function-thenable-immed.js
+cases/promise-resolve-thenable-getter-queued.js
+cases/promise-resolve-thenable-queued.js
 cases/promise-catch-basic.js
 cases/promise-catch-context-check.js
 cases/promise-catch-invokes-then.js

@@ -187,3 +187,75 @@ fn drains_promise_finally_jobs_after_script() {
         Some(("fulfilled".to_owned(), Value::Number(9.0)))
     );
 }
+
+#[test]
+fn assimilates_promise_thenables_after_script() {
+    let resolved = eval(
+        "Promise.resolve({ then: function(resolve) { resolve(11); } }).then(function(value) { return value + 1; });",
+    )
+    .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&resolved),
+        Some(("fulfilled".to_owned(), Value::Number(12.0)))
+    );
+
+    let constructed = eval(
+        "new Promise(function(resolve) { resolve({ then: function(resolve) { resolve(13); } }); }).then(function(value) { return value + 1; });",
+    )
+    .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&constructed),
+        Some(("fulfilled".to_owned(), Value::Number(14.0)))
+    );
+
+    let returned = eval(
+        "Promise.resolve(1).then(function() { return { then: function(resolve) { resolve(15); } }; }).then(function(value) { return value + 1; });",
+    )
+    .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&returned),
+        Some(("fulfilled".to_owned(), Value::Number(16.0)))
+    );
+}
+
+#[test]
+fn assimilates_promise_thenable_rejections_after_script() {
+    let rejected = eval(
+        "Promise.resolve({ then: function(resolve, reject) { reject(21); } }).catch(function(reason) { return reason + 1; });",
+    )
+    .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&rejected),
+        Some(("fulfilled".to_owned(), Value::Number(22.0)))
+    );
+
+    let first_settlement = eval(
+        "Promise.resolve({ then: function(resolve, reject) { resolve(31); reject(32); } }).then(function(value) { return value; });",
+    )
+    .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&first_settlement),
+        Some(("fulfilled".to_owned(), Value::Number(31.0)))
+    );
+
+    let poisoned = eval(
+        "var value = {}; Object.defineProperty(value, 'then', { get: function() { throw 41; } }); Promise.resolve(value).catch(function(reason) { return reason + 1; });",
+    )
+    .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&poisoned),
+        Some(("fulfilled".to_owned(), Value::Number(42.0)))
+    );
+}
+
+#[test]
+fn fulfills_non_callable_then_values_after_script() {
+    let fulfilled = eval(
+        "var value = { then: 1, marker: 51 }; Promise.resolve(value).then(function(result) { return result.marker + 1; });",
+    )
+    .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&fulfilled),
+        Some(("fulfilled".to_owned(), Value::Number(52.0)))
+    );
+}

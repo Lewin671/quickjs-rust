@@ -1,9 +1,14 @@
 use std::collections::HashMap;
 
 use crate::{
-    ArrayRef, Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, Property, RuntimeError,
-    Value, call_function, property_value,
+    ArrayRef, Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, call_function,
+    property_value,
 };
+
+mod jobs;
+
+pub(crate) use jobs::drain_promise_jobs;
+use jobs::{enqueue_promise_reaction_job, enqueue_promise_thenable_job};
 
 const PROMISE_FULFILL_REACTION: &str = "\0PromiseFulfillReaction";
 const PROMISE_FINALLY_HANDLER: &str = "\0PromiseFinallyHandler";
@@ -15,6 +20,9 @@ const PROMISE_REACTION_CAPABILITY: &str = "\0PromiseReactionCapability";
 const PROMISE_STATE: &str = "\0PromiseState";
 const PROMISE_RESULT: &str = "\0PromiseResult";
 const PROMISE_TARGET: &str = "\0PromiseTarget";
+const PROMISE_THEN: &str = "\0PromiseThen";
+const PROMISE_THENABLE: &str = "\0PromiseThenable";
+const PROMISE_THENABLE_CAPABILITY: &str = "\0PromiseThenableCapability";
 const PROMISE_PROTOTYPE: &str = "\0PromisePrototype";
 const PROMISE_PENDING: &str = "pending";
 const PROMISE_FULFILLED: &str = "fulfilled";
@@ -154,7 +162,7 @@ pub(crate) fn native_promise_resolve(
     }
     let promise = promise_object_from_function(function);
     initialize_promise(&promise);
-    settle_promise(&promise, PROMISE_FULFILLED, value, env);
+    resolve_promise(&promise, value, env);
     Ok(Value::Object(promise))
 }
 
@@ -280,7 +288,7 @@ pub(crate) fn native_promise_resolve_function(
 ) -> Result<Value, RuntimeError> {
     let promise = promise_from_resolving_function(function)?;
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    settle_promise(&promise, PROMISE_FULFILLED, value, env);
+    resolve_promise(&promise, value, env);
     Ok(Value::Undefined)
 }
 
@@ -341,6 +349,35 @@ fn settle_promise(
             enqueue_promise_reaction_job(env, &reaction, result.clone());
         }
     }
+}
+
+fn resolve_promise(object: &ObjectRef, value: Value, env: &mut HashMap<String, Value>) {
+    if matches!(&value, Value::Object(value_object) if value_object.ptr_eq(object)) {
+        settle_promise(
+            object,
+            PROMISE_REJECTED,
+            Value::String("TypeError: promise resolved with itself".to_owned()),
+            env,
+        );
+        return;
+    }
+    let then = match promise_thenable_then(value.clone(), env) {
+        Ok(Some(then)) => then,
+        Ok(None) => {
+            settle_promise(object, PROMISE_FULFILLED, value, env);
+            return;
+        }
+        Err(error) => {
+            settle_promise(
+                object,
+                PROMISE_REJECTED,
+                error.thrown.map_or(Value::Undefined, |value| *value),
+                env,
+            );
+            return;
+        }
+    };
+    enqueue_promise_thenable_job(env, object.clone(), value, then);
 }
 
 fn resolving_function(name: &str, native: NativeFunction, promise: Value) -> Value {
@@ -470,50 +507,6 @@ fn reaction_is_fulfill(reaction: &ObjectRef) -> bool {
     )
 }
 
-fn enqueue_promise_reaction_job(
-    env: &mut HashMap<String, Value>,
-    reaction: &ObjectRef,
-    argument: Value,
-) {
-    let job = ObjectRef::new(HashMap::new());
-    if let Some(handler) = reaction
-        .own_property(PROMISE_HANDLER)
-        .map(|property| property.value)
-    {
-        job.define_non_enumerable(PROMISE_HANDLER.to_owned(), handler);
-    }
-    if let Some(capability) = reaction
-        .own_property(PROMISE_REACTION_CAPABILITY)
-        .map(|property| property.value)
-    {
-        job.define_non_enumerable(PROMISE_REACTION_CAPABILITY.to_owned(), capability);
-    }
-    job.define_non_enumerable(PROMISE_REACTION_ARGUMENT.to_owned(), argument);
-    job.define_non_enumerable(
-        PROMISE_FULFILL_REACTION.to_owned(),
-        Value::Boolean(reaction_is_fulfill(reaction)),
-    );
-    let jobs = promise_jobs(env);
-    jobs.set(jobs.len(), Value::Object(job));
-}
-
-pub(crate) fn drain_promise_jobs(env: &mut HashMap<String, Value>) -> Result<(), RuntimeError> {
-    loop {
-        let jobs = promise_jobs(env);
-        let pending = jobs.to_vec();
-        if pending.is_empty() {
-            return Ok(());
-        }
-        jobs.replace_with(Vec::new());
-        for job in pending {
-            let Value::Object(job) = job else {
-                continue;
-            };
-            run_promise_reaction_job(&job, env)?;
-        }
-    }
-}
-
 #[cfg(test)]
 pub(crate) fn promise_debug_state_result(value: &Value) -> Option<(String, Value)> {
     let Value::Object(object) = value else {
@@ -522,68 +515,24 @@ pub(crate) fn promise_debug_state_result(value: &Value) -> Option<(String, Value
     Some((promise_state(object)?, promise_result(object)?))
 }
 
-fn run_promise_reaction_job(
-    job: &ObjectRef,
+fn promise_thenable_then(
+    value: Value,
     env: &mut HashMap<String, Value>,
-) -> Result<(), RuntimeError> {
-    let capability = match job
-        .own_property(PROMISE_REACTION_CAPABILITY)
-        .map(|property| property.value)
-    {
-        Some(Value::Object(promise)) if is_promise_object(&promise) => promise,
-        _ => return Ok(()),
-    };
-    let argument = job
-        .own_property(PROMISE_REACTION_ARGUMENT)
-        .map_or(Value::Undefined, |property| property.value);
-    let fulfill = matches!(
-        job.own_property(PROMISE_FULFILL_REACTION)
-            .map(|property| property.value),
-        Some(Value::Boolean(true))
-    );
-    let handler = job
-        .own_property(PROMISE_HANDLER)
-        .map_or(Value::Undefined, |property| property.value);
-
-    match handler {
-        Value::Function(_) => {
-            match call_function(handler, Value::Undefined, vec![argument], env, false) {
-                Ok(value) => settle_promise(&capability, PROMISE_FULFILLED, value, env),
-                Err(error) => settle_promise(
-                    &capability,
-                    PROMISE_REJECTED,
-                    error.thrown.map_or(Value::Undefined, |value| *value),
-                    env,
-                ),
-            }
-        }
-        _ if fulfill => settle_promise(&capability, PROMISE_FULFILLED, argument, env),
-        _ => settle_promise(&capability, PROMISE_REJECTED, argument, env),
+) -> Result<Option<Value>, RuntimeError> {
+    if !is_thenable_candidate(&value) {
+        return Ok(None);
     }
-    Ok(())
+    let then = property_value(value, "then", env)?;
+    if matches!(then, Value::Function(_)) {
+        Ok(Some(then))
+    } else {
+        Ok(None)
+    }
 }
 
-fn promise_jobs(env: &mut HashMap<String, Value>) -> ArrayRef {
-    let global_this = match env.get(GLOBAL_THIS_BINDING).cloned() {
-        Some(Value::Object(global_this)) => global_this,
-        _ => {
-            let global_this = ObjectRef::new(HashMap::new());
-            env.insert(
-                GLOBAL_THIS_BINDING.to_owned(),
-                Value::Object(global_this.clone()),
-            );
-            global_this
-        }
-    };
-    match global_this
-        .own_property(PROMISE_JOBS)
-        .map(|property| property.value)
-    {
-        Some(Value::Array(jobs)) => jobs,
-        _ => {
-            let jobs = ArrayRef::new(Vec::new());
-            global_this.define_non_enumerable(PROMISE_JOBS.to_owned(), Value::Array(jobs.clone()));
-            jobs
-        }
-    }
+fn is_thenable_candidate(value: &Value) -> bool {
+    matches!(
+        value,
+        Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Object(_) | Value::Set(_)
+    )
 }
