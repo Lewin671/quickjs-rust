@@ -96,6 +96,23 @@ impl Parser {
 
     fn arrow_parameters(&mut self) -> Result<Option<Vec<String>>, ParseError> {
         match self.peek().map(|token| &token.kind) {
+            Some(TokenKind::Identifier(name))
+                if name == "async"
+                    && matches!(
+                        self.peek_nth(1).map(|token| &token.kind),
+                        Some(TokenKind::Identifier(_))
+                    )
+                    && self
+                        .peek_nth(2)
+                        .is_some_and(|token| token.kind == TokenKind::Arrow) =>
+            {
+                self.advance();
+                let token = self.advance();
+                let TokenKind::Identifier(param) = token.kind else {
+                    unreachable!("peek checked identifier");
+                };
+                Ok(Some(vec![param]))
+            }
             Some(TokenKind::Identifier(_))
                 if self
                     .peek_nth(1)

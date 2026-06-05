@@ -126,7 +126,7 @@ impl Parser {
                         span: Span::new(start, end),
                     });
                 }
-                if self.match_identifier_text("of") {
+                if self.match_for_of_separator() {
                     let right = self.expression()?;
                     self.expect(&TokenKind::RightParen)?;
                     let body = self.statement()?;
@@ -204,7 +204,7 @@ impl Parser {
                     span: Span::new(start, end),
                 });
             }
-            if self.match_identifier_text("of") {
+            if self.match_for_of_separator() {
                 let right = self.expression()?;
                 self.expect(&TokenKind::RightParen)?;
                 let body = self.statement()?;
@@ -237,7 +237,7 @@ impl Parser {
                     span: Span::new(start, end),
                 });
             }
-            if self.match_identifier_text("of") {
+            if self.match_for_of_separator() {
                 let left = assignment_target(left)?;
                 let right = self.expression()?;
                 self.expect(&TokenKind::RightParen)?;
@@ -299,6 +299,18 @@ impl Parser {
                         TokenKind::Identifier(_) | TokenKind::LeftBracket | TokenKind::LeftBrace
                     )
                 }))
+    }
+
+    fn match_for_of_separator(&mut self) -> bool {
+        if self.at_identifier_text("of")
+            && !self
+                .peek_nth(1)
+                .is_some_and(|token| token.kind == TokenKind::Arrow)
+        {
+            self.advance();
+            return true;
+        }
+        false
     }
 
     pub(super) fn switch_statement(&mut self) -> Result<Stmt, ParseError> {

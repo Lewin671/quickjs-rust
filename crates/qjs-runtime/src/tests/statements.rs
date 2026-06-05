@@ -111,6 +111,12 @@ fn evaluates_for_statements() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "var i = 0; var counter = 0; for (async of => {}; i < 10; ++i) { ++counter; } counter;"
+        ),
+        Ok(Value::Number(10.0))
+    );
 }
 
 #[test]
