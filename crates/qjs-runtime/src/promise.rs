@@ -10,6 +10,7 @@ pub(crate) mod all_settled;
 pub(crate) mod any;
 mod jobs;
 mod race;
+pub(crate) mod r#try;
 pub(crate) mod with_resolvers;
 
 pub(crate) use all::{native_promise_all, native_promise_all_resolve_element};
@@ -115,6 +116,7 @@ pub(crate) fn install_promise(
     for (name, length, native) in [
         ("allSettled", 1, NativeFunction::PromiseAllSettled),
         ("race", 1, NativeFunction::PromiseRace),
+        ("try", 1, NativeFunction::PromiseTry),
         ("withResolvers", 0, NativeFunction::PromiseWithResolvers),
         ("resolve", 1, NativeFunction::PromiseResolve),
         ("reject", 1, NativeFunction::PromiseReject),

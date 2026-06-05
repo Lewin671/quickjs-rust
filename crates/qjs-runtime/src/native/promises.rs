@@ -67,6 +67,9 @@ pub(super) fn call_promise_native(
         NativeFunction::PromiseResolve => {
             promise::native_promise_resolve(function, argument_values, env)?
         }
+        NativeFunction::PromiseTry => {
+            promise::r#try::native_promise_try(function, argument_values, env)?
+        }
         NativeFunction::PromiseWithResolvers => {
             promise::with_resolvers::native_promise_with_resolvers(function)?
         }

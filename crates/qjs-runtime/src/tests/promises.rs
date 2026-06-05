@@ -77,6 +77,20 @@ fn evaluates_promise_any_shell() {
 }
 
 #[test]
+fn evaluates_promise_try_shell() {
+    assert_eval("typeof Promise.try;", Value::String("function".to_owned()));
+    assert_eval("Promise.try.length;", Value::Number(1.0));
+    assert_eval(
+        "Promise.propertyIsEnumerable('try');",
+        Value::Boolean(false),
+    );
+    assert_eval(
+        "Promise.try(function() {}) instanceof Promise;",
+        Value::Boolean(true),
+    );
+}
+
+#[test]
 fn evaluates_promise_with_resolvers_shell() {
     assert_eval(
         "typeof Promise.withResolvers;",
@@ -447,6 +461,38 @@ fn drains_promise_any_rejections_after_script() {
 }
 
 #[test]
+fn drains_promise_try_after_script() {
+    let fulfilled = eval("Promise.try(function(a, b) { return a + b; }, 2, 3);").unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&fulfilled),
+        Some(("fulfilled".to_owned(), Value::Number(5.0)))
+    );
+
+    let args = eval(
+        "Promise.try(function(a, b, c) { return String(a) + ':' + b + ':' + (c === undefined); }, 1, 2);",
+    )
+    .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&args),
+        Some(("fulfilled".to_owned(), Value::String("1:2:true".to_owned())))
+    );
+
+    let rejected = eval("Promise.try(function() { throw 7; });").unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&rejected),
+        Some(("rejected".to_owned(), Value::Number(7.0)))
+    );
+
+    let thenable =
+        eval("Promise.try(function() { return { then: function(resolve) { resolve(11); } }; });")
+            .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&thenable),
+        Some(("fulfilled".to_owned(), Value::Number(11.0)))
+    );
+}
+
+#[test]
 fn drains_promise_with_resolvers_after_script() {
     let resolved = eval(
         "var c = Promise.withResolvers(); var p = c.promise.then(function(value) { return value + 1; }); c.resolve(4); p;",
@@ -546,44 +592,5 @@ fn drains_promise_all_settled_thenable_rejections_after_script() {
             "fulfilled".to_owned(),
             Value::String("rejected:8".to_owned())
         ))
-    );
-}
-
-#[test]
-fn drains_promise_race_jobs_after_script() {
-    let empty = eval("Promise.race([]);").unwrap();
-    assert_eq!(
-        promise::promise_debug_state_result(&empty),
-        Some(("pending".to_owned(), Value::Undefined))
-    );
-
-    let resolved = eval(
-        "Promise.race([Promise.resolve(1), 2, { then: function(resolve) { resolve(3); } }]).then(function(value) { return value + 10; });",
-    )
-    .unwrap();
-    assert_eq!(
-        promise::promise_debug_state_result(&resolved),
-        Some(("fulfilled".to_owned(), Value::Number(11.0)))
-    );
-
-    let thenable = eval(
-        "Promise.race([{ then: function(resolve, reject) { resolve(4); reject(5); } }]).then(function(value) { return value; });",
-    )
-    .unwrap();
-    assert_eq!(
-        promise::promise_debug_state_result(&thenable),
-        Some(("fulfilled".to_owned(), Value::Number(4.0)))
-    );
-}
-
-#[test]
-fn drains_promise_race_rejections_after_script() {
-    let rejected = eval(
-        "Promise.race([Promise.reject(2), Promise.resolve(1)]).catch(function(reason) { return reason + 1; });",
-    )
-    .unwrap();
-    assert_eq!(
-        promise::promise_debug_state_result(&rejected),
-        Some(("fulfilled".to_owned(), Value::Number(3.0)))
     );
 }
