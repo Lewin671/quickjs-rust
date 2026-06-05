@@ -9,6 +9,7 @@ mod maps;
 mod math;
 mod numbers;
 mod objects;
+mod promises;
 mod reflect;
 mod regexp;
 mod sets;
@@ -89,6 +90,17 @@ pub(crate) fn call_native_function(
         this_value.clone(),
         &argument_values,
         is_construct,
+    )? {
+        return Ok(value);
+    }
+
+    if let Some(value) = promises::call_promise_native(
+        function,
+        native,
+        this_value.clone(),
+        &argument_values,
+        is_construct,
+        env,
     )? {
         return Ok(value);
     }

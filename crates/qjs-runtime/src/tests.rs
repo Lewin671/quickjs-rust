@@ -12,6 +12,7 @@ mod maps;
 mod math;
 mod numbers;
 mod objects;
+mod promises;
 mod reflect;
 mod regexp;
 mod sets;

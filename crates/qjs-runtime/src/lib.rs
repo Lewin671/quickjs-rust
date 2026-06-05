@@ -18,6 +18,7 @@ mod native;
 mod number;
 mod object;
 mod operations;
+mod promise;
 mod property;
 mod reflect;
 mod regexp;
@@ -70,6 +71,7 @@ pub(crate) const RUNTIME_INTRINSIC_NAMES: &[&str] = &[
     "TypeError",
     "URIError",
     "JSON",
+    "Promise",
     "Map",
     "Set",
     "Math",
