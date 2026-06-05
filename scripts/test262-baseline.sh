@@ -404,8 +404,16 @@ run_case() {
       rust_pass_qjsng_nonpass=$((rust_pass_qjsng_nonpass + 1))
     elif [ "$qjsng_kind" = "pass" ]; then
       qjsng_pass_rust_nonpass=$((qjsng_pass_rust_nonpass + 1))
+      case "$rust_kind" in
+        skipped) qjsng_pass_rust_harness_gap=$((qjsng_pass_rust_harness_gap + 1)) ;;
+        timeout) qjsng_pass_rust_timeout=$((qjsng_pass_rust_timeout + 1)) ;;
+        fail) qjsng_pass_rust_fail=$((qjsng_pass_rust_fail + 1)) ;;
+      esac
     else
       both_nonpass=$((both_nonpass + 1))
+      if [ "$rust_kind" != "skipped" ] && [ "$qjsng_kind" != "skipped" ]; then
+        both_fail_or_timeout=$((both_fail_or_timeout + 1))
+      fi
     fi
   fi
 }
@@ -444,40 +452,25 @@ write_summary_json() {
   "comparison": {
     "both_pass": $both_pass,
     "quickjs_ng_pass_rust_nonpass": $qjsng_pass_rust_nonpass,
+    "quickjs_ng_pass_rust_harness_gap": $qjsng_pass_rust_harness_gap,
+    "quickjs_ng_pass_rust_fail": $qjsng_pass_rust_fail,
+    "quickjs_ng_pass_rust_timeout": $qjsng_pass_rust_timeout,
     "rust_pass_quickjs_ng_nonpass": $rust_pass_qjsng_nonpass,
-    "both_nonpass": $both_nonpass
+    "both_nonpass": $both_nonpass,
+    "both_fail_or_timeout": $both_fail_or_timeout
   }
 }
 JSON
 }
 
-scanned=0
-total=0
-configured=0
-eligible=0
-run=0
-skipped=0
-skip_async=0
-skip_features=0
-skip_fixture=0
-skip_includes=0
-skip_intl402=0
-skip_module=0
-skip_negative=0
-skip_raw=0
-rust_harness_gap=0
-rust_pass=0
-rust_fail=0
-rust_timeout=0
-rust_skipped=0
-qjsng_pass=0
-qjsng_fail=0
-qjsng_timeout=0
-qjsng_skipped=0
-both_pass=0
-qjsng_pass_rust_nonpass=0
-rust_pass_qjsng_nonpass=0
-both_nonpass=0
+scanned=0 total=0 configured=0 eligible=0 run=0 skipped=0
+skip_async=0 skip_features=0 skip_fixture=0 skip_includes=0
+skip_intl402=0 skip_module=0 skip_negative=0 skip_raw=0
+rust_harness_gap=0 rust_pass=0 rust_fail=0 rust_timeout=0 rust_skipped=0
+qjsng_pass=0 qjsng_fail=0 qjsng_timeout=0 qjsng_skipped=0
+both_pass=0 qjsng_pass_rust_nonpass=0 rust_pass_qjsng_nonpass=0
+qjsng_pass_rust_harness_gap=0 qjsng_pass_rust_fail=0 qjsng_pass_rust_timeout=0
+both_nonpass=0 both_fail_or_timeout=0
 
 while IFS= read -r file; do
   rel="${file#"$TEST262_DIR/"}"
