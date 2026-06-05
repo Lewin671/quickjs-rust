@@ -154,7 +154,7 @@ run_case() {
     echo "timeout"
   else
     first_line="$(printf '%s\n' "$output" | sed -n '1p')"
-    echo "fail\t$first_line"
+    printf "fail\t%s\n" "$first_line"
   fi
 }
 
@@ -181,7 +181,12 @@ while IFS= read -r file; do
   fi
 
   total=$((total + 1))
-  IFS=$'\n' read -r flags includes features has_negative < <(metadata_for "$file")
+  {
+    read -r flags
+    read -r includes
+    read -r features
+    read -r has_negative
+  } < <(metadata_for "$file")
   reason="$(skip_reason "$rel" "$flags" "$includes" "$features" "$has_negative")"
   if [ -n "$reason" ]; then
     skipped=$((skipped + 1))
