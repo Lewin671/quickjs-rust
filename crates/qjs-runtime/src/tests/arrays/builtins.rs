@@ -74,6 +74,12 @@ fn evaluates_array_builtins() {
         eval("Array.prototype.splice.length;"),
         Ok(Value::Number(2.0))
     );
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(Array.prototype, 'toLocaleString'); d.value === Array.prototype.toString && !d.enumerable && d.writable && d.configurable;"
+        ),
+        Ok(Value::Boolean(true))
+    );
     assert_eq!(eval("Array.prototype.pop.length;"), Ok(Value::Number(0.0)));
     assert_eq!(eval("Array.prototype.push.length;"), Ok(Value::Number(1.0)));
     assert_eq!(

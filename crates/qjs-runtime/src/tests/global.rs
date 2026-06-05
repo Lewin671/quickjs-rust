@@ -127,6 +127,12 @@ fn evaluates_uri_global_builtins() {
     );
     assert_eq!(
         eval(
+            "let parseIntDesc = Object.getOwnPropertyDescriptor(this, 'parseInt'); let parseFloatDesc = Object.getOwnPropertyDescriptor(this, 'parseFloat'); parseIntDesc.value === parseInt && parseFloatDesc.value === parseFloat && parseIntDesc.writable && parseFloatDesc.writable && !parseIntDesc.enumerable && !parseFloatDesc.enumerable && parseIntDesc.configurable && parseFloatDesc.configurable;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
             "delete encodeURI.length; !encodeURI.hasOwnProperty('length') && encodeURI.length === 0;"
         ),
         Ok(Value::Boolean(true))

@@ -18,6 +18,10 @@ fn evaluates_date_builtins() {
         Ok(Value::Number(0.0))
     );
     assert_eq!(
+        eval("Date.prototype.getFullYear.length;"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
         eval("Date.prototype.toJSON.length;"),
         Ok(Value::Number(1.0))
     );
@@ -52,6 +56,16 @@ fn evaluates_date_builtins() {
     assert_eq!(
         eval("Date.prototype.setUTCSeconds.length;"),
         Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval("Date.prototype.setFullYear.length;"),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(Date.prototype, 'toLocaleString'); d.value === Date.prototype.toLocaleString && !d.enumerable && d.writable && d.configurable;"
+        ),
+        Ok(Value::Boolean(true))
     );
     assert_eq!(eval("new Date(0).getTime();"), Ok(Value::Number(0.0)));
     assert_eq!(eval("new Date(0).valueOf();"), Ok(Value::Number(0.0)));

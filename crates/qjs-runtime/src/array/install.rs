@@ -194,6 +194,7 @@ pub(crate) fn install_array(
         0,
         NativeFunction::ArrayPrototypeToString,
     );
+    define_array_prototype_alias(&array_prototype, "toLocaleString", "toString");
     define_array_prototype_function(
         &array_prototype,
         "toReversed",
@@ -255,6 +256,12 @@ fn define_array_prototype_function(
         key.to_owned(),
         Value::Function(Function::new_native(Some(key), length, native, false)),
     );
+}
+
+fn define_array_prototype_alias(prototype: &ObjectRef, key: &str, target: &str) {
+    if let Some(value) = prototype.get(target) {
+        prototype.define_non_enumerable(key.to_owned(), value);
+    }
 }
 
 fn define_array_function(function: &Function, key: &str, length: usize, native: NativeFunction) {

@@ -24,6 +24,12 @@ fn evaluates_number_builtins() {
         Ok(Value::Number(1.0))
     );
     assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(Number.prototype, 'toLocaleString'); d.value === Number.prototype.toString && !d.enumerable && d.writable && d.configurable;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("Number.prototype.valueOf.length;"),
         Ok(Value::Number(0.0))
     );

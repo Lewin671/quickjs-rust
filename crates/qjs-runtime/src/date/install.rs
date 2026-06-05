@@ -28,6 +28,54 @@ pub(crate) fn install_date(
     );
     define_date_prototype_function(
         &date_prototype,
+        "getDate",
+        0,
+        NativeFunction::DatePrototypeGetUtcDate,
+    );
+    define_date_prototype_function(
+        &date_prototype,
+        "getDay",
+        0,
+        NativeFunction::DatePrototypeGetUtcDay,
+    );
+    define_date_prototype_function(
+        &date_prototype,
+        "getFullYear",
+        0,
+        NativeFunction::DatePrototypeGetUtcFullYear,
+    );
+    define_date_prototype_function(
+        &date_prototype,
+        "getHours",
+        0,
+        NativeFunction::DatePrototypeGetUtcHours,
+    );
+    define_date_prototype_function(
+        &date_prototype,
+        "getMilliseconds",
+        0,
+        NativeFunction::DatePrototypeGetUtcMilliseconds,
+    );
+    define_date_prototype_function(
+        &date_prototype,
+        "getMinutes",
+        0,
+        NativeFunction::DatePrototypeGetUtcMinutes,
+    );
+    define_date_prototype_function(
+        &date_prototype,
+        "getMonth",
+        0,
+        NativeFunction::DatePrototypeGetUtcMonth,
+    );
+    define_date_prototype_function(
+        &date_prototype,
+        "getSeconds",
+        0,
+        NativeFunction::DatePrototypeGetUtcSeconds,
+    );
+    define_date_prototype_function(
+        &date_prototype,
         "getUTCDate",
         0,
         NativeFunction::DatePrototypeGetUtcDate,
@@ -82,6 +130,48 @@ pub(crate) fn install_date(
     );
     define_date_prototype_function(
         &date_prototype,
+        "setDate",
+        1,
+        NativeFunction::DatePrototypeSetUtcDate,
+    );
+    define_date_prototype_function(
+        &date_prototype,
+        "setFullYear",
+        3,
+        NativeFunction::DatePrototypeSetUtcFullYear,
+    );
+    define_date_prototype_function(
+        &date_prototype,
+        "setHours",
+        4,
+        NativeFunction::DatePrototypeSetUtcHours,
+    );
+    define_date_prototype_function(
+        &date_prototype,
+        "setMilliseconds",
+        1,
+        NativeFunction::DatePrototypeSetUtcMilliseconds,
+    );
+    define_date_prototype_function(
+        &date_prototype,
+        "setMinutes",
+        3,
+        NativeFunction::DatePrototypeSetUtcMinutes,
+    );
+    define_date_prototype_function(
+        &date_prototype,
+        "setMonth",
+        2,
+        NativeFunction::DatePrototypeSetUtcMonth,
+    );
+    define_date_prototype_function(
+        &date_prototype,
+        "setSeconds",
+        2,
+        NativeFunction::DatePrototypeSetUtcSeconds,
+    );
+    define_date_prototype_function(
+        &date_prototype,
         "setUTCDate",
         1,
         NativeFunction::DatePrototypeSetUtcDate,
@@ -127,6 +217,24 @@ pub(crate) fn install_date(
         "toDateString",
         0,
         NativeFunction::DatePrototypeToDateString,
+    );
+    define_date_prototype_function(
+        &date_prototype,
+        "toLocaleDateString",
+        0,
+        NativeFunction::DatePrototypeToDateString,
+    );
+    define_date_prototype_function(
+        &date_prototype,
+        "toLocaleString",
+        0,
+        NativeFunction::DatePrototypeToString,
+    );
+    define_date_prototype_function(
+        &date_prototype,
+        "toLocaleTimeString",
+        0,
+        NativeFunction::DatePrototypeToTimeString,
     );
     define_date_prototype_function(
         &date_prototype,

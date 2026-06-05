@@ -28,6 +28,9 @@ pub(crate) fn install_number(
             false,
         )),
     );
+    if let Some(value) = number_prototype.get("toString") {
+        number_prototype.define_non_enumerable("toLocaleString".to_owned(), value);
+    }
     number_prototype.define_non_enumerable(
         "valueOf".to_owned(),
         Value::Function(Function::new_native(
@@ -104,12 +107,18 @@ pub(crate) fn install_number(
 
     env.insert("parseFloat".to_owned(), parse_float_value.clone());
     if let Value::Object(global_object) = global_this {
-        global_object.set("parseFloat".to_owned(), parse_float_value);
+        global_object.define_property(
+            "parseFloat".to_owned(),
+            Property::data(parse_float_value, false, true, true),
+        );
     }
 
     env.insert("parseInt".to_owned(), parse_int_value.clone());
     if let Value::Object(global_object) = global_this {
-        global_object.set("parseInt".to_owned(), parse_int_value);
+        global_object.define_property(
+            "parseInt".to_owned(),
+            Property::data(parse_int_value, false, true, true),
+        );
     }
 }
 
