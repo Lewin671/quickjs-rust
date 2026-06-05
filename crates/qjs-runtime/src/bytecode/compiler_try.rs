@@ -1,6 +1,6 @@
 use qjs_ast::{CatchClause, Stmt};
 
-use crate::RuntimeError;
+use crate::{CATCH_CAPTURE_PREFIX, RuntimeError, Value};
 
 use super::compiler::Compiler;
 use super::ir::{CatchScope, Op};
@@ -83,12 +83,16 @@ impl Compiler {
             });
             let slot = self.local_slot(param, false);
             self.emit(Op::StoreLocal(slot));
+            let marker_slot = self.local_slot(&catch_capture_marker(param), true);
+            let marker_const = self.const_slot(Value::Boolean(true));
+            self.emit(Op::LoadConst(marker_const));
+            self.emit(Op::StoreLocal(marker_slot));
             self.compile_try_body(&handler.body, result_slot)?;
             self.emit(Op::ExitTry);
-            let catch_scope = if let Some(saved_slot) = saved_slot {
-                CatchScope::Restore { slot, saved_slot }
-            } else {
-                CatchScope::Clear { slot }
+            let catch_scope = CatchScope::Param {
+                slot,
+                saved_slot,
+                marker_slot,
             };
             return Ok((target, Some(catch_scope)));
         } else {
@@ -117,4 +121,8 @@ impl Compiler {
         self.emit(Op::EndFinally);
         Ok(target)
     }
+}
+
+fn catch_capture_marker(name: &str) -> String {
+    format!("{CATCH_CAPTURE_PREFIX}{name}")
 }

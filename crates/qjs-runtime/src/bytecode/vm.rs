@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use qjs_ast::ObjectPropertyKind;
 
 use crate::{
-    ArrayRef, CompiledFunctionInit, Function, GLOBAL_THIS_BINDING, ObjectRef, Property,
-    RUNTIME_INTRINSIC_NAMES, RuntimeError, Value, call_function, constructor_prototype,
+    ArrayRef, CATCH_CAPTURE_PREFIX, CompiledFunctionInit, Function, GLOBAL_THIS_BINDING, ObjectRef,
+    Property, RUNTIME_INTRINSIC_NAMES, RuntimeError, Value, call_function, constructor_prototype,
     initialize_builtins, is_truthy, object_prototype, operations, to_property_key_with_env,
 };
 
@@ -303,6 +303,12 @@ impl<'a> Vm<'a> {
         } else if let Some(value) = self.globals.get(name) {
             env.insert(name.to_owned(), value.clone());
         }
+        let marker = catch_capture_marker(name);
+        if let Some(value) = self.current_local_binding(&marker)
+            && matches!(value, Value::Boolean(true))
+        {
+            env.insert(marker, value.clone());
+        }
     }
 
     fn current_local_binding(&self, name: &str) -> Option<&Value> {
@@ -546,4 +552,8 @@ impl<'a> Vm<'a> {
             }
         }
     }
+}
+
+fn catch_capture_marker(name: &str) -> String {
+    format!("{CATCH_CAPTURE_PREFIX}{name}")
 }

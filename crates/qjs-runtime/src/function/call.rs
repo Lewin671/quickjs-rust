@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use crate::{
-    Bytecode, Function, GLOBAL_THIS_BINDING, ObjectRef, RUNTIME_INTRINSIC_NAMES, RuntimeError,
-    STRICT_MODE_BINDING, Value, bytecode::eval_function_bytecode_with_stack,
-    native::call_native_function, object_prototype,
+    Bytecode, CATCH_CAPTURE_PREFIX, Function, GLOBAL_THIS_BINDING, ObjectRef,
+    RUNTIME_INTRINSIC_NAMES, RuntimeError, STRICT_MODE_BINDING, Value,
+    bytecode::eval_function_bytecode_with_stack, native::call_native_function, object_prototype,
 };
 
 use super::function_call_this;
@@ -209,6 +209,10 @@ fn insert_function_capture(
     if let Some(value) = function_env.get(name) {
         local_env.insert(name.to_owned(), value.clone());
     }
+    let marker = catch_capture_marker(name);
+    if let Some(value) = function_env.get(&marker) {
+        local_env.insert(marker, value.clone());
+    }
 }
 
 fn insert_caller_bytecode_bindings(
@@ -240,12 +244,22 @@ fn insert_caller_binding(
     env: &HashMap<String, Value>,
     name: &str,
 ) {
+    if local_env
+        .get(&catch_capture_marker(name))
+        .is_some_and(|value| matches!(value, Value::Boolean(true)))
+    {
+        return;
+    }
     if let Some(value) = env.get(name) {
         local_env.insert(name.to_owned(), value.clone());
         if !caller_binding_names.iter().any(|existing| existing == name) {
             caller_binding_names.push(name.to_owned());
         }
     }
+}
+
+fn catch_capture_marker(name: &str) -> String {
+    format!("{CATCH_CAPTURE_PREFIX}{name}")
 }
 
 fn insert_caller_scope_bindings(

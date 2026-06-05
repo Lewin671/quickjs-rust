@@ -75,8 +75,11 @@ pub(super) enum Op {
 
 #[derive(Clone, Debug)]
 pub(super) enum CatchScope {
-    Clear { slot: usize },
-    Restore { slot: usize, saved_slot: usize },
+    Param {
+        slot: usize,
+        saved_slot: Option<usize>,
+        marker_slot: usize,
+    },
 }
 
 #[derive(Clone, Debug)]
