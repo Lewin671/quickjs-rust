@@ -25,6 +25,20 @@ fn evaluates_variable_declarations() {
     );
     assert_eq!(
         eval(
+            "var globalVarAttributes; let d = Object.getOwnPropertyDescriptor(this, 'globalVarAttributes'); d.enumerable && d.writable && !d.configurable;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("var nonDeletable; delete this.nonDeletable; this.hasOwnProperty('nonDeletable');"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("this.reflectedVar = 99; var reflectedVar; reflectedVar;"),
+        Ok(Value::Number(99.0))
+    );
+    assert_eq!(
+        eval(
             "function f() { var localOnly = 1; return localOnly; } f(); this.hasOwnProperty('localOnly');"
         ),
         Ok(Value::Boolean(false))

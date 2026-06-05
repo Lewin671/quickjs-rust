@@ -1,6 +1,6 @@
 use qjs_ast::BinaryOp;
 
-use crate::{ArrayRef, GLOBAL_THIS_BINDING, RuntimeError, Value, operations};
+use crate::{ArrayRef, GLOBAL_THIS_BINDING, Property, RuntimeError, Value, operations};
 
 use super::util::stack_underflow;
 use super::vm::Vm;
@@ -58,7 +58,11 @@ impl Vm<'_> {
                 .get(slot)
                 .map(|local| local.name.clone())
         {
-            global_object.set(name, value);
+            if global_object.has_own_property(&name) {
+                global_object.set(name, value);
+            } else {
+                global_object.define_property(name, Property::data(value, true, true, false));
+            }
         }
         Ok(())
     }

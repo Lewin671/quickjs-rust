@@ -1,4 +1,4 @@
-use crate::{RuntimeError, Value, call_function, to_property_key_with_env};
+use crate::{GLOBAL_THIS_BINDING, RuntimeError, Value, call_function, to_property_key_with_env};
 
 use super::vm::{Vm, property_base_error};
 use super::vm_props::{delete_property, get_property, set_property};
@@ -84,7 +84,7 @@ impl Vm<'_> {
             return Ok(());
         };
         let mut env = self.current_env();
-        let set_result = set_property(object, key, value.clone(), &mut env);
+        let set_result = set_property(object.clone(), key.clone(), value.clone(), &mut env);
         self.apply_env(env);
         let Some(did_set) = self.handle_runtime_result(set_result)? else {
             return Ok(());
@@ -104,6 +104,9 @@ impl Vm<'_> {
                 message: "strict property assignment failed without throwing".to_owned(),
             });
         }
+        if did_set {
+            self.sync_global_object_property_to_local(&object, &key, &value);
+        }
         self.stack.push(value);
         Ok(())
     }
@@ -115,6 +118,34 @@ impl Vm<'_> {
         let object = self.pop()?;
         self.stack.push(delete_property(object, &key)?);
         Ok(())
+    }
+
+    fn sync_global_object_property_to_local(&mut self, object: &Value, key: &str, value: &Value) {
+        if !self.sync_var_to_global_object {
+            return;
+        }
+        let Value::Object(object) = object else {
+            return;
+        };
+        let Some(Value::Object(global_object)) = self.globals.get(GLOBAL_THIS_BINDING) else {
+            return;
+        };
+        if !object.ptr_eq(global_object) {
+            return;
+        }
+        let Some(slot) = self.bytecode.local_slot(key) else {
+            return;
+        };
+        if self
+            .bytecode
+            .locals
+            .get(slot)
+            .is_some_and(|local| local.hoisted)
+            && let Some(property) = global_object.own_property(key)
+            && !property.is_accessor()
+        {
+            self.locals[slot] = Some(value.clone());
+        }
     }
 
     pub(super) fn iterator_close_for_throw(
