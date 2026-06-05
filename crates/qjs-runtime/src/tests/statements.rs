@@ -266,6 +266,10 @@ fn evaluates_try_catch_finally_statements() {
         ),
         Ok(Value::Number(2.0))
     );
+    assert_eq!(
+        eval("do { -99; try { 39; } finally { 42; break; } } while (false);"),
+        Ok(Value::Number(42.0))
+    );
     let error =
         eval("try { throw 'try'; } finally { throw 'finally'; }").expect_err("throw should fail");
     assert_eq!(error.message, "throw statement executed: finally");

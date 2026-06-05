@@ -95,9 +95,18 @@ impl Compiler {
 
     fn compile_finally(&mut self, finalizer: &[Stmt]) -> Result<usize, RuntimeError> {
         let target = self.code.len();
+        let result_slot = self.current_result_slot();
+        if let Some(result_slot) = result_slot {
+            self.emit_load_undefined();
+            self.emit(Op::StoreLocal(result_slot));
+        }
         for stmt in finalizer {
             self.compile_stmt(stmt)?;
-            self.emit(Op::Pop);
+            if let Some(result_slot) = result_slot {
+                self.emit(Op::StoreLocal(result_slot));
+            } else {
+                self.emit(Op::Pop);
+            }
         }
         self.emit(Op::EndFinally);
         Ok(target)
