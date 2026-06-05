@@ -15,6 +15,7 @@ pub struct ObjectRef {
     extensible: Rc<Cell<bool>>,
     prototype: Rc<RefCell<Option<ObjectRef>>>,
     to_string_tag: Rc<RefCell<Option<String>>>,
+    raw_json: Rc<Cell<bool>>,
 }
 
 impl fmt::Debug for ObjectRef {
@@ -25,6 +26,7 @@ impl fmt::Debug for ObjectRef {
             .field("symbol_properties", &self.symbol_properties.borrow().len())
             .field("has_prototype", &self.prototype.borrow().is_some())
             .field("to_string_tag", &self.to_string_tag.borrow())
+            .field("raw_json", &self.raw_json.get())
             .finish()
     }
 }
@@ -49,11 +51,20 @@ impl ObjectRef {
             extensible: Rc::new(Cell::new(true)),
             prototype: Rc::new(RefCell::new(prototype)),
             to_string_tag: Rc::new(RefCell::new(None)),
+            raw_json: Rc::new(Cell::new(false)),
         }
     }
 
     pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
         Rc::ptr_eq(&self.properties, &other.properties)
+    }
+
+    pub(crate) fn mark_raw_json(&self) {
+        self.raw_json.set(true);
+    }
+
+    pub(crate) fn is_raw_json(&self) -> bool {
+        self.raw_json.get()
     }
 
     pub(crate) fn get(&self, key: &str) -> Option<Value> {

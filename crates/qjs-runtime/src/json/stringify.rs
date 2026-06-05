@@ -2,6 +2,8 @@ use std::collections::HashMap;
 
 use crate::{ArrayRef, ObjectRef, RuntimeError, Value, call_function, number};
 
+use super::raw_json_value;
+
 pub(crate) fn native_json_stringify(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
@@ -33,7 +35,13 @@ fn stringify_value(
         Value::Boolean(true) => Ok(Some("true".to_owned())),
         Value::Boolean(false) => Ok(Some("false".to_owned())),
         Value::Array(array) => stringify_array(array, env).map(Some),
-        Value::Object(object) => stringify_object(object, env).map(Some),
+        Value::Object(object) => {
+            if let Some(raw_json) = raw_json_value(object) {
+                Ok(Some(raw_json))
+            } else {
+                stringify_object(object, env).map(Some)
+            }
+        }
         Value::Map(map) => stringify_object(&map.object(), env).map(Some),
         Value::Set(set) => stringify_object(&set.object(), env).map(Some),
         Value::Undefined | Value::Function(_) if in_array => Ok(Some("null".to_owned())),

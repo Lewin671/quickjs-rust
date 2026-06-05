@@ -7,7 +7,14 @@ pub(crate) fn native_json_parse(
     env: &HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let source = to_js_string(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
-    JsonParser::new(&source, env).parse()
+    parse_json_text(&source, env)
+}
+
+pub(crate) fn parse_json_text(
+    source: &str,
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    JsonParser::new(source, env).parse()
 }
 
 struct JsonParser<'a> {

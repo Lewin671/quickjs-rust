@@ -10,6 +10,8 @@ pub(crate) fn install_json(
     let json_object = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
     json_object.set_to_string_tag("JSON");
     define_json_function(&json_object, "parse", 2, NativeFunction::JsonParse);
+    define_json_function(&json_object, "rawJSON", 1, NativeFunction::JsonRawJson);
+    define_json_function(&json_object, "isRawJSON", 1, NativeFunction::JsonIsRawJson);
     define_json_function(&json_object, "stringify", 3, NativeFunction::JsonStringify);
 
     let json_value = Value::Object(json_object);

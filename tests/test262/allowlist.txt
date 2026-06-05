@@ -231,6 +231,7 @@ cases/global-escape-annex-b.js
 cases/global-this-basic.js
 cases/global-this-descriptor.js
 cases/json-parse-basic.js
+cases/json-raw-json-basic.js
 cases/json-stringify-basic.js
 cases/equals-null-undefined-basic.js
 cases/equals-number-string-basic.js
