@@ -175,6 +175,10 @@ fn evaluates_break_and_continue() {
         ),
         Ok(Value::String("0001021011".to_owned()))
     );
+    assert_eq!(
+        eval("let i = 0; woohoo: { while (true) { i++; if (i === 10) break woohoo; } i = 99; } i;"),
+        Ok(Value::Number(10.0))
+    );
 }
 
 #[test]

@@ -470,15 +470,38 @@ impl Compiler {
     }
 
     fn compile_label(&mut self, label: &str, body: &Stmt) -> Result<(), RuntimeError> {
-        self.label_stack.push(label.to_owned());
-        let result = self.compile_stmt(body);
-        if self
-            .label_stack
-            .last()
-            .is_some_and(|active| active == label)
-        {
-            self.label_stack.pop();
+        if matches!(
+            body,
+            Stmt::While { .. }
+                | Stmt::DoWhile { .. }
+                | Stmt::For { .. }
+                | Stmt::ForIn { .. }
+                | Stmt::ForOf { .. }
+                | Stmt::Switch { .. }
+        ) {
+            self.label_stack.push(label.to_owned());
+            let result = self.compile_stmt(body);
+            if self
+                .label_stack
+                .last()
+                .is_some_and(|active| active == label)
+            {
+                self.label_stack.pop();
+            }
+            return result;
         }
-        result
+
+        let result_slot = self.temp_local("label_result");
+        self.emit_load_undefined();
+        self.emit(Op::StoreLocal(result_slot));
+        self.label_stack.push(label.to_owned());
+        self.push_breakable(result_slot);
+        self.compile_stmt(body)?;
+        self.emit(Op::StoreLocal(result_slot));
+        let context = self.pop_loop();
+        self.emit(Op::LoadLocal(result_slot));
+        let done = self.code.len();
+        self.patch_loop_breaks(&context, done);
+        Ok(())
     }
 }
