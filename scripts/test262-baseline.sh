@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TEST262_DIR="$ROOT_DIR/third_party/test262"
 RUN_WITH_TIMEOUT="$ROOT_DIR/scripts/run-with-timeout.sh"
+METADATA_PARSER="$ROOT_DIR/scripts/test262-baseline-metadata.awk"
 CASE_TIMEOUT_SECONDS="${TEST262_CASE_TIMEOUT_SECONDS:-10}"
 RUN_LIMIT="${TEST262_BASELINE_LIMIT:-50}"
 FILTER_PREFIX=""
@@ -83,36 +84,7 @@ if [ ! -x "$QJS_CLI_BIN" ]; then
 fi
 
 metadata_for() {
-  awk '
-    /\/\*---/{inside=1; next}
-    /---\*\//{exit}
-    inside {
-      if (sub(/^[[:space:]]*flags:[[:space:]]*/, "", $0)) {
-        gsub(/^[[:space:]]*|[[:space:]]*$/, "", $0)
-        flags=$0
-        next
-      }
-      if (sub(/^[[:space:]]*includes:[[:space:]]*/, "", $0)) {
-        gsub(/^[[:space:]]*|[[:space:]]*$/, "", $0)
-        includes=$0
-        next
-      }
-      if (sub(/^[[:space:]]*features:[[:space:]]*/, "", $0)) {
-        gsub(/^[[:space:]]*|[[:space:]]*$/, "", $0)
-        features=$0
-        next
-      }
-      if ($0 ~ /^[[:space:]]*negative[[:space:]]*:/) {
-        negative=1
-      }
-    }
-    END {
-      print flags
-      print includes
-      print features
-      print (negative ? "1" : "")
-    }
-  ' "$1"
+  awk -f "$METADATA_PARSER" "$1"
 }
 
 skip_reason() {
