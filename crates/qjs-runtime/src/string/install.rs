@@ -17,6 +17,11 @@ const STRING_PROTOTYPE_METHODS: &[(&str, usize, NativeFunction)] = &[
         NativeFunction::StringPrototypeIsWellFormed,
     ),
     ("lastIndexOf", 1, NativeFunction::StringPrototypeLastIndexOf),
+    (
+        "localeCompare",
+        1,
+        NativeFunction::StringPrototypeLocaleCompare,
+    ),
     ("match", 1, NativeFunction::StringPrototypeMatch),
     ("padEnd", 1, NativeFunction::StringPrototypePadEnd),
     ("padStart", 1, NativeFunction::StringPrototypePadStart),

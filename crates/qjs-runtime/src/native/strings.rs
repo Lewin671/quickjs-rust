@@ -53,6 +53,9 @@ pub(super) fn call_string_native(
         NativeFunction::StringPrototypeLastIndexOf => {
             string::native_string_prototype_last_index_of(this_value, argument_values, env)?
         }
+        NativeFunction::StringPrototypeLocaleCompare => {
+            string::native_string_prototype_locale_compare(this_value, argument_values, env)?
+        }
         NativeFunction::StringPrototypeMatch => {
             string::native_string_prototype_match(this_value, argument_values, env)?
         }

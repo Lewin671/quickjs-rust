@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{RuntimeError, Value};
+use crate::{RuntimeError, Value, to_js_string_with_env};
 
 use super::super::indexing::this_string_value;
 use super::super::{string_code_units, string_from_code_unit};
@@ -23,6 +23,25 @@ pub(crate) fn native_string_prototype_to_upper_case(
         &this_string_value(this_value, env)?,
         str::to_uppercase,
     )))
+}
+
+pub(crate) fn native_string_prototype_locale_compare(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let value = this_string_value(this_value, env)?;
+    let that = to_js_string_with_env(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
+
+    let result = match value.as_str().cmp(that.as_str()) {
+        std::cmp::Ordering::Less => -1.0,
+        std::cmp::Ordering::Equal => 0.0,
+        std::cmp::Ordering::Greater => 1.0,
+    };
+    Ok(Value::Number(result))
 }
 
 fn case_convert(value: &str, convert: impl FnOnce(&str) -> String) -> String {
@@ -82,6 +101,26 @@ mod tests {
         );
         assert_eq!(
             eval("'A\\u03A3\\uD835\\uDCA2'.toLowerCase() === 'a\\u03C3\\uD835\\uDCA2';"),
+            Ok(Value::Boolean(true))
+        );
+    }
+
+    #[test]
+    fn locale_compare_returns_ordering_number() {
+        assert_eq!(
+            eval("'abc'.localeCompare('abc') === 0;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("'abc'.localeCompare('abd') < 0;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("'abd'.localeCompare('abc') > 0;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval("'undefined'.localeCompare() === 0;"),
             Ok(Value::Boolean(true))
         );
     }

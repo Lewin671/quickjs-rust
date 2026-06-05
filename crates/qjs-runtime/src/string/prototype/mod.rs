@@ -7,7 +7,8 @@ mod trim;
 mod well_formed;
 
 pub(crate) use case::{
-    native_string_prototype_to_lower_case, native_string_prototype_to_upper_case,
+    native_string_prototype_locale_compare, native_string_prototype_to_lower_case,
+    native_string_prototype_to_upper_case,
 };
 pub(crate) use code_units::{
     native_string_prototype_at, native_string_prototype_char_at,
