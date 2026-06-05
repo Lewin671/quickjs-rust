@@ -329,3 +329,15 @@ fn parses_debugger_statement() {
         [Stmt::Debugger { .. }, Stmt::Expr(_)]
     ));
 }
+
+#[test]
+fn parses_return_line_terminator_as_empty_return() {
+    let script = parse_script("function f() { return\n1; }").expect("source should parse");
+    let [Stmt::FunctionDecl { body, .. }] = script.body.as_slice() else {
+        panic!("expected function declaration");
+    };
+    assert!(matches!(
+        body.as_slice(),
+        [Stmt::Return { argument: None, .. }, Stmt::Expr(_)]
+    ));
+}

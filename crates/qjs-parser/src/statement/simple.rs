@@ -11,7 +11,12 @@ impl Parser {
             .span
             .start;
         self.expect(&TokenKind::Return)?;
-        let argument = if self.at(&TokenKind::Semicolon) || self.at(&TokenKind::RightBrace) {
+        let argument = if self.at(&TokenKind::Semicolon)
+            || self.at(&TokenKind::RightBrace)
+            || self
+                .peek()
+                .is_some_and(|token| token.preceded_by_line_terminator)
+        {
             None
         } else {
             Some(self.expression()?)
