@@ -17,6 +17,9 @@ pub(crate) fn array_own_property_descriptor(elements: &ArrayRef, key: &str) -> O
             false,
         ));
     }
+    if let Some(property) = elements.property(key) {
+        return Some(property);
+    }
     if let Ok(index) = key.parse::<usize>()
         && let Some(value) = elements.get(index)
     {
@@ -27,7 +30,7 @@ pub(crate) fn array_own_property_descriptor(elements: &ArrayRef, key: &str) -> O
             !elements.is_sealed(),
         ));
     }
-    elements.property(key)
+    None
 }
 
 pub(crate) fn array_own_property_keys(elements: &ArrayRef) -> Vec<String> {

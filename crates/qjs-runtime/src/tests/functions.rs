@@ -49,6 +49,16 @@ fn evaluates_function_declarations_and_calls() {
         Ok(Value::Number(3.0))
     );
     assert_eq!(
+        eval("let first = function() {}; let second = function() {}; first === second;"),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval(
+            "let target = function() {}; function check(value) { arguments[2] = function() {}; return arguments[2] === value; } check(target);"
+        ),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
         eval("function pair(a, b) {} pair.length;"),
         Ok(Value::Number(2.0))
     );

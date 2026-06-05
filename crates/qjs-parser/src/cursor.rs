@@ -19,6 +19,20 @@ impl Parser {
         false
     }
 
+    pub(crate) fn at_identifier_text(&self, expected: &str) -> bool {
+        self.peek().is_some_and(
+            |token| matches!(&token.kind, TokenKind::Identifier(name) if name == expected),
+        )
+    }
+
+    pub(crate) fn match_identifier_text(&mut self, expected: &str) -> bool {
+        if self.at_identifier_text(expected) {
+            self.cursor += 1;
+            return true;
+        }
+        false
+    }
+
     pub(crate) fn expect(&mut self, kind: &TokenKind) -> Result<(), ParseError> {
         if self.match_kind(kind) {
             Ok(())

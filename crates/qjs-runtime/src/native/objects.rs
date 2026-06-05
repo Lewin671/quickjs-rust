@@ -22,7 +22,7 @@ pub(super) fn call_object_native(
             object::native_object_define_properties(argument_values, env)?
         }
         NativeFunction::ObjectDefineProperty => {
-            object::native_object_define_property(argument_values)?
+            object::native_object_define_property(argument_values, env)?
         }
         NativeFunction::ObjectGetOwnPropertyDescriptor => {
             object::native_object_get_own_property_descriptor(argument_values, env)?

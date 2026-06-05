@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use qjs_ast::{Expr, MemberProperty, ObjectProperty, ObjectPropertyKey, Stmt};
+use qjs_ast::{ClassMethod, Expr, MemberProperty, ObjectProperty, ObjectPropertyKey, Stmt};
 
 use crate::{
     RuntimeError, Value,
@@ -150,6 +150,60 @@ impl Compiler {
             is_strict,
         });
         self.emit(Op::StoreLocal(slot));
+        self.emit_load_undefined();
+        Ok(())
+    }
+
+    pub(super) fn compile_class_decl(
+        &mut self,
+        name: &str,
+        methods: &[ClassMethod],
+    ) -> Result<(), RuntimeError> {
+        let class_slot = self.local_slot(name, true);
+        let bytecode = super::compiler::compile_function_body(&[], &[])?;
+        self.emit(Op::NewFunction {
+            name: Some(name.to_owned()),
+            params: Vec::new(),
+            local_names: vec!["arguments".to_owned(), "this".to_owned()],
+            bytecode: Rc::new(bytecode),
+            constructable: true,
+            is_strict: self.strict,
+        });
+        self.emit(Op::StoreLocal(class_slot));
+
+        for method in methods {
+            if method.is_static {
+                self.emit(Op::LoadLocal(class_slot));
+            } else {
+                self.emit(Op::LoadLocal(class_slot));
+                let prototype = self.const_slot(Value::String("prototype".to_owned()));
+                self.emit(Op::LoadConst(prototype));
+                self.emit(Op::GetProp);
+            }
+            let key = self.const_slot(Value::String(method.name.clone()));
+            self.emit(Op::LoadConst(key));
+            let is_strict = self.strict || is_strict_function_body(&method.body);
+            let bytecode = super::compiler::compile_function_body_with_strict(
+                &method.params,
+                &method.body,
+                is_strict,
+            )?;
+            self.emit(Op::NewFunction {
+                name: Some(method.name.clone()),
+                params: method.params.clone(),
+                local_names: collect_function_local_names(
+                    Some(&method.name),
+                    &method.params,
+                    &method.body,
+                ),
+                bytecode: Rc::new(bytecode),
+                constructable: false,
+                is_strict,
+            });
+            self.emit(Op::SetProp { strict: false });
+            self.emit(Op::Pop);
+        }
+
         self.emit_load_undefined();
         Ok(())
     }

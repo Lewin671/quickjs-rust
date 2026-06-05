@@ -61,11 +61,11 @@ pub(super) fn call_array_native(
             array::native_array_prototype_includes(this_value, argument_values)?
         }
         NativeFunction::ArrayPrototypeIndexOf => {
-            array::native_array_prototype_index_of(this_value, argument_values)?
+            array::native_array_prototype_index_of(this_value, argument_values, env)?
         }
         NativeFunction::ArrayPrototypeKeys => array::native_array_prototype_keys(this_value, env)?,
         NativeFunction::ArrayPrototypeLastIndexOf => {
-            array::native_array_prototype_last_index_of(this_value, argument_values)?
+            array::native_array_prototype_last_index_of(this_value, argument_values, env)?
         }
         NativeFunction::ArrayPrototypeJoin => {
             array::native_array_prototype_join(this_value, argument_values, env)?

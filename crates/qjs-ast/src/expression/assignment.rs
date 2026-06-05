@@ -1,4 +1,4 @@
-use crate::expression::{Expr, MemberProperty};
+use crate::expression::{Expr, MemberProperty, ObjectPropertyKey};
 use crate::span::Span;
 
 /// An assignment target.
@@ -15,6 +15,20 @@ pub enum AssignmentTarget {
         /// Source span.
         span: Span,
     },
+    /// Object destructuring assignment.
+    Object {
+        /// Assignment properties.
+        properties: Vec<ObjectAssignmentProperty>,
+        /// Source span.
+        span: Span,
+    },
+    /// Array destructuring assignment.
+    Array {
+        /// Assignment elements, with `None` for elisions.
+        elements: Vec<Option<ArrayAssignmentElement>>,
+        /// Source span.
+        span: Span,
+    },
 }
 
 impl AssignmentTarget {
@@ -22,9 +36,34 @@ impl AssignmentTarget {
     #[must_use]
     pub const fn span(&self) -> Span {
         match self {
-            Self::Identifier { span, .. } | Self::Member { span, .. } => *span,
+            Self::Identifier { span, .. }
+            | Self::Member { span, .. }
+            | Self::Object { span, .. }
+            | Self::Array { span, .. } => *span,
         }
     }
+}
+
+/// Array destructuring assignment element.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ArrayAssignmentElement {
+    /// Assignment target receiving the iterated value.
+    pub target: AssignmentTarget,
+    /// Optional default initializer used for `undefined`.
+    pub default: Option<Expr>,
+    /// Source span.
+    pub span: Span,
+}
+
+/// Object destructuring assignment property.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ObjectAssignmentProperty {
+    /// Property key read from the source value.
+    pub key: ObjectPropertyKey,
+    /// Assignment target receiving the property value.
+    pub target: AssignmentTarget,
+    /// Source span.
+    pub span: Span,
 }
 
 /// Assignment operator.

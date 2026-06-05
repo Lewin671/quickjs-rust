@@ -5,7 +5,7 @@ mod control;
 mod declaration;
 mod script;
 
-pub use control::{CatchClause, ForInLeft, ForInit, SwitchCase};
+pub use control::{CatchClause, ClassMethod, ForInLeft, ForInit, SwitchCase};
 pub use declaration::{VarDeclarator, VarKind};
 pub use script::Script;
 
@@ -37,6 +37,15 @@ pub enum Stmt {
         /// Loop condition.
         test: Expr,
         /// Loop body.
+        body: Box<Stmt>,
+        /// Source span.
+        span: Span,
+    },
+    /// A with statement.
+    With {
+        /// Object expression used as a dynamic scope.
+        object: Expr,
+        /// Statement evaluated with the object environment.
         body: Box<Stmt>,
         /// Source span.
         span: Span,
@@ -74,6 +83,17 @@ pub enum Stmt {
         /// Source span.
         span: Span,
     },
+    /// A for-of statement.
+    ForOf {
+        /// Loop binding or assignment target.
+        left: ForInLeft,
+        /// Iterated expression.
+        right: Expr,
+        /// Loop body.
+        body: Box<Stmt>,
+        /// Source span.
+        span: Span,
+    },
     /// A switch statement.
     Switch {
         /// Discriminant expression.
@@ -105,6 +125,24 @@ pub enum Stmt {
         /// Source span.
         span: Span,
     },
+    /// A class declaration.
+    ClassDecl {
+        /// Class binding name.
+        name: String,
+        /// Class methods.
+        methods: Vec<ClassMethod>,
+        /// Source span.
+        span: Span,
+    },
+    /// A labelled statement.
+    Label {
+        /// Label name.
+        label: String,
+        /// Labelled body.
+        body: Box<Stmt>,
+        /// Source span.
+        span: Span,
+    },
     /// A return statement.
     Return {
         /// Optional return value.
@@ -126,11 +164,15 @@ pub enum Stmt {
     },
     /// A break statement.
     Break {
+        /// Optional label target.
+        label: Option<String>,
         /// Source span.
         span: Span,
     },
     /// A continue statement.
     Continue {
+        /// Optional label target.
+        label: Option<String>,
         /// Source span.
         span: Span,
     },

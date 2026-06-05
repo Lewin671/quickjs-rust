@@ -86,6 +86,20 @@ fn skips_line_and_block_comments() {
 }
 
 #[test]
+fn skips_ecmascript_whitespace() {
+    let tokens = lex("one\u{000b}\u{00a0}\u{feff}two").expect("source should lex");
+    let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::Identifier("one".to_owned()),
+            TokenKind::Identifier("two".to_owned()),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
 fn lexes_no_substitution_template_literals_as_strings() {
     let tokens = lex("`hello` `` `price $5`").expect("source should lex");
     let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
@@ -213,6 +227,34 @@ fn lexes_declaration_keywords() {
             TokenKind::New,
             TokenKind::Instanceof,
             TokenKind::Identifier("variable".to_owned()),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn lexes_unicode_escaped_identifiers() {
+    let tokens = lex(r"obj.bre\u0061k;").expect("source should lex");
+    let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::Identifier("obj".to_owned()),
+            TokenKind::Dot,
+            TokenKind::Identifier("break".to_owned()),
+            TokenKind::Semicolon,
+            TokenKind::Eof,
+        ]
+    );
+    let tokens = lex(r"\u0061 = 1;").expect("source should lex");
+    let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::Identifier("a".to_owned()),
+            TokenKind::Equal,
+            TokenKind::Number("1".to_owned()),
+            TokenKind::Semicolon,
             TokenKind::Eof,
         ]
     );

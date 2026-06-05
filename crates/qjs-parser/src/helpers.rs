@@ -1,4 +1,7 @@
-use qjs_ast::{AssignmentTarget, Expr, Stmt, VarKind};
+use qjs_ast::{
+    ArrayAssignmentElement, AssignmentOp, AssignmentTarget, Expr, ObjectAssignmentProperty,
+    ObjectPropertyKind, Stmt, VarKind,
+};
 use qjs_lexer::TokenKind;
 
 use crate::ParseError;
@@ -16,6 +19,7 @@ pub(crate) fn property_name(kind: TokenKind) -> Option<String> {
         TokenKind::If => Some("if".to_owned()),
         TokenKind::Else => Some("else".to_owned()),
         TokenKind::While => Some("while".to_owned()),
+        TokenKind::With => Some("with".to_owned()),
         TokenKind::Do => Some("do".to_owned()),
         TokenKind::For => Some("for".to_owned()),
         TokenKind::Switch => Some("switch".to_owned()),
@@ -60,10 +64,70 @@ pub(crate) fn assignment_target(expr: Expr) -> Result<AssignmentTarget, ParseErr
             property,
             span,
         }),
+        Expr::Object { properties, span } => {
+            let properties = properties
+                .into_iter()
+                .map(|property| {
+                    if property.kind != ObjectPropertyKind::Data {
+                        return Err(ParseError {
+                            message: "invalid destructuring assignment property".to_owned(),
+                            span: property.span,
+                        });
+                    }
+                    let target = destructuring_property_target(property.value)?;
+                    Ok(ObjectAssignmentProperty {
+                        key: property.key,
+                        target,
+                        span: property.span,
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(AssignmentTarget::Object { properties, span })
+        }
+        Expr::Array { elements, span } => {
+            let elements = elements
+                .into_iter()
+                .map(|element| element.map(destructuring_array_element).transpose())
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(AssignmentTarget::Array { elements, span })
+        }
         other => Err(ParseError {
             message: "invalid assignment target".to_owned(),
             span: other.span(),
         }),
+    }
+}
+
+fn destructuring_array_element(expr: Expr) -> Result<ArrayAssignmentElement, ParseError> {
+    let span = expr.span();
+    match expr {
+        Expr::Assignment {
+            target,
+            op: AssignmentOp::Assign,
+            value,
+            ..
+        } => Ok(ArrayAssignmentElement {
+            target,
+            default: Some(*value),
+            span,
+        }),
+        other => Ok(ArrayAssignmentElement {
+            target: assignment_target(other)?,
+            default: None,
+            span,
+        }),
+    }
+}
+
+fn destructuring_property_target(expr: Expr) -> Result<AssignmentTarget, ParseError> {
+    match expr {
+        Expr::Assignment {
+            target,
+            op: AssignmentOp::Assign,
+            value: _,
+            ..
+        } => Ok(target),
+        other => assignment_target(other),
     }
 }
 
@@ -73,17 +137,21 @@ pub(crate) fn stmt_end(stmt: &Stmt) -> usize {
         Stmt::Block { span, .. }
         | Stmt::If { span, .. }
         | Stmt::While { span, .. }
+        | Stmt::With { span, .. }
         | Stmt::DoWhile { span, .. }
         | Stmt::For { span, .. }
         | Stmt::ForIn { span, .. }
+        | Stmt::ForOf { span, .. }
         | Stmt::Switch { span, .. }
         | Stmt::Try { span, .. }
         | Stmt::FunctionDecl { span, .. }
+        | Stmt::ClassDecl { span, .. }
+        | Stmt::Label { span, .. }
         | Stmt::Return { span, .. }
         | Stmt::Throw { span, .. }
         | Stmt::Debugger { span }
-        | Stmt::Break { span }
-        | Stmt::Continue { span }
+        | Stmt::Break { span, .. }
+        | Stmt::Continue { span, .. }
         | Stmt::VarDecl { span, .. } => span.end,
         Stmt::Empty => 0,
     }

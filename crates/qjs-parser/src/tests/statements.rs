@@ -60,6 +60,16 @@ fn parses_while_statement() {
 }
 
 #[test]
+fn parses_with_statement() {
+    let script = parse_script("with (scope) { x *= 3; }").expect("source should parse");
+    let [Stmt::With { object, body, .. }] = script.body.as_slice() else {
+        panic!("expected one with statement");
+    };
+    assert!(matches!(object, Expr::Identifier { name, .. } if name == "scope"));
+    assert!(matches!(body.as_ref(), Stmt::Block { .. }));
+}
+
+#[test]
 fn parses_do_while_statement() {
     let script = parse_script("do { x++; } while (x < 3);").expect("source should parse");
     let [Stmt::DoWhile { body, .. }] = script.body.as_slice() else {

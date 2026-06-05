@@ -8,7 +8,7 @@ mod keywords;
 mod literals;
 mod punctuators;
 
-use char_class::is_identifier_start;
+use char_class::{is_ecmascript_whitespace, is_identifier_start};
 
 pub(crate) struct Lexer<'src> {
     pub(in crate::scanner) source: &'src str,
@@ -28,10 +28,11 @@ impl<'src> Lexer<'src> {
     pub(crate) fn lex(mut self) -> Result<Vec<Token>, LexError> {
         while let Some(ch) = self.peek() {
             match ch {
-                c if c.is_ascii_whitespace() => {
+                c if is_ecmascript_whitespace(c) => {
                     self.advance();
                 }
-                c if is_identifier_start(c) => self.identifier(),
+                c if is_identifier_start(c) => self.identifier()?,
+                '\\' if self.peek_nth(1) == Some('u') => self.identifier_starting_with_escape()?,
                 c if c.is_ascii_digit() => self.number()?,
                 '"' | '\'' => self.string(ch)?,
                 '`' => self.template_no_substitution()?,

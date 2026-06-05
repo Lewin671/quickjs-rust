@@ -2,21 +2,107 @@ use qjs_ast::Span;
 
 use crate::{LexError, Token, TokenKind};
 
-use super::{Lexer, char_class::is_identifier_continue, keywords::identifier_or_keyword};
+use super::{
+    Lexer,
+    char_class::{is_identifier_continue, is_identifier_start},
+    keywords::identifier_or_keyword,
+};
 
 const SURROGATE_ESCAPE_SENTINEL_BASE: u32 = 0xF0000;
 
 impl Lexer<'_> {
-    pub(super) fn identifier(&mut self) {
+    pub(super) fn identifier(&mut self) -> Result<(), LexError> {
         let start = self.cursor;
-        while matches!(self.peek(), Some(ch) if is_identifier_continue(ch)) {
-            self.advance();
+        let mut cooked = None::<String>;
+        let mut segment_start = start;
+        loop {
+            match self.peek() {
+                Some(ch) if is_identifier_continue(ch) => {
+                    self.advance();
+                }
+                Some('\\') => {
+                    let text = cooked.get_or_insert_with(String::new);
+                    text.push_str(&self.source[segment_start..self.cursor]);
+                    let escaped = self.identifier_escape(start)?;
+                    if !is_identifier_continue(escaped) {
+                        return Err(LexError {
+                            message: "invalid identifier escape sequence".to_owned(),
+                            span: Span::new(start, self.cursor),
+                        });
+                    }
+                    text.push(escaped);
+                    segment_start = self.cursor;
+                }
+                _ => break,
+            }
         }
-        let text = &self.source[start..self.cursor];
+        let text = cooked
+            .map(|mut text| {
+                text.push_str(&self.source[segment_start..self.cursor]);
+                text
+            })
+            .unwrap_or_else(|| self.source[start..self.cursor].to_owned());
+        let kind = if segment_start == start {
+            identifier_or_keyword(&text)
+        } else {
+            TokenKind::Identifier(text)
+        };
         self.tokens.push(Token {
-            kind: identifier_or_keyword(text),
+            kind,
             span: Span::new(start, self.cursor),
         });
+        Ok(())
+    }
+
+    pub(super) fn identifier_starting_with_escape(&mut self) -> Result<(), LexError> {
+        let start = self.cursor;
+        let first = self.identifier_escape(start)?;
+        if !is_identifier_start(first) {
+            return Err(LexError {
+                message: "invalid identifier escape sequence".to_owned(),
+                span: Span::new(start, self.cursor),
+            });
+        }
+        let mut text = String::new();
+        text.push(first);
+        let mut segment_start = self.cursor;
+        loop {
+            match self.peek() {
+                Some(ch) if is_identifier_continue(ch) => {
+                    self.advance();
+                }
+                Some('\\') => {
+                    text.push_str(&self.source[segment_start..self.cursor]);
+                    let escaped = self.identifier_escape(start)?;
+                    if !is_identifier_continue(escaped) {
+                        return Err(LexError {
+                            message: "invalid identifier escape sequence".to_owned(),
+                            span: Span::new(start, self.cursor),
+                        });
+                    }
+                    text.push(escaped);
+                    segment_start = self.cursor;
+                }
+                _ => break,
+            }
+        }
+        text.push_str(&self.source[segment_start..self.cursor]);
+        self.tokens.push(Token {
+            kind: TokenKind::Identifier(text),
+            span: Span::new(start, self.cursor),
+        });
+        Ok(())
+    }
+
+    fn identifier_escape(&mut self, start: usize) -> Result<char, LexError> {
+        self.advance();
+        if self.advance() != Some('u') {
+            return Err(LexError {
+                message: "invalid identifier escape sequence".to_owned(),
+                span: Span::new(start, self.cursor),
+            });
+        }
+        self.unicode_escape(start)
     }
 
     pub(super) fn number(&mut self) -> Result<(), LexError> {
@@ -34,6 +120,14 @@ impl Lexer<'_> {
                         message: "expected digits after numeric literal prefix".to_owned(),
                         span: Span::new(start, self.cursor),
                     });
+                }
+                if self.peek() == Some('n') {
+                    self.advance();
+                    self.tokens.push(Token {
+                        kind: TokenKind::Number(self.source[start..self.cursor].to_owned()),
+                        span: Span::new(start, self.cursor),
+                    });
+                    return Ok(());
                 }
                 if matches!(self.peek(), Some(ch) if is_identifier_continue(ch)) {
                     return Err(LexError {
@@ -57,6 +151,13 @@ impl Lexer<'_> {
             while matches!(self.peek(), Some(ch) if ch.is_ascii_digit()) {
                 self.advance();
             }
+        } else if self.peek() == Some('n') {
+            self.advance();
+            self.tokens.push(Token {
+                kind: TokenKind::Number(self.source[start..self.cursor].to_owned()),
+                span: Span::new(start, self.cursor),
+            });
+            return Ok(());
         }
         self.exponent_part(start)?;
         self.reject_identifier_continue_after_number(start)?;

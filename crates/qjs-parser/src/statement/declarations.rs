@@ -52,11 +52,15 @@ impl Parser {
         let mut declarations = Vec::new();
         loop {
             let name_token = self.advance();
-            let TokenKind::Identifier(name) = name_token.kind else {
-                return Err(ParseError {
-                    message: "expected binding identifier".to_owned(),
-                    span: name_token.span,
-                });
+            let name = match name_token.kind {
+                TokenKind::Identifier(name) => name,
+                TokenKind::Let if kind == VarKind::Var => "let".to_owned(),
+                _ => {
+                    return Err(ParseError {
+                        message: "expected binding identifier".to_owned(),
+                        span: name_token.span,
+                    });
+                }
             };
 
             let init = if self.match_kind(&TokenKind::Equal) {

@@ -24,6 +24,21 @@ pub struct CatchClause {
     pub span: Span,
 }
 
+/// A class method declaration.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ClassMethod {
+    /// Method name.
+    pub name: String,
+    /// Parameter names.
+    pub params: Vec<String>,
+    /// Function body statements.
+    pub body: Vec<Stmt>,
+    /// Whether the method is static.
+    pub is_static: bool,
+    /// Source span.
+    pub span: Span,
+}
+
 /// A for statement initializer.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ForInit {
@@ -52,6 +67,15 @@ pub enum ForInLeft {
         /// Source span.
         span: Span,
     },
+    /// Variable declaration loop binding pattern.
+    Binding {
+        /// Declaration kind.
+        kind: VarKind,
+        /// Binding target.
+        target: AssignmentTarget,
+        /// Source span.
+        span: Span,
+    },
     /// Assignment target loop binding.
     Target(AssignmentTarget),
 }
@@ -61,7 +85,7 @@ impl ForInLeft {
     #[must_use]
     pub const fn span(&self) -> Span {
         match self {
-            Self::VarDecl { span, .. } => *span,
+            Self::VarDecl { span, .. } | Self::Binding { span, .. } => *span,
             Self::Target(target) => target.span(),
         }
     }

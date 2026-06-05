@@ -12,7 +12,7 @@ pub(super) fn call_reflect_native(
     let value = match native {
         NativeFunction::ReflectApply => reflect::native_reflect_apply(argument_values, env)?,
         NativeFunction::ReflectDefineProperty => {
-            reflect::native_reflect_define_property(argument_values)?
+            reflect::native_reflect_define_property(argument_values, env)?
         }
         NativeFunction::ReflectDeleteProperty => {
             reflect::native_reflect_delete_property(argument_values)?

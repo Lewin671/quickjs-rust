@@ -14,6 +14,10 @@ pub(crate) fn install_function(
         "constructor".to_owned(),
         Value::Function(function_constructor.clone()),
     );
+    function_prototype.define_property(
+        "length".to_owned(),
+        Property::data(Value::Number(0.0), false, false, true),
+    );
     function_prototype.define_non_enumerable(
         "apply".to_owned(),
         Value::Function(Function::new_native(

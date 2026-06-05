@@ -5,16 +5,21 @@ use crate::{RuntimeError, Value, object};
 
 pub(crate) fn native_reflect_define_property(
     argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     ensure_reflect_object_target(&target, "Reflect.defineProperty")?;
-    let key = crate::to_property_key(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
+    let key = crate::to_property_key_with_env(
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     let descriptor = object::to_property_descriptor(
         argument_values.get(2).cloned().unwrap_or(Value::Undefined),
+        env,
     )?;
 
     Ok(Value::Boolean(object::define_property_on_value(
-        target, key, descriptor,
+        target, key, descriptor, env,
     )?))
 }
 

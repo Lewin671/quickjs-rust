@@ -49,8 +49,14 @@ pub(super) fn call_string_native(
         NativeFunction::StringPrototypeLastIndexOf => {
             string::native_string_prototype_last_index_of(this_value, argument_values, env)?
         }
+        NativeFunction::StringPrototypeLocaleCompare => {
+            string::native_string_prototype_locale_compare(this_value, argument_values, env)?
+        }
         NativeFunction::StringPrototypeMatch => {
             string::native_string_prototype_match(this_value, argument_values, env)?
+        }
+        NativeFunction::StringPrototypeNormalize => {
+            string::native_string_prototype_normalize(this_value, argument_values, env)?
         }
         NativeFunction::StringPrototypePadEnd => string::native_string_prototype_pad(
             this_value,
@@ -82,8 +88,13 @@ pub(super) fn call_string_native(
         NativeFunction::StringPrototypeSubstring => {
             string::native_string_prototype_substring(this_value, argument_values, env)?
         }
-        NativeFunction::StringPrototypeToLowerCase => {
+        NativeFunction::StringPrototypeToLocaleLowerCase
+        | NativeFunction::StringPrototypeToLowerCase => {
             string::native_string_prototype_to_lower_case(this_value, env)?
+        }
+        NativeFunction::StringPrototypeToLocaleUpperCase
+        | NativeFunction::StringPrototypeToUpperCase => {
+            string::native_string_prototype_to_upper_case(this_value, env)?
         }
         NativeFunction::StringPrototypeTrim => {
             string::native_string_prototype_trim(this_value, env)?
@@ -96,9 +107,6 @@ pub(super) fn call_string_native(
         }
         NativeFunction::StringPrototypeToString | NativeFunction::StringPrototypeValueOf => {
             string::native_string_prototype_to_string(this_value, env)?
-        }
-        NativeFunction::StringPrototypeToUpperCase => {
-            string::native_string_prototype_to_upper_case(this_value, env)?
         }
         _ => return Ok(None),
     };

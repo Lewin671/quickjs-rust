@@ -49,12 +49,53 @@ fn evaluates_string_case_and_trim_builtins() {
         Ok(Value::Number(0.0))
     );
     assert_eq!(
+        eval("String.prototype.toLocaleLowerCase.length;"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval("String.prototype.toLocaleUpperCase.length;"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval("String.prototype.localeCompare.length;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval("String.prototype.normalize.length;"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
         eval("'AbC123'.toLowerCase();"),
         Ok(Value::String("abc123".to_owned()))
     );
     assert_eq!(
         eval("'AbC123'.toUpperCase();"),
         Ok(Value::String("ABC123".to_owned()))
+    );
+    assert_eq!(
+        eval("'AbC123'.toLocaleLowerCase();"),
+        Ok(Value::String("abc123".to_owned()))
+    );
+    assert_eq!(
+        eval("'AbC123'.toLocaleUpperCase();"),
+        Ok(Value::String("ABC123".to_owned()))
+    );
+    assert_eq!(eval("'a'.localeCompare('a');"), Ok(Value::Number(0.0)));
+    assert_eq!(eval("'a'.localeCompare('b');"), Ok(Value::Number(-1.0)));
+    assert_eq!(eval("'b'.localeCompare('a');"), Ok(Value::Number(1.0)));
+    assert_eq!(
+        eval("'foo'.normalize();"),
+        Ok(Value::String("foo".to_owned()))
+    );
+    assert_eq!(
+        eval("'\\u1E9B\\u0323'.normalize('NFKC');"),
+        Ok(Value::String("\u{1E69}".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { 'foo'.normalize('bad'); } catch (error) { caught = error instanceof RangeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
     );
     assert_eq!(
         eval("'  abc  '.trim();"),

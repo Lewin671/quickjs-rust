@@ -23,6 +23,14 @@ pub(super) fn call_core_native(
         NativeFunction::GlobalIsFinite => global::native_global_is_finite(argument_values),
         NativeFunction::GlobalIsNaN => global::native_global_is_nan(argument_values),
         NativeFunction::Eval => global::native_global_eval(argument_values, env),
+        NativeFunction::DecodeUri => global::native_decode_uri(argument_values, env),
+        NativeFunction::DecodeUriComponent => {
+            global::native_decode_uri_component(argument_values, env)
+        }
+        NativeFunction::EncodeUri => global::native_encode_uri(argument_values, env),
+        NativeFunction::EncodeUriComponent => {
+            global::native_encode_uri_component(argument_values, env)
+        }
         NativeFunction::Symbol => symbol::native_symbol(function),
         NativeFunction::Function => crate::function::native_function(
             function,

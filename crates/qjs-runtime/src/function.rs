@@ -15,4 +15,4 @@ pub(crate) use prototype::{
     native_function_prototype_bind, native_function_prototype_call,
 };
 pub(crate) use strict::is_strict_function_body;
-pub(crate) use value::Function;
+pub(crate) use value::{CompiledFunctionInit, Function};

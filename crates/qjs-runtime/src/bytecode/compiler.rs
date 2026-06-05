@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use qjs_ast::{ForInLeft, ForInit, Script, Stmt, VarKind};
+use qjs_ast::{AssignmentTarget, ForInLeft, ForInit, Script, Stmt, VarKind};
 
 use crate::{RuntimeError, Value, function::is_strict_function_body};
 
@@ -13,20 +13,32 @@ pub(super) struct Compiler {
     pub(super) local_slots: HashMap<String, usize>,
     pub(super) code: Vec<Op>,
     loop_stack: Vec<LoopContext>,
+    label_stack: Vec<String>,
     next_temp: usize,
     pub(super) strict: bool,
+    pub(super) dynamic_scope_depth: usize,
+    pub(super) direct_eval: bool,
 }
 
 #[derive(Default)]
 pub(super) struct LoopContext {
     result_slot: usize,
     allows_continue: bool,
+    labels: Vec<String>,
     breaks: Vec<usize>,
     continues: Vec<usize>,
 }
 
 pub(super) fn compile_script(script: &Script) -> Result<Bytecode, RuntimeError> {
     Compiler::default().compile(script)
+}
+
+pub(super) fn compile_eval_script(script: &Script) -> Result<Bytecode, RuntimeError> {
+    Compiler {
+        direct_eval: true,
+        ..Compiler::default()
+    }
+    .compile(script)
 }
 
 pub(super) fn compile_function_body(
@@ -93,7 +105,7 @@ impl Compiler {
                         self.collect_hoisted_locals(std::slice::from_ref(alternate));
                     }
                 }
-                Stmt::While { body, .. } | Stmt::DoWhile { body, .. } => {
+                Stmt::While { body, .. } | Stmt::With { body, .. } | Stmt::DoWhile { body, .. } => {
                     self.collect_hoisted_locals(std::slice::from_ref(body));
                 }
                 Stmt::For { init, body, .. } => {
@@ -109,19 +121,34 @@ impl Compiler {
                     }
                     self.collect_hoisted_locals(std::slice::from_ref(body));
                 }
-                Stmt::ForIn { left, body, .. } => {
-                    if let ForInLeft::VarDecl {
-                        name,
-                        kind: VarKind::Var,
-                        ..
-                    } = left
-                    {
-                        self.local_slot(name, true);
+                Stmt::ForIn { left, body, .. } | Stmt::ForOf { left, body, .. } => {
+                    match left {
+                        ForInLeft::VarDecl {
+                            name,
+                            kind: VarKind::Var,
+                            ..
+                        } => {
+                            self.local_slot(name, true);
+                        }
+                        ForInLeft::Binding {
+                            kind: VarKind::Var,
+                            target,
+                            ..
+                        } => {
+                            self.collect_hoisted_target_locals(target);
+                        }
+                        _ => {}
                     }
                     self.collect_hoisted_locals(std::slice::from_ref(body));
                 }
                 Stmt::FunctionDecl { name, .. } => {
                     self.local_slot(name, true);
+                }
+                Stmt::ClassDecl { name, .. } => {
+                    self.local_slot(name, true);
+                }
+                Stmt::Label { body, .. } => {
+                    self.collect_hoisted_locals(std::slice::from_ref(body));
                 }
                 Stmt::VarDecl {
                     kind: VarKind::Var,
@@ -163,6 +190,25 @@ impl Compiler {
         }
     }
 
+    fn collect_hoisted_target_locals(&mut self, target: &AssignmentTarget) {
+        match target {
+            AssignmentTarget::Identifier { name, .. } => {
+                self.local_slot(name, true);
+            }
+            AssignmentTarget::Array { elements, .. } => {
+                for element in elements.iter().flatten() {
+                    self.collect_hoisted_target_locals(&element.target);
+                }
+            }
+            AssignmentTarget::Object { properties, .. } => {
+                for property in properties {
+                    self.collect_hoisted_target_locals(&property.target);
+                }
+            }
+            AssignmentTarget::Member { .. } => {}
+        }
+    }
+
     pub(super) fn local_slot(&mut self, name: &str, hoisted: bool) -> usize {
         if let Some(slot) = self.local_slots.get(name) {
             if hoisted {
@@ -194,7 +240,8 @@ impl Compiler {
             Op::Jump(dest)
             | Op::JumpIfFalse(dest)
             | Op::JumpIfTrue(dest)
-            | Op::JumpIfNotNullish(dest) => *dest = target,
+            | Op::JumpIfNotNullish(dest)
+            | Op::JumpIfNotUndefined(dest) => *dest = target,
             _ => unreachable!("attempted to patch a non-jump instruction"),
         }
     }
@@ -209,6 +256,7 @@ impl Compiler {
         self.loop_stack.push(LoopContext {
             result_slot,
             allows_continue: true,
+            labels: std::mem::take(&mut self.label_stack),
             breaks: Vec::new(),
             continues: Vec::new(),
         });
@@ -218,6 +266,7 @@ impl Compiler {
         self.loop_stack.push(LoopContext {
             result_slot,
             allows_continue: false,
+            labels: std::mem::take(&mut self.label_stack),
             breaks: Vec::new(),
             continues: Vec::new(),
         });
@@ -247,17 +296,32 @@ impl Compiler {
         Ok(())
     }
 
-    pub(super) fn compile_continue(&mut self) -> Result<(), RuntimeError> {
-        let Some(index) = self
-            .loop_stack
-            .iter()
-            .rposition(|context| context.allows_continue)
-        else {
+    pub(super) fn compile_continue(&mut self, label: Option<&str>) -> Result<(), RuntimeError> {
+        let index = if let Some(label) = label {
+            self.loop_stack.iter().rposition(|context| {
+                context.allows_continue && context.labels.iter().any(|candidate| candidate == label)
+            })
+        } else {
+            self.loop_stack
+                .iter()
+                .rposition(|context| context.allows_continue)
+        };
+        let Some(index) = index else {
             return Err(RuntimeError {
                 thrown: None,
                 message: "continue outside loop".to_owned(),
             });
         };
+        if label.is_some()
+            && let (Some(source), target) = (
+                self.loop_stack.last().map(|context| context.result_slot),
+                self.loop_stack[index].result_slot,
+            )
+            && source != target
+        {
+            self.emit(Op::LoadLocal(source));
+            self.emit(Op::StoreLocal(target));
+        }
         let jump = self.emit(Op::Jump(usize::MAX));
         self.loop_stack[index].continues.push(jump);
         Ok(())
@@ -287,7 +351,13 @@ impl Compiler {
                 for (index, stmt) in body.iter().enumerate() {
                     self.compile_stmt(stmt)?;
                     if index + 1 != body.len() {
-                        self.emit(Op::Pop);
+                        if let Some(result_slot) =
+                            self.loop_stack.last().map(|context| context.result_slot)
+                        {
+                            self.emit(Op::StoreLocal(result_slot));
+                        } else {
+                            self.emit(Op::Pop);
+                        }
                     }
                 }
                 Ok(())
@@ -299,6 +369,7 @@ impl Compiler {
                 ..
             } => self.compile_if(test, consequent, alternate.as_deref()),
             Stmt::While { test, body, .. } => self.compile_while(test, body),
+            Stmt::With { object, body, .. } => self.compile_with(object, body),
             Stmt::DoWhile { body, test, .. } => self.compile_do_while(body, test),
             Stmt::For {
                 init,
@@ -310,6 +381,9 @@ impl Compiler {
             Stmt::ForIn {
                 left, right, body, ..
             } => self.compile_for_in(left, right, body),
+            Stmt::ForOf {
+                left, right, body, ..
+            } => self.compile_for_of(left, right, body),
             Stmt::Return { argument, .. } => {
                 if let Some(argument) = argument {
                     self.compile_expr(argument)?;
@@ -340,16 +414,18 @@ impl Compiler {
                     let slot = self.local_slot(&declaration.name, is_hoisted);
                     if let Some(init) = &declaration.init {
                         self.compile_expr(init)?;
-                    } else {
+                        self.emit(Op::StoreLocal(slot));
+                    } else if *kind != VarKind::Var || self.direct_eval {
                         self.emit_load_undefined();
+                        self.emit(Op::StoreLocal(slot));
                     }
-                    self.emit(Op::StoreLocal(slot));
                 }
                 self.emit_load_undefined();
                 Ok(())
             }
             Stmt::Break { .. } => self.compile_break(),
-            Stmt::Continue { .. } => self.compile_continue(),
+            Stmt::Continue { label, .. } => self.compile_continue(label.as_deref()),
+            Stmt::Label { label, body, .. } => self.compile_label(label, body),
             Stmt::Switch {
                 discriminant,
                 cases,
@@ -365,6 +441,20 @@ impl Compiler {
                 self.emit_load_undefined();
                 Ok(())
             }
+            Stmt::ClassDecl { name, methods, .. } => self.compile_class_decl(name, methods),
         }
+    }
+
+    fn compile_label(&mut self, label: &str, body: &Stmt) -> Result<(), RuntimeError> {
+        self.label_stack.push(label.to_owned());
+        let result = self.compile_stmt(body);
+        if self
+            .label_stack
+            .last()
+            .is_some_and(|active| active == label)
+        {
+            self.label_stack.pop();
+        }
+        result
     }
 }

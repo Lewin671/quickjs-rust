@@ -15,7 +15,7 @@ pub(crate) use function::{
     function_delete_own_property, function_own_property_descriptor, function_own_property_keys,
     function_own_property_names,
 };
-pub(crate) use key::to_property_key;
+pub(crate) use key::{to_property_key, to_property_key_with_env};
 pub(crate) use prototype::{
     array_prototype, array_prototype_property, constructor_prototype, function_intrinsic_prototype,
     function_prototype, function_prototype_property, inherited_object_prototype_property,
@@ -65,11 +65,13 @@ pub(crate) fn property_value(
             if key == "length" {
                 Ok(Value::Number(elements.len() as f64))
             } else {
-                let descriptor = key
-                    .parse::<usize>()
-                    .ok()
-                    .and_then(|index| elements.get(index).map(Property::enumerable))
-                    .or_else(|| elements.property(key))
+                let descriptor = elements
+                    .property(key)
+                    .or_else(|| {
+                        key.parse::<usize>()
+                            .ok()
+                            .and_then(|index| elements.get(index).map(Property::enumerable))
+                    })
                     .or_else(|| {
                         elements
                             .prototype_override()

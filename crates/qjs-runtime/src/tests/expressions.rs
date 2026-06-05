@@ -164,6 +164,76 @@ fn evaluates_update_and_compound_assignment() {
         eval("let o = { count: 1 }; o.count++; o.count;"),
         Ok(Value::Number(2.0))
     );
+    assert_eq!(
+        eval("let o = {}; Object.defineProperty(o, 'fixed', { value: 3 }); o.fixed *= 4; o.fixed;"),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval(
+            "'use strict'; let caught = false; let o = {}; Object.defineProperty(o, 'fixed', { value: 3 }); try { o.fixed *= 4; } catch (error) { caught = error instanceof TypeError; } caught + ':' + o.fixed;"
+        ),
+        Ok(Value::String("true:3".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "'use strict'; let caught = false; let xs = [3]; Object.defineProperty(xs, '0', { writable: false }); try { xs[0] *= 4; } catch (error) { caught = error instanceof TypeError; } caught + ':' + xs[0];"
+        ),
+        Ok(Value::String("true:3".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "'use strict'; let caught = false; let o = {}; Object.defineProperty(o, 'prop', { get: function() { return 11; }, set: undefined }); try { o.prop *= 20; } catch (error) { caught = error instanceof TypeError; } caught + ':' + o.prop;"
+        ),
+        Ok(Value::String("true:11".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "'use strict'; let caught = false; let o = {}; Object.defineProperty(o, 'prop', { get: function() { return 11; }, set: undefined }); try { o.prop = 20; } catch (error) { caught = error instanceof TypeError; } caught + ':' + o.prop;"
+        ),
+        Ok(Value::String("true:11".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; let keyCoerced = false; let rhsEvaluated = false; try { let base = null; let key = { toString: function() { keyCoerced = true; return 'x'; } }; base[key] *= (rhsEvaluated = true); } catch (error) { caught = error instanceof TypeError; } caught + ':' + keyCoerced + ':' + rhsEvaluated;"
+        ),
+        Ok(Value::String("true:false:false".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "function Marker() {} let caught = false; try { let base = null; let key = function() { throw new Marker(); }; base[key()] *= 1; } catch (error) { caught = error instanceof Marker; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let count = 0; let base = {}; let key = { toString: function() { count = count + 1; return 'x'; } }; base[key] *= 2; count;"
+        ),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { missingBinding; } catch (error) { caught = error instanceof ReferenceError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { let x = 1; x *= missingBinding; } catch (error) { caught = error instanceof ReferenceError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "function f() { var x = 3; var inner = (function() { x *= (eval('var x = 2;'), 4); return x; })(); return inner === 2 && x === 12; } f();"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "var count = 0; Object.defineProperty(this, 'x', { configurable: true, get: function() { delete this.x; return 2; } }); (function() { 'use strict'; try { count++; x ^= 3; count++; } catch (error) { count++; } })(); count === 2 && !('x' in this);"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]

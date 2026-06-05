@@ -51,6 +51,25 @@ impl Parser {
         })
     }
 
+    pub(super) fn with_statement(&mut self) -> Result<Stmt, ParseError> {
+        let start = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .start;
+        self.expect(&TokenKind::With)?;
+        self.expect(&TokenKind::LeftParen)?;
+        let object = self.expression()?;
+        self.expect(&TokenKind::RightParen)?;
+        let body = self.statement()?;
+        let end = stmt_end(&body);
+        Ok(Stmt::With {
+            object,
+            body: Box::new(body),
+            span: Span::new(start, end),
+        })
+    }
+
     pub(super) fn do_while_statement(&mut self) -> Result<Stmt, ParseError> {
         let start = self
             .peek()
@@ -87,12 +106,57 @@ impl Parser {
         if self.at(&TokenKind::Var) || self.at(&TokenKind::Let) || self.at(&TokenKind::Const) {
             let kind_token = self.advance();
             let kind = var_kind(&kind_token.kind).expect("token should be declaration kind");
-            let name_token = self.advance();
-            let TokenKind::Identifier(name) = name_token.kind else {
+            if self.at(&TokenKind::LeftBracket) || self.at(&TokenKind::LeftBrace) {
+                let pattern = self.assignment()?;
+                let pattern_end = pattern.span().end;
+                let target = assignment_target(pattern)?;
+                if self.match_kind(&TokenKind::In) {
+                    let right = self.expression()?;
+                    self.expect(&TokenKind::RightParen)?;
+                    let body = self.statement()?;
+                    let end = stmt_end(&body);
+                    return Ok(Stmt::ForIn {
+                        left: ForInLeft::Binding {
+                            kind,
+                            target,
+                            span: Span::new(kind_token.span.start, pattern_end),
+                        },
+                        right,
+                        body: Box::new(body),
+                        span: Span::new(start, end),
+                    });
+                }
+                if self.match_identifier_text("of") {
+                    let right = self.expression()?;
+                    self.expect(&TokenKind::RightParen)?;
+                    let body = self.statement()?;
+                    let end = stmt_end(&body);
+                    return Ok(Stmt::ForOf {
+                        left: ForInLeft::Binding {
+                            kind,
+                            target,
+                            span: Span::new(kind_token.span.start, pattern_end),
+                        },
+                        right,
+                        body: Box::new(body),
+                        span: Span::new(start, end),
+                    });
+                }
                 return Err(ParseError {
-                    message: "expected binding identifier".to_owned(),
-                    span: name_token.span,
+                    message: "expected `in` or `of` after loop binding pattern".to_owned(),
+                    span: Span::new(kind_token.span.start, pattern_end),
                 });
+            }
+            let name_token = self.advance();
+            let name = match name_token.kind {
+                TokenKind::Identifier(name) => name,
+                TokenKind::Let if kind == qjs_ast::VarKind::Var => "let".to_owned(),
+                _ => {
+                    return Err(ParseError {
+                        message: "expected binding identifier".to_owned(),
+                        span: name_token.span,
+                    });
+                }
             };
             if self.match_kind(&TokenKind::In) {
                 let right = self.expression()?;
@@ -100,6 +164,22 @@ impl Parser {
                 let body = self.statement()?;
                 let end = stmt_end(&body);
                 return Ok(Stmt::ForIn {
+                    left: ForInLeft::VarDecl {
+                        kind,
+                        name,
+                        span: Span::new(kind_token.span.start, name_token.span.end),
+                    },
+                    right,
+                    body: Box::new(body),
+                    span: Span::new(start, end),
+                });
+            }
+            if self.match_identifier_text("of") {
+                let right = self.expression()?;
+                self.expect(&TokenKind::RightParen)?;
+                let body = self.statement()?;
+                let end = stmt_end(&body);
+                return Ok(Stmt::ForOf {
                     left: ForInLeft::VarDecl {
                         kind,
                         name,
@@ -121,6 +201,19 @@ impl Parser {
                 let body = self.statement()?;
                 let end = stmt_end(&body);
                 return Ok(Stmt::ForIn {
+                    left: ForInLeft::Target(left),
+                    right,
+                    body: Box::new(body),
+                    span: Span::new(start, end),
+                });
+            }
+            if self.match_identifier_text("of") {
+                let left = assignment_target(left)?;
+                let right = self.expression()?;
+                self.expect(&TokenKind::RightParen)?;
+                let body = self.statement()?;
+                let end = stmt_end(&body);
+                return Ok(Stmt::ForOf {
                     left: ForInLeft::Target(left),
                     right,
                     body: Box::new(body),

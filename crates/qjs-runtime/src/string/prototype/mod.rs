@@ -6,6 +6,7 @@ mod sequence;
 mod trim;
 
 pub(crate) use case::{
+    native_string_prototype_locale_compare, native_string_prototype_normalize,
     native_string_prototype_to_lower_case, native_string_prototype_to_upper_case,
 };
 pub(crate) use code_units::{

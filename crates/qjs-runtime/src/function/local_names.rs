@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use qjs_ast::{ForInLeft, ForInit, Stmt};
+use qjs_ast::{AssignmentTarget, ForInLeft, ForInit, Stmt};
 
 pub(crate) fn collect_function_local_names(
     name: Option<&String>,
@@ -33,6 +33,12 @@ fn collect_statement_local_names(body: &[Stmt], names: &mut HashSet<String>) {
             Stmt::FunctionDecl { name, .. } => {
                 names.insert(name.clone());
             }
+            Stmt::ClassDecl { name, methods, .. } => {
+                names.insert(name.clone());
+                for method in methods {
+                    collect_statement_local_names(&method.body, names);
+                }
+            }
             Stmt::Block { body, .. } => collect_statement_local_names(body, names),
             Stmt::If {
                 consequent,
@@ -44,7 +50,7 @@ fn collect_statement_local_names(body: &[Stmt], names: &mut HashSet<String>) {
                     collect_statement_local_names(std::slice::from_ref(alternate.as_ref()), names);
                 }
             }
-            Stmt::While { body, .. } | Stmt::DoWhile { body, .. } => {
+            Stmt::While { body, .. } | Stmt::With { body, .. } | Stmt::DoWhile { body, .. } => {
                 collect_statement_local_names(std::slice::from_ref(body.as_ref()), names);
             }
             Stmt::For { init, body, .. } => {
@@ -57,10 +63,19 @@ fn collect_statement_local_names(body: &[Stmt], names: &mut HashSet<String>) {
                 }
                 collect_statement_local_names(std::slice::from_ref(body.as_ref()), names);
             }
-            Stmt::ForIn { left, body, .. } => {
-                if let ForInLeft::VarDecl { name, .. } = left {
-                    names.insert(name.clone());
+            Stmt::ForIn { left, body, .. } | Stmt::ForOf { left, body, .. } => {
+                match left {
+                    ForInLeft::VarDecl { name, .. } => {
+                        names.insert(name.clone());
+                    }
+                    ForInLeft::Binding { target, .. } => {
+                        collect_target_local_names(target, names);
+                    }
+                    ForInLeft::Target(_) => {}
                 }
+                collect_statement_local_names(std::slice::from_ref(body.as_ref()), names);
+            }
+            Stmt::Label { body, .. } => {
                 collect_statement_local_names(std::slice::from_ref(body.as_ref()), names);
             }
             Stmt::Switch { cases, .. } => {
@@ -93,6 +108,25 @@ fn collect_statement_local_names(body: &[Stmt], names: &mut HashSet<String>) {
             | Stmt::Continue { .. }
             | Stmt::Empty => {}
         }
+    }
+}
+
+fn collect_target_local_names(target: &AssignmentTarget, names: &mut HashSet<String>) {
+    match target {
+        AssignmentTarget::Identifier { name, .. } => {
+            names.insert(name.clone());
+        }
+        AssignmentTarget::Array { elements, .. } => {
+            for element in elements.iter().flatten() {
+                collect_target_local_names(&element.target, names);
+            }
+        }
+        AssignmentTarget::Object { properties, .. } => {
+            for property in properties {
+                collect_target_local_names(&property.target, names);
+            }
+        }
+        AssignmentTarget::Member { .. } => {}
     }
 }
 

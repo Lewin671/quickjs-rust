@@ -34,6 +34,10 @@ impl Parser {
             return self.while_statement();
         }
 
+        if self.at(&TokenKind::With) {
+            return self.with_statement();
+        }
+
         if self.at(&TokenKind::Do) {
             return self.do_while_statement();
         }
@@ -52,6 +56,10 @@ impl Parser {
 
         if self.at(&TokenKind::Function) {
             return self.function_declaration();
+        }
+
+        if self.at_identifier_text("class") {
+            return self.class_declaration();
         }
 
         if self.at(&TokenKind::Return) {
@@ -74,13 +82,44 @@ impl Parser {
             return Ok(self.break_or_continue_statement(TokenKind::Continue));
         }
 
-        if self.at(&TokenKind::Var) || self.at(&TokenKind::Let) || self.at(&TokenKind::Const) {
+        if self.at(&TokenKind::Var)
+            || self.at(&TokenKind::Const)
+            || (self.at(&TokenKind::Let)
+                && !self
+                    .peek_nth(1)
+                    .is_some_and(|token| token.kind == TokenKind::LeftBrace))
+        {
             return self.variable_declaration();
+        }
+
+        if matches!(
+            self.peek().map(|token| &token.kind),
+            Some(TokenKind::Identifier(_))
+        ) && self
+            .peek_nth(1)
+            .is_some_and(|token| token.kind == TokenKind::Colon)
+        {
+            return self.labelled_statement();
         }
 
         let expr = self.expression()?;
         self.match_kind(&TokenKind::Semicolon);
         Ok(Stmt::Expr(expr))
+    }
+
+    fn labelled_statement(&mut self) -> Result<Stmt, ParseError> {
+        let token = self.advance();
+        let TokenKind::Identifier(label) = token.kind else {
+            unreachable!("caller checked label identifier");
+        };
+        self.expect(&TokenKind::Colon)?;
+        let body = self.statement()?;
+        let end = crate::helpers::stmt_end(&body);
+        Ok(Stmt::Label {
+            label,
+            body: Box::new(body),
+            span: Span::new(token.span.start, end),
+        })
     }
 
     pub(super) fn block_statement(&mut self) -> Result<Stmt, ParseError> {

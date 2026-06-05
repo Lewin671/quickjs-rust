@@ -12,6 +12,7 @@ pub(super) fn identifier_or_keyword(text: &str) -> TokenKind {
         "if" => TokenKind::If,
         "else" => TokenKind::Else,
         "while" => TokenKind::While,
+        "with" => TokenKind::With,
         "do" => TokenKind::Do,
         "for" => TokenKind::For,
         "switch" => TokenKind::Switch,

@@ -7,7 +7,9 @@ mod member;
 mod object;
 mod operator;
 
-pub use assignment::{AssignmentOp, AssignmentTarget};
+pub use assignment::{
+    ArrayAssignmentElement, AssignmentOp, AssignmentTarget, ObjectAssignmentProperty,
+};
 pub use literal::Literal;
 pub use member::MemberProperty;
 pub use object::{ObjectProperty, ObjectPropertyKey, ObjectPropertyKind};

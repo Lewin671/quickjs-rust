@@ -2,6 +2,7 @@ use super::Value;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Property {
+    accessor: bool,
     pub(crate) value: Value,
     pub(crate) get: Option<Value>,
     pub(crate) set: Option<Value>,
@@ -13,6 +14,7 @@ pub(crate) struct Property {
 impl Property {
     pub(crate) fn data(value: Value, enumerable: bool, writable: bool, configurable: bool) -> Self {
         Self {
+            accessor: false,
             value,
             get: None,
             set: None,
@@ -29,6 +31,7 @@ impl Property {
         configurable: bool,
     ) -> Self {
         Self {
+            accessor: true,
             value: Value::Undefined,
             get,
             set,
@@ -40,6 +43,7 @@ impl Property {
 
     pub(crate) fn enumerable(value: Value) -> Self {
         Self {
+            accessor: false,
             value,
             get: None,
             set: None,
@@ -51,6 +55,7 @@ impl Property {
 
     pub(crate) fn non_enumerable(value: Value) -> Self {
         Self {
+            accessor: false,
             value,
             get: None,
             set: None,
@@ -61,7 +66,7 @@ impl Property {
     }
 
     pub(crate) fn is_accessor(&self) -> bool {
-        self.get.is_some() || self.set.is_some()
+        self.accessor
     }
 
     pub(crate) fn make_non_configurable(&mut self) {

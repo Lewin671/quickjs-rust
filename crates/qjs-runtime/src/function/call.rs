@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 use crate::{
     Bytecode, Function, GLOBAL_THIS_BINDING, ObjectRef, RUNTIME_INTRINSIC_NAMES, RuntimeError,
-    Value, bytecode::eval_function_bytecode, native::call_native_function, object_prototype,
+    Value, bytecode::eval_function_bytecode_with_stack, native::call_native_function,
+    object_prototype,
 };
 
 use super::function_call_this;
@@ -55,7 +56,11 @@ pub(crate) fn call_function(
             &argument_values,
             env,
         );
-        let result = eval_function_bytecode(bytecode, function_env.env);
+        let result = eval_function_bytecode_with_stack(
+            bytecode,
+            function_env.env,
+            function.with_stack.clone(),
+        );
         propagate_caller_bindings(env, &function_env.caller_binding_names, &result);
         return result.value;
     }

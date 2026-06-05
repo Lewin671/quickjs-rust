@@ -10,8 +10,12 @@ mod ir;
 mod util;
 mod vm;
 mod vm_call;
+mod vm_entry;
 mod vm_errors;
+mod vm_iteration_ops;
+mod vm_name_ops;
 mod vm_ops;
+mod vm_property_ops;
 mod vm_props;
 mod vm_result;
 mod vm_try;
@@ -33,6 +37,10 @@ pub fn compile_script(script: &Script) -> Result<Bytecode, RuntimeError> {
     compiler::compile_script(script)
 }
 
+pub(crate) fn compile_eval_script(script: &Script) -> Result<Bytecode, RuntimeError> {
+    compiler::compile_eval_script(script)
+}
+
 pub(crate) fn compile_function_body(
     params: &[String],
     body: &[qjs_ast::Stmt],
@@ -40,11 +48,12 @@ pub(crate) fn compile_function_body(
     compiler::compile_function_body(params, body)
 }
 
-pub(crate) fn eval_function_bytecode(
+pub(crate) fn eval_function_bytecode_with_stack(
     bytecode: &Bytecode,
     env: std::collections::HashMap<String, Value>,
+    with_stack: Vec<Value>,
 ) -> FunctionBytecodeResult<'_> {
-    vm::eval_function_bytecode(bytecode, env)
+    vm_entry::eval_function_bytecode_with_stack(bytecode, env, with_stack)
 }
 
 /// Compiles and evaluates source text through the bytecode VM.
@@ -67,12 +76,12 @@ pub fn eval_bytecode_source(source: &str) -> Result<Value, RuntimeError> {
 ///
 /// Returns runtime failures or malformed bytecode failures.
 pub fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> {
-    vm::eval_bytecode(bytecode)
+    vm_entry::eval_bytecode(bytecode)
 }
 
 pub(crate) fn eval_bytecode_with_env(
     bytecode: &Bytecode,
     env: std::collections::HashMap<String, Value>,
 ) -> FunctionBytecodeResult<'_> {
-    vm::eval_function_bytecode(bytecode, env)
+    vm_entry::eval_function_bytecode(bytecode, env)
 }

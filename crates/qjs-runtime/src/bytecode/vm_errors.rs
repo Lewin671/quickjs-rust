@@ -38,6 +38,14 @@ impl Vm<'_> {
         }
     }
 
+    pub(super) fn throw_type_error(&mut self, message: String) -> Result<(), RuntimeError> {
+        self.handle_runtime_result::<()>(Err(RuntimeError {
+            thrown: None,
+            message,
+        }))?;
+        Ok(())
+    }
+
     fn should_rethrow_js_error(&self, error: &RuntimeError) -> bool {
         !self.try_stack.is_empty()
             && (error.thrown.is_some() || error.message.starts_with("throw statement executed: "))

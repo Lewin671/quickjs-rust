@@ -3,41 +3,28 @@ use std::collections::HashMap;
 use qjs_ast::ObjectPropertyKind;
 
 use crate::{
-    ArrayRef, Function, GLOBAL_THIS_BINDING, ObjectRef, Property, RUNTIME_INTRINSIC_NAMES,
-    RuntimeError, Value, call_function, constructor_prototype, initialize_builtins, is_truthy,
-    object_prototype, operations, to_property_key,
+    ArrayRef, CompiledFunctionInit, Function, GLOBAL_THIS_BINDING, ObjectRef, Property,
+    RUNTIME_INTRINSIC_NAMES, RuntimeError, Value, call_function, constructor_prototype,
+    initialize_builtins, is_truthy, object_prototype, operations, to_property_key_with_env,
 };
 
 use super::ir::{Bytecode, Op};
 use super::util::{stack_underflow, typeof_value};
 use super::vm_call::{insert_scope_call_bindings, user_bytecode_function};
-use super::vm_props::{delete_property, get_property, set_property};
-use super::vm_result::FunctionBytecodeResult;
+use super::vm_name_ops::NameReference;
+use super::vm_props::get_property;
 use super::vm_try::TryFrame;
 
 pub(super) type Slot = Option<Value>;
-
 struct VmCallEnv {
     env: HashMap<String, Value>,
     binding_names: Option<Vec<String>>,
 }
 
-pub(super) fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> {
-    let mut vm = Vm::new(bytecode);
-    vm.run()
-}
-
-pub(super) fn eval_function_bytecode(
-    bytecode: &Bytecode,
-    env: HashMap<String, Value>,
-) -> FunctionBytecodeResult<'_> {
-    let mut vm = Vm::new_with_globals(bytecode, env);
-    let value = vm.run();
-    FunctionBytecodeResult {
-        value,
-        bytecode,
-        globals: vm.globals,
-        locals: vm.locals,
+pub(super) fn property_base_error() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "TypeError: cannot access property of null or undefined".to_owned(),
     }
 }
 
@@ -50,20 +37,28 @@ pub(super) struct Vm<'a> {
     pub(super) try_stack: Vec<TryFrame>,
     pub(super) pending_throw: Option<Value>,
     pub(super) pending_return: Option<Value>,
+    pub(super) with_stack: Vec<Value>,
+    pub(super) name_references: Vec<NameReference>,
+    pub(super) binding_overrides: HashMap<String, Value>,
+    pub(super) sync_var_to_global_object: bool,
 }
 
 impl<'a> Vm<'a> {
-    fn new(bytecode: &'a Bytecode) -> Self {
+    pub(super) fn new(bytecode: &'a Bytecode) -> Self {
         let mut globals = HashMap::new();
         let global_this = Value::Object(ObjectRef::new(HashMap::new()));
         globals.insert("this".to_owned(), global_this.clone());
         globals.insert(GLOBAL_THIS_BINDING.to_owned(), global_this.clone());
         globals.insert("undefined".to_owned(), Value::Undefined);
         initialize_builtins(&mut globals, &global_this);
-        Self::new_with_globals(bytecode, globals)
+        Self::new_with_globals(bytecode, globals, true)
     }
 
-    fn new_with_globals(bytecode: &'a Bytecode, globals: HashMap<String, Value>) -> Self {
+    pub(super) fn new_with_globals(
+        bytecode: &'a Bytecode,
+        globals: HashMap<String, Value>,
+        sync_var_to_global_object: bool,
+    ) -> Self {
         Self {
             bytecode,
             ip: 0,
@@ -73,6 +68,10 @@ impl<'a> Vm<'a> {
             try_stack: Vec::new(),
             pending_throw: None,
             pending_return: None,
+            with_stack: Vec::new(),
+            name_references: Vec::new(),
+            binding_overrides: HashMap::new(),
+            sync_var_to_global_object,
         }
     }
 
@@ -92,7 +91,7 @@ impl<'a> Vm<'a> {
             .collect()
     }
 
-    fn run(&mut self) -> Result<Value, RuntimeError> {
+    pub(super) fn run(&mut self) -> Result<Value, RuntimeError> {
         loop {
             let op = self
                 .bytecode
@@ -114,7 +113,11 @@ impl<'a> Vm<'a> {
                             }
                         })?)
                 }
-                Op::LoadLocal(slot) => self.stack.push(self.load_local(slot)?),
+                Op::LoadLocal(slot) => {
+                    if let Some(value) = self.handle_runtime_result(self.load_local(slot))? {
+                        self.stack.push(value);
+                    }
+                }
                 Op::LoadLocalOrUndefined(slot) => {
                     self.stack.push(self.load_local_or_undefined(slot)?)
                 }
@@ -122,6 +125,21 @@ impl<'a> Vm<'a> {
                     let value = self.pop()?;
                     self.store_local(slot, value)?;
                 }
+                Op::ClearLocal(slot) => {
+                    self.clear_local(slot)?;
+                }
+                Op::LoadName(name) => {
+                    let result = self.load_name(&name);
+                    if let Some(value) = self.handle_runtime_result(result)? {
+                        self.stack.push(value);
+                    }
+                }
+                Op::StoreName { name, strict } => {
+                    let value = self.pop()?;
+                    let result = self.store_name(&name, value, strict);
+                    self.handle_runtime_result(result)?;
+                }
+                Op::ResolveName(name) => self.resolve_name(&name),
                 Op::LoadGlobal(name) => {
                     let value = self
                         .globals
@@ -130,8 +148,10 @@ impl<'a> Vm<'a> {
                         .ok_or_else(|| RuntimeError {
                             thrown: None,
                             message: format!("ReferenceError: undefined identifier `{name}`"),
-                        })?;
-                    self.stack.push(value);
+                        });
+                    if let Some(value) = self.handle_runtime_result(value)? {
+                        self.stack.push(value);
+                    }
                 }
                 Op::TypeofGlobal(name) => {
                     let value = self.globals.get(&name).cloned().unwrap_or(Value::Undefined);
@@ -145,10 +165,13 @@ impl<'a> Vm<'a> {
                     self.stack.push(value);
                 }
                 Op::NewArray { count, holes } => self.new_array(count, holes)?,
+                Op::ForOfValues => self.for_of_values()?,
                 Op::NewObject(kinds) => self.new_object(&kinds)?,
                 Op::EnumerateKeys => self.enumerate_keys()?,
+                Op::CheckObjectCoercible => self.check_object_coercible()?,
+                Op::ToPropertyKey => self.coerce_property_key()?,
                 Op::GetProp => self.get_prop()?,
-                Op::SetProp => self.set_prop()?,
+                Op::SetProp { strict } => self.set_prop(strict)?,
                 Op::DeleteProp => self.delete_prop()?,
                 Op::Call(argc) => self.call(argc)?,
                 Op::CallMethod(argc) => self.call_method(argc)?,
@@ -165,11 +188,14 @@ impl<'a> Vm<'a> {
                     self.stack.push(Value::Function(Function::new_user_compiled(
                         name,
                         params,
-                        env,
-                        bytecode,
-                        local_names,
-                        constructable,
-                        is_strict,
+                        CompiledFunctionInit {
+                            env,
+                            with_stack: self.with_stack.clone(),
+                            bytecode,
+                            local_names,
+                            constructable,
+                            is_strict,
+                        },
                     )));
                 }
                 Op::Typeof => {
@@ -202,6 +228,16 @@ impl<'a> Vm<'a> {
                         self.ip = target;
                     }
                 }
+                Op::JumpIfNotUndefined(target) => {
+                    if !matches!(self.stack.last(), Some(Value::Undefined)) {
+                        self.ip = target;
+                    }
+                }
+                Op::IteratorCloseForThrow(iterator_slot) => {
+                    self.iterator_close_for_throw(iterator_slot)?;
+                }
+                Op::EnterWith => self.enter_with()?,
+                Op::ExitWith => self.exit_with()?,
                 Op::EnterTry {
                     catch,
                     finally,
@@ -223,6 +259,7 @@ impl<'a> Vm<'a> {
                     let value = self.pop()?;
                     self.throw_value(value)?;
                 }
+                Op::ThrowTypeError(message) => self.throw_type_error(message)?,
             }
         }
     }
@@ -287,7 +324,9 @@ impl<'a> Vm<'a> {
         let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(&self.globals));
         for kind in kinds.iter().rev() {
             let value = self.pop()?;
-            let key = to_property_key(self.pop()?)?;
+            let mut env = self.current_env();
+            let key = to_property_key_with_env(self.pop()?, &mut env)?;
+            self.apply_env(env);
             match kind {
                 ObjectPropertyKind::Data => {
                     object.define_property(key, Property::enumerable(value))
@@ -295,33 +334,12 @@ impl<'a> Vm<'a> {
                 ObjectPropertyKind::Getter => {
                     object.define_property(key, Property::accessor(Some(value), None, true, true))
                 }
+                ObjectPropertyKind::Setter => {
+                    object.define_property(key, Property::accessor(None, Some(value), true, true))
+                }
             }
         }
         self.stack.push(Value::Object(object));
-        Ok(())
-    }
-
-    fn get_prop(&mut self) -> Result<(), RuntimeError> {
-        let key = to_property_key(self.pop()?)?;
-        let object = self.pop()?;
-        self.stack
-            .push(get_property(object, &key, &mut self.globals)?);
-        Ok(())
-    }
-
-    fn set_prop(&mut self) -> Result<(), RuntimeError> {
-        let value = self.pop()?;
-        let key = to_property_key(self.pop()?)?;
-        let object = self.pop()?;
-        set_property(object, key, value.clone(), &mut self.globals)?;
-        self.stack.push(value);
-        Ok(())
-    }
-
-    fn delete_prop(&mut self) -> Result<(), RuntimeError> {
-        let key = to_property_key(self.pop()?)?;
-        let object = self.pop()?;
-        self.stack.push(delete_property(object, &key)?);
         Ok(())
     }
 
@@ -339,9 +357,32 @@ impl<'a> Vm<'a> {
 
     fn call_method(&mut self, argc: usize) -> Result<(), RuntimeError> {
         let arguments = self.pop_arguments(argc)?;
-        let key = to_property_key(self.pop()?)?;
+        let key_value = self.pop()?;
         let this_value = self.pop()?;
-        let callee = get_property(this_value.clone(), &key, &mut self.globals)?;
+        if matches!(this_value, Value::Null | Value::Undefined) {
+            if self
+                .handle_runtime_result::<()>(Err(property_base_error()))?
+                .is_none()
+            {
+                return Ok(());
+            }
+            return Err(RuntimeError {
+                thrown: None,
+                message: "property base error did not throw".to_owned(),
+            });
+        }
+        let mut key_env = self.current_env();
+        let key_result = to_property_key_with_env(key_value, &mut key_env);
+        self.apply_env(key_env);
+        let Some(key) = self.handle_runtime_result(key_result)? else {
+            return Ok(());
+        };
+        let mut property_env = self.current_env();
+        let callee_result = get_property(this_value.clone(), &key, &mut property_env);
+        self.apply_env(property_env);
+        let Some(callee) = self.handle_runtime_result(callee_result)? else {
+            return Ok(());
+        };
         let mut env = self.call_env(&callee);
         let result = call_function(callee, this_value, arguments, &mut env.env, false);
         self.apply_call_env(env);
@@ -490,7 +531,7 @@ impl<'a> Vm<'a> {
         }
     }
 
-    fn apply_env(&mut self, env: HashMap<String, Value>) {
+    pub(super) fn apply_env(&mut self, env: HashMap<String, Value>) {
         for (index, local) in self.bytecode.locals.iter().enumerate() {
             if let Some(value) = env.get(&local.name) {
                 self.locals[index] = Some(value.clone());
@@ -501,46 +542,5 @@ impl<'a> Vm<'a> {
                 self.globals.insert(name, value);
             }
         }
-    }
-
-    pub(super) fn pop(&mut self) -> Result<Value, RuntimeError> {
-        self.stack.pop().ok_or_else(stack_underflow)
-    }
-
-    fn load_local(&self, slot: usize) -> Result<Value, RuntimeError> {
-        match self.locals.get(slot) {
-            Some(Some(value)) => Ok(value.clone()),
-            Some(None) => Err(RuntimeError {
-                thrown: None,
-                message: format!(
-                    "ReferenceError: undefined identifier `{}`",
-                    self.bytecode.locals[slot].name
-                ),
-            }),
-            None => Err(RuntimeError {
-                thrown: None,
-                message: "bytecode local index out of bounds".to_owned(),
-            }),
-        }
-    }
-
-    fn load_local_or_undefined(&self, slot: usize) -> Result<Value, RuntimeError> {
-        match self.locals.get(slot) {
-            Some(Some(value)) => Ok(value.clone()),
-            Some(None) => Ok(Value::Undefined),
-            None => Err(RuntimeError {
-                thrown: None,
-                message: "bytecode local index out of bounds".to_owned(),
-            }),
-        }
-    }
-
-    fn store_local(&mut self, slot: usize, value: Value) -> Result<(), RuntimeError> {
-        let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
-            thrown: None,
-            message: "bytecode local index out of bounds".to_owned(),
-        })?;
-        *local = Some(value);
-        Ok(())
     }
 }

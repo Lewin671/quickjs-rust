@@ -22,7 +22,8 @@ pub(crate) fn to_js_string_with_env(
             Some(value) => Ok(value),
             None => object_to_string(Value::Object(object), env),
         },
-        Value::Function(_) | Value::Array(_) => object_to_string(value, env),
+        Value::Array(array) => array_join(Value::Array(array), ",", env),
+        Value::Function(_) => object_to_string(value, env),
     }
 }
 

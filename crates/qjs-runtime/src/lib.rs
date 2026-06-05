@@ -31,7 +31,7 @@ pub(crate) use conversion::{
     to_uint32, to_uint32_number,
 };
 pub(crate) use function::call_function;
-use function::{Function, NativeFunction};
+use function::{CompiledFunctionInit, Function, NativeFunction};
 pub(crate) use property::{
     array_has_own_property, array_own_property_descriptor, array_own_property_keys,
     array_own_property_names, array_prototype, array_prototype_property, constructor_prototype,
@@ -39,7 +39,7 @@ pub(crate) use property::{
     function_own_property_keys, function_own_property_names, function_prototype,
     function_prototype_property, has_property, inherited_object_prototype_property,
     inherited_string_prototype_property, object_prototype, property_value, string_prototype,
-    to_property_key, value_prototype,
+    to_property_key, to_property_key_with_env, value_prototype,
 };
 pub(crate) use string::string_object_value;
 pub use value::Value;

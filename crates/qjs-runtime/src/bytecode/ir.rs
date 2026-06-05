@@ -13,6 +13,13 @@ pub(super) enum Op {
     LoadLocal(usize),
     LoadLocalOrUndefined(usize),
     StoreLocal(usize),
+    ClearLocal(usize),
+    LoadName(String),
+    StoreName {
+        name: String,
+        strict: bool,
+    },
+    ResolveName(String),
     LoadGlobal(String),
     TypeofGlobal(String),
     Pop,
@@ -21,10 +28,15 @@ pub(super) enum Op {
         count: usize,
         holes: Vec<usize>,
     },
+    ForOfValues,
     NewObject(Vec<ObjectPropertyKind>),
     EnumerateKeys,
+    CheckObjectCoercible,
+    ToPropertyKey,
     GetProp,
-    SetProp,
+    SetProp {
+        strict: bool,
+    },
     DeleteProp,
     Call(usize),
     CallMethod(usize),
@@ -44,6 +56,10 @@ pub(super) enum Op {
     JumpIfFalse(usize),
     JumpIfTrue(usize),
     JumpIfNotNullish(usize),
+    JumpIfNotUndefined(usize),
+    IteratorCloseForThrow(usize),
+    EnterWith,
+    ExitWith,
     EnterTry {
         catch: Option<usize>,
         finally: Option<usize>,
@@ -53,6 +69,7 @@ pub(super) enum Op {
     EndFinally,
     Return,
     Throw,
+    ThrowTypeError(String),
 }
 
 #[derive(Clone, Debug)]
@@ -118,7 +135,11 @@ fn collect_global_names(code: &[Op]) -> Vec<String> {
 fn collect_global_names_from_ops(code: &[Op], names: &mut BTreeSet<String>) {
     for op in code {
         match op {
-            Op::LoadGlobal(name) | Op::TypeofGlobal(name) => {
+            Op::LoadName(name)
+            | Op::ResolveName(name)
+            | Op::LoadGlobal(name)
+            | Op::TypeofGlobal(name)
+            | Op::StoreName { name, .. } => {
                 names.insert(name.clone());
             }
             Op::NewFunction { bytecode, .. } => {

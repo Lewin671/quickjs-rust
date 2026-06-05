@@ -167,13 +167,24 @@ impl ArrayRef {
     }
 
     pub(crate) fn set(&self, index: usize, value: Value) {
+        let _ = self.try_set(index, value);
+    }
+
+    pub(crate) fn try_set(&self, index: usize, value: Value) -> bool {
         if index > MAX_ARRAY_INDEX {
-            self.set_property(index.to_string(), value);
-            return;
+            return self.try_set_property(index.to_string(), value);
+        }
+        let key = index.to_string();
+        if let Some(property) = self.properties.borrow_mut().get_mut(&key) {
+            if property.writable && !property.is_accessor() {
+                property.value = value;
+                return true;
+            }
+            return false;
         }
         if index >= self.length.get() {
             if self.frozen.get() || !self.extensible.get() || !self.length_writable.get() {
-                return;
+                return false;
             }
             self.length.set(index + 1);
         }
@@ -186,17 +197,18 @@ impl ArrayRef {
                 self.properties
                     .borrow_mut()
                     .insert(index.to_string(), Property::enumerable(value));
-                return;
+                return true;
             }
             let old_len = elements.len();
             elements.resize(index + 1, Value::Undefined);
             holes.extend(old_len..index);
         }
         if self.frozen.get() {
-            return;
+            return false;
         }
         elements[index] = value;
         holes.remove(&index);
+        true
     }
 
     pub(crate) fn delete_index(&self, index: usize) -> bool {
@@ -218,17 +230,23 @@ impl ArrayRef {
     }
 
     pub(crate) fn set_property(&self, key: String, value: Value) {
+        let _ = self.try_set_property(key, value);
+    }
+
+    pub(crate) fn try_set_property(&self, key: String, value: Value) -> bool {
         let mut properties = self.properties.borrow_mut();
         if let Some(property) = properties.get_mut(&key) {
             if property.writable {
                 property.value = value;
+                return true;
             }
-            return;
+            return false;
         }
         if !self.extensible.get() {
-            return;
+            return false;
         }
         properties.insert(key, Property::enumerable(value));
+        true
     }
 
     pub(crate) fn define_property(&self, key: String, property: Property) {
@@ -296,13 +314,36 @@ impl ArrayRef {
     }
 
     pub(crate) fn set_len(&self, length: usize) {
+        let _ = self.try_set_len(length);
+    }
+
+    pub(crate) fn try_set_len(&self, length: usize) -> bool {
         let mut elements = self.elements.borrow_mut();
         if self.frozen.get() || !self.length_writable.get() {
-            return;
+            return false;
         }
         let old_len = self.length.get();
         if length > old_len && !self.extensible.get() {
-            return;
+            return false;
+        }
+        if length < old_len {
+            for index in (length..old_len).rev() {
+                let key = index.to_string();
+                let has_non_configurable = self
+                    .properties
+                    .borrow()
+                    .get(&key)
+                    .is_some_and(|property| !property.configurable);
+                if has_non_configurable {
+                    self.length.set(index + 1);
+                    if index + 1 < elements.len() {
+                        elements.truncate(index + 1);
+                    }
+                    self.holes.borrow_mut().retain(|hole| *hole < index + 1);
+                    return false;
+                }
+                self.properties.borrow_mut().remove(&key);
+            }
         }
         self.length.set(length);
         if length < elements.len() {
@@ -315,6 +356,7 @@ impl ArrayRef {
         if length > old_len && length <= MAX_DENSE_STORAGE_LENGTH {
             holes.extend(old_len..length);
         }
+        true
     }
 
     pub(crate) fn is_extensible(&self) -> bool {

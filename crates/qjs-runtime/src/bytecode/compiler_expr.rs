@@ -59,6 +59,16 @@ impl Compiler {
         Ok(())
     }
 
+    pub(super) fn compile_with(&mut self, object: &Expr, body: &Stmt) -> Result<(), RuntimeError> {
+        self.compile_expr(object)?;
+        self.emit(Op::EnterWith);
+        self.dynamic_scope_depth += 1;
+        self.compile_stmt(body)?;
+        self.dynamic_scope_depth -= 1;
+        self.emit(Op::ExitWith);
+        Ok(())
+    }
+
     pub(super) fn compile_do_while(
         &mut self,
         body: &Stmt,
@@ -143,10 +153,11 @@ impl Compiler {
                     let slot = self.local_slot(&declaration.name, is_hoisted);
                     if let Some(init) = &declaration.init {
                         self.compile_expr(init)?;
-                    } else {
+                        self.emit(Op::StoreLocal(slot));
+                    } else if *kind != VarKind::Var || self.direct_eval {
                         self.emit_load_undefined();
+                        self.emit(Op::StoreLocal(slot));
                     }
-                    self.emit(Op::StoreLocal(slot));
                 }
                 self.emit_load_undefined();
                 Ok(())
@@ -158,10 +169,12 @@ impl Compiler {
         match expr {
             Expr::Literal(literal) => self.compile_literal(literal),
             Expr::Identifier { name, .. } => {
-                if let Some(slot) = self.local_slots.get(name) {
+                if self.dynamic_scope_depth > 0 {
+                    self.emit(Op::LoadName(name.clone()));
+                } else if let Some(slot) = self.local_slots.get(name) {
                     self.emit(Op::LoadLocal(*slot));
                 } else {
-                    self.emit(Op::LoadGlobal(name.clone()));
+                    self.emit(Op::LoadName(name.clone()));
                 }
                 Ok(())
             }

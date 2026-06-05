@@ -38,6 +38,8 @@ pub enum TokenKind {
     Else,
     /// `while`.
     While,
+    /// `with`.
+    With,
     /// `do`.
     Do,
     /// `for`.

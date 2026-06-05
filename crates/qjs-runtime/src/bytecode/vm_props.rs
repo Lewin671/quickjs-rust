@@ -4,8 +4,9 @@ use qjs_ast::BinaryOp;
 
 use crate::{
     Property, RuntimeError, Value, array_prototype, boolean, call_function,
-    function_delete_own_property, function_own_property_keys, inherited_string_prototype_property,
-    number, property_value, string, to_length,
+    function_delete_own_property, function_intrinsic_prototype, function_own_property_keys,
+    inherited_string_prototype_property, number, object_prototype, property_value, string,
+    string_prototype, to_length,
 };
 
 pub(super) fn get_property(
@@ -40,35 +41,54 @@ pub(super) fn set_property(
     key: String,
     value: Value,
     env: &mut HashMap<String, Value>,
-) -> Result<(), RuntimeError> {
+) -> Result<bool, RuntimeError> {
     match object {
         Value::Object(object) => {
+            let property = object.property(&key);
             if apply_property_setter(
-                object.property(&key),
+                property.clone(),
                 Value::Object(object.clone()),
                 value.clone(),
                 env,
             )? {
-                return Ok(());
+                return Ok(true);
+            }
+            if property.is_some_and(|property| property.is_accessor() || !property.writable) {
+                return Ok(false);
+            }
+            if object.own_property(&key).is_none() && !object.is_extensible() {
+                return Ok(false);
             }
             object.set(key, value);
-            Ok(())
+            Ok(true)
         }
         Value::Function(function) => {
+            let property = function.properties.borrow().get(&key).cloned().or_else(|| {
+                function
+                    .internal_prototype_override()
+                    .unwrap_or_else(|| function_intrinsic_prototype(env))
+                    .and_then(|prototype| prototype.property(&key))
+            });
             if apply_property_setter(
-                function.properties.borrow().get(&key).cloned(),
+                property.clone(),
                 Value::Function(function.clone()),
                 value.clone(),
                 env,
             )? {
-                return Ok(());
+                return Ok(true);
+            }
+            if property.is_some_and(|property| property.is_accessor() || !property.writable) {
+                return Ok(false);
+            }
+            if !function.properties.borrow().contains_key(&key) && !function.is_extensible() {
+                return Ok(false);
             }
             function.set_property(key, value);
-            Ok(())
+            Ok(true)
         }
         Value::Array(elements) => {
             if key == "length" {
-                elements.set_len(to_length(value)?);
+                Ok(elements.try_set_len(to_length(value)?))
             } else {
                 let property = elements.property(&key).or_else(|| {
                     elements
@@ -77,19 +97,21 @@ pub(super) fn set_property(
                         .and_then(|prototype| prototype.property(&key))
                 });
                 if apply_property_setter(
-                    property,
+                    property.clone(),
                     Value::Array(elements.clone()),
                     value.clone(),
                     env,
                 )? {
-                    return Ok(());
+                    return Ok(true);
                 }
-                match key.parse::<usize>() {
-                    Ok(index) => elements.set(index, value),
-                    Err(_) => elements.set_property(key, value),
+                if property.is_some_and(|property| property.is_accessor() || !property.writable) {
+                    return Ok(false);
                 }
+                Ok(match key.parse::<usize>() {
+                    Ok(index) => elements.try_set(index, value),
+                    Err(_) => elements.try_set_property(key, value),
+                })
             }
-            Ok(())
         }
         _ => Err(RuntimeError {
             thrown: None,
@@ -111,7 +133,7 @@ fn apply_property_setter(
         call_function(setter, receiver, vec![value], env, false)?;
         return Ok(true);
     }
-    Ok(property.is_accessor())
+    Ok(false)
 }
 
 pub(super) fn delete_property(object: Value, key: &str) -> Result<Value, RuntimeError> {
@@ -131,27 +153,61 @@ pub(super) fn delete_property(object: Value, key: &str) -> Result<Value, Runtime
     }
 }
 
-pub(super) fn enumerable_keys(value: Value) -> Result<Vec<Value>, RuntimeError> {
+pub(super) fn enumerable_keys(
+    value: Value,
+    env: &HashMap<String, Value>,
+) -> Result<Vec<Value>, RuntimeError> {
     let keys = match value {
-        Value::Object(object) => object.own_property_keys(),
+        Value::Object(object) => {
+            enumerable_object_keys(object.own_property_keys(), object.prototype())
+        }
         Value::Array(elements) => {
             let mut keys: Vec<_> = (0..elements.len())
                 .filter(|index| elements.has_index(*index))
                 .map(|index| index.to_string())
                 .collect();
             keys.extend(elements.property_keys());
-            keys
+            enumerable_object_keys(
+                keys,
+                elements
+                    .prototype_override()
+                    .unwrap_or_else(|| array_prototype(env)),
+            )
         }
-        Value::Function(function) => function_own_property_keys(&function),
+        Value::Function(function) => {
+            let keys = function_own_property_keys(&function);
+            enumerable_object_keys(
+                keys,
+                function
+                    .internal_prototype_override()
+                    .unwrap_or_else(|| function_intrinsic_prototype(env)),
+            )
+        }
+        Value::String(value) => enumerable_object_keys(
+            crate::string::string_own_property_keys(&value),
+            string_prototype(env),
+        ),
+        Value::Number(_) | Value::Boolean(_) => {
+            enumerable_object_keys(Vec::new(), object_prototype(env))
+        }
         Value::Null | Value::Undefined => Vec::new(),
-        _ => {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "for-in target is not enumerable".to_owned(),
-            });
-        }
     };
     Ok(keys.into_iter().map(Value::String).collect())
+}
+
+fn enumerable_object_keys(
+    mut keys: Vec<String>,
+    mut prototype: Option<crate::ObjectRef>,
+) -> Vec<String> {
+    while let Some(object) = prototype {
+        for key in object.own_property_keys() {
+            if !keys.iter().any(|existing| existing == &key) {
+                keys.push(key);
+            }
+        }
+        prototype = object.prototype();
+    }
+    keys
 }
 
 pub(super) fn fast_number_binary(left: &Value, op: BinaryOp, right: &Value) -> Option<Value> {

@@ -23,6 +23,7 @@ pub struct Function {
     pub params: Vec<String>,
     /// Environment captured when the function was created.
     pub env: HashMap<String, Value>,
+    pub(crate) with_stack: Vec<Value>,
     pub(crate) local_names: Vec<String>,
     pub(crate) bytecode: Option<Rc<Bytecode>>,
     pub(crate) native: Option<NativeFunction>,
@@ -35,6 +36,15 @@ pub struct Function {
     sealed: Rc<Cell<bool>>,
     frozen: Rc<Cell<bool>>,
     internal_prototype: Rc<RefCell<Option<Option<ObjectRef>>>>,
+}
+
+pub(crate) struct CompiledFunctionInit {
+    pub(crate) env: HashMap<String, Value>,
+    pub(crate) with_stack: Vec<Value>,
+    pub(crate) bytecode: Rc<Bytecode>,
+    pub(crate) local_names: Vec<String>,
+    pub(crate) constructable: bool,
+    pub(crate) is_strict: bool,
 }
 
 /// Bound function internal slots.
@@ -100,6 +110,7 @@ impl Function {
             name,
             params,
             env,
+            with_stack: Vec::new(),
             local_names,
             bytecode: Some(bytecode),
             native: None,
@@ -127,22 +138,19 @@ impl Function {
     pub(crate) fn new_user_compiled(
         name: Option<String>,
         params: Vec<String>,
-        env: HashMap<String, Value>,
-        bytecode: Rc<Bytecode>,
-        local_names: Vec<String>,
-        constructable: bool,
-        is_strict: bool,
+        init: CompiledFunctionInit,
     ) -> Self {
-        let prototype = ObjectRef::with_prototype(HashMap::new(), object_prototype(&env));
+        let prototype = ObjectRef::with_prototype(HashMap::new(), object_prototype(&init.env));
         let function = Self {
             name,
             params,
-            env,
-            local_names,
-            bytecode: Some(bytecode),
+            env: init.env,
+            with_stack: init.with_stack,
+            local_names: init.local_names,
+            bytecode: Some(init.bytecode),
             native: None,
-            constructable,
-            is_strict,
+            constructable: init.constructable,
+            is_strict: init.is_strict,
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
             extensible: Rc::new(Cell::new(true)),
@@ -151,7 +159,7 @@ impl Function {
             internal_prototype: Rc::new(RefCell::new(None)),
         };
         function.define_length_property();
-        if constructable {
+        if init.constructable {
             prototype
                 .define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
             function.properties.borrow_mut().insert(
@@ -191,6 +199,7 @@ impl Function {
             name: Some("bound".to_owned()),
             params: vec![String::new(); length],
             env: HashMap::new(),
+            with_stack: Vec::new(),
             local_names: Vec::new(),
             bytecode: None,
             native: None,
@@ -223,6 +232,7 @@ impl Function {
             name,
             params,
             env,
+            with_stack: Vec::new(),
             local_names: Vec::new(),
             bytecode: None,
             native,
@@ -335,10 +345,7 @@ impl Function {
 
 impl PartialEq for Function {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-            && self.params == other.params
-            && self.native == other.native
-            && self.bound.is_some() == other.bound.is_some()
+        Rc::ptr_eq(&self.properties, &other.properties)
     }
 }
 

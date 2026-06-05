@@ -27,6 +27,7 @@ pub(super) fn assignment_binary_op(op: AssignmentOp) -> Result<BinaryOp, Runtime
 }
 
 pub(super) fn parse_number_literal(raw: &str) -> Result<f64, RuntimeError> {
+    let raw = raw.strip_suffix('n').unwrap_or(raw);
     if let Some(digits) = raw.strip_prefix("0x").or_else(|| raw.strip_prefix("0X")) {
         Ok(parse_radix_number(digits, 16))
     } else if let Some(digits) = raw.strip_prefix("0b").or_else(|| raw.strip_prefix("0B")) {

@@ -48,29 +48,6 @@ pub(super) fn array_search_start_index(
     }
 }
 
-pub(super) fn array_search_end_index(
-    length: usize,
-    from_index: Value,
-) -> Result<Option<usize>, RuntimeError> {
-    let number = match from_index {
-        Value::Undefined => return Ok(Some(length - 1)),
-        value => to_number(value)?,
-    };
-    if number.is_nan() {
-        return Ok(Some(0));
-    }
-    if number >= 0.0 {
-        return Ok(Some(number.trunc().min((length - 1) as f64) as usize));
-    }
-
-    let start = length as f64 + number.trunc();
-    if start < 0.0 {
-        Ok(None)
-    } else {
-        Ok(Some(start as usize))
-    }
-}
-
 pub(super) fn array_slice_start(length: usize, start: Value) -> Result<usize, RuntimeError> {
     let number = match start {
         Value::Undefined => 0.0,

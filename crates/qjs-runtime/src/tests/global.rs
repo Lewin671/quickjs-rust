@@ -52,6 +52,12 @@ fn evaluates_boolean_builtins() {
 fn evaluates_global_undefined_binding() {
     assert_eq!(eval("undefined;"), Ok(Value::Undefined));
     assert_eq!(eval("undefined === undefined;"), Ok(Value::Boolean(true)));
+    assert_eq!(
+        eval(
+            "let desc = Object.getOwnPropertyDescriptor(this, 'undefined'); desc.value === undefined && desc.writable === false && desc.enumerable === false && desc.configurable === false;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]
@@ -68,4 +74,52 @@ fn evaluates_global_eval_builtin() {
         eval("let value = 1; eval('value = value + 2;'); value;"),
         Ok(Value::Number(3.0))
     );
+}
+
+#[test]
+fn evaluates_uri_global_builtins() {
+    assert_eq!(eval("encodeURIComponent.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(
+        eval(
+            "let desc = Object.getOwnPropertyDescriptor(this, 'encodeURIComponent'); desc.value === encodeURIComponent && desc.writable && !desc.enumerable && desc.configurable;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "delete encodeURI.length; !encodeURI.hasOwnProperty('length') && encodeURI.length === 0;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("encodeURI('http://example.test/a b?x=1&y=✓');"),
+        Ok(Value::String(
+            "http://example.test/a%20b?x=1&y=%E2%9C%93".to_owned()
+        ))
+    );
+    assert_eq!(
+        eval("encodeURIComponent('a b?x=1&y=✓');"),
+        Ok(Value::String("a%20b%3Fx%3D1%26y%3D%E2%9C%93".to_owned()))
+    );
+    assert_eq!(
+        eval("decodeURI('http://example.test/a%20b?x=1&y=%E2%9C%93');"),
+        Ok(Value::String("http://example.test/a b?x=1&y=✓".to_owned()))
+    );
+    assert_eq!(
+        eval("decodeURI('%3B%2F%3F%3A%40%26%3D%2B%24%2C%23');"),
+        Ok(Value::String(
+            "%3B%2F%3F%3A%40%26%3D%2B%24%2C%23".to_owned()
+        ))
+    );
+    assert_eq!(
+        eval(
+            "decodeURI('%D0%AE%D0%BD%D0%B8%D0%BA%D0%BE%D0%B4%23%D0%92%D0%B5%D1%80%D1%81%D0%B8%D0%B8');"
+        ),
+        Ok(Value::String("Юникод%23Версии".to_owned()))
+    );
+    assert_eq!(
+        eval("decodeURIComponent('a%20b%3Fx%3D1%26y%3D%E2%9C%93');"),
+        Ok(Value::String("a b?x=1&y=✓".to_owned()))
+    );
+    assert!(eval("decodeURIComponent('%zz');").is_err());
 }

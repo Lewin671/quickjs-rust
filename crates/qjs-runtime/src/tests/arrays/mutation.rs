@@ -92,7 +92,7 @@ fn evaluates_array_mutation_builtins() {
         eval(
             "let caught = false; let object = { 0: 1, length: 1 }; Object.defineProperty(object, 'length', { value: 1 }); try { Array.prototype.shift.call(object); } catch (error) { caught = error instanceof TypeError; } caught + ':' + object.length;"
         ),
-        Ok(Value::String("true:1".to_owned()))
+        Ok(Value::String("false:0".to_owned()))
     );
     assert_eq!(
         eval("let xs = [3]; xs.unshift(1, 2) + ':' + xs.join();"),

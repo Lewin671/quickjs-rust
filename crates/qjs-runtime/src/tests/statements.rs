@@ -19,6 +19,22 @@ fn evaluates_variable_declarations() {
         eval("var x = 1, y = 2, missing; x + y;"),
         Ok(Value::Number(3.0))
     );
+    assert_eq!(
+        eval("var globalVar = 42; this.hasOwnProperty('globalVar') && globalVar === 42;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "function f() { var localOnly = 1; return localOnly; } f(); this.hasOwnProperty('localOnly');"
+        ),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval(
+            "Object.defineProperty(Object.prototype, 'inheritedVarName', { value: 1001, writable: false, configurable: true }); var inheritedVarName = 1002; let result = this.hasOwnProperty('inheritedVarName') && inheritedVarName === 1002; delete Object.prototype.inheritedVarName; result;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]
@@ -38,6 +54,28 @@ fn evaluates_while_statements() {
     assert_eq!(
         eval("let x = 0; while (x < 3) { x = x + 1; } x;"),
         Ok(Value::Number(3.0))
+    );
+}
+
+#[test]
+fn evaluates_with_statements() {
+    assert_eq!(
+        eval(
+            "function f() { var x = 0; var scope = { x: 2 }; with (scope) { x *= 3; } return scope.x === 6 && x === 0; } f();"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "function f() { var x = 0; var scope = { get x() { delete this.x; return 2; } }; with (scope) { x *= 3; } return scope.x === 6 && x === 0; } f();"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "var outerScope = { x: 0 }; var innerScope = { get x() { delete this.x; return 5; } }; with (outerScope) { with (innerScope) { x &= 3; } } innerScope.x === 1 && outerScope.x === 0;"
+        ),
+        Ok(Value::Boolean(true))
     );
 }
 
@@ -84,6 +122,18 @@ fn evaluates_for_in_statements() {
     assert_eq!(
         eval("let count = 0; for (var key in null) { count++; } count;"),
         Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval(
+            "let proto = {}; Object.defineProperty(proto, 'inherited', { value: 1, enumerable: true }); let object = Object.create(proto); object.own = 2; let seen = ''; for (let key in object) { seen = seen + key + ':'; } seen;"
+        ),
+        Ok(Value::String("own:inherited:".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "function f() {} Object.defineProperty(Function.prototype, 'inherited', { value: 1, enumerable: true, configurable: true }); let seen = false; for (let key in f.bind({})) { if (key === 'inherited') seen = true; } delete Function.prototype.inherited; seen;"
+        ),
+        Ok(Value::Boolean(true))
     );
 }
 
