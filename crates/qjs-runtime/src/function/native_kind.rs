@@ -239,6 +239,8 @@ pub(crate) enum NativeFunction {
     ReflectSetPrototypeOf,
     RegExp,
     RegExpEscape,
+    RegExpPrototypeCompile,
+    RegExpPrototypeDotAll,
     RegExpPrototypeExec,
     RegExpPrototypeFlags,
     RegExpPrototypeGlobal,

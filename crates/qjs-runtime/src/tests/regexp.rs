@@ -80,12 +80,51 @@ fn evaluates_regexp_escape() {
 }
 
 #[test]
+fn evaluates_regexp_prototype_compile() {
+    assert_eq!(
+        eval("typeof RegExp.prototype.compile;"),
+        Ok(Value::String("function".to_owned()))
+    );
+    assert_eq!(
+        eval("RegExp.prototype.compile.length;"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval(
+            "let re = /abc/gi; let same = re.compile('def'); (same === re) + ':' + re.source + ':' + re.flags + ':' + re.test('def') + ':' + re.test('DEF') + ':' + re.lastIndex;"
+        ),
+        Ok(Value::String("true:def::true:false:0".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let re = /abc/g; let source = /def/i; source.lastIndex = 4; re.lastIndex = 9; let same = re.compile(source); (same === re) + ':' + (source.lastIndex === 4) + ':' + re.source + ':' + re.flags + ':' + re.test('DEF') + ':' + re.lastIndex;"
+        ),
+        Ok(Value::String("true:true:def:i:true:0".to_owned()))
+    );
+    assert_eq!(
+        eval("let re = /abc/; re.compile(); re.source + ':' + re.test('');"),
+        Ok(Value::String("(?:):true".to_owned()))
+    );
+    assert!(eval("RegExp.prototype.compile.call({}, 'abc');").is_err());
+    assert!(eval("RegExp.prototype.compile.call(null, 'abc');").is_err());
+    assert!(eval("/abc/.compile(/def/, 'g');").is_err());
+    assert_eq!(
+        eval(
+            "let re = /abc/; Object.defineProperty(re, 'lastIndex', { value: 45, writable: false }); let caught = false; try { re.compile(/def/g); } catch (error) { caught = error instanceof TypeError; } caught + ':' + re.toString() + ':' + re.lastIndex;"
+        ),
+        Ok(Value::String("true:/def/g:45".to_owned()))
+    );
+}
+
+#[test]
 fn evaluates_regexp_prototype_accessors() {
     assert_eq!(
         eval("/test/g.source;"),
         Ok(Value::String("test".to_owned()))
     );
     assert_eq!(eval("/test/g.global;"), Ok(Value::Boolean(true)));
+    assert_eq!(eval("/test/s.dotAll;"), Ok(Value::Boolean(true)));
+    assert_eq!(eval("/test/.dotAll;"), Ok(Value::Boolean(false)));
     assert_eq!(eval("/test/i.ignoreCase;"), Ok(Value::Boolean(true)));
     assert_eq!(eval("/test/m.multiline;"), Ok(Value::Boolean(true)));
     assert_eq!(eval("/test/.global;"), Ok(Value::Boolean(false)));
@@ -163,6 +202,7 @@ fn evaluates_regexp_prototype_accessors() {
         Ok(Value::String("(?:)".to_owned()))
     );
     assert_eq!(eval("RegExp.prototype.global;"), Ok(Value::Undefined));
+    assert_eq!(eval("RegExp.prototype.dotAll;"), Ok(Value::Undefined));
     assert_eq!(
         eval(
             "let get = Object.getOwnPropertyDescriptor(RegExp.prototype, 'source').get; let caught = false; try { get.call({}); } catch (error) { caught = error instanceof TypeError; } caught;"
