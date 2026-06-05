@@ -10,6 +10,7 @@ pub(crate) mod all_settled;
 pub(crate) mod any;
 mod jobs;
 mod race;
+pub(crate) mod with_resolvers;
 
 pub(crate) use all::{native_promise_all, native_promise_all_resolve_element};
 pub(crate) use jobs::drain_promise_jobs;
@@ -33,6 +34,7 @@ const PROMISE_TARGET: &str = "\0PromiseTarget";
 const PROMISE_THEN: &str = "\0PromiseThen";
 const PROMISE_THENABLE: &str = "\0PromiseThenable";
 const PROMISE_THENABLE_CAPABILITY: &str = "\0PromiseThenableCapability";
+const PROMISE_OBJECT_PROTOTYPE: &str = "\0PromiseObjectPrototype";
 const PROMISE_PROTOTYPE: &str = "\0PromisePrototype";
 const PROMISE_PENDING: &str = "pending";
 const PROMISE_FULFILLED: &str = "fulfilled";
@@ -43,7 +45,8 @@ pub(crate) fn install_promise(
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
-    let promise_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let promise_prototype =
+        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype.clone()));
     promise_prototype.set_to_string_tag("Promise");
     let promise_function = Function::new_native(Some("Promise"), 1, NativeFunction::Promise, true);
     let mut promise_then =
@@ -83,84 +86,77 @@ pub(crate) fn install_promise(
         "prototype".to_owned(),
         Property::non_enumerable(Value::Object(promise_prototype.clone())),
     );
-    let mut promise_all = Function::new_native(Some("all"), 1, NativeFunction::PromiseAll, false);
-    promise_all.env.insert(
-        PROMISE_PROTOTYPE.to_owned(),
-        Value::Object(promise_prototype.clone()),
+    let promise_all = promise_static_function(
+        "all",
+        1,
+        NativeFunction::PromiseAll,
+        &promise_prototype,
+        &object_prototype,
     );
     promise_function.properties.borrow_mut().insert(
         "all".to_owned(),
         Property::non_enumerable(Value::Function(promise_all)),
     );
 
-    let mut promise_any = Function::new_native(Some("any"), 1, NativeFunction::PromiseAny, false);
-    promise_any.env.insert(
-        PROMISE_PROTOTYPE.to_owned(),
-        Value::Object(promise_prototype.clone()),
+    let mut promise_any = promise_static_function(
+        "any",
+        1,
+        NativeFunction::PromiseAny,
+        &promise_prototype,
+        &object_prototype,
     );
     if let Some(aggregate_error) = env.get("AggregateError").cloned() {
         promise_any
             .env
             .insert(PROMISE_AGGREGATE_ERROR.to_owned(), aggregate_error);
     }
-    promise_function.properties.borrow_mut().insert(
-        "any".to_owned(),
-        Property::non_enumerable(Value::Function(promise_any)),
-    );
+    define_promise_static(&promise_function, "any", promise_any);
 
-    let mut promise_all_settled = Function::new_native(
-        Some("allSettled"),
-        1,
-        NativeFunction::PromiseAllSettled,
-        false,
-    );
-    promise_all_settled.env.insert(
-        PROMISE_PROTOTYPE.to_owned(),
-        Value::Object(promise_prototype.clone()),
-    );
-    promise_function.properties.borrow_mut().insert(
-        "allSettled".to_owned(),
-        Property::non_enumerable(Value::Function(promise_all_settled)),
-    );
-
-    let mut promise_race =
-        Function::new_native(Some("race"), 1, NativeFunction::PromiseRace, false);
-    promise_race.env.insert(
-        PROMISE_PROTOTYPE.to_owned(),
-        Value::Object(promise_prototype.clone()),
-    );
-    promise_function.properties.borrow_mut().insert(
-        "race".to_owned(),
-        Property::non_enumerable(Value::Function(promise_race)),
-    );
-
-    let mut promise_resolve =
-        Function::new_native(Some("resolve"), 1, NativeFunction::PromiseResolve, false);
-    promise_resolve.env.insert(
-        PROMISE_PROTOTYPE.to_owned(),
-        Value::Object(promise_prototype.clone()),
-    );
-    promise_function.properties.borrow_mut().insert(
-        "resolve".to_owned(),
-        Property::non_enumerable(Value::Function(promise_resolve)),
-    );
-
-    let mut promise_reject =
-        Function::new_native(Some("reject"), 1, NativeFunction::PromiseReject, false);
-    promise_reject.env.insert(
-        PROMISE_PROTOTYPE.to_owned(),
-        Value::Object(promise_prototype),
-    );
-    promise_function.properties.borrow_mut().insert(
-        "reject".to_owned(),
-        Property::non_enumerable(Value::Function(promise_reject)),
-    );
+    for (name, length, native) in [
+        ("allSettled", 1, NativeFunction::PromiseAllSettled),
+        ("race", 1, NativeFunction::PromiseRace),
+        ("withResolvers", 0, NativeFunction::PromiseWithResolvers),
+        ("resolve", 1, NativeFunction::PromiseResolve),
+        ("reject", 1, NativeFunction::PromiseReject),
+    ] {
+        define_promise_static(
+            &promise_function,
+            name,
+            promise_static_function(name, length, native, &promise_prototype, &object_prototype),
+        );
+    }
 
     let value = Value::Function(promise_function);
     env.insert("Promise".to_owned(), value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.set("Promise".to_owned(), value);
     }
+}
+
+fn promise_static_function(
+    name: &str,
+    length: usize,
+    native: NativeFunction,
+    promise_prototype: &ObjectRef,
+    object_prototype: &ObjectRef,
+) -> Function {
+    let mut function = Function::new_native(Some(name), length, native, false);
+    function.env.insert(
+        PROMISE_OBJECT_PROTOTYPE.to_owned(),
+        Value::Object(object_prototype.clone()),
+    );
+    function.env.insert(
+        PROMISE_PROTOTYPE.to_owned(),
+        Value::Object(promise_prototype.clone()),
+    );
+    function
+}
+
+fn define_promise_static(promise_function: &Function, name: &str, function: Function) {
+    promise_function.properties.borrow_mut().insert(
+        name.to_owned(),
+        Property::non_enumerable(Value::Function(function)),
+    );
 }
 
 pub(crate) fn native_promise(

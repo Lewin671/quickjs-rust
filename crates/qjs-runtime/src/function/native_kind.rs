@@ -179,6 +179,7 @@ pub(crate) enum NativeFunction {
     PromiseResolve,
     PromiseRejectFunction,
     PromiseResolveFunction,
+    PromiseWithResolvers,
     RangeError,
     ReferenceError,
     Object,

@@ -77,6 +77,27 @@ fn evaluates_promise_any_shell() {
 }
 
 #[test]
+fn evaluates_promise_with_resolvers_shell() {
+    assert_eval(
+        "typeof Promise.withResolvers;",
+        Value::String("function".to_owned()),
+    );
+    assert_eval("Promise.withResolvers.length;", Value::Number(0.0));
+    assert_eval(
+        "Promise.propertyIsEnumerable('withResolvers');",
+        Value::Boolean(false),
+    );
+    assert_eval(
+        "var c = Promise.withResolvers(); c.promise instanceof Promise;",
+        Value::Boolean(true),
+    );
+    assert_eval(
+        "var c = Promise.withResolvers(); typeof c.resolve + ':' + c.resolve.length + ':' + c.resolve.name + ':' + typeof c.reject + ':' + c.reject.length + ':' + c.reject.name;",
+        Value::String("function:1::function:1:".to_owned()),
+    );
+}
+
+#[test]
 fn evaluates_promise_all_settled_shell() {
     assert_eval(
         "typeof Promise.allSettled;",
@@ -422,6 +443,36 @@ fn drains_promise_any_rejections_after_script() {
     assert_eq!(
         promise::promise_debug_state_result(&poisoned),
         Some(("fulfilled".to_owned(), Value::String("true:8".to_owned())))
+    );
+}
+
+#[test]
+fn drains_promise_with_resolvers_after_script() {
+    let resolved = eval(
+        "var c = Promise.withResolvers(); var p = c.promise.then(function(value) { return value + 1; }); c.resolve(4); p;",
+    )
+    .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&resolved),
+        Some(("fulfilled".to_owned(), Value::Number(5.0)))
+    );
+
+    let rejected = eval(
+        "var c = Promise.withResolvers(); var p = c.promise.catch(function(reason) { return reason + 1; }); c.reject(6); p;",
+    )
+    .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&rejected),
+        Some(("fulfilled".to_owned(), Value::Number(7.0)))
+    );
+
+    let first_settlement = eval(
+        "var c = Promise.withResolvers(); var p = c.promise.then(function(value) { return value; }); c.resolve(8); c.reject(9); p;",
+    )
+    .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&first_settlement),
+        Some(("fulfilled".to_owned(), Value::Number(8.0)))
     );
 }
 

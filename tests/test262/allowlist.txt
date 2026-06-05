@@ -600,6 +600,10 @@ cases/promise-any-resolved-array.js
 cases/promise-any-resolve-non-thenable.js
 cases/promise-any-rejected-array.js
 cases/promise-any-thenable-queued.js
+cases/promise-with-resolvers-basic.js
+cases/promise-with-resolvers-promise.js
+cases/promise-with-resolvers-resolvers.js
+cases/promise-with-resolvers-settle.js
 cases/promise-all-settled-basic.js
 cases/promise-all-settled-empty.js
 cases/promise-all-settled-resolved-array.js
