@@ -53,6 +53,7 @@ pub(super) enum Op {
     Unary(UnaryOp),
     Binary(BinaryOp),
     Jump(usize),
+    JumpAbrupt(usize),
     JumpIfFalse(usize),
     JumpIfTrue(usize),
     JumpIfNotNullish(usize),

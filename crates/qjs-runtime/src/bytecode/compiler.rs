@@ -250,6 +250,7 @@ impl Compiler {
     pub(super) fn patch_jump(&mut self, at: usize, target: usize) {
         match &mut self.code[at] {
             Op::Jump(dest)
+            | Op::JumpAbrupt(dest)
             | Op::JumpIfFalse(dest)
             | Op::JumpIfTrue(dest)
             | Op::JumpIfNotNullish(dest)
@@ -319,7 +320,7 @@ impl Compiler {
         self.emit_block_restores();
         let result_slot = self.loop_stack[index].result_slot;
         self.emit(Op::LoadLocal(result_slot));
-        let jump = self.emit(Op::Jump(usize::MAX));
+        let jump = self.emit(Op::JumpAbrupt(usize::MAX));
         self.loop_stack[index].breaks.push(jump);
         Ok(())
     }
@@ -349,7 +350,7 @@ impl Compiler {
             self.emit(Op::StoreLocal(target));
         }
         self.emit_block_restores();
-        let jump = self.emit(Op::Jump(usize::MAX));
+        let jump = self.emit(Op::JumpAbrupt(usize::MAX));
         self.loop_stack[index].continues.push(jump);
         Ok(())
     }

@@ -53,6 +53,8 @@ impl Vm<'_> {
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
             if let Some(finally) = frame.finally {
                 self.pending_throw = Some(value);
+                self.pending_return = None;
+                self.pending_jump = None;
                 self.ip = finally;
             } else {
                 self.throw_value(value)?;
@@ -71,6 +73,8 @@ impl Vm<'_> {
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
             if let Some(finally) = frame.finally {
                 self.pending_return = Some(value);
+                self.pending_throw = None;
+                self.pending_jump = None;
                 self.ip = finally;
                 return Ok(None);
             }
@@ -78,11 +82,30 @@ impl Vm<'_> {
         Ok(Some(value))
     }
 
+    pub(super) fn jump_abrupt(&mut self, target: usize) -> Result<(), RuntimeError> {
+        self.pending_jump = Some(target);
+        self.pending_throw = None;
+        self.pending_return = None;
+        while let Some(frame) = self.try_stack.pop() {
+            self.stack.truncate(frame.stack_depth);
+            self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
+            if let Some(finally) = frame.finally {
+                self.ip = finally;
+                return Ok(());
+            }
+        }
+        self.pending_jump = None;
+        self.ip = target;
+        Ok(())
+    }
+
     pub(super) fn end_finally(&mut self) -> Result<Option<Value>, RuntimeError> {
         if let Some(value) = self.pending_throw.take() {
             self.throw_value(value)?;
         } else if let Some(value) = self.pending_return.take() {
             return self.return_value(value);
+        } else if let Some(target) = self.pending_jump.take() {
+            self.jump_abrupt(target)?;
         }
         Ok(None)
     }

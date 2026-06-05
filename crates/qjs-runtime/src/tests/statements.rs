@@ -260,6 +260,12 @@ fn evaluates_try_catch_finally_statements() {
         eval("let x = 1; try { throw 1; } catch (error) { x += error; } finally { x += 2; } x;"),
         Ok(Value::Number(4.0))
     );
+    assert_eq!(
+        eval(
+            "let count = 0; let finalized = 0; do { try { count++; continue; } finally { finalized++; } } while (count < 2); finalized;"
+        ),
+        Ok(Value::Number(2.0))
+    );
     let error =
         eval("try { throw 'try'; } finally { throw 'finally'; }").expect_err("throw should fail");
     assert_eq!(error.message, "throw statement executed: finally");

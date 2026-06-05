@@ -37,6 +37,7 @@ pub(super) struct Vm<'a> {
     pub(super) try_stack: Vec<TryFrame>,
     pub(super) pending_throw: Option<Value>,
     pub(super) pending_return: Option<Value>,
+    pub(super) pending_jump: Option<usize>,
     pub(super) with_stack: Vec<Value>,
     pub(super) name_references: Vec<NameReference>,
     pub(super) binding_overrides: HashMap<String, Value>,
@@ -68,6 +69,7 @@ impl<'a> Vm<'a> {
             try_stack: Vec::new(),
             pending_throw: None,
             pending_return: None,
+            pending_jump: None,
             with_stack: Vec::new(),
             name_references: Vec::new(),
             binding_overrides: HashMap::new(),
@@ -213,6 +215,7 @@ impl<'a> Vm<'a> {
                     }
                 }
                 Op::Jump(target) => self.ip = target,
+                Op::JumpAbrupt(target) => self.jump_abrupt(target)?,
                 Op::JumpIfFalse(target) => {
                     if !is_truthy(self.stack.last().ok_or_else(stack_underflow)?) {
                         self.ip = target;
