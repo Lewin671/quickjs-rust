@@ -124,7 +124,7 @@ fn function_env(
     );
     local_env.insert(
         "arguments".to_owned(),
-        arguments_object(argument_values, env),
+        arguments_object(argument_values, &function.params, function.is_strict, env),
     );
     for (index, param) in function.params.iter().enumerate() {
         let value = argument_values
@@ -139,7 +139,12 @@ fn function_env(
     }
 }
 
-fn arguments_object(argument_values: &[Value], env: &HashMap<String, Value>) -> Value {
+fn arguments_object(
+    argument_values: &[Value],
+    params: &[String],
+    strict: bool,
+    env: &HashMap<String, Value>,
+) -> Value {
     let mut properties = HashMap::with_capacity(argument_values.len() + 1);
     properties.insert(
         "length".to_owned(),
@@ -149,6 +154,11 @@ fn arguments_object(argument_values: &[Value], env: &HashMap<String, Value>) -> 
         properties.insert(index.to_string(), value);
     }
     let object = ObjectRef::with_prototype(properties, object_prototype(env));
+    if !strict {
+        for (index, param) in params.iter().enumerate().take(argument_values.len()) {
+            object.map_argument(index.to_string(), param.clone());
+        }
+    }
     object.set_to_string_tag("Arguments");
     Value::Object(object)
 }

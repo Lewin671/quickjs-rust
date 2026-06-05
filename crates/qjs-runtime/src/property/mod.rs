@@ -50,7 +50,14 @@ pub(crate) fn property_value(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     match receiver.clone() {
-        Value::Object(object) => property_descriptor_value(object.property(key), receiver, env),
+        Value::Object(object) => {
+            if let Some(parameter) = object.mapped_argument(key)
+                && let Some(value) = env.get(&parameter)
+            {
+                return Ok(value.clone());
+            }
+            property_descriptor_value(object.property(key), receiver, env)
+        }
         Value::Function(function) => property_descriptor_value(
             function_own_property_descriptor(&function, key).or_else(|| {
                 function

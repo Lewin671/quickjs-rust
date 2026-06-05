@@ -14,6 +14,7 @@ pub struct ObjectRef {
     extensible: Rc<Cell<bool>>,
     prototype: Rc<RefCell<Option<ObjectRef>>>,
     to_string_tag: Rc<RefCell<Option<String>>>,
+    mapped_arguments: Rc<RefCell<HashMap<String, String>>>,
 }
 
 impl fmt::Debug for ObjectRef {
@@ -46,6 +47,7 @@ impl ObjectRef {
             extensible: Rc::new(Cell::new(true)),
             prototype: Rc::new(RefCell::new(prototype)),
             to_string_tag: Rc::new(RefCell::new(None)),
+            mapped_arguments: Rc::new(RefCell::new(HashMap::new())),
         }
     }
 
@@ -233,5 +235,13 @@ impl ObjectRef {
 
     pub(crate) fn set_to_string_tag(&self, tag: &str) {
         *self.to_string_tag.borrow_mut() = Some(tag.to_owned());
+    }
+
+    pub(crate) fn map_argument(&self, index: String, parameter: String) {
+        self.mapped_arguments.borrow_mut().insert(index, parameter);
+    }
+
+    pub(crate) fn mapped_argument(&self, index: &str) -> Option<String> {
+        self.mapped_arguments.borrow().get(index).cloned()
     }
 }
