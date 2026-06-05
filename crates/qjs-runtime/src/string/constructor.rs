@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    Function, ObjectRef, Property, RuntimeError, Value, function_prototype, to_js_string,
-    to_number, to_uint16,
+    Function, ObjectRef, Property, RuntimeError, Value, function_prototype, property_value,
+    to_js_string, to_js_string_with_env, to_length_with_env, to_number, to_uint16,
 };
 
 use super::STRING_DATA_PROPERTY;
@@ -57,6 +57,34 @@ pub(crate) fn native_string_from_code_point(
     Ok(Value::String(result))
 }
 
+pub(crate) fn native_string_raw(
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let template = require_object_coercible(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        "String.raw template",
+    )?;
+    let raw = require_object_coercible(property_value(template, "raw", env)?, "String.raw raw")?;
+    let raw_length = to_length_with_env(property_value(raw.clone(), "length", env)?, env)?;
+    if raw_length == 0 {
+        return Ok(Value::String(String::new()));
+    }
+
+    let mut result = String::new();
+    for index in 0..raw_length {
+        let raw_segment = property_value(raw.clone(), &index.to_string(), env)?;
+        result.push_str(&to_js_string_with_env(raw_segment, env)?);
+        if index + 1 < raw_length {
+            match argument_values.get(index + 1).cloned() {
+                Some(substitution) => result.push_str(&to_js_string_with_env(substitution, env)?),
+                None => result.push_str(""),
+            }
+        }
+    }
+    Ok(Value::String(result))
+}
+
 fn to_code_point(value: Value) -> Result<u32, RuntimeError> {
     let number = to_number(value)?;
     if !number.is_finite() || number < 0.0 || number > 0x10FFFF as f64 || number.trunc() != number {
@@ -67,6 +95,16 @@ fn to_code_point(value: Value) -> Result<u32, RuntimeError> {
         });
     }
     Ok(number as u32)
+}
+
+fn require_object_coercible(value: Value, context: &str) -> Result<Value, RuntimeError> {
+    match value {
+        Value::Null | Value::Undefined => Err(RuntimeError {
+            thrown: None,
+            message: format!("TypeError: {context} must be object coercible"),
+        }),
+        value => Ok(value),
+    }
 }
 
 fn define_string_data(object: &ObjectRef, value: &str) {

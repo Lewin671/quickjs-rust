@@ -238,6 +238,7 @@ pub(crate) enum NativeFunction {
     String,
     StringFromCharCode,
     StringFromCodePoint,
+    StringRaw,
     StringPrototypeAt,
     StringPrototypeCharAt,
     StringPrototypeCharCodeAt,

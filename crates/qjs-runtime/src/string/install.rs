@@ -64,6 +64,7 @@ pub(crate) fn install_string(
         1,
         NativeFunction::StringFromCodePoint,
     );
+    define_function_property(&string_function, "raw", 1, NativeFunction::StringRaw);
     let string_value = Value::Function(string_function);
     env.insert("String".to_owned(), string_value.clone());
     if let Value::Object(global_object) = global_this {

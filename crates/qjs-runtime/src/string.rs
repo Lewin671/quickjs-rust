@@ -6,7 +6,7 @@ mod prototype;
 
 pub(super) use constructor::{
     is_string_object, native_string, native_string_from_char_code, native_string_from_code_point,
-    string_object_value,
+    native_string_raw, string_object_value,
 };
 pub(crate) use install::install_string;
 pub(super) use property::{

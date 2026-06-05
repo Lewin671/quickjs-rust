@@ -22,6 +22,7 @@ pub(super) fn call_string_native(
         NativeFunction::StringFromCodePoint => {
             string::native_string_from_code_point(argument_values)?
         }
+        NativeFunction::StringRaw => string::native_string_raw(argument_values, env)?,
         NativeFunction::StringPrototypeAt => {
             string::native_string_prototype_at(this_value, argument_values, env)?
         }

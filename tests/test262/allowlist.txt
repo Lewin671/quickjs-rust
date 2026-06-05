@@ -697,6 +697,10 @@ cases/string-from-char-code-basic.js
 cases/string-from-char-code-length.js
 cases/string-from-code-point-basic.js
 cases/string-from-code-point-length.js
+cases/string-raw-basic.js
+cases/string-raw-empty-length.js
+cases/string-raw-return-value.js
+cases/string-raw-substitutions.js
 cases/string-prototype-at-basic.js
 cases/string-prototype-char-at-basic.js
 cases/string-prototype-char-at-length.js
