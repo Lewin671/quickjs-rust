@@ -13,6 +13,13 @@ if ! command -v "$CARGO_BIN" >/dev/null 2>&1 && [ -x "$HOME/.cargo/bin/cargo" ];
   CARGO_BIN="$HOME/.cargo/bin/cargo"
 fi
 
+trim_ws() {
+  local value="$1"
+  value="${value#${value%%[![:space:]]*}}"
+  value="${value%${value##*[![:space:]]}}"
+  printf '%s' "$value"
+}
+
 detect_jobs() {
   local jobs
   jobs=""
@@ -73,7 +80,7 @@ allowlist_count=0
 allowlist_entries=()
 while IFS= read -r line; do
   entry="${line%%#*}"
-  entry="$(echo "$entry" | xargs)"
+  entry="$(trim_ws "$entry")"
   [ -z "$entry" ] && continue
 
   allowlist_count=$((allowlist_count + 1))
@@ -104,7 +111,7 @@ while IFS= read -r line; do
 done < "$ALLOWLIST"
 
 while IFS= read -r line; do
-  trimmed="$(echo "$line" | xargs)"
+  trimmed="$(trim_ws "$line")"
   [ -z "$trimmed" ] && continue
   case "$trimmed" in
     \#*) continue ;;
@@ -116,7 +123,7 @@ while IFS= read -r line; do
   fi
 
   entry="${line%%#*}"
-  entry="$(echo "$entry" | xargs)"
+  entry="$(trim_ws "$entry")"
   if [ ! -f "$LOCAL_CASE_DIR/$entry" ]; then
     echo "error: expected failure entry does not exist: tests/test262/$entry" >&2
     exit 1
