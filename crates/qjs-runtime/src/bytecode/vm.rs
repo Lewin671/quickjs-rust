@@ -3,9 +3,10 @@ use std::collections::HashMap;
 use qjs_ast::ObjectPropertyKind;
 
 use crate::{
-    ArrayRef, CATCH_CAPTURE_PREFIX, CompiledFunctionInit, Function, GLOBAL_THIS_BINDING, ObjectRef,
-    Property, RUNTIME_INTRINSIC_NAMES, RuntimeError, Value, call_function, constructor_prototype,
-    initialize_builtins, is_truthy, object_prototype, operations, to_property_key_with_env,
+    ArrayRef, CATCH_CAPTURE_PREFIX, CompiledFunctionInit, Function, GLOBAL_THIS_BINDING,
+    LOCAL_CAPTURE_PREFIX, ObjectRef, Property, RUNTIME_INTRINSIC_NAMES, RuntimeError, Value,
+    call_function, constructor_prototype, initialize_builtins, is_truthy, object_prototype,
+    operations, to_property_key_with_env,
 };
 
 use super::ir::{Bytecode, Op};
@@ -95,30 +96,6 @@ impl<'a> Vm<'a> {
                 }
             })
             .collect()
-    }
-
-    fn initialize_global_var_properties(&self) {
-        if !self.sync_var_to_global_object {
-            return;
-        }
-        let Some(Value::Object(global_object)) = self.globals.get(GLOBAL_THIS_BINDING) else {
-            return;
-        };
-        for (slot, local) in self.bytecode.locals.iter().enumerate() {
-            if !local.hoisted
-                || local.name.starts_with('\0')
-                || global_object.has_own_property(&local.name)
-            {
-                continue;
-            }
-            let value = self
-                .locals
-                .get(slot)
-                .and_then(|value| value.clone())
-                .unwrap_or(Value::Undefined);
-            global_object
-                .define_property(local.name.clone(), Property::data(value, true, true, false));
-        }
     }
 
     pub(super) fn run(&mut self) -> Result<Value, RuntimeError> {
@@ -329,6 +306,12 @@ impl<'a> Vm<'a> {
     fn insert_referenced_binding(&self, env: &mut HashMap<String, Value>, name: &str) {
         if let Some(value) = self.current_local_binding(name) {
             env.insert(name.to_owned(), value.clone());
+            if !self.sync_var_to_global_object {
+                env.insert(
+                    format!("{LOCAL_CAPTURE_PREFIX}{name}"),
+                    Value::Boolean(true),
+                );
+            }
         } else if let Some(value) = self.globals.get(name) {
             env.insert(name.to_owned(), value.clone());
         }
@@ -520,6 +503,12 @@ impl<'a> Vm<'a> {
         function_local_names: &[String],
     ) {
         for name in function_bytecode.global_names() {
+            if function_local_names
+                .binary_search_by(|local| local.as_str().cmp(name))
+                .is_ok()
+            {
+                continue;
+            }
             self.insert_call_binding(env, binding_names, name);
         }
         for name in function_bytecode.local_names() {

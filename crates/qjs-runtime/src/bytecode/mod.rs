@@ -14,6 +14,7 @@ mod vm;
 mod vm_call;
 mod vm_entry;
 mod vm_errors;
+mod vm_globals;
 mod vm_iteration_ops;
 mod vm_name_ops;
 mod vm_ops;

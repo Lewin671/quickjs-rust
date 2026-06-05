@@ -14,6 +14,14 @@ fn evaluates_variable_declarations() {
         eval("function f() { return x; var x = 2; } f();"),
         Ok(Value::Undefined)
     );
+    assert_eq!(
+        eval("var x = 'OUT'; (function(){ var x = 'IN'; (function(){ x = 'INNER'; })(); })(); x;"),
+        Ok(Value::String("OUT".to_owned()))
+    );
+    assert_eq!(
+        eval("var x = 'OUT'; (function(){ x = 'IN'; (function(){ x = 'INNER'; })(); })(); x;"),
+        Ok(Value::String("INNER".to_owned()))
+    );
     assert!(eval("x; let x;").is_err());
     assert_eq!(
         eval("var x = 1, y = 2, missing; x + y;"),

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    Bytecode, CATCH_CAPTURE_PREFIX, Function, GLOBAL_THIS_BINDING, ObjectRef,
+    Bytecode, CATCH_CAPTURE_PREFIX, Function, GLOBAL_THIS_BINDING, LOCAL_CAPTURE_PREFIX, ObjectRef,
     RUNTIME_INTRINSIC_NAMES, RuntimeError, STRICT_MODE_BINDING, Value,
     bytecode::eval_function_bytecode_with_stack, native::call_native_function, object_prototype,
 };
@@ -209,6 +209,10 @@ fn insert_function_capture(
     if let Some(value) = function_env.get(name) {
         local_env.insert(name.to_owned(), value.clone());
     }
+    let local_marker = local_capture_marker(name);
+    if let Some(value) = function_env.get(&local_marker) {
+        local_env.insert(local_marker, value.clone());
+    }
     let marker = catch_capture_marker(name);
     if let Some(value) = function_env.get(&marker) {
         local_env.insert(marker, value.clone());
@@ -223,6 +227,12 @@ fn insert_caller_bytecode_bindings(
     env: &HashMap<String, Value>,
 ) {
     for name in bytecode.global_names() {
+        if function_local_names
+            .binary_search_by(|local| local.as_str().cmp(name))
+            .is_ok()
+        {
+            continue;
+        }
         insert_caller_binding(local_env, caller_binding_names, env, name);
     }
     for name in bytecode.local_names() {
@@ -245,6 +255,18 @@ fn insert_caller_binding(
     name: &str,
 ) {
     if local_env
+        .get(&local_capture_marker(name))
+        .is_some_and(|value| matches!(value, Value::Boolean(true)))
+    {
+        if let (Some(captured), Some(caller)) = (local_env.get(name), env.get(name))
+            && captured == caller
+            && !caller_binding_names.iter().any(|existing| existing == name)
+        {
+            caller_binding_names.push(name.to_owned());
+        }
+        return;
+    }
+    if local_env
         .get(&catch_capture_marker(name))
         .is_some_and(|value| matches!(value, Value::Boolean(true)))
     {
@@ -260,6 +282,10 @@ fn insert_caller_binding(
 
 fn catch_capture_marker(name: &str) -> String {
     format!("{CATCH_CAPTURE_PREFIX}{name}")
+}
+
+fn local_capture_marker(name: &str) -> String {
+    format!("{LOCAL_CAPTURE_PREFIX}{name}")
 }
 
 fn insert_caller_scope_bindings(
