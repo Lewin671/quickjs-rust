@@ -278,21 +278,34 @@ impl Compiler {
             .expect("loop context should be balanced")
     }
 
-    pub(super) fn compile_break(&mut self) -> Result<(), RuntimeError> {
-        let Some(context) = self.loop_stack.last() else {
+    pub(super) fn compile_break(&mut self, label: Option<&str>) -> Result<(), RuntimeError> {
+        let index = if let Some(label) = label {
+            self.loop_stack
+                .iter()
+                .rposition(|context| context.labels.iter().any(|candidate| candidate == label))
+        } else {
+            self.loop_stack.len().checked_sub(1)
+        };
+        let Some(index) = index else {
             return Err(RuntimeError {
                 thrown: None,
                 message: "break outside loop".to_owned(),
             });
         };
-        let result_slot = context.result_slot;
+        if label.is_some()
+            && let (Some(source), target) = (
+                self.loop_stack.last().map(|context| context.result_slot),
+                self.loop_stack[index].result_slot,
+            )
+            && source != target
+        {
+            self.emit(Op::LoadLocal(source));
+            self.emit(Op::StoreLocal(target));
+        }
+        let result_slot = self.loop_stack[index].result_slot;
         self.emit(Op::LoadLocal(result_slot));
         let jump = self.emit(Op::Jump(usize::MAX));
-        self.loop_stack
-            .last_mut()
-            .expect("loop context should exist")
-            .breaks
-            .push(jump);
+        self.loop_stack[index].breaks.push(jump);
         Ok(())
     }
 
@@ -423,7 +436,7 @@ impl Compiler {
                 self.emit_load_undefined();
                 Ok(())
             }
-            Stmt::Break { .. } => self.compile_break(),
+            Stmt::Break { label, .. } => self.compile_break(label.as_deref()),
             Stmt::Continue { label, .. } => self.compile_continue(label.as_deref()),
             Stmt::Label { label, body, .. } => self.compile_label(label, body),
             Stmt::Switch {

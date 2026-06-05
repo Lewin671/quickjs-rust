@@ -157,6 +157,12 @@ fn evaluates_break_and_continue() {
         eval("eval('var c = 0; for (; c < 3; c++) { if (c === 2) break; else c; }');"),
         Ok(Value::Undefined)
     );
+    assert_eq!(
+        eval(
+            "let out = ''; outer: for (let i = 0; i < 3; i++) { inner: for (let j = 0; j < 3; j++) { if (i * j >= 2) break outer; out += '' + i + j; } } out;"
+        ),
+        Ok(Value::String("0001021011".to_owned()))
+    );
 }
 
 #[test]
