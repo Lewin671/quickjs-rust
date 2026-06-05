@@ -4,7 +4,7 @@ use qjs_ast::ObjectPropertyKind;
 
 use crate::{
     ArrayRef, Function, GLOBAL_THIS_BINDING, ObjectRef, Property, RUNTIME_INTRINSIC_NAMES,
-    RuntimeError, Value, call_function, constructor_prototype, initialize_builtins, is_truthy,
+    RuntimeError, Value, call_function, construct_function, initialize_builtins, is_truthy,
     object_prototype, promise, to_property_key,
 };
 
@@ -357,35 +357,12 @@ impl<'a> Vm<'a> {
     fn construct(&mut self, argc: usize) -> Result<(), RuntimeError> {
         let arguments = self.pop_arguments(argc)?;
         let callee = self.pop()?;
-        let Value::Function(function) = &callee else {
-            return self.handle_construct_error();
-        };
-        if !function.constructable {
-            return self.handle_construct_error();
-        }
-        let prototype = constructor_prototype(&callee, &self.globals);
-        let this_value = Value::Object(ObjectRef::with_prototype(HashMap::new(), prototype));
         let mut env = self.call_env(&callee);
-        let result = call_function(callee, this_value.clone(), arguments, &mut env.env, true);
+        let result = construct_function(callee.clone(), callee, arguments, &mut env.env);
         self.apply_call_env(env);
         if let Some(result) = self.handle_call_result(result)? {
-            match result {
-                Value::Array(_)
-                | Value::Function(_)
-                | Value::Map(_)
-                | Value::Set(_)
-                | Value::Object(_) => self.stack.push(result),
-                _ => self.stack.push(this_value),
-            }
+            self.stack.push(result);
         }
-        Ok(())
-    }
-
-    fn handle_construct_error(&mut self) -> Result<(), RuntimeError> {
-        self.handle_call_result(Err(RuntimeError {
-            thrown: None,
-            message: "TypeError: value is not a constructor".to_owned(),
-        }))?;
         Ok(())
     }
 

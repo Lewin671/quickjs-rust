@@ -6,7 +6,7 @@ mod prototype;
 mod strict;
 mod value;
 
-pub(crate) use call::call_function;
+pub(crate) use call::{call_function, construct_function, ensure_constructor};
 pub(crate) use install::install_function;
 pub(crate) use local_names::collect_function_local_names;
 pub(crate) use native_kind::NativeFunction;

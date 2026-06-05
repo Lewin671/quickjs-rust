@@ -11,6 +11,7 @@ fn evaluates_reflect_prototype_builtins() {
         Ok(Value::String("function".to_owned()))
     );
     assert_eq!(eval("Reflect.apply.length;"), Ok(Value::Number(3.0)));
+    assert_eq!(eval("Reflect.construct.length;"), Ok(Value::Number(2.0)));
     assert_eq!(
         eval("Reflect.getPrototypeOf.length;"),
         Ok(Value::Number(1.0))
@@ -73,6 +74,28 @@ fn evaluates_reflect_prototype_builtins() {
     assert_eq!(
         eval("function value() { return 57; } Reflect.apply(value, null, []);"),
         Ok(Value::Number(57.0))
+    );
+    assert_eq!(
+        eval(
+            "function C(a, b) { this.sum = a + b; } let value = Reflect.construct(C, [2, 5]); value instanceof C && value.sum;"
+        ),
+        Ok(Value::Number(7.0))
+    );
+    assert_eq!(
+        eval(
+            "function C() { this.proto = Object.getPrototypeOf(this); } let value = Reflect.construct(C, [], Array); Object.getPrototypeOf(value) === Array.prototype && value.proto === Array.prototype;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("function C() { return { marker: 11 }; } Reflect.construct(C, []).marker;"),
+        Ok(Value::Number(11.0))
+    );
+    assert_eq!(
+        eval(
+            "function C(a, b) { this.sum = a + b; } let args = { 0: 3, 1: 4, length: 2 }; Reflect.construct(C, args).sum;"
+        ),
+        Ok(Value::Number(7.0))
     );
     assert_eq!(
         eval("Reflect.get({ value: 5 }, 'value');"),
@@ -297,6 +320,9 @@ fn evaluates_reflect_prototype_builtins() {
     );
     assert!(eval("Reflect.apply(1, null, []);").is_err());
     assert!(eval("Reflect.apply(function f() {}, null, 1);").is_err());
+    assert!(eval("Reflect.construct(1, []);").is_err());
+    assert!(eval("Reflect.construct(function f() {}, 1);").is_err());
+    assert!(eval("Reflect.construct(function f() {}, [], Reflect.apply);").is_err());
     assert!(eval("Reflect.getPrototypeOf(1);").is_err());
     assert!(eval("Reflect.defineProperty(1, 'value', { value: 1 });").is_err());
     assert!(eval("Reflect.deleteProperty(1, 'value');").is_err());

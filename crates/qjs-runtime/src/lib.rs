@@ -33,8 +33,8 @@ pub(crate) use conversion::{
     to_length, to_length_with_env, to_number, to_number_with_env, to_primitive_with_env, to_uint16,
     to_uint32, to_uint32_number,
 };
-pub(crate) use function::call_function;
 use function::{Function, NativeFunction};
+pub(crate) use function::{call_function, construct_function, ensure_constructor};
 pub(crate) use property::{
     array_has_own_property, array_own_property_descriptor, array_own_property_keys,
     array_own_property_names, array_prototype, array_prototype_property, constructor_prototype,

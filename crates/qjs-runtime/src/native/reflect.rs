@@ -11,6 +11,9 @@ pub(super) fn call_reflect_native(
 ) -> NativeCallResult {
     let value = match native {
         NativeFunction::ReflectApply => reflect::native_reflect_apply(argument_values, env)?,
+        NativeFunction::ReflectConstruct => {
+            reflect::native_reflect_construct(argument_values, env)?
+        }
         NativeFunction::ReflectDefineProperty => {
             reflect::native_reflect_define_property(argument_values)?
         }

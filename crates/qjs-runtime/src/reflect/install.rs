@@ -11,6 +11,12 @@ pub(crate) fn install_reflect(
     define_reflect_function(&reflect_object, "apply", 3, NativeFunction::ReflectApply);
     define_reflect_function(
         &reflect_object,
+        "construct",
+        2,
+        NativeFunction::ReflectConstruct,
+    );
+    define_reflect_function(
+        &reflect_object,
         "defineProperty",
         3,
         NativeFunction::ReflectDefineProperty,

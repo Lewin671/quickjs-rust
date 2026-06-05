@@ -11,7 +11,7 @@ pub(crate) use descriptors::{
     native_reflect_get_own_property_descriptor,
 };
 pub(crate) use integrity::{native_reflect_is_extensible, native_reflect_prevent_extensions};
-pub(crate) use invocation::native_reflect_apply;
+pub(crate) use invocation::{native_reflect_apply, native_reflect_construct};
 pub(crate) use keys::native_reflect_own_keys;
 pub(crate) use property_access::{native_reflect_get, native_reflect_has};
 pub(crate) use prototype::{native_reflect_get_prototype_of, native_reflect_set_prototype_of};

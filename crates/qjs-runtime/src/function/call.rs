@@ -67,6 +67,44 @@ pub(crate) fn call_function(
     })
 }
 
+pub(crate) fn construct_function(
+    target: Value,
+    new_target: Value,
+    argument_values: Vec<Value>,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    ensure_constructor(&target)?;
+    ensure_constructor(&new_target)?;
+
+    let prototype = crate::constructor_prototype(&new_target, env);
+    let this_value = Value::Object(ObjectRef::with_prototype(HashMap::new(), prototype));
+    let result = call_function(target, this_value.clone(), argument_values, env, true)?;
+
+    match result {
+        Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) | Value::Object(_) => {
+            Ok(result)
+        }
+        _ => Ok(this_value),
+    }
+}
+
+pub(crate) fn ensure_constructor(value: &Value) -> Result<(), RuntimeError> {
+    let Value::Function(function) = value else {
+        return Err(not_constructor_error());
+    };
+    if !function.constructable {
+        return Err(not_constructor_error());
+    }
+    Ok(())
+}
+
+fn not_constructor_error() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "TypeError: value is not a constructor".to_owned(),
+    }
+}
+
 struct FunctionCallEnv {
     env: HashMap<String, Value>,
     caller_binding_names: Vec<String>,
