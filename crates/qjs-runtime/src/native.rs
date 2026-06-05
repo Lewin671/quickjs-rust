@@ -15,6 +15,7 @@ mod regexp;
 mod sets;
 mod strings;
 mod weak_maps;
+mod weak_sets;
 
 use crate::{Function, NativeFunction, RuntimeError, Value};
 
@@ -86,6 +87,17 @@ pub(crate) fn call_native_function(
     }
 
     if let Some(value) = weak_maps::call_weak_map_native(
+        function,
+        native,
+        this_value.clone(),
+        &argument_values,
+        is_construct,
+        env,
+    )? {
+        return Ok(value);
+    }
+
+    if let Some(value) = weak_sets::call_weak_set_native(
         function,
         native,
         this_value.clone(),

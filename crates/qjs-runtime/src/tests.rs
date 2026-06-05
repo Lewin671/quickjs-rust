@@ -20,3 +20,4 @@ mod sets;
 mod statements;
 mod strings;
 mod weak_maps;
+mod weak_sets;
