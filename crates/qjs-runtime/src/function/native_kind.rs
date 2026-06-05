@@ -161,6 +161,7 @@ pub(crate) enum NativeFunction {
     ParseFloat,
     ParseInt,
     Promise,
+    PromisePrototypeCatch,
     PromisePrototypeThen,
     PromiseReject,
     PromiseResolve,

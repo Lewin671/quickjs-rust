@@ -33,10 +33,21 @@ pub(crate) fn install_promise(
         PROMISE_PROTOTYPE.to_owned(),
         Value::Object(promise_prototype.clone()),
     );
+    let mut promise_catch = Function::new_native(
+        Some("catch"),
+        1,
+        NativeFunction::PromisePrototypeCatch,
+        false,
+    );
+    promise_catch.env.insert(
+        PROMISE_PROTOTYPE.to_owned(),
+        Value::Object(promise_prototype.clone()),
+    );
     promise_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(promise_function.clone()),
     );
+    promise_prototype.define_non_enumerable("catch".to_owned(), Value::Function(promise_catch));
     promise_prototype.define_non_enumerable("then".to_owned(), Value::Function(promise_then));
     promise_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
@@ -189,6 +200,16 @@ pub(crate) fn native_promise_then(
     }
 
     Ok(Value::Object(result_promise))
+}
+
+pub(crate) fn native_promise_catch(
+    function: &Function,
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let on_rejected = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    native_promise_then(function, this_value, &[Value::Undefined, on_rejected], env)
 }
 
 pub(crate) fn native_promise_resolve_function(

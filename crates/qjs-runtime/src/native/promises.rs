@@ -16,6 +16,9 @@ pub(super) fn call_promise_native(
         NativeFunction::Promise => {
             promise::native_promise(function, this_value, argument_values, is_construct, env)?
         }
+        NativeFunction::PromisePrototypeCatch => {
+            promise::native_promise_catch(function, this_value, argument_values, env)?
+        }
         NativeFunction::PromisePrototypeThen => {
             promise::native_promise_then(function, this_value, argument_values, env)?
         }
