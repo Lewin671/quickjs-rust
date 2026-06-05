@@ -215,6 +215,10 @@ fn evaluates_switch_statements() {
         ),
         Ok(Value::Number(2.0))
     );
+    assert_eq!(
+        eval("eval('5; do { switch (\"a\") { case \"a\": { 6; continue; } } } while (false)');"),
+        Ok(Value::Number(6.0))
+    );
 }
 
 #[test]

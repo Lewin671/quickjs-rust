@@ -307,12 +307,10 @@ impl Compiler {
                 message: "break outside loop".to_owned(),
             });
         };
-        if label.is_some()
-            && let (Some(source), target) = (
-                self.loop_stack.last().map(|context| context.result_slot),
-                self.loop_stack[index].result_slot,
-            )
-            && source != target
+        if let (Some(source), target) = (
+            self.loop_stack.last().map(|context| context.result_slot),
+            self.loop_stack[index].result_slot,
+        ) && source != target
         {
             self.emit(Op::LoadLocal(source));
             self.emit(Op::StoreLocal(target));
@@ -340,12 +338,10 @@ impl Compiler {
                 message: "continue outside loop".to_owned(),
             });
         };
-        if label.is_some()
-            && let (Some(source), target) = (
-                self.loop_stack.last().map(|context| context.result_slot),
-                self.loop_stack[index].result_slot,
-            )
-            && source != target
+        if let (Some(source), target) = (
+            self.loop_stack.last().map(|context| context.result_slot),
+            self.loop_stack[index].result_slot,
+        ) && source != target
         {
             self.emit(Op::LoadLocal(source));
             self.emit(Op::StoreLocal(target));
