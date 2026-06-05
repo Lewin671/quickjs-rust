@@ -158,17 +158,21 @@ pub(super) fn enumerable_keys(
     env: &HashMap<String, Value>,
 ) -> Result<Vec<Value>, RuntimeError> {
     let keys = match value {
-        Value::Object(object) => {
-            enumerable_object_keys(object.own_property_keys(), object.prototype())
-        }
+        Value::Object(object) => enumerable_object_keys(
+            object.own_property_keys(),
+            object.own_property_names(),
+            object.prototype(),
+        ),
         Value::Array(elements) => {
             let mut keys: Vec<_> = (0..elements.len())
                 .filter(|index| elements.has_index(*index))
                 .map(|index| index.to_string())
                 .collect();
             keys.extend(elements.property_keys());
+            let visited = keys.clone();
             enumerable_object_keys(
                 keys,
+                visited,
                 elements
                     .prototype_override()
                     .unwrap_or_else(|| array_prototype(env)),
@@ -176,8 +180,10 @@ pub(super) fn enumerable_keys(
         }
         Value::Function(function) => {
             let keys = function_own_property_keys(&function);
+            let visited = keys.clone();
             enumerable_object_keys(
                 keys,
+                visited,
                 function
                     .internal_prototype_override()
                     .unwrap_or_else(|| function_intrinsic_prototype(env)),
@@ -185,10 +191,11 @@ pub(super) fn enumerable_keys(
         }
         Value::String(value) => enumerable_object_keys(
             crate::string::string_own_property_keys(&value),
+            crate::string::string_own_property_keys(&value),
             string_prototype(env),
         ),
         Value::Number(_) | Value::Boolean(_) => {
-            enumerable_object_keys(Vec::new(), object_prototype(env))
+            enumerable_object_keys(Vec::new(), Vec::new(), object_prototype(env))
         }
         Value::Null | Value::Undefined => Vec::new(),
     };
@@ -197,13 +204,21 @@ pub(super) fn enumerable_keys(
 
 fn enumerable_object_keys(
     mut keys: Vec<String>,
+    mut visited: Vec<String>,
     mut prototype: Option<crate::ObjectRef>,
 ) -> Vec<String> {
     while let Some(object) = prototype {
-        for key in object.own_property_keys() {
-            if !keys.iter().any(|existing| existing == &key) {
-                keys.push(key);
+        for key in object.own_property_names() {
+            if visited.iter().any(|existing| existing == &key) {
+                continue;
             }
+            if object
+                .own_property(&key)
+                .is_some_and(|property| property.enumerable)
+            {
+                keys.push(key.clone());
+            }
+            visited.push(key);
         }
         prototype = object.prototype();
     }

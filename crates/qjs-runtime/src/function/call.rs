@@ -185,6 +185,9 @@ fn insert_function_captures(
         insert_function_capture(local_env, function_env, name);
     }
     for name in bytecode.local_names() {
+        if is_internal_binding(name) {
+            continue;
+        }
         if function_local_names
             .binary_search_by(|local| local.as_str().cmp(name))
             .is_err()
@@ -215,6 +218,9 @@ fn insert_caller_bytecode_bindings(
         insert_caller_binding(local_env, caller_binding_names, env, name);
     }
     for name in bytecode.local_names() {
+        if is_internal_binding(name) {
+            continue;
+        }
         if function_local_names
             .binary_search_by(|local| local.as_str().cmp(name))
             .is_err()
@@ -246,6 +252,7 @@ fn insert_caller_scope_bindings(
 ) {
     for name in env.keys() {
         if is_call_frame_binding(name)
+            || is_internal_binding(name)
             || RUNTIME_INTRINSIC_NAMES.contains(&name.as_str())
             || function_local_names
                 .binary_search_by(|local| local.as_str().cmp(name))
@@ -274,4 +281,8 @@ fn propagate_caller_bindings(
 
 fn is_call_frame_binding(name: &str) -> bool {
     matches!(name, GLOBAL_THIS_BINDING | "this" | "arguments")
+}
+
+fn is_internal_binding(name: &str) -> bool {
+    name.starts_with('\0')
 }

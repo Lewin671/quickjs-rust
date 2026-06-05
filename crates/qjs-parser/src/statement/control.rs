@@ -103,11 +103,17 @@ impl Parser {
             .start;
         self.expect(&TokenKind::For)?;
         self.expect(&TokenKind::LeftParen)?;
-        if self.at(&TokenKind::Var) || self.at(&TokenKind::Let) || self.at(&TokenKind::Const) {
+        if self.at(&TokenKind::Var)
+            || self.at(&TokenKind::Const)
+            || (self.at(&TokenKind::Let)
+                && !self
+                    .peek_nth(1)
+                    .is_some_and(|token| token.kind == TokenKind::In))
+        {
             let kind_token = self.advance();
             let kind = var_kind(&kind_token.kind).expect("token should be declaration kind");
             if self.at(&TokenKind::LeftBracket) || self.at(&TokenKind::LeftBrace) {
-                let pattern = self.assignment()?;
+                let pattern = self.primary()?;
                 let pattern_end = pattern.span().end;
                 let target = assignment_target(pattern)?;
                 if self.match_kind(&TokenKind::In) {

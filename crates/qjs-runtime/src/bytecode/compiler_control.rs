@@ -13,6 +13,7 @@ impl Compiler {
         body: &Stmt,
     ) -> Result<(), RuntimeError> {
         let result_slot = self.temp_local("for_in_result");
+        let object_slot = self.temp_local("for_in_object");
         let keys_slot = self.temp_local("for_in_keys");
         let index_slot = self.temp_local("for_in_index");
         let key_slot = self.temp_local("for_in_key");
@@ -23,6 +24,8 @@ impl Compiler {
         self.emit(Op::StoreLocal(result_slot));
         self.emit_clear_locals(&cleanup_slots);
         self.compile_expr(right)?;
+        self.emit(Op::Dup);
+        self.emit(Op::StoreLocal(object_slot));
         self.emit(Op::EnumerateKeys);
         self.emit(Op::StoreLocal(keys_slot));
         self.emit_number(0.0);
@@ -41,14 +44,24 @@ impl Compiler {
         self.emit(Op::LoadLocal(index_slot));
         self.emit(Op::GetProp);
         self.emit(Op::StoreLocal(key_slot));
+        self.emit(Op::LoadLocal(key_slot));
+        self.emit(Op::LoadLocal(object_slot));
+        self.emit(Op::Binary(BinaryOp::In));
+        let deleted_jump = self.emit(Op::JumpIfFalse(usize::MAX));
+        self.emit(Op::Pop);
         self.compile_for_in_left(left, key_slot)?;
 
         self.push_loop(result_slot);
         self.compile_stmt(body)?;
         self.emit(Op::StoreLocal(result_slot));
         let context = self.pop_loop();
+        let normal_update_jump = self.emit(Op::Jump(usize::MAX));
 
+        let deleted_cleanup = self.code.len();
+        self.patch_jump(deleted_jump, deleted_cleanup);
+        self.emit(Op::Pop);
         let update_start = self.code.len();
+        self.patch_jump(normal_update_jump, update_start);
         self.emit(Op::LoadLocal(index_slot));
         self.emit_number(1.0);
         self.emit(Op::Binary(BinaryOp::Add));
