@@ -3,5 +3,6 @@
 # Format:
 # path/to/test.js # reason
 #
-# Do not add failures without a reason. Remove entries as implementation support
-# catches up.
+# Entries must also appear in allowlist.txt. A listed case may fail without
+# failing the subset run, but if it starts passing then test262-subset.sh fails
+# and asks you to remove the stale expected-failure entry.

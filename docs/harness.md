@@ -114,6 +114,12 @@ Run additional checks when relevant:
 ./scripts/microbench.sh
 ```
 
+`scripts/test262-subset.sh` runs the curated local Test262-derived allowlist.
+Entries in `tests/test262/expected-failures.txt` must also be in the allowlist
+and must include a reason. Expected-failure cases may fail without failing the
+subset run; if one passes, the script fails and asks for the stale entry to be
+removed.
+
 `scripts/microbench.sh` runs the repository's current QuickJS microbenchmark
 subset from `tests/benchmarks/quickjs/microbench.js`. Use `--engine quickjs-ng`
 or `--engine both` to compare the same subset against the pinned QuickJS-NG
