@@ -36,13 +36,13 @@ pub(crate) use conversion::{
 use function::{Function, NativeFunction};
 pub(crate) use function::{call_function, construct_function, ensure_constructor};
 pub(crate) use property::{
-    array_has_own_property, array_own_property_descriptor, array_own_property_keys,
+    PropertyKey, array_has_own_property, array_own_property_descriptor, array_own_property_keys,
     array_own_property_names, array_prototype, array_prototype_property, constructor_prototype,
     function_delete_own_property, function_intrinsic_prototype, function_own_property_descriptor,
     function_own_property_keys, function_own_property_names, function_prototype,
     function_prototype_property, has_property, inherited_object_prototype_property,
     inherited_string_prototype_property, object_prototype, property_value, string_prototype,
-    to_property_key, value_prototype,
+    to_property_key, to_property_key_value, value_prototype,
 };
 pub(crate) use string::string_object_value;
 pub use value::Value;

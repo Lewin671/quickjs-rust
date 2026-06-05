@@ -204,6 +204,7 @@ pub(crate) enum NativeFunction {
     ObjectGetOwnPropertyDescriptors,
     ObjectGetPrototypeOf,
     ObjectGetOwnPropertyNames,
+    ObjectGetOwnPropertySymbols,
     ObjectFromEntries,
     ObjectHasOwn,
     ObjectFreeze,

@@ -2,10 +2,10 @@ use std::collections::HashMap;
 
 use crate::{
     ArrayRef, Property, RuntimeError, Value, array_own_property_keys, array_own_property_names,
-    function_own_property_keys, function_own_property_names, property_value, to_property_key,
+    function_own_property_keys, function_own_property_names, property_value, to_property_key_value,
 };
 
-use super::descriptor::own_property_descriptor;
+use super::descriptor::{own_property_descriptor, own_property_descriptor_key};
 
 pub(crate) fn native_object_keys(argument_values: &[Value]) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
@@ -71,6 +71,24 @@ pub(crate) fn native_object_get_own_property_names(
     )))
 }
 
+pub(crate) fn native_object_get_own_property_symbols(
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    if matches!(target, Value::Null | Value::Undefined) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "Object.getOwnPropertySymbols target must not be null or undefined".to_owned(),
+        });
+    }
+    Ok(Value::Array(ArrayRef::new(
+        own_property_symbols(target)
+            .into_iter()
+            .map(Value::Object)
+            .collect(),
+    )))
+}
+
 pub(crate) fn native_object_has_own(argument_values: &[Value]) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if matches!(target, Value::Null | Value::Undefined) {
@@ -80,9 +98,9 @@ pub(crate) fn native_object_has_own(argument_values: &[Value]) -> Result<Value, 
         });
     }
 
-    let key = to_property_key(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
+    let key = to_property_key_value(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
     Ok(Value::Boolean(
-        own_property_descriptor(target, &key)?.is_some(),
+        own_property_descriptor_key(target, &key)?.is_some(),
     ))
 }
 
@@ -124,5 +142,20 @@ pub(super) fn own_property_names(value: Value) -> Vec<String> {
         Value::Function(function) => function_own_property_names(&function),
         Value::String(value) => crate::string::string_own_property_names(&value),
         Value::Number(_) | Value::Boolean(_) | Value::Null | Value::Undefined => Vec::new(),
+    }
+}
+
+fn own_property_symbols(value: Value) -> Vec<crate::ObjectRef> {
+    match value {
+        Value::Object(object) => object.own_property_symbols(),
+        Value::Map(map) => map.object().own_property_symbols(),
+        Value::Set(set) => set.object().own_property_symbols(),
+        Value::Array(_)
+        | Value::Function(_)
+        | Value::String(_)
+        | Value::Number(_)
+        | Value::Boolean(_)
+        | Value::Null
+        | Value::Undefined => Vec::new(),
     }
 }

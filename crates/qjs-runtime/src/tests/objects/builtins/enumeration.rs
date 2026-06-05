@@ -121,6 +121,23 @@ fn evaluates_object_enumeration_builtins() {
         eval("Object.getOwnPropertyNames(Object.prototype)[0];"),
         Ok(Value::String("constructor".to_owned()))
     );
+    assert_eq!(
+        eval("Object.getOwnPropertySymbols.length;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval(
+            "let a = Symbol('a'); let b = Symbol('b'); let object = {}; Object.defineProperty(object, a, { value: 1, enumerable: true, configurable: true }); Object.defineProperty(object, b, { value: 2 }); let symbols = Object.getOwnPropertySymbols(object); symbols.length + ':' + (symbols[0] === a) + ':' + (symbols[1] === b) + ':' + Object.getOwnPropertyDescriptor(object, symbols[0]).value + ':' + Object.hasOwn(object, b) + ':' + Object.getOwnPropertyNames(object).length;"
+        ),
+        Ok(Value::String("2:true:true:1:true:0".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let symbol = Symbol(); let object = {}; Object.defineProperty(object, symbol, { value: 1, configurable: true }); Object.defineProperty(object, symbol, { value: 2, configurable: true }); Object.getOwnPropertySymbols(object).length + ':' + Object.getOwnPropertyDescriptor(object, symbol).value;"
+        ),
+        Ok(Value::String("1:2".to_owned()))
+    );
+    assert!(eval("Object.getOwnPropertySymbols(null);").is_err());
     assert_eq!(eval("Object.hasOwn.length;"), Ok(Value::Number(2.0)));
     assert_eq!(
         eval("Object.hasOwn({ value: 1 }, 'value');"),

@@ -93,6 +93,12 @@ pub(crate) fn install_object(env: &mut HashMap<String, Value>, global_this: &Val
     );
     define_object_function(
         &object_function,
+        "getOwnPropertySymbols",
+        1,
+        NativeFunction::ObjectGetOwnPropertySymbols,
+    );
+    define_object_function(
+        &object_function,
         "fromEntries",
         1,
         NativeFunction::ObjectFromEntries,

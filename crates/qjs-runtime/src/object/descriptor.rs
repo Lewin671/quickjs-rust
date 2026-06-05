@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    ObjectRef, Property, RuntimeError, Value, function_own_property_descriptor, is_truthy,
-    object_prototype, to_property_key,
+    ObjectRef, Property, PropertyKey, RuntimeError, Value, function_own_property_descriptor,
+    is_truthy, object_prototype, to_property_key_value,
 };
 
 use super::enumeration::{enumerable_property_entries, own_property_names};
@@ -11,11 +11,11 @@ pub(crate) fn native_object_define_property(
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    let key = to_property_key(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
+    let key = to_property_key_value(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
     let descriptor =
         to_property_descriptor(argument_values.get(2).cloned().unwrap_or(Value::Undefined))?;
 
-    if !define_property_on_value(target.clone(), key, descriptor)? {
+    if !define_property_on_value_key(target.clone(), key, descriptor)? {
         return Err(RuntimeError {
             thrown: None,
             message: "Object.defineProperty failed".to_owned(),
@@ -59,8 +59,8 @@ pub(crate) fn native_object_get_own_property_descriptor(
     env: &HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    let key = to_property_key(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
-    let Some(property) = own_property_descriptor(target, &key)? else {
+    let key = to_property_key_value(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
+    let Some(property) = own_property_descriptor_key(target, &key)? else {
         return Ok(Value::Undefined);
     };
     Ok(Value::Object(property_descriptor_object(
@@ -103,13 +103,38 @@ pub(super) fn own_property_descriptor(
     value: Value,
     key: &str,
 ) -> Result<Option<Property>, RuntimeError> {
+    own_property_descriptor_key(value, &PropertyKey::String(key.to_owned()))
+}
+
+pub(super) fn own_property_descriptor_key(
+    value: Value,
+    key: &PropertyKey,
+) -> Result<Option<Property>, RuntimeError> {
     match value {
-        Value::Object(object) => Ok(object.own_property(key)),
-        Value::Map(map) => Ok(map.object().own_property(key)),
-        Value::Set(set) => Ok(set.object().own_property(key)),
-        Value::Function(function) => Ok(function_own_property_descriptor(&function, key)),
-        Value::Array(elements) => Ok(crate::array_own_property_descriptor(&elements, key)),
-        Value::String(value) => Ok(crate::string::string_own_property_descriptor(&value, key)),
+        Value::Object(object) => Ok(match key {
+            PropertyKey::String(key) => object.own_property(key),
+            PropertyKey::Symbol(symbol) => object.own_symbol_property(symbol),
+        }),
+        Value::Map(map) => Ok(match key {
+            PropertyKey::String(key) => map.object().own_property(key),
+            PropertyKey::Symbol(symbol) => map.object().own_symbol_property(symbol),
+        }),
+        Value::Set(set) => Ok(match key {
+            PropertyKey::String(key) => set.object().own_property(key),
+            PropertyKey::Symbol(symbol) => set.object().own_symbol_property(symbol),
+        }),
+        Value::Function(function) => Ok(match key {
+            PropertyKey::String(key) => function_own_property_descriptor(&function, key),
+            PropertyKey::Symbol(_) => None,
+        }),
+        Value::Array(elements) => Ok(match key {
+            PropertyKey::String(key) => crate::array_own_property_descriptor(&elements, key),
+            PropertyKey::Symbol(_) => None,
+        }),
+        Value::String(value) => Ok(match key {
+            PropertyKey::String(key) => crate::string::string_own_property_descriptor(&value, key),
+            PropertyKey::Symbol(_) => None,
+        }),
         Value::Number(_) | Value::Boolean(_) | Value::Null | Value::Undefined => Ok(None),
     }
 }
@@ -119,6 +144,20 @@ pub(crate) fn define_property_on_value(
     key: String,
     descriptor: Property,
 ) -> Result<bool, RuntimeError> {
+    define_property_on_value_key(target, PropertyKey::String(key), descriptor)
+}
+
+pub(crate) fn define_property_on_value_key(
+    target: Value,
+    key: PropertyKey,
+    descriptor: Property,
+) -> Result<bool, RuntimeError> {
+    let key = match key {
+        PropertyKey::String(key) => key,
+        PropertyKey::Symbol(symbol) => {
+            return define_symbol_property_on_value(target, symbol, descriptor);
+        }
+    };
     match &target {
         Value::Object(object) => {
             if !object.has_own_property(&key) && !object.is_extensible() {
@@ -193,6 +232,60 @@ pub(crate) fn define_property_on_value(
         _ => {
             ensure_define_property_target(&target)?;
             unreachable!("define property target validation should reject unsupported values")
+        }
+    }
+}
+
+fn define_symbol_property_on_value(
+    target: Value,
+    symbol: ObjectRef,
+    descriptor: Property,
+) -> Result<bool, RuntimeError> {
+    match &target {
+        Value::Object(object) => {
+            if !object.has_own_symbol_property(&symbol) && !object.is_extensible() {
+                return Ok(false);
+            }
+            if object
+                .own_symbol_property(&symbol)
+                .is_some_and(|property| !is_compatible_descriptor(&property, &descriptor))
+            {
+                return Ok(false);
+            }
+            object.define_symbol_property(symbol, descriptor);
+            Ok(true)
+        }
+        Value::Map(map) => {
+            let object = map.object();
+            if !object.has_own_symbol_property(&symbol) && !object.is_extensible() {
+                return Ok(false);
+            }
+            if object
+                .own_symbol_property(&symbol)
+                .is_some_and(|property| !is_compatible_descriptor(&property, &descriptor))
+            {
+                return Ok(false);
+            }
+            object.define_symbol_property(symbol, descriptor);
+            Ok(true)
+        }
+        Value::Set(set) => {
+            let object = set.object();
+            if !object.has_own_symbol_property(&symbol) && !object.is_extensible() {
+                return Ok(false);
+            }
+            if object
+                .own_symbol_property(&symbol)
+                .is_some_and(|property| !is_compatible_descriptor(&property, &descriptor))
+            {
+                return Ok(false);
+            }
+            object.define_symbol_property(symbol, descriptor);
+            Ok(true)
+        }
+        _ => {
+            ensure_define_property_target(&target)?;
+            Ok(false)
         }
     }
 }

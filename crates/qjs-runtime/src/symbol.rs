@@ -36,3 +36,7 @@ pub(crate) fn native_symbol(function: &Function) -> Result<Value, RuntimeError> 
     object.define_non_enumerable(SYMBOL_DATA_PROPERTY.to_owned(), Value::Boolean(true));
     Ok(Value::Object(object))
 }
+
+pub(crate) fn is_symbol_object(object: &ObjectRef) -> bool {
+    object.own_property(SYMBOL_DATA_PROPERTY).is_some()
+}

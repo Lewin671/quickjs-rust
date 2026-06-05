@@ -11,6 +11,7 @@ use super::{Property, Value};
 #[derive(Clone)]
 pub struct ObjectRef {
     properties: Rc<RefCell<HashMap<String, Property>>>,
+    symbol_properties: Rc<RefCell<Vec<(ObjectRef, Property)>>>,
     extensible: Rc<Cell<bool>>,
     prototype: Rc<RefCell<Option<ObjectRef>>>,
     to_string_tag: Rc<RefCell<Option<String>>>,
@@ -21,6 +22,7 @@ impl fmt::Debug for ObjectRef {
         formatter
             .debug_struct("ObjectRef")
             .field("properties", &self.properties.borrow().len())
+            .field("symbol_properties", &self.symbol_properties.borrow().len())
             .field("has_prototype", &self.prototype.borrow().is_some())
             .field("to_string_tag", &self.to_string_tag.borrow())
             .finish()
@@ -43,6 +45,7 @@ impl ObjectRef {
                     .map(|(key, value)| (key, Property::enumerable(value)))
                     .collect(),
             )),
+            symbol_properties: Rc::new(RefCell::new(Vec::new())),
             extensible: Rc::new(Cell::new(true)),
             prototype: Rc::new(RefCell::new(prototype)),
             to_string_tag: Rc::new(RefCell::new(None)),
@@ -93,6 +96,18 @@ impl ObjectRef {
         self.properties.borrow_mut().insert(key, property);
     }
 
+    pub(crate) fn define_symbol_property(&self, symbol: ObjectRef, property: Property) {
+        let mut properties = self.symbol_properties.borrow_mut();
+        if let Some((_, existing)) = properties
+            .iter_mut()
+            .find(|(existing_symbol, _)| existing_symbol.ptr_eq(&symbol))
+        {
+            *existing = property;
+            return;
+        }
+        properties.push((symbol, property));
+    }
+
     pub(crate) fn define_non_enumerable(&self, key: String, value: Value) {
         self.properties
             .borrow_mut()
@@ -112,6 +127,13 @@ impl ObjectRef {
         self.properties.borrow().contains_key(key)
     }
 
+    pub(crate) fn has_own_symbol_property(&self, symbol: &ObjectRef) -> bool {
+        self.symbol_properties
+            .borrow()
+            .iter()
+            .any(|(existing_symbol, _)| existing_symbol.ptr_eq(symbol))
+    }
+
     pub(crate) fn is_extensible(&self) -> bool {
         self.extensible.get()
     }
@@ -125,6 +147,9 @@ impl ObjectRef {
         for property in self.properties.borrow_mut().values_mut() {
             property.make_non_configurable();
         }
+        for (_, property) in self.symbol_properties.borrow_mut().iter_mut() {
+            property.make_non_configurable();
+        }
     }
 
     pub(crate) fn is_sealed(&self) -> bool {
@@ -134,11 +159,19 @@ impl ObjectRef {
                 .borrow()
                 .values()
                 .all(|property| !property.configurable)
+            && self
+                .symbol_properties
+                .borrow()
+                .iter()
+                .all(|(_, property)| !property.configurable)
     }
 
     pub(crate) fn freeze(&self) {
         self.prevent_extensions();
         for property in self.properties.borrow_mut().values_mut() {
+            property.freeze_data();
+        }
+        for (_, property) in self.symbol_properties.borrow_mut().iter_mut() {
             property.freeze_data();
         }
     }
@@ -150,10 +183,23 @@ impl ObjectRef {
                 .borrow()
                 .values()
                 .all(|property| !property.configurable && !property.writable)
+            && self
+                .symbol_properties
+                .borrow()
+                .iter()
+                .all(|(_, property)| !property.configurable && !property.writable)
     }
 
     pub(crate) fn own_property(&self, key: &str) -> Option<Property> {
         self.properties.borrow().get(key).cloned()
+    }
+
+    pub(crate) fn own_symbol_property(&self, symbol: &ObjectRef) -> Option<Property> {
+        self.symbol_properties
+            .borrow()
+            .iter()
+            .find(|(existing_symbol, _)| existing_symbol.ptr_eq(symbol))
+            .map(|(_, property)| property.clone())
     }
 
     pub(crate) fn delete_own_property(&self, key: &str) -> bool {
@@ -184,6 +230,14 @@ impl ObjectRef {
         let mut names: Vec<_> = self.properties.borrow().keys().cloned().collect();
         names.sort();
         names
+    }
+
+    pub(crate) fn own_property_symbols(&self) -> Vec<ObjectRef> {
+        self.symbol_properties
+            .borrow()
+            .iter()
+            .map(|(symbol, _)| symbol.clone())
+            .collect()
     }
 
     pub(crate) fn has_prototype(&self, prototype: &ObjectRef) -> bool {
