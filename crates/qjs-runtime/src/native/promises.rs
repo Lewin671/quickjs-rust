@@ -17,6 +17,15 @@ pub(super) fn call_promise_native(
             promise::native_promise(function, this_value, argument_values, is_construct, env)?
         }
         NativeFunction::PromiseAll => promise::native_promise_all(function, argument_values, env)?,
+        NativeFunction::PromiseAllSettled => {
+            promise::native_promise_all_settled(function, argument_values, env)?
+        }
+        NativeFunction::PromiseAllSettledRejectElement => {
+            promise::native_promise_all_settled_reject_element(function, argument_values, env)?
+        }
+        NativeFunction::PromiseAllSettledResolveElement => {
+            promise::native_promise_all_settled_resolve_element(function, argument_values, env)?
+        }
         NativeFunction::PromiseAllResolveElement => {
             promise::native_promise_all_resolve_element(function, argument_values, env)?
         }

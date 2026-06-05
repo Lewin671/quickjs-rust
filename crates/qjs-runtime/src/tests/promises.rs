@@ -62,6 +62,27 @@ fn evaluates_promise_all_shell() {
 }
 
 #[test]
+fn evaluates_promise_all_settled_shell() {
+    assert_eval(
+        "typeof Promise.allSettled;",
+        Value::String("function".to_owned()),
+    );
+    assert_eval("Promise.allSettled.length;", Value::Number(1.0));
+    assert_eval(
+        "Promise.propertyIsEnumerable('allSettled');",
+        Value::Boolean(false),
+    );
+    assert_eval(
+        "Promise.allSettled([]) instanceof Promise;",
+        Value::Boolean(true),
+    );
+    assert_eval(
+        "Object.prototype.toString.call(Promise.allSettled([]));",
+        Value::String("[object Promise]".to_owned()),
+    );
+}
+
+#[test]
 fn evaluates_promise_race_shell() {
     assert_eval("typeof Promise.race;", Value::String("function".to_owned()));
     assert_eval("Promise.race.length;", Value::Number(1.0));
@@ -327,6 +348,79 @@ fn drains_promise_all_rejections_after_script() {
     assert_eq!(
         promise::promise_debug_state_result(&rejected),
         Some(("fulfilled".to_owned(), Value::Number(3.0)))
+    );
+}
+
+#[test]
+fn drains_promise_all_settled_jobs_after_script() {
+    let empty = eval("Promise.allSettled([]);").unwrap();
+    let Some((state, Value::Array(values))) = promise::promise_debug_state_result(&empty) else {
+        panic!("Promise.allSettled([]) should fulfill with an array");
+    };
+    assert_eq!(state, "fulfilled");
+    assert_eq!(values.len(), 0);
+
+    let fulfilled = eval(
+        "Promise.allSettled([Promise.resolve(1), 2]).then(function(values) { return values[0].status + ':' + values[0].value + ':' + values[1].status + ':' + values[1].value; });",
+    )
+    .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&fulfilled),
+        Some((
+            "fulfilled".to_owned(),
+            Value::String("fulfilled:1:fulfilled:2".to_owned())
+        ))
+    );
+
+    let mixed = eval(
+        "Promise.allSettled([Promise.reject(3), Promise.resolve(4)]).then(function(values) { return values[0].status + ':' + values[0].reason + ':' + values[1].status + ':' + values[1].value; });",
+    )
+    .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&mixed),
+        Some((
+            "fulfilled".to_owned(),
+            Value::String("rejected:3:fulfilled:4".to_owned())
+        ))
+    );
+
+    let first_settlement = eval(
+        "Promise.allSettled([{ then: function(resolve, reject) { resolve(5); reject(6); } }]).then(function(values) { return values[0].status + ':' + values[0].value; });",
+    )
+    .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&first_settlement),
+        Some((
+            "fulfilled".to_owned(),
+            Value::String("fulfilled:5".to_owned())
+        ))
+    );
+}
+
+#[test]
+fn drains_promise_all_settled_thenable_rejections_after_script() {
+    let rejected = eval(
+        "Promise.allSettled([{ then: function(resolve, reject) { reject(7); } }]).then(function(values) { return values[0].status + ':' + values[0].reason; });",
+    )
+    .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&rejected),
+        Some((
+            "fulfilled".to_owned(),
+            Value::String("rejected:7".to_owned())
+        ))
+    );
+
+    let poisoned = eval(
+        "var value = {}; Object.defineProperty(value, 'then', { get: function() { throw 8; } }); Promise.allSettled([value]).then(function(values) { return values[0].status + ':' + values[0].reason; });",
+    )
+    .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&poisoned),
+        Some((
+            "fulfilled".to_owned(),
+            Value::String("rejected:8".to_owned())
+        ))
     );
 }
 

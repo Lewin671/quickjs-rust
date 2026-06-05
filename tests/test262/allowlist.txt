@@ -591,6 +591,12 @@ cases/promise-all-basic.js
 cases/promise-all-empty.js
 cases/promise-all-resolved-array.js
 cases/promise-all-resolve-non-thenable.js
+cases/promise-all-settled-basic.js
+cases/promise-all-settled-empty.js
+cases/promise-all-settled-resolved-array.js
+cases/promise-all-settled-resolve-non-thenable.js
+cases/promise-all-settled-rejected-array.js
+cases/promise-all-settled-thenable-queued.js
 cases/promise-race-basic.js
 cases/promise-race-empty.js
 cases/promise-race-resolved-array.js

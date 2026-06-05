@@ -6,10 +6,15 @@ use crate::{
 };
 
 mod all;
+mod all_settled;
 mod jobs;
 mod race;
 
 pub(crate) use all::{native_promise_all, native_promise_all_resolve_element};
+pub(crate) use all_settled::{
+    native_promise_all_settled, native_promise_all_settled_reject_element,
+    native_promise_all_settled_resolve_element,
+};
 pub(crate) use jobs::drain_promise_jobs;
 use jobs::{enqueue_promise_reaction_job, enqueue_promise_thenable_job};
 pub(crate) use race::native_promise_race;
@@ -88,6 +93,21 @@ pub(crate) fn install_promise(
     promise_function.properties.borrow_mut().insert(
         "all".to_owned(),
         Property::non_enumerable(Value::Function(promise_all)),
+    );
+
+    let mut promise_all_settled = Function::new_native(
+        Some("allSettled"),
+        1,
+        NativeFunction::PromiseAllSettled,
+        false,
+    );
+    promise_all_settled.env.insert(
+        PROMISE_PROTOTYPE.to_owned(),
+        Value::Object(promise_prototype.clone()),
+    );
+    promise_function.properties.borrow_mut().insert(
+        "allSettled".to_owned(),
+        Property::non_enumerable(Value::Function(promise_all_settled)),
     );
 
     let mut promise_race =
