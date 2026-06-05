@@ -124,6 +124,7 @@ fn object_to_primitive(
 }
 
 fn object_to_number(value: Value, env: &mut HashMap<String, Value>) -> Result<f64, RuntimeError> {
+    let is_function = matches!(value, Value::Function(_));
     for method in ["valueOf", "toString"] {
         let method_value = property_value(value.clone(), method, env)?;
         if matches!(method_value, Value::Function(_)) {
@@ -135,6 +136,9 @@ fn object_to_number(value: Value, env: &mut HashMap<String, Value>) -> Result<f6
                 return to_number_with_env(primitive, env);
             }
         }
+    }
+    if is_function {
+        return Ok(f64::NAN);
     }
     Err(RuntimeError {
         thrown: None,

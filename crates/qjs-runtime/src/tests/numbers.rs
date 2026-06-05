@@ -124,6 +124,7 @@ fn evaluates_number_builtins() {
     assert_eq!(eval("isFinite(Infinity);"), Ok(Value::Boolean(false)));
     assert_eq!(eval("isFinite(undefined);"), Ok(Value::Boolean(false)));
     assert_eq!(eval("isNaN(NaN);"), Ok(Value::Boolean(true)));
+    assert_eq!(eval("isNaN(parseInt);"), Ok(Value::Boolean(true)));
     assert_eq!(eval("isNaN('abc');"), Ok(Value::Boolean(true)));
     assert_eq!(eval("isNaN('10');"), Ok(Value::Boolean(false)));
     assert_eq!(eval("isNaN(null);"), Ok(Value::Boolean(false)));
