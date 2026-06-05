@@ -26,7 +26,9 @@ maintenance, or agent workflow isolation.
 
 - `test262-baseline.sh`: Samples or scans upstream Test262 files to classify
   unsupported metadata, parser or runtime failures, and timeouts before adding
-  curated local cases.
+  curated local cases. Use `--engine both --all --shard I/N --summary-json PATH
+  --no-fail` for asynchronous full-suite coverage comparisons against
+  QuickJS-NG.
 - `test262-baseline-metadata.awk`: Internal helper used by
   `test262-baseline.sh` to read Test262 metadata blocks.
 

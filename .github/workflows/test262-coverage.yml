@@ -1,0 +1,193 @@
+name: Test262 Coverage
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+concurrency:
+  group: test262-coverage-${{ github.event.workflow_run.head_branch || github.event.workflow_run.head_sha }}
+  cancel-in-progress: true
+
+jobs:
+  coverage-shards:
+    name: Test262 coverage shard ${{ matrix.shard }}/16
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.event.workflow_run.head_repository.full_name }}
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 1
+          submodules: false
+
+      - name: Install Rust toolchain
+        run: rustup show
+
+      - name: Restore Rust build cache
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            ~/.cargo/git/db
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/index
+            target
+          key: rust-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          restore-keys: |
+            rust-${{ runner.os }}-
+
+      - name: Init submodules
+        run: git submodule update --init --depth 1 third_party/test262 third_party/quickjs-ng
+
+      - name: QuickJS-NG cache key
+        id: quickjs-ng
+        run: echo "sha=$(git -C third_party/quickjs-ng rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore QuickJS-NG build
+        uses: actions/cache@v5
+        with:
+          path: third_party/quickjs-ng/build
+          key: quickjs-ng-${{ runner.os }}-${{ steps.quickjs-ng.outputs.sha }}
+
+      - name: Run full Test262 coverage shard
+        run: |
+          mkdir -p coverage
+          ./scripts/test262-baseline.sh \
+            --all \
+            --engine both \
+            --shard ${{ matrix.shard }}/16 \
+            --summary-json coverage/summary-${{ matrix.shard }}.json \
+            --no-fail
+
+      - name: Upload shard summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: test262-coverage-${{ matrix.shard }}
+          path: coverage/summary-${{ matrix.shard }}.json
+          retention-days: 14
+
+  aggregate:
+    name: Aggregate Test262 coverage
+    runs-on: ubuntu-latest
+    needs: coverage-shards
+    if: always()
+    steps:
+      - name: Download shard summaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test262-coverage-*
+          path: coverage-summaries
+          merge-multiple: true
+
+      - name: Write coverage summary
+        run: |
+          python3 - <<'PY'
+          import glob
+          import json
+          import os
+
+          paths = sorted(glob.glob("coverage-summaries/*.json"))
+          if not paths:
+              raise SystemExit("no Test262 coverage summaries were downloaded")
+
+          totals = {
+              "total": 0,
+              "eligible": 0,
+              "run": 0,
+              "skipped": 0,
+              "rust_pass": 0,
+              "rust_fail": 0,
+              "rust_timeout": 0,
+              "qjsng_pass": 0,
+              "qjsng_fail": 0,
+              "qjsng_timeout": 0,
+              "both_pass": 0,
+              "qjsng_pass_rust_nonpass": 0,
+              "rust_pass_qjsng_nonpass": 0,
+              "both_nonpass": 0,
+          }
+          skipped = {
+              "async": 0,
+              "features": 0,
+              "fixture": 0,
+              "includes": 0,
+              "intl402": 0,
+              "module": 0,
+              "negative": 0,
+              "raw": 0,
+          }
+
+          for path in paths:
+              with open(path, "r", encoding="utf-8") as handle:
+                  summary = json.load(handle)
+              totals["total"] += summary["total"]
+              totals["eligible"] += summary["eligible"]
+              totals["run"] += summary["run"]
+              totals["skipped"] += summary["skipped"]["total"]
+              for key in skipped:
+                  skipped[key] += summary["skipped"][key]
+              totals["rust_pass"] += summary["quickjs_rust"]["pass"]
+              totals["rust_fail"] += summary["quickjs_rust"]["fail"]
+              totals["rust_timeout"] += summary["quickjs_rust"]["timeout"]
+              totals["qjsng_pass"] += summary["quickjs_ng"]["pass"]
+              totals["qjsng_fail"] += summary["quickjs_ng"]["fail"]
+              totals["qjsng_timeout"] += summary["quickjs_ng"]["timeout"]
+              totals["both_pass"] += summary["comparison"]["both_pass"]
+              totals["qjsng_pass_rust_nonpass"] += summary["comparison"]["quickjs_ng_pass_rust_nonpass"]
+              totals["rust_pass_qjsng_nonpass"] += summary["comparison"]["rust_pass_quickjs_ng_nonpass"]
+              totals["both_nonpass"] += summary["comparison"]["both_nonpass"]
+
+          def pct(value, denominator):
+              if denominator == 0:
+                  return "n/a"
+              return f"{value / denominator * 100:.2f}%"
+
+          lines = [
+              "# Test262 Coverage",
+              "",
+              f"Aggregated `{len(paths)}` shard summaries for `${{ github.event.workflow_run.head_sha }}`.",
+              "",
+              "## Harness Coverage",
+              "",
+              "| Metric | Count | Share |",
+              "| --- | ---: | ---: |",
+              f"| Upstream cases | {totals['total']} | 100.00% |",
+              f"| Runnable by current harness | {totals['eligible']} | {pct(totals['eligible'], totals['total'])} |",
+              f"| Attempted | {totals['run']} | {pct(totals['run'], totals['total'])} |",
+              f"| Skipped by harness | {totals['skipped']} | {pct(totals['skipped'], totals['total'])} |",
+              "",
+              "## Engine Results",
+              "",
+              "| Engine | Pass | Fail | Timeout | Pass Rate |",
+              "| --- | ---: | ---: | ---: | ---: |",
+              f"| quickjs-rust | {totals['rust_pass']} | {totals['rust_fail']} | {totals['rust_timeout']} | {pct(totals['rust_pass'], totals['run'])} |",
+              f"| QuickJS-NG | {totals['qjsng_pass']} | {totals['qjsng_fail']} | {totals['qjsng_timeout']} | {pct(totals['qjsng_pass'], totals['run'])} |",
+              "",
+              "## Coverage Difference",
+              "",
+              "| Comparison | Count | Share of Attempted |",
+              "| --- | ---: | ---: |",
+              f"| Both pass | {totals['both_pass']} | {pct(totals['both_pass'], totals['run'])} |",
+              f"| QuickJS-NG passes, quickjs-rust does not | {totals['qjsng_pass_rust_nonpass']} | {pct(totals['qjsng_pass_rust_nonpass'], totals['run'])} |",
+              f"| quickjs-rust passes, QuickJS-NG does not | {totals['rust_pass_qjsng_nonpass']} | {pct(totals['rust_pass_qjsng_nonpass'], totals['run'])} |",
+              f"| Neither passes | {totals['both_nonpass']} | {pct(totals['both_nonpass'], totals['run'])} |",
+              "",
+              "## Skipped Metadata",
+              "",
+              "| Reason | Count |",
+              "| --- | ---: |",
+          ]
+          for key in sorted(skipped):
+              lines.append(f"| {key} | {skipped[key]} |")
+
+          summary_path = os.environ["GITHUB_STEP_SUMMARY"]
+          with open(summary_path, "a", encoding="utf-8") as handle:
+              handle.write("\n".join(lines))
+              handle.write("\n")
+          PY

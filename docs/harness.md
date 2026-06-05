@@ -120,6 +120,13 @@ and must include a reason. Expected-failure cases may fail without failing the
 subset run; if one passes, the script fails and asks for the stale entry to be
 removed.
 
+`scripts/test262-baseline.sh` scans upstream Test262 coverage. It can run a
+bounded sample, a full scan with `--all`, a shard with `--shard I/N`, and a
+quickjs-rust/QuickJS-NG comparison with `--engine both`. The
+`Test262 Coverage` GitHub Actions workflow runs the full sharded comparison
+after the main `CI` workflow completes, uploads shard summaries, and aggregates
+the result into the workflow summary without delaying the main CI workflow.
+
 `scripts/microbench.sh` runs the repository's current QuickJS microbenchmark
 subset from `tests/benchmarks/quickjs/microbench.js`. Use `--engine quickjs-ng`
 or `--engine both` to compare the same subset against the pinned QuickJS-NG
