@@ -31,6 +31,24 @@ pub(crate) fn install_number(
     if let Some(value) = number_prototype.get("toString") {
         number_prototype.define_non_enumerable("toLocaleString".to_owned(), value);
     }
+    define_number_prototype_function(
+        &number_prototype,
+        "toFixed",
+        1,
+        NativeFunction::NumberPrototypeToFixed,
+    );
+    define_number_prototype_function(
+        &number_prototype,
+        "toExponential",
+        1,
+        NativeFunction::NumberPrototypeToExponential,
+    );
+    define_number_prototype_function(
+        &number_prototype,
+        "toPrecision",
+        1,
+        NativeFunction::NumberPrototypeToPrecision,
+    );
     number_prototype.define_non_enumerable(
         "valueOf".to_owned(),
         Value::Function(Function::new_native(
@@ -126,6 +144,18 @@ fn define_number_constant(function: &Function, key: &str, value: f64) {
     function.properties.borrow_mut().insert(
         key.to_owned(),
         Property::data(Value::Number(value), false, false, false),
+    );
+}
+
+fn define_number_prototype_function(
+    prototype: &ObjectRef,
+    key: &str,
+    length: usize,
+    native: NativeFunction,
+) {
+    prototype.define_non_enumerable(
+        key.to_owned(),
+        Value::Function(Function::new_native(Some(key), length, native, false)),
     );
 }
 

@@ -30,6 +30,24 @@ fn evaluates_number_builtins() {
         Ok(Value::Boolean(true))
     );
     assert_eq!(
+        eval(
+            "['toFixed', 'toExponential', 'toPrecision'].every(function (name) { let d = Object.getOwnPropertyDescriptor(Number.prototype, name); return d.value === Number.prototype[name] && !d.enumerable && d.writable && d.configurable; });"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("(12.345).toFixed(2);"),
+        Ok(Value::String("12.35".to_owned()))
+    );
+    assert_eq!(
+        eval("(12.345).toExponential(2);"),
+        Ok(Value::String("1.23e+1".to_owned()))
+    );
+    assert_eq!(
+        eval("(12.345).toPrecision(4);"),
+        Ok(Value::String("12.35".to_owned()))
+    );
+    assert_eq!(
         eval("Number.prototype.valueOf.length;"),
         Ok(Value::Number(0.0))
     );
