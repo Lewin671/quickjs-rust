@@ -4,9 +4,22 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 QJS_DIR="$ROOT_DIR/third_party/quickjs-ng"
 QJS_BIN="$QJS_DIR/build/qjs"
+QJS_RUST_BIN="$ROOT_DIR/target/debug/qjs"
 FIXTURE_DIR="${1:-$ROOT_DIR/tests/fixtures/compare-qjs}"
 RUN_WITH_TIMEOUT="$ROOT_DIR/scripts/run-with-timeout.sh"
 CASE_TIMEOUT_SECONDS="${COMPARE_QJS_CASE_TIMEOUT_SECONDS:-10}"
+COMPARE_QJS_JOBS="${COMPARE_QJS_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)}"
+
+case "$COMPARE_QJS_JOBS" in
+  ''|*[!0-9]*)
+    echo "error: COMPARE_QJS_JOBS must be a positive integer: $COMPARE_QJS_JOBS" >&2
+    exit 2
+    ;;
+  0)
+    echo "error: COMPARE_QJS_JOBS must be greater than zero" >&2
+    exit 2
+    ;;
+esac
 
 if [ ! -d "$QJS_DIR" ]; then
   echo "error: missing $QJS_DIR; run ./scripts/bootstrap.sh first" >&2
@@ -31,6 +44,13 @@ else
   exit 127
 fi
 
+"$CARGO_BIN" build -q -p qjs-cli
+
+if [ ! -x "$QJS_RUST_BIN" ]; then
+  echo "error: missing built quickjs-rust binary: $QJS_RUST_BIN" >&2
+  exit 1
+fi
+
 normalize_rust_value() {
   sed -E \
     -e 's/^Number\(([0-9]+)\.0\)$/\1/' \
@@ -41,18 +61,14 @@ normalize_rust_value() {
     -e 's/^Undefined$/undefined/'
 }
 
-shopt -s nullglob
-fixtures=("$FIXTURE_DIR"/*.js)
+run_fixture() {
+  local index="$1"
+  local fixture="$2"
+  local expression rust_raw_output rust_status qjs_output qjs_status rust_output
 
-if [ "${#fixtures[@]}" -eq 0 ]; then
-  echo "error: no .js fixtures found in $FIXTURE_DIR" >&2
-  exit 1
-fi
-
-for fixture in "${fixtures[@]}"; do
   expression="$(tr '\n' ' ' < "$fixture")"
   set +e
-  rust_raw_output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$CARGO_BIN" run -q -p qjs-cli -- -e "$expression" 2>&1)"
+  rust_raw_output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$QJS_RUST_BIN" -e "$expression" 2>&1)"
   rust_status=$?
   set -e
   if [ "$rust_status" -ne 0 ]; then
@@ -92,5 +108,41 @@ for fixture in "${fixtures[@]}"; do
     exit 1
   fi
 
-  echo "ok: $fixture => $rust_output"
+  if [ -n "${COMPARE_QJS_RESULTS_DIR:-}" ]; then
+    echo "ok: $fixture => $rust_output" > "$COMPARE_QJS_RESULTS_DIR/$index.out"
+  else
+    echo "ok: $fixture => $rust_output"
+  fi
+}
+
+shopt -s nullglob
+fixtures=("$FIXTURE_DIR"/*.js)
+
+if [ "${#fixtures[@]}" -eq 0 ]; then
+  echo "error: no .js fixtures found in $FIXTURE_DIR" >&2
+  exit 1
+fi
+
+if [ "$COMPARE_QJS_JOBS" -eq 1 ]; then
+  for index in "${!fixtures[@]}"; do
+    run_fixture "$index" "${fixtures[$index]}"
+  done
+  exit 0
+fi
+
+COMPARE_QJS_RESULTS_DIR="$(mktemp -d)"
+export CASE_TIMEOUT_SECONDS COMPARE_QJS_RESULTS_DIR QJS_BIN QJS_RUST_BIN RUN_WITH_TIMEOUT
+export -f normalize_rust_value run_fixture
+trap 'rm -rf "$COMPARE_QJS_RESULTS_DIR"' EXIT
+
+if ! {
+  for index in "${!fixtures[@]}"; do
+    printf '%s\0%s\0' "$index" "${fixtures[$index]}"
+  done
+} | xargs -0 -n 2 -P "$COMPARE_QJS_JOBS" bash -c 'run_fixture "$1" "$2"' _; then
+  exit 1
+fi
+
+for index in "${!fixtures[@]}"; do
+  cat "$COMPARE_QJS_RESULTS_DIR/$index.out"
 done
