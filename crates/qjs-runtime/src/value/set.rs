@@ -61,6 +61,10 @@ impl SetRef {
     pub(crate) fn clear(&self) {
         self.entries.borrow_mut().clear();
     }
+
+    pub(crate) fn values(&self) -> Vec<Value> {
+        self.entries.borrow().clone()
+    }
 }
 
 impl fmt::Debug for SetRef {

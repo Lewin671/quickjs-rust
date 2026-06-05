@@ -78,6 +78,36 @@ fn evaluates_map_same_value_zero_keys() {
 }
 
 #[test]
+fn evaluates_map_iterators_and_for_each() {
+    assert_eq!(
+        eval(
+            "let map = new Map(); map.set('a', 1); map.set('b', 2); let iterator = map.entries(); let first = iterator.next(); let second = iterator.next(); let last = iterator.next(); first.done + ':' + first.value[0] + ':' + first.value[1] + '|' + second.value[0] + ':' + second.value[1] + '|' + last.done + ':' + (last.value === undefined);"
+        ),
+        Ok(Value::String("false:a:1|b:2|true:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let map = new Map(); map.set('a', 1); map.set('b', 2); let iterator = map.keys(); let first = iterator.next(); let second = iterator.next(); let last = iterator.next(); first.value + ':' + first.done + '|' + second.value + ':' + second.done + '|' + (last.value === undefined) + ':' + last.done;"
+        ),
+        Ok(Value::String("a:false|b:false|true:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let map = new Map(); map.set('a', 1); map.set('b', 2); let iterator = map.values(); let first = iterator.next(); let second = iterator.next(); let last = iterator.next(); first.value + ':' + first.done + '|' + second.value + ':' + second.done + '|' + (last.value === undefined) + ':' + last.done;"
+        ),
+        Ok(Value::String("1:false|2:false|true:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let seen = ''; let thisArg = { marker: 'ctx' }; let map = new Map(); map.set('a', 1); map.set('b', 2); let returned = map.forEach(function(value, key, receiver) { seen = seen + this.marker + ':' + key + ':' + value + ':' + (receiver === map) + '|'; }, thisArg); seen + ':' + (returned === undefined);"
+        ),
+        Ok(Value::String("ctx:a:1:true|ctx:b:2:true|:true".to_owned()))
+    );
+    assert!(eval("Map.prototype.entries.call({});").is_err());
+    assert!(eval("Map.prototype.forEach.call(new Map(), 1);").is_err());
+}
+
+#[test]
 fn rejects_map_methods_with_incompatible_receivers() {
     assert!(eval("Map.prototype.get.call({}, 'x');").is_err());
     assert!(eval("Map.prototype.size;").is_err());

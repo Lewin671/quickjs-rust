@@ -64,6 +64,28 @@ fn evaluates_set_same_value_zero_values() {
 }
 
 #[test]
+fn evaluates_set_iterators_and_for_each() {
+    assert_eval(
+        "var set = new Set(); set.add('a'); set.add('b'); var iterator = set.values(); var first = iterator.next(); var second = iterator.next(); var last = iterator.next(); first.value + ':' + first.done + '|' + second.value + ':' + second.done + '|' + (last.value === undefined) + ':' + last.done;",
+        Value::String("a:false|b:false|true:true".to_owned()),
+    );
+    assert_eval(
+        "var set = new Set(); set.add('a'); set.add('b'); var iterator = set.keys(); var first = iterator.next(); var second = iterator.next(); first.value + ':' + second.value;",
+        Value::String("a:b".to_owned()),
+    );
+    assert_eval(
+        "var set = new Set(); set.add('a'); set.add('b'); var iterator = set.entries(); var first = iterator.next(); var second = iterator.next(); first.value[0] + ':' + first.value[1] + '|' + second.value[0] + ':' + second.value[1];",
+        Value::String("a:a|b:b".to_owned()),
+    );
+    assert_eval(
+        "var seen = ''; var thisArg = { marker: 'ctx' }; var set = new Set(); set.add('a'); set.add('b'); var returned = set.forEach(function(value, key, receiver) { seen = seen + this.marker + ':' + key + ':' + value + ':' + (receiver === set) + '|'; }, thisArg); seen + ':' + (returned === undefined);",
+        Value::String("ctx:a:a:true|ctx:b:b:true|:true".to_owned()),
+    );
+    assert!(eval("Set.prototype.values.call({});").is_err());
+    assert!(eval("Set.prototype.forEach.call(new Set(), 1);").is_err());
+}
+
+#[test]
 fn rejects_set_methods_with_incompatible_receivers() {
     assert!(eval("(function () { return Set.prototype.add.call({}); })();").is_err());
     assert!(eval("(function () { return Set.prototype.clear.call({}); })();").is_err());

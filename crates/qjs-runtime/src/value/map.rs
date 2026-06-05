@@ -73,6 +73,10 @@ impl MapRef {
     pub(crate) fn clear(&self) {
         self.entries.borrow_mut().clear();
     }
+
+    pub(crate) fn entries(&self) -> Vec<(Value, Value)> {
+        self.entries.borrow().clone()
+    }
 }
 
 impl fmt::Debug for MapRef {
