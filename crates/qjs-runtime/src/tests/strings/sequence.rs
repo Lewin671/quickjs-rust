@@ -135,3 +135,37 @@ fn evaluates_string_sequence_builtins() {
         Ok(Value::Boolean(true))
     );
 }
+
+#[test]
+fn evaluates_string_html_builtins() {
+    assert_eq!(
+        eval("'x'.bold() + ':' + 'x'.italics() + ':' + 'x'.fixed();"),
+        Ok(Value::String("<b>x</b>:<i>x</i>:<tt>x</tt>".to_owned()))
+    );
+    assert_eq!(
+        eval("'x'.big() + ':' + 'x'.small() + ':' + 'x'.blink();"),
+        Ok(Value::String(
+            "<big>x</big>:<small>x</small>:<blink>x</blink>".to_owned()
+        ))
+    );
+    assert_eq!(
+        eval("'x'.strike() + ':' + 'x'.sub() + ':' + 'x'.sup();"),
+        Ok(Value::String(
+            "<strike>x</strike>:<sub>x</sub>:<sup>x</sup>".to_owned()
+        ))
+    );
+    assert_eq!(
+        eval("'x'.anchor('a') + ':' + 'x'.link('https://e.test') + ':' + 'x'.fontcolor('red') + ':' + 'x'.fontsize(3);"),
+        Ok(Value::String(
+            "<a name=\"a\">x</a>:<a href=\"https://e.test\">x</a>:<font color=\"red\">x</font>:<font size=\"3\">x</font>".to_owned()
+        ))
+    );
+    assert_eq!(
+        eval("'x'.anchor('a\"b') + ':' + String.prototype.bold.call(7);"),
+        Ok(Value::String(
+            "<a name=\"a&quot;b\">x</a>:<b>7</b>".to_owned()
+        ))
+    );
+    assert!(eval("String.prototype.bold.call(null);").is_err());
+    assert!(eval("String.prototype.link.call(undefined, 'x');").is_err());
+}

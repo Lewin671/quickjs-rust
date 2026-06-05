@@ -761,6 +761,7 @@ cases/string-prototype-last-index-of-basic.js
 cases/string-prototype-last-index-of-empty-search.js
 cases/string-prototype-last-index-of-length.js
 cases/string-prototype-last-index-of-position.js
+cases/string-prototype-html-methods-basic.js
 cases/string-prototype-locale-compare-basic.js
 cases/string-prototype-match-basic.js
 cases/string-prototype-match-captures.js

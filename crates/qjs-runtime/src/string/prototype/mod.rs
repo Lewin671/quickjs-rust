@@ -1,5 +1,6 @@
 mod case;
 mod code_units;
+mod html;
 mod padding;
 mod search;
 mod sequence;
@@ -14,6 +15,7 @@ pub(crate) use code_units::{
     native_string_prototype_at, native_string_prototype_char_at,
     native_string_prototype_char_code_at, native_string_prototype_code_point_at,
 };
+pub(crate) use html::{StringHtmlKind, native_string_prototype_html};
 pub(crate) use padding::{StringPadKind, native_string_prototype_pad};
 pub(crate) use search::{
     native_string_prototype_ends_with, native_string_prototype_includes,

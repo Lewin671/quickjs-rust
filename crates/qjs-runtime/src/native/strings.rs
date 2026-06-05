@@ -26,6 +26,30 @@ pub(super) fn call_string_native(
         NativeFunction::StringPrototypeAt => {
             string::native_string_prototype_at(this_value, argument_values, env)?
         }
+        NativeFunction::StringPrototypeAnchor => string::native_string_prototype_html(
+            this_value,
+            argument_values,
+            env,
+            string::StringHtmlKind::Anchor,
+        )?,
+        NativeFunction::StringPrototypeBig => string::native_string_prototype_html(
+            this_value,
+            argument_values,
+            env,
+            string::StringHtmlKind::Big,
+        )?,
+        NativeFunction::StringPrototypeBlink => string::native_string_prototype_html(
+            this_value,
+            argument_values,
+            env,
+            string::StringHtmlKind::Blink,
+        )?,
+        NativeFunction::StringPrototypeBold => string::native_string_prototype_html(
+            this_value,
+            argument_values,
+            env,
+            string::StringHtmlKind::Bold,
+        )?,
         NativeFunction::StringPrototypeCharAt => {
             string::native_string_prototype_char_at(this_value, argument_values, env)?
         }
@@ -41,18 +65,48 @@ pub(super) fn call_string_native(
         NativeFunction::StringPrototypeEndsWith => {
             string::native_string_prototype_ends_with(this_value, argument_values, env)?
         }
+        NativeFunction::StringPrototypeFixed => string::native_string_prototype_html(
+            this_value,
+            argument_values,
+            env,
+            string::StringHtmlKind::Fixed,
+        )?,
+        NativeFunction::StringPrototypeFontcolor => string::native_string_prototype_html(
+            this_value,
+            argument_values,
+            env,
+            string::StringHtmlKind::Fontcolor,
+        )?,
+        NativeFunction::StringPrototypeFontsize => string::native_string_prototype_html(
+            this_value,
+            argument_values,
+            env,
+            string::StringHtmlKind::Fontsize,
+        )?,
         NativeFunction::StringPrototypeIncludes => {
             string::native_string_prototype_includes(this_value, argument_values, env)?
         }
         NativeFunction::StringPrototypeIndexOf => {
             string::native_string_prototype_index_of(this_value, argument_values, env)?
         }
+        NativeFunction::StringPrototypeItalics => string::native_string_prototype_html(
+            this_value,
+            argument_values,
+            env,
+            string::StringHtmlKind::Italics,
+        )?,
         NativeFunction::StringPrototypeIsWellFormed => {
             string::native_string_prototype_is_well_formed(this_value, env)?
         }
         NativeFunction::StringPrototypeLastIndexOf => {
             string::native_string_prototype_last_index_of(this_value, argument_values, env)?
         }
+        NativeFunction::StringPrototypeLink => string::native_string_prototype_html(
+            this_value,
+            argument_values,
+            env,
+            string::StringHtmlKind::Link,
+        )?,
         NativeFunction::StringPrototypeLocaleCompare => {
             string::native_string_prototype_locale_compare(this_value, argument_values, env)?
         }
@@ -83,18 +137,42 @@ pub(super) fn call_string_native(
         NativeFunction::StringPrototypeSlice => {
             string::native_string_prototype_slice(this_value, argument_values, env)?
         }
+        NativeFunction::StringPrototypeSmall => string::native_string_prototype_html(
+            this_value,
+            argument_values,
+            env,
+            string::StringHtmlKind::Small,
+        )?,
         NativeFunction::StringPrototypeSplit => {
             string::native_string_prototype_split(this_value, argument_values, env)?
         }
         NativeFunction::StringPrototypeStartsWith => {
             string::native_string_prototype_starts_with(this_value, argument_values, env)?
         }
+        NativeFunction::StringPrototypeStrike => string::native_string_prototype_html(
+            this_value,
+            argument_values,
+            env,
+            string::StringHtmlKind::Strike,
+        )?,
         NativeFunction::StringPrototypeSubstr => {
             string::native_string_prototype_substr(this_value, argument_values, env)?
         }
         NativeFunction::StringPrototypeSubstring => {
             string::native_string_prototype_substring(this_value, argument_values, env)?
         }
+        NativeFunction::StringPrototypeSub => string::native_string_prototype_html(
+            this_value,
+            argument_values,
+            env,
+            string::StringHtmlKind::Sub,
+        )?,
+        NativeFunction::StringPrototypeSup => string::native_string_prototype_html(
+            this_value,
+            argument_values,
+            env,
+            string::StringHtmlKind::Sup,
+        )?,
         NativeFunction::StringPrototypeToLowerCase => {
             string::native_string_prototype_to_lower_case(this_value, env)?
         }

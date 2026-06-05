@@ -14,13 +14,13 @@ pub(super) use property::{
     string_own_property_names, string_property,
 };
 pub(super) use prototype::{
-    StringPadKind, native_string_prototype_at, native_string_prototype_char_at,
+    StringHtmlKind, StringPadKind, native_string_prototype_at, native_string_prototype_char_at,
     native_string_prototype_char_code_at, native_string_prototype_code_point_at,
     native_string_prototype_concat, native_string_prototype_ends_with,
-    native_string_prototype_includes, native_string_prototype_index_of,
-    native_string_prototype_is_well_formed, native_string_prototype_last_index_of,
-    native_string_prototype_locale_compare, native_string_prototype_match,
-    native_string_prototype_pad, native_string_prototype_repeat,
+    native_string_prototype_html, native_string_prototype_includes,
+    native_string_prototype_index_of, native_string_prototype_is_well_formed,
+    native_string_prototype_last_index_of, native_string_prototype_locale_compare,
+    native_string_prototype_match, native_string_prototype_pad, native_string_prototype_repeat,
     native_string_prototype_replace_all, native_string_prototype_search,
     native_string_prototype_slice, native_string_prototype_split,
     native_string_prototype_starts_with, native_string_prototype_substr,
