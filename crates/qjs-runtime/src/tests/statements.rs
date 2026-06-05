@@ -270,6 +270,12 @@ fn evaluates_try_catch_finally_statements() {
         eval("try { throw 'try'; } finally { throw 'finally'; }").expect_err("throw should fail");
     assert_eq!(error.message, "throw statement executed: finally");
     assert_eq!(
+        eval(
+            "let caught = ''; let finalized = false; try { try { throw 'inner'; } finally { throw 'finally'; } } catch (error) { caught = error; } finally { finalized = true; } caught + ':' + finalized;"
+        ),
+        Ok(Value::String("finally:true".to_owned()))
+    );
+    assert_eq!(
         eval("let error = 'outer'; try { throw 'inner'; } catch (error) { error; } error;"),
         Ok(Value::String("outer".to_owned()))
     );

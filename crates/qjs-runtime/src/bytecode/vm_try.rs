@@ -38,6 +38,9 @@ impl Vm<'_> {
     }
 
     pub(super) fn throw_value(&mut self, value: Value) -> Result<(), RuntimeError> {
+        self.pending_throw = None;
+        self.pending_return = None;
+        self.pending_jump = None;
         if let Some(frame) = self.try_stack.last_mut() {
             self.stack.truncate(frame.stack_depth);
             if let Some(catch) = frame.catch.take() {
@@ -68,6 +71,9 @@ impl Vm<'_> {
     }
 
     pub(super) fn return_value(&mut self, value: Value) -> Result<Option<Value>, RuntimeError> {
+        self.pending_throw = None;
+        self.pending_return = None;
+        self.pending_jump = None;
         while let Some(frame) = self.try_stack.pop() {
             self.stack.truncate(frame.stack_depth);
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
