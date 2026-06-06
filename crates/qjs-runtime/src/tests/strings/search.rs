@@ -246,6 +246,30 @@ fn evaluates_string_match_global_regexp() {
 #[test]
 fn evaluates_string_match_coercions() {
     assert_eq!(
+        eval(
+            "let calls = 0; let matcher = { [Symbol.match]: function(input) { calls = calls + 1; return this === matcher && input === 'abc' ? 42 : -1; } }; 'abc'.match(matcher) + ':' + calls;"
+        ),
+        Ok(Value::String("42:1".to_owned()))
+    );
+    assert!(
+        eval(
+            "let matcher = { get [Symbol.match]() { throw new Error('match'); } }; ''.match(matcher);"
+        )
+        .is_err()
+    );
+    assert_eq!(
+        eval(
+            "let matcher = { [Symbol.match]: null, toString: function() { return '\\\\d'; } }; 'ab3'.match(matcher)[0];"
+        ),
+        Ok(Value::String("3".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let original = RegExp.prototype[Symbol.match]; let calls = 0; RegExp.prototype[Symbol.match] = function(input) { calls = calls + 1; return this.source + ':' + input; }; let result = 'abc'.match('b'); RegExp.prototype[Symbol.match] = original; result + ':' + calls;"
+        ),
+        Ok(Value::String("b:abc:1".to_owned()))
+    );
+    assert_eq!(
         eval("String.prototype.match.call(12345, /34/)[0];"),
         Ok(Value::String("34".to_owned()))
     );

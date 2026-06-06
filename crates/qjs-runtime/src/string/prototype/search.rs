@@ -6,8 +6,8 @@ use super::super::indexing::{
     string_end_position, string_last_search_position, string_search_start, this_string_value,
 };
 
-mod replace_symbol;
-use replace_symbol::symbol_replace_method;
+mod symbol_method;
+use symbol_method::{symbol_match_method, symbol_replace_method};
 
 pub(crate) fn native_string_prototype_ends_with(
     this_value: Value,
@@ -112,9 +112,23 @@ pub(crate) fn native_string_prototype_match(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let input = this_string_value(this_value, env)?;
+    if matches!(this_value, Value::Null | Value::Undefined) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "String.prototype method called on null or undefined".to_owned(),
+        });
+    }
     let pattern = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    if !matches!(pattern, Value::Null | Value::Undefined) {
+        if let Some(matcher) = symbol_match_method(pattern.clone(), env)?.method {
+            return call_function(matcher, pattern, vec![this_value], env, false);
+        }
+    }
+    let input = this_string_value(this_value, env)?;
     let regexp = regexp_value(pattern, env)?;
+    if let Some(matcher) = symbol_match_method(regexp.clone(), env)?.method {
+        return call_function(matcher, regexp, vec![Value::String(input)], env, false);
+    }
     if regexp::regexp_is_global(&regexp) {
         return regexp::native_regexp_global_match(regexp, &input, env);
     }
