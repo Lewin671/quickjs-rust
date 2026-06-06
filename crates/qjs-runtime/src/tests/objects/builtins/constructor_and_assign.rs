@@ -64,4 +64,23 @@ fn evaluates_object_constructor_and_assign() {
         ),
         Ok(Value::String("1:1".to_owned()))
     );
+    assert!(
+        eval(
+            "let target = {}; Object.defineProperty(target, 'attr', { value: 0, writable: false }); Object.assign(target, { attr: 1 });"
+        )
+        .is_err()
+    );
+    assert!(eval("Object.assign('a', [1]);").is_err());
+    assert_eq!(
+        eval(
+            "let target = {}; let seen = 0; Object.defineProperty(target, 'attr', { set: function(value) { seen = value; } }); Object.assign(target, { attr: 3 }); seen;"
+        ),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval(
+            "let target = 12; let result = Object.assign(target, 'aaa', 'bb2b', '1c'); Object.getOwnPropertyNames(result).length + ':' + result[0] + ':' + result[1] + ':' + result[2] + ':' + result[3];"
+        ),
+        Ok(Value::String("4:1:c:2:b".to_owned()))
+    );
 }

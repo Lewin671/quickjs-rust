@@ -122,6 +122,14 @@ fn evaluates_object_enumeration_builtins() {
         Ok(Value::String("constructor".to_owned()))
     );
     assert_eq!(
+        eval("Object.getOwnPropertyNames(Object(1)).length;"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval("Object.getOwnPropertyNames(Object(true)).length;"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
         eval("Object.getOwnPropertySymbols.length;"),
         Ok(Value::Number(1.0))
     );

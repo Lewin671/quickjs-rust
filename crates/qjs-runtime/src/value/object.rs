@@ -230,6 +230,7 @@ impl ObjectRef {
             .properties
             .borrow()
             .iter()
+            .filter(|(key, _)| !is_internal_property_key(key))
             .filter(|(_, property)| property.enumerable)
             .map(|(key, _)| key.clone())
             .collect();
@@ -238,7 +239,13 @@ impl ObjectRef {
     }
 
     pub(crate) fn own_property_names(&self) -> Vec<String> {
-        let mut names: Vec<_> = self.properties.borrow().keys().cloned().collect();
+        let mut names: Vec<_> = self
+            .properties
+            .borrow()
+            .keys()
+            .filter(|key| !is_internal_property_key(key))
+            .cloned()
+            .collect();
         names.sort();
         names
     }
@@ -299,4 +306,8 @@ impl ObjectRef {
     pub(crate) fn set_to_string_tag(&self, tag: &str) {
         *self.to_string_tag.borrow_mut() = Some(tag.to_owned());
     }
+}
+
+fn is_internal_property_key(key: &str) -> bool {
+    key.starts_with('\0')
 }

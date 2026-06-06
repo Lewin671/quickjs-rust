@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     Function, ObjectRef, Property, RuntimeError, Value, boolean::BOOLEAN_DATA_PROPERTY,
-    function_prototype, number::NUMBER_DATA_PROPERTY, string::STRING_DATA_PROPERTY, to_length,
+    function_prototype, number::NUMBER_DATA_PROPERTY, string::STRING_DATA_PROPERTY,
 };
 
 use super::descriptor::native_object_define_properties;
@@ -34,7 +34,7 @@ pub(crate) fn native_object_assign(
             continue;
         }
         for (key, value) in enumerable_property_entries(source, env)? {
-            set_property(target.clone(), key, value)?;
+            assign_property(target.clone(), key, value, env)?;
         }
     }
     Ok(target)
@@ -150,37 +150,17 @@ pub(crate) fn native_object_is(argument_values: &[Value]) -> Result<Value, Runti
     Ok(Value::Boolean(left.same_value(&right)))
 }
 
-fn set_property(target: Value, key: String, value: Value) -> Result<(), RuntimeError> {
-    match target {
-        Value::Object(object) => {
-            object.set(key, value);
-            Ok(())
-        }
-        Value::Map(map) => {
-            map.object().set(key, value);
-            Ok(())
-        }
-        Value::Set(set) => {
-            set.object().set(key, value);
-            Ok(())
-        }
-        Value::Array(array) => {
-            if key == "length" {
-                array.set_len(to_length(value)?);
-            } else if let Ok(index) = key.parse::<usize>() {
-                array.set(index, value);
-            } else {
-                array.set_property(key, value);
-            }
-            Ok(())
-        }
-        Value::Function(function) => {
-            function.set_property(key, value);
-            Ok(())
-        }
-        _ => Err(RuntimeError {
-            thrown: None,
-            message: "property target is not mutable".to_owned(),
-        }),
+fn assign_property(
+    target: Value,
+    key: String,
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
+    if crate::reflect::ordinary_set(target.clone(), &key, value, target, env)? {
+        return Ok(());
     }
+    Err(RuntimeError {
+        thrown: None,
+        message: format!("Object.assign could not set property `{key}`"),
+    })
 }

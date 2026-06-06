@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
 use crate::reflect::target::ensure_reflect_object_target;
-use crate::{Property, RuntimeError, Value, to_length};
+use crate::{Property, RuntimeError, Value, call_function, to_length};
 
 pub(crate) fn native_reflect_set(
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     ensure_reflect_object_target(&target, "Reflect.set")?;
@@ -21,22 +21,22 @@ pub(crate) fn native_reflect_set(
     )?))
 }
 
-fn ordinary_set(
+pub(crate) fn ordinary_set(
     target: Value,
     key: &str,
     value: Value,
     receiver: Value,
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
 ) -> Result<bool, RuntimeError> {
     if let Some(property) = own_property_descriptor(&target, key) {
-        return set_with_data_descriptor(property, key, value, receiver);
+        return ordinary_set_with_descriptor(property, key, value, receiver, env);
     }
 
     if let Some(prototype) = crate::value_prototype(target, env) {
         return ordinary_set(Value::Object(prototype), key, value, receiver, env);
     }
 
-    set_with_data_descriptor(Property::enumerable(Value::Undefined), key, value, receiver)
+    set_receiver_data_property(receiver, key, value)
 }
 
 fn own_property_descriptor(target: &Value, key: &str) -> Option<Property> {
@@ -54,12 +54,20 @@ fn own_property_descriptor(target: &Value, key: &str) -> Option<Property> {
     }
 }
 
-fn set_with_data_descriptor(
+fn ordinary_set_with_descriptor(
     property: Property,
     key: &str,
     value: Value,
     receiver: Value,
+    env: &mut HashMap<String, Value>,
 ) -> Result<bool, RuntimeError> {
+    if property.is_accessor() {
+        let Some(setter) = property.set else {
+            return Ok(false);
+        };
+        call_function(setter, receiver, vec![value], env, false)?;
+        return Ok(true);
+    }
     if !property.writable {
         return Ok(false);
     }

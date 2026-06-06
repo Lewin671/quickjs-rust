@@ -417,7 +417,11 @@ cases/object-assign-target-array.js
 cases/object-assign-target-object.js
 cases/object-assign-override.js
 cases/object-assign-primitive-target.js
+cases/object-assign-readonly-target-throws.js
+cases/object-assign-number-target-string-override.js
 cases/object-assign-source-string.js
+cases/object-assign-target-set-not-writable.js
+cases/object-assign-target-set-user-error.js
 cases/object-assign-null-undefined-source.js
 cases/object-constructor-basic.js
 cases/object-constructor-object-identity.js
@@ -767,6 +771,7 @@ cases/reflect-own-keys-nonenumerable.js
 cases/reflect-prevent-extensions-basic.js
 cases/reflect-prevent-extensions-length.js
 cases/reflect-set-basic.js
+cases/reflect-set-accessor-descriptor.js
 cases/reflect-set-data-descriptor.js
 cases/reflect-set-length.js
 cases/reflect-set-non-writable.js

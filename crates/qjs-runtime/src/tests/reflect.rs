@@ -158,6 +158,12 @@ fn evaluates_reflect_prototype_builtins() {
     );
     assert_eq!(
         eval(
+            "let target = {}; let seen = 0; Object.defineProperty(target, 'value', { set: function(value) { seen = value; } }); Reflect.set(target, 'value', 41) && seen;"
+        ),
+        Ok(Value::Number(41.0))
+    );
+    assert_eq!(
+        eval(
             "let proto = { marker: 7 }; let object = {}; Reflect.setPrototypeOf(object, proto); object.marker;"
         ),
         Ok(Value::Number(7.0))
