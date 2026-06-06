@@ -66,7 +66,14 @@ pub(crate) fn native_object_entries(
 pub(crate) fn native_object_get_own_property_names(
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
-    let names = own_property_names(argument_values.first().cloned().unwrap_or(Value::Undefined));
+    let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    if matches!(target, Value::Null | Value::Undefined) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "Object.getOwnPropertyNames target must not be null or undefined".to_owned(),
+        });
+    }
+    let names = own_property_names(target);
     Ok(Value::Array(ArrayRef::new(
         names.into_iter().map(Value::String).collect(),
     )))

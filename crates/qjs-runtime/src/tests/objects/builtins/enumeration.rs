@@ -129,6 +129,8 @@ fn evaluates_object_enumeration_builtins() {
         eval("Object.getOwnPropertyNames(Object(true)).length;"),
         Ok(Value::Number(0.0))
     );
+    assert!(eval("Object.getOwnPropertyNames(null);").is_err());
+    assert!(eval("Object.getOwnPropertyNames(undefined);").is_err());
     assert_eq!(
         eval("Object.getOwnPropertySymbols.length;"),
         Ok(Value::Number(1.0))
