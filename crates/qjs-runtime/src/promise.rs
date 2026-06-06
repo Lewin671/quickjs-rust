@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     ArrayRef, Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, call_function,
-    property_value,
+    property_value, symbol,
 };
 
 mod all;
@@ -49,6 +49,7 @@ pub(crate) fn install_promise(
     let promise_prototype =
         ObjectRef::with_prototype(HashMap::new(), Some(object_prototype.clone()));
     promise_prototype.set_to_string_tag("Promise");
+    symbol::define_well_known_to_string_tag(env, &promise_prototype, "Promise");
     let promise_function = Function::new_native(Some("Promise"), 1, NativeFunction::Promise, true);
     let mut promise_then =
         Function::new_native(Some("then"), 2, NativeFunction::PromisePrototypeThen, false);

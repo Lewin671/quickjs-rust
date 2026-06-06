@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
-    array::array_like_values_with_env, to_number, to_uint32_number,
+    array::array_like_values_with_env, symbol, to_number, to_uint32_number,
 };
 
 pub(super) fn install_math(
@@ -16,6 +16,7 @@ pub(super) fn install_math(
 ) {
     let math_object = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
     math_object.set_to_string_tag("Math");
+    symbol::define_well_known_to_string_tag(env, &math_object, "Math");
     define_math_constant(&math_object, "E", std::f64::consts::E);
     define_math_constant(&math_object, "LN10", std::f64::consts::LN_10);
     define_math_constant(&math_object, "LN2", std::f64::consts::LN_2);

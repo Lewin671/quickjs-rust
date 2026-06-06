@@ -22,6 +22,9 @@ pub(crate) fn install_symbol(
         Some(symbol_prototype.clone()),
         Value::String("Symbol.toStringTag".to_owned()),
     ));
+    if let Value::Object(symbol) = &to_string_tag {
+        define_to_string_tag_property(&symbol_prototype, symbol.clone(), "Symbol");
+    }
     symbol_function.properties.borrow_mut().insert(
         "toStringTag".to_owned(),
         Property::data(to_string_tag, false, false, false),
@@ -167,6 +170,23 @@ pub(crate) fn to_string_tag_symbol(env: &HashMap<String, Value>) -> Option<Objec
         }) => Some(symbol.clone()),
         _ => None,
     }
+}
+
+pub(crate) fn define_well_known_to_string_tag(
+    env: &HashMap<String, Value>,
+    object: &ObjectRef,
+    tag: &str,
+) {
+    if let Some(symbol) = to_string_tag_symbol(env) {
+        define_to_string_tag_property(object, symbol, tag);
+    }
+}
+
+fn define_to_string_tag_property(object: &ObjectRef, symbol: ObjectRef, tag: &str) {
+    object.define_symbol_property(
+        symbol,
+        Property::data(Value::String(tag.to_owned()), false, false, true),
+    );
 }
 
 pub(crate) fn native_symbol_prototype_description(

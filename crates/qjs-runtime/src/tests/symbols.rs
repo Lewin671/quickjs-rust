@@ -93,3 +93,33 @@ fn evaluates_symbol_registry_builtins() {
     );
     assert!(eval("Symbol.keyFor({});").is_err());
 }
+
+#[test]
+fn exposes_builtin_to_string_tag_symbol_properties() {
+    assert_eq!(
+        eval(
+            "function attrs(object) { let d = Object.getOwnPropertyDescriptor(object, Symbol.toStringTag); return d.value + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable; } attrs(Symbol.prototype) + '|' + attrs(Map.prototype) + '|' + attrs(Set.prototype) + '|' + attrs(WeakMap.prototype) + '|' + attrs(WeakSet.prototype) + '|' + attrs(Promise.prototype) + '|' + attrs(Math) + '|' + attrs(JSON);"
+        ),
+        Ok(Value::String(
+            "Symbol:false:false:true|Map:false:false:true|Set:false:false:true|WeakMap:false:false:true|WeakSet:false:false:true|Promise:false:false:true|Math:false:false:true|JSON:false:false:true".to_owned()
+        ))
+    );
+    assert_eq!(
+        eval(
+            "Map.prototype[Symbol.toStringTag] = 'Changed'; Object.prototype.toString.call(new Map()) + ':' + Map.prototype[Symbol.toStringTag];"
+        ),
+        Ok(Value::String("[object Map]:Map".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let deleted = delete Set.prototype[Symbol.toStringTag]; deleted + ':' + (Object.getOwnPropertyDescriptor(Set.prototype, Symbol.toStringTag) === undefined) + ':' + Object.prototype.toString.call(new Set());"
+        ),
+        Ok(Value::String("true:true:[object Object]".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "Object.getOwnPropertyDescriptor(RegExp.prototype, Symbol.toStringTag) === undefined;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}

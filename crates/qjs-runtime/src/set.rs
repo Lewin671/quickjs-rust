@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     ArrayRef, Function, NativeFunction, ObjectRef, Property, RuntimeError, SetRef, Value,
-    array::array_like_values_with_env,
+    array::array_like_values_with_env, symbol,
 };
 
 const SET_ITERATOR: &str = "\0set_iterator";
@@ -19,6 +19,7 @@ pub(crate) fn install_set(
 ) {
     let set_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
     set_prototype.set_to_string_tag("Set");
+    symbol::define_well_known_to_string_tag(env, &set_prototype, "Set");
     let set_function = Function::new_native(Some("Set"), 0, NativeFunction::Set, true);
     set_prototype.define_non_enumerable(
         "constructor".to_owned(),

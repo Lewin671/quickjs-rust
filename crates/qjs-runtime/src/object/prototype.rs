@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     PropertyKey, RuntimeError, Value, array_has_own_property, array_prototype, boolean,
     call_function, date, error, function_intrinsic_prototype, function_own_property_descriptor,
-    number, property_value, property_value_key, string, symbol, to_property_key_value,
+    number, property_value, property_value_key, regexp, string, symbol, to_property_key_value,
     value_prototype,
 };
 
@@ -216,8 +216,7 @@ fn builtin_to_string_tag(value: Value) -> String {
         Value::Null => "Null".to_owned(),
         Value::Array(_) => "Array".to_owned(),
         Value::Function(_) => "Function".to_owned(),
-        Value::Map(_) => "Map".to_owned(),
-        Value::Set(_) => "Set".to_owned(),
+        Value::Map(_) | Value::Set(_) => "Object".to_owned(),
         Value::String(_) => "String".to_owned(),
         Value::Number(_) => "Number".to_owned(),
         Value::Boolean(_) => "Boolean".to_owned(),
@@ -230,12 +229,14 @@ fn builtin_to_string_tag(value: Value) -> String {
                 "String".to_owned()
             } else if date::is_date_object(&object) {
                 "Date".to_owned()
+            } else if regexp::regexp_is_regexp(&Value::Object(object.clone())) {
+                "RegExp".to_owned()
             } else if error::is_error_object(&object) {
                 "Error".to_owned()
+            } else if object.to_string_tag().as_deref() == Some("Arguments") {
+                "Arguments".to_owned()
             } else {
-                object
-                    .to_string_tag()
-                    .unwrap_or_else(|| "Object".to_owned())
+                "Object".to_owned()
             }
         }
     }

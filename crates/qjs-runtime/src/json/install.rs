@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{Function, NativeFunction, ObjectRef, Value};
+use crate::{Function, NativeFunction, ObjectRef, Value, symbol};
 
 pub(crate) fn install_json(
     env: &mut HashMap<String, Value>,
@@ -9,6 +9,7 @@ pub(crate) fn install_json(
 ) {
     let json_object = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
     json_object.set_to_string_tag("JSON");
+    symbol::define_well_known_to_string_tag(env, &json_object, "JSON");
     define_json_function(&json_object, "parse", 2, NativeFunction::JsonParse);
     define_json_function(&json_object, "rawJSON", 1, NativeFunction::JsonRawJson);
     define_json_function(&json_object, "isRawJSON", 1, NativeFunction::JsonIsRawJson);

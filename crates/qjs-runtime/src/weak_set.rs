@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     ArrayRef, Function, NativeFunction, ObjectRef, RuntimeError, Value,
-    array::array_like_values_with_env,
+    array::array_like_values_with_env, symbol,
 };
 
 const WEAK_SET_ENTRIES: &str = "\0weak_set_entries";
@@ -15,6 +15,7 @@ pub(crate) fn install_weak_set(
 ) {
     let weak_set_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
     weak_set_prototype.set_to_string_tag("WeakSet");
+    symbol::define_well_known_to_string_tag(env, &weak_set_prototype, "WeakSet");
     let weak_set_function = Function::new_native(Some("WeakSet"), 0, NativeFunction::WeakSet, true);
     weak_set_prototype.define_non_enumerable(
         "constructor".to_owned(),

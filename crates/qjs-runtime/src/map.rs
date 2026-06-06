@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     ArrayRef, Function, MapRef, NativeFunction, ObjectRef, Property, RuntimeError, Value,
-    array::array_like_values_with_env, property_value,
+    array::array_like_values_with_env, property_value, symbol,
 };
 
 const MAP_ITERATOR: &str = "\0map_iterator";
@@ -20,6 +20,7 @@ pub(crate) fn install_map(
 ) {
     let map_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
     map_prototype.set_to_string_tag("Map");
+    symbol::define_well_known_to_string_tag(env, &map_prototype, "Map");
     let map_function = Function::new_native(Some("Map"), 0, NativeFunction::Map, true);
     define_map_function(&map_function, "groupBy", 2, NativeFunction::MapGroupBy);
     map_prototype.define_non_enumerable(
