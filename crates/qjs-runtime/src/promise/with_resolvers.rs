@@ -1,12 +1,18 @@
 use std::collections::HashMap;
 
-use crate::{Function, NativeFunction, ObjectRef, Property, RuntimeError, Value};
+use crate::{
+    Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, ensure_constructor,
+};
 
 use super::{
     PROMISE_OBJECT_PROTOTYPE, initialize_promise, promise_object_from_function, resolving_function,
 };
 
-pub(crate) fn native_promise_with_resolvers(function: &Function) -> Result<Value, RuntimeError> {
+pub(crate) fn native_promise_with_resolvers(
+    function: &Function,
+    this_value: Value,
+) -> Result<Value, RuntimeError> {
+    ensure_constructor(&this_value)?;
     let promise = promise_object_from_function(function);
     initialize_promise(&promise);
     let result = ObjectRef::with_prototype(

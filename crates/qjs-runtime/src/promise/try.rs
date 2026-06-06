@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{Function, RuntimeError, Value, call_function};
+use crate::{Function, RuntimeError, Value, call_function, ensure_constructor};
 
 use super::{
     PROMISE_REJECTED, initialize_promise, promise_object_from_function, resolve_promise,
@@ -9,9 +9,11 @@ use super::{
 
 pub(crate) fn native_promise_try(
     function: &Function,
+    this_value: Value,
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
+    ensure_constructor(&this_value)?;
     let promise = promise_object_from_function(function);
     initialize_promise(&promise);
     let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);

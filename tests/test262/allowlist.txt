@@ -763,6 +763,7 @@ cases/promise-try-basic.js
 cases/promise-try-args.js
 cases/promise-try-return-value.js
 cases/promise-try-throws.js
+cases/promise-static-receiver-validation.js
 cases/promise-with-resolvers-basic.js
 cases/promise-with-resolvers-promise.js
 cases/promise-with-resolvers-resolvers.js
