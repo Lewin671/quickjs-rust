@@ -85,7 +85,9 @@ fn regexp_match(
             Vec::new()
         }
     } else {
-        (start_index.min(text.len())..=text.len()).collect()
+        (start_index.min(text.len())..=text.len())
+            .filter(|index| !options.unicode || !is_trailing_surrogate_position(&text, *index))
+            .collect()
     };
 
     starts.into_iter().find_map(|start| {
@@ -110,6 +112,22 @@ fn regexp_match(
             captures: state.captures,
         })
     })
+}
+
+fn is_trailing_surrogate_position(text: &[char], index: usize) -> bool {
+    if index == 0 || index >= text.len() {
+        return false;
+    }
+    matches!(
+        (char_code_unit(text[index - 1]), char_code_unit(text[index])),
+        (Some(0xD800..=0xDBFF), Some(0xDC00..=0xDFFF))
+    )
+}
+
+fn char_code_unit(value: char) -> Option<u16> {
+    crate::string::string_code_units(&value.to_string())
+        .first()
+        .copied()
 }
 
 fn normalized_regexp_source(source: &str) -> &str {

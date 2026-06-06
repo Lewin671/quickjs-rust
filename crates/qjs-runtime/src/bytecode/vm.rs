@@ -327,7 +327,17 @@ impl<'a> Vm<'a> {
             };
             entries.push((key, descriptor));
         }
-        for (key, descriptor) in entries.into_iter().rev() {
+        for (key, mut descriptor) in entries.into_iter().rev() {
+            if descriptor.is_accessor()
+                && let Some(existing) = match &key {
+                    crate::PropertyKey::String(key) => object.own_property(key),
+                    crate::PropertyKey::Symbol(symbol) => object.own_symbol_property(symbol),
+                }
+                && existing.is_accessor()
+            {
+                descriptor.get = descriptor.get.or(existing.get);
+                descriptor.set = descriptor.set.or(existing.set);
+            }
             let success = object::define_property_on_value_key(
                 Value::Object(object.clone()),
                 key,

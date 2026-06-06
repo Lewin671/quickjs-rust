@@ -78,6 +78,25 @@ fn evaluates_string_search_builtins() {
     assert_eq!(eval("'abc'.search(/z/);"), Ok(Value::Number(-1.0)));
     assert_eq!(eval("'abc'.search('b');"), Ok(Value::Number(1.0)));
     assert_eq!(
+        eval(
+            "let calls = 0; let searcher = { [Symbol.search]: function(input) { calls = calls + 1; return this === searcher && input === 'abc' ? 42 : -1; } }; 'abc'.search(searcher) + ':' + calls;"
+        ),
+        Ok(Value::String("42:1".to_owned()))
+    );
+    assert!(eval("let searcher = { get [Symbol.search]() { throw new Error('search'); } }; ''.search(searcher);").is_err());
+    assert_eq!(
+        eval(
+            "let searcher = { [Symbol.search]: null, toString: function() { return '\\\\d'; } }; 'ab3'.search(searcher);"
+        ),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval(
+            "let original = RegExp.prototype[Symbol.search]; RegExp.prototype[Symbol.search] = function(input) { return this.source + ':' + input; }; let result = 'abc'.search('b'); RegExp.prototype[Symbol.search] = original; result;"
+        ),
+        Ok(Value::String("b:abc".to_owned()))
+    );
+    assert_eq!(
         eval("new String('test string').search(/String/i);"),
         Ok(Value::Number(5.0))
     );

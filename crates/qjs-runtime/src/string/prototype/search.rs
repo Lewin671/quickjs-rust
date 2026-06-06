@@ -7,7 +7,7 @@ use super::super::indexing::{
 };
 
 mod symbol_method;
-use symbol_method::{symbol_match_method, symbol_replace_method};
+use symbol_method::{symbol_match_method, symbol_replace_method, symbol_search_method};
 
 pub(crate) fn native_string_prototype_ends_with(
     this_value: Value,
@@ -236,9 +236,23 @@ pub(crate) fn native_string_prototype_search(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
+    if matches!(this_value, Value::Null | Value::Undefined) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "String.prototype method called on null or undefined".to_owned(),
+        });
+    }
+    let search_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    if !matches!(search_value, Value::Null | Value::Undefined) {
+        if let Some(searcher) = symbol_search_method(search_value.clone(), env)?.method {
+            return call_function(searcher, search_value, vec![this_value], env, false);
+        }
+    }
     let input = this_string_value(this_value, env)?;
-    let pattern = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    let regexp = regexp_value(pattern, env)?;
+    let regexp = regexp_value(search_value, env)?;
+    if let Some(searcher) = symbol_search_method(regexp.clone(), env)?.method {
+        return call_function(searcher, regexp, vec![Value::String(input)], env, false);
+    }
     let exec = property_value(regexp.clone(), "exec", env)?;
     match call_function(exec, regexp, vec![Value::String(input)], env, false)? {
         Value::Array(array) => property_value(Value::Array(array), "index", env),

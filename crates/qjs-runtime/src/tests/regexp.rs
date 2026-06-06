@@ -271,6 +271,32 @@ fn evaluates_regexp_exec_global_last_index() {
 }
 
 #[test]
+fn evaluates_regexp_symbol_search() {
+    assert_eq!(
+        eval("RegExp.prototype[Symbol.search].name;"),
+        Ok(Value::String("[Symbol.search]".to_owned()))
+    );
+    assert_eq!(eval("/b/[Symbol.search]('abc');"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("/z/[Symbol.search]('abc');"), Ok(Value::Number(-1.0)));
+    assert_eq!(
+        eval(
+            "let value = 86; let re = { get lastIndex() { return value; }, set lastIndex(next) { value = next; }, exec() { value = null; return null; } }; RegExp.prototype[Symbol.search].call(re); value;"
+        ),
+        Ok(Value::Number(86.0))
+    );
+    assert_eq!(
+        eval(
+            "let re = { exec() { return Symbol(); } }; let caught = false; try { RegExp.prototype[Symbol.search].call(re, 'a'); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("/\\udf06/u[Symbol.search]('\\ud834\\udf06');"),
+        Ok(Value::Number(-1.0))
+    );
+}
+
+#[test]
 fn evaluates_regexp_exec_and_test_sticky_last_index() {
     assert_eq!(
         eval("let re = /abc/y; re.test('abc') + ':' + re.lastIndex;"),

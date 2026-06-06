@@ -28,6 +28,13 @@ pub(super) fn symbol_match_method(
     symbol_method(value, symbol::match_symbol(env), "Symbol.match", env)
 }
 
+pub(super) fn symbol_search_method(
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<SymbolMethod, RuntimeError> {
+    symbol_method(value, symbol::search_symbol(env), "Symbol.search", env)
+}
+
 fn symbol_method(
     value: Value,
     symbol: Option<ObjectRef>,

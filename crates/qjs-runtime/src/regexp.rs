@@ -8,8 +8,10 @@ use crate::{
 
 mod escape;
 mod matcher;
+mod symbol_search;
 
 pub(crate) use escape::native_regexp_escape;
+pub(crate) use symbol_search::native_regexp_prototype_search;
 
 const REGEXP_SOURCE_PROPERTY: &str = "\0RegExpSource";
 const REGEXP_FLAGS_PROPERTY: &str = "\0RegExpFlags";
@@ -72,6 +74,17 @@ pub(crate) fn install_regexp(
             false,
         )),
     );
+    if let Some(symbol) = symbol::search_symbol(env) {
+        regexp_prototype.define_symbol_property(
+            symbol,
+            Property::non_enumerable(Value::Function(Function::new_native(
+                Some("[Symbol.search]"),
+                1,
+                NativeFunction::RegExpPrototypeSearch,
+                false,
+            ))),
+        );
+    }
     define_regexp_accessor(
         &regexp_prototype,
         "source",
