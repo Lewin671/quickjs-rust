@@ -33,7 +33,9 @@ pub(super) fn call_core_native(
         NativeFunction::Eval => global::native_global_eval(argument_values, env),
         NativeFunction::Escape => global::native_global_escape(argument_values, env),
         NativeFunction::Unescape => global::native_global_unescape(argument_values, env),
-        NativeFunction::Symbol => symbol::native_symbol(function, argument_values, env),
+        NativeFunction::Symbol => {
+            symbol::native_symbol(function, argument_values, is_construct, env)
+        }
         NativeFunction::SymbolFor => symbol::native_symbol_for(argument_values, env),
         NativeFunction::SymbolKeyFor => symbol::native_symbol_key_for(argument_values, env),
         NativeFunction::SymbolPrototypeDescription => {

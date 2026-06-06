@@ -35,7 +35,7 @@ pub(crate) fn install_symbol(
     let symbol_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
     symbol_prototype.set_to_string_tag("Symbol");
 
-    let symbol_function = Function::new_native(Some("Symbol"), 0, NativeFunction::Symbol, false);
+    let symbol_function = Function::new_native(Some("Symbol"), 0, NativeFunction::Symbol, true);
     install_well_known_symbols(&symbol_function, &symbol_prototype);
     install_function_has_instance(env, &symbol_function);
     if let Some(to_string_tag) = well_known_symbol_from_function(&symbol_function, "toStringTag") {
@@ -124,8 +124,16 @@ fn install_well_known_symbols(symbol_function: &Function, symbol_prototype: &Obj
 pub(crate) fn native_symbol(
     function: &Function,
     argument_values: &[Value],
+    is_construct: bool,
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
+    if is_construct {
+        return Err(RuntimeError {
+            message: "TypeError: Symbol is not a constructor".to_owned(),
+            thrown: None,
+        });
+    }
+
     let description = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
         Value::Undefined => Value::Undefined,
         value => Value::String(to_js_string_with_env(value, env)?),

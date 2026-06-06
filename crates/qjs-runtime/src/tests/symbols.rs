@@ -53,6 +53,11 @@ fn evaluates_symbol_prototype_builtins() {
         eval("typeof Symbol.iterator;"),
         Ok(Value::String("symbol".to_owned()))
     );
+    assert!(eval("new Symbol('test');").is_err());
+    assert_eq!(
+        eval("Reflect.construct(function() { this.marker = 1; }, [], Symbol).marker;"),
+        Ok(Value::Number(1.0))
+    );
     assert_eq!(
         eval(
             "let descriptor = Object.getOwnPropertyDescriptor(Symbol, 'toStringTag'); descriptor.writable + ':' + descriptor.enumerable + ':' + descriptor.configurable;"
