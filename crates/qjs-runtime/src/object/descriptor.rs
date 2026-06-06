@@ -27,7 +27,6 @@ pub(crate) fn native_object_define_property(
         argument_values.get(2).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-
     if !define_property_descriptor_on_value_key(target.clone(), key, descriptor, env)? {
         return Err(RuntimeError {
             thrown: None,
@@ -43,12 +42,10 @@ pub(crate) fn native_object_define_properties(
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     ensure_define_property_target(&target)?;
-
     let descriptors = to_object_for_define_properties(
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-
     for (key, descriptor_value) in enumerable_property_entries(descriptors, env)? {
         let descriptor = to_property_descriptor_record(descriptor_value, env)?;
         if !define_property_descriptor_on_value(target.clone(), key, descriptor, env)? {
@@ -86,6 +83,13 @@ pub(crate) fn native_object_get_own_property_descriptor(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    if matches!(target, Value::Null | Value::Undefined) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "Object.getOwnPropertyDescriptor target must not be null or undefined"
+                .to_owned(),
+        });
+    }
     let key = to_property_key_value(
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         env,
@@ -111,7 +115,6 @@ pub(crate) fn native_object_get_own_property_descriptors(
                 .to_owned(),
         });
     }
-
     let prototype = object_prototype(env);
     let mut descriptors = HashMap::new();
     for key in own_property_names(target.clone()) {

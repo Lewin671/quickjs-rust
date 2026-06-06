@@ -27,6 +27,12 @@ fn evaluates_object_descriptor_queries() {
         Ok(Value::Undefined)
     );
     assert_eq!(
+        eval("Object.getOwnPropertyDescriptor(0, 'missing');"),
+        Ok(Value::Undefined)
+    );
+    assert!(eval("Object.getOwnPropertyDescriptor(null, 'missing');").is_err());
+    assert!(eval("Object.getOwnPropertyDescriptor(undefined, 'missing');").is_err());
+    assert_eq!(
         eval("Object.getOwnPropertyDescriptors.length;"),
         Ok(Value::Number(1.0))
     );
