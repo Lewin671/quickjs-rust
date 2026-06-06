@@ -196,6 +196,10 @@ pub(crate) fn boxed_symbol(object: &ObjectRef, env: &HashMap<String, Value>) -> 
     Value::Object(boxed)
 }
 
+pub(crate) fn symbol_descriptive_string(object: &ObjectRef) -> String {
+    symbol_description_string(symbol_description(object))
+}
+
 pub(crate) fn to_string_tag_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
     well_known_symbol(env, "toStringTag")
 }
@@ -294,7 +298,7 @@ pub(crate) fn native_symbol_prototype_description(
 }
 
 pub(crate) fn native_symbol_prototype_to_string(this_value: Value) -> Result<Value, RuntimeError> {
-    Ok(Value::String(symbol_descriptive_string(
+    Ok(Value::String(symbol_description_string(
         this_symbol_description(this_value)?,
     )))
 }
@@ -326,7 +330,7 @@ fn symbol_description(object: &ObjectRef) -> Value {
         .unwrap_or(Value::Undefined)
 }
 
-fn symbol_descriptive_string(description: Value) -> String {
+fn symbol_description_string(description: Value) -> String {
     match description {
         Value::String(description) => format!("Symbol({description})"),
         _ => "Symbol()".to_owned(),

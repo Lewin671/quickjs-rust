@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    Function, ObjectRef, Property, RuntimeError, Value, function_prototype, property_value,
+    Function, ObjectRef, Property, RuntimeError, Value, function_prototype, property_value, symbol,
     to_js_string_with_env, to_length_with_env, to_number, to_uint16,
 };
 
@@ -15,6 +15,9 @@ pub(crate) fn native_string(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let value = match argument_values.first().cloned() {
+        Some(Value::Object(object)) if symbol::is_symbol_primitive(&object) => {
+            symbol::symbol_descriptive_string(&object)
+        }
         Some(value) => to_js_string_with_env(value, env)?,
         None => String::new(),
     };

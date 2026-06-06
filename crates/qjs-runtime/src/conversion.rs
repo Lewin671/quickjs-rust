@@ -28,10 +28,27 @@ pub(crate) fn to_js_string_with_env(
         Value::Boolean(false) => Ok("false".to_owned()),
         Value::Null => Ok("null".to_owned()),
         Value::Undefined => Ok("undefined".to_owned()),
+        Value::Object(object) if symbol::is_symbol_primitive(&object) => {
+            Err(symbol_to_string_error())
+        }
         Value::Object(object) => object_to_string(Value::Object(object), env),
         Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_) => {
             object_to_string(value, env)
         }
+    }
+}
+
+fn symbol_to_string_error() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "TypeError: cannot convert Symbol to string".to_owned(),
+    }
+}
+
+fn symbol_to_number_error() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "TypeError: cannot convert Symbol to number".to_owned(),
     }
 }
 
@@ -67,6 +84,9 @@ pub(crate) fn to_number_with_env(
         Value::Boolean(false) | Value::Null => Ok(0.0),
         Value::String(value) => string_to_number(&value),
         Value::Undefined => Ok(f64::NAN),
+        Value::Object(object) if symbol::is_symbol_primitive(&object) => {
+            Err(symbol_to_number_error())
+        }
         Value::Object(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) | Value::Array(_) => {
             object_to_number(value, env)
         }
@@ -78,6 +98,7 @@ pub(crate) fn to_primitive_with_env(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     match value {
+        Value::Object(object) if symbol::is_symbol_primitive(&object) => Ok(Value::Object(object)),
         Value::Object(_) | Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_) => {
             to_primitive_with_hint(value, PreferredType::Default, env)
         }

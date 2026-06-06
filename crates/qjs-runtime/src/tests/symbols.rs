@@ -15,6 +15,8 @@ fn evaluates_symbol_prototype_builtins() {
         eval("String(Symbol('test'));"),
         Ok(Value::String("Symbol(test)".to_owned()))
     );
+    assert!(eval("'' + Symbol('test');").is_err());
+    assert!(eval("Symbol(Symbol('test'));").is_err());
     assert_eq!(
         eval("Symbol().toString();"),
         Ok(Value::String("Symbol()".to_owned()))

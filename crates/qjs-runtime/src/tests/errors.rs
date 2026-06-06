@@ -44,6 +44,12 @@ fn evaluates_error_builtins() {
         eval("Error('boom').toString();"),
         Ok(Value::String("Error: boom".to_owned()))
     );
+    assert!(
+        eval("Error(Symbol('boom'));")
+            .expect_err("Symbol message conversion should throw")
+            .message
+            .contains("TypeError")
+    );
     assert_eq!(
         eval("new Error().toString();"),
         Ok(Value::String("Error".to_owned()))
