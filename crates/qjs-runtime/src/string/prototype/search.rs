@@ -16,7 +16,7 @@ pub(crate) fn native_string_prototype_ends_with(
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
     let search_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    reject_regexp_search_value(&search_value, "String.prototype.endsWith")?;
+    reject_regexp_search_value(search_value.clone(), "String.prototype.endsWith", env)?;
     let search = to_js_string_with_env(search_value, env)?;
     let end = string_end_position(
         value.chars().count(),
@@ -34,7 +34,7 @@ pub(crate) fn native_string_prototype_includes(
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
     let search_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    reject_regexp_search_value(&search_value, "String.prototype.includes")?;
+    reject_regexp_search_value(search_value.clone(), "String.prototype.includes", env)?;
     let search = to_js_string_with_env(search_value, env)?;
     let start = string_search_start(
         value.chars().count(),
@@ -240,7 +240,7 @@ pub(crate) fn native_string_prototype_starts_with(
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
     let search_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    reject_regexp_search_value(&search_value, "String.prototype.startsWith")?;
+    reject_regexp_search_value(search_value.clone(), "String.prototype.startsWith", env)?;
     let search = to_js_string_with_env(search_value, env)?;
     let start = string_search_start(
         value.chars().count(),
@@ -552,8 +552,12 @@ fn regexp_value(pattern: Value, env: &mut HashMap<String, Value>) -> Result<Valu
     call_function(constructor, Value::Undefined, vec![pattern], env, false)
 }
 
-fn reject_regexp_search_value(value: &Value, method: &str) -> Result<(), RuntimeError> {
-    if regexp::regexp_is_regexp(value) {
+fn reject_regexp_search_value(
+    value: Value,
+    method: &str,
+    env: &mut HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
+    if regexp::regexp_is_regexp_with_env(value, env)? {
         return Err(RuntimeError {
             thrown: None,
             message: format!("TypeError: {method} search string must not be a RegExp"),

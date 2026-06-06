@@ -14,6 +14,14 @@ fn evaluates_string_search_builtins() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval("let re = /a/; re[Symbol.match] = false; '/a/'.startsWith(re);"),
+        Ok(Value::Boolean(true))
+    );
+    assert!(
+        eval("let search = { get [Symbol.match]() { throw new Error('match'); } }; ''.startsWith(search);")
+            .is_err()
+    );
     assert_eq!(eval("'abc'.endsWith('bc');"), Ok(Value::Boolean(true)));
     assert_eq!(eval("'abc'.endsWith('ab', 2);"), Ok(Value::Boolean(true)));
     assert_eq!(eval("'abc'.endsWith('bc', 2);"), Ok(Value::Boolean(false)));
@@ -22,6 +30,14 @@ fn evaluates_string_search_builtins() {
             "let caught = false; try { ''.endsWith(/./); } catch (error) { caught = error instanceof TypeError; } caught;"
         ),
         Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("let re = /c/; re[Symbol.match] = false; '/c/'.endsWith(re);"),
+        Ok(Value::Boolean(true))
+    );
+    assert!(
+        eval("let search = { get [Symbol.match]() { throw new Error('match'); } }; ''.endsWith(search);")
+            .is_err()
     );
     assert_eq!(eval("'abc'.indexOf('b');"), Ok(Value::Number(1.0)));
     assert_eq!(eval("'abc'.indexOf('b', 2);"), Ok(Value::Number(-1.0)));
@@ -41,6 +57,14 @@ fn evaluates_string_search_builtins() {
             "let caught = false; try { ''.includes(/./); } catch (error) { caught = error instanceof TypeError; } caught;"
         ),
         Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("let re = /b/; re[Symbol.match] = false; 'a /b/ c'.includes(re);"),
+        Ok(Value::Boolean(true))
+    );
+    assert!(
+        eval("let search = { get [Symbol.match]() { throw new Error('match'); } }; ''.includes(search);")
+            .is_err()
     );
     assert_eq!(
         eval("String.prototype.lastIndexOf.length;"),
