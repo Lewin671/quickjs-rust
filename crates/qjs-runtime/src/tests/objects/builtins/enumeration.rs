@@ -202,4 +202,10 @@ fn evaluates_object_enumeration_builtins() {
         Ok(Value::Boolean(true))
     );
     assert_eq!(eval("Object.hasOwn('ab', '1');"), Ok(Value::Boolean(true)));
+    assert_eq!(
+        eval(
+            "let sym = Symbol(); let object = {}; object[sym] = 1; let calls = ''; let byPrimitive = {}; byPrimitive[Symbol.toPrimitive] = function() { calls += 'p'; return sym; }; let byString = { toString: function() { calls += 's'; return sym; }, valueOf: function() { throw 'bad'; } }; let byValue = { toString: null, valueOf: function() { calls += 'v'; return sym; } }; Object.hasOwn(object, byPrimitive) + ':' + Object.hasOwn(object, byString) + ':' + Object.hasOwn(object, byValue) + ':' + calls;"
+        ),
+        Ok(Value::String("true:true:true:psv".to_owned()))
+    );
 }

@@ -210,10 +210,11 @@ fn object_to_string(
 }
 
 fn is_object_like(value: &Value) -> bool {
-    matches!(
-        value,
-        Value::Object(_) | Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_)
-    )
+    match value {
+        Value::Object(object) => !symbol::is_symbol_primitive(object),
+        Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_) => true,
+        _ => false,
+    }
 }
 
 impl PreferredType {
