@@ -358,6 +358,38 @@ fn evaluates_regexp_exec_empty_non_capturing_group() {
 }
 
 #[test]
+fn evaluates_regexp_symbol_split() {
+    assert_eq!(
+        eval("RegExp.prototype[Symbol.split].name;"),
+        Ok(Value::String("[Symbol.split]".to_owned()))
+    );
+    assert_eq!(
+        eval("RegExp.prototype[Symbol.split].length;"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval("/d/[Symbol.split]('abcdefg').join('|');"),
+        Ok(Value::String("abc|efg".to_owned()))
+    );
+    assert_eq!(
+        eval("/x/[Symbol.split]('axbxcxdxe', 3).join('|');"),
+        Ok(Value::String("a|b|c".to_owned()))
+    );
+    assert_eq!(
+        eval("/c(d)(e)/[Symbol.split]('abcdefg', 2).join('|');"),
+        Ok(Value::String("ab|d".to_owned()))
+    );
+    assert_eq!(
+        eval("/(?:)/[Symbol.split]('').length;"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval("/./[Symbol.split]('').join('|');"),
+        Ok(Value::String(String::new()))
+    );
+}
+
+#[test]
 fn evaluates_regexp_exec_date_format_shape() {
     assert_eq!(
         eval(

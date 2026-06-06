@@ -9,9 +9,11 @@ use crate::{
 mod escape;
 mod matcher;
 mod symbol_search;
+mod symbol_split;
 
 pub(crate) use escape::native_regexp_escape;
 pub(crate) use symbol_search::native_regexp_prototype_search;
+pub(crate) use symbol_split::native_regexp_prototype_split;
 
 const REGEXP_SOURCE_PROPERTY: &str = "\0RegExpSource";
 const REGEXP_FLAGS_PROPERTY: &str = "\0RegExpFlags";
@@ -85,6 +87,7 @@ pub(crate) fn install_regexp(
             ))),
         );
     }
+    symbol_split::install_regexp_prototype_split(env, &regexp_prototype);
     define_regexp_accessor(
         &regexp_prototype,
         "source",

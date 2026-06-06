@@ -96,6 +96,12 @@ fn evaluates_string_sequence_builtins() {
     );
     assert_eq!(
         eval(
+            "let original = RegExp.prototype[Symbol.split]; RegExp.prototype[Symbol.split] = function(input, limit) { return this.source + ':' + input + ':' + limit; }; let result = 'abc'.split(/b/, 7); RegExp.prototype[Symbol.split] = original; result;"
+        ),
+        Ok(Value::String("b:abc:7".to_owned()))
+    );
+    assert_eq!(
+        eval(
             "let called = false; let separator = { toString: function() { called = true; return 'x'; } }; 'abc'.split(separator, 0); called;"
         ),
         Ok(Value::Boolean(true))

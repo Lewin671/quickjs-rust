@@ -44,6 +44,9 @@ pub(super) fn call_regexp_native(
         NativeFunction::RegExpPrototypeSearch => {
             regexp::native_regexp_prototype_search(this_value, argument_values, env)?
         }
+        NativeFunction::RegExpPrototypeSplit => {
+            regexp::native_regexp_prototype_split(this_value, argument_values, env)?
+        }
         NativeFunction::RegExpPrototypeSource => {
             regexp::native_regexp_prototype_source(this_value, env)?
         }
