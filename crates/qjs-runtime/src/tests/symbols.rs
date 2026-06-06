@@ -62,6 +62,22 @@ fn evaluates_symbol_prototype_builtins() {
 }
 
 #[test]
+fn exposes_well_known_symbol_static_properties() {
+    assert_eq!(
+        eval(
+            "let names = ['asyncDispose', 'asyncIterator', 'dispose', 'hasInstance', 'isConcatSpreadable', 'iterator', 'match', 'matchAll', 'replace', 'search', 'species', 'split', 'toPrimitive', 'toStringTag', 'unscopables']; names.every(function(name) { let d = Object.getOwnPropertyDescriptor(Symbol, name); return typeof Symbol[name] === 'symbol' && d.writable === false && d.enumerable === false && d.configurable === false && String(Symbol[name]) === 'Symbol(Symbol.' + name + ')' && Symbol.keyFor(Symbol[name]) === undefined; });"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "Symbol.keyFor(Symbol.hasInstance) === undefined && Symbol.hasInstance !== Symbol('Symbol.hasInstance');"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn evaluates_symbol_registry_builtins() {
     assert_eq!(
         eval("typeof Symbol.for;"),
