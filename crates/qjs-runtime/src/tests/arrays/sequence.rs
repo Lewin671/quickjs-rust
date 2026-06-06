@@ -128,6 +128,28 @@ fn evaluates_array_sequence_builtins() {
     );
     assert_eq!(
         eval(
+            "let a = [1, 2]; a[Symbol.isConcatSpreadable] = false; let out = [0].concat(a); out.length + ':' + (out[1] === a);"
+        ),
+        Ok(Value::String("2:true".to_owned()))
+    );
+    assert_eq!(
+        eval("let a = [1, 2]; a[Symbol.isConcatSpreadable] = undefined; [0].concat(a).join();"),
+        Ok(Value::String("0,1,2".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let item = { 0: 'a', 2: 'c', length: 3 }; item[Symbol.isConcatSpreadable] = true; let out = [0].concat(item); out.length + ':' + out[1] + ':' + out.hasOwnProperty('2') + ':' + out[3];"
+        ),
+        Ok(Value::String("4:a:false:c".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let marker = { ok: true }; let item = {}; Object.defineProperty(item, Symbol.isConcatSpreadable, { get: function() { throw marker; } }); let caught = false; try { [].concat(item); } catch (error) { caught = error === marker; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
             "let xs = [1, 2, 3, 4, 5]; let result = xs.copyWithin(0, 3); result === xs && xs.join();"
         ),
         Ok(Value::String("4,5,3,4,5".to_owned()))

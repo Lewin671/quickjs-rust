@@ -195,7 +195,9 @@ fn set_symbol_property(
             value,
             env,
         ),
-        Value::Array(_) => Ok(false),
+        Value::Array(elements) => {
+            set_array_symbol_property(elements.clone(), Value::Array(elements), symbol, value, env)
+        }
         _ => Err(RuntimeError {
             thrown: None,
             message: "member assignment target is not an object".to_owned(),
@@ -260,6 +262,38 @@ fn set_object_symbol_property(
     Ok(true)
 }
 
+fn set_array_symbol_property(
+    array: crate::ArrayRef,
+    receiver: Value,
+    symbol: ObjectRef,
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<bool, RuntimeError> {
+    let inherited = array.symbol_property(&symbol).or_else(|| {
+        array
+            .prototype_override()
+            .unwrap_or_else(|| array_prototype(env))
+            .and_then(|prototype| prototype.symbol_property(&symbol))
+    });
+    if apply_property_setter(inherited.clone(), receiver, value.clone(), env)? {
+        return Ok(false);
+    }
+    let descriptor = match array.own_symbol_property(&symbol) {
+        Some(existing) if !existing.writable => return Ok(false),
+        Some(existing) => Property::data(
+            value,
+            existing.enumerable,
+            existing.writable,
+            existing.configurable,
+        ),
+        None if inherited.is_some_and(|property| !property.writable) => return Ok(false),
+        None if !array.is_extensible() => return Ok(false),
+        None => Property::enumerable(value),
+    };
+    array.define_symbol_property(symbol, descriptor);
+    Ok(true)
+}
+
 fn apply_property_setter(
     property: Option<Property>,
     receiver: Value,
@@ -320,6 +354,12 @@ fn symbol_property_for_set(
         Value::Function(function) => function.symbol_property(symbol, env),
         Value::Map(map) => map.object().symbol_property(symbol),
         Value::Set(set) => set.object().symbol_property(symbol),
+        Value::Array(elements) => elements.symbol_property(symbol).or_else(|| {
+            elements
+                .prototype_override()
+                .unwrap_or_else(|| array_prototype(env))
+                .and_then(|prototype| prototype.symbol_property(symbol))
+        }),
         _ => None,
     }
 }
@@ -362,7 +402,7 @@ fn delete_symbol_property(object: Value, symbol: &ObjectRef) -> Result<Value, Ru
         Value::Function(function) => Ok(Value::Boolean(function_delete_own_symbol_property(
             &function, symbol,
         ))),
-        Value::Array(_) => Ok(Value::Boolean(true)),
+        Value::Array(elements) => Ok(Value::Boolean(elements.delete_own_symbol_property(symbol))),
         _ => Err(RuntimeError {
             thrown: None,
             message: "delete target is not an object".to_owned(),

@@ -134,7 +134,9 @@ pub(crate) fn native_object_prototype_has_own_property(
         (Value::Array(elements), crate::PropertyKey::String(key)) => {
             Ok(Value::Boolean(array_has_own_property(&elements, &key)))
         }
-        (Value::Array(_), crate::PropertyKey::Symbol(_)) => Ok(Value::Boolean(false)),
+        (Value::Array(array), crate::PropertyKey::Symbol(symbol)) => {
+            Ok(Value::Boolean(array.has_own_symbol_property(&symbol)))
+        }
         (Value::String(value), crate::PropertyKey::String(key)) => Ok(Value::Boolean(
             crate::string::string_has_own_property(&value, &key),
         )),

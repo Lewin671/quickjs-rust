@@ -69,8 +69,8 @@ fn own_symbol_property_descriptor(target: &Value, key: &PropertyKey) -> Option<P
         Value::Function(function) => {
             crate::function_own_symbol_property_descriptor(function, symbol)
         }
-        Value::Array(_)
-        | Value::String(_)
+        Value::Array(elements) => elements.own_symbol_property(symbol),
+        Value::String(_)
         | Value::Number(_)
         | Value::Boolean(_)
         | Value::Null
@@ -236,8 +236,22 @@ fn set_receiver_symbol_data_property(
             function.define_symbol_property(symbol.clone(), descriptor);
             Ok(true)
         }
-        Value::Array(_)
-        | Value::String(_)
+        Value::Array(elements) => {
+            let descriptor = match elements.own_symbol_property(symbol) {
+                Some(existing) if !existing.writable => return Ok(false),
+                Some(existing) => Property::data(
+                    value,
+                    existing.enumerable,
+                    existing.writable,
+                    existing.configurable,
+                ),
+                None if !elements.is_extensible() => return Ok(false),
+                None => Property::enumerable(value),
+            };
+            elements.define_symbol_property(symbol.clone(), descriptor);
+            Ok(true)
+        }
+        Value::String(_)
         | Value::Number(_)
         | Value::Boolean(_)
         | Value::Null

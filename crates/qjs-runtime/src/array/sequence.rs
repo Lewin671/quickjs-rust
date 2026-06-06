@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use crate::{ArrayRef, RuntimeError, Value, has_property, property_value, to_length_with_env};
+use crate::{
+    ArrayRef, PropertyKey, RuntimeError, Value, has_property, is_truthy, property_value,
+    property_value_key, symbol, to_length_with_env,
+};
 
 use super::array_like::{array_like_length, array_like_receiver, array_like_values};
 use super::indexing::{array_at_index, array_slice_end, array_slice_start};
@@ -141,13 +144,34 @@ fn concat_array_item(
     value: Value,
     env: &mut HashMap<String, Value>,
 ) -> Result<(), RuntimeError> {
-    match value {
-        Value::Array(_) => concat_spread_array(result, holes, value, env),
-        value => {
-            result.push(value);
-            Ok(())
+    if is_concat_spreadable(value.clone(), env)? {
+        return concat_spread_array(result, holes, value, env);
+    }
+    result.push(value);
+    Ok(())
+}
+
+fn is_concat_spreadable(
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<bool, RuntimeError> {
+    if !is_object_like(&value) {
+        return Ok(false);
+    }
+    if let Some(symbol) = symbol::is_concat_spreadable_symbol(env) {
+        let spreadable = property_value_key(value.clone(), &PropertyKey::Symbol(symbol), env)?;
+        if !matches!(spreadable, Value::Undefined) {
+            return Ok(is_truthy(&spreadable));
         }
     }
+    Ok(matches!(value, Value::Array(_)))
+}
+
+fn is_object_like(value: &Value) -> bool {
+    matches!(
+        value,
+        Value::Object(_) | Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_)
+    )
 }
 
 fn concat_spread_array(

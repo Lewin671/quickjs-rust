@@ -41,7 +41,7 @@ pub(crate) fn native_reflect_delete_property(
                     && crate::array_own_property_descriptor(&elements, &key)
                         .is_none_or(|property| property.configurable)
             }
-            crate::PropertyKey::Symbol(_) => true,
+            crate::PropertyKey::Symbol(symbol) => elements.delete_own_symbol_property(&symbol),
         },
         Value::String(_)
         | Value::Number(_)

@@ -131,7 +131,7 @@ pub(super) fn own_property_descriptor_key(
         }),
         Value::Array(elements) => Ok(match key {
             PropertyKey::String(key) => crate::array_own_property_descriptor(&elements, key),
-            PropertyKey::Symbol(_) => None,
+            PropertyKey::Symbol(symbol) => elements.own_symbol_property(symbol),
         }),
         Value::String(value) => Ok(match key {
             PropertyKey::String(key) => crate::string::string_own_property_descriptor(&value, key),
@@ -296,6 +296,19 @@ fn define_symbol_property_on_value(
                 return Ok(false);
             }
             function.define_symbol_property(symbol, descriptor);
+            Ok(true)
+        }
+        Value::Array(elements) => {
+            if !elements.has_own_symbol_property(&symbol) && !elements.is_extensible() {
+                return Ok(false);
+            }
+            if elements
+                .own_symbol_property(&symbol)
+                .is_some_and(|property| !is_compatible_descriptor(&property, &descriptor))
+            {
+                return Ok(false);
+            }
+            elements.define_symbol_property(symbol, descriptor);
             Ok(true)
         }
         _ => {

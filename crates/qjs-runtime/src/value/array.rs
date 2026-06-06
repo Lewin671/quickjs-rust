@@ -16,6 +16,7 @@ pub struct ArrayRef {
     elements: Rc<RefCell<Vec<Value>>>,
     holes: Rc<RefCell<BTreeSet<usize>>>,
     properties: Rc<RefCell<HashMap<String, Property>>>,
+    symbol_properties: Rc<RefCell<Vec<(ObjectRef, Property)>>>,
     length: Rc<Cell<usize>>,
     length_writable: Rc<Cell<bool>>,
     extensible: Rc<Cell<bool>>,
@@ -35,6 +36,7 @@ impl ArrayRef {
             elements: Rc::new(RefCell::new(elements)),
             holes: Rc::new(RefCell::new(holes.into_iter().collect())),
             properties: Rc::new(RefCell::new(HashMap::new())),
+            symbol_properties: Rc::new(RefCell::new(Vec::new())),
             length: Rc::new(Cell::new(length)),
             length_writable: Rc::new(Cell::new(true)),
             extensible: Rc::new(Cell::new(true)),
@@ -88,6 +90,10 @@ impl ArrayRef {
 
     pub(crate) fn property(&self, key: &str) -> Option<Property> {
         self.properties.borrow().get(key).cloned()
+    }
+
+    pub(crate) fn symbol_property(&self, symbol: &ObjectRef) -> Option<Property> {
+        self.own_symbol_property(symbol)
     }
 
     pub(crate) fn to_vec(&self) -> Vec<Value> {
@@ -253,6 +259,18 @@ impl ArrayRef {
         self.properties.borrow_mut().insert(key, property);
     }
 
+    pub(crate) fn define_symbol_property(&self, symbol: ObjectRef, property: Property) {
+        let mut properties = self.symbol_properties.borrow_mut();
+        if let Some((_, existing)) = properties
+            .iter_mut()
+            .find(|(existing_symbol, _)| existing_symbol.ptr_eq(&symbol))
+        {
+            *existing = property;
+            return;
+        }
+        properties.push((symbol, property));
+    }
+
     pub(crate) fn delete_property(&self, key: &str) -> bool {
         let mut properties = self.properties.borrow_mut();
         if properties
@@ -309,6 +327,13 @@ impl ArrayRef {
         self.extensible.get()
     }
 
+    pub(crate) fn has_own_symbol_property(&self, symbol: &ObjectRef) -> bool {
+        self.symbol_properties
+            .borrow()
+            .iter()
+            .any(|(existing_symbol, _)| existing_symbol.ptr_eq(symbol))
+    }
+
     pub(crate) fn is_length_writable(&self) -> bool {
         self.length_writable.get()
     }
@@ -323,6 +348,9 @@ impl ArrayRef {
 
     pub(crate) fn seal(&self) {
         self.prevent_extensions();
+        for (_, property) in self.symbol_properties.borrow_mut().iter_mut() {
+            property.make_non_configurable();
+        }
         self.sealed.set(true);
     }
 
@@ -332,6 +360,9 @@ impl ArrayRef {
 
     pub(crate) fn freeze(&self) {
         self.seal();
+        for (_, property) in self.symbol_properties.borrow_mut().iter_mut() {
+            property.freeze_data();
+        }
         self.frozen.set(true);
         self.length_writable.set(false);
     }
@@ -342,6 +373,29 @@ impl ArrayRef {
 
     pub(crate) fn prototype_override(&self) -> Option<Option<ObjectRef>> {
         self.prototype.borrow().clone()
+    }
+
+    pub(crate) fn own_symbol_property(&self, symbol: &ObjectRef) -> Option<Property> {
+        self.symbol_properties
+            .borrow()
+            .iter()
+            .find(|(existing_symbol, _)| existing_symbol.ptr_eq(symbol))
+            .map(|(_, property)| property.clone())
+    }
+
+    pub(crate) fn delete_own_symbol_property(&self, symbol: &ObjectRef) -> bool {
+        let mut properties = self.symbol_properties.borrow_mut();
+        let Some(index) = properties
+            .iter()
+            .position(|(existing_symbol, _)| existing_symbol.ptr_eq(symbol))
+        else {
+            return true;
+        };
+        if !properties[index].1.configurable {
+            return false;
+        }
+        properties.remove(index);
+        true
     }
 
     pub(crate) fn set_prototype(&self, prototype: Option<ObjectRef>) -> Result<(), ()> {

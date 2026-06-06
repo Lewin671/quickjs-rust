@@ -72,7 +72,11 @@ fn has_symbol_property(
         Value::Map(map) => Ok(map.object().symbol_property(symbol).is_some()),
         Value::Set(set) => Ok(set.object().symbol_property(symbol).is_some()),
         Value::Function(function) => Ok(function.symbol_property(symbol, env).is_some()),
-        Value::Array(_) => Ok(false),
+        Value::Array(elements) => Ok(elements.symbol_property(symbol).is_some()
+            || elements
+                .prototype_override()
+                .unwrap_or_else(|| array_prototype(env))
+                .is_some_and(|prototype| prototype.symbol_property(symbol).is_some())),
         Value::String(_)
         | Value::Number(_)
         | Value::Boolean(_)
@@ -178,10 +182,12 @@ fn symbol_property_value(
             property_descriptor_value(function.symbol_property(symbol, env), receiver, env)
         }
         Value::Array(elements) => property_descriptor_value(
-            elements
-                .prototype_override()
-                .unwrap_or_else(|| array_prototype(env))
-                .and_then(|prototype| prototype.symbol_property(symbol)),
+            elements.symbol_property(symbol).or_else(|| {
+                elements
+                    .prototype_override()
+                    .unwrap_or_else(|| array_prototype(env))
+                    .and_then(|prototype| prototype.symbol_property(symbol))
+            }),
             receiver,
             env,
         ),
