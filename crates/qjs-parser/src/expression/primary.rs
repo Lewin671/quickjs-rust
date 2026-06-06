@@ -1,4 +1,6 @@
-use qjs_ast::{Expr, Literal, ObjectProperty, ObjectPropertyKey, ObjectPropertyKind, Span};
+use qjs_ast::{
+    ArrayElement, Expr, Literal, ObjectProperty, ObjectPropertyKey, ObjectPropertyKind, Span,
+};
 use qjs_lexer::TokenKind;
 
 use crate::{ParseError, Parser};
@@ -137,14 +139,18 @@ impl Parser {
         if !self.at(&TokenKind::RightBracket) {
             loop {
                 if self.at(&TokenKind::Comma) {
-                    elements.push(None);
+                    elements.push(ArrayElement::Elision);
                     self.advance();
                     if self.at(&TokenKind::RightBracket) {
                         break;
                     }
                     continue;
                 }
-                elements.push(Some(self.assignment()?));
+                if self.match_kind(&TokenKind::DotDotDot) {
+                    elements.push(ArrayElement::Spread(self.assignment()?));
+                } else {
+                    elements.push(ArrayElement::Expr(self.assignment()?));
+                }
                 if !self.match_kind(&TokenKind::Comma) || self.at(&TokenKind::RightBracket) {
                     break;
                 }

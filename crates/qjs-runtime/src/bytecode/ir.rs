@@ -21,8 +21,7 @@ pub(super) enum Op {
     Pop,
     Dup,
     NewArray {
-        count: usize,
-        holes: Vec<usize>,
+        elements: Vec<ArrayElementKind>,
     },
     NewObject(Vec<ObjectPropertyKind>),
     EnumerateKeys,
@@ -58,6 +57,13 @@ pub(super) enum Op {
     EndFinally,
     Return,
     Throw,
+}
+
+#[derive(Clone, Debug)]
+pub(super) enum ArrayElementKind {
+    Expr,
+    Elision,
+    Spread,
 }
 
 #[derive(Clone, Debug)]

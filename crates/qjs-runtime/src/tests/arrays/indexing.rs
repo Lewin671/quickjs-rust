@@ -23,6 +23,14 @@ fn evaluates_array_literals() {
         eval("let xs = []; let ys = xs; xs === ys;"),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval("let xs = [1, ...[2, 3], ...'ab']; xs.join('|');"),
+        Ok(Value::String("1|2|3|a|b".to_owned()))
+    );
+    assert_eq!(
+        eval("let xs = [...[1], , ...[3]]; xs.length + ':' + (1 in xs) + ':' + xs[2];"),
+        Ok(Value::String("3:false:3".to_owned()))
+    );
 }
 
 #[test]

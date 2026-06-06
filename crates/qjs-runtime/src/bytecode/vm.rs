@@ -4,11 +4,12 @@ use qjs_ast::ObjectPropertyKind;
 
 use crate::{
     ArrayRef, Function, GLOBAL_THIS_BINDING, ObjectRef, Property, RUNTIME_INTRINSIC_NAMES,
-    RuntimeError, Value, call_function, construct_function, initialize_builtins, is_truthy, object,
-    object_prototype, promise, symbol, to_property_key_value,
+    RuntimeError, Value, array::array_like_values_with_env, call_function, construct_function,
+    initialize_builtins, is_truthy, object, object_prototype, promise, symbol,
+    to_property_key_value,
 };
 
-use super::ir::{Bytecode, Op};
+use super::ir::{ArrayElementKind, Bytecode, Op};
 use super::util::{stack_underflow, typeof_value};
 use super::vm_call::{insert_scope_call_bindings, user_bytecode_function};
 use super::vm_props::{
@@ -139,7 +140,7 @@ impl<'a> Vm<'a> {
                     let value = self.stack.last().cloned().ok_or_else(stack_underflow)?;
                     self.stack.push(value);
                 }
-                Op::NewArray { count, holes } => self.new_array(count, holes)?,
+                Op::NewArray { elements } => self.new_array(&elements)?,
                 Op::NewObject(kinds) => self.new_object(&kinds)?,
                 Op::EnumerateKeys => self.enumerate_keys()?,
                 Op::GetProp => {
@@ -275,12 +276,39 @@ impl<'a> Vm<'a> {
             .and_then(Option::as_ref)
     }
 
-    fn new_array(&mut self, count: usize, holes: Vec<usize>) -> Result<(), RuntimeError> {
-        let mut values = Vec::with_capacity(count);
-        for _ in 0..count {
-            values.push(self.pop()?);
+    fn new_array(&mut self, elements: &[ArrayElementKind]) -> Result<(), RuntimeError> {
+        let value_count = elements
+            .iter()
+            .filter(|element| !matches!(element, ArrayElementKind::Elision))
+            .count();
+        let mut element_values = Vec::with_capacity(value_count);
+        for _ in 0..value_count {
+            element_values.push(self.pop()?);
         }
-        values.reverse();
+        element_values.reverse();
+
+        let mut values = Vec::new();
+        let mut holes = Vec::new();
+        let mut next_value = element_values.into_iter();
+        for element in elements {
+            match element {
+                ArrayElementKind::Expr => {
+                    values.push(next_value.next().ok_or_else(stack_underflow)?);
+                }
+                ArrayElementKind::Elision => {
+                    holes.push(values.len());
+                    values.push(Value::Undefined);
+                }
+                ArrayElementKind::Spread => {
+                    let value = next_value.next().ok_or_else(stack_underflow)?;
+                    let mut env = self.current_env();
+                    let spread_values =
+                        array_like_values_with_env(value, "array spread", &mut env)?;
+                    self.apply_env(env);
+                    values.extend(spread_values);
+                }
+            }
+        }
         self.stack
             .push(Value::Array(ArrayRef::new_sparse(values, holes)));
         Ok(())

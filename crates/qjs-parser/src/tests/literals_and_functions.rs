@@ -1,5 +1,6 @@
 use qjs_ast::{
-    AssignmentTarget, Expr, Literal, MemberProperty, ObjectPropertyKey, ObjectPropertyKind, Stmt,
+    ArrayElement, AssignmentTarget, Expr, Literal, MemberProperty, ObjectPropertyKey,
+    ObjectPropertyKind, Stmt,
 };
 
 use crate::parse_script;
@@ -129,13 +130,24 @@ fn parses_array_literal() {
         panic!("expected one array expression");
     };
     assert_eq!(elements.len(), 2);
-    assert!(elements.iter().all(Option::is_some));
+    assert!(
+        elements
+            .iter()
+            .all(|element| matches!(element, ArrayElement::Expr(_)))
+    );
     let script = parse_script("[1, , 3];").expect("source should parse");
     let [Stmt::Expr(Expr::Array { elements, .. })] = script.body.as_slice() else {
         panic!("expected one array expression");
     };
     assert_eq!(elements.len(), 3);
-    assert!(elements[1].is_none());
+    assert!(matches!(elements[1], ArrayElement::Elision));
+    let script = parse_script("[1, ...items, 3];").expect("source should parse");
+    let [Stmt::Expr(Expr::Array { elements, .. })] = script.body.as_slice() else {
+        panic!("expected one array expression");
+    };
+    assert!(matches!(elements[0], ArrayElement::Expr(_)));
+    assert!(matches!(elements[1], ArrayElement::Spread(_)));
+    assert!(matches!(elements[2], ArrayElement::Expr(_)));
 }
 
 #[test]

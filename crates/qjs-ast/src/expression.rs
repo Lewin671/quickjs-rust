@@ -68,8 +68,8 @@ pub enum Expr {
     Literal(Literal),
     /// An array literal.
     Array {
-        /// Array elements, with `None` for elisions.
-        elements: Vec<Option<Expr>>,
+        /// Array elements, including elisions and spread elements.
+        elements: Vec<ArrayElement>,
         /// Source span.
         span: Span,
     },
@@ -184,6 +184,17 @@ pub enum Expr {
     This { span: Span },
     /// An identifier reference.
     Identifier { name: String, span: Span },
+}
+
+/// An array literal element.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ArrayElement {
+    /// An omitted element in a sparse array literal.
+    Elision,
+    /// A normal element expression.
+    Expr(Expr),
+    /// A spread element expression.
+    Spread(Expr),
 }
 
 impl Expr {

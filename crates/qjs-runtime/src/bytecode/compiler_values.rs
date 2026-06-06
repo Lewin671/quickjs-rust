@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use qjs_ast::{Expr, MemberProperty, ObjectProperty, ObjectPropertyKey, Stmt};
+use qjs_ast::{ArrayElement, Expr, MemberProperty, ObjectProperty, ObjectPropertyKey, Stmt};
 
 use crate::{
     RuntimeError, Value,
@@ -8,7 +8,7 @@ use crate::{
 };
 
 use super::compiler::Compiler;
-use super::ir::Op;
+use super::ir::{ArrayElementKind, Op};
 use super::util::unsupported_stmt;
 
 impl Compiler {
@@ -25,19 +25,25 @@ impl Compiler {
         Ok(())
     }
 
-    pub(super) fn compile_array(&mut self, elements: &[Option<Expr>]) -> Result<(), RuntimeError> {
-        let mut holes = Vec::new();
-        for (index, element) in elements.iter().enumerate() {
-            if let Some(element) = element {
-                self.compile_expr(element)?;
-            } else {
-                holes.push(index);
-                self.emit_load_undefined();
+    pub(super) fn compile_array(&mut self, elements: &[ArrayElement]) -> Result<(), RuntimeError> {
+        let mut element_kinds = Vec::with_capacity(elements.len());
+        for element in elements {
+            match element {
+                ArrayElement::Expr(expr) => {
+                    self.compile_expr(expr)?;
+                    element_kinds.push(ArrayElementKind::Expr);
+                }
+                ArrayElement::Elision => {
+                    element_kinds.push(ArrayElementKind::Elision);
+                }
+                ArrayElement::Spread(expr) => {
+                    self.compile_expr(expr)?;
+                    element_kinds.push(ArrayElementKind::Spread);
+                }
             }
         }
         self.emit(Op::NewArray {
-            count: elements.len(),
-            holes,
+            elements: element_kinds,
         });
         Ok(())
     }
