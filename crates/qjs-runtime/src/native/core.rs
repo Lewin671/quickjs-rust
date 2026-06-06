@@ -34,6 +34,8 @@ pub(super) fn call_core_native(
         NativeFunction::Escape => global::native_global_escape(argument_values, env),
         NativeFunction::Unescape => global::native_global_unescape(argument_values, env),
         NativeFunction::Symbol => symbol::native_symbol(function, argument_values, env),
+        NativeFunction::SymbolFor => symbol::native_symbol_for(argument_values, env),
+        NativeFunction::SymbolKeyFor => symbol::native_symbol_key_for(argument_values, env),
         NativeFunction::SymbolPrototypeDescription => {
             symbol::native_symbol_prototype_description(this_value)
         }

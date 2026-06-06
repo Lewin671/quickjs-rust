@@ -829,6 +829,7 @@ cases/string-prototype-trim-length.js
 cases/string-prototype-trim-right-alias.js
 cases/string-prototype-trim-start-basic.js
 cases/string-prototype-trim-start-length.js
+cases/symbol-registry-basic.js
 cases/symbol-prototype-description-to-string.js
 cases/template-literal-no-substitution-basic.js
 cases/weak-map-basic.js

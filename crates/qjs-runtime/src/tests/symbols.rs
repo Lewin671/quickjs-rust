@@ -46,3 +46,40 @@ fn evaluates_symbol_prototype_builtins() {
     assert!(eval("Symbol.prototype.toString.call({});").is_err());
     assert!(eval("Symbol.prototype.valueOf.call({});").is_err());
 }
+
+#[test]
+fn evaluates_symbol_registry_builtins() {
+    assert_eq!(
+        eval("typeof Symbol.for;"),
+        Ok(Value::String("function".to_owned()))
+    );
+    assert_eq!(eval("Symbol.for.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(
+        eval("typeof Symbol.keyFor;"),
+        Ok(Value::String("function".to_owned()))
+    );
+    assert_eq!(eval("Symbol.keyFor.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(
+        eval(
+            "let first = Symbol.for('shared'); let second = Symbol.for('shared'); first === second;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("Symbol.for('shared') === Symbol('shared');"),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval("let symbol = Symbol.for('shared'); Symbol.keyFor(symbol);"),
+        Ok(Value::String("shared".to_owned()))
+    );
+    assert_eq!(
+        eval("Symbol.keyFor(Symbol('local'));"),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval("let symbol = Symbol.for(7); symbol.description + ':' + Symbol.keyFor(symbol);"),
+        Ok(Value::String("7:7".to_owned()))
+    );
+    assert!(eval("Symbol.keyFor({});").is_err());
+}

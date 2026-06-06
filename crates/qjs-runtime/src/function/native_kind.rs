@@ -315,6 +315,8 @@ pub(crate) enum NativeFunction {
     StringPrototypeToWellFormed,
     StringPrototypeValueOf,
     Symbol,
+    SymbolFor,
+    SymbolKeyFor,
     SymbolPrototypeDescription,
     SymbolPrototypeToString,
     SymbolPrototypeValueOf,
