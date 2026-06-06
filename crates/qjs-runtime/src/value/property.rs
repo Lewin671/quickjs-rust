@@ -65,6 +65,10 @@ impl Property {
         }
     }
 
+    pub(crate) fn fixed_non_enumerable(value: Value) -> Self {
+        Self::data(value, false, false, false)
+    }
+
     pub(crate) fn is_accessor(&self) -> bool {
         self.accessor
     }

@@ -90,7 +90,7 @@ pub(crate) fn install_map(
     symbol::define_well_known_iterator_alias(env, &map_prototype, "entries");
     map_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
-        Property::non_enumerable(Value::Object(map_prototype)),
+        Property::fixed_non_enumerable(Value::Object(map_prototype)),
     );
 
     let value = Value::Function(map_function);

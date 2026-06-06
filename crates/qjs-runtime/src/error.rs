@@ -47,7 +47,7 @@ pub(crate) fn install_error(
     );
     error_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
-        Property::non_enumerable(Value::Object(error_prototype)),
+        Property::fixed_non_enumerable(Value::Object(error_prototype)),
     );
     define_function_name(&error_function, "Error");
 
@@ -223,7 +223,7 @@ fn install_native_error(
     prototype.define_non_enumerable("message".to_owned(), Value::String(String::new()));
     function.properties.borrow_mut().insert(
         "prototype".to_owned(),
-        Property::non_enumerable(Value::Object(prototype)),
+        Property::fixed_non_enumerable(Value::Object(prototype)),
     );
     define_function_name(&function, name);
 

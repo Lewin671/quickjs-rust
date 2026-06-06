@@ -41,7 +41,7 @@ pub(crate) fn install_weak_set(
     );
     weak_set_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
-        crate::Property::non_enumerable(Value::Object(weak_set_prototype)),
+        crate::Property::fixed_non_enumerable(Value::Object(weak_set_prototype)),
     );
 
     let value = Value::Function(weak_set_function);

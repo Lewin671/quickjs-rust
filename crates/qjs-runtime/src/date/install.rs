@@ -305,7 +305,7 @@ pub(crate) fn install_date(
 
     date_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
-        Property::non_enumerable(Value::Object(date_prototype)),
+        Property::fixed_non_enumerable(Value::Object(date_prototype)),
     );
     define_date_function(&date_function, "now", 0, NativeFunction::DateNow);
     define_date_function(&date_function, "parse", 1, NativeFunction::DateParse);

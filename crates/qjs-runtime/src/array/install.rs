@@ -239,7 +239,7 @@ pub(crate) fn install_array(
     );
     array_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
-        Property::non_enumerable(Value::Object(array_prototype)),
+        Property::fixed_non_enumerable(Value::Object(array_prototype)),
     );
     define_array_function(&array_function, "from", 1, NativeFunction::ArrayFrom);
     define_array_function(&array_function, "isArray", 1, NativeFunction::ArrayIsArray);

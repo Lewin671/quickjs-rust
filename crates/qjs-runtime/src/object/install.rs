@@ -47,7 +47,7 @@ pub(crate) fn install_object(env: &mut HashMap<String, Value>, global_this: &Val
     );
     object_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
-        Property::non_enumerable(Value::Object(object_prototype.clone())),
+        Property::fixed_non_enumerable(Value::Object(object_prototype.clone())),
     );
     define_object_function(&object_function, "assign", 2, NativeFunction::ObjectAssign);
     define_object_function(&object_function, "create", 2, NativeFunction::ObjectCreate);

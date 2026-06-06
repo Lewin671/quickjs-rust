@@ -86,7 +86,7 @@ pub(crate) fn install_promise(
     promise_prototype.define_non_enumerable("then".to_owned(), Value::Function(promise_then));
     promise_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
-        Property::non_enumerable(Value::Object(promise_prototype.clone())),
+        Property::fixed_non_enumerable(Value::Object(promise_prototype.clone())),
     );
     let promise_all = promise_static_function(
         "all",

@@ -90,7 +90,7 @@ pub(crate) fn install_string(
     define_object_alias(&string_prototype, "trimRight", "trimEnd");
     string_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
-        Property::non_enumerable(Value::Object(string_prototype)),
+        Property::fixed_non_enumerable(Value::Object(string_prototype)),
     );
     define_function_property(
         &string_function,

@@ -19,6 +19,12 @@ fn evaluates_object_descriptor_queries() {
         Ok(Value::Boolean(false))
     );
     assert_eq!(
+        eval(
+            "['Object','Function','Array','String','Boolean','Number','Date','RegExp','Error','EvalError','RangeError','ReferenceError','SyntaxError','TypeError','URIError','Map','Set','WeakMap','WeakSet','Promise','Symbol'].every(function(name) { let d = Object.getOwnPropertyDescriptor(this[name], 'prototype'); return d.writable === false && d.enumerable === false && d.configurable === false && !d.hasOwnProperty('get') && !d.hasOwnProperty('set'); });"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("Object.getOwnPropertyDescriptor([1, 2], 'length').value;"),
         Ok(Value::Number(2.0))
     );
