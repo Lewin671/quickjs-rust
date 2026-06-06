@@ -109,7 +109,7 @@ pub(super) fn call_array_native(
             array::native_array_prototype_to_reversed(this_value, env)?
         }
         NativeFunction::ArrayPrototypeToSpliced => {
-            array::native_array_prototype_to_spliced(this_value, argument_values)?
+            array::native_array_prototype_to_spliced(this_value, argument_values, env)?
         }
         NativeFunction::ArrayPrototypeToSorted => {
             array::native_array_prototype_to_sorted(this_value, argument_values, env)?

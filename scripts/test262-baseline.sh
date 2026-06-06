@@ -239,11 +239,11 @@ rust_source_syntax_supported() {
 }
 rust_features_supported() {
   local entries; entries="$(list_entries "$1")"
-  [[ "${2:-}" == test/built-ins/RegExp/prototype/Symbol.split/* ]] && entries="$(printf '%s\n' "$entries" | grep -Fxv 'Symbol.species' || true)"; [[ "${2:-}" == test/built-ins/Array/prototype/with/* || "${2:-}" == test/built-ins/Array/prototype/toReversed/* ]] && entries="$(printf '%s\n' "$entries" | grep -Fxv -e 'change-array-by-copy' -e 'exponentiation' || true)"
+  [[ "${2:-}" == test/built-ins/RegExp/prototype/Symbol.split/* ]] && entries="$(printf '%s\n' "$entries" | grep -Fxv 'Symbol.species' || true)"; [[ "${2:-}" == test/built-ins/Array/prototype/with/* || "${2:-}" == test/built-ins/Array/prototype/toReversed/* || "${2:-}" == test/built-ins/Array/prototype/toSpliced/* ]] && entries="$(printf '%s\n' "$entries" | grep -Fxv -e 'change-array-by-copy' -e 'exponentiation' || true)"
   [ -z "$entries" ] || ! grep -Fvx -e 'Symbol' -e 'Symbol.isConcatSpreadable' -e 'Symbol.match' \
     -e 'Symbol.replace' -e 'Symbol.search' -e 'Symbol.split' -e 'Symbol.toPrimitive' \
     -e 'Reflect.construct' -e 'arrow-function' \
-    -e 'array-find-from-last' -e 'Array.prototype.at' -e 'Array.prototype.includes' -e 'Array.prototype.toReversed' -e 'Array.prototype.with' -e 'RegExp.escape' -e 'String.prototype.endsWith' -e 'String.prototype.includes' -e 'String.prototype.isWellFormed' -e 'String.prototype.replaceAll' -e 'String.prototype.toWellFormed' \
+    -e 'array-find-from-last' -e 'Array.prototype.at' -e 'Array.prototype.includes' -e 'Array.prototype.toReversed' -e 'Array.prototype.toSpliced' -e 'Array.prototype.with' -e 'RegExp.escape' -e 'String.prototype.endsWith' -e 'String.prototype.includes' -e 'String.prototype.isWellFormed' -e 'String.prototype.replaceAll' -e 'String.prototype.toWellFormed' \
     <<<"$entries" >/dev/null
 }
 rust_includes_supported() {

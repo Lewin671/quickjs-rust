@@ -5,11 +5,12 @@ use crate::{
     property_value_key, symbol, to_length_with_env,
 };
 
-use super::array_like::{array_like_length, array_like_receiver, array_like_values};
+use super::array_like::{array_like_length, array_like_receiver};
 use super::indexing::{array_at_index, array_slice_end, array_slice_start};
-use super::splice::{splice_delete_count, splice_start};
+use super::splice::{splice_start_with_env, to_spliced_delete_count};
 
 const MAX_ARRAY_LENGTH: usize = u32::MAX as usize;
+const MAX_SAFE_LENGTH: usize = (1usize << 53) - 1;
 
 pub(crate) fn native_array_prototype_concat(
     this_value: Value,
@@ -117,24 +118,58 @@ pub(crate) fn native_array_prototype_to_reversed(
 pub(crate) fn native_array_prototype_to_spliced(
     this_value: Value,
     argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let values = array_like_values(this_value, "Array.prototype.toSpliced")?;
-    let length = values.len();
-    let start = splice_start(
+    let source = array_like_length(this_value, "Array.prototype.toSpliced", env)?;
+    let length = source.length;
+    let start = splice_start_with_env(
         length,
         argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
     )?;
-    let delete_count = splice_delete_count(length, start, argument_values)?;
+    let delete_count = to_spliced_delete_count(length, start, argument_values, env)?;
     let items = if argument_values.len() > 2 {
         &argument_values[2..]
     } else {
         &[]
     };
 
-    let mut result = Vec::with_capacity(length.saturating_sub(delete_count) + items.len());
-    result.extend_from_slice(&values[..start]);
+    let new_length = length
+        .saturating_sub(delete_count)
+        .checked_add(items.len())
+        .ok_or_else(|| RuntimeError {
+            thrown: None,
+            message: "TypeError: invalid array length".to_owned(),
+        })?;
+    if new_length > MAX_SAFE_LENGTH {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: invalid array length".to_owned(),
+        });
+    }
+    if new_length > MAX_ARRAY_LENGTH {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "RangeError: invalid array length".to_owned(),
+        });
+    }
+
+    let mut result = Vec::with_capacity(new_length);
+    for index in 0..start {
+        result.push(property_value(
+            source.receiver.clone(),
+            &index.to_string(),
+            env,
+        )?);
+    }
     result.extend_from_slice(items);
-    result.extend_from_slice(&values[start + delete_count..]);
+    for index in start + delete_count..length {
+        result.push(property_value(
+            source.receiver.clone(),
+            &index.to_string(),
+            env,
+        )?);
+    }
     Ok(Value::Array(ArrayRef::new(result)))
 }
 
