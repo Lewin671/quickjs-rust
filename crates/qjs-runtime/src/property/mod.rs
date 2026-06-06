@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{Property, RuntimeError, Value, call_function};
+use crate::{Property, RuntimeError, Value, call_function, error};
 
 mod array;
 mod function;
@@ -47,6 +47,7 @@ pub(crate) fn has_property_key(
         Value::Array(elements) => Ok(array_has_own_property(&elements, key)
             || array_prototype_property(&elements, env, key).is_some()),
         Value::Function(function) => Ok(function_own_property_descriptor(&function, key).is_some()
+            || native_error_constructor_parent_descriptor(&function, env, key).is_some()
             || function_prototype_property(&function, env, key).is_some()),
         Value::String(_)
         | Value::Number(_)
@@ -109,12 +110,14 @@ pub(crate) fn property_value_key(
         Value::Map(map) => property_descriptor_value(map.object().property(key), receiver, env),
         Value::Set(set) => property_descriptor_value(set.object().property(key), receiver, env),
         Value::Function(function) => property_descriptor_value(
-            function_own_property_descriptor(&function, key).or_else(|| {
-                function
-                    .internal_prototype_override()
-                    .unwrap_or_else(|| function_intrinsic_prototype(env))
-                    .and_then(|prototype| prototype.property(key))
-            }),
+            function_own_property_descriptor(&function, key)
+                .or_else(|| native_error_constructor_parent_descriptor(&function, env, key))
+                .or_else(|| {
+                    function
+                        .internal_prototype_override()
+                        .unwrap_or_else(|| function_intrinsic_prototype(env))
+                        .and_then(|prototype| prototype.property(key))
+                }),
             receiver,
             env,
         ),
@@ -207,6 +210,18 @@ fn symbol_property_value(
             env,
         ),
         Value::Null | Value::Undefined => Ok(Value::Undefined),
+    }
+}
+
+fn native_error_constructor_parent_descriptor(
+    function: &crate::Function,
+    env: &HashMap<String, Value>,
+    key: &str,
+) -> Option<Property> {
+    match error::native_error_constructor_parent(function, env) {
+        Some(Value::Function(parent)) => function_own_property_descriptor(&parent, key),
+        Some(Value::Object(parent)) => parent.property(key),
+        _ => None,
     }
 }
 

@@ -32,11 +32,16 @@ pub(crate) fn native_object_get_prototype_of(
             .unwrap_or_else(|| array_prototype(env))
             .map(Value::Object)
             .unwrap_or(Value::Null)),
-        Some(Value::Function(function)) => Ok(function
-            .internal_prototype_override()
-            .unwrap_or_else(|| function_intrinsic_prototype(env))
-            .map(Value::Object)
-            .unwrap_or(Value::Null)),
+        Some(Value::Function(function)) => {
+            Ok(error::native_error_constructor_parent(function, env)
+                .or_else(|| {
+                    function
+                        .internal_prototype_override()
+                        .unwrap_or_else(|| function_intrinsic_prototype(env))
+                        .map(Value::Object)
+                })
+                .unwrap_or(Value::Null))
+        }
         Some(Value::Boolean(_)) => Ok(constructor_prototype_value("Boolean", env)),
         Some(Value::Number(_)) => Ok(constructor_prototype_value("Number", env)),
         Some(Value::String(_)) => Ok(constructor_prototype_value("String", env)),

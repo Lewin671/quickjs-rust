@@ -148,6 +148,16 @@ pub(crate) fn is_native_error(native: NativeFunction) -> bool {
     native_error_name(native).is_some()
 }
 
+pub(crate) fn native_error_constructor_parent(
+    function: &Function,
+    env: &HashMap<String, Value>,
+) -> Option<Value> {
+    function
+        .native
+        .filter(|native| is_native_error(*native))
+        .and_then(|_| env.get("Error").cloned())
+}
+
 pub(crate) fn native_error_prototype_to_string(this_value: Value) -> Result<Value, RuntimeError> {
     let Value::Object(object) = this_value else {
         return Err(RuntimeError {

@@ -108,6 +108,18 @@ fn evaluates_native_error_builtins() {
             Ok(Value::Boolean(true))
         );
         assert_eq!(
+            eval(&format!("Object.getPrototypeOf({name}) === Error;")),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval(&format!("Reflect.getPrototypeOf({name}) === Error;")),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval(&format!("{name}.isError === Error.isError;")),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
             eval(&format!("let error = new {name}('boom'); error.message;")),
             Ok(Value::String("boom".to_owned()))
         );
@@ -149,6 +161,10 @@ fn evaluates_aggregate_error_builtin() {
     );
     assert_eq!(
         eval("AggregateError.prototype.constructor === AggregateError;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("Object.getPrototypeOf(AggregateError) === Error;"),
         Ok(Value::Boolean(true))
     );
     assert_eq!(

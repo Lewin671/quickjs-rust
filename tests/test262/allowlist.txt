@@ -481,9 +481,15 @@ cases/object-define-properties-nonenumerable-descriptor-ignored.js
 cases/object-define-properties-primitive-descriptors.js
 cases/object-get-prototype-of-basic.js
 cases/object-get-prototype-of-array-prototype.js
+cases/object-get-prototype-of-eval-error-constructor.js
 cases/object-get-prototype-of-primitive-boolean.js
 cases/object-get-prototype-of-primitive-number.js
 cases/object-get-prototype-of-primitive-string.js
+cases/object-get-prototype-of-range-error-constructor.js
+cases/object-get-prototype-of-reference-error-constructor.js
+cases/object-get-prototype-of-syntax-error-constructor.js
+cases/object-get-prototype-of-type-error-constructor.js
+cases/object-get-prototype-of-uri-error-constructor.js
 cases/object-get-own-property-names-array-basic.js
 cases/object-get-own-property-names-basic.js
 cases/object-get-own-property-names-function-basic.js
