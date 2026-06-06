@@ -234,11 +234,18 @@ skip_reason() {
     echo "raw"
   elif [ -n "$includes" ]; then
     echo "includes"
-  elif [ -n "$features" ]; then
+  elif [ -n "$features" ] && ! rust_features_supported "$features"; then
     echo "features"
   else
     echo ""
   fi
+}
+
+rust_features_supported() {
+  local entries
+  entries="$(feature_entries "$1")"
+  grep -Fxq 'Symbol.isConcatSpreadable' <<<"$entries" || return 1
+  ! grep -Fvx -e 'Symbol' -e 'Symbol.isConcatSpreadable' <<<"$entries" >/dev/null
 }
 
 feature_entries() {
