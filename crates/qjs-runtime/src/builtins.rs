@@ -7,6 +7,9 @@ use crate::{
 
 pub(crate) fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
     let object_prototype = object::install_object(env, global_this);
+    if let Value::Object(global_object) = global_this {
+        let _ = global_object.set_prototype(Some(object_prototype.clone()));
+    }
 
     crate::function::install_function(env, global_this, object_prototype.clone());
     global::install_globals(env, global_this);

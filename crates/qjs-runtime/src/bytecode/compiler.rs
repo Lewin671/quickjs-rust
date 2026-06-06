@@ -15,6 +15,7 @@ pub(super) struct Compiler {
     loop_stack: Vec<LoopContext>,
     next_temp: usize,
     pub(super) strict: bool,
+    pub(super) global_scope: bool,
 }
 
 #[derive(Default)]
@@ -36,6 +37,7 @@ impl Default for Compiler {
             loop_stack: Vec::new(),
             next_temp: 0,
             strict: false,
+            global_scope: true,
         }
     }
 }
@@ -80,6 +82,7 @@ impl Compiler {
         params: &[String],
         body: &[Stmt],
     ) -> Result<Bytecode, RuntimeError> {
+        self.global_scope = false;
         self.strict = self.strict || is_strict_function_body(body);
         for param in params {
             self.local_slot(param, true);
@@ -217,6 +220,16 @@ impl Compiler {
             VarKind::Var => self.local_slot(name, true),
             VarKind::Let => self.declare_lexical_slot(name, true),
             VarKind::Const => self.declare_lexical_slot(name, false),
+        }
+    }
+
+    pub(super) fn emit_store_var_binding(&mut self, slot: usize, name: &str, kind: VarKind) {
+        if self.global_scope && kind == VarKind::Var {
+            self.emit(Op::Dup);
+            self.emit(Op::StoreLocal(slot));
+            self.emit(Op::DefineGlobalVar(name.to_owned()));
+        } else {
+            self.emit(Op::StoreLocal(slot));
         }
     }
 
@@ -420,7 +433,7 @@ impl Compiler {
                     } else {
                         self.emit_load_undefined();
                     }
-                    self.emit(Op::StoreLocal(slot));
+                    self.emit_store_var_binding(slot, &declaration.name, *kind);
                 }
                 self.emit_load_undefined();
                 Ok(())

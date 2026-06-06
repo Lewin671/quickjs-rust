@@ -111,6 +111,11 @@ impl<'a> Vm<'a> {
                     let result = self.store_local(slot, value);
                     self.handle_runtime_result(result)?;
                 }
+                Op::DefineGlobalVar(name) => {
+                    let value = self.pop()?;
+                    let result = self.define_global_var(name, value);
+                    self.handle_runtime_result(result)?;
+                }
                 Op::LoadGlobal(name) => {
                     let result = self.load_global(&name);
                     if let Some(value) = self.handle_runtime_result(result)? {

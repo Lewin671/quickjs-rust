@@ -194,4 +194,14 @@ fn keeps_global_object_properties_and_bindings_in_sync() {
             "function:function:[object Object]".to_owned()
         ))
     );
+    assert_eq!(
+        eval(
+            "Object.defineProperty(Object.prototype, 'prop', { value: 1001, writable: false, configurable: false }); var prop = 1002; this.hasOwnProperty('prop') + ':' + prop + ':' + this.prop;"
+        ),
+        Ok(Value::String("true:1002:1002".to_owned()))
+    );
+    assert_eq!(
+        eval("function f() { var localOnly = 1; return this.hasOwnProperty('localOnly'); } f();"),
+        Ok(Value::Boolean(false))
+    );
 }

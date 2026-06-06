@@ -464,6 +464,7 @@ cases/object-define-property-data-writable.js
 cases/object-define-property-function-basic.js
 cases/object-define-property-array-length-rules.js
 cases/object-define-property-function-inherited-setter.js
+cases/object-define-property-global-var-shadows-prototype.js
 cases/object-define-property-inherited-enumerable-for-in.js
 cases/object-define-property-length.js
 cases/object-define-property-nonconfigurable-compat.js

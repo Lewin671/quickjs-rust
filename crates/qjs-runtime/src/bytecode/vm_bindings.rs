@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{GLOBAL_THIS_BINDING, RuntimeError, Value};
+use crate::{GLOBAL_THIS_BINDING, Property, RuntimeError, Value};
 
 use super::{
     ir::Bytecode,
@@ -91,6 +91,21 @@ impl Vm<'_> {
         {
             global_this.set(local_meta.name, value);
         }
+        Ok(())
+    }
+
+    pub(super) fn define_global_var(
+        &mut self,
+        name: String,
+        value: Value,
+    ) -> Result<(), RuntimeError> {
+        let Some(Value::Object(global_this)) = self.globals.get(GLOBAL_THIS_BINDING) else {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "global object binding is missing".to_owned(),
+            });
+        };
+        global_this.define_property(name, Property::data(value, true, true, false));
         Ok(())
     }
 }

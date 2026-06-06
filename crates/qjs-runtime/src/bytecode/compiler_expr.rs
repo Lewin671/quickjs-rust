@@ -166,7 +166,7 @@ impl Compiler {
                     } else {
                         self.emit_load_undefined();
                     }
-                    self.emit(Op::StoreLocal(slot));
+                    self.emit_store_var_binding(slot, &declaration.name, *kind);
                 }
                 self.emit_load_undefined();
                 Ok(())

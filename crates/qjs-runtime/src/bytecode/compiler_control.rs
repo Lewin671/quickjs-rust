@@ -167,7 +167,7 @@ impl Compiler {
             ForInLeft::VarDecl { name, kind, .. } => {
                 let slot = self.declare_var_kind_slot(name, *kind);
                 self.emit(Op::LoadLocal(key_slot));
-                self.emit(Op::StoreLocal(slot));
+                self.emit_store_var_binding(slot, name, *kind);
             }
             ForInLeft::Target(AssignmentTarget::Identifier { name, .. }) => {
                 let slot = self.assignment_slot(name);

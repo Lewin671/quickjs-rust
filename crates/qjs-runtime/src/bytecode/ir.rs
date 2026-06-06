@@ -13,6 +13,7 @@ pub(super) enum Op {
     LoadLocal(usize),
     LoadLocalOrUndefined(usize),
     StoreLocal(usize),
+    DefineGlobalVar(String),
     LoadGlobal(String),
     StoreGlobalStrict(String),
     TypeofGlobal(String),
