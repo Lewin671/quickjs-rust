@@ -409,6 +409,18 @@ fn evaluates_regexp_symbol_split() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "let flagsArg; let re = {}; re.flags = 'i'; re.constructor = function() {}; re.constructor[Symbol.species] = function(_, flags) { flagsArg = flags; return /b/y; }; RegExp.prototype[Symbol.split].call(re, 'abc').join('|') + ':' + flagsArg;"
+        ),
+        Ok(Value::String("a|c:iy".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let re = /x/; re.constructor = function() {}; re.constructor[Symbol.species] = 1; let caught = false; try { re[Symbol.split]('abc'); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]

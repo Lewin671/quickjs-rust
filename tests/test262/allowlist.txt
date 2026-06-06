@@ -858,6 +858,7 @@ cases/regexp-prototype-source-line-terminator.js
 cases/regexp-prototype-source-value-u.js
 cases/regexp-prototype-source-value-slash.js
 cases/regexp-prototype-symbol-split-basic.js
+cases/regexp-prototype-symbol-split-species.js
 cases/regexp-prototype-symbol-split-unicode-advance.js
 cases/regexp-prototype-test-basic.js
 cases/regexp-prototype-test-sticky-fail-lastindex.js

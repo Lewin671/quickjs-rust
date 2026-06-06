@@ -3,8 +3,9 @@ use std::collections::HashMap;
 use crate::string::advance_string_index;
 use crate::{
     ArrayRef, Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value,
-    call_function, property_value, reflect, symbol, to_js_string_with_env, to_length_with_env,
-    to_number_with_env, to_uint32, to_uint32_number,
+    call_function, construct_function, ensure_constructor, property_value, property_value_key,
+    reflect, symbol, to_js_string_with_env, to_length_with_env, to_number_with_env, to_uint32,
+    to_uint32_number,
 };
 
 pub(crate) fn install_regexp_prototype_split(env: &HashMap<String, Value>, prototype: &ObjectRef) {
@@ -103,38 +104,53 @@ fn split_regexp_clone(
     value: Value,
     env: &mut HashMap<String, Value>,
 ) -> Result<(Value, bool), RuntimeError> {
-    validate_species_constructor(value.clone(), env)?;
+    let constructor = species_constructor(value.clone(), env)?;
     let flags = to_js_string_with_env(property_value(value.clone(), "flags", env)?, env)?;
     let unicode_matching = flags.contains('u');
     let mut split_flags = flags;
     if !split_flags.contains('y') {
         split_flags.push('y');
     }
-    let constructor = env.get("RegExp").cloned().ok_or_else(|| RuntimeError {
-        thrown: None,
-        message: "RegExp constructor is not available".to_owned(),
-    })?;
-    let splitter = call_function(
+    let splitter = construct_function(
+        constructor.clone(),
         constructor,
-        Value::Undefined,
         vec![value, Value::String(split_flags)],
         env,
-        false,
     )?;
     Ok((splitter, unicode_matching))
 }
 
-fn validate_species_constructor(
+fn species_constructor(
     value: Value,
     env: &mut HashMap<String, Value>,
-) -> Result<(), RuntimeError> {
+) -> Result<Value, RuntimeError> {
+    let default_constructor = regexp_constructor(env)?;
     let constructor = property_value(value, "constructor", env)?;
-    if matches!(constructor, Value::Undefined) || is_object_value(&constructor) {
-        return Ok(());
+    if matches!(constructor, Value::Undefined) {
+        return Ok(default_constructor);
     }
-    Err(RuntimeError {
+    if !is_object_value(&constructor) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: RegExp species constructor must be an object".to_owned(),
+        });
+    }
+
+    let Some(species_symbol) = symbol::species_symbol(env) else {
+        return Ok(default_constructor);
+    };
+    let species = property_value_key(constructor, &PropertyKey::Symbol(species_symbol), env)?;
+    if matches!(species, Value::Null | Value::Undefined) {
+        return Ok(default_constructor);
+    }
+    ensure_constructor(&species)?;
+    Ok(species)
+}
+
+fn regexp_constructor(env: &HashMap<String, Value>) -> Result<Value, RuntimeError> {
+    env.get("RegExp").cloned().ok_or_else(|| RuntimeError {
         thrown: None,
-        message: "TypeError: RegExp species constructor must be an object".to_owned(),
+        message: "RegExp constructor is not available".to_owned(),
     })
 }
 

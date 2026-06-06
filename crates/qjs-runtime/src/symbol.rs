@@ -240,6 +240,10 @@ pub(crate) fn search_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
     well_known_symbol(env, "search")
 }
 
+pub(crate) fn species_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+    well_known_symbol(env, "species")
+}
+
 pub(crate) fn split_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
     well_known_symbol(env, "split")
 }
