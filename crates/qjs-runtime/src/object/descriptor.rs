@@ -2,18 +2,22 @@ use std::collections::HashMap;
 
 use crate::{
     ObjectRef, Property, PropertyKey, RuntimeError, Value, function_own_property_descriptor,
-    function_own_symbol_property_descriptor, is_truthy, object_prototype, to_property_key_value,
+    function_own_symbol_property_descriptor, has_property, is_truthy, object_prototype,
+    property_value, to_property_key_value,
 };
 
 use super::enumeration::{enumerable_property_entries, own_property_names};
 
 pub(crate) fn native_object_define_property(
     argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let key = to_property_key_value(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
-    let descriptor =
-        to_property_descriptor(argument_values.get(2).cloned().unwrap_or(Value::Undefined))?;
+    let descriptor = to_property_descriptor(
+        argument_values.get(2).cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
 
     if !define_property_on_value_key(target.clone(), key, descriptor)? {
         return Err(RuntimeError {
@@ -43,7 +47,7 @@ pub(crate) fn native_object_define_properties(
     }
 
     for (key, descriptor_value) in enumerable_property_entries(descriptors, env)? {
-        let descriptor = to_property_descriptor(descriptor_value)?;
+        let descriptor = to_property_descriptor(descriptor_value, env)?;
         if !define_property_on_value(target.clone(), key, descriptor)? {
             return Err(RuntimeError {
                 thrown: None,
@@ -344,49 +348,77 @@ fn ensure_define_property_target(target: &Value) -> Result<(), RuntimeError> {
     }
 }
 
-pub(crate) fn to_property_descriptor(value: Value) -> Result<Property, RuntimeError> {
-    let Value::Object(descriptor) = value else {
+pub(crate) fn to_property_descriptor(
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Property, RuntimeError> {
+    if !matches!(
+        value,
+        Value::Object(_) | Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_)
+    ) {
         return Err(RuntimeError {
             thrown: None,
             message: "property descriptor must be an object".to_owned(),
         });
+    }
+
+    let enumerable = descriptor_bool(value.clone(), "enumerable", env)?;
+    let configurable = descriptor_bool(value.clone(), "configurable", env)?;
+    let has_value = has_property(value.clone(), env, "value")?;
+    let descriptor_value = if has_value {
+        property_value(value.clone(), "value", env)?
+    } else {
+        Value::Undefined
+    };
+    let has_writable = has_property(value.clone(), env, "writable")?;
+    let writable = if has_writable {
+        is_truthy(&property_value(value.clone(), "writable", env)?)
+    } else {
+        false
+    };
+    let has_get = has_property(value.clone(), env, "get")?;
+    let get = if has_get {
+        accessor_function(property_value(value.clone(), "get", env)?, "get")?
+    } else {
+        None
+    };
+    let has_set = has_property(value.clone(), env, "set")?;
+    let set = if has_set {
+        accessor_function(property_value(value.clone(), "set", env)?, "set")?
+    } else {
+        None
     };
 
-    let has_get = descriptor.contains_property("get");
-    let has_set = descriptor.contains_property("set");
+    if (has_get || has_set) && (has_value || has_writable) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "property descriptor cannot mix accessor and data fields".to_owned(),
+        });
+    }
     if has_get || has_set {
-        if descriptor.contains_property("value") || descriptor.contains_property("writable") {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "property descriptor cannot mix accessor and data fields".to_owned(),
-            });
-        }
-        return Ok(Property::accessor(
-            accessor_function(descriptor.get("get").unwrap_or(Value::Undefined), "get")?,
-            accessor_function(descriptor.get("set").unwrap_or(Value::Undefined), "set")?,
-            descriptor
-                .get("enumerable")
-                .is_some_and(|value| is_truthy(&value)),
-            descriptor
-                .get("configurable")
-                .is_some_and(|value| is_truthy(&value)),
-        ));
+        return Ok(Property::accessor(get, set, enumerable, configurable));
     }
 
     Ok(Property {
-        value: descriptor.get("value").unwrap_or(Value::Undefined),
+        value: descriptor_value,
         get: None,
         set: None,
-        writable: descriptor
-            .get("writable")
-            .is_some_and(|value| is_truthy(&value)),
-        enumerable: descriptor
-            .get("enumerable")
-            .is_some_and(|value| is_truthy(&value)),
-        configurable: descriptor
-            .get("configurable")
-            .is_some_and(|value| is_truthy(&value)),
+        writable,
+        enumerable,
+        configurable,
     })
+}
+
+fn descriptor_bool(
+    value: Value,
+    key: &str,
+    env: &mut HashMap<String, Value>,
+) -> Result<bool, RuntimeError> {
+    if has_property(value.clone(), env, key)? {
+        Ok(is_truthy(&property_value(value, key, env)?))
+    } else {
+        Ok(false)
+    }
 }
 
 fn accessor_function(value: Value, name: &str) -> Result<Option<Value>, RuntimeError> {

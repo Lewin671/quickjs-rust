@@ -436,6 +436,7 @@ cases/object-assign-null-undefined-source.js
 cases/object-constructor-basic.js
 cases/object-constructor-object-identity.js
 cases/object-create-basic.js
+cases/object-create-descriptor-objectlike.js
 cases/object-create-null-prototype-basic.js
 cases/object-create-properties-basic.js
 cases/object-create-properties-null-prototype.js

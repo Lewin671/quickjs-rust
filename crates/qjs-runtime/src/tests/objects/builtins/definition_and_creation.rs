@@ -76,7 +76,7 @@ fn evaluates_object_definition_and_creation_builtins() {
         ),
         Ok(Value::Number(8.0))
     );
-    assert_eq!(eval("Object.create.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("Object.create.length;"), Ok(Value::Number(2.0)));
     assert_eq!(
         eval("let proto = { value: 7 }; let object = Object.create(proto); object.value;"),
         Ok(Value::Number(7.0))
@@ -102,6 +102,24 @@ fn evaluates_object_definition_and_creation_builtins() {
             "let object = Object.create({}, { hidden: { value: 4 } }); Object.keys(object).length;"
         ),
         Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval(
+            "let desc = {}; Object.defineProperty(desc, 'configurable', { get: function() { return true; } }); let object = Object.create({}, { own: desc }); let before = object.hasOwnProperty('own'); delete object.own; before + ':' + object.hasOwnProperty('own');"
+        ),
+        Ok(Value::String("true:false".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let desc = function() {}; desc.enumerable = true; desc.value = 9; let object = Object.create({}, { own: desc }); Object.keys(object)[0] + ':' + object.own;"
+        ),
+        Ok(Value::String("own:9".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; let desc = {}; Object.defineProperty(desc, 'value', { get: function() { return 11; } }); Reflect.defineProperty(object, 'own', desc); object.own;"
+        ),
+        Ok(Value::Number(11.0))
     );
     assert_eq!(
         eval(
