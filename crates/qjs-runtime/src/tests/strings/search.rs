@@ -146,6 +146,18 @@ fn evaluates_string_search_builtins() {
         Ok(Value::String("ab<foo>c".to_owned()))
     );
     assert_eq!(
+        eval(
+            "let search = { toString: function() { throw 'search'; } }; let replacement = { toString: function() { throw 'replacement'; } }; try { 'abc'.replace(search, replacement); } catch (error) { error; }"
+        ),
+        Ok(Value::String("search".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let search = { toString: function() { return 'b'; } }; let replacement = { toString: function() { throw 'replacement'; } }; try { 'abc'.replace(search, replacement); } catch (error) { error; }"
+        ),
+        Ok(Value::String("replacement".to_owned()))
+    );
+    assert_eq!(
         eval("'abc'.replace('', '-');"),
         Ok(Value::String("-abc".to_owned()))
     );
@@ -161,7 +173,11 @@ fn evaluates_string_search_builtins() {
     );
     assert_eq!(
         eval("'a1b2'.replace(/(\\d)/g, '[$1:$&]');"),
-        Ok(Value::String("a[1:1]b2".to_owned()))
+        Ok(Value::String("a[1:1]b[2:2]".to_owned()))
+    );
+    assert_eq!(
+        eval("'asdf'.replace(new RegExp(undefined, 'g'), '1');"),
+        Ok(Value::String("1a1s1d1f1".to_owned()))
     );
     assert_eq!(
         eval(

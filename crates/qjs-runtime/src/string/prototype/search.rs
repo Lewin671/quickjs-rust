@@ -215,20 +215,24 @@ pub(crate) fn native_string_prototype_replace(
         }
     }
     let input = this_string_value(this_value, env)?;
-    let replacement = if matches!(replacement_value, Value::Function(_)) {
-        Replacement::Function(replacement_value)
-    } else {
-        Replacement::String(to_js_string_with_env(replacement_value, env)?)
-    };
     let matches = if regexp::regexp_is_regexp(&search_value) {
-        regexp_first_match_position(&input, search_value, env)?
-            .into_iter()
-            .collect()
+        if regexp::regexp_is_global(&search_value) {
+            regexp_match_positions(&input, search_value, env)?
+        } else {
+            regexp_first_match_position(&input, search_value, env)?
+                .into_iter()
+                .collect()
+        }
     } else {
         let search = to_js_string_with_env(search_value, env)?;
         string_first_match_position(&input, &search)
             .into_iter()
             .collect()
+    };
+    let replacement = if matches!(replacement_value, Value::Function(_)) {
+        Replacement::Function(replacement_value)
+    } else {
+        Replacement::String(to_js_string_with_env(replacement_value, env)?)
     };
     replace_matches(input, matches, replacement, env)
 }
