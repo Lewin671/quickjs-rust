@@ -4,12 +4,22 @@ pub(super) fn is_non_capturing_group(pattern: &[char], pc: usize) -> bool {
 
 pub(super) fn closing_group(pattern: &[char], pc: usize) -> Option<usize> {
     let mut escaped = false;
+    let mut in_class = false;
+    let mut depth = 0usize;
     for (offset, char) in pattern[pc + 1..].iter().enumerate() {
         if escaped {
             escaped = false;
         } else if *char == '\\' {
             escaped = true;
-        } else if *char == ')' {
+        } else if *char == '[' {
+            in_class = true;
+        } else if *char == ']' {
+            in_class = false;
+        } else if !in_class && *char == '(' {
+            depth += 1;
+        } else if !in_class && *char == ')' && depth > 0 {
+            depth -= 1;
+        } else if !in_class && *char == ')' {
             return Some(pc + 1 + offset);
         }
     }

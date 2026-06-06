@@ -338,6 +338,14 @@ fn evaluates_regexp_exec_captures() {
         eval(r#"'Boston, MA 02134'.match(/([\d]{5})([-\ ]?[\d]{4})?$/)[2];"#),
         Ok(Value::Undefined)
     );
+    assert_eq!(
+        eval(r#"/(uid=)(\d+)/.exec('uid=31')[1] + '|' + /(uid=)(\d+)/.exec('uid=31')[2];"#),
+        Ok(Value::String("uid=|31".to_owned()))
+    );
+    assert_eq!(
+        eval(r#"/((x))/.exec('foo-x-bar')[1] + '|' + /((x))/.exec('foo-x-bar')[2];"#),
+        Ok(Value::String("x|x".to_owned()))
+    );
 }
 
 #[test]

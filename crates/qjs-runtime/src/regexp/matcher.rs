@@ -487,6 +487,10 @@ fn repeat_atom(
         }
     }
 
+    if quantifier.max == Some(quantifier.min) {
+        return current;
+    }
+
     let mut results = current.clone();
     let mut count = quantifier.min;
     while quantifier.max.is_none_or(|max| count < max) {
@@ -558,4 +562,23 @@ fn match_group(
             (end + 1, matched)
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::regexp_match_range;
+
+    #[test]
+    fn captures_greedy_quantified_group_range() {
+        let matched = regexp_match_range(r"([0-9]+)", "31", 0, false, false).unwrap();
+        assert_eq!((matched.start, matched.end), (0, 2));
+        assert_eq!(matched.captures, vec![Some((0, 2))]);
+    }
+
+    #[test]
+    fn captures_nested_group_ranges() {
+        let matched = regexp_match_range(r"((x))", "foo-x-bar", 0, false, false).unwrap();
+        assert_eq!((matched.start, matched.end), (4, 5));
+        assert_eq!(matched.captures, vec![Some((4, 5)), Some((4, 5))]);
+    }
 }

@@ -170,10 +170,20 @@ fn evaluates_string_search_builtins() {
         Ok(Value::String("foo-|x::x0:0|-bar".to_owned()))
     );
     assert_eq!(
+        eval("'uid=31'.replace(/(uid=)(\\d+)/, '$11' + 15);"),
+        Ok(Value::String("uid=115".to_owned()))
+    );
+    assert_eq!(
         eval(
             "'a-b-a'.replace('a', function(match, position, input) { return match + position + input.length; });"
         ),
         Ok(Value::String("a05-b-a".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "'abc12 def34'.replace(/([a-z]+)([0-9]+)/, function() { return arguments[2] + arguments[1]; });"
+        ),
+        Ok(Value::String("12abc def34".to_owned()))
     );
     assert_eq!(
         eval("'a1b2'.replace(/(\\d)/g, '[$1:$&]');"),
