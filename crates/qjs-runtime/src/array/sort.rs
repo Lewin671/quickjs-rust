@@ -1,8 +1,13 @@
 use std::{cmp::Ordering, collections::HashMap};
 
-use crate::{ArrayRef, Function, RuntimeError, Value, call_function, to_js_string, to_number};
+use crate::{
+    ArrayRef, Function, RuntimeError, Value, call_function, property_value, to_js_string,
+    to_number_with_env,
+};
 
-use super::array_like::array_like_values;
+use super::array_like::array_like_length;
+
+const MAX_ARRAY_LENGTH: usize = u32::MAX as usize;
 
 pub(crate) fn native_array_prototype_sort(
     this_value: Value,
@@ -28,12 +33,34 @@ pub(crate) fn native_array_prototype_to_sorted(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let comparator = array_sort_comparator(argument_values, "Array.prototype.toSorted")?;
-    let values = array_like_values(this_value, "Array.prototype.toSorted")?;
+    let values = to_sorted_array_like_values(this_value, env)?;
     Ok(Value::Array(ArrayRef::new(sorted_array_values(
         values,
         comparator.as_ref(),
         env,
     )?)))
+}
+
+fn to_sorted_array_like_values(
+    this_value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Vec<Value>, RuntimeError> {
+    let source = array_like_length(this_value, "Array.prototype.toSorted", env)?;
+    if source.length > MAX_ARRAY_LENGTH {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "RangeError: invalid array length".to_owned(),
+        });
+    }
+    let mut values = Vec::with_capacity(source.length);
+    for index in 0..source.length {
+        values.push(property_value(
+            source.receiver.clone(),
+            &index.to_string(),
+            env,
+        )?);
+    }
+    Ok(values)
 }
 
 fn sorted_array_values(
@@ -102,7 +129,7 @@ fn compare_values(
             env,
             false,
         )?;
-        let order = to_number(result)?;
+        let order = to_number_with_env(result, env)?;
         if order.is_nan() || order == 0.0 {
             Ok(Ordering::Equal)
         } else if order < 0.0 {

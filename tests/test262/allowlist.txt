@@ -159,6 +159,7 @@ cases/array-sort-undefined.js
 cases/array-spread-literal-basic.js
 cases/array-to-sorted-array-like.js
 cases/array-to-sorted-comparefn.js
+cases/array-to-sorted-copy-semantics.js
 cases/array-to-sorted-default.js
 cases/array-to-sorted-immutable.js
 cases/array-to-sorted-length.js
