@@ -5,9 +5,7 @@ use crate::{
     property_value_key, symbol, to_length_with_env,
 };
 
-use super::array_like::{
-    array_like_length, array_like_receiver, array_like_values, array_like_values_with_env,
-};
+use super::array_like::{array_like_length, array_like_receiver, array_like_values};
 use super::indexing::{array_at_index, array_slice_end, array_slice_start};
 use super::splice::{splice_delete_count, splice_start};
 
@@ -128,17 +126,35 @@ pub(crate) fn native_array_prototype_with(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let mut values = array_like_values_with_env(this_value, "Array.prototype.with", env)?;
+    let source = array_like_length(this_value, "Array.prototype.with", env)?;
+    if source.length > MAX_ARRAY_LENGTH {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "RangeError: invalid array length".to_owned(),
+        });
+    }
     let index = array_at_index(
-        values.len(),
+        source.length,
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?
     .ok_or_else(|| RuntimeError {
         thrown: None,
-        message: "Array.prototype.with index out of range".to_owned(),
+        message: "RangeError: Array.prototype.with index out of range".to_owned(),
     })?;
-    values[index] = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
+    let replacement = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
+    let mut values = Vec::with_capacity(source.length);
+    for offset in 0..source.length {
+        if offset == index {
+            values.push(replacement.clone());
+        } else {
+            values.push(property_value(
+                source.receiver.clone(),
+                &offset.to_string(),
+                env,
+            )?);
+        }
+    }
     Ok(Value::Array(ArrayRef::new(values)))
 }
 
