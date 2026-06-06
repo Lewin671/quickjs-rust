@@ -6,6 +6,9 @@ use super::super::indexing::{
     string_end_position, string_last_search_position, string_search_start, this_string_value,
 };
 
+mod replace_symbol;
+use replace_symbol::symbol_replace_method;
+
 pub(crate) fn native_string_prototype_ends_with(
     this_value: Value,
     argument_values: &[Value],
@@ -131,7 +134,8 @@ pub(crate) fn native_string_prototype_replace_all(
         });
     }
     let search_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    if regexp::regexp_is_regexp_with_env(search_value.clone(), env)? {
+    let is_regexp = regexp::regexp_is_regexp_with_env(search_value.clone(), env)?;
+    if is_regexp {
         let flags_value = property_value(search_value.clone(), "flags", env)?;
         if matches!(flags_value, Value::Null | Value::Undefined) {
             return Err(replace_all_regexp_flags_error());
@@ -144,15 +148,28 @@ pub(crate) fn native_string_prototype_replace_all(
                     .to_owned(),
             });
         }
-        if regexp::regexp_is_regexp(&search_value) {
-            let input = this_string_value(this_value, env)?;
-            return regexp_replace_all(
-                input,
-                search_value,
+    }
+    let replace_method = symbol_replace_method(search_value.clone(), env)?;
+    if let Some(replacer) = replace_method.method {
+        return call_function(
+            replacer,
+            search_value,
+            vec![
+                this_value,
                 argument_values.get(1).cloned().unwrap_or(Value::Undefined),
-                env,
-            );
-        }
+            ],
+            env,
+            false,
+        );
+    }
+    if is_regexp && regexp::regexp_is_regexp(&search_value) && !replace_method.present {
+        let input = this_string_value(this_value, env)?;
+        return regexp_replace_all(
+            input,
+            search_value,
+            argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+            env,
+        );
     }
 
     let input = this_string_value(this_value, env)?;

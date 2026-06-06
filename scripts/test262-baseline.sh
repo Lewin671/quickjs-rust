@@ -20,14 +20,8 @@ CARGO_BIN="${CARGO:-cargo}"
 
 usage() {
   cat >&2 <<'USAGE'
-usage: scripts/test262-baseline.sh [--limit N | --all] [--filter test/<prefix>]
-                                   [--engine quickjs-rust|quickjs-ng|both]
-                                   [--shard I/N] [--summary-json PATH]
-                                   [--no-fail]
-
-Enumerates the upstream Test262 tree, classifies cases the current harness
-cannot model yet, and executes a baseline sample. Use --engine both to compare
-quickjs-rust coverage against the pinned QuickJS-NG reference on the same cases.
+usage: scripts/test262-baseline.sh [--limit N | --all] [--filter test/<prefix>] [--engine quickjs-rust|quickjs-ng|both] [--shard I/N] [--summary-json PATH] [--no-fail]
+Enumerates upstream Test262 cases, classifies harness gaps, and executes a baseline sample.
 USAGE
 }
 
@@ -231,17 +225,23 @@ skip_reason() {
     echo "raw"
   elif [ -n "$includes" ] && ! rust_includes_supported "$includes"; then
     echo "includes"
+  elif ! rust_source_syntax_supported "$rel"; then
+    echo "features"
   elif [ -n "$features" ] && ! rust_features_supported "$features"; then
     echo "features"
   else
     echo ""
   fi
 }
+rust_source_syntax_supported() {
+  # Some upstream files use BigInt literals without declaring a BigInt feature.
+  ! grep -Eq '(^|[^[:alnum:]_$])[0-9][0-9_]*n([^[:alnum:]_$]|$)' "$TEST262_DIR/$1"
+}
 rust_features_supported() {
   local entries
   entries="$(list_entries "$1")"
   ! grep -Fvx -e 'Symbol' -e 'Symbol.isConcatSpreadable' -e 'Symbol.match' \
-    -e 'Symbol.toPrimitive' \
+    -e 'Symbol.replace' -e 'Symbol.toPrimitive' \
     -e 'Reflect.construct' -e 'arrow-function' \
     -e 'array-find-from-last' -e 'String.prototype.replaceAll' \
     <<<"$entries" >/dev/null

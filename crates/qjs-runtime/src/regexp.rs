@@ -279,8 +279,12 @@ pub(crate) fn native_regexp_prototype_to_string(this_value: Value) -> Result<Val
     };
     Ok(Value::String(format!(
         "/{}/{}",
-        regexp_string_data(&object, REGEXP_SOURCE_PROPERTY).unwrap_or_default(),
-        regexp_string_data(&object, REGEXP_FLAGS_PROPERTY).unwrap_or_default()
+        regexp_string_data(&object, REGEXP_SOURCE_PROPERTY)
+            .map(|source| escape_regexp_source(&source))
+            .unwrap_or_default(),
+        regexp_string_data(&object, REGEXP_FLAGS_PROPERTY)
+            .map(|flags| canonical_regexp_flags(&flags))
+            .unwrap_or_default()
     )))
 }
 
@@ -305,14 +309,8 @@ pub(crate) fn native_regexp_prototype_flags(
     this_value: Value,
     env: &HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    regexp_accessor_data(&this_value, env, REGEXP_FLAGS_PROPERTY, "").map(|flags| {
-        Value::String(
-            flags
-                .chars()
-                .filter(|flag| "dgimsyu".contains(*flag))
-                .collect(),
-        )
-    })
+    regexp_accessor_data(&this_value, env, REGEXP_FLAGS_PROPERTY, "")
+        .map(|flags| Value::String(canonical_regexp_flags(&flags)))
 }
 
 pub(crate) fn native_regexp_prototype_flag(
@@ -380,6 +378,13 @@ fn escape_regexp_source(source: &str) -> String {
         }
     }
     escaped
+}
+
+fn canonical_regexp_flags(flags: &str) -> String {
+    "dgimsyu"
+        .chars()
+        .filter(|flag| flags.contains(*flag))
+        .collect()
 }
 
 fn define_regexp_data(object: &ObjectRef, source: &str, flags: &str) {

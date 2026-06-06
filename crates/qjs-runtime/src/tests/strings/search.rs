@@ -162,6 +162,30 @@ fn evaluates_string_search_builtins() {
         )
         .is_err()
     );
+    assert_eq!(
+        eval(
+            "let calls = 0; let search = /./g; Object.defineProperty(search, Symbol.replace, { value: function(input, replacement) { calls = calls + 1; return this === search && input == 'abc' && replacement === 7 ? 42 : -1; } }); new String('abc').replaceAll(search, 7) + ':' + calls;"
+        ),
+        Ok(Value::String("42:1".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let poisoned = 0; let poison = { toString: function() { poisoned = poisoned + 1; throw new Error('poison'); } }; let search = /./g; Object.defineProperty(search, Symbol.replace, { value: function(input, replacement) { return input === poison && replacement === poison ? 'ok' : 'bad'; } }); ''.replaceAll.call(poison, search, poison) + ':' + poisoned;"
+        ),
+        Ok(Value::String("ok:0".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let search = { [Symbol.replace]: null, toString: function() { return 'a'; } }; 'aba'.replaceAll(search, 'x');"
+        ),
+        Ok(Value::String("xbx".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; let search = { [Symbol.match]: false, [Symbol.replace]: 1, toString: function() { throw new Error('toString'); } }; try { ''.replaceAll(search, 'x'); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]

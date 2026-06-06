@@ -232,6 +232,10 @@ pub(crate) fn match_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
     well_known_symbol(env, "match")
 }
 
+pub(crate) fn replace_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+    well_known_symbol(env, "replace")
+}
+
 fn well_known_symbol(env: &HashMap<String, Value>, name: &str) -> Option<ObjectRef> {
     let Some(Value::Function(symbol_function)) = env.get("Symbol") else {
         return None;

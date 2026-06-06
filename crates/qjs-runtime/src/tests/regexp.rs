@@ -26,6 +26,10 @@ fn evaluates_regexp_constructor_identity() {
         Ok(Value::String("/test/".to_owned()))
     );
     assert_eq!(
+        eval("/\\n/iyg.toString();"),
+        Ok(Value::String("/\\n/giy".to_owned()))
+    );
+    assert_eq!(
         eval("/test/.test('a test value');"),
         Ok(Value::Boolean(true))
     );
@@ -128,6 +132,10 @@ fn evaluates_regexp_prototype_accessors() {
     assert_eq!(eval("/test/i.ignoreCase;"), Ok(Value::Boolean(true)));
     assert_eq!(eval("/test/m.multiline;"), Ok(Value::Boolean(true)));
     assert_eq!(eval("/test/.global;"), Ok(Value::Boolean(false)));
+    assert_eq!(
+        eval("/test/iyg.flags;"),
+        Ok(Value::String("giy".to_owned()))
+    );
     assert_eq!(
         eval("new RegExp('').source;"),
         Ok(Value::String("(?:)".to_owned()))
