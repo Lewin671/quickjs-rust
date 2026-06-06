@@ -227,7 +227,7 @@ skip_reason() {
     echo "includes"
   elif ! rust_source_syntax_supported "$rel"; then
     echo "features"
-  elif [ -n "$features" ] && ! rust_features_supported "$features"; then
+  elif [ -n "$features" ] && ! rust_features_supported "$features" "$rel"; then
     echo "features"
   else
     echo ""
@@ -238,8 +238,8 @@ rust_source_syntax_supported() {
   ! grep -Eq '(^|[^[:alnum:]_$])[0-9][0-9_]*n([^[:alnum:]_$]|$)|`([^`\\]|\\.)*\$\{' "$TEST262_DIR/$1"
 }
 rust_features_supported() {
-  local entries
-  entries="$(list_entries "$1")"
+  local entries; entries="$(list_entries "$1")"
+  [[ "${2:-}" == test/built-ins/RegExp/prototype/Symbol.split/* ]] && entries="$(printf '%s\n' "$entries" | grep -Fxv 'Symbol.species' || true)"
   ! grep -Fvx -e 'Symbol' -e 'Symbol.isConcatSpreadable' -e 'Symbol.match' \
     -e 'Symbol.replace' -e 'Symbol.search' -e 'Symbol.split' -e 'Symbol.toPrimitive' \
     -e 'Reflect.construct' -e 'arrow-function' \
