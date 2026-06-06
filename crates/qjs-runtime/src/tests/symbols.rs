@@ -109,6 +109,7 @@ fn evaluates_symbol_registry_builtins() {
         eval("Symbol.keyFor(Symbol('local'));"),
         Ok(Value::Undefined)
     );
+    assert!(eval("Symbol.keyFor(Object(Symbol('local')));").is_err());
     assert_eq!(
         eval("let symbol = Symbol.for(7); symbol.description + ':' + Symbol.keyFor(symbol);"),
         Ok(Value::String("7:7".to_owned()))

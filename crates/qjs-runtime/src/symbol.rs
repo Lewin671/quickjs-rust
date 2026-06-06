@@ -165,7 +165,7 @@ pub(crate) fn native_symbol_key_for(
     let Value::Object(target_object) = target else {
         return Err(symbol_method_error());
     };
-    if !is_symbol_object(&target_object) {
+    if !is_symbol_primitive(&target_object) {
         return Err(symbol_method_error());
     }
 
