@@ -97,6 +97,12 @@ fn evaluates_object_definition_and_creation_builtins() {
         Ok(Value::String("true:3:2".to_owned()))
     );
     assert_eq!(
+        eval(
+            "let caught = false; let array = [0, 1, 2]; Object.defineProperty(array, 'length', { writable: false }); try { Object.defineProperty(array, '3', { value: 3 }); } catch (error) { caught = error instanceof TypeError; } caught + ':' + array.length + ':' + array.hasOwnProperty('3');"
+        ),
+        Ok(Value::String("true:3:false".to_owned()))
+    );
+    assert_eq!(
         eval("Object.defineProperties.length;"),
         Ok(Value::Number(2.0))
     );

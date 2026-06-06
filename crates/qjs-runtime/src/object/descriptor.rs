@@ -252,6 +252,11 @@ pub(crate) fn define_property_descriptor_on_value_key(
             }
             if key == "length" {
                 return define_array_length_property(elements, descriptor);
+            }
+            if array_index_key(&key)
+                .is_some_and(|index| index >= elements.len() && !elements.is_length_writable())
+            {
+                return Ok(false);
             } else {
                 elements.define_property(key, property);
             }
@@ -306,6 +311,15 @@ fn array_length_from_descriptor_value(value: Value) -> Result<usize, RuntimeErro
         });
     }
     Ok(length as usize)
+}
+
+fn array_index_key(key: &str) -> Option<usize> {
+    let index = key.parse::<usize>().ok()?;
+    if index < u32::MAX as usize {
+        Some(index)
+    } else {
+        None
+    }
 }
 
 fn define_symbol_property_descriptor_on_value(
