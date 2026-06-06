@@ -6,7 +6,7 @@ use crate::{
     GLOBAL_THIS_BINDING, ObjectRef, Property, PropertyKey, RuntimeError, Value, array_prototype,
     boolean, call_function, function_delete_own_property, function_delete_own_symbol_property,
     function_own_property_keys, inherited_string_prototype_property, number, property_value,
-    property_value_key, string, to_int32_number, to_length, to_uint32_number,
+    property_value_key, string, to_int32_number, to_length, to_uint32_number, value_prototype,
 };
 
 use super::vm::Vm;
@@ -410,8 +410,11 @@ fn delete_symbol_property(object: Value, symbol: &ObjectRef) -> Result<Value, Ru
     }
 }
 
-pub(super) fn enumerable_keys(value: Value) -> Result<Vec<Value>, RuntimeError> {
-    let keys = match value {
+pub(super) fn enumerable_keys(
+    value: Value,
+    env: &HashMap<String, Value>,
+) -> Result<Vec<Value>, RuntimeError> {
+    let mut keys = match value.clone() {
         Value::Object(object) => object.own_property_keys(),
         Value::Array(elements) => {
             let mut keys: Vec<_> = (0..elements.len())
@@ -432,7 +435,19 @@ pub(super) fn enumerable_keys(value: Value) -> Result<Vec<Value>, RuntimeError> 
             });
         }
     };
+    append_prototype_enumerable_keys(&mut keys, value_prototype(value, env));
     Ok(keys.into_iter().map(Value::String).collect())
+}
+
+fn append_prototype_enumerable_keys(keys: &mut Vec<String>, mut prototype: Option<ObjectRef>) {
+    while let Some(object) = prototype {
+        for key in object.own_property_keys() {
+            if !keys.iter().any(|existing| existing == &key) {
+                keys.push(key);
+            }
+        }
+        prototype = object.prototype();
+    }
 }
 
 pub(super) fn fast_number_binary(left: &Value, op: BinaryOp, right: &Value) -> Option<Value> {

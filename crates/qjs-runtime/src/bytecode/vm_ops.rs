@@ -31,8 +31,8 @@ impl Vm<'_> {
 
     pub(super) fn enumerate_keys(&mut self) -> Result<(), RuntimeError> {
         let value = self.pop()?;
-        self.stack
-            .push(Value::Array(ArrayRef::new(enumerable_keys(value)?)));
+        let keys = enumerable_keys(value, &self.globals)?;
+        self.stack.push(Value::Array(ArrayRef::new(keys)));
         Ok(())
     }
 }

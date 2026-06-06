@@ -85,6 +85,18 @@ fn evaluates_for_in_statements() {
         eval("let count = 0; for (var key in null) { count++; } count;"),
         Ok(Value::Number(0.0))
     );
+    assert_eq!(
+        eval(
+            "let proto = {}; Object.defineProperty(proto, 'inherited', { value: 1, enumerable: true }); let object = Object.create(proto); object.own = 2; let seen = ''; for (var key in object) { seen = seen + key + ':'; } seen;"
+        ),
+        Ok(Value::String("own:inherited:".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "Object.defineProperty(Boolean.prototype, 'visible', { value: 1, enumerable: true, configurable: true }); let seen = false; for (var key in new Boolean()) { if (key === 'visible') seen = true; } delete Boolean.prototype.visible; seen;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]
