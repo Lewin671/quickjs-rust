@@ -1,31 +1,15 @@
 use crate::{Function, ObjectRef, Property};
 
 pub(crate) fn function_own_property_keys(function: &Function) -> Vec<String> {
-    let mut keys: Vec<_> = function
-        .properties
-        .borrow()
-        .iter()
-        .filter(|(_, property)| property.enumerable)
-        .map(|(key, _)| key.clone())
-        .collect();
-    keys.sort();
-    keys
+    function.own_property_keys()
 }
 
 pub(crate) fn function_own_property_descriptor(function: &Function, key: &str) -> Option<Property> {
-    function.properties.borrow().get(key).cloned()
+    function.own_property(key)
 }
 
 pub(crate) fn function_delete_own_property(function: &Function, key: &str) -> bool {
-    let mut properties = function.properties.borrow_mut();
-    if properties
-        .get(key)
-        .is_some_and(|property| !property.configurable)
-    {
-        return false;
-    }
-    properties.remove(key);
-    true
+    function.delete_own_property(key)
 }
 
 pub(crate) fn function_own_symbol_property_descriptor(
@@ -40,9 +24,7 @@ pub(crate) fn function_delete_own_symbol_property(function: &Function, symbol: &
 }
 
 pub(crate) fn function_own_property_names(function: &Function) -> Vec<String> {
-    let mut names: Vec<_> = function.properties.borrow().keys().cloned().collect();
-    names.sort();
-    names
+    function.own_property_names()
 }
 
 pub(crate) fn function_own_property_symbols(function: &Function) -> Vec<ObjectRef> {

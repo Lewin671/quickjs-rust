@@ -188,7 +188,7 @@ pub(crate) fn define_property_descriptor_on_value_key(
             if defines_new_property && !function.is_extensible() {
                 return Ok(false);
             }
-            function.properties.borrow_mut().insert(key, property);
+            function.define_property(key, property);
             Ok(true)
         }
         Value::Array(elements) => {
@@ -408,7 +408,7 @@ pub(crate) fn define_property_on_value_key(
             if existing.is_some_and(|property| !is_compatible_descriptor(&property, &descriptor)) {
                 return Ok(false);
             }
-            function.properties.borrow_mut().insert(key, descriptor);
+            function.define_property(key, descriptor);
             Ok(true)
         }
         Value::Array(elements) => {

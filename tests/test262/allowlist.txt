@@ -444,6 +444,7 @@ cases/object-create-properties-undefined.js
 cases/object-create-properties-writable.js
 cases/object-entries-array-basic.js
 cases/object-entries-basic.js
+cases/object-entries-function-order-after-define.js
 cases/object-entries-getter-values.js
 cases/object-entries-inherited-omitted.js
 cases/object-entries-length.js

@@ -31,6 +31,7 @@ pub struct Function {
     pub(crate) bound: Option<Box<BoundFunction>>,
     /// Function object properties.
     pub(crate) properties: Rc<RefCell<HashMap<String, Property>>>,
+    property_order: Rc<RefCell<Vec<String>>>,
     symbol_properties: Rc<RefCell<Vec<(ObjectRef, Property)>>>,
     extensible: Rc<Cell<bool>>,
     sealed: Rc<Cell<bool>>,
@@ -108,6 +109,7 @@ impl Function {
             is_strict,
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
+            property_order: Rc::new(RefCell::new(Vec::new())),
             symbol_properties: Rc::new(RefCell::new(Vec::new())),
             extensible: Rc::new(Cell::new(true)),
             sealed: Rc::new(Cell::new(false)),
@@ -119,7 +121,7 @@ impl Function {
         if constructable {
             prototype
                 .define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
-            function.properties.borrow_mut().insert(
+            function.define_property(
                 "prototype".to_owned(),
                 Property::non_enumerable(Value::Object(prototype)),
             );
@@ -148,6 +150,7 @@ impl Function {
             is_strict,
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
+            property_order: Rc::new(RefCell::new(Vec::new())),
             symbol_properties: Rc::new(RefCell::new(Vec::new())),
             extensible: Rc::new(Cell::new(true)),
             sealed: Rc::new(Cell::new(false)),
@@ -159,7 +162,7 @@ impl Function {
         if constructable {
             prototype
                 .define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
-            function.properties.borrow_mut().insert(
+            function.define_property(
                 "prototype".to_owned(),
                 Property::non_enumerable(Value::Object(prototype)),
             );
@@ -208,6 +211,7 @@ impl Function {
                 arguments,
             })),
             properties: Rc::new(RefCell::new(HashMap::new())),
+            property_order: Rc::new(RefCell::new(Vec::new())),
             symbol_properties: Rc::new(RefCell::new(Vec::new())),
             extensible: Rc::new(Cell::new(true)),
             sealed: Rc::new(Cell::new(false)),
@@ -238,6 +242,7 @@ impl Function {
             is_strict: false,
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
+            property_order: Rc::new(RefCell::new(Vec::new())),
             symbol_properties: Rc::new(RefCell::new(Vec::new())),
             extensible: Rc::new(Cell::new(true)),
             sealed: Rc::new(Cell::new(false)),
@@ -249,7 +254,7 @@ impl Function {
         if constructable {
             prototype
                 .define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
-            function.properties.borrow_mut().insert(
+            function.define_property(
                 "prototype".to_owned(),
                 Property::non_enumerable(Value::Object(prototype)),
             );
@@ -258,7 +263,7 @@ impl Function {
     }
 
     fn define_length_property(&self) {
-        self.properties.borrow_mut().insert(
+        self.define_property(
             "length".to_owned(),
             Property::data(
                 Value::Number(self.params.length() as f64),
@@ -270,7 +275,7 @@ impl Function {
     }
 
     fn define_name_property(&self) {
-        self.properties.borrow_mut().insert(
+        self.define_property(
             "name".to_owned(),
             Property::data(
                 Value::String(self.name.clone().unwrap_or_default()),
@@ -355,7 +360,85 @@ impl Function {
         if !self.extensible.get() {
             return;
         }
+        self.property_order.borrow_mut().push(key.clone());
         properties.insert(key, Property::enumerable(value));
+    }
+
+    pub(crate) fn define_property(&self, key: String, property: Property) {
+        let mut properties = self.properties.borrow_mut();
+        if !properties.contains_key(&key) {
+            self.property_order.borrow_mut().push(key.clone());
+        }
+        properties.insert(key, property);
+    }
+
+    pub(crate) fn own_property(&self, key: &str) -> Option<Property> {
+        self.properties.borrow().get(key).cloned()
+    }
+
+    pub(crate) fn own_property_keys(&self) -> Vec<String> {
+        self.ordered_property_names(|property| property.enumerable)
+    }
+
+    pub(crate) fn own_property_names(&self) -> Vec<String> {
+        self.ordered_property_names(|_| true)
+    }
+
+    fn ordered_property_names(&self, include: impl Fn(&Property) -> bool) -> Vec<String> {
+        let properties = self.properties.borrow();
+        let property_order = self.property_order.borrow().clone();
+        let mut indices = Vec::new();
+        let mut strings = Vec::new();
+        let mut fallback_strings = Vec::new();
+
+        for key in property_order.iter() {
+            let Some(property) = properties.get(key.as_str()) else {
+                continue;
+            };
+            if !include(property) {
+                continue;
+            }
+            if let Some(index) = array_index_property_key(key) {
+                indices.push((index, key.clone()));
+            } else {
+                strings.push(key.clone());
+            }
+        }
+
+        for (key, property) in properties.iter() {
+            if property_order.iter().any(|ordered| ordered == key) || !include(property) {
+                continue;
+            }
+            if let Some(index) = array_index_property_key(key) {
+                indices.push((index, key.clone()));
+            } else {
+                fallback_strings.push(key.clone());
+            }
+        }
+
+        indices.sort_by_key(|(index, _)| *index);
+        fallback_strings.sort();
+        strings.extend(fallback_strings);
+        indices
+            .into_iter()
+            .map(|(_, key)| key)
+            .chain(strings)
+            .collect()
+    }
+
+    pub(crate) fn delete_own_property(&self, key: &str) -> bool {
+        let mut properties = self.properties.borrow_mut();
+        if properties
+            .get(key)
+            .is_some_and(|property| !property.configurable)
+        {
+            return false;
+        }
+        properties.remove(key);
+        self.property_order
+            .borrow_mut()
+            .retain(|existing| existing != key);
+        true
     }
 
     pub(crate) fn symbol_property(
@@ -470,8 +553,10 @@ fn function_as_object_prototype(function: &Function) -> ObjectRef {
         .internal_prototype_override()
         .unwrap_or_else(|| function_intrinsic_prototype(&function.env));
     let object = ObjectRef::with_prototype(HashMap::new(), prototype);
-    for (key, property) in function.properties.borrow().iter() {
-        object.define_property(key.clone(), property.clone());
+    for key in function.own_property_names() {
+        if let Some(property) = function.own_property(&key) {
+            object.define_property(key, property);
+        }
     }
     for symbol in function.own_property_symbols() {
         if let Some(property) = function.own_symbol_property(&symbol) {
@@ -496,4 +581,10 @@ fn same_prototype(left: &Option<ObjectRef>, right: &Option<ObjectRef>) -> bool {
         (Some(left), Some(right)) => left.ptr_eq(right),
         _ => false,
     }
+}
+
+fn array_index_property_key(key: &str) -> Option<u32> {
+    key.parse::<u32>()
+        .ok()
+        .filter(|index| *index < u32::MAX && index.to_string() == key)
 }

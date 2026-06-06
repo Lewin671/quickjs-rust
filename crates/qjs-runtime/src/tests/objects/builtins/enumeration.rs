@@ -97,6 +97,12 @@ fn evaluates_object_enumeration_builtins() {
     assert_eq!(eval("Object.entries(0).length;"), Ok(Value::Number(0.0)));
     assert_eq!(
         eval(
+            "let fn = () => {}; fn.a = 1; Object.defineProperty(fn, 'name', { enumerable: true }); Object.entries(fn).map(entry => entry[0]).join('|');"
+        ),
+        Ok(Value::String("name|a".to_owned()))
+    );
+    assert_eq!(
+        eval(
             "function fakeObject() { throw 'called'; } fakeObject.entries = Object.entries; let global = Function('return this;')(); global.Object = fakeObject; Object === fakeObject && Object.entries(1).length === 0;"
         ),
         Ok(Value::Boolean(true))
