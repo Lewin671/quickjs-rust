@@ -224,6 +224,9 @@ fn evaluates_delete_with_bytecode() {
     assert_bytecode_evaluates(
         "let key = 'value'; let object = { value: 1 }; delete object[key]; object.value;",
     );
+    assert_bytecode_evaluates(
+        "let key = Symbol(); let object = { [key]: 1 }; delete object[key]; object[key];",
+    );
     assert_bytecode_evaluates("let array = [1, 2]; delete array[0]; array[0];");
     assert_bytecode_evaluates("let x = 1; delete x;");
     assert_bytecode_evaluates("delete missing;");

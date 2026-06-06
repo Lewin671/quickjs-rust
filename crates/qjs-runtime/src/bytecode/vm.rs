@@ -12,7 +12,7 @@ use super::ir::{Bytecode, Op};
 use super::util::{stack_underflow, typeof_value};
 use super::vm_call::{insert_scope_call_bindings, user_bytecode_function};
 use super::vm_props::{
-    delete_property, get_property_key, property_set_uses_setter, set_property_key,
+    delete_property_key, get_property_key, property_set_uses_setter, set_property_key,
 };
 use super::vm_result::FunctionBytecodeResult;
 use super::vm_try::TryFrame;
@@ -342,9 +342,9 @@ impl<'a> Vm<'a> {
     }
 
     fn delete_prop(&mut self) -> Result<(), RuntimeError> {
-        let key = crate::to_property_key(self.pop()?)?;
+        let key = to_property_key_value(self.pop()?)?;
         let object = self.pop()?;
-        self.stack.push(delete_property(object, &key)?);
+        self.stack.push(delete_property_key(object, &key)?);
         Ok(())
     }
 

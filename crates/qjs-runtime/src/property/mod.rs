@@ -15,7 +15,7 @@ pub(crate) use function::{
     function_delete_own_property, function_own_property_descriptor, function_own_property_keys,
     function_own_property_names,
 };
-pub(crate) use key::{PropertyKey, to_property_key, to_property_key_value};
+pub(crate) use key::{PropertyKey, to_property_key_value};
 pub(crate) use prototype::{
     array_prototype, array_prototype_property, constructor_prototype, function_intrinsic_prototype,
     function_prototype, function_prototype_property, inherited_object_prototype_property,

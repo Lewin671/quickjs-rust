@@ -276,6 +276,10 @@ fn evaluates_delete_operator() {
         Ok(Value::Undefined)
     );
     assert_eq!(
+        eval("let key = Symbol(); let o = { [key]: 2 }; delete o[key] && o[key] === undefined;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("let o = {}; Object.defineProperty(o, 'fixed', { value: 1 }); delete o.fixed;"),
         Ok(Value::Boolean(false))
     );
@@ -294,6 +298,16 @@ fn evaluates_in_operator() {
     assert_eq!(
         eval("let object = {}; object.Infinity = 1; Infinity in object;"),
         Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("let symbol = Symbol(); let object = { [symbol]: 1 }; symbol in object;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let symbol = Symbol(); let other = Symbol(); let object = { [symbol]: 1 }; other in object;"
+        ),
+        Ok(Value::Boolean(false))
     );
     assert_eq!(
         eval("let o = {}; o.present = undefined; 'present' in o;"),

@@ -285,7 +285,14 @@ fn symbol_property_for_set(object: &Value, key: &PropertyKey) -> Option<Property
     }
 }
 
-pub(super) fn delete_property(object: Value, key: &str) -> Result<Value, RuntimeError> {
+pub(super) fn delete_property_key(object: Value, key: &PropertyKey) -> Result<Value, RuntimeError> {
+    match key {
+        PropertyKey::String(key) => delete_property(object, key),
+        PropertyKey::Symbol(symbol) => delete_symbol_property(object, symbol),
+    }
+}
+
+fn delete_property(object: Value, key: &str) -> Result<Value, RuntimeError> {
     match object {
         Value::Object(object) => Ok(Value::Boolean(object.delete_own_property(key))),
         Value::Map(map) => Ok(Value::Boolean(map.object().delete_own_property(key))),
@@ -297,6 +304,23 @@ pub(super) fn delete_property(object: Value, key: &str) -> Result<Value, Runtime
         Value::Function(function) => {
             Ok(Value::Boolean(function_delete_own_property(&function, key)))
         }
+        _ => Err(RuntimeError {
+            thrown: None,
+            message: "delete target is not an object".to_owned(),
+        }),
+    }
+}
+
+fn delete_symbol_property(object: Value, symbol: &ObjectRef) -> Result<Value, RuntimeError> {
+    match object {
+        Value::Object(object) => Ok(Value::Boolean(object.delete_own_symbol_property(symbol))),
+        Value::Map(map) => Ok(Value::Boolean(
+            map.object().delete_own_symbol_property(symbol),
+        )),
+        Value::Set(set) => Ok(Value::Boolean(
+            set.object().delete_own_symbol_property(symbol),
+        )),
+        Value::Array(_) | Value::Function(_) => Ok(Value::Boolean(true)),
         _ => Err(RuntimeError {
             thrown: None,
             message: "delete target is not an object".to_owned(),

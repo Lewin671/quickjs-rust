@@ -6,16 +6,6 @@ pub(crate) enum PropertyKey {
     Symbol(ObjectRef),
 }
 
-pub(crate) fn to_property_key(value: Value) -> Result<String, RuntimeError> {
-    match to_property_key_value(value)? {
-        PropertyKey::String(key) => Ok(key),
-        PropertyKey::Symbol(_) => Err(RuntimeError {
-            thrown: None,
-            message: "symbol property key is not supported here".to_owned(),
-        }),
-    }
-}
-
 pub(crate) fn to_property_key_value(value: Value) -> Result<PropertyKey, RuntimeError> {
     match value {
         Value::String(value) => Ok(PropertyKey::String(value)),

@@ -3,9 +3,9 @@ use std::{cmp::Ordering, collections::HashMap};
 use qjs_ast::{BinaryOp, UnaryOp};
 
 use crate::{
-    Property, RuntimeError, Value, has_property, is_truthy, to_int32_number, to_js_string_with_env,
-    to_number, to_number_with_env, to_primitive_with_env, to_property_key, to_uint32_number,
-    value_prototype,
+    Property, RuntimeError, Value, has_property_key, is_truthy, to_int32_number,
+    to_js_string_with_env, to_number, to_number_with_env, to_primitive_with_env,
+    to_property_key_value, to_uint32_number, value_prototype,
 };
 
 pub(crate) fn eval_unary(
@@ -225,8 +225,8 @@ fn eval_instanceof(
 }
 
 fn eval_in(left: Value, right: Value, env: &HashMap<String, Value>) -> Result<Value, RuntimeError> {
-    let key = to_property_key(left)?;
-    has_property(right, env, &key)
+    let key = to_property_key_value(left)?;
+    has_property_key(right, env, &key)
         .map(Value::Boolean)
         .map_err(|_| RuntimeError {
             thrown: None,

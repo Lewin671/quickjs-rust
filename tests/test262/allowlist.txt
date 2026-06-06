@@ -585,6 +585,7 @@ cases/object-value-of-object-prototype.js
 cases/typeof-basic.js
 cases/typeof-unresolvable.js
 cases/in-basic.js
+cases/in-symbol-property.js
 cases/in-undefined-vs-missing.js
 cases/in-prototype-chain-basic.js
 cases/instanceof-object-basic.js
@@ -593,6 +594,7 @@ cases/instanceof-primitive-left-basic.js
 cases/instanceof-reassigned-prototype-basic.js
 cases/delete-basic.js
 cases/delete-object-property.js
+cases/delete-symbol-property.js
 cases/object-property-values.js
 cases/object-literal-setter-basic.js
 cases/object-property-names.js
