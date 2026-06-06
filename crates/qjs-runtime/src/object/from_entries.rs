@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     ArrayRef, Function, ObjectRef, Property, RuntimeError, Value, array_prototype_property,
-    function_prototype_property, object_prototype, to_property_key,
+    function_prototype_property, object_prototype, to_property_key_value,
 };
 
 use crate::array::array_like_values;
@@ -15,9 +15,16 @@ pub(crate) fn native_object_from_entries(
     let result = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
 
     for entry in array_like_values(iterable, "Object.fromEntries")? {
-        let key = to_property_key(entry_component(entry.clone(), 0, env)?)?;
+        let key = to_property_key_value(entry_component(entry.clone(), 0, env)?)?;
         let value = entry_component(entry, 1, env)?;
-        result.define_property(key, Property::enumerable(value));
+        match key {
+            crate::PropertyKey::String(key) => {
+                result.define_property(key, Property::enumerable(value));
+            }
+            crate::PropertyKey::Symbol(symbol) => {
+                result.define_symbol_property(symbol, Property::enumerable(value));
+            }
+        }
     }
 
     Ok(Value::Object(result))

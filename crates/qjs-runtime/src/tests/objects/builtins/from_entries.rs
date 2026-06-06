@@ -27,6 +27,10 @@ fn evaluates_object_from_entries() {
         ),
         Ok(Value::String("1:true:true:true".to_owned()))
     );
+    assert_eq!(
+        eval("let key = Symbol(); let result = Object.fromEntries([[key, 'value']]); result[key];"),
+        Ok(Value::String("value".to_owned()))
+    );
     assert!(eval("Object.fromEntries();").is_err());
     assert!(eval("Object.fromEntries(['ab']);").is_err());
 }
