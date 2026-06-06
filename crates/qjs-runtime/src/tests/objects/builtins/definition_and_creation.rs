@@ -103,6 +103,24 @@ fn evaluates_object_definition_and_creation_builtins() {
         Ok(Value::String("true:3:false".to_owned()))
     );
     assert_eq!(
+        eval(
+            "let array = []; let valueOfAccessed = false; let toStringAccessed = false; Object.defineProperty(array, 'length', { value: { valueOf: function() { valueOfAccessed = true; return 3; }, toString: function() { toStringAccessed = true; return '2'; } } }); array.length + ':' + valueOfAccessed + ':' + toStringAccessed;"
+        ),
+        Ok(Value::String("3:true:false".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let array = []; let valueOfAccessed = false; let toStringAccessed = false; Object.defineProperty(array, 'length', { value: { valueOf: function() { valueOfAccessed = true; return {}; }, toString: function() { toStringAccessed = true; return '2'; } } }); array.length + ':' + valueOfAccessed + ':' + toStringAccessed;"
+        ),
+        Ok(Value::String("2:true:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let array = []; let valueOfAccessed = false; let toStringAccessed = false; let caught = false; try { Object.defineProperty(array, 'length', { value: { valueOf: function() { valueOfAccessed = true; return {}; }, toString: function() { toStringAccessed = true; return {}; } } }); } catch (error) { caught = error instanceof TypeError; } caught + ':' + valueOfAccessed + ':' + toStringAccessed + ':' + array.length;"
+        ),
+        Ok(Value::String("true:true:true:0".to_owned()))
+    );
+    assert_eq!(
         eval("Object.defineProperties.length;"),
         Ok(Value::Number(2.0))
     );

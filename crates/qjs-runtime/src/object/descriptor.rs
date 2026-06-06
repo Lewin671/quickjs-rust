@@ -28,7 +28,7 @@ pub(crate) fn native_object_define_property(
         env,
     )?;
 
-    if !define_property_descriptor_on_value_key(target.clone(), key, descriptor)? {
+    if !define_property_descriptor_on_value_key(target.clone(), key, descriptor, env)? {
         return Err(RuntimeError {
             thrown: None,
             message: "Object.defineProperty failed".to_owned(),
@@ -51,7 +51,7 @@ pub(crate) fn native_object_define_properties(
 
     for (key, descriptor_value) in enumerable_property_entries(descriptors, env)? {
         let descriptor = to_property_descriptor_record(descriptor_value, env)?;
-        if !define_property_descriptor_on_value(target.clone(), key, descriptor)? {
+        if !define_property_descriptor_on_value(target.clone(), key, descriptor, env)? {
             return Err(RuntimeError {
                 thrown: None,
                 message: "Object.defineProperties failed".to_owned(),
@@ -175,14 +175,16 @@ fn define_property_descriptor_on_value(
     target: Value,
     key: String,
     descriptor: PropertyDescriptor,
+    env: &mut HashMap<String, Value>,
 ) -> Result<bool, RuntimeError> {
-    define_property_descriptor_on_value_key(target, PropertyKey::String(key), descriptor)
+    define_property_descriptor_on_value_key(target, PropertyKey::String(key), descriptor, env)
 }
 
 pub(crate) fn define_property_descriptor_on_value_key(
     target: Value,
     key: PropertyKey,
     descriptor: PropertyDescriptor,
+    env: &mut HashMap<String, Value>,
 ) -> Result<bool, RuntimeError> {
     let key = match key {
         PropertyKey::String(key) => key,
@@ -251,15 +253,14 @@ pub(crate) fn define_property_descriptor_on_value_key(
                 return Ok(false);
             }
             if key == "length" {
-                return define_array_length_property(elements, descriptor);
+                return define_array_length_property(elements, descriptor, env);
             }
             if array_index_key(&key)
                 .is_some_and(|index| index >= elements.len() && !elements.is_length_writable())
             {
                 return Ok(false);
-            } else {
-                elements.define_property(key, property);
             }
+            elements.define_property(key, property);
             Ok(true)
         }
         _ => {
@@ -272,9 +273,10 @@ pub(crate) fn define_property_descriptor_on_value_key(
 fn define_array_length_property(
     elements: &crate::ArrayRef,
     descriptor: PropertyDescriptor,
+    env: &mut HashMap<String, Value>,
 ) -> Result<bool, RuntimeError> {
     if let Some(value) = descriptor.value {
-        let new_len = array_length_from_descriptor_value(value)?;
+        let new_len = array_length_from_descriptor_value(value, env)?;
         let old_len = elements.len();
         if new_len < old_len {
             for index in (new_len..old_len).rev() {
@@ -301,8 +303,11 @@ fn define_array_length_property(
     Ok(true)
 }
 
-fn array_length_from_descriptor_value(value: Value) -> Result<usize, RuntimeError> {
-    let number = crate::to_number(value)?;
+fn array_length_from_descriptor_value(
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<usize, RuntimeError> {
+    let number = crate::to_number_with_env(value, env)?;
     let length = crate::to_uint32_number(number);
     if f64::from(length) != number {
         return Err(RuntimeError {
@@ -314,12 +319,9 @@ fn array_length_from_descriptor_value(value: Value) -> Result<usize, RuntimeErro
 }
 
 fn array_index_key(key: &str) -> Option<usize> {
-    let index = key.parse::<usize>().ok()?;
-    if index < u32::MAX as usize {
-        Some(index)
-    } else {
-        None
-    }
+    key.parse::<usize>()
+        .ok()
+        .filter(|index| *index < u32::MAX as usize)
 }
 
 fn define_symbol_property_descriptor_on_value(

@@ -19,7 +19,7 @@ pub(crate) fn native_reflect_define_property(
     )?;
 
     Ok(Value::Boolean(
-        object::define_property_descriptor_on_value_key(target, key, descriptor)?,
+        object::define_property_descriptor_on_value_key(target, key, descriptor, env)?,
     ))
 }
 
