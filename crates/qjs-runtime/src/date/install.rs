@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{Function, NativeFunction, ObjectRef, Property, Value};
+use crate::{Function, NativeFunction, ObjectRef, Property, Value, symbol};
 
 pub(crate) fn install_date(
     env: &mut HashMap<String, Value>,
@@ -158,6 +158,22 @@ pub(crate) fn install_date(
         1,
         NativeFunction::DatePrototypeToJson,
     );
+    if let Some(to_primitive) = symbol::to_primitive_symbol(env) {
+        date_prototype.define_symbol_property(
+            to_primitive,
+            Property::data(
+                Value::Function(Function::new_native(
+                    Some("[Symbol.toPrimitive]"),
+                    1,
+                    NativeFunction::DatePrototypeToPrimitive,
+                    false,
+                )),
+                false,
+                false,
+                true,
+            ),
+        );
+    }
     define_date_prototype_function(
         &date_prototype,
         "toString",

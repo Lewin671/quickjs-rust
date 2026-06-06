@@ -17,8 +17,9 @@ pub(crate) use accessors::{
 pub(crate) use constructor::{native_date, native_date_now, native_date_parse, native_date_utc};
 pub(crate) use format::{
     native_date_prototype_to_date_string, native_date_prototype_to_iso_string,
-    native_date_prototype_to_json, native_date_prototype_to_string,
-    native_date_prototype_to_time_string, native_date_prototype_to_utc_string,
+    native_date_prototype_to_json, native_date_prototype_to_primitive,
+    native_date_prototype_to_string, native_date_prototype_to_time_string,
+    native_date_prototype_to_utc_string,
 };
 pub(crate) use install::install_date;
 pub(crate) use mutation::{

@@ -19,6 +19,28 @@ fn evaluates_date_local_format_builtins() {
         Ok(Value::Number(0.0))
     );
     assert_eq!(
+        eval(
+            "let f = Date.prototype[Symbol.toPrimitive]; let d = Object.getOwnPropertyDescriptor(Date.prototype, Symbol.toPrimitive); typeof f + ':' + f.length + ':' + f.name + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String(
+            "function:1:[Symbol.toPrimitive]:false:false:true".to_owned()
+        ))
+    );
+    assert_eq!(
+        eval(
+            "let log = ''; let object = { toString: function() { log = log + 't'; return {}; }, valueOf: function() { log = log + 'v'; return 5; } }; Date.prototype[Symbol.toPrimitive].call(object, 'default') + ':' + log;"
+        ),
+        Ok(Value::String("5:tv".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let log = ''; let object = { toString: function() { log = log + 't'; return 'str'; }, valueOf: function() { log = log + 'v'; return 5; } }; Date.prototype[Symbol.toPrimitive].call(object, 'number') + ':' + log;"
+        ),
+        Ok(Value::String("5:v".to_owned()))
+    );
+    assert!(eval("Date.prototype[Symbol.toPrimitive].call({}, 'bad');").is_err());
+    assert!(eval("Date.prototype[Symbol.toPrimitive].call(1, 'string');").is_err());
+    assert_eq!(
         eval("new Date(0).getTimezoneOffset();"),
         Ok(Value::Number(0.0))
     );

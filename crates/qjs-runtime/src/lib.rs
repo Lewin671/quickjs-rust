@@ -31,9 +31,9 @@ mod weak_set;
 
 use builtins::initialize_builtins;
 pub(crate) use conversion::{
-    error_value, is_truthy, to_int32, to_int32_number, to_js_string, to_js_string_with_env,
-    to_length, to_length_with_env, to_number, to_number_with_env, to_primitive_with_env, to_uint16,
-    to_uint32, to_uint32_number,
+    PreferredType, error_value, is_truthy, ordinary_to_primitive, to_int32, to_int32_number,
+    to_js_string, to_js_string_with_env, to_length, to_length_with_env, to_number,
+    to_number_with_env, to_primitive_with_env, to_uint16, to_uint32, to_uint32_number,
 };
 use function::{Function, NativeFunction};
 pub(crate) use function::{call_function, construct_function, ensure_constructor};

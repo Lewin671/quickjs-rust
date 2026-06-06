@@ -31,7 +31,7 @@ pub(crate) use iterator::{
     native_array_iterator_next, native_array_prototype_entries, native_array_prototype_keys,
     native_array_prototype_values,
 };
-pub(crate) use join::{array_join, native_array_prototype_join, native_array_prototype_to_string};
+pub(crate) use join::{native_array_prototype_join, native_array_prototype_to_string};
 pub(crate) use mutation::{
     native_array_prototype_copy_within, native_array_prototype_fill, native_array_prototype_pop,
     native_array_prototype_push, native_array_prototype_reverse,

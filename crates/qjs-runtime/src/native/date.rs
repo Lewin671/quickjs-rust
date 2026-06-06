@@ -86,6 +86,11 @@ pub(super) fn call_date_native(
             argument_values.first().cloned().unwrap_or(Value::Undefined),
             env,
         )?,
+        NativeFunction::DatePrototypeToPrimitive => date::native_date_prototype_to_primitive(
+            this_value,
+            argument_values.first().cloned().unwrap_or(Value::Undefined),
+            env,
+        )?,
         NativeFunction::DatePrototypeToString => date::native_date_prototype_to_string(this_value)?,
         NativeFunction::DatePrototypeToTimeString => {
             date::native_date_prototype_to_time_string(this_value)?

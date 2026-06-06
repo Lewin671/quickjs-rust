@@ -56,6 +56,19 @@ fn evaluates_string_addition() {
         Ok(Value::String("x2".to_owned()))
     );
     assert_eq!(
+        eval(
+            "let object = {}; object[Symbol.toPrimitive] = function(hint) { return hint; }; String(object) + ':' + (+object) + ':' + (object + '');"
+        ),
+        Ok(Value::String("string:NaN:default".to_owned()))
+    );
+    assert!(
+        eval(
+            "let object = {}; object[Symbol.toPrimitive] = function() { return {}; }; object + '';"
+        )
+        .is_err()
+    );
+    assert!(eval("let object = {}; object[Symbol.toPrimitive] = 1; object + '';").is_err());
+    assert_eq!(
         eval("({ valueOf: function() { return 2; } }) + 3;"),
         Ok(Value::Number(5.0))
     );

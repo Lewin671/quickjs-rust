@@ -1,6 +1,16 @@
 use std::collections::HashMap;
 
-use crate::{RuntimeError, Value, array::array_join, call_function, date, number, property_value};
+use crate::{
+    PropertyKey, RuntimeError, Value, call_function, date, number, property_value,
+    property_value_key, symbol,
+};
+
+#[derive(Clone, Copy)]
+pub(crate) enum PreferredType {
+    Default,
+    String,
+    Number,
+}
 
 pub(crate) fn to_js_string(value: Value) -> Result<String, RuntimeError> {
     let mut env = HashMap::new();
@@ -18,10 +28,7 @@ pub(crate) fn to_js_string_with_env(
         Value::Boolean(false) => Ok("false".to_owned()),
         Value::Null => Ok("null".to_owned()),
         Value::Undefined => Ok("undefined".to_owned()),
-        Value::Object(object) => match crate::string_object_value(&object) {
-            Some(value) => Ok(value),
-            None => object_to_string(Value::Object(object), env),
-        },
+        Value::Object(object) => object_to_string(Value::Object(object), env),
         Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_) => {
             object_to_string(value, env)
         }
@@ -60,13 +67,8 @@ pub(crate) fn to_number_with_env(
         Value::Boolean(false) | Value::Null => Ok(0.0),
         Value::String(value) => string_to_number(&value),
         Value::Undefined => Ok(f64::NAN),
-        Value::Object(object) => match crate::string_object_value(&object) {
-            Some(value) => string_to_number(&value),
-            None => object_to_number(Value::Object(object), env),
-        },
-        Value::Function(_) | Value::Map(_) | Value::Set(_) => object_to_number(value, env),
-        Value::Array(array) => {
-            string_to_number(&array_join(Value::Array(array), ",", &mut HashMap::new())?)
+        Value::Object(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) | Value::Array(_) => {
+            object_to_number(value, env)
         }
     }
 }
@@ -77,7 +79,7 @@ pub(crate) fn to_primitive_with_env(
 ) -> Result<Value, RuntimeError> {
     match value {
         Value::Object(_) | Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_) => {
-            object_to_primitive(value, env)
+            to_primitive_with_hint(value, PreferredType::Default, env)
         }
         value => Ok(value),
     }
@@ -112,26 +114,57 @@ fn string_to_number(value: &str) -> Result<f64, RuntimeError> {
     Ok(trimmed.parse::<f64>().unwrap_or(f64::NAN))
 }
 
-fn object_to_primitive(
+fn to_primitive_with_hint(
     value: Value,
+    hint: PreferredType,
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let methods = match &value {
-        Value::Object(object) if date::is_date_object(object) => ["toString", "valueOf"],
-        _ => ["valueOf", "toString"],
+    if let Some(symbol) = symbol::to_primitive_symbol(env) {
+        let method = property_value_key(value.clone(), &PropertyKey::Symbol(symbol), env)?;
+        if !matches!(method, Value::Undefined | Value::Null) {
+            let Value::Function(_) = method else {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: "TypeError: Symbol.toPrimitive method is not callable".to_owned(),
+                });
+            };
+            let primitive = call_function(
+                method,
+                value.clone(),
+                vec![Value::String(hint.name().to_owned())],
+                env,
+                false,
+            )?;
+            if !is_object_like(&primitive) {
+                return Ok(primitive);
+            }
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: Symbol.toPrimitive returned an object".to_owned(),
+            });
+        }
+    }
+    ordinary_to_primitive(value, hint, env)
+}
+
+pub(crate) fn ordinary_to_primitive(
+    value: Value,
+    hint: PreferredType,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let methods = match hint {
+        PreferredType::String => ["toString", "valueOf"],
+        PreferredType::Number => ["valueOf", "toString"],
+        PreferredType::Default => match &value {
+            Value::Object(object) if date::is_date_object(object) => ["toString", "valueOf"],
+            _ => ["valueOf", "toString"],
+        },
     };
     for method in methods {
         let method_value = property_value(value.clone(), method, env)?;
         if matches!(method_value, Value::Function(_)) {
             let primitive = call_function(method_value, value.clone(), Vec::new(), env, false)?;
-            if !matches!(
-                primitive,
-                Value::Object(_)
-                    | Value::Function(_)
-                    | Value::Array(_)
-                    | Value::Map(_)
-                    | Value::Set(_)
-            ) {
+            if !is_object_like(&primitive) {
                 return Ok(primitive);
             }
         }
@@ -143,52 +176,33 @@ fn object_to_primitive(
 }
 
 fn object_to_number(value: Value, env: &mut HashMap<String, Value>) -> Result<f64, RuntimeError> {
-    for method in ["valueOf", "toString"] {
-        let method_value = property_value(value.clone(), method, env)?;
-        if matches!(method_value, Value::Function(_)) {
-            let primitive = call_function(method_value, value.clone(), Vec::new(), env, false)?;
-            if !matches!(
-                primitive,
-                Value::Object(_)
-                    | Value::Function(_)
-                    | Value::Array(_)
-                    | Value::Map(_)
-                    | Value::Set(_)
-            ) {
-                return to_number_with_env(primitive, env);
-            }
-        }
-    }
-    Err(RuntimeError {
-        thrown: None,
-        message: "cannot convert object to number".to_owned(),
-    })
+    let primitive = to_primitive_with_hint(value, PreferredType::Number, env)?;
+    to_number_with_env(primitive, env)
 }
 
 fn object_to_string(
     value: Value,
     env: &mut HashMap<String, Value>,
 ) -> Result<String, RuntimeError> {
-    for method in ["toString", "valueOf"] {
-        let method_value = property_value(value.clone(), method, env)?;
-        if matches!(method_value, Value::Function(_)) {
-            let primitive = call_function(method_value, value.clone(), Vec::new(), env, false)?;
-            if !matches!(
-                primitive,
-                Value::Object(_)
-                    | Value::Function(_)
-                    | Value::Array(_)
-                    | Value::Map(_)
-                    | Value::Set(_)
-            ) {
-                return to_js_string_with_env(primitive, env);
-            }
+    let primitive = to_primitive_with_hint(value, PreferredType::String, env)?;
+    to_js_string_with_env(primitive, env)
+}
+
+fn is_object_like(value: &Value) -> bool {
+    matches!(
+        value,
+        Value::Object(_) | Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_)
+    )
+}
+
+impl PreferredType {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Default => "default",
+            Self::String => "string",
+            Self::Number => "number",
         }
     }
-    Err(RuntimeError {
-        thrown: None,
-        message: "cannot convert object to string".to_owned(),
-    })
 }
 
 pub(crate) fn to_int32(value: Value) -> Result<i32, RuntimeError> {

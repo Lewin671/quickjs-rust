@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     Function, ObjectRef, Property, RuntimeError, Value, function_prototype, property_value,
-    to_js_string, to_js_string_with_env, to_length_with_env, to_number, to_uint16,
+    to_js_string_with_env, to_length_with_env, to_number, to_uint16,
 };
 
 use super::{STRING_DATA_PROPERTY, string_from_code_unit};
@@ -12,9 +12,10 @@ pub(crate) fn native_string(
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let value = match argument_values.first().cloned() {
-        Some(value) => to_js_string(value)?,
+        Some(value) => to_js_string_with_env(value, env)?,
         None => String::new(),
     };
     if !is_construct {

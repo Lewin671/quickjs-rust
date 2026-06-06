@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
 use crate::{
-    RuntimeError, Value, call_function,
+    PreferredType, RuntimeError, Value, call_function,
     date::iso::{
         format_date_string, format_iso_string, format_local_string, format_time_string,
         format_utc_string,
     },
+    ordinary_to_primitive,
 };
 
 use super::value::date_value;
@@ -67,6 +68,35 @@ pub(crate) fn native_date_prototype_to_json(
         message: "Date toJSON receiver does not have a toISOString method".to_owned(),
     })?;
     call_function(to_iso_string, this_value, vec![key], env, false)
+}
+
+pub(crate) fn native_date_prototype_to_primitive(
+    this_value: Value,
+    hint: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    if !matches!(
+        this_value,
+        Value::Object(_) | Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_)
+    ) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Date.prototype[Symbol.toPrimitive] receiver must be an object"
+                .to_owned(),
+        });
+    }
+
+    let hint = match hint {
+        Value::String(hint) if hint == "string" || hint == "default" => PreferredType::String,
+        Value::String(hint) if hint == "number" => PreferredType::Number,
+        _ => {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: invalid Date.prototype[Symbol.toPrimitive] hint".to_owned(),
+            });
+        }
+    };
+    ordinary_to_primitive(this_value, hint, env)
 }
 
 fn format_date_value(

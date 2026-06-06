@@ -14,7 +14,7 @@ pub(super) fn call_string_native(
 ) -> NativeCallResult {
     let value = match native {
         NativeFunction::String => {
-            string::native_string(function, this_value, argument_values, is_construct)?
+            string::native_string(function, this_value, argument_values, is_construct, env)?
         }
         NativeFunction::StringFromCharCode => {
             string::native_string_from_char_code(argument_values)?

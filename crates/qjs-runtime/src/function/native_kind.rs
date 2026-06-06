@@ -71,6 +71,7 @@ pub(crate) enum NativeFunction {
     DatePrototypeToDateString,
     DatePrototypeToISOString,
     DatePrototypeToJson,
+    DatePrototypeToPrimitive,
     DatePrototypeToString,
     DatePrototypeToTimeString,
     DatePrototypeToUtcString,
