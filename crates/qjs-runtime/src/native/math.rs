@@ -1,10 +1,13 @@
-use crate::{NativeFunction, math as math_builtins};
+use std::collections::HashMap;
+
+use crate::{NativeFunction, Value, math as math_builtins};
 
 use super::NativeCallResult;
 
 pub(super) fn call_math_native(
     native: NativeFunction,
-    argument_values: &[crate::Value],
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
 ) -> NativeCallResult {
     let value = match native {
         NativeFunction::MathAbs => math_builtins::native_math_unary(argument_values, f64::abs)?,
@@ -42,6 +45,10 @@ pub(super) fn call_math_native(
         NativeFunction::MathSin => math_builtins::native_math_unary(argument_values, f64::sin)?,
         NativeFunction::MathSinh => math_builtins::native_math_unary(argument_values, f64::sinh)?,
         NativeFunction::MathSqrt => math_builtins::native_math_unary(argument_values, f64::sqrt)?,
+        NativeFunction::MathSumPrecise => math_builtins::native_math_sum_precise(
+            argument_values.first().cloned().unwrap_or(Value::Undefined),
+            env,
+        )?,
         NativeFunction::MathTan => math_builtins::native_math_unary(argument_values, f64::tan)?,
         NativeFunction::MathTanh => math_builtins::native_math_unary(argument_values, f64::tanh)?,
         NativeFunction::MathTrunc => math_builtins::native_math_unary(argument_values, f64::trunc)?,

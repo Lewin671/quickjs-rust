@@ -5,7 +5,8 @@ use std::{
 };
 
 use crate::{
-    Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, to_number, to_uint32_number,
+    Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
+    array::array_like_values_with_env, to_number, to_uint32_number,
 };
 
 pub(super) fn install_math(
@@ -56,6 +57,12 @@ pub(super) fn install_math(
     define_math_function(&math_object, "sin", 1, NativeFunction::MathSin);
     define_math_function(&math_object, "sinh", 1, NativeFunction::MathSinh);
     define_math_function(&math_object, "sqrt", 1, NativeFunction::MathSqrt);
+    define_math_function(
+        &math_object,
+        "sumPrecise",
+        1,
+        NativeFunction::MathSumPrecise,
+    );
     define_math_function(&math_object, "tan", 1, NativeFunction::MathTan);
     define_math_function(&math_object, "tanh", 1, NativeFunction::MathTanh);
     define_math_function(&math_object, "trunc", 1, NativeFunction::MathTrunc);
@@ -202,6 +209,225 @@ pub(super) fn native_math_imul(argument_values: &[Value]) -> Result<Value, Runti
     let right = to_number(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
     let product = to_uint32_number(left).wrapping_mul(to_uint32_number(right));
     Ok(Value::Number(f64::from(product as i32)))
+}
+
+pub(super) fn native_math_sum_precise(
+    items: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let mut sum = SumPrecise::new();
+    for value in array_like_values_with_env(items, "Math.sumPrecise", env)? {
+        match value {
+            Value::Number(number) => sum.add(number),
+            _ => {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: "TypeError: Math.sumPrecise element must be a number".to_owned(),
+                });
+            }
+        }
+    }
+    Ok(Value::Number(sum.result()))
+}
+
+const SUM_PRECISE_ACC_LEN: usize = 34;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SumPreciseState {
+    MinusZero,
+    Finite,
+    Infinity,
+    MinusInfinity,
+    Nan,
+}
+
+struct SumPrecise {
+    acc: [u64; SUM_PRECISE_ACC_LEN],
+    n_limbs: usize,
+    state: SumPreciseState,
+}
+
+impl SumPrecise {
+    fn new() -> Self {
+        let mut acc = [0; SUM_PRECISE_ACC_LEN];
+        acc[0] = 0;
+        Self {
+            acc,
+            n_limbs: 1,
+            state: SumPreciseState::MinusZero,
+        }
+    }
+
+    fn add(&mut self, number: f64) {
+        let bits = number.to_bits();
+        let sign = bits >> 63;
+        let exponent = ((bits >> 52) & ((1 << 11) - 1)) as i32;
+        let mut mantissa = bits & ((1_u64 << 52) - 1);
+
+        if exponent == 2047 {
+            if mantissa == 0 {
+                self.add_infinity(sign != 0);
+            } else {
+                self.state = SumPreciseState::Nan;
+            }
+            return;
+        }
+
+        if exponent == 0 {
+            if mantissa == 0 {
+                if self.state == SumPreciseState::MinusZero && sign == 0 {
+                    self.state = SumPreciseState::Finite;
+                }
+                return;
+            }
+            self.add_finite(sign, 0, 0, mantissa);
+            return;
+        }
+
+        mantissa |= 1_u64 << 52;
+        let shift = (exponent - 1) as usize;
+        self.add_finite(sign, shift / 64, shift % 64, mantissa);
+    }
+
+    fn add_infinity(&mut self, is_negative: bool) {
+        self.state = match (self.state, is_negative) {
+            (SumPreciseState::Nan, _) => SumPreciseState::Nan,
+            (SumPreciseState::MinusInfinity, false) => SumPreciseState::Nan,
+            (SumPreciseState::Infinity, true) => SumPreciseState::Nan,
+            (_, true) => SumPreciseState::MinusInfinity,
+            (_, false) => SumPreciseState::Infinity,
+        };
+    }
+
+    fn add_finite(&mut self, sign: u64, mut limb_index: usize, shift: usize, mantissa: u64) {
+        if matches!(
+            self.state,
+            SumPreciseState::Infinity | SumPreciseState::MinusInfinity | SumPreciseState::Nan
+        ) {
+            return;
+        }
+        self.state = SumPreciseState::Finite;
+
+        let mut n = self.n_limbs;
+        let acc_sign = sign_extend(self.acc[n - 1]);
+        for index in n..=limb_index {
+            self.acc[index] = acc_sign;
+        }
+
+        let mut carry = sign;
+        let add_sign = 0_u64.wrapping_sub(sign);
+        let low = mantissa << shift;
+        (self.acc[limb_index], carry) = add_with_carry(self.acc[limb_index], low ^ add_sign, carry);
+
+        if shift >= 12 {
+            limb_index += 1;
+            if limb_index >= n {
+                self.acc[limb_index] = acc_sign;
+            }
+            let high = mantissa >> (64 - shift);
+            (self.acc[limb_index], carry) =
+                add_with_carry(self.acc[limb_index], high ^ add_sign, carry);
+        }
+
+        limb_index += 1;
+        if limb_index >= n {
+            n = limb_index;
+        } else {
+            for index in limb_index..n {
+                if carry == sign {
+                    self.n_limbs = n;
+                    return;
+                }
+                (self.acc[index], carry) = add_with_carry(self.acc[index], add_sign, carry);
+            }
+        }
+
+        let extension = carry.wrapping_add(acc_sign).wrapping_add(add_sign);
+        if extension != sign_extend(self.acc[n - 1]) {
+            self.acc[n] = extension;
+            n += 1;
+        }
+        self.n_limbs = n;
+    }
+
+    fn result(&mut self) -> f64 {
+        match self.state {
+            SumPreciseState::MinusZero => return -0.0,
+            SumPreciseState::Infinity => return f64::INFINITY,
+            SumPreciseState::MinusInfinity => return f64::NEG_INFINITY,
+            SumPreciseState::Nan => return f64::NAN,
+            SumPreciseState::Finite => {}
+        }
+
+        let mut n = self.n_limbs;
+        let is_negative = self.acc[n - 1] >> 63;
+        if is_negative != 0 {
+            let mut carry = 1;
+            for index in 0..n {
+                (self.acc[index], carry) = add_with_carry(!self.acc[index], 0, carry);
+            }
+        }
+
+        while n > 0 && self.acc[n - 1] == 0 {
+            n -= 1;
+        }
+        if n == 0 {
+            return 0.0;
+        }
+        if n == 1 && self.acc[0] < (1_u64 << 52) {
+            return f64::from_bits((is_negative << 63) | self.acc[0]);
+        }
+
+        let mut exponent = (n * 64) as i32;
+        let mut limb_index = n - 1;
+        let mut mantissa = self.acc[limb_index];
+        let shift = mantissa.leading_zeros() as usize;
+        exponent = exponent - shift as i32 - 52;
+        if shift != 0 {
+            mantissa <<= shift;
+            if limb_index > 0 {
+                limb_index -= 1;
+                let remaining_shift = 64 - shift;
+                let non_zero_mask = (1_u64 << remaining_shift) - 1;
+                let non_zero = (self.acc[limb_index] & non_zero_mask) != 0;
+                mantissa =
+                    mantissa | (self.acc[limb_index] >> remaining_shift) | u64::from(non_zero);
+            }
+        }
+
+        if (mantissa & ((1_u64 << 10) - 1)) == 0 {
+            while limb_index > 0 {
+                limb_index -= 1;
+                if self.acc[limb_index] != 0 {
+                    mantissa |= 1;
+                    break;
+                }
+            }
+        }
+
+        let addend = (1_u64 << 10) - 1 + ((mantissa >> 11) & 1);
+        mantissa = mantissa.wrapping_add(addend) >> 11;
+        if mantissa == 0 {
+            exponent += 1;
+        }
+        if exponent >= 2047 {
+            f64::from_bits((is_negative << 63) | (2047_u64 << 52))
+        } else {
+            f64::from_bits(
+                (is_negative << 63) | ((exponent as u64) << 52) | (mantissa & ((1_u64 << 52) - 1)),
+            )
+        }
+    }
+}
+
+fn add_with_carry(left: u64, right: u64, carry_in: u64) -> (u64, u64) {
+    let (sum, carry_left) = left.overflowing_add(right);
+    let (sum, carry_right) = sum.overflowing_add(carry_in);
+    (sum, u64::from(carry_left || carry_right))
+}
+
+fn sign_extend(value: u64) -> u64 {
+    ((value as i64) >> 63) as u64
 }
 
 static RANDOM_STATE: AtomicU64 = AtomicU64::new(0);

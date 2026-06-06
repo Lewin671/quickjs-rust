@@ -46,7 +46,7 @@ pub(crate) fn call_native_function(
         return Ok(value);
     }
 
-    if let Some(value) = math::call_math_native(native, &argument_values)? {
+    if let Some(value) = math::call_math_native(native, &argument_values, env)? {
         return Ok(value);
     }
 

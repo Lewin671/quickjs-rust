@@ -328,6 +328,15 @@ cases/math-sign-name.js
 cases/math-sqrt-basic.js
 cases/math-sqrt-length.js
 cases/math-sqrt-name.js
+cases/math-sum-precise-basic.js
+cases/math-sum-precise-infinite.js
+cases/math-sum-precise-length.js
+cases/math-sum-precise-minus-zero.js
+cases/math-sum-precise-name.js
+cases/math-sum-precise-nan.js
+cases/math-sum-precise-not-a-constructor.js
+cases/math-sum-precise-prop-desc.js
+cases/math-sum-precise-throws-on-non-number.js
 cases/math-transcendental-basic.js
 cases/math-transcendental-length.js
 cases/math-acos-name.js

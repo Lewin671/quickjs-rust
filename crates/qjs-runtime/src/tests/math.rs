@@ -38,6 +38,7 @@ fn evaluates_math_builtins() {
     assert_eq!(eval("Math.pow.length;"), Ok(Value::Number(2.0)));
     assert_eq!(eval("Math.random.length;"), Ok(Value::Number(0.0)));
     assert_eq!(eval("Math.sqrt.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("Math.sumPrecise.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("Math.round.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("Math.sign.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("Math.sin.length;"), Ok(Value::Number(1.0)));
@@ -182,6 +183,25 @@ fn evaluates_math_builtins() {
         Ok(Value::Boolean(true))
     );
     assert_eq!(eval("Math.log1p(0);"), Ok(Value::Number(0.0)));
+    assert_eq!(eval("Math.sumPrecise([1, 2, 3]);"), Ok(Value::Number(6.0)));
+    assert_eq!(
+        eval("Math.sumPrecise([1e30, 0.1, -1e30]);"),
+        Ok(Value::Number(0.1))
+    );
+    assert_eq!(
+        eval("1 / Math.sumPrecise([]) === -Infinity;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("Math.sumPrecise([Infinity, -Infinity]) === Math.sumPrecise([Infinity, -Infinity]);"),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { Math.sumPrecise([1, '2']); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
     assert_eq!(
         eval("Math.log1p(-1) === -Infinity;"),
         Ok(Value::Boolean(true))

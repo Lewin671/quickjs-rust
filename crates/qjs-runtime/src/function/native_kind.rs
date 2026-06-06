@@ -120,6 +120,7 @@ pub(crate) enum NativeFunction {
     MathSin,
     MathSinh,
     MathSqrt,
+    MathSumPrecise,
     MathTan,
     MathTanh,
     MathTrunc,
