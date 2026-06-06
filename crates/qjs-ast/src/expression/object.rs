@@ -21,6 +21,8 @@ pub enum ObjectPropertyKind {
     Data,
     /// Getter accessor.
     Getter,
+    /// Setter accessor.
+    Setter,
 }
 
 /// Object literal property key.

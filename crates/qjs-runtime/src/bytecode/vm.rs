@@ -11,7 +11,7 @@ use crate::{
 use super::ir::{Bytecode, Op};
 use super::util::{stack_underflow, typeof_value};
 use super::vm_call::{insert_scope_call_bindings, user_bytecode_function};
-use super::vm_props::{delete_property, get_property, set_property};
+use super::vm_props::{delete_property, get_property, property_set_uses_setter, set_property};
 use super::vm_result::FunctionBytecodeResult;
 use super::vm_try::TryFrame;
 
@@ -284,6 +284,9 @@ impl<'a> Vm<'a> {
                 ObjectPropertyKind::Getter => {
                     object.define_property(key, Property::accessor(Some(value), None, true, true))
                 }
+                ObjectPropertyKind::Setter => {
+                    object.define_property(key, Property::accessor(None, Some(value), true, true))
+                }
             }
         }
         self.stack.push(Value::Object(object));
@@ -303,8 +306,15 @@ impl<'a> Vm<'a> {
         let key = to_property_key(self.pop()?)?;
         let object = self.pop()?;
         let updates_global_binding = self.is_global_object(&object);
-        set_property(object, key.clone(), value.clone(), &mut self.globals)?;
-        if updates_global_binding {
+        let wrote_data = if property_set_uses_setter(&object, &key, &self.globals) {
+            let mut env = self.current_env();
+            let wrote_data = set_property(object, key.clone(), value.clone(), &mut env)?;
+            self.apply_env(env);
+            wrote_data
+        } else {
+            set_property(object, key.clone(), value.clone(), &mut self.globals)?
+        };
+        if updates_global_binding && wrote_data {
             self.globals.insert(key, value.clone());
         }
         self.stack.push(value);

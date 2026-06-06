@@ -83,4 +83,10 @@ fn evaluates_object_constructor_and_assign() {
         ),
         Ok(Value::String("4:1:c:2:b".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "let seen = 1; let target = Object.seal({ set value(next) { seen = next; } }); Object.assign(target, { value: 2 }); seen;"
+        ),
+        Ok(Value::Number(2.0))
+    );
 }

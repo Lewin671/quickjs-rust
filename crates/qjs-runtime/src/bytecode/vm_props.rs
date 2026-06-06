@@ -65,7 +65,7 @@ pub(super) fn set_property(
     key: String,
     value: Value,
     env: &mut HashMap<String, Value>,
-) -> Result<(), RuntimeError> {
+) -> Result<bool, RuntimeError> {
     match object {
         Value::Object(object) => {
             if apply_property_setter(
@@ -74,10 +74,10 @@ pub(super) fn set_property(
                 value.clone(),
                 env,
             )? {
-                return Ok(());
+                return Ok(false);
             }
             object.set(key, value);
-            Ok(())
+            Ok(true)
         }
         Value::Function(function) => {
             if apply_property_setter(
@@ -86,14 +86,15 @@ pub(super) fn set_property(
                 value.clone(),
                 env,
             )? {
-                return Ok(());
+                return Ok(false);
             }
             function.set_property(key, value);
-            Ok(())
+            Ok(true)
         }
         Value::Array(elements) => {
             if key == "length" {
                 elements.set_len(to_length(value)?);
+                Ok(true)
             } else {
                 let property = elements.property(&key).or_else(|| {
                     elements
@@ -107,14 +108,14 @@ pub(super) fn set_property(
                     value.clone(),
                     env,
                 )? {
-                    return Ok(());
+                    return Ok(false);
                 }
                 match key.parse::<usize>() {
                     Ok(index) => elements.set(index, value),
                     Err(_) => elements.set_property(key, value),
-                }
+                };
+                Ok(true)
             }
-            Ok(())
         }
         Value::Map(map) => {
             if apply_property_setter(
@@ -123,10 +124,10 @@ pub(super) fn set_property(
                 value.clone(),
                 env,
             )? {
-                return Ok(());
+                return Ok(false);
             }
             map.object().set(key, value);
-            Ok(())
+            Ok(true)
         }
         Value::Set(set) => {
             if apply_property_setter(
@@ -135,10 +136,10 @@ pub(super) fn set_property(
                 value.clone(),
                 env,
             )? {
-                return Ok(());
+                return Ok(false);
             }
             set.object().set(key, value);
-            Ok(())
+            Ok(true)
         }
         _ => Err(RuntimeError {
             thrown: None,
@@ -161,6 +162,30 @@ fn apply_property_setter(
         return Ok(true);
     }
     Ok(property.is_accessor())
+}
+
+pub(super) fn property_set_uses_setter(
+    object: &Value,
+    key: &str,
+    env: &HashMap<String, Value>,
+) -> bool {
+    property_for_set(object, key, env).is_some_and(|property| property.set.is_some())
+}
+
+fn property_for_set(object: &Value, key: &str, env: &HashMap<String, Value>) -> Option<Property> {
+    match object {
+        Value::Object(object) => object.property(key),
+        Value::Function(function) => function.properties.borrow().get(key).cloned(),
+        Value::Array(elements) => elements.property(key).or_else(|| {
+            elements
+                .prototype_override()
+                .unwrap_or_else(|| array_prototype(env))
+                .and_then(|prototype| prototype.property(key))
+        }),
+        Value::Map(map) => map.object().property(key),
+        Value::Set(set) => set.object().property(key),
+        _ => None,
+    }
 }
 
 pub(super) fn delete_property(object: Value, key: &str) -> Result<Value, RuntimeError> {

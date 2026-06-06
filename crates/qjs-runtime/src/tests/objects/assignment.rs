@@ -11,6 +11,10 @@ fn evaluates_member_assignment() {
         Ok(Value::Number(7.0))
     );
     assert_eq!(
+        eval("let seen = 0; let o = { set answer(value) { seen = value; } }; o.answer = 9; seen;"),
+        Ok(Value::Number(9.0))
+    );
+    assert_eq!(
         eval("this.answer = 42; this.answer;"),
         Ok(Value::Number(42.0))
     );

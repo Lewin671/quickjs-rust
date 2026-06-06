@@ -257,6 +257,41 @@ fn parses_object_literal_and_member_assignment() {
     assert_eq!(name.as_deref(), Some("get"));
     assert!(params.is_empty());
     assert!(!constructable);
+
+    let script =
+        parse_script("({ set value(next) { this.seen = next; } });").expect("source should parse");
+    let [Stmt::Expr(Expr::Object { properties, .. })] = script.body.as_slice() else {
+        panic!("expected object expression with setter");
+    };
+    assert_eq!(
+        properties[0].key,
+        ObjectPropertyKey::Literal("value".to_owned())
+    );
+    assert_eq!(properties[0].kind, ObjectPropertyKind::Setter);
+    let Expr::Function {
+        name,
+        params,
+        constructable,
+        ..
+    } = &properties[0].value
+    else {
+        panic!("expected setter value to parse as function expression");
+    };
+    assert_eq!(name.as_deref(), Some("value"));
+    assert_eq!(params, &["next".to_owned()]);
+    assert!(!constructable);
+
+    let script = parse_script("({ set() { return 42; } });").expect("source should parse");
+    let [Stmt::Expr(Expr::Object { properties, .. })] = script.body.as_slice() else {
+        panic!("expected object expression with method named set");
+    };
+    assert_eq!(
+        properties[0].key,
+        ObjectPropertyKey::Literal("set".to_owned())
+    );
+    assert_eq!(properties[0].kind, ObjectPropertyKind::Data);
+    assert!(parse_script("({ set value() {} });").is_err());
+    assert!(parse_script("({ set value(a, b) {} });").is_err());
 }
 
 #[test]

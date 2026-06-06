@@ -422,6 +422,7 @@ cases/object-assign-number-target-string-override.js
 cases/object-assign-source-string.js
 cases/object-assign-target-set-not-writable.js
 cases/object-assign-target-set-user-error.js
+cases/object-assign-sealed-accessor-target.js
 cases/object-assign-null-undefined-source.js
 cases/object-constructor-basic.js
 cases/object-constructor-object-identity.js
@@ -590,6 +591,7 @@ cases/instanceof-reassigned-prototype-basic.js
 cases/delete-basic.js
 cases/delete-object-property.js
 cases/object-property-values.js
+cases/object-literal-setter-basic.js
 cases/object-property-names.js
 cases/missing-property-undefined.js
 cases/object-reference-alias.js
