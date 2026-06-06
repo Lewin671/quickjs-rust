@@ -251,12 +251,7 @@ pub(crate) fn define_property_descriptor_on_value_key(
                 return Ok(false);
             }
             if key == "length" {
-                if let Some(value) = descriptor.value {
-                    elements.set_len(crate::to_length(value)?);
-                }
-                if let Some(writable) = descriptor.writable {
-                    elements.set_length_writable(writable);
-                }
+                return define_array_length_property(elements, descriptor);
             } else {
                 elements.define_property(key, property);
             }
@@ -267,6 +262,50 @@ pub(crate) fn define_property_descriptor_on_value_key(
             unreachable!("define property target validation should reject unsupported values")
         }
     }
+}
+
+fn define_array_length_property(
+    elements: &crate::ArrayRef,
+    descriptor: PropertyDescriptor,
+) -> Result<bool, RuntimeError> {
+    if let Some(value) = descriptor.value {
+        let new_len = array_length_from_descriptor_value(value)?;
+        let old_len = elements.len();
+        if new_len < old_len {
+            for index in (new_len..old_len).rev() {
+                if crate::array_own_property_descriptor(elements, &index.to_string())
+                    .is_some_and(|property| !property.configurable)
+                {
+                    elements.set_len(index + 1);
+                    if descriptor.writable == Some(false) {
+                        elements.set_length_writable(false);
+                    }
+                    return Ok(false);
+                }
+                elements.delete_index(index);
+            }
+        }
+        elements.set_len(new_len);
+        if elements.len() != new_len {
+            return Ok(false);
+        }
+    }
+    if let Some(writable) = descriptor.writable {
+        elements.set_length_writable(writable);
+    }
+    Ok(true)
+}
+
+fn array_length_from_descriptor_value(value: Value) -> Result<usize, RuntimeError> {
+    let number = crate::to_number(value)?;
+    let length = crate::to_uint32_number(number);
+    if f64::from(length) != number {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "RangeError: invalid array length".to_owned(),
+        });
+    }
+    Ok(length as usize)
 }
 
 fn define_symbol_property_descriptor_on_value(

@@ -85,6 +85,18 @@ fn evaluates_object_definition_and_creation_builtins() {
         Ok(Value::Boolean(true))
     );
     assert_eq!(
+        eval(
+            "let caught = false; let array = []; try { Object.defineProperty(array, 'length', { value: -1 }); } catch (error) { caught = error instanceof RangeError; } caught + ':' + array.length;"
+        ),
+        Ok(Value::String("true:0".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; let array = [0, 1, 2]; Object.defineProperty(array, '2', { configurable: false }); try { Object.defineProperty(array, 'length', { value: 1 }); } catch (error) { caught = error instanceof TypeError; } caught + ':' + array.length + ':' + array[2];"
+        ),
+        Ok(Value::String("true:3:2".to_owned()))
+    );
+    assert_eq!(
         eval("Object.defineProperties.length;"),
         Ok(Value::Number(2.0))
     );

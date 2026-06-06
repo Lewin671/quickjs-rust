@@ -461,6 +461,7 @@ cases/object-define-property-data-defaults.js
 cases/object-define-property-data-enumerable.js
 cases/object-define-property-data-writable.js
 cases/object-define-property-function-basic.js
+cases/object-define-property-array-length-rules.js
 cases/object-define-property-length.js
 cases/object-define-property-nonconfigurable-compat.js
 cases/object-define-property-object-key.js
