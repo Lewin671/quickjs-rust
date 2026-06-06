@@ -67,6 +67,30 @@ fn evaluates_string_sequence_builtins() {
         Ok(Value::String("|".to_owned()))
     );
     assert_eq!(
+        eval(
+            "let calls = 0; let separator = {}; separator[Symbol.split] = function(input, limit) { calls++; return this === separator && input === 'abc' && limit === 'limit' ? 'ok' : 'bad'; }; 'abc'.split(separator, 'limit') + ':' + calls;"
+        ),
+        Ok(Value::String("ok:1".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let separator = { toString: function() { return '2'; }, valueOf: function() { throw 'bad'; } }; separator[Symbol.split] = null; 'a2b2c'.split(separator).join('|');"
+        ),
+        Ok(Value::String("a|b|c".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "Object.defineProperty(String.prototype, Symbol.split, { configurable: true, get: function() { throw 'bad'; } }); let out = 'a,b,c'.split(',').join('|'); delete String.prototype[Symbol.split]; out;"
+        ),
+        Ok(Value::String("a|b|c".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; let separator = {}; separator[Symbol.split] = 1; try { 'abc'.split(separator); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("'hello'.split(new RegExp).join('|');"),
         Ok(Value::String("h|e|l|l|o".to_owned()))
     );

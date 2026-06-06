@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
 use crate::{
-    ArrayRef, RuntimeError, Value, call_function, property_value, regexp, to_js_string,
-    to_js_string_with_env, to_number, to_number_with_env, to_uint32, to_uint32_number,
+    ArrayRef, PropertyKey, RuntimeError, Value, call_function, has_property_key, property_value,
+    property_value_key, regexp, symbol, to_js_string, to_js_string_with_env, to_number,
+    to_number_with_env, to_uint32, to_uint32_number,
 };
 
 use super::super::indexing::{string_slice_index, string_substring_index, this_string_value};
@@ -71,9 +72,28 @@ pub(crate) fn native_string_prototype_split(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let value = this_string_value(this_value, env)?;
     let separator_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let limit_value = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
+
+    if matches!(this_value, Value::Null | Value::Undefined) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "String.prototype method called on null or undefined".to_owned(),
+        });
+    }
+    if !matches!(separator_value, Value::Null | Value::Undefined) {
+        if let Some(splitter) = symbol_split_method(separator_value.clone(), env)? {
+            return call_function(
+                splitter,
+                separator_value,
+                vec![this_value, limit_value],
+                env,
+                false,
+            );
+        }
+    }
+
+    let value = this_string_value(this_value, env)?;
     let limit = string_split_limit(limit_value, env)?;
 
     if matches!(separator_value, Value::Undefined) {
@@ -108,6 +128,40 @@ pub(crate) fn native_string_prototype_split(
             .collect()
     };
     Ok(Value::Array(ArrayRef::new(parts)))
+}
+
+fn symbol_split_method(
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Option<Value>, RuntimeError> {
+    if !is_object_value(&value) {
+        return Ok(None);
+    }
+    let Some(split_symbol) = symbol::split_symbol(env) else {
+        return Ok(None);
+    };
+    let key = PropertyKey::Symbol(split_symbol);
+    if !has_property_key(value.clone(), env, &key)? {
+        return Ok(None);
+    }
+    let method = property_value_key(value, &key, env)?;
+    if matches!(method, Value::Null | Value::Undefined) {
+        return Ok(None);
+    }
+    if !matches!(method, Value::Function(_)) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Symbol.split method is not callable".to_owned(),
+        });
+    }
+    Ok(Some(method))
+}
+
+fn is_object_value(value: &Value) -> bool {
+    matches!(
+        value,
+        Value::Object(_) | Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_)
+    )
 }
 
 fn string_split_regexp(
