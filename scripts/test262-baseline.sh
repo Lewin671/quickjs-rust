@@ -211,19 +211,16 @@ fi
 metadata_for() {
   awk -f "$METADATA_PARSER" "$1"
 }
-
 skip_reason() {
   local rel="$1"
   local flags="$2"
   local includes="$3"
   local features="$4"
   local has_negative="$5"
-
   case "$rel" in
     *_FIXTURE.js) echo "fixture"; return ;;
     test/intl402/*|test/staging/intl402/*) echo "intl402"; return ;;
   esac
-
   if [ -n "$has_negative" ]; then
     echo "negative"
   elif [[ "$flags" == *module* ]]; then
@@ -232,7 +229,7 @@ skip_reason() {
     echo "async"
   elif [[ "$flags" == *raw* ]]; then
     echo "raw"
-  elif [ -n "$includes" ]; then
+  elif [ -n "$includes" ] && ! rust_includes_supported "$includes"; then
     echo "includes"
   elif [ -n "$features" ] && ! rust_features_supported "$features"; then
     echo "features"
@@ -240,22 +237,23 @@ skip_reason() {
     echo ""
   fi
 }
-
 rust_features_supported() {
   local entries
-  entries="$(feature_entries "$1")"
+  entries="$(list_entries "$1")"
   grep -Fxq 'Symbol.isConcatSpreadable' <<<"$entries" || return 1
   ! grep -Fvx -e 'Symbol' -e 'Symbol.isConcatSpreadable' <<<"$entries" >/dev/null
 }
-
-feature_entries() {
-  printf '%s\n' "$1" \
-    | tr -d '[]' \
-    | tr ',' '\n' \
+rust_includes_supported() {
+  local include
+  while IFS= read -r include; do
+    [ -f "$TEST262_DIR/harness/$include" ] || return 1
+  done < <(list_entries "$1")
+}
+list_entries() {
+  printf '%s\n' "$1" | tr -d '[]' | tr ',' '\n' \
     | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' \
     | sed '/^$/d'
 }
-
 prefix_list_contains() {
   local rel="$1"
   local list="$2"
@@ -273,7 +271,6 @@ quickjs_ng_skip_reason() {
   local rel="$1"
   local features="$2"
   local feature
-
   case "$rel" in
     *_FIXTURE.js) echo "fixture"; return ;;
   esac
@@ -291,14 +288,15 @@ quickjs_ng_skip_reason() {
       echo "unknown-feature"
       return
     fi
-  done < <(feature_entries "$features")
+  done < <(list_entries "$features")
   echo ""
 }
-
 make_case() {
   local source="$1"
   local output="$2"
   local flags="$3"
+  local includes="$4"
+  local include
   {
     if [[ "$flags" == *onlyStrict* ]]; then
       printf '"use strict";\n'
@@ -307,10 +305,13 @@ make_case() {
     printf '\n'
     cat "$TEST262_DIR/harness/sta.js"
     printf '\n'
+    while IFS= read -r include; do
+      cat "$TEST262_DIR/harness/$include"
+      printf '\n'
+    done < <(list_entries "$includes")
     cat "$source"
   } >"$output"
 }
-
 run_engine_case() {
   local engine="$1"
   local temp="$2"
@@ -336,7 +337,6 @@ run_engine_case() {
     printf "fail\t%s\n" "$first_line"
   fi
 }
-
 count_engine_result() {
   local prefix="$1"
   local result="$2"
@@ -346,7 +346,6 @@ count_engine_result() {
     fail*) eval "${prefix}_fail=\$(( ${prefix}_fail + 1 ))" ;;
   esac
 }
-
 result_kind() {
   case "$1" in
     pass) echo "pass" ;;
@@ -355,22 +354,20 @@ result_kind() {
     *) echo "fail" ;;
   esac
 }
-
 run_case() {
   local file="$1"
   local flags="$2"
   local rel="$3"
-  local rust_skip_reason="$4"
-  local qjsng_skip_reason="$5"
+  local includes="$4"
+  local rust_skip_reason="$5"
+  local qjsng_skip_reason="$6"
   local temp_dir
   local temp
   local rust_result="not-run"
   local qjsng_result="not-run"
-
   temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/qjs-test262-baseline-XXXXXX")"
   temp="$temp_dir/case.js"
-  make_case "$file" "$temp" "$flags"
-
+  make_case "$file" "$temp" "$flags" "$includes"
   if [ "$ENGINE" = "quickjs-rust" ] || [ "$ENGINE" = "both" ]; then
     if [ -n "$rust_skip_reason" ]; then
       rust_result="skipped"
@@ -545,7 +542,7 @@ while IFS= read -r file; do
 
   run=$((run + 1))
   printf 'test262-baseline [%d]: %s\n' "$run" "$rel"
-  run_case "$file" "$flags" "$rel" "$reason" "$qjsng_reason"
+  run_case "$file" "$flags" "$rel" "$includes" "$reason" "$qjsng_reason"
 done < <(find "$TEST262_DIR/test" -type f -name '*.js' | sort)
 
 echo "summary:"
