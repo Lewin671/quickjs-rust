@@ -241,7 +241,8 @@ rust_features_supported() {
   local entries
   entries="$(list_entries "$1")"
   ! grep -Fvx -e 'Symbol' -e 'Symbol.isConcatSpreadable' \
-    -e 'Reflect.construct' -e 'arrow-function' <<<"$entries" >/dev/null
+    -e 'Reflect.construct' -e 'arrow-function' \
+    -e 'array-find-from-last' <<<"$entries" >/dev/null
 }
 rust_includes_supported() {
   local include
