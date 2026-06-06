@@ -349,6 +349,7 @@ cases/set-is-disjoint-from-basic.js
 cases/set-iterator-basic.js
 cases/set-for-each-basic.js
 cases/object-assign-length.js
+cases/object-assign-target-array.js
 cases/object-assign-target-object.js
 cases/object-assign-override.js
 cases/object-assign-primitive-target.js

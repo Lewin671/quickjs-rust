@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     Function, ObjectRef, Property, RuntimeError, Value, boolean::BOOLEAN_DATA_PROPERTY,
-    function_prototype, number::NUMBER_DATA_PROPERTY, string::STRING_DATA_PROPERTY,
+    function_prototype, number::NUMBER_DATA_PROPERTY, string::STRING_DATA_PROPERTY, to_length,
 };
 
 use super::descriptor::native_object_define_properties;
@@ -13,7 +13,11 @@ pub(crate) fn native_object_assign(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let target = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
-        value @ (Value::Object(_) | Value::Function(_) | Value::Map(_) | Value::Set(_)) => value,
+        value @ (Value::Array(_)
+        | Value::Object(_)
+        | Value::Function(_)
+        | Value::Map(_)
+        | Value::Set(_)) => value,
         Value::Null | Value::Undefined => {
             return Err(RuntimeError {
                 thrown: None,
@@ -22,12 +26,6 @@ pub(crate) fn native_object_assign(
         }
         value @ (Value::String(_) | Value::Number(_) | Value::Boolean(_)) => {
             boxed_primitive(value, env).expect("primitive value should box")
-        }
-        Value::Array(_) => {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "Object.assign array targets are not implemented".to_owned(),
-            });
         }
     };
 
@@ -164,6 +162,16 @@ fn set_property(target: Value, key: String, value: Value) -> Result<(), RuntimeE
         }
         Value::Set(set) => {
             set.object().set(key, value);
+            Ok(())
+        }
+        Value::Array(array) => {
+            if key == "length" {
+                array.set_len(to_length(value)?);
+            } else if let Ok(index) = key.parse::<usize>() {
+                array.set(index, value);
+            } else {
+                array.set_property(key, value);
+            }
             Ok(())
         }
         Value::Function(function) => {

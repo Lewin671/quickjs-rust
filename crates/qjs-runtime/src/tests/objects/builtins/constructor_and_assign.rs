@@ -46,4 +46,22 @@ fn evaluates_object_constructor_and_assign() {
         ),
         Ok(Value::Number(0.0))
     );
+    assert_eq!(
+        eval(
+            "let target = []; let result = Object.assign(target, { 0: 'a', 2: 'c' }); (result === target) + ':' + target.length + ':' + target.join('-');"
+        ),
+        Ok(Value::String("true:3:a--c".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let target = [1]; Object.assign(target, { label: 'ok' }); target.length + ':' + target.label;"
+        ),
+        Ok(Value::String("1:ok".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let target = [1, 2, 3]; Object.assign(target, { length: 1 }); target.length + ':' + target.join('-');"
+        ),
+        Ok(Value::String("1:1".to_owned()))
+    );
 }
