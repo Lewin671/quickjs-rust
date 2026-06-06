@@ -259,6 +259,7 @@ cases/logical-or-assignment-basic.js
 cases/nullish-assignment-basic.js
 cases/logical-assignment-short-circuit.js
 cases/logical-and-basic.js
+cases/number-constant-descriptors.js
 cases/number-constructor-basic.js
 cases/number-constants-basic.js
 cases/number-min-value.js
