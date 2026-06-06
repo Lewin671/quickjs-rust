@@ -4,6 +4,7 @@
 # enough support for the test to provide useful signal.
 cases/builtin-iterator-symbol-properties.js
 cases/builtin-to-string-tag-symbol-properties.js
+cases/function-symbol-has-instance-basic.js
 cases/symbol-well-known-static-properties.js
 cases/array-constructor-basic.js
 cases/array-constructor-multiple-arguments.js

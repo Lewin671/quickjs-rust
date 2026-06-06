@@ -61,6 +61,13 @@ pub(super) fn call_core_native(
         NativeFunction::FunctionPrototypeCall => {
             crate::function::native_function_prototype_call(this_value, argument_values, env)
         }
+        NativeFunction::FunctionPrototypeHasInstance => {
+            crate::function::native_function_prototype_has_instance(
+                this_value,
+                argument_values,
+                env,
+            )
+        }
         _ => unreachable!("native function was not handled by its owning dispatcher"),
     }
 }

@@ -313,6 +313,38 @@ fn evaluates_function_declarations_and_calls() {
     );
     assert_eq!(
         eval(
+            "let d = Object.getOwnPropertyDescriptor(Function.prototype, Symbol.hasInstance); typeof d.value + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("function:false:false:false".to_owned()))
+    );
+    assert_eq!(
+        eval("let f = Function.prototype[Symbol.hasInstance]; f.length + ':' + f.name;"),
+        Ok(Value::String("1:[Symbol.hasInstance]".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "function C() {} let instance = new C(); Function.prototype[Symbol.hasInstance].call(C, instance) + ':' + Function.prototype[Symbol.hasInstance].call(C, {});"
+        ),
+        Ok(Value::String("true:false".to_owned()))
+    );
+    assert_eq!(
+        eval("Function.prototype[Symbol.hasInstance].call({}, {});"),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval(
+            "function C() {} let Bound = C.bind(null); let instance = new C(); Function.prototype[Symbol.hasInstance].call(Bound, instance);"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "function F() {} let s = Symbol(); F[s] = 1; let before = Object.getOwnPropertySymbols(F)[0] === s; let descriptor = Object.getOwnPropertyDescriptor(F, s); delete F[s]; before + ':' + descriptor.value + ':' + descriptor.enumerable + ':' + Object.hasOwn(F, s);"
+        ),
+        Ok(Value::String("true:1:true:false".to_owned()))
+    );
+    assert_eq!(
+        eval(
             "function make(value) { return function() { return ({ value: value }).hasOwnProperty('value'); }; } make(1)();"
         ),
         Ok(Value::Boolean(true))

@@ -36,6 +36,7 @@ pub(crate) fn install_symbol(
 
     let symbol_function = Function::new_native(Some("Symbol"), 0, NativeFunction::Symbol, false);
     install_well_known_symbols(&symbol_function, &symbol_prototype);
+    install_function_has_instance(env, &symbol_function);
     if let Some(to_string_tag) = well_known_symbol_from_function(&symbol_function, "toStringTag") {
         define_to_string_tag_property(&symbol_prototype, to_string_tag, "Symbol");
     }
@@ -191,6 +192,10 @@ pub(crate) fn iterator_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef>
     well_known_symbol(env, "iterator")
 }
 
+pub(crate) fn has_instance_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+    well_known_symbol(env, "hasInstance")
+}
+
 fn well_known_symbol(env: &HashMap<String, Value>, name: &str) -> Option<ObjectRef> {
     let Some(Value::Function(symbol_function)) = env.get("Symbol") else {
         return None;
@@ -206,6 +211,29 @@ fn well_known_symbol_from_function(symbol_function: &Function, name: &str) -> Op
         }) => Some(symbol.clone()),
         _ => None,
     }
+}
+
+fn install_function_has_instance(env: &HashMap<String, Value>, symbol_function: &Function) {
+    let Some(symbol) = well_known_symbol_from_function(symbol_function, "hasInstance") else {
+        return;
+    };
+    let Some(prototype) = crate::function_intrinsic_prototype(env) else {
+        return;
+    };
+    prototype.define_symbol_property(
+        symbol,
+        Property::data(
+            Value::Function(Function::new_native(
+                Some("[Symbol.hasInstance]"),
+                1,
+                NativeFunction::FunctionPrototypeHasInstance,
+                false,
+            )),
+            false,
+            false,
+            false,
+        ),
+    );
 }
 
 pub(crate) fn define_well_known_iterator_alias(

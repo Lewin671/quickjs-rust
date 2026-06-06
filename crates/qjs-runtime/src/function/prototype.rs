@@ -157,6 +157,18 @@ pub(crate) fn native_function_prototype_bind(
     Ok(Value::Function(bound))
 }
 
+pub(crate) fn native_function_prototype_has_instance(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    if !matches!(this_value, Value::Function(_)) {
+        return Ok(Value::Boolean(false));
+    }
+    let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    crate::operations::ordinary_has_instance(value, this_value, env).map(Value::Boolean)
+}
+
 pub(crate) fn function_call_this(
     this_arg: Option<Value>,
     env: &HashMap<String, Value>,

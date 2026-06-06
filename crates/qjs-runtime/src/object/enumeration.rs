@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     ArrayRef, Property, PropertyKey, RuntimeError, Value, array_own_property_keys,
     array_own_property_names, function_own_property_keys, function_own_property_names,
-    property_value, property_value_key, to_property_key_value,
+    function_own_property_symbols, property_value, property_value_key, to_property_key_value,
 };
 
 use super::descriptor::{own_property_descriptor, own_property_descriptor_key};
@@ -174,8 +174,8 @@ fn own_property_symbols(value: Value) -> Vec<crate::ObjectRef> {
         Value::Object(object) => object.own_property_symbols(),
         Value::Map(map) => map.object().own_property_symbols(),
         Value::Set(set) => set.object().own_property_symbols(),
+        Value::Function(function) => function_own_property_symbols(&function),
         Value::Array(_)
-        | Value::Function(_)
         | Value::String(_)
         | Value::Number(_)
         | Value::Boolean(_)

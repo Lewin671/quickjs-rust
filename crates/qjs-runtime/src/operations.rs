@@ -3,8 +3,8 @@ use std::{cmp::Ordering, collections::HashMap};
 use qjs_ast::{BinaryOp, UnaryOp};
 
 use crate::{
-    Property, RuntimeError, Value, has_property_key, is_truthy, to_int32_number,
-    to_js_string_with_env, to_number, to_number_with_env, to_primitive_with_env,
+    Property, PropertyKey, RuntimeError, Value, call_function, has_property_key, is_truthy, symbol,
+    to_int32_number, to_js_string_with_env, to_number, to_number_with_env, to_primitive_with_env,
     to_property_key_value, to_uint32_number, value_prototype,
 };
 
@@ -198,16 +198,41 @@ fn abstract_eq(
 fn eval_instanceof(
     left: Value,
     right: Value,
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
+    if let Some(symbol) = symbol::has_instance_symbol(env) {
+        let method = crate::property_value_key(right.clone(), &PropertyKey::Symbol(symbol), env)?;
+        if !matches!(method, Value::Undefined | Value::Null) {
+            let Value::Function(_) = method else {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: "TypeError: Symbol.hasInstance method is not callable".to_owned(),
+                });
+            };
+            let result = call_function(method, right, vec![left], env, false)?;
+            return Ok(Value::Boolean(is_truthy(&result)));
+        }
+    }
+
+    ordinary_has_instance(left, right, env).map(Value::Boolean)
+}
+
+pub(crate) fn ordinary_has_instance(
+    left: Value,
+    right: Value,
+    env: &HashMap<String, Value>,
+) -> Result<bool, RuntimeError> {
     let Value::Function(constructor) = right else {
         return Err(RuntimeError {
             thrown: None,
             message: "right-hand side of instanceof is not callable".to_owned(),
         });
     };
+    if let Some(bound) = &constructor.bound {
+        return ordinary_has_instance(left, bound.target.clone(), env);
+    }
     let Some(left_prototype) = value_prototype(left, env) else {
-        return Ok(Value::Boolean(false));
+        return Ok(false);
     };
     let Some(Property {
         value: Value::Object(prototype),
@@ -219,9 +244,7 @@ fn eval_instanceof(
             message: "function prototype is not an object".to_owned(),
         });
     };
-    Ok(Value::Boolean(
-        left_prototype.ptr_eq(&prototype) || left_prototype.has_prototype(&prototype),
-    ))
+    Ok(left_prototype.ptr_eq(&prototype) || left_prototype.has_prototype(&prototype))
 }
 
 fn eval_in(left: Value, right: Value, env: &HashMap<String, Value>) -> Result<Value, RuntimeError> {

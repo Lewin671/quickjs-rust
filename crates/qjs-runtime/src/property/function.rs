@@ -1,4 +1,4 @@
-use crate::{Function, Property};
+use crate::{Function, ObjectRef, Property};
 
 pub(crate) fn function_own_property_keys(function: &Function) -> Vec<String> {
     let mut keys: Vec<_> = function
@@ -28,8 +28,23 @@ pub(crate) fn function_delete_own_property(function: &Function, key: &str) -> bo
     true
 }
 
+pub(crate) fn function_own_symbol_property_descriptor(
+    function: &Function,
+    symbol: &ObjectRef,
+) -> Option<Property> {
+    function.own_symbol_property(symbol)
+}
+
+pub(crate) fn function_delete_own_symbol_property(function: &Function, symbol: &ObjectRef) -> bool {
+    function.delete_own_symbol_property(symbol)
+}
+
 pub(crate) fn function_own_property_names(function: &Function) -> Vec<String> {
     let mut names: Vec<_> = function.properties.borrow().keys().cloned().collect();
     names.sort();
     names
+}
+
+pub(crate) fn function_own_property_symbols(function: &Function) -> Vec<ObjectRef> {
+    function.own_property_symbols()
 }

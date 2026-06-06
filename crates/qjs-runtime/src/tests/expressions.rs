@@ -130,6 +130,34 @@ fn evaluates_comparison_and_equality() {
     assert!(
         eval("function C() {} C.prototype = 1; let object = {}; object instanceof C;").is_err()
     );
+    assert_eq!(
+        eval(
+            "let calls = 0; let F = {}; F[Symbol.hasInstance] = function(value) { calls = calls + (this === F ? 1 : 0); return value === 7; }; (7 instanceof F) + ':' + (8 instanceof F) + ':' + calls;"
+        ),
+        Ok(Value::String("true:false:2".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let F = {}; F[Symbol.hasInstance] = function(value) { return value === 1 ? 'yes' : ''; }; (1 instanceof F) + ':' + (2 instanceof F);"
+        ),
+        Ok(Value::String("true:false".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "function F() {} Object.defineProperty(F, Symbol.hasInstance, { value: function(value) { return value === 3; }, configurable: true }); (3 instanceof F) + ':' + (4 instanceof F);"
+        ),
+        Ok(Value::String("true:false".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "function F() {} F[Symbol.hasInstance] = function() { return true; }; let object = {}; object instanceof F;"
+        ),
+        Ok(Value::Boolean(false))
+    );
+    assert!(
+        eval("let F = {}; F[Symbol.hasInstance] = 1; let caught = false; try { 1 instanceof F; } catch (error) { caught = error instanceof TypeError; } caught;")
+            .is_ok_and(|value| value == Value::Boolean(true))
+    );
 }
 
 #[test]

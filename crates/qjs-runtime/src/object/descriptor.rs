@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     ObjectRef, Property, PropertyKey, RuntimeError, Value, function_own_property_descriptor,
-    is_truthy, object_prototype, to_property_key_value,
+    function_own_symbol_property_descriptor, is_truthy, object_prototype, to_property_key_value,
 };
 
 use super::enumeration::{enumerable_property_entries, own_property_names};
@@ -125,7 +125,9 @@ pub(super) fn own_property_descriptor_key(
         }),
         Value::Function(function) => Ok(match key {
             PropertyKey::String(key) => function_own_property_descriptor(&function, key),
-            PropertyKey::Symbol(_) => None,
+            PropertyKey::Symbol(symbol) => {
+                function_own_symbol_property_descriptor(&function, symbol)
+            }
         }),
         Value::Array(elements) => Ok(match key {
             PropertyKey::String(key) => crate::array_own_property_descriptor(&elements, key),
@@ -281,6 +283,19 @@ fn define_symbol_property_on_value(
                 return Ok(false);
             }
             object.define_symbol_property(symbol, descriptor);
+            Ok(true)
+        }
+        Value::Function(function) => {
+            if !function.has_own_symbol_property(&symbol) && !function.is_extensible() {
+                return Ok(false);
+            }
+            if function
+                .own_symbol_property(&symbol)
+                .is_some_and(|property| !is_compatible_descriptor(&property, &descriptor))
+            {
+                return Ok(false);
+            }
+            function.define_symbol_property(symbol, descriptor);
             Ok(true)
         }
         _ => {

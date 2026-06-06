@@ -130,6 +130,7 @@ pub(crate) enum NativeFunction {
     FunctionPrototypeApply,
     FunctionPrototypeBind,
     FunctionPrototypeCall,
+    FunctionPrototypeHasInstance,
     JsonParse,
     JsonRawJson,
     JsonIsRawJson,

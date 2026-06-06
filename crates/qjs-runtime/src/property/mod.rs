@@ -12,8 +12,9 @@ pub(crate) use array::{
     array_own_property_names,
 };
 pub(crate) use function::{
-    function_delete_own_property, function_own_property_descriptor, function_own_property_keys,
-    function_own_property_names,
+    function_delete_own_property, function_delete_own_symbol_property,
+    function_own_property_descriptor, function_own_property_keys, function_own_property_names,
+    function_own_property_symbols, function_own_symbol_property_descriptor,
 };
 pub(crate) use key::{PropertyKey, to_property_key_value};
 pub(crate) use prototype::{
@@ -37,7 +38,7 @@ pub(crate) fn has_property_key(
     key: &PropertyKey,
 ) -> Result<bool, RuntimeError> {
     let PropertyKey::String(key) = key else {
-        return has_symbol_property(value, key);
+        return has_symbol_property(value, env, key);
     };
     match value {
         Value::Object(object) => Ok(object.contains_property(key)),
@@ -58,7 +59,11 @@ pub(crate) fn has_property_key(
     }
 }
 
-fn has_symbol_property(value: Value, key: &PropertyKey) -> Result<bool, RuntimeError> {
+fn has_symbol_property(
+    value: Value,
+    env: &HashMap<String, Value>,
+    key: &PropertyKey,
+) -> Result<bool, RuntimeError> {
     let PropertyKey::Symbol(symbol) = key else {
         unreachable!("symbol property helper should only receive symbol keys");
     };
@@ -66,7 +71,8 @@ fn has_symbol_property(value: Value, key: &PropertyKey) -> Result<bool, RuntimeE
         Value::Object(object) => Ok(object.symbol_property(symbol).is_some()),
         Value::Map(map) => Ok(map.object().symbol_property(symbol).is_some()),
         Value::Set(set) => Ok(set.object().symbol_property(symbol).is_some()),
-        Value::Array(_) | Value::Function(_) => Ok(false),
+        Value::Function(function) => Ok(function.symbol_property(symbol, env).is_some()),
+        Value::Array(_) => Ok(false),
         Value::String(_)
         | Value::Number(_)
         | Value::Boolean(_)
@@ -168,14 +174,9 @@ fn symbol_property_value(
         Value::Set(set) => {
             property_descriptor_value(set.object().symbol_property(symbol), receiver, env)
         }
-        Value::Function(function) => property_descriptor_value(
-            function
-                .internal_prototype_override()
-                .unwrap_or_else(|| function_intrinsic_prototype(env))
-                .and_then(|prototype| prototype.symbol_property(symbol)),
-            receiver,
-            env,
-        ),
+        Value::Function(function) => {
+            property_descriptor_value(function.symbol_property(symbol, env), receiver, env)
+        }
         Value::Array(elements) => property_descriptor_value(
             elements
                 .prototype_override()

@@ -4,9 +4,9 @@ use qjs_ast::{BinaryOp, UnaryOp};
 
 use crate::{
     GLOBAL_THIS_BINDING, ObjectRef, Property, PropertyKey, RuntimeError, Value, array_prototype,
-    boolean, call_function, function_delete_own_property, function_own_property_keys,
-    inherited_string_prototype_property, number, property_value, property_value_key, string,
-    to_int32_number, to_length, to_uint32_number,
+    boolean, call_function, function_delete_own_property, function_delete_own_symbol_property,
+    function_own_property_keys, inherited_string_prototype_property, number, property_value,
+    property_value_key, string, to_int32_number, to_length, to_uint32_number,
 };
 
 use super::vm::Vm;
@@ -188,12 +188,46 @@ fn set_symbol_property(
         Value::Set(set) => {
             set_object_symbol_property(set.object(), Value::Set(set), symbol, value, env)
         }
-        Value::Array(_) | Value::Function(_) => Ok(false),
+        Value::Function(function) => set_function_symbol_property(
+            function.clone(),
+            Value::Function(function),
+            symbol,
+            value,
+            env,
+        ),
+        Value::Array(_) => Ok(false),
         _ => Err(RuntimeError {
             thrown: None,
             message: "member assignment target is not an object".to_owned(),
         }),
     }
+}
+
+fn set_function_symbol_property(
+    function: crate::Function,
+    receiver: Value,
+    symbol: ObjectRef,
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<bool, RuntimeError> {
+    let inherited = function.symbol_property(&symbol, env);
+    if apply_property_setter(inherited.clone(), receiver, value.clone(), env)? {
+        return Ok(false);
+    }
+    let descriptor = match function.own_symbol_property(&symbol) {
+        Some(existing) if !existing.writable => return Ok(false),
+        Some(existing) => Property::data(
+            value,
+            existing.enumerable,
+            existing.writable,
+            existing.configurable,
+        ),
+        None if inherited.is_some_and(|property| !property.writable) => return Ok(false),
+        None if !function.is_extensible() => return Ok(false),
+        None => Property::enumerable(value),
+    };
+    function.define_symbol_property(symbol, descriptor);
+    Ok(true)
 }
 
 fn set_object_symbol_property(
@@ -256,7 +290,7 @@ fn property_for_set(
     env: &HashMap<String, Value>,
 ) -> Option<Property> {
     let PropertyKey::String(key) = key else {
-        return symbol_property_for_set(object, key);
+        return symbol_property_for_set(object, key, env);
     };
     match object {
         Value::Object(object) => object.property(key),
@@ -273,12 +307,17 @@ fn property_for_set(
     }
 }
 
-fn symbol_property_for_set(object: &Value, key: &PropertyKey) -> Option<Property> {
+fn symbol_property_for_set(
+    object: &Value,
+    key: &PropertyKey,
+    env: &HashMap<String, Value>,
+) -> Option<Property> {
     let PropertyKey::Symbol(symbol) = key else {
         unreachable!("symbol property helper should only receive symbol keys");
     };
     match object {
         Value::Object(object) => object.symbol_property(symbol),
+        Value::Function(function) => function.symbol_property(symbol, env),
         Value::Map(map) => map.object().symbol_property(symbol),
         Value::Set(set) => set.object().symbol_property(symbol),
         _ => None,
@@ -320,7 +359,10 @@ fn delete_symbol_property(object: Value, symbol: &ObjectRef) -> Result<Value, Ru
         Value::Set(set) => Ok(Value::Boolean(
             set.object().delete_own_symbol_property(symbol),
         )),
-        Value::Array(_) | Value::Function(_) => Ok(Value::Boolean(true)),
+        Value::Function(function) => Ok(Value::Boolean(function_delete_own_symbol_property(
+            &function, symbol,
+        ))),
+        Value::Array(_) => Ok(Value::Boolean(true)),
         _ => Err(RuntimeError {
             thrown: None,
             message: "delete target is not an object".to_owned(),

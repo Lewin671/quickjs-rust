@@ -66,8 +66,10 @@ fn own_symbol_property_descriptor(target: &Value, key: &PropertyKey) -> Option<P
         Value::Object(object) => object.own_symbol_property(symbol),
         Value::Map(map) => map.object().own_symbol_property(symbol),
         Value::Set(set) => set.object().own_symbol_property(symbol),
+        Value::Function(function) => {
+            crate::function_own_symbol_property_descriptor(function, symbol)
+        }
         Value::Array(_)
-        | Value::Function(_)
         | Value::String(_)
         | Value::Number(_)
         | Value::Boolean(_)
@@ -219,8 +221,22 @@ fn set_receiver_symbol_data_property(
         Value::Object(object) => set_object_symbol_data_property(object, symbol.clone(), value),
         Value::Map(map) => set_object_symbol_data_property(map.object(), symbol.clone(), value),
         Value::Set(set) => set_object_symbol_data_property(set.object(), symbol.clone(), value),
+        Value::Function(function) => {
+            let descriptor = match function.own_symbol_property(symbol) {
+                Some(existing) if !existing.writable => return Ok(false),
+                Some(existing) => Property::data(
+                    value,
+                    existing.enumerable,
+                    existing.writable,
+                    existing.configurable,
+                ),
+                None if !function.is_extensible() => return Ok(false),
+                None => Property::enumerable(value),
+            };
+            function.define_symbol_property(symbol.clone(), descriptor);
+            Ok(true)
+        }
         Value::Array(_)
-        | Value::Function(_)
         | Value::String(_)
         | Value::Number(_)
         | Value::Boolean(_)

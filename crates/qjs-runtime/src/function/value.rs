@@ -31,6 +31,7 @@ pub struct Function {
     pub(crate) bound: Option<Box<BoundFunction>>,
     /// Function object properties.
     pub(crate) properties: Rc<RefCell<HashMap<String, Property>>>,
+    symbol_properties: Rc<RefCell<Vec<(ObjectRef, Property)>>>,
     extensible: Rc<Cell<bool>>,
     sealed: Rc<Cell<bool>>,
     frozen: Rc<Cell<bool>>,
@@ -107,6 +108,7 @@ impl Function {
             is_strict,
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
+            symbol_properties: Rc::new(RefCell::new(Vec::new())),
             extensible: Rc::new(Cell::new(true)),
             sealed: Rc::new(Cell::new(false)),
             frozen: Rc::new(Cell::new(false)),
@@ -146,6 +148,7 @@ impl Function {
             is_strict,
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
+            symbol_properties: Rc::new(RefCell::new(Vec::new())),
             extensible: Rc::new(Cell::new(true)),
             sealed: Rc::new(Cell::new(false)),
             frozen: Rc::new(Cell::new(false)),
@@ -205,6 +208,7 @@ impl Function {
                 arguments,
             })),
             properties: Rc::new(RefCell::new(HashMap::new())),
+            symbol_properties: Rc::new(RefCell::new(Vec::new())),
             extensible: Rc::new(Cell::new(true)),
             sealed: Rc::new(Cell::new(false)),
             frozen: Rc::new(Cell::new(false)),
@@ -234,6 +238,7 @@ impl Function {
             is_strict: false,
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
+            symbol_properties: Rc::new(RefCell::new(Vec::new())),
             extensible: Rc::new(Cell::new(true)),
             sealed: Rc::new(Cell::new(false)),
             frozen: Rc::new(Cell::new(false)),
@@ -285,6 +290,9 @@ impl Function {
         for property in self.properties.borrow_mut().values_mut() {
             property.make_non_configurable();
         }
+        for (_, property) in self.symbol_properties.borrow_mut().iter_mut() {
+            property.make_non_configurable();
+        }
     }
 
     pub(crate) fn is_sealed(&self) -> bool {
@@ -295,6 +303,11 @@ impl Function {
                 .borrow()
                 .values()
                 .all(|property| !property.configurable)
+            && self
+                .symbol_properties
+                .borrow()
+                .iter()
+                .all(|(_, property)| !property.configurable)
     }
 
     pub(crate) fn freeze(&self) {
@@ -302,6 +315,9 @@ impl Function {
         self.sealed.set(true);
         self.frozen.set(true);
         for property in self.properties.borrow_mut().values_mut() {
+            property.freeze_data();
+        }
+        for (_, property) in self.symbol_properties.borrow_mut().iter_mut() {
             property.freeze_data();
         }
     }
@@ -315,6 +331,11 @@ impl Function {
                 .borrow()
                 .values()
                 .all(|property| !property.configurable && !property.writable)
+            && self
+                .symbol_properties
+                .borrow()
+                .iter()
+                .all(|(_, property)| !property.configurable && !property.writable)
     }
 
     pub(crate) fn set_property(&self, key: String, value: Value) {
@@ -330,6 +351,68 @@ impl Function {
             return;
         }
         properties.insert(key, Property::enumerable(value));
+    }
+
+    pub(crate) fn symbol_property(
+        &self,
+        symbol: &ObjectRef,
+        env: &HashMap<String, Value>,
+    ) -> Option<Property> {
+        self.own_symbol_property(symbol).or_else(|| {
+            self.internal_prototype_override()
+                .unwrap_or_else(|| function_intrinsic_prototype(env))
+                .and_then(|prototype| prototype.symbol_property(symbol))
+        })
+    }
+
+    pub(crate) fn define_symbol_property(&self, symbol: ObjectRef, property: Property) {
+        let mut properties = self.symbol_properties.borrow_mut();
+        if let Some((_, existing)) = properties
+            .iter_mut()
+            .find(|(existing_symbol, _)| existing_symbol.ptr_eq(&symbol))
+        {
+            *existing = property;
+            return;
+        }
+        properties.push((symbol, property));
+    }
+
+    pub(crate) fn has_own_symbol_property(&self, symbol: &ObjectRef) -> bool {
+        self.symbol_properties
+            .borrow()
+            .iter()
+            .any(|(existing_symbol, _)| existing_symbol.ptr_eq(symbol))
+    }
+
+    pub(crate) fn own_symbol_property(&self, symbol: &ObjectRef) -> Option<Property> {
+        self.symbol_properties
+            .borrow()
+            .iter()
+            .find(|(existing_symbol, _)| existing_symbol.ptr_eq(symbol))
+            .map(|(_, property)| property.clone())
+    }
+
+    pub(crate) fn delete_own_symbol_property(&self, symbol: &ObjectRef) -> bool {
+        let mut properties = self.symbol_properties.borrow_mut();
+        let Some(index) = properties
+            .iter()
+            .position(|(existing_symbol, _)| existing_symbol.ptr_eq(symbol))
+        else {
+            return true;
+        };
+        if !properties[index].1.configurable {
+            return false;
+        }
+        properties.remove(index);
+        true
+    }
+
+    pub(crate) fn own_property_symbols(&self) -> Vec<ObjectRef> {
+        self.symbol_properties
+            .borrow()
+            .iter()
+            .map(|(symbol, _)| symbol.clone())
+            .collect()
     }
 
     pub(crate) fn internal_prototype_override(&self) -> Option<Option<ObjectRef>> {
@@ -384,6 +467,11 @@ fn function_as_object_prototype(function: &Function) -> ObjectRef {
     let object = ObjectRef::with_prototype(HashMap::new(), prototype);
     for (key, property) in function.properties.borrow().iter() {
         object.define_property(key.clone(), property.clone());
+    }
+    for symbol in function.own_property_symbols() {
+        if let Some(property) = function.own_symbol_property(&symbol) {
+            object.define_symbol_property(symbol, property);
+        }
     }
     object
 }
