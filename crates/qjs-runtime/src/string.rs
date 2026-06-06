@@ -38,17 +38,23 @@ pub(crate) fn string_code_units(value: &str) -> Vec<u16> {
     value
         .chars()
         .flat_map(|character| {
-            let code = character as u32;
-            if (SURROGATE_ESCAPE_SENTINEL_BASE..SURROGATE_ESCAPE_SENTINEL_BASE + 0x800)
-                .contains(&code)
-            {
-                vec![(0xD800 + code - SURROGATE_ESCAPE_SENTINEL_BASE) as u16]
+            if let Some(code_unit) = surrogate_escape_code_unit(character) {
+                vec![code_unit]
             } else {
                 let mut buffer = [0; 2];
                 character.encode_utf16(&mut buffer).to_vec()
             }
         })
         .collect()
+}
+
+pub(crate) fn surrogate_escape_code_unit(character: char) -> Option<u16> {
+    let code = character as u32;
+    if (SURROGATE_ESCAPE_SENTINEL_BASE..SURROGATE_ESCAPE_SENTINEL_BASE + 0x800).contains(&code) {
+        Some((0xD800 + code - SURROGATE_ESCAPE_SENTINEL_BASE) as u16)
+    } else {
+        None
+    }
 }
 
 pub(crate) fn string_from_code_unit(code_unit: u16) -> String {

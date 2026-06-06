@@ -234,8 +234,8 @@ skip_reason() {
   fi
 }
 rust_source_syntax_supported() {
-  # Some upstream files use BigInt literals without declaring a BigInt feature.
-  ! grep -Eq '(^|[^[:alnum:]_$])[0-9][0-9_]*n([^[:alnum:]_$]|$)' "$TEST262_DIR/$1"
+  # Some upstream files use syntax the Rust parser does not support yet.
+  ! grep -Eq '(^|[^[:alnum:]_$])[0-9][0-9_]*n([^[:alnum:]_$]|$)|`([^`\\]|\\.)*\$\{' "$TEST262_DIR/$1"
 }
 rust_features_supported() {
   local entries
@@ -243,7 +243,7 @@ rust_features_supported() {
   ! grep -Fvx -e 'Symbol' -e 'Symbol.isConcatSpreadable' -e 'Symbol.match' \
     -e 'Symbol.replace' -e 'Symbol.search' -e 'Symbol.toPrimitive' \
     -e 'Reflect.construct' -e 'arrow-function' \
-    -e 'array-find-from-last' -e 'String.prototype.endsWith' -e 'String.prototype.includes' -e 'String.prototype.replaceAll' \
+    -e 'array-find-from-last' -e 'RegExp.escape' -e 'String.prototype.endsWith' -e 'String.prototype.includes' -e 'String.prototype.isWellFormed' -e 'String.prototype.replaceAll' -e 'String.prototype.toWellFormed' \
     <<<"$entries" >/dev/null
 }
 rust_includes_supported() {

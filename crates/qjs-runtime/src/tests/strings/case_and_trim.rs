@@ -100,6 +100,10 @@ fn evaluates_string_case_and_trim_builtins() {
         Ok(Value::Boolean(true))
     );
     assert_eq!(
+        eval("String.fromCodePoint(0x1F4A9).toWellFormed() === String.fromCodePoint(0x1F4A9);"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("'  abc  '.trim();"),
         Ok(Value::String("abc".to_owned()))
     );

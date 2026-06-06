@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{RuntimeError, Value};
 
 use super::super::indexing::this_string_value;
-use super::super::{string_code_units, string_from_code_unit};
+use super::super::{string_code_units, surrogate_escape_code_unit};
 
 pub(crate) fn native_string_prototype_is_well_formed(
     this_value: Value,
@@ -42,26 +42,26 @@ fn is_well_formed(value: &str) -> bool {
 }
 
 fn to_well_formed(value: &str) -> String {
-    let code_units = string_code_units(value);
     let mut result = String::new();
-    let mut index = 0;
-    while index < code_units.len() {
-        let unit = code_units[index];
+    let mut chars = value.chars().peekable();
+    while let Some(character) = chars.next() {
+        let Some(unit) = surrogate_escape_code_unit(character) else {
+            result.push(character);
+            continue;
+        };
         if (0xD800..=0xDBFF).contains(&unit) {
-            if index + 1 < code_units.len() && (0xDC00..=0xDFFF).contains(&code_units[index + 1]) {
-                result.push_str(&string_from_code_unit(unit));
-                result.push_str(&string_from_code_unit(code_units[index + 1]));
-                index += 2;
+            if let Some(next) = chars.peek().copied()
+                && let Some(next_unit) = surrogate_escape_code_unit(next)
+                && (0xDC00..=0xDFFF).contains(&next_unit)
+            {
+                result.push(character);
+                result.push(next);
+                chars.next();
             } else {
                 result.push(char::REPLACEMENT_CHARACTER);
-                index += 1;
             }
-        } else if (0xDC00..=0xDFFF).contains(&unit) {
-            result.push(char::REPLACEMENT_CHARACTER);
-            index += 1;
         } else {
-            result.push_str(&string_from_code_unit(unit));
-            index += 1;
+            result.push(char::REPLACEMENT_CHARACTER);
         }
     }
     result
