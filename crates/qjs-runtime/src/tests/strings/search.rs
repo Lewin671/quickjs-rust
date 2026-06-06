@@ -130,6 +130,22 @@ fn evaluates_string_search_builtins() {
         Ok(Value::String("bar foo".to_owned()))
     );
     assert_eq!(
+        eval(
+            "let calls = 0; let search = { [Symbol.replace]: function(input, replacement) { calls = calls + 1; return this === search && input === 'abc' && replacement === 7 ? 42 : -1; } }; 'abc'.replace(search, 7) + ':' + calls;"
+        ),
+        Ok(Value::String("42:1".to_owned()))
+    );
+    assert!(
+        eval("let search = { get [Symbol.replace]() { throw new Error('replace'); } }; ''.replace(search, 'x');")
+            .is_err()
+    );
+    assert_eq!(
+        eval(
+            "let search = { [Symbol.replace]: null, toString: function() { return '3'; } }; 'ab3c'.replace(search, '<foo>');"
+        ),
+        Ok(Value::String("ab<foo>c".to_owned()))
+    );
+    assert_eq!(
         eval("'abc'.replace('', '-');"),
         Ok(Value::String("-abc".to_owned()))
     );

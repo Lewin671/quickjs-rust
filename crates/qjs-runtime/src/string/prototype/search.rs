@@ -6,7 +6,9 @@ use super::super::indexing::{
     string_end_position, string_last_search_position, string_search_start, this_string_value,
 };
 
+mod errors;
 mod symbol_method;
+use errors::{replace_all_regexp_flags_error, string_method_null_error};
 use symbol_method::{symbol_match_method, symbol_replace_method, symbol_search_method};
 
 pub(crate) fn native_string_prototype_ends_with(
@@ -113,10 +115,7 @@ pub(crate) fn native_string_prototype_match(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     if matches!(this_value, Value::Null | Value::Undefined) {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "String.prototype method called on null or undefined".to_owned(),
-        });
+        return Err(string_method_null_error());
     }
     let pattern = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if !matches!(pattern, Value::Null | Value::Undefined) {
@@ -142,10 +141,7 @@ pub(crate) fn native_string_prototype_replace_all(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     if matches!(this_value, Value::Null | Value::Undefined) {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "String.prototype method called on null or undefined".to_owned(),
-        });
+        return Err(string_method_null_error());
     }
     let search_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let is_regexp = regexp::regexp_is_regexp_with_env(search_value.clone(), env)?;
@@ -197,22 +193,28 @@ pub(crate) fn native_string_prototype_replace_all(
     string_replace_all(input, search, replacement, env)
 }
 
-fn replace_all_regexp_flags_error() -> RuntimeError {
-    RuntimeError {
-        thrown: None,
-        message: "TypeError: String.prototype.replaceAll RegExp flags are null or undefined"
-            .to_owned(),
-    }
-}
-
 pub(crate) fn native_string_prototype_replace(
     this_value: Value,
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let input = this_string_value(this_value, env)?;
+    if matches!(this_value, Value::Null | Value::Undefined) {
+        return Err(string_method_null_error());
+    }
     let search_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let replacement_value = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
+    if !matches!(search_value, Value::Null | Value::Undefined) {
+        if let Some(replacer) = symbol_replace_method(search_value.clone(), env)?.method {
+            return call_function(
+                replacer,
+                search_value,
+                vec![this_value, replacement_value],
+                env,
+                false,
+            );
+        }
+    }
+    let input = this_string_value(this_value, env)?;
     let replacement = if matches!(replacement_value, Value::Function(_)) {
         Replacement::Function(replacement_value)
     } else {
@@ -237,10 +239,7 @@ pub(crate) fn native_string_prototype_search(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     if matches!(this_value, Value::Null | Value::Undefined) {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "String.prototype method called on null or undefined".to_owned(),
-        });
+        return Err(string_method_null_error());
     }
     let search_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if !matches!(search_value, Value::Null | Value::Undefined) {
