@@ -166,6 +166,9 @@ impl Compiler {
         match left {
             ForInLeft::VarDecl { name, kind, .. } => {
                 let slot = self.declare_var_kind_slot(name, *kind);
+                if matches!(kind, VarKind::Let | VarKind::Const) {
+                    self.emit(Op::ClearLocal(slot));
+                }
                 self.emit(Op::LoadLocal(key_slot));
                 self.emit_store_var_binding(slot, name, *kind);
             }

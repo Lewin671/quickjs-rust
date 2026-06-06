@@ -111,6 +111,7 @@ impl<'a> Vm<'a> {
                     let result = self.store_local(slot, value);
                     self.handle_runtime_result(result)?;
                 }
+                Op::ClearLocal(slot) => self.clear_local(slot)?,
                 Op::DefineGlobalVar(name) => {
                     let value = self.pop()?;
                     let result = self.define_global_var(name, value);

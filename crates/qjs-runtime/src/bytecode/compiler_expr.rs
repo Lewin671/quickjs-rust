@@ -161,6 +161,9 @@ impl Compiler {
             } => {
                 for declaration in declarations {
                     let slot = self.declare_var_kind_slot(&declaration.name, *kind);
+                    if matches!(kind, VarKind::Let | VarKind::Const) {
+                        self.emit(Op::ClearLocal(slot));
+                    }
                     if let Some(init) = &declaration.init {
                         self.compile_expr(init)?;
                     } else {

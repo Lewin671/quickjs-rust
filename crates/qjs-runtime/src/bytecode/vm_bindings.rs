@@ -94,6 +94,15 @@ impl Vm<'_> {
         Ok(())
     }
 
+    pub(super) fn clear_local(&mut self, slot: usize) -> Result<(), RuntimeError> {
+        let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
+            thrown: None,
+            message: "bytecode local index out of bounds".to_owned(),
+        })?;
+        *local = None;
+        Ok(())
+    }
+
     pub(super) fn define_global_var(
         &mut self,
         name: String,

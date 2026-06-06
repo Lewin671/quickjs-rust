@@ -192,6 +192,28 @@ fn evaluates_strict_identifier_assignment_with_bytecode() {
 }
 
 #[test]
+fn reinitializes_lexical_declarations_in_loop_blocks_with_bytecode() {
+    assert_eq!(
+        eval_bytecode_source(
+            "let i = 0; let total = 0; while (i < 3) { const value = i; total = total + value; i = i + 1; } total;"
+        ),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval_bytecode_source(
+            "let i = 0; for (; i < 3; i = i + 1) { let value = i; value = value + 1; } i;"
+        ),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval_bytecode_source(
+            "let caught = false; try { const value = 1; value = 2; } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn rejects_unresolved_identifier_compound_assignment_with_bytecode() {
     assert_eq!(
         eval_bytecode_source(
