@@ -68,6 +68,12 @@ fn evaluates_reflect_prototype_builtins() {
         Ok(Value::Number(0.0))
     );
     assert_eq!(
+        eval(
+            "function join(a, b) { return a + ':' + b + ':' + arguments.length; } Reflect.apply(join, null, { 0: 'x', 1: 'y', length: 2 });"
+        ),
+        Ok(Value::String("x:y:2".to_owned()))
+    );
+    assert_eq!(
         eval("function getThis() { return this; } Reflect.apply(getThis, undefined, []) === this;"),
         Ok(Value::Boolean(true))
     );

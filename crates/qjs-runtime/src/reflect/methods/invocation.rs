@@ -17,15 +17,9 @@ pub(crate) fn native_reflect_apply(
     }
 
     let this_value = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
-    let arguments = match argument_values.get(2).cloned().unwrap_or(Value::Undefined) {
-        Value::Array(elements) => elements.to_vec(),
-        value => {
-            return Err(RuntimeError {
-                thrown: None,
-                message: format!("Reflect.apply argument list is not array-like: {value:?}"),
-            });
-        }
-    };
+    let arguments_list = argument_values.get(2).cloned().unwrap_or(Value::Undefined);
+    ensure_reflect_object_argument_list(&arguments_list, "Reflect.apply")?;
+    let arguments = array_like_values_with_env(arguments_list, "Reflect.apply argument list", env)?;
 
     crate::call_function(target, this_value, arguments, env, false)
 }
@@ -38,7 +32,7 @@ pub(crate) fn native_reflect_construct(
     ensure_reflect_constructor(&target, "target")?;
 
     let arguments_list = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
-    ensure_reflect_object_argument_list(&arguments_list)?;
+    ensure_reflect_object_argument_list(&arguments_list, "Reflect.construct")?;
     let arguments =
         array_like_values_with_env(arguments_list, "Reflect.construct argument list", env)?;
 
@@ -58,7 +52,7 @@ fn ensure_reflect_constructor(value: &Value, name: &str) -> Result<(), RuntimeEr
     })
 }
 
-fn ensure_reflect_object_argument_list(value: &Value) -> Result<(), RuntimeError> {
+fn ensure_reflect_object_argument_list(value: &Value, name: &str) -> Result<(), RuntimeError> {
     match value {
         Value::Object(_) | Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) => {
             Ok(())
@@ -69,7 +63,7 @@ fn ensure_reflect_object_argument_list(value: &Value) -> Result<(), RuntimeError
         | Value::Null
         | Value::Undefined => Err(RuntimeError {
             thrown: None,
-            message: "Reflect.construct argument list must be an object".to_owned(),
+            message: format!("{name} argument list must be an object"),
         }),
     }
 }
