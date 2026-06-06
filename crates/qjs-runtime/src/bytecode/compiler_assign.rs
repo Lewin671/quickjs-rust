@@ -36,7 +36,9 @@ impl Compiler {
                 self.compile_expr(object)?;
                 self.compile_member_key(property)?;
                 self.compile_expr(value)?;
-                self.emit(Op::SetProp);
+                self.emit(Op::SetProp {
+                    is_strict: self.strict,
+                });
                 Ok(())
             }
         }
@@ -232,7 +234,9 @@ impl Compiler {
         self.emit(Op::LoadLocal(object_slot));
         self.emit(Op::LoadLocal(key_slot));
         self.emit(Op::LoadLocal(value_slot));
-        self.emit(Op::SetProp);
+        self.emit(Op::SetProp {
+            is_strict: self.strict,
+        });
     }
 
     pub(super) fn compile_typeof(&mut self, argument: &Expr) -> Result<(), RuntimeError> {

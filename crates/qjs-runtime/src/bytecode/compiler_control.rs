@@ -180,7 +180,9 @@ impl Compiler {
                 self.compile_expr(object)?;
                 self.compile_member_key(property)?;
                 self.emit(Op::LoadLocal(key_slot));
-                self.emit(Op::SetProp);
+                self.emit(Op::SetProp {
+                    is_strict: self.strict,
+                });
                 self.emit(Op::Pop);
             }
         }

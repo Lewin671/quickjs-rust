@@ -69,6 +69,34 @@ fn evaluates_symbol_prototype_builtins() {
 }
 
 #[test]
+fn evaluates_symbol_primitive_property_assignment() {
+    assert_eq!(
+        eval("let symbol = Symbol('id'); symbol.a = 1; symbol.a;"),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval("let symbol = Symbol('id'); symbol['a' + 'b'] = 1; symbol.ab;"),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval("let symbol = Symbol('id'); symbol[62] = 1; symbol[62];"),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval(
+            "\"use strict\"; let caught = false; try { Symbol('id').a = 1; } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let receiver; Object.defineProperty(Symbol.prototype, 'a', { set: function(value) { receiver = this; } }); let symbol = Symbol('id'); symbol.a = 1; receiver === symbol && symbol.a === undefined;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn exposes_well_known_symbol_static_properties() {
     assert_eq!(
         eval(

@@ -26,7 +26,9 @@ pub(super) enum Op {
     NewObject(Vec<ObjectPropertyKind>),
     EnumerateKeys,
     GetProp,
-    SetProp,
+    SetProp {
+        is_strict: bool,
+    },
     DeleteProp,
     Call(usize),
     CallMethod(usize),

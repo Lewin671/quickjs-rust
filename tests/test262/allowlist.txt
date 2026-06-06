@@ -967,6 +967,7 @@ cases/string-prototype-trim-right-alias.js
 cases/string-prototype-trim-start-basic.js
 cases/string-prototype-trim-start-length.js
 cases/symbol-registry-basic.js
+cases/symbol-auto-boxing-assignment.js
 cases/symbol-is-constructor.js
 cases/symbol-key-for-boxed-symbol-throws.js
 cases/symbol-prototype-description-to-string.js

@@ -5,7 +5,7 @@ use qjs_ast::ObjectPropertyKind;
 use crate::{
     ArrayRef, Function, GLOBAL_THIS_BINDING, ObjectRef, Property, RUNTIME_INTRINSIC_NAMES,
     RuntimeError, Value, call_function, construct_function, initialize_builtins, is_truthy, object,
-    object_prototype, promise, to_property_key_value,
+    object_prototype, promise, symbol, to_property_key_value,
 };
 
 use super::ir::{Bytecode, Op};
@@ -142,7 +142,10 @@ impl<'a> Vm<'a> {
                 Op::NewObject(kinds) => self.new_object(&kinds)?,
                 Op::EnumerateKeys => self.enumerate_keys()?,
                 Op::GetProp => self.get_prop()?,
-                Op::SetProp => self.set_prop()?,
+                Op::SetProp { is_strict } => {
+                    let result = self.set_prop(is_strict);
+                    self.handle_runtime_result(result)?;
+                }
                 Op::DeleteProp => self.delete_prop()?,
                 Op::Call(argc) => self.call(argc)?,
                 Op::CallMethod(argc) => self.call_method(argc)?,
@@ -319,10 +322,20 @@ impl<'a> Vm<'a> {
         Ok(())
     }
 
-    fn set_prop(&mut self) -> Result<(), RuntimeError> {
+    fn set_prop(&mut self, is_strict: bool) -> Result<(), RuntimeError> {
         let value = self.pop()?;
         let key = to_property_key_value(self.pop()?, &mut self.globals)?;
         let object = self.pop()?;
+        if self.symbol_primitive_set_fails(&object, &key) {
+            if is_strict {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: "TypeError: cannot assign property on Symbol primitive".to_owned(),
+                });
+            }
+            self.stack.push(value);
+            return Ok(());
+        }
         let updates_global_binding = self.is_global_object(&object);
         let wrote_data = if property_set_uses_setter(&object, &key, &self.globals) {
             let mut env = self.current_env();
@@ -340,6 +353,11 @@ impl<'a> Vm<'a> {
         }
         self.stack.push(value);
         Ok(())
+    }
+
+    fn symbol_primitive_set_fails(&self, object: &Value, key: &crate::PropertyKey) -> bool {
+        matches!(object, Value::Object(object) if symbol::is_symbol_primitive(object))
+            && !property_set_uses_setter(object, key, &self.globals)
     }
 
     fn is_global_object(&self, value: &Value) -> bool {
