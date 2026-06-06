@@ -21,7 +21,7 @@ pub(crate) fn array_like_length(
         Value::Object(_) => {
             to_length_with_env(property_value(receiver.clone(), "length", env)?, env)?
         }
-        Value::Function(function) => function.params.len(),
+        Value::Function(function) => function.params.length(),
         Value::Null | Value::Undefined => {
             return Err(RuntimeError {
                 thrown: None,
@@ -55,7 +55,7 @@ pub(crate) fn array_like_values_with_env(
             array_like_values_from_receiver(receiver, length, env)
         }
         Value::Function(function) => {
-            let length = function.params.len();
+            let length = function.params.length();
             Ok((0..length)
                 .map(|index| {
                     function

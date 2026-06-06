@@ -1,4 +1,4 @@
-use qjs_ast::{Expr, Span, Stmt};
+use qjs_ast::{Expr, FunctionParams, Span, Stmt};
 use qjs_lexer::{Token, TokenKind};
 
 use crate::{ParseError, Parser};
@@ -73,11 +73,23 @@ impl Parser {
         })
     }
 
-    pub(crate) fn function_parameters(&mut self) -> Result<Vec<String>, ParseError> {
+    pub(crate) fn function_parameters(&mut self) -> Result<FunctionParams, ParseError> {
         self.expect(&TokenKind::LeftParen)?;
-        let mut params = Vec::new();
+        let mut positional = Vec::new();
+        let mut rest = None;
         if !self.at(&TokenKind::RightParen) {
             loop {
+                if self.match_kind(&TokenKind::DotDotDot) {
+                    let rest_token = self.advance();
+                    let TokenKind::Identifier(rest_name) = rest_token.kind else {
+                        return Err(ParseError {
+                            message: "expected rest parameter name".to_owned(),
+                            span: rest_token.span,
+                        });
+                    };
+                    rest = Some(rest_name);
+                    break;
+                }
                 let param_token = self.advance();
                 let TokenKind::Identifier(param) = param_token.kind else {
                     return Err(ParseError {
@@ -85,13 +97,13 @@ impl Parser {
                         span: param_token.span,
                     });
                 };
-                params.push(param);
+                positional.push(param);
                 if !self.match_kind(&TokenKind::Comma) {
                     break;
                 }
             }
         }
         self.expect(&TokenKind::RightParen)?;
-        Ok(params)
+        Ok(FunctionParams { positional, rest })
     }
 }

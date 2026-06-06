@@ -1,16 +1,16 @@
 use std::collections::HashSet;
 
-use qjs_ast::{ForInLeft, ForInit, Stmt};
+use qjs_ast::{ForInLeft, ForInit, FunctionParams, Stmt};
 
 pub(crate) fn collect_function_local_names(
     name: Option<&String>,
-    params: &[String],
+    params: &FunctionParams,
     body: &[Stmt],
 ) -> Vec<String> {
     let mut names = HashSet::new();
     names.insert("this".to_owned());
     names.insert("arguments".to_owned());
-    names.extend(params.iter().cloned());
+    names.extend(params.names());
     if let Some(name) = name {
         names.insert(name.clone());
     }

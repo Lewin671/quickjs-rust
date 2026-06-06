@@ -767,6 +767,7 @@ cases/var-hoist-before-declaration-basic.js
 cases/var-hoist-unentered-block-basic.js
 cases/var-hoist-function-body-basic.js
 cases/reflect-apply-array-like-object.js
+cases/reflect-apply-rest-parameters.js
 cases/reflect-apply-call-target.js
 cases/reflect-apply-length.js
 cases/reflect-apply-return-target-result.js

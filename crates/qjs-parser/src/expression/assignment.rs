@@ -1,4 +1,4 @@
-use qjs_ast::{AssignmentOp, Expr, Span, Stmt};
+use qjs_ast::{AssignmentOp, Expr, FunctionParams, Span, Stmt};
 use qjs_lexer::TokenKind;
 
 use crate::helpers::assignment_target;
@@ -94,7 +94,7 @@ impl Parser {
         }))
     }
 
-    fn arrow_parameters(&mut self) -> Result<Option<Vec<String>>, ParseError> {
+    fn arrow_parameters(&mut self) -> Result<Option<FunctionParams>, ParseError> {
         match self.peek().map(|token| &token.kind) {
             Some(TokenKind::Identifier(_))
                 if self
@@ -105,25 +105,35 @@ impl Parser {
                 let TokenKind::Identifier(param) = token.kind else {
                     unreachable!("peek checked identifier");
                 };
-                Ok(Some(vec![param]))
+                Ok(Some(FunctionParams::positional(vec![param])))
             }
             Some(TokenKind::LeftParen) => self.parenthesized_arrow_parameters(),
             _ => Ok(None),
         }
     }
 
-    fn parenthesized_arrow_parameters(&mut self) -> Result<Option<Vec<String>>, ParseError> {
+    fn parenthesized_arrow_parameters(&mut self) -> Result<Option<FunctionParams>, ParseError> {
         let start_cursor = self.cursor;
         self.expect(&TokenKind::LeftParen)?;
-        let mut params = Vec::new();
+        let mut positional = Vec::new();
+        let mut rest = None;
         if !self.at(&TokenKind::RightParen) {
             loop {
+                if self.match_kind(&TokenKind::DotDotDot) {
+                    let token = self.advance();
+                    let TokenKind::Identifier(param) = token.kind else {
+                        self.cursor = start_cursor;
+                        return Ok(None);
+                    };
+                    rest = Some(param);
+                    break;
+                }
                 let token = self.advance();
                 let TokenKind::Identifier(param) = token.kind else {
                     self.cursor = start_cursor;
                     return Ok(None);
                 };
-                params.push(param);
+                positional.push(param);
                 if !self.match_kind(&TokenKind::Comma) {
                     break;
                 }
@@ -137,7 +147,7 @@ impl Parser {
             self.cursor = start_cursor;
             return Ok(None);
         }
-        Ok(Some(params))
+        Ok(Some(FunctionParams { positional, rest }))
     }
 
     pub(crate) fn conditional(&mut self) -> Result<Expr, ParseError> {

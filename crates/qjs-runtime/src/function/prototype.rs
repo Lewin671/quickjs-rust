@@ -152,7 +152,7 @@ pub(crate) fn native_function_prototype_bind(
 
     let bound_this = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let bound_arguments = argument_values.iter().skip(1).cloned().collect::<Vec<_>>();
-    let length = target.params.len().saturating_sub(bound_arguments.len());
+    let length = target.params.length().saturating_sub(bound_arguments.len());
     let bound = Function::new_bound(this_value, bound_this, bound_arguments, length);
     Ok(Value::Function(bound))
 }

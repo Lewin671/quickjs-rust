@@ -3,7 +3,7 @@ use std::{
     rc::Rc,
 };
 
-use qjs_ast::{BinaryOp, ObjectPropertyKind, UnaryOp};
+use qjs_ast::{BinaryOp, FunctionParams, ObjectPropertyKind, UnaryOp};
 
 use crate::Value;
 
@@ -33,7 +33,7 @@ pub(super) enum Op {
     New(usize),
     NewFunction {
         name: Option<String>,
-        params: Vec<String>,
+        params: FunctionParams,
         local_names: Vec<String>,
         bytecode: Rc<Bytecode>,
         constructable: bool,

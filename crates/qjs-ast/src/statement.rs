@@ -1,4 +1,4 @@
-use crate::expression::Expr;
+use crate::expression::{Expr, FunctionParams};
 use crate::span::Span;
 
 mod control;
@@ -98,8 +98,8 @@ pub enum Stmt {
     FunctionDecl {
         /// Function name.
         name: String,
-        /// Parameter names.
-        params: Vec<String>,
+        /// Formal parameters.
+        params: FunctionParams,
         /// Function body statements.
         body: Vec<Stmt>,
         /// Source span.

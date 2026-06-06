@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use qjs_ast::{ForInLeft, ForInit, Script, Stmt, VarKind};
+use qjs_ast::{ForInLeft, ForInit, FunctionParams, Script, Stmt, VarKind};
 
 use crate::{RuntimeError, Value, function::is_strict_function_body};
 
@@ -47,14 +47,14 @@ pub(super) fn compile_script(script: &Script) -> Result<Bytecode, RuntimeError> 
 }
 
 pub(super) fn compile_function_body(
-    params: &[String],
+    params: &FunctionParams,
     body: &[Stmt],
 ) -> Result<Bytecode, RuntimeError> {
     compile_function_body_with_strict(params, body, false)
 }
 
 pub(super) fn compile_function_body_with_strict(
-    params: &[String],
+    params: &FunctionParams,
     body: &[Stmt],
     parent_strict: bool,
 ) -> Result<Bytecode, RuntimeError> {
@@ -79,13 +79,13 @@ impl Compiler {
 
     fn compile_function(
         mut self,
-        params: &[String],
+        params: &FunctionParams,
         body: &[Stmt],
     ) -> Result<Bytecode, RuntimeError> {
         self.global_scope = false;
         self.strict = self.strict || is_strict_function_body(body);
-        for param in params {
-            self.local_slot(param, true);
+        for param in params.names() {
+            self.local_slot(&param, true);
         }
         self.collect_hoisted_locals(body);
         self.compile_hoisted_function_decls(body)?;

@@ -57,6 +57,26 @@ fn evaluates_function_declarations_and_calls() {
         Ok(Value::Number(2.0))
     );
     assert_eq!(
+        eval(
+            "function collect(first, ...rest) { return first + ':' + rest.join('|'); } collect('a', 'b', 'c');"
+        ),
+        Ok(Value::String("a:b|c".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "function collect(...rest) { return rest.length + ':' + Array.isArray(rest); } collect();"
+        ),
+        Ok(Value::String("0:true".to_owned()))
+    );
+    assert_eq!(
+        eval("function collect(first, ...rest) {} collect.length;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval("((first, ...rest) => first + rest[1])('a', 'b', 'c');"),
+        Ok(Value::String("ac".to_owned()))
+    );
+    assert_eq!(
         eval("Function.prototype.toString.length;"),
         Ok(Value::Number(0.0))
     );

@@ -335,7 +335,7 @@ impl Parser {
         let key_span = key_token.span;
         let (key, _) = self.object_property_key(key_token)?;
         let params = self.function_parameters()?;
-        if params.len() != 1 {
+        if params.length() != 1 {
             return Err(ParseError {
                 message: "setter must have exactly one parameter".to_owned(),
                 span: key_span,

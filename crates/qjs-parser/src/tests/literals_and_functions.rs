@@ -15,7 +15,7 @@ fn parses_function_declaration_and_call() {
         panic!("expected function declaration followed by call");
     };
     assert_eq!(name, "add");
-    assert_eq!(params, &["a", "b"]);
+    assert_eq!(params.positional, ["a", "b"]);
     assert_eq!(arguments.len(), 2);
 
     let script = parse_script("let f = function named(value) { return value; }; f(1);")
@@ -31,7 +31,7 @@ fn parses_function_declaration_and_call() {
         panic!("expected function expression initializer");
     };
     assert_eq!(name.as_deref(), Some("named"));
-    assert_eq!(params, &["value"]);
+    assert_eq!(params.positional, ["value"]);
 
     let script = parse_script("let f = (a, b) => a + b;").expect("source should parse");
     let [Stmt::VarDecl { declarations, .. }] = script.body.as_slice() else {
@@ -48,7 +48,7 @@ fn parses_function_declaration_and_call() {
         panic!("expected arrow function initializer");
     };
     assert_eq!(name, &None);
-    assert_eq!(params, &["a", "b"]);
+    assert_eq!(params.positional, ["a", "b"]);
     assert!(!constructable);
     assert!(matches!(body.as_slice(), [Stmt::Return { .. }]));
 
@@ -59,8 +59,29 @@ fn parses_function_declaration_and_call() {
     let Some(Expr::Function { params, body, .. }) = &declarations[0].init else {
         panic!("expected arrow function initializer");
     };
-    assert_eq!(params, &["value"]);
+    assert_eq!(params.positional, ["value"]);
     assert!(matches!(body.as_slice(), [Stmt::Return { .. }]));
+}
+
+#[test]
+fn parses_rest_parameters() {
+    let script = parse_script("function collect(first, ...rest) { return rest; }")
+        .expect("source should parse");
+    let [Stmt::FunctionDecl { params, .. }] = script.body.as_slice() else {
+        panic!("expected function declaration");
+    };
+    assert_eq!(params.positional, ["first"]);
+    assert_eq!(params.rest.as_deref(), Some("rest"));
+
+    let script = parse_script("let collect = (...rest) => rest;").expect("source should parse");
+    let [Stmt::VarDecl { declarations, .. }] = script.body.as_slice() else {
+        panic!("expected arrow function declaration");
+    };
+    let Some(Expr::Function { params, .. }) = &declarations[0].init else {
+        panic!("expected arrow function initializer");
+    };
+    assert!(params.positional.is_empty());
+    assert_eq!(params.rest.as_deref(), Some("rest"));
 }
 
 #[test]
@@ -211,7 +232,7 @@ fn parses_object_literal_and_member_assignment() {
         panic!("expected method value to parse as function expression");
     };
     assert_eq!(name.as_deref(), Some("method"));
-    assert_eq!(params, &["a".to_owned(), "b".to_owned()]);
+    assert_eq!(params.positional, ["a".to_owned(), "b".to_owned()]);
     assert!(!constructable);
 
     let script = parse_script("({ get value() { return 42; } });").expect("source should parse");
@@ -278,7 +299,7 @@ fn parses_object_literal_and_member_assignment() {
         panic!("expected setter value to parse as function expression");
     };
     assert_eq!(name.as_deref(), Some("value"));
-    assert_eq!(params, &["next".to_owned()]);
+    assert_eq!(params.positional, ["next".to_owned()]);
     assert!(!constructable);
 
     let script = parse_script("({ set() { return 42; } });").expect("source should parse");

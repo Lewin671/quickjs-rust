@@ -5,7 +5,7 @@ use std::{
     rc::Rc,
 };
 
-use qjs_ast::Stmt;
+use qjs_ast::{FunctionParams, Stmt};
 
 use crate::{
     Bytecode, NativeFunction, ObjectRef, Property, Value,
@@ -20,7 +20,7 @@ pub struct Function {
     /// Optional internal function name.
     pub name: Option<String>,
     /// Parameter names.
-    pub params: Vec<String>,
+    pub params: FunctionParams,
     /// Environment captured when the function was created.
     pub env: HashMap<String, Value>,
     pub(crate) local_names: Vec<String>,
@@ -51,7 +51,7 @@ impl fmt::Debug for Function {
         formatter
             .debug_struct("Function")
             .field("name", &self.name)
-            .field("length", &self.params.len())
+            .field("length", &self.params.length())
             .field("native", &self.native)
             .field("local_names", &self.local_names.len())
             .field("bytecode", &self.bytecode.is_some())
@@ -65,7 +65,7 @@ impl fmt::Debug for Function {
 impl Function {
     pub(crate) fn new_user(
         name: Option<String>,
-        params: Vec<String>,
+        params: FunctionParams,
         body: Vec<Stmt>,
         env: HashMap<String, Value>,
     ) -> Result<Self, crate::RuntimeError> {
@@ -74,7 +74,7 @@ impl Function {
 
     pub(crate) fn new_user_with_constructable(
         name: Option<String>,
-        params: Vec<String>,
+        params: FunctionParams,
         body: Vec<Stmt>,
         env: HashMap<String, Value>,
         constructable: bool,
@@ -84,7 +84,7 @@ impl Function {
 
     pub(crate) fn new_user_with_bytecode(
         name: Option<String>,
-        params: Vec<String>,
+        params: FunctionParams,
         body: Vec<Stmt>,
         env: HashMap<String, Value>,
         bytecode: Option<Rc<Bytecode>>,
@@ -129,7 +129,7 @@ impl Function {
 
     pub(crate) fn new_user_compiled(
         name: Option<String>,
-        params: Vec<String>,
+        params: FunctionParams,
         env: HashMap<String, Value>,
         bytecode: Rc<Bytecode>,
         local_names: Vec<String>,
@@ -195,7 +195,7 @@ impl Function {
         let name = bound_function_name(&target);
         let function = Self {
             name: Some(name),
-            params: vec![String::new(); length],
+            params: FunctionParams::positional(vec![String::new(); length]),
             env: HashMap::new(),
             local_names: Vec::new(),
             bytecode: None,
@@ -229,7 +229,7 @@ impl Function {
         let prototype = ObjectRef::new(HashMap::new());
         let function = Self {
             name,
-            params,
+            params: FunctionParams::positional(params),
             env,
             local_names: Vec::new(),
             bytecode: None,
@@ -260,7 +260,12 @@ impl Function {
     fn define_length_property(&self) {
         self.properties.borrow_mut().insert(
             "length".to_owned(),
-            Property::data(Value::Number(self.params.len() as f64), false, false, true),
+            Property::data(
+                Value::Number(self.params.length() as f64),
+                false,
+                false,
+                true,
+            ),
         );
     }
 

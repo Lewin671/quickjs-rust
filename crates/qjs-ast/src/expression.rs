@@ -13,6 +13,54 @@ pub use member::MemberProperty;
 pub use object::{ObjectProperty, ObjectPropertyKey, ObjectPropertyKind};
 pub use operator::{BinaryOp, UnaryOp, UpdateOp};
 
+/// Function formal parameters.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FunctionParams {
+    /// Positional parameter names.
+    pub positional: Vec<String>,
+    /// Optional rest parameter name.
+    pub rest: Option<String>,
+}
+
+impl FunctionParams {
+    /// Creates a parameter list without a rest parameter.
+    #[must_use]
+    pub fn positional(positional: Vec<String>) -> Self {
+        Self {
+            positional,
+            rest: None,
+        }
+    }
+
+    /// Returns all declared parameter names, including the rest parameter.
+    #[must_use]
+    pub fn names(&self) -> Vec<String> {
+        let mut names = self.positional.clone();
+        if let Some(rest) = &self.rest {
+            names.push(rest.clone());
+        }
+        names
+    }
+
+    /// Returns the number of local parameter bindings.
+    #[must_use]
+    pub fn binding_count(&self) -> usize {
+        self.positional.len() + usize::from(self.rest.is_some())
+    }
+
+    /// Returns true when there are no positional or rest parameters.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.positional.is_empty() && self.rest.is_none()
+    }
+
+    /// Returns the JavaScript function length.
+    #[must_use]
+    pub fn length(&self) -> usize {
+        self.positional.len()
+    }
+}
+
 /// An expression node.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Expr {
@@ -114,8 +162,8 @@ pub enum Expr {
     Function {
         /// Optional function name.
         name: Option<String>,
-        /// Parameter names.
-        params: Vec<String>,
+        /// Formal parameters.
+        params: FunctionParams,
         /// Function body statements.
         body: Vec<Stmt>,
         /// Whether the function can be called with `new`.

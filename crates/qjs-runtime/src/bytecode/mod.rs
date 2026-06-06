@@ -17,7 +17,7 @@ mod vm_props;
 mod vm_result;
 mod vm_try;
 
-use qjs_ast::Script;
+use qjs_ast::{FunctionParams, Script};
 use qjs_parser::parse_script;
 
 use crate::{RuntimeError, Value};
@@ -35,7 +35,7 @@ pub fn compile_script(script: &Script) -> Result<Bytecode, RuntimeError> {
 }
 
 pub(crate) fn compile_function_body(
-    params: &[String],
+    params: &FunctionParams,
     body: &[qjs_ast::Stmt],
 ) -> Result<Bytecode, RuntimeError> {
     compiler::compile_function_body(params, body)

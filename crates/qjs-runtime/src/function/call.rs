@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use crate::{
-    Bytecode, Function, GLOBAL_THIS_BINDING, ObjectRef, Property, RUNTIME_INTRINSIC_NAMES,
-    RuntimeError, Value, bytecode::eval_function_bytecode, native::call_native_function,
-    object_prototype,
+    ArrayRef, Bytecode, Function, GLOBAL_THIS_BINDING, ObjectRef, Property,
+    RUNTIME_INTRINSIC_NAMES, RuntimeError, Value, bytecode::eval_function_bytecode,
+    native::call_native_function, object_prototype,
 };
 
 use super::function_call_this;
@@ -121,7 +121,7 @@ fn function_env(
     let mut local_env = HashMap::with_capacity(
         RUNTIME_INTRINSIC_NAMES.len()
             + function.env.len()
-            + function.params.len()
+            + function.params.binding_count()
             + argument_values.len()
             + 3,
     );
@@ -160,12 +160,20 @@ fn function_env(
         "arguments".to_owned(),
         arguments_object(argument_values, env),
     );
-    for (index, param) in function.params.iter().enumerate() {
+    for (index, param) in function.params.positional.iter().enumerate() {
         let value = argument_values
             .get(index)
             .cloned()
             .unwrap_or(Value::Undefined);
         local_env.insert(param.clone(), value);
+    }
+    if let Some(rest) = &function.params.rest {
+        let values = argument_values
+            .iter()
+            .skip(function.params.positional.len())
+            .cloned()
+            .collect();
+        local_env.insert(rest.clone(), Value::Array(ArrayRef::new(values)));
     }
     FunctionCallEnv {
         env: local_env,
