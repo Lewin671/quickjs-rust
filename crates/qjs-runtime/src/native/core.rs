@@ -33,7 +33,16 @@ pub(super) fn call_core_native(
         NativeFunction::Eval => global::native_global_eval(argument_values, env),
         NativeFunction::Escape => global::native_global_escape(argument_values, env),
         NativeFunction::Unescape => global::native_global_unescape(argument_values, env),
-        NativeFunction::Symbol => symbol::native_symbol(function),
+        NativeFunction::Symbol => symbol::native_symbol(function, argument_values, env),
+        NativeFunction::SymbolPrototypeDescription => {
+            symbol::native_symbol_prototype_description(this_value)
+        }
+        NativeFunction::SymbolPrototypeToString => {
+            symbol::native_symbol_prototype_to_string(this_value)
+        }
+        NativeFunction::SymbolPrototypeValueOf => {
+            symbol::native_symbol_prototype_value_of(this_value)
+        }
         NativeFunction::Function => crate::function::native_function(
             function,
             this_value,
