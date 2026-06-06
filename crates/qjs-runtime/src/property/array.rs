@@ -40,10 +40,12 @@ pub(crate) fn array_own_property_keys(elements: &ArrayRef) -> Vec<String> {
 }
 
 pub(crate) fn array_own_property_names(elements: &ArrayRef) -> Vec<String> {
-    let mut names = array_own_property_keys(elements);
-    names.extend(elements.property_names());
+    let mut names: Vec<_> = (0..elements.len())
+        .filter(|index| elements.has_index(*index))
+        .map(|index| index.to_string())
+        .collect();
     names.push("length".to_owned());
-    names.sort();
+    names.extend(elements.property_names());
     names.dedup();
     names
 }

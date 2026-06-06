@@ -17,27 +17,27 @@ pub(crate) fn install_object(env: &mut HashMap<String, Value>, global_this: &Val
     );
     define_object_prototype_function(
         &object_prototype,
-        "propertyIsEnumerable",
-        1,
-        NativeFunction::ObjectPrototypePropertyIsEnumerable,
-    );
-    define_object_prototype_function(
-        &object_prototype,
         "isPrototypeOf",
         1,
         NativeFunction::ObjectPrototypeIsPrototypeOf,
     );
     define_object_prototype_function(
         &object_prototype,
-        "toString",
-        0,
-        NativeFunction::ObjectPrototypeToString,
+        "propertyIsEnumerable",
+        1,
+        NativeFunction::ObjectPrototypePropertyIsEnumerable,
     );
     define_object_prototype_function(
         &object_prototype,
         "toLocaleString",
         0,
         NativeFunction::ObjectPrototypeToLocaleString,
+    );
+    define_object_prototype_function(
+        &object_prototype,
+        "toString",
+        0,
+        NativeFunction::ObjectPrototypeToString,
     );
     define_object_prototype_function(
         &object_prototype,

@@ -281,6 +281,7 @@ impl<'a> Vm<'a> {
 
     fn new_object(&mut self, kinds: &[ObjectPropertyKind]) -> Result<(), RuntimeError> {
         let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(&self.globals));
+        let mut entries = Vec::with_capacity(kinds.len());
         for kind in kinds.iter().rev() {
             let value = self.pop()?;
             let key = to_property_key_value(self.pop()?, &mut self.globals)?;
@@ -289,6 +290,9 @@ impl<'a> Vm<'a> {
                 ObjectPropertyKind::Getter => Property::accessor(Some(value), None, true, true),
                 ObjectPropertyKind::Setter => Property::accessor(None, Some(value), true, true),
             };
+            entries.push((key, descriptor));
+        }
+        for (key, descriptor) in entries.into_iter().rev() {
             let success = object::define_property_on_value_key(
                 Value::Object(object.clone()),
                 key,

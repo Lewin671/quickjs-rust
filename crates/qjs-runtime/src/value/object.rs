@@ -11,6 +11,7 @@ use super::{Property, Value};
 #[derive(Clone)]
 pub struct ObjectRef {
     properties: Rc<RefCell<HashMap<String, Property>>>,
+    property_order: Rc<RefCell<Vec<String>>>,
     symbol_properties: Rc<RefCell<Vec<(ObjectRef, Property)>>>,
     extensible: Rc<Cell<bool>>,
     prototype: Rc<RefCell<Option<ObjectRef>>>,
@@ -40,6 +41,8 @@ impl ObjectRef {
         properties: HashMap<String, Value>,
         prototype: Option<ObjectRef>,
     ) -> Self {
+        let mut property_order: Vec<_> = properties.keys().cloned().collect();
+        property_order.sort();
         Self {
             properties: Rc::new(RefCell::new(
                 properties
@@ -47,6 +50,7 @@ impl ObjectRef {
                     .map(|(key, value)| (key, Property::enumerable(value)))
                     .collect(),
             )),
+            property_order: Rc::new(RefCell::new(property_order)),
             symbol_properties: Rc::new(RefCell::new(Vec::new())),
             extensible: Rc::new(Cell::new(true)),
             prototype: Rc::new(RefCell::new(prototype)),
@@ -109,11 +113,16 @@ impl ObjectRef {
         if !self.extensible.get() {
             return;
         }
+        self.property_order.borrow_mut().push(key.clone());
         properties.insert(key, Property::enumerable(value));
     }
 
     pub(crate) fn define_property(&self, key: String, property: Property) {
-        self.properties.borrow_mut().insert(key, property);
+        let mut properties = self.properties.borrow_mut();
+        if !properties.contains_key(&key) {
+            self.property_order.borrow_mut().push(key.clone());
+        }
+        properties.insert(key, property);
     }
 
     pub(crate) fn define_symbol_property(&self, symbol: ObjectRef, property: Property) {
@@ -129,9 +138,7 @@ impl ObjectRef {
     }
 
     pub(crate) fn define_non_enumerable(&self, key: String, value: Value) {
-        self.properties
-            .borrow_mut()
-            .insert(key, Property::non_enumerable(value));
+        self.define_property(key, Property::non_enumerable(value));
     }
 
     pub(crate) fn contains_property(&self, key: &str) -> bool {
@@ -231,6 +238,9 @@ impl ObjectRef {
             return false;
         }
         properties.remove(key);
+        self.property_order
+            .borrow_mut()
+            .retain(|existing| existing != key);
         true
     }
 
@@ -250,28 +260,29 @@ impl ObjectRef {
     }
 
     pub(crate) fn own_property_keys(&self) -> Vec<String> {
-        let mut keys: Vec<_> = self
-            .properties
+        let properties = self.properties.borrow();
+        self.property_order
             .borrow()
             .iter()
-            .filter(|(key, _)| !is_internal_property_key(key))
-            .filter(|(_, property)| property.enumerable)
-            .map(|(key, _)| key.clone())
-            .collect();
-        keys.sort();
-        keys
+            .filter(|key| !is_internal_property_key(key))
+            .filter(|key| {
+                properties
+                    .get(key.as_str())
+                    .is_some_and(|property| property.enumerable)
+            })
+            .cloned()
+            .collect()
     }
 
     pub(crate) fn own_property_names(&self) -> Vec<String> {
-        let mut names: Vec<_> = self
-            .properties
+        let properties = self.properties.borrow();
+        self.property_order
             .borrow()
-            .keys()
+            .iter()
             .filter(|key| !is_internal_property_key(key))
+            .filter(|key| properties.contains_key(key.as_str()))
             .cloned()
-            .collect();
-        names.sort();
-        names
+            .collect()
     }
 
     pub(crate) fn own_property_symbols(&self) -> Vec<ObjectRef> {

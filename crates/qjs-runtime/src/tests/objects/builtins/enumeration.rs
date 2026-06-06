@@ -114,6 +114,16 @@ fn evaluates_object_enumeration_builtins() {
         Ok(Value::Number(3.0))
     );
     assert_eq!(
+        eval(
+            "let object = {}; Object.defineProperty(object, 'a', { value: 1, configurable: true }); object.b = 2; Object.defineProperty(object, 'a', { value: 3 }); Object.getOwnPropertyNames(object).join('|');"
+        ),
+        Ok(Value::String("a|b".to_owned()))
+    );
+    assert_eq!(
+        eval("let array = []; array.a = 1; Object.getOwnPropertyNames(array).join('|');"),
+        Ok(Value::String("length|a".to_owned()))
+    );
+    assert_eq!(
         eval("Object.getOwnPropertyNames(Object.prototype).length;"),
         Ok(Value::Number(7.0))
     );
