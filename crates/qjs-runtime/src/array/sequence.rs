@@ -5,7 +5,9 @@ use crate::{
     property_value_key, symbol, to_length_with_env,
 };
 
-use super::array_like::{array_like_length, array_like_receiver, array_like_values};
+use super::array_like::{
+    array_like_length, array_like_receiver, array_like_values, array_like_values_with_env,
+};
 use super::indexing::{array_at_index, array_slice_end, array_slice_start};
 use super::splice::{splice_delete_count, splice_start};
 
@@ -124,11 +126,13 @@ pub(crate) fn native_array_prototype_to_spliced(
 pub(crate) fn native_array_prototype_with(
     this_value: Value,
     argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let mut values = array_like_values(this_value, "Array.prototype.with")?;
+    let mut values = array_like_values_with_env(this_value, "Array.prototype.with", env)?;
     let index = array_at_index(
         values.len(),
         argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
     )?
     .ok_or_else(|| RuntimeError {
         thrown: None,

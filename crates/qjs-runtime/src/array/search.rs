@@ -1,25 +1,25 @@
-use crate::{RuntimeError, Value};
+use std::collections::HashMap;
 
+use crate::{RuntimeError, Value, property_value};
+
+use super::array_like::array_like_length;
 use super::indexing::{array_at_index, array_search_end_index, array_search_start_index};
 
 pub(crate) fn native_array_prototype_at(
     this_value: Value,
     argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let Value::Array(elements) = this_value else {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "Array.prototype.at called on non-array".to_owned(),
-        });
-    };
+    let source = array_like_length(this_value, "Array.prototype.at", env)?;
     let Some(index) = array_at_index(
-        elements.len(),
+        source.length,
         argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
     )?
     else {
         return Ok(Value::Undefined);
     };
-    Ok(elements.get(index).unwrap_or(Value::Undefined))
+    property_value(source.receiver, &index.to_string(), env)
 }
 
 pub(crate) fn native_array_prototype_includes(

@@ -16,7 +16,7 @@ pub(super) fn call_array_native(
         NativeFunction::ArrayIsArray => array::native_array_is_array(argument_values)?,
         NativeFunction::ArrayOf => array::native_array_of(argument_values)?,
         NativeFunction::ArrayPrototypeAt => {
-            array::native_array_prototype_at(this_value, argument_values)?
+            array::native_array_prototype_at(this_value, argument_values, env)?
         }
         NativeFunction::ArrayPrototypeConcat => {
             array::native_array_prototype_concat(this_value, argument_values, env)?
@@ -118,7 +118,7 @@ pub(super) fn call_array_native(
             array::native_array_prototype_unshift(this_value, argument_values, env)?
         }
         NativeFunction::ArrayPrototypeWith => {
-            array::native_array_prototype_with(this_value, argument_values)?
+            array::native_array_prototype_with(this_value, argument_values, env)?
         }
         NativeFunction::ArrayPrototypeValues => {
             array::native_array_prototype_values(this_value, env)?

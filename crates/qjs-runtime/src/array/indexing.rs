@@ -1,9 +1,15 @@
-use crate::{RuntimeError, Value, to_number};
+use std::collections::HashMap;
 
-pub(super) fn array_at_index(length: usize, index: Value) -> Result<Option<usize>, RuntimeError> {
+use crate::{RuntimeError, Value, to_number, to_number_with_env};
+
+pub(super) fn array_at_index(
+    length: usize,
+    index: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Option<usize>, RuntimeError> {
     let number = match index {
         Value::Undefined => 0.0,
-        value => to_number(value)?,
+        value => to_number_with_env(value, env)?,
     };
     if number.is_nan() {
         return Ok(Some(0));

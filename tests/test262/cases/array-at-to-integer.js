@@ -10,3 +10,18 @@ if (array.at(-1.9) !== 3) {
 if (array.at() !== 1) {
   throw "expected omitted index to behave like 0";
 }
+
+var valueOfCallCount = 0;
+var index = {
+  valueOf: function() {
+    valueOfCallCount += 1;
+    return 1;
+  }
+};
+
+if (array.at(index) !== 2) {
+  throw "expected at({ valueOf }) to use the coerced integer";
+}
+if (valueOfCallCount !== 1) {
+  throw "expected at({ valueOf }) to call valueOf exactly once";
+}
