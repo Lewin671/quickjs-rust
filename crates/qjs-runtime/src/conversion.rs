@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    PropertyKey, RuntimeError, Value, call_function, date, number, property_value,
-    property_value_key, symbol,
+    PropertyKey, RuntimeError, Value, array::array_join, call_function, date, number,
+    property_value, property_value_key, symbol,
 };
 
 #[derive(Clone, Copy)]
@@ -32,9 +32,8 @@ pub(crate) fn to_js_string_with_env(
             Err(symbol_to_string_error())
         }
         Value::Object(object) => object_to_string(Value::Object(object), env),
-        Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_) => {
-            object_to_string(value, env)
-        }
+        Value::Array(_) => array_join(value, ",", env),
+        Value::Function(_) | Value::Map(_) | Value::Set(_) => object_to_string(value, env),
     }
 }
 

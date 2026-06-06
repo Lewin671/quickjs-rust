@@ -55,6 +55,22 @@ fn evaluates_json_builtins() {
         ),
         Ok(Value::Boolean(true))
     );
-    assert!(eval("JSON.parse('{bad');").is_err());
-    assert!(eval("JSON.rawJSON('{\"x\":1}');").is_err());
+    assert_eq!(
+        eval(
+            "let caught = false; try { JSON.parse('{bad'); } catch (error) { caught = error instanceof SyntaxError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { JSON.rawJSON([]); } catch (error) { caught = error instanceof SyntaxError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { JSON.rawJSON('{\"x\":1}'); } catch (error) { caught = error instanceof SyntaxError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
