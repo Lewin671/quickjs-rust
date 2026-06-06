@@ -18,6 +18,10 @@ pub(crate) fn install_symbol(
     symbol_prototype.set_to_string_tag("Symbol");
 
     let symbol_function = Function::new_native(Some("Symbol"), 0, NativeFunction::Symbol, false);
+    let iterator = Value::Object(symbol_object(
+        Some(symbol_prototype.clone()),
+        Value::String("Symbol.iterator".to_owned()),
+    ));
     let to_string_tag = Value::Object(symbol_object(
         Some(symbol_prototype.clone()),
         Value::String("Symbol.toStringTag".to_owned()),
@@ -25,6 +29,10 @@ pub(crate) fn install_symbol(
     if let Value::Object(symbol) = &to_string_tag {
         define_to_string_tag_property(&symbol_prototype, symbol.clone(), "Symbol");
     }
+    symbol_function.properties.borrow_mut().insert(
+        "iterator".to_owned(),
+        Property::data(iterator, false, false, false),
+    );
     symbol_function.properties.borrow_mut().insert(
         "toStringTag".to_owned(),
         Property::data(to_string_tag, false, false, false),
@@ -160,16 +168,38 @@ pub(crate) fn is_symbol_object(object: &ObjectRef) -> bool {
 }
 
 pub(crate) fn to_string_tag_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+    well_known_symbol(env, "toStringTag")
+}
+
+pub(crate) fn iterator_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+    well_known_symbol(env, "iterator")
+}
+
+fn well_known_symbol(env: &HashMap<String, Value>, name: &str) -> Option<ObjectRef> {
     let Some(Value::Function(symbol_function)) = env.get("Symbol") else {
         return None;
     };
-    match symbol_function.properties.borrow().get("toStringTag") {
+    match symbol_function.properties.borrow().get(name) {
         Some(Property {
             value: Value::Object(symbol),
             ..
         }) => Some(symbol.clone()),
         _ => None,
     }
+}
+
+pub(crate) fn define_well_known_iterator_alias(
+    env: &HashMap<String, Value>,
+    object: &ObjectRef,
+    method_name: &str,
+) {
+    let Some(symbol) = iterator_symbol(env) else {
+        return;
+    };
+    let Some(property) = object.own_property(method_name) else {
+        return;
+    };
+    object.define_symbol_property(symbol, Property::non_enumerable(property.value));
 }
 
 pub(crate) fn define_well_known_to_string_tag(

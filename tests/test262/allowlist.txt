@@ -2,6 +2,7 @@
 #
 # Keep this list small and feature-scoped. Add entries only when the engine has
 # enough support for the test to provide useful signal.
+cases/builtin-iterator-symbol-properties.js
 cases/builtin-to-string-tag-symbol-properties.js
 cases/array-constructor-basic.js
 cases/array-constructor-multiple-arguments.js

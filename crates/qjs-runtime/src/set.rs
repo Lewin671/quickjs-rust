@@ -114,6 +114,7 @@ pub(crate) fn install_set(
         0,
         NativeFunction::SetPrototypeValues,
     );
+    symbol::define_well_known_iterator_alias(env, &set_prototype, "values");
     set_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
         Property::non_enumerable(Value::Object(set_prototype)),

@@ -48,6 +48,10 @@ fn evaluates_symbol_prototype_builtins() {
         Ok(Value::String("symbol".to_owned()))
     );
     assert_eq!(
+        eval("typeof Symbol.iterator;"),
+        Ok(Value::String("symbol".to_owned()))
+    );
+    assert_eq!(
         eval(
             "let descriptor = Object.getOwnPropertyDescriptor(Symbol, 'toStringTag'); descriptor.writable + ':' + descriptor.enumerable + ':' + descriptor.configurable;"
         ),
@@ -121,5 +125,41 @@ fn exposes_builtin_to_string_tag_symbol_properties() {
             "Object.getOwnPropertyDescriptor(RegExp.prototype, Symbol.toStringTag) === undefined;"
         ),
         Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn exposes_builtin_iterator_symbol_properties() {
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(Symbol, 'iterator'); typeof Symbol.iterator + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("symbol:false:false:false".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "function attrs(object, method) { let d = Object.getOwnPropertyDescriptor(object, Symbol.iterator); return (d.value === object[method]) + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable; } attrs(Array.prototype, 'values') + '|' + attrs(Map.prototype, 'entries') + '|' + attrs(Set.prototype, 'values');"
+        ),
+        Ok(Value::String(
+            "true:true:false:true|true:true:false:true|true:true:false:true".to_owned()
+        ))
+    );
+    assert_eq!(
+        eval(
+            "let iterator = [5][Symbol.iterator](); let first = iterator.next(); first.value + ':' + first.done + ':' + iterator.next().done;"
+        ),
+        Ok(Value::String("5:false:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let iterator = new Map([['k', 7]])[Symbol.iterator](); let first = iterator.next(); first.value[0] + ':' + first.value[1] + ':' + first.done;"
+        ),
+        Ok(Value::String("k:7:false".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let iterator = new Set(['v'])[Symbol.iterator](); let first = iterator.next(); first.value + ':' + first.done;"
+        ),
+        Ok(Value::String("v:false".to_owned()))
     );
 }

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{Function, NativeFunction, ObjectRef, Property, Value};
+use crate::{Function, NativeFunction, ObjectRef, Property, Value, symbol};
 
 pub(crate) fn install_array(
     env: &mut HashMap<String, Value>,
@@ -224,6 +224,7 @@ pub(crate) fn install_array(
         0,
         NativeFunction::ArrayPrototypeValues,
     );
+    symbol::define_well_known_iterator_alias(env, &array_prototype, "values");
     define_array_prototype_function(
         &array_prototype,
         "with",
