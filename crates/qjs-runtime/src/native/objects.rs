@@ -44,7 +44,7 @@ pub(super) fn call_object_native(
         }
         NativeFunction::ObjectGroupBy => object::native_object_group_by(argument_values, env)?,
         NativeFunction::ObjectFreeze => object::native_object_freeze(argument_values)?,
-        NativeFunction::ObjectHasOwn => object::native_object_has_own(argument_values)?,
+        NativeFunction::ObjectHasOwn => object::native_object_has_own(argument_values, env)?,
         NativeFunction::ObjectIs => object::native_object_is(argument_values)?,
         NativeFunction::ObjectIsExtensible => object::native_object_is_extensible(argument_values)?,
         NativeFunction::ObjectIsFrozen => object::native_object_is_frozen(argument_values)?,
@@ -60,13 +60,17 @@ pub(super) fn call_object_native(
         NativeFunction::ObjectKeys => object::native_object_keys(argument_values)?,
         NativeFunction::ObjectValues => object::native_object_values(argument_values, env)?,
         NativeFunction::ObjectPrototypeHasOwnProperty => {
-            object::native_object_prototype_has_own_property(this_value, argument_values)?
+            object::native_object_prototype_has_own_property(this_value, argument_values, env)?
         }
         NativeFunction::ObjectPrototypeIsPrototypeOf => {
             object::native_object_prototype_is_prototype_of(this_value, argument_values, env)?
         }
         NativeFunction::ObjectPrototypePropertyIsEnumerable => {
-            object::native_object_prototype_property_is_enumerable(this_value, argument_values)?
+            object::native_object_prototype_property_is_enumerable(
+                this_value,
+                argument_values,
+                env,
+            )?
         }
         NativeFunction::ObjectPrototypeToString => {
             object::native_object_prototype_to_string(this_value, env)?

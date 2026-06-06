@@ -106,8 +106,12 @@ pub(crate) fn native_object_set_prototype_of(
 pub(crate) fn native_object_prototype_has_own_property(
     this_value: Value,
     argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let key = to_property_key_value(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    let key = to_property_key_value(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     match (this_value, key) {
         (Value::Object(object), crate::PropertyKey::String(key)) => {
             Ok(Value::Boolean(object.has_own_property(&key)))
@@ -152,8 +156,12 @@ pub(crate) fn native_object_prototype_has_own_property(
 pub(crate) fn native_object_prototype_property_is_enumerable(
     this_value: Value,
     argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let key = to_property_key_value(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    let key = to_property_key_value(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     match this_value {
         Value::Null | Value::Undefined => Err(RuntimeError {
             thrown: None,

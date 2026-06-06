@@ -278,7 +278,7 @@ impl<'a> Vm<'a> {
         let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(&self.globals));
         for kind in kinds.iter().rev() {
             let value = self.pop()?;
-            let key = to_property_key_value(self.pop()?)?;
+            let key = to_property_key_value(self.pop()?, &mut self.globals)?;
             let descriptor = match kind {
                 ObjectPropertyKind::Data => Property::enumerable(value),
                 ObjectPropertyKind::Getter => Property::accessor(Some(value), None, true, true),
@@ -301,7 +301,7 @@ impl<'a> Vm<'a> {
     }
 
     fn get_prop(&mut self) -> Result<(), RuntimeError> {
-        let key = to_property_key_value(self.pop()?)?;
+        let key = to_property_key_value(self.pop()?, &mut self.globals)?;
         let object = self.pop()?;
         self.stack
             .push(get_property_key(object, &key, &mut self.globals)?);
@@ -310,7 +310,7 @@ impl<'a> Vm<'a> {
 
     fn set_prop(&mut self) -> Result<(), RuntimeError> {
         let value = self.pop()?;
-        let key = to_property_key_value(self.pop()?)?;
+        let key = to_property_key_value(self.pop()?, &mut self.globals)?;
         let object = self.pop()?;
         let updates_global_binding = self.is_global_object(&object);
         let wrote_data = if property_set_uses_setter(&object, &key, &self.globals) {
@@ -342,7 +342,7 @@ impl<'a> Vm<'a> {
     }
 
     fn delete_prop(&mut self) -> Result<(), RuntimeError> {
-        let key = to_property_key_value(self.pop()?)?;
+        let key = to_property_key_value(self.pop()?, &mut self.globals)?;
         let object = self.pop()?;
         self.stack.push(delete_property_key(object, &key)?);
         Ok(())
@@ -362,7 +362,7 @@ impl<'a> Vm<'a> {
 
     fn call_method(&mut self, argc: usize) -> Result<(), RuntimeError> {
         let arguments = self.pop_arguments(argc)?;
-        let key = to_property_key_value(self.pop()?)?;
+        let key = to_property_key_value(self.pop()?, &mut self.globals)?;
         let this_value = self.pop()?;
         let callee = get_property_key(this_value.clone(), &key, &mut self.globals)?;
         let mut env = self.call_env(&callee);

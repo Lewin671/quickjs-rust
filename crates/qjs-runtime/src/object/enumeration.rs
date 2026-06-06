@@ -90,7 +90,10 @@ pub(crate) fn native_object_get_own_property_symbols(
     )))
 }
 
-pub(crate) fn native_object_has_own(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+pub(crate) fn native_object_has_own(
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if matches!(target, Value::Null | Value::Undefined) {
         return Err(RuntimeError {
@@ -99,7 +102,10 @@ pub(crate) fn native_object_has_own(argument_values: &[Value]) -> Result<Value, 
         });
     }
 
-    let key = to_property_key_value(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
+    let key = to_property_key_value(
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     Ok(Value::Boolean(
         own_property_descriptor_key(target, &key)?.is_some(),
     ))

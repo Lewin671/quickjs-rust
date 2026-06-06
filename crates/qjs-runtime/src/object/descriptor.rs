@@ -13,7 +13,10 @@ pub(crate) fn native_object_define_property(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    let key = to_property_key_value(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
+    let key = to_property_key_value(
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     let descriptor = to_property_descriptor(
         argument_values.get(2).cloned().unwrap_or(Value::Undefined),
         env,
@@ -60,10 +63,13 @@ pub(crate) fn native_object_define_properties(
 
 pub(crate) fn native_object_get_own_property_descriptor(
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    let key = to_property_key_value(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
+    let key = to_property_key_value(
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     let Some(property) = own_property_descriptor_key(target, &key)? else {
         return Ok(Value::Undefined);
     };

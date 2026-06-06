@@ -114,7 +114,7 @@ fn string_to_number(value: &str) -> Result<f64, RuntimeError> {
     Ok(trimmed.parse::<f64>().unwrap_or(f64::NAN))
 }
 
-fn to_primitive_with_hint(
+pub(crate) fn to_primitive_with_hint(
     value: Value,
     hint: PreferredType,
     env: &mut HashMap<String, Value>,

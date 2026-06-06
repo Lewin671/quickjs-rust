@@ -30,7 +30,7 @@ pub(crate) fn native_object_group_by(
             env,
             false,
         )?;
-        append_group(&result, to_property_key_value(key)?, value);
+        append_group(&result, to_property_key_value(key, env)?, value);
     }
 
     Ok(Value::Object(result))

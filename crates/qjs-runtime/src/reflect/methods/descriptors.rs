@@ -9,8 +9,10 @@ pub(crate) fn native_reflect_define_property(
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     ensure_reflect_object_target(&target, "Reflect.defineProperty")?;
-    let key =
-        crate::to_property_key_value(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
+    let key = crate::to_property_key_value(
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     let descriptor = object::to_property_descriptor(
         argument_values.get(2).cloned().unwrap_or(Value::Undefined),
         env,
@@ -23,11 +25,14 @@ pub(crate) fn native_reflect_define_property(
 
 pub(crate) fn native_reflect_delete_property(
     argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     ensure_reflect_object_target(&target, "Reflect.deleteProperty")?;
-    let key =
-        crate::to_property_key_value(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
+    let key = crate::to_property_key_value(
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
 
     let success = match target {
         Value::Object(object) => delete_object_property(object, &key),
@@ -64,7 +69,7 @@ fn delete_object_property(object: crate::ObjectRef, key: &crate::PropertyKey) ->
 
 pub(crate) fn native_reflect_get_own_property_descriptor(
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     ensure_reflect_object_target(&target, "Reflect.getOwnPropertyDescriptor")?;

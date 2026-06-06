@@ -247,8 +247,12 @@ pub(crate) fn ordinary_has_instance(
     Ok(left_prototype.ptr_eq(&prototype) || left_prototype.has_prototype(&prototype))
 }
 
-fn eval_in(left: Value, right: Value, env: &HashMap<String, Value>) -> Result<Value, RuntimeError> {
-    let key = to_property_key_value(left)?;
+fn eval_in(
+    left: Value,
+    right: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let key = to_property_key_value(left, env)?;
     has_property_key(right, env, &key)
         .map(Value::Boolean)
         .map_err(|_| RuntimeError {

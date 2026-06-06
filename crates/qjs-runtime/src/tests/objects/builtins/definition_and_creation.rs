@@ -43,6 +43,24 @@ fn evaluates_object_definition_and_creation_builtins() {
         Ok(Value::Boolean(true))
     );
     assert_eq!(
+        eval(
+            "let object = {}; Object.defineProperty(object, [1, 2], {}); object.hasOwnProperty('1,2');"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; Object.defineProperty(object, new String('Hello'), {}); object.hasOwnProperty('Hello');"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; Object.defineProperty(object, new Boolean(false), {}); object.hasOwnProperty('false');"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("Object.defineProperties.length;"),
         Ok(Value::Number(2.0))
     );

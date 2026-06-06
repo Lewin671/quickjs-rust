@@ -9,13 +9,13 @@ use crate::array::array_like_values;
 
 pub(crate) fn native_object_from_entries(
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let iterable = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let result = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
 
     for entry in array_like_values(iterable, "Object.fromEntries")? {
-        let key = to_property_key_value(entry_component(entry.clone(), 0, env)?)?;
+        let key = to_property_key_value(entry_component(entry.clone(), 0, env)?, env)?;
         let value = entry_component(entry, 1, env)?;
         match key {
             crate::PropertyKey::String(key) => {

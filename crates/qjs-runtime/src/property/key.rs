@@ -1,4 +1,8 @@
-use crate::{ObjectRef, RuntimeError, Value, number, symbol};
+use std::collections::HashMap;
+
+use crate::{
+    ObjectRef, PreferredType, RuntimeError, Value, number, symbol, to_primitive_with_hint,
+};
 
 #[derive(Clone)]
 pub(crate) enum PropertyKey {
@@ -6,8 +10,21 @@ pub(crate) enum PropertyKey {
     Symbol(ObjectRef),
 }
 
-pub(crate) fn to_property_key_value(value: Value) -> Result<PropertyKey, RuntimeError> {
-    match value {
+pub(crate) fn to_property_key_value(
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<PropertyKey, RuntimeError> {
+    let primitive = match value {
+        Value::Object(object) if symbol::is_symbol_object(&object) => {
+            return Ok(PropertyKey::Symbol(object));
+        }
+        Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_) | Value::Object(_) => {
+            to_primitive_with_hint(value, PreferredType::String, env)?
+        }
+        value => value,
+    };
+
+    match primitive {
         Value::String(value) => Ok(PropertyKey::String(value)),
         Value::Number(number) => Ok(PropertyKey::String(number::number_to_js_string(number))),
         Value::Boolean(true) => Ok(PropertyKey::String("true".to_owned())),

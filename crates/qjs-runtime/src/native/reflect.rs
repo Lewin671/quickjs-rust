@@ -18,7 +18,7 @@ pub(super) fn call_reflect_native(
             reflect::native_reflect_define_property(argument_values, env)?
         }
         NativeFunction::ReflectDeleteProperty => {
-            reflect::native_reflect_delete_property(argument_values)?
+            reflect::native_reflect_delete_property(argument_values, env)?
         }
         NativeFunction::ReflectGet => reflect::native_reflect_get(argument_values, env)?,
         NativeFunction::ReflectGetPrototypeOf => {

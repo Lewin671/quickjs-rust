@@ -9,8 +9,10 @@ pub(crate) fn native_reflect_get(
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     ensure_reflect_object_target(&target, "Reflect.get")?;
-    let key =
-        crate::to_property_key_value(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
+    let key = crate::to_property_key_value(
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
 
     Ok(match target {
         Value::Object(_) | Value::Map(_) | Value::Set(_) | Value::Array(_) => {
@@ -35,11 +37,13 @@ pub(crate) fn native_reflect_get(
 
 pub(crate) fn native_reflect_has(
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    let key =
-        crate::to_property_key_value(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
+    let key = crate::to_property_key_value(
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     match target {
         Value::Object(_) | Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) => {
             Ok(Value::Boolean(has_property_key(target, env, &key)?))

@@ -9,8 +9,10 @@ pub(crate) fn native_reflect_set(
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     ensure_reflect_object_target(&target, "Reflect.set")?;
-    let key =
-        crate::to_property_key_value(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
+    let key = crate::to_property_key_value(
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     let value = argument_values.get(2).cloned().unwrap_or(Value::Undefined);
     let receiver = argument_values
         .get(3)
