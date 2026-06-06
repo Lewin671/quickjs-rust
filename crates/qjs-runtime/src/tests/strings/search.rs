@@ -190,6 +190,10 @@ fn evaluates_string_search_builtins() {
         Ok(Value::String("a[1:1]b[2:2]".to_owned()))
     );
     assert_eq!(
+        eval("'aaaaaaaaaa,aaaaaaaaaaaaaaa'.replace(/^(a+)\\1*,\\1+$/, '$1');"),
+        Ok(Value::String("aaaaa".to_owned()))
+    );
+    assert_eq!(
         eval("'asdf'.replace(new RegExp(undefined, 'g'), '1');"),
         Ok(Value::String("1a1s1d1f1".to_owned()))
     );

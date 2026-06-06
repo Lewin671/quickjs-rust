@@ -4,12 +4,13 @@ use crate::string::string_from_code_unit;
 
 mod escapes;
 mod groups;
+mod normalization;
+#[cfg(test)]
+mod tests;
 
 use escapes::{chars_equal, class_range_contains, regexp_control_escape, unicode_escape};
 use groups::{closing_group, group_alternatives, is_non_capturing_group};
-
-const DATE_TO_STRING_FORMAT_PATTERN: &str = "^(Sun|Mon|Tue|Wed|Thu|Fri|Sat) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) [0-9]{2} [0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2} GMT[+-][0-9]{4}( \\(.+\\))?$";
-const DATE_TO_STRING_FORMAT_PATTERN_COMPACT: &str = "^(Sun|Mon|Tue|Wed|Thu|Fri|Sat)(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[0-9]{2}[0-9]{4}[0-9]{2}:[0-9]{2}:[0-9]{2}GMT[+-][0-9]{4}(\\(.+\\))?$";
+use normalization::normalized_regexp_source;
 
 #[derive(Clone)]
 pub(super) struct RegexpMatch {
@@ -128,13 +129,6 @@ fn char_code_unit(value: char) -> Option<u16> {
     crate::string::string_code_units(&value.to_string())
         .first()
         .copied()
-}
-
-fn normalized_regexp_source(source: &str) -> &str {
-    match source {
-        DATE_TO_STRING_FORMAT_PATTERN_COMPACT => DATE_TO_STRING_FORMAT_PATTERN,
-        _ => source,
-    }
 }
 
 fn capture_group_indices(pattern: &[char]) -> HashMap<usize, usize> {
@@ -281,6 +275,12 @@ fn match_escape(
     let Some(escaped) = pattern.get(pc + 1).copied() else {
         return Vec::new();
     };
+    if let Some(index) = escaped.to_digit(10).map(|value| value as usize)
+        && (1..=state.captures.len()).contains(&index)
+    {
+        let capture = state.captures[index - 1];
+        return match_backreference(text, state, capture, pc + 2, options);
+    }
     let Some(value) = text.get(state.index).copied() else {
         return Vec::new();
     };
@@ -315,6 +315,34 @@ fn match_escape(
         return Vec::new();
     }
     state.index += 1;
+    vec![(next_pc, state)]
+}
+
+fn match_backreference(
+    text: &[char],
+    mut state: MatchState,
+    capture: Option<(usize, usize)>,
+    next_pc: usize,
+    options: MatchOptions,
+) -> Vec<(usize, MatchState)> {
+    let Some((start, end)) = capture else {
+        return vec![(next_pc, state)];
+    };
+    let capture_len = end - start;
+    if state.index + capture_len > text.len() {
+        return Vec::new();
+    }
+    let matched = (0..capture_len).all(|offset| {
+        chars_equal(
+            text[state.index + offset],
+            text[start + offset],
+            options.ignore_case,
+        )
+    });
+    if !matched {
+        return Vec::new();
+    }
+    state.index += capture_len;
     vec![(next_pc, state)]
 }
 
@@ -411,6 +439,11 @@ fn quantifier(pattern: &[char], pc: usize) -> Quantifier {
         Some('?') => Quantifier {
             min: 0,
             max: Some(1),
+            next_pc: pc + 1,
+        },
+        Some('*') => Quantifier {
+            min: 0,
+            max: None,
             next_pc: pc + 1,
         },
         Some('+') => Quantifier {
@@ -562,23 +595,4 @@ fn match_group(
             (end + 1, matched)
         })
         .collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::regexp_match_range;
-
-    #[test]
-    fn captures_greedy_quantified_group_range() {
-        let matched = regexp_match_range(r"([0-9]+)", "31", 0, false, false).unwrap();
-        assert_eq!((matched.start, matched.end), (0, 2));
-        assert_eq!(matched.captures, vec![Some((0, 2))]);
-    }
-
-    #[test]
-    fn captures_nested_group_ranges() {
-        let matched = regexp_match_range(r"((x))", "foo-x-bar", 0, false, false).unwrap();
-        assert_eq!((matched.start, matched.end), (4, 5));
-        assert_eq!(matched.captures, vec![Some((4, 5)), Some((4, 5))]);
-    }
 }
