@@ -124,24 +124,38 @@ pub(crate) fn native_string_prototype_replace_all(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let input = this_string_value(this_value, env)?;
+    if matches!(this_value, Value::Null | Value::Undefined) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "String.prototype method called on null or undefined".to_owned(),
+        });
+    }
     let search_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    if regexp::regexp_is_regexp(&search_value) {
-        if !regexp::regexp_is_global(&search_value) {
+    if regexp::regexp_is_regexp_with_env(search_value.clone(), env)? {
+        let flags_value = property_value(search_value.clone(), "flags", env)?;
+        if matches!(flags_value, Value::Null | Value::Undefined) {
+            return Err(replace_all_regexp_flags_error());
+        }
+        let flags = to_js_string_with_env(flags_value, env)?;
+        if !flags.contains('g') {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: String.prototype.replaceAll called with a non-global RegExp"
                     .to_owned(),
             });
         }
-        return regexp_replace_all(
-            input,
-            search_value,
-            argument_values.get(1).cloned().unwrap_or(Value::Undefined),
-            env,
-        );
+        if regexp::regexp_is_regexp(&search_value) {
+            let input = this_string_value(this_value, env)?;
+            return regexp_replace_all(
+                input,
+                search_value,
+                argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+                env,
+            );
+        }
     }
 
+    let input = this_string_value(this_value, env)?;
     let search = to_js_string_with_env(search_value, env)?;
     let replacement_value = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
     let replacement = if matches!(replacement_value, Value::Function(_)) {
@@ -150,6 +164,14 @@ pub(crate) fn native_string_prototype_replace_all(
         Replacement::String(to_js_string_with_env(replacement_value, env)?)
     };
     string_replace_all(input, search, replacement, env)
+}
+
+fn replace_all_regexp_flags_error() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "TypeError: String.prototype.replaceAll RegExp flags are null or undefined"
+            .to_owned(),
+    }
 }
 
 pub(crate) fn native_string_prototype_replace(

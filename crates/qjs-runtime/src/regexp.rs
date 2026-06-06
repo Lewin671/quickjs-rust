@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
 use crate::{
-    ArrayRef, Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
-    function_prototype, to_js_string_with_env, to_length_with_env,
+    ArrayRef, Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value,
+    function_prototype, is_truthy, property_value_key, symbol, to_js_string_with_env,
+    to_length_with_env,
 };
 
 mod escape;
@@ -449,6 +450,26 @@ pub(crate) fn regexp_is_regexp(value: &Value) -> bool {
         value,
         Value::Object(object) if regexp_string_data(object, REGEXP_SOURCE_PROPERTY).is_some()
     )
+}
+
+pub(crate) fn regexp_is_regexp_with_env(
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<bool, RuntimeError> {
+    let is_object = matches!(
+        value,
+        Value::Object(_) | Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_)
+    );
+    if !is_object {
+        return Ok(false);
+    }
+    if let Some(symbol) = symbol::match_symbol(env) {
+        let matcher = property_value_key(value.clone(), &PropertyKey::Symbol(symbol), env)?;
+        if !matches!(matcher, Value::Undefined) {
+            return Ok(is_truthy(&matcher));
+        }
+    }
+    Ok(regexp_is_regexp(&value))
 }
 
 pub(crate) fn regexp_set_last_index(value: &Value, index: usize) {

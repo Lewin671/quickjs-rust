@@ -228,6 +228,10 @@ pub(crate) fn is_concat_spreadable_symbol(env: &HashMap<String, Value>) -> Optio
     well_known_symbol(env, "isConcatSpreadable")
 }
 
+pub(crate) fn match_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+    well_known_symbol(env, "match")
+}
+
 fn well_known_symbol(env: &HashMap<String, Value>, name: &str) -> Option<ObjectRef> {
     let Some(Value::Function(symbol_function)) = env.get("Symbol") else {
         return None;

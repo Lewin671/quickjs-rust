@@ -138,6 +138,30 @@ fn evaluates_string_search_builtins() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "let calls = 0; let search = { [Symbol.match]: true, get flags() { calls = calls + 1; return 'g'; }, toString: function() { return 'a'; } }; 'aba'.replaceAll(search, 'x') + ':' + calls;"
+        ),
+        Ok(Value::String("xbx:1".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let search = { [Symbol.match]: false, get flags() { throw new Error('flags'); }, toString: function() { return 'a'; } }; 'aba'.replaceAll(search, 'x');"
+        ),
+        Ok(Value::String("xbx".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; let search = { [Symbol.match]: true, flags: undefined }; try { 'abc'.replaceAll(search, 'x'); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert!(
+        eval(
+            "let search = { get [Symbol.match]() { throw new Error('match'); }, toString: function() { throw new Error('toString'); } }; ''.replaceAll(search, 'x');"
+        )
+        .is_err()
+    );
 }
 
 #[test]
