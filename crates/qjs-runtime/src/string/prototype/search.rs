@@ -7,8 +7,10 @@ use super::super::indexing::{
 };
 
 mod errors;
+mod substitution;
 mod symbol_method;
 use errors::{replace_all_regexp_flags_error, string_method_null_error};
+use substitution::get_substitution;
 use symbol_method::{symbol_match_method, symbol_replace_method, symbol_search_method};
 
 pub(crate) fn native_string_prototype_ends_with(
@@ -496,65 +498,6 @@ fn functional_replacement(
     arguments.push(Value::String(input));
     let value = call_function(function, Value::Undefined, arguments, env, false)?;
     to_js_string_with_env(value, env)
-}
-
-fn get_substitution(
-    replacement: &str,
-    matched: &str,
-    position: usize,
-    input: &str,
-    captures: &[Value],
-) -> String {
-    let mut result = String::new();
-    let mut chars = replacement.chars().peekable();
-    while let Some(character) = chars.next() {
-        if character != '$' {
-            result.push(character);
-            continue;
-        }
-        let Some(next) = chars.next() else {
-            result.push('$');
-            break;
-        };
-        match next {
-            '$' => result.push('$'),
-            '&' => result.push_str(matched),
-            '`' => result.push_str(&input_char_slice(input, 0, position)),
-            '\'' => result.push_str(&input_char_slice(
-                input,
-                position + matched.chars().count(),
-                input.chars().count(),
-            )),
-            '1'..='9' => {
-                let first = next.to_digit(10).unwrap() as usize;
-                if let Some(second) = chars.peek().and_then(|value| value.to_digit(10)) {
-                    let two_digit = first * 10 + second as usize;
-                    if two_digit <= captures.len() {
-                        chars.next();
-                        push_capture(&mut result, captures, two_digit);
-                        continue;
-                    }
-                }
-                if first <= captures.len() {
-                    push_capture(&mut result, captures, first);
-                } else {
-                    result.push('$');
-                    result.push(next);
-                }
-            }
-            _ => {
-                result.push('$');
-                result.push(next);
-            }
-        }
-    }
-    result
-}
-
-fn push_capture(result: &mut String, captures: &[Value], index: usize) {
-    if let Some(Value::String(capture)) = captures.get(index - 1) {
-        result.push_str(capture);
-    }
 }
 
 fn regexp_match_index(

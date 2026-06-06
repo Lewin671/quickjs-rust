@@ -166,6 +166,10 @@ fn evaluates_string_search_builtins() {
         Ok(Value::String("[a::ba]ba".to_owned()))
     );
     assert_eq!(
+        eval("'foo-x-bar'.replace(/(x)($^)?/, '|$01:$02:$10:$20|');"),
+        Ok(Value::String("foo-|x::x0:0|-bar".to_owned()))
+    );
+    assert_eq!(
         eval(
             "'a-b-a'.replace('a', function(match, position, input) { return match + position + input.length; });"
         ),
