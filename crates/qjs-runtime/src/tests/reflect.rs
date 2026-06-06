@@ -352,6 +352,12 @@ fn evaluates_reflect_prototype_builtins() {
         eval("Reflect.ownKeys([1, 2]).join();"),
         Ok(Value::String("0,1,length".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "let a = Symbol('a'); let b = Symbol('b'); let object = {}; object[a] = 1; Object.defineProperty(object, b, { value: 2 }); let keys = Reflect.ownKeys(object); keys.length + ':' + (keys[0] === a) + ':' + (keys[1] === b);"
+        ),
+        Ok(Value::String("2:true:true".to_owned()))
+    );
     assert!(eval("Reflect.apply(1, null, []);").is_err());
     assert!(eval("Reflect.apply(function f() {}, null, 1);").is_err());
     assert!(eval("Reflect.construct(1, []);").is_err());

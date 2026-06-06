@@ -803,6 +803,7 @@ cases/reflect-own-keys-array.js
 cases/reflect-own-keys-basic.js
 cases/reflect-own-keys-length.js
 cases/reflect-own-keys-nonenumerable.js
+cases/reflect-own-keys-symbols-basic.js
 cases/reflect-prevent-extensions-basic.js
 cases/reflect-prevent-extensions-length.js
 cases/reflect-set-basic.js
