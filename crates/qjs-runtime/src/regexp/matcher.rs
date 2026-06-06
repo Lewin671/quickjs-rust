@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::string::string_from_code_unit;
+use crate::string::{advance_string_index, string_from_code_unit};
 
 mod classes;
 mod escapes;
@@ -237,16 +237,21 @@ fn match_atom(
         '\\' => match_escape(pattern, text, pc, state, options),
         '[' => match_class(pattern, text, pc, state, options),
         '(' => match_group(pattern, text, pc, state, group_indices, options),
-        '.' => match_any(text, pc + 1, state),
+        '.' => match_any(text, pc + 1, state, options.unicode),
         literal => match_literal(text, pc + 1, state, literal, options.ignore_case),
     }
 }
 
-fn match_any(text: &[char], next_pc: usize, mut state: MatchState) -> Vec<(usize, MatchState)> {
+fn match_any(
+    text: &[char],
+    next_pc: usize,
+    mut state: MatchState,
+    unicode: bool,
+) -> Vec<(usize, MatchState)> {
     if state.index >= text.len() {
         return Vec::new();
     }
-    state.index += 1;
+    state.index = advance_string_index(text, state.index, unicode);
     vec![(next_pc, state)]
 }
 

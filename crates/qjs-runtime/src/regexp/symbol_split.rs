@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::string::advance_string_index;
 use crate::{
     ArrayRef, Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value,
     call_function, property_value, reflect, symbol, to_js_string_with_env, to_length_with_env,
@@ -36,7 +37,7 @@ pub(crate) fn native_regexp_prototype_split(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    let splitter = split_regexp_clone(this_value, env)?;
+    let (splitter, unicode_matching) = split_regexp_clone(this_value, env)?;
     let limit = split_limit(
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         env,
@@ -46,7 +47,8 @@ pub(crate) fn native_regexp_prototype_split(
         return Ok(Value::Array(ArrayRef::new(parts)));
     }
 
-    let input_len = input.chars().count();
+    let input_chars: Vec<_> = input.chars().collect();
+    let input_len = input_chars.len();
     if input_len == 0 {
         set_last_index(splitter.clone(), Value::Number(0.0), env)?;
         let result = regexp_exec(splitter, &input, env)?;
@@ -64,14 +66,14 @@ pub(crate) fn native_regexp_prototype_split(
         set_last_index(splitter.clone(), Value::Number(search_index as f64), env)?;
         let result = regexp_exec(splitter.clone(), &input, env)?;
         if matches!(result, Value::Null) {
-            search_index += 1;
+            search_index = advance_string_index(&input_chars, search_index, unicode_matching);
             continue;
         }
 
         let match_result = ensure_exec_result_object(result)?;
         let match_end = regexp_last_index(splitter.clone(), env)?.min(input_len);
         if match_end == segment_start {
-            search_index += 1;
+            search_index = advance_string_index(&input_chars, search_index, unicode_matching);
             continue;
         }
 
@@ -100,9 +102,10 @@ pub(crate) fn native_regexp_prototype_split(
 fn split_regexp_clone(
     value: Value,
     env: &mut HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
+) -> Result<(Value, bool), RuntimeError> {
     validate_species_constructor(value.clone(), env)?;
     let flags = to_js_string_with_env(property_value(value.clone(), "flags", env)?, env)?;
+    let unicode_matching = flags.contains('u');
     let mut split_flags = flags;
     if !split_flags.contains('y') {
         split_flags.push('y');
@@ -111,13 +114,14 @@ fn split_regexp_clone(
         thrown: None,
         message: "RegExp constructor is not available".to_owned(),
     })?;
-    call_function(
+    let splitter = call_function(
         constructor,
         Value::Undefined,
         vec![value, Value::String(split_flags)],
         env,
         false,
-    )
+    )?;
+    Ok((splitter, unicode_matching))
 }
 
 fn validate_species_constructor(

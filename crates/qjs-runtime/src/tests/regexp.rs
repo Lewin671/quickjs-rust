@@ -388,6 +388,16 @@ fn evaluates_regexp_symbol_split() {
         Ok(Value::String(String::new()))
     );
     assert_eq!(
+        eval("let result = /\\uDF06/u[Symbol.split]('\\uD834\\uDF06'); result.length;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval(
+            "let result = /./u[Symbol.split]('\\uD834\\uDF06'); result.length + ':' + result.join('|');"
+        ),
+        Ok(Value::String("2:|".to_owned()))
+    );
+    assert_eq!(
         eval(
             "let thrown = {}; let obj = { flags: '', get constructor() { throw thrown; } }; let caught = false; try { RegExp.prototype[Symbol.split].call(obj, 'abc'); } catch (error) { caught = error === thrown; } caught;"
         ),

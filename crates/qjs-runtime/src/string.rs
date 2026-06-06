@@ -57,6 +57,26 @@ pub(crate) fn surrogate_escape_code_unit(character: char) -> Option<u16> {
     }
 }
 
+pub(crate) fn advance_string_index(characters: &[char], index: usize, unicode: bool) -> usize {
+    if unicode
+        && matches!(
+            (
+                characters
+                    .get(index)
+                    .and_then(|ch| surrogate_escape_code_unit(*ch)),
+                characters
+                    .get(index + 1)
+                    .and_then(|ch| surrogate_escape_code_unit(*ch))
+            ),
+            (Some(0xD800..=0xDBFF), Some(0xDC00..=0xDFFF))
+        )
+    {
+        index + 2
+    } else {
+        index + 1
+    }
+}
+
 pub(crate) fn string_from_code_unit(code_unit: u16) -> String {
     if (0xD800..=0xDFFF).contains(&code_unit) {
         char::from_u32(SURROGATE_ESCAPE_SENTINEL_BASE + u32::from(code_unit) - 0xD800)
