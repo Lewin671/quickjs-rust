@@ -586,6 +586,7 @@ cases/object-values-getter-adding-key.js
 cases/object-values-getter-throws.js
 cases/object-values-inherited-omitted.js
 cases/object-values-length.js
+cases/object-values-order-after-define.js
 cases/object-values-primitive-number.js
 cases/object-values-primitive-string.js
 cases/object-values-tamper-with-global-object.js
