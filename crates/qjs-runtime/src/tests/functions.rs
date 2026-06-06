@@ -57,6 +57,18 @@ fn evaluates_function_declarations_and_calls() {
         Ok(Value::Number(2.0))
     );
     assert_eq!(
+        eval(
+            "function pair(a, b) {} let d = Object.getOwnPropertyDescriptor(pair, 'name'); d.value + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("pair:false:false:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(Array.isArray, 'name'); d.value + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("isArray:false:false:true".to_owned()))
+    );
+    assert_eq!(
         eval("function noReturn() { 1 + 2; } noReturn();"),
         Ok(Value::Undefined)
     );
@@ -260,6 +272,10 @@ fn evaluates_function_declarations_and_calls() {
         Ok(Value::Number(2.0))
     );
     assert_eq!(
+        eval("function join(a, b, c) { return '' + a + b + c; } join.bind(null, 'a').name;"),
+        Ok(Value::String("bound join".to_owned()))
+    );
+    assert_eq!(
         eval("function add(a, b) { return a + b; } add.bind(null, 2).bind(null, 3)();"),
         Ok(Value::Number(5.0))
     );
@@ -320,6 +336,10 @@ fn evaluates_function_declarations_and_calls() {
     assert_eq!(
         eval("let add = new Function('a,b', 'return a + b;'); add.length + ':' + add(2, 3);"),
         Ok(Value::String("2:5".to_owned()))
+    );
+    assert_eq!(
+        eval("Function('return 1;').name;"),
+        Ok(Value::String("anonymous".to_owned()))
     );
     assert_eq!(
         eval(

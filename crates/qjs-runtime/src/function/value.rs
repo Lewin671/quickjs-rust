@@ -113,6 +113,7 @@ impl Function {
             internal_prototype: Rc::new(RefCell::new(None)),
         };
         function.define_length_property();
+        function.define_name_property();
         if constructable {
             prototype
                 .define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
@@ -151,6 +152,7 @@ impl Function {
             internal_prototype: Rc::new(RefCell::new(None)),
         };
         function.define_length_property();
+        function.define_name_property();
         if constructable {
             prototype
                 .define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
@@ -187,8 +189,9 @@ impl Function {
             Value::Function(function) => function.constructable,
             _ => false,
         };
+        let name = bound_function_name(&target);
         let function = Self {
-            name: Some("bound".to_owned()),
+            name: Some(name),
             params: vec![String::new(); length],
             env: HashMap::new(),
             local_names: Vec::new(),
@@ -208,6 +211,7 @@ impl Function {
             internal_prototype: Rc::new(RefCell::new(None)),
         };
         function.define_length_property();
+        function.define_name_property();
         function
     }
 
@@ -236,6 +240,7 @@ impl Function {
             internal_prototype: Rc::new(RefCell::new(None)),
         };
         function.define_length_property();
+        function.define_name_property();
         if constructable {
             prototype
                 .define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
@@ -251,6 +256,18 @@ impl Function {
         self.properties.borrow_mut().insert(
             "length".to_owned(),
             Property::data(Value::Number(self.params.len() as f64), false, false, true),
+        );
+    }
+
+    fn define_name_property(&self) {
+        self.properties.borrow_mut().insert(
+            "name".to_owned(),
+            Property::data(
+                Value::String(self.name.clone().unwrap_or_default()),
+                false,
+                false,
+                true,
+            ),
         );
     }
 
@@ -341,6 +358,23 @@ fn constructor_prototype_property_value(key: &str, value: Value) -> Value {
         }
         (_, value) => value,
     }
+}
+
+fn bound_function_name(target: &Value) -> String {
+    let target_name = match target {
+        Value::Function(function) => function
+            .properties
+            .borrow()
+            .get("name")
+            .and_then(|property| match &property.value {
+                Value::String(name) => Some(name.clone()),
+                _ => None,
+            })
+            .or_else(|| function.name.clone())
+            .unwrap_or_default(),
+        _ => String::new(),
+    };
+    format!("bound {target_name}")
 }
 
 fn function_as_object_prototype(function: &Function) -> ObjectRef {

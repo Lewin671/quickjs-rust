@@ -71,6 +71,7 @@ cases/array-index-of-length.js
 cases/array-instanceof-basic.js
 cases/array-is-array-basic.js
 cases/array-is-array-length.js
+cases/array-is-array-name.js
 cases/array-from-array-basic.js
 cases/array-from-array-like-object.js
 cases/array-from-length.js
