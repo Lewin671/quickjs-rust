@@ -132,7 +132,7 @@ pub(crate) fn install_promise(
     let value = Value::Function(promise_function);
     env.insert("Promise".to_owned(), value.clone());
     if let Value::Object(global_object) = global_this {
-        global_object.set("Promise".to_owned(), value);
+        global_object.define_non_enumerable("Promise".to_owned(), value);
     }
 }
 

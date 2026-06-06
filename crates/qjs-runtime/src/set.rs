@@ -123,7 +123,7 @@ pub(crate) fn install_set(
     let value = Value::Function(set_function);
     env.insert("Set".to_owned(), value.clone());
     if let Value::Object(global_object) = global_this {
-        global_object.set("Set".to_owned(), value);
+        global_object.define_non_enumerable("Set".to_owned(), value);
     }
 }
 

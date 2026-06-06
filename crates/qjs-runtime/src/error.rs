@@ -54,7 +54,7 @@ pub(crate) fn install_error(
     let error_value = Value::Function(error_function);
     env.insert("Error".to_owned(), error_value.clone());
     if let Value::Object(global_object) = global_this {
-        global_object.set("Error".to_owned(), error_value.clone());
+        global_object.define_non_enumerable("Error".to_owned(), error_value.clone());
     }
 
     let Value::Function(error_function) = error_value else {
@@ -230,7 +230,7 @@ fn install_native_error(
     let value = Value::Function(function);
     env.insert(name.to_owned(), value.clone());
     if let Value::Object(global_object) = global_this {
-        global_object.set(name.to_owned(), value);
+        global_object.define_non_enumerable(name.to_owned(), value);
     }
 }
 

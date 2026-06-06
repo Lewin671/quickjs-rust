@@ -102,7 +102,7 @@ pub(crate) fn install_symbol(
     let symbol_value = Value::Function(symbol_function);
     env.insert("Symbol".to_owned(), symbol_value.clone());
     if let Value::Object(global_object) = global_this {
-        global_object.set("Symbol".to_owned(), symbol_value);
+        global_object.define_non_enumerable("Symbol".to_owned(), symbol_value);
     }
 }
 

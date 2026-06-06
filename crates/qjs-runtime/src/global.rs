@@ -26,6 +26,10 @@ pub(super) fn install_globals(env: &mut HashMap<String, Value>, global_this: &Va
             "Infinity".to_owned(),
             Property::data(Value::Number(f64::INFINITY), false, false, false),
         );
+        global_object.define_property(
+            "undefined".to_owned(),
+            Property::data(Value::Undefined, false, false, false),
+        );
     }
 
     define_global_function(
@@ -67,7 +71,7 @@ fn define_global_function(
     let value = Value::Function(Function::new_native(Some(key), length, native, false));
     env.insert(key.to_owned(), value.clone());
     if let Value::Object(global_object) = global_this {
-        global_object.set(key.to_owned(), value);
+        global_object.define_non_enumerable(key.to_owned(), value);
     }
 }
 

@@ -70,7 +70,7 @@ pub(super) fn install_math(
     let math_value = Value::Object(math_object);
     env.insert("Math".to_owned(), math_value.clone());
     if let Value::Object(global_object) = global_this {
-        global_object.set("Math".to_owned(), math_value);
+        global_object.define_non_enumerable("Math".to_owned(), math_value);
     }
 }
 

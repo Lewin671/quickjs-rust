@@ -488,6 +488,7 @@ cases/object-get-own-property-symbols-basic.js
 cases/object-get-own-property-descriptor-array-length.js
 cases/object-get-own-property-descriptor-basic.js
 cases/object-get-own-property-descriptor-function-basic.js
+cases/object-get-own-property-descriptor-global-builtins.js
 cases/object-get-own-property-descriptor-missing.js
 cases/object-get-own-property-descriptor-nonenumerable-basic.js
 cases/object-get-own-property-descriptor-nullish-throws.js

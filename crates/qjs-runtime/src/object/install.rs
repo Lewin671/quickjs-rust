@@ -151,7 +151,7 @@ pub(crate) fn install_object(env: &mut HashMap<String, Value>, global_this: &Val
     let object_value = Value::Function(object_function);
     env.insert("Object".to_owned(), object_value.clone());
     if let Value::Object(global_object) = global_this {
-        global_object.set("Object".to_owned(), object_value);
+        global_object.define_non_enumerable("Object".to_owned(), object_value);
     }
 
     object_prototype

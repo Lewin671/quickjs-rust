@@ -45,7 +45,7 @@ pub(super) fn install_boolean(
     let boolean_value = Value::Function(boolean_function);
     env.insert("Boolean".to_owned(), boolean_value.clone());
     if let Value::Object(global_object) = global_this {
-        global_object.set("Boolean".to_owned(), boolean_value);
+        global_object.define_non_enumerable("Boolean".to_owned(), boolean_value);
     }
 }
 

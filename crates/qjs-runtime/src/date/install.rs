@@ -212,7 +212,7 @@ pub(crate) fn install_date(
     let date_value = Value::Function(date_function);
     env.insert("Date".to_owned(), date_value.clone());
     if let Value::Object(global_object) = global_this {
-        global_object.set("Date".to_owned(), date_value);
+        global_object.define_non_enumerable("Date".to_owned(), date_value);
     }
 }
 

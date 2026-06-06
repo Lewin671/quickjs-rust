@@ -126,17 +126,17 @@ pub(crate) fn install_number(
     let number_value = Value::Function(number_function);
     env.insert("Number".to_owned(), number_value.clone());
     if let Value::Object(global_object) = global_this {
-        global_object.set("Number".to_owned(), number_value);
+        global_object.define_non_enumerable("Number".to_owned(), number_value);
     }
 
     env.insert("parseFloat".to_owned(), parse_float_value.clone());
     if let Value::Object(global_object) = global_this {
-        global_object.set("parseFloat".to_owned(), parse_float_value);
+        global_object.define_non_enumerable("parseFloat".to_owned(), parse_float_value);
     }
 
     env.insert("parseInt".to_owned(), parse_int_value.clone());
     if let Value::Object(global_object) = global_this {
-        global_object.set("parseInt".to_owned(), parse_int_value);
+        global_object.define_non_enumerable("parseInt".to_owned(), parse_int_value);
     }
 }
 

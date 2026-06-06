@@ -124,7 +124,7 @@ pub(crate) fn install_regexp(
     let regexp_value = Value::Function(regexp_function);
     env.insert("RegExp".to_owned(), regexp_value.clone());
     if let Value::Object(global_object) = global_this {
-        global_object.set("RegExp".to_owned(), regexp_value);
+        global_object.define_non_enumerable("RegExp".to_owned(), regexp_value);
     }
 }
 

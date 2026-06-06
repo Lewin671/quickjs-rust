@@ -49,6 +49,6 @@ pub(crate) fn install_function(
     let function_value = Value::Function(function_constructor);
     env.insert("Function".to_owned(), function_value.clone());
     if let Value::Object(global_object) = global_this {
-        global_object.set("Function".to_owned(), function_value);
+        global_object.define_non_enumerable("Function".to_owned(), function_value);
     }
 }

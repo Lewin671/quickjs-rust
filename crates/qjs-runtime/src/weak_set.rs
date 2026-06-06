@@ -47,7 +47,7 @@ pub(crate) fn install_weak_set(
     let value = Value::Function(weak_set_function);
     env.insert("WeakSet".to_owned(), value.clone());
     if let Value::Object(global_object) = global_this {
-        global_object.set("WeakSet".to_owned(), value);
+        global_object.define_non_enumerable("WeakSet".to_owned(), value);
     }
 }
 

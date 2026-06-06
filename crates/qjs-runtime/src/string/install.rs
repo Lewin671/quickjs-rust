@@ -97,7 +97,7 @@ pub(crate) fn install_string(
     let string_value = Value::Function(string_function);
     env.insert("String".to_owned(), string_value.clone());
     if let Value::Object(global_object) = global_this {
-        global_object.set("String".to_owned(), string_value);
+        global_object.define_non_enumerable("String".to_owned(), string_value);
     }
 }
 

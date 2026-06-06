@@ -242,7 +242,7 @@ pub(crate) fn install_array(
     let array_value = Value::Function(array_function);
     env.insert("Array".to_owned(), array_value.clone());
     if let Value::Object(global_object) = global_this {
-        global_object.set("Array".to_owned(), array_value);
+        global_object.define_non_enumerable("Array".to_owned(), array_value);
     }
 }
 

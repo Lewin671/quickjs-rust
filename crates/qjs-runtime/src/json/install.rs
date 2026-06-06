@@ -18,7 +18,7 @@ pub(crate) fn install_json(
     let json_value = Value::Object(json_object);
     env.insert("JSON".to_owned(), json_value.clone());
     if let Value::Object(global_object) = global_this {
-        global_object.set("JSON".to_owned(), json_value);
+        global_object.define_non_enumerable("JSON".to_owned(), json_value);
     }
 }
 

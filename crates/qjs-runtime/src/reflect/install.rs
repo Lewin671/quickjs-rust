@@ -70,7 +70,7 @@ pub(crate) fn install_reflect(
     let reflect_value = Value::Object(reflect_object);
     env.insert("Reflect".to_owned(), reflect_value.clone());
     if let Value::Object(global_object) = global_this {
-        global_object.set("Reflect".to_owned(), reflect_value);
+        global_object.define_non_enumerable("Reflect".to_owned(), reflect_value);
     }
 }
 

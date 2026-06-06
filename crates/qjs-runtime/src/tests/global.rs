@@ -52,6 +52,12 @@ fn evaluates_boolean_builtins() {
 fn evaluates_global_undefined_binding() {
     assert_eq!(eval("undefined;"), Ok(Value::Undefined));
     assert_eq!(eval("undefined === undefined;"), Ok(Value::Boolean(true)));
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(this, 'undefined'); d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("false:false:false".to_owned()))
+    );
 }
 
 #[test]
@@ -87,6 +93,18 @@ fn evaluates_global_eval_builtin() {
     );
     assert_eq!(eval("eval.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("this.eval === eval;"), Ok(Value::Boolean(true)));
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(this, 'eval'); (d.value === eval) + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("true:true:false:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(this, 'Object'); (d.value === Object) + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("true:true:false:true".to_owned()))
+    );
     assert_eq!(eval("eval(7);"), Ok(Value::Number(7.0)));
     assert_eq!(eval("eval('1 + 2;');"), Ok(Value::Number(3.0)));
     assert_eq!(
@@ -101,6 +119,12 @@ fn evaluates_uri_coding_builtins() {
     assert_eq!(eval("decodeURI.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("encodeURIComponent.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("decodeURIComponent.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(this, 'decodeURIComponent'); (d.value === decodeURIComponent) + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("true:true:false:true".to_owned()))
+    );
     assert_eq!(
         eval("encodeURI('https://example.test/a b?x=1&y=\\u00E9#frag');"),
         Ok(Value::String(
