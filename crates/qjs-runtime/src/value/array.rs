@@ -398,6 +398,14 @@ impl ArrayRef {
         true
     }
 
+    pub(crate) fn own_property_symbols(&self) -> Vec<ObjectRef> {
+        self.symbol_properties
+            .borrow()
+            .iter()
+            .map(|(symbol, _)| symbol.clone())
+            .collect()
+    }
+
     pub(crate) fn set_prototype(&self, prototype: Option<ObjectRef>) -> Result<(), ()> {
         if matches!(
             self.prototype.borrow().as_ref(),

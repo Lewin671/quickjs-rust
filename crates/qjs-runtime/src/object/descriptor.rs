@@ -2,16 +2,15 @@ use std::collections::HashMap;
 
 use crate::{
     ObjectRef, Property, PropertyKey, RuntimeError, Value, function_own_property_descriptor,
-    function_own_symbol_property_descriptor, object_prototype, to_property_key_value,
+    function_own_symbol_property_descriptor, to_property_key_value,
 };
 
 use super::{
     boxed_primitive,
     descriptor_record::{
-        PropertyDescriptor, property_descriptor_object, resolve_property_definition,
-        to_property_descriptor_record,
+        PropertyDescriptor, resolve_property_definition, to_property_descriptor_record,
     },
-    enumeration::{enumerable_property_entries, own_property_names},
+    enumeration::enumerable_property_entries,
 };
 
 pub(crate) fn native_object_define_property(
@@ -76,60 +75,6 @@ fn to_object_for_define_properties(
             message: "property descriptors must be an object".to_owned(),
         }),
     }
-}
-
-pub(crate) fn native_object_get_own_property_descriptor(
-    argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
-    let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    if matches!(target, Value::Null | Value::Undefined) {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "Object.getOwnPropertyDescriptor target must not be null or undefined"
-                .to_owned(),
-        });
-    }
-    let key = to_property_key_value(
-        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
-        env,
-    )?;
-    let Some(property) = own_property_descriptor_key(target, &key)? else {
-        return Ok(Value::Undefined);
-    };
-    Ok(Value::Object(property_descriptor_object(
-        property,
-        object_prototype(env),
-    )))
-}
-
-pub(crate) fn native_object_get_own_property_descriptors(
-    argument_values: &[Value],
-    env: &HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
-    let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    if matches!(target, Value::Null | Value::Undefined) {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "Object.getOwnPropertyDescriptors target must not be null or undefined"
-                .to_owned(),
-        });
-    }
-    let prototype = object_prototype(env);
-    let mut descriptors = HashMap::new();
-    for key in own_property_names(target.clone()) {
-        if let Some(property) = own_property_descriptor(target.clone(), &key)? {
-            descriptors.insert(
-                key,
-                Value::Object(property_descriptor_object(property, prototype.clone())),
-            );
-        }
-    }
-
-    Ok(Value::Object(ObjectRef::with_prototype(
-        descriptors,
-        prototype,
-    )))
 }
 
 pub(super) fn own_property_descriptor(

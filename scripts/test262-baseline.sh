@@ -240,7 +240,6 @@ skip_reason() {
 rust_features_supported() {
   local entries
   entries="$(list_entries "$1")"
-  grep -Fxq 'Symbol.isConcatSpreadable' <<<"$entries" || return 1
   ! grep -Fvx -e 'Symbol' -e 'Symbol.isConcatSpreadable' <<<"$entries" >/dev/null
 }
 rust_includes_supported() {

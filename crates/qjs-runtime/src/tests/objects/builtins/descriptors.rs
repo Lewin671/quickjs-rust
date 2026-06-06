@@ -80,6 +80,12 @@ fn evaluates_object_descriptor_queries() {
     );
     assert_eq!(
         eval(
+            "let object = {}; let value = {}; let hidden = Symbol('hidden'); let shown = Symbol('shown'); object[shown] = value; Object.defineProperty(object, hidden, { value: value, enumerable: false, writable: true, configurable: true }); let descriptors = Object.getOwnPropertyDescriptors(object); let symbols = Object.getOwnPropertySymbols(descriptors); symbols.length + ':' + (symbols[0] === shown) + ':' + (symbols[1] === hidden) + ':' + descriptors[shown].enumerable + ':' + descriptors[hidden].enumerable + ':' + (descriptors[hidden].value === value);"
+        ),
+        Ok(Value::String("2:true:true:true:false:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
             "let object = {}; Object.defineProperty(object, 'value', { get: function() { return 9; }, enumerable: true, configurable: true }); object.value;"
         ),
         Ok(Value::Number(9.0))

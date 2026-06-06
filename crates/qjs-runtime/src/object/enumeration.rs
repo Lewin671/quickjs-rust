@@ -175,14 +175,14 @@ pub(super) fn own_property_names(value: Value) -> Vec<String> {
     }
 }
 
-fn own_property_symbols(value: Value) -> Vec<crate::ObjectRef> {
+pub(super) fn own_property_symbols(value: Value) -> Vec<crate::ObjectRef> {
     match value {
         Value::Object(object) => object.own_property_symbols(),
         Value::Map(map) => map.object().own_property_symbols(),
         Value::Set(set) => set.object().own_property_symbols(),
         Value::Function(function) => function_own_property_symbols(&function),
-        Value::Array(_)
-        | Value::String(_)
+        Value::Array(elements) => elements.own_property_symbols(),
+        Value::String(_)
         | Value::Number(_)
         | Value::Boolean(_)
         | Value::Null

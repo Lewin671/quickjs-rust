@@ -501,6 +501,7 @@ cases/object-get-own-property-descriptors-length.js
 cases/object-get-own-property-descriptors-normal-object.js
 cases/object-get-own-property-descriptors-primitive-number.js
 cases/object-get-own-property-descriptors-primitive-string.js
+cases/object-get-own-property-descriptors-symbols-included.js
 cases/object-get-own-property-descriptors-tamper-with-global-object.js
 cases/object-get-own-property-descriptors-tamper-with-object-get-own-property-descriptor.js
 cases/object-map-group-by-basic.js
