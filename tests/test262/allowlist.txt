@@ -179,6 +179,7 @@ cases/array-to-string-boolean-primitive.js
 cases/array-to-string-length.js
 cases/array-to-reversed-basic.js
 cases/array-to-reversed-array-like.js
+cases/array-to-reversed-copy-semantics.js
 cases/array-to-reversed-length.js
 cases/array-to-reversed-zero-or-one.js
 cases/array-to-spliced-array-like.js

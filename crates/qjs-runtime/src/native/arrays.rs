@@ -106,7 +106,7 @@ pub(super) fn call_array_native(
             array::native_array_prototype_to_string(this_value, env)?
         }
         NativeFunction::ArrayPrototypeToReversed => {
-            array::native_array_prototype_to_reversed(this_value)?
+            array::native_array_prototype_to_reversed(this_value, env)?
         }
         NativeFunction::ArrayPrototypeToSpliced => {
             array::native_array_prototype_to_spliced(this_value, argument_values)?

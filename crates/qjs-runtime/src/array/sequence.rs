@@ -91,9 +91,26 @@ pub(crate) fn native_array_prototype_slice(
     Ok(Value::Array(ArrayRef::new_sparse(result, holes)))
 }
 
-pub(crate) fn native_array_prototype_to_reversed(this_value: Value) -> Result<Value, RuntimeError> {
-    let mut values = array_like_values(this_value, "Array.prototype.toReversed")?;
-    values.reverse();
+pub(crate) fn native_array_prototype_to_reversed(
+    this_value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let source = array_like_length(this_value, "Array.prototype.toReversed", env)?;
+    if source.length > MAX_ARRAY_LENGTH {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "RangeError: invalid array length".to_owned(),
+        });
+    }
+    let mut values = Vec::with_capacity(source.length);
+    for offset in 0..source.length {
+        let from = source.length - offset - 1;
+        values.push(property_value(
+            source.receiver.clone(),
+            &from.to_string(),
+            env,
+        )?);
+    }
     Ok(Value::Array(ArrayRef::new(values)))
 }
 
