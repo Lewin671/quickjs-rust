@@ -6,7 +6,10 @@ use crate::{
     property_value, to_property_key_value,
 };
 
-use super::enumeration::{enumerable_property_entries, own_property_names};
+use super::{
+    boxed_primitive,
+    enumeration::{enumerable_property_entries, own_property_names},
+};
 
 pub(crate) fn native_object_define_property(
     argument_values: &[Value],
@@ -38,16 +41,10 @@ pub(crate) fn native_object_define_properties(
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     ensure_define_property_target(&target)?;
 
-    let descriptors = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
-    if !matches!(
-        descriptors,
-        Value::Array(_) | Value::Object(_) | Value::Function(_) | Value::Map(_) | Value::Set(_)
-    ) {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "property descriptors must be an object".to_owned(),
-        });
-    }
+    let descriptors = to_object_for_define_properties(
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
 
     for (key, descriptor_value) in enumerable_property_entries(descriptors, env)? {
         let descriptor = to_property_descriptor(descriptor_value, env)?;
@@ -59,6 +56,26 @@ pub(crate) fn native_object_define_properties(
         }
     }
     Ok(target)
+}
+
+fn to_object_for_define_properties(
+    value: Value,
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    match value {
+        value @ (Value::Array(_)
+        | Value::Object(_)
+        | Value::Function(_)
+        | Value::Map(_)
+        | Value::Set(_)) => Ok(value),
+        value @ (Value::String(_) | Value::Number(_) | Value::Boolean(_)) => {
+            Ok(boxed_primitive(value, env).expect("primitive value should box"))
+        }
+        Value::Null | Value::Undefined => Err(RuntimeError {
+            thrown: None,
+            message: "property descriptors must be an object".to_owned(),
+        }),
+    }
 }
 
 pub(crate) fn native_object_get_own_property_descriptor(

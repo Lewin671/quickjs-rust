@@ -66,6 +66,24 @@ fn evaluates_object_definition_and_creation_builtins() {
     );
     assert_eq!(
         eval(
+            "let object = {}; Object.defineProperties(object, false) === object && Object.keys(object).length === 0;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let object = { value: 1 }; Object.defineProperties(object, -12) === object && object.value === 1;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let object = { value: 1 }; Object.defineProperties(object, '') === object && object.value === 1;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
             "let object = {}; Object.defineProperties(object, { first: { value: 1, enumerable: true }, second: { value: 2 } }); object.first + object.second;"
         ),
         Ok(Value::Number(3.0))
