@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     Function, ObjectRef, Property, PropertyKey, RuntimeError, Value,
     boolean::BOOLEAN_DATA_PROPERTY, function_prototype, number::NUMBER_DATA_PROPERTY,
-    string::STRING_DATA_PROPERTY,
+    string::STRING_DATA_PROPERTY, symbol,
 };
 
 use super::descriptor::native_object_define_properties;
@@ -14,6 +14,9 @@ pub(crate) fn native_object_assign(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let target = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
+        Value::Object(object) if symbol::is_symbol_primitive(&object) => {
+            symbol::boxed_symbol(&object, env)
+        }
         value @ (Value::Array(_)
         | Value::Object(_)
         | Value::Function(_)
@@ -49,6 +52,9 @@ pub(crate) fn native_object(
     env: &HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     match argument_values.first() {
+        Some(Value::Object(object)) if symbol::is_symbol_primitive(object) => {
+            Ok(symbol::boxed_symbol(object, env))
+        }
         Some(
             Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) | Value::Object(_),
         ) => Ok(argument_values[0].clone()),
@@ -68,6 +74,9 @@ pub(crate) fn boxed_primitive(value: Value, env: &HashMap<String, Value>) -> Opt
         Value::Boolean(value) => Some(boxed_boolean(value, env)),
         Value::Number(value) => Some(boxed_number(value, env)),
         Value::String(value) => Some(boxed_string(&value, env)),
+        Value::Object(object) if symbol::is_symbol_primitive(&object) => {
+            Some(symbol::boxed_symbol(&object, env))
+        }
         _ => None,
     }
 }

@@ -54,7 +54,7 @@ pub(super) fn typeof_value(value: Value) -> String {
         Value::Number(_) => "number",
         Value::String(_) => "string",
         Value::Function(_) => "function",
-        Value::Object(object) if symbol::is_symbol_object(&object) => "symbol",
+        Value::Object(object) if symbol::is_symbol_primitive(&object) => "symbol",
         Value::Null | Value::Array(_) | Value::Map(_) | Value::Set(_) | Value::Object(_) => {
             "object"
         }

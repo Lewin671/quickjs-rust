@@ -427,6 +427,7 @@ cases/object-assign-primitive-target.js
 cases/object-assign-readonly-target-throws.js
 cases/object-assign-number-target-string-override.js
 cases/object-assign-source-string.js
+cases/object-assign-symbol-target.js
 cases/object-assign-target-set-not-writable.js
 cases/object-assign-target-set-user-error.js
 cases/object-assign-sealed-accessor-target.js

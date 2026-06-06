@@ -15,7 +15,7 @@ pub(crate) fn to_property_key_value(
     env: &mut HashMap<String, Value>,
 ) -> Result<PropertyKey, RuntimeError> {
     let primitive = match value {
-        Value::Object(object) if symbol::is_symbol_object(&object) => {
+        Value::Object(object) if symbol::is_symbol_primitive(&object) => {
             return Ok(PropertyKey::Symbol(object));
         }
         Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_) | Value::Object(_) => {
@@ -31,7 +31,7 @@ pub(crate) fn to_property_key_value(
         Value::Boolean(false) => Ok(PropertyKey::String("false".to_owned())),
         Value::Null => Ok(PropertyKey::String("null".to_owned())),
         Value::Undefined => Ok(PropertyKey::String("undefined".to_owned())),
-        Value::Object(object) if symbol::is_symbol_object(&object) => {
+        Value::Object(object) if symbol::is_symbol_primitive(&object) => {
             Ok(PropertyKey::Symbol(object))
         }
         Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_) | Value::Object(_) => {

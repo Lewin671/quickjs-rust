@@ -7,6 +7,7 @@ use crate::{
 
 const SYMBOL_DATA_PROPERTY: &str = "\0SymbolData";
 const SYMBOL_DESCRIPTION_PROPERTY: &str = "\0SymbolDescription";
+const SYMBOL_BOXED_PROPERTY: &str = "\0SymbolBoxed";
 const SYMBOL_REGISTRY_BINDING: &str = "\0SymbolRegistry";
 const WELL_KNOWN_SYMBOL_NAMES: &[&str] = &[
     "asyncDispose",
@@ -184,6 +185,17 @@ pub(crate) fn is_symbol_object(object: &ObjectRef) -> bool {
     object.own_property(SYMBOL_DATA_PROPERTY).is_some()
 }
 
+pub(crate) fn is_symbol_primitive(object: &ObjectRef) -> bool {
+    is_symbol_object(object) && object.own_property(SYMBOL_BOXED_PROPERTY).is_none()
+}
+
+pub(crate) fn boxed_symbol(object: &ObjectRef, env: &HashMap<String, Value>) -> Value {
+    let description = symbol_description(object);
+    let boxed = symbol_object(symbol_prototype(env), description);
+    boxed.define_non_enumerable(SYMBOL_BOXED_PROPERTY.to_owned(), Value::Boolean(true));
+    Value::Object(boxed)
+}
+
 pub(crate) fn to_string_tag_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
     well_known_symbol(env, "toStringTag")
 }
@@ -304,10 +316,14 @@ fn this_symbol_description(this_value: Value) -> Result<Value, RuntimeError> {
     if !is_symbol_object(&object) {
         return Err(symbol_method_error());
     }
-    Ok(object
+    Ok(symbol_description(&object))
+}
+
+fn symbol_description(object: &ObjectRef) -> Value {
+    object
         .own_property(SYMBOL_DESCRIPTION_PROPERTY)
         .map(|property| property.value)
-        .unwrap_or(Value::Undefined))
+        .unwrap_or(Value::Undefined)
 }
 
 fn symbol_descriptive_string(description: Value) -> String {

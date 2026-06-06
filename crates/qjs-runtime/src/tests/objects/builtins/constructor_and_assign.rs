@@ -42,6 +42,12 @@ fn evaluates_object_constructor_and_assign() {
     );
     assert_eq!(
         eval(
+            "let result = Object.assign(Symbol('foo'), { a: 1 }); typeof result + ':' + result.toString() + ':' + result.a;"
+        ),
+        Ok(Value::String("object:Symbol(foo):1".to_owned()))
+    );
+    assert_eq!(
+        eval(
             "let target = {}; Object.assign(target, Object.create({ inherited: 1 })); Object.keys(target).length;"
         ),
         Ok(Value::Number(0.0))
