@@ -737,6 +737,8 @@ cases/string-raw-basic.js
 cases/string-raw-empty-length.js
 cases/string-raw-return-value.js
 cases/string-raw-substitutions.js
+cases/string-raw-substitution-limit.js
+cases/string-raw-undefined-length.js
 cases/string-prototype-at-basic.js
 cases/string-prototype-char-at-basic.js
 cases/string-prototype-char-at-length.js
