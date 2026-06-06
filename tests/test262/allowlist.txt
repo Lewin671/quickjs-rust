@@ -75,12 +75,14 @@ cases/array-is-array-name.js
 cases/array-from-array-basic.js
 cases/array-from-array-like-object.js
 cases/array-from-length.js
+cases/array-from-name.js
 cases/array-from-mapfn.js
 cases/array-from-mapfn-this-arg.js
 cases/array-from-string.js
 cases/array-of-basic.js
 cases/array-of-empty.js
 cases/array-of-length.js
+cases/array-of-name.js
 cases/array-of-single-number.js
 cases/array-join-basic.js
 cases/array-join-boolean-primitive.js
@@ -266,6 +268,7 @@ cases/number-constants-basic.js
 cases/number-min-value.js
 cases/number-is-finite-basic.js
 cases/number-is-finite-length.js
+cases/number-is-finite-name.js
 cases/number-prototype-constructor.js
 cases/number-prototype-to-exponential-basic.js
 cases/number-prototype-to-string-basic.js
@@ -351,6 +354,7 @@ cases/set-is-disjoint-from-basic.js
 cases/set-iterator-basic.js
 cases/set-for-each-basic.js
 cases/object-assign-length.js
+cases/object-assign-name.js
 cases/object-assign-target-array.js
 cases/object-assign-target-object.js
 cases/object-assign-override.js
@@ -737,6 +741,7 @@ cases/string-from-code-point-basic.js
 cases/string-from-code-point-length.js
 cases/string-raw-basic.js
 cases/string-raw-empty-length.js
+cases/string-raw-name.js
 cases/string-raw-return-value.js
 cases/string-raw-substitutions.js
 cases/string-raw-substitution-limit.js
