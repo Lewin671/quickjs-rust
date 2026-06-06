@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use crate::{
     PropertyKey, RuntimeError, Value, array_has_own_property, array_prototype, boolean,
     call_function, date, error, function_intrinsic_prototype, function_own_property_descriptor,
-    number, property_value, property_value_key, regexp, string, symbol, to_property_key_value,
-    value_prototype,
+    function_prototype, number, property_value, property_value_key, regexp, string, symbol,
+    to_property_key_value, value_prototype,
 };
 
 use super::descriptor::own_property_descriptor_key;
@@ -37,6 +37,9 @@ pub(crate) fn native_object_get_prototype_of(
             .unwrap_or_else(|| function_intrinsic_prototype(env))
             .map(Value::Object)
             .unwrap_or(Value::Null)),
+        Some(Value::Boolean(_)) => Ok(constructor_prototype_value("Boolean", env)),
+        Some(Value::Number(_)) => Ok(constructor_prototype_value("Number", env)),
+        Some(Value::String(_)) => Ok(constructor_prototype_value("String", env)),
         _ => Err(RuntimeError {
             thrown: None,
             message: "Object.getPrototypeOf target must be an object".to_owned(),
@@ -49,6 +52,12 @@ pub(crate) fn native_object_set_prototype_of(
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let prototype = match argument_values.get(1).cloned().unwrap_or(Value::Undefined) {
+        Value::Object(prototype) if symbol::is_symbol_primitive(&prototype) => {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "Object.setPrototypeOf prototype must be an object or null".to_owned(),
+            });
+        }
         Value::Object(prototype) => Some(prototype),
         Value::Null => None,
         _ => {
@@ -60,6 +69,7 @@ pub(crate) fn native_object_set_prototype_of(
     };
 
     match &target {
+        Value::Object(object) if symbol::is_symbol_primitive(object) => {}
         Value::Object(object) => object.set_prototype(prototype).map_err(|()| RuntimeError {
             thrown: None,
             message: "Object.setPrototypeOf failed".to_owned(),
@@ -101,6 +111,15 @@ pub(crate) fn native_object_set_prototype_of(
         }
     }
     Ok(target)
+}
+
+fn constructor_prototype_value(name: &str, env: &HashMap<String, Value>) -> Value {
+    let Some(Value::Function(function)) = env.get(name) else {
+        return Value::Null;
+    };
+    function_prototype(function)
+        .map(Value::Object)
+        .unwrap_or(Value::Null)
 }
 
 pub(crate) fn native_object_prototype_has_own_property(

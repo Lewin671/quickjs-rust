@@ -370,6 +370,7 @@ fn evaluates_reflect_prototype_builtins() {
     assert!(eval("Reflect.construct(function f() {}, 1);").is_err());
     assert!(eval("Reflect.construct(function f() {}, [], Reflect.apply);").is_err());
     assert!(eval("Reflect.getPrototypeOf(1);").is_err());
+    assert!(eval("Reflect.getPrototypeOf(Symbol('target'));").is_err());
     assert!(eval("Reflect.defineProperty(1, 'value', { value: 1 });").is_err());
     assert!(eval("Reflect.deleteProperty(1, 'value');").is_err());
     assert!(eval("Reflect.get(1, 'value');").is_err());
@@ -381,4 +382,6 @@ fn evaluates_reflect_prototype_builtins() {
     assert!(eval("Reflect.set(1, 'value', 1);").is_err());
     assert!(eval("Reflect.setPrototypeOf(1, null);").is_err());
     assert!(eval("Reflect.setPrototypeOf({}, 1);").is_err());
+    assert!(eval("Reflect.setPrototypeOf(Symbol('target'), null);").is_err());
+    assert!(eval("Reflect.setPrototypeOf({}, Symbol('proto'));").is_err());
 }

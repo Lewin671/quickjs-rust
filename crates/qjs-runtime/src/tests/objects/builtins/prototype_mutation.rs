@@ -39,6 +39,10 @@ fn evaluates_object_prototype_mutation_builtins() {
         Ok(Value::Number(1.0))
     );
     assert_eq!(
+        eval("let symbol = Symbol('target'); Object.setPrototypeOf(symbol, null) === symbol;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval(
             "let proto = { marker: 11 }; let array = []; Object.setPrototypeOf(array, proto) === array;"
         ),
@@ -83,6 +87,7 @@ fn evaluates_object_prototype_mutation_builtins() {
     assert!(eval("Object.setPrototypeOf(null, null);").is_err());
     assert!(eval("Object.setPrototypeOf(undefined, null);").is_err());
     assert!(eval("Object.setPrototypeOf({}, 1);").is_err());
+    assert!(eval("Object.setPrototypeOf({}, Symbol('proto'));").is_err());
     assert!(
         eval(
             "let array = []; Object.preventExtensions(array); Object.setPrototypeOf(array, null);"

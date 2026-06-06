@@ -251,6 +251,16 @@ fn evaluates_object_definition_and_creation_builtins() {
         eval("Object.getPrototypeOf(Object.create(null));"),
         Ok(Value::Null)
     );
+    assert_eq!(
+        eval(
+            "Object.getPrototypeOf(true) === Boolean.prototype && Object.getPrototypeOf(1) === Number.prototype && Object.getPrototypeOf('value') === String.prototype;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("Object.getPrototypeOf(Symbol('value')) === Symbol.prototype;"),
+        Ok(Value::Boolean(true))
+    );
     assert_eq!(eval("({}) instanceof Object;"), Ok(Value::Boolean(true)));
     assert_eq!(
         eval("Object() instanceof Object;"),

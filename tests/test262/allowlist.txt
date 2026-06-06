@@ -481,6 +481,9 @@ cases/object-define-properties-nonenumerable-descriptor-ignored.js
 cases/object-define-properties-primitive-descriptors.js
 cases/object-get-prototype-of-basic.js
 cases/object-get-prototype-of-array-prototype.js
+cases/object-get-prototype-of-primitive-boolean.js
+cases/object-get-prototype-of-primitive-number.js
+cases/object-get-prototype-of-primitive-string.js
 cases/object-get-own-property-names-array-basic.js
 cases/object-get-own-property-names-basic.js
 cases/object-get-own-property-names-function-basic.js
@@ -561,6 +564,7 @@ cases/object-set-prototype-of-array.js
 cases/object-set-prototype-of-function.js
 cases/object-set-prototype-of-null.js
 cases/object-set-prototype-of-primitive.js
+cases/object-set-prototype-of-proto-symbol-throws.js
 cases/object-set-prototype-of-success.js
 cases/object-is-prototype-of-array-and-function.js
 cases/object-is-prototype-of-basic.js
@@ -805,6 +809,7 @@ cases/reflect-get-own-property-descriptor-array-function.js
 cases/reflect-get-own-property-descriptor-basic.js
 cases/reflect-get-own-property-descriptor-length.js
 cases/reflect-get-prototype-of-basic.js
+cases/reflect-get-prototype-of-symbol-target-throws.js
 cases/reflect-get-prototype-of-length.js
 cases/reflect-get-symbol-property.js
 cases/reflect-has-array-and-function.js
@@ -829,6 +834,8 @@ cases/reflect-set-non-writable.js
 cases/reflect-set-prototype-of-basic.js
 cases/reflect-set-prototype-of-length.js
 cases/reflect-set-prototype-of-non-extensible.js
+cases/reflect-set-prototype-of-proto-symbol-throws.js
+cases/reflect-set-prototype-of-symbol-target-throws.js
 cases/regexp-escape-basic.js
 cases/regexp-escape-non-string-inputs.js
 cases/regexp-escape-punctuators-whitespace.js
