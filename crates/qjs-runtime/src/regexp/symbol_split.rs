@@ -101,6 +101,7 @@ fn split_regexp_clone(
     value: Value,
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
+    validate_species_constructor(value.clone(), env)?;
     let flags = to_js_string_with_env(property_value(value.clone(), "flags", env)?, env)?;
     let mut split_flags = flags;
     if !split_flags.contains('y') {
@@ -117,6 +118,20 @@ fn split_regexp_clone(
         env,
         false,
     )
+}
+
+fn validate_species_constructor(
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
+    let constructor = property_value(value, "constructor", env)?;
+    if matches!(constructor, Value::Undefined) || is_object_value(&constructor) {
+        return Ok(());
+    }
+    Err(RuntimeError {
+        thrown: None,
+        message: "TypeError: RegExp species constructor must be an object".to_owned(),
+    })
 }
 
 fn regexp_exec(

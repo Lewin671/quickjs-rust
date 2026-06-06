@@ -387,6 +387,18 @@ fn evaluates_regexp_symbol_split() {
         eval("/./[Symbol.split]('').join('|');"),
         Ok(Value::String(String::new()))
     );
+    assert_eq!(
+        eval(
+            "let thrown = {}; let obj = { flags: '', get constructor() { throw thrown; } }; let caught = false; try { RegExp.prototype[Symbol.split].call(obj, 'abc'); } catch (error) { caught = error === thrown; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let obj = { flags: '', constructor: false }; let caught = false; try { RegExp.prototype[Symbol.split].call(obj, 'abc'); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]
