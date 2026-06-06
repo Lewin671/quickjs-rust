@@ -2,13 +2,15 @@ use std::collections::HashMap;
 
 use crate::string::string_from_code_unit;
 
+mod classes;
 mod escapes;
 mod groups;
 mod normalization;
 #[cfg(test)]
 mod tests;
 
-use escapes::{chars_equal, class_range_contains, regexp_control_escape, unicode_escape};
+use classes::class_match;
+use escapes::{chars_equal, regexp_control_escape, regexp_word_char, unicode_escape};
 use groups::{closing_group, group_alternatives, is_non_capturing_group};
 use normalization::normalized_regexp_source;
 
@@ -289,6 +291,8 @@ fn match_escape(
         'D' => (!value.is_ascii_digit(), pc + 2),
         's' => (value.is_whitespace(), pc + 2),
         'S' => (!value.is_whitespace(), pc + 2),
+        'w' => (regexp_word_char(value), pc + 2),
+        'W' => (!regexp_word_char(value), pc + 2),
         'u' => {
             let Some(escape) = unicode_escape(pattern, pc, options.unicode) else {
                 let matched = chars_equal(value, 'u', options.ignore_case);
@@ -405,35 +409,6 @@ fn match_class(
     vec![(class_end + 1, state)]
 }
 
-fn class_match(class: &[char], value: char, options: MatchOptions) -> bool {
-    let mut index = 0;
-    while index < class.len() {
-        if class[index] == '\\' {
-            if class.get(index + 1).is_some() && class_escape_matches(class, index, value, options)
-            {
-                return true;
-            }
-            index += if let Some(escape) = unicode_escape(class, index, options.unicode) {
-                escape.next_pc - index
-            } else {
-                2
-            };
-        } else if class.get(index + 1) == Some(&'-') && class.get(index + 2).is_some() {
-            let end = class[index + 2];
-            if class_range_contains(class[index], end, value, options.ignore_case) {
-                return true;
-            }
-            index += 3;
-        } else {
-            if chars_equal(class[index], value, options.ignore_case) {
-                return true;
-            }
-            index += 1;
-        }
-    }
-    false
-}
-
 fn quantifier(pattern: &[char], pc: usize) -> Quantifier {
     match pattern.get(pc) {
         Some('?') => Quantifier {
@@ -542,19 +517,6 @@ fn repeat_atom(
     }
     results.reverse();
     results
-}
-
-fn class_escape_matches(class: &[char], index: usize, value: char, options: MatchOptions) -> bool {
-    match class.get(index + 1).copied() {
-        Some('d') => value.is_ascii_digit(),
-        Some('D') => !value.is_ascii_digit(),
-        Some('s') => value.is_whitespace(),
-        Some('S') => !value.is_whitespace(),
-        Some('u') => unicode_escape(class, index, options.unicode)
-            .is_some_and(|escape| chars_equal(value, escape.value, options.ignore_case)),
-        Some(escaped) => chars_equal(regexp_control_escape(escaped), value, options.ignore_case),
-        None => false,
-    }
 }
 
 fn match_group(

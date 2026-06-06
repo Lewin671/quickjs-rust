@@ -34,6 +34,10 @@ pub(super) fn class_range_contains(start: char, end: char, value: char, ignore_c
     }
 }
 
+pub(super) fn regexp_word_char(value: char) -> bool {
+    value.is_ascii_alphanumeric() || value == '_'
+}
+
 pub(super) fn unicode_escape(pattern: &[char], pc: usize, unicode: bool) -> Option<ParsedEscape> {
     if pattern.get(pc + 1) != Some(&'u') {
         return None;

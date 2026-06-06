@@ -150,7 +150,6 @@ fn string_split_regexp(
 
         if match_start == match_end && match_start == segment_start {
             next_search += 1;
-            trailing_empty = match_start == input_len;
             continue;
         }
 

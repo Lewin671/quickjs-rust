@@ -59,6 +59,14 @@ fn evaluates_string_sequence_builtins() {
         Ok(Value::String("|||".to_owned()))
     );
     assert_eq!(
+        eval("'x'.split(/.?/).join('|');"),
+        Ok(Value::String("|".to_owned()))
+    );
+    assert_eq!(
+        eval("'x'.split(/\\w/).join('|');"),
+        Ok(Value::String("|".to_owned()))
+    );
+    assert_eq!(
         eval("'hello'.split(new RegExp).join('|');"),
         Ok(Value::String("h|e|l|l|o".to_owned()))
     );
