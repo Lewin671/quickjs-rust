@@ -487,6 +487,7 @@ cases/object-get-own-property-names-prototype-negative.js
 cases/object-get-own-property-symbols-basic.js
 cases/object-get-own-property-descriptor-array-length.js
 cases/object-get-own-property-descriptor-basic.js
+cases/object-get-own-property-descriptor-date-local-methods.js
 cases/object-get-own-property-descriptor-function-basic.js
 cases/object-get-own-property-descriptor-global-builtins.js
 cases/object-get-own-property-descriptor-missing.js

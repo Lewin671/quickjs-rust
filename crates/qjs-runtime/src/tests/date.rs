@@ -18,6 +18,34 @@ fn evaluates_date_builtins() {
         Ok(Value::Number(0.0))
     );
     assert_eq!(
+        eval("Date.prototype.getMonth.length;"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval("Date.prototype.getDate.length;"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval("Date.prototype.getDay.length;"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval("Date.prototype.getHours.length;"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval("Date.prototype.getMinutes.length;"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval("Date.prototype.getSeconds.length;"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval("Date.prototype.getMilliseconds.length;"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
         eval("Date.prototype.getYear.length;"),
         Ok(Value::Number(0.0))
     );
@@ -35,6 +63,34 @@ fn evaluates_date_builtins() {
     );
     assert_eq!(
         eval("Date.prototype.setYear.length;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval("Date.prototype.setFullYear.length;"),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval("Date.prototype.setMonth.length;"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval("Date.prototype.setDate.length;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval("Date.prototype.setHours.length;"),
+        Ok(Value::Number(4.0))
+    );
+    assert_eq!(
+        eval("Date.prototype.setMinutes.length;"),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval("Date.prototype.setSeconds.length;"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval("Date.prototype.setMilliseconds.length;"),
         Ok(Value::Number(1.0))
     );
     assert_eq!(
@@ -128,6 +184,24 @@ fn evaluates_date_builtins() {
     assert_eq!(
         eval("Date.prototype.toGMTString === Date.prototype.toUTCString;"),
         Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(Date.prototype, 'getMonth'); (d.value === Date.prototype.getMonth) + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("true:true:false:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(Date.prototype, 'setMonth'); (d.value === Date.prototype.setMonth) + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("true:true:false:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(Date.prototype, 'toLocaleString'); (d.value === Date.prototype.toLocaleString) + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("true:true:false:true".to_owned()))
     );
     assert_eq!(
         eval("new Date('1970-01-02T03:04:05.006Z').toGMTString();"),
