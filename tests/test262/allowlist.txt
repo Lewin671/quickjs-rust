@@ -669,6 +669,13 @@ cases/arguments-index-basic.js
 cases/function-extra-arguments-basic.js
 cases/function-missing-parameter-basic.js
 cases/function-length-basic.js
+cases/rest-parameters-arrow-function.js
+cases/rest-parameters-expected-argument-count.js
+cases/rest-parameters-no-alias-arguments.js
+cases/rest-parameters-rest-index.js
+cases/rest-parameters-apply.js
+cases/rest-parameters-call.js
+cases/rest-parameters-produce-array.js
 cases/function-closure-return-basic.js
 cases/function-closure-argument-basic.js
 cases/function-constructor-prototype-function-valued.js
