@@ -239,7 +239,7 @@ rust_source_syntax_supported() {
 }
 rust_features_supported() {
   local entries; entries="$(list_entries "$1")"
-  [[ "${2:-}" == test/built-ins/RegExp/prototype/Symbol.split/* ]] && entries="$(printf '%s\n' "$entries" | grep -Fxv 'Symbol.species' || true)"; [[ "${2:-}" == test/built-ins/Array/prototype/with/* || "${2:-}" == test/built-ins/Array/prototype/toReversed/* || "${2:-}" == test/built-ins/Array/prototype/toSpliced/* || "${2:-}" == test/built-ins/Array/prototype/toSorted/* ]] && entries="$(printf '%s\n' "$entries" | grep -Fxv -e 'change-array-by-copy' -e 'exponentiation' || true)"
+  [[ "${2:-}" == test/built-ins/RegExp/prototype/Symbol.split/* ]] && entries="$(printf '%s\n' "$entries" | grep -Fxv 'Symbol.species' || true)"; [[ "${2:-}" == test/built-ins/Array/prototype/with/* || "${2:-}" == test/built-ins/Array/prototype/toReversed/* || "${2:-}" == test/built-ins/Array/prototype/toSpliced/* || "${2:-}" == test/built-ins/Array/prototype/toSorted/* ]] && entries="$(printf '%s\n' "$entries" | grep -Fxv -e 'change-array-by-copy' -e 'exponentiation' || true)"; [[ "${2:-}" == test/built-ins/Object/entries/* || "${2:-}" == test/built-ins/Object/keys/* || "${2:-}" == test/built-ins/Object/values/* ]] && entries="$(printf '%s\n' "$entries" | grep -Fxv 'for-in-order' || true)"
   [ -z "$entries" ] || ! grep -Fvx -e 'Symbol' -e 'Symbol.isConcatSpreadable' -e 'Symbol.match' \
     -e 'Symbol.replace' -e 'Symbol.search' -e 'Symbol.split' -e 'Symbol.toPrimitive' \
     -e 'Reflect.construct' -e 'arrow-function' \
