@@ -172,6 +172,16 @@ pub(crate) fn inherited_primitive_prototype_descriptor(
         .or_else(|| inherited_object_prototype_descriptor(env, key))
 }
 
+pub(crate) fn inherited_primitive_prototype_symbol_descriptor(
+    env: &HashMap<String, Value>,
+    constructor_name: &str,
+    symbol: &ObjectRef,
+) -> Option<Property> {
+    constructor_named_prototype(env, constructor_name)
+        .and_then(|prototype| prototype.symbol_property(symbol))
+        .or_else(|| object_prototype(env).and_then(|prototype| prototype.symbol_property(symbol)))
+}
+
 pub(crate) fn inherited_string_prototype_property(
     env: &HashMap<String, Value>,
     key: &str,

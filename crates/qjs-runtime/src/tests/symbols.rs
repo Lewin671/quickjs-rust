@@ -43,6 +43,16 @@ fn evaluates_symbol_prototype_builtins() {
         eval("Object.prototype.toString.call(Symbol('x'));"),
         Ok(Value::String("[object Symbol]".to_owned()))
     );
+    assert_eq!(
+        eval("typeof Symbol.toStringTag;"),
+        Ok(Value::String("symbol".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let descriptor = Object.getOwnPropertyDescriptor(Symbol, 'toStringTag'); descriptor.writable + ':' + descriptor.enumerable + ':' + descriptor.configurable;"
+        ),
+        Ok(Value::String("false:false:false".to_owned()))
+    );
     assert!(eval("Symbol.prototype.toString.call({});").is_err());
     assert!(eval("Symbol.prototype.valueOf.call({});").is_err());
 }

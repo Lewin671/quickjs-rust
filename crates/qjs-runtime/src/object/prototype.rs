@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
 use crate::{
-    RuntimeError, Value, array_has_own_property, array_prototype, boolean, call_function, date,
-    error, function_intrinsic_prototype, function_own_property_descriptor, number, property_value,
-    string, to_property_key_value, value_prototype,
+    PropertyKey, RuntimeError, Value, array_has_own_property, array_prototype, boolean,
+    call_function, date, error, function_intrinsic_prototype, function_own_property_descriptor,
+    number, property_value, property_value_key, string, symbol, to_property_key_value,
+    value_prototype,
 };
 
 use super::descriptor::own_property_descriptor_key;
@@ -194,36 +195,50 @@ pub(crate) fn native_object_prototype_is_prototype_of(
     ))
 }
 
-pub(crate) fn native_object_prototype_to_string(this_value: Value) -> Result<Value, RuntimeError> {
-    let tag = match this_value {
-        Value::Undefined => "Undefined",
-        Value::Null => "Null",
-        Value::Array(_) => "Array",
-        Value::Function(_) => "Function",
-        Value::Map(_) => "Map",
-        Value::Set(_) => "Set",
-        Value::String(_) => "String",
-        Value::Number(_) => "Number",
-        Value::Boolean(_) => "Boolean",
-        Value::Object(object) => {
-            if boolean::is_boolean_object(&object) {
-                "Boolean"
-            } else if number::is_number_object(&object) {
-                "Number"
-            } else if string::is_string_object(&object) {
-                "String"
-            } else if date::is_date_object(&object) {
-                "Date"
-            } else if error::is_error_object(&object) {
-                "Error"
-            } else if let Some(tag) = object.to_string_tag() {
-                return Ok(Value::String(format!("[object {tag}]")));
-            } else {
-                "Object"
-            }
-        }
+pub(crate) fn native_object_prototype_to_string(
+    this_value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let tag = builtin_to_string_tag(this_value.clone());
+    let tag = match symbol::to_string_tag_symbol(env) {
+        Some(symbol) => match property_value_key(this_value, &PropertyKey::Symbol(symbol), env)? {
+            Value::String(tag) => tag,
+            _ => tag,
+        },
+        None => tag,
     };
     Ok(Value::String(format!("[object {tag}]")))
+}
+
+fn builtin_to_string_tag(value: Value) -> String {
+    match value {
+        Value::Undefined => "Undefined".to_owned(),
+        Value::Null => "Null".to_owned(),
+        Value::Array(_) => "Array".to_owned(),
+        Value::Function(_) => "Function".to_owned(),
+        Value::Map(_) => "Map".to_owned(),
+        Value::Set(_) => "Set".to_owned(),
+        Value::String(_) => "String".to_owned(),
+        Value::Number(_) => "Number".to_owned(),
+        Value::Boolean(_) => "Boolean".to_owned(),
+        Value::Object(object) => {
+            if boolean::is_boolean_object(&object) {
+                "Boolean".to_owned()
+            } else if number::is_number_object(&object) {
+                "Number".to_owned()
+            } else if string::is_string_object(&object) {
+                "String".to_owned()
+            } else if date::is_date_object(&object) {
+                "Date".to_owned()
+            } else if error::is_error_object(&object) {
+                "Error".to_owned()
+            } else {
+                object
+                    .to_string_tag()
+                    .unwrap_or_else(|| "Object".to_owned())
+            }
+        }
+    }
 }
 
 pub(crate) fn native_object_prototype_to_locale_string(

@@ -19,6 +19,21 @@ fn evaluates_object_prototype_methods() {
         Ok(Value::String("[object Date]".to_owned()))
     );
     assert_eq!(
+        eval(
+            "let object = {}; object[Symbol.toStringTag] = 'custom'; Object.prototype.toString.call(object);"
+        ),
+        Ok(Value::String("[object custom]".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; object[Symbol.toStringTag] = 86; Object.prototype.toString.call(object);"
+        ),
+        Ok(Value::String("[object Object]".to_owned()))
+    );
+    assert!(
+        eval("let object = {}; Object.defineProperty(object, Symbol.toStringTag, { get: function() { throw new Error('tag'); } }); Object.prototype.toString.call(object);").is_err()
+    );
+    assert_eq!(
         eval("Object.prototype.toLocaleString.length;"),
         Ok(Value::Number(0.0))
     );

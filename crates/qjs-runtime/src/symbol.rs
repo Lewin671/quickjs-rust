@@ -18,6 +18,14 @@ pub(crate) fn install_symbol(
     symbol_prototype.set_to_string_tag("Symbol");
 
     let symbol_function = Function::new_native(Some("Symbol"), 0, NativeFunction::Symbol, false);
+    let to_string_tag = Value::Object(symbol_object(
+        Some(symbol_prototype.clone()),
+        Value::String("Symbol.toStringTag".to_owned()),
+    ));
+    symbol_function.properties.borrow_mut().insert(
+        "toStringTag".to_owned(),
+        Property::data(to_string_tag, false, false, false),
+    );
     symbol_function.properties.borrow_mut().insert(
         "for".to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
@@ -146,6 +154,19 @@ pub(crate) fn native_symbol_key_for(
 
 pub(crate) fn is_symbol_object(object: &ObjectRef) -> bool {
     object.own_property(SYMBOL_DATA_PROPERTY).is_some()
+}
+
+pub(crate) fn to_string_tag_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+    let Some(Value::Function(symbol_function)) = env.get("Symbol") else {
+        return None;
+    };
+    match symbol_function.properties.borrow().get("toStringTag") {
+        Some(Property {
+            value: Value::Object(symbol),
+            ..
+        }) => Some(symbol.clone()),
+        _ => None,
+    }
 }
 
 pub(crate) fn native_symbol_prototype_description(

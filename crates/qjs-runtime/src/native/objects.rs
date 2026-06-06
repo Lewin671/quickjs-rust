@@ -69,7 +69,7 @@ pub(super) fn call_object_native(
             object::native_object_prototype_property_is_enumerable(this_value, argument_values)?
         }
         NativeFunction::ObjectPrototypeToString => {
-            object::native_object_prototype_to_string(this_value)?
+            object::native_object_prototype_to_string(this_value, env)?
         }
         NativeFunction::ObjectPrototypeToLocaleString => {
             object::native_object_prototype_to_locale_string(this_value, env)?

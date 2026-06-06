@@ -25,7 +25,7 @@ pub(crate) fn native_array_prototype_to_string(
     if matches!(join, Value::Function(_)) {
         return call_function(join, receiver, Vec::new(), env, false);
     }
-    object::native_object_prototype_to_string(receiver)
+    object::native_object_prototype_to_string(receiver, env)
 }
 
 pub(crate) fn array_join(

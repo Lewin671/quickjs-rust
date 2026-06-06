@@ -19,8 +19,8 @@ pub(crate) use key::{PropertyKey, to_property_key_value};
 pub(crate) use prototype::{
     array_prototype, array_prototype_property, constructor_prototype, function_intrinsic_prototype,
     function_prototype, function_prototype_property, inherited_object_prototype_property,
-    inherited_primitive_prototype_descriptor, inherited_string_prototype_property,
-    object_prototype, string_prototype, value_prototype,
+    inherited_primitive_prototype_descriptor, inherited_primitive_prototype_symbol_descriptor,
+    inherited_string_prototype_property, object_prototype, string_prototype, value_prototype,
 };
 
 pub(crate) fn has_property(
@@ -168,12 +168,38 @@ fn symbol_property_value(
         Value::Set(set) => {
             property_descriptor_value(set.object().symbol_property(symbol), receiver, env)
         }
-        Value::Array(_) | Value::Function(_) => Ok(Value::Undefined),
-        Value::String(_)
-        | Value::Number(_)
-        | Value::Boolean(_)
-        | Value::Null
-        | Value::Undefined => Ok(Value::Undefined),
+        Value::Function(function) => property_descriptor_value(
+            function
+                .internal_prototype_override()
+                .unwrap_or_else(|| function_intrinsic_prototype(env))
+                .and_then(|prototype| prototype.symbol_property(symbol)),
+            receiver,
+            env,
+        ),
+        Value::Array(elements) => property_descriptor_value(
+            elements
+                .prototype_override()
+                .unwrap_or_else(|| array_prototype(env))
+                .and_then(|prototype| prototype.symbol_property(symbol)),
+            receiver,
+            env,
+        ),
+        Value::String(_) => property_descriptor_value(
+            inherited_primitive_prototype_symbol_descriptor(env, "String", symbol),
+            receiver,
+            env,
+        ),
+        Value::Number(_) => property_descriptor_value(
+            inherited_primitive_prototype_symbol_descriptor(env, "Number", symbol),
+            receiver,
+            env,
+        ),
+        Value::Boolean(_) => property_descriptor_value(
+            inherited_primitive_prototype_symbol_descriptor(env, "Boolean", symbol),
+            receiver,
+            env,
+        ),
+        Value::Null | Value::Undefined => Ok(Value::Undefined),
     }
 }
 

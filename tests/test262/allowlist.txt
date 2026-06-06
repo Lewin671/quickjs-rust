@@ -572,6 +572,7 @@ cases/object-to-string-direct-basic.js
 cases/object-to-string-date.js
 cases/object-to-string-length.js
 cases/object-to-string-own-property.js
+cases/object-to-string-symbol-tag.js
 cases/object-prototype-to-locale-string-primitive-getter.js
 cases/object-to-locale-string-basic.js
 cases/object-to-locale-string-length.js
@@ -914,6 +915,7 @@ cases/string-prototype-trim-start-basic.js
 cases/string-prototype-trim-start-length.js
 cases/symbol-registry-basic.js
 cases/symbol-prototype-description-to-string.js
+cases/symbol-to-string-tag-basic.js
 cases/template-literal-no-substitution-basic.js
 cases/weak-map-basic.js
 cases/weak-set-basic.js
