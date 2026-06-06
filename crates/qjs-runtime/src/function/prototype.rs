@@ -184,6 +184,13 @@ pub(crate) fn native_function_prototype_to_string(
     )))
 }
 
+pub(crate) fn native_throw_type_error() -> Result<Value, RuntimeError> {
+    Err(RuntimeError {
+        thrown: None,
+        message: "TypeError: restricted function property access".to_owned(),
+    })
+}
+
 pub(crate) fn function_call_this(
     this_arg: Option<Value>,
     env: &HashMap<String, Value>,

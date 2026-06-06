@@ -141,7 +141,10 @@ impl<'a> Vm<'a> {
                 Op::NewArray { count, holes } => self.new_array(count, holes)?,
                 Op::NewObject(kinds) => self.new_object(&kinds)?,
                 Op::EnumerateKeys => self.enumerate_keys()?,
-                Op::GetProp => self.get_prop()?,
+                Op::GetProp => {
+                    let result = self.get_prop();
+                    self.handle_runtime_result(result)?;
+                }
                 Op::SetProp { is_strict } => {
                     let result = self.set_prop(is_strict);
                     self.handle_runtime_result(result)?;

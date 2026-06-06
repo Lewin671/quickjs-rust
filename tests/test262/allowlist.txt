@@ -660,6 +660,7 @@ cases/function-prototype-call-boxes-number-this.js
 cases/function-prototype-call-global-this.js
 cases/function-prototype-call-length.js
 cases/function-prototype-inheritance-basic.js
+cases/function-prototype-restricted-properties.js
 cases/function-prototype-apply-basic.js
 cases/function-prototype-apply-arguments-object-params.js
 cases/function-prototype-apply-null-args.js

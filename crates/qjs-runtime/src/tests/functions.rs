@@ -87,6 +87,18 @@ fn evaluates_function_declarations_and_calls() {
         Ok(Value::String("true:true:false:true".to_owned()))
     );
     assert_eq!(
+        eval(
+            "let a = Object.getOwnPropertyDescriptor(Function.prototype, 'arguments'); let c = Object.getOwnPropertyDescriptor(Function.prototype, 'caller'); (typeof a.get) + ':' + (a.get === a.set) + ':' + (a.get === c.get) + ':' + a.enumerable + ':' + a.configurable;"
+        ),
+        Ok(Value::String("function:true:true:false:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let got = false; let set = false; try { Function.prototype.arguments; } catch (error) { got = error instanceof TypeError; } try { Function.prototype.arguments = 1; } catch (error) { set = error instanceof TypeError; } got + ':' + set;"
+        ),
+        Ok(Value::String("true:true".to_owned()))
+    );
+    assert_eq!(
         eval("Function.prototype.toString.call(Array.isArray).includes('[native code]');"),
         Ok(Value::Boolean(true))
     );

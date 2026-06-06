@@ -50,6 +50,20 @@ pub(crate) fn install_function(
             false,
         )),
     );
+    let throw_type_error = Value::Function(Function::new_native(
+        Some("ThrowTypeError"),
+        0,
+        NativeFunction::ThrowTypeError,
+        false,
+    ));
+    let restricted_property = Property::accessor(
+        Some(throw_type_error.clone()),
+        Some(throw_type_error),
+        false,
+        true,
+    );
+    function_prototype.define_property("arguments".to_owned(), restricted_property.clone());
+    function_prototype.define_property("caller".to_owned(), restricted_property);
     function_constructor.properties.borrow_mut().insert(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(function_prototype)),
