@@ -260,28 +260,40 @@ impl ObjectRef {
     }
 
     pub(crate) fn own_property_keys(&self) -> Vec<String> {
-        let properties = self.properties.borrow();
-        self.property_order
-            .borrow()
-            .iter()
-            .filter(|key| !is_internal_property_key(key))
-            .filter(|key| {
-                properties
-                    .get(key.as_str())
-                    .is_some_and(|property| property.enumerable)
-            })
-            .cloned()
-            .collect()
+        self.ordered_property_names(|property| property.enumerable)
     }
 
     pub(crate) fn own_property_names(&self) -> Vec<String> {
+        self.ordered_property_names(|_| true)
+    }
+
+    fn ordered_property_names(&self, include: impl Fn(&Property) -> bool) -> Vec<String> {
         let properties = self.properties.borrow();
-        self.property_order
-            .borrow()
-            .iter()
-            .filter(|key| !is_internal_property_key(key))
-            .filter(|key| properties.contains_key(key.as_str()))
-            .cloned()
+        let mut indices = Vec::new();
+        let mut strings = Vec::new();
+
+        for key in self.property_order.borrow().iter() {
+            if is_internal_property_key(key) {
+                continue;
+            }
+            let Some(property) = properties.get(key.as_str()) else {
+                continue;
+            };
+            if !include(property) {
+                continue;
+            }
+            if let Some(index) = array_index_property_key(key) {
+                indices.push((index, key.clone()));
+            } else {
+                strings.push(key.clone());
+            }
+        }
+
+        indices.sort_by_key(|(index, _)| *index);
+        indices
+            .into_iter()
+            .map(|(_, key)| key)
+            .chain(strings)
             .collect()
     }
 
@@ -345,4 +357,10 @@ impl ObjectRef {
 
 fn is_internal_property_key(key: &str) -> bool {
     key.starts_with('\0')
+}
+
+fn array_index_property_key(key: &str) -> Option<u32> {
+    key.parse::<u32>()
+        .ok()
+        .filter(|index| *index < u32::MAX && index.to_string() == key)
 }
