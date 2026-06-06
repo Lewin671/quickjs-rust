@@ -93,7 +93,7 @@ pub(super) fn set_property(
         }
         Value::Function(function) => {
             if apply_property_setter(
-                function.properties.borrow().get(&key).cloned(),
+                function_property_for_set(&function, env, &key),
                 Value::Function(function.clone()),
                 value.clone(),
                 env,
@@ -328,7 +328,7 @@ fn property_for_set(
     };
     match object {
         Value::Object(object) => object.property(key),
-        Value::Function(function) => function.properties.borrow().get(key).cloned(),
+        Value::Function(function) => function_property_for_set(function, env, key),
         Value::Array(elements) => elements.property(key).or_else(|| {
             elements
                 .prototype_override()
@@ -339,6 +339,17 @@ fn property_for_set(
         Value::Set(set) => set.object().property(key),
         _ => None,
     }
+}
+
+fn function_property_for_set(
+    function: &crate::Function,
+    env: &HashMap<String, Value>,
+    key: &str,
+) -> Option<Property> {
+    function.properties.borrow().get(key).cloned().or_else(|| {
+        value_prototype(Value::Function(function.clone()), env)
+            .and_then(|prototype| prototype.property(key))
+    })
 }
 
 fn symbol_property_for_set(

@@ -296,6 +296,12 @@ fn evaluates_function_declarations_and_calls() {
         Ok(Value::Boolean(false))
     );
     assert_eq!(
+        eval(
+            "function f() {} let data = 'data'; Object.defineProperty(Function.prototype, 'prop', { get: function() { return data; }, set: function(value) { data = value; }, configurable: true }); let bound = f.bind({}); bound.prop = 'overrideData'; let result = bound.hasOwnProperty('prop') + ':' + bound.prop + ':' + data; delete Function.prototype.prop; result;"
+        ),
+        Ok(Value::String("false:overrideData:overrideData".to_owned()))
+    );
+    assert_eq!(
         eval("function add(a, b) { return a + b; } add.call.propertyIsEnumerable('length');"),
         Ok(Value::Boolean(false))
     );
