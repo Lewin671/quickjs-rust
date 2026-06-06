@@ -243,7 +243,7 @@ rust_features_supported() {
   [ -z "$entries" ] || ! grep -Fvx -e 'Symbol' -e 'Symbol.isConcatSpreadable' -e 'Symbol.match' \
     -e 'Symbol.replace' -e 'Symbol.search' -e 'Symbol.split' -e 'Symbol.toPrimitive' \
     -e 'Reflect.construct' -e 'arrow-function' \
-    -e 'array-find-from-last' -e 'Array.prototype.at' -e 'Array.prototype.includes' -e 'Array.prototype.toReversed' -e 'Array.prototype.toSorted' -e 'Array.prototype.toSpliced' -e 'Array.prototype.with' -e 'Object.hasOwn' -e 'promise-with-resolvers' -e 'RegExp.escape' -e 'string-trimming' -e 'String.prototype.at' -e 'String.prototype.endsWith' -e 'String.prototype.includes' -e 'String.prototype.isWellFormed' -e 'String.prototype.replaceAll' -e 'String.prototype.toWellFormed' -e 'String.prototype.trimEnd' -e 'String.prototype.trimStart' \
+    -e 'array-find-from-last' -e 'Array.prototype.at' -e 'Array.prototype.includes' -e 'Array.prototype.toReversed' -e 'Array.prototype.toSorted' -e 'Array.prototype.toSpliced' -e 'Array.prototype.with' -e 'Object.hasOwn' -e 'promise-with-resolvers' -e 'RegExp.escape' -e 'string-trimming' -e 'String.fromCodePoint' -e 'String.prototype.at' -e 'String.prototype.endsWith' -e 'String.prototype.includes' -e 'String.prototype.isWellFormed' -e 'String.prototype.replaceAll' -e 'String.prototype.toWellFormed' -e 'String.prototype.trimEnd' -e 'String.prototype.trimStart' \
     <<<"$entries" >/dev/null
 }
 rust_includes_supported() {

@@ -23,17 +23,34 @@ fn evaluates_string_constructor_and_statics() {
         Ok(Value::Number(56320.0))
     );
     assert_eq!(
-        eval("String.fromCodePoint(65, 128512, 67);"),
-        Ok(Value::String("A😀C".to_owned()))
+        eval(
+            "let value = String.fromCodePoint(65, 128512, 67); value.length + ':' + value.charCodeAt(0) + ':' + value.charCodeAt(1) + ':' + value.charCodeAt(2) + ':' + value.charCodeAt(3);"
+        ),
+        Ok(Value::String("4:65:55357:56832:67".to_owned()))
     );
     assert_eq!(
         eval("String.fromCodePoint();"),
         Ok(Value::String(String::new()))
     );
     assert_eq!(eval("String.fromCodePoint.length;"), Ok(Value::Number(1.0)));
-    assert!(eval("String.fromCodePoint(-1);").is_err());
-    assert!(eval("String.fromCodePoint(1.5);").is_err());
-    assert!(eval("String.fromCodePoint(1114112);").is_err());
+    assert_eq!(
+        eval(
+            "let caught = false; try { String.fromCodePoint(-1); } catch (error) { caught = error instanceof RangeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { String.fromCodePoint(1.5); } catch (error) { caught = error instanceof RangeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { String.fromCodePoint(1114112); } catch (error) { caught = error instanceof RangeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
     assert_eq!(eval("String.raw.length;"), Ok(Value::Number(1.0)));
     assert_eq!(
         eval("String.raw({ raw: ['a', 'b', 'c'] }, 1, 2);"),

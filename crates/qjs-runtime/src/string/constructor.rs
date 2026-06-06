@@ -50,10 +50,7 @@ pub(crate) fn native_string_from_code_point(
     let mut result = String::new();
     for value in argument_values.iter().cloned() {
         let code_point = to_code_point(value)?;
-        match char::from_u32(code_point) {
-            Some(character) => result.push(character),
-            None => result.push(char::REPLACEMENT_CHARACTER),
-        }
+        result.push_str(&string_from_code_point(code_point));
     }
     Ok(Value::String(result))
 }
@@ -91,11 +88,26 @@ fn to_code_point(value: Value) -> Result<u32, RuntimeError> {
     if !number.is_finite() || number < 0.0 || number > 0x10FFFF as f64 || number.trunc() != number {
         return Err(RuntimeError {
             thrown: None,
-            message: "String.fromCodePoint code point must be an integer in [0, 0x10FFFF]"
-                .to_owned(),
+            message:
+                "RangeError: String.fromCodePoint code point must be an integer in [0, 0x10FFFF]"
+                    .to_owned(),
         });
     }
     Ok(number as u32)
+}
+
+fn string_from_code_point(code_point: u32) -> String {
+    if code_point <= 0xFFFF {
+        return string_from_code_unit(code_point as u16);
+    }
+    let scalar = code_point - 0x10000;
+    let high = 0xD800 + ((scalar >> 10) as u16);
+    let low = 0xDC00 + ((scalar & 0x3FF) as u16);
+    format!(
+        "{}{}",
+        string_from_code_unit(high),
+        string_from_code_unit(low)
+    )
 }
 
 fn require_object_coercible(value: Value, context: &str) -> Result<Value, RuntimeError> {
