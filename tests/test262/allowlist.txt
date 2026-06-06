@@ -457,6 +457,7 @@ cases/object-from-entries-length.js
 cases/object-from-entries-object-entry.js
 cases/object-from-entries-property-descriptor.js
 cases/object-from-entries-symbol-key.js
+cases/object-define-property-accessor-getter-env.js
 cases/object-define-property-data-defaults.js
 cases/object-define-property-data-enumerable.js
 cases/object-define-property-data-writable.js

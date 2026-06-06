@@ -219,6 +219,18 @@ fn evaluates_object_definition_and_creation_builtins() {
     );
     assert_eq!(
         eval(
+            "let accessed = false; let object = {}; Object.defineProperty(object, 'value', { get: function() { accessed = true; return 12; } }); object.value + ':' + accessed;"
+        ),
+        Ok(Value::String("12:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let accessed = false; let args = (function() { return arguments; })(1, 2, 3); Object.defineProperty(args, '0', { get: function() { accessed = true; return 12; } }); args[0] + ':' + accessed;"
+        ),
+        Ok(Value::String("12:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
             "let proto = {}; let object = Object.create(proto); Object.getPrototypeOf(object) === proto;"
         ),
         Ok(Value::Boolean(true))

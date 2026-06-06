@@ -303,8 +303,10 @@ impl<'a> Vm<'a> {
     fn get_prop(&mut self) -> Result<(), RuntimeError> {
         let key = to_property_key_value(self.pop()?, &mut self.globals)?;
         let object = self.pop()?;
-        self.stack
-            .push(get_property_key(object, &key, &mut self.globals)?);
+        let mut env = self.current_env();
+        let value = get_property_key(object, &key, &mut env)?;
+        self.apply_env(env);
+        self.stack.push(value);
         Ok(())
     }
 
@@ -364,7 +366,9 @@ impl<'a> Vm<'a> {
         let arguments = self.pop_arguments(argc)?;
         let key = to_property_key_value(self.pop()?, &mut self.globals)?;
         let this_value = self.pop()?;
-        let callee = get_property_key(this_value.clone(), &key, &mut self.globals)?;
+        let mut getter_env = self.current_env();
+        let callee = get_property_key(this_value.clone(), &key, &mut getter_env)?;
+        self.apply_env(getter_env);
         let mut env = self.call_env(&callee);
         let result = call_function(callee, this_value, arguments, &mut env.env, false);
         self.apply_call_env(env);
