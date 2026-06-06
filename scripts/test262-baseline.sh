@@ -240,7 +240,7 @@ skip_reason() {
 rust_features_supported() {
   local entries
   entries="$(list_entries "$1")"
-  ! grep -Fvx -e 'Symbol' -e 'Symbol.isConcatSpreadable' \
+  ! grep -Fvx -e 'Symbol' -e 'Symbol.isConcatSpreadable' -e 'Symbol.toPrimitive' \
     -e 'Reflect.construct' -e 'arrow-function' \
     -e 'array-find-from-last' -e 'String.prototype.replaceAll' \
     <<<"$entries" >/dev/null
