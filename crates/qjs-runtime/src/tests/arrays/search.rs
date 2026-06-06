@@ -35,6 +35,24 @@ fn evaluates_array_search_builtins() {
         eval("[false, 'false'].indexOf('false');"),
         Ok(Value::Number(1.0))
     );
+    assert_eq!(
+        eval("Array.prototype.indexOf.call('abc', 'b');"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval("Array.prototype.indexOf.call({ length: 3, 2: 'x' }, 'x');"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval("[, undefined].indexOf(undefined);"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval(
+            "let calls = 0; [0, 1].indexOf(1, { valueOf: function() { calls += 1; return 1; } }) + ':' + calls;"
+        ),
+        Ok(Value::String("1:1".to_owned()))
+    );
     assert_eq!(eval("[1, 2, 1].lastIndexOf(1);"), Ok(Value::Number(2.0)));
     assert_eq!(eval("[1, 2, 1].lastIndexOf(1, 1);"), Ok(Value::Number(0.0)));
     assert_eq!(
@@ -49,6 +67,24 @@ fn evaluates_array_search_builtins() {
     assert_eq!(
         eval("[false, 'false'].lastIndexOf(false);"),
         Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval("Array.prototype.lastIndexOf.call('abc', 'b');"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval("Array.prototype.lastIndexOf.call({ length: 3, 2: 'x' }, 'x');"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval("[undefined, ,].lastIndexOf(undefined);"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval(
+            "let calls = 0; [0, 1, 2].lastIndexOf(1, { valueOf: function() { calls += 1; return 1; } }) + ':' + calls;"
+        ),
+        Ok(Value::String("1:1".to_owned()))
     );
     assert_eq!(eval("[1, 2, 3].includes(2);"), Ok(Value::Boolean(true)));
     assert_eq!(eval("[1, 2, 3].includes(4);"), Ok(Value::Boolean(false)));

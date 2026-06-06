@@ -57,12 +57,12 @@ pub(super) fn array_search_start_index(
 
 pub(super) fn array_search_end_index(
     length: usize,
-    from_index: Value,
+    from_index: Option<Value>,
     env: &mut HashMap<String, Value>,
 ) -> Result<Option<usize>, RuntimeError> {
     let number = match from_index {
-        Value::Undefined => return Ok(Some(length - 1)),
-        value => to_number_with_env(value, env)?,
+        None => return Ok(Some(length - 1)),
+        Some(value) => to_number_with_env(value, env)?,
     };
     if number.is_nan() {
         return Ok(Some(0));

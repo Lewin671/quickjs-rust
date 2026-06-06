@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{RuntimeError, Value, property_value};
+use crate::{RuntimeError, Value, has_property, property_value};
 
 use super::array_like::array_like_length;
 use super::indexing::{array_at_index, array_search_end_index, array_search_start_index};
@@ -52,24 +52,23 @@ pub(crate) fn native_array_prototype_index_of(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let Value::Array(elements) = this_value else {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "Array.prototype.indexOf called on non-array".to_owned(),
-        });
-    };
-    if elements.is_empty() {
+    let source = array_like_length(this_value, "Array.prototype.indexOf", env)?;
+    if source.length == 0 {
         return Ok(Value::Number(-1.0));
     }
 
     let search_element = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let start = array_search_start_index(
-        elements.len(),
+        source.length,
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    for (index, element) in elements.to_vec().iter().enumerate().skip(start) {
-        if *element == search_element {
+    for index in start..source.length {
+        let key = index.to_string();
+        if !has_property(source.receiver.clone(), env, &key)? {
+            continue;
+        }
+        if property_value(source.receiver.clone(), &key, env)? == search_element {
             return Ok(Value::Number(index as f64));
         }
     }
@@ -81,28 +80,22 @@ pub(crate) fn native_array_prototype_last_index_of(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let Value::Array(elements) = this_value else {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "Array.prototype.lastIndexOf called on non-array".to_owned(),
-        });
-    };
-    if elements.is_empty() {
+    let source = array_like_length(this_value, "Array.prototype.lastIndexOf", env)?;
+    if source.length == 0 {
         return Ok(Value::Number(-1.0));
     }
 
     let search_element = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    let Some(start) = array_search_end_index(
-        elements.len(),
-        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
-        env,
-    )?
+    let Some(start) = array_search_end_index(source.length, argument_values.get(1).cloned(), env)?
     else {
         return Ok(Value::Number(-1.0));
     };
-    let elements = elements.to_vec();
     for index in (0..=start).rev() {
-        if elements[index] == search_element {
+        let key = index.to_string();
+        if !has_property(source.receiver.clone(), env, &key)? {
+            continue;
+        }
+        if property_value(source.receiver.clone(), &key, env)? == search_element {
             return Ok(Value::Number(index as f64));
         }
     }

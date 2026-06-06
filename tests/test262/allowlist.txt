@@ -73,6 +73,7 @@ cases/array-includes-length.js
 cases/array-includes-same-value-zero.js
 cases/array-includes-search-not-found.js
 cases/array-index-of-basic.js
+cases/array-index-of-array-like.js
 cases/array-index-of-empty.js
 cases/array-index-of-from-index.js
 cases/array-index-of-from-index-negative.js

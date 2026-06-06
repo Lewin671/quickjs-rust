@@ -54,10 +54,6 @@ impl ArrayRef {
         self.length.get()
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
-        self.length.get() == 0
-    }
-
     pub(crate) fn get(&self, index: usize) -> Option<Value> {
         if self.holes.borrow().contains(&index) {
             return None;
