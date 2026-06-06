@@ -64,6 +64,18 @@ fn evaluates_object_definition_and_creation_builtins() {
         ),
         Ok(Value::Number(9.0))
     );
+    assert_eq!(
+        eval(
+            "let object = {}; let descriptors = []; descriptors[0] = { value: 7, enumerable: true }; let result = Object.defineProperties(object, descriptors); (result === object) + ':' + object[0] + ':' + Object.keys(object)[0];"
+        ),
+        Ok(Value::String("true:7:0".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; let descriptors = []; Object.defineProperty(descriptors, 'prop', { get: function() { return { value: 8, enumerable: true }; }, enumerable: true }); Object.defineProperties(object, descriptors); object.prop;"
+        ),
+        Ok(Value::Number(8.0))
+    );
     assert_eq!(eval("Object.create.length;"), Ok(Value::Number(1.0)));
     assert_eq!(
         eval("let proto = { value: 7 }; let object = Object.create(proto); object.value;"),

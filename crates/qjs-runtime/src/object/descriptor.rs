@@ -34,7 +34,7 @@ pub(crate) fn native_object_define_properties(
     let descriptors = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
     if !matches!(
         descriptors,
-        Value::Object(_) | Value::Function(_) | Value::Map(_) | Value::Set(_)
+        Value::Array(_) | Value::Object(_) | Value::Function(_) | Value::Map(_) | Value::Set(_)
     ) {
         return Err(RuntimeError {
             thrown: None,
