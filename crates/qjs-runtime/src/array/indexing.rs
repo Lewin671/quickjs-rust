@@ -31,10 +31,11 @@ pub(super) fn array_at_index(
 pub(super) fn array_search_start_index(
     length: usize,
     from_index: Value,
+    env: &mut HashMap<String, Value>,
 ) -> Result<usize, RuntimeError> {
     let number = match from_index {
         Value::Undefined => 0.0,
-        value => to_number(value)?,
+        value => to_number_with_env(value, env)?,
     };
     if number.is_nan() {
         return Ok(0);
@@ -57,10 +58,11 @@ pub(super) fn array_search_start_index(
 pub(super) fn array_search_end_index(
     length: usize,
     from_index: Value,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Option<usize>, RuntimeError> {
     let number = match from_index {
         Value::Undefined => return Ok(Some(length - 1)),
-        value => to_number(value)?,
+        value => to_number_with_env(value, env)?,
     };
     if number.is_nan() {
         return Ok(Some(0));

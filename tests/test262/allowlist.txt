@@ -67,6 +67,7 @@ cases/array-for-each-callback-arguments.js
 cases/array-for-each-this-arg.js
 cases/array-for-each-length.js
 cases/array-includes-basic.js
+cases/array-includes-array-like.js
 cases/array-includes-from-index.js
 cases/array-includes-length.js
 cases/array-includes-same-value-zero.js

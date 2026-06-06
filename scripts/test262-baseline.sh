@@ -243,7 +243,7 @@ rust_features_supported() {
   ! grep -Fvx -e 'Symbol' -e 'Symbol.isConcatSpreadable' -e 'Symbol.match' \
     -e 'Symbol.replace' -e 'Symbol.search' -e 'Symbol.split' -e 'Symbol.toPrimitive' \
     -e 'Reflect.construct' -e 'arrow-function' \
-    -e 'array-find-from-last' -e 'Array.prototype.at' -e 'RegExp.escape' -e 'String.prototype.endsWith' -e 'String.prototype.includes' -e 'String.prototype.isWellFormed' -e 'String.prototype.replaceAll' -e 'String.prototype.toWellFormed' \
+    -e 'array-find-from-last' -e 'Array.prototype.at' -e 'Array.prototype.includes' -e 'RegExp.escape' -e 'String.prototype.endsWith' -e 'String.prototype.includes' -e 'String.prototype.isWellFormed' -e 'String.prototype.replaceAll' -e 'String.prototype.toWellFormed' \
     <<<"$entries" >/dev/null
 }
 rust_includes_supported() {

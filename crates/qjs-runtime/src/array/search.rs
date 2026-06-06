@@ -25,34 +25,32 @@ pub(crate) fn native_array_prototype_at(
 pub(crate) fn native_array_prototype_includes(
     this_value: Value,
     argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let Value::Array(elements) = this_value else {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "Array.prototype.includes called on non-array".to_owned(),
-        });
-    };
-    if elements.is_empty() {
+    let source = array_like_length(this_value, "Array.prototype.includes", env)?;
+    if source.length == 0 {
         return Ok(Value::Boolean(false));
     }
 
     let search_element = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let start = array_search_start_index(
-        elements.len(),
+        source.length,
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
     )?;
-    Ok(Value::Boolean(
-        elements
-            .to_vec()
-            .iter()
-            .skip(start)
-            .any(|element| same_value_zero(element, &search_element)),
-    ))
+    for index in start..source.length {
+        let element = property_value(source.receiver.clone(), &index.to_string(), env)?;
+        if same_value_zero(&element, &search_element) {
+            return Ok(Value::Boolean(true));
+        }
+    }
+    Ok(Value::Boolean(false))
 }
 
 pub(crate) fn native_array_prototype_index_of(
     this_value: Value,
     argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let Value::Array(elements) = this_value else {
         return Err(RuntimeError {
@@ -68,6 +66,7 @@ pub(crate) fn native_array_prototype_index_of(
     let start = array_search_start_index(
         elements.len(),
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
     )?;
     for (index, element) in elements.to_vec().iter().enumerate().skip(start) {
         if *element == search_element {
@@ -80,6 +79,7 @@ pub(crate) fn native_array_prototype_index_of(
 pub(crate) fn native_array_prototype_last_index_of(
     this_value: Value,
     argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let Value::Array(elements) = this_value else {
         return Err(RuntimeError {
@@ -95,6 +95,7 @@ pub(crate) fn native_array_prototype_last_index_of(
     let Some(start) = array_search_end_index(
         elements.len(),
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
     )?
     else {
         return Ok(Value::Number(-1.0));
