@@ -5,6 +5,7 @@ pub(crate) struct Property {
     pub(crate) value: Value,
     pub(crate) get: Option<Value>,
     pub(crate) set: Option<Value>,
+    pub(crate) accessor: bool,
     pub(crate) enumerable: bool,
     pub(crate) writable: bool,
     pub(crate) configurable: bool,
@@ -16,6 +17,7 @@ impl Property {
             value,
             get: None,
             set: None,
+            accessor: false,
             enumerable,
             writable,
             configurable,
@@ -32,6 +34,7 @@ impl Property {
             value: Value::Undefined,
             get,
             set,
+            accessor: true,
             enumerable,
             writable: false,
             configurable,
@@ -43,6 +46,7 @@ impl Property {
             value,
             get: None,
             set: None,
+            accessor: false,
             enumerable: true,
             writable: true,
             configurable: true,
@@ -54,6 +58,7 @@ impl Property {
             value,
             get: None,
             set: None,
+            accessor: false,
             enumerable: false,
             writable: true,
             configurable: true,
@@ -61,7 +66,7 @@ impl Property {
     }
 
     pub(crate) fn is_accessor(&self) -> bool {
-        self.get.is_some() || self.set.is_some()
+        self.accessor
     }
 
     pub(crate) fn make_non_configurable(&mut self) {

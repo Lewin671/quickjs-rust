@@ -86,6 +86,18 @@ fn evaluates_object_definition_and_creation_builtins() {
     );
     assert_eq!(
         eval(
+            "let object = {}; Object.defineProperty(object, 'prop', { get: undefined, set: undefined, enumerable: true, configurable: true }); let before = Object.getOwnPropertyDescriptor(object, 'prop'); Object.defineProperty(object, 'prop', { value: 1001 }); let after = Object.getOwnPropertyDescriptor(object, 'prop'); before.hasOwnProperty('get') + ':' + after.hasOwnProperty('value') + ':' + after.value;"
+        ),
+        Ok(Value::String("true:true:1001".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; Object.defineProperty(object, 'prop', { get: undefined, set: undefined, configurable: false }); let caught = false; try { Object.defineProperty(object, 'prop', { value: 1001 }); } catch (error) { caught = error instanceof TypeError; } let after = Object.getOwnPropertyDescriptor(object, 'prop'); caught + ':' + after.hasOwnProperty('get') + ':' + after.hasOwnProperty('value');"
+        ),
+        Ok(Value::String("true:true:false".to_owned()))
+    );
+    assert_eq!(
+        eval(
             "let caught = false; let array = []; try { Object.defineProperty(array, 'length', { value: -1 }); } catch (error) { caught = error instanceof RangeError; } caught + ':' + array.length;"
         ),
         Ok(Value::String("true:0".to_owned()))
