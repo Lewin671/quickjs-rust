@@ -2,12 +2,15 @@ use std::collections::HashMap;
 
 use crate::{
     ObjectRef, Property, PropertyKey, RuntimeError, Value, function_own_property_descriptor,
-    function_own_symbol_property_descriptor, has_property, is_truthy, object_prototype,
-    property_value, to_property_key_value,
+    function_own_symbol_property_descriptor, object_prototype, to_property_key_value,
 };
 
 use super::{
     boxed_primitive,
+    descriptor_record::{
+        PropertyDescriptor, property_descriptor_object, resolve_property_definition,
+        to_property_descriptor_record,
+    },
     enumeration::{enumerable_property_entries, own_property_names},
 };
 
@@ -20,12 +23,12 @@ pub(crate) fn native_object_define_property(
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    let descriptor = to_property_descriptor(
+    let descriptor = to_property_descriptor_record(
         argument_values.get(2).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
 
-    if !define_property_on_value_key(target.clone(), key, descriptor)? {
+    if !define_property_descriptor_on_value_key(target.clone(), key, descriptor)? {
         return Err(RuntimeError {
             thrown: None,
             message: "Object.defineProperty failed".to_owned(),
@@ -47,8 +50,8 @@ pub(crate) fn native_object_define_properties(
     )?;
 
     for (key, descriptor_value) in enumerable_property_entries(descriptors, env)? {
-        let descriptor = to_property_descriptor(descriptor_value, env)?;
-        if !define_property_on_value(target.clone(), key, descriptor)? {
+        let descriptor = to_property_descriptor_record(descriptor_value, env)?;
+        if !define_property_descriptor_on_value(target.clone(), key, descriptor)? {
             return Err(RuntimeError {
                 thrown: None,
                 message: "Object.defineProperties failed".to_owned(),
@@ -168,12 +171,177 @@ pub(super) fn own_property_descriptor_key(
     }
 }
 
-pub(crate) fn define_property_on_value(
+fn define_property_descriptor_on_value(
     target: Value,
     key: String,
-    descriptor: Property,
+    descriptor: PropertyDescriptor,
 ) -> Result<bool, RuntimeError> {
-    define_property_on_value_key(target, PropertyKey::String(key), descriptor)
+    define_property_descriptor_on_value_key(target, PropertyKey::String(key), descriptor)
+}
+
+pub(crate) fn define_property_descriptor_on_value_key(
+    target: Value,
+    key: PropertyKey,
+    descriptor: PropertyDescriptor,
+) -> Result<bool, RuntimeError> {
+    let key = match key {
+        PropertyKey::String(key) => key,
+        PropertyKey::Symbol(symbol) => {
+            return define_symbol_property_descriptor_on_value(target, symbol, descriptor);
+        }
+    };
+    match &target {
+        Value::Object(object) => {
+            let existing = object.own_property(&key);
+            let defines_new_property = existing.is_none();
+            let Some(property) = resolve_property_definition(existing, descriptor) else {
+                return Ok(false);
+            };
+            if defines_new_property && !object.is_extensible() {
+                return Ok(false);
+            }
+            object.define_property(key, property);
+            Ok(true)
+        }
+        Value::Map(map) => {
+            let object = map.object();
+            let existing = object.own_property(&key);
+            let defines_new_property = existing.is_none();
+            let Some(property) = resolve_property_definition(existing, descriptor) else {
+                return Ok(false);
+            };
+            if defines_new_property && !object.is_extensible() {
+                return Ok(false);
+            }
+            object.define_property(key, property);
+            Ok(true)
+        }
+        Value::Set(set) => {
+            let object = set.object();
+            let existing = object.own_property(&key);
+            let defines_new_property = existing.is_none();
+            let Some(property) = resolve_property_definition(existing, descriptor) else {
+                return Ok(false);
+            };
+            if defines_new_property && !object.is_extensible() {
+                return Ok(false);
+            }
+            object.define_property(key, property);
+            Ok(true)
+        }
+        Value::Function(function) => {
+            let existing = function_own_property_descriptor(function, &key);
+            let defines_new_property = existing.is_none();
+            let Some(property) = resolve_property_definition(existing, descriptor) else {
+                return Ok(false);
+            };
+            if defines_new_property && !function.is_extensible() {
+                return Ok(false);
+            }
+            function.properties.borrow_mut().insert(key, property);
+            Ok(true)
+        }
+        Value::Array(elements) => {
+            let existing = crate::array_own_property_descriptor(elements, &key);
+            let defines_new_property = existing.is_none();
+            let Some(property) = resolve_property_definition(existing, descriptor.clone()) else {
+                return Ok(false);
+            };
+            if defines_new_property && !elements.is_extensible() {
+                return Ok(false);
+            }
+            if key == "length" {
+                if let Some(value) = descriptor.value {
+                    elements.set_len(crate::to_length(value)?);
+                }
+                if let Some(writable) = descriptor.writable {
+                    elements.set_length_writable(writable);
+                }
+            } else {
+                elements.define_property(key, property);
+            }
+            Ok(true)
+        }
+        _ => {
+            ensure_define_property_target(&target)?;
+            unreachable!("define property target validation should reject unsupported values")
+        }
+    }
+}
+
+fn define_symbol_property_descriptor_on_value(
+    target: Value,
+    symbol: ObjectRef,
+    descriptor: PropertyDescriptor,
+) -> Result<bool, RuntimeError> {
+    match &target {
+        Value::Object(object) => {
+            let existing = object.own_symbol_property(&symbol);
+            let defines_new_property = existing.is_none();
+            let Some(property) = resolve_property_definition(existing, descriptor) else {
+                return Ok(false);
+            };
+            if defines_new_property && !object.is_extensible() {
+                return Ok(false);
+            }
+            object.define_symbol_property(symbol, property);
+            Ok(true)
+        }
+        Value::Map(map) => {
+            let object = map.object();
+            let existing = object.own_symbol_property(&symbol);
+            let defines_new_property = existing.is_none();
+            let Some(property) = resolve_property_definition(existing, descriptor) else {
+                return Ok(false);
+            };
+            if defines_new_property && !object.is_extensible() {
+                return Ok(false);
+            }
+            object.define_symbol_property(symbol, property);
+            Ok(true)
+        }
+        Value::Set(set) => {
+            let object = set.object();
+            let existing = object.own_symbol_property(&symbol);
+            let defines_new_property = existing.is_none();
+            let Some(property) = resolve_property_definition(existing, descriptor) else {
+                return Ok(false);
+            };
+            if defines_new_property && !object.is_extensible() {
+                return Ok(false);
+            }
+            object.define_symbol_property(symbol, property);
+            Ok(true)
+        }
+        Value::Function(function) => {
+            let existing = function.own_symbol_property(&symbol);
+            let defines_new_property = existing.is_none();
+            let Some(property) = resolve_property_definition(existing, descriptor) else {
+                return Ok(false);
+            };
+            if defines_new_property && !function.is_extensible() {
+                return Ok(false);
+            }
+            function.define_symbol_property(symbol, property);
+            Ok(true)
+        }
+        Value::Array(elements) => {
+            let existing = elements.own_symbol_property(&symbol);
+            let defines_new_property = existing.is_none();
+            let Some(property) = resolve_property_definition(existing, descriptor) else {
+                return Ok(false);
+            };
+            if defines_new_property && !elements.is_extensible() {
+                return Ok(false);
+            }
+            elements.define_symbol_property(symbol, property);
+            Ok(true)
+        }
+        _ => {
+            ensure_define_property_target(&target)?;
+            Ok(false)
+        }
+    }
 }
 
 pub(crate) fn define_property_on_value_key(
@@ -369,106 +537,4 @@ fn ensure_define_property_target(target: &Value) -> Result<(), RuntimeError> {
             message: "Object.defineProperty target must be an object".to_owned(),
         }),
     }
-}
-
-pub(crate) fn to_property_descriptor(
-    value: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<Property, RuntimeError> {
-    if !matches!(
-        value,
-        Value::Object(_) | Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_)
-    ) {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "property descriptor must be an object".to_owned(),
-        });
-    }
-
-    let enumerable = descriptor_bool(value.clone(), "enumerable", env)?;
-    let configurable = descriptor_bool(value.clone(), "configurable", env)?;
-    let has_value = has_property(value.clone(), env, "value")?;
-    let descriptor_value = if has_value {
-        property_value(value.clone(), "value", env)?
-    } else {
-        Value::Undefined
-    };
-    let has_writable = has_property(value.clone(), env, "writable")?;
-    let writable = if has_writable {
-        is_truthy(&property_value(value.clone(), "writable", env)?)
-    } else {
-        false
-    };
-    let has_get = has_property(value.clone(), env, "get")?;
-    let get = if has_get {
-        accessor_function(property_value(value.clone(), "get", env)?, "get")?
-    } else {
-        None
-    };
-    let has_set = has_property(value.clone(), env, "set")?;
-    let set = if has_set {
-        accessor_function(property_value(value.clone(), "set", env)?, "set")?
-    } else {
-        None
-    };
-
-    if (has_get || has_set) && (has_value || has_writable) {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "property descriptor cannot mix accessor and data fields".to_owned(),
-        });
-    }
-    if has_get || has_set {
-        return Ok(Property::accessor(get, set, enumerable, configurable));
-    }
-
-    Ok(Property {
-        value: descriptor_value,
-        get: None,
-        set: None,
-        writable,
-        enumerable,
-        configurable,
-    })
-}
-
-fn descriptor_bool(
-    value: Value,
-    key: &str,
-    env: &mut HashMap<String, Value>,
-) -> Result<bool, RuntimeError> {
-    if has_property(value.clone(), env, key)? {
-        Ok(is_truthy(&property_value(value, key, env)?))
-    } else {
-        Ok(false)
-    }
-}
-
-fn accessor_function(value: Value, name: &str) -> Result<Option<Value>, RuntimeError> {
-    match value {
-        Value::Undefined => Ok(None),
-        Value::Function(_) => Ok(Some(value)),
-        _ => Err(RuntimeError {
-            thrown: None,
-            message: format!("property descriptor {name} must be callable or undefined"),
-        }),
-    }
-}
-
-fn property_descriptor_object(property: Property, prototype: Option<ObjectRef>) -> ObjectRef {
-    let mut properties = HashMap::from([
-        ("enumerable".to_owned(), Value::Boolean(property.enumerable)),
-        (
-            "configurable".to_owned(),
-            Value::Boolean(property.configurable),
-        ),
-    ]);
-    if property.is_accessor() {
-        properties.insert("get".to_owned(), property.get.unwrap_or(Value::Undefined));
-        properties.insert("set".to_owned(), property.set.unwrap_or(Value::Undefined));
-    } else {
-        properties.insert("value".to_owned(), property.value);
-        properties.insert("writable".to_owned(), Value::Boolean(property.writable));
-    }
-    ObjectRef::with_prototype(properties, prototype)
 }

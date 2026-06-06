@@ -61,6 +61,30 @@ fn evaluates_object_definition_and_creation_builtins() {
         Ok(Value::Boolean(true))
     );
     assert_eq!(
+        eval(
+            "let object = {}; let getter = function() { return 1; }; Object.defineProperty(object, 'value', { get: getter, enumerable: false, configurable: false }); try { Object.defineProperty(object, 'value', { get: getter, enumerable: true }); 'not thrown'; } catch (error) { let desc = Object.getOwnPropertyDescriptor(object, 'value'); desc.get === getter && desc.enumerable === false && desc.configurable === false; }"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; Object.defineProperty(object, 'value', { value: 101, configurable: false }); try { Object.defineProperty(object, 'value', { get: function() { return 1; } }); 'not thrown'; } catch (error) { let desc = Object.getOwnPropertyDescriptor(object, 'value'); desc.value === 101 && desc.writable === false && desc.configurable === false; }"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; let getter = function() { return 1; }; Object.defineProperty(object, 'value', { get: getter, configurable: false }); try { Object.defineProperty(object, 'value', { value: 101 }); 'not thrown'; } catch (error) { let desc = Object.getOwnPropertyDescriptor(object, 'value'); desc.get === getter && desc.configurable === false; }"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; let getter = function() { return 1; }; Object.defineProperty(object, 'value', { get: getter, configurable: false }); Object.defineProperty(object, 'value', {}); Object.getOwnPropertyDescriptor(object, 'value').get === getter;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("Object.defineProperties.length;"),
         Ok(Value::Number(2.0))
     );

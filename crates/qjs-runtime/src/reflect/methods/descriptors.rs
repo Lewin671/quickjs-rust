@@ -13,14 +13,14 @@ pub(crate) fn native_reflect_define_property(
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    let descriptor = object::to_property_descriptor(
+    let descriptor = object::to_property_descriptor_record(
         argument_values.get(2).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
 
-    Ok(Value::Boolean(object::define_property_on_value_key(
-        target, key, descriptor,
-    )?))
+    Ok(Value::Boolean(
+        object::define_property_descriptor_on_value_key(target, key, descriptor)?,
+    ))
 }
 
 pub(crate) fn native_reflect_delete_property(

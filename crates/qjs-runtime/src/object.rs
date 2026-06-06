@@ -1,5 +1,6 @@
 mod constructor;
 mod descriptor;
+mod descriptor_record;
 mod enumeration;
 mod from_entries;
 mod group_by;
@@ -11,10 +12,11 @@ pub(crate) use constructor::{
     boxed_primitive, native_object, native_object_assign, native_object_create, native_object_is,
 };
 pub(crate) use descriptor::{
-    define_property_on_value_key, native_object_define_properties, native_object_define_property,
+    define_property_descriptor_on_value_key, define_property_on_value_key,
+    native_object_define_properties, native_object_define_property,
     native_object_get_own_property_descriptor, native_object_get_own_property_descriptors,
-    to_property_descriptor,
 };
+pub(crate) use descriptor_record::to_property_descriptor_record;
 pub(crate) use enumeration::{
     native_object_entries, native_object_get_own_property_names,
     native_object_get_own_property_symbols, native_object_has_own, native_object_keys,
