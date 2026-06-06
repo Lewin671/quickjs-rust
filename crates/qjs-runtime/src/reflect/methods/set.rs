@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::reflect::target::ensure_reflect_object_target;
-use crate::{Property, RuntimeError, Value, call_function, to_length};
+use crate::{ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function, to_length};
 
 pub(crate) fn native_reflect_set(
     argument_values: &[Value],
@@ -9,7 +9,8 @@ pub(crate) fn native_reflect_set(
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     ensure_reflect_object_target(&target, "Reflect.set")?;
-    let key = crate::to_property_key(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
+    let key =
+        crate::to_property_key_value(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
     let value = argument_values.get(2).cloned().unwrap_or(Value::Undefined);
     let receiver = argument_values
         .get(3)
@@ -23,12 +24,12 @@ pub(crate) fn native_reflect_set(
 
 pub(crate) fn ordinary_set(
     target: Value,
-    key: &str,
+    key: &PropertyKey,
     value: Value,
     receiver: Value,
     env: &mut HashMap<String, Value>,
 ) -> Result<bool, RuntimeError> {
-    if let Some(property) = own_property_descriptor(&target, key) {
+    if let Some(property) = own_property_descriptor_key(&target, key) {
         return ordinary_set_with_descriptor(property, key, value, receiver, env);
     }
 
@@ -39,7 +40,10 @@ pub(crate) fn ordinary_set(
     set_receiver_data_property(receiver, key, value)
 }
 
-fn own_property_descriptor(target: &Value, key: &str) -> Option<Property> {
+fn own_property_descriptor_key(target: &Value, key: &PropertyKey) -> Option<Property> {
+    let PropertyKey::String(key) = key else {
+        return own_symbol_property_descriptor(target, key);
+    };
     match target {
         Value::Object(object) => object.own_property(key),
         Value::Map(map) => map.object().own_property(key),
@@ -54,9 +58,27 @@ fn own_property_descriptor(target: &Value, key: &str) -> Option<Property> {
     }
 }
 
+fn own_symbol_property_descriptor(target: &Value, key: &PropertyKey) -> Option<Property> {
+    let PropertyKey::Symbol(symbol) = key else {
+        unreachable!("symbol descriptor helper should only receive symbol keys");
+    };
+    match target {
+        Value::Object(object) => object.own_symbol_property(symbol),
+        Value::Map(map) => map.object().own_symbol_property(symbol),
+        Value::Set(set) => set.object().own_symbol_property(symbol),
+        Value::Array(_)
+        | Value::Function(_)
+        | Value::String(_)
+        | Value::Number(_)
+        | Value::Boolean(_)
+        | Value::Null
+        | Value::Undefined => None,
+    }
+}
+
 fn ordinary_set_with_descriptor(
     property: Property,
-    key: &str,
+    key: &PropertyKey,
     value: Value,
     receiver: Value,
     env: &mut HashMap<String, Value>,
@@ -76,9 +98,12 @@ fn ordinary_set_with_descriptor(
 
 fn set_receiver_data_property(
     receiver: Value,
-    key: &str,
+    key: &PropertyKey,
     value: Value,
 ) -> Result<bool, RuntimeError> {
+    let PropertyKey::String(key) = key else {
+        return set_receiver_symbol_data_property(receiver, key, value);
+    };
     match receiver {
         Value::Object(object) => {
             let descriptor = match object.own_property(key) {
@@ -180,4 +205,46 @@ fn set_receiver_data_property(
         | Value::Null
         | Value::Undefined => Ok(false),
     }
+}
+
+fn set_receiver_symbol_data_property(
+    receiver: Value,
+    key: &PropertyKey,
+    value: Value,
+) -> Result<bool, RuntimeError> {
+    let PropertyKey::Symbol(symbol) = key else {
+        unreachable!("symbol set helper should only receive symbol keys");
+    };
+    match receiver {
+        Value::Object(object) => set_object_symbol_data_property(object, symbol.clone(), value),
+        Value::Map(map) => set_object_symbol_data_property(map.object(), symbol.clone(), value),
+        Value::Set(set) => set_object_symbol_data_property(set.object(), symbol.clone(), value),
+        Value::Array(_)
+        | Value::Function(_)
+        | Value::String(_)
+        | Value::Number(_)
+        | Value::Boolean(_)
+        | Value::Null
+        | Value::Undefined => Ok(false),
+    }
+}
+
+fn set_object_symbol_data_property(
+    object: ObjectRef,
+    symbol: ObjectRef,
+    value: Value,
+) -> Result<bool, RuntimeError> {
+    let descriptor = match object.own_symbol_property(&symbol) {
+        Some(existing) if !existing.writable => return Ok(false),
+        Some(existing) => Property::data(
+            value,
+            existing.enumerable,
+            existing.writable,
+            existing.configurable,
+        ),
+        None if !object.is_extensible() => return Ok(false),
+        None => Property::enumerable(value),
+    };
+    object.define_symbol_property(symbol, descriptor);
+    Ok(true)
 }

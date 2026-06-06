@@ -4,14 +4,16 @@ use qjs_ast::ObjectPropertyKind;
 
 use crate::{
     ArrayRef, Function, GLOBAL_THIS_BINDING, ObjectRef, Property, RUNTIME_INTRINSIC_NAMES,
-    RuntimeError, Value, call_function, construct_function, initialize_builtins, is_truthy,
-    object_prototype, promise, to_property_key,
+    RuntimeError, Value, call_function, construct_function, initialize_builtins, is_truthy, object,
+    object_prototype, promise, to_property_key_value,
 };
 
 use super::ir::{Bytecode, Op};
 use super::util::{stack_underflow, typeof_value};
 use super::vm_call::{insert_scope_call_bindings, user_bytecode_function};
-use super::vm_props::{delete_property, get_property, property_set_uses_setter, set_property};
+use super::vm_props::{
+    delete_property, get_property_key, property_set_uses_setter, set_property_key,
+};
 use super::vm_result::FunctionBytecodeResult;
 use super::vm_try::TryFrame;
 
@@ -276,17 +278,22 @@ impl<'a> Vm<'a> {
         let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(&self.globals));
         for kind in kinds.iter().rev() {
             let value = self.pop()?;
-            let key = to_property_key(self.pop()?)?;
-            match kind {
-                ObjectPropertyKind::Data => {
-                    object.define_property(key, Property::enumerable(value))
-                }
-                ObjectPropertyKind::Getter => {
-                    object.define_property(key, Property::accessor(Some(value), None, true, true))
-                }
-                ObjectPropertyKind::Setter => {
-                    object.define_property(key, Property::accessor(None, Some(value), true, true))
-                }
+            let key = to_property_key_value(self.pop()?)?;
+            let descriptor = match kind {
+                ObjectPropertyKind::Data => Property::enumerable(value),
+                ObjectPropertyKind::Getter => Property::accessor(Some(value), None, true, true),
+                ObjectPropertyKind::Setter => Property::accessor(None, Some(value), true, true),
+            };
+            let success = object::define_property_on_value_key(
+                Value::Object(object.clone()),
+                key,
+                descriptor,
+            )?;
+            if !success {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: "object literal property definition failed".to_owned(),
+                });
             }
         }
         self.stack.push(Value::Object(object));
@@ -294,27 +301,30 @@ impl<'a> Vm<'a> {
     }
 
     fn get_prop(&mut self) -> Result<(), RuntimeError> {
-        let key = to_property_key(self.pop()?)?;
+        let key = to_property_key_value(self.pop()?)?;
         let object = self.pop()?;
         self.stack
-            .push(get_property(object, &key, &mut self.globals)?);
+            .push(get_property_key(object, &key, &mut self.globals)?);
         Ok(())
     }
 
     fn set_prop(&mut self) -> Result<(), RuntimeError> {
         let value = self.pop()?;
-        let key = to_property_key(self.pop()?)?;
+        let key = to_property_key_value(self.pop()?)?;
         let object = self.pop()?;
         let updates_global_binding = self.is_global_object(&object);
         let wrote_data = if property_set_uses_setter(&object, &key, &self.globals) {
             let mut env = self.current_env();
-            let wrote_data = set_property(object, key.clone(), value.clone(), &mut env)?;
+            let wrote_data = set_property_key(object, key.clone(), value.clone(), &mut env)?;
             self.apply_env(env);
             wrote_data
         } else {
-            set_property(object, key.clone(), value.clone(), &mut self.globals)?
+            set_property_key(object, key.clone(), value.clone(), &mut self.globals)?
         };
-        if updates_global_binding && wrote_data {
+        if updates_global_binding
+            && wrote_data
+            && let crate::PropertyKey::String(key) = key
+        {
             self.globals.insert(key, value.clone());
         }
         self.stack.push(value);
@@ -332,7 +342,7 @@ impl<'a> Vm<'a> {
     }
 
     fn delete_prop(&mut self) -> Result<(), RuntimeError> {
-        let key = to_property_key(self.pop()?)?;
+        let key = crate::to_property_key(self.pop()?)?;
         let object = self.pop()?;
         self.stack.push(delete_property(object, &key)?);
         Ok(())
@@ -352,9 +362,9 @@ impl<'a> Vm<'a> {
 
     fn call_method(&mut self, argc: usize) -> Result<(), RuntimeError> {
         let arguments = self.pop_arguments(argc)?;
-        let key = to_property_key(self.pop()?)?;
+        let key = to_property_key_value(self.pop()?)?;
         let this_value = self.pop()?;
-        let callee = get_property(this_value.clone(), &key, &mut self.globals)?;
+        let callee = get_property_key(this_value.clone(), &key, &mut self.globals)?;
         let mut env = self.call_env(&callee);
         let result = call_function(callee, this_value, arguments, &mut env.env, false);
         self.apply_call_env(env);

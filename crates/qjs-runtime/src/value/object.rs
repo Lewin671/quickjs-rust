@@ -89,6 +89,15 @@ impl ObjectRef {
         })
     }
 
+    pub(crate) fn symbol_property(&self, symbol: &ObjectRef) -> Option<Property> {
+        self.own_symbol_property(symbol).or_else(|| {
+            self.prototype
+                .borrow()
+                .as_ref()
+                .and_then(|proto| proto.symbol_property(symbol))
+        })
+    }
+
     pub(crate) fn set(&self, key: String, value: Value) {
         let mut properties = self.properties.borrow_mut();
         if let Some(property) = properties.get_mut(&key) {

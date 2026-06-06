@@ -164,6 +164,12 @@ fn evaluates_reflect_prototype_builtins() {
     );
     assert_eq!(
         eval(
+            "let symbol = Symbol(); let object = {}; Reflect.set(object, symbol, 59) && object[symbol];"
+        ),
+        Ok(Value::Number(59.0))
+    );
+    assert_eq!(
+        eval(
             "let proto = { marker: 7 }; let object = {}; Reflect.setPrototypeOf(object, proto); object.marker;"
         ),
         Ok(Value::Number(7.0))

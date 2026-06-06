@@ -423,6 +423,8 @@ cases/object-assign-source-string.js
 cases/object-assign-target-set-not-writable.js
 cases/object-assign-target-set-user-error.js
 cases/object-assign-sealed-accessor-target.js
+cases/object-assign-sealed-symbol-accessor-target.js
+cases/object-assign-sealed-symbol-data-target.js
 cases/object-assign-null-undefined-source.js
 cases/object-constructor-basic.js
 cases/object-constructor-object-identity.js

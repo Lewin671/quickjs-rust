@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 
 use crate::{
-    Function, ObjectRef, Property, RuntimeError, Value, boolean::BOOLEAN_DATA_PROPERTY,
-    function_prototype, number::NUMBER_DATA_PROPERTY, string::STRING_DATA_PROPERTY,
+    Function, ObjectRef, Property, PropertyKey, RuntimeError, Value,
+    boolean::BOOLEAN_DATA_PROPERTY, function_prototype, number::NUMBER_DATA_PROPERTY,
+    string::STRING_DATA_PROPERTY,
 };
 
 use super::descriptor::native_object_define_properties;
-use super::enumeration::enumerable_property_entries;
+use super::enumeration::enumerable_property_entries_with_symbols;
 
 pub(crate) fn native_object_assign(
     argument_values: &[Value],
@@ -33,7 +34,7 @@ pub(crate) fn native_object_assign(
         if matches!(source, Value::Null | Value::Undefined) {
             continue;
         }
-        for (key, value) in enumerable_property_entries(source, env)? {
+        for (key, value) in enumerable_property_entries_with_symbols(source, env)? {
             assign_property(target.clone(), key, value, env)?;
         }
     }
@@ -152,13 +153,17 @@ pub(crate) fn native_object_is(argument_values: &[Value]) -> Result<Value, Runti
 
 fn assign_property(
     target: Value,
-    key: String,
+    key: PropertyKey,
     value: Value,
     env: &mut HashMap<String, Value>,
 ) -> Result<(), RuntimeError> {
     if crate::reflect::ordinary_set(target.clone(), &key, value, target, env)? {
         return Ok(());
     }
+    let key = match key {
+        PropertyKey::String(key) => key,
+        PropertyKey::Symbol(_) => "[symbol]".to_owned(),
+    };
     Err(RuntimeError {
         thrown: None,
         message: format!("Object.assign could not set property `{key}`"),

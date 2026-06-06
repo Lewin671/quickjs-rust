@@ -89,4 +89,16 @@ fn evaluates_object_constructor_and_assign() {
         ),
         Ok(Value::Number(2.0))
     );
+    assert_eq!(
+        eval(
+            "let symbol = Symbol(); let target = { [symbol]: 1 }; Object.seal(target); Object.assign(target, { [symbol]: 2 }); target[symbol];"
+        ),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval(
+            "let symbol = Symbol(); let seen = 1; let target = { set [symbol](next) { seen = next; } }; Object.seal(target); Object.assign(target, { [symbol]: 2 }); seen;"
+        ),
+        Ok(Value::Number(2.0))
+    );
 }

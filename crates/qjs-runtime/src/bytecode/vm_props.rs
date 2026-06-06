@@ -3,9 +3,10 @@ use std::collections::HashMap;
 use qjs_ast::{BinaryOp, UnaryOp};
 
 use crate::{
-    GLOBAL_THIS_BINDING, Property, RuntimeError, Value, array_prototype, boolean, call_function,
-    function_delete_own_property, function_own_property_keys, inherited_string_prototype_property,
-    number, property_value, string, to_int32_number, to_length, to_uint32_number,
+    GLOBAL_THIS_BINDING, ObjectRef, Property, PropertyKey, RuntimeError, Value, array_prototype,
+    boolean, call_function, function_delete_own_property, function_own_property_keys,
+    inherited_string_prototype_property, number, property_value, property_value_key, string,
+    to_int32_number, to_length, to_uint32_number,
 };
 
 use super::vm::Vm;
@@ -57,6 +58,17 @@ pub(super) fn get_property(
             thrown: None,
             message: format!("unsupported property `{key}`"),
         }),
+    }
+}
+
+pub(super) fn get_property_key(
+    object: Value,
+    key: &PropertyKey,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    match key {
+        PropertyKey::String(key) => get_property(object, key, env),
+        PropertyKey::Symbol(_) => property_value_key(object, key, env),
     }
 }
 
@@ -148,6 +160,72 @@ pub(super) fn set_property(
     }
 }
 
+pub(super) fn set_property_key(
+    object: Value,
+    key: PropertyKey,
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<bool, RuntimeError> {
+    match key {
+        PropertyKey::String(key) => set_property(object, key, value, env),
+        PropertyKey::Symbol(symbol) => set_symbol_property(object, symbol, value, env),
+    }
+}
+
+fn set_symbol_property(
+    object: Value,
+    symbol: ObjectRef,
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<bool, RuntimeError> {
+    match object {
+        Value::Object(object) => {
+            set_object_symbol_property(object.clone(), Value::Object(object), symbol, value, env)
+        }
+        Value::Map(map) => {
+            set_object_symbol_property(map.object(), Value::Map(map), symbol, value, env)
+        }
+        Value::Set(set) => {
+            set_object_symbol_property(set.object(), Value::Set(set), symbol, value, env)
+        }
+        Value::Array(_) | Value::Function(_) => Ok(false),
+        _ => Err(RuntimeError {
+            thrown: None,
+            message: "member assignment target is not an object".to_owned(),
+        }),
+    }
+}
+
+fn set_object_symbol_property(
+    object: ObjectRef,
+    receiver: Value,
+    symbol: ObjectRef,
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<bool, RuntimeError> {
+    if apply_property_setter(
+        object.symbol_property(&symbol),
+        receiver,
+        value.clone(),
+        env,
+    )? {
+        return Ok(false);
+    }
+    let descriptor = match object.own_symbol_property(&symbol) {
+        Some(existing) if !existing.writable => return Ok(false),
+        Some(existing) => Property::data(
+            value,
+            existing.enumerable,
+            existing.writable,
+            existing.configurable,
+        ),
+        None if !object.is_extensible() => return Ok(false),
+        None => Property::enumerable(value),
+    };
+    object.define_symbol_property(symbol, descriptor);
+    Ok(true)
+}
+
 fn apply_property_setter(
     property: Option<Property>,
     receiver: Value,
@@ -166,13 +244,20 @@ fn apply_property_setter(
 
 pub(super) fn property_set_uses_setter(
     object: &Value,
-    key: &str,
+    key: &PropertyKey,
     env: &HashMap<String, Value>,
 ) -> bool {
     property_for_set(object, key, env).is_some_and(|property| property.set.is_some())
 }
 
-fn property_for_set(object: &Value, key: &str, env: &HashMap<String, Value>) -> Option<Property> {
+fn property_for_set(
+    object: &Value,
+    key: &PropertyKey,
+    env: &HashMap<String, Value>,
+) -> Option<Property> {
+    let PropertyKey::String(key) = key else {
+        return symbol_property_for_set(object, key);
+    };
     match object {
         Value::Object(object) => object.property(key),
         Value::Function(function) => function.properties.borrow().get(key).cloned(),
@@ -184,6 +269,18 @@ fn property_for_set(object: &Value, key: &str, env: &HashMap<String, Value>) -> 
         }),
         Value::Map(map) => map.object().property(key),
         Value::Set(set) => set.object().property(key),
+        _ => None,
+    }
+}
+
+fn symbol_property_for_set(object: &Value, key: &PropertyKey) -> Option<Property> {
+    let PropertyKey::Symbol(symbol) = key else {
+        unreachable!("symbol property helper should only receive symbol keys");
+    };
+    match object {
+        Value::Object(object) => object.symbol_property(symbol),
+        Value::Map(map) => map.object().symbol_property(symbol),
+        Value::Set(set) => set.object().symbol_property(symbol),
         _ => None,
     }
 }

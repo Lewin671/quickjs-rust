@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
 use crate::{
-    ArrayRef, Property, RuntimeError, Value, array_own_property_keys, array_own_property_names,
-    function_own_property_keys, function_own_property_names, property_value, to_property_key_value,
+    ArrayRef, Property, PropertyKey, RuntimeError, Value, array_own_property_keys,
+    array_own_property_names, function_own_property_keys, function_own_property_names,
+    property_value, property_value_key, to_property_key_value,
 };
 
 use super::descriptor::{own_property_descriptor, own_property_descriptor_key};
@@ -115,6 +116,29 @@ pub(super) fn enumerable_property_entries(
             && enumerable
         {
             let property = property_value(value.clone(), &key, env)?;
+            entries.push((key, property));
+        }
+    }
+    Ok(entries)
+}
+
+pub(super) fn enumerable_property_entries_with_symbols(
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Vec<(PropertyKey, Value)>, RuntimeError> {
+    let string_keys = own_property_keys(value.clone())
+        .into_iter()
+        .map(PropertyKey::String);
+    let symbol_keys = own_property_symbols(value.clone())
+        .into_iter()
+        .map(PropertyKey::Symbol);
+    let keys: Vec<_> = string_keys.chain(symbol_keys).collect();
+    let mut entries = Vec::with_capacity(keys.len());
+    for key in keys {
+        if let Some(Property { enumerable, .. }) = own_property_descriptor_key(value.clone(), &key)?
+            && enumerable
+        {
+            let property = property_value_key(value.clone(), &key, env)?;
             entries.push((key, property));
         }
     }

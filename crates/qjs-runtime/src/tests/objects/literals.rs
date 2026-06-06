@@ -25,6 +25,10 @@ fn evaluates_object_literals_and_member_access() {
         Ok(Value::String("two".to_owned()))
     );
     assert_eq!(
+        eval("let key = Symbol('key'); let object = { [key]: 42 }; object[key];"),
+        Ok(Value::Number(42.0))
+    );
+    assert_eq!(
         eval("let object = { value: 7, method() { return this.value; } }; object.method();"),
         Ok(Value::Number(7.0))
     );

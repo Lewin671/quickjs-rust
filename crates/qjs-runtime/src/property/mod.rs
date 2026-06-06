@@ -28,6 +28,17 @@ pub(crate) fn has_property(
     env: &HashMap<String, Value>,
     key: &str,
 ) -> Result<bool, RuntimeError> {
+    has_property_key(value, env, &PropertyKey::String(key.to_owned()))
+}
+
+pub(crate) fn has_property_key(
+    value: Value,
+    env: &HashMap<String, Value>,
+    key: &PropertyKey,
+) -> Result<bool, RuntimeError> {
+    let PropertyKey::String(key) = key else {
+        return has_symbol_property(value, key);
+    };
     match value {
         Value::Object(object) => Ok(object.contains_property(key)),
         Value::Map(map) => Ok(map.object().contains_property(key)),
@@ -47,11 +58,42 @@ pub(crate) fn has_property(
     }
 }
 
+fn has_symbol_property(value: Value, key: &PropertyKey) -> Result<bool, RuntimeError> {
+    let PropertyKey::Symbol(symbol) = key else {
+        unreachable!("symbol property helper should only receive symbol keys");
+    };
+    match value {
+        Value::Object(object) => Ok(object.symbol_property(symbol).is_some()),
+        Value::Map(map) => Ok(map.object().symbol_property(symbol).is_some()),
+        Value::Set(set) => Ok(set.object().symbol_property(symbol).is_some()),
+        Value::Array(_) | Value::Function(_) => Ok(false),
+        Value::String(_)
+        | Value::Number(_)
+        | Value::Boolean(_)
+        | Value::Null
+        | Value::Undefined => Err(RuntimeError {
+            thrown: None,
+            message: "property target must be an object".to_owned(),
+        }),
+    }
+}
+
 pub(crate) fn property_value(
     receiver: Value,
     key: &str,
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
+    property_value_key(receiver, &PropertyKey::String(key.to_owned()), env)
+}
+
+pub(crate) fn property_value_key(
+    receiver: Value,
+    key: &PropertyKey,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let PropertyKey::String(key) = key else {
+        return symbol_property_value(receiver, key, env);
+    };
     match receiver.clone() {
         Value::Object(object) => property_descriptor_value(object.property(key), receiver, env),
         Value::Map(map) => property_descriptor_value(map.object().property(key), receiver, env),
@@ -105,6 +147,33 @@ pub(crate) fn property_value(
             env,
         ),
         Value::Null | Value::Undefined => Ok(Value::Undefined),
+    }
+}
+
+fn symbol_property_value(
+    receiver: Value,
+    key: &PropertyKey,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let PropertyKey::Symbol(symbol) = key else {
+        unreachable!("symbol property helper should only receive symbol keys");
+    };
+    match receiver.clone() {
+        Value::Object(object) => {
+            property_descriptor_value(object.symbol_property(symbol), receiver, env)
+        }
+        Value::Map(map) => {
+            property_descriptor_value(map.object().symbol_property(symbol), receiver, env)
+        }
+        Value::Set(set) => {
+            property_descriptor_value(set.object().symbol_property(symbol), receiver, env)
+        }
+        Value::Array(_) | Value::Function(_) => Ok(Value::Undefined),
+        Value::String(_)
+        | Value::Number(_)
+        | Value::Boolean(_)
+        | Value::Null
+        | Value::Undefined => Ok(Value::Undefined),
     }
 }
 
