@@ -234,6 +234,21 @@ impl ObjectRef {
         true
     }
 
+    pub(crate) fn delete_own_symbol_property(&self, symbol: &ObjectRef) -> bool {
+        let mut properties = self.symbol_properties.borrow_mut();
+        let Some(index) = properties
+            .iter()
+            .position(|(existing_symbol, _)| existing_symbol.ptr_eq(symbol))
+        else {
+            return true;
+        };
+        if !properties[index].1.configurable {
+            return false;
+        }
+        properties.remove(index);
+        true
+    }
+
     pub(crate) fn own_property_keys(&self) -> Vec<String> {
         let mut keys: Vec<_> = self
             .properties

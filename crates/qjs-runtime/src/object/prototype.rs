@@ -3,10 +3,10 @@ use std::collections::HashMap;
 use crate::{
     RuntimeError, Value, array_has_own_property, array_prototype, boolean, call_function, date,
     error, function_intrinsic_prototype, function_own_property_descriptor, number, property_value,
-    string, to_property_key, value_prototype,
+    string, to_property_key_value, value_prototype,
 };
 
-use super::descriptor::own_property_descriptor;
+use super::descriptor::own_property_descriptor_key;
 
 pub(crate) fn native_object_get_prototype_of(
     argument_values: &[Value],
@@ -106,23 +106,43 @@ pub(crate) fn native_object_prototype_has_own_property(
     this_value: Value,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
-    let key = to_property_key(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
-    match this_value {
-        Value::Object(object) => Ok(Value::Boolean(object.has_own_property(&key))),
-        Value::Map(map) => Ok(Value::Boolean(map.object().has_own_property(&key))),
-        Value::Set(set) => Ok(Value::Boolean(set.object().has_own_property(&key))),
-        Value::Function(function) => Ok(Value::Boolean(
+    let key = to_property_key_value(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    match (this_value, key) {
+        (Value::Object(object), crate::PropertyKey::String(key)) => {
+            Ok(Value::Boolean(object.has_own_property(&key)))
+        }
+        (Value::Object(object), crate::PropertyKey::Symbol(symbol)) => {
+            Ok(Value::Boolean(object.has_own_symbol_property(&symbol)))
+        }
+        (Value::Map(map), crate::PropertyKey::String(key)) => {
+            Ok(Value::Boolean(map.object().has_own_property(&key)))
+        }
+        (Value::Map(map), crate::PropertyKey::Symbol(symbol)) => Ok(Value::Boolean(
+            map.object().has_own_symbol_property(&symbol),
+        )),
+        (Value::Set(set), crate::PropertyKey::String(key)) => {
+            Ok(Value::Boolean(set.object().has_own_property(&key)))
+        }
+        (Value::Set(set), crate::PropertyKey::Symbol(symbol)) => Ok(Value::Boolean(
+            set.object().has_own_symbol_property(&symbol),
+        )),
+        (Value::Function(function), crate::PropertyKey::String(key)) => Ok(Value::Boolean(
             function_own_property_descriptor(&function, &key).is_some(),
         )),
-        Value::Array(elements) => Ok(Value::Boolean(array_has_own_property(&elements, &key))),
-        Value::String(value) => Ok(Value::Boolean(crate::string::string_has_own_property(
-            &value, &key,
-        ))),
-        Value::Null | Value::Undefined => Err(RuntimeError {
+        (Value::Function(_), crate::PropertyKey::Symbol(_)) => Ok(Value::Boolean(false)),
+        (Value::Array(elements), crate::PropertyKey::String(key)) => {
+            Ok(Value::Boolean(array_has_own_property(&elements, &key)))
+        }
+        (Value::Array(_), crate::PropertyKey::Symbol(_)) => Ok(Value::Boolean(false)),
+        (Value::String(value), crate::PropertyKey::String(key)) => Ok(Value::Boolean(
+            crate::string::string_has_own_property(&value, &key),
+        )),
+        (Value::String(_), crate::PropertyKey::Symbol(_)) => Ok(Value::Boolean(false)),
+        (Value::Null, _) | (Value::Undefined, _) => Err(RuntimeError {
             thrown: None,
             message: "hasOwnProperty called on null or undefined".to_owned(),
         }),
-        Value::Number(_) | Value::Boolean(_) => Ok(Value::Boolean(false)),
+        (Value::Number(_), _) | (Value::Boolean(_), _) => Ok(Value::Boolean(false)),
     }
 }
 
@@ -130,14 +150,14 @@ pub(crate) fn native_object_prototype_property_is_enumerable(
     this_value: Value,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
-    let key = to_property_key(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    let key = to_property_key_value(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
     match this_value {
         Value::Null | Value::Undefined => Err(RuntimeError {
             thrown: None,
             message: "propertyIsEnumerable called on null or undefined".to_owned(),
         }),
         value => Ok(Value::Boolean(
-            own_property_descriptor(value, &key)?.is_some_and(|property| property.enumerable),
+            own_property_descriptor_key(value, &key)?.is_some_and(|property| property.enumerable),
         )),
     }
 }

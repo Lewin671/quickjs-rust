@@ -750,10 +750,12 @@ cases/reflect-define-property-basic.js
 cases/reflect-define-property-function-basic.js
 cases/reflect-define-property-length.js
 cases/reflect-define-property-return-boolean.js
+cases/reflect-define-property-symbol.js
 cases/reflect-delete-property-basic.js
 cases/reflect-delete-property-function-basic.js
 cases/reflect-delete-property-length.js
 cases/reflect-delete-property-non-configurable.js
+cases/reflect-delete-property-symbol.js
 cases/reflect-get-array-function-basic.js
 cases/reflect-get-basic.js
 cases/reflect-get-length.js
@@ -762,10 +764,12 @@ cases/reflect-get-own-property-descriptor-basic.js
 cases/reflect-get-own-property-descriptor-length.js
 cases/reflect-get-prototype-of-basic.js
 cases/reflect-get-prototype-of-length.js
+cases/reflect-get-symbol-property.js
 cases/reflect-has-array-and-function.js
 cases/reflect-has-basic.js
 cases/reflect-has-length.js
 cases/reflect-has-return-boolean.js
+cases/reflect-has-symbol-property.js
 cases/reflect-is-extensible-basic.js
 cases/reflect-is-extensible-length.js
 cases/reflect-own-keys-array.js

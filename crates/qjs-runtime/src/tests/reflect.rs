@@ -119,6 +119,10 @@ fn evaluates_reflect_prototype_builtins() {
         Ok(Value::Number(11.0))
     );
     assert_eq!(
+        eval("let symbol = Symbol(); let object = { [symbol]: 13 }; Reflect.get(object, symbol);"),
+        Ok(Value::Number(13.0))
+    );
+    assert_eq!(
         eval("let object = {}; Reflect.set(object, 'value', 41) && object.value;"),
         Ok(Value::Number(41.0))
     );
@@ -221,6 +225,12 @@ fn evaluates_reflect_prototype_builtins() {
         Ok(Value::Boolean(true))
     );
     assert_eq!(
+        eval(
+            "let symbol = Symbol(); let other = Symbol(); let object = { [symbol]: 1 }; Reflect.has(object, symbol) && !Reflect.has(object, other);"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("let object = {}; Reflect.isExtensible(object);"),
         Ok(Value::Boolean(true))
     );
@@ -268,6 +278,12 @@ fn evaluates_reflect_prototype_builtins() {
     );
     assert_eq!(
         eval(
+            "let symbol = Symbol(); let object = {}; Reflect.defineProperty(object, symbol, { value: 17, enumerable: true, writable: true, configurable: true }) && object[symbol];"
+        ),
+        Ok(Value::Number(17.0))
+    );
+    assert_eq!(
+        eval(
             "function f() {} Reflect.defineProperty(f, 'value', { value: 29, enumerable: true }) && f.value;"
         ),
         Ok(Value::Number(29.0))
@@ -298,6 +314,12 @@ fn evaluates_reflect_prototype_builtins() {
     );
     assert_eq!(
         eval("let object = {}; Reflect.deleteProperty(object, 'missing');"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let symbol = Symbol(); let object = { [symbol]: 19 }; Reflect.deleteProperty(object, symbol) && !object.hasOwnProperty(symbol) && object[symbol] === undefined;"
+        ),
         Ok(Value::Boolean(true))
     );
     assert_eq!(
