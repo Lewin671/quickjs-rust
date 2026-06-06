@@ -19,6 +19,22 @@ fn evaluates_string_case_and_trim_builtins() {
         Ok(Value::String("abc".to_owned()))
     );
     assert_eq!(
+        eval("'ABC'.toLocaleLowerCase();"),
+        Ok(Value::String("abc".to_owned()))
+    );
+    assert_eq!(
+        eval("'abc'.toLocaleUpperCase();"),
+        Ok(Value::String("ABC".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let lower = Object.getOwnPropertyDescriptor(String.prototype, 'toLocaleLowerCase'); let upper = Object.getOwnPropertyDescriptor(String.prototype, 'toLocaleUpperCase'); (lower.value === String.prototype.toLocaleLowerCase) + ':' + lower.writable + ':' + lower.enumerable + ':' + lower.configurable + '|' + (upper.value === String.prototype.toLocaleUpperCase) + ':' + upper.writable + ':' + upper.enumerable + ':' + upper.configurable;"
+        ),
+        Ok(Value::String(
+            "true:true:false:true|true:true:false:true".to_owned()
+        ))
+    );
+    assert_eq!(
         eval(
             "let caught = false; try { String.prototype.toString.call(false); } catch (error) { caught = error instanceof TypeError; } caught;"
         ),

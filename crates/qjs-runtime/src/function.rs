@@ -13,7 +13,7 @@ pub(crate) use native_kind::NativeFunction;
 pub(crate) use prototype::{
     function_call_this, native_function, native_function_prototype_apply,
     native_function_prototype_bind, native_function_prototype_call,
-    native_function_prototype_has_instance,
+    native_function_prototype_has_instance, native_function_prototype_to_string,
 };
 pub(crate) use strict::is_strict_function_body;
 pub(crate) use value::Function;

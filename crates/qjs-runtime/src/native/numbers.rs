@@ -31,6 +31,9 @@ pub(super) fn call_number_native(
         NativeFunction::NumberPrototypeToString => {
             number::native_number_prototype_to_string(this_value, argument_values)?
         }
+        NativeFunction::NumberPrototypeToLocaleString => {
+            number::native_number_prototype_to_string(this_value, &[])?
+        }
         NativeFunction::NumberPrototypeValueOf => {
             number::native_number_prototype_value_of(this_value)?
         }

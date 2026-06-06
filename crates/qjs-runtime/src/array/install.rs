@@ -196,6 +196,12 @@ pub(crate) fn install_array(
     );
     define_array_prototype_function(
         &array_prototype,
+        "toLocaleString",
+        0,
+        NativeFunction::ArrayPrototypeToLocaleString,
+    );
+    define_array_prototype_function(
+        &array_prototype,
         "toReversed",
         0,
         NativeFunction::ArrayPrototypeToReversed,

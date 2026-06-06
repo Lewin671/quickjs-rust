@@ -35,6 +35,7 @@ const STRING_PROTOTYPE_METHODS: &[(&str, usize, NativeFunction)] = &[
     ("padEnd", 1, NativeFunction::StringPrototypePadEnd),
     ("padStart", 1, NativeFunction::StringPrototypePadStart),
     ("repeat", 1, NativeFunction::StringPrototypeRepeat),
+    ("replace", 2, NativeFunction::StringPrototypeReplace),
     ("replaceAll", 2, NativeFunction::StringPrototypeReplaceAll),
     ("search", 1, NativeFunction::StringPrototypeSearch),
     ("slice", 2, NativeFunction::StringPrototypeSlice),
@@ -47,6 +48,16 @@ const STRING_PROTOTYPE_METHODS: &[(&str, usize, NativeFunction)] = &[
     ("sub", 0, NativeFunction::StringPrototypeSub),
     ("sup", 0, NativeFunction::StringPrototypeSup),
     ("toLowerCase", 0, NativeFunction::StringPrototypeToLowerCase),
+    (
+        "toLocaleLowerCase",
+        0,
+        NativeFunction::StringPrototypeToLocaleLowerCase,
+    ),
+    (
+        "toLocaleUpperCase",
+        0,
+        NativeFunction::StringPrototypeToLocaleUpperCase,
+    ),
     (
         "toWellFormed",
         0,

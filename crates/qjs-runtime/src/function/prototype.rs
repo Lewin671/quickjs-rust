@@ -169,6 +169,21 @@ pub(crate) fn native_function_prototype_has_instance(
     crate::operations::ordinary_has_instance(value, this_value, env).map(Value::Boolean)
 }
 
+pub(crate) fn native_function_prototype_to_string(
+    this_value: Value,
+) -> Result<Value, RuntimeError> {
+    let Value::Function(function) = this_value else {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "Function.prototype.toString requires a callable receiver".to_owned(),
+        });
+    };
+    let name = function.name.clone().unwrap_or_default();
+    Ok(Value::String(format!(
+        "function {name}() {{ [native code] }}"
+    )))
+}
+
 pub(crate) fn function_call_this(
     this_arg: Option<Value>,
     env: &HashMap<String, Value>,

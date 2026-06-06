@@ -68,6 +68,9 @@ pub(super) fn call_core_native(
                 env,
             )
         }
+        NativeFunction::FunctionPrototypeToString => {
+            crate::function::native_function_prototype_to_string(this_value)
+        }
         _ => unreachable!("native function was not handled by its owning dispatcher"),
     }
 }

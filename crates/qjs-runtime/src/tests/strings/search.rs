@@ -79,6 +79,38 @@ fn evaluates_string_search_builtins() {
         Ok(Value::Number(2.0))
     );
     assert_eq!(
+        eval("String.prototype.replace.length;"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval("'foo foo'.replace('foo', 'bar');"),
+        Ok(Value::String("bar foo".to_owned()))
+    );
+    assert_eq!(
+        eval("'abc'.replace('', '-');"),
+        Ok(Value::String("-abc".to_owned()))
+    );
+    assert_eq!(
+        eval("'aba'.replace('a', '[$&:$`:$\\']');"),
+        Ok(Value::String("[a::ba]ba".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "'a-b-a'.replace('a', function(match, position, input) { return match + position + input.length; });"
+        ),
+        Ok(Value::String("a05-b-a".to_owned()))
+    );
+    assert_eq!(
+        eval("'a1b2'.replace(/(\\d)/g, '[$1:$&]');"),
+        Ok(Value::String("a[1:1]b2".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(String.prototype, 'replace'); (d.value === String.prototype.replace) + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("true:true:false:true".to_owned()))
+    );
+    assert_eq!(
         eval("'foo foo'.replaceAll('foo', 'bar');"),
         Ok(Value::String("bar bar".to_owned()))
     );

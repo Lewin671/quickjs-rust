@@ -56,6 +56,15 @@ pub(crate) fn install_number(
         )),
     );
     number_prototype.define_non_enumerable(
+        "toLocaleString".to_owned(),
+        Value::Function(Function::new_native(
+            Some("toLocaleString"),
+            0,
+            NativeFunction::NumberPrototypeToLocaleString,
+            false,
+        )),
+    );
+    number_prototype.define_non_enumerable(
         "valueOf".to_owned(),
         Value::Function(Function::new_native(
             Some("valueOf"),

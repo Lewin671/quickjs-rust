@@ -57,6 +57,20 @@ fn evaluates_function_declarations_and_calls() {
         Ok(Value::Number(2.0))
     );
     assert_eq!(
+        eval("Function.prototype.toString.length;"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(Function.prototype, 'toString'); (d.value === Function.prototype.toString) + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("true:true:false:true".to_owned()))
+    );
+    assert_eq!(
+        eval("Function.prototype.toString.call(Array.isArray).includes('[native code]');"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval(
             "function pair(a, b) {} let d = Object.getOwnPropertyDescriptor(pair, 'name'); d.value + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),

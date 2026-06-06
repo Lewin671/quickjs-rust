@@ -24,6 +24,10 @@ fn evaluates_number_builtins() {
         Ok(Value::Number(1.0))
     );
     assert_eq!(
+        eval("Number.prototype.toLocaleString.length;"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
         eval("Number.prototype.toFixed.length;"),
         Ok(Value::Number(1.0))
     );
@@ -42,6 +46,16 @@ fn evaluates_number_builtins() {
     assert_eq!(
         eval("let n = 10; n.toString();"),
         Ok(Value::String("10".to_owned()))
+    );
+    assert_eq!(
+        eval("(10).toLocaleString();"),
+        Ok(Value::String("10".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(Number.prototype, 'toLocaleString'); (d.value === Number.prototype.toLocaleString) + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("true:true:false:true".to_owned()))
     );
     assert_eq!(
         eval("let n = 255; n.toString(16);"),

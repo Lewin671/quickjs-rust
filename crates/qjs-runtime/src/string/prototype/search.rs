@@ -152,6 +152,32 @@ pub(crate) fn native_string_prototype_replace_all(
     string_replace_all(input, search, replacement, env)
 }
 
+pub(crate) fn native_string_prototype_replace(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let input = this_string_value(this_value, env)?;
+    let search_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let replacement_value = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
+    let replacement = if matches!(replacement_value, Value::Function(_)) {
+        Replacement::Function(replacement_value)
+    } else {
+        Replacement::String(to_js_string_with_env(replacement_value, env)?)
+    };
+    let matches = if regexp::regexp_is_regexp(&search_value) {
+        regexp_first_match_position(&input, search_value, env)?
+            .into_iter()
+            .collect()
+    } else {
+        let search = to_js_string_with_env(search_value, env)?;
+        string_first_match_position(&input, &search)
+            .into_iter()
+            .collect()
+    };
+    replace_matches(input, matches, replacement, env)
+}
+
 pub(crate) fn native_string_prototype_search(
     this_value: Value,
     argument_values: &[Value],
@@ -262,6 +288,25 @@ fn string_match_positions(input: &str, search: &str) -> Vec<StringMatch> {
     matches
 }
 
+fn string_first_match_position(input: &str, search: &str) -> Option<StringMatch> {
+    if search.is_empty() {
+        return Some(StringMatch {
+            start: 0,
+            end: 0,
+            matched: String::new(),
+            captures: Vec::new(),
+        });
+    }
+    let byte_index = input.find(search)?;
+    let start = input[..byte_index].chars().count();
+    Some(StringMatch {
+        start,
+        end: start + search.chars().count(),
+        matched: search.to_owned(),
+        captures: Vec::new(),
+    })
+}
+
 fn regexp_match_positions(
     input: &str,
     regexp: Value,
@@ -301,6 +346,38 @@ fn regexp_match_positions(
         }
     }
     Ok(matches)
+}
+
+fn regexp_first_match_position(
+    input: &str,
+    regexp: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Option<StringMatch>, RuntimeError> {
+    regexp::regexp_set_last_index(&regexp, 0);
+    let exec = property_value(regexp.clone(), "exec", env)?;
+    let result = call_function(
+        exec,
+        regexp.clone(),
+        vec![Value::String(input.to_owned())],
+        env,
+        false,
+    )?;
+    let Value::Array(array) = result else {
+        return Ok(None);
+    };
+    let Some(Value::String(matched)) = array.get(0) else {
+        return Ok(None);
+    };
+    let start = regexp_match_index(&Value::Array(array.clone()), env)?;
+    let captures = (1..array.len())
+        .map(|index| array.get(index).unwrap_or(Value::Undefined))
+        .collect();
+    Ok(Some(StringMatch {
+        start,
+        end: start + matched.chars().count(),
+        matched,
+        captures,
+    }))
 }
 
 fn replace_matches(

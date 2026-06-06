@@ -128,6 +128,9 @@ pub(super) fn call_string_native(
         NativeFunction::StringPrototypeRepeat => {
             string::native_string_prototype_repeat(this_value, argument_values, env)?
         }
+        NativeFunction::StringPrototypeReplace => {
+            string::native_string_prototype_replace(this_value, argument_values, env)?
+        }
         NativeFunction::StringPrototypeReplaceAll => {
             string::native_string_prototype_replace_all(this_value, argument_values, env)?
         }
@@ -175,6 +178,12 @@ pub(super) fn call_string_native(
         )?,
         NativeFunction::StringPrototypeToLowerCase => {
             string::native_string_prototype_to_lower_case(this_value, env)?
+        }
+        NativeFunction::StringPrototypeToLocaleLowerCase => {
+            string::native_string_prototype_to_lower_case(this_value, env)?
+        }
+        NativeFunction::StringPrototypeToLocaleUpperCase => {
+            string::native_string_prototype_to_upper_case(this_value, env)?
         }
         NativeFunction::StringPrototypeTrim => {
             string::native_string_prototype_trim(this_value, env)?

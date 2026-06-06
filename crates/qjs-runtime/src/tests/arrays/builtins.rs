@@ -100,6 +100,20 @@ fn evaluates_array_builtins() {
         eval("Array.prototype.toString.length;"),
         Ok(Value::Number(0.0))
     );
+    assert_eq!(
+        eval("Array.prototype.toLocaleString.length;"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(Array.prototype, 'toLocaleString'); (d.value === Array.prototype.toLocaleString) + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("true:true:false:true".to_owned()))
+    );
+    assert_eq!(
+        eval("[1, 'x', true].toLocaleString();"),
+        Ok(Value::String("1,x,true".to_owned()))
+    );
     assert_eq!(eval("Array().length;"), Ok(Value::Number(0.0)));
     assert_eq!(eval("Array(1, 2)[1];"), Ok(Value::Number(2.0)));
     assert_eq!(

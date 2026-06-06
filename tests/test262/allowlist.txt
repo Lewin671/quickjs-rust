@@ -493,6 +493,7 @@ cases/object-get-own-property-descriptor-global-builtins.js
 cases/object-get-own-property-descriptor-missing.js
 cases/object-get-own-property-descriptor-nonenumerable-basic.js
 cases/object-get-own-property-descriptor-nullish-throws.js
+cases/object-get-own-property-descriptor-prototype-methods.js
 cases/object-get-own-property-descriptors-data.js
 cases/object-get-own-property-descriptors-inherited-omitted.js
 cases/object-get-own-property-descriptors-length.js
