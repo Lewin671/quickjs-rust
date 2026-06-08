@@ -1,21 +1,18 @@
 use std::collections::HashMap;
 
-use crate::{ArrayRef, RuntimeError, Value, call_function, to_number};
+use crate::{ArrayRef, RuntimeError, Value, call_function, property_value, to_number};
+
+use super::array_like::array_like_length;
 
 pub(crate) fn native_array_prototype_flat(
     this_value: Value,
     argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let Value::Array(array) = this_value else {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "Array.prototype.flat called on non-array".to_owned(),
-        });
-    };
-
+    let source = array_like_length(this_value, "Array.prototype.flat", env)?;
     let depth = flat_depth(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
     let mut result = Vec::new();
-    flatten_into(&mut result, array.to_vec(), depth);
+    flatten_source_into(&mut result, source.receiver, source.length, depth, env)?;
     Ok(Value::Array(ArrayRef::new(result)))
 }
 
@@ -24,12 +21,7 @@ pub(crate) fn native_array_prototype_flat_map(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let Value::Array(array) = this_value else {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "Array.prototype.flatMap called on non-array".to_owned(),
-        });
-    };
+    let source = array_like_length(this_value, "Array.prototype.flatMap", env)?;
     let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if !matches!(callback, Value::Function(_)) {
         return Err(RuntimeError {
@@ -39,17 +31,13 @@ pub(crate) fn native_array_prototype_flat_map(
     }
 
     let callback_this = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
-    let source = array.to_vec();
     let mut result = Vec::new();
-    for (index, value) in source.iter().cloned().enumerate() {
+    for index in 0..source.length {
+        let value = property_value(source.receiver.clone(), &index.to_string(), env)?;
         let mapped = call_function(
             callback.clone(),
             callback_this.clone(),
-            vec![
-                value,
-                Value::Number(index as f64),
-                Value::Array(array.clone()),
-            ],
+            vec![value, Value::Number(index as f64), source.receiver.clone()],
             env,
             false,
         )?;
@@ -78,6 +66,20 @@ fn flatten_into(result: &mut Vec<Value>, values: Vec<Value>, depth: usize) {
     for value in values {
         flatten_value_into(result, value, depth);
     }
+}
+
+fn flatten_source_into(
+    result: &mut Vec<Value>,
+    receiver: Value,
+    length: usize,
+    depth: usize,
+    env: &mut HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
+    for index in 0..length {
+        let value = property_value(receiver.clone(), &index.to_string(), env)?;
+        flatten_value_into(result, value, depth);
+    }
+    Ok(())
 }
 
 fn flatten_value_into(result: &mut Vec<Value>, value: Value, depth: usize) {

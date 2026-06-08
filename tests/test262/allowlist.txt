@@ -41,6 +41,7 @@ cases/array-flat-map-length.js
 cases/array-flat-map-this-arg.js
 cases/array-flat-null-undefined.js
 cases/array-flat-string-depth.js
+cases/array-flatten-boolean-receiver.js
 cases/array-filter-basic.js
 cases/array-filter-callback-arguments.js
 cases/array-filter-this-arg.js

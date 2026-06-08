@@ -5,6 +5,9 @@
   var zero = [1, [2]].flat(0).join("|");
   var stringDepth = [1, [2]].flat("1").join();
   var values = [1, [null, undefined]].flat();
+  var booleanFlat = Array.prototype.flat.call(true).length
+    + "|"
+    + Array.prototype.flat.call(false).length;
   return basic
     + ":" + shallow
     + ":" + deep
@@ -13,5 +16,6 @@
     + ":" + values.length
     + ":" + (values[1] === null)
     + ":" + (values[2] === undefined)
+    + ":" + booleanFlat
     + ":" + Array.prototype.flat.length;
 })()

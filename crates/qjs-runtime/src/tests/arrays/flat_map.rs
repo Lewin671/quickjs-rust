@@ -10,6 +10,12 @@ fn evaluates_array_flat_map_basic_mapping_and_flattening() {
         eval("[1, 2].flatMap(function(value) { return [[value]]; })[0][0];"),
         Ok(Value::Number(1.0))
     );
+    assert_eq!(
+        eval(
+            "let called = 0; let out = Array.prototype.flatMap.call(true, function() { called = called + 1; }); out.length + ':' + called;"
+        ),
+        Ok(Value::String("0:0".to_owned()))
+    );
 }
 
 #[test]

@@ -11,11 +11,17 @@
     seen = seen + value + ":" + index + ":" + (array === source) + ":" + this.offset + ";";
     return [value + index + this.offset];
   }, { offset: 3 });
+  var called = 0;
+  var booleanFlatMap = Array.prototype.flatMap.call(true, function () {
+    called = called + 1;
+  });
   return doubled
     + ":" + shallow.length
     + ":" + Array.isArray(shallow[0])
     + ":" + shallow[0][0]
     + ":" + seen
     + ":" + mapped.join()
+    + ":" + booleanFlatMap.length
+    + ":" + called
     + ":" + Array.prototype.flatMap.length;
 })()

@@ -48,4 +48,10 @@ fn evaluates_array_flat_depth_coercion_and_values() {
         ),
         Ok(Value::String("3:true:true".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "Array.prototype.flat.call(true).length + ':' + Array.prototype.flat.call(false).length;"
+        ),
+        Ok(Value::String("0:0".to_owned()))
+    );
 }
