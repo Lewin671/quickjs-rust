@@ -22,7 +22,7 @@ pub(super) fn call_set_native(
             set::native_set_prototype_delete(this_value, argument_values)?
         }
         NativeFunction::SetPrototypeDifference => {
-            set::native_set_prototype_difference(this_value, argument_values)?
+            set::native_set_prototype_difference(this_value, argument_values, env)?
         }
         NativeFunction::SetPrototypeEntries => set::native_set_prototype_entries(this_value)?,
         NativeFunction::SetPrototypeForEach => {
@@ -32,24 +32,24 @@ pub(super) fn call_set_native(
             set::native_set_prototype_has(this_value, argument_values)?
         }
         NativeFunction::SetPrototypeIntersection => {
-            set::native_set_prototype_intersection(this_value, argument_values)?
+            set::native_set_prototype_intersection(this_value, argument_values, env)?
         }
         NativeFunction::SetPrototypeIsDisjointFrom => {
-            set::native_set_prototype_is_disjoint_from(this_value, argument_values)?
+            set::native_set_prototype_is_disjoint_from(this_value, argument_values, env)?
         }
         NativeFunction::SetPrototypeIsSubsetOf => {
-            set::native_set_prototype_is_subset_of(this_value, argument_values)?
+            set::native_set_prototype_is_subset_of(this_value, argument_values, env)?
         }
         NativeFunction::SetPrototypeIsSupersetOf => {
-            set::native_set_prototype_is_superset_of(this_value, argument_values)?
+            set::native_set_prototype_is_superset_of(this_value, argument_values, env)?
         }
         NativeFunction::SetPrototypeKeys => set::native_set_prototype_keys(this_value)?,
         NativeFunction::SetPrototypeSize => set::native_set_prototype_size(this_value)?,
         NativeFunction::SetPrototypeSymmetricDifference => {
-            set::native_set_prototype_symmetric_difference(this_value, argument_values)?
+            set::native_set_prototype_symmetric_difference(this_value, argument_values, env)?
         }
         NativeFunction::SetPrototypeUnion => {
-            set::native_set_prototype_union(this_value, argument_values)?
+            set::native_set_prototype_union(this_value, argument_values, env)?
         }
         NativeFunction::SetPrototypeValues => set::native_set_prototype_values(this_value)?,
         NativeFunction::SetIteratorPrototypeNext => set::native_set_iterator_next(this_value)?,

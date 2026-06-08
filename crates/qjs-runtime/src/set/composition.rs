@@ -1,0 +1,130 @@
+use std::collections::HashMap;
+
+use crate::{
+    MapRef, RuntimeError, SetRef, Value, array::array_like_values_with_env, call_function,
+    is_truthy, property_value, to_length_with_env,
+};
+
+pub(super) enum SetRecord {
+    Set(SetRef),
+    Map(MapRef),
+    SetLike {
+        object: Value,
+        size: usize,
+        has: Box<Value>,
+        keys: Box<Value>,
+    },
+}
+
+impl SetRecord {
+    pub(super) fn from_arguments(
+        argument_values: &[Value],
+        env: &mut HashMap<String, Value>,
+    ) -> Result<Self, RuntimeError> {
+        match argument_values.first().cloned().unwrap_or(Value::Undefined) {
+            Value::Set(set) => Ok(Self::Set(set)),
+            Value::Map(map) => Ok(Self::Map(map)),
+            Value::Object(object) => Self::from_set_like_object(Value::Object(object), env),
+            Value::Array(array) => Self::from_set_like_object(Value::Array(array), env),
+            value => Err(RuntimeError {
+                thrown: None,
+                message: format!("TypeError: Set composition argument must be set-like: {value:?}"),
+            }),
+        }
+    }
+
+    pub(super) fn has(
+        &self,
+        value: &Value,
+        env: &mut HashMap<String, Value>,
+    ) -> Result<bool, RuntimeError> {
+        match self {
+            Self::Set(set) => Ok(set.has(value)),
+            Self::Map(map) => Ok(map.has(value)),
+            Self::SetLike { object, has, .. } => {
+                let result = call_function(
+                    (**has).clone(),
+                    object.clone(),
+                    vec![value.clone()],
+                    env,
+                    false,
+                )?;
+                Ok(is_truthy(&result))
+            }
+        }
+    }
+
+    pub(super) fn keys(
+        &self,
+        env: &mut HashMap<String, Value>,
+    ) -> Result<Vec<Value>, RuntimeError> {
+        match self {
+            Self::Set(set) => Ok(set.values()),
+            Self::Map(map) => Ok(map.entries().into_iter().map(|(key, _)| key).collect()),
+            Self::SetLike { object, keys, .. } => {
+                let values =
+                    call_function((**keys).clone(), object.clone(), Vec::new(), env, false)?;
+                iterator_values(values, "Set-like keys", env)
+            }
+        }
+    }
+
+    pub(super) fn size(&self) -> usize {
+        match self {
+            Self::Set(set) => set.len(),
+            Self::Map(map) => map.len(),
+            Self::SetLike { size, .. } => *size,
+        }
+    }
+
+    fn from_set_like_object(
+        object: Value,
+        env: &mut HashMap<String, Value>,
+    ) -> Result<Self, RuntimeError> {
+        let size = to_length_with_env(property_value(object.clone(), "size", env)?, env)?;
+        let has = property_value(object.clone(), "has", env)?;
+        if !matches!(has, Value::Function(_)) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: Set-like has must be callable".to_owned(),
+            });
+        }
+        let keys = property_value(object.clone(), "keys", env)?;
+        if !matches!(keys, Value::Function(_)) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: Set-like keys must be callable".to_owned(),
+            });
+        }
+        Ok(Self::SetLike {
+            object,
+            size,
+            has: Box::new(has),
+            keys: Box::new(keys),
+        })
+    }
+}
+
+fn iterator_values(
+    value: Value,
+    context: &str,
+    env: &mut HashMap<String, Value>,
+) -> Result<Vec<Value>, RuntimeError> {
+    if !matches!(value, Value::Object(_)) {
+        return array_like_values_with_env(value, context, env);
+    }
+    let next = property_value(value.clone(), "next", env)?;
+    if !matches!(next, Value::Function(_)) {
+        return array_like_values_with_env(value, context, env);
+    }
+
+    let mut values = Vec::new();
+    loop {
+        let step = call_function(next.clone(), value.clone(), Vec::new(), env, false)?;
+        let done = is_truthy(&property_value(step.clone(), "done", env)?);
+        if done {
+            return Ok(values);
+        }
+        values.push(property_value(step, "value", env)?);
+    }
+}

@@ -5,6 +5,9 @@ use crate::{
     array::array_like_values_with_env, symbol,
 };
 
+mod composition;
+use composition::SetRecord;
+
 const SET_ITERATOR: &str = "\0set_iterator";
 const SET_ITERATOR_NEXT_INDEX: &str = "\0set_iterator_next_index";
 const SET_ITERATOR_DONE: &str = "\0set_iterator_done";
@@ -187,14 +190,15 @@ pub(crate) fn native_set_prototype_entries(this_value: Value) -> Result<Value, R
 pub(crate) fn native_set_prototype_union(
     this_value: Value,
     argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let set = this_set(this_value)?;
-    let other = other_set(argument_values)?;
+    let other = SetRecord::from_arguments(argument_values, env)?;
     let result = new_set_like(&set);
     for value in set.values() {
         result.add(value);
     }
-    for value in other.values() {
+    for value in other.keys(env)? {
         result.add(value);
     }
     Ok(Value::Set(result))
@@ -203,13 +207,22 @@ pub(crate) fn native_set_prototype_union(
 pub(crate) fn native_set_prototype_intersection(
     this_value: Value,
     argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let set = this_set(this_value)?;
-    let other = other_set(argument_values)?;
+    let other = SetRecord::from_arguments(argument_values, env)?;
     let result = new_set_like(&set);
-    for value in set.values() {
-        if other.has(&value) {
-            result.add(value);
+    if set.len() <= other.size() {
+        for value in set.values() {
+            if other.has(&value, env)? {
+                result.add(value);
+            }
+        }
+    } else {
+        for value in other.keys(env)? {
+            if set.has(&value) {
+                result.add(value);
+            }
         }
     }
     Ok(Value::Set(result))
@@ -218,13 +231,23 @@ pub(crate) fn native_set_prototype_intersection(
 pub(crate) fn native_set_prototype_difference(
     this_value: Value,
     argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let set = this_set(this_value)?;
-    let other = other_set(argument_values)?;
+    let other = SetRecord::from_arguments(argument_values, env)?;
     let result = new_set_like(&set);
-    for value in set.values() {
-        if !other.has(&value) {
+    if set.len() <= other.size() {
+        for value in set.values() {
+            if !other.has(&value, env)? {
+                result.add(value);
+            }
+        }
+    } else {
+        for value in set.values() {
             result.add(value);
+        }
+        for value in other.keys(env)? {
+            result.delete(&value);
         }
     }
     Ok(Value::Set(result))
@@ -233,16 +256,17 @@ pub(crate) fn native_set_prototype_difference(
 pub(crate) fn native_set_prototype_symmetric_difference(
     this_value: Value,
     argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let set = this_set(this_value)?;
-    let other = other_set(argument_values)?;
+    let other = SetRecord::from_arguments(argument_values, env)?;
     let result = new_set_like(&set);
     for value in set.values() {
-        if !other.has(&value) {
+        if !other.has(&value, env)? {
             result.add(value);
         }
     }
-    for value in other.values() {
+    for value in other.keys(env)? {
         if !set.has(&value) {
             result.add(value);
         }
@@ -253,34 +277,60 @@ pub(crate) fn native_set_prototype_symmetric_difference(
 pub(crate) fn native_set_prototype_is_subset_of(
     this_value: Value,
     argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let set = this_set(this_value)?;
-    let other = other_set(argument_values)?;
-    Ok(Value::Boolean(
-        set.values().into_iter().all(|value| other.has(&value)),
-    ))
+    let other = SetRecord::from_arguments(argument_values, env)?;
+    if set.len() > other.size() {
+        return Ok(Value::Boolean(false));
+    }
+    for value in set.values() {
+        if !other.has(&value, env)? {
+            return Ok(Value::Boolean(false));
+        }
+    }
+    Ok(Value::Boolean(true))
 }
 
 pub(crate) fn native_set_prototype_is_superset_of(
     this_value: Value,
     argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let set = this_set(this_value)?;
-    let other = other_set(argument_values)?;
-    Ok(Value::Boolean(
-        other.values().into_iter().all(|value| set.has(&value)),
-    ))
+    let other = SetRecord::from_arguments(argument_values, env)?;
+    if set.len() < other.size() {
+        return Ok(Value::Boolean(false));
+    }
+    for value in other.keys(env)? {
+        if !set.has(&value) {
+            return Ok(Value::Boolean(false));
+        }
+    }
+    Ok(Value::Boolean(true))
 }
 
 pub(crate) fn native_set_prototype_is_disjoint_from(
     this_value: Value,
     argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let set = this_set(this_value)?;
-    let other = other_set(argument_values)?;
-    Ok(Value::Boolean(
-        set.values().into_iter().all(|value| !other.has(&value)),
-    ))
+    let other = SetRecord::from_arguments(argument_values, env)?;
+    if set.len() <= other.size() {
+        for value in set.values() {
+            if other.has(&value, env)? {
+                return Ok(Value::Boolean(false));
+            }
+        }
+    } else {
+        for value in other.keys(env)? {
+            if set.has(&value) {
+                return Ok(Value::Boolean(false));
+            }
+        }
+    }
+    Ok(Value::Boolean(true))
 }
 
 pub(crate) fn native_set_prototype_for_each(
@@ -377,16 +427,6 @@ fn this_set(this_value: Value) -> Result<SetRef, RuntimeError> {
         _ => Err(RuntimeError {
             thrown: None,
             message: "TypeError: incompatible Set receiver".to_owned(),
-        }),
-    }
-}
-
-fn other_set(argument_values: &[Value]) -> Result<SetRef, RuntimeError> {
-    match argument_values.first() {
-        Some(Value::Set(set)) => Ok(set.clone()),
-        _ => Err(RuntimeError {
-            thrown: None,
-            message: "TypeError: Set composition argument must be a Set".to_owned(),
         }),
     }
 }

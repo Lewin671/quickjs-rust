@@ -102,6 +102,30 @@ fn evaluates_set_composition_methods_with_sets() {
 }
 
 #[test]
+fn evaluates_set_composition_methods_with_set_like_objects() {
+    assert_eval(
+        "var result = new Set([1, 2]).difference(new Map([[2, 'two'], [3, 'three']])); var seen = ''; result.forEach(function(value) { seen = seen + value; }); result.size + ':' + seen;",
+        Value::String("1:1".to_owned()),
+    );
+    assert_eval(
+        "var other = { size: 2, has: function(value) { return value === 2; }, keys: function() { return [2, 3].values(); } }; var result = new Set([1, 2]).difference(other); var seen = ''; result.forEach(function(value) { seen = seen + value; }); result.size + ':' + seen;",
+        Value::String("1:1".to_owned()),
+    );
+    assert_eval(
+        "var other = { size: 3, has: function(value) { return value === 2; }, keys: function() { throw 'keys should not be called'; } }; var result = new Set([1, 2]).difference(other); var seen = ''; result.forEach(function(value) { seen = seen + value; }); result.size + ':' + seen;",
+        Value::String("1:1".to_owned()),
+    );
+    assert_eval(
+        "var other = { size: 1, has: function() { throw 'has should not be called'; }, keys: function() { return [-0].values(); } }; var result = new Set([0, 1]).difference(other); var seen = ''; result.forEach(function(value) { seen = seen + value; }); result.size + ':' + seen;",
+        Value::String("1:1".to_owned()),
+    );
+    assert_eval(
+        "var other = { size: 2, has: function(value) { return value === 2; }, keys: function() { return [2, 3].values(); } }; new Set([1, 2]).isSubsetOf(other) + ':' + new Set([1, 2, 3]).isSupersetOf(other) + ':' + new Set([1]).isDisjointFrom(other);",
+        Value::String("false:true:true".to_owned()),
+    );
+}
+
+#[test]
 fn evaluates_set_same_value_zero_values() {
     assert_eval(
         "var set = new Set(); set.add(NaN); set.add(NaN); set.size + ':' + set.has(NaN);",
