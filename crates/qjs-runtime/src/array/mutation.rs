@@ -370,6 +370,10 @@ pub(crate) fn native_array_prototype_pop(
     this_value: Value,
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
+    if matches!(this_value, Value::String(_)) {
+        return Err(pop_length_error());
+    }
+
     let source = array_like_length(this_value, "Array.prototype.pop", env)?;
     let receiver = source.receiver;
     let length = source.length;

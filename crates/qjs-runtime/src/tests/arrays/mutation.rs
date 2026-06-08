@@ -39,6 +39,12 @@ fn evaluates_array_mutation_builtins() {
     );
     assert_eq!(
         eval(
+            "let caughtEmpty = false; let caughtText = false; try { Array.prototype.pop.call(''); } catch (error) { caughtEmpty = error instanceof TypeError; } try { Array.prototype.pop.call('abc'); } catch (error) { caughtText = error instanceof TypeError; } caughtEmpty + ':' + caughtText;"
+        ),
+        Ok(Value::String("true:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
             "let proto = { length: 2 }; let object = Object.create(proto); object[1] = 7; Array.prototype.pop.call(object) + ':' + object.length + ':' + proto.length;"
         ),
         Ok(Value::String("7:1:2".to_owned()))

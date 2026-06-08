@@ -119,6 +119,7 @@ cases/array-pop-basic.js
 cases/array-pop-boolean-receiver.js
 cases/array-pop-length.js
 cases/array-pop-object-generic.js
+cases/array-pop-string-receiver-throws.js
 cases/array-prototype-constructor.js
 cases/array-push-basic.js
 cases/array-push-boolean-receiver.js
