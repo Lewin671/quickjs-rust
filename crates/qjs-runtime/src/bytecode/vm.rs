@@ -4,7 +4,7 @@ use qjs_ast::ObjectPropertyKind;
 
 use crate::{
     ArrayRef, Function, GLOBAL_THIS_BINDING, ObjectRef, Property, RUNTIME_INTRINSIC_NAMES,
-    RuntimeError, Value, array::array_like_values_with_env, call_function, construct_function,
+    RuntimeError, Value, array::iterable_values_with_env, call_function, construct_function,
     initialize_builtins, is_truthy, object, object_prototype, promise, symbol,
     to_js_string_with_env, to_property_key_value,
 };
@@ -310,8 +310,7 @@ impl<'a> Vm<'a> {
                 ArrayElementKind::Spread => {
                     let value = next_value.next().ok_or_else(stack_underflow)?;
                     let mut env = self.current_env();
-                    let spread_values =
-                        array_like_values_with_env(value, "array spread", &mut env)?;
+                    let spread_values = iterable_values_with_env(value, "array spread", &mut env)?;
                     self.apply_env(env);
                     values.extend(spread_values);
                 }

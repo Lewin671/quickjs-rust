@@ -158,6 +158,7 @@ cases/array-sort-comparefn.js
 cases/array-sort-length.js
 cases/array-sort-undefined.js
 cases/array-spread-literal-basic.js
+cases/array-spread-iterable-values.js
 cases/array-to-sorted-array-like.js
 cases/array-to-sorted-comparefn.js
 cases/array-to-sorted-copy-semantics.js

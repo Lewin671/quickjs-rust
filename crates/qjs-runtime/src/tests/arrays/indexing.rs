@@ -31,6 +31,13 @@ fn evaluates_array_literals() {
         eval("let xs = [...[1], , ...[3]]; xs.length + ':' + (1 in xs) + ':' + xs[2];"),
         Ok(Value::String("3:false:3".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "let xs = [...new Set([1, 2]), ...new Map([['a', 3]]), ...{ [Symbol.iterator]: function() { return ['z'][Symbol.iterator](); } }]; xs[0] + ':' + xs[1] + ':' + xs[2][0] + ':' + xs[2][1] + ':' + xs[3];"
+        ),
+        Ok(Value::String("1:2:a:3:z".to_owned()))
+    );
+    assert!(eval("[...{}];").is_err());
 }
 
 #[test]

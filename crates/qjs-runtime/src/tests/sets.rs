@@ -101,6 +101,14 @@ fn evaluates_set_composition_methods_with_sets() {
         Value::String("true:3:123".to_owned()),
     );
     assert_eval(
+        "var result = new Set([1, 2]).union(new Set([2, 3])); [...result].join('|') + ':' + result.size;",
+        Value::String("1|2|3:3".to_owned()),
+    );
+    assert_eval(
+        "var other = { size: 3, has: function() { throw 'has should not be called'; }, keys: function() { return [2, 3, 4].values(); } }; [...new Set([1, 2]).union(other)].join('|');",
+        Value::String("1|2|3|4".to_owned()),
+    );
+    assert_eval(
         "var result = new Set([1, 2]).intersection(new Set([2, 3])); var seen = ''; result.forEach(function(value) { seen = seen + value; }); result.size + ':' + seen;",
         Value::String("1:2".to_owned()),
     );
