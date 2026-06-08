@@ -53,7 +53,25 @@
     truncatedStringSeen = truncatedStringSeen + part.length + ":" + part.charCodeAt(0) + "|";
   }
 
+  function collectArguments() {
+    var seen = "";
+    for (var argument of arguments) {
+      seen = seen + argument;
+    }
+    return seen;
+  }
+
+  function mutateArguments() {
+    var seen = "";
+    for (var argument of arguments) {
+      seen = seen + argument;
+      arguments[1] = "z";
+    }
+    return seen;
+  }
+
   return total + ":" + setSeen + ":" + mapSeen + ":" + controlled + ":" +
     target.value + ":" + keySeen + ":" + entrySeen + ":" + setIteratorSeen + ":" +
-    stringSeen + ":" + truncatedStringSeen;
+    stringSeen + ":" + truncatedStringSeen + ":" + collectArguments("a", "b", "c") + ":" +
+    mutateArguments("a", "b");
 })()

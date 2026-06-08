@@ -1,6 +1,11 @@
 // Derived from: test/language/statements/for-of/array.js
 // Derived from: test/language/statements/for-of/Array.prototype.entries.js
 // Derived from: test/language/statements/for-of/Array.prototype.keys.js
+// Derived from: test/language/statements/for-of/arguments-mapped-mutation.js
+// Derived from: test/language/statements/for-of/arguments-mapped.js
+// Derived from: test/language/statements/for-of/arguments-unmapped-aliasing.js
+// Derived from: test/language/statements/for-of/arguments-unmapped-mutation.js
+// Derived from: test/language/statements/for-of/arguments-unmapped.js
 // Derived from: test/language/statements/for-of/string-astral-truncated.js
 // Derived from: test/language/statements/for-of/string-astral.js
 // Derived from: test/language/statements/for-of/string-bmp.js
@@ -82,4 +87,41 @@ for (var truncated of "a\uD801b\uD801") {
 }
 if (truncatedSeen !== "1:97|1:55297|1:98|1:55297|") {
   throw "for-of should preserve unpaired string surrogates";
+}
+
+var argumentsSeen = (function() {
+  var seen = "";
+  for (var value of arguments) {
+    seen = seen + value;
+  }
+  return seen;
+}("a", "b", "c"));
+if (argumentsSeen !== "abc") {
+  throw "for-of should iterate arguments object values";
+}
+
+var mutatedArgumentsSeen = (function() {
+  var seen = "";
+  for (var value of arguments) {
+    seen = seen + value;
+    arguments[1] = "z";
+  }
+  return seen;
+}("a", "b"));
+if (mutatedArgumentsSeen !== "az") {
+  throw "for-of should observe arguments object element mutation";
+}
+
+var unmappedAliasSeen = (function(a, b) {
+  "use strict";
+  var seen = "";
+  for (var value of arguments) {
+    a = "x";
+    b = "y";
+    seen = seen + value;
+  }
+  return seen;
+}("a", "b"));
+if (unmappedAliasSeen !== "ab") {
+  throw "strict arguments iteration should not observe parameter mutation";
 }

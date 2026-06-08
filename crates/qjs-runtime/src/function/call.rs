@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use crate::{
-    ArrayRef, Bytecode, Function, GLOBAL_THIS_BINDING, ObjectRef, Property,
+    ArrayRef, Bytecode, Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, Property,
     RUNTIME_INTRINSIC_NAMES, RuntimeError, Value, bytecode::eval_function_bytecode,
-    native::call_native_function, object_prototype,
+    native::call_native_function, object_prototype, symbol,
 };
 
 use super::function_call_this;
@@ -195,8 +195,24 @@ fn arguments_object(argument_values: &[Value], env: &HashMap<String, Value>) -> 
     for (index, value) in argument_values.iter().cloned().enumerate() {
         object.define_property(index.to_string(), Property::enumerable(value));
     }
+    define_arguments_iterator(&object, env);
     object.set_to_string_tag("Arguments");
     Value::Object(object)
+}
+
+fn define_arguments_iterator(object: &ObjectRef, env: &HashMap<String, Value>) {
+    let Some(iterator) = symbol::iterator_symbol(env) else {
+        return;
+    };
+    object.define_symbol_property(
+        iterator,
+        Property::non_enumerable(Value::Function(Function::new_native(
+            Some("[Symbol.iterator]"),
+            0,
+            NativeFunction::ArrayPrototypeValues,
+            false,
+        ))),
+    );
 }
 
 fn insert_runtime_intrinsics(

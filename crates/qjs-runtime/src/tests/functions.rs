@@ -41,6 +41,24 @@ fn evaluates_function_declarations_and_calls() {
         Ok(Value::String("0|1|2".to_owned()))
     );
     assert_eq!(
+        eval(
+            "function values() { let seen = ''; for (var value of arguments) { seen += value; } return seen; } values('a', 'b', 'c');"
+        ),
+        Ok(Value::String("abc".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "function values() { let descriptor = Object.getOwnPropertyDescriptor(arguments, Symbol.iterator); return (typeof descriptor.value) + ':' + descriptor.enumerable + ':' + descriptor.writable + ':' + descriptor.configurable; } values(1);"
+        ),
+        Ok(Value::String("function:false:true:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "function values() { let seen = ''; for (var value of arguments) { seen += value; arguments[1] = 'z'; } return seen; } values('a', 'b');"
+        ),
+        Ok(Value::String("az".to_owned()))
+    );
+    assert_eq!(
         eval("function none() { return arguments.length; } none();"),
         Ok(Value::Number(0.0))
     );
