@@ -52,6 +52,7 @@ pub(super) fn typeof_value(value: Value) -> String {
         Value::Undefined => "undefined",
         Value::Boolean(_) => "boolean",
         Value::Number(_) => "number",
+        Value::BigInt(_) => "bigint",
         Value::String(_) => "string",
         Value::Function(_) => "function",
         Value::Object(object) if symbol::is_symbol_primitive(&object) => "symbol",

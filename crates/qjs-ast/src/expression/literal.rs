@@ -5,6 +5,8 @@ use crate::span::Span;
 pub enum Literal {
     /// Numeric literal text.
     Number { raw: String, span: Span },
+    /// BigInt literal text without the trailing `n`.
+    BigInt { raw: String, span: Span },
     /// String literal contents after quote removal.
     String { value: String, span: Span },
     /// Boolean literal.
@@ -19,6 +21,7 @@ impl Literal {
     pub const fn span(&self) -> Span {
         match self {
             Self::Number { span, .. }
+            | Self::BigInt { span, .. }
             | Self::String { span, .. }
             | Self::Boolean { span, .. }
             | Self::Null { span } => *span,

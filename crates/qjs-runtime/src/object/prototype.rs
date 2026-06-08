@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     PropertyKey, RuntimeError, Value, array_as_object_prototype, array_has_own_property,
-    array_prototype, boolean, call_function, date, error, function_intrinsic_prototype,
+    array_prototype, bigint, boolean, call_function, date, error, function_intrinsic_prototype,
     function_own_property_descriptor, function_prototype, number, property_value,
     property_value_key, regexp, string, symbol, to_property_key_value, value_prototype,
 };
@@ -43,6 +43,7 @@ pub(crate) fn native_object_get_prototype_of(
                 .unwrap_or(Value::Null))
         }
         Some(Value::Boolean(_)) => Ok(constructor_prototype_value("Boolean", env)),
+        Some(Value::BigInt(_)) => Ok(constructor_prototype_value("BigInt", env)),
         Some(Value::Number(_)) => Ok(constructor_prototype_value("Number", env)),
         Some(Value::String(_)) => Ok(constructor_prototype_value("String", env)),
         _ => Err(RuntimeError {
@@ -109,7 +110,7 @@ pub(crate) fn native_object_set_prototype_of(
                     message: "Object.setPrototypeOf failed".to_owned(),
                 })?
         }
-        Value::String(_) | Value::Number(_) | Value::Boolean(_) => {}
+        Value::String(_) | Value::Number(_) | Value::BigInt(_) | Value::Boolean(_) => {}
         Value::Null | Value::Undefined => {
             return Err(RuntimeError {
                 thrown: None,
@@ -175,7 +176,9 @@ pub(crate) fn native_object_prototype_has_own_property(
             thrown: None,
             message: "hasOwnProperty called on null or undefined".to_owned(),
         }),
-        (Value::Number(_), _) | (Value::Boolean(_), _) => Ok(Value::Boolean(false)),
+        (Value::Number(_), _) | (Value::BigInt(_), _) | (Value::Boolean(_), _) => {
+            Ok(Value::Boolean(false))
+        }
     }
 }
 
@@ -222,6 +225,7 @@ pub(crate) fn native_object_prototype_is_prototype_of(
         | Value::Set(_)
         | Value::String(_)
         | Value::Number(_)
+        | Value::BigInt(_)
         | Value::Boolean(_) => {
             return Ok(Value::Boolean(false));
         }
@@ -255,10 +259,13 @@ fn builtin_to_string_tag(value: Value) -> String {
         Value::Map(_) | Value::Set(_) => "Object".to_owned(),
         Value::String(_) => "String".to_owned(),
         Value::Number(_) => "Number".to_owned(),
+        Value::BigInt(_) => "BigInt".to_owned(),
         Value::Boolean(_) => "Boolean".to_owned(),
         Value::Object(object) => {
             if boolean::is_boolean_object(&object) {
                 "Boolean".to_owned()
+            } else if bigint::is_bigint_object(&object) {
+                "BigInt".to_owned()
             } else if number::is_number_object(&object) {
                 "Number".to_owned()
             } else if string::is_string_object(&object) {

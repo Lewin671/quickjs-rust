@@ -189,6 +189,7 @@ fn map_entry(
         | Value::Undefined
         | Value::String(_)
         | Value::Number(_)
+        | Value::BigInt(_)
         | Value::Boolean(_) => Err(RuntimeError {
             thrown: None,
             message: "TypeError: Map constructor entry must be an object".to_owned(),

@@ -28,14 +28,30 @@ impl Lexer<'_> {
                 self.advance();
                 self.advance();
                 let digits_start = self.cursor;
-                while matches!(self.peek(), Some(ch) if is_digit_for_radix(ch, radix)) {
+                while matches!(self.peek(), Some(ch) if is_digit_for_radix(ch, radix) || ch == '_')
+                {
                     self.advance();
                 }
-                if self.cursor == digits_start {
+                let digits = &self.source[digits_start..self.cursor];
+                if digits.is_empty() {
                     return Err(LexError {
                         message: "expected digits after numeric literal prefix".to_owned(),
                         span: Span::new(start, self.cursor),
                     });
+                }
+                validate_numeric_separators(digits, start + 2, radix)?;
+                if self.peek() == Some('n') {
+                    self.advance();
+                    self.tokens.push(Token {
+                        kind: TokenKind::BigInt(self.source[start..self.cursor - 1].to_owned()),
+                        span: Span::new(start, self.cursor),
+                    });
+                    return Ok(());
+                }
+                if digits.contains('_') {
+                    return Err(invalid_numeric_separator(
+                        start + 2 + digits.find('_').unwrap_or(0),
+                    ));
                 }
                 if matches!(self.peek(), Some(ch) if is_identifier_continue(ch)) {
                     return Err(LexError {
@@ -51,8 +67,23 @@ impl Lexer<'_> {
             }
         }
 
-        while matches!(self.peek(), Some(ch) if ch.is_ascii_digit()) {
+        while matches!(self.peek(), Some(ch) if ch.is_ascii_digit() || ch == '_') {
             self.advance();
+        }
+        if self.peek() == Some('n') {
+            let digits = &self.source[start..self.cursor];
+            validate_decimal_bigint_literal(digits, start)?;
+            self.advance();
+            self.tokens.push(Token {
+                kind: TokenKind::BigInt(digits.to_owned()),
+                span: Span::new(start, self.cursor),
+            });
+            return Ok(());
+        }
+        if self.source[start..self.cursor].contains('_') {
+            return Err(invalid_numeric_separator(
+                start + self.source[start..self.cursor].find('_').unwrap_or(0),
+            ));
         }
         if self.peek() == Some('.') {
             self.advance();
@@ -398,6 +429,48 @@ impl Lexer<'_> {
             message: "invalid escape sequence".to_owned(),
             span: Span::new(literal_start, self.cursor),
         })
+    }
+}
+
+fn validate_decimal_bigint_literal(digits: &str, start: usize) -> Result<(), LexError> {
+    validate_numeric_separators(digits, start, 10)?;
+    if digits.len() > 1 && digits.starts_with('0') {
+        return Err(LexError {
+            message: "invalid BigInt literal with leading zero".to_owned(),
+            span: Span::new(start, start + digits.len()),
+        });
+    }
+    Ok(())
+}
+
+fn validate_numeric_separators(digits: &str, start: usize, radix: u32) -> Result<(), LexError> {
+    let mut previous_separator = false;
+    for (offset, ch) in digits.char_indices() {
+        if ch == '_' {
+            if offset == 0 || previous_separator {
+                return Err(invalid_numeric_separator(start + offset));
+            }
+            previous_separator = true;
+            continue;
+        }
+        if !is_digit_for_radix(ch, radix) {
+            return Err(LexError {
+                message: "invalid digit in numeric literal".to_owned(),
+                span: Span::new(start + offset, start + offset + ch.len_utf8()),
+            });
+        }
+        previous_separator = false;
+    }
+    if previous_separator {
+        return Err(invalid_numeric_separator(start + digits.len() - 1));
+    }
+    Ok(())
+}
+
+fn invalid_numeric_separator(position: usize) -> LexError {
+    LexError {
+        message: "invalid numeric separator".to_owned(),
+        span: Span::new(position, position + 1),
     }
 }
 

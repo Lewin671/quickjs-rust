@@ -14,6 +14,7 @@ pub(crate) fn native_reflect_is_extensible(
         Value::Function(function) => function.is_extensible(),
         Value::String(_)
         | Value::Number(_)
+        | Value::BigInt(_)
         | Value::Boolean(_)
         | Value::Null
         | Value::Undefined => unreachable!("target was validated before extensibility check"),
@@ -33,6 +34,7 @@ pub(crate) fn native_reflect_prevent_extensions(
         Value::Function(function) => function.prevent_extensions(),
         Value::String(_)
         | Value::Number(_)
+        | Value::BigInt(_)
         | Value::Boolean(_)
         | Value::Null
         | Value::Undefined => unreachable!("target was validated before preventing extensions"),

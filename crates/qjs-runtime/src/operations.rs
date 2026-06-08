@@ -1,5 +1,7 @@
 use std::{cmp::Ordering, collections::HashMap};
 
+use num_bigint::{BigInt, Sign};
+use num_traits::{ToPrimitive, Zero};
 use qjs_ast::{BinaryOp, UnaryOp};
 
 use crate::{
@@ -16,6 +18,18 @@ pub(crate) fn eval_unary(
     match op {
         UnaryOp::Not => Ok(Value::Boolean(!is_truthy(&argument))),
         UnaryOp::Plus => Ok(Value::Number(to_number_with_env(argument, env)?)),
+        UnaryOp::Minus if matches!(argument, Value::BigInt(_)) => {
+            let Value::BigInt(value) = argument else {
+                unreachable!("BigInt argument was checked before negation")
+            };
+            Ok(Value::BigInt(-value))
+        }
+        UnaryOp::BitwiseNot if matches!(argument, Value::BigInt(_)) => {
+            let Value::BigInt(value) = argument else {
+                unreachable!("BigInt argument was checked before bitwise not")
+            };
+            Ok(Value::BigInt(!value))
+        }
         UnaryOp::Minus => Ok(Value::Number(-to_number_with_env(argument, env)?)),
         UnaryOp::BitwiseNot => Ok(Value::Number(f64::from(!to_int32_number(
             to_number_with_env(argument, env)?,
@@ -55,6 +69,9 @@ pub(crate) fn eval_binary(
                     to_js_string_with_env(right, env)?
                 )));
             }
+            if matches!(left, Value::BigInt(_)) || matches!(right, Value::BigInt(_)) {
+                return eval_bigint_binary(left, op, right);
+            }
             return Ok(Value::Number(
                 to_number_with_env(left, env)? + to_number_with_env(right, env)?,
             ));
@@ -63,6 +80,10 @@ pub(crate) fn eval_binary(
             return eval_relational(left, op, right, env);
         }
         _ => {}
+    }
+
+    if matches!(left, Value::BigInt(_)) || matches!(right, Value::BigInt(_)) {
+        return eval_bigint_binary(left, op, right);
     }
 
     let left = to_number_with_env(left, env)?;
@@ -122,6 +143,55 @@ pub(crate) fn eval_binary(
     Ok(Value::Number(value))
 }
 
+fn eval_bigint_binary(left: Value, op: BinaryOp, right: Value) -> Result<Value, RuntimeError> {
+    let (Value::BigInt(left), Value::BigInt(right)) = (left, right) else {
+        return Err(bigint_mix_error());
+    };
+    let value = match op {
+        BinaryOp::Add => left + right,
+        BinaryOp::Sub => left - right,
+        BinaryOp::Mul => left * right,
+        BinaryOp::Div => {
+            if right.is_zero() {
+                return Err(bigint_division_by_zero_error());
+            }
+            left / right
+        }
+        BinaryOp::Rem => {
+            if right.is_zero() {
+                return Err(bigint_division_by_zero_error());
+            }
+            left % right
+        }
+        BinaryOp::Pow => {
+            let Some(exponent) = right.to_u32() else {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: "RangeError: BigInt exponent is too large".to_owned(),
+                });
+            };
+            if right < BigInt::zero() {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: "RangeError: BigInt exponent must be positive".to_owned(),
+                });
+            }
+            left.pow(exponent)
+        }
+        BinaryOp::BitwiseAnd => left & right,
+        BinaryOp::BitwiseXor => left ^ right,
+        BinaryOp::BitwiseOr => left | right,
+        BinaryOp::Shl | BinaryOp::Shr | BinaryOp::UShr => {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: BigInt shifts are not supported yet".to_owned(),
+            });
+        }
+        _ => unreachable!("BigInt binary operator should be arithmetic or bitwise"),
+    };
+    Ok(Value::BigInt(value))
+}
+
 fn eval_relational(
     left: Value,
     op: BinaryOp,
@@ -140,6 +210,19 @@ fn eval_relational(
             _ => unreachable!("relational operator required"),
         };
         return Ok(Value::Boolean(value));
+    }
+    if let (Value::BigInt(left), Value::BigInt(right)) = (&left, &right) {
+        let value = match op {
+            BinaryOp::Lt => left < right,
+            BinaryOp::Le => left <= right,
+            BinaryOp::Gt => left > right,
+            BinaryOp::Ge => left >= right,
+            _ => unreachable!("relational operator required"),
+        };
+        return Ok(Value::Boolean(value));
+    }
+    if matches!(left, Value::BigInt(_)) || matches!(right, Value::BigInt(_)) {
+        return eval_bigint_mixed_relational(left, op, right, env);
     }
 
     let left = to_number_with_env(left, env)?;
@@ -172,6 +255,12 @@ fn abstract_eq(
 ) -> Result<bool, RuntimeError> {
     match (left, right) {
         (Value::Null, Value::Undefined) | (Value::Undefined, Value::Null) => Ok(true),
+        (Value::BigInt(left), Value::String(right))
+        | (Value::String(right), Value::BigInt(left)) => {
+            Ok(crate::bigint::parse_bigint_string_value(right).is_some_and(|value| &value == left))
+        }
+        (Value::BigInt(left), Value::Number(right))
+        | (Value::Number(right), Value::BigInt(left)) => Ok(number_bigint_eq(*right, left)),
         (Value::Number(_), Value::String(value)) => {
             Ok(left == &Value::Number(to_number(Value::String(value.clone()))?))
         }
@@ -199,6 +288,88 @@ fn abstract_eq(
             abstract_eq(left, &primitive, env)
         }
         _ => Ok(strict_eq(left, right)),
+    }
+}
+
+fn eval_bigint_mixed_relational(
+    left: Value,
+    op: BinaryOp,
+    right: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let left = match left {
+        Value::BigInt(value) => BigIntComparable::BigInt(value),
+        value => BigIntComparable::Number(to_number_with_env(value, env)?),
+    };
+    let right = match right {
+        Value::BigInt(value) => BigIntComparable::BigInt(value),
+        value => BigIntComparable::Number(to_number_with_env(value, env)?),
+    };
+    Ok(Value::Boolean(match op {
+        BinaryOp::Lt => left.partial_cmp(&right) == Some(Ordering::Less),
+        BinaryOp::Le => left
+            .partial_cmp(&right)
+            .is_some_and(|ordering| ordering != Ordering::Greater),
+        BinaryOp::Gt => left.partial_cmp(&right) == Some(Ordering::Greater),
+        BinaryOp::Ge => left
+            .partial_cmp(&right)
+            .is_some_and(|ordering| ordering != Ordering::Less),
+        _ => unreachable!("relational operator required"),
+    }))
+}
+
+enum BigIntComparable {
+    BigInt(BigInt),
+    Number(f64),
+}
+
+impl BigIntComparable {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self, other) {
+            (Self::BigInt(left), Self::BigInt(right)) => Some(left.cmp(right)),
+            (Self::Number(left), Self::Number(right)) => left.partial_cmp(right),
+            (Self::Number(number), Self::BigInt(bigint)) => number_bigint_ordering(*number, bigint),
+            (Self::BigInt(bigint), Self::Number(number)) => {
+                number_bigint_ordering(*number, bigint).map(Ordering::reverse)
+            }
+        }
+    }
+}
+
+fn number_bigint_eq(number: f64, bigint: &BigInt) -> bool {
+    number_bigint_ordering(number, bigint) == Some(Ordering::Equal)
+}
+
+fn number_bigint_ordering(number: f64, bigint: &BigInt) -> Option<Ordering> {
+    if number.is_nan() {
+        return None;
+    }
+    if number == f64::INFINITY {
+        return Some(Ordering::Greater);
+    }
+    if number == f64::NEG_INFINITY {
+        return Some(Ordering::Less);
+    }
+    if let Some(bigint_number) = bigint.to_f64() {
+        return number.partial_cmp(&bigint_number);
+    }
+    Some(match bigint.sign() {
+        Sign::Minus => Ordering::Greater,
+        Sign::NoSign | Sign::Plus => Ordering::Less,
+    })
+}
+
+fn bigint_mix_error() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "TypeError: cannot mix BigInt and other types".to_owned(),
+    }
+}
+
+fn bigint_division_by_zero_error() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "RangeError: BigInt division by zero".to_owned(),
     }
 }
 

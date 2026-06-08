@@ -1,4 +1,5 @@
 mod arrays;
+mod bigint;
 mod bytecode;
 mod date;
 mod date_format;

@@ -52,6 +52,7 @@ pub(crate) fn native_reflect_delete_property(
         },
         Value::String(_)
         | Value::Number(_)
+        | Value::BigInt(_)
         | Value::Boolean(_)
         | Value::Null
         | Value::Undefined => unreachable!("target was validated before property deletion"),

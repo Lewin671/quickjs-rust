@@ -27,6 +27,7 @@ pub(crate) fn to_property_key_value(
     match primitive {
         Value::String(value) => Ok(PropertyKey::String(value)),
         Value::Number(number) => Ok(PropertyKey::String(number::number_to_js_string(number))),
+        Value::BigInt(value) => Ok(PropertyKey::String(value.to_string())),
         Value::Boolean(true) => Ok(PropertyKey::String("true".to_owned())),
         Value::Boolean(false) => Ok(PropertyKey::String("false".to_owned())),
         Value::Null => Ok(PropertyKey::String("null".to_owned())),

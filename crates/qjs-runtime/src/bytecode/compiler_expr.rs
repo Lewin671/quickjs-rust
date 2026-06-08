@@ -282,6 +282,7 @@ impl Compiler {
     fn compile_literal(&mut self, literal: &Literal) -> Result<(), RuntimeError> {
         let value = match literal {
             Literal::Number { raw, .. } => Value::Number(parse_number_literal(raw)?),
+            Literal::BigInt { raw, .. } => Value::BigInt(crate::bigint::parse_bigint_literal(raw)?),
             Literal::String { value, .. } => Value::String(value.clone()),
             Literal::Boolean { value, .. } => Value::Boolean(*value),
             Literal::Null { .. } => Value::Null,

@@ -4,9 +4,10 @@ use qjs_ast::{BinaryOp, UnaryOp};
 
 use crate::{
     GLOBAL_THIS_BINDING, ObjectRef, Property, PropertyKey, RuntimeError, Value, array_prototype,
-    boolean, call_function, function_delete_own_property, function_delete_own_symbol_property,
-    function_own_property_keys, inherited_string_prototype_property, number, property_value,
-    property_value_key, string, to_int32_number, to_length, to_uint32_number, value_prototype,
+    bigint, boolean, call_function, function_delete_own_property,
+    function_delete_own_symbol_property, function_own_property_keys,
+    inherited_string_prototype_property, number, property_value, property_value_key, string,
+    to_int32_number, to_length, to_uint32_number, value_prototype,
 };
 
 use super::vm::Vm;
@@ -53,6 +54,9 @@ pub(super) fn get_property(
         }
         Value::Number(_) => {
             Ok(number::inherited_number_prototype_property(env, key).unwrap_or(Value::Undefined))
+        }
+        Value::BigInt(_) => {
+            Ok(bigint::inherited_bigint_prototype_property(env, key).unwrap_or(Value::Undefined))
         }
         Value::Map(_) | Value::Set(_) => property_value(object, key, env),
         Value::Object(_) => property_value(object, key, env),

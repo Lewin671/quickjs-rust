@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     Function, ObjectRef, Property, PropertyKey, RuntimeError, Value,
+    bigint::BIGINT_DATA_PROPERTY,
     boolean::BOOLEAN_DATA_PROPERTY,
     function_prototype,
     number::NUMBER_DATA_PROPERTY,
@@ -31,7 +32,7 @@ pub(crate) fn native_object_assign(
                 message: "Object.assign target must not be null or undefined".to_owned(),
             });
         }
-        value @ (Value::String(_) | Value::Number(_) | Value::Boolean(_)) => {
+        value @ (Value::String(_) | Value::Number(_) | Value::BigInt(_) | Value::Boolean(_)) => {
             boxed_primitive(value, env).expect("primitive value should box")
         }
     };
@@ -62,6 +63,7 @@ pub(crate) fn native_object(
             Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) | Value::Object(_),
         ) => Ok(argument_values[0].clone()),
         Some(Value::Boolean(value)) => Ok(boxed_boolean(*value, env)),
+        Some(Value::BigInt(value)) => Ok(boxed_bigint(value.clone(), env)),
         Some(Value::Number(value)) => Ok(boxed_number(*value, env)),
         Some(Value::String(value)) => Ok(boxed_string(value, env)),
         _ if is_construct => Ok(this_value),
@@ -75,6 +77,7 @@ pub(crate) fn native_object(
 pub(crate) fn boxed_primitive(value: Value, env: &HashMap<String, Value>) -> Option<Value> {
     match value {
         Value::Boolean(value) => Some(boxed_boolean(value, env)),
+        Value::BigInt(value) => Some(boxed_bigint(value, env)),
         Value::Number(value) => Some(boxed_number(value, env)),
         Value::String(value) => Some(boxed_string(&value, env)),
         Value::Object(object) if symbol::is_symbol_primitive(&object) => {
@@ -82,6 +85,12 @@ pub(crate) fn boxed_primitive(value: Value, env: &HashMap<String, Value>) -> Opt
         }
         _ => None,
     }
+}
+
+fn boxed_bigint(value: num_bigint::BigInt, env: &HashMap<String, Value>) -> Value {
+    let object = ObjectRef::with_prototype(HashMap::new(), constructor_prototype("BigInt", env));
+    object.define_non_enumerable(BIGINT_DATA_PROPERTY.to_owned(), Value::BigInt(value));
+    Value::Object(object)
 }
 
 fn boxed_boolean(value: bool, env: &HashMap<String, Value>) -> Value {

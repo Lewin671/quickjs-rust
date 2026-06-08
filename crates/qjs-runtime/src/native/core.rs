@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{Function, NativeFunction, RuntimeError, Value, boolean, global, symbol};
+use crate::{Function, NativeFunction, RuntimeError, Value, bigint, boolean, global, symbol};
 
 pub(super) fn call_core_native(
     function: &Function,
@@ -30,6 +30,18 @@ pub(super) fn call_core_native(
         }
         NativeFunction::GlobalIsFinite => global::native_global_is_finite(argument_values),
         NativeFunction::GlobalIsNaN => global::native_global_is_nan(argument_values),
+        NativeFunction::BigInt => bigint::native_bigint(argument_values),
+        NativeFunction::BigIntAsIntN => bigint::native_bigint_as_int_n(argument_values),
+        NativeFunction::BigIntAsUintN => bigint::native_bigint_as_uint_n(argument_values),
+        NativeFunction::BigIntPrototypeToString => {
+            bigint::native_bigint_prototype_to_string(this_value, argument_values)
+        }
+        NativeFunction::BigIntPrototypeToLocaleString => {
+            bigint::native_bigint_prototype_to_string(this_value, &[])
+        }
+        NativeFunction::BigIntPrototypeValueOf => {
+            bigint::native_bigint_prototype_value_of(this_value)
+        }
         NativeFunction::Eval => global::native_global_eval(argument_values, env),
         NativeFunction::Escape => global::native_global_escape(argument_values, env),
         NativeFunction::Unescape => global::native_global_unescape(argument_values, env),

@@ -86,6 +86,7 @@ pub(crate) fn native_reflect_set_prototype_of(
         Value::Function(function) => function.set_internal_prototype(prototype).is_ok(),
         Value::String(_)
         | Value::Number(_)
+        | Value::BigInt(_)
         | Value::Boolean(_)
         | Value::Null
         | Value::Undefined => {

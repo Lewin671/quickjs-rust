@@ -23,6 +23,7 @@ pub(crate) fn to_js_string_with_env(
 ) -> Result<String, RuntimeError> {
     match value {
         Value::Number(number) => Ok(number::number_to_js_string(number)),
+        Value::BigInt(value) => Ok(value.to_string()),
         Value::String(value) => Ok(value),
         Value::Boolean(true) => Ok("true".to_owned()),
         Value::Boolean(false) => Ok("false".to_owned()),
@@ -54,6 +55,7 @@ fn symbol_to_number_error() -> RuntimeError {
 pub(crate) fn error_value(value: Value) -> String {
     match value {
         Value::Number(number) => number::number_to_js_string(number),
+        Value::BigInt(value) => value.to_string(),
         Value::String(value) => value,
         Value::Boolean(true) => "true".to_owned(),
         Value::Boolean(false) => "false".to_owned(),
@@ -79,6 +81,10 @@ pub(crate) fn to_number_with_env(
 ) -> Result<f64, RuntimeError> {
     match value {
         Value::Number(number) => Ok(number),
+        Value::BigInt(_) => Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: cannot convert BigInt to number".to_owned(),
+        }),
         Value::Boolean(true) => Ok(1.0),
         Value::Boolean(false) | Value::Null => Ok(0.0),
         Value::String(value) => string_to_number(&value),
@@ -283,6 +289,7 @@ pub(crate) fn to_length_with_env(
 pub(crate) fn is_truthy(value: &Value) -> bool {
     match value {
         Value::Number(number) => *number != 0.0 && !number.is_nan(),
+        Value::BigInt(value) => value != &num_bigint::BigInt::from(0),
         Value::String(value) => !value.is_empty(),
         Value::Boolean(value) => *value,
         Value::Null | Value::Undefined => false,

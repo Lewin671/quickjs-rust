@@ -37,6 +37,47 @@ fn lexes_prefixed_numeric_literals() {
 }
 
 #[test]
+fn lexes_bigint_literals() {
+    let tokens = lex("0n 12n 0xfn 0b101n 0o77n 1_000n").expect("source should lex");
+    let kinds: Vec<TokenKind> = tokens.into_iter().map(|token| token.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::BigInt("0".to_owned()),
+            TokenKind::BigInt("12".to_owned()),
+            TokenKind::BigInt("0xf".to_owned()),
+            TokenKind::BigInt("0b101".to_owned()),
+            TokenKind::BigInt("0o77".to_owned()),
+            TokenKind::BigInt("1_000".to_owned()),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn rejects_invalid_bigint_literals() {
+    assert!(lex("01n").is_err());
+    assert!(lex("1__0n").is_err());
+    assert!(lex("1_n").is_err());
+    assert!(lex("1.0n").is_err());
+}
+
+#[test]
+fn lexes_division_after_bigint_literals() {
+    let tokens = lex("7n / 2n").expect("source should lex");
+    let kinds: Vec<TokenKind> = tokens.into_iter().map(|token| token.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::BigInt("7".to_owned()),
+            TokenKind::Slash,
+            TokenKind::BigInt("2".to_owned()),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
 fn rejects_invalid_prefixed_numeric_literals() {
     assert!(lex("0xG").is_err());
     assert!(lex("0b2").is_err());

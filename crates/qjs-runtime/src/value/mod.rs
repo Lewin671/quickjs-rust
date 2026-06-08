@@ -1,5 +1,7 @@
 use std::fmt;
 
+use num_bigint::BigInt;
+
 mod array;
 mod map;
 mod object;
@@ -19,6 +21,8 @@ use crate::{Function, string};
 pub enum Value {
     /// Number value.
     Number(f64),
+    /// BigInt value.
+    BigInt(BigInt),
     /// String value.
     String(String),
     /// Boolean value.
@@ -43,6 +47,7 @@ impl fmt::Debug for Value {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Number(value) => formatter.debug_tuple("Number").field(value).finish(),
+            Self::BigInt(value) => formatter.debug_tuple("BigInt").field(value).finish(),
             Self::String(value) => formatter.debug_tuple("String").field(value).finish(),
             Self::Boolean(value) => formatter.debug_tuple("Boolean").field(value).finish(),
             Self::Null => formatter.write_str("Null"),
@@ -60,6 +65,7 @@ impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Number(left), Self::Number(right)) => left == right,
+            (Self::BigInt(left), Self::BigInt(right)) => left == right,
             (Self::String(left), Self::String(right)) => string::string_utf16_eq(left, right),
             (Self::Boolean(left), Self::Boolean(right)) => left == right,
             (Self::Null, Self::Null) | (Self::Undefined, Self::Undefined) => true,
@@ -79,6 +85,7 @@ impl Value {
             (Self::Number(left), Self::Number(right)) => {
                 (left.is_nan() && right.is_nan()) || left.to_bits() == right.to_bits()
             }
+            (Self::BigInt(left), Self::BigInt(right)) => left == right,
             (Self::String(left), Self::String(right)) => string::string_utf16_eq(left, right),
             (Self::Boolean(left), Self::Boolean(right)) => left == right,
             (Self::Null, Self::Null) | (Self::Undefined, Self::Undefined) => true,

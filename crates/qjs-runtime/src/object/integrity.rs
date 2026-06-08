@@ -9,7 +9,13 @@ pub(crate) fn native_object_is_extensible(
         Some(Value::Set(set)) => set.object().is_extensible(),
         Some(Value::Array(elements)) => elements.is_extensible(),
         Some(Value::Function(function)) => function.is_extensible(),
-        Some(Value::String(_) | Value::Number(_) | Value::Boolean(_) | Value::Null)
+        Some(
+            Value::String(_)
+            | Value::Number(_)
+            | Value::BigInt(_)
+            | Value::Boolean(_)
+            | Value::Null,
+        )
         | Some(Value::Undefined)
         | None => false,
     }))
@@ -37,7 +43,13 @@ pub(crate) fn native_object_is_sealed(argument_values: &[Value]) -> Result<Value
         Some(Value::Set(set)) => set.object().is_sealed(),
         Some(Value::Array(elements)) => elements.is_sealed(),
         Some(Value::Function(function)) => function.is_sealed(),
-        Some(Value::String(_) | Value::Number(_) | Value::Boolean(_) | Value::Null)
+        Some(
+            Value::String(_)
+            | Value::Number(_)
+            | Value::BigInt(_)
+            | Value::Boolean(_)
+            | Value::Null,
+        )
         | Some(Value::Undefined)
         | None => true,
     }))
@@ -50,7 +62,13 @@ pub(crate) fn native_object_is_frozen(argument_values: &[Value]) -> Result<Value
         Some(Value::Set(set)) => set.object().is_frozen(),
         Some(Value::Array(elements)) => elements.is_frozen(),
         Some(Value::Function(function)) => function.is_frozen(),
-        Some(Value::String(_) | Value::Number(_) | Value::Boolean(_) | Value::Null)
+        Some(
+            Value::String(_)
+            | Value::Number(_)
+            | Value::BigInt(_)
+            | Value::Boolean(_)
+            | Value::Null,
+        )
         | Some(Value::Undefined)
         | None => true,
     }))

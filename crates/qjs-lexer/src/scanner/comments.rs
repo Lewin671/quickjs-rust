@@ -74,6 +74,7 @@ impl Lexer<'_> {
             previous.kind,
             TokenKind::Identifier(_)
                 | TokenKind::Number(_)
+                | TokenKind::BigInt(_)
                 | TokenKind::String(_)
                 | TokenKind::TemplateNoSubstitution(_)
                 | TokenKind::TemplateTail(_)

@@ -21,6 +21,10 @@ impl Parser {
                 raw,
                 span: token.span,
             })),
+            TokenKind::BigInt(raw) => Ok(Expr::Literal(Literal::BigInt {
+                raw,
+                span: token.span,
+            })),
             TokenKind::String(value) => Ok(Expr::Literal(Literal::String {
                 value,
                 span: token.span,

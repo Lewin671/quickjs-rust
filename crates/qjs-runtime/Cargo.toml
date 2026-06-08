@@ -8,6 +8,8 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+num-bigint = "0.4"
+num-traits = "0.2"
 qjs-ast = { path = "../qjs-ast" }
 qjs-parser = { path = "../qjs-parser" }
 

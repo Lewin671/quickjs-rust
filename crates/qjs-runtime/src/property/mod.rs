@@ -52,6 +52,7 @@ pub(crate) fn has_property_key(
             || function_prototype_property(&function, env, key).is_some()),
         Value::String(_)
         | Value::Number(_)
+        | Value::BigInt(_)
         | Value::Boolean(_)
         | Value::Null
         | Value::Undefined => Err(RuntimeError {
@@ -81,6 +82,7 @@ fn has_symbol_property(
                 .is_some_and(|prototype| prototype.symbol_property(symbol).is_some())),
         Value::String(_)
         | Value::Number(_)
+        | Value::BigInt(_)
         | Value::Boolean(_)
         | Value::Null
         | Value::Undefined => Err(RuntimeError {
@@ -171,6 +173,11 @@ pub(crate) fn property_value_key_with_receiver(
             receiver,
             env,
         ),
+        Value::BigInt(_) => property_descriptor_value(
+            inherited_primitive_prototype_descriptor(env, "BigInt", key),
+            receiver,
+            env,
+        ),
         Value::Null | Value::Undefined => Ok(Value::Undefined),
     }
 }
@@ -214,6 +221,11 @@ fn symbol_property_value_with_receiver(
         ),
         Value::Number(_) => property_descriptor_value(
             inherited_primitive_prototype_symbol_descriptor(env, "Number", symbol),
+            receiver,
+            env,
+        ),
+        Value::BigInt(_) => property_descriptor_value(
+            inherited_primitive_prototype_symbol_descriptor(env, "BigInt", symbol),
             receiver,
             env,
         ),

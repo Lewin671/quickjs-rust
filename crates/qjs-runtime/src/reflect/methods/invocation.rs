@@ -61,6 +61,7 @@ fn ensure_reflect_object_argument_list(value: &Value, name: &str) -> Result<(), 
         }
         Value::String(_)
         | Value::Number(_)
+        | Value::BigInt(_)
         | Value::Boolean(_)
         | Value::Null
         | Value::Undefined => Err(RuntimeError {
@@ -91,6 +92,7 @@ fn reflect_argument_list(
         }
         Value::String(_)
         | Value::Number(_)
+        | Value::BigInt(_)
         | Value::Boolean(_)
         | Value::Null
         | Value::Undefined => unreachable!("argument list was validated before collection"),

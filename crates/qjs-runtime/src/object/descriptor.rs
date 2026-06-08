@@ -67,7 +67,7 @@ fn to_object_for_define_properties(
         | Value::Function(_)
         | Value::Map(_)
         | Value::Set(_)) => Ok(value),
-        value @ (Value::String(_) | Value::Number(_) | Value::Boolean(_)) => {
+        value @ (Value::String(_) | Value::Number(_) | Value::BigInt(_) | Value::Boolean(_)) => {
             Ok(boxed_primitive(value, env).expect("primitive value should box"))
         }
         Value::Null | Value::Undefined => Err(RuntimeError {
@@ -115,7 +115,11 @@ pub(super) fn own_property_descriptor_key(
             PropertyKey::String(key) => crate::string::string_own_property_descriptor(&value, key),
             PropertyKey::Symbol(_) => None,
         }),
-        Value::Number(_) | Value::Boolean(_) | Value::Null | Value::Undefined => Ok(None),
+        Value::Number(_)
+        | Value::BigInt(_)
+        | Value::Boolean(_)
+        | Value::Null
+        | Value::Undefined => Ok(None),
     }
 }
 
@@ -531,10 +535,12 @@ fn ensure_define_property_target(target: &Value) -> Result<(), RuntimeError> {
         Value::Object(_) | Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_) => {
             Ok(())
         }
-        Value::String(_) | Value::Number(_) | Value::Boolean(_) => Err(RuntimeError {
-            thrown: None,
-            message: "Object.defineProperty primitive targets are not implemented".to_owned(),
-        }),
+        Value::String(_) | Value::Number(_) | Value::BigInt(_) | Value::Boolean(_) => {
+            Err(RuntimeError {
+                thrown: None,
+                message: "Object.defineProperty primitive targets are not implemented".to_owned(),
+            })
+        }
         Value::Null | Value::Undefined => Err(RuntimeError {
             thrown: None,
             message: "Object.defineProperty target must be an object".to_owned(),

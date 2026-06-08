@@ -16,6 +16,8 @@ pub enum TokenKind {
     Identifier(String),
     /// Number literal text.
     Number(String),
+    /// BigInt literal text without the trailing `n`.
+    BigInt(String),
     /// String literal value.
     String(String),
     /// Template literal without substitutions.

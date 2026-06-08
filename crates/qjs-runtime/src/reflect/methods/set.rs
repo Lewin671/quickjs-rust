@@ -54,6 +54,7 @@ fn own_property_descriptor_key(target: &Value, key: &PropertyKey) -> Option<Prop
         Value::Function(function) => crate::function_own_property_descriptor(function, key),
         Value::String(_)
         | Value::Number(_)
+        | Value::BigInt(_)
         | Value::Boolean(_)
         | Value::Null
         | Value::Undefined => None,
@@ -74,6 +75,7 @@ fn own_symbol_property_descriptor(target: &Value, key: &PropertyKey) -> Option<P
         Value::Array(elements) => elements.own_symbol_property(symbol),
         Value::String(_)
         | Value::Number(_)
+        | Value::BigInt(_)
         | Value::Boolean(_)
         | Value::Null
         | Value::Undefined => None,
@@ -205,6 +207,7 @@ fn set_receiver_data_property(
         }
         Value::String(_)
         | Value::Number(_)
+        | Value::BigInt(_)
         | Value::Boolean(_)
         | Value::Null
         | Value::Undefined => Ok(false),
@@ -255,6 +258,7 @@ fn set_receiver_symbol_data_property(
         }
         Value::String(_)
         | Value::Number(_)
+        | Value::BigInt(_)
         | Value::Boolean(_)
         | Value::Null
         | Value::Undefined => Ok(false),

@@ -166,7 +166,11 @@ fn own_property_keys(value: Value) -> Vec<String> {
         Value::Array(elements) => array_own_property_keys(&elements),
         Value::Function(function) => function_own_property_keys(&function),
         Value::String(value) => crate::string::string_own_property_keys(&value),
-        Value::Number(_) | Value::Boolean(_) | Value::Null | Value::Undefined => Vec::new(),
+        Value::Number(_)
+        | Value::BigInt(_)
+        | Value::Boolean(_)
+        | Value::Null
+        | Value::Undefined => Vec::new(),
     }
 }
 
@@ -178,7 +182,11 @@ pub(super) fn own_property_names(value: Value) -> Vec<String> {
         Value::Array(elements) => array_own_property_names(&elements),
         Value::Function(function) => function_own_property_names(&function),
         Value::String(value) => crate::string::string_own_property_names(&value),
-        Value::Number(_) | Value::Boolean(_) | Value::Null | Value::Undefined => Vec::new(),
+        Value::Number(_)
+        | Value::BigInt(_)
+        | Value::Boolean(_)
+        | Value::Null
+        | Value::Undefined => Vec::new(),
     }
 }
 
@@ -191,6 +199,7 @@ pub(super) fn own_property_symbols(value: Value) -> Vec<crate::ObjectRef> {
         Value::Array(elements) => elements.own_property_symbols(),
         Value::String(_)
         | Value::Number(_)
+        | Value::BigInt(_)
         | Value::Boolean(_)
         | Value::Null
         | Value::Undefined => Vec::new(),

@@ -12,6 +12,7 @@ pub(crate) fn native_reflect_own_keys(argument_values: &[Value]) -> Result<Value
         Value::Function(function) => crate::function_own_property_names(&function),
         Value::String(_)
         | Value::Number(_)
+        | Value::BigInt(_)
         | Value::Boolean(_)
         | Value::Null
         | Value::Undefined => {
@@ -26,6 +27,7 @@ pub(crate) fn native_reflect_own_keys(argument_values: &[Value]) -> Result<Value
         Value::Function(function) => crate::function_own_property_symbols(&function),
         Value::String(_)
         | Value::Number(_)
+        | Value::BigInt(_)
         | Value::Boolean(_)
         | Value::Null
         | Value::Undefined => {

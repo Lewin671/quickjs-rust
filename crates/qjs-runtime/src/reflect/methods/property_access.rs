@@ -25,6 +25,7 @@ pub(crate) fn native_reflect_get(
         }
         Value::String(_)
         | Value::Number(_)
+        | Value::BigInt(_)
         | Value::Boolean(_)
         | Value::Null
         | Value::Undefined => unreachable!("target was validated before property get"),
@@ -47,6 +48,7 @@ pub(crate) fn native_reflect_has(
         }
         Value::String(_)
         | Value::Number(_)
+        | Value::BigInt(_)
         | Value::Boolean(_)
         | Value::Null
         | Value::Undefined => unreachable!("target was validated before property lookup"),

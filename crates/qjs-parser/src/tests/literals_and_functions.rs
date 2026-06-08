@@ -151,6 +151,16 @@ fn parses_array_literal() {
 }
 
 #[test]
+fn parses_bigint_literal() {
+    let script = parse_script("123n;").expect("source should parse");
+    let [Stmt::Expr(Expr::Literal(Literal::BigInt { raw, span }))] = script.body.as_slice() else {
+        panic!("expected BigInt literal expression");
+    };
+    assert_eq!(raw, "123");
+    assert_eq!(*span, qjs_ast::Span::new(0, 4));
+}
+
+#[test]
 fn parses_no_substitution_template_literal_as_string_literal() {
     let script = parse_script("`hello`;").expect("script should parse");
     let [Stmt::Expr(Expr::Literal(Literal::String { value, .. }))] = script.body.as_slice() else {

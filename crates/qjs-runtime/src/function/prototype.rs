@@ -107,9 +107,12 @@ fn apply_argument_list(
                 .map(|index| property_value(arg_array.clone(), &index.to_string(), env))
                 .collect()
         }
-        Value::String(_) | Value::Number(_) | Value::Boolean(_) | Value::Map(_) | Value::Set(_) => {
-            Err(apply_argument_list_type_error())
-        }
+        Value::String(_)
+        | Value::Number(_)
+        | Value::BigInt(_)
+        | Value::Boolean(_)
+        | Value::Map(_)
+        | Value::Set(_) => Err(apply_argument_list_type_error()),
     }
 }
 

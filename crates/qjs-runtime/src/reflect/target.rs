@@ -14,6 +14,7 @@ pub(super) fn ensure_reflect_object_target(
         }
         Value::String(_)
         | Value::Number(_)
+        | Value::BigInt(_)
         | Value::Boolean(_)
         | Value::Null
         | Value::Undefined => Err(RuntimeError {

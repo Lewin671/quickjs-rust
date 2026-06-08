@@ -32,6 +32,10 @@ fn stringify_value(
             Ok(Some(number::number_to_js_string(*number)))
         }
         Value::Number(_) | Value::Null => Ok(Some("null".to_owned())),
+        Value::BigInt(_) => Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: cannot serialize BigInt".to_owned(),
+        }),
         Value::Boolean(true) => Ok(Some("true".to_owned())),
         Value::Boolean(false) => Ok(Some("false".to_owned())),
         Value::Array(array) => stringify_array(array, env).map(Some),
