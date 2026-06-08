@@ -34,6 +34,28 @@ fn evaluates_array_from_static_constructor() {
         eval("Array.from({ length: 3, 0: 'a', 2: 'c' }).join('|');"),
         Ok(Value::String("a||c".to_owned()))
     );
+    assert_eq!(
+        eval("Array.from.call(Object, []).constructor === Object;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "function C(length) { this.args = arguments; } let result = Array.from.call(C, { length: 42 }); result instanceof C && result.args.length === 1 && result.args[0] === 42 && result.length === 42;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "function C() { Object.defineProperty(this, '0', { value: 1, writable: false, configurable: true }); } let result = Array.from.call(C, { length: 1, 0: 2 }); let desc = Object.getOwnPropertyDescriptor(result, '0'); result[0] + ':' + desc.writable + ':' + desc.enumerable + ':' + desc.configurable;"
+        ),
+        Ok(Value::String("2:true:true:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "function C() { Object.preventExtensions(this); } let caught = false; try { Array.from.call(C, { length: 1 }); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]

@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    ArrayRef, PropertyKey, RuntimeError, Value, call_function, is_truthy, property_value,
-    property_value_key, symbol,
+    ArrayRef, Function, Property, PropertyKey, RuntimeError, Value, call_function,
+    construct_function, is_truthy, property_value, property_value_key, symbol,
 };
 
 use super::array_like::array_like_values_with_env;
@@ -33,6 +33,7 @@ pub(crate) fn native_array_is_array(argument_values: &[Value]) -> Result<Value, 
 }
 
 pub(crate) fn native_array_from(
+    this_value: Value,
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
@@ -50,8 +51,13 @@ pub(crate) fn native_array_from(
         }
     };
 
-    let values = array_from_values(items, mapping.as_ref(), this_arg, env)?;
-    Ok(Value::Array(ArrayRef::new(values)))
+    let elements = array_from_values(items, mapping.as_ref(), this_arg, env)?;
+    array_from_result(this_value, elements, env)
+}
+
+struct ArrayFromElements {
+    values: Vec<Value>,
+    construct_length: Option<usize>,
 }
 
 fn array_from_values(
@@ -59,9 +65,14 @@ fn array_from_values(
     mapping: Option<&Value>,
     this_arg: Value,
     env: &mut HashMap<String, Value>,
-) -> Result<Vec<Value>, RuntimeError> {
+) -> Result<ArrayFromElements, RuntimeError> {
     if matches!(items, Value::Null | Value::Undefined) {
-        return array_like_values_with_env(items, "Array.from", env);
+        return array_like_values_with_env(items, "Array.from", env).map(|values| {
+            ArrayFromElements {
+                construct_length: Some(values.len()),
+                values,
+            }
+        });
     }
 
     let iterator_method = match symbol::iterator_symbol(env) {
@@ -72,14 +83,121 @@ fn array_from_values(
     };
 
     match iterator_method {
-        Value::Undefined | Value::Null => map_array_like_values(items, mapping, this_arg, env),
+        Value::Undefined | Value::Null => {
+            let values = map_array_like_values(items, mapping, this_arg, env)?;
+            Ok(ArrayFromElements {
+                construct_length: Some(values.len()),
+                values,
+            })
+        }
         Value::Function(_) => {
-            array_from_iterable_values(items, iterator_method, mapping, this_arg, env)
+            let values =
+                array_from_iterable_values(items, iterator_method, mapping, this_arg, env)?;
+            Ok(ArrayFromElements {
+                construct_length: None,
+                values,
+            })
         }
         _ => Err(RuntimeError {
             thrown: None,
             message: "Array.from iterator method is not callable".to_owned(),
         }),
+    }
+}
+
+fn array_from_result(
+    this_value: Value,
+    elements: ArrayFromElements,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let length = elements.values.len();
+    let Some(constructor) = array_from_constructor(this_value) else {
+        return Ok(Value::Array(ArrayRef::new(elements.values)));
+    };
+
+    let arguments = elements
+        .construct_length
+        .map(|length| vec![Value::Number(length as f64)])
+        .unwrap_or_default();
+    let target = construct_function(constructor.clone(), constructor, arguments, env)?;
+    for (index, value) in elements.values.into_iter().enumerate() {
+        create_data_property_or_throw(target.clone(), index.to_string(), value)?;
+    }
+    create_data_property_or_throw(
+        target.clone(),
+        "length".to_owned(),
+        Value::Number(length as f64),
+    )?;
+    Ok(target)
+}
+
+fn array_from_constructor(value: Value) -> Option<Value> {
+    match &value {
+        Value::Function(Function {
+            constructable: true,
+            ..
+        }) => Some(value),
+        _ => None,
+    }
+}
+
+fn create_data_property_or_throw(
+    target: Value,
+    key: String,
+    value: Value,
+) -> Result<(), RuntimeError> {
+    match target {
+        Value::Object(object) => {
+            if object
+                .own_property(&key)
+                .is_some_and(|property| !property.configurable)
+                || (!object.has_own_property(&key) && !object.is_extensible())
+            {
+                return Err(create_data_property_error());
+            }
+            object.define_property(key, Property::enumerable(value));
+            Ok(())
+        }
+        Value::Array(array) => {
+            array.define_property(key, Property::enumerable(value));
+            Ok(())
+        }
+        Value::Function(function) => {
+            function.define_property(key, Property::enumerable(value));
+            Ok(())
+        }
+        Value::Map(map) => {
+            let object = map.object();
+            if object
+                .own_property(&key)
+                .is_some_and(|property| !property.configurable)
+                || (!object.has_own_property(&key) && !object.is_extensible())
+            {
+                return Err(create_data_property_error());
+            }
+            object.define_property(key, Property::enumerable(value));
+            Ok(())
+        }
+        Value::Set(set) => {
+            let object = set.object();
+            if object
+                .own_property(&key)
+                .is_some_and(|property| !property.configurable)
+                || (!object.has_own_property(&key) && !object.is_extensible())
+            {
+                return Err(create_data_property_error());
+            }
+            object.define_property(key, Property::enumerable(value));
+            Ok(())
+        }
+        _ => Err(create_data_property_error()),
+    }
+}
+
+fn create_data_property_error() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "TypeError: Array.from cannot create result property".to_owned(),
     }
 }
 
