@@ -42,6 +42,25 @@ fn evaluates_set_iterable_constructor_arguments() {
 }
 
 #[test]
+fn set_constructor_uses_prototype_add_adder() {
+    assert_eval(
+        "let original = Set.prototype.add; let calls = 0; let receivers = []; let seen = ''; Set.prototype.add = function(value) { calls = calls + 1; receivers.push(this); seen = seen + value + '|'; return original.call(this, value); }; let set = new Set(['a', 'b']); calls + ':' + seen + ':' + (receivers[0] === set) + ':' + (receivers[1] === set) + ':' + set.has('b');",
+        Value::String("2:a|b|:true:true:true".to_owned()),
+    );
+    assert_eval(
+        "let original = Set.prototype.add; Set.prototype.add = null; new Set().size;",
+        Value::Number(0.0),
+    );
+    assert!(eval("Set.prototype.add = null; new Set([1]);").is_err());
+    assert!(
+        eval(
+            "Object.defineProperty(Set.prototype, 'add', { get: function() { throw new TypeError('boom'); } }); new Set([]);"
+        )
+        .is_err()
+    );
+}
+
+#[test]
 fn evaluates_set_basic_methods() {
     assert_eval("var set = new Set(); set.size;", Value::Number(0.0));
     assert_eval(

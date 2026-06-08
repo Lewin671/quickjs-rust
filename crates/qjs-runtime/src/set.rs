@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     ArrayRef, Function, NativeFunction, ObjectRef, Property, RuntimeError, SetRef, Value,
-    array::array_like_values_with_env, symbol,
+    array::array_like_values_with_env, call_function, property_value, symbol,
 };
 
 mod composition;
@@ -143,14 +143,22 @@ pub(crate) fn native_set(
         });
     }
     let set = SetRef::new(crate::function_prototype(function));
+    let set_value = Value::Set(set);
     if let Some(iterable) = argument_values.first().cloned()
         && !matches!(iterable, Value::Undefined | Value::Null)
     {
+        let adder = property_value(set_value.clone(), "add", env)?;
+        if !matches!(adder, Value::Function(_)) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: Set constructor add adder must be callable".to_owned(),
+            });
+        }
         for value in array_like_values_with_env(iterable, "Set constructor", env)? {
-            set.add(value);
+            call_function(adder.clone(), set_value.clone(), vec![value], env, false)?;
         }
     }
-    Ok(Value::Set(set))
+    Ok(set_value)
 }
 
 pub(crate) fn native_set_prototype_size(this_value: Value) -> Result<Value, RuntimeError> {
