@@ -39,9 +39,9 @@ pub(crate) use conversion::{
 use function::{Function, NativeFunction};
 pub(crate) use function::{call_function, construct_function, ensure_constructor};
 pub(crate) use property::{
-    PropertyKey, array_has_own_property, array_own_property_descriptor, array_own_property_keys,
-    array_own_property_names, array_prototype, array_prototype_property, constructor_prototype,
-    function_delete_own_property, function_delete_own_symbol_property,
+    PropertyKey, array_as_object_prototype, array_has_own_property, array_own_property_descriptor,
+    array_own_property_keys, array_own_property_names, array_prototype, array_prototype_property,
+    constructor_prototype, function_delete_own_property, function_delete_own_symbol_property,
     function_intrinsic_prototype, function_own_property_descriptor, function_own_property_keys,
     function_own_property_names, function_own_property_symbols,
     function_own_symbol_property_descriptor, function_prototype, function_prototype_property,

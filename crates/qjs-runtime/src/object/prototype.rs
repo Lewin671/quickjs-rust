@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use crate::{
-    PropertyKey, RuntimeError, Value, array_has_own_property, array_prototype, boolean,
-    call_function, date, error, function_intrinsic_prototype, function_own_property_descriptor,
-    function_prototype, number, property_value, property_value_key, regexp, string, symbol,
-    to_property_key_value, value_prototype,
+    PropertyKey, RuntimeError, Value, array_as_object_prototype, array_has_own_property,
+    array_prototype, boolean, call_function, date, error, function_intrinsic_prototype,
+    function_own_property_descriptor, function_prototype, number, property_value,
+    property_value_key, regexp, string, symbol, to_property_key_value, value_prototype,
 };
 
 use super::descriptor::own_property_descriptor_key;
@@ -54,6 +54,7 @@ pub(crate) fn native_object_get_prototype_of(
 
 pub(crate) fn native_object_set_prototype_of(
     argument_values: &[Value],
+    env: &HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let prototype = match argument_values.get(1).cloned().unwrap_or(Value::Undefined) {
@@ -64,6 +65,7 @@ pub(crate) fn native_object_set_prototype_of(
             });
         }
         Value::Object(prototype) => Some(prototype),
+        Value::Array(array) => Some(array_as_object_prototype(&array, env)),
         Value::Null => None,
         _ => {
             return Err(RuntimeError {

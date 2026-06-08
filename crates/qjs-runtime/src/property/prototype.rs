@@ -66,7 +66,10 @@ pub(crate) fn function_prototype(function: &Function) -> Option<ObjectRef> {
     }
 }
 
-fn array_as_object_prototype(array: &ArrayRef, env: &HashMap<String, Value>) -> ObjectRef {
+pub(crate) fn array_as_object_prototype(
+    array: &ArrayRef,
+    env: &HashMap<String, Value>,
+) -> ObjectRef {
     let prototype = ObjectRef::with_prototype(
         HashMap::new(),
         array

@@ -37,7 +37,7 @@ pub(super) fn call_reflect_native(
         }
         NativeFunction::ReflectSet => reflect::native_reflect_set(argument_values, env)?,
         NativeFunction::ReflectSetPrototypeOf => {
-            reflect::native_reflect_set_prototype_of(argument_values)?
+            reflect::native_reflect_set_prototype_of(argument_values, env)?
         }
         _ => return Ok(None),
     };

@@ -75,6 +75,7 @@ cases/array-copy-within-basic.js
 cases/array-copy-within-coercion-side-effects.js
 test/built-ins/Array/prototype/copyWithin/call-with-boolean.js
 test/built-ins/Array/prototype/copyWithin/coerced-values-end.js
+test/built-ins/Array/prototype/copyWithin/coerced-values-start-change-start.js
 test/built-ins/Array/prototype/copyWithin/coerced-values-start-change-target.js
 test/built-ins/Array/prototype/copyWithin/coerced-values-start.js
 test/built-ins/Array/prototype/copyWithin/coerced-values-target.js

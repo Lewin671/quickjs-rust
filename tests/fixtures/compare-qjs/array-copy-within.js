@@ -22,6 +22,16 @@
     }
   });
 
+  var arrayProto = [0, 1, 2, 3, 4];
+  var arrayInherited = [0, 1, 2, 3, 4];
+  Object.setPrototypeOf(arrayInherited, arrayProto);
+  arrayInherited.copyWithin(0, {
+    valueOf: function() {
+      arrayInherited.length = 2;
+      return 3;
+    }
+  });
+
   return (result === xs)
     + ":" + xs.join()
     + ":" + ys.join()
@@ -31,5 +41,8 @@
     + ":" + shortened[1]
     + ":" + inherited.length
     + ":" + inherited[0]
-    + ":" + inherited[1];
+    + ":" + inherited[1]
+    + ":" + arrayInherited.length
+    + ":" + arrayInherited[0]
+    + ":" + arrayInherited[1];
 })()

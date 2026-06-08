@@ -54,7 +54,7 @@ pub(super) fn call_object_native(
         }
         NativeFunction::ObjectSeal => object::native_object_seal(argument_values)?,
         NativeFunction::ObjectSetPrototypeOf => {
-            object::native_object_set_prototype_of(argument_values)?
+            object::native_object_set_prototype_of(argument_values, env)?
         }
         NativeFunction::ObjectEntries => object::native_object_entries(argument_values, env)?,
         NativeFunction::ObjectKeys => object::native_object_keys(argument_values)?,
