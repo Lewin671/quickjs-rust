@@ -1018,4 +1018,5 @@ cases/tagged-template-basic.js
 cases/template-literal-substitution-basic.js
 cases/weak-map-basic.js
 cases/weak-collection-constructor-adder.js
+cases/weak-collection-registered-symbol-rejection.js
 cases/weak-set-basic.js

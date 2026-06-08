@@ -164,17 +164,18 @@ pub(crate) fn native_weak_map_prototype_has(
 pub(crate) fn native_weak_map_prototype_set(
     this_value: Value,
     argument_values: &[Value],
+    env: &HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let object = weak_map_object(&this_value)?;
     let key = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    if !is_weak_map_key(&key) {
+    if !can_be_held_weakly(&key, env) {
         return Err(RuntimeError {
             thrown: None,
             message: "TypeError: WeakMap key must be an object".to_owned(),
         });
     }
     let value = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
-    weak_map_set(object, key, value)?;
+    weak_map_set(object, key, value, env)?;
     Ok(this_value)
 }
 
@@ -228,8 +229,13 @@ fn weak_map_has(object: ObjectRef, key: &Value) -> bool {
     weak_map_get(object, key).is_some()
 }
 
-fn weak_map_set(object: ObjectRef, key: Value, value: Value) -> Result<(), RuntimeError> {
-    if !is_weak_map_key(&key) {
+fn weak_map_set(
+    object: ObjectRef,
+    key: Value,
+    value: Value,
+    env: &HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
+    if !can_be_held_weakly(&key, env) {
         return Err(RuntimeError {
             thrown: None,
             message: "TypeError: WeakMap key must be an object".to_owned(),
@@ -278,6 +284,15 @@ fn is_weak_map_key(value: &Value) -> bool {
         value,
         Value::Object(_) | Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_)
     )
+}
+
+fn can_be_held_weakly(value: &Value, env: &HashMap<String, Value>) -> bool {
+    match value {
+        Value::Object(object) if symbol::is_symbol_primitive(object) => {
+            !symbol::is_registered_symbol(object, env)
+        }
+        value => is_weak_map_key(value),
+    }
 }
 
 fn incompatible_receiver() -> RuntimeError {

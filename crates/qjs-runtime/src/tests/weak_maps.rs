@@ -115,6 +115,16 @@ fn rejects_weak_map_invalid_receivers_and_primitive_set_keys() {
     assert!(eval("WeakMap.prototype.set.call({}, {}, 1);").is_err());
     assert!(eval("new WeakMap().set('key', 1);").is_err());
     assert_eq!(
+        eval("let key = Symbol('key'); let map = new WeakMap(); map.set(key, 1); map.get(key);"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval(
+            "let map = new WeakMap(); let caught = false; try { map.set(Symbol.for('key'), 1); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval(
             "let map = new WeakMap(); map.get('key') === undefined && !map.has('key') && !map.delete('key');"
         ),

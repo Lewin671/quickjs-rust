@@ -50,7 +50,26 @@
     nonIterableSetThrows = error.constructor === TypeError;
   }
 
+  var mapSymbol = Symbol("map");
+  map.set(mapSymbol, 8);
+  var setSymbol = Symbol("set");
+  set.add(setSymbol);
+  var registeredMapSymbolThrows = false;
+  var registeredSetSymbolThrows = false;
+  try {
+    map.set(Symbol.for("map"), 9);
+  } catch (error) {
+    registeredMapSymbolThrows = error.constructor === TypeError;
+  }
+  try {
+    set.add(Symbol.for("set"));
+  } catch (error) {
+    registeredSetSymbolThrows = error.constructor === TypeError;
+  }
+
   return mapCalls + ":" + map.get(mapKey) + ":" + setCalls + ":" +
     set.has(setValue) + ":" + mapNullAdderThrows + ":" + setNullAdderThrows +
-    ":" + nonIterableMapThrows + ":" + nonIterableSetThrows;
+    ":" + nonIterableMapThrows + ":" + nonIterableSetThrows + ":" +
+    map.get(mapSymbol) + ":" + set.has(setSymbol) + ":" +
+    registeredMapSymbolThrows + ":" + registeredSetSymbolThrows;
 })()

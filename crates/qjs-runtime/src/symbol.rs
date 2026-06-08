@@ -197,6 +197,18 @@ pub(crate) fn is_symbol_primitive(object: &ObjectRef) -> bool {
     is_symbol_object(object) && object.own_property(SYMBOL_BOXED_PROPERTY).is_none()
 }
 
+pub(crate) fn is_registered_symbol(object: &ObjectRef, env: &HashMap<String, Value>) -> bool {
+    let Some(Value::Object(registry)) = env.get(SYMBOL_REGISTRY_BINDING) else {
+        return false;
+    };
+    registry.own_property_names().into_iter().any(|key| {
+        matches!(
+            registry.own_property(&key).map(|property| property.value),
+            Some(Value::Object(symbol)) if symbol.ptr_eq(object)
+        )
+    })
+}
+
 pub(crate) fn boxed_symbol(object: &ObjectRef, env: &HashMap<String, Value>) -> Value {
     let description = symbol_description(object);
     let boxed = symbol_object(symbol_prototype(env), description);

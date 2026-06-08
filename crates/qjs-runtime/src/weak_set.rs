@@ -94,10 +94,11 @@ pub(crate) fn native_weak_set(
 pub(crate) fn native_weak_set_prototype_add(
     this_value: Value,
     argument_values: &[Value],
+    env: &HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let object = weak_set_object(&this_value)?;
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    weak_set_add(object, value)?;
+    weak_set_add(object, value, env)?;
     Ok(this_value)
 }
 
@@ -160,8 +161,12 @@ fn weak_set_has(object: ObjectRef, value: &Value) -> bool {
         .is_some_and(|entries| entries.to_vec().iter().any(|entry| entry.same_value(value)))
 }
 
-fn weak_set_add(object: ObjectRef, value: Value) -> Result<(), RuntimeError> {
-    if !is_weak_set_value(&value) {
+fn weak_set_add(
+    object: ObjectRef,
+    value: Value,
+    env: &HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
+    if !can_be_held_weakly(&value, env) {
         return Err(RuntimeError {
             thrown: None,
             message: "TypeError: WeakSet value must be an object".to_owned(),
@@ -194,6 +199,15 @@ fn is_weak_set_value(value: &Value) -> bool {
         value,
         Value::Object(_) | Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_)
     )
+}
+
+fn can_be_held_weakly(value: &Value, env: &HashMap<String, Value>) -> bool {
+    match value {
+        Value::Object(object) if symbol::is_symbol_primitive(object) => {
+            !symbol::is_registered_symbol(object, env)
+        }
+        value => is_weak_set_value(value),
+    }
 }
 
 fn incompatible_receiver() -> RuntimeError {

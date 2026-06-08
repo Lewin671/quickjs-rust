@@ -106,6 +106,18 @@ fn rejects_weak_set_invalid_receivers_and_primitive_add_values() {
     assert!(eval("WeakSet.prototype.add.call({}, {});").is_err());
     assert!(eval("new WeakSet().add('key');").is_err());
     assert_eq!(
+        eval(
+            "let value = Symbol('value'); let set = new WeakSet(); set.add(value); set.has(value);"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let set = new WeakSet(); let caught = false; try { set.add(Symbol.for('value')); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("let set = new WeakSet(); !set.has('key') && !set.delete('key');"),
         Ok(Value::Boolean(true))
     );

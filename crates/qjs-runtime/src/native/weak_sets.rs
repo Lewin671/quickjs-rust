@@ -17,7 +17,7 @@ pub(super) fn call_weak_set_native(
             weak_set::native_weak_set(function, argument_values, is_construct, env)?
         }
         NativeFunction::WeakSetPrototypeAdd => {
-            weak_set::native_weak_set_prototype_add(this_value, argument_values)?
+            weak_set::native_weak_set_prototype_add(this_value, argument_values, env)?
         }
         NativeFunction::WeakSetPrototypeDelete => {
             weak_set::native_weak_set_prototype_delete(this_value, argument_values)?
