@@ -13,6 +13,7 @@ RUN_LIMIT="${TEST262_BASELINE_LIMIT:-50}"
 FILTER_PREFIX=""
 ENGINE="quickjs-rust"
 SUMMARY_JSON=""
+CASE_RESULTS_JSONL=""
 NO_FAIL=0
 SHARD_INDEX=1
 SHARD_TOTAL=1
@@ -20,7 +21,7 @@ CARGO_BIN="${CARGO:-cargo}"
 
 usage() {
   cat >&2 <<'USAGE'
-usage: scripts/test262-baseline.sh [--limit N | --all] [--filter test/<prefix>] [--engine quickjs-rust|quickjs-ng|both] [--shard I/N] [--summary-json PATH] [--no-fail]
+usage: scripts/test262-baseline.sh [--limit N | --all] [--filter test/<prefix>] [--engine quickjs-rust|quickjs-ng|both] [--shard I/N] [--summary-json PATH] [--case-results-jsonl PATH] [--no-fail]
 Enumerates upstream Test262 cases, classifies harness gaps, and executes a baseline sample.
 USAGE
 }
@@ -64,6 +65,11 @@ while [ "$#" -gt 0 ]; do
     --summary-json)
       [ "$#" -ge 2 ] || { usage; exit 2; }
       SUMMARY_JSON="$2"
+      shift 2
+      ;;
+    --case-results-jsonl)
+      [ "$#" -ge 2 ] || { usage; exit 2; }
+      CASE_RESULTS_JSONL="$2"
       shift 2
       ;;
     --no-fail)
@@ -357,8 +363,22 @@ result_kind() {
     pass) echo "pass" ;;
     timeout) echo "timeout" ;;
     skipped) echo "skipped" ;;
+    not-run) echo "not-run" ;;
     *) echo "fail" ;;
   esac
+}
+write_case_result() {
+  [ -n "$CASE_RESULTS_JSONL" ] || return
+  mkdir -p "$(dirname "$CASE_RESULTS_JSONL")"
+  printf '{"path":"%s","rust":"%s","rust_result":"%s","rust_skip":"%s","quickjs_ng":"%s","quickjs_ng_result":"%s","quickjs_ng_skip":"%s"}\n' \
+    "$(json_escape "$1")" \
+    "$(json_escape "$(result_kind "$2")")" \
+    "$(json_escape "$(result_kind "$2")")" \
+    "$(json_escape "$3")" \
+    "$(json_escape "$(result_kind "$4")")" \
+    "$(json_escape "$(result_kind "$4")")" \
+    "$(json_escape "$5")" \
+    >>"$CASE_RESULTS_JSONL"
 }
 run_case() {
   local file="$1" flags="$2" rel="$3" includes="$4"
@@ -387,6 +407,7 @@ run_case() {
     fi
   fi
   rm -rf "$temp_dir"
+  write_case_result "$rel" "$rust_result" "$rust_skip_reason" "$qjsng_result" "$qjsng_skip_reason"
 
   case "$rust_result" in
     skipped) echo "quickjs-rust skipped: $rel ($rust_skip_reason)" >&2 ;;
@@ -467,6 +488,11 @@ write_summary_json() {
 JSON
 }
 
+if [ -n "$CASE_RESULTS_JSONL" ]; then
+  mkdir -p "$(dirname "$CASE_RESULTS_JSONL")"
+  : >"$CASE_RESULTS_JSONL"
+fi
+
 scanned=0 total=0 configured=0 eligible=0 run=0 skipped=0
 skip_async=0 skip_features=0 skip_fixture=0 skip_includes=0
 skip_intl402=0 skip_module=0 skip_negative=0 skip_raw=0
@@ -508,6 +534,7 @@ while IFS= read -r file; do
       feature|unknown-feature) skip_features=$((skip_features + 1)) ;;
       fixture) skip_fixture=$((skip_fixture + 1)) ;;
     esac
+    write_case_result "$rel" "not-run" "$reason" "skipped" "$qjsng_reason"
     continue
   fi
 
@@ -531,6 +558,7 @@ while IFS= read -r file; do
       raw) skip_raw=$((skip_raw + 1)) ;;
     esac
     if [ "$ENGINE" = "quickjs-rust" ]; then
+      write_case_result "$rel" "skipped" "$reason" "not-run" ""
       continue
     fi
   else

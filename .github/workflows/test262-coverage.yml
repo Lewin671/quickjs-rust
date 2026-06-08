@@ -9,12 +9,87 @@ on:
     types: [completed]
 
 concurrency:
-  group: test262-coverage-${{ github.event.workflow_run.head_sha || github.sha }}
+  group: test262-coverage-${{ github.event.workflow_run.head_branch || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
+  quickjs-ng-baseline:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    name: QuickJS-NG baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.event.workflow_run.head_repository.full_name || github.repository }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 1
+          submodules: false
+
+      - name: Init submodules
+        run: git submodule update --init --depth 1 third_party/test262 third_party/quickjs-ng
+
+      - name: Baseline cache key
+        id: baseline-key
+        run: |
+          echo "quickjs_ng_sha=$(git -C third_party/quickjs-ng rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "test262_sha=$(git -C third_party/test262 rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore QuickJS-NG baseline
+        id: quickjs-ng-baseline-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: coverage-baseline
+          key: test262-qjsng-baseline-${{ runner.os }}-${{ steps.baseline-key.outputs.quickjs_ng_sha }}-${{ steps.baseline-key.outputs.test262_sha }}-${{ hashFiles('scripts/test262-baseline.sh', 'scripts/test262-baseline-metadata.awk', 'scripts/run-with-timeout.sh') }}
+
+      - name: Restore QuickJS-NG build
+        if: steps.quickjs-ng-baseline-cache.outputs.cache-hit != 'true'
+        uses: actions/cache@v5
+        with:
+          path: third_party/quickjs-ng/build
+          key: quickjs-ng-${{ runner.os }}-${{ steps.baseline-key.outputs.quickjs_ng_sha }}
+
+      - name: Run QuickJS-NG baseline shard
+        if: steps.quickjs-ng-baseline-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p coverage-baseline
+          status=0
+          for shard in $(seq 1 16); do
+            (
+              ./scripts/test262-baseline.sh \
+                --all \
+                --engine quickjs-ng \
+                --shard "$shard/16" \
+                --summary-json "coverage-baseline/summary-${shard}.json" \
+                --case-results-jsonl "coverage-baseline/cases-${shard}.jsonl" \
+                --no-fail
+            ) &
+            if [ "$(jobs -pr | wc -l | tr -d ' ')" -ge 4 ]; then
+              wait -n || status=1
+            fi
+          done
+          wait || status=1
+          exit "$status"
+
+      - name: Save QuickJS-NG baseline
+        if: steps.quickjs-ng-baseline-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: coverage-baseline
+          key: test262-qjsng-baseline-${{ runner.os }}-${{ steps.baseline-key.outputs.quickjs_ng_sha }}-${{ steps.baseline-key.outputs.test262_sha }}-${{ hashFiles('scripts/test262-baseline.sh', 'scripts/test262-baseline-metadata.awk', 'scripts/run-with-timeout.sh') }}
+
+      - name: Upload QuickJS-NG baseline shard
+        uses: actions/upload-artifact@v4
+        with:
+          name: test262-qjsng-baseline
+          path: coverage-baseline
+          retention-days: 14
+
   coverage-shards:
-    name: Test262 coverage shard ${{ matrix.shard }}/16
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    name: Test262 rust coverage shard ${{ matrix.shard }}/16
+    needs: quickjs-ng-baseline
     runs-on: ubuntu-latest
     timeout-minutes: 180
     strategy:
@@ -46,46 +121,44 @@ jobs:
             rust-${{ runner.os }}-
 
       - name: Init submodules
-        run: git submodule update --init --depth 1 third_party/test262 third_party/quickjs-ng
-
-      - name: QuickJS-NG cache key
-        id: quickjs-ng
-        run: echo "sha=$(git -C third_party/quickjs-ng rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
-      - name: Restore QuickJS-NG build
-        uses: actions/cache@v5
-        with:
-          path: third_party/quickjs-ng/build
-          key: quickjs-ng-${{ runner.os }}-${{ steps.quickjs-ng.outputs.sha }}
+        run: git submodule update --init --depth 1 third_party/test262
 
       - name: Run full Test262 coverage shard
         run: |
           mkdir -p coverage
           ./scripts/test262-baseline.sh \
             --all \
-            --engine both \
+            --engine quickjs-rust \
             --shard ${{ matrix.shard }}/16 \
             --summary-json coverage/summary-${{ matrix.shard }}.json \
+            --case-results-jsonl coverage/cases-${{ matrix.shard }}.jsonl \
             --no-fail
 
       - name: Upload shard summary
         uses: actions/upload-artifact@v4
         with:
           name: test262-coverage-${{ matrix.shard }}
-          path: coverage/summary-${{ matrix.shard }}.json
+          path: coverage
           retention-days: 14
 
   aggregate:
     name: Aggregate Test262 coverage
     runs-on: ubuntu-latest
-    needs: coverage-shards
-    if: always()
+    needs: [quickjs-ng-baseline, coverage-shards]
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     steps:
-      - name: Download shard summaries
+      - name: Download QuickJS-NG baseline
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test262-qjsng-baseline-*
+          path: qjsng-baseline
+          merge-multiple: true
+
+      - name: Download rust shard summaries
         uses: actions/download-artifact@v4
         with:
           pattern: test262-coverage-*
-          path: coverage-summaries
+          path: rust-coverage
           merge-multiple: true
 
       - name: Write coverage summary
@@ -97,72 +170,106 @@ jobs:
           import json
           import os
 
-          paths = sorted(glob.glob("coverage-summaries/*.json"))
-          if not paths:
-              raise SystemExit("no Test262 coverage summaries were downloaded")
+          def load_cases(pattern, engine_key):
+              cases = {}
+              paths = sorted(glob.glob(pattern))
+              if not paths:
+                  raise SystemExit(f"no case result files matched {pattern}")
+              for path in paths:
+                  with open(path, "r", encoding="utf-8") as handle:
+                      for line in handle:
+                          if not line.strip():
+                              continue
+                          row = json.loads(line)
+                          cases[row["path"]] = row
+              return cases, paths
 
-          totals = {
-              "total": 0,
-              "configured": 0,
-              "eligible": 0,
-              "run": 0,
-              "skipped": 0,
-              "rust_harness_gap": 0,
-              "rust_pass": 0,
-              "rust_fail": 0,
-              "rust_timeout": 0,
-              "rust_skipped": 0,
-              "qjsng_pass": 0,
-              "qjsng_fail": 0,
-              "qjsng_timeout": 0,
-              "qjsng_skipped": 0,
-              "both_pass": 0,
-              "qjsng_pass_rust_nonpass": 0,
-              "qjsng_pass_rust_harness_gap": 0,
-              "qjsng_pass_rust_fail": 0,
-              "qjsng_pass_rust_timeout": 0,
-              "rust_pass_qjsng_nonpass": 0,
-              "both_nonpass": 0,
-              "both_fail_or_timeout": 0,
-          }
-          skipped = {
-              "async": 0,
-              "features": 0,
-              "fixture": 0,
-              "includes": 0,
-              "intl402": 0,
-              "module": 0,
-              "negative": 0,
-              "raw": 0,
-          }
+          qjsng_cases, qjsng_paths = load_cases("qjsng-baseline/cases-*.jsonl", "quickjs_ng")
+          rust_cases, rust_paths = load_cases("rust-coverage/cases-*.jsonl", "rust")
 
-          for path in paths:
-              with open(path, "r", encoding="utf-8") as handle:
-                  summary = json.load(handle)
-              totals["total"] += summary["total"]
-              totals["configured"] += summary["configured"]
-              totals["eligible"] += summary["eligible"]
-              totals["run"] += summary["run"]
-              totals["skipped"] += summary["skipped"]["total"]
-              totals["rust_harness_gap"] += summary["rust_harness_gap"]
-              for key in skipped:
-                  skipped[key] += summary["skipped"][key]
-              totals["rust_pass"] += summary["quickjs_rust"]["pass"]
-              totals["rust_fail"] += summary["quickjs_rust"]["fail"]
-              totals["rust_timeout"] += summary["quickjs_rust"]["timeout"]
-              totals["rust_skipped"] += summary["quickjs_rust"]["skipped"]
-              totals["qjsng_pass"] += summary["quickjs_ng"]["pass"]
-              totals["qjsng_fail"] += summary["quickjs_ng"]["fail"]
-              totals["qjsng_timeout"] += summary["quickjs_ng"]["timeout"]
-              totals["qjsng_skipped"] += summary["quickjs_ng"]["skipped"]
-              totals["both_pass"] += summary["comparison"]["both_pass"]
-              totals["qjsng_pass_rust_nonpass"] += summary["comparison"]["quickjs_ng_pass_rust_nonpass"]
-              totals["qjsng_pass_rust_harness_gap"] += summary["comparison"]["quickjs_ng_pass_rust_harness_gap"]
-              totals["qjsng_pass_rust_fail"] += summary["comparison"]["quickjs_ng_pass_rust_fail"]
-              totals["qjsng_pass_rust_timeout"] += summary["comparison"]["quickjs_ng_pass_rust_timeout"]
-              totals["rust_pass_qjsng_nonpass"] += summary["comparison"]["rust_pass_quickjs_ng_nonpass"]
-              totals["both_nonpass"] += summary["comparison"]["both_nonpass"]
-              totals["both_fail_or_timeout"] += summary["comparison"]["both_fail_or_timeout"]
+          totals = dict.fromkeys([
+              "total",
+              "configured",
+              "eligible",
+              "run",
+              "skipped",
+              "rust_harness_gap",
+              "rust_pass",
+              "rust_fail",
+              "rust_timeout",
+              "rust_skipped",
+              "qjsng_pass",
+              "qjsng_fail",
+              "qjsng_timeout",
+              "qjsng_skipped",
+              "both_pass",
+              "qjsng_pass_rust_nonpass",
+              "qjsng_pass_rust_harness_gap",
+              "qjsng_pass_rust_fail",
+              "qjsng_pass_rust_timeout",
+              "rust_pass_qjsng_nonpass",
+              "both_nonpass",
+              "both_fail_or_timeout",
+          ], 0)
+          skipped = dict.fromkeys(["async", "features", "fixture", "includes", "intl402", "module", "negative", "raw"], 0)
+
+          def skipped_bucket(reason):
+              if reason == "fixture":
+                  return "fixture"
+              return "features"
+
+          totals["total"] = len(qjsng_cases)
+          totals["run"] = len(rust_cases)
+          for path, qjsng in qjsng_cases.items():
+              rust = rust_cases.get(path, {"rust": "skipped", "rust_skip": "missing"})
+              qkind = qjsng["quickjs_ng"]
+              rkind = rust["rust"]
+              if qkind == "skipped":
+                  totals["skipped"] += 1
+                  bucket = skipped_bucket(qjsng.get("quickjs_ng_skip", ""))
+                  skipped[bucket] += 1
+                  continue
+
+              totals["configured"] += 1
+              if qkind == "pass":
+                  totals["qjsng_pass"] += 1
+              elif qkind == "timeout":
+                  totals["qjsng_timeout"] += 1
+              else:
+                  totals["qjsng_fail"] += 1
+
+              if rkind == "pass":
+                  totals["rust_pass"] += 1
+              elif rkind == "timeout":
+                  totals["rust_timeout"] += 1
+              elif rkind == "skipped":
+                  totals["rust_skipped"] += 1
+                  totals["rust_harness_gap"] += 1
+                  reason = rust.get("rust_skip", "")
+                  if reason in skipped:
+                      skipped[reason] += 1
+              else:
+                  totals["rust_fail"] += 1
+
+              if rkind != "skipped":
+                  totals["eligible"] += 1
+
+              if rkind == "pass" and qkind == "pass":
+                  totals["both_pass"] += 1
+              elif rkind == "pass":
+                  totals["rust_pass_qjsng_nonpass"] += 1
+              elif qkind == "pass":
+                  totals["qjsng_pass_rust_nonpass"] += 1
+                  if rkind == "skipped":
+                      totals["qjsng_pass_rust_harness_gap"] += 1
+                  elif rkind == "timeout":
+                      totals["qjsng_pass_rust_timeout"] += 1
+                  else:
+                      totals["qjsng_pass_rust_fail"] += 1
+              else:
+                  totals["both_nonpass"] += 1
+                  if rkind != "skipped":
+                      totals["both_fail_or_timeout"] += 1
 
           def pct(value, denominator):
               if denominator == 0:
@@ -172,7 +279,7 @@ jobs:
           lines = [
               "# Test262 Coverage",
               "",
-              f"Aggregated `{len(paths)}` shard summaries for `{os.environ['COVERAGE_SHA']}`.",
+              f"Aggregated `{len(rust_paths)}` rust shard result files against `{len(qjsng_paths)}` cached QuickJS-NG baseline files for `{os.environ['COVERAGE_SHA']}`.",
               "",
               "## Corpus Scope",
               "",
