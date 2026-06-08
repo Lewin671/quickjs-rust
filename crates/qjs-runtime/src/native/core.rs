@@ -70,6 +70,7 @@ pub(super) fn call_core_native(
                 env,
             )
         }
+        NativeFunction::IteratorPrototypeIterator => Ok(this_value),
         NativeFunction::FunctionPrototypeToString => {
             crate::function::native_function_prototype_to_string(this_value)
         }

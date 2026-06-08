@@ -28,5 +28,21 @@
   var target = {};
   for (target.value of [8, 9]) {}
 
-  return total + ":" + setSeen + ":" + mapSeen + ":" + controlled + ":" + target.value;
+  var keySeen = "";
+  for (var key of ["a", "b"].keys()) {
+    keySeen = keySeen + key;
+  }
+
+  var entrySeen = "";
+  for (var arrayEntry of ["a", "b"].entries()) {
+    entrySeen = entrySeen + arrayEntry[0] + arrayEntry[1];
+  }
+
+  var setIteratorSeen = "";
+  for (var setValue of new Set(["x", "y"]).values()) {
+    setIteratorSeen = setIteratorSeen + setValue;
+  }
+
+  return total + ":" + setSeen + ":" + mapSeen + ":" + controlled + ":" +
+    target.value + ":" + keySeen + ":" + entrySeen + ":" + setIteratorSeen;
 })()

@@ -250,8 +250,11 @@ pub(crate) fn native_map_prototype_get_or_insert_computed(
     Ok(value)
 }
 
-pub(crate) fn native_map_prototype_entries(this_value: Value) -> Result<Value, RuntimeError> {
-    map_iterator(this_value, MAP_ITERATOR_KIND_KEY_VALUE)
+pub(crate) fn native_map_prototype_entries(
+    this_value: Value,
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    map_iterator(this_value, env, MAP_ITERATOR_KIND_KEY_VALUE)
 }
 
 pub(crate) fn native_map_prototype_for_each(
@@ -289,8 +292,11 @@ pub(crate) fn native_map_prototype_has(
     Ok(Value::Boolean(map.has(&key)))
 }
 
-pub(crate) fn native_map_prototype_keys(this_value: Value) -> Result<Value, RuntimeError> {
-    map_iterator(this_value, MAP_ITERATOR_KIND_KEY)
+pub(crate) fn native_map_prototype_keys(
+    this_value: Value,
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    map_iterator(this_value, env, MAP_ITERATOR_KIND_KEY)
 }
 
 pub(crate) fn native_map_prototype_set(
@@ -304,8 +310,11 @@ pub(crate) fn native_map_prototype_set(
     Ok(this_value)
 }
 
-pub(crate) fn native_map_prototype_values(this_value: Value) -> Result<Value, RuntimeError> {
-    map_iterator(this_value, MAP_ITERATOR_KIND_VALUE)
+pub(crate) fn native_map_prototype_values(
+    this_value: Value,
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    map_iterator(this_value, env, MAP_ITERATOR_KIND_VALUE)
 }
 
 pub(crate) fn native_map_iterator_next(this_value: Value) -> Result<Value, RuntimeError> {
@@ -364,7 +373,11 @@ fn this_map(this_value: Value) -> Result<MapRef, RuntimeError> {
     }
 }
 
-fn map_iterator(this_value: Value, kind: &str) -> Result<Value, RuntimeError> {
+fn map_iterator(
+    this_value: Value,
+    env: &HashMap<String, Value>,
+    kind: &str,
+) -> Result<Value, RuntimeError> {
     this_map(this_value.clone())?;
     let iterator = ObjectRef::new(HashMap::new());
     iterator.define_non_enumerable(MAP_ITERATOR.to_owned(), this_value);
@@ -380,6 +393,7 @@ fn map_iterator(this_value: Value, kind: &str) -> Result<Value, RuntimeError> {
             false,
         )),
     );
+    symbol::define_iterator_identity(env, &iterator);
     Ok(Value::Object(iterator))
 }
 

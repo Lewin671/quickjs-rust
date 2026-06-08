@@ -1,4 +1,6 @@
 // Derived from: test/language/statements/for-of/array.js
+// Derived from: test/language/statements/for-of/Array.prototype.entries.js
+// Derived from: test/language/statements/for-of/Array.prototype.keys.js
 // Derived from: test/built-ins/Map/prototype/getOrInsertComputed/canonical-key-passed-to-callback.js
 
 var total = 0;
@@ -37,4 +39,20 @@ for (var item of [1, 2, 3, 4]) {
 }
 if (controlled !== 4) {
   throw "for-of should support break and continue";
+}
+
+var keySeen = "";
+for (var key of ["a", "b"].keys()) {
+  keySeen = keySeen + key;
+}
+if (keySeen !== "01") {
+  throw "for-of should iterate array key iterator objects";
+}
+
+var entrySeen = "";
+for (var arrayEntry of ["a", "b"].entries()) {
+  entrySeen = entrySeen + arrayEntry[0] + arrayEntry[1];
+}
+if (entrySeen !== "0a1b") {
+  throw "for-of should iterate array entry iterator objects";
 }

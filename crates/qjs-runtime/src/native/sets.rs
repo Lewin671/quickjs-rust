@@ -24,7 +24,7 @@ pub(super) fn call_set_native(
         NativeFunction::SetPrototypeDifference => {
             set::native_set_prototype_difference(this_value, argument_values, env)?
         }
-        NativeFunction::SetPrototypeEntries => set::native_set_prototype_entries(this_value)?,
+        NativeFunction::SetPrototypeEntries => set::native_set_prototype_entries(this_value, env)?,
         NativeFunction::SetPrototypeForEach => {
             set::native_set_prototype_for_each(this_value, argument_values, env)?
         }
@@ -43,7 +43,7 @@ pub(super) fn call_set_native(
         NativeFunction::SetPrototypeIsSupersetOf => {
             set::native_set_prototype_is_superset_of(this_value, argument_values, env)?
         }
-        NativeFunction::SetPrototypeKeys => set::native_set_prototype_keys(this_value)?,
+        NativeFunction::SetPrototypeKeys => set::native_set_prototype_keys(this_value, env)?,
         NativeFunction::SetPrototypeSize => set::native_set_prototype_size(this_value)?,
         NativeFunction::SetPrototypeSymmetricDifference => {
             set::native_set_prototype_symmetric_difference(this_value, argument_values, env)?
@@ -51,7 +51,7 @@ pub(super) fn call_set_native(
         NativeFunction::SetPrototypeUnion => {
             set::native_set_prototype_union(this_value, argument_values, env)?
         }
-        NativeFunction::SetPrototypeValues => set::native_set_prototype_values(this_value)?,
+        NativeFunction::SetPrototypeValues => set::native_set_prototype_values(this_value, env)?,
         NativeFunction::SetIteratorPrototypeNext => set::native_set_iterator_next(this_value)?,
         _ => return Ok(None),
     };

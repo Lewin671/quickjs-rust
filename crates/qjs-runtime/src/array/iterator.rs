@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    ArrayRef, Function, NativeFunction, ObjectRef, RuntimeError, Value, property_value,
+    ArrayRef, Function, NativeFunction, ObjectRef, RuntimeError, Value, property_value, symbol,
     to_length_with_env,
 };
 
@@ -67,6 +67,7 @@ fn array_iterator(
             false,
         )),
     );
+    symbol::define_iterator_identity(env, &iterator);
     Ok(Value::Object(iterator))
 }
 

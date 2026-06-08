@@ -43,6 +43,7 @@ pub(crate) enum NativeFunction {
     ArrayPrototypeWith,
     ArrayPrototypeValues,
     ArrayIteratorPrototypeNext,
+    IteratorPrototypeIterator,
     Boolean,
     BooleanPrototypeToString,
     BooleanPrototypeValueOf,

@@ -183,8 +183,11 @@ pub(crate) fn native_set_prototype_delete(
     Ok(Value::Boolean(set.delete(&value)))
 }
 
-pub(crate) fn native_set_prototype_entries(this_value: Value) -> Result<Value, RuntimeError> {
-    set_iterator(this_value, SET_ITERATOR_KIND_KEY_VALUE)
+pub(crate) fn native_set_prototype_entries(
+    this_value: Value,
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    set_iterator(this_value, env, SET_ITERATOR_KIND_KEY_VALUE)
 }
 
 pub(crate) fn native_set_prototype_union(
@@ -368,12 +371,18 @@ pub(crate) fn native_set_prototype_has(
     Ok(Value::Boolean(set.has(&value)))
 }
 
-pub(crate) fn native_set_prototype_keys(this_value: Value) -> Result<Value, RuntimeError> {
-    set_iterator(this_value, SET_ITERATOR_KIND_VALUE)
+pub(crate) fn native_set_prototype_keys(
+    this_value: Value,
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    set_iterator(this_value, env, SET_ITERATOR_KIND_VALUE)
 }
 
-pub(crate) fn native_set_prototype_values(this_value: Value) -> Result<Value, RuntimeError> {
-    set_iterator(this_value, SET_ITERATOR_KIND_VALUE)
+pub(crate) fn native_set_prototype_values(
+    this_value: Value,
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    set_iterator(this_value, env, SET_ITERATOR_KIND_VALUE)
 }
 
 pub(crate) fn native_set_iterator_next(this_value: Value) -> Result<Value, RuntimeError> {
@@ -435,7 +444,11 @@ fn new_set_like(set: &SetRef) -> SetRef {
     SetRef::new(set.object().prototype())
 }
 
-fn set_iterator(this_value: Value, kind: &str) -> Result<Value, RuntimeError> {
+fn set_iterator(
+    this_value: Value,
+    env: &HashMap<String, Value>,
+    kind: &str,
+) -> Result<Value, RuntimeError> {
     this_set(this_value.clone())?;
     let iterator = ObjectRef::new(HashMap::new());
     iterator.define_non_enumerable(SET_ITERATOR.to_owned(), this_value);
@@ -451,6 +464,7 @@ fn set_iterator(this_value: Value, kind: &str) -> Result<Value, RuntimeError> {
             false,
         )),
     );
+    symbol::define_iterator_identity(env, &iterator);
     Ok(Value::Object(iterator))
 }
 

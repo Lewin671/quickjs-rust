@@ -19,7 +19,7 @@ pub(super) fn call_map_native(
         NativeFunction::MapPrototypeDelete => {
             map::native_map_prototype_delete(this_value, argument_values)?
         }
-        NativeFunction::MapPrototypeEntries => map::native_map_prototype_entries(this_value)?,
+        NativeFunction::MapPrototypeEntries => map::native_map_prototype_entries(this_value, env)?,
         NativeFunction::MapPrototypeForEach => {
             map::native_map_prototype_for_each(this_value, argument_values, env)?
         }
@@ -35,12 +35,12 @@ pub(super) fn call_map_native(
         NativeFunction::MapPrototypeHas => {
             map::native_map_prototype_has(this_value, argument_values)?
         }
-        NativeFunction::MapPrototypeKeys => map::native_map_prototype_keys(this_value)?,
+        NativeFunction::MapPrototypeKeys => map::native_map_prototype_keys(this_value, env)?,
         NativeFunction::MapPrototypeSet => {
             map::native_map_prototype_set(this_value, argument_values)?
         }
         NativeFunction::MapPrototypeSize => map::native_map_prototype_size(this_value)?,
-        NativeFunction::MapPrototypeValues => map::native_map_prototype_values(this_value)?,
+        NativeFunction::MapPrototypeValues => map::native_map_prototype_values(this_value, env)?,
         NativeFunction::MapIteratorPrototypeNext => map::native_map_iterator_next(this_value)?,
         _ => return Ok(None),
     };

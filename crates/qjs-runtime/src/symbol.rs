@@ -302,6 +302,21 @@ pub(crate) fn define_well_known_iterator_alias(
     object.define_symbol_property(symbol, Property::non_enumerable(property.value));
 }
 
+pub(crate) fn define_iterator_identity(env: &HashMap<String, Value>, object: &ObjectRef) {
+    let Some(symbol) = iterator_symbol(env) else {
+        return;
+    };
+    object.define_symbol_property(
+        symbol,
+        Property::non_enumerable(Value::Function(Function::new_native(
+            Some("[Symbol.iterator]"),
+            0,
+            NativeFunction::IteratorPrototypeIterator,
+            false,
+        ))),
+    );
+}
+
 pub(crate) fn define_well_known_to_string_tag(
     env: &HashMap<String, Value>,
     object: &ObjectRef,

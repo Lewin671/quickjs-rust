@@ -214,4 +214,18 @@ fn exposes_builtin_iterator_symbol_properties() {
         ),
         Ok(Value::String("v:false".to_owned()))
     );
+    assert_eq!(
+        eval("let iterator = ['a'].keys(); iterator[Symbol.iterator]() === iterator;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let iterator = new Map([['k', 7]]).entries(); iterator[Symbol.iterator]() === iterator;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("let iterator = new Set(['v']).values(); iterator[Symbol.iterator]() === iterator;"),
+        Ok(Value::Boolean(true))
+    );
 }
