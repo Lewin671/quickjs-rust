@@ -180,10 +180,13 @@ cases/array-with-length.js
 cases/array-with-negative-index.js
 cases/array-with-undefined-value.js
 cases/array-splice-delete-basic.js
+cases/array-splice-boolean-receiver.js
 cases/array-splice-insert-basic.js
 cases/array-splice-length.js
 cases/array-splice-negative-start.js
+cases/array-splice-object-generic.js
 cases/array-splice-omitted-delete-count.js
+cases/array-splice-result-length-range.js
 cases/array-to-string-basic.js
 cases/array-to-string-boolean-primitive.js
 cases/array-to-string-length.js

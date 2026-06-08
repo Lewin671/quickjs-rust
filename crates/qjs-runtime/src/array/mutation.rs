@@ -86,7 +86,7 @@ pub(crate) fn native_array_prototype_copy_within(
     Ok(receiver)
 }
 
-fn set_array_like_property(
+pub(super) fn set_array_like_property(
     receiver: Value,
     key: String,
     value: Value,
@@ -153,7 +153,7 @@ fn validate_copy_within_set(
     Ok(())
 }
 
-fn delete_array_like_property(receiver: Value, key: &str) -> Result<(), RuntimeError> {
+pub(super) fn delete_array_like_property(receiver: Value, key: &str) -> Result<(), RuntimeError> {
     match receiver {
         Value::Object(object) if !object.delete_own_property(key) => {
             return Err(copy_within_delete_error());

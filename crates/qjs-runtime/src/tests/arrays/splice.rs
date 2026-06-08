@@ -57,3 +57,25 @@ fn evaluates_array_splice_bounds() {
         Ok(Value::String("0:0,1,2".to_owned()))
     );
 }
+
+#[test]
+fn evaluates_array_splice_generic_receivers() {
+    assert_eq!(
+        eval(
+            "let object = {0: 0, 1: 1, 2: 2, 3: 3, length: 4}; let removed = Array.prototype.splice.call(object, 0, 3, 4, 5); removed.join() + ':' + removed.length + ':' + object.length + ':' + object[0] + ':' + object[1] + ':' + object[2] + ':' + object[3];"
+        ),
+        Ok(Value::String("0,1,2:3:3:4:5:3:undefined".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "Array.prototype.splice.call(true).length + ':' + Array.prototype.splice.call(false).length;"
+        ),
+        Ok(Value::String("0:0".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let object = Object.defineProperty({}, 'length', { get: function() { return Math.pow(2, 32); }, set: function() { throw 'length should not be set'; } }); let caught = false; try { Array.prototype.splice.call(object, 0); } catch (error) { caught = error instanceof RangeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}

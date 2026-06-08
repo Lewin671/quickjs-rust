@@ -5,11 +5,35 @@
   var tail = ys.splice(-2);
   var zs = [1, undefined, 3];
   var undef = zs.splice(1, 1, 2);
+  var obj = {0: 0, 1: 1, 2: 2, 3: 3, length: 4};
+  var generic = Array.prototype.splice.call(obj, 0, 3, 4, 5);
+  var rangeError = false;
+  var big = Object.defineProperty({}, "length", {
+    get: function () {
+      return Math.pow(2, 32);
+    },
+    set: function () {
+      throw "length should not be set";
+    }
+  });
+  try {
+    Array.prototype.splice.call(big, 0);
+  } catch (error) {
+    rangeError = error instanceof RangeError;
+  }
   return removed.join()
     + ":" + xs.join()
     + ":" + tail.join()
     + ":" + ys.join()
     + ":" + (undef[0] === undefined)
     + ":" + zs.join()
+    + ":" + generic.join()
+    + ":" + obj.length
+    + ":" + obj[0]
+    + ":" + obj[1]
+    + ":" + obj[2]
+    + ":" + obj[3]
+    + ":" + Array.prototype.splice.call(true).length
+    + ":" + rangeError
     + ":" + Array.prototype.splice.length;
 })()

@@ -121,27 +121,6 @@ impl ArrayRef {
         self.holes.borrow_mut().clear();
     }
 
-    pub(crate) fn splice(&self, start: usize, delete_count: usize, items: &[Value]) -> Vec<Value> {
-        if self.frozen.get() {
-            return Vec::new();
-        }
-
-        let mut elements = self.elements.borrow_mut();
-        let length = self.length.get();
-        let end = start + delete_count.min(length.saturating_sub(start));
-        let new_len = length - (end - start) + items.len();
-        if new_len > length && !self.extensible.get() {
-            return Vec::new();
-        }
-        self.length.set(new_len);
-        if start > elements.len() {
-            return Vec::new();
-        }
-        let end = end.min(elements.len());
-        self.holes.borrow_mut().clear();
-        elements.splice(start..end, items.iter().cloned()).collect()
-    }
-
     pub(crate) fn set(&self, index: usize, value: Value) {
         if index > MAX_ARRAY_INDEX {
             self.set_property(index.to_string(), value);
