@@ -31,7 +31,7 @@ pub(super) fn call_array_native(
             array::native_array_prototype_every(this_value, argument_values, env)?
         }
         NativeFunction::ArrayPrototypeFill => {
-            array::native_array_prototype_fill(this_value, argument_values)?
+            array::native_array_prototype_fill(this_value, argument_values, env)?
         }
         NativeFunction::ArrayPrototypeFlat => {
             array::native_array_prototype_flat(this_value, argument_values, env)?

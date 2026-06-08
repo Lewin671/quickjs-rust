@@ -176,6 +176,25 @@ fn evaluates_array_mutation_builtins() {
         Ok(Value::String(",,".to_owned()))
     );
     assert_eq!(
+        eval("Array.prototype.fill.call(true, 1) instanceof Boolean;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let object = { length: 4 }; let result = Array.prototype.fill.call(object, 'x', 1, 3); (result === object) + ':' + object.hasOwnProperty('0') + ':' + object[1] + ':' + object[2] + ':' + object.hasOwnProperty('3');"
+        ),
+        Ok(Value::String("true:false:x:x:false".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let value = {}; let start = Number.MAX_SAFE_INTEGER - 3; let object = { length: Number.MAX_SAFE_INTEGER }; Array.prototype.fill.call(object, value, start, start + 3); (object[start] === value) + ':' + (object[start + 1] === value) + ':' + (object[start + 2] === value);"
+        ),
+        Ok(Value::String("true:true:true".to_owned()))
+    );
+    assert!(
+        eval("let object = { length: 1 }; Object.defineProperty(object, '0', { set: function() { throw new TypeError('nope'); } }); Array.prototype.fill.call(object);").is_err()
+    );
+    assert_eq!(
         eval("let xs = [1, undefined, 3]; xs.reverse(); xs.length + ':' + xs.join();"),
         Ok(Value::String("3:3,,1".to_owned()))
     );

@@ -31,6 +31,7 @@ cases/array-every-this-arg.js
 cases/array-every-length.js
 cases/array-every-empty.js
 cases/array-fill-basic.js
+cases/array-fill-generic-receiver.js
 cases/array-flat-basic.js
 cases/array-flat-depth.js
 cases/array-flat-length.js

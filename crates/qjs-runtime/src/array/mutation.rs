@@ -17,15 +17,11 @@ const MAX_ARRAY_LENGTH: usize = u32::MAX as usize;
 pub(crate) fn native_array_prototype_fill(
     this_value: Value,
     argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let Value::Array(elements) = this_value.clone() else {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "Array.prototype.fill called on non-array".to_owned(),
-        });
-    };
-
-    let length = elements.len();
+    let source = array_like_length(this_value, "Array.prototype.fill", env)?;
+    let receiver = source.receiver;
+    let length = source.length;
     let start = array_slice_start(
         length,
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
@@ -34,14 +30,11 @@ pub(crate) fn native_array_prototype_fill(
         length,
         argument_values.get(2).cloned().unwrap_or(Value::Undefined),
     )?;
-    if start < end {
-        elements.fill(
-            start,
-            end,
-            argument_values.first().cloned().unwrap_or(Value::Undefined),
-        );
+    let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    for index in start..end {
+        set_array_like_property(receiver.clone(), index.to_string(), value.clone(), env)?;
     }
-    Ok(this_value)
+    Ok(receiver)
 }
 
 pub(crate) fn native_array_prototype_copy_within(

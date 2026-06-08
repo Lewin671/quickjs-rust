@@ -142,13 +142,6 @@ impl ArrayRef {
         elements.splice(start..end, items.iter().cloned()).collect()
     }
 
-    pub(crate) fn fill(&self, start: usize, end: usize, value: Value) {
-        let mut elements = self.elements.borrow_mut();
-        for element in &mut elements[start..end] {
-            *element = value.clone();
-        }
-    }
-
     pub(crate) fn set(&self, index: usize, value: Value) {
         if index > MAX_ARRAY_INDEX {
             self.set_property(index.to_string(), value);
