@@ -187,6 +187,18 @@ fn evaluates_set_iterators_and_for_each() {
         "var seen = ''; var thisArg = { marker: 'ctx' }; var set = new Set(); set.add('a'); set.add('b'); var returned = set.forEach(function(value, key, receiver) { seen = seen + this.marker + ':' + key + ':' + value + ':' + (receiver === set) + '|'; }, thisArg); seen + ':' + (returned === undefined);",
         Value::String("ctx:a:a:true|ctx:b:b:true|:true".to_owned()),
     );
+    assert_eval(
+        "var seen = ''; var set = new Set(['a', 'b']); set.forEach(function(value) { if (value === 'a') { set.add('c'); } seen = seen + value + '|'; }); seen;",
+        Value::String("a|b|c|".to_owned()),
+    );
+    assert_eval(
+        "var seen = ''; var count = 0; var set = new Set(['a', 'b']); set.forEach(function(value) { if (count === 0) { set.delete('a'); set.add('a'); } seen = seen + value + '|'; count = count + 1; }); seen + ':' + set.size;",
+        Value::String("a|b|a|:2".to_owned()),
+    );
+    assert_eval(
+        "var seen = ''; var set = new Set([1]); set.forEach(function(value) { if (value === 1) { set.add(2); } if (value === 2) { set.add(3); } seen = seen + value + '|'; }); seen;",
+        Value::String("1|2|3|".to_owned()),
+    );
     assert!(eval("Set.prototype.values.call({});").is_err());
     assert!(eval("Set.prototype.forEach.call(new Set(), 1);").is_err());
 }

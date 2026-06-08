@@ -359,14 +359,33 @@ pub(crate) fn native_set_prototype_for_each(
         });
     }
     let this_arg = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
-    for value in set.values() {
+    let mut index = 0;
+    loop {
+        let values = set.values();
+        let Some(value) = values.get(index).cloned() else {
+            break;
+        };
+        let tail_values = values.iter().skip(index + 1).cloned().collect::<Vec<_>>();
         crate::call_function(
             callback.clone(),
             this_arg.clone(),
-            vec![value.clone(), value, this_value.clone()],
+            vec![value.clone(), value.clone(), this_value.clone()],
             env,
             false,
         )?;
+        let values = set.values();
+        if let Some(next_index) = tail_values.iter().find_map(|tail_value| {
+            values
+                .iter()
+                .position(|entry| entry.same_value_zero(tail_value))
+        }) {
+            index = next_index;
+        } else if values
+            .get(index)
+            .is_some_and(|entry| entry.same_value_zero(&value))
+        {
+            index += 1;
+        }
     }
     Ok(Value::Undefined)
 }

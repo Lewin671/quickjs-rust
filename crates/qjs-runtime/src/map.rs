@@ -291,14 +291,37 @@ pub(crate) fn native_map_prototype_for_each(
         });
     }
     let this_arg = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
-    for (key, value) in map.entries() {
+    let mut index = 0;
+    loop {
+        let entries = map.entries();
+        let Some((key, value)) = entries.get(index).cloned() else {
+            break;
+        };
+        let tail_keys = entries
+            .iter()
+            .skip(index + 1)
+            .map(|(tail_key, _)| tail_key.clone())
+            .collect::<Vec<_>>();
         crate::call_function(
             callback.clone(),
             this_arg.clone(),
-            vec![value, key, this_value.clone()],
+            vec![value, key.clone(), this_value.clone()],
             env,
             false,
         )?;
+        let entries = map.entries();
+        if let Some(next_index) = tail_keys.iter().find_map(|tail_key| {
+            entries
+                .iter()
+                .position(|(entry_key, _)| entry_key.same_value_zero(tail_key))
+        }) {
+            index = next_index;
+        } else if entries
+            .get(index)
+            .is_some_and(|(entry_key, _)| entry_key.same_value_zero(&key))
+        {
+            index += 1;
+        }
     }
     Ok(Value::Undefined)
 }

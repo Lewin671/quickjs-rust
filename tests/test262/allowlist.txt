@@ -416,6 +416,7 @@ cases/map-get-or-insert-basic.js
 cases/map-get-or-insert-computed-basic.js
 cases/map-iterator-basic.js
 cases/map-for-each-basic.js
+cases/map-set-foreach-live-iteration.js
 cases/set-constructor-basic.js
 cases/set-constructor-adder.js
 cases/set-iterable-basic.js

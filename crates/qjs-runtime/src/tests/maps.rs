@@ -224,6 +224,18 @@ fn evaluates_map_iterators_and_for_each() {
         ),
         Ok(Value::String("ctx:a:1:true|ctx:b:2:true|:true".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "let seen = ''; let map = new Map([['a', 1], ['b', 2]]); map.forEach(function(value, key) { if (key === 'a') { map.set('c', 3); } seen = seen + key + ':' + value + '|'; }); seen;"
+        ),
+        Ok(Value::String("a:1|b:2|c:3|".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let seen = ''; let count = 0; let map = new Map([['a', 1], ['b', 2]]); map.forEach(function(value, key) { if (count === 0) { map.delete('a'); map.set('a', 3); } seen = seen + key + ':' + value + '|'; count = count + 1; }); seen + ':' + map.size;"
+        ),
+        Ok(Value::String("a:1|b:2|a:3|:2".to_owned()))
+    );
     assert!(eval("Map.prototype.entries.call({});").is_err());
     assert!(eval("Map.prototype.forEach.call(new Map(), 1);").is_err());
 }
