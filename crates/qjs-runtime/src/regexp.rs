@@ -10,10 +10,12 @@ mod escape;
 mod matcher;
 mod symbol_search;
 mod symbol_split;
+mod validation;
 
 pub(crate) use escape::native_regexp_escape;
 pub(crate) use symbol_search::native_regexp_prototype_search;
 pub(crate) use symbol_split::native_regexp_prototype_split;
+use validation::validate_regexp_init;
 
 const REGEXP_SOURCE_PROPERTY: &str = "\0RegExpSource";
 const REGEXP_FLAGS_PROPERTY: &str = "\0RegExpFlags";
@@ -173,6 +175,7 @@ pub(crate) fn native_regexp(
     let flags_value = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
     let source = regexp_source(pattern.clone(), env)?;
     let flags = regexp_flags(pattern.clone(), flags_value, env)?;
+    validate_regexp_init(&source, &flags)?;
 
     if !is_construct {
         let object = ObjectRef::with_prototype(HashMap::new(), function_prototype(function));
@@ -231,6 +234,7 @@ pub(crate) fn native_regexp_prototype_compile(
             (source, flags)
         }
     };
+    validate_regexp_init(&source, &flags)?;
 
     define_regexp_data_without_last_index(object, &source, &flags);
     regexp_set_last_index_object(object, 0)?;

@@ -118,6 +118,24 @@ fn evaluates_regexp_prototype_compile() {
         ),
         Ok(Value::String("true:/def/g:45".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "let re = /test262/gi; let caught = false; try { re.compile('', 'igi'); } catch (error) { caught = error instanceof SyntaxError; } caught + ':' + re.toString() + ':' + re.test('TEsT262');"
+        ),
+        Ok(Value::String("true:/test262/gi:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let re = /test262/gi; let caught = false; try { re.compile('.{2,1}'); } catch (error) { caught = error instanceof SyntaxError; } caught + ':' + re.toString() + ':' + re.test('TEsT262');"
+        ),
+        Ok(Value::String("true:/test262/gi:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let re = /test262/gi; let caught = false; try { re.compile('\\\\2', 'u'); } catch (error) { caught = error instanceof SyntaxError; } caught + ':' + re.toString() + ':' + re.test('TEsT262');"
+        ),
+        Ok(Value::String("true:/test262/gi:true".to_owned()))
+    );
 }
 
 #[test]

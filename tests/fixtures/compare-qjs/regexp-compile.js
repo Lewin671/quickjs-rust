@@ -18,5 +18,25 @@
     flagsError = error instanceof TypeError;
   }
 
-  return stringCase + "|" + regexpCase + "|" + flagsError;
+  function invalid(source, flags) {
+    re = /test262/gi;
+    try {
+      re.compile(source, flags);
+      return "missing";
+    } catch (error) {
+      return (error instanceof SyntaxError) + ":" + re.toString() + ":" + re.test("TEsT262");
+    }
+  }
+
+  var invalidCases = [
+    invalid("", "igi"),
+    invalid("", "gI"),
+    invalid("", "w"),
+    invalid("?"),
+    invalid(".{2,1}"),
+    invalid("{", "u"),
+    invalid("\\2", "u"),
+  ].join(",");
+
+  return stringCase + "|" + regexpCase + "|" + flagsError + "|" + invalidCases;
 })()
