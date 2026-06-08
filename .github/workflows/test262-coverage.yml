@@ -9,8 +9,8 @@ on:
     types: [completed]
 
 concurrency:
-  group: test262-coverage-${{ github.event.workflow_run.head_branch || github.event.workflow_run.head_sha }}
-  cancel-in-progress: true
+  group: test262-coverage-${{ github.event.workflow_run.head_sha || github.sha }}
+  cancel-in-progress: false
 
 jobs:
   coverage-shards:
