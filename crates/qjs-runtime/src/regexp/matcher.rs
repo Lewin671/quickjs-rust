@@ -404,14 +404,30 @@ fn match_class(
     };
     let class_end = pc + 1 + end;
     let class = &pattern[pc + 1..class_end];
-    if !text
-        .get(state.index)
-        .is_some_and(|value| class_match(class, *value, options))
-    {
+    let Some((value, next_index)) = regexp_code_point_at(text, state.index, options.unicode) else {
+        return Vec::new();
+    };
+    if !class_match(class, value, options) {
         return Vec::new();
     }
-    state.index += 1;
+    state.index = next_index;
     vec![(class_end + 1, state)]
+}
+
+fn regexp_code_point_at(text: &[char], index: usize, unicode: bool) -> Option<(char, usize)> {
+    let first = *text.get(index)?;
+    if unicode
+        && let Some(high) = char_code_unit(first)
+        && (0xD800..=0xDBFF).contains(&high)
+        && let Some(low) = text.get(index + 1).and_then(|value| char_code_unit(*value))
+        && (0xDC00..=0xDFFF).contains(&low)
+    {
+        let code_point = 0x10000 + ((u32::from(high) - 0xD800) << 10) + u32::from(low) - 0xDC00;
+        if let Some(value) = char::from_u32(code_point) {
+            return Some((value, index + 2));
+        }
+    }
+    Some((first, index + 1))
 }
 
 fn quantifier(pattern: &[char], pc: usize) -> Quantifier {

@@ -38,5 +38,12 @@
     invalid("\\2", "u"),
   ].join(",");
 
-  return stringCase + "|" + regexpCase + "|" + flagsError + "|" + invalidCases;
+  re.compile("[\ud834\udf06]", "u");
+  var unicodeCase = [
+    re.test("\ud834"),
+    re.test("\udf06"),
+    re.test("\ud834\udf06"),
+  ].join(":");
+
+  return stringCase + "|" + regexpCase + "|" + flagsError + "|" + invalidCases + "|" + unicodeCase;
 })()

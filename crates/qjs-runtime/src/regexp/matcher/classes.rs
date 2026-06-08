@@ -2,6 +2,7 @@ use super::MatchOptions;
 use super::escapes::{
     chars_equal, class_range_contains, regexp_control_escape, regexp_word_char, unicode_escape,
 };
+use crate::string::surrogate_escape_code_unit;
 
 pub(super) fn class_match(class: &[char], value: char, options: MatchOptions) -> bool {
     let (negated, class) = if class.first() == Some(&'^') {
@@ -33,6 +34,15 @@ fn class_match_positive(class: &[char], value: char, options: MatchOptions) -> b
             }
             index += 3;
         } else {
+            if options.unicode
+                && let Some((code_point, next_index)) = class_code_point_at(class, index)
+            {
+                if chars_equal(code_point, value, options.ignore_case) {
+                    return true;
+                }
+                index = next_index;
+                continue;
+            }
             if chars_equal(class[index], value, options.ignore_case) {
                 return true;
             }
@@ -55,4 +65,21 @@ fn class_escape_matches(class: &[char], index: usize, value: char, options: Matc
         Some(escaped) => chars_equal(regexp_control_escape(escaped), value, options.ignore_case),
         None => false,
     }
+}
+
+fn class_code_point_at(class: &[char], index: usize) -> Option<(char, usize)> {
+    let high = class
+        .get(index)
+        .and_then(|value| surrogate_escape_code_unit(*value))?;
+    if !(0xD800..=0xDBFF).contains(&high) {
+        return None;
+    }
+    let low = class
+        .get(index + 1)
+        .and_then(|value| surrogate_escape_code_unit(*value))?;
+    if !(0xDC00..=0xDFFF).contains(&low) {
+        return None;
+    }
+    let code_point = 0x10000 + ((u32::from(high) - 0xD800) << 10) + u32::from(low) - 0xDC00;
+    char::from_u32(code_point).map(|value| (value, index + 2))
 }

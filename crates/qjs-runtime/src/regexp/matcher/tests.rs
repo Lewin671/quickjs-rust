@@ -1,4 +1,5 @@
 use super::regexp_match_range;
+use crate::string::string_from_code_unit;
 
 #[test]
 fn captures_greedy_quantified_group_range() {
@@ -26,4 +27,17 @@ fn matches_numbered_backreferences() {
     .unwrap();
     assert_eq!((matched.start, matched.end), (0, 26));
     assert_eq!(matched.captures, vec![Some((0, 5))]);
+}
+
+#[test]
+fn unicode_character_classes_match_surrogate_pairs_as_code_points() {
+    let high = string_from_code_unit(0xD834);
+    let low = string_from_code_unit(0xDF06);
+    let pattern = format!("[{high}{low}]");
+    let input = format!("{high}{low}");
+
+    let matched = regexp_match_range(&pattern, &input, 0, false, true).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 2));
+    assert!(regexp_match_range(&pattern, &high, 0, false, true).is_none());
+    assert!(regexp_match_range(&pattern, &low, 0, false, true).is_none());
 }

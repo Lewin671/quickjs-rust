@@ -867,6 +867,7 @@ cases/regexp-prototype-compile-basic.js
 cases/regexp-compile-invalid-flags-syntax.js
 cases/regexp-compile-invalid-pattern-syntax.js
 cases/regexp-compile-invalid-unicode-pattern-syntax.js
+cases/regexp-compile-unicode-pattern-string.js
 cases/regexp-prototype-dot-all-accessor.js
 cases/regexp-prototype-flag-accessors.js
 cases/regexp-literal-date-format-escaped-atoms.js
