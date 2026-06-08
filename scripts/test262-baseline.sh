@@ -210,14 +210,11 @@ skip_reason() {
   local flags="$2"
   local includes="$3"
   local features="$4"
-  local has_negative="$5"
   case "$rel" in
     *_FIXTURE.js) echo "fixture"; return ;;
     test/intl402/*|test/staging/intl402/*) echo "intl402"; return ;;
   esac
-  if [ -n "$has_negative" ]; then
-    echo "negative"
-  elif [[ "$flags" == *module* ]]; then
+  if [[ "$flags" == *module* ]]; then
     echo "module"
   elif [[ "$flags" == *async* ]]; then
     echo "async"
@@ -316,12 +313,9 @@ make_case() {
   } >"$output"
 }
 run_engine_case() {
-  local engine="$1"
-  local temp="$2"
-  local source="$3"
-  local output
-  local status
-  local first_line
+  local engine="$1" temp="$2" source="$3"
+  local negative_phase="${4:-}" negative_type="${5:-}"
+  local output status first_line
 
   set +e
   case "$engine" in
@@ -332,9 +326,15 @@ run_engine_case() {
   set -e
 
   if [ "$status" -eq 0 ]; then
+    if [ "$engine" = "quickjs-rust" ] && [ -n "$negative_phase" ]; then
+      printf "fail\texpected negative %s%s\n" "$negative_phase" "${negative_type:+ $negative_type}"
+      return
+    fi
     echo "pass"
   elif [ "$status" -eq 124 ]; then
     echo "timeout"
+  elif [ "$engine" = "quickjs-rust" ] && [ -n "$negative_phase" ]; then
+    echo "pass"
   else
     first_line="$(printf '%s\n' "$output" | sed -n '1p')"
     printf "fail\t%s\n" "$first_line"
@@ -358,16 +358,10 @@ result_kind() {
   esac
 }
 run_case() {
-  local file="$1"
-  local flags="$2"
-  local rel="$3"
-  local includes="$4"
-  local rust_skip_reason="$5"
-  local qjsng_skip_reason="$6"
-  local temp_dir
-  local temp
-  local rust_result="not-run"
-  local qjsng_result="not-run"
+  local file="$1" flags="$2" rel="$3" includes="$4"
+  local rust_skip_reason="$5" qjsng_skip_reason="$6"
+  local negative_phase="${7:-}" negative_type="${8:-}"
+  local temp_dir temp rust_result="not-run" qjsng_result="not-run"
   temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/qjs-test262-baseline-XXXXXX")"
   temp="$temp_dir/case.js"
   make_case "$file" "$temp" "$flags" "$includes"
@@ -376,7 +370,7 @@ run_case() {
       rust_result="skipped"
       rust_skipped=$((rust_skipped + 1))
     else
-      rust_result="$(run_engine_case quickjs-rust "$temp" "$file")"
+      rust_result="$(run_engine_case quickjs-rust "$temp" "$file" "$negative_phase" "$negative_type")"
       count_engine_result rust "$rust_result"
     fi
   fi
@@ -495,9 +489,10 @@ while IFS= read -r file; do
     read -r flags
     read -r includes
     read -r features
-    read -r has_negative
+    read -r negative_phase
+    read -r negative_type
   } < <(metadata_for "$file")
-  reason="$(skip_reason "$rel" "$flags" "$includes" "$features" "$has_negative")"
+  reason="$(skip_reason "$rel" "$flags" "$includes" "$features")"
   qjsng_reason=""
   if needs_quickjs_ng; then
     qjsng_reason="$(quickjs_ng_skip_reason "$rel" "$features")"
@@ -545,7 +540,7 @@ while IFS= read -r file; do
 
   run=$((run + 1))
   printf 'test262-baseline [%d]: %s\n' "$run" "$rel"
-  run_case "$file" "$flags" "$rel" "$includes" "$reason" "$qjsng_reason"
+  run_case "$file" "$flags" "$rel" "$includes" "$reason" "$qjsng_reason" "$negative_phase" "$negative_type"
 done < <(find "$TEST262_DIR/test" -type f -name '*.js' | sort)
 
 echo "summary:"

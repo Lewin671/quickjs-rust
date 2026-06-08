@@ -18,11 +18,23 @@ inside {
   }
   if ($0 ~ /^[[:space:]]*negative[[:space:]]*:/) {
     negative=1
+    next
+  }
+  if (negative && sub(/^[[:space:]]*phase:[[:space:]]*/, "", $0)) {
+    gsub(/^[[:space:]]*|[[:space:]]*$/, "", $0)
+    negative_phase=$0
+    next
+  }
+  if (negative && sub(/^[[:space:]]*type:[[:space:]]*/, "", $0)) {
+    gsub(/^[[:space:]]*|[[:space:]]*$/, "", $0)
+    negative_type=$0
+    next
   }
 }
 END {
   print flags
   print includes
   print features
-  print (negative ? "1" : "")
+  print negative_phase
+  print negative_type
 }
