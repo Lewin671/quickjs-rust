@@ -15,9 +15,13 @@ concurrency:
 jobs:
   quickjs-ng-baseline:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
-    name: QuickJS-NG baseline
+    name: QuickJS-NG baseline shard ${{ matrix.shard }}/16
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -27,21 +31,22 @@ jobs:
           fetch-depth: 1
           submodules: false
 
-      - name: Init submodules
-        run: git submodule update --init --depth 1 third_party/test262 third_party/quickjs-ng
-
       - name: Baseline cache key
         id: baseline-key
         run: |
-          echo "quickjs_ng_sha=$(git -C third_party/quickjs-ng rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          echo "test262_sha=$(git -C third_party/test262 rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "quickjs_ng_sha=$(git rev-parse HEAD:third_party/quickjs-ng)" >> "$GITHUB_OUTPUT"
+          echo "test262_sha=$(git rev-parse HEAD:third_party/test262)" >> "$GITHUB_OUTPUT"
 
       - name: Restore QuickJS-NG baseline
         id: quickjs-ng-baseline-cache
         uses: actions/cache/restore@v5
         with:
-          path: coverage-baseline
-          key: test262-qjsng-baseline-${{ runner.os }}-${{ steps.baseline-key.outputs.quickjs_ng_sha }}-${{ steps.baseline-key.outputs.test262_sha }}-${{ hashFiles('scripts/test262-baseline.sh', 'scripts/test262-baseline-metadata.awk', 'scripts/run-with-timeout.sh') }}
+          path: coverage-baseline/shard-${{ matrix.shard }}
+          key: test262-qjsng-baseline-${{ runner.os }}-${{ steps.baseline-key.outputs.quickjs_ng_sha }}-${{ steps.baseline-key.outputs.test262_sha }}-${{ hashFiles('scripts/test262-baseline.sh', 'scripts/test262-baseline-metadata.awk', 'scripts/run-with-timeout.sh') }}-${{ matrix.shard }}
+
+      - name: Init submodules
+        if: steps.quickjs-ng-baseline-cache.outputs.cache-hit != 'true'
+        run: git submodule update --init --depth 1 third_party/test262 third_party/quickjs-ng
 
       - name: Restore QuickJS-NG build
         if: steps.quickjs-ng-baseline-cache.outputs.cache-hit != 'true'
@@ -53,37 +58,27 @@ jobs:
       - name: Run QuickJS-NG baseline shard
         if: steps.quickjs-ng-baseline-cache.outputs.cache-hit != 'true'
         run: |
-          mkdir -p coverage-baseline
-          status=0
-          for shard in $(seq 1 16); do
-            (
-              ./scripts/test262-baseline.sh \
-                --all \
-                --engine quickjs-ng \
-                --shard "$shard/16" \
-                --summary-json "coverage-baseline/summary-${shard}.json" \
-                --case-results-jsonl "coverage-baseline/cases-${shard}.jsonl" \
-                --no-fail
-            ) &
-            if [ "$(jobs -pr | wc -l | tr -d ' ')" -ge 4 ]; then
-              wait -n || status=1
-            fi
-          done
-          wait || status=1
-          exit "$status"
+          mkdir -p coverage-baseline/shard-${{ matrix.shard }}
+          ./scripts/test262-baseline.sh \
+            --all \
+            --engine quickjs-ng \
+            --shard ${{ matrix.shard }}/16 \
+            --summary-json coverage-baseline/shard-${{ matrix.shard }}/summary-${{ matrix.shard }}.json \
+            --case-results-jsonl coverage-baseline/shard-${{ matrix.shard }}/cases-${{ matrix.shard }}.jsonl \
+            --no-fail
 
       - name: Save QuickJS-NG baseline
         if: steps.quickjs-ng-baseline-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v5
         with:
-          path: coverage-baseline
-          key: test262-qjsng-baseline-${{ runner.os }}-${{ steps.baseline-key.outputs.quickjs_ng_sha }}-${{ steps.baseline-key.outputs.test262_sha }}-${{ hashFiles('scripts/test262-baseline.sh', 'scripts/test262-baseline-metadata.awk', 'scripts/run-with-timeout.sh') }}
+          path: coverage-baseline/shard-${{ matrix.shard }}
+          key: test262-qjsng-baseline-${{ runner.os }}-${{ steps.baseline-key.outputs.quickjs_ng_sha }}-${{ steps.baseline-key.outputs.test262_sha }}-${{ hashFiles('scripts/test262-baseline.sh', 'scripts/test262-baseline-metadata.awk', 'scripts/run-with-timeout.sh') }}-${{ matrix.shard }}
 
       - name: Upload QuickJS-NG baseline shard
         uses: actions/upload-artifact@v4
         with:
-          name: test262-qjsng-baseline
-          path: coverage-baseline
+          name: test262-qjsng-baseline-${{ matrix.shard }}
+          path: coverage-baseline/shard-${{ matrix.shard }}
           retention-days: 14
 
   coverage-shards:
