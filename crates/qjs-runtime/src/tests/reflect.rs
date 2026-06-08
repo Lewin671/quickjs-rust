@@ -117,6 +117,18 @@ fn evaluates_reflect_prototype_builtins() {
         eval("Reflect.get(Object.create({ inherited: 7 }), 'inherited');"),
         Ok(Value::Number(7.0))
     );
+    assert_eq!(
+        eval(
+            "let target = {}; let receiver = { value: 17 }; Object.defineProperty(target, 'x', { get: function() { return this.value; } }); Reflect.get(target, 'x', receiver);"
+        ),
+        Ok(Value::Number(17.0))
+    );
+    assert_eq!(
+        eval(
+            "let proto = {}; let receiver = { value: 19 }; Object.defineProperty(proto, 'x', { get: function() { return this.value; } }); Reflect.get(Object.create(proto), 'x', receiver);"
+        ),
+        Ok(Value::Number(19.0))
+    );
     assert_eq!(eval("Reflect.get({}, 'missing');"), Ok(Value::Undefined));
     assert_eq!(
         eval("Reflect.get([3, 4], '1') + Reflect.get([3, 4], 'length');"),

@@ -832,6 +832,7 @@ cases/reflect-delete-property-symbol.js
 cases/reflect-get-array-function-basic.js
 cases/reflect-get-basic.js
 cases/reflect-get-length.js
+cases/reflect-get-receiver-accessor.js
 cases/reflect-get-own-property-descriptor-array-function.js
 cases/reflect-get-own-property-descriptor-basic.js
 cases/reflect-get-own-property-descriptor-length.js

@@ -102,10 +102,19 @@ pub(crate) fn property_value_key(
     key: &PropertyKey,
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
+    property_value_key_with_receiver(receiver.clone(), key, receiver, env)
+}
+
+pub(crate) fn property_value_key_with_receiver(
+    target: Value,
+    key: &PropertyKey,
+    receiver: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
     let PropertyKey::String(key) = key else {
-        return symbol_property_value(receiver, key, env);
+        return symbol_property_value_with_receiver(target, key, receiver, env);
     };
-    match receiver.clone() {
+    match target {
         Value::Object(object) => property_descriptor_value(object.property(key), receiver, env),
         Value::Map(map) => property_descriptor_value(map.object().property(key), receiver, env),
         Value::Set(set) => property_descriptor_value(set.object().property(key), receiver, env),
@@ -165,15 +174,16 @@ pub(crate) fn property_value_key(
     }
 }
 
-fn symbol_property_value(
-    receiver: Value,
+fn symbol_property_value_with_receiver(
+    target: Value,
     key: &PropertyKey,
+    receiver: Value,
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let PropertyKey::Symbol(symbol) = key else {
         unreachable!("symbol property helper should only receive symbol keys");
     };
-    match receiver.clone() {
+    match target {
         Value::Object(object) => {
             property_descriptor_value(object.symbol_property(symbol), receiver, env)
         }

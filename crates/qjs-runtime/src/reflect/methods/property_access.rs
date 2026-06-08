@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::reflect::target::ensure_reflect_object_target;
-use crate::{RuntimeError, Value, has_property_key, property_value_key};
+use crate::{RuntimeError, Value, has_property_key, property_value_key_with_receiver};
 
 pub(crate) fn native_reflect_get(
     argument_values: &[Value],
@@ -14,19 +14,15 @@ pub(crate) fn native_reflect_get(
         env,
     )?;
 
+    let receiver = argument_values
+        .get(2)
+        .cloned()
+        .unwrap_or_else(|| target.clone());
+
     Ok(match target {
-        Value::Object(_) | Value::Map(_) | Value::Set(_) | Value::Array(_) => {
-            property_value_key(target, &key, env)?
+        Value::Object(_) | Value::Map(_) | Value::Set(_) | Value::Array(_) | Value::Function(_) => {
+            property_value_key_with_receiver(target, &key, receiver, env)?
         }
-        Value::Function(function) => match key {
-            crate::PropertyKey::String(key) => {
-                crate::function_own_property_descriptor(&function, &key)
-                    .map(|property| property.value)
-                    .or_else(|| crate::function_prototype_property(&function, env, &key))
-                    .unwrap_or(Value::Undefined)
-            }
-            crate::PropertyKey::Symbol(_) => Value::Undefined,
-        },
         Value::String(_)
         | Value::Number(_)
         | Value::Boolean(_)
