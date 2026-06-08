@@ -265,6 +265,20 @@ fn evaluates_reflect_prototype_builtins() {
         Ok(Value::Number(1.0))
     );
     assert_eq!(
+        eval(
+            "Object.getOwnPropertyNames(Reflect.getOwnPropertyDescriptor({ value: 1 }, 'value')).join(',');"
+        ),
+        Ok(Value::String(
+            "value,writable,enumerable,configurable".to_owned()
+        ))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; Object.defineProperty(object, 'value', { get: function() {}, configurable: true }); Object.getOwnPropertyNames(Reflect.getOwnPropertyDescriptor(object, 'value')).join(',');"
+        ),
+        Ok(Value::String("get,set,enumerable,configurable".to_owned()))
+    );
+    assert_eq!(
         eval("Reflect.getOwnPropertyDescriptor([1, 2], 'length').enumerable;"),
         Ok(Value::Boolean(false))
     );

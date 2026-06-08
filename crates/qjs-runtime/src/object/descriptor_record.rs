@@ -249,19 +249,30 @@ pub(crate) fn property_descriptor_object(
     property: Property,
     prototype: Option<ObjectRef>,
 ) -> ObjectRef {
-    let mut properties = HashMap::from([
-        ("enumerable".to_owned(), Value::Boolean(property.enumerable)),
-        (
-            "configurable".to_owned(),
-            Value::Boolean(property.configurable),
-        ),
-    ]);
+    let result = ObjectRef::with_prototype(HashMap::new(), prototype);
     if property.is_accessor() {
-        properties.insert("get".to_owned(), property.get.unwrap_or(Value::Undefined));
-        properties.insert("set".to_owned(), property.set.unwrap_or(Value::Undefined));
+        result.define_property(
+            "get".to_owned(),
+            Property::enumerable(property.get.unwrap_or(Value::Undefined)),
+        );
+        result.define_property(
+            "set".to_owned(),
+            Property::enumerable(property.set.unwrap_or(Value::Undefined)),
+        );
     } else {
-        properties.insert("value".to_owned(), property.value);
-        properties.insert("writable".to_owned(), Value::Boolean(property.writable));
+        result.define_property("value".to_owned(), Property::enumerable(property.value));
+        result.define_property(
+            "writable".to_owned(),
+            Property::enumerable(Value::Boolean(property.writable)),
+        );
     }
-    ObjectRef::with_prototype(properties, prototype)
+    result.define_property(
+        "enumerable".to_owned(),
+        Property::enumerable(Value::Boolean(property.enumerable)),
+    );
+    result.define_property(
+        "configurable".to_owned(),
+        Property::enumerable(Value::Boolean(property.configurable)),
+    );
+    result
 }

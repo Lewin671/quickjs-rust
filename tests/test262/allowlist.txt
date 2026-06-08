@@ -835,6 +835,7 @@ cases/reflect-get-length.js
 cases/reflect-get-own-property-descriptor-array-function.js
 cases/reflect-get-own-property-descriptor-basic.js
 cases/reflect-get-own-property-descriptor-length.js
+cases/reflect-get-own-property-descriptor-order.js
 cases/reflect-get-prototype-of-basic.js
 cases/reflect-get-prototype-of-symbol-target-throws.js
 cases/reflect-get-prototype-of-length.js
