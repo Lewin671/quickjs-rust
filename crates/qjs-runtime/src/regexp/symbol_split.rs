@@ -105,6 +105,7 @@ fn split_regexp_clone(
     env: &mut HashMap<String, Value>,
 ) -> Result<(Value, bool), RuntimeError> {
     let constructor = species_constructor(value.clone(), env)?;
+    let _ = super::regexp_is_regexp_with_env(value.clone(), env)?;
     let flags = to_js_string_with_env(property_value(value.clone(), "flags", env)?, env)?;
     let unicode_matching = flags.contains('u');
     let mut split_flags = flags;

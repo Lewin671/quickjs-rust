@@ -439,6 +439,12 @@ fn evaluates_regexp_symbol_split() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "let re = /a/; Object.defineProperty(re, Symbol.match, { get: function() { re.compile('b'); } }); let result = re[Symbol.split]('abba'); result.length + ':' + result.join('|');"
+        ),
+        Ok(Value::String("3:a||a".to_owned()))
+    );
 }
 
 #[test]
