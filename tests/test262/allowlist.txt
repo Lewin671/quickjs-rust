@@ -109,6 +109,13 @@ test/built-ins/Array/prototype/copyWithin/return-abrupt-from-this-length.js
 test/built-ins/Array/prototype/copyWithin/return-abrupt-from-this.js
 test/built-ins/Array/prototype/copyWithin/return-this.js
 test/built-ins/Array/prototype/copyWithin/undefined-end.js
+test/built-ins/Array/prototype/entries/returns-iterator-from-object.js
+test/built-ins/Array/prototype/entries/returns-iterator.js
+test/built-ins/Array/prototype/keys/returns-iterator-from-object.js
+test/built-ins/Array/prototype/keys/returns-iterator.js
+test/built-ins/Array/prototype/Symbol.iterator.js
+test/built-ins/Array/prototype/values/returns-iterator-from-object.js
+test/built-ins/Array/prototype/values/returns-iterator.js
 cases/array-every-basic.js
 cases/array-every-callback-arguments.js
 cases/array-every-this-arg.js
