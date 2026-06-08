@@ -200,7 +200,7 @@ fn arguments_object(
         if let Some(parameter_name) = mapped_argument_parameter(function, index) {
             object.define_property(
                 index.to_string(),
-                mapped_argument_property(parameter_name.to_owned()),
+                mapped_argument_property(parameter_name.to_owned(), value),
             );
         } else {
             object.define_property(index.to_string(), Property::enumerable(value));
@@ -234,29 +234,45 @@ fn mapped_argument_parameter(function: &Function, index: usize) -> Option<&str> 
     }
 }
 
-fn mapped_argument_property(parameter_name: String) -> Property {
+fn mapped_argument_property(parameter_name: String, initial_value: Value) -> Property {
+    let backing = ObjectRef::new(HashMap::from([("value".to_owned(), initial_value)]));
     Property::accessor(
-        Some(mapped_argument_accessor(
-            "[[MappedArgumentGet]]",
-            NativeFunction::MappedArgumentGet,
+        Some(mapped_argument_getter(
             parameter_name.clone(),
+            backing.clone(),
         )),
-        Some(mapped_argument_accessor(
-            "[[MappedArgumentSet]]",
-            NativeFunction::MappedArgumentSet,
-            parameter_name,
-        )),
+        Some(mapped_argument_setter(parameter_name, backing)),
         true,
         true,
     )
 }
 
-fn mapped_argument_accessor(name: &str, native: NativeFunction, parameter_name: String) -> Value {
-    let target = Value::Function(Function::new_native(Some(name), 1, native, false));
+fn mapped_argument_getter(parameter_name: String, backing: ObjectRef) -> Value {
+    let target = Value::Function(Function::new_native(
+        Some("[[MappedArgumentGet]]"),
+        1,
+        NativeFunction::MappedArgumentGet,
+        false,
+    ));
     Value::Function(Function::new_bound(
         target,
         Value::Undefined,
-        vec![Value::String(parameter_name)],
+        vec![Value::String(parameter_name), Value::Object(backing)],
+        1,
+    ))
+}
+
+fn mapped_argument_setter(parameter_name: String, backing: ObjectRef) -> Value {
+    let target = Value::Function(Function::new_native(
+        Some("[[MappedArgumentSet]]"),
+        1,
+        NativeFunction::MappedArgumentSet,
+        false,
+    ));
+    Value::Function(Function::new_bound(
+        target,
+        Value::Undefined,
+        vec![Value::String(parameter_name), Value::Object(backing)],
         1,
     ))
 }
@@ -283,7 +299,13 @@ pub(crate) fn native_mapped_argument_get(
     let Some(parameter_name) = mapped_argument_name(argument_values) else {
         return Ok(Value::Undefined);
     };
-    Ok(env.get(parameter_name).cloned().unwrap_or(Value::Undefined))
+    Ok(env
+        .get(parameter_name)
+        .cloned()
+        .or_else(|| {
+            mapped_argument_backing(argument_values).and_then(|backing| backing.get("value"))
+        })
+        .unwrap_or(Value::Undefined))
 }
 
 pub(crate) fn native_mapped_argument_set(
@@ -293,9 +315,12 @@ pub(crate) fn native_mapped_argument_set(
     let Some(parameter_name) = mapped_argument_name(argument_values) else {
         return Ok(Value::Undefined);
     };
-    let value = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
+    let value = argument_values.get(2).cloned().unwrap_or(Value::Undefined);
     if let Some(binding) = env.get_mut(parameter_name) {
-        *binding = value;
+        *binding = value.clone();
+    }
+    if let Some(backing) = mapped_argument_backing(argument_values) {
+        backing.set("value".to_owned(), value);
     }
     Ok(Value::Undefined)
 }
@@ -303,6 +328,13 @@ pub(crate) fn native_mapped_argument_set(
 fn mapped_argument_name(argument_values: &[Value]) -> Option<&str> {
     match argument_values.first() {
         Some(Value::String(name)) => Some(name),
+        _ => None,
+    }
+}
+
+fn mapped_argument_backing(argument_values: &[Value]) -> Option<ObjectRef> {
+    match argument_values.get(1) {
+        Some(Value::Object(object)) => Some(object.clone()),
         _ => None,
     }
 }

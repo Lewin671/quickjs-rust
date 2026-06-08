@@ -144,6 +144,18 @@ fn evaluates_array_sequence_builtins() {
     );
     assert_eq!(
         eval(
+            "let args = (function(a, b, c) { return arguments; })(1, 2, 3); args[Symbol.isConcatSpreadable] = true; [].concat(args, args).join('|');"
+        ),
+        Ok(Value::String("1|2|3|1|2|3".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let args = (function(a) { return arguments; })(1, 2, 3); delete args[1]; args[Symbol.isConcatSpreadable] = true; let out = [].concat(args, args); out.join('|') + ':' + out.hasOwnProperty('1') + ':' + out.hasOwnProperty('4');"
+        ),
+        Ok(Value::String("1||3|1||3:false:false".to_owned()))
+    );
+    assert_eq!(
+        eval(
             "let marker = { ok: true }; let item = {}; Object.defineProperty(item, Symbol.isConcatSpreadable, { get: function() { throw marker; } }); let caught = false; try { [].concat(item); } catch (error) { caught = error === marker; } caught;"
         ),
         Ok(Value::Boolean(true))

@@ -71,6 +71,14 @@ fn evaluates_function_declarations_and_calls() {
         Ok(Value::String("x:x".to_owned()))
     );
     assert_eq!(
+        eval("let args = (function(a) { arguments[0] = 'x'; return arguments; })('a'); args[0];"),
+        Ok(Value::String("x".to_owned()))
+    );
+    assert_eq!(
+        eval("let args = (function(a) { return arguments; })('a'); args[0] = 'x'; args[0];"),
+        Ok(Value::String("x".to_owned()))
+    );
+    assert_eq!(
         eval(
             "function values(a, a) { arguments[0] = 'x'; arguments[1] = 'y'; return arguments[0] + ':' + a; } values('a', 'b');"
         ),
