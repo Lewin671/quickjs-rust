@@ -447,6 +447,18 @@ fn seeds_bytecode_function_env_from_referenced_caller_bindings() {
         ),
         Ok(Value::Number(3.0))
     );
+    assert_eq!(
+        eval_bytecode_source(
+            "function makeCounter() { let index = 0; return function() { index = index + 1; return index; }; } let next = makeCounter(); next() + ':' + next();",
+        ),
+        Ok(Value::String("1:2".to_owned()))
+    );
+    assert_eq!(
+        eval_bytecode_source(
+            "function makePair() { let index = 0; return [function() { index = index + 1; return index; }, function() { index = index + 1; return index; }]; } let pair = makePair(); pair[0]() + ':' + pair[1]() + ':' + pair[0]();",
+        ),
+        Ok(Value::String("1:2:3".to_owned()))
+    );
 }
 
 #[test]

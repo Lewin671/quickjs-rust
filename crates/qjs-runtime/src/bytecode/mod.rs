@@ -1,5 +1,7 @@
 //! Bytecode compiler and stack VM for the runtime's fast path.
 
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
+
 mod compiler;
 mod compiler_assign;
 mod compiler_control;
@@ -43,9 +45,10 @@ pub(crate) fn compile_function_body(
 
 pub(crate) fn eval_function_bytecode(
     bytecode: &Bytecode,
-    env: std::collections::HashMap<String, Value>,
+    env: HashMap<String, Value>,
+    captured_env: Rc<RefCell<HashMap<String, Value>>>,
 ) -> FunctionBytecodeResult<'_> {
-    vm::eval_function_bytecode(bytecode, env)
+    vm::eval_function_bytecode(bytecode, env, captured_env)
 }
 
 /// Compiles and evaluates source text through the bytecode VM.
@@ -73,7 +76,8 @@ pub fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> {
 
 pub(crate) fn eval_bytecode_with_env(
     bytecode: &Bytecode,
-    env: std::collections::HashMap<String, Value>,
+    env: HashMap<String, Value>,
 ) -> FunctionBytecodeResult<'_> {
-    vm::eval_function_bytecode(bytecode, env)
+    let captured_env = Rc::new(RefCell::new(env.clone()));
+    vm::eval_function_bytecode(bytecode, env, captured_env)
 }

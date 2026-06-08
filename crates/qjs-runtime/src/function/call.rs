@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
     ArrayRef, Bytecode, Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, Property,
@@ -56,7 +56,9 @@ pub(crate) fn call_function(
             &argument_values,
             env,
         );
-        let result = eval_function_bytecode(bytecode, function_env.env);
+        let activation_captured_env = Rc::new(RefCell::new(function_env.env.clone()));
+        let result = eval_function_bytecode(bytecode, function_env.env, activation_captured_env);
+        propagate_function_captures(&function, &function_env.function_capture_names, &result);
         propagate_caller_bindings(env, &function_env.caller_binding_names, &result);
         return result.value;
     }
@@ -107,6 +109,7 @@ fn not_constructor_error() -> RuntimeError {
 
 struct FunctionCallEnv {
     env: HashMap<String, Value>,
+    function_capture_names: Vec<String>,
     caller_binding_names: Vec<String>,
 }
 
@@ -118,20 +121,22 @@ fn function_env(
     argument_values: &[Value],
     env: &HashMap<String, Value>,
 ) -> FunctionCallEnv {
+    let captured_env = function.captured_env.borrow();
     let mut local_env = HashMap::with_capacity(
         RUNTIME_INTRINSIC_NAMES.len()
-            + function.env.len()
+            + captured_env.len()
             + function.params.binding_count()
             + argument_values.len()
             + 3,
     );
-    insert_runtime_intrinsics(&mut local_env, &function.env, env);
-    insert_function_captures(
+    insert_runtime_intrinsics(&mut local_env, &captured_env, env);
+    let function_capture_names = insert_function_captures(
         &mut local_env,
         bytecode,
         &function.local_names,
-        &function.env,
+        &captured_env,
     );
+    drop(captured_env);
     let mut caller_binding_names = Vec::new();
     insert_caller_bytecode_bindings(
         &mut local_env,
@@ -177,6 +182,7 @@ fn function_env(
     }
     FunctionCallEnv {
         env: local_env,
+        function_capture_names,
         caller_binding_names,
     }
 }
@@ -356,27 +362,33 @@ fn insert_function_captures(
     bytecode: &Bytecode,
     function_local_names: &[String],
     function_env: &HashMap<String, Value>,
-) {
+) -> Vec<String> {
+    let mut names = Vec::new();
     for name in bytecode.global_names() {
-        insert_function_capture(local_env, function_env, name);
+        insert_function_capture(local_env, &mut names, function_env, name);
     }
     for name in bytecode.local_names() {
         if function_local_names
             .binary_search_by(|local| local.as_str().cmp(name))
             .is_err()
         {
-            insert_function_capture(local_env, function_env, name);
+            insert_function_capture(local_env, &mut names, function_env, name);
         }
     }
+    names
 }
 
 fn insert_function_capture(
     local_env: &mut HashMap<String, Value>,
+    names: &mut Vec<String>,
     function_env: &HashMap<String, Value>,
     name: &str,
 ) {
     if let Some(value) = function_env.get(name) {
         local_env.insert(name.to_owned(), value.clone());
+        if !names.iter().any(|existing| existing == name) {
+            names.push(name.to_owned());
+        }
     }
 }
 
@@ -444,6 +456,24 @@ fn propagate_caller_bindings(
             && let Some(final_value) = result.binding(name)
         {
             *value = final_value.clone();
+        }
+    }
+}
+
+fn propagate_function_captures(
+    function: &Function,
+    function_capture_names: &[String],
+    result: &crate::bytecode::FunctionBytecodeResult<'_>,
+) {
+    if function_capture_names.is_empty() {
+        return;
+    }
+    let mut captured_env = function.captured_env.borrow_mut();
+    for name in function_capture_names {
+        if !is_call_frame_binding(name)
+            && let Some(final_value) = result.binding(name)
+        {
+            captured_env.insert(name.clone(), final_value.clone());
         }
     }
 }

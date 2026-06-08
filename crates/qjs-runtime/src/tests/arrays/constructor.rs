@@ -76,7 +76,7 @@ fn evaluates_array_from_iterables() {
     );
     assert_eq!(
         eval(
-            "let state = { index: 0 }; let source = {}; source[Symbol.iterator] = function() { return { next: function() { state.index = state.index + 1; return state.index > 2 ? { done: true } : { value: state.index * 3, done: false }; } }; }; Array.from(source).join();"
+            "let source = {}; source[Symbol.iterator] = function() { let index = 0; return { next: function() { index = index + 1; return index > 2 ? { done: true } : { value: index * 3, done: false }; } }; }; Array.from(source).join();"
         ),
         Ok(Value::String("3,6".to_owned()))
     );
@@ -86,7 +86,7 @@ fn evaluates_array_from_iterables() {
 fn maps_array_from_iterables_during_consumption() {
     assert_eq!(
         eval(
-            "let log = ''; let state = { index: 0 }; let source = {}; source[Symbol.iterator] = function() { return { next: function() { log = log + 'n' + state.index; state.index = state.index + 1; return state.index > 2 ? { done: true } : { value: state.index, done: false }; } }; }; Array.from(source, function(value, index) { log = log + 'm' + index; return value; }); log;"
+            "let log = ''; let source = {}; source[Symbol.iterator] = function() { let index = 0; return { next: function() { log = log + 'n' + index; index = index + 1; return index > 2 ? { done: true } : { value: index, done: false }; } }; }; Array.from(source, function(value, index) { log = log + 'm' + index; return value; }); log;"
         ),
         Ok(Value::String("n0m0n1m1n2".to_owned()))
     );

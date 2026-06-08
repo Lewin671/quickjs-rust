@@ -23,6 +23,7 @@ pub struct Function {
     pub params: FunctionParams,
     /// Environment captured when the function was created.
     pub env: HashMap<String, Value>,
+    pub(crate) captured_env: Rc<RefCell<HashMap<String, Value>>>,
     pub(crate) local_names: Vec<String>,
     pub(crate) bytecode: Option<Rc<Bytecode>>,
     pub(crate) native: Option<NativeFunction>,
@@ -45,6 +46,17 @@ pub(crate) struct BoundFunction {
     pub(crate) target: Value,
     pub(crate) this_value: Value,
     pub(crate) arguments: Vec<Value>,
+}
+
+pub(crate) struct CompiledUserFunction {
+    pub(crate) name: Option<String>,
+    pub(crate) params: FunctionParams,
+    pub(crate) env: HashMap<String, Value>,
+    pub(crate) bytecode: Rc<Bytecode>,
+    pub(crate) local_names: Vec<String>,
+    pub(crate) constructable: bool,
+    pub(crate) is_strict: bool,
+    pub(crate) captured_env: Rc<RefCell<HashMap<String, Value>>>,
 }
 
 impl fmt::Debug for Function {
@@ -98,10 +110,12 @@ impl Function {
             Some(bytecode) => bytecode,
             None => Rc::new(compile_function_body(&params, &body)?),
         };
+        let captured_env = Rc::new(RefCell::new(env.clone()));
         let function = Self {
             name,
             params,
             env,
+            captured_env,
             local_names,
             bytecode: Some(bytecode),
             native: None,
@@ -129,20 +143,23 @@ impl Function {
         Ok(function)
     }
 
-    pub(crate) fn new_user_compiled(
-        name: Option<String>,
-        params: FunctionParams,
-        env: HashMap<String, Value>,
-        bytecode: Rc<Bytecode>,
-        local_names: Vec<String>,
-        constructable: bool,
-        is_strict: bool,
-    ) -> Self {
+    pub(crate) fn new_user_compiled(compiled: CompiledUserFunction) -> Self {
+        let CompiledUserFunction {
+            name,
+            params,
+            env,
+            bytecode,
+            local_names,
+            constructable,
+            is_strict,
+            captured_env,
+        } = compiled;
         let prototype = ObjectRef::with_prototype(HashMap::new(), object_prototype(&env));
         let function = Self {
             name,
             params,
             env,
+            captured_env,
             local_names,
             bytecode: Some(bytecode),
             native: None,
@@ -200,6 +217,7 @@ impl Function {
             name: Some(name),
             params: FunctionParams::positional(vec![String::new(); length]),
             env: HashMap::new(),
+            captured_env: Rc::new(RefCell::new(HashMap::new())),
             local_names: Vec::new(),
             bytecode: None,
             native: None,
@@ -231,10 +249,12 @@ impl Function {
         constructable: bool,
     ) -> Self {
         let prototype = ObjectRef::new(HashMap::new());
+        let captured_env = Rc::new(RefCell::new(env.clone()));
         let function = Self {
             name,
             params: FunctionParams::positional(params),
             env,
+            captured_env,
             local_names: Vec::new(),
             bytecode: None,
             native,

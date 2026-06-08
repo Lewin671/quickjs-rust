@@ -80,6 +80,18 @@ fn evaluates_function_declarations_and_calls() {
     );
     assert_eq!(
         eval(
+            "function makeCounter() { let index = 0; return function() { index = index + 1; return index; }; } let next = makeCounter(); next() + ':' + next();"
+        ),
+        Ok(Value::String("1:2".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "function makePair() { let index = 0; return [function() { index = index + 1; return index; }, function() { index = index + 1; return index; }]; } let pair = makePair(); pair[0]() + ':' + pair[1]() + ':' + pair[0]();"
+        ),
+        Ok(Value::String("1:2:3".to_owned()))
+    );
+    assert_eq!(
+        eval(
             "function values(a, a) { arguments[0] = 'x'; arguments[1] = 'y'; return arguments[0] + ':' + a; } values('a', 'b');"
         ),
         Ok(Value::String("x:y".to_owned()))

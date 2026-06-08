@@ -1,12 +1,12 @@
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use qjs_ast::ObjectPropertyKind;
 
 use crate::{
     ArrayRef, Function, GLOBAL_THIS_BINDING, ObjectRef, Property, RUNTIME_INTRINSIC_NAMES,
     RuntimeError, Value, array::iterable_values_with_env, call_function, construct_function,
-    initialize_builtins, is_truthy, object, object_prototype, promise, symbol,
-    to_js_string_with_env, to_property_key_value,
+    function::CompiledUserFunction, initialize_builtins, is_truthy, object, object_prototype,
+    promise, symbol, to_js_string_with_env, to_property_key_value,
 };
 
 use super::ir::{ArrayElementKind, Bytecode, Op};
@@ -35,8 +35,9 @@ pub(super) fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> 
 pub(super) fn eval_function_bytecode(
     bytecode: &Bytecode,
     env: HashMap<String, Value>,
+    captured_env: Rc<RefCell<HashMap<String, Value>>>,
 ) -> FunctionBytecodeResult<'_> {
-    let mut vm = Vm::new_with_globals(bytecode, env);
+    let mut vm = Vm::new_with_globals_and_captures(bytecode, env, captured_env);
     let value = vm.run();
     FunctionBytecodeResult {
         value,
@@ -52,6 +53,7 @@ pub(super) struct Vm<'a> {
     pub(super) stack: Vec<Value>,
     pub(super) locals: Vec<Slot>,
     pub(super) globals: HashMap<String, Value>,
+    pub(super) captured_env: Rc<RefCell<HashMap<String, Value>>>,
     pub(super) try_stack: Vec<TryFrame>,
     pub(super) pending_throw: Option<Value>,
     pub(super) pending_return: Option<Value>,
@@ -65,16 +67,22 @@ impl<'a> Vm<'a> {
         globals.insert(GLOBAL_THIS_BINDING.to_owned(), global_this.clone());
         globals.insert("undefined".to_owned(), Value::Undefined);
         initialize_builtins(&mut globals, &global_this);
-        Self::new_with_globals(bytecode, globals)
+        let captured_env = Rc::new(RefCell::new(globals.clone()));
+        Self::new_with_globals_and_captures(bytecode, globals, captured_env)
     }
 
-    fn new_with_globals(bytecode: &'a Bytecode, globals: HashMap<String, Value>) -> Self {
+    fn new_with_globals_and_captures(
+        bytecode: &'a Bytecode,
+        globals: HashMap<String, Value>,
+        captured_env: Rc<RefCell<HashMap<String, Value>>>,
+    ) -> Self {
         Self {
             bytecode,
             ip: 0,
             stack: Vec::with_capacity(64),
             locals: Self::initial_slots(bytecode, &globals),
             globals,
+            captured_env,
             try_stack: Vec::new(),
             pending_throw: None,
             pending_return: None,
@@ -165,14 +173,18 @@ impl<'a> Vm<'a> {
                     is_strict,
                 } => {
                     let env = self.function_capture_env(&bytecode, &local_names);
+                    self.refresh_captured_env(&env);
                     self.stack.push(Value::Function(Function::new_user_compiled(
-                        name,
-                        params,
-                        env,
-                        bytecode,
-                        local_names,
-                        constructable,
-                        is_strict,
+                        CompiledUserFunction {
+                            name,
+                            params,
+                            env,
+                            bytecode,
+                            local_names,
+                            constructable,
+                            is_strict,
+                            captured_env: self.captured_env.clone(),
+                        },
                     )));
                 }
                 Op::Typeof => {
@@ -274,6 +286,13 @@ impl<'a> Vm<'a> {
             env.insert(name.to_owned(), value.clone());
         } else if let Some(value) = self.globals.get(name) {
             env.insert(name.to_owned(), value.clone());
+        }
+    }
+
+    fn refresh_captured_env(&self, env: &HashMap<String, Value>) {
+        let mut captured_env = self.captured_env.borrow_mut();
+        for (name, value) in env {
+            captured_env.insert(name.clone(), value.clone());
         }
     }
 

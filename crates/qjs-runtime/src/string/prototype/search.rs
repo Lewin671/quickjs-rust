@@ -188,7 +188,7 @@ pub(crate) fn native_string_prototype_replace_all(
     let search = to_js_string_with_env(search_value, env)?;
     let replacement_value = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
     let replacement = if matches!(replacement_value, Value::Function(_)) {
-        Replacement::Function(replacement_value)
+        Replacement::Function(Box::new(replacement_value))
     } else {
         Replacement::String(to_js_string_with_env(replacement_value, env)?)
     };
@@ -232,7 +232,7 @@ pub(crate) fn native_string_prototype_replace(
             .collect()
     };
     let replacement = if matches!(replacement_value, Value::Function(_)) {
-        Replacement::Function(replacement_value)
+        Replacement::Function(Box::new(replacement_value))
     } else {
         Replacement::String(to_js_string_with_env(replacement_value, env)?)
     };
@@ -290,7 +290,7 @@ pub(crate) fn native_string_prototype_starts_with(
 }
 
 enum Replacement {
-    Function(Value),
+    Function(Box<Value>),
     String(String),
 }
 
@@ -318,7 +318,7 @@ fn regexp_replace_all(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let replacement = if matches!(replacement_value, Value::Function(_)) {
-        Replacement::Function(replacement_value)
+        Replacement::Function(Box::new(replacement_value))
     } else {
         Replacement::String(to_js_string_with_env(replacement_value, env)?)
     };
@@ -464,7 +464,7 @@ fn replace_matches(
         result.push_str(&input_char_slice(&input, copied_until, string_match.start));
         let replacement_string = match &replacement {
             Replacement::Function(function) => {
-                functional_replacement(function.clone(), &string_match, input.clone(), env)?
+                functional_replacement((**function).clone(), &string_match, input.clone(), env)?
             }
             Replacement::String(replacement) => get_substitution(
                 replacement,
