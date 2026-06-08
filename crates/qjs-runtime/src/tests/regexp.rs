@@ -22,6 +22,28 @@ fn evaluates_regexp_constructor_identity() {
         Ok(Value::String("/test/".to_owned()))
     );
     assert_eq!(
+        eval("let obj = { constructor: RegExp }; obj[Symbol.match] = true; RegExp(obj) === obj;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let obj = { source: 'source text', flags: 'i' }; obj[Symbol.match] = []; let result = new RegExp(obj); Object.getPrototypeOf(result) === RegExp.prototype && result.source + ':' + result.flags;"
+        ),
+        Ok(Value::String("source text:i".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let obj = { source: 'source text' }; Object.defineProperty(obj, 'flags', { get: function() { throw 'flags'; } }); obj[Symbol.match] = true; let result = new RegExp(obj, 'g'); result.source + ':' + result.flags;"
+        ),
+        Ok(Value::String("source text:g".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let thrown = {}; let obj = {}; Object.defineProperty(obj, 'source', { get: function() { throw thrown; } }); obj[Symbol.match] = true; let caught = false; try { new RegExp(obj); } catch (error) { caught = error === thrown; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("/test/.toString();"),
         Ok(Value::String("/test/".to_owned()))
     );

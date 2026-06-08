@@ -2,17 +2,19 @@ use std::collections::HashMap;
 
 use crate::{
     ArrayRef, Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value,
-    function_prototype, is_truthy, property_value_key, symbol, to_js_string_with_env,
-    to_length_with_env,
+    function_prototype, is_truthy, property_value, property_value_key, symbol,
+    to_js_string_with_env, to_length_with_env,
 };
 
 mod escape;
+mod formatting;
 mod matcher;
 mod symbol_search;
 mod symbol_split;
 mod validation;
 
 pub(crate) use escape::native_regexp_escape;
+use formatting::{canonical_regexp_flags, escape_regexp_source};
 pub(crate) use symbol_search::native_regexp_prototype_search;
 pub(crate) use symbol_split::native_regexp_prototype_split;
 use validation::validate_regexp_init;
@@ -173,8 +175,16 @@ pub(crate) fn native_regexp(
 ) -> Result<Value, RuntimeError> {
     let pattern = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let flags_value = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
-    let source = regexp_source(pattern.clone(), env)?;
-    let flags = regexp_flags(pattern.clone(), flags_value, env)?;
+    let pattern_is_regexp = regexp_is_regexp_with_env(pattern.clone(), env)?;
+    if !is_construct && pattern_is_regexp && matches!(flags_value, Value::Undefined) {
+        let pattern_constructor = property_value(pattern.clone(), "constructor", env)?;
+        if pattern_constructor.same_value(&Value::Function(function.clone())) {
+            return Ok(pattern);
+        }
+    }
+
+    let source = regexp_source(pattern.clone(), pattern_is_regexp, env)?;
+    let flags = regexp_flags(pattern.clone(), pattern_is_regexp, flags_value, env)?;
     validate_regexp_init(&source, &flags)?;
 
     if !is_construct {
@@ -229,8 +239,8 @@ pub(crate) fn native_regexp_prototype_compile(
             )
         }
         _ => {
-            let source = regexp_source(pattern, env)?;
-            let flags = regexp_flags(Value::Undefined, flags_value, env)?;
+            let source = regexp_source(pattern, false, env)?;
+            let flags = regexp_flags(Value::Undefined, false, flags_value, env)?;
             (source, flags)
         }
     };
@@ -382,31 +392,6 @@ fn regexp_receiver_error() -> RuntimeError {
     }
 }
 
-fn escape_regexp_source(source: &str) -> String {
-    if source.is_empty() {
-        return "(?:)".to_owned();
-    }
-    let mut escaped = String::new();
-    for ch in source.chars() {
-        match ch {
-            '/' => escaped.push_str("\\/"),
-            '\n' => escaped.push_str("\\n"),
-            '\r' => escaped.push_str("\\r"),
-            '\u{2028}' => escaped.push_str("\\u2028"),
-            '\u{2029}' => escaped.push_str("\\u2029"),
-            _ => escaped.push(ch),
-        }
-    }
-    escaped
-}
-
-fn canonical_regexp_flags(flags: &str) -> String {
-    "dgimsyu"
-        .chars()
-        .filter(|flag| flags.contains(*flag))
-        .collect()
-}
-
 fn define_regexp_data(object: &ObjectRef, source: &str, flags: &str) {
     define_regexp_data_without_last_index(object, source, flags);
     object.define_non_enumerable("lastIndex".to_owned(), Value::Number(0.0));
@@ -423,7 +408,14 @@ fn define_regexp_data_without_last_index(object: &ObjectRef, source: &str, flags
     );
 }
 
-fn regexp_source(pattern: Value, env: &mut HashMap<String, Value>) -> Result<String, RuntimeError> {
+fn regexp_source(
+    pattern: Value,
+    pattern_is_regexp: bool,
+    env: &mut HashMap<String, Value>,
+) -> Result<String, RuntimeError> {
+    if pattern_is_regexp {
+        return to_js_string_with_env(property_value(pattern, "source", env)?, env);
+    }
     match pattern {
         Value::Undefined => Ok("(?:)".to_owned()),
         Value::Object(object) => {
@@ -439,16 +431,15 @@ fn regexp_source(pattern: Value, env: &mut HashMap<String, Value>) -> Result<Str
 
 fn regexp_flags(
     pattern: Value,
+    pattern_is_regexp: bool,
     flags_value: Value,
     env: &mut HashMap<String, Value>,
 ) -> Result<String, RuntimeError> {
     match flags_value {
-        Value::Undefined => match pattern {
-            Value::Object(object) => {
-                Ok(regexp_string_data(&object, REGEXP_FLAGS_PROPERTY).unwrap_or_default())
-            }
-            _ => Ok(String::new()),
-        },
+        Value::Undefined if pattern_is_regexp => {
+            to_js_string_with_env(property_value(pattern, "flags", env)?, env)
+        }
+        Value::Undefined => Ok(String::new()),
         value => to_js_string_with_env(value, env),
     }
 }

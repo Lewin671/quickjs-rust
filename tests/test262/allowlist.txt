@@ -868,6 +868,9 @@ cases/regexp-compile-invalid-flags-syntax.js
 cases/regexp-compile-invalid-pattern-syntax.js
 cases/regexp-compile-invalid-unicode-pattern-syntax.js
 cases/regexp-compile-unicode-pattern-string.js
+cases/regexp-constructor-from-regexp-like.js
+cases/regexp-constructor-regexp-like-flag-override.js
+cases/regexp-constructor-regexp-like-short-circuit.js
 cases/regexp-decimal-escape-class-range.js
 cases/regexp-prototype-dot-all-accessor.js
 cases/regexp-prototype-flag-accessors.js
