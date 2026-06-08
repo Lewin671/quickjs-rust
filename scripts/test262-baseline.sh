@@ -258,6 +258,16 @@ rust_features_supported() {
       ;;
   esac
   case "$rel" in
+    test/built-ins/BigInt/asIntN/bigint-tobigint-toprimitive.js|test/built-ins/BigInt/asIntN/bigint-tobigint-wrapped-values.js|test/built-ins/BigInt/asIntN/bits-toindex-errors.js|test/built-ins/BigInt/asIntN/bits-toindex-toprimitive.js|test/built-ins/BigInt/asIntN/bits-toindex-wrapped-values.js|test/built-ins/BigInt/asUintN/bigint-tobigint-toprimitive.js|test/built-ins/BigInt/asUintN/bigint-tobigint-wrapped-values.js|test/built-ins/BigInt/asUintN/bits-toindex-errors.js|test/built-ins/BigInt/asUintN/bits-toindex-toprimitive.js|test/built-ins/BigInt/asUintN/bits-toindex-wrapped-values.js)
+      entries="$(drop_feature_entries "$entries" -e 'Symbol.toPrimitive' -e 'computed-property-names')"
+      ;;
+  esac
+  case "$rel" in
+    test/built-ins/BigInt/prototype/valueOf/cross-realm.js)
+      entries="$(drop_feature_entries "$entries" -e 'cross-realm')"
+      ;;
+  esac
+  case "$rel" in
     test/built-ins/Array/prototype/with/*|test/built-ins/Array/prototype/toReversed/*|test/built-ins/Array/prototype/toSpliced/*|test/built-ins/Array/prototype/toSorted/*)
       entries="$(drop_feature_entries "$entries" -e 'change-array-by-copy' -e 'exponentiation')"
       ;;
