@@ -50,6 +50,7 @@ fn validate_regexp_pattern(source: &str, unicode: bool) -> Result<(), RuntimeErr
                 let Some(end) = class_end(&pattern, index) else {
                     return Err(regexp_syntax_error("invalid regular expression pattern"));
                 };
+                validate_class_ranges(&pattern, index + 1, end, unicode)?;
                 index = end + 1;
                 has_atom = true;
             }
@@ -123,6 +124,54 @@ fn class_end(pattern: &[char], start: usize) -> Option<usize> {
         }
     }
     None
+}
+
+fn validate_class_ranges(
+    pattern: &[char],
+    start: usize,
+    end: usize,
+    unicode: bool,
+) -> Result<(), RuntimeError> {
+    let mut index = start;
+    while index < end {
+        if pattern[index] == '\\' {
+            index = class_escape_end(pattern, index, unicode);
+            continue;
+        }
+        if index + 2 < end && pattern[index + 1] == '-' {
+            if pattern[index] > pattern[index + 2] {
+                return Err(regexp_syntax_error("invalid regular expression pattern"));
+            }
+            index += 3;
+            continue;
+        }
+        index += 1;
+    }
+    Ok(())
+}
+
+fn class_escape_end(pattern: &[char], start: usize, unicode: bool) -> usize {
+    if pattern.get(start + 1) == Some(&'u') {
+        if unicode
+            && pattern.get(start + 2) == Some(&'{')
+            && let Some(end) = braced_escape_end(pattern, start + 2)
+        {
+            return end + 1;
+        }
+        return (start + 6).min(pattern.len());
+    }
+    if !unicode && let Some(first) = pattern.get(start + 1).and_then(|value| value.to_digit(8)) {
+        let max_digits = if first <= 3 { 3 } else { 2 };
+        let mut index = start + 1;
+        let mut digit_count = 0;
+        while digit_count < max_digits && pattern.get(index).is_some_and(|value| value.is_digit(8))
+        {
+            index += 1;
+            digit_count += 1;
+        }
+        return index;
+    }
+    (start + 2).min(pattern.len())
 }
 
 fn braced_escape_end(pattern: &[char], start: usize) -> Option<usize> {

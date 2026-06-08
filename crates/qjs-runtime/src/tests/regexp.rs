@@ -154,6 +154,12 @@ fn evaluates_regexp_prototype_compile() {
     );
     assert_eq!(
         eval(
+            "let caught = false; try { new RegExp('^[z-a]$'); } catch (error) { caught = error instanceof SyntaxError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
             "let re = /test262/gi; let caught = false; try { re.compile('\\\\2', 'u'); } catch (error) { caught = error instanceof SyntaxError; } caught + ':' + re.toString() + ':' + re.test('TEsT262');"
         ),
         Ok(Value::String("true:/test262/gi:true".to_owned()))
