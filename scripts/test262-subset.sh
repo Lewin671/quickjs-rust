@@ -7,6 +7,7 @@ ALLOWLIST="${TEST262_ALLOWLIST:-$ROOT_DIR/tests/test262/allowlist.txt}"
 EXPECTED_FAILURES="${TEST262_EXPECTED_FAILURES:-$ROOT_DIR/tests/test262/expected-failures.txt}"
 LOCAL_CASE_DIR="${TEST262_LOCAL_CASE_DIR:-$ROOT_DIR/tests/test262}"
 RUN_WITH_TIMEOUT="${RUN_WITH_TIMEOUT:-$ROOT_DIR/scripts/run-with-timeout.sh}"
+METADATA_PARSER="$ROOT_DIR/scripts/test262-baseline-metadata.awk"
 CASE_TIMEOUT_SECONDS="${TEST262_CASE_TIMEOUT_SECONDS:-10}"
 CARGO_BIN="${CARGO:-cargo}"
 if ! command -v "$CARGO_BIN" >/dev/null 2>&1 && [ -x "$HOME/.cargo/bin/cargo" ]; then
@@ -71,10 +72,148 @@ if [ ! -x "$RUN_WITH_TIMEOUT" ]; then
   exit 1
 fi
 
+if [ ! -f "$METADATA_PARSER" ]; then
+  echo "error: missing $METADATA_PARSER" >&2
+  exit 1
+fi
+
 if ! xargs -P 1 -n 1 true </dev/null >/dev/null 2>&1; then
   echo "error: xargs does not support -P; parallel Test262 subset execution is unavailable" >&2
   exit 1
 fi
+
+list_entries() {
+  printf '%s\n' "$1" | tr -d '[]' | tr ',' '\n' \
+    | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' \
+    | sed '/^$/d'
+}
+
+metadata_for() {
+  awk -f "$METADATA_PARSER" "$1"
+}
+
+validate_includes() {
+  local includes="$1"
+  local include
+  while IFS= read -r include; do
+    if [ ! -f "$TEST262_DIR/harness/$include" ]; then
+      echo "error: Test262 include does not exist: $include" >&2
+      return 1
+    fi
+  done < <(list_entries "$includes")
+}
+
+case_path_for_entry() {
+  local entry="$1"
+  case "$entry" in
+    cases/*)
+      printf '%s\n' "$LOCAL_CASE_DIR/$entry"
+      ;;
+    test/*.js)
+      printf '%s\n' "$TEST262_DIR/$entry"
+      ;;
+  esac
+}
+
+entry_label() {
+  local entry="$1"
+  case "$entry" in
+    cases/*) printf 'tests/test262/%s\n' "$entry" ;;
+    test/*.js) printf 'third_party/test262/%s\n' "$entry" ;;
+  esac
+}
+
+validate_entry_path() {
+  local entry="$1"
+  case "$entry" in
+    /*|*..*)
+      echo "error: allowlist entry must be a relative path without '..': $entry" >&2
+      return 1
+      ;;
+    cases/*|test/*.js)
+      ;;
+    *)
+      echo "error: allowlist entry must start with cases/ or test/: $entry" >&2
+      return 1
+      ;;
+  esac
+}
+
+validate_case_entry() {
+  local entry="$1"
+  local case_path
+  local derived_from
+  local flags
+  local includes
+  local features
+  local negative_phase
+  local negative_type
+
+  validate_entry_path "$entry"
+  case_path="$(case_path_for_entry "$entry")"
+  if [ ! -f "$case_path" ]; then
+    echo "error: allowlist entry does not exist: $(entry_label "$entry")" >&2
+    return 1
+  fi
+
+  case "$entry" in
+    cases/*)
+      derived_from="$(sed -n 's#^// Derived from: ##p' "$case_path" | head -n 1)"
+      if [ -z "$derived_from" ]; then
+        echo "error: missing Test262 provenance in tests/test262/$entry" >&2
+        return 1
+      fi
+      if [ ! -f "$TEST262_DIR/$derived_from" ]; then
+        echo "error: derived Test262 source does not exist: $derived_from" >&2
+        return 1
+      fi
+      ;;
+    test/*.js)
+      {
+        read -r flags
+        read -r includes
+        read -r features
+        read -r negative_phase
+        read -r negative_type
+      } < <(metadata_for "$case_path")
+      if [[ "$flags" == *module* ]] || [[ "$flags" == *async* ]]; then
+        echo "error: upstream subset entry uses unsupported flags ($flags): $entry" >&2
+        return 1
+      fi
+      if [ -n "$negative_phase" ] || [ -n "$negative_type" ]; then
+        echo "error: upstream negative Test262 entries are not supported by subset runner yet: $entry" >&2
+        return 1
+      fi
+      validate_includes "$includes"
+      ;;
+  esac
+}
+
+make_upstream_case() {
+  local source="$1"
+  local output="$2"
+  local flags="$3"
+  local includes="$4"
+  local include
+  {
+    if [[ "$flags" == *raw* ]]; then
+      cat "$source"
+    else
+      if [[ "$flags" == *onlyStrict* ]]; then
+        printf '"use strict";\n'
+      fi
+      cat "$TEST262_DIR/harness/assert.js"
+      printf '\n'
+      cat "$TEST262_DIR/harness/sta.js"
+      printf '\n'
+      while IFS= read -r include; do
+        cat "$TEST262_DIR/harness/$include"
+        printf '\n'
+      done < <(list_entries "$includes")
+      cat "$source"
+    fi
+  } >"$output"
+}
 
 allowlist_count=0
 allowlist_entries=()
@@ -86,28 +225,7 @@ while IFS= read -r line; do
 
   allowlist_count=$((allowlist_count + 1))
   allowlist_entries+=("$entry")
-  case "$entry" in
-    /*|*..*)
-      echo "error: allowlist entry must be a relative path under tests/test262: $entry" >&2
-      exit 1
-      ;;
-  esac
-
-  case_path="$LOCAL_CASE_DIR/$entry"
-  if [ ! -f "$case_path" ]; then
-    echo "error: allowlist entry does not exist: tests/test262/$entry" >&2
-    exit 1
-  fi
-
-  derived_from="$(sed -n 's#^// Derived from: ##p' "$case_path" | head -n 1)"
-  if [ -z "$derived_from" ]; then
-    echo "error: missing Test262 provenance in tests/test262/$entry" >&2
-    exit 1
-  fi
-  if [ ! -f "$TEST262_DIR/$derived_from" ]; then
-    echo "error: derived Test262 source does not exist: $derived_from" >&2
-    exit 1
-  fi
+  validate_case_entry "$entry"
 
 done < "$ALLOWLIST"
 
@@ -149,16 +267,16 @@ while IFS= read -r line; do
 
   entry="${line%%#*}"
   entry="$(trim_ws "$entry")"
-  if [ ! -f "$LOCAL_CASE_DIR/$entry" ]; then
-    echo "error: expected failure entry does not exist: tests/test262/$entry" >&2
+  if ! validate_case_entry "$entry"; then
+    echo "error: expected failure entry does not exist: $(entry_label "$entry")" >&2
     exit 1
   fi
   if ! entry_in_allowlist "$entry"; then
-    echo "error: expected failure entry is not in allowlist: tests/test262/$entry" >&2
+    echo "error: expected failure entry is not in allowlist: $(entry_label "$entry")" >&2
     exit 1
   fi
   if entry_in_expected_failures "$entry"; then
-    echo "error: duplicate expected failure entry: tests/test262/$entry" >&2
+    echo "error: duplicate expected failure entry: $(entry_label "$entry")" >&2
     exit 1
   fi
 
@@ -205,16 +323,37 @@ is_expected_failure() {
 run_test262_case() {
   local current="$1"
   local entry="$2"
-  local case_path="$LOCAL_CASE_DIR/$entry"
+  local case_path
+  local exec_path
   local log_path="$RESULT_DIR/$current.log"
   local status_path="$RESULT_DIR/$current.status"
   local result_path="$RESULT_DIR/$current.result"
+  local flags
+  local includes
+  local features
+  local negative_phase
+  local negative_type
   local output
   local status
 
   printf 'test262 [%d/%d]: %s\n' "$current" "$ALLOWLIST_COUNT" "$entry"
+  case_path="$(case_path_for_entry "$entry")"
+  exec_path="$case_path"
+  case "$entry" in
+    test/*.js)
+      {
+        read -r flags
+        read -r includes
+        read -r features
+        read -r negative_phase
+        read -r negative_type
+      } < <(metadata_for "$case_path")
+      exec_path="$RESULT_DIR/$current.case.js"
+      make_upstream_case "$case_path" "$exec_path" "$flags" "$includes"
+      ;;
+  esac
   set +e
-  output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$QJS_CLI_BIN" "$case_path" 2>&1)"
+  output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$QJS_CLI_BIN" "$exec_path" 2>&1)"
   status=$?
   set -e
 
@@ -243,10 +382,16 @@ export ALLOWLIST_COUNT="$allowlist_count"
 export CASE_TIMEOUT_SECONDS
 export EXPECTED_FAILURE_LIST
 export LOCAL_CASE_DIR
+export METADATA_PARSER
 export QJS_CLI_BIN
 export RESULT_DIR
 export RUN_WITH_TIMEOUT
+export TEST262_DIR
 export -f is_expected_failure
+export -f case_path_for_entry
+export -f list_entries
+export -f make_upstream_case
+export -f metadata_for
 export -f run_test262_case
 
 set +e
@@ -277,9 +422,9 @@ if [ -n "$first_status" ]; then
   failed_log="$RESULT_DIR/$failed_index.log"
 
   if [ "$failed_status" -eq 124 ]; then
-    echo "error: Test262 case timed out after ${CASE_TIMEOUT_SECONDS}s: tests/test262/$failed_entry" >&2
+    echo "error: Test262 case timed out after ${CASE_TIMEOUT_SECONDS}s: $(entry_label "$failed_entry")" >&2
   else
-    echo "error: Test262 case failed: tests/test262/$failed_entry" >&2
+    echo "error: Test262 case failed: $(entry_label "$failed_entry")" >&2
   fi
   if [ -s "$failed_log" ]; then
     cat "$failed_log" >&2
@@ -297,7 +442,7 @@ fi
 
 if [ -n "$first_status" ]; then
   passed_entry="$(sed -n '1p' "$first_status")"
-  echo "error: expected-failure case passed; remove it from tests/test262/expected-failures.txt: tests/test262/$passed_entry" >&2
+  echo "error: expected-failure case passed; remove it from tests/test262/expected-failures.txt: $(entry_label "$passed_entry")" >&2
   exit 1
 fi
 

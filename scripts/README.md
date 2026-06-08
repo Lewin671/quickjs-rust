@@ -10,9 +10,12 @@ maintenance, or agent workflow isolation.
   tests, and file-size limits.
 - `compare-qjs.sh`: Runs selected local fixtures against both quickjs-rust and
   the pinned QuickJS-NG reference.
-- `test262-subset.sh`: Runs the curated local Test262-derived allowlist. Cases
-  listed in `tests/test262/expected-failures.txt` may fail, but passing expected
-  failures are reported as stale entries.
+- `test262-subset.sh`: Runs the curated Test262 allowlist. Entries may point to
+  local derived cases under `tests/test262/cases/` or pinned upstream cases
+  under `third_party/test262/test/`. Upstream entries are executed with the
+  standard Test262 harness files declared by their metadata. Cases listed in
+  `tests/test262/expected-failures.txt` may fail, but passing expected failures
+  are reported as stale entries.
 
 ## Focused Development
 

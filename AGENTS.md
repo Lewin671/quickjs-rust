@@ -209,9 +209,10 @@ workspace configuration, global error models, or broad architecture documents.
   harness can run them deterministically. Each case must start with
   `// Derived from: <official Test262 path>` so the runner can validate
   provenance.
-- Add those local case paths to `tests/test262/allowlist.txt`; do not list raw
-  upstream Test262 files unless the runner is intentionally changed to execute
-  them.
+- Add those local case paths to `tests/test262/allowlist.txt`. The allowlist may
+  also include raw upstream paths under `test/` when the pinned Test262 case can
+  run deterministically through `scripts/test262-subset.sh` with its declared
+  harness metadata.
 - Run `./scripts/test262-subset.sh` after editing Test262 allowlists or expected
   failures.
 

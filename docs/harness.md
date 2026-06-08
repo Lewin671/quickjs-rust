@@ -114,11 +114,14 @@ Run additional checks when relevant:
 ./scripts/microbench.sh
 ```
 
-`scripts/test262-subset.sh` runs the curated local Test262-derived allowlist.
-Entries in `tests/test262/expected-failures.txt` must also be in the allowlist
-and must include a reason. Expected-failure cases may fail without failing the
-subset run; if one passes, the script fails and asks for the stale entry to be
-removed.
+`scripts/test262-subset.sh` runs the curated Test262 allowlist. Allowlist
+entries may point to local derived cases under `tests/test262/cases/` or pinned
+upstream cases under `third_party/test262/test/`. Upstream entries are expanded
+into temporary files with Test262 `assert.js`, `sta.js`, and metadata
+`includes` before execution. Entries in `tests/test262/expected-failures.txt`
+must also be in the allowlist and must include a reason. Expected-failure cases
+may fail without failing the subset run; if one passes, the script fails and
+asks for the stale entry to be removed.
 
 `scripts/test262-baseline.sh` scans upstream Test262 coverage. It can run a
 bounded sample, a full scan with `--all`, a shard with `--shard I/N`, and a
