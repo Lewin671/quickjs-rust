@@ -1,6 +1,7 @@
 // Derived from: test/language/statements/for-of/array.js
 // Derived from: test/language/statements/for-of/Array.prototype.entries.js
 // Derived from: test/language/statements/for-of/Array.prototype.keys.js
+// Derived from: test/language/statements/for-of/arguments-mapped-aliasing.js
 // Derived from: test/language/statements/for-of/arguments-mapped-mutation.js
 // Derived from: test/language/statements/for-of/arguments-mapped.js
 // Derived from: test/language/statements/for-of/arguments-unmapped-aliasing.js
@@ -124,4 +125,18 @@ var unmappedAliasSeen = (function(a, b) {
 }("a", "b"));
 if (unmappedAliasSeen !== "ab") {
   throw "strict arguments iteration should not observe parameter mutation";
+}
+
+var mappedAliasSeen = (function(a, b, c) {
+  var seen = "";
+  for (var value of arguments) {
+    a = b;
+    b = c;
+    c = 1;
+    seen = seen + value;
+  }
+  return seen;
+}(1, 2, 3));
+if (mappedAliasSeen !== "131") {
+  throw "mapped arguments iteration should observe parameter mutation";
 }

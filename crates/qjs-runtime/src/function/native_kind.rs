@@ -135,6 +135,8 @@ pub(crate) enum NativeFunction {
     FunctionPrototypeCall,
     FunctionPrototypeHasInstance,
     FunctionPrototypeToString,
+    MappedArgumentGet,
+    MappedArgumentSet,
     ThrowTypeError,
     JsonParse,
     JsonRawJson,

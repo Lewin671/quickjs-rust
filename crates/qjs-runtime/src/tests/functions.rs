@@ -59,6 +59,24 @@ fn evaluates_function_declarations_and_calls() {
         Ok(Value::String("az".to_owned()))
     );
     assert_eq!(
+        eval(
+            "function values(a, b, c) { let seen = ''; for (var value of arguments) { a = b; b = c; c = 1; seen += value; } return seen; } values(1, 2, 3);"
+        ),
+        Ok(Value::String("131".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "function values(a, b) { arguments[0] = 'x'; return a + ':' + arguments[0]; } values('a', 'b');"
+        ),
+        Ok(Value::String("x:x".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "function values(a, a) { arguments[0] = 'x'; arguments[1] = 'y'; return arguments[0] + ':' + a; } values('a', 'b');"
+        ),
+        Ok(Value::String("x:y".to_owned()))
+    );
+    assert_eq!(
         eval("function none() { return arguments.length; } none();"),
         Ok(Value::Number(0.0))
     );

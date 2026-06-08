@@ -156,10 +156,6 @@ fn function_env(
         "this".to_owned(),
         function_call_this(Some(this_value), env, function.is_strict),
     );
-    local_env.insert(
-        "arguments".to_owned(),
-        arguments_object(argument_values, env),
-    );
     for (index, param) in function.params.positional.iter().enumerate() {
         let value = argument_values
             .get(index)
@@ -167,6 +163,10 @@ fn function_env(
             .unwrap_or(Value::Undefined);
         local_env.insert(param.clone(), value);
     }
+    local_env.insert(
+        "arguments".to_owned(),
+        arguments_object(function, argument_values, env),
+    );
     if let Some(rest) = &function.params.rest {
         let values = argument_values
             .iter()
@@ -181,7 +181,11 @@ fn function_env(
     }
 }
 
-fn arguments_object(argument_values: &[Value], env: &HashMap<String, Value>) -> Value {
+fn arguments_object(
+    function: &Function,
+    argument_values: &[Value],
+    env: &HashMap<String, Value>,
+) -> Value {
     let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
     object.define_property(
         "length".to_owned(),
@@ -193,11 +197,68 @@ fn arguments_object(argument_values: &[Value], env: &HashMap<String, Value>) -> 
         ),
     );
     for (index, value) in argument_values.iter().cloned().enumerate() {
-        object.define_property(index.to_string(), Property::enumerable(value));
+        if let Some(parameter_name) = mapped_argument_parameter(function, index) {
+            object.define_property(
+                index.to_string(),
+                mapped_argument_property(parameter_name.to_owned()),
+            );
+        } else {
+            object.define_property(index.to_string(), Property::enumerable(value));
+        }
     }
     define_arguments_iterator(&object, env);
     object.set_to_string_tag("Arguments");
     Value::Object(object)
+}
+
+fn mapped_argument_parameter(function: &Function, index: usize) -> Option<&str> {
+    if function.is_strict || function.params.rest.is_some() {
+        return None;
+    }
+    let parameter_name = function
+        .params
+        .positional
+        .get(index)
+        .map(String::as_str)
+        .filter(|name| !name.is_empty())?;
+    if function
+        .params
+        .positional
+        .iter()
+        .skip(index + 1)
+        .any(|name| name == parameter_name)
+    {
+        None
+    } else {
+        Some(parameter_name)
+    }
+}
+
+fn mapped_argument_property(parameter_name: String) -> Property {
+    Property::accessor(
+        Some(mapped_argument_accessor(
+            "[[MappedArgumentGet]]",
+            NativeFunction::MappedArgumentGet,
+            parameter_name.clone(),
+        )),
+        Some(mapped_argument_accessor(
+            "[[MappedArgumentSet]]",
+            NativeFunction::MappedArgumentSet,
+            parameter_name,
+        )),
+        true,
+        true,
+    )
+}
+
+fn mapped_argument_accessor(name: &str, native: NativeFunction, parameter_name: String) -> Value {
+    let target = Value::Function(Function::new_native(Some(name), 1, native, false));
+    Value::Function(Function::new_bound(
+        target,
+        Value::Undefined,
+        vec![Value::String(parameter_name)],
+        1,
+    ))
 }
 
 fn define_arguments_iterator(object: &ObjectRef, env: &HashMap<String, Value>) {
@@ -213,6 +274,37 @@ fn define_arguments_iterator(object: &ObjectRef, env: &HashMap<String, Value>) {
             false,
         ))),
     );
+}
+
+pub(crate) fn native_mapped_argument_get(
+    argument_values: &[Value],
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let Some(parameter_name) = mapped_argument_name(argument_values) else {
+        return Ok(Value::Undefined);
+    };
+    Ok(env.get(parameter_name).cloned().unwrap_or(Value::Undefined))
+}
+
+pub(crate) fn native_mapped_argument_set(
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let Some(parameter_name) = mapped_argument_name(argument_values) else {
+        return Ok(Value::Undefined);
+    };
+    let value = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
+    if let Some(binding) = env.get_mut(parameter_name) {
+        *binding = value;
+    }
+    Ok(Value::Undefined)
+}
+
+fn mapped_argument_name(argument_values: &[Value]) -> Option<&str> {
+    match argument_values.first() {
+        Some(Value::String(name)) => Some(name),
+        _ => None,
+    }
 }
 
 fn insert_runtime_intrinsics(
