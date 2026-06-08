@@ -732,6 +732,7 @@ cases/for-in-var-basic.js
 cases/for-in-assignment-basic.js
 cases/for-in-member-head.js
 cases/for-of-basic.js
+cases/loop-completion-basic.js
 cases/break-basic.js
 cases/continue-basic.js
 cases/do-while-runs-before-test.js

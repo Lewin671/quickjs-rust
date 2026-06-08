@@ -378,7 +378,7 @@ impl Compiler {
                 for (index, stmt) in body.iter().enumerate() {
                     compiler.compile_stmt(stmt)?;
                     if index + 1 != body.len() {
-                        compiler.emit(Op::Pop);
+                        compiler.store_or_pop_statement_list_completion(stmt);
                     }
                 }
                 Ok(())
@@ -463,4 +463,25 @@ impl Compiler {
             }
         }
     }
+
+    fn store_or_pop_statement_list_completion(&mut self, stmt: &Stmt) {
+        if let Some(result_slot) = self.current_loop_result_slot()
+            && stmt_updates_statement_list_completion(stmt)
+        {
+            self.emit(Op::StoreLocal(result_slot));
+        } else {
+            self.emit(Op::Pop);
+        }
+    }
+
+    fn current_loop_result_slot(&self) -> Option<usize> {
+        self.loop_stack.last().map(|context| context.result_slot)
+    }
+}
+
+fn stmt_updates_statement_list_completion(stmt: &Stmt) -> bool {
+    !matches!(
+        stmt,
+        Stmt::Debugger { .. } | Stmt::Empty | Stmt::FunctionDecl { .. } | Stmt::VarDecl { .. }
+    )
 }

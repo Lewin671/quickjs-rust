@@ -141,6 +141,18 @@ fn evaluates_break_and_continue() {
         ),
         Ok(Value::Number(8.0))
     );
+    assert_eq!(
+        eval("eval('2; while (true) { 3; break; }');"),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval("eval('2; for (var value of [0]) { 3; break; }');"),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval("eval('2; for (var value of [0, 1]) { 3; continue; }');"),
+        Ok(Value::Number(3.0))
+    );
 }
 
 #[test]
