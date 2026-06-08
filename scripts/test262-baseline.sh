@@ -497,7 +497,7 @@ json_escape() {
 }
 
 write_summary_json() {
-  [ -n "$SUMMARY_JSON" ] || return
+  [ -n "$SUMMARY_JSON" ] || return 0
   mkdir -p "$(dirname "$SUMMARY_JSON")"
   cat >"$SUMMARY_JSON" <<JSON
 {
