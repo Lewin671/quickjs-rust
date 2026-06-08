@@ -4,7 +4,7 @@ use crate::{
     ArrayRef, RuntimeError, Value, call_function, has_property, property_value, to_number,
 };
 
-use super::array_like::array_like_length;
+use super::{array_like::array_like_length, species::validate_array_species_constructor};
 
 pub(crate) fn native_array_prototype_flat(
     this_value: Value,
@@ -13,6 +13,7 @@ pub(crate) fn native_array_prototype_flat(
 ) -> Result<Value, RuntimeError> {
     let source = array_like_length(this_value, "Array.prototype.flat", env)?;
     let depth = flat_depth(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    validate_array_species_constructor(source.receiver.clone(), "flat", env)?;
     let mut result = Vec::new();
     flatten_source_into(&mut result, source.receiver, source.length, depth, env)?;
     Ok(Value::Array(ArrayRef::new(result)))
@@ -31,6 +32,7 @@ pub(crate) fn native_array_prototype_flat_map(
             message: "Array.prototype.flatMap callback is not callable".to_owned(),
         });
     }
+    validate_array_species_constructor(source.receiver.clone(), "flatMap", env)?;
 
     let callback_this = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
     let mut result = Vec::new();

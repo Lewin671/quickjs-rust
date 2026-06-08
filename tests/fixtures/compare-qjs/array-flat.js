@@ -8,6 +8,14 @@
   var booleanFlat = Array.prototype.flat.call(true).length
     + "|"
     + Array.prototype.flat.call(false).length;
+  var invalidConstructor = [];
+  invalidConstructor.constructor = null;
+  var invalidConstructorThrows = false;
+  try {
+    invalidConstructor.flat();
+  } catch (error) {
+    invalidConstructorThrows = error instanceof TypeError;
+  }
   return basic
     + ":" + shallow
     + ":" + deep
@@ -17,5 +25,6 @@
     + ":" + (values[1] === null)
     + ":" + (values[2] === undefined)
     + ":" + booleanFlat
-    + ":" + Array.prototype.flat.length;
+    + ":" + Array.prototype.flat.length
+    + ":" + invalidConstructorThrows;
 })()

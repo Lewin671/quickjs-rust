@@ -55,3 +55,19 @@ fn evaluates_array_flat_depth_coercion_and_values() {
         Ok(Value::String("0:0".to_owned()))
     );
 }
+
+#[test]
+fn evaluates_array_flat_species_constructor_validation() {
+    assert_eq!(
+        eval(
+            "let values = [null, 1, 'string', true]; let result = []; for (let index = 0; index < values.length; index = index + 1) { let array = []; array.constructor = values[index]; try { array.flat(); result.push(false); } catch (error) { result.push(error instanceof TypeError); } } result.join();"
+        ),
+        Ok(Value::String("true,true,true,true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let values = [null, 1, 'string', true]; let result = []; for (let index = 0; index < values.length; index = index + 1) { let array = []; array.constructor = values[index]; try { array.flatMap(function(value) { return [value]; }); result.push(false); } catch (error) { result.push(error instanceof TypeError); } } result.join();"
+        ),
+        Ok(Value::String("true,true,true,true".to_owned()))
+    );
+}
