@@ -218,8 +218,6 @@ skip_reason() {
     echo "module"
   elif [[ "$flags" == *async* ]]; then
     echo "async"
-  elif [[ "$flags" == *raw* ]]; then
-    echo "raw"
   elif [ -n "$includes" ] && ! rust_includes_supported "$includes"; then
     echo "includes"
   elif ! rust_source_syntax_supported "$rel"; then
@@ -298,18 +296,22 @@ make_case() {
   local includes="$4"
   local include
   {
-    if [[ "$flags" == *onlyStrict* ]]; then
-      printf '"use strict";\n'
-    fi
-    cat "$TEST262_DIR/harness/assert.js"
-    printf '\n'
-    cat "$TEST262_DIR/harness/sta.js"
-    printf '\n'
-    while IFS= read -r include; do
-      cat "$TEST262_DIR/harness/$include"
+    if [[ "$flags" == *raw* ]]; then
+      cat "$source"
+    else
+      if [[ "$flags" == *onlyStrict* ]]; then
+        printf '"use strict";\n'
+      fi
+      cat "$TEST262_DIR/harness/assert.js"
       printf '\n'
-    done < <(list_entries "$includes")
-    cat "$source"
+      cat "$TEST262_DIR/harness/sta.js"
+      printf '\n'
+      while IFS= read -r include; do
+        cat "$TEST262_DIR/harness/$include"
+        printf '\n'
+      done < <(list_entries "$includes")
+      cat "$source"
+    fi
   } >"$output"
 }
 run_engine_case() {
