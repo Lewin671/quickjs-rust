@@ -44,7 +44,9 @@ fn evaluates_map_iterable_constructor_arguments() {
         Ok(Value::String("2:1:2".to_owned()))
     );
     assert_eq!(
-        eval("let map = new Map({ 0: ['a', 1], 1: ['b', 2], length: 2 }); map.get('b');"),
+        eval(
+            "let entries = [['a', 1], ['b', 2]]; let iterable = {}; iterable[Symbol.iterator] = function() { return entries[Symbol.iterator](); }; let map = new Map(iterable); map.get('b');"
+        ),
         Ok(Value::Number(2.0))
     );
     assert_eq!(
@@ -55,6 +57,7 @@ fn evaluates_map_iterable_constructor_arguments() {
     assert!(eval("new Map(['']);").is_err());
     assert!(eval("new Map([Symbol('a')]);").is_err());
     assert!(eval("new Map([null]);").is_err());
+    assert!(eval("new Map({});").is_err());
 }
 
 #[test]

@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 use crate::{
     ArrayRef, Function, MapRef, NativeFunction, ObjectRef, Property, RuntimeError, Value,
-    array::array_like_values_with_env, call_function, property_value, symbol,
+    array::{array_like_values_with_env, iterable_values_with_env},
+    call_function, property_value, symbol,
 };
 
 const MAP_ITERATOR: &str = "\0map_iterator";
@@ -125,7 +126,7 @@ pub(crate) fn native_map(
                 message: "TypeError: Map constructor set adder must be callable".to_owned(),
             });
         }
-        for entry in array_like_values_with_env(iterable, "Map constructor", env)? {
+        for entry in iterable_values_with_env(iterable, "Map constructor", env)? {
             let (key, value) = map_entry(entry, env)?;
             call_function(
                 adder.clone(),

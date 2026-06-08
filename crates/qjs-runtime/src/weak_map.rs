@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     ArrayRef, Function, NativeFunction, ObjectRef, RuntimeError, Value,
-    array::array_like_values_with_env, call_function, property_value, symbol,
+    array::iterable_values_with_env, call_function, property_value, symbol,
 };
 
 const WEAK_MAP_ENTRIES: &str = "\0weak_map_entries";
@@ -89,7 +89,7 @@ pub(crate) fn native_weak_map(
                 message: "TypeError: WeakMap constructor set adder must be callable".to_owned(),
             });
         }
-        for entry in array_like_values_with_env(iterable, "WeakMap constructor", env)? {
+        for entry in iterable_values_with_env(iterable, "WeakMap constructor", env)? {
             let (key, value) = weak_map_entry(entry, env)?;
             call_function(
                 adder.clone(),

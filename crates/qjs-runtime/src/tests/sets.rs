@@ -44,9 +44,10 @@ fn evaluates_set_iterable_constructor_arguments() {
         Value::String("2:true:true".to_owned()),
     );
     assert_eval(
-        "var set = new Set({ 0: 'x', 1: 'y', length: 2 }); set.size + ':' + set.has('x') + ':' + set.has('y');",
+        "var values = ['x', 'y']; var iterable = {}; iterable[Symbol.iterator] = function() { return values[Symbol.iterator](); }; var set = new Set(iterable); set.size + ':' + set.has('x') + ':' + set.has('y');",
         Value::String("2:true:true".to_owned()),
     );
+    assert!(eval("new Set({});").is_err());
 }
 
 #[test]

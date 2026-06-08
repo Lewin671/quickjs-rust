@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    ObjectRef, RuntimeError, Value, object, property_value, string_prototype, to_length_with_env,
+    ObjectRef, PropertyKey, RuntimeError, Value, call_function, is_truthy, object, property_value,
+    property_value_key, string_prototype, symbol, to_length_with_env,
 };
 
 pub(crate) struct ArrayLikeLength {
@@ -73,6 +74,54 @@ pub(crate) fn array_like_values_with_env(
         }),
         _ => Ok(Vec::new()),
     }
+}
+
+pub(crate) fn iterable_values_with_env(
+    value: Value,
+    context: &str,
+    env: &mut HashMap<String, Value>,
+) -> Result<Vec<Value>, RuntimeError> {
+    let Some(iterator_symbol) = symbol::iterator_symbol(env) else {
+        return Err(RuntimeError {
+            thrown: None,
+            message: format!("{context} iterator symbol is unavailable"),
+        });
+    };
+    let iterator_method =
+        property_value_key(value.clone(), &PropertyKey::Symbol(iterator_symbol), env)?;
+    if !matches!(iterator_method, Value::Function(_)) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: format!("{context} argument is not iterable"),
+        });
+    }
+    let iterator = call_function(iterator_method, value, Vec::new(), env, false)?;
+    let next = property_value(iterator.clone(), "next", env)?;
+    if !matches!(next, Value::Function(_)) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: format!("{context} iterator next method is not callable"),
+        });
+    }
+
+    let mut values = Vec::new();
+    loop {
+        let step = call_function(next.clone(), iterator.clone(), Vec::new(), env, false)?;
+        if !matches!(
+            step,
+            Value::Object(_) | Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_)
+        ) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: format!("{context} iterator result is not an object"),
+            });
+        }
+        if is_truthy(&property_value(step.clone(), "done", env)?) {
+            break;
+        }
+        values.push(property_value(step, "value", env)?);
+    }
+    Ok(values)
 }
 
 pub(crate) fn array_like_values_from_receiver(

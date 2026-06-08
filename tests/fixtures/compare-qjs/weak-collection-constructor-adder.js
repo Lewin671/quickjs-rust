@@ -37,5 +37,20 @@
   }
   WeakSet.prototype.add = savedAdd;
 
-  return mapCalls + ":" + map.get(mapKey) + ":" + setCalls + ":" + set.has(setValue) + ":" + mapNullAdderThrows + ":" + setNullAdderThrows;
+  var nonIterableMapThrows = false;
+  var nonIterableSetThrows = false;
+  try {
+    new WeakMap({});
+  } catch (error) {
+    nonIterableMapThrows = error.constructor === TypeError;
+  }
+  try {
+    new WeakSet({});
+  } catch (error) {
+    nonIterableSetThrows = error.constructor === TypeError;
+  }
+
+  return mapCalls + ":" + map.get(mapKey) + ":" + setCalls + ":" +
+    set.has(setValue) + ":" + mapNullAdderThrows + ":" + setNullAdderThrows +
+    ":" + nonIterableMapThrows + ":" + nonIterableSetThrows;
 })()

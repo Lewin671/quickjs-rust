@@ -34,7 +34,9 @@ fn evaluates_weak_set_iterable_constructor_arguments() {
         Ok(Value::Boolean(true))
     );
     assert_eq!(
-        eval("let key = {}; let set = new WeakSet({ 0: key, length: 1 }); set.has(key);"),
+        eval(
+            "let key = {}; let values = [key]; let iterable = {}; iterable[Symbol.iterator] = function() { return values[Symbol.iterator](); }; let set = new WeakSet(iterable); set.has(key);"
+        ),
         Ok(Value::Boolean(true))
     );
     assert_eq!(
@@ -44,6 +46,7 @@ fn evaluates_weak_set_iterable_constructor_arguments() {
         Ok(Value::String("true:false".to_owned()))
     );
     assert!(eval("new WeakSet([1]);").is_err());
+    assert!(eval("new WeakSet({});").is_err());
 }
 
 #[test]

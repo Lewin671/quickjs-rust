@@ -34,7 +34,9 @@ fn evaluates_weak_map_iterable_constructor_arguments() {
         Ok(Value::Number(1.0))
     );
     assert_eq!(
-        eval("let key = {}; let map = new WeakMap({ 0: [key, 1], length: 1 }); map.has(key);"),
+        eval(
+            "let key = {}; let entries = [[key, 1]]; let iterable = {}; iterable[Symbol.iterator] = function() { return entries[Symbol.iterator](); }; let map = new WeakMap(iterable); map.has(key);"
+        ),
         Ok(Value::Boolean(true))
     );
     assert_eq!(
@@ -43,6 +45,7 @@ fn evaluates_weak_map_iterable_constructor_arguments() {
     );
     assert!(eval("new WeakMap([1]);").is_err());
     assert!(eval("new WeakMap([[1, 2]]);").is_err());
+    assert!(eval("new WeakMap({});").is_err());
 }
 
 #[test]
