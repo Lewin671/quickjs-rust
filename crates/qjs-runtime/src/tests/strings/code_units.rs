@@ -73,5 +73,23 @@ fn evaluates_string_code_unit_builtins() {
     assert_eq!(eval("'abc'.codePointAt(3);"), Ok(Value::Undefined));
     assert_eq!(eval("'😀'.codePointAt(0);"), Ok(Value::Number(128_512.0)));
     assert_eq!(eval("'😀'.codePointAt(1);"), Ok(Value::Number(56_832.0)));
+    assert_eq!(
+        eval("let seen = ''; for (var ch of 'ab') { seen += ch; } seen;"),
+        Ok(Value::String("ab".to_owned()))
+    );
+    assert_eq!(
+        eval("let seen = ''; for (var ch of 'a\\uD801\\uDC28b') { seen += ch + '|'; } seen;"),
+        Ok(Value::String("a|𐐨|b|".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let seen = ''; for (var ch of 'a\\uD801b') { seen += ch.length + ':' + ch.charCodeAt(0) + '|'; } seen;"
+        ),
+        Ok(Value::String("1:97|1:55297|1:98|".to_owned()))
+    );
+    assert_eq!(
+        eval("let iterator = 'x'[Symbol.iterator](); iterator[Symbol.iterator]() === iterator;"),
+        Ok(Value::Boolean(true))
+    );
     assert!(eval("new String.prototype.charAt();").is_err());
 }

@@ -43,6 +43,17 @@
     setIteratorSeen = setIteratorSeen + setValue;
   }
 
+  var stringSeen = "";
+  for (var ch of "a\uD801\uDC28b") {
+    stringSeen = stringSeen + ch + "|";
+  }
+
+  var truncatedStringSeen = "";
+  for (var part of "a\uD801b") {
+    truncatedStringSeen = truncatedStringSeen + part.length + ":" + part.charCodeAt(0) + "|";
+  }
+
   return total + ":" + setSeen + ":" + mapSeen + ":" + controlled + ":" +
-    target.value + ":" + keySeen + ":" + entrySeen + ":" + setIteratorSeen;
+    target.value + ":" + keySeen + ":" + entrySeen + ":" + setIteratorSeen + ":" +
+    stringSeen + ":" + truncatedStringSeen;
 })()

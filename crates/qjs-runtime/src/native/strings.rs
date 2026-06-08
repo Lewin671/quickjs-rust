@@ -95,6 +95,12 @@ pub(super) fn call_string_native(
             env,
             string::StringHtmlKind::Italics,
         )?,
+        NativeFunction::StringPrototypeIterator => {
+            string::native_string_prototype_iterator(this_value, env)?
+        }
+        NativeFunction::StringIteratorPrototypeNext => {
+            string::native_string_iterator_next(this_value)?
+        }
         NativeFunction::StringPrototypeIsWellFormed => {
             string::native_string_prototype_is_well_formed(this_value, env)?
         }
