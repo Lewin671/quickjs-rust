@@ -87,6 +87,15 @@ list_entries() {
     | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' \
     | sed '/^$/d'
 }
+emit_test262_host_shim() {
+  cat <<'EOF'
+var $262 = {
+  createRealm: function() {
+    return { global: globalThis };
+  }
+};
+EOF
+}
 
 metadata_for() {
   awk -f "$METADATA_PARSER" "$1"
@@ -205,6 +214,8 @@ make_upstream_case() {
       cat "$TEST262_DIR/harness/assert.js"
       printf '\n'
       cat "$TEST262_DIR/harness/sta.js"
+      printf '\n'
+      emit_test262_host_shim
       printf '\n'
       while IFS= read -r include; do
         cat "$TEST262_DIR/harness/$include"
@@ -389,6 +400,7 @@ export RUN_WITH_TIMEOUT
 export TEST262_DIR
 export -f is_expected_failure
 export -f case_path_for_entry
+export -f emit_test262_host_shim
 export -f list_entries
 export -f make_upstream_case
 export -f metadata_for

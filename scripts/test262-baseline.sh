@@ -248,6 +248,11 @@ rust_features_supported() {
       ;;
   esac
   case "$rel" in
+    test/built-ins/String/prototype/toString/non-generic-realm.js|test/built-ins/String/prototype/valueOf/non-generic-realm.js)
+      entries="$(drop_feature_entries "$entries" -e 'cross-realm')"
+      ;;
+  esac
+  case "$rel" in
     test/built-ins/Array/prototype/with/*|test/built-ins/Array/prototype/toReversed/*|test/built-ins/Array/prototype/toSpliced/*|test/built-ins/Array/prototype/toSorted/*)
       entries="$(drop_feature_entries "$entries" -e 'change-array-by-copy' -e 'exponentiation')"
       ;;
@@ -276,7 +281,7 @@ rust_features_supported() {
     -e 'Symbol.replace' -e 'Symbol.search' -e 'Symbol.split' -e 'Symbol.toPrimitive' \
     -e 'Reflect' -e 'Reflect.construct' -e 'arrow-function' -e 'Map' -e 'Set' -e 'WeakMap' -e 'WeakSet' \
     -e 'set-methods' \
-    -e 'array-find-from-last' -e 'Array.prototype.at' -e 'Array.prototype.flat' -e 'Array.prototype.flatMap' -e 'Array.prototype.includes' -e 'Array.prototype.toReversed' -e 'Array.prototype.toSorted' -e 'Array.prototype.toSpliced' -e 'Array.prototype.with' -e 'json-parse-with-source' -e 'Object.hasOwn' -e 'Object.is' -e 'promise-with-resolvers' -e 'RegExp.escape' -e 'string-trimming' -e 'String.fromCodePoint' -e 'String.prototype.at' -e 'String.prototype.endsWith' -e 'String.prototype.includes' -e 'String.prototype.isWellFormed' -e 'String.prototype.replaceAll' -e 'String.prototype.toWellFormed' -e 'String.prototype.trimEnd' -e 'String.prototype.trimStart' \
+    -e 'array-find-from-last' -e 'Array.prototype.at' -e 'Array.prototype.flat' -e 'Array.prototype.flatMap' -e 'Array.prototype.includes' -e 'Array.prototype.toReversed' -e 'Array.prototype.toSorted' -e 'Array.prototype.toSpliced' -e 'Array.prototype.with' -e 'json-parse-with-source' -e 'Object.hasOwn' -e 'Object.is' -e 'promise-with-resolvers' -e 'RegExp.escape' -e 'string-trimming' -e 'String.fromCodePoint' -e 'String.prototype.at' -e 'String.prototype.endsWith' -e 'String.prototype.includes' -e 'String.prototype.isWellFormed' -e 'String.prototype.replaceAll' -e 'String.prototype.toWellFormed' -e 'String.prototype.trimEnd' -e 'String.prototype.trimStart' -e 'u180e' \
     <<<"$entries" >/dev/null
 }
 drop_feature_entries() {
@@ -295,6 +300,15 @@ list_entries() {
   printf '%s\n' "$1" | tr -d '[]' | tr ',' '\n' \
     | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' \
     | sed '/^$/d'
+}
+emit_test262_host_shim() {
+  cat <<'EOF'
+var $262 = {
+  createRealm: function() {
+    return { global: globalThis };
+  }
+};
+EOF
 }
 prefix_list_contains() {
   local rel="$1"
@@ -363,6 +377,8 @@ make_case() {
       cat "$TEST262_DIR/harness/assert.js"
       printf '\n'
       cat "$TEST262_DIR/harness/sta.js"
+      printf '\n'
+      emit_test262_host_shim
       printf '\n'
       while IFS= read -r include; do
         cat "$TEST262_DIR/harness/$include"

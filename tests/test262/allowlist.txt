@@ -3875,6 +3875,7 @@ cases/string-prototype-substring-basic.js
 cases/string-prototype-substring-length.js
 cases/string-prototype-substring-negative.js
 cases/string-prototype-substring-swap.js
+test/built-ins/String/prototype/toLowerCase/Final_Sigma_U180E.js
 test/built-ins/String/prototype/toLowerCase/name.js
 test/built-ins/String/prototype/toLowerCase/not-a-constructor.js
 test/built-ins/String/prototype/toLowerCase/S15.5.4.16_A1_T1.js
@@ -3910,6 +3911,7 @@ cases/string-prototype-to-lower-case-length.js
 cases/string-prototype-to-lower-case-supplementary-plane.js
 test/built-ins/String/prototype/toString/length.js
 test/built-ins/String/prototype/toString/name.js
+test/built-ins/String/prototype/toString/non-generic-realm.js
 test/built-ins/String/prototype/toString/non-generic.js
 test/built-ins/String/prototype/toString/not-a-constructor.js
 test/built-ins/String/prototype/toString/string-object.js
@@ -4131,6 +4133,7 @@ cases/string-prototype-trim-start-basic.js
 cases/string-prototype-trim-start-length.js
 test/built-ins/String/prototype/valueOf/length.js
 test/built-ins/String/prototype/valueOf/name.js
+test/built-ins/String/prototype/valueOf/non-generic-realm.js
 test/built-ins/String/prototype/valueOf/non-generic.js
 test/built-ins/String/prototype/valueOf/not-a-constructor.js
 test/built-ins/String/prototype/valueOf/string-object.js
