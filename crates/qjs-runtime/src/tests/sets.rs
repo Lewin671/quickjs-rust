@@ -159,6 +159,14 @@ fn evaluates_set_composition_methods_with_set_like_objects() {
         "var other = { size: 2, has: function(value) { return value === 2; }, keys: function() { return [2, 3].values(); } }; new Set([1, 2]).isSubsetOf(other) + ':' + new Set([1, 2, 3]).isSupersetOf(other) + ':' + new Set([1]).isDisjointFrom(other);",
         Value::String("false:true:true".to_owned()),
     );
+    assert_eval(
+        "var other = { size: 1, has: function() { throw 'has should not be called'; }, keys: function() { return [-0].values(); } }; var result = new Set([1, 2]).symmetricDifference(other); Object.is([...result][2], 0) + ':' + result.size + ':' + [...result].join('|');",
+        Value::String("true:3:1|2|0".to_owned()),
+    );
+    assert_eval(
+        "var other = [5]; other.size = 3; other.has = function() { throw 'has should not be called'; }; other.keys = function() { return [2, 3, 4].values(); }; [...new Set([1, 2]).symmetricDifference(other)].join('|');",
+        Value::String("1|3|4".to_owned()),
+    );
 }
 
 #[test]

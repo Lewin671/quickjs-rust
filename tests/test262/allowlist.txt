@@ -430,6 +430,7 @@ cases/set-union-basic.js
 cases/set-intersection-basic.js
 cases/set-difference-basic.js
 cases/set-symmetric-difference-basic.js
+cases/set-symmetric-difference-setlike-keys.js
 cases/set-is-subset-of-basic.js
 cases/set-is-superset-of-basic.js
 cases/set-is-disjoint-from-basic.js

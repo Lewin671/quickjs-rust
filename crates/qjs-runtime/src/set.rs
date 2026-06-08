@@ -274,12 +274,12 @@ pub(crate) fn native_set_prototype_symmetric_difference(
     let other = SetRecord::from_arguments(argument_values, env)?;
     let result = new_set_like(&set);
     for value in set.values() {
-        if !other.has(&value, env)? {
-            result.add(value);
-        }
+        result.add(value);
     }
     for value in other.keys(env)? {
-        if !set.has(&value) {
+        if set.has(&value) {
+            result.delete(&value);
+        } else {
             result.add(value);
         }
     }
