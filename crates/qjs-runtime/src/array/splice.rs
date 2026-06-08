@@ -5,6 +5,7 @@ use crate::{ArrayRef, RuntimeError, Value, has_property, property_value, to_numb
 use super::{
     array_like::array_like_length,
     mutation::{delete_array_like_property, set_array_like_property},
+    species::validate_array_species_constructor,
 };
 
 const MAX_SAFE_INTEGER_LENGTH: usize = 9_007_199_254_740_991;
@@ -28,6 +29,7 @@ pub(crate) fn native_array_prototype_splice(
         env,
     )?;
     let delete_count = splice_delete_count(length, start, argument_values, env)?;
+    validate_array_species_constructor(receiver.clone(), "splice", env)?;
     let items = if argument_values.len() > 2 {
         &argument_values[2..]
     } else {

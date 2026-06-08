@@ -5,9 +5,12 @@ use crate::{
     property_value_key, symbol, to_length_with_env,
 };
 
-use super::array_like::{array_like_length, array_like_receiver};
 use super::indexing::{array_at_index, array_slice_end, array_slice_start};
 use super::splice::{splice_start_with_env, to_spliced_delete_count};
+use super::{
+    array_like::{array_like_length, array_like_receiver},
+    species::validate_array_species_constructor,
+};
 
 const MAX_ARRAY_LENGTH: usize = u32::MAX as usize;
 const MAX_SAFE_LENGTH: usize = (1usize << 53) - 1;
@@ -27,25 +30,6 @@ pub(crate) fn native_array_prototype_concat(
         concat_array_item(&mut result, &mut holes, value, env)?;
     }
     Ok(Value::Array(ArrayRef::new_sparse(result, holes)))
-}
-
-fn validate_array_species_constructor(
-    receiver: Value,
-    method: &str,
-    env: &mut HashMap<String, Value>,
-) -> Result<(), RuntimeError> {
-    if !matches!(receiver, Value::Array(_)) {
-        return Ok(());
-    }
-    match property_value(receiver, "constructor", env)? {
-        Value::Undefined | Value::Function(_) | Value::Object(_) => Ok(()),
-        _ => Err(RuntimeError {
-            thrown: None,
-            message: format!(
-                "TypeError: Array.prototype.{method} constructor is not a constructor"
-            ),
-        }),
-    }
 }
 
 pub(crate) fn native_array_prototype_slice(

@@ -11,6 +11,7 @@ mod search;
 mod sequence;
 mod shift;
 mod sort;
+mod species;
 mod splice;
 mod unshift;
 

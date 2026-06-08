@@ -181,6 +181,8 @@ cases/array-with-negative-index.js
 cases/array-with-undefined-value.js
 cases/array-splice-delete-basic.js
 cases/array-splice-boolean-receiver.js
+cases/array-splice-constructor-non-object.js
+cases/array-splice-constructor-poisoned.js
 cases/array-splice-insert-basic.js
 cases/array-splice-length.js
 cases/array-splice-negative-start.js

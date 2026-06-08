@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::array_like::array_like_length;
+use super::{array_like::array_like_length, species::validate_array_species_constructor};
 use crate::{
     ArrayRef, RuntimeError, Value, array_prototype, call_function, has_property, is_truthy,
     property_value,
@@ -43,7 +43,7 @@ fn prepare_array_iteration(
         });
     }
     if matches!(method, "filter" | "map") {
-        validate_array_species_constructor(method, source.receiver.clone(), env)?;
+        validate_array_species_constructor(source.receiver.clone(), method, env)?;
     }
     Ok(ArrayIteration {
         receiver: source.receiver,
@@ -51,26 +51,6 @@ fn prepare_array_iteration(
         callback,
         callback_this: argument_values.get(1).cloned().unwrap_or(Value::Undefined),
     })
-}
-
-fn validate_array_species_constructor(
-    method: &str,
-    receiver: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<(), RuntimeError> {
-    if !matches!(receiver, Value::Array(_)) {
-        return Ok(());
-    }
-
-    match property_value(receiver, "constructor", env)? {
-        Value::Undefined | Value::Function(_) | Value::Object(_) => Ok(()),
-        _ => Err(RuntimeError {
-            thrown: None,
-            message: format!(
-                "TypeError: Array.prototype.{method} constructor is not a constructor"
-            ),
-        }),
-    }
 }
 
 fn prepare_array_reduction(

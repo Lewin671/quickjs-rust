@@ -21,6 +21,27 @@
   } catch (error) {
     rangeError = error instanceof RangeError;
   }
+  var constructorTypeError = false;
+  var invalidConstructor = [];
+  invalidConstructor.constructor = 1;
+  try {
+    invalidConstructor.splice();
+  } catch (error) {
+    constructorTypeError = error instanceof TypeError;
+  }
+  var marker = {ok: true};
+  var constructorAbrupt = false;
+  var poisonedConstructor = [];
+  Object.defineProperty(poisonedConstructor, "constructor", {
+    get: function () {
+      throw marker;
+    }
+  });
+  try {
+    poisonedConstructor.splice();
+  } catch (error) {
+    constructorAbrupt = error === marker;
+  }
   return removed.join()
     + ":" + xs.join()
     + ":" + tail.join()
@@ -35,5 +56,7 @@
     + ":" + obj[3]
     + ":" + Array.prototype.splice.call(true).length
     + ":" + rangeError
+    + ":" + constructorTypeError
+    + ":" + constructorAbrupt
     + ":" + Array.prototype.splice.length;
 })()

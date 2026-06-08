@@ -79,3 +79,19 @@ fn evaluates_array_splice_generic_receivers() {
         Ok(Value::Boolean(true))
     );
 }
+
+#[test]
+fn evaluates_array_splice_species_constructor_validation() {
+    assert_eq!(
+        eval(
+            "let values = [null, 1, 'string', true]; let result = []; for (let index = 0; index < values.length; index = index + 1) { let array = []; array.constructor = values[index]; try { array.splice(); result.push(false); } catch (error) { result.push(error instanceof TypeError); } } result.join();"
+        ),
+        Ok(Value::String("true,true,true,true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let marker = { ok: true }; let array = []; Object.defineProperty(array, 'constructor', { get: function() { throw marker; } }); let caught = false; try { array.splice(); } catch (error) { caught = error === marker; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
