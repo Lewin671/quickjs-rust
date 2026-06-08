@@ -3,6 +3,7 @@
 # Keep this list small and feature-scoped. Add entries only when the engine has
 # enough support for the test to provide useful signal.
 cases/builtin-iterator-symbol-properties.js
+cases/builtin-species-accessors.js
 cases/builtin-to-string-tag-symbol-properties.js
 cases/date-symbol-to-primitive-basic.js
 cases/function-symbol-has-instance-basic.js

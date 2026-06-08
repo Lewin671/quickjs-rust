@@ -241,6 +241,7 @@ pub(crate) fn install_array(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(array_prototype)),
     );
+    symbol::define_species_accessor(env, &array_function);
     define_array_function(&array_function, "from", 1, NativeFunction::ArrayFrom);
     define_array_function(&array_function, "isArray", 1, NativeFunction::ArrayIsArray);
     define_array_function(&array_function, "of", 0, NativeFunction::ArrayOf);

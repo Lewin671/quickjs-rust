@@ -24,6 +24,18 @@ fn evaluates_map_constructor_and_prototype() {
 }
 
 #[test]
+fn exposes_map_species_accessor() {
+    assert_eq!(
+        eval(
+            "let desc = Object.getOwnPropertyDescriptor(Map, Symbol.species); let receiver = {}; [desc.get.call(receiver) === receiver, desc.set === undefined, desc.enumerable, desc.configurable, desc.get.name, desc.get.length].join(':');"
+        ),
+        Ok(Value::String(
+            "true:true:false:true:get [Symbol.species]:0".to_owned()
+        ))
+    );
+}
+
+#[test]
 fn evaluates_map_iterable_constructor_arguments() {
     assert_eq!(
         eval(

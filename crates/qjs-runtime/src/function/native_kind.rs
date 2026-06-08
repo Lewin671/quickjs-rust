@@ -184,6 +184,7 @@ pub(crate) enum NativeFunction {
     SetPrototypeUnion,
     SetPrototypeValues,
     SetIteratorPrototypeNext,
+    SpeciesGetter,
     Number,
     NumberIsFinite,
     NumberIsInteger,

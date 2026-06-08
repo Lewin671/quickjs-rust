@@ -92,6 +92,7 @@ pub(crate) fn install_map(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(map_prototype)),
     );
+    symbol::define_species_accessor(env, &map_function);
 
     let value = Value::Function(map_function);
     env.insert("Map".to_owned(), value.clone());

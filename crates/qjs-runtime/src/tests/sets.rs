@@ -22,6 +22,14 @@ fn evaluates_set_constructor_and_prototype() {
 }
 
 #[test]
+fn exposes_set_species_accessor() {
+    assert_eval(
+        "let desc = Object.getOwnPropertyDescriptor(Set, Symbol.species); let receiver = {}; [desc.get.call(receiver) === receiver, desc.set === undefined, desc.enumerable, desc.configurable, desc.get.name, desc.get.length].join(':');",
+        Value::String("true:true:false:true:get [Symbol.species]:0".to_owned()),
+    );
+}
+
+#[test]
 fn evaluates_set_iterable_constructor_arguments() {
     assert_eval(
         "var set = new Set([1, 2]); set.size + ':' + set.has(1) + ':' + set.has(2);",

@@ -37,6 +37,18 @@ fn evaluates_array_from_static_constructor() {
 }
 
 #[test]
+fn exposes_array_species_accessor() {
+    assert_eq!(
+        eval(
+            "let desc = Object.getOwnPropertyDescriptor(Array, Symbol.species); let receiver = {}; [desc.get.call(receiver) === receiver, desc.set === undefined, desc.enumerable, desc.configurable, desc.get.name, desc.get.length].join(':');"
+        ),
+        Ok(Value::String(
+            "true:true:false:true:get [Symbol.species]:0".to_owned()
+        ))
+    );
+}
+
+#[test]
 fn evaluates_array_from_mapping() {
     assert_eq!(
         eval("Array.from([1, 2], function(value, index) { return value + index; }).join();"),

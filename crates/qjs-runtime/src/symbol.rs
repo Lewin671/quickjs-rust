@@ -317,6 +317,26 @@ pub(crate) fn define_iterator_identity(env: &HashMap<String, Value>, object: &Ob
     );
 }
 
+pub(crate) fn define_species_accessor(env: &HashMap<String, Value>, function: &Function) {
+    let Some(symbol) = species_symbol(env) else {
+        return;
+    };
+    function.define_symbol_property(
+        symbol,
+        Property::accessor(
+            Some(Value::Function(Function::new_native(
+                Some("get [Symbol.species]"),
+                0,
+                NativeFunction::SpeciesGetter,
+                false,
+            ))),
+            None,
+            false,
+            true,
+        ),
+    );
+}
+
 pub(crate) fn define_well_known_to_string_tag(
     env: &HashMap<String, Value>,
     object: &ObjectRef,

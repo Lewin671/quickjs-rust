@@ -122,6 +122,7 @@ pub(crate) fn install_set(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(set_prototype)),
     );
+    symbol::define_species_accessor(env, &set_function);
 
     let value = Value::Function(set_function);
     env.insert("Set".to_owned(), value.clone());
