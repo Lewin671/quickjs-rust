@@ -269,6 +269,38 @@ fn lexes_template_escape_sequences() {
     );
 }
 
+#[test]
+fn normalizes_template_line_terminator_sequences() {
+    let tokens = lex("`\r\n\n\r\u{2028}\u{2029}`").expect("source should lex");
+    let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::TemplateNoSubstitution(template_segment(
+                "\n\n\n\u{2028}\u{2029}",
+                "\n\n\n\u{2028}\u{2029}",
+            )),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn preserves_template_line_continuations_in_raw_segments() {
+    let tokens = lex("`\\\r\n\\\n\\\r\\\u{2028}\\\u{2029}`").expect("source should lex");
+    let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::TemplateNoSubstitution(template_segment(
+                "",
+                "\\\n\\\n\\\n\\\u{2028}\\\u{2029}",
+            )),
+            TokenKind::Eof,
+        ]
+    );
+}
+
 fn template_segment(cooked: &str, raw: &str) -> TemplateSegment {
     TemplateSegment {
         cooked: cooked.to_owned(),

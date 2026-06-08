@@ -162,11 +162,10 @@ impl Lexer<'_> {
     pub(super) fn template_literal(&mut self) -> Result<(), LexError> {
         let start = self.cursor;
         self.advance();
-        let segment_start = self.cursor;
         let mut value = String::new();
+        let mut raw = String::new();
         while let Some(ch) = self.peek() {
             if ch == '`' {
-                let raw = self.source[segment_start..self.cursor].to_owned();
                 self.advance();
                 self.tokens.push(Token {
                     kind: TokenKind::TemplateNoSubstitution(TemplateSegment { cooked: value, raw }),
@@ -175,7 +174,6 @@ impl Lexer<'_> {
                 return Ok(());
             }
             if ch == '$' && self.peek_nth(1) == Some('{') {
-                let raw = self.source[segment_start..self.cursor].to_owned();
                 self.advance();
                 self.advance();
                 self.tokens.push(Token {
@@ -186,11 +184,21 @@ impl Lexer<'_> {
                 return Ok(());
             }
             if ch == '\\' {
+                if self.template_line_continuation(&mut raw) {
+                    continue;
+                }
+                let escape_start = self.cursor;
                 if let Some(escaped) = self.escape_sequence(start)? {
                     value.push(escaped);
                 }
+                raw.push_str(&self.source[escape_start..self.cursor]);
                 continue;
             }
+            if Self::is_line_terminator(ch) {
+                self.template_line_terminator(&mut value, &mut raw);
+                continue;
+            }
+            raw.push(ch);
             value.push(ch);
             self.advance();
         }
@@ -204,11 +212,10 @@ impl Lexer<'_> {
     pub(super) fn template_after_substitution(&mut self) -> Result<(), LexError> {
         let start = self.cursor;
         self.advance();
-        let segment_start = self.cursor;
         let mut value = String::new();
+        let mut raw = String::new();
         while let Some(ch) = self.peek() {
             if ch == '`' {
-                let raw = self.source[segment_start..self.cursor].to_owned();
                 self.advance();
                 self.template_stack.pop();
                 self.tokens.push(Token {
@@ -218,7 +225,6 @@ impl Lexer<'_> {
                 return Ok(());
             }
             if ch == '$' && self.peek_nth(1) == Some('{') {
-                let raw = self.source[segment_start..self.cursor].to_owned();
                 self.advance();
                 self.advance();
                 self.tokens.push(Token {
@@ -228,11 +234,21 @@ impl Lexer<'_> {
                 return Ok(());
             }
             if ch == '\\' {
+                if self.template_line_continuation(&mut raw) {
+                    continue;
+                }
+                let escape_start = self.cursor;
                 if let Some(escaped) = self.escape_sequence(start)? {
                     value.push(escaped);
                 }
+                raw.push_str(&self.source[escape_start..self.cursor]);
                 continue;
             }
+            if Self::is_line_terminator(ch) {
+                self.template_line_terminator(&mut value, &mut raw);
+                continue;
+            }
+            raw.push(ch);
             value.push(ch);
             self.advance();
         }
@@ -241,6 +257,43 @@ impl Lexer<'_> {
             message: "unterminated template literal".to_owned(),
             span: Span::new(start, self.cursor),
         })
+    }
+
+    fn template_line_continuation(&mut self, raw: &mut String) -> bool {
+        if self.peek() != Some('\\')
+            || !matches!(self.peek_nth(1), Some(ch) if Self::is_line_terminator(ch))
+        {
+            return false;
+        }
+        self.advance();
+        raw.push('\\');
+        self.template_raw_line_terminator(raw);
+        true
+    }
+
+    fn template_line_terminator(&mut self, cooked: &mut String, raw: &mut String) {
+        let terminator = self.template_raw_line_terminator(raw);
+        cooked.push(terminator);
+    }
+
+    fn template_raw_line_terminator(&mut self, raw: &mut String) -> char {
+        match self.advance().expect("line terminator should be present") {
+            '\r' => {
+                if self.peek() == Some('\n') {
+                    self.advance();
+                }
+                raw.push('\n');
+                '\n'
+            }
+            ch => {
+                raw.push(ch);
+                ch
+            }
+        }
+    }
+
+    fn is_line_terminator(ch: char) -> bool {
+        matches!(ch, '\n' | '\r' | '\u{2028}' | '\u{2029}')
     }
 
     fn escape_sequence(&mut self, literal_start: usize) -> Result<Option<char>, LexError> {
