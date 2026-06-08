@@ -25,6 +25,7 @@ cases/array-concat-length.js
 cases/array-concat-primitive-arguments.js
 cases/array-concat-spreadable-arguments.js
 cases/array-copy-within-basic.js
+cases/array-copy-within-coercion-side-effects.js
 cases/array-every-basic.js
 cases/array-every-callback-arguments.js
 cases/array-every-this-arg.js

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{RuntimeError, Value, to_number, to_number_with_env};
+use crate::{RuntimeError, Value, to_number_with_env};
 
 pub(super) fn array_at_index(
     length: usize,
@@ -79,18 +79,26 @@ pub(super) fn array_search_end_index(
     }
 }
 
-pub(super) fn array_slice_start(length: usize, start: Value) -> Result<usize, RuntimeError> {
+pub(super) fn array_slice_start(
+    length: usize,
+    start: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<usize, RuntimeError> {
     let number = match start {
         Value::Undefined => 0.0,
-        value => to_number(value)?,
+        value => to_number_with_env(value, env)?,
     };
     Ok(relative_array_index(length, number))
 }
 
-pub(super) fn array_slice_end(length: usize, end: Value) -> Result<usize, RuntimeError> {
+pub(super) fn array_slice_end(
+    length: usize,
+    end: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<usize, RuntimeError> {
     let number = match end {
         Value::Undefined => return Ok(length),
-        value => to_number(value)?,
+        value => to_number_with_env(value, env)?,
     };
     Ok(relative_array_index(length, number))
 }

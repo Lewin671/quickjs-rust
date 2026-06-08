@@ -25,10 +25,12 @@ pub(crate) fn native_array_prototype_fill(
     let start = array_slice_start(
         length,
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
     )?;
     let end = array_slice_end(
         length,
         argument_values.get(2).cloned().unwrap_or(Value::Undefined),
+        env,
     )?;
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     for index in start..end {
@@ -48,14 +50,17 @@ pub(crate) fn native_array_prototype_copy_within(
     let target = array_slice_start(
         length,
         argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
     )?;
     let start = array_slice_start(
         length,
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
     )?;
     let end = array_slice_end(
         length,
         argument_values.get(2).cloned().unwrap_or(Value::Undefined),
+        env,
     )?;
     let count = (end.saturating_sub(start)).min(length.saturating_sub(target));
     if count == 0 {

@@ -196,6 +196,18 @@ fn evaluates_array_sequence_builtins() {
     );
     assert_eq!(
         eval(
+            "let xs = [0, 1, 2, 3]; xs.copyWithin(0, { valueOf: function() { xs.length = 2; return 3; } }); xs.length + ':' + xs.hasOwnProperty('0') + ':' + xs[1];"
+        ),
+        Ok(Value::String("2:false:1".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let proto = { 3: 9 }; let xs = [0, 1, 2, 3]; Object.setPrototypeOf(xs, proto); Array.prototype.copyWithin.call(xs, 0, { valueOf: function() { xs.length = 2; return 3; } }); xs.length + ':' + xs[0] + ':' + xs[1];"
+        ),
+        Ok(Value::String("2:9:1".to_owned()))
+    );
+    assert_eq!(
+        eval(
             "let o = { length: 43 }; Object.defineProperty(o, '42', { configurable: false, writable: true }); let caught = false; try { Array.prototype.copyWithin.call(o, 42, 0); } catch (error) { caught = error instanceof TypeError; } caught;"
         ),
         Ok(Value::Boolean(true))

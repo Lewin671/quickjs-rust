@@ -58,10 +58,12 @@ pub(crate) fn native_array_prototype_slice(
     let start = array_slice_start(
         length,
         argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
     )?;
     let end = array_slice_end(
         length,
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
     )?;
     validate_array_species_constructor(array_like.receiver.clone(), "slice", env)?;
 
