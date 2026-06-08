@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use crate::{ArrayRef, RuntimeError, Value, call_function, property_value, to_number};
+use crate::{
+    ArrayRef, RuntimeError, Value, call_function, has_property, property_value, to_number,
+};
 
 use super::array_like::array_like_length;
 
@@ -33,7 +35,11 @@ pub(crate) fn native_array_prototype_flat_map(
     let callback_this = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
     let mut result = Vec::new();
     for index in 0..source.length {
-        let value = property_value(source.receiver.clone(), &index.to_string(), env)?;
+        let key = index.to_string();
+        if !has_property(source.receiver.clone(), env, &key)? {
+            continue;
+        }
+        let value = property_value(source.receiver.clone(), &key, env)?;
         let mapped = call_function(
             callback.clone(),
             callback_this.clone(),
@@ -41,7 +47,7 @@ pub(crate) fn native_array_prototype_flat_map(
             env,
             false,
         )?;
-        flatten_value_into(&mut result, mapped, 1);
+        flatten_value_into(&mut result, mapped, 1, env)?;
     }
 
     Ok(Value::Array(ArrayRef::new(result)))
@@ -62,12 +68,6 @@ fn flat_depth(value: Value) -> Result<usize, RuntimeError> {
     Ok(number.trunc() as usize)
 }
 
-fn flatten_into(result: &mut Vec<Value>, values: Vec<Value>, depth: usize) {
-    for value in values {
-        flatten_value_into(result, value, depth);
-    }
-}
-
 fn flatten_source_into(
     result: &mut Vec<Value>,
     receiver: Value,
@@ -76,17 +76,33 @@ fn flatten_source_into(
     env: &mut HashMap<String, Value>,
 ) -> Result<(), RuntimeError> {
     for index in 0..length {
-        let value = property_value(receiver.clone(), &index.to_string(), env)?;
-        flatten_value_into(result, value, depth);
+        let key = index.to_string();
+        if !has_property(receiver.clone(), env, &key)? {
+            continue;
+        }
+        let value = property_value(receiver.clone(), &key, env)?;
+        flatten_value_into(result, value, depth, env)?;
     }
     Ok(())
 }
 
-fn flatten_value_into(result: &mut Vec<Value>, value: Value, depth: usize) {
+fn flatten_value_into(
+    result: &mut Vec<Value>,
+    value: Value,
+    depth: usize,
+    env: &mut HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
     match value {
         Value::Array(array) if depth > 0 => {
-            flatten_into(result, array.to_vec(), depth.saturating_sub(1));
+            flatten_source_into(
+                result,
+                Value::Array(array.clone()),
+                array.len(),
+                depth.saturating_sub(1),
+                env,
+            )?;
         }
         value => result.push(value),
     }
+    Ok(())
 }

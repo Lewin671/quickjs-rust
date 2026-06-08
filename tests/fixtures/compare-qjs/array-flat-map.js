@@ -15,6 +15,11 @@
   var booleanFlatMap = Array.prototype.flatMap.call(true, function () {
     called = called + 1;
   });
+  var sparseCalls = [];
+  var sparse = [1, , 3].flatMap(function (value, index) {
+    sparseCalls.push(index);
+    return [value];
+  });
   return doubled
     + ":" + shallow.length
     + ":" + Array.isArray(shallow[0])
@@ -23,5 +28,7 @@
     + ":" + mapped.join()
     + ":" + booleanFlatMap.length
     + ":" + called
-    + ":" + Array.prototype.flatMap.length;
+    + ":" + Array.prototype.flatMap.length
+    + ":" + sparse.join()
+    + ":" + sparseCalls.join();
 })()

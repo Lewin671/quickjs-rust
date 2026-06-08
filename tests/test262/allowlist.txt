@@ -358,6 +358,15 @@ cases/array-flat-map-callback-arguments.js
 cases/array-flat-map-depth.js
 cases/array-flat-map-length.js
 cases/array-flat-map-this-arg.js
+test/built-ins/Array/prototype/flatMap/array-like-objects.js
+test/built-ins/Array/prototype/flatMap/bound-function-argument.js
+test/built-ins/Array/prototype/flatMap/depth-always-one.js
+test/built-ins/Array/prototype/flatMap/length.js
+test/built-ins/Array/prototype/flatMap/mapperfunction-throws.js
+test/built-ins/Array/prototype/flatMap/name.js
+test/built-ins/Array/prototype/flatMap/prop-desc.js
+test/built-ins/Array/prototype/flatMap/this-value-null-undefined-throws.js
+test/built-ins/Array/prototype/flatMap/thisArg-argument.js
 cases/array-flat-null-undefined.js
 cases/array-flat-string-depth.js
 test/built-ins/Array/prototype/flat/call-with-boolean.js

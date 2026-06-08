@@ -29,6 +29,22 @@ fn evaluates_array_flat_map_callback_arguments_and_this_arg() {
 }
 
 #[test]
+fn skips_missing_flattened_indexes_but_reads_inherited_indexes() {
+    assert_eq!(
+        eval(
+            "let calls = []; let out = [1, , 3].flatMap(function(value, index) { calls.push(index); return [value]; }); out.join() + ':' + calls.join();"
+        ),
+        Ok(Value::String("1,3:0,2".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let proto = []; proto[1] = 9; let xs = [1, , 3]; Object.setPrototypeOf(xs, proto); xs.flat().join();"
+        ),
+        Ok(Value::String("1,9,3".to_owned()))
+    );
+}
+
+#[test]
 fn rejects_array_flat_map_non_callable_callback() {
     assert!(eval("[1].flatMap(null);").is_err());
 }
