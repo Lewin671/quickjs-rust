@@ -88,7 +88,7 @@ pub(crate) fn native_bigint(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let value = to_bigint(
+    let value = to_bigint_constructor_value(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
@@ -203,6 +203,21 @@ pub(crate) fn to_bigint(
     match primitive {
         Value::BigInt(value) => Ok(value),
         Value::Boolean(value) => Ok(BigInt::from(if value { 1 } else { 0 })),
+        Value::Number(_) => Err(invalid_bigint_conversion()),
+        Value::String(value) => {
+            parse_bigint_string_value(value.trim()).ok_or_else(invalid_bigint_string)
+        }
+        Value::Null | Value::Undefined => Err(invalid_bigint_conversion()),
+        value => parse_bigint_string_value(&to_js_string(value)?).ok_or_else(invalid_bigint_string),
+    }
+}
+
+fn to_bigint_constructor_value(
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<BigInt, RuntimeError> {
+    let primitive = to_primitive_with_hint(value, PreferredType::Number, env)?;
+    match primitive {
         Value::Number(number) if number.is_finite() && number.fract() == 0.0 => {
             let text = format!("{number:.0}");
             parse_bigint_string_value(&text).ok_or_else(invalid_bigint_conversion)
@@ -211,11 +226,7 @@ pub(crate) fn to_bigint(
             thrown: None,
             message: "RangeError: cannot convert non-integer number to BigInt".to_owned(),
         }),
-        Value::String(value) => {
-            parse_bigint_string_value(value.trim()).ok_or_else(invalid_bigint_string)
-        }
-        Value::Null | Value::Undefined => Err(invalid_bigint_conversion()),
-        value => parse_bigint_string_value(&to_js_string(value)?).ok_or_else(invalid_bigint_string),
+        value => to_bigint(value, env),
     }
 }
 

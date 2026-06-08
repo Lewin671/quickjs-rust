@@ -23,6 +23,7 @@ fn evaluates_bigint_literals_and_constructor() {
     assert_eval("typeof 1n;", Value::String("bigint".to_owned()));
     assert_eval("String(1_000n);", Value::String("1000".to_owned()));
     assert_eval("BigInt('0x10') === 16n;", Value::Boolean(true));
+    assert_eval("BigInt(44) === 44n;", Value::Boolean(true));
     assert_eval("BigInt(true) === 1n;", Value::Boolean(true));
     assert_eval("BigInt('') === 0n;", Value::Boolean(true));
     assert_eval("BigInt('   -197   ') === -197n;", Value::Boolean(true));
@@ -78,6 +79,12 @@ fn evaluates_bigint_statics_and_prototype_methods() {
         "BigInt.asIntN({ valueOf: function() { return 3; } }, '10') === 2n;",
         Value::Boolean(true),
     );
+    assert_type_error("BigInt.asIntN(0, 0);");
+    assert_type_error("BigInt.asIntN(0, Object(0));");
+    assert_type_error("BigInt.asIntN(0, { valueOf: function() { return 0; } });");
+    assert_type_error("BigInt.asUintN(0, 0);");
+    assert_type_error("BigInt.asUintN(0, Object(0));");
+    assert_type_error("BigInt.asUintN(0, { valueOf: function() { return 0; } });");
     assert_eval("(10n).toString(16);", Value::String("a".to_owned()));
     assert_eval("Object(1n).valueOf() === 1n;", Value::Boolean(true));
     assert_eval(
