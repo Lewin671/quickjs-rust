@@ -47,6 +47,22 @@ fn evaluates_weak_set_iterable_constructor_arguments() {
 }
 
 #[test]
+fn weak_set_constructor_uses_prototype_add_adder() {
+    assert_eq!(
+        eval(
+            "let first = {}; let second = {}; let calls = 0; let original = WeakSet.prototype.add; WeakSet.prototype.add = function(value) { calls = calls + 1; return original.call(this, value); }; let set = new WeakSet([first, second]); calls + ':' + set.has(first) + ':' + set.has(second);"
+        ),
+        Ok(Value::String("2:true:true".to_owned()))
+    );
+    assert!(
+        eval(
+            "Object.defineProperty(WeakSet.prototype, 'add', { get: function() { throw new TypeError('boom'); } }); new WeakSet([]);"
+        )
+        .is_err()
+    );
+}
+
+#[test]
 fn evaluates_weak_set_basic_methods() {
     assert_eq!(
         eval("let key = {}; let set = new WeakSet(); set.add(key) === set;"),

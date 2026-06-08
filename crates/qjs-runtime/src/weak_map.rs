@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     ArrayRef, Function, NativeFunction, ObjectRef, RuntimeError, Value,
-    array::array_like_values_with_env, property_value, symbol,
+    array::array_like_values_with_env, call_function, property_value, symbol,
 };
 
 const WEAK_MAP_ENTRIES: &str = "\0weak_map_entries";
@@ -82,9 +82,16 @@ pub(crate) fn native_weak_map(
     if let Some(iterable) = argument_values.first().cloned()
         && !matches!(iterable, Value::Undefined | Value::Null)
     {
+        let adder = property_value(weak_map.clone(), "set", env)?;
         for entry in array_like_values_with_env(iterable, "WeakMap constructor", env)? {
             let (key, value) = weak_map_entry(entry, env)?;
-            weak_map_set(weak_map_object(&weak_map)?, key, value)?;
+            call_function(
+                adder.clone(),
+                weak_map.clone(),
+                vec![key, value],
+                env,
+                false,
+            )?;
         }
     }
 

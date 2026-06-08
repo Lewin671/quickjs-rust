@@ -1004,4 +1004,5 @@ cases/symbol-prototype-description-to-string.js
 cases/symbol-to-string-tag-basic.js
 cases/template-literal-no-substitution-basic.js
 cases/weak-map-basic.js
+cases/weak-collection-constructor-adder.js
 cases/weak-set-basic.js

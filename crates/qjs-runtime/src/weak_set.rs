@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     ArrayRef, Function, NativeFunction, ObjectRef, RuntimeError, Value,
-    array::array_like_values_with_env, symbol,
+    array::array_like_values_with_env, call_function, property_value, symbol,
 };
 
 const WEAK_SET_ENTRIES: &str = "\0weak_set_entries";
@@ -76,8 +76,9 @@ pub(crate) fn native_weak_set(
     if let Some(iterable) = argument_values.first().cloned()
         && !matches!(iterable, Value::Undefined | Value::Null)
     {
+        let adder = property_value(weak_set.clone(), "add", env)?;
         for value in array_like_values_with_env(iterable, "WeakSet constructor", env)? {
-            weak_set_add(weak_set_object(&weak_set)?, value)?;
+            call_function(adder.clone(), weak_set.clone(), vec![value], env, false)?;
         }
     }
 

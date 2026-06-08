@@ -46,6 +46,22 @@ fn evaluates_weak_map_iterable_constructor_arguments() {
 }
 
 #[test]
+fn weak_map_constructor_uses_prototype_set_adder() {
+    assert_eq!(
+        eval(
+            "let first = {}; let second = {}; let calls = 0; let original = WeakMap.prototype.set; WeakMap.prototype.set = function(key, value) { calls = calls + 1; return original.call(this, key, value); }; let map = new WeakMap([[first, 1], [second, 2]]); calls + ':' + map.get(first) + ':' + map.get(second);"
+        ),
+        Ok(Value::String("2:1:2".to_owned()))
+    );
+    assert!(
+        eval(
+            "Object.defineProperty(WeakMap.prototype, 'set', { get: function() { throw new TypeError('boom'); } }); new WeakMap([]);"
+        )
+        .is_err()
+    );
+}
+
+#[test]
 fn evaluates_weak_map_basic_methods() {
     assert_eq!(
         eval("let key = {}; let map = new WeakMap(); map.set(key, 1) === map;"),
