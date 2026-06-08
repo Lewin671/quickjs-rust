@@ -104,18 +104,68 @@ pub struct RuntimeError {
     pub message: String,
 }
 
+/// Evaluation failure stage used by conformance harnesses.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EvalErrorKind {
+    /// The parser rejected the source text.
+    Parse,
+    /// The bytecode compiler rejected a syntactically valid script as an early error.
+    Early,
+    /// The VM or JavaScript execution raised an error.
+    Runtime,
+}
+
+impl EvalErrorKind {
+    /// Stable lowercase name for script harness output.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Parse => "parse",
+            Self::Early => "early",
+            Self::Runtime => "runtime",
+        }
+    }
+}
+
+/// Evaluation error with the stage that produced it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct EvalError {
+    /// Failure stage.
+    pub kind: EvalErrorKind,
+    /// Human-readable message.
+    pub message: String,
+}
+
 /// Evaluates source text through the bytecode VM and returns the last statement value.
 ///
 /// # Errors
 ///
 /// Returns parser or runtime failures.
 pub fn eval(source: &str) -> Result<Value, RuntimeError> {
-    let script = parse_script(source).map_err(|error| RuntimeError {
+    eval_classified(source).map_err(|error| RuntimeError {
         thrown: None,
         message: error.message,
+    })
+}
+
+/// Evaluates source text and preserves the failure stage for harnesses.
+///
+/// # Errors
+///
+/// Returns parser, bytecode compiler, or runtime failures with their stage.
+pub fn eval_classified(source: &str) -> Result<Value, EvalError> {
+    let script = parse_script(source).map_err(|error| EvalError {
+        kind: EvalErrorKind::Parse,
+        message: error.message,
     })?;
-    let bytecode = compile_script(&script)?;
-    eval_bytecode(&bytecode)
+    let bytecode = compile_script(&script).map_err(|error| EvalError {
+        kind: EvalErrorKind::Early,
+        message: error.message,
+    })?;
+    eval_bytecode(&bytecode).map_err(|error| EvalError {
+        kind: EvalErrorKind::Runtime,
+        message: error.message,
+    })
 }
 
 #[cfg(test)]

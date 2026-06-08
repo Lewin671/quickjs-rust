@@ -272,6 +272,20 @@ prefix_list_contains() {
   return 1
 }
 
+list_test262_cases() {
+  if [ -n "$FILTER_PREFIX" ]; then
+    if [ -f "$TEST262_DIR/$FILTER_PREFIX" ]; then
+      printf '%s\n' "$TEST262_DIR/$FILTER_PREFIX"
+      return
+    fi
+    if [ -d "$TEST262_DIR/$FILTER_PREFIX" ]; then
+      find "$TEST262_DIR/$FILTER_PREFIX" -type f -name '*.js' | sort
+      return
+    fi
+  fi
+  find "$TEST262_DIR/test" -type f -name '*.js' | sort
+}
+
 quickjs_ng_skip_reason() {
   local rel="$1"
   local features="$2"
@@ -321,6 +335,36 @@ make_case() {
     fi
   } >"$output"
 }
+rust_error_field() {
+  local field="$1"
+  local output="$2"
+  printf '%s\n' "$output" | sed -n "s/^error: .*${field}=\([^ ]*\).*/\1/p" | head -n 1
+}
+rust_negative_matches() {
+  local output="$1" phase="$2" type="$3"
+  local kind actual_type
+  kind="$(rust_error_field kind "$output")"
+  actual_type="$(rust_error_field type "$output")"
+
+  case "$phase" in
+    parse)
+      [ "$kind" = "parse" ] || return 1
+      ;;
+    early)
+      [ "$kind" = "parse" ] || [ "$kind" = "early" ] || return 1
+      ;;
+    runtime|resolution)
+      [ "$kind" = "runtime" ] || return 1
+      ;;
+    "")
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+
+  [ -z "$type" ] || [ "$actual_type" = "$type" ]
+}
 run_engine_case() {
   local engine="$1" temp="$2" source="$3"
   local negative_phase="${4:-}" negative_type="${5:-}"
@@ -328,7 +372,7 @@ run_engine_case() {
 
   set +e
   case "$engine" in
-    quickjs-rust) output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$QJS_CLI_BIN" "$temp" 2>&1)" ;;
+    quickjs-rust) output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$QJS_CLI_BIN" --error-format=test262 "$temp" 2>&1)" ;;
     quickjs-ng) output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$QUICKJS_NG_RUNNER" -c "$QUICKJS_NG_CONF" -t 1 -f "$source" 2>&1)" ;;
   esac
   status=$?
@@ -343,7 +387,12 @@ run_engine_case() {
   elif [ "$status" -eq 124 ]; then
     echo "timeout"
   elif [ "$engine" = "quickjs-rust" ] && [ -n "$negative_phase" ]; then
-    echo "pass"
+    if rust_negative_matches "$output" "$negative_phase" "$negative_type"; then
+      echo "pass"
+    else
+      first_line="$(printf '%s\n' "$output" | sed -n '1p')"
+      printf "fail\texpected negative %s%s, got %s\n" "$negative_phase" "${negative_type:+ $negative_type}" "$first_line"
+    fi
   else
     first_line="$(printf '%s\n' "$output" | sed -n '1p')"
     printf "fail\t%s\n" "$first_line"
@@ -368,7 +417,7 @@ result_kind() {
   esac
 }
 write_case_result() {
-  [ -n "$CASE_RESULTS_JSONL" ] || return
+  [ -n "$CASE_RESULTS_JSONL" ] || return 0
   mkdir -p "$(dirname "$CASE_RESULTS_JSONL")"
   printf '{"path":"%s","rust":"%s","rust_result":"%s","rust_skip":"%s","quickjs_ng":"%s","quickjs_ng_result":"%s","quickjs_ng_skip":"%s"}\n' \
     "$(json_escape "$1")" \
@@ -572,7 +621,7 @@ while IFS= read -r file; do
   run=$((run + 1))
   printf 'test262-baseline [%d]: %s\n' "$run" "$rel"
   run_case "$file" "$flags" "$rel" "$includes" "$reason" "$qjsng_reason" "$negative_phase" "$negative_type"
-done < <(find "$TEST262_DIR/test" -type f -name '*.js' | sort)
+done < <(list_test262_cases)
 
 echo "summary:"
 echo "  engine: $ENGINE"
@@ -624,3 +673,4 @@ fi
 if [ "$ENGINE" = "both" ] && { [ "$rust_fail" -ne 0 ] || [ "$rust_timeout" -ne 0 ] || [ "$qjsng_fail" -ne 0 ] || [ "$qjsng_timeout" -ne 0 ]; }; then
   exit 1
 fi
+exit 0
