@@ -59,6 +59,7 @@ fn weak_map_constructor_uses_prototype_set_adder() {
         )
         .is_err()
     );
+    assert!(eval("WeakMap.prototype.set = null; new WeakMap([]);").is_err());
 }
 
 #[test]

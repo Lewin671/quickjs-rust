@@ -77,6 +77,12 @@ pub(crate) fn native_weak_set(
         && !matches!(iterable, Value::Undefined | Value::Null)
     {
         let adder = property_value(weak_set.clone(), "add", env)?;
+        if !matches!(adder, Value::Function(_)) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: WeakSet constructor add adder must be callable".to_owned(),
+            });
+        }
         for value in array_like_values_with_env(iterable, "WeakSet constructor", env)? {
             call_function(adder.clone(), weak_set.clone(), vec![value], env, false)?;
         }

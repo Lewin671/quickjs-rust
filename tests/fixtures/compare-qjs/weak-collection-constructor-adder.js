@@ -17,5 +17,25 @@
   };
   var set = new WeakSet([setValue]);
 
-  return mapCalls + ":" + map.get(mapKey) + ":" + setCalls + ":" + set.has(setValue);
+  var mapNullAdderThrows = false;
+  var savedSet = WeakMap.prototype.set;
+  WeakMap.prototype.set = null;
+  try {
+    new WeakMap([]);
+  } catch (error) {
+    mapNullAdderThrows = error.constructor === TypeError;
+  }
+  WeakMap.prototype.set = savedSet;
+
+  var setNullAdderThrows = false;
+  var savedAdd = WeakSet.prototype.add;
+  WeakSet.prototype.add = null;
+  try {
+    new WeakSet([]);
+  } catch (error) {
+    setNullAdderThrows = error.constructor === TypeError;
+  }
+  WeakSet.prototype.add = savedAdd;
+
+  return mapCalls + ":" + map.get(mapKey) + ":" + setCalls + ":" + set.has(setValue) + ":" + mapNullAdderThrows + ":" + setNullAdderThrows;
 })()

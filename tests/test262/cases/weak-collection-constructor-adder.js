@@ -1,5 +1,6 @@
 // Derived from: test/built-ins/WeakMap/get-set-method-failure.js
 // Derived from: test/built-ins/WeakMap/iterable-with-object-keys.js
+// Derived from: test/built-ins/WeakSet/add-not-callable-throws.js
 // Derived from: test/built-ins/WeakSet/get-add-method-failure.js
 // Derived from: test/built-ins/WeakSet/iterable-with-object-values.js
 var mapKey = {};
@@ -25,6 +26,30 @@ var set = new WeakSet([setValue]);
 if (setCalls !== 1 || !set.has(setValue)) {
   throw "WeakSet constructor should call the prototype add adder";
 }
+
+WeakMap.prototype.set = null;
+var mapNullAdderThrows = false;
+try {
+  new WeakMap([]);
+} catch (error) {
+  mapNullAdderThrows = error.constructor === TypeError;
+}
+if (!mapNullAdderThrows) {
+  throw "WeakMap constructor should reject non-callable set adders";
+}
+WeakMap.prototype.set = originalSet;
+
+WeakSet.prototype.add = null;
+var setNullAdderThrows = false;
+try {
+  new WeakSet([]);
+} catch (error) {
+  setNullAdderThrows = error.constructor === TypeError;
+}
+if (!setNullAdderThrows) {
+  throw "WeakSet constructor should reject non-callable add adders";
+}
+WeakSet.prototype.add = originalAdd;
 
 Object.defineProperty(WeakMap.prototype, "set", {
   get: function() {

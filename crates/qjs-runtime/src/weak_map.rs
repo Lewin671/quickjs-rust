@@ -83,6 +83,12 @@ pub(crate) fn native_weak_map(
         && !matches!(iterable, Value::Undefined | Value::Null)
     {
         let adder = property_value(weak_map.clone(), "set", env)?;
+        if !matches!(adder, Value::Function(_)) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: WeakMap constructor set adder must be callable".to_owned(),
+            });
+        }
         for entry in array_like_values_with_env(iterable, "WeakMap constructor", env)? {
             let (key, value) = weak_map_entry(entry, env)?;
             call_function(

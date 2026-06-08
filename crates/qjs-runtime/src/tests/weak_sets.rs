@@ -60,6 +60,7 @@ fn weak_set_constructor_uses_prototype_add_adder() {
         )
         .is_err()
     );
+    assert!(eval("WeakSet.prototype.add = null; new WeakSet([]);").is_err());
 }
 
 #[test]
