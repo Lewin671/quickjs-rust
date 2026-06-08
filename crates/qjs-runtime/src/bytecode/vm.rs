@@ -515,15 +515,17 @@ impl<'a> Vm<'a> {
                     bytecode,
                     &function.local_names,
                 );
+                if bytecode.requires_scope_call_bindings() {
+                    insert_scope_call_bindings(
+                        &mut env,
+                        &mut binding_names,
+                        self.bytecode,
+                        &self.locals,
+                        &self.globals,
+                        &function.local_names,
+                    );
+                }
             }
-            insert_scope_call_bindings(
-                &mut env,
-                &mut binding_names,
-                self.bytecode,
-                &self.locals,
-                &self.globals,
-                &function.local_names,
-            );
             return VmCallEnv {
                 env,
                 binding_names: Some(binding_names),

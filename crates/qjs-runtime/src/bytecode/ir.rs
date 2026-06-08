@@ -116,6 +116,20 @@ impl Bytecode {
     pub(crate) fn local_slot(&self, name: &str) -> Option<usize> {
         self.local_slots.get(name).copied()
     }
+
+    pub(crate) fn requires_scope_call_bindings(&self) -> bool {
+        self.code.iter().any(|op| {
+            matches!(
+                op,
+                Op::Call(_)
+                    | Op::CallMethod(_)
+                    | Op::New(_)
+                    | Op::NewFunction { .. }
+                    | Op::StoreGlobalStrict(_)
+            )
+            || matches!(op, Op::StoreLocal(slot) if self.locals.get(*slot).is_some_and(|local| local.from_env))
+        })
+    }
 }
 
 fn collect_local_slots(locals: &[Local]) -> HashMap<String, usize> {

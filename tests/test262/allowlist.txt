@@ -46,6 +46,7 @@ test/built-ins/Array/prototype/concat/Array.prototype.concat_spreadable-function
 test/built-ins/Array/prototype/concat/Array.prototype.concat_spreadable-getter-throws.js
 test/built-ins/Array/prototype/concat/Array.prototype.concat_spreadable-number-wrapper.js
 test/built-ins/Array/prototype/concat/Array.prototype.concat_spreadable-reg-exp.js
+test/built-ins/Array/prototype/concat/Array.prototype.concat_spreadable-sparse-object.js
 test/built-ins/Array/prototype/concat/Array.prototype.concat_spreadable-string-wrapper.js
 test/built-ins/Array/prototype/concat/Array.prototype.concat_strict-arguments.js
 test/built-ins/Array/prototype/concat/call-with-boolean.js

@@ -144,6 +144,12 @@ fn evaluates_array_sequence_builtins() {
     );
     assert_eq!(
         eval(
+            "let item = { length: 4000 }; item[Symbol.isConcatSpreadable] = true; let out = [].concat(item); out.length + ':' + out.hasOwnProperty('0') + ':' + out.hasOwnProperty('3999') + ':' + (out[3999] === undefined);"
+        ),
+        Ok(Value::String("4000:false:false:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
             "let args = (function(a, b, c) { return arguments; })(1, 2, 3); args[Symbol.isConcatSpreadable] = true; [].concat(args, args).join('|');"
         ),
         Ok(Value::String("1|2|3|1|2|3".to_owned()))
