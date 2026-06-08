@@ -5,6 +5,7 @@
 cases/builtin-iterator-symbol-properties.js
 cases/builtin-species-accessors.js
 cases/builtin-to-string-tag-symbol-properties.js
+cases/block-lexical-native-call-isolation.js
 cases/date-symbol-to-primitive-basic.js
 cases/function-symbol-has-instance-basic.js
 cases/symbol-to-primitive-coercion-basic.js

@@ -19,6 +19,10 @@ fn evaluates_variable_declarations() {
         eval("var x = 1, y = 2, missing; x + y;"),
         Ok(Value::Number(3.0))
     );
+    assert_eq!(
+        eval("{ const value = 1; Object.is(value, 1); } { const value = 2; Object.is(value, 2); }"),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]
