@@ -116,6 +116,15 @@ pub enum Stmt {
         /// Source span.
         span: Span,
     },
+    /// A labeled statement.
+    Labelled {
+        /// Label name.
+        label: String,
+        /// Labeled body statement.
+        body: Box<Stmt>,
+        /// Source span.
+        span: Span,
+    },
     /// A return statement.
     Return {
         /// Optional return value.
@@ -137,11 +146,15 @@ pub enum Stmt {
     },
     /// A break statement.
     Break {
+        /// Optional label target.
+        label: Option<String>,
         /// Source span.
         span: Span,
     },
     /// A continue statement.
     Continue {
+        /// Optional label target.
+        label: Option<String>,
         /// Source span.
         span: Span,
     },

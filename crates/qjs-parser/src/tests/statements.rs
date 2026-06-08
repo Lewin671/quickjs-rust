@@ -161,16 +161,30 @@ fn parses_switch_statement() {
 
 #[test]
 fn parses_break_and_continue_statements() {
-    let script = parse_script("while (true) { continue; break; }").expect("source should parse");
-    let [Stmt::While { body, .. }] = script.body.as_slice() else {
-        panic!("expected one while statement");
+    let script = parse_script("outer: while (true) { continue outer; break outer; }")
+        .expect("source should parse");
+    let [Stmt::Labelled { label, body, .. }] = script.body.as_slice() else {
+        panic!("expected one labelled statement");
+    };
+    assert_eq!(label, "outer");
+    let Stmt::While { body, .. } = body.as_ref() else {
+        panic!("expected labelled while statement");
     };
     let Stmt::Block { body, .. } = body.as_ref() else {
         panic!("expected block body");
     };
     assert!(matches!(
         body.as_slice(),
-        [Stmt::Continue { .. }, Stmt::Break { .. }]
+        [
+            Stmt::Continue {
+                label: Some(continue_label),
+                ..
+            },
+            Stmt::Break {
+                label: Some(break_label),
+                ..
+            }
+        ] if continue_label == "outer" && break_label == "outer"
     ));
 }
 

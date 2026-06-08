@@ -72,9 +72,11 @@
 
   var breakCompletion = eval("1; for (var done of [0]) { 2; break; }");
   var continueCompletion = eval("3; for (var skipped of [0, 1]) { 4; continue; }");
+  var labelledContinueCompletion = eval("5; outer: do { for (var labelled of [0]) { 6; continue outer; } } while (false)");
 
   return total + ":" + setSeen + ":" + mapSeen + ":" + controlled + ":" +
     target.value + ":" + keySeen + ":" + entrySeen + ":" + setIteratorSeen + ":" +
     stringSeen + ":" + truncatedStringSeen + ":" + collectArguments("a", "b", "c") + ":" +
-    mutateArguments("a", "b") + ":" + breakCompletion + ":" + continueCompletion;
+    mutateArguments("a", "b") + ":" + breakCompletion + ":" + continueCompletion + ":" +
+    labelledContinueCompletion;
 })()

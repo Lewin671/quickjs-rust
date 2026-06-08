@@ -41,3 +41,16 @@ if (eval("14; for (target of [0]) { 15; }") !== 15) {
 if (eval("16; for (var e of [0, 1]) { 17; continue; }") !== 17) {
   throw "expected for-of continue to preserve prior statement completion";
 }
+
+if (eval("18; outer: do { while (true) { continue outer; } } while (false)") !== undefined) {
+  throw "expected empty labeled while continue completion to remain undefined";
+}
+if (eval("19; outer: do { while (true) { 20; continue outer; } } while (false)") !== 20) {
+  throw "expected labeled while continue to preserve prior statement completion";
+}
+if (eval("21; outer: do { for (var f of [0]) { continue outer; } } while (false)") !== undefined) {
+  throw "expected empty labeled for-of continue completion to remain undefined";
+}
+if (eval("22; outer: do { for (var g of [0]) { 23; continue outer; } } while (false)") !== 23) {
+  throw "expected labeled for-of continue to preserve prior statement completion";
+}

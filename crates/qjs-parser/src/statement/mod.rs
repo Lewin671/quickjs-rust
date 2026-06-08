@@ -74,6 +74,10 @@ impl Parser {
             return Ok(self.break_or_continue_statement(TokenKind::Continue));
         }
 
+        if self.starts_labelled_statement() {
+            return self.labelled_statement();
+        }
+
         if self.at(&TokenKind::Var) || self.at(&TokenKind::Let) || self.at(&TokenKind::Const) {
             return self.variable_declaration();
         }
@@ -81,6 +85,26 @@ impl Parser {
         let expr = self.expression()?;
         self.match_kind(&TokenKind::Semicolon);
         Ok(Stmt::Expr(expr))
+    }
+
+    fn starts_labelled_statement(&self) -> bool {
+        matches!(self.peek(), Some(token) if matches!(token.kind, TokenKind::Identifier(_)))
+            && matches!(self.peek_nth(1), Some(token) if token.kind == TokenKind::Colon)
+    }
+
+    fn labelled_statement(&mut self) -> Result<Stmt, ParseError> {
+        let label_token = self.advance();
+        let TokenKind::Identifier(label) = label_token.kind else {
+            unreachable!("caller should check label token")
+        };
+        self.expect(&TokenKind::Colon)?;
+        let body = self.statement()?;
+        let end = crate::helpers::stmt_end(&body);
+        Ok(Stmt::Labelled {
+            label,
+            body: Box::new(body),
+            span: Span::new(label_token.span.start, end),
+        })
     }
 
     pub(super) fn block_statement(&mut self) -> Result<Stmt, ParseError> {

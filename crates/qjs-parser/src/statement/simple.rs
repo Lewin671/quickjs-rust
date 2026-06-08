@@ -64,13 +64,35 @@ impl Parser {
 
     pub(super) fn break_or_continue_statement(&mut self, kind: TokenKind) -> Stmt {
         let token = self.advance();
+        let label = self.optional_label_identifier();
         self.match_kind(&TokenKind::Semicolon);
         let end = self.tokens[self.cursor.saturating_sub(1)].span.end;
         let span = Span::new(token.span.start, end);
         if kind == TokenKind::Break {
-            Stmt::Break { span }
+            Stmt::Break { label, span }
         } else {
-            Stmt::Continue { span }
+            Stmt::Continue { label, span }
+        }
+    }
+
+    fn optional_label_identifier(&mut self) -> Option<String> {
+        match self.peek() {
+            Some(token)
+                if matches!(
+                    token.kind,
+                    TokenKind::Semicolon | TokenKind::RightBrace | TokenKind::Eof
+                ) =>
+            {
+                None
+            }
+            Some(token) => {
+                let TokenKind::Identifier(name) = token.kind.clone() else {
+                    return None;
+                };
+                self.cursor += 1;
+                Some(name)
+            }
+            None => None,
         }
     }
 }

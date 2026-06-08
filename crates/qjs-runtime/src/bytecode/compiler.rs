@@ -13,6 +13,7 @@ pub(super) struct Compiler {
     lexical_scopes: Vec<HashMap<String, usize>>,
     pub(super) code: Vec<Op>,
     loop_stack: Vec<LoopContext>,
+    pending_labels: Vec<String>,
     next_temp: usize,
     pub(super) strict: bool,
     pub(super) global_scope: bool,
@@ -22,6 +23,7 @@ pub(super) struct Compiler {
 pub(super) struct LoopContext {
     result_slot: usize,
     allows_continue: bool,
+    labels: Vec<String>,
     breaks: Vec<usize>,
     continues: Vec<usize>,
 }
@@ -35,6 +37,7 @@ impl Default for Compiler {
             lexical_scopes: vec![HashMap::new()],
             code: Vec::new(),
             loop_stack: Vec::new(),
+            pending_labels: Vec::new(),
             next_temp: 0,
             strict: false,
             global_scope: true,
@@ -140,6 +143,9 @@ impl Compiler {
                 }
                 Stmt::FunctionDecl { name, .. } => {
                     self.local_slot(name, true);
+                }
+                Stmt::Labelled { body, .. } => {
+                    self.collect_hoisted_locals(std::slice::from_ref(body));
                 }
                 Stmt::VarDecl {
                     kind: VarKind::Var,
@@ -297,21 +303,33 @@ impl Compiler {
     }
 
     pub(super) fn push_loop(&mut self, result_slot: usize) {
+        let labels = self.take_pending_labels();
         self.loop_stack.push(LoopContext {
             result_slot,
             allows_continue: true,
+            labels,
             breaks: Vec::new(),
             continues: Vec::new(),
         });
     }
 
     pub(super) fn push_breakable(&mut self, result_slot: usize) {
+        let labels = self.take_pending_labels();
         self.loop_stack.push(LoopContext {
             result_slot,
             allows_continue: false,
+            labels,
             breaks: Vec::new(),
             continues: Vec::new(),
         });
+    }
+
+    fn push_label(&mut self, label: String) {
+        self.pending_labels.push(label);
+    }
+
+    fn take_pending_labels(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.pending_labels)
     }
 
     pub(super) fn pop_loop(&mut self) -> LoopContext {
@@ -320,38 +338,68 @@ impl Compiler {
             .expect("loop context should be balanced")
     }
 
-    pub(super) fn compile_break(&mut self) -> Result<(), RuntimeError> {
-        let Some(context) = self.loop_stack.last() else {
+    pub(super) fn compile_break(&mut self, label: Option<&str>) -> Result<(), RuntimeError> {
+        let Some(index) = self.break_context_index(label) else {
             return Err(RuntimeError {
                 thrown: None,
-                message: "break outside loop".to_owned(),
+                message: label.map_or_else(
+                    || "break outside loop".to_owned(),
+                    |label| format!("undefined break label: {label}"),
+                ),
             });
         };
-        let result_slot = context.result_slot;
+        self.propagate_current_completion_to(index);
+        let result_slot = self.loop_stack[index].result_slot;
         self.emit(Op::LoadLocal(result_slot));
         let jump = self.emit(Op::Jump(usize::MAX));
-        self.loop_stack
-            .last_mut()
-            .expect("loop context should exist")
-            .breaks
-            .push(jump);
+        self.loop_stack[index].breaks.push(jump);
         Ok(())
     }
 
-    pub(super) fn compile_continue(&mut self) -> Result<(), RuntimeError> {
-        let Some(index) = self
-            .loop_stack
-            .iter()
-            .rposition(|context| context.allows_continue)
-        else {
+    pub(super) fn compile_continue(&mut self, label: Option<&str>) -> Result<(), RuntimeError> {
+        let Some(index) = self.continue_context_index(label) else {
             return Err(RuntimeError {
                 thrown: None,
-                message: "continue outside loop".to_owned(),
+                message: label.map_or_else(
+                    || "continue outside loop".to_owned(),
+                    |label| format!("undefined continue label: {label}"),
+                ),
             });
         };
+        self.propagate_current_completion_to(index);
         let jump = self.emit(Op::Jump(usize::MAX));
         self.loop_stack[index].continues.push(jump);
         Ok(())
+    }
+
+    fn break_context_index(&self, label: Option<&str>) -> Option<usize> {
+        match label {
+            Some(label) => self
+                .loop_stack
+                .iter()
+                .rposition(|context| context.labels.iter().any(|item| item == label)),
+            None => self.loop_stack.len().checked_sub(1),
+        }
+    }
+
+    fn continue_context_index(&self, label: Option<&str>) -> Option<usize> {
+        self.loop_stack.iter().rposition(|context| {
+            context.allows_continue
+                && label.is_none_or(|label| context.labels.iter().any(|item| item == label))
+        })
+    }
+
+    fn propagate_current_completion_to(&mut self, target_index: usize) {
+        let Some(current_index) = self.loop_stack.len().checked_sub(1) else {
+            return;
+        };
+        if current_index == target_index {
+            return;
+        }
+        let current_slot = self.loop_stack[current_index].result_slot;
+        let target_slot = self.loop_stack[target_index].result_slot;
+        self.emit(Op::LoadLocal(current_slot));
+        self.emit(Op::StoreLocal(target_slot));
     }
 
     pub(super) fn patch_loop_breaks(&mut self, context: &LoopContext, target: usize) {
@@ -444,8 +492,9 @@ impl Compiler {
                 self.emit_load_undefined();
                 Ok(())
             }
-            Stmt::Break { .. } => self.compile_break(),
-            Stmt::Continue { .. } => self.compile_continue(),
+            Stmt::Labelled { label, body, .. } => self.compile_labelled(label, body),
+            Stmt::Break { label, .. } => self.compile_break(label.as_deref()),
+            Stmt::Continue { label, .. } => self.compile_continue(label.as_deref()),
             Stmt::Switch {
                 discriminant,
                 cases,
@@ -477,11 +526,44 @@ impl Compiler {
     fn current_loop_result_slot(&self) -> Option<usize> {
         self.loop_stack.last().map(|context| context.result_slot)
     }
+
+    fn compile_labelled(&mut self, label: &str, body: &Stmt) -> Result<(), RuntimeError> {
+        if stmt_accepts_pending_label(body) {
+            self.push_label(label.to_owned());
+            return self.compile_stmt(body);
+        }
+
+        let result_slot = self.temp_local("label_result");
+        self.emit_load_undefined();
+        self.emit(Op::StoreLocal(result_slot));
+        self.push_label(label.to_owned());
+        self.push_breakable(result_slot);
+        self.compile_stmt(body)?;
+        self.emit(Op::StoreLocal(result_slot));
+        let context = self.pop_loop();
+        self.emit(Op::LoadLocal(result_slot));
+        let done = self.code.len();
+        self.patch_loop_breaks(&context, done);
+        Ok(())
+    }
 }
 
 fn stmt_updates_statement_list_completion(stmt: &Stmt) -> bool {
     !matches!(
         stmt,
         Stmt::Debugger { .. } | Stmt::Empty | Stmt::FunctionDecl { .. } | Stmt::VarDecl { .. }
+    )
+}
+
+fn stmt_accepts_pending_label(stmt: &Stmt) -> bool {
+    matches!(
+        stmt,
+        Stmt::Labelled { .. }
+            | Stmt::While { .. }
+            | Stmt::DoWhile { .. }
+            | Stmt::For { .. }
+            | Stmt::ForIn { .. }
+            | Stmt::ForOf { .. }
+            | Stmt::Switch { .. }
     )
 }

@@ -33,6 +33,9 @@ fn collect_statement_local_names(body: &[Stmt], names: &mut HashSet<String>) {
             Stmt::FunctionDecl { name, .. } => {
                 names.insert(name.clone());
             }
+            Stmt::Labelled { body, .. } => {
+                collect_statement_local_names(std::slice::from_ref(body.as_ref()), names);
+            }
             Stmt::Block { body, .. } => collect_statement_local_names(body, names),
             Stmt::If {
                 consequent,

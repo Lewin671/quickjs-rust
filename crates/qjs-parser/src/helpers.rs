@@ -80,11 +80,12 @@ pub(crate) fn stmt_end(stmt: &Stmt) -> usize {
         | Stmt::Switch { span, .. }
         | Stmt::Try { span, .. }
         | Stmt::FunctionDecl { span, .. }
+        | Stmt::Labelled { span, .. }
         | Stmt::Return { span, .. }
         | Stmt::Throw { span, .. }
         | Stmt::Debugger { span }
-        | Stmt::Break { span }
-        | Stmt::Continue { span }
+        | Stmt::Break { span, .. }
+        | Stmt::Continue { span, .. }
         | Stmt::VarDecl { span, .. } => span.end,
         Stmt::Empty => 0,
     }

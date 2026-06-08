@@ -153,6 +153,24 @@ fn evaluates_break_and_continue() {
         eval("eval('2; for (var value of [0, 1]) { 3; continue; }');"),
         Ok(Value::Number(3.0))
     );
+    assert_eq!(
+        eval("eval('4; outer: do { while (true) { continue outer; } } while (false)');"),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval("eval('5; outer: do { while (true) { 6; continue outer; } } while (false)');"),
+        Ok(Value::Number(6.0))
+    );
+    assert_eq!(
+        eval(
+            "eval('7; outer: do { for (var value of [0]) { 8; continue outer; } } while (false)');"
+        ),
+        Ok(Value::Number(8.0))
+    );
+    assert_eq!(
+        eval("eval('done: { 9; break done; 10; }');"),
+        Ok(Value::Number(9.0))
+    );
 }
 
 #[test]
