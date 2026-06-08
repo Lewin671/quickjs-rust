@@ -852,6 +852,7 @@ cases/reflect-own-keys-nonenumerable.js
 cases/reflect-own-keys-symbols-basic.js
 cases/reflect-prevent-extensions-basic.js
 cases/reflect-prevent-extensions-length.js
+cases/reflect-symbol-target-throws.js
 cases/reflect-set-basic.js
 cases/reflect-set-accessor-descriptor.js
 cases/reflect-set-data-descriptor.js

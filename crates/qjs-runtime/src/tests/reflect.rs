@@ -380,6 +380,12 @@ fn evaluates_reflect_prototype_builtins() {
     assert!(eval("Reflect.ownKeys(1);").is_err());
     assert!(eval("Reflect.preventExtensions(1);").is_err());
     assert!(eval("Reflect.set(1, 'value', 1);").is_err());
+    assert_eq!(
+        eval(
+            "let names = ['defineProperty', 'deleteProperty', 'get', 'getOwnPropertyDescriptor', 'has', 'isExtensible', 'ownKeys', 'preventExtensions', 'set']; names.every(function(name) { try { Reflect[name](Symbol('target'), 'key', {}); } catch (error) { return error instanceof TypeError; } return false; });"
+        ),
+        Ok(Value::Boolean(true))
+    );
     assert!(eval("Reflect.setPrototypeOf(1, null);").is_err());
     assert!(eval("Reflect.setPrototypeOf({}, 1);").is_err());
     assert!(eval("Reflect.setPrototypeOf(Symbol('target'), null);").is_err());

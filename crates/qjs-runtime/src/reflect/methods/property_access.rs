@@ -40,6 +40,7 @@ pub(crate) fn native_reflect_has(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    ensure_reflect_object_target(&target, "Reflect.has")?;
     let key = crate::to_property_key_value(
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         env,
@@ -52,9 +53,6 @@ pub(crate) fn native_reflect_has(
         | Value::Number(_)
         | Value::Boolean(_)
         | Value::Null
-        | Value::Undefined => Err(RuntimeError {
-            thrown: None,
-            message: "Reflect.has target must be an object".to_owned(),
-        }),
+        | Value::Undefined => unreachable!("target was validated before property lookup"),
     }
 }
