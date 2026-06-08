@@ -3,7 +3,7 @@ use std::{
     rc::Rc,
 };
 
-use qjs_ast::{BinaryOp, FunctionParams, ObjectPropertyKind, UnaryOp};
+use qjs_ast::{BinaryOp, FunctionParams, ObjectPropertyKind, UnaryOp, UpdateOp};
 
 use crate::Value;
 
@@ -47,7 +47,9 @@ pub(super) enum Op {
     },
     Typeof,
     ToString,
+    ToNumeric,
     Unary(UnaryOp),
+    Update(UpdateOp),
     Binary(BinaryOp),
     Jump(usize),
     JumpIfFalse(usize),

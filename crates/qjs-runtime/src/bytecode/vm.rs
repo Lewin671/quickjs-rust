@@ -198,8 +198,20 @@ impl<'a> Vm<'a> {
                     self.apply_env(env);
                     self.stack.push(Value::String(result?));
                 }
+                Op::ToNumeric => {
+                    let result = self.eval_to_numeric();
+                    if let Some(value) = self.handle_runtime_result(result)? {
+                        self.stack.push(value);
+                    }
+                }
                 Op::Unary(op) => {
                     let result = self.eval_unary(op);
+                    if let Some(value) = self.handle_runtime_result(result)? {
+                        self.stack.push(value);
+                    }
+                }
+                Op::Update(op) => {
+                    let result = self.eval_update(op);
                     if let Some(value) = self.handle_runtime_result(result)? {
                         self.stack.push(value);
                     }

@@ -1,4 +1,4 @@
-use qjs_ast::{AssignmentOp, AssignmentTarget, BinaryOp, Expr, UpdateOp};
+use qjs_ast::{AssignmentOp, AssignmentTarget, Expr, UpdateOp};
 
 use crate::{RuntimeError, Value};
 
@@ -107,16 +107,11 @@ impl Compiler {
         };
         let slot = self.resolve_local_slot(name);
         self.emit_load_identifier(name, slot);
-        self.emit(Op::Unary(qjs_ast::UnaryOp::Plus));
+        self.emit(Op::ToNumeric);
         if !prefix {
             self.emit(Op::Dup);
         }
-        let one = self.const_slot(Value::Number(1.0));
-        self.emit(Op::LoadConst(one));
-        self.emit(Op::Binary(match op {
-            UpdateOp::Increment => BinaryOp::Add,
-            UpdateOp::Decrement => BinaryOp::Sub,
-        }));
+        self.emit(Op::Update(op));
         if prefix {
             self.emit(Op::Dup);
             self.emit_store_identifier(name, slot);
@@ -214,15 +209,10 @@ impl Compiler {
         self.emit(Op::LoadLocal(object_slot));
         self.emit(Op::LoadLocal(key_slot));
         self.emit(Op::GetProp);
-        self.emit(Op::Unary(qjs_ast::UnaryOp::Plus));
+        self.emit(Op::ToNumeric);
         self.emit(Op::StoreLocal(old_slot));
         self.emit(Op::LoadLocal(old_slot));
-        let one = self.const_slot(Value::Number(1.0));
-        self.emit(Op::LoadConst(one));
-        self.emit(Op::Binary(match op {
-            UpdateOp::Increment => BinaryOp::Add,
-            UpdateOp::Decrement => BinaryOp::Sub,
-        }));
+        self.emit(Op::Update(op));
         self.emit(Op::StoreLocal(new_slot));
         self.emit_member_store(object_slot, key_slot, new_slot);
         self.emit(Op::Pop);

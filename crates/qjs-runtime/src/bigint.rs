@@ -4,8 +4,9 @@ use num_bigint::BigInt;
 use num_traits::{One, Signed, Zero};
 
 use crate::{
-    Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
-    inherited_object_prototype_property, to_js_string, to_number,
+    Function, NativeFunction, ObjectRef, PreferredType, Property, RuntimeError, Value,
+    inherited_object_prototype_property, to_js_string, to_number, to_number_with_env,
+    to_primitive_with_hint,
 };
 
 pub(crate) const BIGINT_DATA_PROPERTY: &str = "\0BigIntData";
@@ -83,14 +84,29 @@ fn define_static_native(function: &Function, key: &str, length: usize, native: N
     );
 }
 
-pub(crate) fn native_bigint(argument_values: &[Value]) -> Result<Value, RuntimeError> {
-    let value = to_bigint(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+pub(crate) fn native_bigint(
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let value = to_bigint(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     Ok(Value::BigInt(value))
 }
 
-pub(crate) fn native_bigint_as_int_n(argument_values: &[Value]) -> Result<Value, RuntimeError> {
-    let bits = to_index(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
-    let value = to_bigint(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
+pub(crate) fn native_bigint_as_int_n(
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let bits = to_index(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
+    let value = to_bigint(
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     if bits == 0 {
         return Ok(Value::BigInt(BigInt::zero()));
     }
@@ -105,9 +121,18 @@ pub(crate) fn native_bigint_as_int_n(argument_values: &[Value]) -> Result<Value,
     Ok(Value::BigInt(signed))
 }
 
-pub(crate) fn native_bigint_as_uint_n(argument_values: &[Value]) -> Result<Value, RuntimeError> {
-    let bits = to_index(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
-    let value = to_bigint(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
+pub(crate) fn native_bigint_as_uint_n(
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let bits = to_index(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
+    let value = to_bigint(
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     if bits == 0 {
         return Ok(Value::BigInt(BigInt::zero()));
     }
@@ -170,8 +195,12 @@ pub(crate) fn inherited_bigint_prototype_property(
         .or_else(|| inherited_object_prototype_property(env, key))
 }
 
-pub(crate) fn to_bigint(value: Value) -> Result<BigInt, RuntimeError> {
-    match value {
+pub(crate) fn to_bigint(
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<BigInt, RuntimeError> {
+    let primitive = to_primitive_with_hint(value, PreferredType::Number, env)?;
+    match primitive {
         Value::BigInt(value) => Ok(value),
         Value::Boolean(value) => Ok(BigInt::from(if value { 1 } else { 0 })),
         Value::Number(number) if number.is_finite() && number.fract() == 0.0 => {
@@ -200,25 +229,28 @@ fn bigint_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef> {
 fn parse_bigint_text(raw: &str, allow_separators: bool) -> Option<BigInt> {
     let (sign, unsigned) = raw.strip_prefix('-').map_or((1, raw), |rest| (-1, rest));
     let unsigned = unsigned.strip_prefix('+').unwrap_or(unsigned);
-    let (radix, digits) = if let Some(digits) = unsigned
+    let (radix, digits, prefixed) = if let Some(digits) = unsigned
         .strip_prefix("0x")
         .or_else(|| unsigned.strip_prefix("0X"))
     {
-        (16, digits)
+        (16, digits, true)
     } else if let Some(digits) = unsigned
         .strip_prefix("0b")
         .or_else(|| unsigned.strip_prefix("0B"))
     {
-        (2, digits)
+        (2, digits, true)
     } else if let Some(digits) = unsigned
         .strip_prefix("0o")
         .or_else(|| unsigned.strip_prefix("0O"))
     {
-        (8, digits)
+        (8, digits, true)
     } else {
-        (10, unsigned)
+        (10, unsigned, false)
     };
     if digits.is_empty() {
+        return (!prefixed).then(BigInt::zero);
+    }
+    if sign < 0 && radix != 10 {
         return None;
     }
     if digits.contains('_') && !allow_separators {
@@ -247,21 +279,31 @@ fn this_bigint_value(value: Value) -> Result<BigInt, RuntimeError> {
     }
 }
 
-fn to_index(value: Value) -> Result<usize, RuntimeError> {
-    let number = to_number(value)?;
-    if !number.is_finite() || number.fract() != 0.0 || number < 0.0 {
+fn to_index(value: Value, env: &mut HashMap<String, Value>) -> Result<usize, RuntimeError> {
+    let number = to_number_with_env(value, env)?;
+    if number.is_nan() || number == 0.0 {
+        return Ok(0);
+    }
+    if !number.is_finite() {
         return Err(RuntimeError {
             thrown: None,
             message: "RangeError: BigInt bit width must be a non-negative integer".to_owned(),
         });
     }
-    if number > usize::MAX as f64 {
+    let integer = number.trunc();
+    if integer < 0.0 {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "RangeError: BigInt bit width must be a non-negative integer".to_owned(),
+        });
+    }
+    if integer > 9_007_199_254_740_991.0 || integer > usize::MAX as f64 {
         return Err(RuntimeError {
             thrown: None,
             message: "RangeError: BigInt bit width is too large".to_owned(),
         });
     }
-    Ok(number as usize)
+    Ok(integer as usize)
 }
 
 fn bigint_to_string_radix(value: &BigInt, radix: u32) -> String {

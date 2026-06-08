@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use num_traits::ToPrimitive;
+
 use crate::{
     Function, ObjectRef, Property, RuntimeError, Value, function_prototype, to_int32, to_number,
 };
@@ -13,6 +15,13 @@ pub(crate) fn native_number(
     is_construct: bool,
 ) -> Result<Value, RuntimeError> {
     let number = match argument_values.first() {
+        Some(Value::BigInt(value)) => value.to_f64().unwrap_or_else(|| {
+            if value.sign() == num_bigint::Sign::Minus {
+                f64::NEG_INFINITY
+            } else {
+                f64::INFINITY
+            }
+        }),
         Some(value) => to_number(value.clone())?,
         None => 0.0,
     };
