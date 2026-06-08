@@ -135,6 +135,7 @@ cases/array-reduce-right-length.js
 cases/array-reduce-right-empty-initial-value.js
 cases/array-reference-identity-basic.js
 cases/array-reverse-basic.js
+cases/array-reverse-generic-receiver.js
 cases/array-shift-basic.js
 cases/array-shift-boolean-receiver.js
 cases/array-shift-length.js

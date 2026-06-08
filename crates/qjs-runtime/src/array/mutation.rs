@@ -506,13 +506,49 @@ fn pop_length_error() -> RuntimeError {
     }
 }
 
-pub(crate) fn native_array_prototype_reverse(this_value: Value) -> Result<Value, RuntimeError> {
-    let Value::Array(elements) = this_value.clone() else {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "Array.prototype.reverse called on non-array".to_owned(),
-        });
-    };
-    elements.reverse();
-    Ok(this_value)
+pub(crate) fn native_array_prototype_reverse(
+    this_value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let source = array_like_length(this_value, "Array.prototype.reverse", env)?;
+    let receiver = source.receiver;
+    let length = source.length;
+    if length < 2 {
+        return Ok(receiver);
+    }
+
+    for lower in 0..(length / 2) {
+        let upper = length - lower - 1;
+        let lower_key = lower.to_string();
+        let upper_key = upper.to_string();
+        let lower_exists = has_property(receiver.clone(), env, &lower_key)?;
+        let lower_value = if lower_exists {
+            Some(property_value(receiver.clone(), &lower_key, env)?)
+        } else {
+            None
+        };
+        let upper_exists = has_property(receiver.clone(), env, &upper_key)?;
+        let upper_value = if upper_exists {
+            Some(property_value(receiver.clone(), &upper_key, env)?)
+        } else {
+            None
+        };
+
+        match (lower_value, upper_value) {
+            (Some(lower_value), Some(upper_value)) => {
+                set_array_like_property(receiver.clone(), lower_key, upper_value, env)?;
+                set_array_like_property(receiver.clone(), upper_key, lower_value, env)?;
+            }
+            (Some(lower_value), None) => {
+                delete_array_like_property(receiver.clone(), &lower_key)?;
+                set_array_like_property(receiver.clone(), upper_key, lower_value, env)?;
+            }
+            (None, Some(upper_value)) => {
+                set_array_like_property(receiver.clone(), lower_key, upper_value, env)?;
+                delete_array_like_property(receiver.clone(), &upper_key)?;
+            }
+            (None, None) => {}
+        }
+    }
+    Ok(receiver)
 }

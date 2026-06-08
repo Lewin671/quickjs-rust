@@ -134,6 +134,28 @@ fn evaluates_array_mutation_builtins() {
         Ok(Value::String("3,2,1".to_owned()))
     );
     assert_eq!(
+        eval("Array.prototype.reverse.call(true) instanceof Boolean;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let object = { length: 4, 0: 'a', 2: 'c' }; let result = Array.prototype.reverse.call(object); (result === object) + ':' + object[1] + ':' + object[3] + ':' + object.hasOwnProperty('0') + ':' + object.hasOwnProperty('2');"
+        ),
+        Ok(Value::String("true:c:a:false:false".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let array = ['first', 'second']; Object.defineProperty(array, '0', { get: function() { array.length = 0; return 'first'; }, configurable: true }); array.reverse(); (0 in array) + ':' + (1 in array) + ':' + array[1];"
+        ),
+        Ok(Value::String("false:true:first".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "Array.prototype[1] = 1; let array = [0]; array.length = 2; array.reverse(); let out = array[0] + ':' + array[1] + ':' + array.hasOwnProperty('0') + ':' + array.hasOwnProperty('1'); delete Array.prototype[1]; out;"
+        ),
+        Ok(Value::String("1:0:true:true".to_owned()))
+    );
+    assert_eq!(
         eval("let xs = [1, 2, 3]; let result = xs.fill(9); result === xs && xs.join();"),
         Ok(Value::String("9,9,9".to_owned()))
     );

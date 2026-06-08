@@ -109,13 +109,6 @@ impl ArrayRef {
         }
     }
 
-    pub(crate) fn reverse(&self) {
-        let len = self.length.get();
-        self.elements.borrow_mut().reverse();
-        let mut holes = self.holes.borrow_mut();
-        *holes = holes.iter().map(|index| len - 1 - index).collect();
-    }
-
     pub(crate) fn replace_with(&self, values: Vec<Value>) {
         if self.frozen.get() {
             return;
