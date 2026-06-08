@@ -110,6 +110,22 @@ impl Parser {
                     span: Span::new(start, end),
                 });
             }
+            if self.match_contextual_keyword("of") {
+                let right = self.expression()?;
+                self.expect(&TokenKind::RightParen)?;
+                let body = self.statement()?;
+                let end = stmt_end(&body);
+                return Ok(Stmt::ForOf {
+                    left: ForInLeft::VarDecl {
+                        kind,
+                        name,
+                        span: Span::new(kind_token.span.start, name_token.span.end),
+                    },
+                    right,
+                    body: Box::new(body),
+                    span: Span::new(start, end),
+                });
+            }
             self.cursor -= 2;
         } else if !self.at(&TokenKind::Semicolon) {
             let cursor = self.cursor;
@@ -121,6 +137,19 @@ impl Parser {
                 let body = self.statement()?;
                 let end = stmt_end(&body);
                 return Ok(Stmt::ForIn {
+                    left: ForInLeft::Target(left),
+                    right,
+                    body: Box::new(body),
+                    span: Span::new(start, end),
+                });
+            }
+            if self.match_contextual_keyword("of") {
+                let left = assignment_target(left)?;
+                let right = self.expression()?;
+                self.expect(&TokenKind::RightParen)?;
+                let body = self.statement()?;
+                let end = stmt_end(&body);
+                return Ok(Stmt::ForOf {
                     left: ForInLeft::Target(left),
                     right,
                     body: Box::new(body),

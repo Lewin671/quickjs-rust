@@ -76,6 +76,7 @@ pub(crate) fn stmt_end(stmt: &Stmt) -> usize {
         | Stmt::DoWhile { span, .. }
         | Stmt::For { span, .. }
         | Stmt::ForIn { span, .. }
+        | Stmt::ForOf { span, .. }
         | Stmt::Switch { span, .. }
         | Stmt::Try { span, .. }
         | Stmt::FunctionDecl { span, .. }

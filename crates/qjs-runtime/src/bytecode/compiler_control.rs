@@ -25,6 +25,25 @@ impl Compiler {
         self.compile_for_in_scoped(left, right, body)
     }
 
+    pub(super) fn compile_for_of(
+        &mut self,
+        left: &ForInLeft,
+        right: &Expr,
+        body: &Stmt,
+    ) -> Result<(), RuntimeError> {
+        if matches!(
+            left,
+            ForInLeft::VarDecl {
+                kind: VarKind::Let | VarKind::Const,
+                ..
+            }
+        ) {
+            return self
+                .with_lexical_scope(|compiler| compiler.compile_for_of_scoped(left, right, body));
+        }
+        self.compile_for_of_scoped(left, right, body)
+    }
+
     fn compile_for_in_scoped(
         &mut self,
         left: &ForInLeft,
@@ -78,6 +97,63 @@ impl Compiler {
         let done = self.code.len();
         self.patch_loop_breaks(&context, done);
         self.patch_loop_continues(&context, update_start);
+        Ok(())
+    }
+
+    fn compile_for_of_scoped(
+        &mut self,
+        left: &ForInLeft,
+        right: &Expr,
+        body: &Stmt,
+    ) -> Result<(), RuntimeError> {
+        let result_slot = self.temp_local("for_of_result");
+        let iterable_slot = self.temp_local("for_of_iterable");
+        let iterator_slot = self.temp_local("for_of_iterator");
+        let step_slot = self.temp_local("for_of_step");
+        let value_slot = self.temp_local("for_of_value");
+
+        self.emit_load_undefined();
+        self.emit(Op::StoreLocal(result_slot));
+        self.compile_expr(right)?;
+        self.emit(Op::StoreLocal(iterable_slot));
+        self.emit(Op::LoadLocal(iterable_slot));
+        self.emit(Op::LoadGlobal("Symbol".to_owned()));
+        self.emit_string("iterator");
+        self.emit(Op::GetProp);
+        self.emit(Op::CallMethod(0));
+        self.emit(Op::StoreLocal(iterator_slot));
+
+        let loop_start = self.code.len();
+        self.emit(Op::LoadLocal(iterator_slot));
+        self.emit_string("next");
+        self.emit(Op::CallMethod(0));
+        self.emit(Op::StoreLocal(step_slot));
+        self.emit(Op::LoadLocal(step_slot));
+        self.emit_string("done");
+        self.emit(Op::GetProp);
+        let exit_jump = self.emit(Op::JumpIfTrue(usize::MAX));
+        self.emit(Op::Pop);
+
+        self.emit(Op::LoadLocal(step_slot));
+        self.emit_string("value");
+        self.emit(Op::GetProp);
+        self.emit(Op::StoreLocal(value_slot));
+        self.compile_for_in_left(left, value_slot)?;
+
+        self.push_loop(result_slot);
+        self.compile_stmt(body)?;
+        self.emit(Op::StoreLocal(result_slot));
+        let context = self.pop_loop();
+
+        self.emit(Op::Jump(loop_start));
+
+        let exit = self.code.len();
+        self.patch_jump(exit_jump, exit);
+        self.emit(Op::Pop);
+        self.emit(Op::LoadLocal(result_slot));
+        let done = self.code.len();
+        self.patch_loop_breaks(&context, done);
+        self.patch_loop_continues(&context, loop_start);
         Ok(())
     }
 

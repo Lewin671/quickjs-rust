@@ -100,6 +100,36 @@ fn evaluates_for_in_statements() {
 }
 
 #[test]
+fn evaluates_for_of_statements() {
+    assert_eq!(
+        eval("let total = 0; for (var value of [1, 2, 3]) { total += value; } total;"),
+        Ok(Value::Number(6.0))
+    );
+    assert_eq!(
+        eval(
+            "let seen = ''; for (const value of new Set(['a', 'b'])) { seen = seen + value; } seen;"
+        ),
+        Ok(Value::String("ab".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let seen = ''; for (let entry of new Map([['a', 1], ['b', 2]])) { seen = seen + entry[0] + entry[1]; } seen;"
+        ),
+        Ok(Value::String("a1b2".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let total = 0; for (var value of [1, 2, 3, 4]) { if (value === 2) continue; if (value === 4) break; total += value; } total;"
+        ),
+        Ok(Value::Number(4.0))
+    );
+    assert_eq!(
+        eval("let target = {}; for (target.value of [5, 6]) {} target.value;"),
+        Ok(Value::Number(6.0))
+    );
+}
+
+#[test]
 fn evaluates_break_and_continue() {
     assert_eq!(
         eval("let i = 0; while (true) { i = i + 1; if (i === 3) break; } i;"),

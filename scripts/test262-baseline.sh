@@ -230,7 +230,7 @@ skip_reason() {
 }
 rust_source_syntax_supported() {
   # Some upstream files use syntax the Rust parser does not support yet.
-  ! grep -Eq '(^|[^[:alnum:]_$])[0-9][0-9_]*n([^[:alnum:]_$]|$)|`([^`\\]|\\.)*\$\{|for[[:space:]]*\([[:space:]]*(var|let|const)[^;)]*[[:space:]]of[[:space:]]|(^|[^[:alnum:]_$])class[[:space:]]' "$TEST262_DIR/$1"
+  ! grep -Eq '(^|[^[:alnum:]_$])[0-9][0-9_]*n([^[:alnum:]_$]|$)|`([^`\\]|\\.)*\$\{|for[[:space:]]*\([[:space:]]*(var|let|const)[[:space:]]*[\[{][^;)]*[[:space:]]of[[:space:]]|(^|[^[:alnum:]_$])class[[:space:]]' "$TEST262_DIR/$1"
 }
 rust_features_supported() {
   local entries; entries="$(list_entries "$1")"

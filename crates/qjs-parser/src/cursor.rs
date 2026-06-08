@@ -23,6 +23,15 @@ impl Parser {
         false
     }
 
+    pub(crate) fn match_contextual_keyword(&mut self, keyword: &str) -> bool {
+        if matches!(self.peek(), Some(Token { kind: TokenKind::Identifier(name), .. }) if name == keyword)
+        {
+            self.cursor += 1;
+            return true;
+        }
+        false
+    }
+
     pub(crate) fn expect(&mut self, kind: &TokenKind) -> Result<(), ParseError> {
         if self.match_kind(kind) {
             Ok(())

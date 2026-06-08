@@ -57,7 +57,7 @@ fn collect_statement_local_names(body: &[Stmt], names: &mut HashSet<String>) {
                 }
                 collect_statement_local_names(std::slice::from_ref(body.as_ref()), names);
             }
-            Stmt::ForIn { left, body, .. } => {
+            Stmt::ForIn { left, body, .. } | Stmt::ForOf { left, body, .. } => {
                 if let ForInLeft::VarDecl { name, .. } = left {
                     names.insert(name.clone());
                 }

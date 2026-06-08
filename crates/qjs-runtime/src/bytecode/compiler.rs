@@ -127,7 +127,7 @@ impl Compiler {
                     }
                     self.collect_hoisted_locals(std::slice::from_ref(body));
                 }
-                Stmt::ForIn { left, body, .. } => {
+                Stmt::ForIn { left, body, .. } | Stmt::ForOf { left, body, .. } => {
                     if let ForInLeft::VarDecl {
                         name,
                         kind: VarKind::Var,
@@ -401,6 +401,9 @@ impl Compiler {
             Stmt::ForIn {
                 left, right, body, ..
             } => self.compile_for_in(left, right, body),
+            Stmt::ForOf {
+                left, right, body, ..
+            } => self.compile_for_of(left, right, body),
             Stmt::Return { argument, .. } => {
                 if let Some(argument) = argument {
                     self.compile_expr(argument)?;

@@ -74,6 +74,17 @@ pub enum Stmt {
         /// Source span.
         span: Span,
     },
+    /// A for-of statement.
+    ForOf {
+        /// Loop binding or assignment target.
+        left: ForInLeft,
+        /// Iterable expression.
+        right: Expr,
+        /// Loop body.
+        body: Box<Stmt>,
+        /// Source span.
+        span: Span,
+    },
     /// A switch statement.
     Switch {
         /// Discriminant expression.

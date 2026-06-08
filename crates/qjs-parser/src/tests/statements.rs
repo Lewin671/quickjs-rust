@@ -120,6 +120,31 @@ fn parses_for_in_statement() {
 }
 
 #[test]
+fn parses_for_of_statement() {
+    let script =
+        parse_script("for (const value of values) { value; }").expect("source should parse");
+    let [Stmt::ForOf { left, body, .. }] = script.body.as_slice() else {
+        panic!("expected one for-of statement");
+    };
+    assert!(matches!(
+        left,
+        ForInLeft::VarDecl {
+            name,
+            kind: VarKind::Const,
+            ..
+        } if name == "value"
+    ));
+    assert!(matches!(body.as_ref(), Stmt::Block { .. }));
+
+    let script =
+        parse_script("for (target.value of values) target.value;").expect("source should parse");
+    let [Stmt::ForOf { left, .. }] = script.body.as_slice() else {
+        panic!("expected one for-of statement");
+    };
+    assert!(matches!(left, ForInLeft::Target(_)));
+}
+
+#[test]
 fn parses_switch_statement() {
     let script =
         parse_script("switch (x) { case 1: x += 1; break; default: x = 0; case 2: x += 2; }")
