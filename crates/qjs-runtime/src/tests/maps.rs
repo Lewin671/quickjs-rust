@@ -41,7 +41,25 @@ fn evaluates_map_iterable_constructor_arguments() {
     );
     assert!(eval("new Map([1]);").is_err());
     assert!(eval("new Map(['']);").is_err());
+    assert!(eval("new Map([Symbol('a')]);").is_err());
     assert!(eval("new Map([null]);").is_err());
+}
+
+#[test]
+fn map_constructor_uses_prototype_set_adder() {
+    assert_eq!(
+        eval(
+            "let original = Map.prototype.set; let calls = 0; let receivers = []; let seen = ''; Map.prototype.set = function(key, value) { calls = calls + 1; receivers.push(this); seen = seen + key + ':' + value + '|'; return original.call(this, key, value); }; let map = new Map([['a', 1], ['b', 2]]); calls + ':' + seen + ':' + (receivers[0] === map) + ':' + (receivers[1] === map) + ':' + map.get('b');"
+        ),
+        Ok(Value::String("2:a:1|b:2|:true:true:2".to_owned()))
+    );
+    assert!(eval("Map.prototype.set = null; new Map([[1, 1]]);").is_err());
+    assert!(
+        eval(
+            "Object.defineProperty(Map.prototype, 'set', { get: function() { throw new TypeError('boom'); } }); new Map([]);"
+        )
+        .is_err()
+    );
 }
 
 #[test]

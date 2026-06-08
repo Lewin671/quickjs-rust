@@ -404,6 +404,7 @@ cases/math-floor-name.js
 cases/math-ceil-name.js
 cases/math-trunc-name.js
 cases/map-constructor-basic.js
+cases/map-constructor-set-adder.js
 cases/map-iterable-basic.js
 cases/map-iterable-non-object-entry.js
 cases/map-no-iterable-basic.js

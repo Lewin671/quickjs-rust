@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     ArrayRef, Function, MapRef, NativeFunction, ObjectRef, Property, RuntimeError, Value,
-    array::array_like_values_with_env, property_value, symbol,
+    array::array_like_values_with_env, call_function, property_value, symbol,
 };
 
 const MAP_ITERATOR: &str = "\0map_iterator";
@@ -113,15 +113,29 @@ pub(crate) fn native_map(
         });
     }
     let map = MapRef::new(crate::function_prototype(function));
+    let map_value = Value::Map(map);
     if let Some(iterable) = argument_values.first().cloned()
         && !matches!(iterable, Value::Undefined | Value::Null)
     {
+        let adder = property_value(map_value.clone(), "set", env)?;
+        if !matches!(adder, Value::Function(_)) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: Map constructor set adder must be callable".to_owned(),
+            });
+        }
         for entry in array_like_values_with_env(iterable, "Map constructor", env)? {
             let (key, value) = map_entry(entry, env)?;
-            map.set(key, value);
+            call_function(
+                adder.clone(),
+                map_value.clone(),
+                vec![key, value],
+                env,
+                false,
+            )?;
         }
     }
-    Ok(Value::Map(map))
+    Ok(map_value)
 }
 
 pub(crate) fn native_map_group_by(
@@ -160,6 +174,10 @@ fn map_entry(
     env: &mut HashMap<String, Value>,
 ) -> Result<(Value, Value), RuntimeError> {
     match entry {
+        Value::Object(object) if symbol::is_symbol_primitive(&object) => Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Map constructor entry must be an object".to_owned(),
+        }),
         Value::Object(_) | Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) => {
             let key = property_value(entry.clone(), "0", env)?;
             let value = property_value(entry, "1", env)?;
