@@ -85,6 +85,36 @@ fn evaluates_string_addition() {
 }
 
 #[test]
+fn evaluates_template_literal_substitutions() {
+    assert_eq!(
+        eval("let name = 'quickjs'; `hello ${name}`;"),
+        Ok(Value::String("hello quickjs".to_owned()))
+    );
+    assert_eq!(
+        eval("`${1 + 2}:${true}:${null}:${undefined}`;"),
+        Ok(Value::String("3:true:null:undefined".to_owned()))
+    );
+    assert_eq!(
+        eval("`${{ value: 7 }.value}`;"),
+        Ok(Value::String("7".to_owned()))
+    );
+    assert_eq!(
+        eval("`escaped \\${name}`;"),
+        Ok(Value::String("escaped ${name}".to_owned()))
+    );
+}
+
+#[test]
+fn template_literal_substitutions_to_string_before_next_expression() {
+    assert_eq!(
+        eval(
+            "let log = ''; let first = { toString: function() { log += 'a'; return 'A'; } }; let second = { toString: function() { log += 'b'; return 'B'; } }; `${first}${second}` + ':' + log;"
+        ),
+        Ok(Value::String("AB:ab".to_owned()))
+    );
+}
+
+#[test]
 fn evaluates_comparison_and_equality() {
     assert_eq!(eval("1 + 2 * 3 >= 7;"), Ok(Value::Boolean(true)));
     assert_eq!(eval("'2' < '10';"), Ok(Value::Boolean(false)));

@@ -6,7 +6,7 @@ use crate::{
     ArrayRef, Function, GLOBAL_THIS_BINDING, ObjectRef, Property, RUNTIME_INTRINSIC_NAMES,
     RuntimeError, Value, array::array_like_values_with_env, call_function, construct_function,
     initialize_builtins, is_truthy, object, object_prototype, promise, symbol,
-    to_property_key_value,
+    to_js_string_with_env, to_property_key_value,
 };
 
 use super::ir::{ArrayElementKind, Bytecode, Op};
@@ -177,6 +177,13 @@ impl<'a> Vm<'a> {
                 Op::Typeof => {
                     let value = self.pop()?;
                     self.stack.push(Value::String(typeof_value(value)));
+                }
+                Op::ToString => {
+                    let value = self.pop()?;
+                    let mut env = self.current_env();
+                    let result = to_js_string_with_env(value, &mut env);
+                    self.apply_env(env);
+                    self.stack.push(Value::String(result?));
                 }
                 Op::Unary(op) => {
                     let result = self.eval_unary(op);

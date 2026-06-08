@@ -160,6 +160,26 @@ fn parses_no_substitution_template_literal_as_string_literal() {
 }
 
 #[test]
+fn parses_template_literal_with_substitutions() {
+    let script = parse_script("`a ${name} b ${1 + 2} c`;").expect("script should parse");
+    let [
+        Stmt::Expr(Expr::Template {
+            parts, expressions, ..
+        }),
+    ] = script.body.as_slice()
+    else {
+        panic!("expected one template literal expression");
+    };
+    assert_eq!(
+        parts,
+        &vec!["a ".to_owned(), " b ".to_owned(), " c".to_owned()]
+    );
+    assert_eq!(expressions.len(), 2);
+    assert!(matches!(expressions[0], Expr::Identifier { .. }));
+    assert!(matches!(expressions[1], Expr::Binary { .. }));
+}
+
+#[test]
 fn parses_object_literal_and_member_assignment() {
     let script = parse_script("let object = { answer: 42, 'name': 7, }; object.answer = 43;")
         .expect("source should parse");

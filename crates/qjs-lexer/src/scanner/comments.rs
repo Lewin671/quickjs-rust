@@ -75,6 +75,7 @@ impl Lexer<'_> {
             TokenKind::Identifier(_)
                 | TokenKind::Number(_)
                 | TokenKind::String(_)
+                | TokenKind::TemplateTail(_)
                 | TokenKind::RegularExpression { .. }
                 | TokenKind::True
                 | TokenKind::False

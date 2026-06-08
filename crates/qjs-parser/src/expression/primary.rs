@@ -25,6 +25,7 @@ impl Parser {
                 value,
                 span: token.span,
             })),
+            TokenKind::TemplateHead(value) => self.template_literal(value, token.span.start),
             TokenKind::True => Ok(Expr::Literal(Literal::Boolean {
                 value: true,
                 span: token.span,
@@ -122,6 +123,34 @@ impl Parser {
                 })?),
             }
             previous_end = token.span.end;
+        }
+    }
+
+    fn template_literal(&mut self, head: String, start: usize) -> Result<Expr, ParseError> {
+        let mut parts = vec![head];
+        let mut expressions = Vec::new();
+        loop {
+            expressions.push(self.assignment()?);
+            let token = self.advance();
+            match token.kind {
+                TokenKind::TemplateMiddle(value) => {
+                    parts.push(value);
+                }
+                TokenKind::TemplateTail(value) => {
+                    parts.push(value);
+                    return Ok(Expr::Template {
+                        parts,
+                        expressions,
+                        span: Span::new(start, token.span.end),
+                    });
+                }
+                _ => {
+                    return Err(ParseError {
+                        message: "expected template literal segment".to_owned(),
+                        span: token.span,
+                    });
+                }
+            }
         }
     }
 

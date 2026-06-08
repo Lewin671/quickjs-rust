@@ -14,6 +14,11 @@ pub(crate) struct Lexer<'src> {
     pub(in crate::scanner) source: &'src str,
     pub(in crate::scanner) cursor: usize,
     pub(in crate::scanner) tokens: Vec<Token>,
+    pub(in crate::scanner) template_stack: Vec<TemplateState>,
+}
+
+pub(in crate::scanner) struct TemplateState {
+    pub(in crate::scanner) brace_depth: usize,
 }
 
 impl<'src> Lexer<'src> {
@@ -22,6 +27,7 @@ impl<'src> Lexer<'src> {
             source,
             cursor: 0,
             tokens: Vec::new(),
+            template_stack: Vec::new(),
         }
     }
 
@@ -34,7 +40,7 @@ impl<'src> Lexer<'src> {
                 c if is_identifier_start(c) => self.identifier(),
                 c if c.is_ascii_digit() => self.number()?,
                 '"' | '\'' => self.string(ch)?,
-                '`' => self.template_no_substitution()?,
+                '`' => self.template_literal()?,
                 '+' => self.plus(),
                 '-' => self.minus(),
                 '*' => self.star(),
@@ -51,8 +57,11 @@ impl<'src> Lexer<'src> {
                 '\\' => self.single(TokenKind::Backslash),
                 '(' => self.single(TokenKind::LeftParen),
                 ')' => self.single(TokenKind::RightParen),
-                '{' => self.single(TokenKind::LeftBrace),
-                '}' => self.single(TokenKind::RightBrace),
+                '{' => self.left_brace(),
+                '}' if self.template_substitution_is_complete() => {
+                    self.template_after_substitution()?;
+                }
+                '}' => self.right_brace(),
                 '[' => self.single(TokenKind::LeftBracket),
                 ']' => self.single(TokenKind::RightBracket),
                 ',' => self.single(TokenKind::Comma),
@@ -92,6 +101,26 @@ impl<'src> Lexer<'src> {
             kind,
             span: Span::new(start, self.cursor),
         });
+    }
+
+    fn left_brace(&mut self) {
+        if let Some(template) = self.template_stack.last_mut() {
+            template.brace_depth += 1;
+        }
+        self.single(TokenKind::LeftBrace);
+    }
+
+    fn right_brace(&mut self) {
+        if let Some(template) = self.template_stack.last_mut() {
+            template.brace_depth = template.brace_depth.saturating_sub(1);
+        }
+        self.single(TokenKind::RightBrace);
+    }
+
+    fn template_substitution_is_complete(&self) -> bool {
+        self.template_stack
+            .last()
+            .is_some_and(|template| template.brace_depth == 0)
     }
 
     pub(in crate::scanner) fn peek(&self) -> Option<char> {

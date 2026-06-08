@@ -42,6 +42,7 @@ pub(super) enum Op {
         is_strict: bool,
     },
     Typeof,
+    ToString,
     Unary(UnaryOp),
     Binary(BinaryOp),
     Jump(usize),

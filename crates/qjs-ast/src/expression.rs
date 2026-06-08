@@ -107,6 +107,15 @@ pub enum Expr {
         /// Source span.
         span: Span,
     },
+    /// An untagged template literal with cooked string segments.
+    Template {
+        /// Cooked string segments. This always has one more entry than `expressions`.
+        parts: Vec<String>,
+        /// Substitution expressions evaluated left to right.
+        expressions: Vec<Expr>,
+        /// Source span.
+        span: Span,
+    },
     /// A conditional expression.
     Conditional {
         /// Test expression.
@@ -208,6 +217,7 @@ impl Expr {
             | Self::Sequence { span, .. }
             | Self::Unary { span, .. }
             | Self::Binary { span, .. }
+            | Self::Template { span, .. }
             | Self::Conditional { span, .. }
             | Self::Assignment { span, .. }
             | Self::Update { span, .. }

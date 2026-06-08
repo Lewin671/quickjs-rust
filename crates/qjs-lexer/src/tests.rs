@@ -148,13 +148,43 @@ fn lexes_no_substitution_template_literals_as_strings() {
 }
 
 #[test]
-fn rejects_template_literals_with_substitution() {
-    let error = lex("`hello ${name}`").expect_err("substitution should fail");
+fn lexes_template_literals_with_substitutions() {
+    let tokens = lex("`hello ${name}${1 + 2} end`").expect("source should lex");
+    let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
     assert_eq!(
-        error.message,
-        "template substitution is not supported yet".to_owned()
+        kinds,
+        vec![
+            TokenKind::TemplateHead("hello ".to_owned()),
+            TokenKind::Identifier("name".to_owned()),
+            TokenKind::TemplateMiddle(String::new()),
+            TokenKind::Number("1".to_owned()),
+            TokenKind::Plus,
+            TokenKind::Number("2".to_owned()),
+            TokenKind::TemplateTail(" end".to_owned()),
+            TokenKind::Eof,
+        ]
     );
-    assert_eq!(error.span, Span::new(0, 9));
+}
+
+#[test]
+fn lexes_template_substitution_with_nested_braces() {
+    let tokens = lex("`${{ value: 1 }.value}`").expect("source should lex");
+    let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::TemplateHead(String::new()),
+            TokenKind::LeftBrace,
+            TokenKind::Identifier("value".to_owned()),
+            TokenKind::Colon,
+            TokenKind::Number("1".to_owned()),
+            TokenKind::RightBrace,
+            TokenKind::Dot,
+            TokenKind::Identifier("value".to_owned()),
+            TokenKind::TemplateTail(String::new()),
+            TokenKind::Eof,
+        ]
+    );
 }
 
 #[test]

@@ -211,6 +211,9 @@ impl Compiler {
             Expr::Binary {
                 left, op, right, ..
             } => self.compile_binary(left, *op, right),
+            Expr::Template {
+                parts, expressions, ..
+            } => self.compile_template(parts, expressions),
             Expr::Conditional {
                 test,
                 consequent,
@@ -314,6 +317,26 @@ impl Compiler {
                 Ok(())
             }
         }
+    }
+
+    fn compile_template(
+        &mut self,
+        parts: &[String],
+        expressions: &[Expr],
+    ) -> Result<(), RuntimeError> {
+        let first = self.const_slot(Value::String(parts.first().cloned().unwrap_or_default()));
+        self.emit(Op::LoadConst(first));
+        for (index, expression) in expressions.iter().enumerate() {
+            self.compile_expr(expression)?;
+            self.emit(Op::ToString);
+            self.emit(Op::Binary(BinaryOp::Add));
+            let part = self.const_slot(Value::String(
+                parts.get(index + 1).cloned().unwrap_or_default(),
+            ));
+            self.emit(Op::LoadConst(part));
+            self.emit(Op::Binary(BinaryOp::Add));
+        }
+        Ok(())
     }
 
     fn compile_short_circuit(

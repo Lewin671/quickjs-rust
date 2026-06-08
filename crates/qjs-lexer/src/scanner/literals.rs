@@ -2,7 +2,9 @@ use qjs_ast::Span;
 
 use crate::{LexError, Token, TokenKind};
 
-use super::{Lexer, char_class::is_identifier_continue, keywords::identifier_or_keyword};
+use super::{
+    Lexer, TemplateState, char_class::is_identifier_continue, keywords::identifier_or_keyword,
+};
 
 const SURROGATE_ESCAPE_SENTINEL_BASE: u32 = 0xF0000;
 
@@ -157,7 +159,7 @@ impl Lexer<'_> {
         })
     }
 
-    pub(super) fn template_no_substitution(&mut self) -> Result<(), LexError> {
+    pub(super) fn template_literal(&mut self) -> Result<(), LexError> {
         let start = self.cursor;
         self.advance();
         let mut value = String::new();
@@ -171,10 +173,53 @@ impl Lexer<'_> {
                 return Ok(());
             }
             if ch == '$' && self.peek_nth(1) == Some('{') {
-                return Err(LexError {
-                    message: "template substitution is not supported yet".to_owned(),
-                    span: Span::new(start, self.cursor + 2),
+                self.advance();
+                self.advance();
+                self.tokens.push(Token {
+                    kind: TokenKind::TemplateHead(value),
+                    span: Span::new(start, self.cursor),
                 });
+                self.template_stack.push(TemplateState { brace_depth: 0 });
+                return Ok(());
+            }
+            if ch == '\\' {
+                if let Some(escaped) = self.escape_sequence(start)? {
+                    value.push(escaped);
+                }
+                continue;
+            }
+            value.push(ch);
+            self.advance();
+        }
+
+        Err(LexError {
+            message: "unterminated template literal".to_owned(),
+            span: Span::new(start, self.cursor),
+        })
+    }
+
+    pub(super) fn template_after_substitution(&mut self) -> Result<(), LexError> {
+        let start = self.cursor;
+        self.advance();
+        let mut value = String::new();
+        while let Some(ch) = self.peek() {
+            if ch == '`' {
+                self.advance();
+                self.template_stack.pop();
+                self.tokens.push(Token {
+                    kind: TokenKind::TemplateTail(value),
+                    span: Span::new(start, self.cursor),
+                });
+                return Ok(());
+            }
+            if ch == '$' && self.peek_nth(1) == Some('{') {
+                self.advance();
+                self.advance();
+                self.tokens.push(Token {
+                    kind: TokenKind::TemplateMiddle(value),
+                    span: Span::new(start, self.cursor),
+                });
+                return Ok(());
             }
             if ch == '\\' {
                 if let Some(escaped) = self.escape_sequence(start)? {
