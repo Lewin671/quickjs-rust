@@ -1095,6 +1095,16 @@ cases/array-from-name.js
 cases/array-from-mapfn.js
 cases/array-from-mapfn-this-arg.js
 cases/array-from-string.js
+test/built-ins/Array/from/get-iter-method-err.js
+test/built-ins/Array/from/iter-adv-err.js
+test/built-ins/Array/from/iter-get-iter-err.js
+test/built-ins/Array/from/iter-get-iter-val-err.js
+test/built-ins/Array/from/iter-map-fn-args.js
+test/built-ins/Array/from/iter-map-fn-return.js
+test/built-ins/Array/from/iter-map-fn-this-arg.js
+test/built-ins/Array/from/iter-set-elem-prop.js
+test/built-ins/Array/from/iter-set-length.js
+test/built-ins/Array/from/source-object-iterator-2.js
 cases/array-of-basic.js
 cases/array-of-empty.js
 cases/array-of-length.js

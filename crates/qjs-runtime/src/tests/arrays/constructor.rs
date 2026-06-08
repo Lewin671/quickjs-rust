@@ -61,3 +61,40 @@ fn evaluates_array_from_mapping() {
     assert!(eval("Array.from([1], null);").is_err());
     assert!(eval("Array.from(null);").is_err());
 }
+
+#[test]
+fn evaluates_array_from_iterables() {
+    assert_eq!(
+        eval("Array.from(new Set(['a', 'b'])).join('|');"),
+        Ok(Value::String("a|b".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let source = { length: 1, 0: 'array-like' }; source[Symbol.iterator] = function() { return ['iterable'][Symbol.iterator](); }; Array.from(source)[0];"
+        ),
+        Ok(Value::String("iterable".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let state = { index: 0 }; let source = {}; source[Symbol.iterator] = function() { return { next: function() { state.index = state.index + 1; return state.index > 2 ? { done: true } : { value: state.index * 3, done: false }; } }; }; Array.from(source).join();"
+        ),
+        Ok(Value::String("3,6".to_owned()))
+    );
+}
+
+#[test]
+fn maps_array_from_iterables_during_consumption() {
+    assert_eq!(
+        eval(
+            "let log = ''; let state = { index: 0 }; let source = {}; source[Symbol.iterator] = function() { return { next: function() { log = log + 'n' + state.index; state.index = state.index + 1; return state.index > 2 ? { done: true } : { value: state.index, done: false }; } }; }; Array.from(source, function(value, index) { log = log + 'm' + index; return value; }); log;"
+        ),
+        Ok(Value::String("n0m0n1m1n2".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "Array.from(new Set([1, 2]), function(value, index) { return value + index + this.offset; }, { offset: 4 }).join();"
+        ),
+        Ok(Value::String("5,7".to_owned()))
+    );
+    assert!(eval("let source = {}; source[Symbol.iterator] = 1; Array.from(source);").is_err());
+}

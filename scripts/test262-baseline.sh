@@ -239,14 +239,51 @@ rust_source_syntax_supported() {
   ! grep -Eq '(^|[^[:alnum:]_$])[0-9][0-9_]*n([^[:alnum:]_$]|$)|for[[:space:]]*\([[:space:]]*(var|let|const)[[:space:]]*[\[{][^;)]*[[:space:]]of[[:space:]]|(^|[^[:alnum:]_$])class[[:space:]]' "$TEST262_DIR/$1"
 }
 rust_features_supported() {
-  local entries; entries="$(list_entries "$1")"
-  [[ "${2:-}" == test/built-ins/RegExp/prototype/Symbol.split/* ]] && entries="$(printf '%s\n' "$entries" | grep -Fxv 'Symbol.species' || true)"; [[ "${2:-}" == test/built-ins/Array/prototype/with/* || "${2:-}" == test/built-ins/Array/prototype/toReversed/* || "${2:-}" == test/built-ins/Array/prototype/toSpliced/* || "${2:-}" == test/built-ins/Array/prototype/toSorted/* ]] && entries="$(printf '%s\n' "$entries" | grep -Fxv -e 'change-array-by-copy' -e 'exponentiation' || true)"; [[ "${2:-}" == test/built-ins/Array/prototype/entries/* || "${2:-}" == test/built-ins/Array/prototype/keys/* || "${2:-}" == test/built-ins/Array/prototype/values/* || "${2:-}" == test/built-ins/Array/prototype/Symbol.iterator.js ]] && entries="$(printf '%s\n' "$entries" | grep -Fxv 'Symbol.iterator' || true)"; [[ "${2:-}" == test/built-ins/Object/entries/* || "${2:-}" == test/built-ins/Object/keys/* || "${2:-}" == test/built-ins/Object/values/* ]] && entries="$(printf '%s\n' "$entries" | grep -Fxv 'for-in-order' || true)"; [[ "${2:-}" == test/built-ins/Reflect/getPrototypeOf/* || "${2:-}" == test/built-ins/Reflect/setPrototypeOf/* ]] && entries="$(printf '%s\n' "$entries" | grep -Fxv -e 'Reflect' -e 'Reflect.setPrototypeOf' || true)"
+  local entries rel
+  entries="$(list_entries "$1")"
+  rel="${2:-}"
+  case "$rel" in
+    test/built-ins/RegExp/prototype/Symbol.split/*)
+      entries="$(drop_feature_entries "$entries" -e 'Symbol.species')"
+      ;;
+  esac
+  case "$rel" in
+    test/built-ins/Array/prototype/with/*|test/built-ins/Array/prototype/toReversed/*|test/built-ins/Array/prototype/toSpliced/*|test/built-ins/Array/prototype/toSorted/*)
+      entries="$(drop_feature_entries "$entries" -e 'change-array-by-copy' -e 'exponentiation')"
+      ;;
+  esac
+  case "$rel" in
+    test/built-ins/Array/prototype/entries/*|test/built-ins/Array/prototype/keys/*|test/built-ins/Array/prototype/values/*|test/built-ins/Array/prototype/Symbol.iterator.js)
+      entries="$(drop_feature_entries "$entries" -e 'Symbol.iterator')"
+      ;;
+  esac
+  case "$rel" in
+    test/built-ins/Array/from/source-object-iterator-2.js|test/built-ins/Array/from/iter-map-fn-args.js|test/built-ins/Array/from/iter-map-fn-return.js|test/built-ins/Array/from/iter-map-fn-this-arg.js|test/built-ins/Array/from/iter-set-elem-prop.js|test/built-ins/Array/from/iter-set-length.js|test/built-ins/Array/from/get-iter-method-err.js|test/built-ins/Array/from/iter-get-iter-err.js|test/built-ins/Array/from/iter-get-iter-val-err.js|test/built-ins/Array/from/iter-adv-err.js)
+      entries="$(drop_feature_entries "$entries" -e 'Symbol.iterator')"
+      ;;
+  esac
+  case "$rel" in
+    test/built-ins/Object/entries/*|test/built-ins/Object/keys/*|test/built-ins/Object/values/*)
+      entries="$(drop_feature_entries "$entries" -e 'for-in-order')"
+      ;;
+  esac
+  case "$rel" in
+    test/built-ins/Reflect/getPrototypeOf/*|test/built-ins/Reflect/setPrototypeOf/*)
+      entries="$(drop_feature_entries "$entries" -e 'Reflect' -e 'Reflect.setPrototypeOf')"
+      ;;
+  esac
   [ -z "$entries" ] || ! grep -Fvx -e 'Symbol' -e 'Symbol.isConcatSpreadable' -e 'Symbol.match' \
     -e 'Symbol.replace' -e 'Symbol.search' -e 'Symbol.split' -e 'Symbol.toPrimitive' \
     -e 'Reflect' -e 'Reflect.construct' -e 'arrow-function' -e 'Map' -e 'Set' -e 'WeakMap' -e 'WeakSet' \
     -e 'set-methods' \
     -e 'array-find-from-last' -e 'Array.prototype.at' -e 'Array.prototype.flat' -e 'Array.prototype.flatMap' -e 'Array.prototype.includes' -e 'Array.prototype.toReversed' -e 'Array.prototype.toSorted' -e 'Array.prototype.toSpliced' -e 'Array.prototype.with' -e 'json-parse-with-source' -e 'Object.hasOwn' -e 'Object.is' -e 'promise-with-resolvers' -e 'RegExp.escape' -e 'string-trimming' -e 'String.fromCodePoint' -e 'String.prototype.at' -e 'String.prototype.endsWith' -e 'String.prototype.includes' -e 'String.prototype.isWellFormed' -e 'String.prototype.replaceAll' -e 'String.prototype.toWellFormed' -e 'String.prototype.trimEnd' -e 'String.prototype.trimStart' \
     <<<"$entries" >/dev/null
+}
+drop_feature_entries() {
+  local entries="$1"
+  shift
+  [ -z "$entries" ] && return
+  printf '%s\n' "$entries" | grep -Fxv "$@" || true
 }
 rust_includes_supported() {
   local include
