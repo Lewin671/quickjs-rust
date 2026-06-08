@@ -74,6 +74,12 @@ fn evaluates_reflect_prototype_builtins() {
         Ok(Value::String("x:y:2".to_owned()))
     );
     assert_eq!(
+        eval(
+            "function count() { return arguments.length + ':' + arguments[0]; } let args = function() {}; Object.defineProperty(args, 'length', { get: function() { return 1; } }); Reflect.apply(count, null, args);"
+        ),
+        Ok(Value::String("1:undefined".to_owned()))
+    );
+    assert_eq!(
         eval("function getThis() { return this; } Reflect.apply(getThis, undefined, []) === this;"),
         Ok(Value::Boolean(true))
     );
@@ -366,6 +372,12 @@ fn evaluates_reflect_prototype_builtins() {
     );
     assert!(eval("Reflect.apply(1, null, []);").is_err());
     assert!(eval("Reflect.apply(function f() {}, null, 1);").is_err());
+    assert_eq!(
+        eval(
+            "let caught = false; try { Reflect.apply(function() {}, null, Symbol()); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
     assert!(eval("Reflect.construct(1, []);").is_err());
     assert!(eval("Reflect.construct(function f() {}, 1);").is_err());
     assert!(eval("Reflect.construct(function f() {}, [], Reflect.apply);").is_err());

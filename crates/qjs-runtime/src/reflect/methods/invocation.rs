@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    RuntimeError, Value, array::array_like_values_with_env, construct_function, ensure_constructor,
+    PropertyKey, RuntimeError, Value, array::array_like_values_from_receiver, construct_function,
+    ensure_constructor, property_value_key, symbol, to_length_with_env,
 };
 
 pub(crate) fn native_reflect_apply(
@@ -18,8 +19,7 @@ pub(crate) fn native_reflect_apply(
 
     let this_value = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
     let arguments_list = argument_values.get(2).cloned().unwrap_or(Value::Undefined);
-    ensure_reflect_object_argument_list(&arguments_list, "Reflect.apply")?;
-    let arguments = array_like_values_with_env(arguments_list, "Reflect.apply argument list", env)?;
+    let arguments = reflect_argument_list(arguments_list, "Reflect.apply", env)?;
 
     crate::call_function(target, this_value, arguments, env, false)
 }
@@ -32,9 +32,7 @@ pub(crate) fn native_reflect_construct(
     ensure_reflect_constructor(&target, "target")?;
 
     let arguments_list = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
-    ensure_reflect_object_argument_list(&arguments_list, "Reflect.construct")?;
-    let arguments =
-        array_like_values_with_env(arguments_list, "Reflect.construct argument list", env)?;
+    let arguments = reflect_argument_list(arguments_list, "Reflect.construct", env)?;
 
     let new_target = argument_values
         .get(2)
@@ -54,6 +52,10 @@ fn ensure_reflect_constructor(value: &Value, name: &str) -> Result<(), RuntimeEr
 
 fn ensure_reflect_object_argument_list(value: &Value, name: &str) -> Result<(), RuntimeError> {
     match value {
+        Value::Object(object) if symbol::is_symbol_primitive(object) => Err(RuntimeError {
+            thrown: None,
+            message: format!("{name} argument list must be an object"),
+        }),
         Value::Object(_) | Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) => {
             Ok(())
         }
@@ -65,5 +67,32 @@ fn ensure_reflect_object_argument_list(value: &Value, name: &str) -> Result<(), 
             thrown: None,
             message: format!("{name} argument list must be an object"),
         }),
+    }
+}
+
+fn reflect_argument_list(
+    value: Value,
+    name: &str,
+    env: &mut HashMap<String, Value>,
+) -> Result<Vec<Value>, RuntimeError> {
+    ensure_reflect_object_argument_list(&value, name)?;
+    match value {
+        Value::Array(array) => Ok(array.to_vec()),
+        value @ (Value::Object(_) | Value::Function(_) | Value::Map(_) | Value::Set(_)) => {
+            let length = to_length_with_env(
+                property_value_key(
+                    value.clone(),
+                    &PropertyKey::String("length".to_owned()),
+                    env,
+                )?,
+                env,
+            )?;
+            array_like_values_from_receiver(value, length, env)
+        }
+        Value::String(_)
+        | Value::Number(_)
+        | Value::Boolean(_)
+        | Value::Null
+        | Value::Undefined => unreachable!("argument list was validated before collection"),
     }
 }
