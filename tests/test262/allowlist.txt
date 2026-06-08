@@ -19,6 +19,17 @@ cases/array-at-length.js
 cases/array-at-out-of-range.js
 cases/array-at-relative-index.js
 cases/array-at-to-integer.js
+test/built-ins/Array/prototype/at/index-argument-tointeger.js
+test/built-ins/Array/prototype/at/index-non-numeric-argument-tointeger-invalid.js
+test/built-ins/Array/prototype/at/index-non-numeric-argument-tointeger.js
+test/built-ins/Array/prototype/at/length.js
+test/built-ins/Array/prototype/at/name.js
+test/built-ins/Array/prototype/at/prop-desc.js
+test/built-ins/Array/prototype/at/return-abrupt-from-this.js
+test/built-ins/Array/prototype/at/returns-item-relative-index.js
+test/built-ins/Array/prototype/at/returns-item.js
+test/built-ins/Array/prototype/at/returns-undefined-for-holes-in-sparse-arrays.js
+test/built-ins/Array/prototype/at/returns-undefined-for-out-of-range-index.js
 cases/array-concat-array-arguments.js
 cases/array-concat-basic.js
 cases/array-concat-is-concat-spreadable.js
