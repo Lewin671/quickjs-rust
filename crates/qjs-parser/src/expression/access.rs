@@ -32,6 +32,11 @@ impl Parser {
                 continue;
             }
 
+            if self.at_template_literal() {
+                expr = self.finish_tagged_template_literal(expr)?;
+                continue;
+            }
+
             break;
         }
         Ok(expr)

@@ -1,6 +1,6 @@
 use qjs_ast::Span;
 
-use crate::{LexError, Token, TokenKind};
+use crate::{LexError, TemplateSegment, Token, TokenKind};
 
 use super::{
     Lexer, TemplateState, char_class::is_identifier_continue, keywords::identifier_or_keyword,
@@ -162,21 +162,24 @@ impl Lexer<'_> {
     pub(super) fn template_literal(&mut self) -> Result<(), LexError> {
         let start = self.cursor;
         self.advance();
+        let segment_start = self.cursor;
         let mut value = String::new();
         while let Some(ch) = self.peek() {
             if ch == '`' {
+                let raw = self.source[segment_start..self.cursor].to_owned();
                 self.advance();
                 self.tokens.push(Token {
-                    kind: TokenKind::String(value),
+                    kind: TokenKind::TemplateNoSubstitution(TemplateSegment { cooked: value, raw }),
                     span: Span::new(start, self.cursor),
                 });
                 return Ok(());
             }
             if ch == '$' && self.peek_nth(1) == Some('{') {
+                let raw = self.source[segment_start..self.cursor].to_owned();
                 self.advance();
                 self.advance();
                 self.tokens.push(Token {
-                    kind: TokenKind::TemplateHead(value),
+                    kind: TokenKind::TemplateHead(TemplateSegment { cooked: value, raw }),
                     span: Span::new(start, self.cursor),
                 });
                 self.template_stack.push(TemplateState { brace_depth: 0 });
@@ -201,22 +204,25 @@ impl Lexer<'_> {
     pub(super) fn template_after_substitution(&mut self) -> Result<(), LexError> {
         let start = self.cursor;
         self.advance();
+        let segment_start = self.cursor;
         let mut value = String::new();
         while let Some(ch) = self.peek() {
             if ch == '`' {
+                let raw = self.source[segment_start..self.cursor].to_owned();
                 self.advance();
                 self.template_stack.pop();
                 self.tokens.push(Token {
-                    kind: TokenKind::TemplateTail(value),
+                    kind: TokenKind::TemplateTail(TemplateSegment { cooked: value, raw }),
                     span: Span::new(start, self.cursor),
                 });
                 return Ok(());
             }
             if ch == '$' && self.peek_nth(1) == Some('{') {
+                let raw = self.source[segment_start..self.cursor].to_owned();
                 self.advance();
                 self.advance();
                 self.tokens.push(Token {
-                    kind: TokenKind::TemplateMiddle(value),
+                    kind: TokenKind::TemplateMiddle(TemplateSegment { cooked: value, raw }),
                     span: Span::new(start, self.cursor),
                 });
                 return Ok(());
@@ -273,6 +279,7 @@ impl Lexer<'_> {
                 }
                 None
             }
+            '\u{2028}' | '\u{2029}' => None,
             other => Some(other),
         };
         Ok(escaped)

@@ -1,6 +1,6 @@
 use qjs_ast::Span;
 
-use super::{TokenKind, lex};
+use super::{TemplateSegment, TokenKind, lex};
 
 #[test]
 fn lexes_expression() {
@@ -139,9 +139,9 @@ fn lexes_no_substitution_template_literals_as_strings() {
     assert_eq!(
         kinds,
         vec![
-            TokenKind::String("hello".to_owned()),
-            TokenKind::String(String::new()),
-            TokenKind::String("price $5".to_owned()),
+            TokenKind::TemplateNoSubstitution(template_segment("hello", "hello")),
+            TokenKind::TemplateNoSubstitution(template_segment("", "")),
+            TokenKind::TemplateNoSubstitution(template_segment("price $5", "price $5")),
             TokenKind::Eof,
         ]
     );
@@ -154,13 +154,13 @@ fn lexes_template_literals_with_substitutions() {
     assert_eq!(
         kinds,
         vec![
-            TokenKind::TemplateHead("hello ".to_owned()),
+            TokenKind::TemplateHead(template_segment("hello ", "hello ")),
             TokenKind::Identifier("name".to_owned()),
-            TokenKind::TemplateMiddle(String::new()),
+            TokenKind::TemplateMiddle(template_segment("", "")),
             TokenKind::Number("1".to_owned()),
             TokenKind::Plus,
             TokenKind::Number("2".to_owned()),
-            TokenKind::TemplateTail(" end".to_owned()),
+            TokenKind::TemplateTail(template_segment(" end", " end")),
             TokenKind::Eof,
         ]
     );
@@ -173,7 +173,7 @@ fn lexes_template_substitution_with_nested_braces() {
     assert_eq!(
         kinds,
         vec![
-            TokenKind::TemplateHead(String::new()),
+            TokenKind::TemplateHead(template_segment("", "")),
             TokenKind::LeftBrace,
             TokenKind::Identifier("value".to_owned()),
             TokenKind::Colon,
@@ -181,7 +181,22 @@ fn lexes_template_substitution_with_nested_braces() {
             TokenKind::RightBrace,
             TokenKind::Dot,
             TokenKind::Identifier("value".to_owned()),
-            TokenKind::TemplateTail(String::new()),
+            TokenKind::TemplateTail(template_segment("", "")),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn lexes_template_raw_segments() {
+    let tokens = lex(r"`\n${1}\t`").expect("source should lex");
+    let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::TemplateHead(template_segment("\n", r"\n")),
+            TokenKind::Number("1".to_owned()),
+            TokenKind::TemplateTail(template_segment("\t", r"\t")),
             TokenKind::Eof,
         ]
     );
@@ -247,8 +262,18 @@ fn lexes_template_escape_sequences() {
     let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
     assert_eq!(
         kinds,
-        vec![TokenKind::String("\nABC`".to_owned()), TokenKind::Eof]
+        vec![
+            TokenKind::TemplateNoSubstitution(template_segment("\nABC`", r"\n\x41\u0042\u{43}\`")),
+            TokenKind::Eof,
+        ]
     );
+}
+
+fn template_segment(cooked: &str, raw: &str) -> TemplateSegment {
+    TemplateSegment {
+        cooked: cooked.to_owned(),
+        raw: raw.to_owned(),
+    }
 }
 
 #[test]

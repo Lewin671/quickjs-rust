@@ -141,6 +141,7 @@ impl<'a> Vm<'a> {
                     self.stack.push(value);
                 }
                 Op::NewArray { elements } => self.new_array(&elements)?,
+                Op::NewTemplateObject { cooked, raw } => self.new_template_object(&cooked, &raw),
                 Op::NewObject(kinds) => self.new_object(&kinds)?,
                 Op::EnumerateKeys => self.enumerate_keys()?,
                 Op::GetProp => {
@@ -319,6 +320,24 @@ impl<'a> Vm<'a> {
         self.stack
             .push(Value::Array(ArrayRef::new_sparse(values, holes)));
         Ok(())
+    }
+
+    fn new_template_object(&mut self, cooked: &[String], raw: &[String]) {
+        let cooked_values = cooked
+            .iter()
+            .cloned()
+            .map(Value::String)
+            .collect::<Vec<_>>();
+        let raw_values = raw.iter().cloned().map(Value::String).collect::<Vec<_>>();
+        let cooked_array = ArrayRef::new(cooked_values);
+        let raw_array = ArrayRef::new(raw_values);
+        raw_array.freeze();
+        cooked_array.define_property(
+            "raw".to_owned(),
+            Property::fixed_non_enumerable(Value::Array(raw_array)),
+        );
+        cooked_array.freeze();
+        self.stack.push(Value::Array(cooked_array));
     }
 
     fn new_object(&mut self, kinds: &[ObjectPropertyKind]) -> Result<(), RuntimeError> {

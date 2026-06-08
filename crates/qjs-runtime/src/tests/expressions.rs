@@ -115,6 +115,26 @@ fn template_literal_substitutions_to_string_before_next_expression() {
 }
 
 #[test]
+fn evaluates_tagged_template_literals() {
+    assert_eq!(
+        eval(
+            "function tag(strings, a, b) { return strings[0] + ':' + strings[1] + ':' + strings.raw[1] + ':' + a + ':' + b; } tag`a ${1 + 1} \\n${3} b`;"
+        ),
+        Ok(Value::String("a : \n: \\n:2:3".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let object = { prefix: 'p', tag: function(strings, value) { return this.prefix + ':' + strings[0] + ':' + strings.raw[0] + ':' + value; } }; object.tag`\\t${4}`;"
+        ),
+        Ok(Value::String("p:\t:\\t:4".to_owned()))
+    );
+    assert_eq!(
+        eval("function tag(strings) { return strings[0] + ':' + strings.raw[0]; } tag`plain`;"),
+        Ok(Value::String("plain:plain".to_owned()))
+    );
+}
+
+#[test]
 fn evaluates_comparison_and_equality() {
     assert_eq!(eval("1 + 2 * 3 >= 7;"), Ok(Value::Boolean(true)));
     assert_eq!(eval("'2' < '10';"), Ok(Value::Boolean(false)));

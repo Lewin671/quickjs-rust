@@ -23,6 +23,10 @@ pub(super) enum Op {
     NewArray {
         elements: Vec<ArrayElementKind>,
     },
+    NewTemplateObject {
+        cooked: Vec<String>,
+        raw: Vec<String>,
+    },
     NewObject(Vec<ObjectPropertyKind>),
     EnumerateKeys,
     GetProp,

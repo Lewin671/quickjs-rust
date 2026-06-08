@@ -116,6 +116,19 @@ pub enum Expr {
         /// Source span.
         span: Span,
     },
+    /// A tagged template call expression.
+    TaggedTemplate {
+        /// Tag expression called with the template object.
+        tag: Box<Expr>,
+        /// Cooked string segments. This always has one more entry than `expressions`.
+        cooked: Vec<String>,
+        /// Raw string segments. This always has one more entry than `expressions`.
+        raw: Vec<String>,
+        /// Substitution expressions evaluated left to right.
+        expressions: Vec<Expr>,
+        /// Source span.
+        span: Span,
+    },
     /// A conditional expression.
     Conditional {
         /// Test expression.
@@ -218,6 +231,7 @@ impl Expr {
             | Self::Unary { span, .. }
             | Self::Binary { span, .. }
             | Self::Template { span, .. }
+            | Self::TaggedTemplate { span, .. }
             | Self::Conditional { span, .. }
             | Self::Assignment { span, .. }
             | Self::Update { span, .. }

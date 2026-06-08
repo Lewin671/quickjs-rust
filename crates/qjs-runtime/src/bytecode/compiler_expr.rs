@@ -214,6 +214,13 @@ impl Compiler {
             Expr::Template {
                 parts, expressions, ..
             } => self.compile_template(parts, expressions),
+            Expr::TaggedTemplate {
+                tag,
+                cooked,
+                raw,
+                expressions,
+                ..
+            } => self.compile_tagged_template(tag, cooked, raw, expressions),
             Expr::Conditional {
                 test,
                 consequent,
@@ -336,6 +343,42 @@ impl Compiler {
             self.emit(Op::LoadConst(part));
             self.emit(Op::Binary(BinaryOp::Add));
         }
+        Ok(())
+    }
+
+    fn compile_tagged_template(
+        &mut self,
+        tag: &Expr,
+        cooked: &[String],
+        raw: &[String],
+        expressions: &[Expr],
+    ) -> Result<(), RuntimeError> {
+        if let Expr::Member {
+            object, property, ..
+        } = tag
+        {
+            self.compile_expr(object)?;
+            self.compile_member_key(property)?;
+            self.emit(Op::NewTemplateObject {
+                cooked: cooked.to_vec(),
+                raw: raw.to_vec(),
+            });
+            for expression in expressions {
+                self.compile_expr(expression)?;
+            }
+            self.emit(Op::CallMethod(expressions.len() + 1));
+            return Ok(());
+        }
+
+        self.compile_expr(tag)?;
+        self.emit(Op::NewTemplateObject {
+            cooked: cooked.to_vec(),
+            raw: raw.to_vec(),
+        });
+        for expression in expressions {
+            self.compile_expr(expression)?;
+        }
+        self.emit(Op::Call(expressions.len() + 1));
         Ok(())
     }
 

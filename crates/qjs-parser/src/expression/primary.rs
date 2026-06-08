@@ -1,7 +1,7 @@
 use qjs_ast::{
     ArrayElement, Expr, Literal, ObjectProperty, ObjectPropertyKey, ObjectPropertyKind, Span,
 };
-use qjs_lexer::TokenKind;
+use qjs_lexer::{TemplateSegment, TokenKind};
 
 use crate::{ParseError, Parser};
 
@@ -25,7 +25,11 @@ impl Parser {
                 value,
                 span: token.span,
             })),
-            TokenKind::TemplateHead(value) => self.template_literal(value, token.span.start),
+            TokenKind::TemplateNoSubstitution(segment) => Ok(Expr::Literal(Literal::String {
+                value: segment.cooked,
+                span: token.span,
+            })),
+            TokenKind::TemplateHead(segment) => self.template_literal(segment, token.span.start),
             TokenKind::True => Ok(Expr::Literal(Literal::Boolean {
                 value: true,
                 span: token.span,
@@ -126,18 +130,22 @@ impl Parser {
         }
     }
 
-    fn template_literal(&mut self, head: String, start: usize) -> Result<Expr, ParseError> {
-        let mut parts = vec![head];
+    pub(crate) fn template_literal(
+        &mut self,
+        head: TemplateSegment,
+        start: usize,
+    ) -> Result<Expr, ParseError> {
+        let mut parts = vec![head.cooked];
         let mut expressions = Vec::new();
         loop {
             expressions.push(self.assignment()?);
             let token = self.advance();
             match token.kind {
-                TokenKind::TemplateMiddle(value) => {
-                    parts.push(value);
+                TokenKind::TemplateMiddle(segment) => {
+                    parts.push(segment.cooked);
                 }
-                TokenKind::TemplateTail(value) => {
-                    parts.push(value);
+                TokenKind::TemplateTail(segment) => {
+                    parts.push(segment.cooked);
                     return Ok(Expr::Template {
                         parts,
                         expressions,
@@ -151,6 +159,71 @@ impl Parser {
                     });
                 }
             }
+        }
+    }
+
+    pub(crate) fn at_template_literal(&self) -> bool {
+        matches!(
+            self.peek().map(|token| &token.kind),
+            Some(TokenKind::TemplateNoSubstitution(_) | TokenKind::TemplateHead(_))
+        )
+    }
+
+    pub(crate) fn finish_tagged_template_literal(&mut self, tag: Expr) -> Result<Expr, ParseError> {
+        let token = self
+            .peek()
+            .cloned()
+            .expect("parser should always have eof token");
+        match token.kind {
+            TokenKind::TemplateNoSubstitution(segment) => {
+                self.advance();
+                let span = Span::new(tag.span().start, token.span.end);
+                Ok(Expr::TaggedTemplate {
+                    tag: Box::new(tag),
+                    cooked: vec![segment.cooked],
+                    raw: vec![segment.raw],
+                    expressions: Vec::new(),
+                    span,
+                })
+            }
+            TokenKind::TemplateHead(segment) => {
+                let start = tag.span().start;
+                self.advance();
+                let mut cooked = vec![segment.cooked];
+                let mut raw = vec![segment.raw];
+                let mut expressions = Vec::new();
+                loop {
+                    expressions.push(self.assignment()?);
+                    let token = self.advance();
+                    match token.kind {
+                        TokenKind::TemplateMiddle(segment) => {
+                            cooked.push(segment.cooked);
+                            raw.push(segment.raw);
+                        }
+                        TokenKind::TemplateTail(segment) => {
+                            cooked.push(segment.cooked);
+                            raw.push(segment.raw);
+                            return Ok(Expr::TaggedTemplate {
+                                tag: Box::new(tag),
+                                cooked,
+                                raw,
+                                expressions,
+                                span: Span::new(start, token.span.end),
+                            });
+                        }
+                        _ => {
+                            return Err(ParseError {
+                                message: "expected template literal segment".to_owned(),
+                                span: token.span,
+                            });
+                        }
+                    }
+                }
+            }
+            _ => Err(ParseError {
+                message: "expected template literal".to_owned(),
+                span: token.span,
+            }),
         }
     }
 

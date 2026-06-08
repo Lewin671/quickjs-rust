@@ -5,7 +5,7 @@ mod scanner;
 mod token;
 
 pub use error::LexError;
-pub use token::{Token, TokenKind};
+pub use token::{TemplateSegment, Token, TokenKind};
 
 use scanner::Lexer;
 

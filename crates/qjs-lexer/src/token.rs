@@ -18,12 +18,14 @@ pub enum TokenKind {
     Number(String),
     /// String literal value.
     String(String),
+    /// Template literal without substitutions.
+    TemplateNoSubstitution(TemplateSegment),
     /// Template literal head before the first substitution.
-    TemplateHead(String),
+    TemplateHead(TemplateSegment),
     /// Template literal middle segment between substitutions.
-    TemplateMiddle(String),
+    TemplateMiddle(TemplateSegment),
     /// Template literal tail after the last substitution.
-    TemplateTail(String),
+    TemplateTail(TemplateSegment),
     /// Regular expression literal raw pattern and flags.
     RegularExpression { pattern: String, flags: String },
     /// `true`.
@@ -204,4 +206,13 @@ pub enum TokenKind {
     Semicolon,
     /// End of input.
     Eof,
+}
+
+/// Cooked and raw text for a template literal segment.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TemplateSegment {
+    /// Cooked template value.
+    pub cooked: String,
+    /// Raw template value.
+    pub raw: String,
 }

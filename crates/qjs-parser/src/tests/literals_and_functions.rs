@@ -180,6 +180,27 @@ fn parses_template_literal_with_substitutions() {
 }
 
 #[test]
+fn parses_tagged_template_literal() {
+    let script = parse_script("tag`a ${value} b`;").expect("script should parse");
+    let [
+        Stmt::Expr(Expr::TaggedTemplate {
+            tag,
+            cooked,
+            raw,
+            expressions,
+            ..
+        }),
+    ] = script.body.as_slice()
+    else {
+        panic!("expected one tagged template expression");
+    };
+    assert!(matches!(tag.as_ref(), Expr::Identifier { .. }));
+    assert_eq!(cooked, &vec!["a ".to_owned(), " b".to_owned()]);
+    assert_eq!(raw, &vec!["a ".to_owned(), " b".to_owned()]);
+    assert_eq!(expressions.len(), 1);
+}
+
+#[test]
 fn parses_object_literal_and_member_assignment() {
     let script = parse_script("let object = { answer: 42, 'name': 7, }; object.answer = 43;")
         .expect("source should parse");
