@@ -89,6 +89,18 @@ fn evaluates_function_declarations_and_calls() {
         Ok(Value::Number(0.0))
     );
     assert_eq!(
+        eval(
+            "let left = function() {}; let right = function() {}; (left === left) + ':' + (left === right);"
+        ),
+        Ok(Value::String("true:false".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let target = function() {}; function values(a, b) { arguments[2] = function() {}; return Array.prototype.lastIndexOf.call(arguments, target) + ':' + Array.prototype.lastIndexOf.call(arguments, arguments[2]); } values(0, target);"
+        ),
+        Ok(Value::String("1:-1".to_owned()))
+    );
+    assert_eq!(
         eval("function pair(a, b) { return b; } pair(1);"),
         Ok(Value::Undefined)
     );

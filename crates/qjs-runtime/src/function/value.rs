@@ -290,6 +290,10 @@ impl Function {
         self.extensible.get()
     }
 
+    pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.properties, &other.properties)
+    }
+
     pub(crate) fn prevent_extensions(&self) {
         self.extensible.set(false);
     }
@@ -568,10 +572,7 @@ fn function_as_object_prototype(function: &Function) -> ObjectRef {
 
 impl PartialEq for Function {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-            && self.params == other.params
-            && self.native == other.native
-            && self.bound.is_some() == other.bound.is_some()
+        self.ptr_eq(other)
     }
 }
 

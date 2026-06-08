@@ -111,6 +111,7 @@ cases/array-last-index-of-empty.js
 cases/array-last-index-of-from-index.js
 cases/array-last-index-of-from-index-negative.js
 cases/array-last-index-of-length.js
+cases/array-last-index-of-arguments-function-identity.js
 cases/array-map-basic.js
 cases/array-map-callback-arguments.js
 cases/array-map-this-arg.js
