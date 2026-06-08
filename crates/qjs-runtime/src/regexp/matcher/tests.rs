@@ -41,3 +41,10 @@ fn unicode_character_classes_match_surrogate_pairs_as_code_points() {
     assert!(regexp_match_range(&pattern, &high, 0, false, true).is_none());
     assert!(regexp_match_range(&pattern, &low, 0, false, true).is_none());
 }
+
+#[test]
+fn legacy_decimal_escapes_define_character_class_ranges() {
+    let matched = regexp_match_range(r"[\12-\14]+", "\n\n", 0, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 2));
+    assert!(regexp_match_range(r"[\12-\14]+", "\t", 0, false, false).is_none());
+}

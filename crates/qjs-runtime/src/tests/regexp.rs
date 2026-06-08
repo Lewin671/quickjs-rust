@@ -264,6 +264,12 @@ fn evaluates_regexp_exec_literal_match() {
         eval("/String/i.exec('test string')[0];"),
         Ok(Value::String("string".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "let r = /[\\d][\\12-\\14]{1,}[^\\d]/.exec('line1\\n\\n\\n\\n\\nline2'); r.length + ':' + r.index + ':' + r[0];"
+        ),
+        Ok(Value::String("1:4:1\n\n\n\n\nl".to_owned()))
+    );
 }
 
 #[test]
