@@ -8,6 +8,7 @@ use crate::{
 const SYMBOL_DATA_PROPERTY: &str = "\0SymbolData";
 const SYMBOL_DESCRIPTION_PROPERTY: &str = "\0SymbolDescription";
 const SYMBOL_BOXED_PROPERTY: &str = "\0SymbolBoxed";
+const SYMBOL_WRAPPED_PROPERTY: &str = "\0SymbolWrapped";
 const SYMBOL_REGISTRY_BINDING: &str = "\0SymbolRegistry";
 const WELL_KNOWN_SYMBOL_NAMES: &[&str] = &[
     "asyncDispose",
@@ -40,6 +41,22 @@ pub(crate) fn install_symbol(
     install_function_has_instance(env, &symbol_function);
     if let Some(to_string_tag) = well_known_symbol_from_function(&symbol_function, "toStringTag") {
         define_to_string_tag_property(&symbol_prototype, to_string_tag, "Symbol");
+    }
+    if let Some(to_primitive) = well_known_symbol_from_function(&symbol_function, "toPrimitive") {
+        symbol_prototype.define_symbol_property(
+            to_primitive,
+            Property::data(
+                Value::Function(Function::new_native(
+                    Some("[Symbol.toPrimitive]"),
+                    1,
+                    NativeFunction::SymbolPrototypeToPrimitive,
+                    false,
+                )),
+                false,
+                false,
+                true,
+            ),
+        );
     }
     symbol_function.properties.borrow_mut().insert(
         "for".to_owned(),
@@ -213,6 +230,10 @@ pub(crate) fn boxed_symbol(object: &ObjectRef, env: &HashMap<String, Value>) -> 
     let description = symbol_description(object);
     let boxed = symbol_object(symbol_prototype(env), description);
     boxed.define_non_enumerable(SYMBOL_BOXED_PROPERTY.to_owned(), Value::Boolean(true));
+    boxed.define_non_enumerable(
+        SYMBOL_WRAPPED_PROPERTY.to_owned(),
+        Value::Object(object.clone()),
+    );
     Value::Object(boxed)
 }
 
@@ -372,6 +393,15 @@ pub(crate) fn native_symbol_prototype_description(
     this_symbol_description(this_value)
 }
 
+pub(crate) fn native_symbol_prototype_to_primitive(
+    this_value: Value,
+) -> Result<Value, RuntimeError> {
+    let Value::Object(object) = this_value else {
+        return Err(symbol_method_error());
+    };
+    symbol_primitive_value(&object).ok_or_else(symbol_method_error)
+}
+
 pub(crate) fn native_symbol_prototype_to_string(this_value: Value) -> Result<Value, RuntimeError> {
     Ok(Value::String(symbol_description_string(
         this_symbol_description(this_value)?,
@@ -382,10 +412,7 @@ pub(crate) fn native_symbol_prototype_value_of(this_value: Value) -> Result<Valu
     let Value::Object(object) = this_value else {
         return Err(symbol_method_error());
     };
-    if !is_symbol_object(&object) {
-        return Err(symbol_method_error());
-    }
-    Ok(Value::Object(object))
+    symbol_primitive_value(&object).ok_or_else(symbol_method_error)
 }
 
 fn this_symbol_description(this_value: Value) -> Result<Value, RuntimeError> {
@@ -403,6 +430,22 @@ fn symbol_description(object: &ObjectRef) -> Value {
         .own_property(SYMBOL_DESCRIPTION_PROPERTY)
         .map(|property| property.value)
         .unwrap_or(Value::Undefined)
+}
+
+fn symbol_primitive_value(object: &ObjectRef) -> Option<Value> {
+    if !is_symbol_object(object) {
+        return None;
+    }
+    if is_symbol_primitive(object) {
+        return Some(Value::Object(object.clone()));
+    }
+    match object.own_property(SYMBOL_WRAPPED_PROPERTY) {
+        Some(Property {
+            value: Value::Object(symbol),
+            ..
+        }) if is_symbol_primitive(&symbol) => Some(Value::Object(symbol)),
+        _ => None,
+    }
 }
 
 fn symbol_description_string(description: Value) -> String {

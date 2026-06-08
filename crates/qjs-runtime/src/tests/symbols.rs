@@ -36,6 +36,24 @@ fn evaluates_symbol_prototype_builtins() {
         Ok(Value::Boolean(true))
     );
     assert_eq!(
+        eval("let symbol = Symbol.for('id'); Object(symbol).valueOf() === symbol;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let symbol = Symbol.for('id'); Object(symbol)[Symbol.toPrimitive]('string') === symbol;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(Symbol.prototype, Symbol.toPrimitive); typeof d.value + ':' + d.value.length + ':' + d.value.name + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String(
+            "function:1:[Symbol.toPrimitive]:false:false:true".to_owned()
+        ))
+    );
+    assert_eq!(
         eval(
             "let get = Object.getOwnPropertyDescriptor(Symbol.prototype, 'description').get; get.call(Symbol('x'));"
         ),

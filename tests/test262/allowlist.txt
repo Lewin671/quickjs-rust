@@ -3611,6 +3611,7 @@ cases/string-prototype-includes-basic.js
 cases/string-prototype-includes-length.js
 test/built-ins/String/prototype/indexOf/name.js
 test/built-ins/String/prototype/indexOf/not-a-constructor.js
+test/built-ins/String/prototype/indexOf/position-tointeger-errors.js
 test/built-ins/String/prototype/indexOf/position-tointeger-toprimitive.js
 test/built-ins/String/prototype/indexOf/position-tointeger.js
 test/built-ins/String/prototype/indexOf/position-tointeger-wrapped-values.js
@@ -3648,6 +3649,7 @@ test/built-ins/String/prototype/indexOf/S15.5.4.7_A6.js
 test/built-ins/String/prototype/indexOf/S15.5.4.7_A7.js
 test/built-ins/String/prototype/indexOf/S15.5.4.7_A8.js
 test/built-ins/String/prototype/indexOf/S15.5.4.7_A9.js
+test/built-ins/String/prototype/indexOf/searchstring-tostring-errors.js
 test/built-ins/String/prototype/indexOf/searchstring-tostring.js
 test/built-ins/String/prototype/indexOf/searchstring-tostring-toprimitive.js
 test/built-ins/String/prototype/indexOf/searchstring-tostring-wrapped-values.js

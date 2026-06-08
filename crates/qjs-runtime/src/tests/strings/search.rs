@@ -50,6 +50,18 @@ fn evaluates_string_search_builtins() {
         eval("'abc'.indexOf({ toString: function() { return 'b'; } });"),
         Ok(Value::Number(1.0))
     );
+    assert_eq!(
+        eval(
+            "let caught = false; try { ''.indexOf(Object(Symbol('search'))); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { ''.indexOf('', Object(Symbol('position'))); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
     assert_eq!(eval("'abc'.includes('b');"), Ok(Value::Boolean(true)));
     assert_eq!(eval("'abc'.includes('b', 2);"), Ok(Value::Boolean(false)));
     assert_eq!(

@@ -336,6 +336,7 @@ pub(crate) enum NativeFunction {
     SymbolFor,
     SymbolKeyFor,
     SymbolPrototypeDescription,
+    SymbolPrototypeToPrimitive,
     SymbolPrototypeToString,
     SymbolPrototypeValueOf,
     SyntaxError,

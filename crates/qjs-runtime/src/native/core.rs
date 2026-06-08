@@ -41,6 +41,9 @@ pub(super) fn call_core_native(
         NativeFunction::SymbolPrototypeDescription => {
             symbol::native_symbol_prototype_description(this_value)
         }
+        NativeFunction::SymbolPrototypeToPrimitive => {
+            symbol::native_symbol_prototype_to_primitive(this_value)
+        }
         NativeFunction::SymbolPrototypeToString => {
             symbol::native_symbol_prototype_to_string(this_value)
         }

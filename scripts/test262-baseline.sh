@@ -253,7 +253,7 @@ rust_features_supported() {
       ;;
   esac
   case "$rel" in
-    test/built-ins/String/prototype/indexOf/position-tointeger-toprimitive.js|test/built-ins/String/prototype/indexOf/position-tointeger-wrapped-values.js|test/built-ins/String/prototype/indexOf/searchstring-tostring-toprimitive.js|test/built-ins/String/prototype/indexOf/searchstring-tostring-wrapped-values.js)
+    test/built-ins/String/prototype/indexOf/position-tointeger-errors.js|test/built-ins/String/prototype/indexOf/position-tointeger-toprimitive.js|test/built-ins/String/prototype/indexOf/position-tointeger-wrapped-values.js|test/built-ins/String/prototype/indexOf/searchstring-tostring-errors.js|test/built-ins/String/prototype/indexOf/searchstring-tostring-toprimitive.js|test/built-ins/String/prototype/indexOf/searchstring-tostring-wrapped-values.js)
       entries="$(drop_feature_entries "$entries" -e 'Symbol.toPrimitive' -e 'computed-property-names')"
       ;;
   esac
