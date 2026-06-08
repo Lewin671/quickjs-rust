@@ -13,6 +13,10 @@ impl Parser {
                 name,
                 span: token.span,
             }),
+            TokenKind::Let => Ok(Expr::Identifier {
+                name: "let".to_owned(),
+                span: token.span,
+            }),
             TokenKind::Number(raw) => Ok(Expr::Literal(Literal::Number {
                 raw,
                 span: token.span,

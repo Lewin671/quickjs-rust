@@ -127,6 +127,10 @@ fn evaluates_for_of_statements() {
         eval("let target = {}; for (target.value of [5, 6]) {} target.value;"),
         Ok(Value::Number(6.0))
     );
+    assert_eq!(
+        eval("let total = 0; for (var let of [1, 2]) { total = total + let; } total;"),
+        Ok(Value::Number(3.0))
+    );
 }
 
 #[test]

@@ -7,6 +7,7 @@
 // Derived from: test/language/statements/for-of/arguments-unmapped-aliasing.js
 // Derived from: test/language/statements/for-of/arguments-unmapped-mutation.js
 // Derived from: test/language/statements/for-of/arguments-unmapped.js
+// Derived from: test/language/statements/for-of/head-var-bound-names-let.js
 // Derived from: test/language/statements/for-of/string-astral-truncated.js
 // Derived from: test/language/statements/for-of/string-astral.js
 // Derived from: test/language/statements/for-of/string-bmp.js
@@ -139,4 +140,12 @@ var mappedAliasSeen = (function(a, b, c) {
 }(1, 2, 3));
 if (mappedAliasSeen !== "131") {
   throw "mapped arguments iteration should observe parameter mutation";
+}
+
+var varLetTotal = 0;
+for (var let of [23]) {
+  varLetTotal += let;
+}
+if (varLetTotal !== 23) {
+  throw "var for-of binding named let should be allowed";
 }

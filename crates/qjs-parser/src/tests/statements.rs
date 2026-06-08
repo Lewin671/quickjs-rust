@@ -142,6 +142,22 @@ fn parses_for_of_statement() {
         panic!("expected one for-of statement");
     };
     assert!(matches!(left, ForInLeft::Target(_)));
+
+    let script = parse_script("for (var let of values) { total = total + let; }")
+        .expect("source should parse");
+    let [Stmt::ForOf { left, .. }] = script.body.as_slice() else {
+        panic!("expected one for-of statement");
+    };
+    assert!(matches!(
+        left,
+        ForInLeft::VarDecl {
+            name,
+            kind: VarKind::Var,
+            ..
+        } if name == "let"
+    ));
+    assert!(parse_script("for (let let of values) {}").is_err());
+    assert!(parse_script("for (const let of values) {}").is_err());
 }
 
 #[test]

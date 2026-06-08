@@ -88,12 +88,10 @@ impl Parser {
             let kind_token = self.advance();
             let kind = var_kind(&kind_token.kind).expect("token should be declaration kind");
             let name_token = self.advance();
-            let TokenKind::Identifier(name) = name_token.kind else {
-                return Err(ParseError {
-                    message: "expected binding identifier".to_owned(),
-                    span: name_token.span,
-                });
-            };
+            let name = for_head_binding_name(&name_token.kind, kind).ok_or_else(|| ParseError {
+                message: "expected binding identifier".to_owned(),
+                span: name_token.span,
+            })?;
             if self.match_kind(&TokenKind::In) {
                 let right = self.expression()?;
                 self.expect(&TokenKind::RightParen)?;
@@ -337,5 +335,13 @@ impl Parser {
             body,
             span: Span::new(start, end),
         })
+    }
+}
+
+fn for_head_binding_name(kind: &TokenKind, declaration_kind: qjs_ast::VarKind) -> Option<String> {
+    match kind {
+        TokenKind::Identifier(name) => Some(name.clone()),
+        TokenKind::Let if declaration_kind == qjs_ast::VarKind::Var => Some("let".to_owned()),
+        _ => None,
     }
 }
