@@ -12,7 +12,7 @@ pub use object::ObjectRef;
 pub(crate) use property::Property;
 pub use set::SetRef;
 
-use crate::Function;
+use crate::{Function, string};
 
 /// A JavaScript value supported by the current runtime subset.
 #[derive(Clone)]
@@ -60,7 +60,7 @@ impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Number(left), Self::Number(right)) => left == right,
-            (Self::String(left), Self::String(right)) => left == right,
+            (Self::String(left), Self::String(right)) => string::string_utf16_eq(left, right),
             (Self::Boolean(left), Self::Boolean(right)) => left == right,
             (Self::Null, Self::Null) | (Self::Undefined, Self::Undefined) => true,
             (Self::Function(left), Self::Function(right)) => left == right,
@@ -79,7 +79,7 @@ impl Value {
             (Self::Number(left), Self::Number(right)) => {
                 (left.is_nan() && right.is_nan()) || left.to_bits() == right.to_bits()
             }
-            (Self::String(left), Self::String(right)) => left == right,
+            (Self::String(left), Self::String(right)) => string::string_utf16_eq(left, right),
             (Self::Boolean(left), Self::Boolean(right)) => left == right,
             (Self::Null, Self::Null) | (Self::Undefined, Self::Undefined) => true,
             (Self::Function(left), Self::Function(right)) => left == right,

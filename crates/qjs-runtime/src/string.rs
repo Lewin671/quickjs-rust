@@ -48,6 +48,33 @@ pub(crate) fn string_code_units(value: &str) -> Vec<u16> {
         .collect()
 }
 
+pub(crate) fn string_utf16_eq(left: &str, right: &str) -> bool {
+    string_code_units(left) == string_code_units(right)
+}
+
+pub(crate) fn string_from_code_units(code_units: &[u16]) -> String {
+    let mut result = String::new();
+    let mut index = 0;
+    while index < code_units.len() {
+        let first = code_units[index];
+        if (0xD800..=0xDBFF).contains(&first) && index + 1 < code_units.len() {
+            let second = code_units[index + 1];
+            if (0xDC00..=0xDFFF).contains(&second) {
+                let code_point =
+                    0x10000 + ((u32::from(first) - 0xD800) << 10) + u32::from(second) - 0xDC00;
+                if let Some(character) = char::from_u32(code_point) {
+                    result.push(character);
+                    index += 2;
+                    continue;
+                }
+            }
+        }
+        result.push_str(&string_from_code_unit(first));
+        index += 1;
+    }
+    result
+}
+
 pub(crate) fn surrogate_escape_code_unit(character: char) -> Option<u16> {
     let code = character as u32;
     if (SURROGATE_ESCAPE_SENTINEL_BASE..SURROGATE_ESCAPE_SENTINEL_BASE + 0x800).contains(&code) {

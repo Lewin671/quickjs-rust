@@ -40,10 +40,9 @@ pub(crate) fn native_string_prototype_char_at(
     }
     let index = position as usize;
     Ok(Value::String(
-        value
-            .chars()
-            .nth(index)
-            .map(|character| character.to_string())
+        string_code_units(&value)
+            .get(index)
+            .map(|code_unit| string_from_code_unit(*code_unit))
             .unwrap_or_default(),
     ))
 }

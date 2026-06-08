@@ -2,8 +2,11 @@ use std::collections::HashMap;
 
 use crate::{
     Function, ObjectRef, Property, PropertyKey, RuntimeError, Value,
-    boolean::BOOLEAN_DATA_PROPERTY, function_prototype, number::NUMBER_DATA_PROPERTY,
-    string::STRING_DATA_PROPERTY, symbol,
+    boolean::BOOLEAN_DATA_PROPERTY,
+    function_prototype,
+    number::NUMBER_DATA_PROPERTY,
+    string::{self, STRING_DATA_PROPERTY},
+    symbol,
 };
 
 use super::descriptor::native_object_define_properties;
@@ -102,16 +105,21 @@ fn boxed_string(value: &str, env: &HashMap<String, Value>) -> Value {
     object.define_property(
         "length".to_owned(),
         Property::data(
-            Value::Number(value.chars().count() as f64),
+            Value::Number(string::string_code_units(value).len() as f64),
             false,
             false,
             false,
         ),
     );
-    for (index, character) in value.chars().enumerate() {
+    for (index, code_unit) in string::string_code_units(value).into_iter().enumerate() {
         object.define_property(
             index.to_string(),
-            Property::data(Value::String(character.to_string()), true, false, false),
+            Property::data(
+                Value::String(string::string_from_code_unit(code_unit)),
+                true,
+                false,
+                false,
+            ),
         );
     }
     Value::Object(object)

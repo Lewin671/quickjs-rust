@@ -141,7 +141,9 @@ pub(crate) fn property_value_key(
         }
         Value::String(value) => {
             if key == "length" {
-                Ok(Value::Number(value.chars().count() as f64))
+                Ok(Value::Number(
+                    crate::string::string_code_units(&value).len() as f64,
+                ))
             } else {
                 let descriptor = crate::string::string_property(&value, key)
                     .map(|value| Property::data(value, true, false, false))

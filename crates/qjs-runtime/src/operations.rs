@@ -3,9 +3,9 @@ use std::{cmp::Ordering, collections::HashMap};
 use qjs_ast::{BinaryOp, UnaryOp};
 
 use crate::{
-    Property, PropertyKey, RuntimeError, Value, call_function, has_property_key, is_truthy, symbol,
-    to_int32_number, to_js_string_with_env, to_number, to_number_with_env, to_primitive_with_env,
-    to_property_key_value, to_uint32_number, value_prototype,
+    Property, PropertyKey, RuntimeError, Value, call_function, has_property_key, is_truthy, string,
+    symbol, to_int32_number, to_js_string_with_env, to_number, to_number_with_env,
+    to_primitive_with_env, to_property_key_value, to_uint32_number, value_prototype,
 };
 
 pub(crate) fn eval_unary(
@@ -43,8 +43,8 @@ pub(crate) fn eval_binary(
     match op {
         BinaryOp::Eq => return Ok(Value::Boolean(abstract_eq(&left, &right, env)?)),
         BinaryOp::Ne => return Ok(Value::Boolean(!abstract_eq(&left, &right, env)?)),
-        BinaryOp::StrictEq => return Ok(Value::Boolean(left == right)),
-        BinaryOp::StrictNe => return Ok(Value::Boolean(left != right)),
+        BinaryOp::StrictEq => return Ok(Value::Boolean(strict_eq(&left, &right))),
+        BinaryOp::StrictNe => return Ok(Value::Boolean(!strict_eq(&left, &right))),
         BinaryOp::Add => {
             let left = to_primitive_with_env(left, env)?;
             let right = to_primitive_with_env(right, env)?;
@@ -155,7 +155,14 @@ fn eval_relational(
 }
 
 fn compare_utf16_code_units(left: &str, right: &str) -> Ordering {
-    left.encode_utf16().cmp(right.encode_utf16())
+    string::string_code_units(left).cmp(&string::string_code_units(right))
+}
+
+fn strict_eq(left: &Value, right: &Value) -> bool {
+    match (left, right) {
+        (Value::String(left), Value::String(right)) => string::string_utf16_eq(left, right),
+        _ => left == right,
+    }
 }
 
 fn abstract_eq(
@@ -191,7 +198,7 @@ fn abstract_eq(
             let primitive = to_primitive_with_env(right.clone(), env)?;
             abstract_eq(left, &primitive, env)
         }
-        _ => Ok(left == right),
+        _ => Ok(strict_eq(left, right)),
     }
 }
 

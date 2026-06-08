@@ -5,7 +5,9 @@ use crate::{
     to_js_string_with_env, to_length_with_env, to_number, to_uint16,
 };
 
-use super::{STRING_DATA_PROPERTY, string_from_code_unit};
+use super::{
+    STRING_DATA_PROPERTY, string_code_units, string_from_code_unit, string_from_code_units,
+};
 
 pub(crate) fn native_string(
     function: &Function,
@@ -100,14 +102,9 @@ fn string_from_code_point(code_point: u32) -> String {
     if code_point <= 0xFFFF {
         return string_from_code_unit(code_point as u16);
     }
-    let scalar = code_point - 0x10000;
-    let high = 0xD800 + ((scalar >> 10) as u16);
-    let low = 0xDC00 + ((scalar & 0x3FF) as u16);
-    format!(
-        "{}{}",
-        string_from_code_unit(high),
-        string_from_code_unit(low)
-    )
+    char::from_u32(code_point)
+        .unwrap_or(char::REPLACEMENT_CHARACTER)
+        .to_string()
 }
 
 fn require_object_coercible(value: Value, context: &str) -> Result<Value, RuntimeError> {
@@ -128,16 +125,21 @@ fn define_string_data(object: &ObjectRef, value: &str) {
     object.define_property(
         "length".to_owned(),
         Property::data(
-            Value::Number(value.chars().count() as f64),
+            Value::Number(string_code_units(value).len() as f64),
             false,
             false,
             false,
         ),
     );
-    for (index, character) in value.chars().enumerate() {
+    for (index, code_unit) in string_code_units(value).into_iter().enumerate() {
         object.define_property(
             index.to_string(),
-            Property::data(Value::String(character.to_string()), true, false, false),
+            Property::data(
+                Value::String(string_from_code_units(&[code_unit])),
+                true,
+                false,
+                false,
+            ),
         );
     }
 }

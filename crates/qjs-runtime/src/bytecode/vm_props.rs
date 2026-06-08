@@ -42,7 +42,9 @@ pub(super) fn get_property(
         Value::Array(elements) if key == "length" => Ok(Value::Number(elements.len() as f64)),
         Value::Array(elements) => property_value(Value::Array(elements), key, env),
         Value::Function(function) => property_value(Value::Function(function), key, env),
-        Value::String(value) if key == "length" => Ok(Value::Number(value.chars().count() as f64)),
+        Value::String(value) if key == "length" => {
+            Ok(Value::Number(string::string_code_units(&value).len() as f64))
+        }
         Value::String(value) => Ok(string::string_property(&value, key)
             .or_else(|| inherited_string_prototype_property(env, key))
             .unwrap_or(Value::Undefined)),
