@@ -253,6 +253,11 @@ rust_features_supported() {
       ;;
   esac
   case "$rel" in
+    test/built-ins/String/prototype/indexOf/position-tointeger-toprimitive.js|test/built-ins/String/prototype/indexOf/position-tointeger-wrapped-values.js|test/built-ins/String/prototype/indexOf/searchstring-tostring-toprimitive.js|test/built-ins/String/prototype/indexOf/searchstring-tostring-wrapped-values.js)
+      entries="$(drop_feature_entries "$entries" -e 'Symbol.toPrimitive' -e 'computed-property-names')"
+      ;;
+  esac
+  case "$rel" in
     test/built-ins/Array/prototype/with/*|test/built-ins/Array/prototype/toReversed/*|test/built-ins/Array/prototype/toSpliced/*|test/built-ins/Array/prototype/toSorted/*)
       entries="$(drop_feature_entries "$entries" -e 'change-array-by-copy' -e 'exponentiation')"
       ;;
