@@ -708,6 +708,12 @@ cases/function-closure-argument-basic.js
 cases/function-constructor-prototype-function-valued.js
 cases/function-constructor-basic.js
 cases/function-constructor-call-body.js
+cases/function-constructor-html-close-comment-body.js
+cases/function-constructor-html-close-comment-body-wrapped.js
+cases/function-constructor-html-close-comment-params.js
+cases/function-constructor-html-close-comment-params-throws.js
+cases/function-constructor-html-comments-params.js
+cases/function-constructor-html-open-comment-body.js
 cases/function-hoist-before-declaration-basic.js
 cases/function-hoist-inside-body-basic.js
 cases/string-addition-basic.js

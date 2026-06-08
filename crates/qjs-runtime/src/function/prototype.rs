@@ -16,10 +16,13 @@ pub(crate) fn native_function(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let (params, body) = function_source_parts(argument_values, env)?;
-    let source = format!("function anonymous({params}) {{\n{body}\n}}");
+    let source = format!("function anonymous({params}\n) {{\n{body}\n}}");
     let script = parse_script(&source).map_err(|error| RuntimeError {
         thrown: None,
-        message: format!("invalid Function constructor source: {}", error.message),
+        message: format!(
+            "SyntaxError: invalid Function constructor source: {}",
+            error.message
+        ),
     })?;
 
     let Some(Stmt::FunctionDecl {

@@ -439,6 +439,17 @@ fn evaluates_function_declarations_and_calls() {
         eval("let C = Function('x', 'this.x = x;'); let c = new C(9); c.x;"),
         Ok(Value::Number(9.0))
     );
+    assert_eq!(eval("Function('<!--'); 1;"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("Function('-->'); 1;"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("Function('<!--', ''); 1;"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("Function('\\n-->', ''); 1;"), Ok(Value::Number(1.0)));
+    assert!(eval("Function('-->', '');").is_err());
+    assert_eq!(
+        eval(
+            "let caught = false; try { Function('-->', ''); } catch (error) { caught = error instanceof SyntaxError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
     assert!(eval("Function('a +', 'return a;');").is_err());
     assert!(eval("Function('break;');").is_err());
 }

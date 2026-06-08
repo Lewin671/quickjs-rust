@@ -21,6 +21,10 @@ impl Lexer<'_> {
     }
 
     pub(super) fn minus(&mut self) {
+        if self.html_close_comment() {
+            return;
+        }
+
         let start = self.cursor;
         self.advance();
         let kind = match self.peek() {
@@ -111,6 +115,10 @@ impl Lexer<'_> {
     }
 
     pub(super) fn less(&mut self) {
+        if self.html_open_comment() {
+            return;
+        }
+
         let start = self.cursor;
         self.advance();
         let kind = match self.peek() {

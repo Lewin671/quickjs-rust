@@ -5,6 +5,39 @@ use crate::{LexError, TokenKind};
 use super::{Lexer, char_class::is_identifier_continue};
 
 impl Lexer<'_> {
+    pub(super) fn html_open_comment(&mut self) -> bool {
+        if self.peek() != Some('<')
+            || self.peek_nth(1) != Some('!')
+            || self.peek_nth(2) != Some('-')
+            || self.peek_nth(3) != Some('-')
+        {
+            return false;
+        }
+
+        self.advance();
+        self.advance();
+        self.advance();
+        self.advance();
+        self.skip_line_comment_tail();
+        true
+    }
+
+    pub(super) fn html_close_comment(&mut self) -> bool {
+        if self.peek() != Some('-')
+            || self.peek_nth(1) != Some('-')
+            || self.peek_nth(2) != Some('>')
+            || !self.has_preceding_line_terminator()
+        {
+            return false;
+        }
+
+        self.advance();
+        self.advance();
+        self.advance();
+        self.skip_line_comment_tail();
+        true
+    }
+
     pub(super) fn slash_or_comment(&mut self) -> Result<(), LexError> {
         let start = self.cursor;
         self.advance();
@@ -12,9 +45,7 @@ impl Lexer<'_> {
         match self.peek() {
             Some('/') => {
                 self.advance();
-                while !matches!(self.peek(), None | Some('\n' | '\r')) {
-                    self.advance();
-                }
+                self.skip_line_comment_tail();
                 Ok(())
             }
             Some('*') => {
@@ -129,5 +160,18 @@ impl Lexer<'_> {
             message: "unterminated block comment".to_owned(),
             span: Span::new(start, self.cursor),
         })
+    }
+
+    fn skip_line_comment_tail(&mut self) {
+        while !matches!(self.peek(), None | Some('\n' | '\r')) {
+            self.advance();
+        }
+    }
+
+    fn has_preceding_line_terminator(&self) -> bool {
+        self.source[..self.cursor]
+            .chars()
+            .next_back()
+            .is_some_and(|ch| matches!(ch, '\n' | '\r'))
     }
 }

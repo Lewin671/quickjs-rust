@@ -86,6 +86,37 @@ fn skips_line_and_block_comments() {
 }
 
 #[test]
+fn skips_annex_b_html_like_comments() {
+    let tokens = lex("one <!-- ignore\ntwo\n--> skip\nthree").expect("source should lex");
+    let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::Identifier("one".to_owned()),
+            TokenKind::Identifier("two".to_owned()),
+            TokenKind::Identifier("three".to_owned()),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn html_close_comment_requires_preceding_line_terminator() {
+    let tokens = lex("one-->two").expect("source should lex");
+    let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::Identifier("one".to_owned()),
+            TokenKind::MinusMinus,
+            TokenKind::Greater,
+            TokenKind::Identifier("two".to_owned()),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
 fn skips_ecmascript_whitespace_and_line_terminators() {
     let tokens =
         lex("one\u{0009}\u{000B}\u{000C}\u{0020}\u{00A0}\u{000A}\u{000D}\u{2028}\u{2029}two")
