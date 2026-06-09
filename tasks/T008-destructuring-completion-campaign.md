@@ -17,9 +17,9 @@ syntax pre-filter.
 
 ## Slices
 
-- [ ] S1 Function parameters: binding patterns in function/arrow parameters,
+- [x] S1 Function parameters: binding patterns in function/arrow parameters,
       including nested patterns and rest elements.
-- [ ] S2 Parameter defaults: default values in plain and pattern parameters
+- [x] S2 Parameter defaults: default values in plain and pattern parameters
       (`default-parameters` cluster).
 - [ ] S3 Assignment patterns: destructuring assignment expressions,
       including object rest (`object-rest`) and evaluation order.
