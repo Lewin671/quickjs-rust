@@ -119,17 +119,28 @@ Run additional checks when relevant:
 behavior supported by the pinned QuickJS-NG reference but not yet supported by
 quickjs-rust. It runs `scripts/test262-baseline.sh --engine both`, stores the
 raw summary and case results under `target/test262-gaps/`, and prints a compact
-report with the total QuickJS-NG-pass/quickjs-rust-nonpass count, the split
-between runtime failures, timeouts, and harness gaps, top affected areas, and
-the first cases to investigate. Use `--filter test/<prefix>` to focus the scan
-on one Test262 subtree and `--all` when the focused scan should be exhaustive.
-It prints a greedy next area by default. The recommendation prioritizes areas
-with real quickjs-rust failures or timeouts, then falls back to the largest
-harness-gap area when the sample contains only skipped cases. Use
-`--no-recommend` when only the raw gap report is needed. Treat the recommended
-area as the smallest useful planning and commit boundary unless the area is too
-broad to review as one change; avoid splitting follow-up work into one commit
-per individual Test262 case.
+report with the total QuickJS-NG-pass/quickjs-rust actionable gap count, the
+split between runtime failures, included timeouts, excluded stress timeouts, and
+harness gaps, top affected areas, and the first cases to investigate. Use
+`--filter test/<prefix>` to focus the scan on one Test262 subtree and `--all`
+when the focused scan should be exhaustive. It prints a greedy next area by
+default. For unfiltered `--all` recommendation runs, the default is a bounded
+greedy probe over `TEST262_GAP_PROBE_LIMIT` cases, currently 100, from
+`TEST262_GAP_PROBE_SHARD`, currently `1/16`, so each agent iteration can pick a
+high-yield area without paying for a full audit or biasing entirely toward the
+first sorted Test262 directories.
+Use `--exact --all` when the task needs a complete report or when a probe finds
+no gaps and the agent needs to prove the exit condition. The recommendation
+prioritizes areas with real quickjs-rust failures, then falls back to the
+largest harness-gap area when the sample contains only skipped cases. Stress
+timeouts are excluded from the default actionable gap list so large conformance
+stress loops do not hide missing behavior; use `--include-timeouts` when
+performance parity is the task. Use `--probe-limit N` and `--probe-shard I/N`
+to tune recommendation speed versus confidence, and `--no-recommend` when only
+the raw gap report is needed. Treat the recommended area as the smallest useful
+planning and commit boundary unless the area is too broad to review as one
+change; avoid splitting follow-up work into one commit per individual Test262
+case.
 
 `scripts/test262-subset.sh` runs the curated Test262 allowlist. Allowlist
 entries may point to local derived cases under `tests/test262/cases/` or pinned
@@ -151,8 +162,11 @@ the inline and block-list forms used by Test262 `flags`, `includes`, and
 `features` entries. Negative Test262 cases are runnable by the quickjs-rust
 baseline harness; parse, early, runtime, and resolution failures are matched
 against the Test262 negative metadata before being counted as expected results.
-Raw Test262 cases run without injected harness files. Set `QJS_CLI_BIN` to
-reuse a prebuilt quickjs-rust binary across multiple shard runs. The
+Raw Test262 cases run without injected harness files. `--stop-after-limit` is
+reserved for bounded probe callers such as `find-qjsng-gaps.sh`; do not use it
+for coverage accounting because it stops enumeration once the run limit is
+reached. Set `QJS_CLI_BIN` to reuse a prebuilt quickjs-rust binary across
+multiple shard runs. The
 `Test262 Coverage` GitHub Actions workflow runs once for each successful `CI`
 commit, runs the sharded quickjs-rust scan and QuickJS-NG baseline in parallel,
 uploads shard summaries, and aggregates the result into the workflow summary

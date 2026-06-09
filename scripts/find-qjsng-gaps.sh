@@ -10,13 +10,24 @@ OUT_DIR=""
 TOP_COUNT=20
 AREA_COUNT=10
 RECOMMEND=1
+INCLUDE_TIMEOUTS=0
+EXACT_SCAN=0
+PROBE_LIMIT="${TEST262_GAP_PROBE_LIMIT:-100}"
+PROBE_SHARD="${TEST262_GAP_PROBE_SHARD:-1/16}"
 
 usage() {
   cat >&2 <<'USAGE'
-usage: scripts/find-qjsng-gaps.sh [--limit N | --all] [--filter test/<prefix>] [--out-dir PATH] [--top N] [--areas N] [--no-recommend]
+usage: scripts/find-qjsng-gaps.sh [--limit N | --all] [--filter test/<prefix>] [--out-dir PATH] [--top N] [--areas N] [--probe-limit N] [--probe-shard I/N] [--exact] [--include-timeouts] [--no-recommend]
 
 Runs a QuickJS-NG comparison baseline and prints the cases where QuickJS-NG
-passes but quickjs-rust does not. A greedy next area is recommended by default.
+passes but quickjs-rust has an actionable feature gap. Stress timeouts are
+reported separately by default; use --include-timeouts to include them in the
+gap list and greedy recommendation.
+
+For unfiltered --all recommendation runs, the default strategy is a fast greedy
+probe over TEST262_GAP_PROBE_LIMIT cases from TEST262_GAP_PROBE_SHARD. Use
+--exact --all when a complete audit is required, especially to prove there are
+no remaining gaps.
 Raw summary and case JSONL files are written under target/test262-gaps/ unless
 --out-dir is supplied.
 USAGE
@@ -53,8 +64,26 @@ while [ "$#" -gt 0 ]; do
       AREA_COUNT="$2"
       shift 2
       ;;
+    --probe-limit)
+      [ "$#" -ge 2 ] || { usage; exit 2; }
+      PROBE_LIMIT="$2"
+      shift 2
+      ;;
+    --probe-shard)
+      [ "$#" -ge 2 ] || { usage; exit 2; }
+      PROBE_SHARD="$2"
+      shift 2
+      ;;
+    --exact)
+      EXACT_SCAN=1
+      shift
+      ;;
     --recommend)
       RECOMMEND=1
+      shift
+      ;;
+    --include-timeouts)
+      INCLUDE_TIMEOUTS=1
       shift
       ;;
     --no-recommend)
@@ -76,6 +105,19 @@ case "$RUN_LIMIT" in
   all) ;;
   ''|*[!0-9]*)
     echo "error: --limit must be a non-negative integer or --all: $RUN_LIMIT" >&2
+    exit 2
+    ;;
+esac
+case "$PROBE_LIMIT" in
+  ''|*[!0-9]*|0)
+    echo "error: --probe-limit must be a positive integer: $PROBE_LIMIT" >&2
+    exit 2
+    ;;
+esac
+case "$PROBE_SHARD" in
+  */*) ;;
+  *)
+    echo "error: --probe-shard must use I/N form: $PROBE_SHARD" >&2
     exit 2
     ;;
 esac
@@ -107,15 +149,26 @@ mkdir -p "$OUT_DIR"
 SUMMARY_JSON="$OUT_DIR/summary.json"
 CASES_JSONL="$OUT_DIR/cases.jsonl"
 GAPS_TSV="$OUT_DIR/qjsng-pass-rust-nonpass.tsv"
+TIMEOUTS_TSV="$OUT_DIR/qjsng-pass-rust-timeout.tsv"
 AREAS_TSV="$OUT_DIR/gap-areas.tsv"
 RECOMMENDATIONS_TSV="$OUT_DIR/recommendations.tsv"
 BASELINE_LOG="$OUT_DIR/baseline.log"
 
+PROBE_SCAN=0
+BASELINE_RUN_LIMIT="$RUN_LIMIT"
+if [ "$RUN_LIMIT" = "all" ] && [ -z "$FILTER_PREFIX" ] && [ "$RECOMMEND" -eq 1 ] && [ "$EXACT_SCAN" -eq 0 ]; then
+  PROBE_SCAN=1
+  BASELINE_RUN_LIMIT="$PROBE_LIMIT"
+fi
+
 baseline_args=(--engine both --summary-json "$SUMMARY_JSON" --case-results-jsonl "$CASES_JSONL" --no-fail)
-if [ "$RUN_LIMIT" = "all" ]; then
+if [ "$BASELINE_RUN_LIMIT" = "all" ]; then
   baseline_args+=(--all)
 else
-  baseline_args+=(--limit "$RUN_LIMIT")
+  baseline_args+=(--limit "$BASELINE_RUN_LIMIT")
+fi
+if [ "$PROBE_SCAN" -eq 1 ]; then
+  baseline_args+=(--shard "$PROBE_SHARD" --stop-after-limit)
 fi
 if [ -n "$FILTER_PREFIX" ]; then
   baseline_args+=(--filter "$FILTER_PREFIX")
@@ -133,7 +186,8 @@ if [ "$baseline_status" -ne 0 ]; then
   exit "$baseline_status"
 fi
 
-awk -F'"' '
+: >"$TIMEOUTS_TSV"
+awk -F'"' -v include_timeouts="$INCLUDE_TIMEOUTS" -v timeouts_file="$TIMEOUTS_TSV" '
   function area_for(path, parts, n, limit, i, area) {
     n = split(path, parts, "/")
     if (n < 2) {
@@ -159,7 +213,14 @@ awk -F'"' '
     qjsng_result = $24
     if (qjsng_result == "pass" && rust_result != "pass") {
       area = area_for(path)
-      print path "\t" rust_result "\t" rust_skip "\t" area
+      line = path "\t" rust_result "\t" rust_skip "\t" area
+      if (rust_result == "timeout") {
+        print line > timeouts_file
+        if (include_timeouts != 1) {
+          next
+        }
+      }
+      print line
     }
   }
 ' "$CASES_JSONL" >"$GAPS_TSV"
@@ -192,22 +253,41 @@ awk -F'\t' '
 total_gaps="$(wc -l <"$GAPS_TSV" | tr -d ' ')"
 rust_fail="$(awk -F'\t' '$2 == "fail" { count++ } END { print count + 0 }' "$GAPS_TSV")"
 rust_timeout="$(awk -F'\t' '$2 == "timeout" { count++ } END { print count + 0 }' "$GAPS_TSV")"
+excluded_timeout="$(wc -l <"$TIMEOUTS_TSV" | tr -d ' ')"
 harness_gap="$(awk -F'\t' '$2 == "skipped" { count++ } END { print count + 0 }' "$GAPS_TSV")"
 
 echo
 echo "QuickJS-NG gap report"
 echo "  filter: ${FILTER_PREFIX:-test/}"
-echo "  limit: $RUN_LIMIT"
+echo "  requested limit: $RUN_LIMIT"
+if [ "$PROBE_SCAN" -eq 1 ]; then
+  echo "  scan: greedy probe over $BASELINE_RUN_LIMIT cases from shard $PROBE_SHARD"
+else
+  echo "  scan: exact requested range"
+fi
 echo "  output: $OUT_DIR"
 echo
-echo "QuickJS-NG passes, quickjs-rust does not: $total_gaps"
+if [ "$INCLUDE_TIMEOUTS" -eq 1 ]; then
+  echo "QuickJS-NG passes, quickjs-rust does not: $total_gaps"
+else
+  echo "QuickJS-NG passes, quickjs-rust actionable gaps: $total_gaps"
+fi
 echo "  rust fail: $rust_fail"
 echo "  rust timeout: $rust_timeout"
+if [ "$INCLUDE_TIMEOUTS" -eq 0 ]; then
+  echo "  rust timeout excluded: $excluded_timeout"
+fi
 echo "  rust harness gap: $harness_gap"
 
 if [ "$total_gaps" -eq 0 ]; then
   echo
-  echo "No QuickJS-NG pass / quickjs-rust non-pass cases found in this run."
+  if [ "$PROBE_SCAN" -eq 1 ]; then
+    echo "No gaps found in the greedy probe. Run with --exact --all to confirm the full Test262 range."
+  elif [ "$INCLUDE_TIMEOUTS" -eq 1 ]; then
+    echo "No QuickJS-NG pass / quickjs-rust non-pass cases found in this run."
+  else
+    echo "No QuickJS-NG pass / quickjs-rust actionable gaps found in this run."
+  fi
   exit 0
 fi
 
@@ -242,6 +322,9 @@ if [ "$RECOMMEND" -eq 1 ]; then
     echo "  rust timeout: $rec_timeout"
     echo "  harness gaps: $rec_harness"
     echo "  rerun: ./scripts/find-qjsng-gaps.sh --filter $rec_area --all"
+    if [ "$PROBE_SCAN" -eq 1 ]; then
+      echo "  note: recommendation is from a greedy probe; use --exact --all for a complete audit."
+    fi
     echo
     echo "Recommended cases:"
     awk -F'\t' -v area="$rec_area" '$4 == area {
@@ -260,5 +343,6 @@ echo "Raw files:"
 echo "  summary: $SUMMARY_JSON"
 echo "  cases: $CASES_JSONL"
 echo "  gaps: $GAPS_TSV"
+echo "  excluded timeouts: $TIMEOUTS_TSV"
 echo "  recommendations: $RECOMMENDATIONS_TSV"
 echo "  baseline log: $BASELINE_LOG"

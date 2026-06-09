@@ -15,13 +15,14 @@ ENGINE="quickjs-rust"
 SUMMARY_JSON=""
 CASE_RESULTS_JSONL=""
 NO_FAIL=0
+STOP_AFTER_LIMIT=0
 SHARD_INDEX=1
 SHARD_TOTAL=1
 CARGO_BIN="${CARGO:-cargo}"
 
 usage() {
   cat >&2 <<'USAGE'
-usage: scripts/test262-baseline.sh [--limit N | --all] [--filter test/<prefix>] [--engine quickjs-rust|quickjs-ng|both] [--shard I/N] [--summary-json PATH] [--case-results-jsonl PATH] [--no-fail]
+usage: scripts/test262-baseline.sh [--limit N | --all] [--filter test/<prefix>] [--engine quickjs-rust|quickjs-ng|both] [--shard I/N] [--summary-json PATH] [--case-results-jsonl PATH] [--stop-after-limit] [--no-fail]
 Enumerates upstream Test262 cases, classifies harness gaps, and executes a baseline sample.
 USAGE
 }
@@ -71,6 +72,10 @@ while [ "$#" -gt 0 ]; do
       [ "$#" -ge 2 ] || { usage; exit 2; }
       CASE_RESULTS_JSONL="$2"
       shift 2
+      ;;
+    --stop-after-limit)
+      STOP_AFTER_LIMIT=1
+      shift
       ;;
     --no-fail)
       NO_FAIL=1
@@ -653,6 +658,10 @@ qjsng_pass_rust_harness_gap=0 qjsng_pass_rust_fail=0 qjsng_pass_rust_timeout=0
 both_nonpass=0 both_fail_or_timeout=0
 
 while IFS= read -r file; do
+  if [ "$STOP_AFTER_LIMIT" -eq 1 ] && [ "$RUN_LIMIT" != "all" ] && [ "$run" -ge "$RUN_LIMIT" ]; then
+    break
+  fi
+
   rel="${file#"$TEST262_DIR/"}"
   if [ -n "$FILTER_PREFIX" ] && [[ "$rel" != "$FILTER_PREFIX"* ]]; then
     continue
