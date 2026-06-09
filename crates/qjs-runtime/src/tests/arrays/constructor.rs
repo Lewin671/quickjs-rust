@@ -1,6 +1,28 @@
 use crate::{Value, eval};
 
 #[test]
+fn evaluates_array_constructor_length_argument() {
+    assert_eq!(eval("new Array(3).length;"), Ok(Value::Number(3.0)));
+    assert_eq!(eval("new Array(3)[0];"), Ok(Value::Undefined));
+    assert_eq!(
+        eval("let value = new Array('3'); value.length + ':' + value[0];"),
+        Ok(Value::String("1:3".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { new Array(1.5); } catch (error) { caught = error instanceof RangeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { new Array(Number.MAX_VALUE); } catch (error) { caught = error instanceof RangeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn evaluates_array_of_static_constructor() {
     assert_eq!(eval("Array.of.length;"), Ok(Value::Number(0.0)));
     assert_eq!(

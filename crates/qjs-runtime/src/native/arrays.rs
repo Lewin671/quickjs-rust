@@ -11,7 +11,7 @@ pub(super) fn call_array_native(
     env: &mut HashMap<String, Value>,
 ) -> NativeCallResult {
     let value = match native {
-        NativeFunction::Array => array::native_array(argument_values)?,
+        NativeFunction::Array => array::native_array(argument_values, env)?,
         NativeFunction::ArrayFrom => array::native_array_from(this_value, argument_values, env)?,
         NativeFunction::ArrayIsArray => array::native_array_is_array(argument_values, env)?,
         NativeFunction::ArrayOf => array::native_array_of(argument_values)?,

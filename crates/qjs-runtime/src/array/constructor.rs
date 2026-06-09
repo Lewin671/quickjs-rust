@@ -2,20 +2,18 @@ use std::collections::HashMap;
 
 use crate::{
     ArrayRef, Function, Property, PropertyKey, RuntimeError, Value, array_prototype, call_function,
-    construct_function, is_truthy, property_value, property_value_key, symbol,
+    construct_function, is_truthy, object::array_length_from_descriptor_value, property_value,
+    property_value_key, symbol,
 };
 
 use super::array_like::array_like_values_with_env;
 
-pub(crate) fn native_array(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+pub(crate) fn native_array(
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
     if let [Value::Number(length)] = argument_values {
-        if !length.is_finite() || *length < 0.0 || length.fract() != 0.0 {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "RangeError: invalid array length".to_owned(),
-            });
-        }
-        let length = *length as usize;
+        let length = array_length_from_descriptor_value(Value::Number(*length), env)?;
         return Ok(Value::Array(ArrayRef::new_sparse(
             vec![Value::Undefined; length],
             (0..length).collect(),
