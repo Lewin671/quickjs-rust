@@ -306,6 +306,16 @@ rust_features_supported() {
       ;;
   esac
   case "$rel" in
+    test/built-ins/Array/prototype/concat/create-species-null.js|test/built-ins/Array/prototype/concat/create-species-undef.js)
+      entries="$(drop_feature_entries "$entries" -e 'Symbol.species')"
+      ;;
+  esac
+  case "$rel" in
+    test/built-ins/Array/prototype/concat/create-proto-from-ctor-realm-array.js)
+      entries="$(drop_feature_entries "$entries" -e 'cross-realm' -e 'Symbol.species')"
+      ;;
+  esac
+  case "$rel" in
     test/built-ins/Array/prototype/entries/*|test/built-ins/Array/prototype/keys/*|test/built-ins/Array/prototype/values/*|test/built-ins/Array/prototype/Symbol.iterator.js)
       entries="$(drop_feature_entries "$entries" -e 'Symbol.iterator')"
       ;;
