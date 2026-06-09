@@ -281,6 +281,11 @@ rust_features_supported() {
       ;;
   esac
   case "$rel" in
+    test/built-ins/Symbol/toStringTag/prop-desc.js|test/built-ins/Symbol/prototype/Symbol.toStringTag.js|test/built-ins/Map/prototype/Symbol.toStringTag.js|test/built-ins/Set/prototype/Symbol.toStringTag.js|test/built-ins/WeakMap/prototype/Symbol.toStringTag.js|test/built-ins/WeakSet/prototype/Symbol.toStringTag.js|test/built-ins/Promise/prototype/Symbol.toStringTag.js|test/built-ins/Math/Symbol.toStringTag.js|test/built-ins/JSON/Symbol.toStringTag.js)
+      entries="$(drop_feature_entries "$entries" -e 'Symbol.toStringTag')"
+      ;;
+  esac
+  case "$rel" in
     test/built-ins/Array/prototype/with/*|test/built-ins/Array/prototype/toReversed/*|test/built-ins/Array/prototype/toSpliced/*|test/built-ins/Array/prototype/toSorted/*)
       entries="$(drop_feature_entries "$entries" -e 'change-array-by-copy' -e 'exponentiation')"
       ;;
