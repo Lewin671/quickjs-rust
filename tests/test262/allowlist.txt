@@ -4209,3 +4209,17 @@ cases/weak-map-basic.js
 cases/weak-collection-constructor-adder.js
 cases/weak-collection-registered-symbol-rejection.js
 cases/weak-set-basic.js
+test/built-ins/Set/prototype/difference/allows-set-like-object.js
+test/built-ins/Set/prototype/difference/has-is-callable.js
+test/built-ins/Set/prototype/intersection/allows-set-like-object.js
+test/built-ins/Set/prototype/intersection/has-is-callable.js
+test/built-ins/Set/prototype/isDisjointFrom/allows-set-like-object.js
+test/built-ins/Set/prototype/isDisjointFrom/has-is-callable.js
+test/built-ins/Set/prototype/isSubsetOf/allows-set-like-object.js
+test/built-ins/Set/prototype/isSubsetOf/has-is-callable.js
+test/built-ins/Set/prototype/isSupersetOf/allows-set-like-object.js
+test/built-ins/Set/prototype/isSupersetOf/has-is-callable.js
+test/built-ins/Set/prototype/symmetricDifference/allows-set-like-object.js
+test/built-ins/Set/prototype/symmetricDifference/has-is-callable.js
+test/built-ins/Set/prototype/union/allows-set-like-object.js
+test/built-ins/Set/prototype/union/has-is-callable.js

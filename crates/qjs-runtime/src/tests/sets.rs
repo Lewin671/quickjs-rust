@@ -148,6 +148,14 @@ fn evaluates_set_composition_methods_with_set_like_objects() {
         Value::String("1:1".to_owned()),
     );
     assert_eval(
+        "var other = { size: 2, has: function(value) { return value === 2; }, keys: function* keys() { yield 2; yield 3; } }; [...new Set([1, 2]).union(other)].join('|');",
+        Value::String("1|2|3".to_owned()),
+    );
+    assert_eval(
+        "var other = { size: 3, has: function(value) { return value === 2; }, keys: function* keys() { throw 'keys should not be called'; } }; [...new Set([1, 2]).difference(other)].join('|');",
+        Value::String("1".to_owned()),
+    );
+    assert_eval(
         "var other = { size: 3, has: function(value) { return value === 2; }, keys: function() { throw 'keys should not be called'; } }; var result = new Set([1, 2]).difference(other); var seen = ''; result.forEach(function(value) { seen = seen + value; }); result.size + ':' + seen;",
         Value::String("1:1".to_owned()),
     );

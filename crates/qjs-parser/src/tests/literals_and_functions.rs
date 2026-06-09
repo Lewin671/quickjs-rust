@@ -319,6 +319,30 @@ fn parses_object_literal_and_member_assignment() {
     assert_eq!(params.positional, ["a".to_owned(), "b".to_owned()]);
     assert!(!constructable);
 
+    let script = parse_script("({ keys: function* keys() { yield 2; yield 3; } });")
+        .expect("source should parse");
+    let [Stmt::Expr(Expr::Object { properties, .. })] = script.body.as_slice() else {
+        panic!("expected object expression with generator function property");
+    };
+    let Expr::Function {
+        name,
+        body,
+        constructable,
+        ..
+    } = &properties[0].value
+    else {
+        panic!("expected generator function to parse as function expression");
+    };
+    assert_eq!(name.as_deref(), Some("keys"));
+    assert!(!constructable);
+    assert!(matches!(
+        body.as_slice(),
+        [Stmt::Return {
+            argument: Some(Expr::Array { elements, .. }),
+            ..
+        }] if elements.len() == 2
+    ));
+
     let script = parse_script("({ get value() { return 42; } });").expect("source should parse");
     let [Stmt::Expr(Expr::Object { properties, .. })] = script.body.as_slice() else {
         panic!("expected object expression with getter");
