@@ -13,7 +13,7 @@ pub(super) fn call_array_native(
     let value = match native {
         NativeFunction::Array => array::native_array(argument_values)?,
         NativeFunction::ArrayFrom => array::native_array_from(this_value, argument_values, env)?,
-        NativeFunction::ArrayIsArray => array::native_array_is_array(argument_values)?,
+        NativeFunction::ArrayIsArray => array::native_array_is_array(argument_values, env)?,
         NativeFunction::ArrayOf => array::native_array_of(argument_values)?,
         NativeFunction::ArrayPrototypeAt => {
             array::native_array_prototype_at(this_value, argument_values, env)?

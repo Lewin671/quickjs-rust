@@ -121,6 +121,10 @@ fn evaluates_array_builtins() {
         Ok(Value::String("x".to_owned()))
     );
     assert_eq!(eval("Array.isArray([]);"), Ok(Value::Boolean(true)));
+    assert_eq!(
+        eval("Array.isArray(Array.prototype);"),
+        Ok(Value::Boolean(true))
+    );
     assert_eq!(eval("Array.isArray({});"), Ok(Value::Boolean(false)));
     assert_eq!(eval("Array.isArray('abc');"), Ok(Value::Boolean(false)));
     assert_eq!(

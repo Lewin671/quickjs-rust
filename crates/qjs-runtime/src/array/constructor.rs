@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    ArrayRef, Function, Property, PropertyKey, RuntimeError, Value, call_function,
+    ArrayRef, Function, Property, PropertyKey, RuntimeError, Value, array_prototype, call_function,
     construct_function, is_truthy, property_value, property_value_key, symbol,
 };
 
@@ -25,11 +25,18 @@ pub(crate) fn native_array(argument_values: &[Value]) -> Result<Value, RuntimeEr
     Ok(Value::Array(ArrayRef::new(argument_values.to_vec())))
 }
 
-pub(crate) fn native_array_is_array(argument_values: &[Value]) -> Result<Value, RuntimeError> {
-    Ok(Value::Boolean(matches!(
-        argument_values.first(),
-        Some(Value::Array(_))
-    )))
+pub(crate) fn native_array_is_array(
+    argument_values: &[Value],
+    env: &HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let is_array = match argument_values.first() {
+        Some(Value::Array(_)) => true,
+        Some(Value::Object(object)) => array_prototype(env)
+            .as_ref()
+            .is_some_and(|prototype| object.ptr_eq(prototype)),
+        _ => false,
+    };
+    Ok(Value::Boolean(is_array))
 }
 
 pub(crate) fn native_array_from(
