@@ -315,12 +315,7 @@ pub(crate) fn native_set_prototype_is_superset_of(
     if (set.len() as f64) < other.size() {
         return Ok(Value::Boolean(false));
     }
-    for value in other.keys(env)? {
-        if !set.has(&value) {
-            return Ok(Value::Boolean(false));
-        }
-    }
-    Ok(Value::Boolean(true))
+    Ok(Value::Boolean(other.all_in_set(&set, env)?))
 }
 
 pub(crate) fn native_set_prototype_is_disjoint_from(

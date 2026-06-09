@@ -85,6 +85,22 @@ impl SetRecord {
         }
     }
 
+    pub(super) fn all_in_set(
+        &self,
+        set: &SetRef,
+        env: &mut HashMap<String, Value>,
+    ) -> Result<bool, RuntimeError> {
+        match self {
+            Self::Set(other) => Ok(other.values().into_iter().all(|value| set.has(&value))),
+            Self::Map(map) => Ok(map.entries().into_iter().all(|(key, _)| set.has(&key))),
+            Self::SetLike { object, keys, .. } => {
+                let values =
+                    call_function((**keys).clone(), object.clone(), Vec::new(), env, false)?;
+                iterator_all_values_in_set(values, set, env)
+            }
+        }
+    }
+
     pub(super) fn size(&self) -> f64 {
         match self {
             Self::Set(set) => set.len() as f64,
@@ -118,6 +134,36 @@ impl SetRecord {
             has: Box::new(has),
             keys: Box::new(keys),
         })
+    }
+}
+
+fn iterator_all_values_in_set(
+    value: Value,
+    set: &SetRef,
+    env: &mut HashMap<String, Value>,
+) -> Result<bool, RuntimeError> {
+    if !matches!(value, Value::Object(_)) {
+        return Ok(array_like_values_with_env(value, "Set-like keys", env)?
+            .into_iter()
+            .all(|value| set.has(&value)));
+    }
+    let next = property_value(value.clone(), "next", env)?;
+    if !matches!(next, Value::Function(_)) {
+        return Ok(array_like_values_with_env(value, "Set-like keys", env)?
+            .into_iter()
+            .all(|value| set.has(&value)));
+    }
+
+    loop {
+        let step = call_function(next.clone(), value.clone(), Vec::new(), env, false)?;
+        let done = is_truthy(&property_value(step.clone(), "done", env)?);
+        if done {
+            return Ok(true);
+        }
+        if !set.has(&property_value(step, "value", env)?) {
+            close_iterator(value, env)?;
+            return Ok(false);
+        }
     }
 }
 

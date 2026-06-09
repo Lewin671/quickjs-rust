@@ -4219,6 +4219,7 @@ test/built-ins/Set/prototype/isSubsetOf/allows-set-like-object.js
 test/built-ins/Set/prototype/isSubsetOf/has-is-callable.js
 test/built-ins/Set/prototype/isSupersetOf/allows-set-like-object.js
 test/built-ins/Set/prototype/isSupersetOf/has-is-callable.js
+test/built-ins/Set/prototype/isSupersetOf/set-like-iter-return.js
 test/built-ins/Set/prototype/symmetricDifference/allows-set-like-object.js
 test/built-ins/Set/prototype/symmetricDifference/has-is-callable.js
 test/built-ins/Set/prototype/union/allows-set-like-object.js
