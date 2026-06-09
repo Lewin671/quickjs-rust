@@ -45,6 +45,8 @@ pub(super) fn call_core_native(
         }
         NativeFunction::Eval => global::native_global_eval(argument_values, env),
         NativeFunction::Proxy => crate::proxy::native_proxy(argument_values, is_construct),
+        NativeFunction::ProxyRevocable => crate::proxy::native_proxy_revocable(argument_values),
+        NativeFunction::ProxyRevoke => crate::proxy::native_proxy_revoke(function),
         NativeFunction::Escape => global::native_global_escape(argument_values, env),
         NativeFunction::Unescape => global::native_global_unescape(argument_values, env),
         NativeFunction::Symbol => {

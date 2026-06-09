@@ -217,6 +217,12 @@ pub(crate) fn define_property_descriptor_on_value_key(
             elements.define_property(key, property);
             Ok(true)
         }
+        Value::Proxy(proxy) => define_property_descriptor_on_value_key(
+            proxy.target_result()?,
+            PropertyKey::String(key),
+            descriptor,
+            env,
+        ),
         _ => {
             ensure_define_property_target(&target)?;
             unreachable!("define property target validation should reject unsupported values")
@@ -392,6 +398,9 @@ fn define_symbol_property_descriptor_on_value(
             elements.define_symbol_property(symbol, property);
             Ok(true)
         }
+        Value::Proxy(proxy) => {
+            define_symbol_property_descriptor_on_value(proxy.target_result()?, symbol, descriptor)
+        }
         _ => {
             ensure_define_property_target(&target)?;
             Ok(false)
@@ -481,6 +490,11 @@ pub(crate) fn define_property_on_value_key(
             }
             Ok(true)
         }
+        Value::Proxy(proxy) => define_property_on_value_key(
+            proxy.target_result()?,
+            PropertyKey::String(key),
+            descriptor,
+        ),
         _ => {
             ensure_define_property_target(&target)?;
             unreachable!("define property target validation should reject unsupported values")
@@ -560,6 +574,9 @@ fn define_symbol_property_on_value(
             }
             elements.define_symbol_property(symbol, descriptor);
             Ok(true)
+        }
+        Value::Proxy(proxy) => {
+            define_symbol_property_on_value(proxy.target_result()?, symbol, descriptor)
         }
         _ => {
             ensure_define_property_target(&target)?;

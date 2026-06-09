@@ -27,6 +27,28 @@ fn evaluates_proxy_constructor_and_basic_traps() {
 }
 
 #[test]
+fn evaluates_proxy_revocable_and_revoked_operations() {
+    assert_eq!(
+        eval(
+            "let r = Proxy.revocable({ value: 1 }, {}); r.proxy.value + ':' + typeof r.revoke + ':' + Proxy.revocable.length;"
+        ),
+        Ok(Value::String("1:function:2".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let r = Proxy.revocable({ value: 1 }, {}); r.revoke(); r.revoke(); let caught = false; try { r.proxy.value; } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let r = Proxy.revocable([], {}); r.revoke(); let caught = false; try { [].concat(r.proxy); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn evaluates_proxy_traps_used_by_array_operations() {
     assert_eq!(
         eval(

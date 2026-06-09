@@ -225,8 +225,13 @@ fn is_concat_spreadable(
             return Ok(is_truthy(&spreadable));
         }
     }
-    Ok(matches!(value, Value::Array(_))
-        || matches!(&value, Value::Proxy(proxy) if crate::proxy::proxy_target_is_array(proxy)))
+    if matches!(value, Value::Array(_)) {
+        return Ok(true);
+    }
+    match value {
+        Value::Proxy(proxy) => crate::proxy::proxy_target_is_array_result(&proxy),
+        _ => Ok(false),
+    }
 }
 
 fn is_object_like(value: &Value) -> bool {

@@ -234,6 +234,8 @@ pub(crate) enum NativeFunction {
     PromiseTry,
     PromiseWithResolvers,
     Proxy,
+    ProxyRevocable,
+    ProxyRevoke,
     RangeError,
     ReferenceError,
     Object,

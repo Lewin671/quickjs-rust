@@ -11,7 +11,7 @@ pub(super) fn array_species_create(
     method: &str,
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    if !is_array_species_receiver(&receiver) {
+    if !is_array_species_receiver(&receiver)? {
         return Ok(Value::Array(ArrayRef::new(vec![Value::Undefined; length])));
     }
 
@@ -92,9 +92,14 @@ pub(super) fn set_array_like_length(target: Value, length: usize) -> Result<(), 
     })
 }
 
-fn is_array_species_receiver(value: &Value) -> bool {
-    matches!(value, Value::Array(_))
-        || matches!(value, Value::Proxy(proxy) if crate::proxy::proxy_target_is_array(proxy))
+fn is_array_species_receiver(value: &Value) -> Result<bool, RuntimeError> {
+    if matches!(value, Value::Array(_)) {
+        return Ok(true);
+    }
+    match value {
+        Value::Proxy(proxy) => crate::proxy::proxy_target_is_array_result(proxy),
+        _ => Ok(false),
+    }
 }
 
 fn is_object_like(value: &Value) -> bool {
