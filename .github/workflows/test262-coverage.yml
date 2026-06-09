@@ -5,6 +5,11 @@ on:
     workflows: ["CI"]
     types: [completed]
   workflow_dispatch:
+    inputs:
+      ci_run_id:
+        description: "Optional CI run id to reuse qjs-cli-debug-linux artifact"
+        required: false
+        type: string
 
 concurrency:
   group: test262-coverage-${{ github.event.workflow_run.head_sha || github.sha }}
@@ -163,10 +168,28 @@ jobs:
           fetch-depth: 1
           submodules: false
 
+      - name: Download qjs-cli from CI
+        id: qjs-cli-artifact
+        if: github.event_name == 'workflow_run' || github.event.inputs.ci_run_id != ''
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: qjs-cli-debug-linux
+          path: prebuilt-qjs
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.event.workflow_run.head_repository.full_name || github.repository }}
+          run-id: ${{ github.event.workflow_run.id || github.event.inputs.ci_run_id }}
+
+      - name: Prepare qjs-cli artifact
+        if: steps.qjs-cli-artifact.outcome == 'success'
+        run: chmod +x prebuilt-qjs/qjs
+
       - name: Install Rust toolchain
+        if: steps.qjs-cli-artifact.outcome != 'success'
         run: rustup show
 
       - name: Restore Rust build cache
+        if: steps.qjs-cli-artifact.outcome != 'success'
         uses: actions/cache/restore@v5
         with:
           path: |
@@ -182,16 +205,21 @@ jobs:
         run: git submodule update --init --depth 1 third_party/test262
 
       - name: Build quickjs-rust once
+        if: steps.qjs-cli-artifact.outcome != 'success'
         run: cargo build -q -p qjs-cli
 
       - name: Run full Test262 coverage shard
         run: |
           mkdir -p coverage
           status=0
-          target_dir="$(cargo metadata --format-version=1 --no-deps \
-            | sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p' \
-            | head -n 1)"
-          export QJS_CLI_BIN="${target_dir:-$PWD/target}/debug/qjs"
+          if [ -x prebuilt-qjs/qjs ]; then
+            export QJS_CLI_BIN="$PWD/prebuilt-qjs/qjs"
+          else
+            target_dir="$(cargo metadata --format-version=1 --no-deps \
+              | sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p' \
+              | head -n 1)"
+            export QJS_CLI_BIN="${target_dir:-$PWD/target}/debug/qjs"
+          fi
           first_shard=$(( (${{ matrix.group }} - 1) * 2 + 1 ))
           last_shard=$(( first_shard + 1 ))
           for shard in $(seq "$first_shard" "$last_shard"); do
