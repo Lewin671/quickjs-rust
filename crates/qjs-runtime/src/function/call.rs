@@ -8,7 +8,10 @@ use crate::{
     native::call_native_function, object_prototype, symbol,
 };
 
-use super::{function_call_this, parameter_binding_name, rest_parameter_binding_name};
+use super::{
+    function_call_this, is_internal_binding_name, parameter_binding_name,
+    rest_parameter_binding_name,
+};
 
 pub(crate) fn call_function(
     callee: Value,
@@ -409,6 +412,9 @@ fn insert_function_capture(
     function_env: &HashMap<String, Value>,
     name: &str,
 ) {
+    if is_internal_binding_name(name) {
+        return;
+    }
     if let Some(value) = function_env.get(name) {
         local_env.insert(name.to_owned(), value.clone());
         if !names.iter().any(|existing| existing == name) {
@@ -443,6 +449,9 @@ fn insert_caller_binding(
     env: &HashMap<String, Value>,
     name: &str,
 ) {
+    if is_internal_binding_name(name) {
+        return;
+    }
     if let Some(value) = env.get(name) {
         local_env.insert(name.to_owned(), value.clone());
         insert_missing_caller_binding_name(caller_binding_names, name);

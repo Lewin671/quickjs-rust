@@ -38,6 +38,22 @@ fn evaluates_variable_declaration_destructuring() {
 }
 
 #[test]
+fn evaluates_variable_declaration_rest_destructuring() {
+    assert_eq!(
+        eval("let [first, ...others] = [1, 2, 3]; first + ':' + others.join('|');"),
+        Ok(Value::String("1:2|3".to_owned()))
+    );
+    assert_eq!(
+        eval("const {p, ...rest} = {p: 1, q: 2, r: 3}; p + ':' + Object.keys(rest).join('|');"),
+        Ok(Value::String("1:q|r".to_owned()))
+    );
+    assert_eq!(
+        eval("var g = function*() { yield 1; yield 2; }; let [x, y] = g(); x + y;"),
+        Ok(Value::Number(3.0))
+    );
+}
+
+#[test]
 fn destructuring_defaults_do_not_treat_html_dda_as_undefined() {
     assert_eq!(
         eval(

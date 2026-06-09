@@ -10,7 +10,8 @@ pub(crate) use call::{call_function, construct_function, ensure_constructor};
 pub(crate) use call::{native_mapped_argument_get, native_mapped_argument_set};
 pub(crate) use install::install_function;
 pub(crate) use local_names::{
-    collect_function_local_names, parameter_binding_name, rest_parameter_binding_name,
+    collect_function_local_names, is_internal_binding_name, parameter_binding_name,
+    rest_parameter_binding_name,
 };
 pub(crate) use native_kind::NativeFunction;
 pub(crate) use prototype::{

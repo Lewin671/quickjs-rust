@@ -5,7 +5,10 @@ use qjs_ast::{
     SwitchCase, VarKind,
 };
 
-use crate::{RuntimeError, Value, function::is_strict_function_body};
+use crate::{
+    RuntimeError, Value,
+    function::{is_strict_function_body, parameter_binding_name, rest_parameter_binding_name},
+};
 
 use super::ir::{Bytecode, Local, Op};
 
@@ -96,10 +99,15 @@ impl Compiler {
     ) -> Result<Bytecode, RuntimeError> {
         self.global_scope = false;
         self.strict = self.strict || is_strict_function_body(body);
-        for param in params.names() {
-            self.local_slot(&param, true);
+        for (index, element) in params.positional.iter().enumerate() {
+            let binding_name = parameter_binding_name(&element.binding, index);
+            self.local_slot(&binding_name, true);
         }
-        self.compile_parameter_defaults(params)?;
+        if let Some(rest) = &params.rest {
+            let binding_name = rest_parameter_binding_name(rest);
+            self.local_slot(&binding_name, true);
+        }
+        self.compile_parameter_bindings(params)?;
         let param_blocked = function_param_names(params);
         self.with_annex_b_blocked_function_names(&param_blocked, |compiler| {
             compiler.collect_hoisted_locals(body);
@@ -118,30 +126,47 @@ impl Compiler {
         Ok(Bytecode::new(self.constants, self.locals, self.code))
     }
 
-    fn compile_parameter_defaults(&mut self, params: &FunctionParams) -> Result<(), RuntimeError> {
-        for element in &params.positional {
-            let Some(default) = &element.default else {
-                continue;
-            };
-            let BindingPattern::Identifier { name, .. } = &element.binding else {
-                continue;
-            };
+    fn compile_parameter_bindings(&mut self, params: &FunctionParams) -> Result<(), RuntimeError> {
+        for (index, element) in params.positional.iter().enumerate() {
+            if let BindingPattern::Identifier { name, .. } = &element.binding {
+                let Some(default) = &element.default else {
+                    continue;
+                };
+                let slot = self
+                    .resolve_local_slot(name)
+                    .expect("parameter slot should be declared before defaults");
+                self.emit(Op::LoadLocal(slot));
+                self.emit_load_undefined();
+                self.emit(Op::Binary(BinaryOp::StrictEq));
+                let skip_default = self.emit(Op::JumpIfFalse(usize::MAX));
+                self.emit(Op::Pop);
+                self.compile_expr(default)?;
+                self.emit(Op::StoreLocal(slot));
+                let done = self.emit(Op::Jump(usize::MAX));
+                let skip_target = self.code.len();
+                self.patch_jump(skip_default, skip_target);
+                self.emit(Op::Pop);
+                let done_target = self.code.len();
+                self.patch_jump(done, done_target);
+            } else {
+                let binding_name = parameter_binding_name(&element.binding, index);
+                let slot = self
+                    .resolve_local_slot(&binding_name)
+                    .expect("parameter pattern slot should be declared before bindings");
+                self.emit(Op::LoadLocal(slot));
+                self.compile_binding_default(element.default.as_ref())?;
+                self.compile_binding_initializer(&element.binding, VarKind::Var)?;
+            }
+        }
+        if let Some(rest) = &params.rest
+            && !matches!(rest.as_ref(), BindingPattern::Identifier { .. })
+        {
+            let binding_name = rest_parameter_binding_name(rest);
             let slot = self
-                .resolve_local_slot(name)
-                .expect("parameter slot should be declared before defaults");
+                .resolve_local_slot(&binding_name)
+                .expect("rest parameter pattern slot should be declared before bindings");
             self.emit(Op::LoadLocal(slot));
-            self.emit_load_undefined();
-            self.emit(Op::Binary(BinaryOp::StrictEq));
-            let skip_default = self.emit(Op::JumpIfFalse(usize::MAX));
-            self.emit(Op::Pop);
-            self.compile_expr(default)?;
-            self.emit(Op::StoreLocal(slot));
-            let done = self.emit(Op::Jump(usize::MAX));
-            let skip_target = self.code.len();
-            self.patch_jump(skip_default, skip_target);
-            self.emit(Op::Pop);
-            let done_target = self.code.len();
-            self.patch_jump(done, done_target);
+            self.compile_binding_initializer(rest, VarKind::Var)?;
         }
         Ok(())
     }
@@ -342,7 +367,8 @@ impl Compiler {
                 let slot = self.declare_var_kind_slot(name, kind);
                 self.emit_store_var_initializer(slot, name, kind);
             }
-            BindingPattern::Array { elements, .. } => {
+            BindingPattern::Array { elements, rest, .. } => {
+                self.emit(Op::IterableToList);
                 let source_slot = self.temp_local("array_binding_source");
                 self.emit(Op::StoreLocal(source_slot));
                 for (index, element) in elements.iter().enumerate() {
@@ -356,8 +382,18 @@ impl Compiler {
                     self.compile_binding_default(element.default.as_ref())?;
                     self.compile_binding_initializer(&element.binding, kind)?;
                 }
+                if let Some(rest) = rest {
+                    self.emit(Op::LoadLocal(source_slot));
+                    self.emit(Op::ArrayTailFrom {
+                        start: elements.len(),
+                    });
+                    self.compile_binding_initializer(rest, kind)?;
+                }
             }
-            BindingPattern::Object { properties, .. } => {
+            BindingPattern::Object {
+                properties, rest, ..
+            } => {
+                self.emit(Op::RequireObjectCoercible);
                 let source_slot = self.temp_local("object_binding_source");
                 self.emit(Op::StoreLocal(source_slot));
                 for property in properties {
@@ -367,6 +403,16 @@ impl Compiler {
                     self.emit(Op::GetProp);
                     self.compile_binding_default(property.default.as_ref())?;
                     self.compile_binding_initializer(&property.binding, kind)?;
+                }
+                if let Some(rest) = rest {
+                    self.emit(Op::LoadLocal(source_slot));
+                    self.emit(Op::ObjectRestExcluding {
+                        excluded: properties
+                            .iter()
+                            .map(|property| property.key.clone())
+                            .collect(),
+                    });
+                    self.compile_binding_initializer(rest, kind)?;
                 }
             }
         }

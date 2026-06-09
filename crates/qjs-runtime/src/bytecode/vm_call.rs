@@ -76,6 +76,9 @@ fn insert_binding(
     name: &str,
     value: &Value,
 ) {
+    if crate::function::is_internal_binding_name(name) {
+        return;
+    }
     env.entry(name.to_owned()).or_insert_with(|| value.clone());
     if !binding_names.iter().any(|existing| existing == name) {
         binding_names.push(name.to_owned());
