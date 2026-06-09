@@ -263,6 +263,38 @@ fn evaluates_try_catch_finally_statements() {
         ),
         Ok(Value::String("outer".to_owned()))
     );
+    assert_eq!(
+        eval("try { throw 'thrown'; } catch (foo) { var foo = 'initializer in catch'; foo; }"),
+        Ok(Value::String("initializer in catch".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "function capturedFoo() { return foo; } foo = 'prior to throw'; try { throw new Error(); } catch (foo) { var foo = 'initializer in catch'; } capturedFoo();"
+        ),
+        Ok(Value::String("prior to throw".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let before, during, after; try { throw 'exception'; } catch (err) { before = err; for (var err = 'loop initializer'; err !== 'increment'; err = 'increment') { during = err; } after = err; } before + ',' + during + ',' + after;"
+        ),
+        Ok(Value::String(
+            "exception,loop initializer,increment".to_owned()
+        ))
+    );
+    assert_eq!(
+        eval(
+            "let before, during, after; try { throw 'exception'; } catch (err) { before = err; for (var err in { propertyName: null }) { during = err; } after = err; } before + ',' + during + ',' + after;"
+        ),
+        Ok(Value::String(
+            "exception,propertyName,propertyName".to_owned()
+        ))
+    );
+    assert_eq!(
+        eval(
+            "let before, during, after; try { throw 'exception'; } catch (err) { before = err; for (var err of [2]) { during = err; } after = err; } before + ',' + during + ',' + after;"
+        ),
+        Ok(Value::String("exception,2,2".to_owned()))
+    );
 }
 
 #[test]

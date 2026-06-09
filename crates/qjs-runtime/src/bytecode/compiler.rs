@@ -298,6 +298,22 @@ impl Compiler {
         }
     }
 
+    fn var_initializer_slot(&self, name: &str, declared_slot: usize, kind: VarKind) -> usize {
+        if kind != VarKind::Var {
+            return declared_slot;
+        }
+        self.resolve_local_slot(name).unwrap_or(declared_slot)
+    }
+
+    pub(super) fn emit_store_var_initializer(&mut self, slot: usize, name: &str, kind: VarKind) {
+        let store_slot = self.var_initializer_slot(name, slot, kind);
+        if store_slot != slot && kind == VarKind::Var {
+            self.emit(Op::StoreLocal(store_slot));
+        } else {
+            self.emit_store_var_binding(store_slot, name, kind);
+        }
+    }
+
     pub(super) fn emit_store_var_binding(&mut self, slot: usize, name: &str, kind: VarKind) {
         if self.global_scope && kind == VarKind::Var {
             self.emit(Op::Dup);
@@ -627,12 +643,17 @@ impl Compiler {
                     if matches!(kind, VarKind::Let | VarKind::Const) {
                         self.emit(Op::ClearLocal(slot));
                     }
+                    let has_init = declaration.init.is_some();
                     if let Some(init) = &declaration.init {
                         self.compile_expr(init)?;
                     } else {
                         self.emit_load_undefined();
                     }
-                    self.emit_store_var_binding(slot, &declaration.name, *kind);
+                    if has_init {
+                        self.emit_store_var_initializer(slot, &declaration.name, *kind);
+                    } else {
+                        self.emit_store_var_binding(slot, &declaration.name, *kind);
+                    }
                 }
                 self.emit_load_undefined();
                 Ok(())

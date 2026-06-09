@@ -176,10 +176,11 @@ impl Compiler {
                     }
                     if let Some(init) = &declaration.init {
                         self.compile_expr(init)?;
+                        self.emit_store_var_initializer(slot, &declaration.name, *kind);
                     } else {
                         self.emit_load_undefined();
+                        self.emit_store_var_binding(slot, &declaration.name, *kind);
                     }
-                    self.emit_store_var_binding(slot, &declaration.name, *kind);
                 }
                 self.emit_load_undefined();
                 Ok(())

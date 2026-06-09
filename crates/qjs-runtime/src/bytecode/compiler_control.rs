@@ -260,7 +260,7 @@ impl Compiler {
                     self.emit(Op::ClearLocal(slot));
                 }
                 self.emit(Op::LoadLocal(key_slot));
-                self.emit_store_var_binding(slot, name, *kind);
+                self.emit_store_var_initializer(slot, name, *kind);
             }
             ForInLeft::Target(AssignmentTarget::Identifier { name, .. }) => {
                 let slot = self.assignment_slot(name);
@@ -294,7 +294,7 @@ impl Compiler {
         };
         let slot = self.declare_var_kind_slot(name, *kind);
         self.compile_expr(init)?;
-        self.emit_store_var_binding(slot, name, *kind);
+        self.emit_store_var_initializer(slot, name, *kind);
         Ok(())
     }
 
