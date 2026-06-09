@@ -1,6 +1,7 @@
-use std::collections::HashMap;
+use std::{borrow::Cow, collections::HashMap};
 
 use crate::{RuntimeError, Value, to_js_string_with_env};
+use unicode_normalization::UnicodeNormalization;
 
 use super::super::indexing::this_string_value;
 use super::super::{string_code_units, string_from_code_unit};
@@ -36,12 +37,22 @@ pub(crate) fn native_string_prototype_locale_compare(
         env,
     )?;
 
-    let result = match value.as_str().cmp(that.as_str()) {
+    let value = canonical_locale_compare_key(&value);
+    let that = canonical_locale_compare_key(&that);
+    let result = match value.as_ref().cmp(that.as_ref()) {
         std::cmp::Ordering::Less => -1.0,
         std::cmp::Ordering::Equal => 0.0,
         std::cmp::Ordering::Greater => 1.0,
     };
     Ok(Value::Number(result))
+}
+
+fn canonical_locale_compare_key(value: &str) -> Cow<'_, str> {
+    if value.is_ascii() {
+        Cow::Borrowed(value)
+    } else {
+        Cow::Owned(value.nfc().collect())
+    }
 }
 
 fn case_convert(value: &str, convert: impl FnOnce(&str) -> String) -> String {
@@ -121,6 +132,18 @@ mod tests {
         );
         assert_eq!(
             eval("'undefined'.localeCompare() === 0;"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval(r#"'o\u0308'.localeCompare('ö') === 0;"#),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval(r#"'Å'.localeCompare('A\u030A') === 0;"#),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval(r#"'가'.localeCompare('\u1100\u1161') === 0;"#),
             Ok(Value::Boolean(true))
         );
     }
