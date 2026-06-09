@@ -312,6 +312,18 @@ fn lexes_string_escape_sequences() {
 }
 
 #[test]
+fn lexes_legacy_octal_escape_sequences() {
+    assert_eq!(
+        lex("'\\07\\141'").unwrap()[0].kind,
+        TokenKind::String("\u{0007}a".to_owned())
+    );
+    assert_eq!(
+        lex("`\\07\\141`").unwrap()[0].kind,
+        TokenKind::TemplateNoSubstitution(template_segment("\u{0007}a", r"\07\141"))
+    );
+}
+
+#[test]
 fn lexes_surrogate_unicode_escapes() {
     let tokens = lex(r#"'\uD800\uDC00'"#).expect("source should lex");
     let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();

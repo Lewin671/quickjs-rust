@@ -327,6 +327,13 @@ fn parses_template_literal_with_substitutions() {
 }
 
 #[test]
+fn rejects_legacy_octal_escapes_in_strict_strings_and_templates() {
+    assert!(parse_script("\"use strict\"; '\\07';").is_err());
+    assert!(parse_script("\"use strict\"; `${'\\07'}`;").is_err());
+    parse_script("'\\07'; `${'\\07'}`;").expect("legacy octal escapes parse outside strict mode");
+}
+
+#[test]
 fn parses_tagged_template_literal() {
     let script = parse_script("tag`a ${value} b`;").expect("script should parse");
     let [

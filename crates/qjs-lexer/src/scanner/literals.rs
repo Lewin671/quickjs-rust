@@ -348,7 +348,8 @@ impl Lexer<'_> {
             't' => Some('\t'),
             'v' => Some('\u{000b}'),
             '0' if !matches!(self.peek(), Some(next) if next.is_ascii_digit()) => Some('\0'),
-            '0' | '1'..='9' => {
+            '0'..='7' => Some(self.legacy_octal_escape(ch, literal_start)?),
+            '8' | '9' => {
                 return Err(LexError {
                     message: "legacy octal escape sequence is not supported".to_owned(),
                     span: Span::new(literal_start, self.cursor),
@@ -367,6 +368,37 @@ impl Lexer<'_> {
             other => Some(other),
         };
         Ok(escaped)
+    }
+
+    fn legacy_octal_escape(
+        &mut self,
+        first_digit: char,
+        literal_start: usize,
+    ) -> Result<char, LexError> {
+        let mut digits = String::from(first_digit);
+        let max_digits = if matches!(first_digit, '0'..='3') {
+            3
+        } else {
+            2
+        };
+        while digits.len() < max_digits {
+            let Some(next) = self.peek() else {
+                break;
+            };
+            if !matches!(next, '0'..='7') {
+                break;
+            }
+            digits.push(next);
+            self.advance();
+        }
+        let value = u32::from_str_radix(&digits, 8).map_err(|_| LexError {
+            message: "invalid legacy octal escape sequence".to_owned(),
+            span: Span::new(literal_start, self.cursor),
+        })?;
+        char::from_u32(value).ok_or_else(|| LexError {
+            message: "invalid legacy octal escape sequence".to_owned(),
+            span: Span::new(literal_start, self.cursor),
+        })
     }
 
     fn unicode_escape(&mut self, literal_start: usize) -> Result<char, LexError> {

@@ -25,14 +25,23 @@ impl Parser {
                 raw,
                 span: token.span,
             })),
-            TokenKind::String(value) => Ok(Expr::Literal(Literal::String {
-                value,
-                span: token.span,
-            })),
-            TokenKind::TemplateNoSubstitution(segment) => Ok(Expr::Literal(Literal::String {
-                value: segment.cooked,
-                span: token.span,
-            })),
+            TokenKind::String(value) => {
+                self.reject_strict_legacy_octal_escape(
+                    &self.source[token.span.start..token.span.end],
+                    token.span,
+                )?;
+                Ok(Expr::Literal(Literal::String {
+                    value,
+                    span: token.span,
+                }))
+            }
+            TokenKind::TemplateNoSubstitution(segment) => {
+                self.reject_strict_legacy_octal_escape(&segment.raw, token.span)?;
+                Ok(Expr::Literal(Literal::String {
+                    value: segment.cooked,
+                    span: token.span,
+                }))
+            }
             TokenKind::TemplateHead(segment) => self.template_literal(segment, token.span.start),
             TokenKind::True => Ok(Expr::Literal(Literal::Boolean {
                 value: true,
@@ -139,6 +148,7 @@ impl Parser {
         head: TemplateSegment,
         start: usize,
     ) -> Result<Expr, ParseError> {
+        self.reject_strict_legacy_octal_escape(&head.raw, Span::new(start, start))?;
         let mut parts = vec![head.cooked];
         let mut expressions = Vec::new();
         loop {
@@ -146,9 +156,11 @@ impl Parser {
             let token = self.advance();
             match token.kind {
                 TokenKind::TemplateMiddle(segment) => {
+                    self.reject_strict_legacy_octal_escape(&segment.raw, token.span)?;
                     parts.push(segment.cooked);
                 }
                 TokenKind::TemplateTail(segment) => {
+                    self.reject_strict_legacy_octal_escape(&segment.raw, token.span)?;
                     parts.push(segment.cooked);
                     return Ok(Expr::Template {
                         parts,
@@ -229,6 +241,16 @@ impl Parser {
                 span: token.span,
             }),
         }
+    }
+
+    fn reject_strict_legacy_octal_escape(&self, raw: &str, span: Span) -> Result<(), ParseError> {
+        if !self.strict || !has_legacy_octal_escape(raw) {
+            return Ok(());
+        }
+        Err(ParseError {
+            message: "legacy octal escape sequence is not allowed in strict mode".to_owned(),
+            span,
+        })
     }
 
     fn regexp_flags(&mut self) -> Option<RegexpFlags> {
@@ -492,6 +514,28 @@ impl Parser {
             },
         ))
     }
+}
+
+fn has_legacy_octal_escape(raw: &str) -> bool {
+    let mut chars = raw.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch != '\\' {
+            continue;
+        }
+        let Some(escaped) = chars.next() else {
+            return false;
+        };
+        match escaped {
+            '0' => {
+                if matches!(chars.peek(), Some('0'..='9')) {
+                    return true;
+                }
+            }
+            '1'..='7' => return true,
+            _ => {}
+        }
+    }
+    false
 }
 
 fn keyword_property_name(kind: &TokenKind) -> Option<&'static str> {

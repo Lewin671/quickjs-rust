@@ -105,6 +105,14 @@ fn evaluates_template_literal_substitutions() {
 }
 
 #[test]
+fn evaluates_legacy_octal_escapes_inside_template_expressions() {
+    assert_eq!(
+        eval("`${'\\07'}`;"),
+        Ok(Value::String("\u{0007}".to_owned()))
+    );
+}
+
+#[test]
 fn template_literal_substitutions_to_string_before_next_expression() {
     assert_eq!(
         eval(

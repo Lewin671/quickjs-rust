@@ -326,6 +326,21 @@ rust_features_supported() {
       ;;
   esac
   case "$rel" in
+    test/annexB/language/expressions/conditional/emulates-undefined.js|test/annexB/language/expressions/does-not-equals/emulates-undefined.js|test/annexB/language/expressions/equals/emulates-undefined.js|test/annexB/language/expressions/logical-and/emulates-undefined.js|test/annexB/language/expressions/logical-not/emulates-undefined.js|test/annexB/language/expressions/logical-or/emulates-undefined.js|test/annexB/language/expressions/strict-does-not-equals/emulates-undefined.js|test/annexB/language/expressions/strict-equals/emulates-undefined.js|test/annexB/language/expressions/typeof/emulates-undefined.js)
+      entries="$(drop_feature_entries "$entries" -e 'IsHTMLDDA')"
+      ;;
+  esac
+  case "$rel" in
+    test/annexB/language/expressions/coalesce/emulates-undefined.js)
+      entries="$(drop_feature_entries "$entries" -e 'coalesce-expression' -e 'IsHTMLDDA')"
+      ;;
+  esac
+  case "$rel" in
+    test/annexB/language/expressions/logical-assignment/emulates-undefined-and.js|test/annexB/language/expressions/logical-assignment/emulates-undefined-coalesce.js|test/annexB/language/expressions/logical-assignment/emulates-undefined-or.js)
+      entries="$(drop_feature_entries "$entries" -e 'logical-assignment-operators' -e 'IsHTMLDDA')"
+      ;;
+  esac
+  case "$rel" in
     test/built-ins/Array/prototype/entries/*|test/built-ins/Array/prototype/keys/*|test/built-ins/Array/prototype/values/*|test/built-ins/Array/prototype/Symbol.iterator.js)
       entries="$(drop_feature_entries "$entries" -e 'Symbol.iterator')"
       ;;
