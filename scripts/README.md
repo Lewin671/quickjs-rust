@@ -37,13 +37,14 @@ maintenance, or agent workflow isolation.
   under `target/test262-gaps/` by default, then prints a short summary, top gap
   areas, and first actionable cases. Use `--filter test/<prefix>` to focus on
   one subsystem and `--all` when a full focused scan is useful. Unfiltered
-  `--all` uses a concurrent multi-shard greedy probe by default, then selects a
-  next area by preferring small batches of real runtime or parser failures
-  before pure harness skips; if no small engine batch is available, it recommends
-  a small harness batch before falling back to a larger engine batch. Tune it
-  with `--strategy fast|largest`, `--recommend-batch-cap N`, `--probe-limit N`,
-  and `--probe-shards I/N[,I/N...]`; use `--probe-shard I/N` for a single very
-  fast probe, and use `--exact --all` for a complete audit. Use
+  `--all` uses a concurrent multi-shard greedy probe by default, exact-checks
+  the top candidate areas, then selects a next area by preferring small batches
+  of real runtime or parser failures before pure harness skips; if no small
+  engine batch is available, it recommends a small harness batch before falling
+  back to a larger engine batch. Tune it with `--strategy fast|largest`,
+  `--recommend-batch-cap N`, `--verify-candidates N`, `--probe-limit N`, and
+  `--probe-shards I/N[,I/N...]`; use `--probe-shard I/N` for a single very fast
+  probe, and use `--exact --all` for a complete audit. Use
   `--from-report PATH` or
   `--from-latest-report` to replay a saved `cases.jsonl` and recompute the
   recommendation without rerunning Test262; add `--skip-area test/<prefix>` to

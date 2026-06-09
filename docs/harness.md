@@ -131,7 +131,11 @@ entry in `TEST262_GAP_PROBE_SHARDS`, currently `1/16,5/16,9/16,13/16`. Those
 probe shards run concurrently, and the report merges their case results before
 ranking areas. This gives the agent broader Test262 coverage per iteration
 without paying for a full audit or biasing entirely toward the first sorted
-Test262 directories.
+Test262 directories. After that sampled candidate queue is built, the default
+global probe exact-checks the top `TEST262_GAP_VERIFY_CANDIDATES` areas,
+currently 5, and prints the final recommendation from those exact focused
+results. This costs a few additional focused baseline runs, but it prevents a
+sampled broad area from hiding a smaller parity win.
 The default recommendation strategy is quickwins greedy. It prefers real
 quickjs-rust engine failures when they fit in a small reviewable batch. After
 that, it prefers small harness-only batches when at least one case does not
@@ -146,7 +150,10 @@ default ranking so an agent can find reviewable parity wins before getting stuck
 on known broad features. Use
 `--strategy fast` for the older small-batch-first behavior,
 `--strategy largest` to restore largest-gap-first recommendation, or
-`--recommend-batch-cap N` to tune how large a default batch may be.
+`--recommend-batch-cap N` to tune how large a default batch may be. Use
+`--verify-candidates N` to tune the exact candidate follow-up, or
+`--verify-candidates 0` when the fastest possible sampled recommendation is
+more useful than a verified one.
 After a global probe has produced a candidate queue, use
 `--from-report target/test262-gaps/<run>` or `--from-latest-report` to recompute
 the recommendation from the saved `cases.jsonl` without executing Test262
