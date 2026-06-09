@@ -121,7 +121,9 @@ into temporary files with Test262 `assert.js`, `sta.js`, and metadata
 `includes` before execution. Entries in `tests/test262/expected-failures.txt`
 must also be in the allowlist and must include a reason. Expected-failure cases
 may fail without failing the subset run; if one passes, the script fails and
-asks for the stale entry to be removed.
+asks for the stale entry to be removed. GitHub CI gives individual subset cases
+a wider timeout than the local default to avoid false failures on shared
+runners.
 
 `scripts/test262-baseline.sh` scans upstream Test262 coverage. It can run a
 bounded sample, a full scan with `--all`, a shard with `--shard I/N`, and a
