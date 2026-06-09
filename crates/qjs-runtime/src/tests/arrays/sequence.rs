@@ -309,6 +309,30 @@ fn evaluates_array_sequence_builtins() {
 }
 
 #[test]
+fn exposes_array_unscopables() {
+    assert_eq!(
+        eval("let u = Array.prototype[Symbol.unscopables]; Object.getPrototypeOf(u) === null;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(Array.prototype, Symbol.unscopables); d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("false:false:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let u = Array.prototype[Symbol.unscopables]; ['copyWithin', 'entries', 'fill', 'find', 'findIndex', 'findLast', 'findLastIndex', 'flat', 'flatMap', 'includes', 'keys', 'toReversed', 'toSorted', 'toSpliced', 'values'].every(function(key) { let d = Object.getOwnPropertyDescriptor(u, key); return d.value === true && d.writable && d.enumerable && d.configurable; });"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("Object.prototype.hasOwnProperty.call(Array.prototype[Symbol.unscopables], 'with');"),
+        Ok(Value::Boolean(false))
+    );
+}
+
+#[test]
 fn evaluates_array_to_reversed() {
     assert_eq!(
         eval(

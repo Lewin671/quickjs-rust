@@ -238,6 +238,7 @@ pub(crate) fn install_array(
         2,
         NativeFunction::ArrayPrototypeWith,
     );
+    define_array_unscopables(env, &array_prototype);
     array_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(array_prototype)),
@@ -281,5 +282,37 @@ fn define_array_function(function: &Function, key: &str, length: usize, native: 
             native,
             false,
         ))),
+    );
+}
+
+fn define_array_unscopables(env: &HashMap<String, Value>, prototype: &ObjectRef) {
+    let Some(symbol) = symbol::unscopables_symbol(env) else {
+        return;
+    };
+
+    let unscopables = ObjectRef::new(HashMap::new());
+    for key in [
+        "copyWithin",
+        "entries",
+        "fill",
+        "find",
+        "findIndex",
+        "findLast",
+        "findLastIndex",
+        "flat",
+        "flatMap",
+        "includes",
+        "keys",
+        "toReversed",
+        "toSorted",
+        "toSpliced",
+        "values",
+    ] {
+        unscopables.define_property(key.to_owned(), Property::enumerable(Value::Boolean(true)));
+    }
+
+    prototype.define_symbol_property(
+        symbol,
+        Property::data(Value::Object(unscopables), false, false, true),
     );
 }
