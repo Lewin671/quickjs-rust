@@ -353,10 +353,16 @@ impl Parser {
                 self.expect(&TokenKind::RightBracket)?;
                 Ok((ObjectPropertyKey::Computed(name), None))
             }
-            _ => Err(ParseError {
-                message: "expected property name".to_owned(),
-                span: key_token.span,
-            }),
+            kind => {
+                if let Some(name) = keyword_property_name(&kind) {
+                    Ok((ObjectPropertyKey::Literal(name.to_owned()), None))
+                } else {
+                    Err(ParseError {
+                        message: "expected property name".to_owned(),
+                        span: key_token.span,
+                    })
+                }
+            }
         }
     }
 
@@ -479,6 +485,39 @@ impl Parser {
                 span: Span::new(start_span.start, end),
             },
         ))
+    }
+}
+
+fn keyword_property_name(kind: &TokenKind) -> Option<&'static str> {
+    match kind {
+        TokenKind::This => Some("this"),
+        TokenKind::Var => Some("var"),
+        TokenKind::Let => Some("let"),
+        TokenKind::Const => Some("const"),
+        TokenKind::If => Some("if"),
+        TokenKind::Else => Some("else"),
+        TokenKind::While => Some("while"),
+        TokenKind::Do => Some("do"),
+        TokenKind::For => Some("for"),
+        TokenKind::Switch => Some("switch"),
+        TokenKind::Case => Some("case"),
+        TokenKind::Default => Some("default"),
+        TokenKind::Try => Some("try"),
+        TokenKind::Catch => Some("catch"),
+        TokenKind::Finally => Some("finally"),
+        TokenKind::Break => Some("break"),
+        TokenKind::Continue => Some("continue"),
+        TokenKind::Function => Some("function"),
+        TokenKind::Return => Some("return"),
+        TokenKind::Throw => Some("throw"),
+        TokenKind::Debugger => Some("debugger"),
+        TokenKind::Typeof => Some("typeof"),
+        TokenKind::Void => Some("void"),
+        TokenKind::In => Some("in"),
+        TokenKind::Delete => Some("delete"),
+        TokenKind::New => Some("new"),
+        TokenKind::Instanceof => Some("instanceof"),
+        _ => None,
     }
 }
 

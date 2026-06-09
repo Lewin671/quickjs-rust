@@ -259,6 +259,21 @@ fn parses_object_literal_and_member_assignment() {
     );
 
     let script =
+        parse_script("({ return() { return 1; }, default: 2 });").expect("source should parse");
+    let [Stmt::Expr(Expr::Object { properties, .. })] = script.body.as_slice() else {
+        panic!("expected object expression with keyword property names");
+    };
+    assert_eq!(
+        properties[0].key,
+        ObjectPropertyKey::Literal("return".to_owned())
+    );
+    assert_eq!(
+        properties[1].key,
+        ObjectPropertyKey::Literal("default".to_owned())
+    );
+    assert!(matches!(properties[0].value, Expr::Function { .. }));
+
+    let script =
         parse_script("let answer = 42; ({ answer, named: answer });").expect("source should parse");
     let [_, Stmt::Expr(Expr::Object { properties, .. })] = script.body.as_slice() else {
         panic!("expected object expression with shorthand property");

@@ -167,6 +167,10 @@ fn evaluates_set_composition_methods_with_set_like_objects() {
         "var other = [5]; other.size = 3; other.has = function() { throw 'has should not be called'; }; other.keys = function() { return [2, 3, 4].values(); }; [...new Set([1, 2]).symmetricDifference(other)].join('|');",
         Value::String("1|3|4".to_owned()),
     );
+    assert_eval(
+        "var iterator = { values: [4, 5, 6], nextCalls: 0, returnCalls: 0, next: function() { var done = this.nextCalls >= this.values.length; var value = this.values[this.nextCalls]; this.nextCalls = this.nextCalls + 1; return { done: done, value: value }; }, return: function() { this.returnCalls = this.returnCalls + 1; return this; } }; var other = { size: 3, has: function(value) { return iterator.values.includes(value); }, keys: function() { return iterator; } }; var overlaps = new Set([4, 5, 6, 7]).isDisjointFrom(other); var first = overlaps + ':' + iterator.nextCalls + ':' + iterator.returnCalls; iterator.nextCalls = 0; iterator.returnCalls = 0; var disjoint = new Set([0, 1, 2, 3]).isDisjointFrom(other); first + '|' + disjoint + ':' + iterator.nextCalls + ':' + iterator.returnCalls;",
+        Value::String("false:1:1|true:4:0".to_owned()),
+    );
 }
 
 #[test]

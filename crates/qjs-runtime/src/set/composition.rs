@@ -69,6 +69,22 @@ impl SetRecord {
         }
     }
 
+    pub(super) fn has_any_in_set(
+        &self,
+        set: &SetRef,
+        env: &mut HashMap<String, Value>,
+    ) -> Result<bool, RuntimeError> {
+        match self {
+            Self::Set(other) => Ok(other.values().into_iter().any(|value| set.has(&value))),
+            Self::Map(map) => Ok(map.entries().into_iter().any(|(key, _)| set.has(&key))),
+            Self::SetLike { object, keys, .. } => {
+                let values =
+                    call_function((**keys).clone(), object.clone(), Vec::new(), env, false)?;
+                iterator_has_value_in_set(values, set, env)
+            }
+        }
+    }
+
     pub(super) fn size(&self) -> usize {
         match self {
             Self::Set(set) => set.len(),
@@ -102,6 +118,51 @@ impl SetRecord {
             has: Box::new(has),
             keys: Box::new(keys),
         })
+    }
+}
+
+fn iterator_has_value_in_set(
+    value: Value,
+    set: &SetRef,
+    env: &mut HashMap<String, Value>,
+) -> Result<bool, RuntimeError> {
+    if !matches!(value, Value::Object(_)) {
+        return Ok(array_like_values_with_env(value, "Set-like keys", env)?
+            .into_iter()
+            .any(|value| set.has(&value)));
+    }
+    let next = property_value(value.clone(), "next", env)?;
+    if !matches!(next, Value::Function(_)) {
+        return Ok(array_like_values_with_env(value, "Set-like keys", env)?
+            .into_iter()
+            .any(|value| set.has(&value)));
+    }
+
+    loop {
+        let step = call_function(next.clone(), value.clone(), Vec::new(), env, false)?;
+        let done = is_truthy(&property_value(step.clone(), "done", env)?);
+        if done {
+            return Ok(false);
+        }
+        if set.has(&property_value(step, "value", env)?) {
+            close_iterator(value, env)?;
+            return Ok(true);
+        }
+    }
+}
+
+fn close_iterator(iterator: Value, env: &mut HashMap<String, Value>) -> Result<(), RuntimeError> {
+    let return_method = property_value(iterator.clone(), "return", env)?;
+    match return_method {
+        Value::Undefined => Ok(()),
+        Value::Function(_) => {
+            let _ = call_function(return_method, iterator, Vec::new(), env, false)?;
+            Ok(())
+        }
+        _ => Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: iterator return must be callable".to_owned(),
+        }),
     }
 }
 

@@ -336,10 +336,8 @@ pub(crate) fn native_set_prototype_is_disjoint_from(
             }
         }
     } else {
-        for value in other.keys(env)? {
-            if set.has(&value) {
-                return Ok(Value::Boolean(false));
-            }
+        if other.has_any_in_set(&set, env)? {
+            return Ok(Value::Boolean(false));
         }
     }
     Ok(Value::Boolean(true))
