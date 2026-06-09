@@ -146,7 +146,7 @@ impl Compiler {
         let slot = self.local_slot(name, true);
         let is_strict = self.strict || is_strict_function_body(body);
         let bytecode = super::compiler::compile_function_body_with_strict(params, body, is_strict)?;
-        let local_names = collect_function_local_names(Some(name), params, body);
+        let local_names = collect_function_local_names(Some(name), params, body, true);
         self.emit(Op::NewFunction {
             name: Some(name.clone()),
             params: params.clone(),
@@ -155,6 +155,7 @@ impl Compiler {
             constructable: true,
             is_strict,
             lexical_this: false,
+            lexical_arguments: false,
         });
         self.emit(Op::StoreLocal(slot));
         self.emit_load_undefined();

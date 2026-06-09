@@ -551,6 +551,28 @@ fn evaluates_arrow_functions_with_lexical_this() {
 }
 
 #[test]
+fn evaluates_arrow_functions_with_lexical_arguments() {
+    assert_eq!(
+        eval(
+            "function outer() { let args = arguments; let read = () => arguments; return read() === args; } outer(1, 2);"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "function outer() { let read = (value) => arguments[0] + ':' + arguments.length + ':' + value; return read('arrow'); } outer('outer', 'second');"
+        ),
+        Ok(Value::String("outer:2:arrow".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "function outer() { let read = () => { return function() { return arguments[0]; }('inner'); }; return read(); } outer('outer');"
+        ),
+        Ok(Value::String("inner".to_owned()))
+    );
+}
+
+#[test]
 fn evaluates_new_expressions() {
     assert_eq!(
         eval(

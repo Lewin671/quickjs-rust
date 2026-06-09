@@ -253,12 +253,14 @@ impl Compiler {
                 body,
                 constructable,
                 lexical_this,
+                lexical_arguments,
                 ..
             } => {
                 let is_strict = self.strict || is_strict_function_body(body);
                 let bytecode =
                     super::compiler::compile_function_body_with_strict(params, body, is_strict)?;
-                let local_names = collect_function_local_names(name.as_ref(), params, body);
+                let local_names =
+                    collect_function_local_names(name.as_ref(), params, body, !lexical_arguments);
                 self.emit(Op::NewFunction {
                     name: name.clone(),
                     params: params.clone(),
@@ -267,6 +269,7 @@ impl Compiler {
                     constructable: *constructable,
                     is_strict,
                     lexical_this: *lexical_this,
+                    lexical_arguments: *lexical_arguments,
                 });
                 Ok(())
             }

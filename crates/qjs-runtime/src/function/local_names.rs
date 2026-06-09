@@ -6,10 +6,13 @@ pub(crate) fn collect_function_local_names(
     name: Option<&String>,
     params: &FunctionParams,
     body: &[Stmt],
+    has_own_arguments: bool,
 ) -> Vec<String> {
     let mut names = HashSet::new();
     names.insert("this".to_owned());
-    names.insert("arguments".to_owned());
+    if has_own_arguments {
+        names.insert("arguments".to_owned());
+    }
     names.extend(params.names());
     if let Some(name) = name {
         names.insert(name.clone());
@@ -120,7 +123,7 @@ mod tests {
         };
 
         assert_eq!(
-            collect_function_local_names(Some(name), params, body),
+            collect_function_local_names(Some(name), params, body, true),
             vec![
                 "a",
                 "arguments",

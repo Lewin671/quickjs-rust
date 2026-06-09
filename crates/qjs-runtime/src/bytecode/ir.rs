@@ -45,6 +45,7 @@ pub(super) enum Op {
         constructable: bool,
         is_strict: bool,
         lexical_this: bool,
+        lexical_arguments: bool,
     },
     Typeof,
     ToString,

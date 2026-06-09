@@ -192,6 +192,8 @@ pub enum Expr {
         constructable: bool,
         /// Whether `this` is captured lexically from the creation environment.
         lexical_this: bool,
+        /// Whether `arguments` resolves through the lexical environment.
+        lexical_arguments: bool,
         /// Source span.
         span: Span,
     },

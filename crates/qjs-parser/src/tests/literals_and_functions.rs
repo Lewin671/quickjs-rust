@@ -38,6 +38,7 @@ fn parses_function_declaration_and_call() {
         name,
         params,
         lexical_this,
+        lexical_arguments,
         ..
     }) = &declarations[0].init
     else {
@@ -46,6 +47,7 @@ fn parses_function_declaration_and_call() {
     assert_eq!(name.as_deref(), Some("named"));
     assert_eq!(params.positional, ["value"]);
     assert!(!lexical_this);
+    assert!(!lexical_arguments);
 
     let script = parse_script("let f = (a, b) => a + b;").expect("source should parse");
     let [Stmt::VarDecl { declarations, .. }] = script.body.as_slice() else {
@@ -56,6 +58,7 @@ fn parses_function_declaration_and_call() {
         params,
         constructable,
         lexical_this,
+        lexical_arguments,
         body,
         ..
     }) = &declarations[0].init
@@ -66,6 +69,7 @@ fn parses_function_declaration_and_call() {
     assert_eq!(params.positional, ["a", "b"]);
     assert!(!constructable);
     assert!(lexical_this);
+    assert!(lexical_arguments);
     assert!(matches!(body.as_slice(), [Stmt::Return { .. }]));
 
     let script = parse_script("let f = value => { return value; };").expect("source should parse");
@@ -76,6 +80,7 @@ fn parses_function_declaration_and_call() {
         params,
         body,
         lexical_this,
+        lexical_arguments,
         ..
     }) = &declarations[0].init
     else {
@@ -83,6 +88,7 @@ fn parses_function_declaration_and_call() {
     };
     assert_eq!(params.positional, ["value"]);
     assert!(lexical_this);
+    assert!(lexical_arguments);
     assert!(matches!(body.as_slice(), [Stmt::Return { .. }]));
 }
 
@@ -103,6 +109,7 @@ fn parses_rest_parameters() {
     let Some(Expr::Function {
         params,
         lexical_this,
+        lexical_arguments,
         ..
     }) = &declarations[0].init
     else {
@@ -111,6 +118,7 @@ fn parses_rest_parameters() {
     assert!(params.positional.is_empty());
     assert_eq!(params.rest.as_deref(), Some("rest"));
     assert!(lexical_this);
+    assert!(lexical_arguments);
 }
 
 #[test]

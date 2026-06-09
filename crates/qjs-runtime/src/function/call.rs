@@ -173,10 +173,12 @@ fn function_env(
             .unwrap_or(Value::Undefined);
         local_env.insert(param.clone(), value);
     }
-    local_env.insert(
-        "arguments".to_owned(),
-        arguments_object(function, argument_values, env),
-    );
+    if !function.lexical_arguments {
+        local_env.insert(
+            "arguments".to_owned(),
+            arguments_object(function, argument_values, env),
+        );
+    }
     if let Some(rest) = &function.params.rest {
         let values = argument_values
             .iter()
