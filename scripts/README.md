@@ -79,3 +79,7 @@ maintenance, or agent workflow isolation.
   `check.sh`.
 - `run-with-timeout.sh`: Runs a command with a timeout. It is shared by
   comparison, benchmark, and Test262 scripts.
+- `test262-aggregate.py`: Aggregates QuickJS-NG and quickjs-rust case-result
+  JSONL sets into the CI coverage summary and the schema-1 burndown entry.
+  Used by the Test262 Coverage workflow; also runs locally on artifacts
+  downloaded with `gh run download`.

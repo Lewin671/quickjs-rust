@@ -259,6 +259,14 @@ jobs:
         needs.quickjs-ng-baseline.result == 'success'
       )
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.event.workflow_run.head_repository.full_name || github.repository }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 1
+          submodules: false
+
       - name: Download QuickJS-NG baseline
         uses: actions/download-artifact@v4
         with:
@@ -273,206 +281,16 @@ jobs:
           path: rust-coverage
           merge-multiple: true
 
-      - name: Write coverage summary
+      - name: Write coverage summary and burndown entry
         env:
           COVERAGE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
-          python3 - <<'PY'
-          import glob
-          import datetime
-          import json
-          import os
-
-          def load_cases(pattern, engine_key):
-              cases = {}
-              paths = sorted(glob.glob(pattern))
-              if not paths:
-                  raise SystemExit(f"no case result files matched {pattern}")
-              for path in paths:
-                  with open(path, "r", encoding="utf-8") as handle:
-                      for line in handle:
-                          if not line.strip():
-                              continue
-                          row = json.loads(line)
-                          cases[row["path"]] = row
-              return cases, paths
-
-          qjsng_cases, qjsng_paths = load_cases("qjsng-baseline/cases-*.jsonl", "quickjs_ng")
-          rust_cases, rust_paths = load_cases("rust-coverage/cases-*.jsonl", "rust")
-
-          totals = dict.fromkeys([
-              "total",
-              "configured",
-              "eligible",
-              "run",
-              "skipped",
-              "rust_not_run",
-              "rust_pass",
-              "rust_fail",
-              "rust_timeout",
-              "rust_skipped",
-              "qjsng_pass",
-              "qjsng_fail",
-              "qjsng_timeout",
-              "qjsng_skipped",
-              "both_pass",
-              "qjsng_pass_rust_nonpass",
-              "qjsng_pass_rust_not_run",
-              "qjsng_pass_rust_fail",
-              "qjsng_pass_rust_timeout",
-              "rust_pass_qjsng_nonpass",
-              "both_nonpass",
-              "both_fail_or_timeout",
-          ], 0)
-          skipped = dict.fromkeys(["async", "features", "fixture", "includes", "intl402", "missing", "module", "negative", "raw", "syntax"], 0)
-
-          def skipped_bucket(reason):
-              if reason == "fixture":
-                  return "fixture"
-              return "features"
-
-          totals["total"] = len(qjsng_cases)
-          totals["run"] = len(rust_cases)
-          for path, qjsng in qjsng_cases.items():
-              rust = rust_cases.get(path, {"rust": "skipped", "rust_skip": "missing"})
-              qkind = qjsng["quickjs_ng"]
-              rkind = rust["rust"]
-              if qkind == "skipped":
-                  totals["skipped"] += 1
-                  bucket = skipped_bucket(qjsng.get("quickjs_ng_skip", ""))
-                  skipped[bucket] += 1
-                  continue
-
-              totals["configured"] += 1
-              if qkind == "pass":
-                  totals["qjsng_pass"] += 1
-              elif qkind == "timeout":
-                  totals["qjsng_timeout"] += 1
-              else:
-                  totals["qjsng_fail"] += 1
-
-              if rkind == "pass":
-                  totals["rust_pass"] += 1
-              elif rkind == "timeout":
-                  totals["rust_timeout"] += 1
-              elif rkind == "skipped":
-                  totals["rust_skipped"] += 1
-                  totals["rust_not_run"] += 1
-                  reason = rust.get("rust_skip", "")
-                  if reason in skipped:
-                      skipped[reason] += 1
-                  else:
-                      skipped["missing"] += 1
-              else:
-                  totals["rust_fail"] += 1
-
-              if rkind != "skipped":
-                  totals["eligible"] += 1
-
-              if rkind == "pass" and qkind == "pass":
-                  totals["both_pass"] += 1
-              elif rkind == "pass":
-                  totals["rust_pass_qjsng_nonpass"] += 1
-              elif qkind == "pass":
-                  totals["qjsng_pass_rust_nonpass"] += 1
-                  if rkind == "skipped":
-                      totals["qjsng_pass_rust_not_run"] += 1
-                  elif rkind == "timeout":
-                      totals["qjsng_pass_rust_timeout"] += 1
-                  else:
-                      totals["qjsng_pass_rust_fail"] += 1
-              else:
-                  totals["both_nonpass"] += 1
-                  if rkind != "skipped":
-                      totals["both_fail_or_timeout"] += 1
-
-          def pct(value, denominator):
-              if denominator == 0:
-                  return "n/a"
-              return f"{value / denominator * 100:.2f}%"
-
-          lines = [
-              "# Test262 Coverage",
-              "",
-              f"Aggregated `{len(rust_paths)}` rust shard result files against `{len(qjsng_paths)}` cached QuickJS-NG baseline files for `{os.environ['COVERAGE_SHA']}`.",
-              "",
-              "## Corpus Scope",
-              "",
-              "| Metric | Count | Share |",
-              "| --- | ---: | ---: |",
-              f"| Upstream cases | {totals['total']} | 100.00% |",
-              f"| Skipped by QuickJS-NG config | {totals['skipped']} | {pct(totals['skipped'], totals['total'])} |",
-              f"| Comparison baseline | {totals['configured']} | {pct(totals['configured'], totals['total'])} |",
-              "",
-              "## quickjs-rust Readiness",
-              "",
-              "| Metric | Count | Share of Baseline |",
-              "| --- | ---: | ---: |",
-              f"| Runnable by quickjs-rust harness | {totals['eligible']} | {pct(totals['eligible'], totals['configured'])} |",
-              f"| Not run by quickjs-rust harness | {totals['rust_not_run']} | {pct(totals['rust_not_run'], totals['configured'])} |",
-              "",
-              "## Engine Results",
-              "",
-              "| Engine | Pass | Fail | Timeout | Not Run | Baseline Pass Rate | Runnable Pass Rate |",
-              "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
-              f"| quickjs-rust | {totals['rust_pass']} | {totals['rust_fail']} | {totals['rust_timeout']} | {totals['rust_skipped']} | {pct(totals['rust_pass'], totals['configured'])} | {pct(totals['rust_pass'], totals['eligible'])} |",
-              f"| QuickJS-NG | {totals['qjsng_pass']} | {totals['qjsng_fail']} | {totals['qjsng_timeout']} | 0 | {pct(totals['qjsng_pass'], totals['configured'])} | {pct(totals['qjsng_pass'], totals['configured'])} |",
-              "",
-              "## Coverage Difference",
-              "",
-              "| Comparison | Count | Share of Baseline |",
-              "| --- | ---: | ---: |",
-              f"| Both pass | {totals['both_pass']} | {pct(totals['both_pass'], totals['configured'])} |",
-              f"| QuickJS-NG passes, quickjs-rust not run | {totals['qjsng_pass_rust_not_run']} | {pct(totals['qjsng_pass_rust_not_run'], totals['configured'])} |",
-              f"| QuickJS-NG passes, quickjs-rust fails | {totals['qjsng_pass_rust_fail']} | {pct(totals['qjsng_pass_rust_fail'], totals['configured'])} |",
-              f"| QuickJS-NG passes, quickjs-rust timeouts | {totals['qjsng_pass_rust_timeout']} | {pct(totals['qjsng_pass_rust_timeout'], totals['configured'])} |",
-              f"| quickjs-rust passes, QuickJS-NG does not | {totals['rust_pass_qjsng_nonpass']} | {pct(totals['rust_pass_qjsng_nonpass'], totals['configured'])} |",
-              f"| Both fail or timeout | {totals['both_fail_or_timeout']} | {pct(totals['both_fail_or_timeout'], totals['configured'])} |",
-              "",
-              "## Skipped / Not-Run Reasons",
-              "",
-              "| Reason | Count |",
-              "| --- | ---: |",
-          ]
-          for key in sorted(skipped):
-              lines.append(f"| {key} | {skipped[key]} |")
-
-          summary_path = os.environ["GITHUB_STEP_SUMMARY"]
-          with open(summary_path, "a", encoding="utf-8") as handle:
-              handle.write("\n".join(lines))
-              handle.write("\n")
-
-          burndown = {
-              "schema": 1,
-              "recorded": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d"),
-              "commit": os.environ["COVERAGE_SHA"],
-              "source": "ci-aggregate",
-              "total": totals["total"],
-              "ng_config_skipped": totals["skipped"],
-              "configured": totals["configured"],
-              "rust": {
-                  "pass": totals["rust_pass"],
-                  "fail": totals["rust_fail"],
-                  "timeout": totals["rust_timeout"],
-                  "not_run": totals["rust_skipped"],
-              },
-              "ng": {
-                  "pass": totals["qjsng_pass"],
-                  "fail": totals["qjsng_fail"],
-                  "timeout": totals["qjsng_timeout"],
-              },
-              "comparison": {
-                  "both_pass": totals["both_pass"],
-                  "actionable_gap": totals["qjsng_pass_rust_fail"] + totals["qjsng_pass_rust_timeout"],
-                  "ng_pass_rust_fail": totals["qjsng_pass_rust_fail"],
-                  "ng_pass_rust_timeout": totals["qjsng_pass_rust_timeout"],
-                  "ng_pass_rust_not_run": totals["qjsng_pass_rust_not_run"],
-                  "rust_pass_ng_nonpass": totals["rust_pass_qjsng_nonpass"],
-              },
-          }
-          with open("burndown.json", "w", encoding="utf-8") as handle:
-              handle.write(json.dumps(burndown, separators=(",", ":")) + "\n")
-          PY
+          python3 scripts/test262-aggregate.py \
+            --ng-cases 'qjsng-baseline/cases-*.jsonl' \
+            --rust-cases 'rust-coverage/cases-*.jsonl' \
+            --commit "$COVERAGE_SHA" \
+            --summary-out "$GITHUB_STEP_SUMMARY" \
+            --burndown-out burndown.json
 
       - name: Upload burndown entry
         uses: actions/upload-artifact@v4
