@@ -321,9 +321,31 @@ apply_skipped_areas() {
 write_recommendations() {
   local gaps_file="$1"
   local recommendations_file="$2"
-  awk -F'\t' -v strategy="$RECOMMEND_STRATEGY" -v batch_cap="$RECOMMEND_BATCH_CAP" '
+  awk -F'\t' -v strategy="$RECOMMEND_STRATEGY" -v batch_cap="$RECOMMEND_BATCH_CAP" -v test262_dir="$TEST262_DIR" '
+    function metadata_has_hard_hint(path, file, line, hard) {
+      if (path in metadata_hard) {
+        return metadata_hard[path]
+      }
+      file = test262_dir "/" path
+      hard = 0
+      while ((getline line < file) > 0) {
+        if (line ~ /^(---\*\/|\*\/)$/) {
+          break
+        }
+        if (line ~ /(features|flags|includes):/ && line ~ /(async|class|destructur|dstr|for-await-of|yield|Proxy|proxy|realm|Realm|species|resizable-arraybuffer|growable-sharedarraybuffer)/) {
+          hard = 1
+          break
+        }
+      }
+      close(file)
+      metadata_hard[path] = hard
+      return hard
+    }
     function has_hard_hint(path, skip, area) {
       if (area ~ /annexB\/language\/global-code$/) {
+        return 1
+      }
+      if (metadata_has_hard_hint(path)) {
         return 1
       }
       if (skip ~ /async/) {

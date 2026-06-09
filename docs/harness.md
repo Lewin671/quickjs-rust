@@ -142,7 +142,7 @@ that, it prefers small harness-only batches when at least one case does not
 carry a hard-feature hint, because those mixed batches are often faster to
 verify or clear than a broad semantic area. Harness-only batches where every
 case is hard-hinted remain visible, but they rank below mixed quick wins. It
-also computes `hard hints` from paths and skip metadata
+also computes `hard hints` from Test262 feature metadata, paths, and skip metadata
 that usually imply larger missing features, such as async, destructuring, class,
 yield, proxy/realm/species behavior, resizable or growable buffers, or Annex B
 global-code semantics. Those hints do not hide gaps; they only lower an area's
