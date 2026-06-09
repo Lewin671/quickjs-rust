@@ -2,7 +2,10 @@ use qjs_ast::Span;
 
 use crate::{LexError, TokenKind};
 
-use super::{Lexer, char_class::is_identifier_continue};
+use super::{
+    Lexer,
+    char_class::{is_identifier_continue, is_js_whitespace_or_line_terminator},
+};
 
 impl Lexer<'_> {
     pub(super) fn html_open_comment(&mut self) -> bool {
@@ -26,7 +29,7 @@ impl Lexer<'_> {
         if self.peek() != Some('-')
             || self.peek_nth(1) != Some('-')
             || self.peek_nth(2) != Some('>')
-            || !self.has_preceding_line_terminator()
+            || !self.html_close_comment_allowed()
         {
             return false;
         }
@@ -171,10 +174,15 @@ impl Lexer<'_> {
         }
     }
 
-    fn has_preceding_line_terminator(&self) -> bool {
-        self.source[..self.cursor]
-            .chars()
-            .next_back()
-            .is_some_and(|ch| matches!(ch, '\n' | '\r'))
+    fn html_close_comment_allowed(&self) -> bool {
+        for ch in self.source[..self.cursor].chars().rev() {
+            if matches!(ch, '\n' | '\r') {
+                return true;
+            }
+            if !is_js_whitespace_or_line_terminator(ch) {
+                return false;
+            }
+        }
+        true
     }
 }
