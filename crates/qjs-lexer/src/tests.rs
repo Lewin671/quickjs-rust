@@ -168,6 +168,44 @@ fn html_close_comment_allows_initial_whitespace() {
 }
 
 #[test]
+fn html_close_comment_allows_block_comment_prefixes() {
+    let tokens = lex("/* first */ /* second */--> skip\none").expect("source should lex");
+    let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![TokenKind::Identifier("one".to_owned()), TokenKind::Eof,]
+    );
+}
+
+#[test]
+fn html_close_comment_allows_multiline_block_comment_prefix_after_token() {
+    let tokens = lex("0/*\n*/--> skip\none").expect("source should lex");
+    let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::Number("0".to_owned()),
+            TokenKind::Identifier("one".to_owned()),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn html_close_comment_allows_unicode_line_separators() {
+    let tokens = lex("counter\u{2028}--> skip\nnext").expect("source should lex");
+    let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::Identifier("counter".to_owned()),
+            TokenKind::Identifier("next".to_owned()),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
 fn skips_ecmascript_whitespace_and_line_terminators() {
     let tokens =
         lex("one\u{0009}\u{000B}\u{000C}\u{0020}\u{00A0}\u{000A}\u{000D}\u{2028}\u{2029}two")

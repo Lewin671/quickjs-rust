@@ -98,7 +98,7 @@ impl Lexer<'_> {
         let mut in_character_class = false;
 
         while let Some(ch) = self.peek() {
-            if matches!(ch, '\n' | '\r') {
+            if is_line_terminator(ch) {
                 return Err(LexError {
                     message: "unterminated regular expression literal".to_owned(),
                     span: Span::new(start, self.cursor),
@@ -169,20 +169,52 @@ impl Lexer<'_> {
     }
 
     fn skip_line_comment_tail(&mut self) {
-        while !matches!(self.peek(), None | Some('\n' | '\r')) {
+        while match self.peek() {
+            Some(ch) => !is_line_terminator(ch),
+            None => false,
+        } {
             self.advance();
         }
     }
 
     fn html_close_comment_allowed(&self) -> bool {
-        for ch in self.source[..self.cursor].chars().rev() {
-            if matches!(ch, '\n' | '\r') {
+        let mut index = self.cursor;
+        loop {
+            index = self.skip_html_close_prefix_whitespace(index);
+            if index == 0 {
                 return true;
             }
-            if !is_js_whitespace_or_line_terminator(ch) {
-                return false;
+
+            let Some(previous) = self.source[..index].chars().next_back() else {
+                return true;
+            };
+            if is_line_terminator(previous) {
+                return true;
             }
+            if self.source[..index].ends_with("*/")
+                && let Some(start) = self.source[..index].rfind("/*")
+            {
+                if self.source[start..index].chars().any(is_line_terminator) {
+                    return true;
+                }
+                index = start;
+                continue;
+            }
+            return false;
         }
-        true
     }
+
+    fn skip_html_close_prefix_whitespace(&self, mut index: usize) -> usize {
+        while let Some(ch) = self.source[..index].chars().next_back() {
+            if is_line_terminator(ch) || !is_js_whitespace_or_line_terminator(ch) {
+                break;
+            }
+            index -= ch.len_utf8();
+        }
+        index
+    }
+}
+
+fn is_line_terminator(ch: char) -> bool {
+    matches!(ch, '\n' | '\r' | '\u{2028}' | '\u{2029}')
 }

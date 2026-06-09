@@ -86,15 +86,21 @@ fn error_type(kind: EvalErrorKind, message: &str) -> &'static str {
         return "SyntaxError";
     }
     for name in [
-        "EvalError",
+        "AggregateError",
         "RangeError",
         "ReferenceError",
         "SyntaxError",
+        "Test262Error",
         "TypeError",
         "URIError",
+        "EvalError",
+        "Error",
     ] {
         let typed_prefix = format!("{name}:");
-        if message.starts_with(name) || message.contains(&typed_prefix) {
+        if message.starts_with(name)
+            || message.contains(&typed_prefix)
+            || (name != "Error" && message.contains(name))
+        {
             return name;
         }
     }
@@ -189,6 +195,15 @@ mod tests {
         assert_eq!(
             runtime.message,
             "kind=runtime type=TypeError message=throw statement executed: TypeError: incompatible receiver"
+        );
+
+        let test262 = format_test262_error(EvalError {
+            kind: EvalErrorKind::Runtime,
+            message: "throw statement executed: Test262Error".to_owned(),
+        });
+        assert_eq!(
+            test262.message,
+            "kind=runtime type=Test262Error message=throw statement executed: Test262Error"
         );
     }
 }

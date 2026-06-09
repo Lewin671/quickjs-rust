@@ -64,10 +64,17 @@ pub(crate) fn error_value(value: Value) -> String {
         Value::Function(_) => "function".to_owned(),
         Value::Array(_) => "array".to_owned(),
         Value::Map(_) | Value::Set(_) => "object".to_owned(),
-        Value::Object(object) => {
-            crate::error::error_object_to_string(&object).unwrap_or_else(|| "object".to_owned())
-        }
+        Value::Object(object) => crate::error::error_object_to_string(&object)
+            .or_else(|| object_constructor_name(&object))
+            .unwrap_or_else(|| "object".to_owned()),
     }
+}
+
+fn object_constructor_name(object: &crate::ObjectRef) -> Option<String> {
+    let Some(Value::Function(function)) = object.get("constructor") else {
+        return None;
+    };
+    function.name.filter(|name| !name.is_empty())
 }
 
 pub(crate) fn to_number(value: Value) -> Result<f64, RuntimeError> {
