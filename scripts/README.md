@@ -52,6 +52,8 @@ each script is for.
 
 ## Internal Helpers
 
+- `lib.sh`: Shared helpers (cargo resolution, QuickJS-NG build, qjs-cli
+  build, timeout wrapper check) sourced by the other scripts.
 - `check-file-size.sh`: Enforces file-size limits; called by `check.sh`.
 - `run-with-timeout.sh`: Runs a command with a timeout; shared by comparison,
   benchmark, and Test262 scripts.
