@@ -23,13 +23,13 @@ pub(super) fn call_number_native(
             number::native_number_is_safe_integer(argument_values)?
         }
         NativeFunction::NumberPrototypeToExponential => {
-            number::native_number_prototype_to_exponential(this_value, argument_values)?
+            number::native_number_prototype_to_exponential(this_value, argument_values, env)?
         }
         NativeFunction::NumberPrototypeToFixed => {
-            number::native_number_prototype_to_fixed(this_value, argument_values)?
+            number::native_number_prototype_to_fixed(this_value, argument_values, env)?
         }
         NativeFunction::NumberPrototypeToPrecision => {
-            number::native_number_prototype_to_precision(this_value, argument_values)?
+            number::native_number_prototype_to_precision(this_value, argument_values, env)?
         }
         NativeFunction::NumberPrototypeToString => {
             number::native_number_prototype_to_string(this_value, argument_values)?

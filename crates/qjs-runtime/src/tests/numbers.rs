@@ -124,6 +124,10 @@ fn evaluates_number_builtins() {
         Ok(Value::String("1.23e+1".to_owned()))
     );
     assert_eq!(
+        eval("(123.456).toExponential([2]);"),
+        Ok(Value::String("1.23e+2".to_owned()))
+    );
+    assert_eq!(
         eval("(1).toExponential(0);"),
         Ok(Value::String("1e+0".to_owned()))
     );
@@ -144,6 +148,12 @@ fn evaluates_number_builtins() {
         Ok(Value::String("Infinity".to_owned()))
     );
     assert_eq!(
+        eval(
+            "let calls = 0; NaN.toExponential({ valueOf: function() { calls++; return 1; } }); calls;"
+        ),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
         eval("(123.456).toPrecision();"),
         Ok(Value::String("123.456".to_owned()))
     );
@@ -153,6 +163,10 @@ fn evaluates_number_builtins() {
     );
     assert_eq!(
         eval("(123.456).toPrecision(2);"),
+        Ok(Value::String("1.2e+2".to_owned()))
+    );
+    assert_eq!(
+        eval("(123.456).toPrecision([2]);"),
         Ok(Value::String("1.2e+2".to_owned()))
     );
     assert_eq!(
@@ -170,6 +184,12 @@ fn evaluates_number_builtins() {
     assert_eq!(
         eval("NaN.toPrecision(101);"),
         Ok(Value::String("NaN".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let calls = 0; NaN.toPrecision({ valueOf: function() { calls++; return 1 / 0; } }); calls;"
+        ),
+        Ok(Value::Number(1.0))
     );
     assert_eq!(eval("(new Number(7)).valueOf();"), Ok(Value::Number(7.0)));
     assert_eq!(

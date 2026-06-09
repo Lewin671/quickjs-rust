@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use num_traits::ToPrimitive;
 
 use crate::{
-    Function, ObjectRef, Property, RuntimeError, Value, function_prototype, to_int32, to_number,
+    Function, ObjectRef, Property, RuntimeError, Value, function_prototype, to_int32,
     to_number_with_env,
 };
 
@@ -52,10 +52,13 @@ pub(crate) fn native_number_prototype_to_string(
 pub(crate) fn native_number_prototype_to_fixed(
     this_value: Value,
     argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let number = this_number_value(this_value)?;
-    let fraction_digits =
-        fraction_digits(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    let fraction_digits = fraction_digits(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     Ok(Value::String(number_to_fixed_string(
         number,
         fraction_digits,
@@ -65,17 +68,25 @@ pub(crate) fn native_number_prototype_to_fixed(
 pub(crate) fn native_number_prototype_to_exponential(
     this_value: Value,
     argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let number = this_number_value(this_value)?;
+    let fraction_digits = optional_digit_number(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     if !number.is_finite() {
         return Ok(Value::String(number_to_js_string(number)));
     }
-    let fraction_digits = optional_digits(
-        argument_values.first().cloned().unwrap_or(Value::Undefined),
-        0,
-        100,
-        "RangeError: toExponential fraction digits must be between 0 and 100",
-    )?;
+    let fraction_digits = match fraction_digits {
+        Some(digits) => Some(validate_digits(
+            digits,
+            0,
+            100,
+            "RangeError: toExponential fraction digits must be between 0 and 100",
+        )?),
+        None => None,
+    };
     Ok(Value::String(number_to_exponential_string(
         number,
         fraction_digits,
@@ -85,18 +96,29 @@ pub(crate) fn native_number_prototype_to_exponential(
 pub(crate) fn native_number_prototype_to_precision(
     this_value: Value,
     argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let number = this_number_value(this_value)?;
+    if matches!(argument_values.first(), None | Some(Value::Undefined)) {
+        return Ok(Value::String(number_to_js_string(number)));
+    }
+    let precision = optional_digit_number(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     if !number.is_finite() {
         return Ok(Value::String(number_to_js_string(number)));
     }
-    let precision = optional_digits(
-        argument_values.first().cloned().unwrap_or(Value::Undefined),
+    let precision = validate_digits(
+        precision.expect("precision undefined handled above"),
         1,
         100,
         "RangeError: toPrecision precision must be between 1 and 100",
     )?;
-    Ok(Value::String(number_to_precision_string(number, precision)))
+    Ok(Value::String(number_to_precision_string(
+        number,
+        Some(precision),
+    )))
 }
 
 pub(crate) fn native_number_prototype_value_of(this_value: Value) -> Result<Value, RuntimeError> {
@@ -137,12 +159,13 @@ fn number_to_string_radix(value: Value) -> Result<u32, RuntimeError> {
     Ok(radix as u32)
 }
 
-fn fraction_digits(value: Value) -> Result<usize, RuntimeError> {
+fn fraction_digits(value: Value, env: &mut HashMap<String, Value>) -> Result<usize, RuntimeError> {
     match optional_digits(
         value,
         0,
         100,
         "RangeError: toFixed fraction digits must be between 0 and 100",
+        env,
     )? {
         Some(digits) => Ok(digits),
         None => Ok(0),
@@ -154,19 +177,38 @@ fn optional_digits(
     min: usize,
     max: usize,
     range_message: &str,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Option<usize>, RuntimeError> {
+    let Some(digits) = optional_digit_number(value, env)? else {
+        return Ok(None);
+    };
+    Ok(Some(validate_digits(digits, min, max, range_message)?))
+}
+
+fn optional_digit_number(
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Option<f64>, RuntimeError> {
     if matches!(value, Value::Undefined) {
         return Ok(None);
     }
-    let digits = to_number(value)?;
-    let digits = if digits.is_nan() { 0.0 } else { digits.trunc() };
+    let digits = to_number_with_env(value, env)?;
+    Ok(Some(if digits.is_nan() { 0.0 } else { digits.trunc() }))
+}
+
+fn validate_digits(
+    digits: f64,
+    min: usize,
+    max: usize,
+    range_message: &str,
+) -> Result<usize, RuntimeError> {
     if digits < min as f64 || digits > max as f64 {
         return Err(RuntimeError {
             thrown: None,
             message: range_message.to_owned(),
         });
     }
-    Ok(Some(digits as usize))
+    Ok(digits as usize)
 }
 
 fn number_to_fixed_string(number: f64, fraction_digits: usize) -> String {
