@@ -281,6 +281,11 @@ rust_features_supported() {
       ;;
   esac
   case "$rel" in
+    test/built-ins/Number/string-numeric-separator-literal-*.js)
+      entries="$(drop_feature_entries "$entries" -e 'numeric-separator-literal')"
+      ;;
+  esac
+  case "$rel" in
     test/built-ins/Symbol/toStringTag/prop-desc.js|test/built-ins/Symbol/prototype/Symbol.toStringTag.js|test/built-ins/Map/prototype/Symbol.toStringTag.js|test/built-ins/Set/prototype/Symbol.toStringTag.js|test/built-ins/WeakMap/prototype/Symbol.toStringTag.js|test/built-ins/WeakSet/prototype/Symbol.toStringTag.js|test/built-ins/Promise/prototype/Symbol.toStringTag.js|test/built-ins/Math/Symbol.toStringTag.js|test/built-ins/JSON/Symbol.toStringTag.js)
       entries="$(drop_feature_entries "$entries" -e 'Symbol.toStringTag')"
       ;;
