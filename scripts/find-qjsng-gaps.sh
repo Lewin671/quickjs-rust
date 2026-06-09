@@ -524,7 +524,7 @@ total_gaps="$(wc -l <"$GAPS_TSV" | tr -d ' ')"
 rust_fail="$(awk -F'\t' '$2 == "fail" { count++ } END { print count + 0 }' "$GAPS_TSV")"
 rust_timeout="$(awk -F'\t' '$2 == "timeout" { count++ } END { print count + 0 }' "$GAPS_TSV")"
 excluded_timeout="$(wc -l <"$TIMEOUTS_TSV" | tr -d ' ')"
-harness_gap="$(awk -F'\t' '$2 == "skipped" { count++ } END { print count + 0 }' "$GAPS_TSV")"
+rust_not_run="$(awk -F'\t' '$2 == "skipped" { count++ } END { print count + 0 }' "$GAPS_TSV")"
 
 echo
 echo "QuickJS-NG gap report"
@@ -552,7 +552,7 @@ echo "  rust timeout: $rust_timeout"
 if [ "$INCLUDE_TIMEOUTS" -eq 0 ]; then
   echo "  rust timeout excluded: $excluded_timeout"
 fi
-echo "  rust harness gap: $harness_gap"
+echo "  rust not run: $rust_not_run"
 
 if [ "$total_gaps" -eq 0 ]; then
   echo
@@ -603,7 +603,7 @@ if [ "$RECOMMEND" -eq 1 ]; then
     echo "  engine gaps: $rec_engine"
     echo "  rust fail: $rec_fail"
     echo "  rust timeout: $rec_timeout"
-    echo "  harness gaps: $rec_harness"
+    echo "  rust not run: $rec_harness"
     if [ "$RECOMMEND_STRATEGY" = "quickwins" ]; then
       echo "  hard hints: $rec_hard"
     fi
