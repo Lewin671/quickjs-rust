@@ -114,6 +114,12 @@ impl Parser {
                         span: token.span,
                     });
                 }
+                if reserved_arrow_parameter(&param, self.strict) {
+                    return Err(ParseError {
+                        message: "reserved arrow parameter name".to_owned(),
+                        span: token.span,
+                    });
+                }
                 Ok(Some(FunctionParams::positional(vec![param])))
             }
             Some(TokenKind::LeftParen) => self.parenthesized_arrow_parameters(),
@@ -178,6 +184,12 @@ impl Parser {
                     span,
                 });
             }
+        }
+        if let Some(span) = reserved_arrow_parameter_span(&positional, rest.as_ref(), self.strict) {
+            return Err(ParseError {
+                message: "reserved arrow parameter name".to_owned(),
+                span,
+            });
         }
         Ok(Some(FunctionParams {
             positional: positional.into_iter().map(|(name, _)| name).collect(),
@@ -252,6 +264,31 @@ fn restricted_strict_arrow_parameter_span(
 
 fn restricted_strict_arrow_parameter(name: &str) -> bool {
     matches!(name, "arguments" | "eval" | "yield")
+}
+
+fn reserved_arrow_parameter_span(
+    positional: &[(String, Span)],
+    rest: Option<&(String, Span)>,
+    strict: bool,
+) -> Option<Span> {
+    for (name, span) in positional {
+        if reserved_arrow_parameter(name, strict) {
+            return Some(*span);
+        }
+    }
+    let (name, span) = rest?;
+    reserved_arrow_parameter(name, strict).then_some(*span)
+}
+
+fn reserved_arrow_parameter(name: &str, strict: bool) -> bool {
+    if name == "enum" {
+        return true;
+    }
+    strict
+        && matches!(
+            name,
+            "implements" | "interface" | "package" | "private" | "protected" | "public" | "static"
+        )
 }
 
 fn is_line_terminator(ch: char) -> bool {

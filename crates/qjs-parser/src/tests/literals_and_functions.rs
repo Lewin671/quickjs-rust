@@ -166,6 +166,19 @@ fn rejects_restricted_arrow_parameter_names_in_strict_mode() {
 }
 
 #[test]
+fn rejects_reserved_arrow_parameter_names() {
+    assert!(parse_script("let arrow = enum => 1;").is_err());
+    assert!(parse_script("let arrow = (value, ...enum) => value;").is_err());
+    assert!(parse_script("\"use strict\"; let arrow = package => 1;").is_err());
+    assert!(parse_script("\"use strict\"; let arrow = (value, private) => value;").is_err());
+
+    parse_script("let arrow = package => package;")
+        .expect("strict-only future reserved words should parse outside strict mode");
+    parse_script("function ordinary(enum, package) { return package; }")
+        .expect("ordinary function parameter validation is outside arrow parsing");
+}
+
+#[test]
 fn rejects_line_terminator_before_arrow() {
     assert!(parse_script("let arrow = value\n=> value;").is_err());
     assert!(parse_script("let arrow = ()\n=> {};").is_err());
