@@ -110,9 +110,26 @@ Run additional checks when relevant:
 
 ```sh
 ./scripts/compare-qjs.sh
+./scripts/find-qjsng-gaps.sh --filter test/built-ins/String --limit 100
 ./scripts/test262-subset.sh
 ./scripts/microbench.sh
 ```
+
+`scripts/find-qjsng-gaps.sh` is the first-choice entrypoint for discovering
+behavior supported by the pinned QuickJS-NG reference but not yet supported by
+quickjs-rust. It runs `scripts/test262-baseline.sh --engine both`, stores the
+raw summary and case results under `target/test262-gaps/`, and prints a compact
+report with the total QuickJS-NG-pass/quickjs-rust-nonpass count, the split
+between runtime failures, timeouts, and harness gaps, top affected areas, and
+the first cases to investigate. Use `--filter test/<prefix>` to focus the scan
+on one Test262 subtree and `--all` when the focused scan should be exhaustive.
+It prints a greedy next area by default. The recommendation prioritizes areas
+with real quickjs-rust failures or timeouts, then falls back to the largest
+harness-gap area when the sample contains only skipped cases. Use
+`--no-recommend` when only the raw gap report is needed. Treat the recommended
+area as the smallest useful planning and commit boundary unless the area is too
+broad to review as one change; avoid splitting follow-up work into one commit
+per individual Test262 case.
 
 `scripts/test262-subset.sh` runs the curated Test262 allowlist. Allowlist
 entries may point to local derived cases under `tests/test262/cases/` or pinned

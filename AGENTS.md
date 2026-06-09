@@ -20,6 +20,8 @@ boundaries and make each change verifiable with focused tests.
 - Test only: `cargo test --workspace`
 - CLI smoke test: `cargo run -p qjs-cli -- -e "1 + 2;"`
 - QuickJS comparison smoke tests: `./scripts/compare-qjs.sh`
+- QuickJS-NG gap discovery:
+  `./scripts/find-qjsng-gaps.sh [--limit N | --all] [--filter test/<prefix>]`
 - Test262 subset runner: `./scripts/test262-subset.sh`
 - Upstream Test262 baseline runner:
   `./scripts/test262-baseline.sh [--limit N | --all] [--filter test/<prefix>] [--engine quickjs-rust|quickjs-ng|both] [--shard I/N] [--summary-json PATH] [--no-fail]`
@@ -132,6 +134,10 @@ Both `scripts/bootstrap.sh` and `scripts/check.sh` fall back to
 - Do not stage user changes or unrelated workspace changes.
 - Split broad tasks into small commits that each compile and have relevant
   tests where practical.
+- For QuickJS-NG gap work, treat one greedy recommendation area or one coherent
+  JavaScript semantic family as the commit boundary. Do not create one commit
+  per individual Test262 case; include allowlist or expected-failure updates
+  with the implementation or harness support that makes them meaningful.
 - Commit messages should describe the behavior or policy change, for example
   `Add lexer support for comments` or `Tighten agent workflow docs`.
 

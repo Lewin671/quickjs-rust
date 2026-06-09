@@ -10,6 +10,10 @@ maintenance, or agent workflow isolation.
   tests, and file-size limits.
 - `compare-qjs.sh`: Runs selected local fixtures against both quickjs-rust and
   the pinned QuickJS-NG reference.
+- `find-qjsng-gaps.sh`: Runs a QuickJS-NG comparison baseline and prints the
+  upstream Test262 cases where QuickJS-NG passes but quickjs-rust does not.
+  Use this as the first agent entrypoint for discovering the next conformance
+  gap to implement. It prints the greedy next area by default.
 - `test262-subset.sh`: Runs the curated Test262 allowlist. Entries may point to
   local derived cases under `tests/test262/cases/` or pinned upstream cases
   under `third_party/test262/test/`. Upstream entries are executed with the
@@ -27,6 +31,14 @@ maintenance, or agent workflow isolation.
 
 ## Test262 Exploration
 
+- `find-qjsng-gaps.sh`: Friendly gap-discovery wrapper around
+  `test262-baseline.sh --engine both`. It writes raw `summary.json`,
+  `cases.jsonl`, `qjsng-pass-rust-nonpass.tsv`, and `recommendations.tsv` files
+  under `target/test262-gaps/` by default, then prints a short summary, top gap
+  areas, and first actionable cases. Use `--filter test/<prefix>` to focus on
+  one subsystem and `--all` when a full focused scan is useful. It selects a
+  greedy next area by preferring real runtime or parser failures before pure
+  harness skips. Use `--no-recommend` to suppress that recommendation.
 - `test262-baseline.sh`: Samples or scans upstream Test262 files to classify
   unsupported metadata, parser or runtime failures, and timeouts before adding
   curated local cases. Use `--engine both --all --shard I/N --summary-json PATH

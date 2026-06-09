@@ -119,12 +119,16 @@ cargo fmt --all
 cargo test --workspace
 cargo run -p qjs-cli -- -e "1 + 2;"
 ./scripts/compare-qjs.sh
+./scripts/find-qjsng-gaps.sh --filter test/built-ins/String --limit 100
 ./scripts/test262-subset.sh
 ./scripts/source-size-report.sh
 ```
 
 `./scripts/compare-qjs.sh` compares selected local fixtures against the pinned
-QuickJS-NG reference. `./scripts/test262-subset.sh` runs only curated
+QuickJS-NG reference. `./scripts/find-qjsng-gaps.sh` summarizes upstream
+Test262 cases that QuickJS-NG passes but `quickjs-rust` does not, and prints a
+greedy next area to investigate.
+`./scripts/test262-subset.sh` runs only curated
 Test262-derived cases that the current harness can execute deterministically;
 cases listed in `tests/test262/expected-failures.txt` may fail until the named
 support gap is implemented, and passing expected-failure cases are reported as
