@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 use crate::{
     ArrayRef, Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
-    function_prototype, to_js_string,
+    function_prototype, has_property, property_value, property_value_key, symbol, to_js_string,
+    to_js_string_with_env,
 };
 
 const ERROR_DATA_PROPERTY: &str = "\0ErrorData";
@@ -113,17 +114,14 @@ pub(crate) fn native_aggregate_error(
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let object = match (is_construct, this_value) {
         (true, Value::Object(object)) => object,
         _ => ObjectRef::with_prototype(HashMap::new(), function_prototype(function)),
     };
     define_error_data(&object);
-    let errors = match argument_values.first() {
-        Some(Value::Array(errors)) => Value::Array(errors.clone()),
-        Some(Value::Undefined) | None => Value::Array(ArrayRef::new(Vec::new())),
-        Some(value) => Value::Array(ArrayRef::new(vec![value.clone()])),
-    };
+    let errors = aggregate_error_errors(argument_values.first().cloned(), env)?;
     object.define_property(
         "errors".to_owned(),
         Property::data(errors, false, true, true),
@@ -133,7 +131,7 @@ pub(crate) fn native_aggregate_error(
             object.define_property(
                 "message".to_owned(),
                 Property::data(
-                    Value::String(to_js_string(message.clone())?),
+                    Value::String(to_js_string_with_env(message.clone(), env)?),
                     false,
                     true,
                     true,
@@ -141,7 +139,64 @@ pub(crate) fn native_aggregate_error(
             );
         }
     }
+    install_error_cause(&object, argument_values.get(2).cloned(), env)?;
     Ok(Value::Object(object))
+}
+
+fn aggregate_error_errors(
+    errors: Option<Value>,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let Some(errors) = errors else {
+        return Ok(Value::Array(ArrayRef::new(Vec::new())));
+    };
+    match errors {
+        Value::Array(errors) => Ok(Value::Array(errors)),
+        Value::Undefined => Ok(Value::Array(ArrayRef::new(Vec::new()))),
+        value => {
+            if aggregate_errors_is_iterable(value.clone(), env)? {
+                let array_constructor = env.get("Array").cloned().unwrap_or(Value::Undefined);
+                crate::array::native_array_from(array_constructor, &[value], env)
+            } else {
+                Ok(Value::Array(ArrayRef::new(vec![value])))
+            }
+        }
+    }
+}
+
+fn aggregate_errors_is_iterable(
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<bool, RuntimeError> {
+    let Some(iterator_symbol) = symbol::iterator_symbol(env) else {
+        return Ok(false);
+    };
+    let iterator_method =
+        property_value_key(value, &crate::PropertyKey::Symbol(iterator_symbol), env)?;
+    Ok(!matches!(iterator_method, Value::Undefined | Value::Null))
+}
+
+fn install_error_cause(
+    object: &ObjectRef,
+    options: Option<Value>,
+    env: &mut HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
+    let Some(options) = options else {
+        return Ok(());
+    };
+    if !is_object_value(&options) || !has_property(options.clone(), env, "cause")? {
+        return Ok(());
+    }
+    let cause = property_value(options, "cause", env)?;
+    object.define_property("cause".to_owned(), Property::data(cause, false, true, true));
+    Ok(())
+}
+
+fn is_object_value(value: &Value) -> bool {
+    matches!(
+        value,
+        Value::Object(_) | Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_)
+    )
 }
 
 pub(crate) fn is_native_error(native: NativeFunction) -> bool {

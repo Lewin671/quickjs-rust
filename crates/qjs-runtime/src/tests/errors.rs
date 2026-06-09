@@ -203,4 +203,30 @@ fn evaluates_aggregate_error_builtin() {
         eval("Error.isError(new AggregateError([], 'boom'));"),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "let cause = { message: 'root' }; let error = new AggregateError([], 'boom', { cause: cause }); let desc = Object.getOwnPropertyDescriptor(error, 'cause'); (desc.value === cause) + ':' + desc.writable + ':' + desc.enumerable + ':' + desc.configurable;"
+        ),
+        Ok(Value::String("true:true:false:true".to_owned()))
+    );
+    assert_eq!(
+        eval("Object.hasOwn(new AggregateError([], 'boom', { cause: undefined }), 'cause');"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("Object.hasOwn(new AggregateError([], 'boom'), 'cause');"),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval(
+            "let marker = {}; let message = { toString: function() { throw marker; } }; let caught = false; try { new AggregateError([], message); } catch (error) { caught = error === marker; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let source = {}; source[Symbol.iterator] = function() { let index = 0; return { next: function() { index = index + 1; return index > 2 ? { done: true } : { value: index, done: false }; } }; }; let error = new AggregateError(source, 'boom'); error.errors.join();"
+        ),
+        Ok(Value::String("1,2".to_owned()))
+    );
 }
