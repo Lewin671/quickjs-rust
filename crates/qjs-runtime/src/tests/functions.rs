@@ -21,6 +21,18 @@ fn evaluates_function_declarations_and_calls() {
         Ok(Value::Number(17.0))
     );
     assert_eq!(
+        eval(
+            "var after; eval('if (true) function f() { return \"declaration\"; } else function _f() {} after = f;'); after();"
+        ),
+        Ok(Value::String("declaration".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var after = 'unchanged'; eval('if (false) function f() { return \"no\"; } else function _f() { return \"alternate\"; } after = _f;'); after();"
+        ),
+        Ok(Value::String("alternate".to_owned()))
+    );
+    assert_eq!(
         eval("function first(a) { return a; } first();"),
         Ok(Value::Undefined)
     );

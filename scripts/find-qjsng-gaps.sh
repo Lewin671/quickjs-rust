@@ -327,14 +327,17 @@ if [ "$RECOMMEND" -eq 1 ]; then
     fi
     echo
     echo "Recommended cases:"
-    awk -F'\t' -v area="$rec_area" '$4 == area {
+    awk -F'\t' -v area="$rec_area" -v top="$TOP_COUNT" '$4 == area {
       label = $2
       if ($3 != "") {
         label = label ", " $3
       }
       printf "  %s  (%s)\n", $1, label
-    }' "$GAPS_TSV" \
-      | head -n "$TOP_COUNT"
+      shown++
+      if (shown >= top) {
+        exit
+      }
+    }' "$GAPS_TSV"
   fi
 fi
 

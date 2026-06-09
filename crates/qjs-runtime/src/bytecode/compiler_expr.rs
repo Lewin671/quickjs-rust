@@ -21,19 +21,26 @@ impl Compiler {
         self.compile_expr(test)?;
         let else_jump = self.emit(Op::JumpIfFalse(usize::MAX));
         self.emit(Op::Pop);
-        self.compile_stmt(consequent)?;
+        self.compile_if_clause_stmt(consequent)?;
         let end_jump = self.emit(Op::Jump(usize::MAX));
         let else_target = self.code.len();
         self.patch_jump(else_jump, else_target);
         self.emit(Op::Pop);
         if let Some(alternate) = alternate {
-            self.compile_stmt(alternate)?;
+            self.compile_if_clause_stmt(alternate)?;
         } else {
             self.emit_load_undefined();
         }
         let end_target = self.code.len();
         self.patch_jump(end_jump, end_target);
         Ok(())
+    }
+
+    fn compile_if_clause_stmt(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
+        if let Stmt::FunctionDecl { .. } = stmt {
+            return self.compile_function_decl(stmt);
+        }
+        self.compile_stmt(stmt)
     }
 
     pub(super) fn compile_while(&mut self, test: &Expr, body: &Stmt) -> Result<(), RuntimeError> {
