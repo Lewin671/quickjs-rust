@@ -1,6 +1,8 @@
 mod control;
 mod declarations;
 mod functions;
+
+pub(crate) use functions::duplicate_parameter_span;
 mod simple;
 
 use qjs_ast::{Script, Span, Stmt};

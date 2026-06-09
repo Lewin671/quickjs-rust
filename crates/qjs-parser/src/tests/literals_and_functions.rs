@@ -843,3 +843,11 @@ fn rejects_strict_directive_with_pattern_parameters() {
     assert!(parse_script("function pick([value]) { \"use strict\"; return value; }").is_err());
     assert!(parse_script("function pick(...rest) { \"use strict\"; return rest; }").is_err());
 }
+
+#[test]
+fn rejects_duplicate_method_parameters() {
+    assert!(parse_script("var o = {m(a, a) {}};").is_err());
+    assert!(parse_script("var o = {set s([v, v]) {}};").is_err());
+    parse_script("function ordinary(a, a) {}").expect("sloppy simple duplicates stay legal");
+    parse_script("var o = {m(a, b) {}};").expect("unique method parameters parse");
+}

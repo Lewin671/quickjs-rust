@@ -265,7 +265,7 @@ impl Parser {
     }
 }
 
-fn duplicate_parameter_span(params: &FunctionParams) -> Option<Span> {
+pub(crate) fn duplicate_parameter_span(params: &FunctionParams) -> Option<Span> {
     let named = params.named_spans();
     for (index, (name, _)) in named.iter().enumerate() {
         for (candidate, span) in &named[index + 1..] {

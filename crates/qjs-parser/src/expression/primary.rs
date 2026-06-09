@@ -403,6 +403,7 @@ impl Parser {
                 ObjectPropertyKey::Computed(_) => None,
             };
             let params = self.function_parameters()?;
+            reject_duplicate_method_parameters(&params)?;
             let body_start = self
                 .peek()
                 .expect("parser should always have eof token")
@@ -498,6 +499,7 @@ impl Parser {
                 span: key_span,
             });
         }
+        reject_duplicate_method_parameters(&params)?;
         let body = self.block_body()?;
         let end = self
             .tokens
@@ -545,6 +547,16 @@ fn has_legacy_octal_escape(raw: &str) -> bool {
         }
     }
     false
+}
+
+fn reject_duplicate_method_parameters(params: &qjs_ast::FunctionParams) -> Result<(), ParseError> {
+    if let Some(span) = crate::statement::duplicate_parameter_span(params) {
+        return Err(ParseError {
+            message: "duplicate parameter name".to_owned(),
+            span,
+        });
+    }
+    Ok(())
 }
 
 pub(crate) fn keyword_property_name(kind: &TokenKind) -> Option<&'static str> {
