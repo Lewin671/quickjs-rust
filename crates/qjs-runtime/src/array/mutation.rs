@@ -163,15 +163,16 @@ pub(super) fn delete_array_like_property(
             return Err(copy_within_delete_error());
         }
         Value::Object(_) => {}
-        Value::Proxy(proxy) => {
+        Value::Proxy(proxy)
             if !crate::proxy::proxy_delete_property(
-                proxy,
+                proxy.clone(),
                 &crate::PropertyKey::String(key.to_owned()),
                 env,
-            )? {
-                return Err(copy_within_delete_error());
-            }
+            )? =>
+        {
+            return Err(copy_within_delete_error());
         }
+        Value::Proxy(_) => {}
         Value::Array(elements) => match key.parse::<usize>() {
             Ok(index) => {
                 if !elements.delete_index(index) {
