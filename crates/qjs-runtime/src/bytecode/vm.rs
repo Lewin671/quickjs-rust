@@ -3,7 +3,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use qjs_ast::ObjectPropertyKind;
 
 use crate::{
-    ArrayRef, Function, GLOBAL_THIS_BINDING, ObjectRef, Property, PropertyKey,
+    ArrayRef, Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, Property, PropertyKey,
     RUNTIME_INTRINSIC_NAMES, RuntimeError, Value, array::iterable_values_with_env, call_function,
     construct_function, function::CompiledUserFunction, initialize_builtins, is_truthy, object,
     object_prototype, promise, symbol, to_js_string_with_env, to_property_key_value,
@@ -442,9 +442,14 @@ impl<'a> Vm<'a> {
         let key_value = self.pop()?;
         let key = self.coerce_property_key(key_value)?;
         let object = self.pop()?;
-        let mut env = self.current_env();
-        let value = get_property_key(object, &key, &mut env)?;
-        self.apply_env(env);
+        let value = if let Some(value) = direct_get_property_key(&object, &key) {
+            value
+        } else {
+            let mut env = self.current_env();
+            let value = get_property_key(object, &key, &mut env)?;
+            self.apply_env(env);
+            value
+        };
         self.stack.push(value);
         Ok(())
     }
@@ -509,6 +514,12 @@ impl<'a> Vm<'a> {
     fn call(&mut self, argc: usize) -> Result<(), RuntimeError> {
         let arguments = self.pop_arguments(argc)?;
         let callee = self.pop()?;
+        if let Some(result) = self.try_fast_global_native_call(&callee, &arguments)? {
+            if let Some(value) = result {
+                self.stack.push(value);
+            }
+            return Ok(());
+        }
         let mut env = self.call_env(&callee);
         let result = call_function(callee, Value::Undefined, arguments, &mut env.env, false);
         self.apply_call_env(env);
@@ -518,14 +529,66 @@ impl<'a> Vm<'a> {
         Ok(())
     }
 
+    fn try_fast_global_native_call(
+        &mut self,
+        callee: &Value,
+        arguments: &[Value],
+    ) -> Result<Option<Option<Value>>, RuntimeError> {
+        let Value::Function(function) = callee else {
+            return Ok(None);
+        };
+        let Some(native) = function.native else {
+            return Ok(None);
+        };
+        let result = match native {
+            NativeFunction::DecodeUri | NativeFunction::DecodeUriComponent => {
+                let source = match arguments.first().cloned().unwrap_or(Value::Undefined) {
+                    Value::String(source) => source,
+                    Value::Undefined => "undefined".to_owned(),
+                    _ => return Ok(None),
+                };
+                let result = match native {
+                    NativeFunction::DecodeUri => crate::global::decode_uri_string(&source),
+                    NativeFunction::DecodeUriComponent => {
+                        crate::global::decode_uri_component_string(&source)
+                    }
+                    _ => unreachable!("URI native matched above"),
+                };
+                result.map(Value::String)
+            }
+            NativeFunction::StringFromCharCode => {
+                if !arguments
+                    .iter()
+                    .all(|value| matches!(value, Value::Number(_)))
+                {
+                    return Ok(None);
+                }
+                Ok(Value::String(fast_string_from_char_code_numbers(arguments)))
+            }
+            _ => return Ok(None),
+        };
+        Ok(Some(self.handle_runtime_result(result)?))
+    }
+
     fn call_method(&mut self, argc: usize) -> Result<(), RuntimeError> {
         let arguments = self.pop_arguments(argc)?;
         let key_value = self.pop()?;
         let key = self.coerce_property_key(key_value)?;
         let this_value = self.pop()?;
-        let mut getter_env = self.current_env();
-        let callee = get_property_key(this_value.clone(), &key, &mut getter_env)?;
-        self.apply_env(getter_env);
+        let callee = if let Some(callee) = direct_function_data_property(&this_value, &key) {
+            callee
+        } else {
+            let mut getter_env = self.current_env();
+            let callee = get_property_key(this_value.clone(), &key, &mut getter_env)?;
+            self.apply_env(getter_env);
+            callee
+        };
+        if let Some(result) = self.try_fast_global_native_call(&callee, &arguments)? {
+            if let Some(value) = result {
+                self.stack.push(value);
+            }
+            return Ok(());
+        }
         let mut env = self.call_env(&callee);
         let result = call_function(callee, this_value, arguments, &mut env.env, false);
         self.apply_call_env(env);
@@ -694,6 +757,47 @@ impl<'a> Vm<'a> {
         {
             self.sloppy_global_names.push(name.to_owned());
         }
+    }
+}
+
+fn fast_string_from_char_code_numbers(arguments: &[Value]) -> String {
+    let code_units: Vec<u16> = arguments
+        .iter()
+        .map(|value| match value {
+            Value::Number(number) if number.is_finite() && *number != 0.0 => {
+                number.trunc().rem_euclid(65_536.0) as u16
+            }
+            Value::Number(_) => 0,
+            _ => unreachable!("fast path only accepts numeric arguments"),
+        })
+        .collect();
+    crate::string::string_from_code_units(&code_units)
+}
+
+fn direct_function_data_property(this_value: &Value, key: &PropertyKey) -> Option<Value> {
+    let (Value::Function(function), PropertyKey::String(name)) = (this_value, key) else {
+        return None;
+    };
+    function
+        .properties
+        .borrow()
+        .get(name)
+        .filter(|property| !property.accessor)
+        .map(|property| property.value.clone())
+}
+
+fn direct_get_property_key(value: &Value, key: &PropertyKey) -> Option<Value> {
+    let PropertyKey::String(name) = key else {
+        return None;
+    };
+    match value {
+        Value::Array(array) if name == "length" => Some(Value::Number(array.len() as f64)),
+        Value::Array(array) => name
+            .parse::<usize>()
+            .ok()
+            .and_then(|index| array.get(index)),
+        Value::Function(_) => direct_function_data_property(value, key),
+        _ => None,
     }
 }
 

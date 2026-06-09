@@ -5,8 +5,8 @@ use num_traits::{ToPrimitive, Zero};
 use qjs_ast::{BinaryOp, UnaryOp};
 
 use crate::{
-    Property, PropertyKey, RuntimeError, Value, call_function, has_property_key, is_truthy, string,
-    symbol, to_int32_number, to_js_string_with_env, to_number, to_number_with_env,
+    Property, PropertyKey, RuntimeError, Value, call_function, error, has_property_key, is_truthy,
+    string, symbol, to_int32_number, to_js_string_with_env, to_number, to_number_with_env,
     to_primitive_with_env, to_property_key_value, to_uint32_number, value_prototype,
 };
 
@@ -381,6 +381,13 @@ fn eval_instanceof(
     right: Value,
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
+    if matches!(
+        &right,
+        Value::Function(function) if function.native.is_some_and(error::is_native_error)
+    ) {
+        return ordinary_has_instance(left, right, env).map(Value::Boolean);
+    }
+
     if let Some(symbol) = symbol::has_instance_symbol(env) {
         let method = crate::property_value_key(right.clone(), &PropertyKey::Symbol(symbol), env)?;
         if !matches!(method, Value::Undefined | Value::Null) {

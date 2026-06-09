@@ -109,7 +109,7 @@ pub(super) fn native_global_decode_uri(
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let source = to_js_string_with_env(value, env)?;
-    decode_uri(&source, UriDecodeKind::Uri).map(Value::String)
+    decode_uri_string(&source).map(Value::String)
 }
 
 pub(super) fn native_global_decode_uri_component(
@@ -118,7 +118,15 @@ pub(super) fn native_global_decode_uri_component(
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let source = to_js_string_with_env(value, env)?;
-    decode_uri(&source, UriDecodeKind::Component).map(Value::String)
+    decode_uri_component_string(&source).map(Value::String)
+}
+
+pub(crate) fn decode_uri_string(source: &str) -> Result<String, RuntimeError> {
+    decode_uri(source, UriDecodeKind::Uri)
+}
+
+pub(crate) fn decode_uri_component_string(source: &str) -> Result<String, RuntimeError> {
+    decode_uri(source, UriDecodeKind::Component)
 }
 
 pub(super) fn native_global_eval(
@@ -271,6 +279,13 @@ fn encode_uri(source: &str, kind: UriEncodeKind) -> Result<String, RuntimeError>
 }
 
 fn decode_uri(source: &str, kind: UriDecodeKind) -> Result<String, RuntimeError> {
+    if !source.contains('%') {
+        return Ok(source.to_owned());
+    }
+    if source.is_ascii() {
+        return decode_ascii_uri(source, kind);
+    }
+
     let mut output = String::new();
     let chars: Vec<char> = source.chars().collect();
     let mut index = 0;
@@ -303,6 +318,62 @@ fn decode_uri(source: &str, kind: UriDecodeKind) -> Result<String, RuntimeError>
         }
     }
     Ok(output)
+}
+
+fn decode_ascii_uri(source: &str, kind: UriDecodeKind) -> Result<String, RuntimeError> {
+    let bytes = source.as_bytes();
+    let mut output = String::with_capacity(source.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] != b'%' {
+            output.push(char::from(bytes[index]));
+            index += 1;
+            continue;
+        }
+
+        let escape_start = index;
+        let first_byte = ascii_percent_byte(bytes, index)?;
+        index += 3;
+
+        let expected_len = utf8_sequence_len(first_byte)?;
+        let mut decoded_bytes = [0u8; 4];
+        decoded_bytes[0] = first_byte;
+        for slot in decoded_bytes.iter_mut().take(expected_len).skip(1) {
+            if index >= bytes.len() || bytes[index] != b'%' {
+                return malformed_uri();
+            }
+            *slot = ascii_percent_byte(bytes, index)?;
+            index += 3;
+        }
+
+        let decoded =
+            std::str::from_utf8(&decoded_bytes[..expected_len]).map_err(|_| uri_error())?;
+        if matches!(kind, UriDecodeKind::Uri) && decoded.chars().all(is_uri_reserved) {
+            output.push_str(&source[escape_start..index]);
+        } else {
+            output.push_str(decoded);
+        }
+    }
+    Ok(output)
+}
+
+fn ascii_percent_byte(bytes: &[u8], index: usize) -> Result<u8, RuntimeError> {
+    let Some(high) = bytes.get(index + 1).and_then(|byte| ascii_hex_digit(*byte)) else {
+        return malformed_uri();
+    };
+    let Some(low) = bytes.get(index + 2).and_then(|byte| ascii_hex_digit(*byte)) else {
+        return malformed_uri();
+    };
+    Ok((high << 4) | low)
+}
+
+fn ascii_hex_digit(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
 }
 
 fn is_uri_unescaped(character: char, kind: UriEncodeKind) -> bool {
