@@ -117,6 +117,20 @@ fn parses_for_in_statement() {
         panic!("expected one for-in statement");
     };
     assert!(matches!(left, ForInLeft::Target(_)));
+
+    let script =
+        parse_script("for (var key = init() in object) key;").expect("source should parse");
+    let [Stmt::ForIn { left, .. }] = script.body.as_slice() else {
+        panic!("expected one for-in statement");
+    };
+    assert!(matches!(
+        left,
+        ForInLeft::VarDecl {
+            name,
+            init: Some(_),
+            ..
+        } if name == "key"
+    ));
 }
 
 #[test]

@@ -1,4 +1,4 @@
-use qjs_ast::{CatchClause, ForInLeft, ForInit, Span, Stmt, SwitchCase};
+use qjs_ast::{CatchClause, ForInLeft, ForInit, Span, Stmt, SwitchCase, VarKind};
 use qjs_lexer::TokenKind;
 
 use crate::helpers::{assignment_target, stmt_end, var_kind};
@@ -85,6 +85,7 @@ impl Parser {
         self.expect(&TokenKind::For)?;
         self.expect(&TokenKind::LeftParen)?;
         if self.at(&TokenKind::Var) || self.at(&TokenKind::Let) || self.at(&TokenKind::Const) {
+            let var_head_start = self.cursor;
             let kind_token = self.advance();
             let kind = var_kind(&kind_token.kind).expect("token should be declaration kind");
             let name_token = self.advance();
@@ -92,6 +93,11 @@ impl Parser {
                 message: "expected binding identifier".to_owned(),
                 span: name_token.span,
             })?;
+            let init = if kind == VarKind::Var && self.match_kind(&TokenKind::Equal) {
+                Some(self.expression_no_in()?)
+            } else {
+                None
+            };
             if self.match_kind(&TokenKind::In) {
                 let right = self.expression()?;
                 self.expect(&TokenKind::RightParen)?;
@@ -101,6 +107,7 @@ impl Parser {
                     left: ForInLeft::VarDecl {
                         kind,
                         name,
+                        init,
                         span: Span::new(kind_token.span.start, name_token.span.end),
                     },
                     right,
@@ -117,6 +124,7 @@ impl Parser {
                     left: ForInLeft::VarDecl {
                         kind,
                         name,
+                        init: None,
                         span: Span::new(kind_token.span.start, name_token.span.end),
                     },
                     right,
@@ -124,7 +132,7 @@ impl Parser {
                     span: Span::new(start, end),
                 });
             }
-            self.cursor -= 2;
+            self.cursor = var_head_start;
         } else if !self.at(&TokenKind::Semicolon) {
             let cursor = self.cursor;
             let left = self.call()?;

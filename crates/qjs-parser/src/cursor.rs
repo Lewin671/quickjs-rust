@@ -9,6 +9,7 @@ impl Parser {
             tokens,
             cursor: 0,
             strict: false,
+            allow_in: true,
         }
     }
 

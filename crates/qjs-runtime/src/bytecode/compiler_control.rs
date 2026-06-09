@@ -57,6 +57,7 @@ impl Compiler {
 
         self.emit_load_undefined();
         self.emit(Op::StoreLocal(result_slot));
+        self.compile_for_in_initializer(left)?;
         self.compile_expr(right)?;
         self.emit(Op::EnumerateKeys);
         self.emit(Op::StoreLocal(keys_slot));
@@ -269,6 +270,22 @@ impl Compiler {
                 self.emit(Op::Pop);
             }
         }
+        Ok(())
+    }
+
+    fn compile_for_in_initializer(&mut self, left: &ForInLeft) -> Result<(), RuntimeError> {
+        let ForInLeft::VarDecl {
+            name,
+            kind,
+            init: Some(init),
+            ..
+        } = left
+        else {
+            return Ok(());
+        };
+        let slot = self.declare_var_kind_slot(name, *kind);
+        self.compile_expr(init)?;
+        self.emit_store_var_binding(slot, name, *kind);
         Ok(())
     }
 

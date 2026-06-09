@@ -49,6 +49,8 @@ pub enum ForInLeft {
         kind: VarKind,
         /// Binding name.
         name: String,
+        /// Optional Annex B initializer.
+        init: Option<Expr>,
         /// Source span.
         span: Span,
     },

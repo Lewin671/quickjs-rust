@@ -31,4 +31,12 @@ impl Parser {
             span: Span::new(start, end),
         })
     }
+
+    pub(crate) fn expression_no_in(&mut self) -> Result<Expr, ParseError> {
+        let previous = self.allow_in;
+        self.allow_in = false;
+        let result = self.expression();
+        self.allow_in = previous;
+        result
+    }
 }

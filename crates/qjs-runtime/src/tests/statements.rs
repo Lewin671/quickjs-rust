@@ -101,6 +101,10 @@ fn evaluates_for_in_statements() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval("var stored; for (var key = 0 in stored = key, { a: 1 }) {} stored + ':' + key;"),
+        Ok(Value::String("0:a".to_owned()))
+    );
 }
 
 #[test]

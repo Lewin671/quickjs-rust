@@ -56,6 +56,18 @@ impl Parser {
     }
 
     fn comparison(&mut self) -> Result<Expr, ParseError> {
+        if !self.allow_in {
+            return self.binary_left_assoc(
+                Self::shift,
+                &[
+                    (TokenKind::Less, BinaryOp::Lt),
+                    (TokenKind::LessEqual, BinaryOp::Le),
+                    (TokenKind::Greater, BinaryOp::Gt),
+                    (TokenKind::GreaterEqual, BinaryOp::Ge),
+                    (TokenKind::Instanceof, BinaryOp::Instanceof),
+                ],
+            );
+        }
         self.binary_left_assoc(
             Self::shift,
             &[
