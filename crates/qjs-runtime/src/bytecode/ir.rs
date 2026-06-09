@@ -17,6 +17,10 @@ pub(super) enum Op {
     DefineGlobalVar(String),
     LoadGlobal(String),
     StoreGlobalStrict(String),
+    StoreLocalOrGlobalSloppy {
+        slot: usize,
+        name: String,
+    },
     TypeofGlobal(String),
     Pop,
     Dup,
@@ -95,6 +99,7 @@ pub struct Bytecode {
     pub(super) locals: Vec<Local>,
     local_slots: HashMap<String, usize>,
     global_names: Vec<String>,
+    sloppy_global_assignment_names: Vec<String>,
     pub(super) code: Vec<Op>,
 }
 
@@ -105,12 +110,17 @@ impl Bytecode {
             local_slots: collect_local_slots(&locals),
             locals,
             global_names: collect_global_names(&code),
+            sloppy_global_assignment_names: collect_sloppy_global_assignment_names(&code),
             code,
         }
     }
 
     pub(crate) fn global_names(&self) -> &[String] {
         &self.global_names
+    }
+
+    pub(crate) fn sloppy_global_assignment_names(&self) -> &[String] {
+        &self.sloppy_global_assignment_names
     }
 
     pub(crate) fn local_names(&self) -> impl Iterator<Item = &str> {
@@ -130,6 +140,7 @@ impl Bytecode {
                     | Op::New(_)
                     | Op::NewFunction { .. }
                     | Op::StoreGlobalStrict(_)
+                    | Op::StoreLocalOrGlobalSloppy { .. }
             )
             || matches!(op, Op::StoreLocal(slot) if self.locals.get(*slot).is_some_and(|local| local.from_env))
         })
@@ -156,10 +167,27 @@ fn collect_global_names_from_ops(code: &[Op], names: &mut BTreeSet<String>) {
             Op::LoadGlobal(name) | Op::StoreGlobalStrict(name) | Op::TypeofGlobal(name) => {
                 names.insert(name.clone());
             }
+            Op::StoreLocalOrGlobalSloppy { name, .. } => {
+                names.insert(name.clone());
+            }
             Op::NewFunction { bytecode, .. } => {
                 names.extend(bytecode.global_names().iter().cloned());
             }
             _ => {}
+        }
+    }
+}
+
+fn collect_sloppy_global_assignment_names(code: &[Op]) -> Vec<String> {
+    let mut names = BTreeSet::new();
+    collect_sloppy_global_assignment_names_from_ops(code, &mut names);
+    names.into_iter().collect()
+}
+
+fn collect_sloppy_global_assignment_names_from_ops(code: &[Op], names: &mut BTreeSet<String>) {
+    for op in code {
+        if let Op::StoreLocalOrGlobalSloppy { name, .. } = op {
+            names.insert(name.clone());
         }
     }
 }

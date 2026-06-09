@@ -94,6 +94,37 @@ impl Vm<'_> {
         Ok(())
     }
 
+    pub(super) fn store_local_or_global_sloppy(
+        &mut self,
+        slot: usize,
+        name: String,
+        value: Value,
+    ) -> Result<(), RuntimeError> {
+        match self.locals.get(slot) {
+            Some(Some(_)) => {
+                self.store_local(slot, value.clone())?;
+                if self.globals.contains_key(&name) {
+                    self.store_global_sloppy(name, value)?;
+                }
+                Ok(())
+            }
+            Some(None) => {
+                self.store_global_sloppy(name.clone(), value)?;
+                self.record_sloppy_global_name(&name);
+                let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
+                    thrown: None,
+                    message: "bytecode local index out of bounds".to_owned(),
+                })?;
+                *local = self.globals.get(&name).cloned();
+                Ok(())
+            }
+            None => Err(RuntimeError {
+                thrown: None,
+                message: "bytecode local index out of bounds".to_owned(),
+            }),
+        }
+    }
+
     pub(super) fn clear_local(&mut self, slot: usize) -> Result<(), RuntimeError> {
         let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
             thrown: None,

@@ -21,7 +21,10 @@ impl Compiler {
                         self.emit(Op::StoreGlobalStrict(name.clone()));
                     } else {
                         let slot = self.assignment_slot(name);
-                        self.emit(Op::StoreLocal(slot));
+                        self.emit(Op::StoreLocalOrGlobalSloppy {
+                            slot,
+                            name: name.clone(),
+                        });
                     }
                     return Ok(());
                 };

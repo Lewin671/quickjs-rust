@@ -549,6 +549,36 @@ fn evaluates_function_declarations_and_calls() {
 }
 
 #[test]
+fn evaluates_sloppy_undeclared_global_assignment() {
+    assert_eq!(
+        eval("function set() { sloppyGlobal = 7; } set(); sloppyGlobal + this.sloppyGlobal;"),
+        Ok(Value::Number(14.0))
+    );
+    assert_eq!(
+        eval("let set = () => { arrowGlobal = 3; }; set(); arrowGlobal + this.arrowGlobal;"),
+        Ok(Value::Number(6.0))
+    );
+    assert_eq!(
+        eval(
+            "function set() { descriptorGlobal = 1; } set(); let d = Object.getOwnPropertyDescriptor(this, 'descriptorGlobal'); d.value + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("1:true:true:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "function set() { 'use strict'; strictMissing = 1; } let caught = false; try { set(); } catch (error) { caught = error instanceof ReferenceError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "function makeCounter() { let index = 0; return function() { index = index + 1; return index; }; } let left = makeCounter(); let right = makeCounter(); left() + ':' + right() + ':' + left();"
+        ),
+        Ok(Value::String("1:1:2".to_owned()))
+    );
+}
+
+#[test]
 fn evaluates_arrow_functions_with_lexical_this() {
     assert_eq!(
         eval(

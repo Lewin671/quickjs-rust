@@ -32,6 +32,20 @@ impl Vm<'_> {
         }
         Ok(())
     }
+
+    pub(super) fn store_global_sloppy(
+        &mut self,
+        name: String,
+        value: Value,
+    ) -> Result<(), RuntimeError> {
+        if let Some(Value::Object(global_this)) = self.globals.get(GLOBAL_THIS_BINDING) {
+            global_this.set(name.clone(), value.clone());
+            self.globals.insert(name, value);
+            return Ok(());
+        }
+        self.globals.insert(name, value);
+        Ok(())
+    }
 }
 
 pub(super) fn get_property(

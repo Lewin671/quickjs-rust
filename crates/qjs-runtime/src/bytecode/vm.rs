@@ -44,6 +44,7 @@ pub(super) fn eval_function_bytecode(
         bytecode,
         globals: vm.globals,
         locals: vm.locals,
+        sloppy_global_names: vm.sloppy_global_names,
     }
 }
 
@@ -54,6 +55,7 @@ pub(super) struct Vm<'a> {
     pub(super) locals: Vec<Slot>,
     pub(super) globals: HashMap<String, Value>,
     pub(super) captured_env: Rc<RefCell<HashMap<String, Value>>>,
+    pub(super) sloppy_global_names: Vec<String>,
     pub(super) try_stack: Vec<TryFrame>,
     pub(super) pending_throw: Option<Value>,
     pub(super) pending_return: Option<Value>,
@@ -83,6 +85,7 @@ impl<'a> Vm<'a> {
             locals: Self::initial_slots(bytecode, &globals),
             globals,
             captured_env,
+            sloppy_global_names: Vec::new(),
             try_stack: Vec::new(),
             pending_throw: None,
             pending_return: None,
@@ -151,6 +154,11 @@ impl<'a> Vm<'a> {
                 Op::StoreGlobalStrict(name) => {
                     let value = self.pop()?;
                     let result = self.store_global_strict(name, value);
+                    self.handle_runtime_result(result)?;
+                }
+                Op::StoreLocalOrGlobalSloppy { slot, name } => {
+                    let value = self.pop()?;
+                    let result = self.store_local_or_global_sloppy(slot, name, value);
                     self.handle_runtime_result(result)?;
                 }
                 Op::TypeofGlobal(name) => {
@@ -602,6 +610,9 @@ impl<'a> Vm<'a> {
         for name in function_bytecode.global_names() {
             self.insert_call_binding(env, binding_names, name);
         }
+        for name in function_bytecode.sloppy_global_assignment_names() {
+            insert_missing_binding_name(binding_names, name);
+        }
         for name in function_bytecode.local_names() {
             if function_local_names
                 .binary_search_by(|local| local.as_str().cmp(name))
@@ -673,5 +684,21 @@ impl<'a> Vm<'a> {
         promise::drain_promise_jobs(&mut env)?;
         self.apply_env(env);
         Ok(())
+    }
+
+    pub(super) fn record_sloppy_global_name(&mut self, name: &str) {
+        if !self
+            .sloppy_global_names
+            .iter()
+            .any(|existing| existing == name)
+        {
+            self.sloppy_global_names.push(name.to_owned());
+        }
+    }
+}
+
+fn insert_missing_binding_name(binding_names: &mut Vec<String>, name: &str) {
+    if !binding_names.iter().any(|existing| existing == name) {
+        binding_names.push(name.to_owned());
     }
 }

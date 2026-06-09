@@ -9,6 +9,7 @@ pub(crate) struct FunctionBytecodeResult<'a> {
     pub(super) bytecode: &'a Bytecode,
     pub(super) globals: HashMap<String, Value>,
     pub(super) locals: Vec<Option<Value>>,
+    pub(crate) sloppy_global_names: Vec<String>,
 }
 
 impl FunctionBytecodeResult<'_> {

@@ -430,9 +430,13 @@ fn insert_caller_binding(
 ) {
     if let Some(value) = env.get(name) {
         local_env.insert(name.to_owned(), value.clone());
-        if !caller_binding_names.iter().any(|existing| existing == name) {
-            caller_binding_names.push(name.to_owned());
-        }
+        insert_missing_caller_binding_name(caller_binding_names, name);
+    }
+}
+
+fn insert_missing_caller_binding_name(caller_binding_names: &mut Vec<String>, name: &str) {
+    if !caller_binding_names.iter().any(|existing| existing == name) {
+        caller_binding_names.push(name.to_owned());
     }
 }
 
@@ -466,6 +470,14 @@ fn propagate_caller_bindings(
             && let Some(final_value) = result.binding(name)
         {
             *value = final_value.clone();
+        }
+    }
+    for name in &result.sloppy_global_names {
+        if !is_call_frame_binding(name)
+            && !env.contains_key(name)
+            && let Some(final_value) = result.binding(name)
+        {
+            env.insert(name.clone(), final_value.clone());
         }
     }
 }
