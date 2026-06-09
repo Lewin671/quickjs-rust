@@ -210,6 +210,9 @@ impl Parser {
                 if !self.match_kind(&TokenKind::Comma) {
                     break;
                 }
+                if self.at(&TokenKind::RightParen) {
+                    break;
+                }
             }
         }
         self.expect(&TokenKind::RightParen)?;

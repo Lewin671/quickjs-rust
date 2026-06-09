@@ -90,6 +90,22 @@ fn parses_function_declaration_and_call() {
     assert!(lexical_this);
     assert!(lexical_arguments);
     assert!(matches!(body.as_slice(), [Stmt::Return { .. }]));
+
+    let script =
+        parse_script("function trailing(a, b,) { return a + b; }").expect("source should parse");
+    let [Stmt::FunctionDecl { params, .. }] = script.body.as_slice() else {
+        panic!("expected function declaration");
+    };
+    assert_eq!(params.positional, ["a", "b"]);
+
+    let script = parse_script("let trailing = (a, b,) => a + b;").expect("source should parse");
+    let [Stmt::VarDecl { declarations, .. }] = script.body.as_slice() else {
+        panic!("expected arrow function declaration");
+    };
+    let Some(Expr::Function { params, .. }) = &declarations[0].init else {
+        panic!("expected arrow function initializer");
+    };
+    assert_eq!(params.positional, ["a", "b"]);
 }
 
 #[test]
@@ -119,6 +135,9 @@ fn parses_rest_parameters() {
     assert_eq!(params.rest.as_deref(), Some("rest"));
     assert!(lexical_this);
     assert!(lexical_arguments);
+
+    assert!(parse_script("function collect(...rest,) { return rest; }").is_err());
+    assert!(parse_script("let collect = (...rest,) => rest;").is_err());
 }
 
 #[test]
