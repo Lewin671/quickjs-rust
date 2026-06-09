@@ -45,6 +45,9 @@ maintenance, or agent workflow isolation.
   --no-fail` for asynchronous comparisons against QuickJS-NG's Test262 config.
   In that mode QuickJS-NG config skips are applied as the shared baseline, and
   quickjs-rust unsupported metadata is reported as a separate harness gap.
+  Keep the quickjs-rust supported-feature list current when a builtin feature
+  is implemented so those cases run as real pass/fail signal instead of harness
+  skips.
   Negative quickjs-rust cases must fail with the expected Test262 phase and
   error type. Set `QJS_CLI_BIN` to reuse a prebuilt quickjs-rust binary across
   multiple shard runs.

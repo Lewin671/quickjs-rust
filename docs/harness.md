@@ -162,6 +162,9 @@ the inline and block-list forms used by Test262 `flags`, `includes`, and
 `features` entries. Negative Test262 cases are runnable by the quickjs-rust
 baseline harness; parse, early, runtime, and resolution failures are matched
 against the Test262 negative metadata before being counted as expected results.
+The quickjs-rust feature allowlist is intentionally explicit; when a runtime
+builtin becomes supported, add its Test262 feature tag there so the gap report
+can distinguish missing behavior from stale harness metadata.
 Raw Test262 cases run without injected harness files. `--stop-after-limit` is
 reserved for bounded probe callers such as `find-qjsng-gaps.sh`; do not use it
 for coverage accounting because it stops enumeration once the run limit is
