@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BASELINE="$ROOT_DIR/scripts/test262-baseline.sh"
 TEST262_DIR="$ROOT_DIR/third_party/test262"
+QUICKJS_NG_DIR="$ROOT_DIR/third_party/quickjs-ng"
 RUN_LIMIT="${TEST262_GAP_LIMIT:-100}"
 FILTER_PREFIX=""
 OUT_DIR=""
@@ -13,11 +14,11 @@ RECOMMEND=1
 INCLUDE_TIMEOUTS=0
 EXACT_SCAN=0
 PROBE_LIMIT="${TEST262_GAP_PROBE_LIMIT:-100}"
-PROBE_SHARD="${TEST262_GAP_PROBE_SHARD:-1/16}"
+PROBE_SHARDS="${TEST262_GAP_PROBE_SHARDS:-${TEST262_GAP_PROBE_SHARD:-1/16,5/16,9/16,13/16}}"
 
 usage() {
   cat >&2 <<'USAGE'
-usage: scripts/find-qjsng-gaps.sh [--limit N | --all] [--filter test/<prefix>] [--out-dir PATH] [--top N] [--areas N] [--probe-limit N] [--probe-shard I/N] [--exact] [--include-timeouts] [--no-recommend]
+usage: scripts/find-qjsng-gaps.sh [--limit N | --all] [--filter test/<prefix>] [--out-dir PATH] [--top N] [--areas N] [--probe-limit N] [--probe-shard I/N] [--probe-shards I/N[,I/N...]] [--exact] [--include-timeouts] [--no-recommend]
 
 Runs a QuickJS-NG comparison baseline and prints the cases where QuickJS-NG
 passes but quickjs-rust has an actionable feature gap. Stress timeouts are
@@ -25,9 +26,9 @@ reported separately by default; use --include-timeouts to include them in the
 gap list and greedy recommendation.
 
 For unfiltered --all recommendation runs, the default strategy is a fast greedy
-probe over TEST262_GAP_PROBE_LIMIT cases from TEST262_GAP_PROBE_SHARD. Use
---exact --all when a complete audit is required, especially to prove there are
-no remaining gaps.
+probe over TEST262_GAP_PROBE_LIMIT cases from each TEST262_GAP_PROBE_SHARDS
+shard, run concurrently. Use --exact --all when a complete audit is required,
+especially to prove there are no remaining gaps.
 Raw summary and case JSONL files are written under target/test262-gaps/ unless
 --out-dir is supplied.
 USAGE
@@ -71,7 +72,12 @@ while [ "$#" -gt 0 ]; do
       ;;
     --probe-shard)
       [ "$#" -ge 2 ] || { usage; exit 2; }
-      PROBE_SHARD="$2"
+      PROBE_SHARDS="$2"
+      shift 2
+      ;;
+    --probe-shards)
+      [ "$#" -ge 2 ] || { usage; exit 2; }
+      PROBE_SHARDS="$2"
       shift 2
       ;;
     --exact)
@@ -114,13 +120,20 @@ case "$PROBE_LIMIT" in
     exit 2
     ;;
 esac
-case "$PROBE_SHARD" in
-  */*) ;;
-  *)
-    echo "error: --probe-shard must use I/N form: $PROBE_SHARD" >&2
-    exit 2
-    ;;
-esac
+IFS=',' read -r -a PROBE_SHARD_LIST <<<"$PROBE_SHARDS"
+if [ "${#PROBE_SHARD_LIST[@]}" -eq 0 ]; then
+  echo "error: --probe-shards must not be empty" >&2
+  exit 2
+fi
+for shard in "${PROBE_SHARD_LIST[@]}"; do
+  case "$shard" in
+    */*) ;;
+    *)
+      echo "error: probe shards must use I/N form: $shard" >&2
+      exit 2
+      ;;
+  esac
+done
 case "$TOP_COUNT:$AREA_COUNT" in
   *[!0-9:]*|0:*|*:0)
     echo "error: --top and --areas must be positive integers" >&2
@@ -146,6 +159,42 @@ if [ -z "$OUT_DIR" ]; then
 fi
 mkdir -p "$OUT_DIR"
 
+if [ -z "${QJS_CLI_BIN:-}" ] && [ "$RUN_LIMIT" = "all" ] && [ -z "$FILTER_PREFIX" ] && [ "$RECOMMEND" -eq 1 ] && [ "$EXACT_SCAN" -eq 0 ]; then
+  if command -v cargo >/dev/null 2>&1; then
+    CARGO_BIN="cargo"
+  elif [ -x "$HOME/.cargo/bin/cargo" ]; then
+    CARGO_BIN="$HOME/.cargo/bin/cargo"
+  else
+    echo "error: cargo not found; install Rust with rustup before running gap probes" >&2
+    exit 127
+  fi
+  build_output="$(mktemp "${TMPDIR:-/tmp}/qjs-gap-cargo-build-XXXXXX")"
+  set +e
+  "$CARGO_BIN" build -q --message-format=json-render-diagnostics -p qjs-cli >"$build_output"
+  build_status=$?
+  set -e
+  if [ "$build_status" -ne 0 ]; then
+    cat "$build_output" >&2
+    rm -f "$build_output"
+    exit "$build_status"
+  fi
+  QJS_CLI_BIN="$(sed -n 's/.*"executable":"\([^"]*\)".*/\1/p' "$build_output" | tail -n 1)"
+  rm -f "$build_output"
+  if [ -z "$QJS_CLI_BIN" ]; then
+    QJS_CLI_BIN="$ROOT_DIR/target/debug/qjs"
+  fi
+  export QJS_CLI_BIN
+fi
+if [ "$RUN_LIMIT" = "all" ] && [ -z "$FILTER_PREFIX" ] && [ "$RECOMMEND" -eq 1 ] && [ "$EXACT_SCAN" -eq 0 ]; then
+  if [ ! -d "$QUICKJS_NG_DIR" ]; then
+    echo "error: missing $QUICKJS_NG_DIR; run ./scripts/bootstrap.sh first" >&2
+    exit 1
+  fi
+  if [ ! -x "$QUICKJS_NG_DIR/build/qjs" ] || [ ! -x "$QUICKJS_NG_DIR/build/run-test262" ]; then
+    make -C "$QUICKJS_NG_DIR" all
+  fi
+fi
+
 SUMMARY_JSON="$OUT_DIR/summary.json"
 CASES_JSONL="$OUT_DIR/cases.jsonl"
 GAPS_TSV="$OUT_DIR/qjsng-pass-rust-nonpass.tsv"
@@ -167,23 +216,87 @@ if [ "$BASELINE_RUN_LIMIT" = "all" ]; then
 else
   baseline_args+=(--limit "$BASELINE_RUN_LIMIT")
 fi
-if [ "$PROBE_SCAN" -eq 1 ]; then
-  baseline_args+=(--shard "$PROBE_SHARD" --stop-after-limit)
-fi
 if [ -n "$FILTER_PREFIX" ]; then
   baseline_args+=(--filter "$FILTER_PREFIX")
 fi
 
 echo "Running Test262 comparison against QuickJS-NG..."
 echo "  log: $BASELINE_LOG"
-set +e
-"$BASELINE" "${baseline_args[@]}" >"$BASELINE_LOG" 2>&1
-baseline_status=$?
-set -e
-if [ "$baseline_status" -ne 0 ]; then
-  echo "error: baseline comparison failed; last log lines:" >&2
-  tail -n 40 "$BASELINE_LOG" >&2
-  exit "$baseline_status"
+if [ "$PROBE_SCAN" -eq 1 ]; then
+  : >"$CASES_JSONL"
+  : >"$BASELINE_LOG"
+  probe_dir="$OUT_DIR/probes"
+  mkdir -p "$probe_dir"
+  pids=()
+  logs=()
+  cases=()
+  summaries=()
+  for shard in "${PROBE_SHARD_LIST[@]}"; do
+    safe_shard="$(printf '%s' "$shard" | tr '/' '-')"
+    shard_dir="$probe_dir/$safe_shard"
+    mkdir -p "$shard_dir"
+    shard_log="$shard_dir/baseline.log"
+    shard_cases="$shard_dir/cases.jsonl"
+    shard_summary="$shard_dir/summary.json"
+    logs+=("$shard_log")
+    cases+=("$shard_cases")
+    summaries+=("$shard_summary")
+    shard_args=(--engine both --summary-json "$shard_summary" --case-results-jsonl "$shard_cases" --no-fail --limit "$PROBE_LIMIT" --shard "$shard" --stop-after-limit)
+    "$BASELINE" "${shard_args[@]}" >"$shard_log" 2>&1 &
+    pids+=("$!")
+  done
+
+  baseline_status=0
+  for index in "${!pids[@]}"; do
+    if ! wait "${pids[$index]}"; then
+      baseline_status=1
+      echo "error: probe shard ${PROBE_SHARD_LIST[$index]} failed; last log lines:" >&2
+      tail -n 40 "${logs[$index]}" >&2
+    fi
+  done
+  for index in "${!logs[@]}"; do
+    {
+      printf '== probe shard %s ==\n' "${PROBE_SHARD_LIST[$index]}"
+      cat "${logs[$index]}"
+      printf '\n'
+    } >>"$BASELINE_LOG"
+    if [ -f "${cases[$index]}" ]; then
+      cat "${cases[$index]}" >>"$CASES_JSONL"
+    fi
+  done
+  {
+    printf '{\n'
+    printf '  "engine": "both",\n'
+    printf '  "filter": "",\n'
+    printf '  "mode": "greedy-probe",\n'
+    printf '  "probe_limit_per_shard": %s,\n' "$PROBE_LIMIT"
+    printf '  "probe_shards": ['
+    for index in "${!PROBE_SHARD_LIST[@]}"; do
+      [ "$index" -eq 0 ] || printf ', '
+      printf '"%s"' "${PROBE_SHARD_LIST[$index]}"
+    done
+    printf '],\n'
+    printf '  "probe_summaries": ['
+    for index in "${!summaries[@]}"; do
+      [ "$index" -eq 0 ] || printf ', '
+      printf '"%s"' "${summaries[$index]#"$OUT_DIR/"}"
+    done
+    printf ']\n'
+    printf '}\n'
+  } >"$SUMMARY_JSON"
+  if [ "$baseline_status" -ne 0 ]; then
+    exit "$baseline_status"
+  fi
+else
+  set +e
+  "$BASELINE" "${baseline_args[@]}" >"$BASELINE_LOG" 2>&1
+  baseline_status=$?
+  set -e
+  if [ "$baseline_status" -ne 0 ]; then
+    echo "error: baseline comparison failed; last log lines:" >&2
+    tail -n 40 "$BASELINE_LOG" >&2
+    exit "$baseline_status"
+  fi
 fi
 
 : >"$TIMEOUTS_TSV"
@@ -261,7 +374,7 @@ echo "QuickJS-NG gap report"
 echo "  filter: ${FILTER_PREFIX:-test/}"
 echo "  requested limit: $RUN_LIMIT"
 if [ "$PROBE_SCAN" -eq 1 ]; then
-  echo "  scan: greedy probe over $BASELINE_RUN_LIMIT cases from shard $PROBE_SHARD"
+  echo "  scan: greedy probe over $BASELINE_RUN_LIMIT cases per shard from shards $PROBE_SHARDS"
 else
   echo "  scan: exact requested range"
 fi

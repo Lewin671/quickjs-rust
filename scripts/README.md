@@ -36,9 +36,12 @@ maintenance, or agent workflow isolation.
   `cases.jsonl`, `qjsng-pass-rust-nonpass.tsv`, and `recommendations.tsv` files
   under `target/test262-gaps/` by default, then prints a short summary, top gap
   areas, and first actionable cases. Use `--filter test/<prefix>` to focus on
-  one subsystem and `--all` when a full focused scan is useful. It selects a
-  greedy next area by preferring real runtime or parser failures before pure
-  harness skips. Use `--no-recommend` to suppress that recommendation.
+  one subsystem and `--all` when a full focused scan is useful. Unfiltered
+  `--all` uses a concurrent multi-shard greedy probe by default, then selects a
+  next area by preferring real runtime or parser failures before pure harness
+  skips. Tune it with `--probe-limit N` and `--probe-shards I/N[,I/N...]`, use
+  `--probe-shard I/N` for a single very fast probe, and use `--exact --all` for
+  a complete audit. Use `--no-recommend` to suppress the recommendation.
 - `test262-baseline.sh`: Samples or scans upstream Test262 files to classify
   unsupported metadata, parser or runtime failures, and timeouts before adding
   curated local cases. Use `--engine both --all --shard I/N --summary-json PATH

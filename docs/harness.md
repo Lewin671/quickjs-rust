@@ -125,22 +125,25 @@ harness gaps, top affected areas, and the first cases to investigate. Use
 `--filter test/<prefix>` to focus the scan on one Test262 subtree and `--all`
 when the focused scan should be exhaustive. It prints a greedy next area by
 default. For unfiltered `--all` recommendation runs, the default is a bounded
-greedy probe over `TEST262_GAP_PROBE_LIMIT` cases, currently 100, from
-`TEST262_GAP_PROBE_SHARD`, currently `1/16`, so each agent iteration can pick a
-high-yield area without paying for a full audit or biasing entirely toward the
-first sorted Test262 directories.
+greedy probe over `TEST262_GAP_PROBE_LIMIT` cases, currently 100, from each
+entry in `TEST262_GAP_PROBE_SHARDS`, currently `1/16,5/16,9/16,13/16`. Those
+probe shards run concurrently, and the report merges their case results before
+ranking areas. This gives the agent broader Test262 coverage per iteration
+without paying for a full audit or biasing entirely toward the first sorted
+Test262 directories.
 Use `--exact --all` when the task needs a complete report or when a probe finds
 no gaps and the agent needs to prove the exit condition. The recommendation
 prioritizes areas with real quickjs-rust failures, then falls back to the
 largest harness-gap area when the sample contains only skipped cases. Stress
 timeouts are excluded from the default actionable gap list so large conformance
 stress loops do not hide missing behavior; use `--include-timeouts` when
-performance parity is the task. Use `--probe-limit N` and `--probe-shard I/N`
-to tune recommendation speed versus confidence, and `--no-recommend` when only
-the raw gap report is needed. Treat the recommended area as the smallest useful
-planning and commit boundary unless the area is too broad to review as one
-change; avoid splitting follow-up work into one commit per individual Test262
-case.
+performance parity is the task. Use `--probe-limit N` and `--probe-shards
+I/N[,I/N...]` to tune recommendation speed versus confidence; `--probe-shard
+I/N` remains as a single-shard shorthand for very fast local checks. Use
+`--no-recommend` when only the raw gap report is needed. Treat the recommended
+area as the smallest useful planning and commit boundary unless the area is too
+broad to review as one change; avoid splitting follow-up work into one commit
+per individual Test262 case.
 
 `scripts/test262-subset.sh` runs the curated Test262 allowlist. Allowlist
 entries may point to local derived cases under `tests/test262/cases/` or pinned
