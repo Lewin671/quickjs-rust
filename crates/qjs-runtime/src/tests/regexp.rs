@@ -59,6 +59,18 @@ fn evaluates_regexp_constructor_identity() {
         eval("/missing/.test('a test value');"),
         Ok(Value::Boolean(false))
     );
+    assert_eq!(
+        eval(
+            "let re = new RegExp(''); let d = Object.getOwnPropertyDescriptor(re, 'lastIndex'); re.lastIndex + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("0:true:false:false".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let re = /./; let d = Object.getOwnPropertyDescriptor(re, 'lastIndex'); d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("true:false:false".to_owned()))
+    );
 }
 
 #[test]
@@ -350,9 +362,9 @@ fn evaluates_regexp_exec_global_last_index() {
     );
     assert_eq!(
         eval(
-            "let value = 0; let re = /./g; Object.defineProperty(re, 'lastIndex', { get: function() { return value; }, set: function(next) { value = next; } }); let result = re.exec('abc'); result[0] + ':' + value;"
+            "let re = /./g; Object.defineProperty(re, 'lastIndex', { writable: false }); let caught = false; try { re.exec('abc'); } catch (error) { caught = error instanceof TypeError; } caught + ':' + re.lastIndex;"
         ),
-        Ok(Value::String("a:1".to_owned()))
+        Ok(Value::String("true:0".to_owned()))
     );
 }
 

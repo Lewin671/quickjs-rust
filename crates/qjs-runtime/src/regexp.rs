@@ -427,7 +427,10 @@ fn regexp_receiver_error() -> RuntimeError {
 
 fn define_regexp_data(object: &ObjectRef, source: &str, flags: &str) {
     define_regexp_data_without_last_index(object, source, flags);
-    object.define_non_enumerable("lastIndex".to_owned(), Value::Number(0.0));
+    object.define_property(
+        "lastIndex".to_owned(),
+        Property::data(Value::Number(0.0), false, true, false),
+    );
 }
 
 fn define_regexp_data_without_last_index(object: &ObjectRef, source: &str, flags: &str) {
