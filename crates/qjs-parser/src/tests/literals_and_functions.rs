@@ -19,6 +19,12 @@ fn parses_function_declaration_and_call() {
     assert_eq!(params.positional, ["a", "b"]);
     assert_eq!(arguments.len(), 2);
 
+    let script = parse_script("add(1, 2,);").expect("source should parse");
+    let [Stmt::Expr(Expr::Call { arguments, .. })] = script.body.as_slice() else {
+        panic!("expected function call with trailing comma");
+    };
+    assert_eq!(arguments.len(), 2);
+
     let script = parse_script("let f = function named(value) { return value; }; f(1);")
         .expect("source should parse");
     let [

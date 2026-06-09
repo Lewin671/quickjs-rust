@@ -323,7 +323,7 @@ rust_features_supported() {
   [ -z "$entries" ] || ! grep -Fvx -e 'Symbol' -e 'Symbol.isConcatSpreadable' -e 'Symbol.match' -e 'Symbol.matchAll' \
     -e 'Symbol.replace' -e 'Symbol.search' -e 'Symbol.split' -e 'Symbol.toPrimitive' \
     -e 'Reflect' -e 'Reflect.construct' -e 'arrow-function' -e 'BigInt' -e 'Map' -e 'Set' -e 'WeakMap' -e 'WeakSet' \
-    -e 'set-methods' \
+    -e 'set-methods' -e 'upsert' \
     -e 'array-find-from-last' -e 'Array.prototype.at' -e 'Array.prototype.flat' -e 'Array.prototype.flatMap' -e 'Array.prototype.includes' -e 'Array.prototype.toReversed' -e 'Array.prototype.toSorted' -e 'Array.prototype.toSpliced' -e 'Array.prototype.with' -e 'json-parse-with-source' -e 'Object.hasOwn' -e 'Object.is' -e 'promise-with-resolvers' -e 'RegExp.escape' -e 'regexp-dotall' -e 'string-trimming' -e 'String.fromCodePoint' -e 'String.prototype.at' -e 'String.prototype.endsWith' -e 'String.prototype.includes' -e 'String.prototype.isWellFormed' -e 'String.prototype.matchAll' -e 'String.prototype.replaceAll' -e 'String.prototype.toWellFormed' -e 'String.prototype.trimEnd' -e 'String.prototype.trimStart' -e 'u180e' \
     <<<"$entries" >/dev/null
 }
