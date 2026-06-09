@@ -139,6 +139,20 @@ fn evaluates_global_eval_builtin() {
 }
 
 #[test]
+fn initializes_global_hoisted_bindings_before_script_execution() {
+    assert_eq!(
+        eval("var before = f; { function f() { return 9; } } before === undefined && f() === 9;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "{ function f() {} } var d = Object.getOwnPropertyDescriptor(this, 'f'); d.enumerable + ':' + d.writable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("true:true:false".to_owned()))
+    );
+}
+
+#[test]
 fn evaluates_uri_coding_builtins() {
     assert_eq!(eval("encodeURI.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("decodeURI.length;"), Ok(Value::Number(1.0)));

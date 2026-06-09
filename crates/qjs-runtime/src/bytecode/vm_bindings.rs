@@ -8,6 +8,34 @@ use super::{
 };
 
 impl Vm<'_> {
+    pub(super) fn initialize_script_global_bindings(
+        bytecode: &Bytecode,
+        globals: &mut HashMap<String, Value>,
+    ) {
+        let global_this = globals
+            .get(GLOBAL_THIS_BINDING)
+            .and_then(|value| match value {
+                Value::Object(object) => Some(object.clone()),
+                _ => None,
+            });
+        for name in bytecode.hoisted_local_names() {
+            if let Some(property) = global_this
+                .as_ref()
+                .and_then(|object| object.own_property(name))
+            {
+                globals.insert(name.to_owned(), property.value);
+            } else {
+                globals.entry(name.to_owned()).or_insert(Value::Undefined);
+                if let Some(global_this) = &global_this {
+                    global_this.define_property(
+                        name.to_owned(),
+                        Property::data(Value::Undefined, true, true, false),
+                    );
+                }
+            }
+        }
+    }
+
     pub(super) fn initial_slots(
         bytecode: &Bytecode,
         globals: &HashMap<String, Value>,

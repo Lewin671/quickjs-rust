@@ -1,6 +1,8 @@
 use std::rc::Rc;
 
-use qjs_ast::{ArrayElement, Expr, MemberProperty, ObjectProperty, ObjectPropertyKey, Stmt};
+use qjs_ast::{
+    ArrayElement, Expr, MemberProperty, ObjectProperty, ObjectPropertyKey, Stmt, VarKind,
+};
 
 use crate::{
     RuntimeError, Value,
@@ -163,7 +165,11 @@ impl Compiler {
             lexical_arguments: false,
         });
         let slot = self.local_slot(name, true);
-        self.emit(Op::StoreLocal(slot));
+        if self.global_scope {
+            self.emit_store_var_binding(slot, name, VarKind::Var);
+        } else {
+            self.emit(Op::StoreLocal(slot));
+        }
         self.emit_load_undefined();
         Ok(())
     }

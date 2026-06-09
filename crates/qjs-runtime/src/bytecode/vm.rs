@@ -69,6 +69,7 @@ impl<'a> Vm<'a> {
         globals.insert(GLOBAL_THIS_BINDING.to_owned(), global_this.clone());
         globals.insert("undefined".to_owned(), Value::Undefined);
         initialize_builtins(&mut globals, &global_this);
+        Self::initialize_script_global_bindings(bytecode, &mut globals);
         let captured_env = Rc::new(RefCell::new(globals.clone()));
         Self::new_with_globals_and_captures(bytecode, globals, captured_env)
     }
