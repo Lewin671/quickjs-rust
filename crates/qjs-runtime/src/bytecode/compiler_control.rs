@@ -159,9 +159,36 @@ impl Compiler {
         self.patch_jump(exit_jump, exit);
         self.emit(Op::Pop);
         let cleanup_slots = self.current_lexical_slots_for_names(&blocked);
-        self.emit_scoped_loop_completion(result_slot, &cleanup_slots, &context);
+        self.emit_for_of_loop_completion(result_slot, iterator_slot, &cleanup_slots, &context);
         self.patch_loop_continues(&context, loop_start);
         Ok(())
+    }
+
+    fn emit_for_of_loop_completion(
+        &mut self,
+        result_slot: usize,
+        iterator_slot: usize,
+        cleanup_slots: &[usize],
+        context: &super::compiler::LoopContext,
+    ) {
+        for slot in cleanup_slots {
+            self.emit(Op::ClearLocal(*slot));
+        }
+        self.emit(Op::LoadLocal(result_slot));
+        let normal_done = self.emit(Op::Jump(usize::MAX));
+
+        let break_cleanup = self.code.len();
+        self.emit(Op::LoadLocal(iterator_slot));
+        self.emit(Op::IteratorClose);
+        for slot in cleanup_slots {
+            self.emit(Op::ClearLocal(*slot));
+        }
+        let break_done = self.emit(Op::Jump(usize::MAX));
+
+        let done = self.code.len();
+        self.patch_jump(normal_done, done);
+        self.patch_jump(break_done, done);
+        self.patch_loop_breaks(context, break_cleanup);
     }
 
     pub(super) fn compile_switch(

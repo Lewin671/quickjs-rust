@@ -139,6 +139,24 @@ fn evaluates_for_of_statements() {
         eval("let total = 0; for (var let of [1, 2]) { total = total + let; } total;"),
         Ok(Value::Number(3.0))
     );
+    assert_eq!(
+        eval(
+            "let closed = 0; let iter = { next: function() { return { done: false, value: 1 }; }, return: function() { closed += 1; return {}; } }; let source = {}; source[Symbol.iterator] = function() { return iter; }; for (var value of source) { break; } closed;"
+        ),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval(
+            "let iter = { next: function() { return { done: false, value: 1 }; }, return: function() { return null; } }; let source = {}; source[Symbol.iterator] = function() { return iter; }; let caught = false; try { for (var value of source) { break; } } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let iter = { next: function() { return { done: false, value: 1 }; }, return: __quickjsRustIsHTMLDDA }; iter[Symbol.iterator] = function() { return iter; }; let caught = false; try { for (var value of iter) { break; } } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]

@@ -188,6 +188,7 @@ impl<'a> Vm<'a> {
                 Op::DeleteProp => self.delete_prop()?,
                 Op::Call(argc) => self.call(argc)?,
                 Op::CallMethod(argc) => self.call_method(argc)?,
+                Op::IteratorClose => self.iterator_close()?,
                 Op::New(argc) => self.construct(argc)?,
                 Op::NewFunction {
                     name,
@@ -611,6 +612,36 @@ impl<'a> Vm<'a> {
         Ok(())
     }
 
+    fn iterator_close(&mut self) -> Result<(), RuntimeError> {
+        let iterator = self.pop()?;
+        let mut getter_env = self.current_env();
+        let return_method = get_property_key(
+            iterator.clone(),
+            &PropertyKey::String("return".to_owned()),
+            &mut getter_env,
+        )?;
+        self.apply_env(getter_env);
+        if matches!(return_method, Value::Null | Value::Undefined) {
+            return Ok(());
+        }
+
+        let mut env = self.call_env(&return_method);
+        let result = call_function(return_method, iterator, Vec::new(), &mut env.env, false);
+        self.apply_call_env(env);
+        let Some(result) = self.handle_runtime_result(result)? else {
+            return Ok(());
+        };
+        if is_object_value(&result) {
+            Ok(())
+        } else {
+            let _ = self.handle_runtime_result::<()>(Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: iterator return result must be an object".to_owned(),
+            }))?;
+            Ok(())
+        }
+    }
+
     fn pop_arguments(&mut self, argc: usize) -> Result<Vec<Value>, RuntimeError> {
         let mut arguments = Vec::with_capacity(argc);
         for _ in 0..argc {
@@ -785,6 +816,13 @@ fn direct_function_data_property(this_value: &Value, key: &PropertyKey) -> Optio
         .get(name)
         .filter(|property| !property.accessor)
         .map(|property| property.value.clone())
+}
+
+fn is_object_value(value: &Value) -> bool {
+    matches!(
+        value,
+        Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Object(_) | Value::Set(_)
+    )
 }
 
 fn direct_get_property_key(value: &Value, key: &PropertyKey) -> Option<Value> {

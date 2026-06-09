@@ -40,6 +40,7 @@ pub(super) enum Op {
     DeleteProp,
     Call(usize),
     CallMethod(usize),
+    IteratorClose,
     New(usize),
     NewFunction {
         name: Option<String>,
