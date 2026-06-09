@@ -22,6 +22,12 @@ fn evaluates_array_mutation_builtins() {
     );
     assert_eq!(
         eval(
+            "let array = [1, 2, 3]; let hints = []; let length = {}; length[Symbol.toPrimitive] = function(hint) { hints.push(hint); Object.defineProperty(array, 'length', { writable: false }); return 0; }; let caught = false; try { (function() { 'use strict'; array.length = length; })(); } catch (error) { caught = error instanceof TypeError; } caught + ':' + hints.join() + ':' + array.length;"
+        ),
+        Ok(Value::String("true:number,number:3".to_owned()))
+    );
+    assert_eq!(
+        eval(
             "let caught = false; try { Reflect.set([], 'length', -1); } catch (error) { caught = error instanceof RangeError; } caught;"
         ),
         Ok(Value::Boolean(true))

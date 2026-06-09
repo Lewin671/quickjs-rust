@@ -269,6 +269,14 @@ fn define_array_length_property(
     Ok(true)
 }
 
+pub(crate) fn define_array_length_value(
+    elements: &crate::ArrayRef,
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<bool, RuntimeError> {
+    define_array_length_property(elements, PropertyDescriptor::data_value(value), env)
+}
+
 fn array_length_property(elements: &crate::ArrayRef) -> Property {
     Property::data(
         Value::Number(elements.len() as f64),

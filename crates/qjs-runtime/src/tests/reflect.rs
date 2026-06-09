@@ -171,6 +171,12 @@ fn evaluates_reflect_prototype_builtins() {
         Ok(Value::Number(1.0))
     );
     assert_eq!(
+        eval(
+            "let array = [1, 2, 3]; let hints = []; let length = {}; length[Symbol.toPrimitive] = function(hint) { hints.push(hint); Object.defineProperty(array, 'length', { writable: false }); return 0; }; Reflect.set(array, 'length', length) + ':' + hints.join() + ':' + array.length;"
+        ),
+        Ok(Value::String("false:number,number:3".to_owned()))
+    );
+    assert_eq!(
         eval("function f() {} Reflect.set(f, 'value', 53) && f.value;"),
         Ok(Value::Number(53.0))
     );

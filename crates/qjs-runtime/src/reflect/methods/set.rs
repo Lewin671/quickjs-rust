@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::reflect::target::ensure_reflect_object_target;
 use crate::{
     ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function,
-    object::array_length_from_descriptor_value,
+    object::define_array_length_value,
 };
 
 pub(crate) fn native_reflect_set(
@@ -132,17 +132,7 @@ fn set_receiver_data_property(
         }
         Value::Array(elements) => {
             if key == "length" {
-                if !crate::array_own_property_descriptor(&elements, key)
-                    .is_some_and(|property| property.writable)
-                {
-                    return Ok(false);
-                }
-                let length = array_length_from_descriptor_value(value, env)?;
-                if length > elements.len() && !elements.is_extensible() {
-                    return Ok(false);
-                }
-                elements.set_len(length);
-                Ok(true)
+                define_array_length_value(&elements, value, env)
             } else {
                 match key.parse::<usize>() {
                     Ok(index) => {

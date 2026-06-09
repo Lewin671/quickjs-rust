@@ -13,8 +13,9 @@ pub(crate) use constructor::{
     boxed_primitive, native_object, native_object_assign, native_object_create, native_object_is,
 };
 pub(crate) use descriptor::{
-    array_length_from_descriptor_value, define_property_descriptor_on_value_key,
-    define_property_on_value_key, native_object_define_properties, native_object_define_property,
+    array_length_from_descriptor_value, define_array_length_value,
+    define_property_descriptor_on_value_key, define_property_on_value_key,
+    native_object_define_properties, native_object_define_property,
 };
 pub(crate) use descriptor_query::{
     native_object_get_own_property_descriptor, native_object_get_own_property_descriptors,

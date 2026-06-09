@@ -157,6 +157,17 @@ pub(crate) struct PropertyDescriptor {
 }
 
 impl PropertyDescriptor {
+    pub(super) fn data_value(value: Value) -> Self {
+        Self {
+            value: Some(value),
+            writable: None,
+            get: None,
+            set: None,
+            enumerable: None,
+            configurable: None,
+        }
+    }
+
     fn is_accessor_descriptor(&self) -> bool {
         self.get.is_some() || self.set.is_some()
     }

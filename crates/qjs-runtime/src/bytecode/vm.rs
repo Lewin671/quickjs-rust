@@ -480,6 +480,12 @@ impl<'a> Vm<'a> {
         } else {
             set_property_key(object, key.clone(), value.clone(), &mut self.globals)?
         };
+        if !wrote_data && is_strict {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: cannot set property".to_owned(),
+            });
+        }
         if updates_global_binding
             && wrote_data
             && let crate::PropertyKey::String(key) = key
