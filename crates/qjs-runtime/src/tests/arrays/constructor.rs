@@ -111,6 +111,36 @@ fn evaluates_array_from_static_constructor() {
 }
 
 #[test]
+fn exposes_array_from_async_static_surface() {
+    assert_eq!(
+        eval("typeof Array.fromAsync + ':' + Array.fromAsync.length + ':' + Array.fromAsync.name;"),
+        Ok(Value::String("function:1:fromAsync".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let desc = Object.getOwnPropertyDescriptor(Array, 'fromAsync'); desc.writable + ':' + desc.enumerable + ':' + desc.configurable;"
+        ),
+        Ok(Value::String("true:false:true".to_owned()))
+    );
+    assert_eq!(
+        eval("Array.fromAsync.hasOwnProperty('prototype');"),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { Reflect.construct(function() {}, [], Array.fromAsync); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { Array.fromAsync([]); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn exposes_array_species_accessor() {
     assert_eq!(
         eval(

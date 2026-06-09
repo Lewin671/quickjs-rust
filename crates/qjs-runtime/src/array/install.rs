@@ -244,6 +244,12 @@ pub(crate) fn install_array(
     );
     symbol::define_species_accessor(env, &array_function);
     define_array_function(&array_function, "from", 1, NativeFunction::ArrayFrom);
+    define_array_function(
+        &array_function,
+        "fromAsync",
+        1,
+        NativeFunction::ArrayFromAsync,
+    );
     define_array_function(&array_function, "isArray", 1, NativeFunction::ArrayIsArray);
     define_array_function(&array_function, "of", 0, NativeFunction::ArrayOf);
 

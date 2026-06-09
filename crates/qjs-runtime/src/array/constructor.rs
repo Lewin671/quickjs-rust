@@ -60,6 +60,13 @@ pub(crate) fn native_array_from(
     array_from_values(items, mapping.as_ref(), this_arg, constructor, env)
 }
 
+pub(crate) fn native_array_from_async() -> Result<Value, RuntimeError> {
+    Err(RuntimeError {
+        thrown: None,
+        message: "TypeError: Array.fromAsync is not implemented".to_owned(),
+    })
+}
+
 struct ArrayFromElements {
     values: Vec<Value>,
     construct_length: Option<usize>,

@@ -2,6 +2,7 @@
 pub(crate) enum NativeFunction {
     Array,
     ArrayFrom,
+    ArrayFromAsync,
     ArrayIsArray,
     ArrayOf,
     ArrayPrototypeAt,
