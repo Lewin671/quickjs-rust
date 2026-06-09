@@ -1,8 +1,9 @@
 # Agent Instructions
 
-This repository is designed for autonomous work through Codex or Harness.
-It is the authoritative instruction file for agents. `README.md` is the
-human-facing project overview; do not duplicate detailed agent workflow there.
+Authoritative instruction file for autonomous agents (Claude Code, Codex, or
+similar; `CLAUDE.md` is a symlink to this file). `README.md` is the
+human-facing overview; architecture and harness mechanics live under `docs/`.
+Do not duplicate agent workflow there.
 
 ## Prime Directive
 
@@ -12,257 +13,165 @@ boundaries and make each change verifiable with focused tests.
 ## Standard Commands
 
 - Fresh checkout setup: `./scripts/bootstrap.sh`
-- Full check: `./scripts/check.sh`
-- Source size report: `./scripts/source-size-report.sh [limit] [--vendor]`
-- Create agent worktree: `./scripts/create-agent-worktree.sh <task-slug> <owner-id> [base-ref]`
-- Validate agent branch: `./scripts/validate-agent-branch.sh <branch> <base-sha> <allowed-path>...`
-- Format only: `cargo fmt --all`
-- Test only: `cargo test --workspace`
+- Full check (fmt, clippy, tests, file-size guard): `./scripts/check.sh`
 - CLI smoke test: `cargo run -p qjs-cli -- -e "1 + 2;"`
-- QuickJS comparison smoke tests: `./scripts/compare-qjs.sh`
-- QuickJS-NG gap discovery:
-  `./scripts/find-qjsng-gaps.sh [--limit N | --all] [--filter test/<prefix>]`
+- QuickJS-NG comparison smoke tests: `./scripts/compare-qjs.sh`
+- Gap discovery: `./scripts/find-qjsng-gaps.sh [--all] [--filter test/<prefix>]`
 - Test262 subset runner: `./scripts/test262-subset.sh`
-- Conformance burndown recorder:
-  `./scripts/test262-burndown.sh --report <full-scan-dir> | --entry <ci-artifact>`
-- Upstream Test262 baseline runner:
-  `./scripts/test262-baseline.sh [--limit N | --all] [--filter test/<prefix>] [--engine quickjs-rust|quickjs-ng|both] [--shard I/N] [--summary-json PATH] [--no-fail]`
-- Watch a pushed branch CI run: `gh run list --branch <branch> --limit 1`
-  followed by `gh run watch <run-id> --exit-status`
+- Test262 baseline scan: `./scripts/test262-baseline.sh`
+- Burndown recorder: `./scripts/test262-burndown.sh --report <dir> | --entry <file>`
+- Source size report: `./scripts/source-size-report.sh [limit] [--vendor]`
+- Agent worktree: `./scripts/create-agent-worktree.sh <task-slug> <owner-id> [base-ref]`
+- Branch scope check: `./scripts/validate-agent-branch.sh <branch> <base-sha> <path>...`
+- Branch CI: `gh run list --branch <branch> --limit 1`, then
+  `gh run watch <run-id> --exit-status`
 
-If Rust is not installed, report that clearly and do not fake test results.
-Both `scripts/bootstrap.sh` and `scripts/check.sh` fall back to
-`$HOME/.cargo/bin/cargo` when `cargo` is not on `PATH`.
+Full flags and behavior for the Test262 and gap scripts are documented in
+`docs/harness.md`. `bootstrap.sh` and `check.sh` fall back to
+`$HOME/.cargo/bin/cargo` when `cargo` is not on `PATH`. If Rust is not
+installed, report that clearly and do not fake test results.
 
 ## Work Boundaries
 
-- Keep each change scoped to one clear feature, fix, refactor, or documentation
-  update.
-- Prefer the existing crate boundaries and local APIs over introducing new
-  abstractions.
-- Preserve module boundaries inside crates. Large implementation files should
-  be split by responsibility before adding unrelated behavior.
-- Keep implementation files reviewable. `scripts/check-file-size.sh` enforces
-  current upper bounds for Rust source files, Rust test files, and repository
-  scripts; split by subsystem responsibility before raising those limits.
-- First-party files should stay small enough for direct review. If a Rust
-  implementation file is trending toward the guard limit, split it by semantic
-  responsibility before adding more behavior; do not wait until it fails CI.
-- Treat large files under `third_party/` as vendored reference material, not as
-  examples for first-party Rust structure. Use
-  `./scripts/source-size-report.sh` for first-party size audits and
-  `./scripts/source-size-report.sh --vendor` only when you need to inspect
-  pinned upstream submodule files.
-- Thousands-line files are acceptable only in vendored upstream references or
-  generated conformance data under `third_party/`. New first-party code,
-  fixtures, scripts, and docs should remain modular and reviewable.
-- Add a new crate or third-party dependency only when it removes clear
-  complexity and is justified in the final summary.
-- Parser work should not mutate runtime behavior unless the task explicitly
-  requires it.
-- Runtime work should prefer existing AST types over adding parser shortcuts.
-- Lexer tokens must carry spans.
-- Public APIs should stay small and documented.
-- Avoid `unsafe`; the workspace forbids it.
-- Avoid global mutable state. When shared state is required, make ownership and
-  lifetime explicit in runtime data structures.
-- Do not edit files under `third_party/` unless the task is explicitly to update
-  a submodule pointer.
-- Use `third_party/quickjs-ng` as a reference implementation, not as a Rust build
-  dependency.
-- Use `third_party/test262` as conformance input. Prefer small allowlisted
-  subsets over running the entire suite during early engine work.
-- Do not initialize or rely on nested submodules under `third_party/quickjs-ng`
-  unless a task explicitly requires QuickJS-NG's own test setup.
+- One change = one clear feature, fix, refactor, or documentation update.
+- Prefer existing crate boundaries and local APIs over new abstractions; a new
+  crate or dependency must remove clear complexity and be justified in the
+  final summary.
+- Keep first-party files reviewable: split by semantic responsibility before a
+  file trends toward the `scripts/check-file-size.sh` limits, not after CI
+  fails. Thousands-line files are acceptable only under `third_party/`.
+- Parser work must not mutate runtime behavior unless the task requires it;
+  runtime work should use existing AST types instead of parser shortcuts;
+  lexer tokens must carry spans.
+- No `unsafe` (workspace forbids it). No global mutable state; make shared
+  ownership and lifetime explicit in runtime data structures.
+- `third_party/` is read-only reference material: never edit it outside an
+  explicit submodule-pointer task, never use `quickjs-ng` as a build
+  dependency, and do not initialize its nested submodules. `test262` is
+  conformance input, consumed through the harness scripts.
 - Keep generated files and build outputs out of commits.
 
 ## Rust Engineering Standards
 
-- Keep public APIs small, typed, and documented when they cross crate
-  boundaries.
-- Return structured errors for source input failures; do not panic on malformed
-  JavaScript.
-- Preserve source spans when adding syntax, token, parser, or diagnostic
-  behavior.
-- Use byte offsets for spans unless the architecture document is intentionally
-  changed.
+- Public APIs that cross crate boundaries stay small, typed, and documented.
+- Return structured errors for source input failures; never panic on
+  malformed JavaScript.
+- Preserve source spans (byte offsets) in token, syntax, and diagnostic work.
 - Prefer deterministic data structures and output for tests and diagnostics.
-- Do not add async, threading, FFI, unsafe code, or custom allocators unless the
-  task explicitly requires that design.
-- Keep CLI behavior thin. Library crates should own engine semantics and error
-  models.
-- Keep tests in crate-local `tests` modules/files when they are large enough to
-  distract from implementation structure.
-- Split large test files by the behavior under test rather than by the feature
-  that happened to add them. For example, Object tests should separate
-  descriptors, enumeration, integrity, prototype operations, and constructor
-  behavior.
-- Keep performance changes evidence-based. Add a benchmark or explain the
-  measured case before optimizing core engine paths.
+- No async, threading, FFI, or custom allocators unless the task explicitly
+  requires that design.
+- Keep `qjs-cli` thin; library crates own engine semantics and error models.
+- Split large test files by the behavior under test (descriptors,
+  enumeration, prototype operations, ...), not by the feature that added them.
+- Performance changes need evidence: a benchmark or a measured case.
 
 ## Dependency Policy
 
-- Prefer the Rust standard library for early engine code.
-- Before adding a dependency, check whether an existing workspace crate or a
-  small local helper is enough.
-- If a dependency is added, explain why it is needed, what surface area uses it,
-  and whether it affects runtime, dev-only tooling, or tests.
-- Do not add dependencies from `third_party/quickjs-ng` or generated Test262
-  artifacts to Cargo crates.
+- Prefer the standard library; check existing workspace crates or a small
+  local helper before adding anything.
+- A new dependency must state why it is needed, what uses it, and whether it
+  affects runtime, dev-only tooling, or tests.
 
 ## Documentation Sync
 
-- Treat docs as part of the change when behavior, architecture, setup,
-  verification commands, public APIs, supported syntax, runtime semantics, or
-  conformance status changes.
-- If an implementation change makes `README.md`, `docs/architecture.md`,
-  `docs/harness.md`, task files, crate metadata, examples, allowlists, or
-  expected-failure notes inaccurate or incomplete, update the relevant document
-  in the same reviewable unit.
-- Keep the audience boundaries intact: `README.md` is the human-facing overview,
-  `AGENTS.md` is the agent workflow contract, and detailed architecture or
-  harness mechanics belong under `docs/`.
-- If documentation appears stale but the correct update is outside the current
-  task boundary, call it out in the final response with the exact file and topic
-  that need follow-up.
+- Docs are part of the change: when behavior, setup, commands, APIs,
+  supported syntax, or conformance expectations change, update `README.md`,
+  `docs/`, task files, allowlists, or expected-failure notes in the same
+  reviewable unit.
+- Audience boundaries: `README.md` human overview, `AGENTS.md` agent
+  contract, mechanics under `docs/`.
+- If a stale doc is outside the task boundary, name the file and topic in the
+  final response instead of fixing it silently.
 
 ## Commit Discipline
 
-- Prefer one commit per reviewable unit of work.
-- A reviewable unit is one feature, one bug fix, one refactor, one dependency
-  update, or one documentation/policy update.
-- Do not mix unrelated formatting, cleanup, or documentation changes into a
-  feature commit.
-- Do not stage user changes or unrelated workspace changes.
-- Split broad tasks into small commits that each compile and have relevant
-  tests where practical.
-- For QuickJS-NG gap work, treat one greedy recommendation queue area or one
-  coherent JavaScript semantic family as the commit boundary. Use the printed
-  queue to keep momentum after a global probe, but verify each chosen area with
+- One commit per reviewable unit: one feature, fix, refactor, dependency
+  update, or documentation/policy update. No unrelated formatting or cleanup
+  mixed in; never stage user or unrelated workspace changes.
+- For gap work, one recommendation-queue area or one coherent semantic family
+  is the commit boundary. Verify the area with
   `./scripts/find-qjsng-gaps.sh --filter <area> --all` before implementation
-  and again before committing. Do not create one commit per individual Test262
-  case; include allowlist or expected-failure updates with the implementation
-  or harness support that makes them meaningful.
-- Commit messages should describe the behavior or policy change, for example
-  `Add lexer support for comments` or `Tighten agent workflow docs`.
+  and again before committing. No one-commit-per-Test262-case; allowlist and
+  expected-failure updates ride with the change that makes them meaningful.
+- Commit messages describe the behavior or policy change, for example
+  `Add lexer support for comments`.
 
 ## Parallel Agent Workflow
 
-Use isolated git worktrees for parallel coding only when the task can be split
-into clear, non-overlapping ownership boundaries.
+Use isolated worktrees only when ownership boundaries are clear; serialize on
+one branch when a task touches shared AST types, workspace configuration,
+global error models, or broad architecture docs. Full runbook:
+`docs/harness.md`.
 
-- Keep `main` as the stable integration branch.
-- Create one short-lived branch and one worktree per coding owner.
-- Branch names should follow `agent/<task-slug>/<owner-id>`.
-- Every coding owner must start from the same recorded `base sha`, unless the
-  main agent explicitly re-baselines that owner.
-- Every coding owner must have a path boundary before editing. Examples:
-  `crates/qjs-lexer/**`, `crates/qjs-parser/**`,
-  `crates/qjs-runtime/**`, or `scripts/compare-qjs.sh`.
-- Push locally verified `agent/**` branches when early GitHub Actions feedback
-  is useful. The workflow is configured to run CI for these branches.
-- Remote CI is additional evidence, not a substitute for local checks. Do not
-  integrate a branch with a red, missing, or unexplained latest branch CI run
-  when that branch was pushed for CI.
-- Global files default to main-agent ownership: `Cargo.toml`, `Cargo.lock`,
-  `rust-toolchain.toml`, `.gitmodules`, `AGENTS.md`, `README.md`,
-  `docs/architecture.md`, `docs/harness.md`, and shared CI or bootstrap
-  scripts.
-- Coding owners must not merge each other's branches. The main agent integrates
-  owner results one branch at a time.
-- Before integration, inspect the owner branch's changed files against its path
-  boundary and confirm the reported base sha. Use
-  `./scripts/validate-agent-branch.sh` for this check.
-- For pushed owner branches, inspect the latest branch CI run with `gh run list`
-  and `gh run view` before merging.
-- After each integration, run `./scripts/check.sh` before integrating another
-  owner branch.
-- Delete merged temporary worktrees and short-lived branches unless they are
-  intentionally retained for diagnosis.
-
-Prefer serialized work on one branch when a task changes shared AST types,
-workspace configuration, global error models, or broad architecture documents.
+- `main` is the stable integration branch; one short-lived
+  `agent/<task-slug>/<owner-id>` branch and worktree per coding owner, all
+  from the same recorded base sha.
+- Every owner gets a path boundary before editing; global files
+  (`Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`, `.gitmodules`,
+  `AGENTS.md`, `README.md`, `docs/`, shared CI/bootstrap scripts) default to
+  main-agent ownership.
+- Owners never merge each other's branches. The main agent validates scope
+  with `./scripts/validate-agent-branch.sh`, integrates one branch at a time,
+  and runs `./scripts/check.sh` after each integration.
+- Pushed `agent/**` branches get CI; a red or unexplained latest run blocks
+  integration, but green remote CI never replaces local checks.
+- Remove merged worktrees and branches unless retained for diagnosis.
 
 ## Architecture Expectations
 
-- `qjs-ast` owns shared syntax and span types. It should not depend on lexer,
-  parser, runtime, or CLI crates.
-- `qjs-lexer` owns tokenization and should preserve byte spans.
-- `qjs-parser` owns syntactic structure and should not evaluate code.
-- `qjs-runtime` owns evaluation semantics and should not re-parse source except
-  through public parser APIs.
-- `qjs-cli` is a thin smoke-test wrapper. Keep engine policy in library crates.
-- Runtime builtins should stay grouped by JavaScript object and behavior family
-  (`array/iteration`, `date/iso`, `object/descriptor`, and similar modules)
-  rather than accumulating unrelated native methods in a single file.
+- `qjs-ast`: shared syntax and span types; depends on no other engine crate.
+- `qjs-lexer`: tokenization, preserving byte spans.
+- `qjs-parser`: syntactic structure; never evaluates code.
+- `qjs-runtime`: evaluation semantics; re-parses only through public parser
+  APIs. Builtins stay grouped by object and behavior family
+  (`array/iteration`, `object/descriptor`, ...).
+- `qjs-cli`: thin smoke-test wrapper.
 
 ## Test Strategy
 
-- Unit tests belong next to the crate behavior they exercise.
-- Cross-crate behavior should use integration tests once the public surface is
-  stable enough.
-- Every behavior change should include a focused test at the lowest useful
-  layer.
-- Use QuickJS-NG comparisons for selected smoke programs when semantics are
-  unclear.
-- Use Test262 through curated runnable subsets with explicit provenance and
-  expected failures; do not treat full-suite failure counts as useful signal
-  during early development.
-- Use `./scripts/test262-baseline.sh` to enumerate upstream Test262 coverage
-  and classify unsupported harness metadata, parser/runtime failures, and
-  timeouts before expanding the curated subset.
-- When a Test262 case is expected to fail, record the reason near the allowlist
-  or expected-failure list rather than relying on tribal knowledge.
-- Record a conformance burndown entry with `./scripts/test262-burndown.sh`
-  after every complete `--exact --all` comparison scan, and prefer the CI
-  `test262-burndown` artifact for per-commit measurements. The trend in
-  `docs/conformance/burndown.jsonl` is the signal for changing recommendation
-  strategy or campaign priorities; do not record partial scans.
-- Prefer small fixtures that are easy to inspect over broad generated tests for
-  early parser and runtime work.
-- Add simple QuickJS comparison programs under `tests/fixtures/compare-qjs/`.
-- Add Test262-derived cases under `tests/test262/cases/` only when the current
-  harness can run them deterministically. Each case must start with
-  `// Derived from: <official Test262 path>` so the runner can validate
-  provenance.
-- Add those local case paths to `tests/test262/allowlist.txt`. The allowlist may
-  also include raw upstream paths under `test/` when the pinned Test262 case can
-  run deterministically through `scripts/test262-subset.sh` with its declared
-  harness metadata.
-- Run `./scripts/test262-subset.sh` after editing Test262 allowlists or expected
-  failures.
+- Every behavior change gets a focused test at the lowest useful layer; unit
+  tests live next to the crate behavior they exercise.
+- Use QuickJS-NG comparisons (`tests/fixtures/compare-qjs/`) when semantics
+  are unclear.
+- Use Test262 through curated subsets, not full-suite failure counts.
+  Derived cases under `tests/test262/cases/` must start with
+  `// Derived from: <official Test262 path>`; list them (or directly runnable
+  upstream `test/` paths) in `tests/test262/allowlist.txt`, and run
+  `./scripts/test262-subset.sh` after editing allowlists or expected
+  failures. Expected failures always carry a written reason.
+- Record a burndown entry (`./scripts/test262-burndown.sh`) after every
+  complete `--exact --all` scan; prefer the CI `test262-burndown` artifact
+  for per-commit numbers. The trend in `docs/conformance/burndown.jsonl`
+  decides when recommendation strategy or campaign priorities change. Never
+  record partial scans.
 
 ## Definition of Done
 
 For code changes:
 
-1. The relevant crate has unit tests or integration coverage.
+1. The relevant crate has unit or integration coverage.
 2. `./scripts/check.sh` passes, or the failure is explained with exact output.
-3. Public docs and crate metadata are updated when behavior, architecture,
-   setup, commands, APIs, or conformance expectations change.
+3. Docs and crate metadata are updated when behavior, commands, APIs, or
+   conformance expectations change.
 4. New dependencies, public APIs, or architecture shifts are justified.
 5. The final response names changed files and verification performed.
 
-For documentation-only changes:
-
-1. The changed document has a single clear audience.
-2. Instructions are not duplicated across README and AGENTS unless the summary is
-   intentionally brief.
-3. `./scripts/check.sh` is run when scripts, Cargo files, or examples changed.
+For documentation-only changes: single clear audience, no README/AGENTS
+duplication, and `./scripts/check.sh` when scripts, Cargo files, or examples
+changed.
 
 ## Suggested Autonomous Loop
 
-1. Pick one task from `tasks/`. For QuickJS-NG gap work, take quick wins from
-   the `find-qjsng-gaps.sh` recommendation queue while they exist; when the
-   queue is dominated by hard-hinted broad areas, switch to the next unchecked
-   slice of the highest-priority campaign task in `tasks/README.md` instead of
-   re-running global probes.
+1. Pick one task from `tasks/`. For gap work, take quick wins from the
+   `find-qjsng-gaps.sh` recommendation queue while they exist; when the queue
+   is dominated by hard-hinted broad areas, switch to the next unchecked
+   slice of the highest-priority campaign task in `tasks/README.md` instead
+   of re-running global probes.
 2. Read the related crate, `docs/architecture.md`, and `docs/harness.md`.
-3. Implement the smallest useful slice.
-4. Add or update tests.
-5. Run `./scripts/check.sh`.
-6. Summarize behavior, risks, verification, and the next useful task.
+3. Implement the smallest useful slice, with tests.
+4. Run `./scripts/check.sh`.
+5. Summarize behavior, risks, verification, and the next useful task.
 
 If requirements are ambiguous, prefer a small reversible implementation and
-state the assumption. Ask for user input only when the ambiguity changes public
-architecture, dependency choices, or long-term compatibility.
+state the assumption. Ask for user input only when the ambiguity changes
+public architecture, dependency choices, or long-term compatibility.
