@@ -131,7 +131,7 @@ fn number_to_string_radix(value: Value) -> Result<u32, RuntimeError> {
     if !(2..=36).contains(&radix) {
         return Err(RuntimeError {
             thrown: None,
-            message: "radix must be between 2 and 36".to_owned(),
+            message: "RangeError: radix must be between 2 and 36".to_owned(),
         });
     }
     Ok(radix as u32)

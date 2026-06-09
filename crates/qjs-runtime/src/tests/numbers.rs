@@ -62,6 +62,18 @@ fn evaluates_number_builtins() {
         Ok(Value::String("ff".to_owned()))
     );
     assert_eq!(
+        eval(
+            "let caught = false; try { (3).toString(1); } catch (error) { caught = error instanceof RangeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { (3).toString(37); } catch (error) { caught = error instanceof RangeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("let n = 1e21; n.toString();"),
         Ok(Value::String("1e+21".to_owned()))
     );
