@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
 use crate::reflect::target::ensure_reflect_object_target;
-use crate::{ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function, to_length};
+use crate::{
+    ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function,
+    object::array_length_from_descriptor_value,
+};
 
 pub(crate) fn native_reflect_set(
     argument_values: &[Value],
@@ -39,7 +42,7 @@ pub(crate) fn ordinary_set(
         return ordinary_set(Value::Object(prototype), key, value, receiver, env);
     }
 
-    set_receiver_data_property(receiver, key, value)
+    set_receiver_data_property(receiver, key, value, env)
 }
 
 fn own_property_descriptor_key(target: &Value, key: &PropertyKey) -> Option<Property> {
@@ -99,13 +102,14 @@ fn ordinary_set_with_descriptor(
     if !property.writable {
         return Ok(false);
     }
-    set_receiver_data_property(receiver, key, value)
+    set_receiver_data_property(receiver, key, value, env)
 }
 
 fn set_receiver_data_property(
     receiver: Value,
     key: &PropertyKey,
     value: Value,
+    env: &mut HashMap<String, Value>,
 ) -> Result<bool, RuntimeError> {
     let PropertyKey::String(key) = key else {
         return set_receiver_symbol_data_property(receiver, key, value);
@@ -133,7 +137,7 @@ fn set_receiver_data_property(
                 {
                     return Ok(false);
                 }
-                let length = to_length(value)?;
+                let length = array_length_from_descriptor_value(value, env)?;
                 if length > elements.len() && !elements.is_extensible() {
                     return Ok(false);
                 }

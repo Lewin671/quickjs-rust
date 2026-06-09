@@ -7,6 +7,26 @@ fn evaluates_array_mutation_builtins() {
         Ok(Value::String("3:3:1,2,3".to_owned()))
     );
     assert_eq!(
+        eval("let xs = [1, 2]; xs.length = 1; xs.length + ':' + xs.hasOwnProperty('1');"),
+        Ok(Value::String("1:false".to_owned()))
+    );
+    assert_eq!(
+        eval("let xs = [1, 2]; xs.length = 2.0; xs.length;"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { [].length = 4294967296; } catch (error) { caught = error instanceof RangeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { Reflect.set([], 'length', -1); } catch (error) { caught = error instanceof RangeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval(
             "let object = { 0: 1, length: 1 }; Array.prototype.push.call(object, 2, 3) + ':' + object.length + ':' + object[2];"
         ),

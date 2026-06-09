@@ -6,8 +6,8 @@ use crate::{
     GLOBAL_THIS_BINDING, ObjectRef, Property, PropertyKey, RuntimeError, Value, array_prototype,
     bigint, boolean, call_function, function_delete_own_property,
     function_delete_own_symbol_property, function_own_property_keys,
-    inherited_string_prototype_property, number, property_value, property_value_key, string,
-    to_int32_number, to_length, to_uint32_number, value_prototype,
+    inherited_string_prototype_property, number, object::array_length_from_descriptor_value,
+    property_value, property_value_key, string, to_int32_number, to_uint32_number, value_prototype,
 };
 
 use super::vm::Vm;
@@ -125,7 +125,7 @@ pub(super) fn set_property(
         }
         Value::Array(elements) => {
             if key == "length" {
-                elements.set_len(to_length(value)?);
+                elements.set_len(array_length_from_descriptor_value(value, env)?);
                 Ok(true)
             } else {
                 let property = elements.property(&key).or_else(|| {

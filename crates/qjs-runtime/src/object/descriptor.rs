@@ -255,7 +255,7 @@ fn define_array_length_property(
     Ok(true)
 }
 
-fn array_length_from_descriptor_value(
+pub(crate) fn array_length_from_descriptor_value(
     value: Value,
     env: &mut HashMap<String, Value>,
 ) -> Result<usize, RuntimeError> {
