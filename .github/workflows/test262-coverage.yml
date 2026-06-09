@@ -147,13 +147,13 @@ jobs:
 
   coverage-shards:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
-    name: Test262 rust coverage shard ${{ matrix.shard }}/32
+    name: Test262 rust coverage group ${{ matrix.group }}/8
     runs-on: ubuntu-latest
     timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]
+        group: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -184,18 +184,29 @@ jobs:
       - name: Run full Test262 coverage shard
         run: |
           mkdir -p coverage
-          ./scripts/test262-baseline.sh \
-            --all \
-            --engine quickjs-rust \
-            --shard ${{ matrix.shard }}/32 \
-            --summary-json coverage/summary-${{ matrix.shard }}.json \
-            --case-results-jsonl coverage/cases-${{ matrix.shard }}.jsonl \
-            --no-fail
+          status=0
+          first_shard=$(( (${{ matrix.group }} - 1) * 4 + 1 ))
+          last_shard=$(( first_shard + 3 ))
+          for shard in $(seq "$first_shard" "$last_shard"); do
+            (
+              ./scripts/test262-baseline.sh \
+                --all \
+                --engine quickjs-rust \
+                --shard "$shard/32" \
+                --summary-json "coverage/summary-${shard}.json" \
+                --case-results-jsonl "coverage/cases-${shard}.jsonl" \
+                --no-fail
+            ) &
+          done
+          for job in $(jobs -pr); do
+            wait "$job" || status=1
+          done
+          exit "$status"
 
       - name: Upload shard summary
         uses: actions/upload-artifact@v4
         with:
-          name: test262-coverage-${{ matrix.shard }}
+          name: test262-coverage-${{ matrix.group }}
           path: coverage
           retention-days: 14
 
