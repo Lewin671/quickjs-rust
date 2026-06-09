@@ -279,6 +279,20 @@ fn evaluates_regexp_prototype_accessors() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "let get = Object.getOwnPropertyDescriptor(RegExp.prototype, 'source').get; let caught = false; try { get.call(Symbol()); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let get = Object.getOwnPropertyDescriptor(RegExp.prototype, 'flags').get; function throwsTypeError(value) { try { get.call(value); return false; } catch (error) { return error instanceof TypeError; } } throwsTypeError(undefined) + ':' + throwsTypeError(null) + ':' + throwsTypeError(4) + ':' + throwsTypeError('string') + ':' + throwsTypeError(false) + ':' + throwsTypeError(Symbol()) + ':' + throwsTypeError(4n);"
+        ),
+        Ok(Value::String(
+            "true:true:true:true:true:true:true".to_owned()
+        ))
+    );
 }
 
 #[test]

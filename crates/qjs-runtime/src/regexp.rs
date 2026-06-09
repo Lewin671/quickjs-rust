@@ -358,9 +358,9 @@ pub(crate) fn native_regexp_prototype_flags(
     this_value: Value,
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let Value::Object(_) = &this_value else {
+    if !is_regexp_accessor_object_receiver(&this_value) {
         return Err(regexp_receiver_error());
-    };
+    }
     let mut flags = String::new();
     for (name, flag) in [
         ("hasIndices", 'd'),
@@ -396,8 +396,11 @@ fn regexp_accessor_data(
     key: &str,
     prototype_value: &str,
 ) -> Result<String, RuntimeError> {
-    let Value::Object(object) = &this_value else {
+    if !is_regexp_accessor_object_receiver(this_value) {
         return Err(regexp_receiver_error());
+    };
+    let Value::Object(object) = &this_value else {
+        unreachable!("RegExp accessor receiver object was checked above")
     };
     if let Some(value) = regexp_string_data(object, key) {
         return Ok(value);
@@ -406,6 +409,10 @@ fn regexp_accessor_data(
         return Ok(prototype_value.to_owned());
     }
     Err(regexp_receiver_error())
+}
+
+fn is_regexp_accessor_object_receiver(value: &Value) -> bool {
+    matches!(value, Value::Object(object) if !symbol::is_symbol_primitive(object))
 }
 
 fn is_regexp_prototype_value(value: &Value, env: &HashMap<String, Value>) -> bool {
