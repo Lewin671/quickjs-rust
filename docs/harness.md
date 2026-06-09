@@ -138,10 +138,10 @@ Raw Test262 cases run without injected harness files. The `Test262 Coverage`
 GitHub Actions workflow runs once for each successful `CI` commit, runs the
 sharded quickjs-rust scan and QuickJS-NG baseline in parallel, uploads shard
 summaries, and aggregates the result into the workflow summary without delaying
-the main CI workflow. The quickjs-rust scan uses a small matrix of coverage
-groups; each group runs multiple Test262 shards concurrently inside one runner
-to reduce GitHub Actions scheduling overhead while preserving complete shard
-coverage. The workflow reuses a full QuickJS-NG baseline cache when available;
+the main CI workflow. The quickjs-rust scan uses 16 coverage groups; each group
+runs two Test262 shards concurrently inside one runner to reduce per-job tail
+latency while keeping the full 32-shard scan complete. The workflow reuses a
+full QuickJS-NG baseline cache when available;
 when that cache is missing, it falls back to sharded baseline jobs and saves a
 full cache for later commits.
 
