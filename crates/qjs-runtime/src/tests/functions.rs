@@ -22,6 +22,12 @@ fn evaluates_function_declarations_and_calls() {
     );
     assert_eq!(
         eval(
+            "function g() { { function f() { return 1; } { function f() { return 2; } } } return f(); } g();"
+        ),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval(
             "var after; eval('if (true) function f() { return \"declaration\"; } else function _f() {} after = f;'); after();"
         ),
         Ok(Value::String("declaration".to_owned()))

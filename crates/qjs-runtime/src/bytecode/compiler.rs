@@ -580,12 +580,16 @@ impl Compiler {
                         return Ok(());
                     }
                     compiler.compile_hoisted_function_decls(body)?;
-                    for (index, stmt) in body.iter().enumerate() {
-                        compiler.compile_stmt(stmt)?;
-                        if index + 1 != body.len() {
-                            compiler.store_or_pop_statement_list_completion(stmt);
+                    let nested_blocked = nested_block_annex_b_blocked_names(body);
+                    compiler.with_annex_b_blocked_function_names(&nested_blocked, |compiler| {
+                        for (index, stmt) in body.iter().enumerate() {
+                            compiler.compile_stmt(stmt)?;
+                            if index + 1 != body.len() {
+                                compiler.store_or_pop_statement_list_completion(stmt);
+                            }
                         }
-                    }
+                        Ok(())
+                    })?;
                     for slot in compiler.current_lexical_slots_for_names(&blocked) {
                         compiler.emit(Op::ClearLocal(slot));
                     }
@@ -797,6 +801,18 @@ fn lexical_declared_names(body: &[Stmt]) -> Vec<String> {
             }
             Stmt::Switch { cases, .. } => names.extend(switch_lexical_declared_names(cases)),
             _ => {}
+        }
+    }
+    names
+}
+
+fn nested_block_annex_b_blocked_names(body: &[Stmt]) -> Vec<String> {
+    let mut names = lexical_declared_names(body);
+    for stmt in body {
+        if let Stmt::FunctionDecl { name, .. } = stmt
+            && !names.iter().any(|existing| existing == name)
+        {
+            names.push(name.clone());
         }
     }
     names
