@@ -2,11 +2,10 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "$ROOT_DIR/scripts/lib.sh"
 QJS_DIR="$ROOT_DIR/third_party/quickjs-ng"
 QJS_BIN="$QJS_DIR/build/qjs"
-QJS_RUST_BIN="$ROOT_DIR/target/debug/qjs"
 FIXTURE_DIR="${1:-$ROOT_DIR/tests/fixtures/compare-qjs}"
-RUN_WITH_TIMEOUT="$ROOT_DIR/scripts/run-with-timeout.sh"
 CASE_TIMEOUT_SECONDS="${COMPARE_QJS_CASE_TIMEOUT_SECONDS:-10}"
 COMPARE_QJS_JOBS="${COMPARE_QJS_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)}"
 
@@ -21,35 +20,15 @@ case "$COMPARE_QJS_JOBS" in
     ;;
 esac
 
-if [ ! -d "$QJS_DIR" ]; then
-  echo "error: missing $QJS_DIR; run ./scripts/bootstrap.sh first" >&2
-  exit 1
-fi
+qjs_ensure_quickjs_ng
+qjs_require_run_with_timeout
 
-if [ ! -x "$QJS_BIN" ]; then
-  make -C "$QJS_DIR" all
-fi
-
-if [ ! -x "$RUN_WITH_TIMEOUT" ]; then
-  echo "error: missing executable $RUN_WITH_TIMEOUT" >&2
-  exit 1
-fi
-
-if command -v cargo >/dev/null 2>&1; then
-  CARGO_BIN="cargo"
-elif [ -x "$HOME/.cargo/bin/cargo" ]; then
-  CARGO_BIN="$HOME/.cargo/bin/cargo"
-else
+if ! CARGO_BIN="$(qjs_resolve_cargo)"; then
   echo "error: cargo not found; install Rust with rustup before comparing" >&2
   exit 127
 fi
 
-"$CARGO_BIN" build -q -p qjs-cli
-
-if [ ! -x "$QJS_RUST_BIN" ]; then
-  echo "error: missing built quickjs-rust binary: $QJS_RUST_BIN" >&2
-  exit 1
-fi
+QJS_RUST_BIN="$(qjs_build_cli_bin "$CARGO_BIN")"
 
 normalize_rust_value() {
   sed -E \

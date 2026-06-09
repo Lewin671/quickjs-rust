@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "$ROOT_DIR/scripts/lib.sh"
 TEST262_DIR="${TEST262_DIR:-$ROOT_DIR/third_party/test262}"
 ALLOWLIST="${TEST262_ALLOWLIST:-$ROOT_DIR/tests/test262/allowlist.txt}"
 EXPECTED_FAILURES="${TEST262_EXPECTED_FAILURES:-$ROOT_DIR/tests/test262/expected-failures.txt}"
@@ -9,9 +10,9 @@ LOCAL_CASE_DIR="${TEST262_LOCAL_CASE_DIR:-$ROOT_DIR/tests/test262}"
 RUN_WITH_TIMEOUT="${RUN_WITH_TIMEOUT:-$ROOT_DIR/scripts/run-with-timeout.sh}"
 METADATA_PARSER="$ROOT_DIR/scripts/test262-baseline-metadata.awk"
 CASE_TIMEOUT_SECONDS="${TEST262_CASE_TIMEOUT_SECONDS:-10}"
-CARGO_BIN="${CARGO:-cargo}"
-if ! command -v "$CARGO_BIN" >/dev/null 2>&1 && [ -x "$HOME/.cargo/bin/cargo" ]; then
-  CARGO_BIN="$HOME/.cargo/bin/cargo"
+if ! CARGO_BIN="$(qjs_resolve_cargo)"; then
+  echo "error: cargo not found; install Rust with rustup before running the subset" >&2
+  exit 127
 fi
 
 trim_ws() {
@@ -309,20 +310,7 @@ if [ "$allowlist_count" -eq 0 ]; then
 fi
 
 echo "building qjs-cli for Test262 subset"
-"$CARGO_BIN" build -q -p qjs-cli
-
-target_dir="$("$CARGO_BIN" metadata --format-version=1 --no-deps \
-  | sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p' \
-  | head -n 1)"
-if [ -z "$target_dir" ]; then
-  target_dir="$ROOT_DIR/target"
-fi
-
-QJS_CLI_BIN="$target_dir/debug/qjs"
-if [ ! -x "$QJS_CLI_BIN" ]; then
-  echo "error: built qjs-cli binary is missing or not executable: $QJS_CLI_BIN" >&2
-  exit 1
-fi
+QJS_CLI_BIN="$(qjs_build_cli_bin "$CARGO_BIN")"
 
 RESULT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/qjs-test262-subset-XXXXXX")"
 trap 'rm -rf "$RESULT_DIR"' EXIT

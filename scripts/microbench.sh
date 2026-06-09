@@ -2,8 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "$ROOT_DIR/scripts/lib.sh"
 BENCH_FILE="$ROOT_DIR/tests/benchmarks/quickjs/microbench.js"
-RUN_WITH_TIMEOUT="$ROOT_DIR/scripts/run-with-timeout.sh"
 CASE_TIMEOUT_SECONDS="${MICROBENCH_TIMEOUT_SECONDS:-120}"
 ENGINE="quickjs-rust"
 
@@ -47,16 +47,9 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-if [ ! -x "$RUN_WITH_TIMEOUT" ]; then
-  echo "error: missing executable $RUN_WITH_TIMEOUT" >&2
-  exit 1
-fi
+qjs_require_run_with_timeout
 
-if command -v cargo >/dev/null 2>&1; then
-  CARGO_BIN="cargo"
-elif [ -x "$HOME/.cargo/bin/cargo" ]; then
-  CARGO_BIN="$HOME/.cargo/bin/cargo"
-else
+if ! CARGO_BIN="$(qjs_resolve_cargo)"; then
   echo "error: cargo not found; install Rust with rustup before benchmarking" >&2
   exit 127
 fi
@@ -67,17 +60,8 @@ run_rust() {
 }
 
 run_quickjs_ng() {
-  local qjs_dir="$ROOT_DIR/third_party/quickjs-ng"
-  local qjs_bin="$qjs_dir/build/qjs"
-
-  if [ ! -d "$qjs_dir" ]; then
-    echo "error: missing $qjs_dir; run ./scripts/bootstrap.sh first" >&2
-    exit 1
-  fi
-  if [ ! -x "$qjs_bin" ]; then
-    make -C "$qjs_dir" all
-  fi
-  "$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$qjs_bin" "$BENCH_FILE" "$@"
+  qjs_ensure_quickjs_ng
+  "$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$ROOT_DIR/third_party/quickjs-ng/build/qjs" "$BENCH_FILE" "$@"
 }
 
 case "$ENGINE" in

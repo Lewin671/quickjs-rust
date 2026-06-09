@@ -2,9 +2,9 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "$ROOT_DIR/scripts/lib.sh"
 TEST262_DIR="$ROOT_DIR/third_party/test262"
 QUICKJS_NG_DIR="$ROOT_DIR/third_party/quickjs-ng"
-QUICKJS_NG_BIN="$QUICKJS_NG_DIR/build/qjs"
 QUICKJS_NG_RUNNER="$QUICKJS_NG_DIR/build/run-test262"
 RUN_WITH_TIMEOUT="$ROOT_DIR/scripts/run-with-timeout.sh"
 METADATA_PARSER="$ROOT_DIR/scripts/test262-baseline-metadata.awk"
@@ -18,7 +18,6 @@ NO_FAIL=0
 STOP_AFTER_LIMIT=0
 SHARD_INDEX=1
 SHARD_TOTAL=1
-CARGO_BIN="${CARGO:-cargo}"
 
 usage() {
   cat >&2 <<'USAGE'
@@ -116,18 +115,11 @@ if [ "$SHARD_INDEX" -gt "$SHARD_TOTAL" ]; then
   echo "error: --shard index must be <= shard total: $SHARD_INDEX/$SHARD_TOTAL" >&2
   exit 2
 fi
-if ! command -v "$CARGO_BIN" >/dev/null 2>&1 && [ -x "$HOME/.cargo/bin/cargo" ]; then
-  CARGO_BIN="$HOME/.cargo/bin/cargo"
-fi
-
 if [ ! -d "$TEST262_DIR/test" ]; then
   echo "error: missing $TEST262_DIR/test; run ./scripts/bootstrap.sh first" >&2
   exit 1
 fi
-if [ ! -x "$RUN_WITH_TIMEOUT" ]; then
-  echo "error: missing executable $RUN_WITH_TIMEOUT" >&2
-  exit 1
-fi
+qjs_require_run_with_timeout
 
 needs_rust() {
   [ "$ENGINE" = "quickjs-rust" ] || [ "$ENGINE" = "both" ]
@@ -137,46 +129,16 @@ needs_quickjs_ng() {
   [ "$ENGINE" = "quickjs-ng" ] || [ "$ENGINE" = "both" ]
 }
 
-if needs_rust && [ -n "${QJS_CLI_BIN:-}" ]; then
-  if [ ! -x "$QJS_CLI_BIN" ]; then
-    echo "error: QJS_CLI_BIN is not executable: $QJS_CLI_BIN" >&2
-    exit 1
+if needs_rust; then
+  if ! CARGO_BIN="$(qjs_resolve_cargo)"; then
+    echo "error: cargo not found; install Rust with rustup before running the baseline" >&2
+    exit 127
   fi
-elif needs_rust; then
-  echo "building qjs-cli for baseline"
-  build_output="$(mktemp "${TMPDIR:-/tmp}/qjs-test262-cargo-build-XXXXXX")"
-  set +e
-  "$CARGO_BIN" build -q --message-format=json-render-diagnostics -p qjs-cli >"$build_output"
-  build_status=$?
-  set -e
-  if [ "$build_status" -ne 0 ]; then
-    cat "$build_output" >&2
-    rm -f "$build_output"
-    exit "$build_status"
-  fi
-  QJS_CLI_BIN="$(sed -n 's/.*"executable":"\([^"]*\)".*/\1/p' "$build_output" | tail -n 1)"
-  rm -f "$build_output"
-  target_dir="$("$CARGO_BIN" metadata --format-version=1 --no-deps \
-    | sed -n 's/.*\"target_directory\":\"\([^\"]*\)\".*/\1/p' \
-    | head -n 1)"
-  target_dir="${target_dir:-$ROOT_DIR/target}"
-  if [ -z "$QJS_CLI_BIN" ]; then
-    QJS_CLI_BIN="$target_dir/debug/qjs"
-  fi
-  if [ ! -x "$QJS_CLI_BIN" ]; then
-    echo "error: built qjs-cli binary is missing or not executable: $QJS_CLI_BIN" >&2
-    exit 1
-  fi
+  QJS_CLI_BIN="$(qjs_build_cli_bin "$CARGO_BIN")"
 fi
 
 if needs_quickjs_ng; then
-  if [ ! -d "$QUICKJS_NG_DIR" ]; then
-    echo "error: missing $QUICKJS_NG_DIR; run ./scripts/bootstrap.sh first" >&2
-    exit 1
-  fi
-  if [ ! -x "$QUICKJS_NG_BIN" ] || [ ! -x "$QUICKJS_NG_RUNNER" ]; then
-    make -C "$QUICKJS_NG_DIR" all
-  fi
+  qjs_ensure_quickjs_ng "$QUICKJS_NG_RUNNER"
   QUICKJS_NG_CONF="$(mktemp "${TMPDIR:-/tmp}/qjsng-test262-conf-XXXXXX")"
   QUICKJS_NG_FEATURES="$(mktemp "${TMPDIR:-/tmp}/qjsng-test262-features-XXXXXX")"
   QUICKJS_NG_SKIP_FEATURES="$(mktemp "${TMPDIR:-/tmp}/qjsng-test262-skip-features-XXXXXX")"

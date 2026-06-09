@@ -1,15 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-git submodule update --init third_party/quickjs-ng third_party/test262
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "$ROOT_DIR/scripts/lib.sh"
 
-if command -v cargo >/dev/null 2>&1; then
-  CARGO_BIN="cargo"
-elif [ -x "$HOME/.cargo/bin/cargo" ]; then
-  CARGO_BIN="$HOME/.cargo/bin/cargo"
-else
+git -C "$ROOT_DIR" submodule update --init third_party/quickjs-ng third_party/test262
+
+if ! CARGO_BIN="$(qjs_resolve_cargo)"; then
   echo "warning: cargo not found; install Rust before running project checks" >&2
   exit 0
 fi
 
-"$CARGO_BIN" fetch
+(cd "$ROOT_DIR" && "$CARGO_BIN" fetch)
