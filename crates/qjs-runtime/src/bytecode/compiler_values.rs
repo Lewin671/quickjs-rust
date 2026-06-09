@@ -145,6 +145,10 @@ impl Compiler {
         else {
             return Err(unsupported_stmt(stmt));
         };
+        if self.annex_b_function_name_blocked(name) {
+            self.emit_load_undefined();
+            return Ok(());
+        }
         let slot = self.local_slot(name, true);
         let is_strict = self.strict || is_strict_function_body(body);
         let bytecode = super::compiler::compile_function_body_with_strict(params, body, is_strict)?;

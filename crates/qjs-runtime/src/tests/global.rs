@@ -121,6 +121,10 @@ fn evaluates_global_eval_builtin() {
     );
     assert!(eval("eval('{ let lexical = 1; } lexical;')").is_err());
     assert!(eval("eval('{ let f = 123; { function f() {} } } f;')").is_err());
+    assert!(
+        eval("eval('{ let f = 123; if (true) function f() {} else function _f() {} } f;')")
+            .is_err()
+    );
     assert!(eval("eval('for (let i = 0; i < 1; i++) {} i;')").is_err());
     assert!(eval("eval('for (let f; ; ) { { function f() {} } break; } f;')").is_err());
     assert!(eval("eval('for (let k in { a: 1 }) {} k;')").is_err());
