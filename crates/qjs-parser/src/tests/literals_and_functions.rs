@@ -166,6 +166,17 @@ fn rejects_restricted_arrow_parameter_names_in_strict_mode() {
 }
 
 #[test]
+fn rejects_line_terminator_before_arrow() {
+    assert!(parse_script("let arrow = value\n=> value;").is_err());
+    assert!(parse_script("let arrow = ()\n=> {};").is_err());
+    assert!(parse_script("let arrow = (value)\r\n=> value;").is_err());
+    assert!(parse_script("let arrow = (value)\u{2028}=> value;").is_err());
+
+    parse_script("let arrow = value => value;").expect("same-line arrow should parse");
+    parse_script("let arrow = () => {};").expect("same-line arrow block body should parse");
+}
+
+#[test]
 fn parses_new_expression() {
     let script = parse_script("new Point(1, 2);").expect("source should parse");
     let [

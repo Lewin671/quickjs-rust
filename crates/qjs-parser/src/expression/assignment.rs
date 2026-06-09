@@ -104,6 +104,7 @@ impl Parser {
                     .is_some_and(|token| token.kind == TokenKind::Arrow) =>
             {
                 let token = self.advance();
+                self.reject_line_terminator_before_arrow(token.span)?;
                 let TokenKind::Identifier(param) = token.kind else {
                     unreachable!("peek checked identifier");
                 };
@@ -160,6 +161,8 @@ impl Parser {
             self.cursor = start_cursor;
             return Ok(None);
         }
+        let close_paren_span = self.tokens[self.cursor - 1].span;
+        self.reject_line_terminator_before_arrow(close_paren_span)?;
         let duplicate_span = duplicate_arrow_parameter_span(&positional, rest.as_ref());
         if let Some(span) = duplicate_span {
             return Err(ParseError {
@@ -180,6 +183,20 @@ impl Parser {
             positional: positional.into_iter().map(|(name, _)| name).collect(),
             rest: rest.map(|(name, _)| name),
         }))
+    }
+
+    fn reject_line_terminator_before_arrow(&self, previous_span: Span) -> Result<(), ParseError> {
+        let arrow = self.peek().expect("arrow lookahead should be present");
+        if self.source[previous_span.end..arrow.span.start]
+            .chars()
+            .any(is_line_terminator)
+        {
+            return Err(ParseError {
+                message: "line terminator before arrow".to_owned(),
+                span: arrow.span,
+            });
+        }
+        Ok(())
     }
 
     pub(crate) fn conditional(&mut self) -> Result<Expr, ParseError> {
@@ -235,4 +252,8 @@ fn restricted_strict_arrow_parameter_span(
 
 fn restricted_strict_arrow_parameter(name: &str) -> bool {
     matches!(name, "arguments" | "eval" | "yield")
+}
+
+fn is_line_terminator(ch: char) -> bool {
+    matches!(ch, '\n' | '\r' | '\u{2028}' | '\u{2029}')
 }
