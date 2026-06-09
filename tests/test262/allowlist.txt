@@ -2918,6 +2918,8 @@ test/built-ins/Map/prototype/getOrInsertComputed/returns-value-if-key-is-not-pre
 test/built-ins/Map/prototype/getOrInsertComputed/returns-value-if-key-is-present-different-key-types.js
 test/built-ins/Map/prototype/getOrInsertComputed/returns-value-normalized-zero-key.js
 test/built-ins/Map/prototype/getOrInsertComputed/this-not-object-throw.js
+test/built-ins/Map/prototype/Symbol.iterator.js
+test/built-ins/Map/prototype/Symbol.iterator/not-a-constructor.js
 cases/map-iterator-basic.js
 cases/map-for-each-basic.js
 cases/map-set-foreach-live-iteration.js
