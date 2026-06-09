@@ -33,6 +33,7 @@ const STRING_PROTOTYPE_METHODS: &[(&str, usize, NativeFunction)] = &[
     ),
     ("match", 1, NativeFunction::StringPrototypeMatch),
     ("matchAll", 1, NativeFunction::StringPrototypeMatchAll),
+    ("normalize", 0, NativeFunction::StringPrototypeNormalize),
     ("padEnd", 1, NativeFunction::StringPrototypePadEnd),
     ("padStart", 1, NativeFunction::StringPrototypePadStart),
     ("repeat", 1, NativeFunction::StringPrototypeRepeat),

@@ -47,11 +47,44 @@ pub(crate) fn native_string_prototype_locale_compare(
     Ok(Value::Number(result))
 }
 
+pub(crate) fn native_string_prototype_normalize(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let value = this_string_value(this_value, env)?;
+    let form = match argument_values.first() {
+        None | Some(Value::Undefined) => "NFC".to_owned(),
+        Some(value) => to_js_string_with_env(value.clone(), env)?,
+    };
+    let normalized = match form.as_str() {
+        "NFC" => normalize_string(&value, |value| value.nfc().collect()),
+        "NFD" => normalize_string(&value, |value| value.nfd().collect()),
+        "NFKC" => normalize_string(&value, |value| value.nfkc().collect()),
+        "NFKD" => normalize_string(&value, |value| value.nfkd().collect()),
+        _ => {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "RangeError: invalid normalization form".to_owned(),
+            });
+        }
+    };
+    Ok(Value::String(normalized))
+}
+
 fn canonical_locale_compare_key(value: &str) -> Cow<'_, str> {
     if value.is_ascii() {
         Cow::Borrowed(value)
     } else {
         Cow::Owned(value.nfc().collect())
+    }
+}
+
+fn normalize_string(value: &str, normalize: impl FnOnce(&str) -> String) -> String {
+    if value.is_ascii() {
+        value.to_owned()
+    } else {
+        normalize(value)
     }
 }
 
@@ -144,6 +177,36 @@ mod tests {
         );
         assert_eq!(
             eval(r#"'가'.localeCompare('\u1100\u1161') === 0;"#),
+            Ok(Value::Boolean(true))
+        );
+    }
+
+    #[test]
+    fn normalize_supports_unicode_forms() {
+        assert_eq!(
+            eval(r#"'o\u0308'.normalize() === 'ö';"#),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval(r#"'ö'.normalize('NFD') === 'o\u0308';"#),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval(r#"'\uFB00'.normalize('NFKC') === 'ff';"#),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval(r#"'\u1E9B\u0323'.normalize('NFKD') === 's\u0323\u0307';"#),
+            Ok(Value::Boolean(true))
+        );
+    }
+
+    #[test]
+    fn normalize_rejects_invalid_form() {
+        assert_eq!(
+            eval(
+                "let caught = false; try { 'x'.normalize('bad'); } catch (error) { caught = error instanceof RangeError; } caught;"
+            ),
             Ok(Value::Boolean(true))
         );
     }

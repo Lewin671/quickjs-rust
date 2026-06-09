@@ -122,6 +122,9 @@ pub(super) fn call_string_native(
         NativeFunction::StringPrototypeMatchAll => {
             string::native_string_prototype_match_all(this_value, argument_values, env)?
         }
+        NativeFunction::StringPrototypeNormalize => {
+            string::native_string_prototype_normalize(this_value, argument_values, env)?
+        }
         NativeFunction::StringPrototypePadEnd => string::native_string_prototype_pad(
             this_value,
             argument_values,
