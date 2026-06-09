@@ -132,7 +132,12 @@ needs_quickjs_ng() {
   [ "$ENGINE" = "quickjs-ng" ] || [ "$ENGINE" = "both" ]
 }
 
-if needs_rust; then
+if needs_rust && [ -n "${QJS_CLI_BIN:-}" ]; then
+  if [ ! -x "$QJS_CLI_BIN" ]; then
+    echo "error: QJS_CLI_BIN is not executable: $QJS_CLI_BIN" >&2
+    exit 1
+  fi
+elif needs_rust; then
   echo "building qjs-cli for baseline"
   build_output="$(mktemp "${TMPDIR:-/tmp}/qjs-test262-cargo-build-XXXXXX")"
   set +e

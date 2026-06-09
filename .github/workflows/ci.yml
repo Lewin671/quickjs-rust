@@ -39,6 +39,16 @@ jobs:
       - name: Check
         run: ./scripts/check.sh
 
+      - name: Build qjs-cli artifact binary
+        run: cargo build -q -p qjs-cli
+
+      - name: Upload qjs-cli artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: qjs-cli-debug-linux
+          path: target/debug/qjs
+          retention-days: 7
+
   compare-qjs:
     runs-on: ubuntu-latest
     steps:

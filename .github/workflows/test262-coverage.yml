@@ -1,21 +1,65 @@
 name: Test262 Coverage
 
 on:
-  push:
-    branches:
-      - 'agent/**'
   workflow_run:
     workflows: ["CI"]
     types: [completed]
+  workflow_dispatch:
+    inputs:
+      ci_run_id:
+        description: "Optional CI run id to reuse qjs-cli-debug-linux artifact"
+        required: false
+        type: string
 
 concurrency:
-  group: test262-coverage-${{ github.event.workflow_run.head_branch || github.ref_name }}
+  group: test262-coverage-${{ github.event.workflow_run.head_sha || github.sha }}
   cancel-in-progress: false
 
 jobs:
-  quickjs-ng-baseline:
+  quickjs-ng-baseline-cache:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    name: QuickJS-NG baseline cache
+    runs-on: ubuntu-latest
+    outputs:
+      cache-hit: ${{ steps.quickjs-ng-baseline-cache.outputs.cache-hit }}
+      cache-key: ${{ steps.baseline-key.outputs.full_key }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.event.workflow_run.head_repository.full_name || github.repository }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 1
+          submodules: false
+
+      - name: Baseline cache key
+        id: baseline-key
+        run: |
+          echo "quickjs_ng_sha=$(git rev-parse HEAD:third_party/quickjs-ng)" >> "$GITHUB_OUTPUT"
+          echo "test262_sha=$(git rev-parse HEAD:third_party/test262)" >> "$GITHUB_OUTPUT"
+          echo "full_key=test262-qjsng-baseline-full-${{ runner.os }}-$(git rev-parse HEAD:third_party/quickjs-ng)-$(git rev-parse HEAD:third_party/test262)-${{ hashFiles('scripts/test262-baseline.sh', 'scripts/test262-baseline-metadata.awk', 'scripts/run-with-timeout.sh') }}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore QuickJS-NG baseline
+        id: quickjs-ng-baseline-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: coverage-baseline
+          key: ${{ steps.baseline-key.outputs.full_key }}
+
+      - name: Upload cached QuickJS-NG baseline
+        if: steps.quickjs-ng-baseline-cache.outputs.cache-hit == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: test262-qjsng-baseline-full
+          path: coverage-baseline
+          retention-days: 14
+
+  quickjs-ng-baseline:
+    if: |
+      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') &&
+      needs.quickjs-ng-baseline-cache.outputs.cache-hit != 'true'
     name: QuickJS-NG baseline shard ${{ matrix.shard }}/16
+    needs: quickjs-ng-baseline-cache
     runs-on: ubuntu-latest
     timeout-minutes: 180
     strategy:
@@ -37,26 +81,26 @@ jobs:
           echo "quickjs_ng_sha=$(git rev-parse HEAD:third_party/quickjs-ng)" >> "$GITHUB_OUTPUT"
           echo "test262_sha=$(git rev-parse HEAD:third_party/test262)" >> "$GITHUB_OUTPUT"
 
-      - name: Restore QuickJS-NG baseline
-        id: quickjs-ng-baseline-cache
+      - name: Restore QuickJS-NG baseline shard
+        id: quickjs-ng-baseline-shard-cache
         uses: actions/cache/restore@v5
         with:
           path: coverage-baseline/shard-${{ matrix.shard }}
           key: test262-qjsng-baseline-${{ runner.os }}-${{ steps.baseline-key.outputs.quickjs_ng_sha }}-${{ steps.baseline-key.outputs.test262_sha }}-${{ hashFiles('scripts/test262-baseline.sh', 'scripts/test262-baseline-metadata.awk', 'scripts/run-with-timeout.sh') }}-${{ matrix.shard }}
 
       - name: Init submodules
-        if: steps.quickjs-ng-baseline-cache.outputs.cache-hit != 'true'
+        if: steps.quickjs-ng-baseline-shard-cache.outputs.cache-hit != 'true'
         run: git submodule update --init --depth 1 third_party/test262 third_party/quickjs-ng
 
       - name: Restore QuickJS-NG build
-        if: steps.quickjs-ng-baseline-cache.outputs.cache-hit != 'true'
+        if: steps.quickjs-ng-baseline-shard-cache.outputs.cache-hit != 'true'
         uses: actions/cache@v5
         with:
           path: third_party/quickjs-ng/build
           key: quickjs-ng-${{ runner.os }}-${{ steps.baseline-key.outputs.quickjs_ng_sha }}
 
       - name: Run QuickJS-NG baseline shard
-        if: steps.quickjs-ng-baseline-cache.outputs.cache-hit != 'true'
+        if: steps.quickjs-ng-baseline-shard-cache.outputs.cache-hit != 'true'
         run: |
           mkdir -p coverage-baseline/shard-${{ matrix.shard }}
           ./scripts/test262-baseline.sh \
@@ -68,7 +112,8 @@ jobs:
             --no-fail
 
       - name: Save QuickJS-NG baseline
-        if: steps.quickjs-ng-baseline-cache.outputs.cache-hit != 'true'
+        if: steps.quickjs-ng-baseline-shard-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
         uses: actions/cache/save@v5
         with:
           path: coverage-baseline/shard-${{ matrix.shard }}
@@ -81,16 +126,39 @@ jobs:
           path: coverage-baseline/shard-${{ matrix.shard }}
           retention-days: 14
 
+  save-quickjs-ng-baseline-cache:
+    name: Save QuickJS-NG baseline cache
+    needs: [quickjs-ng-baseline-cache, quickjs-ng-baseline]
+    if: |
+      always() &&
+      needs.quickjs-ng-baseline-cache.result == 'success' &&
+      needs.quickjs-ng-baseline-cache.outputs.cache-hit != 'true' &&
+      needs.quickjs-ng-baseline.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download QuickJS-NG baseline shards
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test262-qjsng-baseline-*
+          path: coverage-baseline
+          merge-multiple: true
+
+      - name: Save full QuickJS-NG baseline
+        continue-on-error: true
+        uses: actions/cache/save@v5
+        with:
+          path: coverage-baseline
+          key: ${{ needs.quickjs-ng-baseline-cache.outputs.cache-key }}
+
   coverage-shards:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
-    name: Test262 rust coverage shard ${{ matrix.shard }}/16
-    needs: quickjs-ng-baseline
+    name: Test262 rust coverage group ${{ matrix.group }}/16
     runs-on: ubuntu-latest
     timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+        group: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -100,10 +168,28 @@ jobs:
           fetch-depth: 1
           submodules: false
 
+      - name: Download qjs-cli from CI
+        id: qjs-cli-artifact
+        if: github.event_name == 'workflow_run' || github.event.inputs.ci_run_id != ''
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: qjs-cli-debug-linux
+          path: prebuilt-qjs
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.event.workflow_run.head_repository.full_name || github.repository }}
+          run-id: ${{ github.event.workflow_run.id || github.event.inputs.ci_run_id }}
+
+      - name: Prepare qjs-cli artifact
+        if: steps.qjs-cli-artifact.outcome == 'success'
+        run: chmod +x prebuilt-qjs/qjs
+
       - name: Install Rust toolchain
+        if: steps.qjs-cli-artifact.outcome != 'success'
         run: rustup show
 
       - name: Restore Rust build cache
+        if: steps.qjs-cli-artifact.outcome != 'success'
         uses: actions/cache/restore@v5
         with:
           path: |
@@ -118,29 +204,60 @@ jobs:
       - name: Init submodules
         run: git submodule update --init --depth 1 third_party/test262
 
+      - name: Build quickjs-rust once
+        if: steps.qjs-cli-artifact.outcome != 'success'
+        run: cargo build -q -p qjs-cli
+
       - name: Run full Test262 coverage shard
         run: |
           mkdir -p coverage
-          ./scripts/test262-baseline.sh \
-            --all \
-            --engine quickjs-rust \
-            --shard ${{ matrix.shard }}/16 \
-            --summary-json coverage/summary-${{ matrix.shard }}.json \
-            --case-results-jsonl coverage/cases-${{ matrix.shard }}.jsonl \
-            --no-fail
+          status=0
+          if [ -x prebuilt-qjs/qjs ]; then
+            export QJS_CLI_BIN="$PWD/prebuilt-qjs/qjs"
+          else
+            target_dir="$(cargo metadata --format-version=1 --no-deps \
+              | sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p' \
+              | head -n 1)"
+            export QJS_CLI_BIN="${target_dir:-$PWD/target}/debug/qjs"
+          fi
+          first_shard=$(( (${{ matrix.group }} - 1) * 2 + 1 ))
+          last_shard=$(( first_shard + 1 ))
+          for shard in $(seq "$first_shard" "$last_shard"); do
+            (
+              ./scripts/test262-baseline.sh \
+                --all \
+                --engine quickjs-rust \
+                --shard "$shard/32" \
+                --summary-json "coverage/summary-${shard}.json" \
+                --case-results-jsonl "coverage/cases-${shard}.jsonl" \
+                --no-fail
+            ) &
+          done
+          for job in $(jobs -pr); do
+            wait "$job" || status=1
+          done
+          exit "$status"
 
       - name: Upload shard summary
         uses: actions/upload-artifact@v4
         with:
-          name: test262-coverage-${{ matrix.shard }}
+          name: test262-coverage-${{ matrix.group }}
           path: coverage
           retention-days: 14
 
   aggregate:
     name: Aggregate Test262 coverage
     runs-on: ubuntu-latest
-    needs: [quickjs-ng-baseline, coverage-shards]
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    needs: [quickjs-ng-baseline-cache, quickjs-ng-baseline, coverage-shards]
+    if: |
+      always() &&
+      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') &&
+      needs.quickjs-ng-baseline-cache.result == 'success' &&
+      needs.coverage-shards.result == 'success' &&
+      (
+        needs.quickjs-ng-baseline-cache.outputs.cache-hit == 'true' ||
+        needs.quickjs-ng-baseline.result == 'success'
+      )
     steps:
       - name: Download QuickJS-NG baseline
         uses: actions/download-artifact@v4
