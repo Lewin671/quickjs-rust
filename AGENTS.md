@@ -95,6 +95,8 @@ installed, report that clearly and do not fake test results.
   expected-failure updates ride with the change that makes them meaningful.
 - Commit messages describe the behavior or policy change, for example
   `Add lexer support for comments`.
+- Push promptly after each locally verified commit so remote CI starts as
+  early as possible; do not batch finished commits locally.
 
 ## Parallel Agent Workflow
 
