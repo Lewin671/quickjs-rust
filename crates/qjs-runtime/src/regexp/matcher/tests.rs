@@ -119,3 +119,25 @@ fn dot_excludes_line_terminators_unless_dot_all() {
     assert!(regexp_match_range("^.$", "\u{10300}", 0, false, false, false).is_none());
     assert!(regexp_match_range("^.$", "\u{10300}", 0, false, true, false).is_some());
 }
+
+#[test]
+fn whitespace_escapes_use_ecmascript_character_set() {
+    for whitespace in [
+        '\t', '\n', '\u{000b}', '\u{000c}', '\r', ' ', '\u{00a0}', '\u{1680}', '\u{2000}',
+        '\u{200a}', '\u{2028}', '\u{2029}', '\u{202f}', '\u{205f}', '\u{3000}', '\u{feff}',
+    ] {
+        let input = whitespace.to_string();
+        assert!(regexp_match_range(r"^\s$", &input, 0, false, false, false).is_some());
+        assert!(regexp_match_range(r"^[\s]$", &input, 0, false, false, false).is_some());
+        assert!(regexp_match_range(r"^\S$", &input, 0, false, false, false).is_none());
+        assert!(regexp_match_range(r"^[\S]$", &input, 0, false, false, false).is_none());
+    }
+
+    for non_whitespace in ['\u{0085}', '\u{180e}', 'A', '_', '0'] {
+        let input = non_whitespace.to_string();
+        assert!(regexp_match_range(r"^\s$", &input, 0, false, false, false).is_none());
+        assert!(regexp_match_range(r"^[\s]$", &input, 0, false, false, false).is_none());
+        assert!(regexp_match_range(r"^\S$", &input, 0, false, false, false).is_some());
+        assert!(regexp_match_range(r"^[\S]$", &input, 0, false, false, false).is_some());
+    }
+}

@@ -10,7 +10,9 @@ mod normalization;
 mod tests;
 
 use classes::class_match;
-use escapes::{chars_equal, regexp_control_escape, regexp_word_char, unicode_escape};
+use escapes::{
+    chars_equal, regexp_control_escape, regexp_whitespace, regexp_word_char, unicode_escape,
+};
 use groups::{closing_group, group_alternatives, is_non_capturing_group};
 use normalization::normalized_regexp_source;
 
@@ -344,8 +346,8 @@ fn match_escape(
     let (matched, next_pc) = match escaped {
         'd' => (value.is_ascii_digit(), pc + 2),
         'D' => (!value.is_ascii_digit(), pc + 2),
-        's' => (value.is_whitespace(), pc + 2),
-        'S' => (!value.is_whitespace(), pc + 2),
+        's' => (regexp_whitespace(value), pc + 2),
+        'S' => (!regexp_whitespace(value), pc + 2),
         'w' => (regexp_word_char(value), pc + 2),
         'W' => (!regexp_word_char(value), pc + 2),
         'u' => {

@@ -305,6 +305,12 @@ fn evaluates_regexp_exec_literal_match() {
         Ok(Value::Number(3.0))
     );
     assert_eq!(
+        eval(
+            "/\\s/.test('\\u0085') + ':' + /\\S/.test('\\u0085') + ':' + /[\\s]/.test('\\u202f') + ':' + /[\\S]/.test('\\u180e');"
+        ),
+        Ok(Value::String("false:true:true:true".to_owned()))
+    );
+    assert_eq!(
         eval("/String/i.exec('test string')[0];"),
         Ok(Value::String("string".to_owned()))
     );

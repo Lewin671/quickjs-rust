@@ -38,6 +38,14 @@ pub(super) fn regexp_word_char(value: char) -> bool {
     value.is_ascii_alphanumeric() || value == '_'
 }
 
+pub(super) fn regexp_whitespace(value: char) -> bool {
+    matches!(
+        value as u32,
+        0x0009 | 0x000a | 0x000b | 0x000c | 0x000d | 0x0020 | 0x00a0 | 0x1680 | 0x2000
+            ..=0x200a | 0x2028 | 0x2029 | 0x202f | 0x205f | 0x3000 | 0xfeff
+    )
+}
+
 pub(super) fn unicode_escape(pattern: &[char], pc: usize, unicode: bool) -> Option<ParsedEscape> {
     if pattern.get(pc + 1) != Some(&'u') {
         return None;

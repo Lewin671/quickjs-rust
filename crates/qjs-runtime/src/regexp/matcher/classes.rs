@@ -1,6 +1,7 @@
 use super::MatchOptions;
 use super::escapes::{
-    chars_equal, class_range_contains, regexp_control_escape, regexp_word_char, unicode_escape,
+    chars_equal, class_range_contains, regexp_control_escape, regexp_whitespace, regexp_word_char,
+    unicode_escape,
 };
 use crate::string::surrogate_escape_code_unit;
 
@@ -108,8 +109,8 @@ fn class_escape_matches(class: &[char], index: usize, value: char, options: Matc
     match class.get(index + 1).copied() {
         Some('d') => value.is_ascii_digit(),
         Some('D') => !value.is_ascii_digit(),
-        Some('s') => value.is_whitespace(),
-        Some('S') => !value.is_whitespace(),
+        Some('s') => regexp_whitespace(value),
+        Some('S') => !regexp_whitespace(value),
         Some('w') => regexp_word_char(value),
         Some('W') => !regexp_word_char(value),
         Some('u') => unicode_escape(class, index, options.unicode)

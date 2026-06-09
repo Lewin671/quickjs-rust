@@ -3368,6 +3368,7 @@ cases/regexp-exec-lazy-quantifiers.js
 cases/regexp-exec-quantified-group-captures.js
 cases/regexp-exec-failure-lastindex-access.js
 cases/regexp-exec-success-lastindex-access.js
+cases/regexp-character-class-escape-non-whitespace.js
 cases/regexp-lastindex-descriptor.js
 cases/regexp-exec-top-level-alternation.js
 cases/regexp-exec-unicode-lastindex-value.js
