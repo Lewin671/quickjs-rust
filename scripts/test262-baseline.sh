@@ -356,8 +356,13 @@ rust_features_supported() {
       ;;
   esac
   case "$rel" in
-    test/built-ins/Array/from/source-object-iterator-1.js|test/built-ins/Array/from/source-object-iterator-2.js|test/built-ins/Array/from/iter-cstm-ctor.js|test/built-ins/Array/from/iter-map-fn-args.js|test/built-ins/Array/from/iter-map-fn-return.js|test/built-ins/Array/from/iter-map-fn-this-arg.js|test/built-ins/Array/from/iter-map-fn-this-non-strict.js|test/built-ins/Array/from/iter-set-elem-prop.js|test/built-ins/Array/from/iter-set-length.js|test/built-ins/Array/from/get-iter-method-err.js|test/built-ins/Array/from/iter-get-iter-err.js|test/built-ins/Array/from/iter-get-iter-val-err.js|test/built-ins/Array/from/iter-adv-err.js)
+    test/built-ins/Array/from/source-object-iterator-1.js|test/built-ins/Array/from/source-object-iterator-2.js|test/built-ins/Array/from/iter-cstm-ctor.js|test/built-ins/Array/from/iter-cstm-ctor-err.js|test/built-ins/Array/from/iter-map-fn-args.js|test/built-ins/Array/from/iter-map-fn-err.js|test/built-ins/Array/from/iter-map-fn-return.js|test/built-ins/Array/from/iter-map-fn-this-arg.js|test/built-ins/Array/from/iter-map-fn-this-non-strict.js|test/built-ins/Array/from/iter-set-elem-prop.js|test/built-ins/Array/from/iter-set-elem-prop-err.js|test/built-ins/Array/from/iter-set-elem-prop-non-writable.js|test/built-ins/Array/from/iter-set-length.js|test/built-ins/Array/from/iter-set-length-err.js|test/built-ins/Array/from/get-iter-method-err.js|test/built-ins/Array/from/iter-get-iter-err.js|test/built-ins/Array/from/iter-get-iter-val-err.js|test/built-ins/Array/from/iter-adv-err.js)
       entries="$(drop_feature_entries "$entries" -e 'Symbol.iterator')"
+      ;;
+  esac
+  case "$rel" in
+    test/built-ins/Array/from/iter-set-elem-prop-non-writable.js)
+      entries="$(drop_feature_entries "$entries" -e 'generators')"
       ;;
   esac
   case "$rel" in
