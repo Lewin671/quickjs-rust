@@ -13,7 +13,8 @@ AREA_COUNT=10
 RECOMMEND=1
 RECOMMEND_STRATEGY="${TEST262_GAP_RECOMMEND_STRATEGY:-quickwins}"
 RECOMMEND_BATCH_CAP="${TEST262_GAP_RECOMMEND_BATCH_CAP:-5}"
-VERIFY_CANDIDATES="${TEST262_GAP_VERIFY_CANDIDATES:-5}"
+RECOMMEND_QUEUE="${TEST262_GAP_RECOMMEND_QUEUE:-8}"
+VERIFY_CANDIDATES="${TEST262_GAP_VERIFY_CANDIDATES:-8}"
 INCLUDE_TIMEOUTS=0
 EXACT_SCAN=0
 REPORT_SOURCE=""
@@ -24,7 +25,7 @@ PROBE_SHARDS="${TEST262_GAP_PROBE_SHARDS:-${TEST262_GAP_PROBE_SHARD:-1/16,5/16,9
 
 usage() {
   cat >&2 <<'USAGE'
-usage: scripts/find-qjsng-gaps.sh [--limit N | --all] [--filter test/<prefix>] [--out-dir PATH] [--top N] [--areas N] [--strategy quickwins|fast|largest] [--recommend-batch-cap N] [--verify-candidates N] [--probe-limit N] [--probe-shard I/N] [--probe-shards I/N[,I/N...]] [--from-report PATH | --from-latest-report] [--skip-area test/<prefix>] [--exact] [--include-timeouts] [--no-recommend]
+usage: scripts/find-qjsng-gaps.sh [--limit N | --all] [--filter test/<prefix>] [--out-dir PATH] [--top N] [--areas N] [--strategy quickwins|fast|largest] [--recommend-batch-cap N] [--recommend-queue N] [--verify-candidates N] [--probe-limit N] [--probe-shard I/N] [--probe-shards I/N[,I/N...]] [--from-report PATH | --from-latest-report] [--skip-area test/<prefix>] [--exact] [--include-timeouts] [--no-recommend]
 
 Runs a QuickJS-NG comparison baseline and prints the cases where QuickJS-NG
 passes but quickjs-rust has an actionable feature gap. Stress timeouts are
@@ -46,6 +47,10 @@ For default global probes, the script exact-checks the top quickwins candidate
 areas before printing a recommendation, so sampled areas that expand into broad
 work do not outrank smaller exact wins. Use --verify-candidates 0 to disable
 that follow-up, or TEST262_GAP_VERIFY_CANDIDATES to change the default.
+Exact candidate checks run concurrently. The report also prints a greedy
+recommendation queue, controlled by --recommend-queue or
+TEST262_GAP_RECOMMEND_QUEUE, so agents can keep moving without rerunning the
+global probe after every small fix.
 Use --from-report with a previous output directory or cases.jsonl to recompute
 the greedy recommendation without executing Test262 again. Use --skip-area to
 ignore an area already being worked or already rechecked.
@@ -93,6 +98,11 @@ while [ "$#" -gt 0 ]; do
     --recommend-batch-cap)
       [ "$#" -ge 2 ] || { usage; exit 2; }
       RECOMMEND_BATCH_CAP="$2"
+      shift 2
+      ;;
+    --recommend-queue)
+      [ "$#" -ge 2 ] || { usage; exit 2; }
+      RECOMMEND_QUEUE="$2"
       shift 2
       ;;
     --verify-candidates)
@@ -204,6 +214,12 @@ esac
 case "$RECOMMEND_BATCH_CAP" in
   ''|*[!0-9]*|0)
     echo "error: --recommend-batch-cap must be a positive integer: $RECOMMEND_BATCH_CAP" >&2
+    exit 2
+    ;;
+esac
+case "$RECOMMEND_QUEUE" in
+  ''|*[!0-9]*|0)
+    echo "error: --recommend-queue must be a positive integer: $RECOMMEND_QUEUE" >&2
     exit 2
     ;;
 esac
@@ -604,6 +620,10 @@ if [ "$PROBE_SCAN" -eq 1 ] && [ "$RECOMMEND" -eq 1 ] && [ "$RECOMMEND_STRATEGY" 
   done < <(awk -F'\t' -v limit="$VERIFY_CANDIDATES" '{ print $7; shown++ } shown >= limit { exit }' "$PROBE_RECOMMENDATIONS_TSV")
   if [ "${#candidate_areas[@]}" -gt 0 ]; then
     echo "Verifying top greedy candidate areas exactly..."
+    verify_pids=()
+    verify_logs=()
+    verify_cases=()
+    verify_areas=()
     for area in "${candidate_areas[@]}"; do
       safe_area="$(printf '%s' "$area" | tr '/ :' '---' | tr -cd '[:alnum:]_.-')"
       area_dir="$verify_dir/$safe_area"
@@ -612,15 +632,24 @@ if [ "$PROBE_SCAN" -eq 1 ] && [ "$RECOMMEND" -eq 1 ] && [ "$RECOMMEND_STRATEGY" 
       area_cases="$area_dir/cases.jsonl"
       area_log="$area_dir/baseline.log"
       echo "  exact: $area"
-      set +e
-      "$BASELINE" --engine both --summary-json "$area_summary" --case-results-jsonl "$area_cases" --no-fail --all --filter "$area" >"$area_log" 2>&1
-      area_status=$?
-      set -e
-      if [ "$area_status" -ne 0 ]; then
-        echo "error: exact candidate verification failed for $area; last log lines:" >&2
-        tail -n 40 "$area_log" >&2
-        exit "$area_status"
+      "$BASELINE" --engine both --summary-json "$area_summary" --case-results-jsonl "$area_cases" --no-fail --all --filter "$area" >"$area_log" 2>&1 &
+      verify_pids+=("$!")
+      verify_logs+=("$area_log")
+      verify_cases+=("$area_cases")
+      verify_areas+=("$area")
+    done
+    verify_status=0
+    for index in "${!verify_pids[@]}"; do
+      if ! wait "${verify_pids[$index]}"; then
+        verify_status=1
+        echo "error: exact candidate verification failed for ${verify_areas[$index]}; last log lines:" >&2
+        tail -n 40 "${verify_logs[$index]}" >&2
       fi
+    done
+    if [ "$verify_status" -ne 0 ]; then
+      exit "$verify_status"
+    fi
+    for area_cases in "${verify_cases[@]}"; do
       cat "$area_cases" >>"$VERIFIED_CASES_JSONL"
       VERIFIED_CANDIDATES=$((VERIFIED_CANDIDATES + 1))
     done
@@ -647,7 +676,7 @@ echo "  requested limit: $RUN_LIMIT"
 if [ "$PROBE_SCAN" -eq 1 ]; then
   echo "  scan: greedy probe over $BASELINE_RUN_LIMIT cases per shard from shards $PROBE_SHARDS"
   if [ "$VERIFIED_CANDIDATES" -gt 0 ]; then
-    echo "  recommendation verification: exact scan of $VERIFIED_CANDIDATES candidate areas"
+    echo "  recommendation verification: concurrent exact scan of $VERIFIED_CANDIDATES candidate areas"
   fi
 elif [ -n "$REPORT_CASES_SOURCE" ]; then
   echo "  scan: replayed report"
@@ -752,6 +781,12 @@ if [ "$RECOMMEND" -eq 1 ]; then
     echo
     echo "Next candidate areas:"
     awk -F'\t' '{ printf "  %s  engine=%s gaps=%s harness=%s hard=%s\n", $7, $3, $2, $5, $6; shown++ } shown >= 5 { exit }' "$RECOMMENDATIONS_TSV"
+    echo
+    echo "Greedy recommendation queue:"
+    awk -F'\t' -v limit="$RECOMMEND_QUEUE" '{
+      printf "  %s  engine=%s gaps=%s harness=%s hard=%s  rerun=./scripts/find-qjsng-gaps.sh --filter %s --all\n", $7, $3, $2, $5, $6, $7
+      shown++
+    } shown >= limit { exit }' "$RECOMMENDATIONS_TSV"
   fi
 fi
 

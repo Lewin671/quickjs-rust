@@ -134,10 +134,13 @@ Both `scripts/bootstrap.sh` and `scripts/check.sh` fall back to
 - Do not stage user changes or unrelated workspace changes.
 - Split broad tasks into small commits that each compile and have relevant
   tests where practical.
-- For QuickJS-NG gap work, treat one greedy recommendation area or one coherent
-  JavaScript semantic family as the commit boundary. Do not create one commit
-  per individual Test262 case; include allowlist or expected-failure updates
-  with the implementation or harness support that makes them meaningful.
+- For QuickJS-NG gap work, treat one greedy recommendation queue area or one
+  coherent JavaScript semantic family as the commit boundary. Use the printed
+  queue to keep momentum after a global probe, but verify each chosen area with
+  `./scripts/find-qjsng-gaps.sh --filter <area> --all` before implementation
+  and again before committing. Do not create one commit per individual Test262
+  case; include allowlist or expected-failure updates with the implementation
+  or harness support that makes them meaningful.
 - Commit messages should describe the behavior or policy change, for example
   `Add lexer support for comments` or `Tighten agent workflow docs`.
 

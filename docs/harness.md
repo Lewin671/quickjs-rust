@@ -133,9 +133,11 @@ ranking areas. This gives the agent broader Test262 coverage per iteration
 without paying for a full audit or biasing entirely toward the first sorted
 Test262 directories. After that sampled candidate queue is built, the default
 global probe exact-checks the top `TEST262_GAP_VERIFY_CANDIDATES` areas,
-currently 5, and prints the final recommendation from those exact focused
-results. This costs a few additional focused baseline runs, but it prevents a
-sampled broad area from hiding a smaller parity win.
+currently 8. These focused verification runs execute concurrently, then the
+script prints the final recommendation and a greedy queue from those exact
+focused results. This costs a few additional focused baseline runs, but it
+prevents a sampled broad area from hiding smaller parity wins and gives the
+agent several ready follow-up areas from one global probe.
 The default recommendation strategy is quickwins greedy. It prefers real
 quickjs-rust engine failures when they fit in a small reviewable batch. After
 that, it prefers small harness-only batches when at least one case does not
@@ -151,6 +153,8 @@ on known broad features. Use
 `--strategy fast` for the older small-batch-first behavior,
 `--strategy largest` to restore largest-gap-first recommendation, or
 `--recommend-batch-cap N` to tune how large a default batch may be. Use
+`--recommend-queue N` or `TEST262_GAP_RECOMMEND_QUEUE` to tune how many ranked
+areas the report prints for continuous or parallel follow-up work. Use
 `--verify-candidates N` to tune the exact candidate follow-up, or
 `--verify-candidates 0` when the fastest possible sampled recommendation is
 more useful than a verified one.
@@ -173,9 +177,11 @@ hide missing behavior; use
 and `--probe-shards I/N[,I/N...]` to tune recommendation speed versus
 confidence; `--probe-shard I/N` remains as a single-shard shorthand for very
 fast local checks. Use `--no-recommend` when only the raw gap report is needed.
-Treat the recommended area as the smallest useful planning and commit boundary
-unless the area is too broad to review as one change; avoid splitting follow-up
-work into one commit per individual Test262 case.
+Treat one recommended queue area as the smallest useful planning and commit
+boundary unless the area is too broad to review as one change. When several
+queue entries touch independent subsystems, agents may work them as separate
+reviewable units after focused `--filter ... --all` verification; avoid
+splitting follow-up work into one commit per individual Test262 case.
 
 `scripts/test262-subset.sh` runs the curated Test262 allowlist. Allowlist
 entries may point to local derived cases under `tests/test262/cases/` or pinned
