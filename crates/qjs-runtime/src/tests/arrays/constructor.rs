@@ -154,6 +154,18 @@ fn evaluates_array_from_iterables() {
         ),
         Ok(Value::String("3,6".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "let log = ''; function C() { log += 'c'; } let source = {}; source[Symbol.iterator] = function() { log += 'i'; return { next: function() { return { done: true }; } }; }; let result = Array.from.call(C, source); log + ':' + (result instanceof C);"
+        ),
+        Ok(Value::String("ci:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let marker = {}; function C() { throw marker; } let source = {}; source[Symbol.iterator] = function() { return { next: function() { throw {}; } }; }; let caught = false; try { Array.from.call(C, source); } catch (error) { caught = error === marker; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]
@@ -169,6 +181,18 @@ fn maps_array_from_iterables_during_consumption() {
             "Array.from(new Set([1, 2]), function(value, index) { return value + index + this.offset; }, { offset: 4 }).join();"
         ),
         Ok(Value::String("5,7".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let closeCount = 0; let marker = {}; let source = {}; source[Symbol.iterator] = function() { return { return: function() { closeCount += 1; return {}; }, next: function() { return { value: 1, done: false }; } }; }; let caught = false; try { Array.from(source, function() { throw marker; }); } catch (error) { caught = error === marker; } caught + ':' + closeCount;"
+        ),
+        Ok(Value::String("true:1".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let marker = {}; function C() {} Object.defineProperty(C.prototype, 'length', { set: function(_) { throw marker; } }); let source = {}; source[Symbol.iterator] = function() { return { next: function() { return { done: true }; } }; }; let caught = false; try { Array.from.call(C, source); } catch (error) { caught = error === marker; } caught;"
+        ),
+        Ok(Value::Boolean(true))
     );
     assert!(eval("let source = {}; source[Symbol.iterator] = 1; Array.from(source);").is_err());
 }

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     ArrayRef, Function, Property, PropertyKey, RuntimeError, Value, array_prototype, call_function,
     construct_function, is_truthy, object::array_length_from_descriptor_value, property_value,
-    property_value_key, symbol,
+    property_value_key, reflect::ordinary_set, symbol,
 };
 
 use super::array_like::array_like_values_with_env;
@@ -56,8 +56,8 @@ pub(crate) fn native_array_from(
         }
     };
 
-    let elements = array_from_values(items, mapping.as_ref(), this_arg, env)?;
-    array_from_result(this_value, elements, env)
+    let constructor = array_from_constructor(this_value);
+    array_from_values(items, mapping.as_ref(), this_arg, constructor, env)
 }
 
 struct ArrayFromElements {
@@ -69,15 +69,17 @@ fn array_from_values(
     items: Value,
     mapping: Option<&Value>,
     this_arg: Value,
+    constructor: Option<Value>,
     env: &mut HashMap<String, Value>,
-) -> Result<ArrayFromElements, RuntimeError> {
+) -> Result<Value, RuntimeError> {
     if matches!(items, Value::Null | Value::Undefined) {
-        return array_like_values_with_env(items, "Array.from", env).map(|values| {
+        let elements = array_like_values_with_env(items, "Array.from", env).map(|values| {
             ArrayFromElements {
                 construct_length: Some(values.len()),
                 values,
             }
-        });
+        })?;
+        return array_from_array_like_result(constructor, elements, env);
     }
 
     let iterator_method = match symbol::iterator_symbol(env) {
@@ -90,18 +92,17 @@ fn array_from_values(
     match iterator_method {
         Value::Undefined | Value::Null => {
             let values = map_array_like_values(items, mapping, this_arg, env)?;
-            Ok(ArrayFromElements {
-                construct_length: Some(values.len()),
-                values,
-            })
+            array_from_array_like_result(
+                constructor,
+                ArrayFromElements {
+                    construct_length: Some(values.len()),
+                    values,
+                },
+                env,
+            )
         }
         Value::Function(_) => {
-            let values =
-                array_from_iterable_values(items, iterator_method, mapping, this_arg, env)?;
-            Ok(ArrayFromElements {
-                construct_length: None,
-                values,
-            })
+            array_from_iterable_result(items, iterator_method, mapping, this_arg, constructor, env)
         }
         _ => Err(RuntimeError {
             thrown: None,
@@ -110,13 +111,13 @@ fn array_from_values(
     }
 }
 
-fn array_from_result(
-    this_value: Value,
+fn array_from_array_like_result(
+    constructor: Option<Value>,
     elements: ArrayFromElements,
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let length = elements.values.len();
-    let Some(constructor) = array_from_constructor(this_value) else {
+    let Some(constructor) = constructor else {
         return Ok(Value::Array(ArrayRef::new(elements.values)));
     };
 
@@ -226,13 +227,18 @@ fn map_array_like_values(
     Ok(result)
 }
 
-fn array_from_iterable_values(
+fn array_from_iterable_result(
     items: Value,
     iterator_method: Value,
     mapping: Option<&Value>,
     this_arg: Value,
+    constructor: Option<Value>,
     env: &mut HashMap<String, Value>,
-) -> Result<Vec<Value>, RuntimeError> {
+) -> Result<Value, RuntimeError> {
+    let target = match constructor {
+        Some(constructor) => construct_function(constructor.clone(), constructor, Vec::new(), env)?,
+        None => Value::Array(ArrayRef::new(Vec::new())),
+    };
     let iterator = call_function(iterator_method, items, Vec::new(), env, false)?;
     let next = property_value(iterator.clone(), "next", env)?;
     if !matches!(next, Value::Function(_)) {
@@ -242,7 +248,7 @@ fn array_from_iterable_values(
         });
     }
 
-    let mut result = Vec::new();
+    let mut index = 0usize;
     loop {
         let step = call_function(next.clone(), iterator.clone(), Vec::new(), env, false)?;
         if !is_iterator_result_object(&step) {
@@ -252,19 +258,66 @@ fn array_from_iterable_values(
             });
         }
         if is_truthy(&property_value(step.clone(), "done", env)?) {
+            set_array_from_length(target.clone(), index, env)?;
             break;
         }
         let value = property_value(step, "value", env)?;
-        let index = result.len();
-        result.push(array_from_mapped_value(
-            value,
-            index,
-            mapping,
-            this_arg.clone(),
-            env,
-        )?);
+        let value = match array_from_mapped_value(value, index, mapping, this_arg.clone(), env) {
+            Ok(value) => value,
+            Err(error) => {
+                let _ = close_array_from_iterator(iterator, env);
+                return Err(error);
+            }
+        };
+        if let Err(error) = create_data_property_or_throw(target.clone(), index.to_string(), value)
+        {
+            let _ = close_array_from_iterator(iterator, env);
+            return Err(error);
+        }
+        index += 1;
     }
-    Ok(result)
+    Ok(target)
+}
+
+fn close_array_from_iterator(
+    iterator: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
+    match property_value(iterator.clone(), "return", env)? {
+        Value::Undefined | Value::Null => Ok(()),
+        return_method @ Value::Function(_) => {
+            let result = call_function(return_method, iterator, Vec::new(), env, false)?;
+            if is_iterator_result_object(&result) {
+                Ok(())
+            } else {
+                Err(RuntimeError {
+                    thrown: None,
+                    message: "Array.from iterator return result is not an object".to_owned(),
+                })
+            }
+        }
+        _ => Err(RuntimeError {
+            thrown: None,
+            message: "Array.from iterator return method is not callable".to_owned(),
+        }),
+    }
+}
+
+fn set_array_from_length(
+    target: Value,
+    length: usize,
+    env: &mut HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
+    let key = PropertyKey::String("length".to_owned());
+    let value = Value::Number(length as f64);
+    if ordinary_set(target.clone(), &key, value, target, env)? {
+        Ok(())
+    } else {
+        Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Array.from cannot set result length".to_owned(),
+        })
+    }
 }
 
 fn array_from_mapped_value(
