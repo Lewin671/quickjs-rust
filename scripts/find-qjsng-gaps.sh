@@ -13,12 +13,15 @@ AREA_COUNT=10
 RECOMMEND=1
 INCLUDE_TIMEOUTS=0
 EXACT_SCAN=0
+REPORT_SOURCE=""
+FROM_LATEST_REPORT=0
+SKIP_AREAS=()
 PROBE_LIMIT="${TEST262_GAP_PROBE_LIMIT:-100}"
 PROBE_SHARDS="${TEST262_GAP_PROBE_SHARDS:-${TEST262_GAP_PROBE_SHARD:-1/16,5/16,9/16,13/16}}"
 
 usage() {
   cat >&2 <<'USAGE'
-usage: scripts/find-qjsng-gaps.sh [--limit N | --all] [--filter test/<prefix>] [--out-dir PATH] [--top N] [--areas N] [--probe-limit N] [--probe-shard I/N] [--probe-shards I/N[,I/N...]] [--exact] [--include-timeouts] [--no-recommend]
+usage: scripts/find-qjsng-gaps.sh [--limit N | --all] [--filter test/<prefix>] [--out-dir PATH] [--top N] [--areas N] [--probe-limit N] [--probe-shard I/N] [--probe-shards I/N[,I/N...]] [--from-report PATH | --from-latest-report] [--skip-area test/<prefix>] [--exact] [--include-timeouts] [--no-recommend]
 
 Runs a QuickJS-NG comparison baseline and prints the cases where QuickJS-NG
 passes but quickjs-rust has an actionable feature gap. Stress timeouts are
@@ -29,6 +32,9 @@ For unfiltered --all recommendation runs, the default strategy is a fast greedy
 probe over TEST262_GAP_PROBE_LIMIT cases from each TEST262_GAP_PROBE_SHARDS
 shard, run concurrently. Use --exact --all when a complete audit is required,
 especially to prove there are no remaining gaps.
+Use --from-report with a previous output directory or cases.jsonl to recompute
+the greedy recommendation without executing Test262 again. Use --skip-area to
+ignore an area already being worked or already rechecked.
 Raw summary and case JSONL files are written under target/test262-gaps/ unless
 --out-dir is supplied.
 USAGE
@@ -80,6 +86,20 @@ while [ "$#" -gt 0 ]; do
       PROBE_SHARDS="$2"
       shift 2
       ;;
+    --from-report)
+      [ "$#" -ge 2 ] || { usage; exit 2; }
+      REPORT_SOURCE="$2"
+      shift 2
+      ;;
+    --from-latest-report)
+      FROM_LATEST_REPORT=1
+      shift
+      ;;
+    --skip-area)
+      [ "$#" -ge 2 ] || { usage; exit 2; }
+      SKIP_AREAS+=("$2")
+      shift 2
+      ;;
     --exact)
       EXACT_SCAN=1
       shift
@@ -106,6 +126,11 @@ while [ "$#" -gt 0 ]; do
       ;;
   esac
 done
+
+if [ "$FROM_LATEST_REPORT" -eq 1 ] && [ -n "$REPORT_SOURCE" ]; then
+  echo "error: use only one of --from-report or --from-latest-report" >&2
+  exit 2
+fi
 
 case "$RUN_LIMIT" in
   all) ;;
@@ -145,6 +170,29 @@ if [ ! -x "$BASELINE" ]; then
   echo "error: missing executable $BASELINE" >&2
   exit 1
 fi
+if [ "$FROM_LATEST_REPORT" -eq 1 ]; then
+  latest_root="$ROOT_DIR/target/test262-gaps"
+  if [ ! -d "$latest_root" ]; then
+    echo "error: no previous gap reports found under $latest_root" >&2
+    exit 2
+  fi
+  REPORT_SOURCE="$(find "$latest_root" -mindepth 1 -maxdepth 1 -type d -name '*-*' -exec test -f '{}/cases.jsonl' ';' -print | sort | tail -n 1)"
+  if [ -z "$REPORT_SOURCE" ]; then
+    echo "error: no previous gap report with cases.jsonl found under $latest_root" >&2
+    exit 2
+  fi
+fi
+REPORT_CASES_SOURCE=""
+if [ -n "$REPORT_SOURCE" ]; then
+  if [ -d "$REPORT_SOURCE" ] && [ -f "$REPORT_SOURCE/cases.jsonl" ]; then
+    REPORT_CASES_SOURCE="$REPORT_SOURCE/cases.jsonl"
+  elif [ -f "$REPORT_SOURCE" ]; then
+    REPORT_CASES_SOURCE="$REPORT_SOURCE"
+  else
+    echo "error: --from-report must point to a gap output directory or cases.jsonl: $REPORT_SOURCE" >&2
+    exit 2
+  fi
+fi
 if [ -n "$FILTER_PREFIX" ] && [ ! -f "$TEST262_DIR/$FILTER_PREFIX" ] && [ ! -d "$TEST262_DIR/$FILTER_PREFIX" ]; then
   echo "error: --filter does not match a Test262 file or directory: $FILTER_PREFIX" >&2
   echo "hint: use a path under third_party/test262/test, for example test/built-ins/String" >&2
@@ -159,7 +207,7 @@ if [ -z "$OUT_DIR" ]; then
 fi
 mkdir -p "$OUT_DIR"
 
-if [ -z "${QJS_CLI_BIN:-}" ] && [ "$RUN_LIMIT" = "all" ] && [ -z "$FILTER_PREFIX" ] && [ "$RECOMMEND" -eq 1 ] && [ "$EXACT_SCAN" -eq 0 ]; then
+if [ -z "$REPORT_CASES_SOURCE" ] && [ -z "${QJS_CLI_BIN:-}" ] && [ "$RUN_LIMIT" = "all" ] && [ -z "$FILTER_PREFIX" ] && [ "$RECOMMEND" -eq 1 ] && [ "$EXACT_SCAN" -eq 0 ]; then
   if command -v cargo >/dev/null 2>&1; then
     CARGO_BIN="cargo"
   elif [ -x "$HOME/.cargo/bin/cargo" ]; then
@@ -185,7 +233,7 @@ if [ -z "${QJS_CLI_BIN:-}" ] && [ "$RUN_LIMIT" = "all" ] && [ -z "$FILTER_PREFIX
   fi
   export QJS_CLI_BIN
 fi
-if [ "$RUN_LIMIT" = "all" ] && [ -z "$FILTER_PREFIX" ] && [ "$RECOMMEND" -eq 1 ] && [ "$EXACT_SCAN" -eq 0 ]; then
+if [ -z "$REPORT_CASES_SOURCE" ] && [ "$RUN_LIMIT" = "all" ] && [ -z "$FILTER_PREFIX" ] && [ "$RECOMMEND" -eq 1 ] && [ "$EXACT_SCAN" -eq 0 ]; then
   if [ ! -d "$QUICKJS_NG_DIR" ]; then
     echo "error: missing $QUICKJS_NG_DIR; run ./scripts/bootstrap.sh first" >&2
     exit 1
@@ -220,9 +268,25 @@ if [ -n "$FILTER_PREFIX" ]; then
   baseline_args+=(--filter "$FILTER_PREFIX")
 fi
 
-echo "Running Test262 comparison against QuickJS-NG..."
-echo "  log: $BASELINE_LOG"
-if [ "$PROBE_SCAN" -eq 1 ]; then
+if [ -n "$REPORT_CASES_SOURCE" ]; then
+  echo "Recomputing QuickJS-NG gap recommendation from an existing report..."
+  echo "  source: $REPORT_CASES_SOURCE"
+  echo "  log: $BASELINE_LOG"
+  cp "$REPORT_CASES_SOURCE" "$CASES_JSONL"
+  {
+    printf '{\n'
+    printf '  "engine": "both",\n'
+    printf '  "filter": "%s",\n' "$FILTER_PREFIX"
+    printf '  "mode": "replayed-report",\n'
+    printf '  "source": "%s"\n' "$REPORT_CASES_SOURCE"
+    printf '}\n'
+  } >"$SUMMARY_JSON"
+  printf 'replayed cases from %s\n' "$REPORT_CASES_SOURCE" >"$BASELINE_LOG"
+else
+  echo "Running Test262 comparison against QuickJS-NG..."
+  echo "  log: $BASELINE_LOG"
+fi
+if [ -z "$REPORT_CASES_SOURCE" ] && [ "$PROBE_SCAN" -eq 1 ]; then
   : >"$CASES_JSONL"
   : >"$BASELINE_LOG"
   probe_dir="$OUT_DIR/probes"
@@ -287,7 +351,7 @@ if [ "$PROBE_SCAN" -eq 1 ]; then
   if [ "$baseline_status" -ne 0 ]; then
     exit "$baseline_status"
   fi
-else
+elif [ -z "$REPORT_CASES_SOURCE" ]; then
   set +e
   "$BASELINE" "${baseline_args[@]}" >"$BASELINE_LOG" 2>&1
   baseline_status=$?
@@ -338,6 +402,21 @@ awk -F'"' -v include_timeouts="$INCLUDE_TIMEOUTS" -v timeouts_file="$TIMEOUTS_TS
   }
 ' "$CASES_JSONL" >"$GAPS_TSV"
 
+if [ "${#SKIP_AREAS[@]}" -gt 0 ]; then
+  SKIP_AREAS_FILE="$OUT_DIR/skip-areas.txt"
+  printf '%s\n' "${SKIP_AREAS[@]}" >"$SKIP_AREAS_FILE"
+  awk -F'\t' -v skip_file="$SKIP_AREAS_FILE" '
+    BEGIN {
+      while ((getline area < skip_file) > 0) {
+        skip[area] = 1
+      }
+      close(skip_file)
+    }
+    !($4 in skip)
+  ' "$GAPS_TSV" >"$GAPS_TSV.tmp"
+  mv "$GAPS_TSV.tmp" "$GAPS_TSV"
+fi
+
 awk -F'\t' '{ count[$4]++ } END { for (area in count) print count[area] "\t" area }' "$GAPS_TSV" \
   | sort -nr >"$AREAS_TSV"
 
@@ -375,8 +454,13 @@ echo "  filter: ${FILTER_PREFIX:-test/}"
 echo "  requested limit: $RUN_LIMIT"
 if [ "$PROBE_SCAN" -eq 1 ]; then
   echo "  scan: greedy probe over $BASELINE_RUN_LIMIT cases per shard from shards $PROBE_SHARDS"
+elif [ -n "$REPORT_CASES_SOURCE" ]; then
+  echo "  scan: replayed report"
 else
   echo "  scan: exact requested range"
+fi
+if [ "${#SKIP_AREAS[@]}" -gt 0 ]; then
+  echo "  skipped areas: ${SKIP_AREAS[*]}"
 fi
 echo "  output: $OUT_DIR"
 echo

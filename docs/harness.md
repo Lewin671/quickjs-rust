@@ -131,6 +131,14 @@ probe shards run concurrently, and the report merges their case results before
 ranking areas. This gives the agent broader Test262 coverage per iteration
 without paying for a full audit or biasing entirely toward the first sorted
 Test262 directories.
+After a global probe has produced a candidate queue, use
+`--from-report target/test262-gaps/<run>` or `--from-latest-report` to recompute
+the recommendation from the saved `cases.jsonl` without executing Test262
+again. Pair it with `--skip-area test/<prefix>` when the current top area is
+already being worked or has just been rechecked, so the agent can pick the next
+largest known gap immediately. This replay mode is only a planning shortcut:
+focused verification still needs `--filter test/<prefix> --all`, and final
+completion still needs `--exact --all`.
 Use `--exact --all` when the task needs a complete report or when a probe finds
 no gaps and the agent needs to prove the exit condition. The recommendation
 prioritizes areas with real quickjs-rust failures, then falls back to the

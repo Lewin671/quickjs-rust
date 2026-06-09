@@ -41,7 +41,10 @@ maintenance, or agent workflow isolation.
   next area by preferring real runtime or parser failures before pure harness
   skips. Tune it with `--probe-limit N` and `--probe-shards I/N[,I/N...]`, use
   `--probe-shard I/N` for a single very fast probe, and use `--exact --all` for
-  a complete audit. Use `--no-recommend` to suppress the recommendation.
+  a complete audit. Use `--from-report PATH` or `--from-latest-report` to replay
+  a saved `cases.jsonl` and recompute the recommendation without rerunning
+  Test262; add `--skip-area test/<prefix>` to ignore an area already being
+  worked. Use `--no-recommend` to suppress the recommendation.
 - `test262-baseline.sh`: Samples or scans upstream Test262 files to classify
   unsupported metadata, parser or runtime failures, and timeouts before adding
   curated local cases. Use `--engine both --all --shard I/N --summary-json PATH
