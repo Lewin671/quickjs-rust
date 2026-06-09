@@ -4,6 +4,8 @@
     (12.345).toExponential() + ":" +
     (12.345).toExponential(2) + ":" +
     (1).toExponential(0) + ":" +
+    (25).toExponential(0) + ":" +
+    (12345).toExponential(3) + ":" +
     (-0).toExponential(2) + ":" +
     NaN.toExponential(101) + ":" +
     Infinity.toExponential(101) + ":" +

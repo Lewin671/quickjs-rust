@@ -95,12 +95,20 @@ fn evaluates_number_builtins() {
         Ok(Value::String("7".to_owned()))
     );
     assert_eq!(
+        eval("(1000000000000000128).toString();"),
+        Ok(Value::String("1000000000000000100".to_owned()))
+    );
+    assert_eq!(
         eval("(1.25).toFixed(1);"),
-        Ok(Value::String("1.2".to_owned()))
+        Ok(Value::String("1.3".to_owned()))
     );
     assert_eq!(
         eval("(1.25).toFixed(2);"),
         Ok(Value::String("1.25".to_owned()))
+    );
+    assert_eq!(
+        eval("(1000000000000000128).toFixed(0);"),
+        Ok(Value::String("1000000000000000128".to_owned()))
     );
     assert_eq!(
         eval("(new Number(7)).toFixed(2);"),
@@ -130,6 +138,14 @@ fn evaluates_number_builtins() {
     assert_eq!(
         eval("(1).toExponential(0);"),
         Ok(Value::String("1e+0".to_owned()))
+    );
+    assert_eq!(
+        eval("(25).toExponential(0);"),
+        Ok(Value::String("3e+1".to_owned()))
+    );
+    assert_eq!(
+        eval("(12345).toExponential(3);"),
+        Ok(Value::String("1.235e+4".to_owned()))
     );
     assert_eq!(
         eval("Number.prototype.toExponential.call(-0, 2);"),

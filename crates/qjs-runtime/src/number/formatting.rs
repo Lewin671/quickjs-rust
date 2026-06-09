@@ -9,8 +9,6 @@ pub(crate) fn number_to_js_string(number: f64) -> String {
         "0".to_owned()
     } else if number.abs() >= 1e21 || number.abs() < 1e-6 {
         to_js_exponential_string(number)
-    } else if number.fract() == 0.0 {
-        format!("{number:.0}")
     } else {
         number.to_string()
     }

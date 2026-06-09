@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 
 use crate::{
@@ -215,20 +216,121 @@ fn number_to_fixed_string(number: f64, fraction_digits: usize) -> String {
     if !number.is_finite() || number.abs() >= 1e21 {
         return number_to_js_string(number);
     }
-    let number = if number == 0.0 { 0.0 } else { number };
-    format!("{number:.fraction_digits$}")
+    let sign = if number < 0.0 { "-" } else { "" };
+    let digits = rounded_scaled_power10(number.abs(), fraction_digits as i32).to_string();
+    if fraction_digits == 0 {
+        return format!("{sign}{digits}");
+    }
+    if digits.len() <= fraction_digits {
+        return format!(
+            "{sign}0.{}{}",
+            "0".repeat(fraction_digits - digits.len()),
+            digits
+        );
+    }
+    let decimal_position = digits.len() - fraction_digits;
+    format!(
+        "{sign}{}.{}",
+        &digits[..decimal_position],
+        &digits[decimal_position..]
+    )
+}
+
+fn rounded_scaled_power10(number: f64, decimal_exponent: i32) -> BigInt {
+    let (significand, exponent) = positive_f64_parts(number);
+    let mut numerator = BigInt::from(significand);
+    let mut denominator = BigInt::from(1_u8);
+    if exponent >= 0 {
+        numerator <<= exponent as usize;
+    } else {
+        denominator <<= (-exponent) as usize;
+    }
+    if decimal_exponent >= 0 {
+        numerator *= ten_pow(decimal_exponent as usize);
+    } else {
+        denominator *= ten_pow((-decimal_exponent) as usize);
+    }
+
+    let quotient = &numerator / &denominator;
+    let remainder = numerator % &denominator;
+    if (remainder << 1_usize) >= denominator {
+        quotient + 1
+    } else {
+        quotient
+    }
+}
+
+fn positive_f64_parts(number: f64) -> (u64, i32) {
+    if number == 0.0 {
+        return (0, 0);
+    }
+    let bits = number.to_bits();
+    let exponent_bits = ((bits >> 52) & 0x7ff) as i32;
+    let fraction_bits = bits & ((1_u64 << 52) - 1);
+    if exponent_bits == 0 {
+        (fraction_bits, -1074)
+    } else {
+        ((1_u64 << 52) | fraction_bits, exponent_bits - 1075)
+    }
+}
+
+fn ten_pow(exponent: usize) -> BigInt {
+    let mut value = BigInt::from(1_u8);
+    for _ in 0..exponent {
+        value *= 10_u8;
+    }
+    value
 }
 
 fn number_to_exponential_string(number: f64, fraction_digits: Option<usize>) -> String {
     if !number.is_finite() {
         return number_to_js_string(number);
     }
+    if let Some(fraction_digits) = fraction_digits {
+        return number_to_exact_exponential_string(number, fraction_digits);
+    }
     let number = if number == 0.0 { 0.0 } else { number };
-    let formatted = match fraction_digits {
-        Some(fraction_digits) => format!("{number:.fraction_digits$e}"),
-        None => format!("{number:e}"),
-    };
+    let formatted = format!("{number:e}");
     normalize_exponential_string(&formatted)
+}
+
+fn number_to_exact_exponential_string(number: f64, fraction_digits: usize) -> String {
+    if number == 0.0 {
+        return format!("0{}e+0", fractional_zero_suffix(fraction_digits));
+    }
+
+    let sign = if number < 0.0 { "-" } else { "" };
+    let mut exponent = number.abs().log10().floor() as i32;
+    let precision = fraction_digits + 1;
+    let mut digits = rounded_scaled_power10(number.abs(), fraction_digits as i32 - exponent);
+    let precision_limit = ten_pow(precision);
+    if digits >= precision_limit {
+        digits /= 10_u8;
+        exponent += 1;
+    }
+
+    let mut digits = digits.to_string();
+    if digits.len() < precision {
+        digits = format!("{}{}", "0".repeat(precision - digits.len()), digits);
+    }
+    let exponent_sign = if exponent < 0 { '-' } else { '+' };
+    if fraction_digits == 0 {
+        return format!("{sign}{digits}e{exponent_sign}{}", exponent.abs());
+    }
+    format!(
+        "{sign}{}.{}e{exponent_sign}{}",
+        &digits[..1],
+        &digits[1..],
+        exponent.abs()
+    )
+}
+
+fn fractional_zero_suffix(fraction_digits: usize) -> String {
+    if fraction_digits == 0 {
+        String::new()
+    } else {
+        format!(".{}", "0".repeat(fraction_digits))
+    }
 }
 
 fn number_to_precision_string(number: f64, precision: Option<usize>) -> String {
