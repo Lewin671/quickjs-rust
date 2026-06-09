@@ -133,11 +133,35 @@ fn string_to_number(value: &str) -> Result<f64, RuntimeError> {
         .strip_prefix("0x")
         .or_else(|| trimmed.strip_prefix("0X"))
     {
-        return Ok(u64::from_str_radix(hex, 16)
-            .map(|value| value as f64)
-            .unwrap_or(f64::NAN));
+        return Ok(parse_radix_string_number(hex, 16));
+    }
+    if let Some(binary) = trimmed
+        .strip_prefix("0b")
+        .or_else(|| trimmed.strip_prefix("0B"))
+    {
+        return Ok(parse_radix_string_number(binary, 2));
+    }
+    if let Some(octal) = trimmed
+        .strip_prefix("0o")
+        .or_else(|| trimmed.strip_prefix("0O"))
+    {
+        return Ok(parse_radix_string_number(octal, 8));
     }
     Ok(trimmed.parse::<f64>().unwrap_or(f64::NAN))
+}
+
+fn parse_radix_string_number(digits: &str, radix: u32) -> f64 {
+    if digits.is_empty() {
+        return f64::NAN;
+    }
+    let mut value = 0.0;
+    for digit in digits.chars() {
+        let Some(digit) = digit.to_digit(radix) else {
+            return f64::NAN;
+        };
+        value = value * f64::from(radix) + f64::from(digit);
+    }
+    value
 }
 
 pub(crate) fn to_primitive_with_hint(

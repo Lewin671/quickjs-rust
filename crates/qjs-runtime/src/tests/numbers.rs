@@ -13,6 +13,10 @@ fn evaluates_number_builtins() {
         Ok(Value::Boolean(false))
     );
     assert_eq!(eval("Number('10');"), Ok(Value::Number(10.0)));
+    assert_eq!(eval("Number('0b11');"), Ok(Value::Number(3.0)));
+    assert_eq!(eval("Number('0B010');"), Ok(Value::Number(2.0)));
+    assert_eq!(eval("Number('0o77');"), Ok(Value::Number(63.0)));
+    assert_eq!(eval("Number('0O010');"), Ok(Value::Number(8.0)));
     assert_eq!(eval("Number(true);"), Ok(Value::Number(1.0)));
     assert_eq!(eval("Number(null);"), Ok(Value::Number(0.0)));
     assert_eq!(
@@ -196,6 +200,14 @@ fn evaluates_number_builtins() {
     );
     assert_eq!(
         eval("Number('abc') === Number('abc');"),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval("Number('0b2') === Number('0b2');"),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval("Number('+0o10') === Number('+0o10');"),
         Ok(Value::Boolean(false))
     );
     assert_eq!(
