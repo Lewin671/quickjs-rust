@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use qjs_ast::{ForInLeft, ForInit, FunctionParams, Stmt};
+use qjs_ast::{CatchParam, ForInLeft, ForInit, FunctionParams, Stmt};
 
 pub(crate) fn collect_function_local_names(
     name: Option<&String>,
@@ -83,7 +83,14 @@ fn collect_statement_local_names(body: &[Stmt], names: &mut HashSet<String>) {
                 collect_statement_local_names(block, names);
                 if let Some(handler) = handler {
                     if let Some(param) = &handler.param {
-                        names.insert(param.clone());
+                        match param {
+                            CatchParam::Identifier(name) => {
+                                names.insert(name.clone());
+                            }
+                            CatchParam::Object { names: param_names } => {
+                                names.extend(param_names.iter().cloned());
+                            }
+                        }
                     }
                     collect_statement_local_names(&handler.body, names);
                 }

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use qjs_ast::{BinaryOp, ForInLeft, ForInit, FunctionParams, Script, Stmt, VarKind};
+use qjs_ast::{BinaryOp, CatchParam, ForInLeft, ForInit, FunctionParams, Script, Stmt, VarKind};
 
 use crate::{RuntimeError, Value, function::is_strict_function_body};
 
@@ -17,6 +17,7 @@ pub(super) struct Compiler {
     next_temp: usize,
     pub(super) strict: bool,
     pub(super) global_scope: bool,
+    annex_b_blocked_function_names: Vec<Vec<String>>,
 }
 
 #[derive(Default)]
@@ -41,6 +42,7 @@ impl Default for Compiler {
             next_temp: 0,
             strict: false,
             global_scope: true,
+            annex_b_blocked_function_names: Vec::new(),
         }
     }
 }
@@ -168,7 +170,9 @@ impl Compiler {
                     self.collect_hoisted_locals(std::slice::from_ref(body));
                 }
                 Stmt::FunctionDecl { name, .. } => {
-                    self.local_slot(name, true);
+                    if !self.annex_b_function_name_blocked(name) {
+                        self.local_slot(name, true);
+                    }
                 }
                 Stmt::Labelled { body, .. } => {
                     self.collect_hoisted_locals(std::slice::from_ref(body));
@@ -195,7 +199,12 @@ impl Compiler {
                 } => {
                     self.collect_hoisted_locals(block);
                     if let Some(handler) = handler {
-                        self.collect_hoisted_locals(&handler.body);
+                        let blocked = catch_param_annex_b_blocked_names(handler.param.as_ref());
+                        self.with_annex_b_blocked_function_names(&blocked, |compiler| {
+                            compiler.collect_hoisted_locals(&handler.body);
+                            Ok(())
+                        })
+                        .expect("hoisted local collection should not fail");
                     }
                     if let Some(finalizer) = finalizer {
                         self.collect_hoisted_locals(finalizer);
@@ -288,6 +297,29 @@ impl Compiler {
             .pop()
             .expect("lexical scope stack should be balanced");
         result
+    }
+
+    pub(super) fn with_annex_b_blocked_function_names<T>(
+        &mut self,
+        names: &[String],
+        compile: impl FnOnce(&mut Self) -> Result<T, RuntimeError>,
+    ) -> Result<T, RuntimeError> {
+        if names.is_empty() {
+            return compile(self);
+        }
+        self.annex_b_blocked_function_names.push(names.to_vec());
+        let result = compile(self);
+        self.annex_b_blocked_function_names
+            .pop()
+            .expect("Annex B function blocklist stack should be balanced");
+        result
+    }
+
+    pub(super) fn annex_b_function_name_blocked(&self, name: &str) -> bool {
+        self.annex_b_blocked_function_names
+            .iter()
+            .rev()
+            .any(|names| names.iter().any(|blocked| blocked == name))
     }
 
     fn current_lexical_scope(&self) -> &HashMap<String, usize> {
@@ -592,4 +624,11 @@ fn stmt_accepts_pending_label(stmt: &Stmt) -> bool {
             | Stmt::ForOf { .. }
             | Stmt::Switch { .. }
     )
+}
+
+pub(super) fn catch_param_annex_b_blocked_names(param: Option<&CatchParam>) -> Vec<String> {
+    match param {
+        Some(CatchParam::Object { names }) => names.clone(),
+        Some(CatchParam::Identifier(_)) | None => Vec::new(),
+    }
 }

@@ -81,7 +81,7 @@ pub(super) enum ArrayElementKind {
 
 #[derive(Clone, Debug)]
 pub(super) enum CatchScope {
-    Clear { slot: usize },
+    Clear { slots: Vec<usize> },
 }
 
 #[derive(Clone, Debug)]

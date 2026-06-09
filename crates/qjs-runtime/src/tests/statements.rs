@@ -253,6 +253,16 @@ fn evaluates_try_catch_finally_statements() {
         eval("let error = 'outer'; try { throw 'inner'; } catch (error) { error; } error;"),
         Ok(Value::String("outer".to_owned()))
     );
+    assert_eq!(
+        eval("try { throw { marker: 7 }; } catch ({ marker }) { marker; }"),
+        Ok(Value::Number(7.0))
+    );
+    assert_eq!(
+        eval(
+            "let marker = 'outer'; try { throw { marker: 'inner' }; } catch ({ marker }) { marker; } marker;"
+        ),
+        Ok(Value::String("outer".to_owned()))
+    );
 }
 
 #[test]

@@ -96,7 +96,12 @@ impl Vm<'_> {
             return Ok(());
         }
         match scope {
-            Some(CatchScope::Clear { slot }) => self.set_local_slot(slot, None),
+            Some(CatchScope::Clear { slots }) => {
+                for slot in slots {
+                    self.set_local_slot(slot, None)?;
+                }
+                Ok(())
+            }
             None => Ok(()),
         }
     }

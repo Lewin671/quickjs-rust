@@ -17,7 +17,9 @@ impl Compiler {
         body: &[Stmt],
     ) -> Result<(), RuntimeError> {
         for stmt in body {
-            if let Stmt::FunctionDecl { .. } = stmt {
+            if let Stmt::FunctionDecl { name, .. } = stmt
+                && !self.annex_b_function_name_blocked(name)
+            {
                 self.compile_function_decl(stmt)?;
                 self.emit(Op::Pop);
             }

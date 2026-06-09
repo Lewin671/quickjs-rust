@@ -10,5 +10,5 @@ pub use expression::{
 };
 pub use span::Span;
 pub use statement::{
-    CatchClause, ForInLeft, ForInit, Script, Stmt, SwitchCase, VarDeclarator, VarKind,
+    CatchClause, CatchParam, ForInLeft, ForInit, Script, Stmt, SwitchCase, VarDeclarator, VarKind,
 };

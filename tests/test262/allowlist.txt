@@ -4227,10 +4227,13 @@ test/language/expressions/arrow-function/lexical-arguments.js
 test/language/expressions/arrow-function/lexical-this.js
 test/language/expressions/arrow-function/params-trailing-comma-multiple.js
 test/language/expressions/arrow-function/params-trailing-comma-single.js
+test/annexB/language/eval-code/direct/func-block-decl-eval-func-skip-early-err-try.js
 test/annexB/language/eval-code/direct/func-if-decl-else-decl-a-eval-func-update.js
 test/annexB/language/eval-code/direct/func-if-decl-else-decl-b-eval-func-update.js
 test/annexB/language/eval-code/direct/func-switch-case-eval-func-update.js
 test/annexB/language/eval-code/direct/func-switch-dflt-eval-func-update.js
+test/annexB/language/eval-code/direct/global-block-decl-eval-global-skip-early-err-try.js
+test/annexB/language/eval-code/indirect/global-block-decl-eval-global-skip-early-err-try.js
 test/annexB/language/literals/regexp/class-escape.js
 test/annexB/language/statements/for-in/nonstrict-initializer.js
 test/built-ins/Array/length/15.4.5.1-3.d-1.js

@@ -1,8 +1,8 @@
-use qjs_ast::{CatchClause, Stmt};
+use qjs_ast::{CatchClause, CatchParam, Stmt};
 
-use crate::RuntimeError;
+use crate::{RuntimeError, Value};
 
-use super::compiler::Compiler;
+use super::compiler::{Compiler, catch_param_annex_b_blocked_names};
 use super::ir::{CatchScope, Op};
 
 impl Compiler {
@@ -68,20 +68,48 @@ impl Compiler {
     ) -> Result<(usize, Option<CatchScope>), RuntimeError> {
         let target = self.code.len();
         if let Some(param) = &handler.param {
-            let slot = self.with_lexical_scope(|compiler| {
-                let slot = compiler.declare_lexical_slot(param, true);
-                compiler.emit(Op::StoreLocal(slot));
-                compiler.compile_try_body(&handler.body, result_slot)?;
+            let slots = self.with_lexical_scope(|compiler| {
+                let slots = compiler.compile_catch_param(param);
+                let blocked = catch_param_annex_b_blocked_names(Some(param));
+                compiler.with_annex_b_blocked_function_names(&blocked, |compiler| {
+                    compiler.compile_try_body(&handler.body, result_slot)
+                })?;
                 compiler.emit(Op::ExitTry);
-                Ok(slot)
+                Ok(slots)
             })?;
-            return Ok((target, Some(CatchScope::Clear { slot })));
+            return Ok((target, Some(CatchScope::Clear { slots })));
         } else {
             self.emit(Op::Pop);
             self.compile_try_body(&handler.body, result_slot)?;
         }
         self.emit(Op::ExitTry);
         Ok((target, None))
+    }
+
+    fn compile_catch_param(&mut self, param: &CatchParam) -> Vec<usize> {
+        match param {
+            CatchParam::Identifier(name) => {
+                let slot = self.declare_lexical_slot(name, true);
+                self.emit(Op::StoreLocal(slot));
+                vec![slot]
+            }
+            CatchParam::Object { names } => {
+                let value_slot = self.temp_local("catch_value");
+                self.emit(Op::StoreLocal(value_slot));
+                let mut slots = Vec::with_capacity(names.len() + 1);
+                slots.push(value_slot);
+                for name in names {
+                    let slot = self.declare_lexical_slot(name, true);
+                    let key_slot = self.const_slot(Value::String(name.clone()));
+                    self.emit(Op::LoadLocal(value_slot));
+                    self.emit(Op::LoadConst(key_slot));
+                    self.emit(Op::GetProp);
+                    self.emit(Op::StoreLocal(slot));
+                    slots.push(slot);
+                }
+                slots
+            }
+        }
     }
 
     fn compile_finally(&mut self, finalizer: &[Stmt]) -> Result<usize, RuntimeError> {

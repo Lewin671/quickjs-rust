@@ -1,4 +1,4 @@
-use qjs_ast::{BinaryOp, Expr, ForInLeft, ForInit, Stmt, VarKind};
+use qjs_ast::{BinaryOp, CatchParam, Expr, ForInLeft, ForInit, Stmt, VarKind};
 
 use crate::parse_script;
 
@@ -132,6 +132,8 @@ fn parses_for_in_statement() {
         } if name == "key"
     ));
     assert!(parse_script("\"use strict\"; for (var key = 0 in object) key;").is_err());
+    parse_script("\"use strict\"; for (var key = 0; key < 1; key = key + 1) key;")
+        .expect("strict var for-loop initializers should parse");
 }
 
 #[test]
@@ -254,7 +256,10 @@ fn parses_try_catch_finally_statement() {
     };
     assert!(matches!(block.as_slice(), [Stmt::Throw { .. }]));
     let handler = handler.as_ref().expect("expected catch clause");
-    assert_eq!(handler.param.as_deref(), Some("error"));
+    assert_eq!(
+        handler.param,
+        Some(CatchParam::Identifier("error".to_owned()))
+    );
     assert_eq!(handler.body.len(), 1);
     assert!(matches!(
         finalizer.as_deref(),
@@ -270,6 +275,24 @@ fn parses_try_catch_finally_statement() {
             ..
         }]
     ));
+
+    let script = parse_script("try { throw {}; } catch ({ error, value, }) { value; }")
+        .expect("source should parse");
+    let [
+        Stmt::Try {
+            handler: Some(handler),
+            ..
+        },
+    ] = script.body.as_slice()
+    else {
+        panic!("expected try statement with catch clause");
+    };
+    assert_eq!(
+        handler.param,
+        Some(CatchParam::Object {
+            names: vec!["error".to_owned(), "value".to_owned()]
+        })
+    );
 }
 
 #[test]

@@ -17,11 +17,20 @@ pub struct SwitchCase {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CatchClause {
     /// Optional catch binding.
-    pub param: Option<String>,
+    pub param: Option<CatchParam>,
     /// Catch block statements.
     pub body: Vec<Stmt>,
     /// Source span.
     pub span: Span,
+}
+
+/// A catch parameter binding.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CatchParam {
+    /// Identifier binding.
+    Identifier(String),
+    /// Simple object binding pattern with shorthand identifier properties.
+    Object { names: Vec<String> },
 }
 
 /// A for statement initializer.

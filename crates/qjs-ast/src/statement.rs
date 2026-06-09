@@ -5,7 +5,7 @@ mod control;
 mod declaration;
 mod script;
 
-pub use control::{CatchClause, ForInLeft, ForInit, SwitchCase};
+pub use control::{CatchClause, CatchParam, ForInLeft, ForInit, SwitchCase};
 pub use declaration::{VarDeclarator, VarKind};
 pub use script::Script;
 

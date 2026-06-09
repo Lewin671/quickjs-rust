@@ -1,4 +1,4 @@
-use qjs_ast::{CatchClause, ForInLeft, ForInit, Span, Stmt, SwitchCase, VarKind};
+use qjs_ast::{CatchClause, CatchParam, ForInLeft, ForInit, Span, Stmt, SwitchCase, VarKind};
 use qjs_lexer::TokenKind;
 
 use crate::helpers::{assignment_target, stmt_end, var_kind};
@@ -94,7 +94,12 @@ impl Parser {
                 span: name_token.span,
             })?;
             let init = if kind == VarKind::Var && self.match_kind(&TokenKind::Equal) {
-                if self.strict {
+                Some(self.expression_no_in()?)
+            } else {
+                None
+            };
+            if self.match_kind(&TokenKind::In) {
+                if self.strict && init.is_some() {
                     return Err(ParseError {
                         message:
                             "for-in variable declarations cannot have initializers in strict mode"
@@ -105,11 +110,6 @@ impl Parser {
                             .span,
                     });
                 }
-                Some(self.expression_no_in()?)
-            } else {
-                None
-            };
-            if self.match_kind(&TokenKind::In) {
                 let right = self.expression()?;
                 self.expect(&TokenKind::RightParen)?;
                 let body = self.statement()?;
@@ -335,15 +335,9 @@ impl Parser {
             .start;
         self.expect(&TokenKind::Catch)?;
         let param = if self.match_kind(&TokenKind::LeftParen) {
-            let token = self.advance();
-            let TokenKind::Identifier(name) = token.kind else {
-                return Err(ParseError {
-                    message: "expected catch binding identifier".to_owned(),
-                    span: token.span,
-                });
-            };
+            let param = self.catch_param()?;
             self.expect(&TokenKind::RightParen)?;
-            Some(name)
+            Some(param)
         } else {
             None
         };
@@ -354,6 +348,54 @@ impl Parser {
             body,
             span: Span::new(start, end),
         })
+    }
+
+    fn catch_param(&mut self) -> Result<CatchParam, ParseError> {
+        if self.match_kind(&TokenKind::LeftBrace) {
+            return self.catch_object_param();
+        }
+        let token = self.advance();
+        let TokenKind::Identifier(name) = token.kind else {
+            return Err(ParseError {
+                message: "expected catch binding identifier".to_owned(),
+                span: token.span,
+            });
+        };
+        Ok(CatchParam::Identifier(name))
+    }
+
+    fn catch_object_param(&mut self) -> Result<CatchParam, ParseError> {
+        let mut names = Vec::new();
+        if self.match_kind(&TokenKind::RightBrace) {
+            return Ok(CatchParam::Object { names });
+        }
+        loop {
+            let token = self.advance();
+            let TokenKind::Identifier(name) = token.kind else {
+                return Err(ParseError {
+                    message: "expected object catch binding identifier".to_owned(),
+                    span: token.span,
+                });
+            };
+            if self.at(&TokenKind::Colon) || self.at(&TokenKind::Equal) {
+                return Err(ParseError {
+                    message: "unsupported object catch binding pattern".to_owned(),
+                    span: self
+                        .peek()
+                        .expect("parser should always have eof token")
+                        .span,
+                });
+            }
+            names.push(name);
+            if self.match_kind(&TokenKind::RightBrace) {
+                break;
+            }
+            self.expect(&TokenKind::Comma)?;
+            if self.match_kind(&TokenKind::RightBrace) {
+                break;
+            }
+        }
+        Ok(CatchParam::Object { names })
     }
 }
 
