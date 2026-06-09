@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+mod array_buffers;
 mod arrays;
 mod core;
 mod date;
@@ -32,6 +33,17 @@ pub(crate) fn call_native_function(
     if let Some(value) =
         arrays::call_array_native(native, this_value.clone(), &argument_values, env)?
     {
+        return Ok(value);
+    }
+
+    if let Some(value) = array_buffers::call_array_buffer_native(
+        function,
+        native,
+        this_value.clone(),
+        &argument_values,
+        is_construct,
+        env,
+    )? {
         return Ok(value);
     }
 

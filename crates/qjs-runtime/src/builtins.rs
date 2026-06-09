@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    Value, array, bigint, boolean, date, error, global, json, map, math, number, object, promise,
-    reflect, regexp, set, string, symbol, weak_map, weak_set,
+    Value, array, array_buffer, bigint, boolean, date, error, global, json, map, math, number,
+    object, promise, reflect, regexp, set, string, symbol, weak_map, weak_set,
 };
 
 pub(crate) fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
@@ -18,6 +18,7 @@ pub(crate) fn initialize_builtins(env: &mut HashMap<String, Value>, global_this:
     number::install_number(env, global_this, object_prototype.clone());
     string::install_string(env, global_this, object_prototype.clone());
     symbol::install_symbol(env, global_this, object_prototype.clone());
+    array_buffer::install_array_buffer(env, global_this, object_prototype.clone());
     bigint::install_bigint_well_known_symbols(env);
     string::install_string_well_known_symbols(env);
     boolean::install_boolean(env, global_this, object_prototype.clone());

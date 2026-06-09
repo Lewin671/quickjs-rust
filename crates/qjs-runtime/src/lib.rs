@@ -3,6 +3,7 @@
 use qjs_parser::parse_script;
 
 mod array;
+mod array_buffer;
 mod bigint;
 mod boolean;
 mod builtins;
@@ -64,6 +65,7 @@ pub(crate) const RUNTIME_INTRINSIC_NAMES: &[&str] = &[
     "Object",
     "Function",
     "Array",
+    "ArrayBuffer",
     "BigInt",
     "Number",
     "String",
