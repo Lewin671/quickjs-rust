@@ -33,6 +33,12 @@ fn evaluates_function_declarations_and_calls() {
         Ok(Value::String("alternate".to_owned()))
     );
     assert_eq!(
+        eval(
+            "var after; eval('switch (1) { default: function f() { return \"switch\"; } } after = f;'); after();"
+        ),
+        Ok(Value::String("switch".to_owned()))
+    );
+    assert_eq!(
         eval("function first(a) { return a; } first();"),
         Ok(Value::Undefined)
     );

@@ -228,7 +228,11 @@ impl Compiler {
         result_slot: usize,
     ) -> Result<(), RuntimeError> {
         for stmt in body {
-            self.compile_stmt(stmt)?;
+            if let Stmt::FunctionDecl { .. } = stmt {
+                self.compile_function_decl(stmt)?;
+            } else {
+                self.compile_stmt(stmt)?;
+            }
             self.emit(Op::StoreLocal(result_slot));
         }
         Ok(())
