@@ -291,6 +291,11 @@ rust_features_supported() {
       ;;
   esac
   case "$rel" in
+    test/built-ins/AggregateError/errors-iterabletolist-failures.js)
+      entries="$(drop_feature_entries "$entries" -e 'Symbol.iterator')"
+      ;;
+  esac
+  case "$rel" in
     test/built-ins/Number/string-numeric-separator-literal-*.js)
       entries="$(drop_feature_entries "$entries" -e 'numeric-separator-literal')"
       ;;

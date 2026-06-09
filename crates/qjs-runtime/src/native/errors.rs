@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{Function, NativeFunction, Value, error};
 
 use super::NativeCallResult;
@@ -8,13 +10,14 @@ pub(super) fn call_error_native(
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
+    env: &mut HashMap<String, Value>,
 ) -> NativeCallResult {
     let value = match native {
         NativeFunction::Error => {
             error::native_error(function, this_value, argument_values, is_construct)?
         }
         NativeFunction::AggregateError => {
-            error::native_aggregate_error(function, this_value, argument_values, is_construct)?
+            error::native_aggregate_error(function, this_value, argument_values, is_construct, env)?
         }
         NativeFunction::ErrorIsError => error::native_error_is_error(argument_values),
         NativeFunction::ErrorPrototypeToString => {
