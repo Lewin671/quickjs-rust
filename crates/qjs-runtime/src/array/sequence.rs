@@ -239,6 +239,14 @@ fn concat_spread_array(
     env: &mut HashMap<String, Value>,
 ) -> Result<(), RuntimeError> {
     let length = to_length_with_env(property_value(value.clone(), "length", env)?, env)?;
+    if let Value::Object(object) = &value
+        && object_has_no_index_properties_below(object, length)
+    {
+        let start = result.len();
+        result.extend(std::iter::repeat_n(Value::Undefined, length));
+        holes.extend(start..start + length);
+        return Ok(());
+    }
     for index in 0..length {
         let key = index.to_string();
         let target_index = result.len();
@@ -250,4 +258,25 @@ fn concat_spread_array(
         }
     }
     Ok(())
+}
+
+fn object_has_no_index_properties_below(object: &crate::ObjectRef, length: usize) -> bool {
+    let mut current = Some(object.clone());
+    while let Some(object) = current {
+        if object
+            .own_property_names()
+            .into_iter()
+            .any(|key| is_array_index_below(&key, length))
+        {
+            return false;
+        }
+        current = object.prototype();
+    }
+    true
+}
+
+fn is_array_index_below(key: &str, length: usize) -> bool {
+    key.parse::<usize>()
+        .ok()
+        .is_some_and(|index| index < length && index.to_string() == key)
 }

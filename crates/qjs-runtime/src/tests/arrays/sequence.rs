@@ -150,6 +150,12 @@ fn evaluates_array_sequence_builtins() {
     );
     assert_eq!(
         eval(
+            "let proto = { 2: 'p' }; let item = Object.create(proto); item.length = 4; item[Symbol.isConcatSpreadable] = true; let out = [].concat(item); out.length + ':' + out.hasOwnProperty('2') + ':' + out[2];"
+        ),
+        Ok(Value::String("4:true:p".to_owned()))
+    );
+    assert_eq!(
+        eval(
             "let args = (function(a, b, c) { return arguments; })(1, 2, 3); args[Symbol.isConcatSpreadable] = true; [].concat(args, args).join('|');"
         ),
         Ok(Value::String("1|2|3|1|2|3".to_owned()))
