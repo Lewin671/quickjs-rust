@@ -59,6 +59,7 @@ pub(super) fn install_globals(env: &mut HashMap<String, Value>, global_this: &Va
     define_global_function(env, global_this, "eval", 1, NativeFunction::Eval);
     define_global_function(env, global_this, "escape", 1, NativeFunction::Escape);
     define_global_function(env, global_this, "unescape", 1, NativeFunction::Unescape);
+    define_is_html_dda(env, global_this);
 }
 
 fn define_global_function(
@@ -69,6 +70,15 @@ fn define_global_function(
     native: NativeFunction,
 ) {
     let value = Value::Function(Function::new_native(Some(key), length, native, false));
+    env.insert(key.to_owned(), value.clone());
+    if let Value::Object(global_object) = global_this {
+        global_object.define_non_enumerable(key.to_owned(), value);
+    }
+}
+
+fn define_is_html_dda(env: &mut HashMap<String, Value>, global_this: &Value) {
+    let key = "__quickjsRustIsHTMLDDA";
+    let value = Value::Function(crate::html_dda::new_is_html_dda_function());
     env.insert(key.to_owned(), value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable(key.to_owned(), value);

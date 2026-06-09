@@ -258,6 +258,8 @@ fn abstract_eq(
 ) -> Result<bool, RuntimeError> {
     match (left, right) {
         (Value::Null, Value::Undefined) | (Value::Undefined, Value::Null) => Ok(true),
+        (left, Value::Null | Value::Undefined) if crate::html_dda::is_html_dda(left) => Ok(true),
+        (Value::Null | Value::Undefined, right) if crate::html_dda::is_html_dda(right) => Ok(true),
         (Value::BigInt(left), Value::String(right))
         | (Value::String(right), Value::BigInt(left)) => {
             Ok(crate::bigint::parse_bigint_string_value(right).is_some_and(|value| &value == left))

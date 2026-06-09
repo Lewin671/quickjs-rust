@@ -318,6 +318,9 @@ pub(crate) fn to_length_with_env(
 }
 
 pub(crate) fn is_truthy(value: &Value) -> bool {
+    if crate::html_dda::is_html_dda(value) {
+        return false;
+    }
     match value {
         Value::Number(number) => *number != 0.0 && !number.is_nan(),
         Value::BigInt(value) => value != &num_bigint::BigInt::from(0),

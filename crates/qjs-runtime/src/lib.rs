@@ -13,6 +13,7 @@ mod date;
 mod error;
 mod function;
 mod global;
+mod html_dda;
 mod json;
 mod map;
 mod math;
@@ -62,6 +63,7 @@ pub(crate) const GLOBAL_THIS_BINDING: &str = "\0global_this";
 pub(crate) const RUNTIME_INTRINSIC_NAMES: &[&str] = &[
     GLOBAL_THIS_BINDING,
     "globalThis",
+    "__quickjsRustIsHTMLDDA",
     "undefined",
     "Object",
     "Function",

@@ -316,6 +316,16 @@ rust_features_supported() {
       ;;
   esac
   case "$rel" in
+    test/annexB/language/statements/if/emulated-undefined.js|test/annexB/language/statements/switch/emulates-undefined.js)
+      entries="$(drop_feature_entries "$entries" -e 'IsHTMLDDA')"
+      ;;
+  esac
+  case "$rel" in
+    test/annexB/language/statements/function/default-parameters-emulates-undefined.js)
+      entries="$(drop_feature_entries "$entries" -e 'default-parameters' -e 'IsHTMLDDA')"
+      ;;
+  esac
+  case "$rel" in
     test/built-ins/Array/prototype/entries/*|test/built-ins/Array/prototype/keys/*|test/built-ins/Array/prototype/values/*|test/built-ins/Array/prototype/Symbol.iterator.js)
       entries="$(drop_feature_entries "$entries" -e 'Symbol.iterator')"
       ;;
@@ -367,6 +377,7 @@ list_entries() {
 emit_test262_host_shim() {
   cat <<'EOF'
 var $262 = {
+  IsHTMLDDA: __quickjsRustIsHTMLDDA,
   createRealm: function() {
     return { global: globalThis };
   }

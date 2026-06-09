@@ -51,6 +51,7 @@ pub(crate) enum NativeFunction {
     Uint32Array,
     Float32Array,
     Float64Array,
+    IsHtmlDda,
     IteratorPrototypeIterator,
     Boolean,
     BooleanPrototypeToString,

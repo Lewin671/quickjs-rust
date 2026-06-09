@@ -48,6 +48,9 @@ fn parse_radix_number(digits: &str, radix: u32) -> f64 {
 }
 
 pub(super) fn typeof_value(value: Value) -> String {
+    if crate::html_dda::is_html_dda(&value) {
+        return "undefined".to_owned();
+    }
     match value {
         Value::Undefined => "undefined",
         Value::Boolean(_) => "boolean",
