@@ -294,6 +294,185 @@ fn is_iterator_result_object(value: &Value) -> bool {
     )
 }
 
-pub(crate) fn native_array_of(argument_values: &[Value]) -> Result<Value, RuntimeError> {
-    Ok(Value::Array(ArrayRef::new(argument_values.to_vec())))
+pub(crate) fn native_array_of(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let length = argument_values.len();
+    let result = if matches!(&this_value, Value::Function(function) if function.constructable) {
+        construct_function(
+            this_value.clone(),
+            this_value,
+            vec![Value::Number(length as f64)],
+            env,
+        )?
+    } else {
+        Value::Array(ArrayRef::new(Vec::new()))
+    };
+    for (index, value) in argument_values.iter().enumerate() {
+        create_array_of_data_property(&result, index.to_string(), value.clone())?;
+    }
+    set_array_of_length(&result, Value::Number(length as f64), env)?;
+    Ok(result)
+}
+
+fn create_array_of_data_property(
+    target: &Value,
+    key: String,
+    value: Value,
+) -> Result<(), RuntimeError> {
+    let property = Property::data(value, true, true, true);
+    let success = match target {
+        Value::Object(object) => {
+            let existing = object.own_property(&key);
+            if can_create_array_of_data_property(existing.as_ref(), object.is_extensible()) {
+                object.define_property(key, property);
+                true
+            } else {
+                false
+            }
+        }
+        Value::Function(function) => {
+            let existing = function.own_property(&key);
+            if can_create_array_of_data_property(existing.as_ref(), function.is_extensible()) {
+                function.define_property(key, property);
+                true
+            } else {
+                false
+            }
+        }
+        Value::Array(array) => {
+            array.define_property(key, property);
+            true
+        }
+        Value::Map(map) => {
+            let object = map.object();
+            let existing = object.own_property(&key);
+            if can_create_array_of_data_property(existing.as_ref(), object.is_extensible()) {
+                object.define_property(key, property);
+                true
+            } else {
+                false
+            }
+        }
+        Value::Set(set) => {
+            let object = set.object();
+            let existing = object.own_property(&key);
+            if can_create_array_of_data_property(existing.as_ref(), object.is_extensible()) {
+                object.define_property(key, property);
+                true
+            } else {
+                false
+            }
+        }
+        _ => false,
+    };
+    if success {
+        Ok(())
+    } else {
+        Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: cannot create array property".to_owned(),
+        })
+    }
+}
+
+fn can_create_array_of_data_property(existing: Option<&Property>, extensible: bool) -> bool {
+    match existing {
+        Some(property) => property.configurable,
+        None => extensible,
+    }
+}
+
+fn set_array_of_length(
+    target: &Value,
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
+    match target {
+        Value::Object(object) => set_object_array_of_length(
+            target,
+            object.own_property("length"),
+            value,
+            |property| {
+                object.define_property("length".to_owned(), property);
+            },
+            env,
+        ),
+        Value::Function(function) => set_object_array_of_length(
+            target,
+            function.own_property("length"),
+            value,
+            |property| {
+                function.define_property("length".to_owned(), property);
+            },
+            env,
+        ),
+        Value::Map(map) => {
+            let object = map.object();
+            set_object_array_of_length(
+                target,
+                object.own_property("length"),
+                value,
+                |property| {
+                    object.define_property("length".to_owned(), property);
+                },
+                env,
+            )
+        }
+        Value::Set(set) => {
+            let object = set.object();
+            set_object_array_of_length(
+                target,
+                object.own_property("length"),
+                value,
+                |property| {
+                    object.define_property("length".to_owned(), property);
+                },
+                env,
+            )
+        }
+        Value::Array(_) => Ok(()),
+        _ => Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: cannot set array length".to_owned(),
+        }),
+    }
+}
+
+fn set_object_array_of_length(
+    target: &Value,
+    existing: Option<Property>,
+    value: Value,
+    define: impl FnOnce(Property),
+    env: &mut HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
+    if let Some(existing) = existing {
+        if existing.accessor {
+            let Some(setter) = existing.set else {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: "TypeError: length property has no setter".to_owned(),
+                });
+            };
+            call_function(setter, target.clone(), vec![value], env, false)?;
+            return Ok(());
+        }
+        if !existing.writable {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: length property is not writable".to_owned(),
+            });
+        }
+        define(Property::data(
+            value,
+            existing.enumerable,
+            existing.writable,
+            existing.configurable,
+        ));
+        return Ok(());
+    }
+    define(Property::data(value, false, true, true));
+    Ok(())
 }

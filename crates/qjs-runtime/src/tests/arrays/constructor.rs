@@ -37,6 +37,36 @@ fn evaluates_array_of_static_constructor() {
         eval("Array.isArray(Array.of(1, 2));"),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "function Coop() {} let coop = Array.of.call(Coop, 'a', 'b'); (coop instanceof Coop) + ':' + coop.length + ':' + coop[0] + ':' + coop[1];"
+        ),
+        Ok(Value::String("true:2:a:b".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "function T() { Object.preventExtensions(this); } let caught = false; try { Array.of.call(T, 'x'); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "function T() { Object.defineProperty(this, 0, { configurable: false, writable: true, enumerable: true }); } let caught = false; try { Array.of.call(T, 'x'); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let hits = 0; let value = 0; function Pack() { Object.defineProperty(this, 'length', { set: function(next) { hits = hits + 1; value = next; } }); } Array.of.call(Pack, 'a', 'b'); hits + ':' + value;"
+        ),
+        Ok(Value::String("1:2".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "function Pack() { Object.defineProperty(this, 'length', { set: function() { throw 'length'; } }); } let caught = false; try { Array.of.call(Pack); } catch (error) { caught = error === 'length'; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]
