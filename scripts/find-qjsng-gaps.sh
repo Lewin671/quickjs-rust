@@ -35,12 +35,12 @@ probe over TEST262_GAP_PROBE_LIMIT cases from each TEST262_GAP_PROBE_SHARDS
 shard, run concurrently. Use --exact --all when a complete audit is required,
 especially to prove there are no remaining gaps.
 The default recommendation strategy is quickwins greedy: prefer reviewable
-engine-gap batches, then small harness-only batches that may only need metadata
-confirmation, and de-prioritize areas whose paths or skip metadata point at
-broad missing features such as async, destructuring, class, yield, proxy, realm,
-species, resizable buffers, or Annex B global-code semantics. Use --strategy
-fast for the older small-batch-first behavior or --strategy largest for
-largest-gap-first.
+engine-gap batches, then small harness-only batches that include at least one
+case without broad-feature hints and may only need metadata confirmation, and
+de-prioritize areas whose paths or skip metadata point at broad missing features
+such as async, destructuring, class, yield, proxy, realm, species, resizable
+buffers, or Annex B global-code semantics. Use --strategy fast for the older
+small-batch-first behavior or --strategy largest for largest-gap-first.
 Use --from-report with a previous output directory or cases.jsonl to recompute
 the greedy recommendation without executing Test262 again. Use --skip-area to
 ignore an area already being worked or already rechecked.
@@ -499,11 +499,16 @@ awk -F'\t' -v strategy="$RECOMMEND_STRATEGY" -v batch_cap="$RECOMMEND_BATCH_CAP"
           score = 800000000 + (total[area] * 1000) - harness
         } else if (engine == 0 && hard_hints == 0) {
           score = 700000000 + (total[area] * 1000) - harness
-        } else if (engine == 0 && total[area] <= batch_cap) {
+        } else if (engine == 0 && total[area] <= batch_cap && hard_hints < total[area]) {
           score = 650000000 + (total[area] * 1000) - (hard_hints * 10000) - harness
-        } else if (engine == 0) {
+        } else if (engine == 0 && hard_hints < total[area]) {
           over = total[area] - batch_cap
           score = 625000000 - (over * 1000000) + total[area] - (hard_hints * 10000) - harness
+        } else if (engine == 0 && total[area] <= batch_cap) {
+          score = 400000000 + (total[area] * 1000) - (hard_hints * 10000) - harness
+        } else if (engine == 0) {
+          over = total[area] - batch_cap
+          score = 300000000 - (over * 1000000) + total[area] - (hard_hints * 10000) - harness
         } else if (engine > 0 && engine <= batch_cap) {
           score = 600000000 + (engine * 1000000) + (total[area] * 1000) - (hard_hints * 10000) - harness
         } else if (engine > 0) {
