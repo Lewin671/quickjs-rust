@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    ArrayRef, Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
-    function_prototype, has_property, property_value, property_value_key, symbol, to_js_string,
-    to_js_string_with_env,
+    Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, function_prototype,
+    has_property, property_value, property_value_key, symbol, to_js_string, to_js_string_with_env,
 };
 
 const ERROR_DATA_PROPERTY: &str = "\0ErrorData";
@@ -148,19 +147,26 @@ fn aggregate_error_errors(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let Some(errors) = errors else {
-        return Ok(Value::Array(ArrayRef::new(Vec::new())));
+        return Err(aggregate_error_errors_not_iterable());
     };
     match errors {
         Value::Array(errors) => Ok(Value::Array(errors)),
-        Value::Undefined => Ok(Value::Array(ArrayRef::new(Vec::new()))),
+        Value::Undefined | Value::Null => Err(aggregate_error_errors_not_iterable()),
         value => {
             if aggregate_errors_is_iterable(value.clone(), env)? {
                 let array_constructor = env.get("Array").cloned().unwrap_or(Value::Undefined);
                 crate::array::native_array_from(array_constructor, &[value], env)
             } else {
-                Ok(Value::Array(ArrayRef::new(vec![value])))
+                Err(aggregate_error_errors_not_iterable())
             }
         }
+    }
+}
+
+fn aggregate_error_errors_not_iterable() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "TypeError: AggregateError errors must be iterable".to_owned(),
     }
 }
 

@@ -229,4 +229,7 @@ fn evaluates_aggregate_error_builtin() {
         ),
         Ok(Value::String("1,2".to_owned()))
     );
+    assert!(eval("new AggregateError();").is_err());
+    assert!(eval("new AggregateError(null);").is_err());
+    assert!(eval("new AggregateError(1);").is_err());
 }
