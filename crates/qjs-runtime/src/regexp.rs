@@ -10,6 +10,7 @@ mod escape;
 mod formatting;
 mod match_all;
 mod matcher;
+mod symbol_replace;
 mod symbol_search;
 mod symbol_split;
 mod validation;
@@ -17,6 +18,7 @@ mod validation;
 pub(crate) use escape::native_regexp_escape;
 use formatting::{canonical_regexp_flags, escape_regexp_source};
 pub(crate) use match_all::{native_regexp_prototype_match_all, native_regexp_string_iterator_next};
+pub(crate) use symbol_replace::native_regexp_prototype_replace;
 pub(crate) use symbol_search::native_regexp_prototype_search;
 pub(crate) use symbol_split::native_regexp_prototype_split;
 use validation::validate_regexp_init;
@@ -94,6 +96,7 @@ pub(crate) fn install_regexp(
         );
     }
     match_all::install_regexp_prototype_match_all(env, &regexp_prototype);
+    symbol_replace::install_regexp_prototype_replace(env, &regexp_prototype);
     symbol_split::install_regexp_prototype_split(env, &regexp_prototype);
     define_regexp_accessor(
         &regexp_prototype,
@@ -340,10 +343,26 @@ pub(crate) fn native_regexp_prototype_source(
 
 pub(crate) fn native_regexp_prototype_flags(
     this_value: Value,
-    env: &HashMap<String, Value>,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    regexp_accessor_data(&this_value, env, REGEXP_FLAGS_PROPERTY, "")
-        .map(|flags| Value::String(canonical_regexp_flags(&flags)))
+    let Value::Object(_) = &this_value else {
+        return Err(regexp_receiver_error());
+    };
+    let mut flags = String::new();
+    for (name, flag) in [
+        ("hasIndices", 'd'),
+        ("global", 'g'),
+        ("ignoreCase", 'i'),
+        ("multiline", 'm'),
+        ("dotAll", 's'),
+        ("unicode", 'u'),
+        ("sticky", 'y'),
+    ] {
+        if is_truthy(&property_value(this_value.clone(), name, env)?) {
+            flags.push(flag);
+        }
+    }
+    Ok(Value::String(flags))
 }
 
 pub(crate) fn native_regexp_prototype_flag(

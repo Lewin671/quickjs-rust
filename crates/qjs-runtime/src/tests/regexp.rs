@@ -389,6 +389,40 @@ fn evaluates_regexp_symbol_match_all() {
 }
 
 #[test]
+fn evaluates_regexp_symbol_replace() {
+    assert_eq!(
+        eval(
+            "typeof RegExp.prototype[Symbol.replace] + ':' + RegExp.prototype[Symbol.replace].length + ':' + RegExp.prototype[Symbol.replace].name;"
+        ),
+        Ok(Value::String("function:2:[Symbol.replace]".to_owned()))
+    );
+    assert_eq!(
+        eval("RegExp.prototype[Symbol.replace].call(/a./, 'a1 a2', 'x');"),
+        Ok(Value::String("x a2".to_owned()))
+    );
+    assert_eq!(
+        eval("RegExp.prototype[Symbol.replace].call(/a(.)/g, 'a1 a2', '[$1:$&]');"),
+        Ok(Value::String("[1:a1] [2:a2]".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "RegExp.prototype[Symbol.replace].call(/(\\d)/g, 'a1b2', function(match, digit, position, input) { return digit + ':' + position + ':' + input.length; });"
+        ),
+        Ok(Value::String("a1:1:4b2:3:4".to_owned()))
+    );
+    assert_eq!(
+        eval("let re = /(?:)/g; 'a'.replace(re, '-');"),
+        Ok(Value::String("-a-".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let re = /a/g; re.lastIndex = 1; let result = re[Symbol.replace]('aba', 'x'); result + ':' + re.lastIndex;"
+        ),
+        Ok(Value::String("xbx:0".to_owned()))
+    );
+}
+
+#[test]
 fn evaluates_regexp_exec_and_test_sticky_last_index() {
     assert_eq!(
         eval("let re = /abc/y; re.test('abc') + ':' + re.lastIndex;"),

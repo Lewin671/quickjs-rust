@@ -44,6 +44,9 @@ pub(super) fn call_regexp_native(
         NativeFunction::RegExpPrototypeMultiline => {
             regexp::native_regexp_prototype_flag(this_value, env, 'm')?
         }
+        NativeFunction::RegExpPrototypeReplace => {
+            regexp::native_regexp_prototype_replace(this_value, argument_values, env)?
+        }
         NativeFunction::RegExpPrototypeSearch => {
             regexp::native_regexp_prototype_search(this_value, argument_values, env)?
         }
