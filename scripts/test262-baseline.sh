@@ -291,7 +291,7 @@ rust_features_supported() {
       ;;
   esac
   case "$rel" in
-    test/built-ins/AggregateError/errors-iterabletolist-failures.js)
+    test/built-ins/AggregateError/errors-iterabletolist-failures.js|test/built-ins/AggregateError/errors-iterabletolist.js)
       entries="$(drop_feature_entries "$entries" -e 'Symbol.iterator')"
       ;;
   esac
