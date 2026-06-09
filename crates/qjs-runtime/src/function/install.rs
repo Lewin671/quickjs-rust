@@ -10,6 +10,10 @@ pub(crate) fn install_function(
     let function_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
     let function_constructor =
         Function::new_native(Some("Function"), 1, NativeFunction::Function, true);
+    function_prototype.define_property(
+        "length".to_owned(),
+        Property::data(Value::Number(0.0), false, false, true),
+    );
     function_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(function_constructor.clone()),

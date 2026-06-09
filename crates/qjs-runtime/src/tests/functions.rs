@@ -197,6 +197,10 @@ fn evaluates_function_declarations_and_calls() {
         Ok(Value::Boolean(true))
     );
     assert_eq!(
+        eval("delete decodeURI.length; decodeURI.length;"),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
         eval(
             "function pair(a, b) {} let d = Object.getOwnPropertyDescriptor(pair, 'name'); d.value + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),

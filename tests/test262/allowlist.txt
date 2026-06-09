@@ -2704,6 +2704,7 @@ cases/date-prototype-to-gmt-string-alias.js
 cases/date-to-utc-string-basic.js
 cases/date-utc-accessors-basic.js
 cases/decode-uri-basic.js
+test/built-ins/decodeURI/S15.1.3.1_A5.2.js
 cases/decode-uri-component-basic.js
 cases/error-constructor-basic.js
 cases/error-message-tostring-symbol.js
