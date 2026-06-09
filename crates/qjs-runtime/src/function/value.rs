@@ -29,6 +29,7 @@ pub struct Function {
     pub(crate) native: Option<NativeFunction>,
     pub(crate) constructable: bool,
     pub(crate) is_strict: bool,
+    pub(crate) lexical_this: bool,
     pub(crate) bound: Option<Box<BoundFunction>>,
     /// Function object properties.
     pub(crate) properties: Rc<RefCell<HashMap<String, Property>>>,
@@ -56,6 +57,7 @@ pub(crate) struct CompiledUserFunction {
     pub(crate) local_names: Vec<String>,
     pub(crate) constructable: bool,
     pub(crate) is_strict: bool,
+    pub(crate) lexical_this: bool,
     pub(crate) captured_env: Rc<RefCell<HashMap<String, Value>>>,
 }
 
@@ -70,6 +72,7 @@ impl fmt::Debug for Function {
             .field("bytecode", &self.bytecode.is_some())
             .field("constructable", &self.constructable)
             .field("is_strict", &self.is_strict)
+            .field("lexical_this", &self.lexical_this)
             .field("bound", &self.bound.is_some())
             .finish()
     }
@@ -103,6 +106,26 @@ impl Function {
         bytecode: Option<Rc<Bytecode>>,
         constructable: bool,
     ) -> Result<Self, crate::RuntimeError> {
+        Self::new_user_with_bytecode_and_lexical_this(
+            name,
+            params,
+            body,
+            env,
+            bytecode,
+            constructable,
+            false,
+        )
+    }
+
+    pub(crate) fn new_user_with_bytecode_and_lexical_this(
+        name: Option<String>,
+        params: FunctionParams,
+        body: Vec<Stmt>,
+        env: HashMap<String, Value>,
+        bytecode: Option<Rc<Bytecode>>,
+        constructable: bool,
+        lexical_this: bool,
+    ) -> Result<Self, crate::RuntimeError> {
         let prototype = ObjectRef::with_prototype(HashMap::new(), object_prototype(&env));
         let local_names = collect_function_local_names(name.as_ref(), &params, &body);
         let is_strict = is_strict_function_body(&body);
@@ -121,6 +144,7 @@ impl Function {
             native: None,
             constructable,
             is_strict,
+            lexical_this,
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
             property_order: Rc::new(RefCell::new(Vec::new())),
@@ -152,6 +176,7 @@ impl Function {
             local_names,
             constructable,
             is_strict,
+            lexical_this,
             captured_env,
         } = compiled;
         let prototype = ObjectRef::with_prototype(HashMap::new(), object_prototype(&env));
@@ -165,6 +190,7 @@ impl Function {
             native: None,
             constructable,
             is_strict,
+            lexical_this,
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
             property_order: Rc::new(RefCell::new(Vec::new())),
@@ -223,6 +249,7 @@ impl Function {
             native: None,
             constructable,
             is_strict: false,
+            lexical_this: false,
             bound: Some(Box::new(BoundFunction {
                 target,
                 this_value,
@@ -260,6 +287,7 @@ impl Function {
             native,
             constructable,
             is_strict: false,
+            lexical_this: false,
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
             property_order: Rc::new(RefCell::new(Vec::new())),

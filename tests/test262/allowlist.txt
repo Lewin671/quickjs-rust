@@ -4232,3 +4232,4 @@ test/built-ins/Set/prototype/isSupersetOf/size-is-a-number.js
 test/built-ins/Set/prototype/symmetricDifference/size-is-a-number.js
 test/built-ins/Set/prototype/union/size-is-a-number.js
 test/built-ins/Set/prototype/keys/keys.js
+test/built-ins/Set/prototype/forEach/this-arg-explicit-cannot-override-lexical-this-arrow.js

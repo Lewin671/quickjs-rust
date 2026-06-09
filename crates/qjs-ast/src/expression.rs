@@ -190,6 +190,8 @@ pub enum Expr {
         body: Vec<Stmt>,
         /// Whether the function can be called with `new`.
         constructable: bool,
+        /// Whether `this` is captured lexically from the creation environment.
+        lexical_this: bool,
         /// Source span.
         span: Span,
     },

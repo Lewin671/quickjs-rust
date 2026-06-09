@@ -187,6 +187,7 @@ impl<'a> Vm<'a> {
                     bytecode,
                     constructable,
                     is_strict,
+                    lexical_this,
                 } => {
                     let env = self.function_capture_env(&bytecode, &local_names);
                     self.refresh_captured_env(&env);
@@ -199,6 +200,7 @@ impl<'a> Vm<'a> {
                             local_names,
                             constructable,
                             is_strict,
+                            lexical_this,
                             captured_env: self.captured_env.clone(),
                         },
                     )));

@@ -90,6 +90,7 @@ impl Parser {
             params,
             body,
             constructable: false,
+            lexical_this: true,
             span: Span::new(start, end),
         }))
     }

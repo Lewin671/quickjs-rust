@@ -390,6 +390,7 @@ impl Parser {
                 params,
                 body,
                 constructable: false,
+                lexical_this: false,
                 span: Span::new(key_span.start, end),
             });
         }
@@ -444,6 +445,7 @@ impl Parser {
                 params,
                 body,
                 constructable: false,
+                lexical_this: false,
                 span: Span::new(start_span.start, end),
             },
         ))
@@ -482,6 +484,7 @@ impl Parser {
                 params,
                 body,
                 constructable: false,
+                lexical_this: false,
                 span: Span::new(start_span.start, end),
             },
         ))

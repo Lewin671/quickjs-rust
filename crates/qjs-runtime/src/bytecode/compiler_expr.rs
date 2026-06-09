@@ -252,6 +252,7 @@ impl Compiler {
                 params,
                 body,
                 constructable,
+                lexical_this,
                 ..
             } => {
                 let is_strict = self.strict || is_strict_function_body(body);
@@ -265,6 +266,7 @@ impl Compiler {
                     bytecode: Rc::new(bytecode),
                     constructable: *constructable,
                     is_strict,
+                    lexical_this: *lexical_this,
                 });
                 Ok(())
             }

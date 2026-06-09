@@ -523,6 +523,34 @@ fn evaluates_function_declarations_and_calls() {
 }
 
 #[test]
+fn evaluates_arrow_functions_with_lexical_this() {
+    assert_eq!(
+        eval(
+            "this.marker = 'global'; let receiver = { marker: 'receiver' }; let read = () => this.marker; read.call(receiver);"
+        ),
+        Ok(Value::String("global".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let receiver = { marker: 'receiver' }; let read = function() { return this.marker; }; read.call(receiver);"
+        ),
+        Ok(Value::String("receiver".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "this.marker = 'global'; let receiver = { marker: 'receiver' }; [1].map(() => this.marker, receiver)[0];"
+        ),
+        Ok(Value::String("global".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "this.marker = 'global'; let receiver = { marker: 'receiver' }; let seen; new Set([1]).forEach(() => { seen = this.marker; }, receiver); seen;"
+        ),
+        Ok(Value::String("global".to_owned()))
+    );
+}
+
+#[test]
 fn evaluates_new_expressions() {
     assert_eq!(
         eval(

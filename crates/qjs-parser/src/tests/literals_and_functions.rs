@@ -34,11 +34,18 @@ fn parses_function_declaration_and_call() {
     else {
         panic!("expected function expression assignment followed by call");
     };
-    let Some(Expr::Function { name, params, .. }) = &declarations[0].init else {
+    let Some(Expr::Function {
+        name,
+        params,
+        lexical_this,
+        ..
+    }) = &declarations[0].init
+    else {
         panic!("expected function expression initializer");
     };
     assert_eq!(name.as_deref(), Some("named"));
     assert_eq!(params.positional, ["value"]);
+    assert!(!lexical_this);
 
     let script = parse_script("let f = (a, b) => a + b;").expect("source should parse");
     let [Stmt::VarDecl { declarations, .. }] = script.body.as_slice() else {
@@ -48,6 +55,7 @@ fn parses_function_declaration_and_call() {
         name,
         params,
         constructable,
+        lexical_this,
         body,
         ..
     }) = &declarations[0].init
@@ -57,16 +65,24 @@ fn parses_function_declaration_and_call() {
     assert_eq!(name, &None);
     assert_eq!(params.positional, ["a", "b"]);
     assert!(!constructable);
+    assert!(lexical_this);
     assert!(matches!(body.as_slice(), [Stmt::Return { .. }]));
 
     let script = parse_script("let f = value => { return value; };").expect("source should parse");
     let [Stmt::VarDecl { declarations, .. }] = script.body.as_slice() else {
         panic!("expected single-parameter arrow function declaration");
     };
-    let Some(Expr::Function { params, body, .. }) = &declarations[0].init else {
+    let Some(Expr::Function {
+        params,
+        body,
+        lexical_this,
+        ..
+    }) = &declarations[0].init
+    else {
         panic!("expected arrow function initializer");
     };
     assert_eq!(params.positional, ["value"]);
+    assert!(lexical_this);
     assert!(matches!(body.as_slice(), [Stmt::Return { .. }]));
 }
 
@@ -84,11 +100,17 @@ fn parses_rest_parameters() {
     let [Stmt::VarDecl { declarations, .. }] = script.body.as_slice() else {
         panic!("expected arrow function declaration");
     };
-    let Some(Expr::Function { params, .. }) = &declarations[0].init else {
+    let Some(Expr::Function {
+        params,
+        lexical_this,
+        ..
+    }) = &declarations[0].init
+    else {
         panic!("expected arrow function initializer");
     };
     assert!(params.positional.is_empty());
     assert_eq!(params.rest.as_deref(), Some("rest"));
+    assert!(lexical_this);
 }
 
 #[test]

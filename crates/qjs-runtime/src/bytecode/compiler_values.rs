@@ -154,6 +154,7 @@ impl Compiler {
             bytecode: Rc::new(bytecode),
             constructable: true,
             is_strict,
+            lexical_this: false,
         });
         self.emit(Op::StoreLocal(slot));
         self.emit_load_undefined();

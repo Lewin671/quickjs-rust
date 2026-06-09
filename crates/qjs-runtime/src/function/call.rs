@@ -122,6 +122,7 @@ fn function_env(
     env: &HashMap<String, Value>,
 ) -> FunctionCallEnv {
     let captured_env = function.captured_env.borrow();
+    let lexical_this = captured_env.get("this").cloned();
     let mut local_env = HashMap::with_capacity(
         RUNTIME_INTRINSIC_NAMES.len()
             + captured_env.len()
@@ -159,7 +160,11 @@ fn function_env(
     }
     local_env.insert(
         "this".to_owned(),
-        function_call_this(Some(this_value), env, function.is_strict),
+        if function.lexical_this {
+            lexical_this.unwrap_or(Value::Undefined)
+        } else {
+            function_call_this(Some(this_value), env, function.is_strict)
+        },
     );
     for (index, param) in function.params.positional.iter().enumerate() {
         let value = argument_values

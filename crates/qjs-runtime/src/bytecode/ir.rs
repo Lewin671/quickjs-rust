@@ -44,6 +44,7 @@ pub(super) enum Op {
         bytecode: Rc<Bytecode>,
         constructable: bool,
         is_strict: bool,
+        lexical_this: bool,
     },
     Typeof,
     ToString,
