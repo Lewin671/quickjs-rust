@@ -187,6 +187,10 @@ fn evaluates_regexp_prototype_accessors() {
     assert_eq!(eval("/test/g.global;"), Ok(Value::Boolean(true)));
     assert_eq!(eval("/test/s.dotAll;"), Ok(Value::Boolean(true)));
     assert_eq!(eval("/test/.dotAll;"), Ok(Value::Boolean(false)));
+    assert_eq!(eval("/./s.test('\\n');"), Ok(Value::Boolean(true)));
+    assert_eq!(eval("/./.test('\\n');"), Ok(Value::Boolean(false)));
+    assert_eq!(eval("/^.$/.test('\\u{10300}');"), Ok(Value::Boolean(false)));
+    assert_eq!(eval("/^.$/u.test('\\u{10300}');"), Ok(Value::Boolean(true)));
     assert_eq!(eval("/test/i.ignoreCase;"), Ok(Value::Boolean(true)));
     assert_eq!(eval("/test/m.multiline;"), Ok(Value::Boolean(true)));
     assert_eq!(eval("/test/.global;"), Ok(Value::Boolean(false)));

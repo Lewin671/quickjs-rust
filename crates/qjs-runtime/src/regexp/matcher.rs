@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::string::{advance_string_index, string_from_code_unit};
+use crate::string::{advance_string_index, string_code_units, string_from_code_unit};
 
 mod classes;
 mod escapes;
@@ -39,6 +39,7 @@ struct Quantifier {
 struct MatchOptions {
     ignore_case: bool,
     unicode: bool,
+    dot_all: bool,
 }
 
 struct RepeatAtom<'a> {
@@ -57,8 +58,17 @@ pub(super) fn regexp_match_range(
     start_index: usize,
     ignore_case: bool,
     unicode: bool,
+    dot_all: bool,
 ) -> Option<RegexpMatch> {
-    regexp_match(source, input, start_index, ignore_case, unicode, false)
+    regexp_match(
+        source,
+        input,
+        start_index,
+        ignore_case,
+        unicode,
+        dot_all,
+        false,
+    )
 }
 
 pub(super) fn regexp_match_at(
@@ -67,8 +77,17 @@ pub(super) fn regexp_match_at(
     start_index: usize,
     ignore_case: bool,
     unicode: bool,
+    dot_all: bool,
 ) -> Option<RegexpMatch> {
-    regexp_match(source, input, start_index, ignore_case, unicode, true)
+    regexp_match(
+        source,
+        input,
+        start_index,
+        ignore_case,
+        unicode,
+        dot_all,
+        true,
+    )
 }
 
 fn regexp_match(
@@ -77,11 +96,19 @@ fn regexp_match(
     start_index: usize,
     ignore_case: bool,
     unicode: bool,
+    dot_all: bool,
     exact_start: bool,
 ) -> Option<RegexpMatch> {
     let source = normalized_regexp_source(source);
     let pattern: Vec<_> = source.chars().collect();
-    let text: Vec<_> = input.chars().collect();
+    let text: Vec<_> = if unicode {
+        input.chars().collect()
+    } else {
+        string_code_units(input)
+            .into_iter()
+            .filter_map(|code_unit| string_from_code_unit(code_unit).chars().next())
+            .collect()
+    };
     if start_index > text.len() {
         return None;
     }
@@ -89,6 +116,7 @@ fn regexp_match(
     let options = MatchOptions {
         ignore_case,
         unicode,
+        dot_all,
     };
     let starts: Vec<_> = if exact_start {
         vec![start_index]
@@ -252,7 +280,7 @@ fn match_atom(
         '\\' => match_escape(pattern, text, pc, state, options),
         '[' => match_class(pattern, text, pc, state, options),
         '(' => match_group(pattern, text, pc, state, group_indices, options),
-        '.' => match_any(text, pc + 1, state, options.unicode),
+        '.' => match_any(text, pc + 1, state, options),
         literal => match_literal(text, pc + 1, state, literal, options.ignore_case),
     }
 }
@@ -261,13 +289,20 @@ fn match_any(
     text: &[char],
     next_pc: usize,
     mut state: MatchState,
-    unicode: bool,
+    options: MatchOptions,
 ) -> Vec<(usize, MatchState)> {
-    if state.index >= text.len() {
+    let Some(value) = text.get(state.index) else {
+        return Vec::new();
+    };
+    if !options.dot_all && is_line_terminator(*value) {
         return Vec::new();
     }
-    state.index = advance_string_index(text, state.index, unicode);
+    state.index = advance_string_index(text, state.index, options.unicode);
     vec![(next_pc, state)]
+}
+
+fn is_line_terminator(value: char) -> bool {
+    matches!(value, '\n' | '\r' | '\u{2028}' | '\u{2029}')
 }
 
 fn match_literal(

@@ -3,14 +3,14 @@ use crate::string::string_from_code_unit;
 
 #[test]
 fn captures_greedy_quantified_group_range() {
-    let matched = regexp_match_range(r"([0-9]+)", "31", 0, false, false).unwrap();
+    let matched = regexp_match_range(r"([0-9]+)", "31", 0, false, false, false).unwrap();
     assert_eq!((matched.start, matched.end), (0, 2));
     assert_eq!(matched.captures, vec![Some((0, 2))]);
 }
 
 #[test]
 fn captures_nested_group_ranges() {
-    let matched = regexp_match_range(r"((x))", "foo-x-bar", 0, false, false).unwrap();
+    let matched = regexp_match_range(r"((x))", "foo-x-bar", 0, false, false, false).unwrap();
     assert_eq!((matched.start, matched.end), (4, 5));
     assert_eq!(matched.captures, vec![Some((4, 5)), Some((4, 5))]);
 }
@@ -21,6 +21,7 @@ fn matches_numbered_backreferences() {
         r"^(a+)\1*,\1+$",
         "aaaaaaaaaa,aaaaaaaaaaaaaaa",
         0,
+        false,
         false,
         false,
     )
@@ -36,56 +37,58 @@ fn unicode_character_classes_match_surrogate_pairs_as_code_points() {
     let pattern = format!("[{high}{low}]");
     let input = format!("{high}{low}");
 
-    let matched = regexp_match_range(&pattern, &input, 0, false, true).unwrap();
+    let matched = regexp_match_range(&pattern, &input, 0, false, true, false).unwrap();
     assert_eq!((matched.start, matched.end), (0, 2));
-    assert!(regexp_match_range(&pattern, &high, 0, false, true).is_none());
-    assert!(regexp_match_range(&pattern, &low, 0, false, true).is_none());
+    assert!(regexp_match_range(&pattern, &high, 0, false, true, false).is_none());
+    assert!(regexp_match_range(&pattern, &low, 0, false, true, false).is_none());
 }
 
 #[test]
 fn legacy_decimal_escapes_define_character_class_ranges() {
-    let matched = regexp_match_range(r"[\12-\14]+", "\n\n", 0, false, false).unwrap();
+    let matched = regexp_match_range(r"[\12-\14]+", "\n\n", 0, false, false, false).unwrap();
     assert_eq!((matched.start, matched.end), (0, 2));
-    assert!(regexp_match_range(r"[\12-\14]+", "\t", 0, false, false).is_none());
+    assert!(regexp_match_range(r"[\12-\14]+", "\t", 0, false, false, false).is_none());
 }
 
 #[test]
 fn top_level_alternatives_match_leftmost_first() {
-    let matched = regexp_match_range("1|12", "123", 0, false, false).unwrap();
+    let matched = regexp_match_range("1|12", "123", 0, false, false, false).unwrap();
     assert_eq!((matched.start, matched.end), (0, 1));
 
-    let matched = regexp_match_range("2|12", "1.012", 0, false, false).unwrap();
+    let matched = regexp_match_range("2|12", "1.012", 0, false, false, false).unwrap();
     assert_eq!((matched.start, matched.end), (3, 5));
 }
 
 #[test]
 fn top_level_alternatives_ignore_character_class_pipes() {
-    let matched = regexp_match_range("[a|b]c|de", "bc", 0, false, false).unwrap();
+    let matched = regexp_match_range("[a|b]c|de", "bc", 0, false, false, false).unwrap();
     assert_eq!((matched.start, matched.end), (0, 2));
 
-    let matched = regexp_match_range("[a|b]c|de", "de", 0, false, false).unwrap();
+    let matched = regexp_match_range("[a|b]c|de", "de", 0, false, false, false).unwrap();
     assert_eq!((matched.start, matched.end), (0, 2));
 }
 
 #[test]
 fn lazy_quantifiers_try_shorter_matches_first() {
-    let matched = regexp_match_range("a+?", "aaa", 0, false, false).unwrap();
+    let matched = regexp_match_range("a+?", "aaa", 0, false, false, false).unwrap();
     assert_eq!((matched.start, matched.end), (0, 1));
 
-    let matched = regexp_match_range("a??a", "a", 0, false, false).unwrap();
+    let matched = regexp_match_range("a??a", "a", 0, false, false, false).unwrap();
     assert_eq!((matched.start, matched.end), (0, 1));
 
-    let matched = regexp_match_range("a[a-z]{2,4}?", "abcdefghi", 0, false, false).unwrap();
+    let matched = regexp_match_range("a[a-z]{2,4}?", "abcdefghi", 0, false, false, false).unwrap();
     assert_eq!((matched.start, matched.end), (0, 3));
 }
 
 #[test]
 fn quantified_groups_preserve_atom_order_and_clear_skipped_captures() {
-    let matched = regexp_match_range("(aa|aabaac|ba|b|c)*", "aabaac", 0, false, false).unwrap();
+    let matched =
+        regexp_match_range("(aa|aabaac|ba|b|c)*", "aabaac", 0, false, false, false).unwrap();
     assert_eq!((matched.start, matched.end), (0, 4));
     assert_eq!(matched.captures, vec![Some((2, 4))]);
 
-    let matched = regexp_match_range("(z)((a+)?(b+)?(c))*", "zaacbbbcac", 0, false, false).unwrap();
+    let matched =
+        regexp_match_range("(z)((a+)?(b+)?(c))*", "zaacbbbcac", 0, false, false, false).unwrap();
     assert_eq!((matched.start, matched.end), (0, 10));
     assert_eq!(
         matched.captures,
@@ -97,4 +100,22 @@ fn quantified_groups_preserve_atom_order_and_clear_skipped_captures() {
             Some((9, 10)),
         ]
     );
+}
+
+#[test]
+fn dot_excludes_line_terminators_unless_dot_all() {
+    for line_terminator in ['\n', '\r', '\u{2028}', '\u{2029}'] {
+        assert!(
+            regexp_match_range(".", &line_terminator.to_string(), 0, false, false, false).is_none()
+        );
+        assert!(
+            regexp_match_range(".", &line_terminator.to_string(), 0, false, false, true).is_some()
+        );
+    }
+
+    assert!(regexp_match_range(".", "\u{0085}", 0, false, false, false).is_some());
+    assert!(regexp_match_range(".", "\u{000b}", 0, false, false, false).is_some());
+    assert!(regexp_match_range(".", "\u{000c}", 0, false, false, false).is_some());
+    assert!(regexp_match_range("^.$", "\u{10300}", 0, false, false, false).is_none());
+    assert!(regexp_match_range("^.$", "\u{10300}", 0, false, true, false).is_some());
 }

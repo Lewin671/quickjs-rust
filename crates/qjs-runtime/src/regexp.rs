@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::reflect::ordinary_set;
+use crate::string::{string_code_units, string_from_code_units};
 use crate::{
     ArrayRef, Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value,
     function_prototype, is_truthy, property_value, property_value_key, symbol,
@@ -285,6 +286,7 @@ pub(crate) fn native_regexp_prototype_exec(
     let sticky = regexp_flags_contains(&object, 'y');
     let ignore_case = regexp_flags_contains(&object, 'i');
     let unicode = regexp_flags_contains(&object, 'u');
+    let dot_all = regexp_flags_contains(&object, 's');
     let stateful = global || sticky;
     let last_index = regexp_last_index(&this_value, env)?;
     let start_code_unit = if stateful { last_index } else { 0 };
@@ -295,9 +297,9 @@ pub(crate) fn native_regexp_prototype_exec(
     };
 
     let match_result = if sticky {
-        matcher::regexp_match_at(&source, &input, start, ignore_case, unicode)
+        matcher::regexp_match_at(&source, &input, start, ignore_case, unicode, dot_all)
     } else {
-        matcher::regexp_match_range(&source, &input, start, ignore_case, unicode)
+        matcher::regexp_match_range(&source, &input, start, ignore_case, unicode, dot_all)
     };
 
     let Some(match_result) = match_result else {
@@ -314,7 +316,7 @@ pub(crate) fn native_regexp_prototype_exec(
         };
         regexp_set_last_index_object(&object, last_index, env)?;
     }
-    Ok(regexp_match_array(&input, match_result))
+    Ok(regexp_match_array(&input, match_result, unicode))
 }
 
 pub(crate) fn native_regexp_prototype_to_string(this_value: Value) -> Result<Value, RuntimeError> {
@@ -603,29 +605,36 @@ fn regexp_set_last_index_object(
     Ok(())
 }
 
-fn regexp_match_array(input: &str, match_result: matcher::RegexpMatch) -> Value {
+fn regexp_match_array(input: &str, match_result: matcher::RegexpMatch, unicode: bool) -> Value {
     let mut values = Vec::with_capacity(1 + match_result.captures.len());
     values.push(Value::String(input_slice(
         input,
         match_result.start,
         match_result.end,
+        unicode,
     )));
     values.extend(match_result.captures.into_iter().map(|capture| {
         capture
-            .map(|(start, end)| Value::String(input_slice(input, start, end)))
+            .map(|(start, end)| Value::String(input_slice(input, start, end, unicode)))
             .unwrap_or(Value::Undefined)
     }));
     let result = ArrayRef::new(values);
-    result.set_property(
-        "index".to_owned(),
-        Value::Number(code_unit_index_for_char_index(input, match_result.start) as f64),
-    );
+    let index = if unicode {
+        code_unit_index_for_char_index(input, match_result.start)
+    } else {
+        match_result.start
+    };
+    result.set_property("index".to_owned(), Value::Number(index as f64));
     result.set_property("input".to_owned(), Value::String(input.to_owned()));
     Value::Array(result)
 }
 
-fn input_slice(input: &str, start: usize, end: usize) -> String {
-    input.chars().skip(start).take(end - start).collect()
+fn input_slice(input: &str, start: usize, end: usize, unicode: bool) -> String {
+    if unicode {
+        input.chars().skip(start).take(end - start).collect()
+    } else {
+        string_from_code_units(&string_code_units(input)[start..end])
+    }
 }
 
 fn code_unit_index_for_char_index(input: &str, char_index: usize) -> usize {
