@@ -11,7 +11,9 @@ mod substitution;
 mod symbol_method;
 use errors::{replace_all_regexp_flags_error, string_method_null_error};
 use substitution::get_substitution;
-use symbol_method::{symbol_match_method, symbol_replace_method, symbol_search_method};
+use symbol_method::{
+    symbol_match_all_method, symbol_match_method, symbol_replace_method, symbol_search_method,
+};
 
 pub(crate) fn native_string_prototype_ends_with(
     this_value: Value,
@@ -135,6 +137,28 @@ pub(crate) fn native_string_prototype_match(
     }
     let exec = property_value(regexp.clone(), "exec", env)?;
     call_function(exec, regexp, vec![Value::String(input)], env, false)
+}
+
+pub(crate) fn native_string_prototype_match_all(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    if matches!(this_value, Value::Null | Value::Undefined) {
+        return Err(string_method_null_error());
+    }
+    let input = this_string_value(this_value, env)?;
+    let regexp = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    if !matches!(regexp, Value::Null | Value::Undefined) {
+        if let Some(matcher) = symbol_match_all_method(regexp.clone(), env)?.method {
+            return call_function(matcher, regexp, vec![Value::String(input)], env, false);
+        }
+    }
+    Err(RuntimeError {
+        thrown: None,
+        message: "TypeError: String.prototype.matchAll RegExp iterator is not implemented"
+            .to_owned(),
+    })
 }
 
 pub(crate) fn native_string_prototype_replace_all(

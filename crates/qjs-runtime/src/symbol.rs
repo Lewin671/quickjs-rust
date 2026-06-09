@@ -265,6 +265,10 @@ pub(crate) fn match_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
     well_known_symbol(env, "match")
 }
 
+pub(crate) fn match_all_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+    well_known_symbol(env, "matchAll")
+}
+
 pub(crate) fn replace_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
     well_known_symbol(env, "replace")
 }

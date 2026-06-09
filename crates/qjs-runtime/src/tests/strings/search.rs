@@ -380,6 +380,45 @@ fn evaluates_string_match_coercions() {
 }
 
 #[test]
+fn evaluates_string_match_all_symbol_dispatch() {
+    assert_eq!(
+        eval("String.prototype.matchAll.length;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(String.prototype, 'matchAll'); (d.value === String.prototype.matchAll) + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("true:true:false:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let calls = 0; let matcher = { [Symbol.matchAll]: function(input) { calls = calls + 1; return this === matcher && input === 'abc' ? 42 : -1; } }; 'abc'.matchAll(matcher) + ':' + calls;"
+        ),
+        Ok(Value::String("42:1".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "String.prototype.matchAll.call(12345, { [Symbol.matchAll]: function(input) { return input; } });"
+        ),
+        Ok(Value::String("12345".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { ''.matchAll({ [Symbol.matchAll]: 1 }); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert!(
+        eval(
+            "let matcher = { get [Symbol.matchAll]() { throw new Error('matchAll'); } }; ''.matchAll(matcher);"
+        )
+        .is_err()
+    );
+    assert!(eval("new String.prototype.matchAll();").is_err());
+}
+
+#[test]
 fn rejects_string_match_null_or_undefined_this() {
     assert_eq!(
         eval(
@@ -390,6 +429,22 @@ fn rejects_string_match_null_or_undefined_this() {
     assert_eq!(
         eval(
             "let caught = false; try { String.prototype.match.call(undefined, /./); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn rejects_string_match_all_null_or_undefined_this() {
+    assert_eq!(
+        eval(
+            "let caught = false; try { String.prototype.matchAll.call(null, /./); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { String.prototype.matchAll.call(undefined, /./); } catch (error) { caught = error instanceof TypeError; } caught;"
         ),
         Ok(Value::Boolean(true))
     );

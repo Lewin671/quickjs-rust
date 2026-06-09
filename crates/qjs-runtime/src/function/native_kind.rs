@@ -313,6 +313,7 @@ pub(crate) enum NativeFunction {
     StringPrototypeLink,
     StringPrototypeLocaleCompare,
     StringPrototypeMatch,
+    StringPrototypeMatchAll,
     StringPrototypePadEnd,
     StringPrototypePadStart,
     StringPrototypeRepeat,
