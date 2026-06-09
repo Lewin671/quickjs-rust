@@ -11,7 +11,7 @@ OUT_DIR=""
 TOP_COUNT=20
 AREA_COUNT=10
 RECOMMEND=1
-RECOMMEND_STRATEGY="${TEST262_GAP_RECOMMEND_STRATEGY:-fast}"
+RECOMMEND_STRATEGY="${TEST262_GAP_RECOMMEND_STRATEGY:-quickwins}"
 RECOMMEND_BATCH_CAP="${TEST262_GAP_RECOMMEND_BATCH_CAP:-5}"
 INCLUDE_TIMEOUTS=0
 EXACT_SCAN=0
@@ -23,7 +23,7 @@ PROBE_SHARDS="${TEST262_GAP_PROBE_SHARDS:-${TEST262_GAP_PROBE_SHARD:-1/16,5/16,9
 
 usage() {
   cat >&2 <<'USAGE'
-usage: scripts/find-qjsng-gaps.sh [--limit N | --all] [--filter test/<prefix>] [--out-dir PATH] [--top N] [--areas N] [--strategy fast|largest] [--recommend-batch-cap N] [--probe-limit N] [--probe-shard I/N] [--probe-shards I/N[,I/N...]] [--from-report PATH | --from-latest-report] [--skip-area test/<prefix>] [--exact] [--include-timeouts] [--no-recommend]
+usage: scripts/find-qjsng-gaps.sh [--limit N | --all] [--filter test/<prefix>] [--out-dir PATH] [--top N] [--areas N] [--strategy quickwins|fast|largest] [--recommend-batch-cap N] [--probe-limit N] [--probe-shard I/N] [--probe-shards I/N[,I/N...]] [--from-report PATH | --from-latest-report] [--skip-area test/<prefix>] [--exact] [--include-timeouts] [--no-recommend]
 
 Runs a QuickJS-NG comparison baseline and prints the cases where QuickJS-NG
 passes but quickjs-rust has an actionable feature gap. Stress timeouts are
@@ -34,10 +34,11 @@ For unfiltered --all recommendation runs, the default strategy is a fast greedy
 probe over TEST262_GAP_PROBE_LIMIT cases from each TEST262_GAP_PROBE_SHARDS
 shard, run concurrently. Use --exact --all when a complete audit is required,
 especially to prove there are no remaining gaps.
-The default recommendation strategy is fast-batch greedy: prefer real engine
-gap areas that fit within TEST262_GAP_RECOMMEND_BATCH_CAP, currently 5, then
-small harness-gap batches, so agents can clear reviewable slices quickly. Use
---strategy largest for the old largest-gap-first behavior.
+The default recommendation strategy is quickwins greedy: prefer reviewable
+engine-gap batches, then de-prioritize areas whose paths or skip metadata point
+at broad missing features such as async, destructuring, class, yield, proxy,
+realm, species, or Annex B global-code semantics. Use --strategy fast for the
+older small-batch-first behavior or --strategy largest for largest-gap-first.
 Use --from-report with a previous output directory or cases.jsonl to recompute
 the greedy recommendation without executing Test262 again. Use --skip-area to
 ignore an area already being worked or already rechecked.
@@ -182,9 +183,9 @@ case "$TOP_COUNT:$AREA_COUNT" in
     ;;
 esac
 case "$RECOMMEND_STRATEGY" in
-  fast|largest) ;;
+  quickwins|fast|largest) ;;
   *)
-    echo "error: --strategy must be fast or largest: $RECOMMEND_STRATEGY" >&2
+    echo "error: --strategy must be quickwins, fast, or largest: $RECOMMEND_STRATEGY" >&2
     exit 2
     ;;
 esac
@@ -450,6 +451,21 @@ awk -F'\t' '{ count[$4]++ } END { for (area in count) print count[area] "\t" are
   | sort -nr >"$AREAS_TSV"
 
 awk -F'\t' -v strategy="$RECOMMEND_STRATEGY" -v batch_cap="$RECOMMEND_BATCH_CAP" '
+  function has_hard_hint(path, skip, area) {
+    if (area ~ /annexB\/language\/global-code$/) {
+      return 1
+    }
+    if (skip ~ /async/) {
+      return 1
+    }
+    if (path ~ /(^|\/)(class|dstr|for-await-of|yield)(\/|$)/) {
+      return 1
+    }
+    if (path ~ /(destructur|proxy|Proxy|realm|Realm|species|superclass)/) {
+      return 1
+    }
+    return 0
+  }
   {
     area = $4
     total[area]++
@@ -460,13 +476,35 @@ awk -F'\t' -v strategy="$RECOMMEND_STRATEGY" -v batch_cap="$RECOMMEND_BATCH_CAP"
     } else if ($2 == "skipped") {
       skipped[area]++
     }
+    if (has_hard_hint($1, $3, area)) {
+      hard[area]++
+    }
   }
   END {
     for (area in total) {
       engine = fail[area] + timeout[area]
       harness = skipped[area] + 0
+      hard_hints = hard[area] + 0
       if (strategy == "largest") {
         score = (engine * 1000000) + (total[area] * 1000) - harness
+      } else if (strategy == "quickwins") {
+        if (engine > 0 && engine <= batch_cap && hard_hints == 0) {
+          score = 1000000000 + (engine * 1000000) + (total[area] * 1000) - harness
+        } else if (engine > 0 && hard_hints == 0) {
+          over = engine - batch_cap
+          score = 900000000 - (over * 1000000) + (engine * 1000) + total[area] - harness
+        } else if (engine == 0 && hard_hints == 0 && total[area] <= batch_cap) {
+          score = 800000000 + (total[area] * 1000) - harness
+        } else if (engine == 0 && hard_hints == 0) {
+          score = 700000000 + (total[area] * 1000) - harness
+        } else if (engine > 0 && engine <= batch_cap) {
+          score = 600000000 + (engine * 1000000) + (total[area] * 1000) - (hard_hints * 10000) - harness
+        } else if (engine > 0) {
+          over = engine - batch_cap
+          score = 500000000 - (over * 1000000) + (engine * 1000) + total[area] - (hard_hints * 10000) - harness
+        } else {
+          score = (total[area] * 1000) - (hard_hints * 10000) - harness
+        }
       } else if (engine > 0 && engine <= batch_cap) {
         score = 1000000000 + (engine * 1000000) + (total[area] * 1000) - harness
       } else if (engine == 0 && total[area] <= batch_cap) {
@@ -477,7 +515,7 @@ awk -F'\t' -v strategy="$RECOMMEND_STRATEGY" -v batch_cap="$RECOMMEND_BATCH_CAP"
       } else {
         score = (total[area] * 1000) - harness
       }
-      printf "%d\t%d\t%d\t%d\t%d\t%s\n", score, total[area], engine, fail[area] + 0, harness, area
+      printf "%d\t%d\t%d\t%d\t%d\t%d\t%s\n", score, total[area], engine, fail[area] + 0, harness, hard_hints, area
     }
   }
 ' "$GAPS_TSV" | sort -nr >"$RECOMMENDATIONS_TSV"
@@ -543,7 +581,7 @@ head -n "$TOP_COUNT" "$GAPS_TSV" | awk -F'\t' '{
 }'
 
 if [ "$RECOMMEND" -eq 1 ]; then
-  if [ "$RECOMMEND_STRATEGY" = "fast" ]; then
+  if [ "$RECOMMEND_STRATEGY" = "quickwins" ] || [ "$RECOMMEND_STRATEGY" = "fast" ]; then
     recommendation="$(sed -n '1p' "$RECOMMENDATIONS_TSV")"
   else
     recommendation="$(awk -F'\t' '$3 > 0 { print; exit }' "$RECOMMENDATIONS_TSV")"
@@ -552,12 +590,12 @@ if [ "$RECOMMEND" -eq 1 ]; then
     fi
   fi
   if [ -n "$recommendation" ]; then
-    IFS=$'\t' read -r _score rec_total rec_engine rec_fail rec_harness rec_area <<<"$recommendation"
+    IFS=$'\t' read -r _score rec_total rec_engine rec_fail rec_harness rec_hard rec_area <<<"$recommendation"
     rec_timeout=$((rec_engine - rec_fail))
     echo
     echo "Greedy recommendation:"
     echo "  strategy: $RECOMMEND_STRATEGY"
-    if [ "$RECOMMEND_STRATEGY" = "fast" ]; then
+    if [ "$RECOMMEND_STRATEGY" = "quickwins" ] || [ "$RECOMMEND_STRATEGY" = "fast" ]; then
       echo "  batch cap: $RECOMMEND_BATCH_CAP engine gaps"
     fi
     echo "  area: $rec_area"
@@ -566,6 +604,9 @@ if [ "$RECOMMEND" -eq 1 ]; then
     echo "  rust fail: $rec_fail"
     echo "  rust timeout: $rec_timeout"
     echo "  harness gaps: $rec_harness"
+    if [ "$RECOMMEND_STRATEGY" = "quickwins" ]; then
+      echo "  hard hints: $rec_hard"
+    fi
     echo "  rerun: ./scripts/find-qjsng-gaps.sh --filter $rec_area --all"
     if [ "$PROBE_SCAN" -eq 1 ]; then
       echo "  note: recommendation is from a greedy probe; use --exact --all for a complete audit."
@@ -585,7 +626,7 @@ if [ "$RECOMMEND" -eq 1 ]; then
     }' "$GAPS_TSV"
     echo
     echo "Next candidate areas:"
-    awk -F'\t' '{ printf "  %s  engine=%s gaps=%s harness=%s\n", $6, $3, $2, $5; shown++ } shown >= 5 { exit }' "$RECOMMENDATIONS_TSV"
+    awk -F'\t' '{ printf "  %s  engine=%s gaps=%s harness=%s hard=%s\n", $7, $3, $2, $5, $6; shown++ } shown >= 5 { exit }' "$RECOMMENDATIONS_TSV"
   fi
 fi
 

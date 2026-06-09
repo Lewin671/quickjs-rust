@@ -127,9 +127,10 @@ cargo run -p qjs-cli -- -e "1 + 2;"
 `./scripts/compare-qjs.sh` compares selected local fixtures against the pinned
 QuickJS-NG reference. `./scripts/find-qjsng-gaps.sh` summarizes upstream
 Test262 cases where QuickJS-NG passes and `quickjs-rust` has an actionable
-feature or harness gap, and prints a greedy next area to investigate. An
-unfiltered `--all` recommendation uses a bounded, sharded probe by default so
-agents can pick the next high-yield area quickly; use `--exact --all` for final
+feature or harness gap, and prints a greedy next area to investigate. The
+default quickwins recommendation uses a bounded, sharded probe and de-prioritizes
+areas with broad-feature signals such as async, destructuring, class, proxy,
+realm, species, or Annex B global-code semantics. Use `--exact --all` for final
 full-range confirmation. Stress timeouts are reported separately by default;
 pass `--include-timeouts` when performance parity is the task.
 `./scripts/test262-subset.sh` runs only curated

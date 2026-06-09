@@ -131,14 +131,16 @@ probe shards run concurrently, and the report merges their case results before
 ranking areas. This gives the agent broader Test262 coverage per iteration
 without paying for a full audit or biasing entirely toward the first sorted
 Test262 directories.
-The default recommendation strategy is fast-batch greedy: it still prioritizes
-real quickjs-rust engine failures over harness gaps, but it prefers candidate
+The default recommendation strategy is quickwins greedy. It still prefers real
+quickjs-rust engine failures over harness-only gaps, and it prefers candidate
 areas with no more than `TEST262_GAP_RECOMMEND_BATCH_CAP` engine gaps, currently
-5. That keeps the next implementation slice reviewable and prevents one large
-or difficult area from blocking discovery of easier parity wins. When the probe
-has no engine-failure area within that cap, fast-batch greedy recommends a small
-harness-gap batch before falling back to a larger engine-failure area. Use
-`--strategy largest` to restore the old largest-gap-first recommendation, or
+5. It also computes `hard hints` from paths and skip metadata that usually imply
+larger missing features, such as async, destructuring, class, yield,
+proxy/realm/species behavior, or Annex B global-code semantics. Those hints do
+not hide gaps; they only lower an area's default ranking so an agent can find
+reviewable parity wins before getting stuck on known broad features. Use
+`--strategy fast` for the older small-batch-first behavior,
+`--strategy largest` to restore largest-gap-first recommendation, or
 `--recommend-batch-cap N` to tune how large a default batch may be.
 After a global probe has produced a candidate queue, use
 `--from-report target/test262-gaps/<run>` or `--from-latest-report` to recompute
@@ -149,10 +151,11 @@ largest known gap immediately. This replay mode is only a planning shortcut:
 focused verification still needs `--filter test/<prefix> --all`, and final
 completion still needs `--exact --all`.
 Use `--exact --all` when the task needs a complete report or when a probe finds
-no gaps and the agent needs to prove the exit condition. The recommendation
-falls back to the largest harness-gap area only when the sample contains no
-engine failures. Stress timeouts are excluded from the default actionable gap
-list so large conformance stress loops do not hide missing behavior; use
+no gaps and the agent needs to prove the exit condition. Under the default
+quickwins strategy, harness-only areas are fallback candidates and broad-feature
+areas remain visible in the candidate queue with their `hard` count. Stress
+timeouts are excluded from the default actionable gap list so large conformance
+stress loops do not hide missing behavior; use
 `--include-timeouts` when performance parity is the task. Use `--probe-limit N`
 and `--probe-shards I/N[,I/N...]` to tune recommendation speed versus
 confidence; `--probe-shard I/N` remains as a single-shard shorthand for very
