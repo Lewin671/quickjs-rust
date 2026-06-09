@@ -387,6 +387,10 @@ impl Compiler {
             .any(|names| names.iter().any(|blocked| blocked == name))
     }
 
+    pub(super) fn annex_b_arguments_function_name_blocked(&self, name: &str) -> bool {
+        name == "arguments" && self.annex_b_function_name_blocked(name)
+    }
+
     fn current_lexical_scope(&self) -> &HashMap<String, usize> {
         self.lexical_scopes
             .last()
@@ -828,6 +832,9 @@ fn function_param_names(params: &FunctionParams) -> Vec<String> {
     let mut names = params.positional.clone();
     if let Some(rest) = &params.rest {
         names.push(rest.clone());
+    }
+    if !names.iter().any(|name| name == "arguments") {
+        names.push("arguments".to_owned());
     }
     names
 }

@@ -28,6 +28,14 @@ fn evaluates_function_declarations_and_calls() {
     );
     assert_eq!(
         eval(
+            "(function() { let before = arguments.toString(); let during; { during = arguments(); function arguments() {} } return before + ':' + during + ':' + arguments.toString(); }());"
+        ),
+        Ok(Value::String(
+            "[object Arguments]:undefined:[object Arguments]".to_owned()
+        ))
+    );
+    assert_eq!(
+        eval(
             "var after; eval('if (true) function f() { return \"declaration\"; } else function _f() {} after = f;'); after();"
         ),
         Ok(Value::String("declaration".to_owned()))

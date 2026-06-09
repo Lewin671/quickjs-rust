@@ -20,7 +20,8 @@ impl Compiler {
     ) -> Result<(), RuntimeError> {
         for stmt in body {
             if let Stmt::FunctionDecl { name, .. } = stmt
-                && !self.annex_b_function_name_blocked(name)
+                && (!self.annex_b_function_name_blocked(name)
+                    || self.annex_b_arguments_function_name_blocked(name))
             {
                 self.compile_function_decl(stmt)?;
                 self.emit(Op::Pop);
@@ -147,7 +148,8 @@ impl Compiler {
         else {
             return Err(unsupported_stmt(stmt));
         };
-        if self.annex_b_function_name_blocked(name) {
+        let blocked_arguments = self.annex_b_arguments_function_name_blocked(name);
+        if self.annex_b_function_name_blocked(name) && !blocked_arguments {
             self.emit_load_undefined();
             return Ok(());
         }
@@ -164,10 +166,14 @@ impl Compiler {
             lexical_this: false,
             lexical_arguments: false,
         });
-        let slot = self.local_slot(name, true);
-        if self.global_scope {
+        if blocked_arguments {
+            let slot = self.declare_lexical_slot(name, true);
+            self.emit(Op::StoreLocal(slot));
+        } else if self.global_scope {
+            let slot = self.local_slot(name, true);
             self.emit_store_var_binding(slot, name, VarKind::Var);
         } else {
+            let slot = self.local_slot(name, true);
             self.emit(Op::StoreLocal(slot));
         }
         self.emit_load_undefined();
