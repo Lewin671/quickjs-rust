@@ -235,6 +235,19 @@ workflow reuses a full QuickJS-NG baseline cache when available;
 when that cache is missing, it falls back to sharded baseline jobs and saves a
 full cache for later commits.
 
+`scripts/test262-burndown.sh` records the conformance burndown time series in
+`docs/conformance/burndown.jsonl`. Use `--report DIR` with the output of a
+complete local scan (sharded `test262-baseline.sh --all --engine both` runs or
+`find-qjsng-gaps.sh --exact --all`), or `--entry FILE` with the
+`test262-burndown` artifact that the Test262 Coverage workflow uploads for
+each aggregated commit. The script refuses partial or filtered scans so every
+entry in the series is comparable. Record an entry after each full exact scan
+and when a CI aggregate provides a fresh per-commit measurement; the
+`comparison.actionable_gap` and `comparison.ng_pass_rust_not_run` trends are
+the convergence signal that decides when the recommendation strategy or
+campaign priorities should change. See `docs/conformance/README.md` for the
+schema.
+
 `scripts/microbench.sh` runs the repository's current QuickJS microbenchmark
 subset from `tests/benchmarks/quickjs/microbench.js`. Use `--engine quickjs-ng`
 or `--engine both` to compare the same subset against the pinned QuickJS-NG

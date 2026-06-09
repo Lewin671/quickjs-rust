@@ -23,6 +23,8 @@ boundaries and make each change verifiable with focused tests.
 - QuickJS-NG gap discovery:
   `./scripts/find-qjsng-gaps.sh [--limit N | --all] [--filter test/<prefix>]`
 - Test262 subset runner: `./scripts/test262-subset.sh`
+- Conformance burndown recorder:
+  `./scripts/test262-burndown.sh --report <full-scan-dir> | --entry <ci-artifact>`
 - Upstream Test262 baseline runner:
   `./scripts/test262-baseline.sh [--limit N | --all] [--filter test/<prefix>] [--engine quickjs-rust|quickjs-ng|both] [--shard I/N] [--summary-json PATH] [--no-fail]`
 - Watch a pushed branch CI run: `gh run list --branch <branch> --limit 1`
@@ -211,6 +213,11 @@ workspace configuration, global error models, or broad architecture documents.
   timeouts before expanding the curated subset.
 - When a Test262 case is expected to fail, record the reason near the allowlist
   or expected-failure list rather than relying on tribal knowledge.
+- Record a conformance burndown entry with `./scripts/test262-burndown.sh`
+  after every complete `--exact --all` comparison scan, and prefer the CI
+  `test262-burndown` artifact for per-commit measurements. The trend in
+  `docs/conformance/burndown.jsonl` is the signal for changing recommendation
+  strategy or campaign priorities; do not record partial scans.
 - Prefer small fixtures that are easy to inspect over broad generated tests for
   early parser and runtime work.
 - Add simple QuickJS comparison programs under `tests/fixtures/compare-qjs/`.

@@ -279,6 +279,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import glob
+          import datetime
           import json
           import os
 
@@ -440,4 +441,42 @@ jobs:
           with open(summary_path, "a", encoding="utf-8") as handle:
               handle.write("\n".join(lines))
               handle.write("\n")
+
+          burndown = {
+              "schema": 1,
+              "recorded": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d"),
+              "commit": os.environ["COVERAGE_SHA"],
+              "source": "ci-aggregate",
+              "total": totals["total"],
+              "ng_config_skipped": totals["skipped"],
+              "configured": totals["configured"],
+              "rust": {
+                  "pass": totals["rust_pass"],
+                  "fail": totals["rust_fail"],
+                  "timeout": totals["rust_timeout"],
+                  "not_run": totals["rust_skipped"],
+              },
+              "ng": {
+                  "pass": totals["qjsng_pass"],
+                  "fail": totals["qjsng_fail"],
+                  "timeout": totals["qjsng_timeout"],
+              },
+              "comparison": {
+                  "both_pass": totals["both_pass"],
+                  "actionable_gap": totals["qjsng_pass_rust_fail"] + totals["qjsng_pass_rust_timeout"],
+                  "ng_pass_rust_fail": totals["qjsng_pass_rust_fail"],
+                  "ng_pass_rust_timeout": totals["qjsng_pass_rust_timeout"],
+                  "ng_pass_rust_not_run": totals["qjsng_pass_rust_not_run"],
+                  "rust_pass_ng_nonpass": totals["rust_pass_qjsng_nonpass"],
+              },
+          }
+          with open("burndown.json", "w", encoding="utf-8") as handle:
+              handle.write(json.dumps(burndown, separators=(",", ":")) + "\n")
           PY
+
+      - name: Upload burndown entry
+        uses: actions/upload-artifact@v4
+        with:
+          name: test262-burndown
+          path: burndown.json
+          retention-days: 90

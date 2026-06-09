@@ -24,18 +24,7 @@ is that the recommendation queue becomes all hard areas, and each agent
 iteration re-evaluates the same large features from scratch instead of
 advancing a planned slice.
 
-## 2. There is no burn-down metric for convergence
-
-No persisted, per-commit record exists of total Test262 cases, quickjs-rust
-passes, QuickJS-NG passes, actionable gap count, and not-run counts. Full
-ground truth is only available through an expensive `--exact --all` run or by
-manually inspecting individual Test262 Coverage workflow summaries in CI.
-
-Without that time series, neither agents nor maintainers can observe the
-convergence slope, detect when progress plateaus, or decide when the
-recommendation strategy should change.
-
-## 3. Structural not-run exclusions are a blind spot with no unlock signal
+## 2. Structural not-run exclusions are a blind spot with no unlock signal
 
 The baseline classifies modules, async tests, intl402, unsupported harness
 includes, fixtures, and known unsupported syntax as structural not-run cases,
@@ -45,7 +34,7 @@ loop. No mechanism records what each exclusion is waiting on or signals when a
 not-run category should be unlocked, so full NG parity work behind these
 exclusions stays invisible by default.
 
-## 4. The harness itself is large untested shell logic
+## 3. The harness itself is large untested shell logic
 
 `find-qjsng-gaps.sh` (~860 lines) and `test262-baseline.sh` (~700 lines)
 contain real program logic: JSONL processing, greedy ranking, hard-hint
@@ -54,7 +43,7 @@ tests of their own. The harness changes frequently and is the leverage point
 for all agent throughput, but every strategy adjustment currently carries
 untested regression risk that only manual inspection can catch.
 
-## 5. Default probe sampling is deterministic and decays in value
+## 4. Default probe sampling is deterministic and decays in value
 
 Unfiltered global probes always sample the same fixed shards
 (`TEST262_GAP_PROBE_SHARDS`, currently `1/16,5/16,9/16,13/16`) with a fixed
