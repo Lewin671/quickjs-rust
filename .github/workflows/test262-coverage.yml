@@ -184,22 +184,9 @@ jobs:
         if: steps.qjs-cli-artifact.outcome == 'success'
         run: chmod +x prebuilt-qjs/qjs
 
-      - name: Install Rust toolchain
+      - name: Setup Rust
         if: steps.qjs-cli-artifact.outcome != 'success'
-        run: rustup show
-
-      - name: Restore Rust build cache
-        if: steps.qjs-cli-artifact.outcome != 'success'
-        uses: actions/cache/restore@v5
-        with:
-          path: |
-            ~/.cargo/git/db
-            ~/.cargo/registry/cache
-            ~/.cargo/registry/index
-            target
-          key: rust-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
-          restore-keys: |
-            rust-${{ runner.os }}-
+        uses: ./.github/actions/setup-rust
 
       - name: Init submodules
         run: git submodule update --init --depth 1 third_party/test262

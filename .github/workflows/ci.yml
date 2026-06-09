@@ -21,20 +21,10 @@ jobs:
           fetch-depth: 1
           submodules: false
 
-      - name: Install Rust toolchain
-        run: rustup show
-
-      - name: Restore Rust build cache
-        uses: actions/cache@v5
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
         with:
-          path: |
-            ~/.cargo/git/db
-            ~/.cargo/registry/cache
-            ~/.cargo/registry/index
-            target
-          key: rust-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
-          restore-keys: |
-            rust-${{ runner.os }}-
+          save-cache: 'true'
 
       - name: Check
         run: ./scripts/check.sh
@@ -58,20 +48,8 @@ jobs:
           fetch-depth: 1
           submodules: false
 
-      - name: Install Rust toolchain
-        run: rustup show
-
-      - name: Restore Rust build cache
-        uses: actions/cache/restore@v5
-        with:
-          path: |
-            ~/.cargo/git/db
-            ~/.cargo/registry/cache
-            ~/.cargo/registry/index
-            target
-          key: rust-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
-          restore-keys: |
-            rust-${{ runner.os }}-
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
 
       - name: Init submodules
         run: git submodule update --init --depth 1 third_party/quickjs-ng
@@ -98,20 +76,8 @@ jobs:
           fetch-depth: 1
           submodules: false
 
-      - name: Install Rust toolchain
-        run: rustup show
-
-      - name: Restore Rust build cache
-        uses: actions/cache/restore@v5
-        with:
-          path: |
-            ~/.cargo/git/db
-            ~/.cargo/registry/cache
-            ~/.cargo/registry/index
-            target
-          key: rust-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
-          restore-keys: |
-            rust-${{ runner.os }}-
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
 
       - name: Init submodules
         run: git submodule update --init --depth 1 third_party/test262

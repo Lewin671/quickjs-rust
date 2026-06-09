@@ -1,0 +1,42 @@
+name: Setup Rust with cache
+description: Install the pinned Rust toolchain and restore the shared build cache.
+
+inputs:
+  save-cache:
+    description: Also save the cache at job end. Enable in exactly one job per
+      pipeline so parallel jobs do not race on the same key.
+    required: false
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Install Rust toolchain
+      shell: bash
+      run: rustup show
+
+    - name: Restore and save Rust build cache
+      if: inputs.save-cache == 'true'
+      uses: actions/cache@v5
+      with:
+        path: |
+          ~/.cargo/git/db
+          ~/.cargo/registry/cache
+          ~/.cargo/registry/index
+          target
+        key: rust-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+        restore-keys: |
+          rust-${{ runner.os }}-
+
+    - name: Restore Rust build cache
+      if: inputs.save-cache != 'true'
+      uses: actions/cache/restore@v5
+      with:
+        path: |
+          ~/.cargo/git/db
+          ~/.cargo/registry/cache
+          ~/.cargo/registry/index
+          target
+        key: rust-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+        restore-keys: |
+          rust-${{ runner.os }}-
