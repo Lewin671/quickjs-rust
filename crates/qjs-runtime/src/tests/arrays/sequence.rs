@@ -174,6 +174,12 @@ fn evaluates_array_sequence_builtins() {
     );
     assert_eq!(
         eval(
+            "let item = { length: Number.MAX_SAFE_INTEGER }; item[Symbol.isConcatSpreadable] = true; let caught = false; try { [1].concat(item); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
             "let xs = [1, 2, 3, 4, 5]; let result = xs.copyWithin(0, 3); result === xs && xs.join();"
         ),
         Ok(Value::String("4,5,3,4,5".to_owned()))

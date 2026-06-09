@@ -239,9 +239,22 @@ fn concat_spread_array(
     env: &mut HashMap<String, Value>,
 ) -> Result<(), RuntimeError> {
     let length = to_length_with_env(property_value(value.clone(), "length", env)?, env)?;
+    let new_length = result
+        .len()
+        .checked_add(length)
+        .ok_or_else(concat_length_error)?;
+    if new_length > MAX_SAFE_LENGTH {
+        return Err(concat_length_error());
+    }
     if let Value::Object(object) = &value
         && object_has_no_index_properties_below(object, length)
     {
+        if new_length > MAX_ARRAY_LENGTH {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "RangeError: invalid array length".to_owned(),
+            });
+        }
         let start = result.len();
         result.extend(std::iter::repeat_n(Value::Undefined, length));
         holes.extend(start..start + length);
@@ -258,6 +271,13 @@ fn concat_spread_array(
         }
     }
     Ok(())
+}
+
+fn concat_length_error() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "TypeError: invalid array length".to_owned(),
+    }
 }
 
 fn object_has_no_index_properties_below(object: &crate::ObjectRef, length: usize) -> bool {
