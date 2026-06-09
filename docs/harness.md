@@ -132,12 +132,13 @@ probe shards run concurrently, and the report merges their case results before
 ranking areas. This gives the agent broader Test262 coverage per iteration
 without paying for a full audit or biasing entirely toward the first sorted
 Test262 directories.
-The default recommendation strategy is quickwins greedy. It still prefers real
-quickjs-rust engine failures over harness-only gaps, and it prefers candidate
-areas with no more than `TEST262_GAP_RECOMMEND_BATCH_CAP` engine gaps, currently
-5. It also computes `hard hints` from paths and skip metadata that usually imply
-larger missing features, such as async, destructuring, class, yield,
-proxy/realm/species behavior, resizable or growable buffers, or Annex B
+The default recommendation strategy is quickwins greedy. It prefers real
+quickjs-rust engine failures when they fit in a small reviewable batch. After
+that, it prefers small harness-only batches, even when their metadata contains
+hard-feature hints, because those are often faster to verify or clear than a
+broad semantic area. It also computes `hard hints` from paths and skip metadata
+that usually imply larger missing features, such as async, destructuring, class,
+yield, proxy/realm/species behavior, resizable or growable buffers, or Annex B
 global-code semantics. Those hints do not hide gaps; they only lower an area's
 default ranking so an agent can find reviewable parity wins before getting stuck
 on known broad features. Use
@@ -154,10 +155,11 @@ focused verification still needs `--filter test/<prefix> --all`, and final
 completion still needs `--exact --all`.
 Use `--exact --all` when the task needs a complete report or when a probe finds
 no gaps and the agent needs to prove the exit condition. Under the default
-quickwins strategy, harness-only areas are fallback candidates and broad-feature
-areas remain visible in the candidate queue with their `hard` count. Stress
-timeouts are excluded from the default actionable gap list so large conformance
-stress loops do not hide missing behavior; use
+quickwins strategy, harness-only areas remain first-class candidates when they
+are small enough to check quickly, and broad-feature areas remain visible in the
+candidate queue with their `hard` count. Stress timeouts are excluded from the
+default actionable gap list so large conformance stress loops do not hide
+missing behavior; use
 `--include-timeouts` when performance parity is the task. Use `--probe-limit N`
 and `--probe-shards I/N[,I/N...]` to tune recommendation speed versus
 confidence; `--probe-shard I/N` remains as a single-shard shorthand for very

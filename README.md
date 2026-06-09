@@ -128,11 +128,12 @@ cargo run -p qjs-cli -- -e "1 + 2;"
 QuickJS-NG reference. `./scripts/find-qjsng-gaps.sh` summarizes upstream
 Test262 cases where QuickJS-NG passes and `quickjs-rust` does not, and prints a
 greedy next area to investigate. The default quickwins recommendation uses a
-bounded, sharded probe and de-prioritizes areas with broad-feature signals such
-as async, destructuring, class, proxy, realm, species, resizable buffers, or
-Annex B global-code semantics. Use `--exact --all` for final full-range
-confirmation. Stress timeouts are reported separately by default; pass
-`--include-timeouts` when performance parity is the task.
+bounded, sharded probe, prefers small reviewable batches, and de-prioritizes
+broad-feature signals such as async, destructuring, class, proxy, realm,
+species, resizable buffers, or Annex B global-code semantics. Use `--exact
+--all` for final full-range confirmation. Stress timeouts are reported
+separately by default; pass `--include-timeouts` when performance parity is the
+task.
 `./scripts/test262-subset.sh` runs only curated
 Test262-derived cases that the current harness can execute deterministically;
 cases listed in `tests/test262/expected-failures.txt` may fail until the named
