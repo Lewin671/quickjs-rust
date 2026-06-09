@@ -131,6 +131,13 @@ probe shards run concurrently, and the report merges their case results before
 ranking areas. This gives the agent broader Test262 coverage per iteration
 without paying for a full audit or biasing entirely toward the first sorted
 Test262 directories.
+The default recommendation strategy is fast-batch greedy: it still prioritizes
+real quickjs-rust engine failures over harness gaps, but it prefers candidate
+areas with no more than `TEST262_GAP_RECOMMEND_BATCH_CAP` engine gaps, currently
+5. That keeps the next implementation slice reviewable and prevents one large
+or difficult area from blocking discovery of easier parity wins. Use
+`--strategy largest` to restore the old largest-gap-first recommendation, or
+`--recommend-batch-cap N` to tune how large a default batch may be.
 After a global probe has produced a candidate queue, use
 `--from-report target/test262-gaps/<run>` or `--from-latest-report` to recompute
 the recommendation from the saved `cases.jsonl` without executing Test262
@@ -141,17 +148,16 @@ focused verification still needs `--filter test/<prefix> --all`, and final
 completion still needs `--exact --all`.
 Use `--exact --all` when the task needs a complete report or when a probe finds
 no gaps and the agent needs to prove the exit condition. The recommendation
-prioritizes areas with real quickjs-rust failures, then falls back to the
-largest harness-gap area when the sample contains only skipped cases. Stress
-timeouts are excluded from the default actionable gap list so large conformance
-stress loops do not hide missing behavior; use `--include-timeouts` when
-performance parity is the task. Use `--probe-limit N` and `--probe-shards
-I/N[,I/N...]` to tune recommendation speed versus confidence; `--probe-shard
-I/N` remains as a single-shard shorthand for very fast local checks. Use
-`--no-recommend` when only the raw gap report is needed. Treat the recommended
-area as the smallest useful planning and commit boundary unless the area is too
-broad to review as one change; avoid splitting follow-up work into one commit
-per individual Test262 case.
+falls back to the largest harness-gap area only when the sample contains no
+engine failures. Stress timeouts are excluded from the default actionable gap
+list so large conformance stress loops do not hide missing behavior; use
+`--include-timeouts` when performance parity is the task. Use `--probe-limit N`
+and `--probe-shards I/N[,I/N...]` to tune recommendation speed versus
+confidence; `--probe-shard I/N` remains as a single-shard shorthand for very
+fast local checks. Use `--no-recommend` when only the raw gap report is needed.
+Treat the recommended area as the smallest useful planning and commit boundary
+unless the area is too broad to review as one change; avoid splitting follow-up
+work into one commit per individual Test262 case.
 
 `scripts/test262-subset.sh` runs the curated Test262 allowlist. Allowlist
 entries may point to local derived cases under `tests/test262/cases/` or pinned
