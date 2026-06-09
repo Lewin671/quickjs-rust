@@ -27,7 +27,7 @@ impl Parser {
             .span
             .start;
         let body = self.block_body()?;
-        reject_strict_body_with_non_simple_params(&params, &body, body_start)?;
+        self.reject_invalid_function_parameters(&params, &body, body_start)?;
         let end = self
             .tokens
             .get(self.cursor.saturating_sub(1))
@@ -69,7 +69,7 @@ impl Parser {
             .span
             .start;
         let body = self.block_body()?;
-        reject_strict_body_with_non_simple_params(&params, &body, body_start)?;
+        self.reject_invalid_function_parameters(&params, &body, body_start)?;
         let end = self
             .tokens
             .get(self.cursor.saturating_sub(1))
@@ -110,7 +110,7 @@ impl Parser {
                 .span
                 .start;
             let body = self.block_body()?;
-            reject_strict_body_with_non_simple_params(&params, &body, body_start)?;
+            self.reject_invalid_function_parameters(&params, &body, body_start)?;
             let end = self
                 .tokens
                 .get(self.cursor.saturating_sub(1))
@@ -194,35 +194,21 @@ impl Parser {
     pub(crate) fn function_parameters(&mut self) -> Result<FunctionParams, ParseError> {
         self.expect(&TokenKind::LeftParen)?;
         let mut positional = Vec::new();
-        let mut defaults = Vec::new();
         let mut rest = None;
         if !self.at(&TokenKind::RightParen) {
             loop {
                 if self.match_kind(&TokenKind::DotDotDot) {
-                    let rest_token = self.advance();
-                    let TokenKind::Identifier(rest_name) = rest_token.kind else {
+                    let pattern = self.binding_pattern()?;
+                    if self.at(&TokenKind::Equal) {
                         return Err(ParseError {
-                            message: "expected rest parameter name".to_owned(),
-                            span: rest_token.span,
+                            message: "rest parameter must not have a default".to_owned(),
+                            span: pattern.span(),
                         });
-                    };
-                    rest = Some(rest_name);
+                    }
+                    rest = Some(pattern);
                     break;
                 }
-                let param_token = self.advance();
-                let TokenKind::Identifier(param) = param_token.kind else {
-                    return Err(ParseError {
-                        message: "expected parameter name".to_owned(),
-                        span: param_token.span,
-                    });
-                };
-                positional.push(param);
-                let default = if self.match_kind(&TokenKind::Equal) {
-                    Some(self.assignment()?)
-                } else {
-                    None
-                };
-                defaults.push(default);
+                positional.push(self.binding_element()?);
                 if !self.match_kind(&TokenKind::Comma) {
                     break;
                 }
@@ -232,20 +218,61 @@ impl Parser {
             }
         }
         self.expect(&TokenKind::RightParen)?;
-        Ok(FunctionParams::new(positional, defaults, rest))
+        let params = FunctionParams::new(positional, rest);
+        if !params.is_simple()
+            && let Some(span) = duplicate_parameter_span(&params)
+        {
+            return Err(ParseError {
+                message: "duplicate parameter name".to_owned(),
+                span,
+            });
+        }
+        Ok(params)
+    }
+
+    pub(crate) fn reject_invalid_function_parameters(
+        &self,
+        params: &FunctionParams,
+        body: &[Stmt],
+        span_start: usize,
+    ) -> Result<(), ParseError> {
+        let strict_body = body_has_strict_directive(body);
+        if !params.is_simple() && strict_body {
+            return Err(ParseError {
+                message: "strict directive not allowed with non-simple parameters".to_owned(),
+                span: Span::new(span_start, span_start),
+            });
+        }
+        if (self.strict || strict_body)
+            && let Some(span) = duplicate_parameter_span(params)
+        {
+            return Err(ParseError {
+                message: "duplicate parameter name".to_owned(),
+                span,
+            });
+        }
+        if self.strict || strict_body {
+            for (name, span) in params.named_spans() {
+                if matches!(name.as_str(), "eval" | "arguments") {
+                    return Err(ParseError {
+                        message: "restricted parameter name in strict mode".to_owned(),
+                        span,
+                    });
+                }
+            }
+        }
+        Ok(())
     }
 }
 
-fn reject_strict_body_with_non_simple_params(
-    params: &FunctionParams,
-    body: &[Stmt],
-    span_start: usize,
-) -> Result<(), ParseError> {
-    if params.has_parameter_expressions() && body_has_strict_directive(body) {
-        return Err(ParseError {
-            message: "strict directive not allowed with non-simple parameters".to_owned(),
-            span: Span::new(span_start, span_start),
-        });
+fn duplicate_parameter_span(params: &FunctionParams) -> Option<Span> {
+    let named = params.named_spans();
+    for (index, (name, _)) in named.iter().enumerate() {
+        for (candidate, span) in &named[index + 1..] {
+            if candidate == name {
+                return Some(*span);
+            }
+        }
     }
-    Ok(())
+    None
 }

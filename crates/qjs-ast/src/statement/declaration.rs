@@ -21,6 +21,8 @@ pub enum BindingPattern {
     Array {
         /// Elements in source order. `None` represents an elision.
         elements: Vec<Option<BindingElement>>,
+        /// Optional trailing rest element.
+        rest: Option<Box<BindingPattern>>,
         /// Source span.
         span: Span,
     },
@@ -28,6 +30,8 @@ pub enum BindingPattern {
     Object {
         /// Object properties in source order.
         properties: Vec<ObjectBindingProperty>,
+        /// Optional trailing rest property binding.
+        rest: Option<Box<BindingPattern>>,
         /// Source span.
         span: Span,
     },
@@ -57,12 +61,33 @@ pub struct ObjectBindingProperty {
     pub span: Span,
 }
 
+impl BindingElement {
+    /// Creates a binding element for a plain identifier without a default.
+    #[must_use]
+    pub fn identifier(name: String, span: Span) -> Self {
+        Self {
+            binding: BindingPattern::Identifier { name, span },
+            default: None,
+            span,
+        }
+    }
+}
+
 impl BindingPattern {
     /// Returns all names declared by the binding pattern.
     #[must_use]
     pub fn names(&self) -> Vec<String> {
+        self.named_spans()
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect()
+    }
+
+    /// Returns all declared names paired with their identifier spans.
+    #[must_use]
+    pub fn named_spans(&self) -> Vec<(String, Span)> {
         let mut names = Vec::new();
-        self.collect_names(&mut names);
+        self.collect_named_spans(&mut names);
         names
     }
 
@@ -76,17 +101,25 @@ impl BindingPattern {
         }
     }
 
-    fn collect_names(&self, names: &mut Vec<String>) {
+    fn collect_named_spans(&self, names: &mut Vec<(String, Span)>) {
         match self {
-            Self::Identifier { name, .. } => names.push(name.clone()),
-            Self::Array { elements, .. } => {
+            Self::Identifier { name, span } => names.push((name.clone(), *span)),
+            Self::Array { elements, rest, .. } => {
                 for element in elements.iter().flatten() {
-                    element.binding.collect_names(names);
+                    element.binding.collect_named_spans(names);
+                }
+                if let Some(rest) = rest {
+                    rest.collect_named_spans(names);
                 }
             }
-            Self::Object { properties, .. } => {
+            Self::Object {
+                properties, rest, ..
+            } => {
                 for property in properties {
-                    property.binding.collect_names(names);
+                    property.binding.collect_named_spans(names);
+                }
+                if let Some(rest) = rest {
+                    rest.collect_named_spans(names);
                 }
             }
         }

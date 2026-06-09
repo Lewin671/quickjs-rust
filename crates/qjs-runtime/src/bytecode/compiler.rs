@@ -119,8 +119,11 @@ impl Compiler {
     }
 
     fn compile_parameter_defaults(&mut self, params: &FunctionParams) -> Result<(), RuntimeError> {
-        for (index, name) in params.positional.iter().enumerate() {
-            let Some(default) = params.default_at(index) else {
+        for element in &params.positional {
+            let Some(default) = &element.default else {
+                continue;
+            };
+            let BindingPattern::Identifier { name, .. } = &element.binding else {
                 continue;
             };
             let slot = self
@@ -916,10 +919,7 @@ fn function_body_annex_b_blocked_names(params: &FunctionParams, body: &[Stmt]) -
 }
 
 fn function_param_names(params: &FunctionParams) -> Vec<String> {
-    let mut names = params.positional.clone();
-    if let Some(rest) = &params.rest {
-        names.push(rest.clone());
-    }
+    let mut names = params.names();
     if !names.iter().any(|name| name == "arguments") {
         names.push("arguments".to_owned());
     }

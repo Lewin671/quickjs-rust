@@ -1,9 +1,25 @@
 use qjs_ast::{
-    ArrayElement, AssignmentTarget, CallArgument, Expr, Literal, MemberProperty, ObjectPropertyKey,
-    ObjectPropertyKind, Stmt,
+    ArrayElement, AssignmentTarget, CallArgument, Expr, FunctionParams, Literal, MemberProperty,
+    ObjectPropertyKey, ObjectPropertyKind, Stmt,
 };
 
 use crate::parse_script;
+
+fn positional_names(params: &FunctionParams) -> Vec<String> {
+    params
+        .positional
+        .iter()
+        .flat_map(|element| element.binding.names())
+        .collect()
+}
+
+fn rest_names(params: &FunctionParams) -> Vec<String> {
+    params
+        .rest
+        .as_deref()
+        .map(qjs_ast::BindingPattern::names)
+        .unwrap_or_default()
+}
 
 #[test]
 fn parses_function_declaration_and_call() {
@@ -16,7 +32,7 @@ fn parses_function_declaration_and_call() {
         panic!("expected function declaration followed by call");
     };
     assert_eq!(name, "add");
-    assert_eq!(params.positional, ["a", "b"]);
+    assert_eq!(positional_names(params), ["a", "b"]);
     assert_eq!(arguments.len(), 2);
 
     let script = parse_script("add(1, 2,);").expect("source should parse");
@@ -52,7 +68,7 @@ fn parses_function_declaration_and_call() {
         panic!("expected function expression initializer");
     };
     assert_eq!(name.as_deref(), Some("named"));
-    assert_eq!(params.positional, ["value"]);
+    assert_eq!(positional_names(params), ["value"]);
     assert!(!lexical_this);
     assert!(!lexical_arguments);
 
@@ -73,7 +89,7 @@ fn parses_function_declaration_and_call() {
         panic!("expected arrow function initializer");
     };
     assert_eq!(name, &None);
-    assert_eq!(params.positional, ["a", "b"]);
+    assert_eq!(positional_names(params), ["a", "b"]);
     assert!(!constructable);
     assert!(lexical_this);
     assert!(lexical_arguments);
@@ -93,7 +109,7 @@ fn parses_function_declaration_and_call() {
     else {
         panic!("expected arrow function initializer");
     };
-    assert_eq!(params.positional, ["value"]);
+    assert_eq!(positional_names(params), ["value"]);
     assert!(lexical_this);
     assert!(lexical_arguments);
     assert!(matches!(body.as_slice(), [Stmt::Return { .. }]));
@@ -103,7 +119,7 @@ fn parses_function_declaration_and_call() {
     let [Stmt::FunctionDecl { params, .. }] = script.body.as_slice() else {
         panic!("expected function declaration");
     };
-    assert_eq!(params.positional, ["a", "b"]);
+    assert_eq!(positional_names(params), ["a", "b"]);
 
     let script = parse_script("let trailing = (a, b,) => a + b;").expect("source should parse");
     let [Stmt::VarDecl { declarations, .. }] = script.body.as_slice() else {
@@ -112,7 +128,7 @@ fn parses_function_declaration_and_call() {
     let Some(Expr::Function { params, .. }) = &declarations[0].init else {
         panic!("expected arrow function initializer");
     };
-    assert_eq!(params.positional, ["a", "b"]);
+    assert_eq!(positional_names(params), ["a", "b"]);
 }
 
 #[test]
@@ -122,7 +138,7 @@ fn parses_default_parameters() {
     let [Stmt::FunctionDecl { params, .. }] = script.body.as_slice() else {
         panic!("expected function declaration");
     };
-    assert_eq!(params.positional, ["a", "b"]);
+    assert_eq!(positional_names(params), ["a", "b"]);
     assert_eq!(params.length(), 1);
     assert!(params.default_at(0).is_none());
     assert!(matches!(
@@ -137,7 +153,7 @@ fn parses_default_parameters() {
     let Some(Expr::Function { params, .. }) = &declarations[0].init else {
         panic!("expected arrow function initializer");
     };
-    assert_eq!(params.positional, ["a", "b"]);
+    assert_eq!(positional_names(params), ["a", "b"]);
     assert_eq!(params.length(), 1);
     assert!(params.default_at(1).is_some());
 }
@@ -155,8 +171,8 @@ fn parses_rest_parameters() {
     let [Stmt::FunctionDecl { params, .. }] = script.body.as_slice() else {
         panic!("expected function declaration");
     };
-    assert_eq!(params.positional, ["first"]);
-    assert_eq!(params.rest.as_deref(), Some("rest"));
+    assert_eq!(positional_names(params), ["first"]);
+    assert_eq!(rest_names(params), ["rest"]);
 
     let script = parse_script("let collect = (...rest) => rest;").expect("source should parse");
     let [Stmt::VarDecl { declarations, .. }] = script.body.as_slice() else {
@@ -172,7 +188,7 @@ fn parses_rest_parameters() {
         panic!("expected arrow function initializer");
     };
     assert!(params.positional.is_empty());
-    assert_eq!(params.rest.as_deref(), Some("rest"));
+    assert_eq!(rest_names(params), ["rest"]);
     assert!(lexical_this);
     assert!(lexical_arguments);
 
@@ -190,7 +206,7 @@ fn rejects_duplicate_arrow_parameters() {
     let [Stmt::FunctionDecl { params, .. }] = script.body.as_slice() else {
         panic!("expected function declaration");
     };
-    assert_eq!(params.positional, ["value", "value"]);
+    assert_eq!(positional_names(params), ["value", "value"]);
 }
 
 #[test]
@@ -201,8 +217,12 @@ fn rejects_restricted_arrow_parameter_names_in_strict_mode() {
 
     parse_script("let arrow = (arguments, eval, ...yield) => arguments;")
         .expect("non-strict arrow parameter names should parse");
-    parse_script("\"use strict\"; function ordinary(arguments, eval) { return arguments; }")
-        .expect("ordinary function parameter validation is outside arrow parsing");
+    assert!(
+        parse_script("\"use strict\"; function ordinary(arguments, eval) { return arguments; }")
+            .is_err()
+    );
+    parse_script("function ordinary(arguments, eval) { return arguments; }")
+        .expect("non-strict function parameter names should parse");
 }
 
 #[test]
@@ -468,7 +488,7 @@ fn parses_object_literal_and_member_assignment() {
         panic!("expected method value to parse as function expression");
     };
     assert_eq!(name.as_deref(), Some("method"));
-    assert_eq!(params.positional, ["a".to_owned(), "b".to_owned()]);
+    assert_eq!(positional_names(params), ["a".to_owned(), "b".to_owned()]);
     assert!(!constructable);
 
     let script = parse_script("({ keys: function* keys() { yield 2; yield 3; } });")
@@ -559,7 +579,7 @@ fn parses_object_literal_and_member_assignment() {
         panic!("expected setter value to parse as function expression");
     };
     assert_eq!(name.as_deref(), Some("value"));
-    assert_eq!(params.positional, ["next".to_owned()]);
+    assert_eq!(positional_names(params), ["next".to_owned()]);
     assert!(!constructable);
 
     let script = parse_script("({ set() { return 42; } });").expect("source should parse");
@@ -763,4 +783,63 @@ fn parses_member_access() {
     };
     assert_eq!(property, &MemberProperty::Named("length".to_owned()));
     assert!(matches!(object.as_ref(), Expr::Member { .. }));
+}
+
+#[test]
+fn parses_binding_pattern_parameters() {
+    let script = parse_script(
+        "function pick({key, nested: {inner} = {}}, [first = 1, , third], ...rest) { return inner; }",
+    )
+    .expect("source should parse");
+    let [Stmt::FunctionDecl { params, .. }] = script.body.as_slice() else {
+        panic!("expected function declaration");
+    };
+    assert_eq!(positional_names(params), ["key", "inner", "first", "third"]);
+    assert_eq!(rest_names(params), ["rest"]);
+    assert_eq!(params.length(), 2);
+    assert!(!params.is_simple());
+}
+
+#[test]
+fn parses_arrow_binding_pattern_parameters() {
+    let script = parse_script("let arrow = ({a = 1}, [b], ...[c, d]) => a + b + c + d;")
+        .expect("source should parse");
+    let [Stmt::VarDecl { declarations, .. }] = script.body.as_slice() else {
+        panic!("expected variable declaration");
+    };
+    let Some(Expr::Function { params, .. }) = &declarations[0].init else {
+        panic!("expected arrow function initializer");
+    };
+    assert_eq!(positional_names(params), ["a", "b"]);
+    assert_eq!(rest_names(params), ["c", "d"]);
+}
+
+#[test]
+fn parses_binding_pattern_rest_elements() {
+    let script = parse_script("let [first, ...others] = xs, {key, ...extra} = obj;")
+        .expect("source should parse");
+    let [Stmt::VarDecl { declarations, .. }] = script.body.as_slice() else {
+        panic!("expected variable declaration");
+    };
+    assert_eq!(declarations[0].binding.names(), ["first", "others"]);
+    assert_eq!(declarations[1].binding.names(), ["key", "extra"]);
+}
+
+#[test]
+fn rejects_duplicate_names_in_pattern_parameters() {
+    assert!(parse_script("function pick([value], value) { return value; }").is_err());
+    assert!(parse_script("function pick({value}, {value}) { return value; }").is_err());
+    assert!(parse_script("function pick(value = 1, value) { return value; }").is_err());
+}
+
+#[test]
+fn rejects_rest_parameter_defaults() {
+    assert!(parse_script("function pick(...rest = []) { return rest; }").is_err());
+    assert!(parse_script("let [a, ...rest = []] = xs;").is_err());
+}
+
+#[test]
+fn rejects_strict_directive_with_pattern_parameters() {
+    assert!(parse_script("function pick([value]) { \"use strict\"; return value; }").is_err());
+    assert!(parse_script("function pick(...rest) { \"use strict\"; return rest; }").is_err());
 }

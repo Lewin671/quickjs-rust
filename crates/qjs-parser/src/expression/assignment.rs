@@ -84,7 +84,7 @@ impl Parser {
                 span,
             }]
         };
-        if params.has_parameter_expressions() && body_has_strict_directive(&body) {
+        if !params.is_simple() && body_has_strict_directive(&body) {
             return Err(ParseError {
                 message: "strict directive not allowed with non-simple parameters".to_owned(),
                 span: Span::new(body_start, body_start),
@@ -142,33 +142,26 @@ impl Parser {
         let start_cursor = self.cursor;
         self.expect(&TokenKind::LeftParen)?;
         let mut positional = Vec::new();
-        let mut defaults = Vec::new();
         let mut rest = None;
         if !self.at(&TokenKind::RightParen) {
             loop {
                 if self.match_kind(&TokenKind::DotDotDot) {
-                    let token = self.advance();
-                    let span = token.span;
-                    let TokenKind::Identifier(param) = token.kind else {
+                    let Ok(pattern) = self.binding_pattern() else {
                         self.cursor = start_cursor;
                         return Ok(None);
                     };
-                    rest = Some((param, span));
+                    if self.at(&TokenKind::Equal) {
+                        self.cursor = start_cursor;
+                        return Ok(None);
+                    }
+                    rest = Some(pattern);
                     break;
                 }
-                let token = self.advance();
-                let span = token.span;
-                let TokenKind::Identifier(param) = token.kind else {
+                let Ok(element) = self.binding_element() else {
                     self.cursor = start_cursor;
                     return Ok(None);
                 };
-                positional.push((param, span));
-                let default = if self.match_kind(&TokenKind::Equal) {
-                    Some(self.assignment()?)
-                } else {
-                    None
-                };
-                defaults.push(default);
+                positional.push(element);
                 if !self.match_kind(&TokenKind::Comma) {
                     break;
                 }
@@ -187,33 +180,33 @@ impl Parser {
         }
         let close_paren_span = self.tokens[self.cursor - 1].span;
         self.reject_line_terminator_before_arrow(close_paren_span)?;
-        let duplicate_span = duplicate_arrow_parameter_span(&positional, rest.as_ref());
-        if let Some(span) = duplicate_span {
+        let params = FunctionParams::new(positional, rest);
+        let named = params.named_spans();
+        if let Some(span) = duplicate_arrow_parameter_span(&named) {
             return Err(ParseError {
                 message: "duplicate arrow parameter name".to_owned(),
                 span,
             });
         }
-        let restricted_span = restricted_strict_arrow_parameter_span(&positional, rest.as_ref());
         if self.strict {
-            if let Some(span) = restricted_span {
+            for (name, span) in &named {
+                if restricted_strict_arrow_parameter(name) {
+                    return Err(ParseError {
+                        message: "restricted arrow parameter name in strict mode".to_owned(),
+                        span: *span,
+                    });
+                }
+            }
+        }
+        for (name, span) in &named {
+            if reserved_arrow_parameter(name, self.strict) {
                 return Err(ParseError {
-                    message: "restricted arrow parameter name in strict mode".to_owned(),
-                    span,
+                    message: "reserved arrow parameter name".to_owned(),
+                    span: *span,
                 });
             }
         }
-        if let Some(span) = reserved_arrow_parameter_span(&positional, rest.as_ref(), self.strict) {
-            return Err(ParseError {
-                message: "reserved arrow parameter name".to_owned(),
-                span,
-            });
-        }
-        Ok(Some(FunctionParams::new(
-            positional.into_iter().map(|(name, _)| name).collect(),
-            defaults,
-            rest.map(|(name, _)| name),
-        )))
+        Ok(Some(params))
     }
 
     fn reject_line_terminator_before_arrow(&self, previous_span: Span) -> Result<(), ParseError> {
@@ -249,18 +242,10 @@ impl Parser {
     }
 }
 
-fn duplicate_arrow_parameter_span(
-    positional: &[(String, Span)],
-    rest: Option<&(String, Span)>,
-) -> Option<Span> {
-    for (index, (name, _)) in positional.iter().enumerate() {
-        for (candidate, span) in &positional[index + 1..] {
+fn duplicate_arrow_parameter_span(named: &[(String, Span)]) -> Option<Span> {
+    for (index, (name, _)) in named.iter().enumerate() {
+        for (candidate, span) in &named[index + 1..] {
             if candidate == name {
-                return Some(*span);
-            }
-        }
-        if let Some((rest_name, span)) = rest {
-            if rest_name == name {
                 return Some(*span);
             }
         }
@@ -268,35 +253,8 @@ fn duplicate_arrow_parameter_span(
     None
 }
 
-fn restricted_strict_arrow_parameter_span(
-    positional: &[(String, Span)],
-    rest: Option<&(String, Span)>,
-) -> Option<Span> {
-    for (name, span) in positional {
-        if restricted_strict_arrow_parameter(name) {
-            return Some(*span);
-        }
-    }
-    let (name, span) = rest?;
-    restricted_strict_arrow_parameter(name).then_some(*span)
-}
-
 fn restricted_strict_arrow_parameter(name: &str) -> bool {
     matches!(name, "arguments" | "eval" | "yield")
-}
-
-fn reserved_arrow_parameter_span(
-    positional: &[(String, Span)],
-    rest: Option<&(String, Span)>,
-    strict: bool,
-) -> Option<Span> {
-    for (name, span) in positional {
-        if reserved_arrow_parameter(name, strict) {
-            return Some(*span);
-        }
-    }
-    let (name, span) = rest?;
-    reserved_arrow_parameter(name, strict).then_some(*span)
 }
 
 fn reserved_arrow_parameter(name: &str, strict: bool) -> bool {

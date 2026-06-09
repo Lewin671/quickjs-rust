@@ -1,6 +1,30 @@
 use std::collections::HashSet;
 
-use qjs_ast::{CatchParam, ForInLeft, ForInit, FunctionParams, Stmt};
+use qjs_ast::{BindingPattern, CatchParam, ForInLeft, ForInit, FunctionParams, Stmt};
+
+/// Returns the call-frame binding name for a positional parameter.
+///
+/// Plain identifier parameters bind under their own name; destructured
+/// parameters bind the raw argument under an internal name that the function
+/// prologue destructures.
+pub(crate) fn parameter_binding_name(binding: &BindingPattern, index: usize) -> String {
+    match binding {
+        BindingPattern::Identifier { name, .. } => name.clone(),
+        BindingPattern::Array { .. } | BindingPattern::Object { .. } => {
+            format!("\u{0}param_pattern_{index}")
+        }
+    }
+}
+
+/// Returns the call-frame binding name for the rest parameter.
+pub(crate) fn rest_parameter_binding_name(binding: &BindingPattern) -> String {
+    match binding {
+        BindingPattern::Identifier { name, .. } => name.clone(),
+        BindingPattern::Array { .. } | BindingPattern::Object { .. } => {
+            "\u{0}rest_pattern".to_owned()
+        }
+    }
+}
 
 pub(crate) fn collect_function_local_names(
     name: Option<&String>,

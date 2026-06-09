@@ -90,7 +90,7 @@ impl Parser {
         Ok(declarations)
     }
 
-    fn binding_pattern(&mut self) -> Result<BindingPattern, ParseError> {
+    pub(crate) fn binding_pattern(&mut self) -> Result<BindingPattern, ParseError> {
         if self.at(&TokenKind::LeftBracket) {
             return self.array_binding_pattern();
         }
@@ -111,7 +111,7 @@ impl Parser {
         })
     }
 
-    fn binding_element(&mut self) -> Result<BindingElement, ParseError> {
+    pub(crate) fn binding_element(&mut self) -> Result<BindingElement, ParseError> {
         let binding = self.binding_pattern()?;
         let default = if self.match_kind(&TokenKind::Equal) {
             Some(self.assignment()?)
@@ -132,10 +132,22 @@ impl Parser {
     fn array_binding_pattern(&mut self) -> Result<BindingPattern, ParseError> {
         let start = self.advance().span.start;
         let mut elements = Vec::new();
+        let mut rest = None;
         while !self.at(&TokenKind::RightBracket) {
             if self.match_kind(&TokenKind::Comma) {
                 elements.push(None);
                 continue;
+            }
+            if self.match_kind(&TokenKind::DotDotDot) {
+                let pattern = self.binding_pattern()?;
+                if self.at(&TokenKind::Equal) {
+                    return Err(ParseError {
+                        message: "rest element must not have a default".to_owned(),
+                        span: pattern.span(),
+                    });
+                }
+                rest = Some(Box::new(pattern));
+                break;
             }
 
             elements.push(Some(self.binding_element()?));
@@ -153,6 +165,7 @@ impl Parser {
         let end = self.advance().span.end;
         Ok(BindingPattern::Array {
             elements,
+            rest,
             span: Span::new(start, end),
         })
     }
@@ -160,22 +173,50 @@ impl Parser {
     fn object_binding_pattern(&mut self) -> Result<BindingPattern, ParseError> {
         let start = self.advance().span.start;
         let mut properties = Vec::new();
+        let mut rest = None;
         while !self.at(&TokenKind::RightBrace) {
+            if self.match_kind(&TokenKind::DotDotDot) {
+                let token = self.advance();
+                let TokenKind::Identifier(name) = token.kind else {
+                    return Err(ParseError {
+                        message: "expected rest binding identifier".to_owned(),
+                        span: token.span,
+                    });
+                };
+                rest = Some(Box::new(BindingPattern::Identifier {
+                    name,
+                    span: token.span,
+                }));
+                break;
+            }
             let key_token = self.advance();
-            let TokenKind::Identifier(key) = key_token.kind else {
-                return Err(ParseError {
-                    message: "expected binding property name".to_owned(),
-                    span: key_token.span,
-                });
+            let shorthand = matches!(key_token.kind, TokenKind::Identifier(_));
+            let key = match key_token.kind {
+                TokenKind::Identifier(key) | TokenKind::String(key) | TokenKind::Number(key) => key,
+                kind => {
+                    if let Some(key) = crate::expression::keyword_property_name(&kind) {
+                        key.to_owned()
+                    } else {
+                        return Err(ParseError {
+                            message: "expected binding property name".to_owned(),
+                            span: key_token.span,
+                        });
+                    }
+                }
             };
 
             let binding = if self.match_kind(&TokenKind::Colon) {
                 self.binding_pattern()?
-            } else {
+            } else if shorthand {
                 BindingPattern::Identifier {
                     name: key.clone(),
                     span: key_token.span,
                 }
+            } else {
+                return Err(ParseError {
+                    message: "expected `:` after binding property name".to_owned(),
+                    span: key_token.span,
+                });
             };
             let default = if self.match_kind(&TokenKind::Equal) {
                 Some(self.assignment()?)
@@ -206,6 +247,7 @@ impl Parser {
         let end = self.advance().span.end;
         Ok(BindingPattern::Object {
             properties,
+            rest,
             span: Span::new(start, end),
         })
     }
