@@ -131,6 +131,7 @@ fn parses_for_in_statement() {
             ..
         } if name == "key"
     ));
+    assert!(parse_script("\"use strict\"; for (var key = 0 in object) key;").is_err());
 }
 
 #[test]

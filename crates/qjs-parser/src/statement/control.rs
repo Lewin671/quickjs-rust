@@ -94,6 +94,17 @@ impl Parser {
                 span: name_token.span,
             })?;
             let init = if kind == VarKind::Var && self.match_kind(&TokenKind::Equal) {
+                if self.strict {
+                    return Err(ParseError {
+                        message:
+                            "for-in variable declarations cannot have initializers in strict mode"
+                                .to_owned(),
+                        span: self
+                            .peek()
+                            .expect("parser should always have eof token")
+                            .span,
+                    });
+                }
                 Some(self.expression_no_in()?)
             } else {
                 None
