@@ -341,6 +341,11 @@ rust_features_supported() {
       ;;
   esac
   case "$rel" in
+    test/annexB/built-ins/String/prototype/match/custom-matcher-emulates-undefined.js|test/annexB/built-ins/String/prototype/matchAll/custom-matcher-emulates-undefined.js|test/annexB/built-ins/String/prototype/replace/custom-replacer-emulates-undefined.js|test/annexB/built-ins/String/prototype/replaceAll/custom-replacer-emulates-undefined.js|test/annexB/built-ins/String/prototype/search/custom-searcher-emulates-undefined.js|test/annexB/built-ins/String/prototype/split/custom-splitter-emulates-undefined.js)
+      entries="$(drop_feature_entries "$entries" -e 'IsHTMLDDA')"
+      ;;
+  esac
+  case "$rel" in
     test/built-ins/Array/prototype/entries/*|test/built-ins/Array/prototype/keys/*|test/built-ins/Array/prototype/values/*|test/built-ins/Array/prototype/Symbol.iterator.js)
       entries="$(drop_feature_entries "$entries" -e 'Symbol.iterator')"
       ;;
