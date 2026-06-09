@@ -78,3 +78,23 @@ fn lazy_quantifiers_try_shorter_matches_first() {
     let matched = regexp_match_range("a[a-z]{2,4}?", "abcdefghi", 0, false, false).unwrap();
     assert_eq!((matched.start, matched.end), (0, 3));
 }
+
+#[test]
+fn quantified_groups_preserve_atom_order_and_clear_skipped_captures() {
+    let matched = regexp_match_range("(aa|aabaac|ba|b|c)*", "aabaac", 0, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 4));
+    assert_eq!(matched.captures, vec![Some((2, 4))]);
+
+    let matched = regexp_match_range("(z)((a+)?(b+)?(c))*", "zaacbbbcac", 0, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 10));
+    assert_eq!(
+        matched.captures,
+        vec![
+            Some((0, 1)),
+            Some((8, 10)),
+            Some((8, 9)),
+            None,
+            Some((9, 10)),
+        ]
+    );
+}

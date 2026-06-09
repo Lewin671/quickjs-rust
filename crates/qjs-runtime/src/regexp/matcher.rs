@@ -41,6 +41,16 @@ struct MatchOptions {
     unicode: bool,
 }
 
+struct RepeatAtom<'a> {
+    pattern: &'a [char],
+    text: &'a [char],
+    atom_pc: usize,
+    quantifier: Quantifier,
+    atom_captures: Vec<usize>,
+    group_indices: &'a HashMap<usize, usize>,
+    options: MatchOptions,
+}
+
 pub(super) fn regexp_match_range(
     source: &str,
     input: &str,
@@ -535,6 +545,7 @@ fn repeat_atom(
     group_indices: &HashMap<usize, usize>,
     options: MatchOptions,
 ) -> Vec<MatchState> {
+    let atom_captures = atom_capture_indices(pattern, atom_pc, group_indices, options.unicode);
     let mut current = vec![state];
     for _ in 0..quantifier.min {
         current = current
@@ -551,26 +562,83 @@ fn repeat_atom(
         return current;
     }
 
-    let mut results = current.clone();
-    let mut count = quantifier.min;
-    while quantifier.max.is_none_or(|max| count < max) {
-        let next: Vec<_> = current
-            .into_iter()
-            .flat_map(|state| match_atom(pattern, text, atom_pc, state, group_indices, options))
-            .map(|(_, state)| state)
-            .filter(|state| results.iter().all(|result| result.index != state.index))
-            .collect();
-        if next.is_empty() {
-            break;
-        }
-        results.extend(next.clone());
-        current = next;
-        count += 1;
-    }
-    if quantifier.greedy {
-        results.reverse();
+    let repeat = RepeatAtom {
+        pattern,
+        text,
+        atom_pc,
+        quantifier,
+        atom_captures,
+        group_indices,
+        options,
+    };
+    let mut results = Vec::new();
+    for state in current {
+        repeat_atom_from(&repeat, state, quantifier.min, &mut results);
     }
     results
+}
+
+fn repeat_atom_from(
+    repeat: &RepeatAtom<'_>,
+    state: MatchState,
+    count: usize,
+    results: &mut Vec<MatchState>,
+) {
+    if !repeat.quantifier.greedy {
+        results.push(repeat_accept_state(
+            state.clone(),
+            count,
+            &repeat.atom_captures,
+        ));
+    }
+
+    if repeat.quantifier.max.is_none_or(|max| count < max) {
+        for (_, next_state) in match_atom(
+            repeat.pattern,
+            repeat.text,
+            repeat.atom_pc,
+            state.clone(),
+            repeat.group_indices,
+            repeat.options,
+        ) {
+            if next_state.index == state.index {
+                continue;
+            }
+            repeat_atom_from(repeat, next_state, count + 1, results);
+        }
+    }
+
+    if repeat.quantifier.greedy {
+        results.push(repeat_accept_state(state, count, &repeat.atom_captures));
+    }
+}
+
+fn repeat_accept_state(mut state: MatchState, count: usize, atom_captures: &[usize]) -> MatchState {
+    if count == 0 {
+        for capture in atom_captures {
+            state.captures[*capture] = None;
+        }
+    }
+    state
+}
+
+fn atom_capture_indices(
+    pattern: &[char],
+    atom_pc: usize,
+    group_indices: &HashMap<usize, usize>,
+    unicode: bool,
+) -> Vec<usize> {
+    let Some(atom_end) = atom_end(pattern, atom_pc, unicode) else {
+        return Vec::new();
+    };
+    let mut indices: Vec<_> = group_indices
+        .iter()
+        .filter_map(|(group_pc, index)| {
+            (atom_pc <= *group_pc && *group_pc < atom_end).then_some(*index)
+        })
+        .collect();
+    indices.sort_unstable();
+    indices
 }
 
 fn match_group(
