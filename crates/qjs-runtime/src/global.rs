@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use qjs_parser::parse_script;
 
 use crate::{
-    Function, NativeFunction, Property, RuntimeError, Value,
+    Function, GLOBAL_THIS_BINDING, NativeFunction, Property, RuntimeError, Value,
     bytecode::{compile_script, eval_bytecode_with_env},
     string::{string_code_units, string_from_code_unit},
     to_js_string_with_env, to_number,
@@ -142,6 +142,7 @@ pub(super) fn native_global_eval(
         message: error.message,
     })?;
     let bytecode = compile_script(&script)?;
+    initialize_eval_global_bindings(&bytecode, env);
     let result = eval_bytecode_with_env(&bytecode, env.clone());
     for name in bytecode
         .hoisted_local_names()
@@ -152,6 +153,32 @@ pub(super) fn native_global_eval(
         }
     }
     result.value
+}
+
+fn initialize_eval_global_bindings(
+    bytecode: &crate::bytecode::Bytecode,
+    env: &mut HashMap<String, Value>,
+) {
+    let global_this = env.get(GLOBAL_THIS_BINDING).and_then(|value| match value {
+        Value::Object(object) => Some(object.clone()),
+        _ => None,
+    });
+    for name in bytecode.hoisted_local_names() {
+        if let Some(property) = global_this
+            .as_ref()
+            .and_then(|object| object.own_property(name))
+        {
+            env.insert(name.to_owned(), property.value);
+        } else {
+            env.entry(name.to_owned()).or_insert(Value::Undefined);
+            if let Some(global_this) = &global_this {
+                global_this.define_property(
+                    name.to_owned(),
+                    Property::data(Value::Undefined, true, true, true),
+                );
+            }
+        }
+    }
 }
 
 pub(super) fn native_global_escape(

@@ -149,7 +149,6 @@ impl Compiler {
             self.emit_load_undefined();
             return Ok(());
         }
-        let slot = self.local_slot(name, true);
         let is_strict = self.strict || is_strict_function_body(body);
         let bytecode = super::compiler::compile_function_body_with_strict(params, body, is_strict)?;
         let local_names = collect_function_local_names(Some(name), params, body, true);
@@ -163,6 +162,7 @@ impl Compiler {
             lexical_this: false,
             lexical_arguments: false,
         });
+        let slot = self.local_slot(name, true);
         self.emit(Op::StoreLocal(slot));
         self.emit_load_undefined();
         Ok(())

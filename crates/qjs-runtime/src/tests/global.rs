@@ -130,6 +130,12 @@ fn evaluates_global_eval_builtin() {
     assert!(eval("eval('for (let k in { a: 1 }) {} k;')").is_err());
     assert!(eval("eval('for (let v of [1]) {} v;')").is_err());
     assert!(eval("eval('switch (1) { case 1: let s = 1; } s;')").is_err());
+    assert_eq!(
+        eval(
+            "eval('var before = f; { function f() { return 7; } } before === undefined && f() === 7;');"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]
