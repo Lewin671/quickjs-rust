@@ -129,8 +129,11 @@ investigate. Use
 `--filter test/<prefix>` to focus the scan on one Test262 subtree and `--all`
 when the focused scan should be exhaustive. It prints a greedy next area by
 default. For unfiltered `--all` recommendation runs, the default is a bounded
-greedy probe over `TEST262_GAP_PROBE_LIMIT` cases, currently 100, from each
-entry in `TEST262_GAP_PROBE_SHARDS`, currently `1/16,5/16,9/16,13/16`. Those
+greedy probe over `TEST262_GAP_PROBE_LIMIT` cases, currently 100, from four
+shards of 16. When no explicit selection is given via `--probe-shards` or
+`TEST262_GAP_PROBE_SHARDS`, the default shard set rotates one step per probe
+run (state in `target/test262-gaps/.probe-rotation`), so four consecutive
+probes sweep all 16 shards instead of resampling the same files. Those
 probe shards run concurrently, and the report merges their case results before
 ranking areas. This gives the agent broader Test262 coverage per iteration
 without paying for a full audit or biasing entirely toward the first sorted

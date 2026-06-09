@@ -22,7 +22,10 @@ REPORT_SOURCE=""
 FROM_LATEST_REPORT=0
 SKIP_AREAS=()
 PROBE_LIMIT="${TEST262_GAP_PROBE_LIMIT:-100}"
-PROBE_SHARDS="${TEST262_GAP_PROBE_SHARDS:-${TEST262_GAP_PROBE_SHARD:-1/16,5/16,9/16,13/16}}"
+PROBE_SHARDS="${TEST262_GAP_PROBE_SHARDS:-${TEST262_GAP_PROBE_SHARD:-}}"
+PROBE_SHARD_BASES="1 5 9 13"
+PROBE_SHARD_TOTAL=16
+PROBE_ROTATION_FILE="${TEST262_GAP_PROBE_ROTATION_FILE:-$ROOT_DIR/target/test262-gaps/.probe-rotation}"
 
 usage() {
   cat >&2 <<'USAGE'
@@ -35,7 +38,10 @@ gap list and greedy recommendation.
 
 For unfiltered --all recommendation runs, the default strategy is a fast greedy
 probe over TEST262_GAP_PROBE_LIMIT cases from each TEST262_GAP_PROBE_SHARDS
-shard, run concurrently. Use --exact --all when a complete audit is required,
+shard, run concurrently. When no explicit shard selection is given, the four
+default shards rotate one step per probe run (state in
+target/test262-gaps/.probe-rotation), sweeping all 16 shards across four
+consecutive probes. Use --exact --all when a complete audit is required,
 especially to prove there are no remaining gaps.
 The default recommendation strategy is quickwins greedy: prefer reviewable
 engine-gap batches, then small harness-only batches that include at least one
@@ -195,6 +201,27 @@ case "$PROBE_LIMIT" in
     exit 2
     ;;
 esac
+# Default probes rotate their shard selection so repeated global probes
+# sweep the whole Test262 tree over successive runs instead of resampling
+# the same fixed shards. Explicit --probe-shards or the env vars above pin
+# the selection and skip rotation.
+if [ -z "$PROBE_SHARDS" ]; then
+  rotation=0
+  if [ -z "$FILTER_PREFIX" ] && [ "$EXACT_SCAN" -eq 0 ] && \
+     [ -z "$REPORT_SOURCE" ] && [ "$FROM_LATEST_REPORT" -eq 0 ]; then
+    if [ -f "$PROBE_ROTATION_FILE" ]; then
+      rotation="$(cat "$PROBE_ROTATION_FILE" 2>/dev/null || echo 0)"
+    fi
+    case "$rotation" in ''|*[!0-9]*) rotation=0 ;; esac
+    rotation=$((rotation % 4))
+    mkdir -p "$(dirname "$PROBE_ROTATION_FILE")"
+    echo $(((rotation + 1) % 4)) >"$PROBE_ROTATION_FILE"
+  fi
+  for base in $PROBE_SHARD_BASES; do
+    idx=$(((base - 1 + rotation) % PROBE_SHARD_TOTAL + 1))
+    PROBE_SHARDS="${PROBE_SHARDS:+$PROBE_SHARDS,}$idx/$PROBE_SHARD_TOTAL"
+  done
+fi
 IFS=',' read -r -a PROBE_SHARD_LIST <<<"$PROBE_SHARDS"
 if [ "${#PROBE_SHARD_LIST[@]}" -eq 0 ]; then
   echo "error: --probe-shards must not be empty" >&2

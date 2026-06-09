@@ -29,11 +29,3 @@ tests of their own. The harness changes frequently and is the leverage point
 for all agent throughput, but every strategy adjustment currently carries
 untested regression risk that only manual inspection can catch.
 
-## 3. Default probe sampling is deterministic and decays in value
-
-Unfiltered global probes always sample the same fixed shards
-(`TEST262_GAP_PROBE_SHARDS`, currently `1/16,5/16,9/16,13/16`) with a fixed
-per-shard limit. As the sampled regions are cleared, repeated default probes
-re-scan the same cases and surface less new information, while gaps in the
-other shards only become visible through explicit `--filter` runs or an
-`--exact --all` audit.
