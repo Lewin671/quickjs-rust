@@ -270,7 +270,9 @@ var $262 = {
     Object.defineProperty(crossRealmArray, "__quickjsRustCrossRealmArray", {
       value: true
     });
-    return { global: { Array: crossRealmArray, Object: Object } };
+    var realmGlobal = Object.create(globalThis);
+    realmGlobal.Array = crossRealmArray;
+    return { global: realmGlobal };
   }
 };
 EOF
