@@ -336,6 +336,24 @@ fn evaluates_regexp_exec_global_last_index() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "let gets = 0; let counter = { valueOf: function() { gets = gets + 1; return 0; } }; let re = /a/; re.lastIndex = counter; let result = re.exec('nbc'); (result === null) + ':' + (re.lastIndex === counter) + ':' + gets;"
+        ),
+        Ok(Value::String("true:true:1".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let gets = 0; let counter = { valueOf: function() { gets = gets + 1; return 0; } }; let re = /./; re.lastIndex = counter; let result = re.exec('abc'); result[0] + ':' + (re.lastIndex === counter) + ':' + gets;"
+        ),
+        Ok(Value::String("a:true:1".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let value = 0; let re = /./g; Object.defineProperty(re, 'lastIndex', { get: function() { return value; }, set: function(next) { value = next; } }); let result = re.exec('abc'); result[0] + ':' + value;"
+        ),
+        Ok(Value::String("a:1".to_owned()))
+    );
 }
 
 #[test]

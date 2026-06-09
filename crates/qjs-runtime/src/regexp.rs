@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::reflect::ordinary_set;
 use crate::{
     ArrayRef, Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value,
     function_prototype, is_truthy, property_value, property_value_key, symbol,
@@ -256,7 +257,7 @@ pub(crate) fn native_regexp_prototype_compile(
     validate_regexp_init(&source, &flags)?;
 
     define_regexp_data_without_last_index(object, &source, &flags);
-    regexp_set_last_index_object(object, 0)?;
+    regexp_set_last_index_object(object, 0, env)?;
     Ok(this_value)
 }
 
@@ -265,7 +266,7 @@ pub(crate) fn native_regexp_prototype_exec(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let Value::Object(object) = this_value else {
+    let Value::Object(object) = this_value.clone() else {
         return Err(RuntimeError {
             thrown: None,
             message: "RegExp.prototype.exec requires an object receiver".to_owned(),
@@ -285,11 +286,8 @@ pub(crate) fn native_regexp_prototype_exec(
     let ignore_case = regexp_flags_contains(&object, 'i');
     let unicode = regexp_flags_contains(&object, 'u');
     let stateful = global || sticky;
-    let start_code_unit = if stateful {
-        regexp_last_index(&object, env)?
-    } else {
-        0
-    };
+    let last_index = regexp_last_index(&this_value, env)?;
+    let start_code_unit = if stateful { last_index } else { 0 };
     let start = if unicode {
         char_index_from_code_unit_index(&input, start_code_unit)
     } else {
@@ -304,7 +302,7 @@ pub(crate) fn native_regexp_prototype_exec(
 
     let Some(match_result) = match_result else {
         if stateful {
-            regexp_set_last_index_object(&object, 0)?;
+            regexp_set_last_index_object(&object, 0, env)?;
         }
         return Ok(Value::Null);
     };
@@ -314,7 +312,7 @@ pub(crate) fn native_regexp_prototype_exec(
         } else {
             match_result.end
         };
-        regexp_set_last_index_object(&object, last_index)?;
+        regexp_set_last_index_object(&object, last_index, env)?;
     }
     Ok(regexp_match_array(&input, match_result))
 }
@@ -567,34 +565,38 @@ fn regexp_flags_contains(object: &ObjectRef, flag: char) -> bool {
 }
 
 fn regexp_last_index(
-    object: &ObjectRef,
+    value: &Value,
     env: &mut HashMap<String, Value>,
 ) -> Result<usize, RuntimeError> {
-    to_length_with_env(object.get("lastIndex").unwrap_or(Value::Undefined), env)
+    to_length_with_env(property_value(value.clone(), "lastIndex", env)?, env)
 }
 
 fn regexp_last_index_value(
     value: &Value,
     env: &mut HashMap<String, Value>,
 ) -> Result<usize, RuntimeError> {
-    let Value::Object(object) = value else {
-        return Ok(0);
-    };
-    regexp_last_index(object, env)
+    regexp_last_index(value, env)
 }
 
-fn regexp_set_last_index_object(object: &ObjectRef, index: usize) -> Result<(), RuntimeError> {
-    if object
-        .own_property("lastIndex")
-        .is_some_and(|property| property.is_accessor() || !property.writable)
-        || !object.has_own_property("lastIndex") && !object.is_extensible()
-    {
+fn regexp_set_last_index_object(
+    object: &ObjectRef,
+    index: usize,
+    env: &mut HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
+    let receiver = Value::Object(object.clone());
+    let key = PropertyKey::String("lastIndex".to_owned());
+    if !ordinary_set(
+        receiver.clone(),
+        &key,
+        Value::Number(index as f64),
+        receiver,
+        env,
+    )? {
         return Err(RuntimeError {
             thrown: None,
             message: "TypeError: RegExp.prototype.exec cannot set lastIndex".to_owned(),
         });
     }
-    object.set("lastIndex".to_owned(), Value::Number(index as f64));
     Ok(())
 }
 
