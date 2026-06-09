@@ -66,3 +66,15 @@ fn top_level_alternatives_ignore_character_class_pipes() {
     let matched = regexp_match_range("[a|b]c|de", "de", 0, false, false).unwrap();
     assert_eq!((matched.start, matched.end), (0, 2));
 }
+
+#[test]
+fn lazy_quantifiers_try_shorter_matches_first() {
+    let matched = regexp_match_range("a+?", "aaa", 0, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 1));
+
+    let matched = regexp_match_range("a??a", "a", 0, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 1));
+
+    let matched = regexp_match_range("a[a-z]{2,4}?", "abcdefghi", 0, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 3));
+}

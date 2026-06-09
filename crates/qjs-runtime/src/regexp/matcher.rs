@@ -32,6 +32,7 @@ struct Quantifier {
     min: usize,
     max: Option<usize>,
     next_pc: usize,
+    greedy: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -440,27 +441,45 @@ fn quantifier(pattern: &[char], pc: usize) -> Quantifier {
             min: 0,
             max: Some(1),
             next_pc: pc + 1,
-        },
+            greedy: true,
+        }
+        .with_lazy_suffix(pattern),
         Some('*') => Quantifier {
             min: 0,
             max: None,
             next_pc: pc + 1,
-        },
+            greedy: true,
+        }
+        .with_lazy_suffix(pattern),
         Some('+') => Quantifier {
             min: 1,
             max: None,
             next_pc: pc + 1,
-        },
+            greedy: true,
+        }
+        .with_lazy_suffix(pattern),
         Some('{') => counted_quantifier(pattern, pc).unwrap_or(Quantifier {
             min: 1,
             max: Some(1),
             next_pc: pc,
+            greedy: true,
         }),
         _ => Quantifier {
             min: 1,
             max: Some(1),
             next_pc: pc,
+            greedy: true,
         },
+    }
+}
+
+impl Quantifier {
+    fn with_lazy_suffix(mut self, pattern: &[char]) -> Self {
+        if pattern.get(self.next_pc) == Some(&'?') {
+            self.greedy = false;
+            self.next_pc += 1;
+        }
+        self
     }
 }
 
@@ -472,11 +491,15 @@ fn counted_quantifier(pattern: &[char], pc: usize) -> Option<Quantifier> {
         index += 1;
     }
     if pattern.get(index) == Some(&'}') {
-        return Some(Quantifier {
-            min,
-            max: Some(min),
-            next_pc: index + 1,
-        });
+        return Some(
+            Quantifier {
+                min,
+                max: Some(min),
+                next_pc: index + 1,
+                greedy: true,
+            }
+            .with_lazy_suffix(pattern),
+        );
     }
     if pattern.get(index) != Some(&',') {
         return None;
@@ -492,11 +515,15 @@ fn counted_quantifier(pattern: &[char], pc: usize) -> Option<Quantifier> {
     if pattern.get(index) != Some(&'}') {
         return None;
     }
-    Some(Quantifier {
-        min,
-        max: has_max.then_some(max),
-        next_pc: index + 1,
-    })
+    Some(
+        Quantifier {
+            min,
+            max: has_max.then_some(max),
+            next_pc: index + 1,
+            greedy: true,
+        }
+        .with_lazy_suffix(pattern),
+    )
 }
 
 fn repeat_atom(
@@ -540,7 +567,9 @@ fn repeat_atom(
         current = next;
         count += 1;
     }
-    results.reverse();
+    if quantifier.greedy {
+        results.reverse();
+    }
     results
 }
 

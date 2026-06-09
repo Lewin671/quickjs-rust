@@ -68,6 +68,9 @@ fn validate_regexp_pattern(source: &str, unicode: bool) -> Result<(), RuntimeErr
             }
             '?' | '*' | '+' => {
                 index += 1;
+                if pattern.get(index) == Some(&'?') {
+                    index += 1;
+                }
                 has_atom = false;
             }
             '{' => match counted_quantifier_bounds(&pattern, index) {
@@ -76,6 +79,9 @@ fn validate_regexp_pattern(source: &str, unicode: bool) -> Result<(), RuntimeErr
                 }
                 Some((_min, _max, next)) if has_atom => {
                     index = next;
+                    if pattern.get(index) == Some(&'?') {
+                        index += 1;
+                    }
                     has_atom = false;
                 }
                 Some(_) | None if unicode => {
