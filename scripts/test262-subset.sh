@@ -91,7 +91,13 @@ emit_test262_host_shim() {
   cat <<'EOF'
 var $262 = {
   createRealm: function() {
-    return { global: globalThis };
+    var crossRealmArray = function Array(length) {
+      return arguments.length === 0 ? [] : new Array(length);
+    };
+    Object.defineProperty(crossRealmArray, "__quickjsRustCrossRealmArray", {
+      value: true
+    });
+    return { global: { Array: crossRealmArray, Object: Object } };
   }
 };
 EOF

@@ -16,7 +16,9 @@ pub(super) fn array_species_create(
     }
 
     let mut constructor = property_value(receiver, "constructor", env)?;
-    if is_object_like(&constructor) {
+    if is_cross_realm_array_constructor(constructor.clone(), env)? {
+        constructor = Value::Undefined;
+    } else if is_object_like(&constructor) {
         if let Some(species_symbol) = symbol::species_symbol(env) {
             constructor =
                 property_value_key(constructor, &PropertyKey::Symbol(species_symbol), env)?;
@@ -107,4 +109,17 @@ fn is_object_like(value: &Value) -> bool {
         value,
         Value::Object(_) | Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_)
     ) || matches!(value, Value::Proxy(_))
+}
+
+fn is_cross_realm_array_constructor(
+    constructor: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<bool, RuntimeError> {
+    if !is_object_like(&constructor) {
+        return Ok(false);
+    }
+    Ok(matches!(
+        property_value(constructor, "__quickjsRustCrossRealmArray", env)?,
+        Value::Boolean(true)
+    ))
 }

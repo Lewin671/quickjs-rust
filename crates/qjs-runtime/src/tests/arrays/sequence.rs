@@ -122,6 +122,12 @@ fn evaluates_array_sequence_builtins() {
     );
     assert_eq!(
         eval(
+            "let calls = 0; function C() {} Object.defineProperty(C, '__quickjsRustCrossRealmArray', { value: true }); Object.defineProperty(C, Symbol.species, { get: function() { calls = calls + 1; } }); let a = []; a.constructor = C; let out = a.concat(); Array.isArray(out) + ':' + calls + ':' + out.length;"
+        ),
+        Ok(Value::String("true:0:0".to_owned()))
+    );
+    assert_eq!(
+        eval(
             "let a = []; a.constructor = {}; a.constructor[Symbol.species] = parseInt; let caught = false; try { a.concat(); } catch (error) { caught = error instanceof TypeError; } caught;"
         ),
         Ok(Value::Boolean(true))
