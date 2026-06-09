@@ -224,7 +224,7 @@ pub(crate) fn native_set_prototype_intersection(
     let set = this_set(this_value)?;
     let other = SetRecord::from_arguments(argument_values, env)?;
     let result = new_set_like(&set);
-    if set.len() <= other.size() {
+    if (set.len() as f64) <= other.size() {
         for value in set.values() {
             if other.has(&value, env)? {
                 result.add(value);
@@ -248,7 +248,7 @@ pub(crate) fn native_set_prototype_difference(
     let set = this_set(this_value)?;
     let other = SetRecord::from_arguments(argument_values, env)?;
     let result = new_set_like(&set);
-    if set.len() <= other.size() {
+    if (set.len() as f64) <= other.size() {
         for value in set.values() {
             if !other.has(&value, env)? {
                 result.add(value);
@@ -293,7 +293,7 @@ pub(crate) fn native_set_prototype_is_subset_of(
 ) -> Result<Value, RuntimeError> {
     let set = this_set(this_value)?;
     let other = SetRecord::from_arguments(argument_values, env)?;
-    if set.len() > other.size() {
+    if (set.len() as f64) > other.size() {
         return Ok(Value::Boolean(false));
     }
     for value in set.values() {
@@ -311,7 +311,7 @@ pub(crate) fn native_set_prototype_is_superset_of(
 ) -> Result<Value, RuntimeError> {
     let set = this_set(this_value)?;
     let other = SetRecord::from_arguments(argument_values, env)?;
-    if set.len() < other.size() {
+    if (set.len() as f64) < other.size() {
         return Ok(Value::Boolean(false));
     }
     for value in other.keys(env)? {
@@ -329,7 +329,7 @@ pub(crate) fn native_set_prototype_is_disjoint_from(
 ) -> Result<Value, RuntimeError> {
     let set = this_set(this_value)?;
     let other = SetRecord::from_arguments(argument_values, env)?;
-    if set.len() <= other.size() {
+    if (set.len() as f64) <= other.size() {
         for value in set.values() {
             if other.has(&value, env)? {
                 return Ok(Value::Boolean(false));

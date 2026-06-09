@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     MapRef, RuntimeError, SetRef, Value, array::array_like_values_with_env, call_function,
-    is_truthy, property_value, to_length_with_env,
+    is_truthy, property_value, to_number_with_env,
 };
 
 pub(super) enum SetRecord {
@@ -10,7 +10,7 @@ pub(super) enum SetRecord {
     Map(MapRef),
     SetLike {
         object: Value,
-        size: usize,
+        size: f64,
         has: Box<Value>,
         keys: Box<Value>,
     },
@@ -85,10 +85,10 @@ impl SetRecord {
         }
     }
 
-    pub(super) fn size(&self) -> usize {
+    pub(super) fn size(&self) -> f64 {
         match self {
-            Self::Set(set) => set.len(),
-            Self::Map(map) => map.len(),
+            Self::Set(set) => set.len() as f64,
+            Self::Map(map) => map.len() as f64,
             Self::SetLike { size, .. } => *size,
         }
     }
@@ -97,7 +97,7 @@ impl SetRecord {
         object: Value,
         env: &mut HashMap<String, Value>,
     ) -> Result<Self, RuntimeError> {
-        let size = to_length_with_env(property_value(object.clone(), "size", env)?, env)?;
+        let size = set_record_size(property_value(object.clone(), "size", env)?, env)?;
         let has = property_value(object.clone(), "has", env)?;
         if !matches!(has, Value::Function(_)) {
             return Err(RuntimeError {
@@ -119,6 +119,24 @@ impl SetRecord {
             keys: Box::new(keys),
         })
     }
+}
+
+fn set_record_size(value: Value, env: &mut HashMap<String, Value>) -> Result<f64, RuntimeError> {
+    let size = to_number_with_env(value, env)?;
+    if size.is_nan() {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Set-like size must not be NaN".to_owned(),
+        });
+    }
+    let integer_size = if size.is_finite() { size.trunc() } else { size };
+    if integer_size < 0.0 {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "RangeError: Set-like size must be non-negative".to_owned(),
+        });
+    }
+    Ok(integer_size)
 }
 
 fn iterator_has_value_in_set(

@@ -4223,3 +4223,10 @@ test/built-ins/Set/prototype/symmetricDifference/allows-set-like-object.js
 test/built-ins/Set/prototype/symmetricDifference/has-is-callable.js
 test/built-ins/Set/prototype/union/allows-set-like-object.js
 test/built-ins/Set/prototype/union/has-is-callable.js
+test/built-ins/Set/prototype/difference/size-is-a-number.js
+test/built-ins/Set/prototype/intersection/size-is-a-number.js
+test/built-ins/Set/prototype/isDisjointFrom/size-is-a-number.js
+test/built-ins/Set/prototype/isSubsetOf/size-is-a-number.js
+test/built-ins/Set/prototype/isSupersetOf/size-is-a-number.js
+test/built-ins/Set/prototype/symmetricDifference/size-is-a-number.js
+test/built-ins/Set/prototype/union/size-is-a-number.js

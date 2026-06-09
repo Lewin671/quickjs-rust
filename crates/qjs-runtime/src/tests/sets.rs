@@ -182,6 +182,42 @@ fn evaluates_set_composition_methods_with_set_like_objects() {
 }
 
 #[test]
+fn validates_set_like_size_as_number() {
+    assert_eval(
+        "var calls = 0; var other = { size: { valueOf: function() { calls = calls + 1; return NaN; } }, has: function() {}, keys: function* keys() { yield 1; } }; var caught = false; try { new Set([1]).union(other); } catch (error) { caught = error instanceof TypeError; } caught + ':' + calls;",
+        Value::String("true:1".to_owned()),
+    );
+    assert!(
+        eval(
+            "var other = { size: undefined, has: function() {}, keys: function* keys() { yield 1; } }; new Set([1]).union(other);"
+        )
+        .is_err()
+    );
+    assert!(
+        eval(
+            "var other = { size: 'string', has: function() {}, keys: function* keys() { yield 1; } }; new Set([1]).union(other);"
+        )
+        .is_err()
+    );
+    assert!(
+        eval(
+            "var other = { size: 0n, has: function() {}, keys: function* keys() { yield 1; } }; new Set([1]).union(other);"
+        )
+        .is_err()
+    );
+    assert!(
+        eval(
+            "var other = { size: -1, has: function() {}, keys: function* keys() { yield 1; } }; new Set([1]).union(other);"
+        )
+        .is_err()
+    );
+    assert_eval(
+        "var other = { size: Infinity, has: function(value) { return value === 2; }, keys: function() { throw 'keys should not be called'; } }; [...new Set([1, 2]).difference(other)].join('|');",
+        Value::String("1".to_owned()),
+    );
+}
+
+#[test]
 fn evaluates_set_same_value_zero_values() {
     assert_eval(
         "var set = new Set(); set.add(NaN); set.add(NaN); set.size + ':' + set.has(NaN);",
