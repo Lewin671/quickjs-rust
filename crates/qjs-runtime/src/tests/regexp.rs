@@ -349,6 +349,46 @@ fn evaluates_regexp_symbol_search() {
 }
 
 #[test]
+fn evaluates_regexp_symbol_match_all() {
+    assert_eq!(
+        eval("typeof RegExp.prototype[Symbol.matchAll];"),
+        Ok(Value::String("function".to_owned()))
+    );
+    assert_eq!(
+        eval("RegExp.prototype[Symbol.matchAll].length;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval("RegExp.prototype[Symbol.matchAll].name;"),
+        Ok(Value::String("[Symbol.matchAll]".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "Array.from(/a./g[Symbol.matchAll]('a1 a2')).map(function(match) { return match[0] + ':' + match.index + ':' + match.input; }).join('|');"
+        ),
+        Ok(Value::String("a1:0:a1 a2|a2:3:a1 a2".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let re = /a/g; re.lastIndex = 1; let result = Array.from(re[Symbol.matchAll]('aba')).map(function(match) { return match.index; }).join(','); re.lastIndex + ':' + result;"
+        ),
+        Ok(Value::String("1:2".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let it = RegExp.prototype[Symbol.matchAll].call(/a/, 'aba'); let first = it.next(); let second = it.next(); first.value.index + ':' + first.value[0] + ':' + second.done;"
+        ),
+        Ok(Value::String("0:a:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "Array.from(/(?:)/g[Symbol.matchAll]('a')).map(function(match) { return match.index; }).join(',');"
+        ),
+        Ok(Value::String("0,1".to_owned()))
+    );
+}
+
+#[test]
 fn evaluates_regexp_exec_and_test_sticky_last_index() {
     assert_eq!(
         eval("let re = /abc/y; re.test('abc') + ':' + re.lastIndex;"),

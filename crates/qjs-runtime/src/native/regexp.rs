@@ -38,6 +38,9 @@ pub(super) fn call_regexp_native(
         NativeFunction::RegExpPrototypeIgnoreCase => {
             regexp::native_regexp_prototype_flag(this_value, env, 'i')?
         }
+        NativeFunction::RegExpPrototypeMatchAll => {
+            regexp::native_regexp_prototype_match_all(this_value, argument_values, env)?
+        }
         NativeFunction::RegExpPrototypeMultiline => {
             regexp::native_regexp_prototype_flag(this_value, env, 'm')?
         }
@@ -61,6 +64,9 @@ pub(super) fn call_regexp_native(
         }
         NativeFunction::RegExpPrototypeUnicode => {
             regexp::native_regexp_prototype_flag(this_value, env, 'u')?
+        }
+        NativeFunction::RegExpStringIteratorPrototypeNext => {
+            regexp::native_regexp_string_iterator_next(this_value, env)?
         }
         _ => return Ok(None),
     };

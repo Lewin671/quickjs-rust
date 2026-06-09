@@ -3691,6 +3691,7 @@ cases/string-prototype-html-methods-basic.js
 cases/string-prototype-locale-compare-basic.js
 cases/string-prototype-match-basic.js
 cases/string-prototype-match-all-dispatch.js
+cases/string-prototype-match-all-regexp-iterator.js
 cases/string-prototype-match-captures.js
 cases/string-prototype-match-global.js
 cases/string-prototype-match-global-digit-escape.js

@@ -419,6 +419,46 @@ fn evaluates_string_match_all_symbol_dispatch() {
 }
 
 #[test]
+fn evaluates_string_match_all_regexp_iterator() {
+    assert_eq!(
+        eval(
+            "Array.from('a1 a2'.matchAll(/a./g)).map(function(match) { return match[0] + ':' + match.index + ':' + match.input; }).join('|');"
+        ),
+        Ok(Value::String("a1:0:a1 a2|a2:3:a1 a2".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "Array.from('-null-'.matchAll(null)).map(function(match) { return match[0] + ':' + match.index; }).join('|');"
+        ),
+        Ok(Value::String("null:1".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "Array.from('a'.matchAll()).map(function(match) { return match[0] + ':' + match.index; }).join('|');"
+        ),
+        Ok(Value::String(":0|:1".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let original = RegExp.prototype[Symbol.matchAll]; let calls = 0; RegExp.prototype[Symbol.matchAll] = function(input) { calls = calls + 1; return this.source + ':' + this.flags + ':' + input; }; let result = 'abc'.matchAll('b'); RegExp.prototype[Symbol.matchAll] = original; result + ':' + calls;"
+        ),
+        Ok(Value::String("b:g:abc:1".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { ''.matchAll(/a/); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let regexp = /a/g; Object.defineProperty(regexp, 'flags', { value: undefined }); let caught = false; try { ''.matchAll(regexp); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn rejects_string_match_null_or_undefined_this() {
     assert_eq!(
         eval(

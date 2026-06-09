@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use crate::{RuntimeError, Value, call_function, property_value, regexp, to_js_string_with_env};
+use crate::{
+    PropertyKey, RuntimeError, Value, call_function, construct_function, property_value,
+    property_value_key, regexp, symbol, to_js_string_with_env,
+};
 
 use super::super::indexing::{
     string_end_position, string_last_search_position, string_search_start, this_string_value,
@@ -150,15 +153,39 @@ pub(crate) fn native_string_prototype_match_all(
     let input = this_string_value(this_value, env)?;
     let regexp = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if !matches!(regexp, Value::Null | Value::Undefined) {
-        if let Some(matcher) = symbol_match_all_method(regexp.clone(), env)?.method {
-            return call_function(matcher, regexp, vec![Value::String(input)], env, false);
+        let is_regexp = regexp::regexp_is_regexp_with_env(regexp.clone(), env)?;
+        if is_regexp {
+            let flags_value = property_value(regexp.clone(), "flags", env)?;
+            if matches!(flags_value, Value::Null | Value::Undefined) {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message:
+                        "TypeError: String.prototype.matchAll RegExp flags are null or undefined"
+                            .to_owned(),
+                });
+            }
+            let flags = to_js_string_with_env(flags_value, env)?;
+            if !flags.contains('g') {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: "TypeError: String.prototype.matchAll called with a non-global RegExp"
+                        .to_owned(),
+                });
+            }
+        }
+        let match_all_method = symbol_match_all_method(regexp.clone(), env)?;
+        if let Some(matcher) = match_all_method.method {
+            return call_function(
+                matcher,
+                regexp.clone(),
+                vec![Value::String(input)],
+                env,
+                false,
+            );
         }
     }
-    Err(RuntimeError {
-        thrown: None,
-        message: "TypeError: String.prototype.matchAll RegExp iterator is not implemented"
-            .to_owned(),
-    })
+    let rx = regexp_value_with_flags(regexp, "g", env)?;
+    invoke_symbol_match_all(rx, input, env)
 }
 
 pub(crate) fn native_string_prototype_replace_all(
@@ -548,6 +575,44 @@ fn regexp_value(pattern: Value, env: &mut HashMap<String, Value>) -> Result<Valu
         message: "RegExp constructor is not available".to_owned(),
     })?;
     call_function(constructor, Value::Undefined, vec![pattern], env, false)
+}
+
+fn regexp_value_with_flags(
+    pattern: Value,
+    flags: &str,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let constructor = env.get("RegExp").cloned().ok_or_else(|| RuntimeError {
+        thrown: None,
+        message: "RegExp constructor is not available".to_owned(),
+    })?;
+    construct_function(
+        constructor.clone(),
+        constructor,
+        vec![pattern, Value::String(flags.to_owned())],
+        env,
+    )
+}
+
+fn invoke_symbol_match_all(
+    regexp: Value,
+    input: String,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let Some(match_all_symbol) = symbol::match_all_symbol(env) else {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "Symbol.matchAll is not available".to_owned(),
+        });
+    };
+    let matcher = property_value_key(regexp.clone(), &PropertyKey::Symbol(match_all_symbol), env)?;
+    if !matches!(matcher, Value::Function(_)) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Symbol.matchAll method is not callable".to_owned(),
+        });
+    }
+    call_function(matcher, regexp, vec![Value::String(input)], env, false)
 }
 
 fn reject_regexp_search_value(

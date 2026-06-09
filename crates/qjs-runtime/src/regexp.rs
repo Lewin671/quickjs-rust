@@ -8,6 +8,7 @@ use crate::{
 
 mod escape;
 mod formatting;
+mod match_all;
 mod matcher;
 mod symbol_search;
 mod symbol_split;
@@ -15,6 +16,7 @@ mod validation;
 
 pub(crate) use escape::native_regexp_escape;
 use formatting::{canonical_regexp_flags, escape_regexp_source};
+pub(crate) use match_all::{native_regexp_prototype_match_all, native_regexp_string_iterator_next};
 pub(crate) use symbol_search::native_regexp_prototype_search;
 pub(crate) use symbol_split::native_regexp_prototype_split;
 use validation::validate_regexp_init;
@@ -91,6 +93,7 @@ pub(crate) fn install_regexp(
             ))),
         );
     }
+    match_all::install_regexp_prototype_match_all(env, &regexp_prototype);
     symbol_split::install_regexp_prototype_split(env, &regexp_prototype);
     define_regexp_accessor(
         &regexp_prototype,
