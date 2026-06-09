@@ -18,6 +18,7 @@ pub(crate) fn initialize_builtins(env: &mut HashMap<String, Value>, global_this:
     number::install_number(env, global_this, object_prototype.clone());
     string::install_string(env, global_this, object_prototype.clone());
     symbol::install_symbol(env, global_this, object_prototype.clone());
+    bigint::install_bigint_well_known_symbols(env);
     string::install_string_well_known_symbols(env);
     boolean::install_boolean(env, global_this, object_prototype.clone());
     date::install_date(env, global_this, object_prototype.clone());

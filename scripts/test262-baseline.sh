@@ -268,6 +268,11 @@ rust_features_supported() {
       ;;
   esac
   case "$rel" in
+    test/built-ins/BigInt/prototype/Symbol.toStringTag.js)
+      entries="$(drop_feature_entries "$entries" -e 'Symbol.toStringTag')"
+      ;;
+  esac
+  case "$rel" in
     test/built-ins/Array/prototype/with/*|test/built-ins/Array/prototype/toReversed/*|test/built-ins/Array/prototype/toSpliced/*|test/built-ins/Array/prototype/toSorted/*)
       entries="$(drop_feature_entries "$entries" -e 'change-array-by-copy' -e 'exponentiation')"
       ;;

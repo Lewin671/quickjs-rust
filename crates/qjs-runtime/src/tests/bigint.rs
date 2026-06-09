@@ -95,6 +95,10 @@ fn evaluates_bigint_statics_and_prototype_methods() {
         "Object.prototype.toString.call(Object(1n));",
         Value::String("[object BigInt]".to_owned()),
     );
+    assert_eval(
+        "let d = Object.getOwnPropertyDescriptor(BigInt.prototype, Symbol.toStringTag); d.value + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;",
+        Value::String("BigInt:false:false:true".to_owned()),
+    );
     assert_eval("Number(10n);", Value::Number(10.0));
     assert_type_error("BigInt.prototype.valueOf.call(1);");
     assert_type_error("JSON.stringify(1n);");

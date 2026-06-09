@@ -5,7 +5,7 @@ use num_traits::{One, Signed, Zero};
 
 use crate::{
     Function, NativeFunction, ObjectRef, PreferredType, Property, RuntimeError, Value,
-    inherited_object_prototype_property, to_js_string, to_number, to_number_with_env,
+    inherited_object_prototype_property, symbol, to_js_string, to_number, to_number_with_env,
     to_primitive_with_hint,
 };
 
@@ -57,6 +57,12 @@ pub(crate) fn install_bigint(
     env.insert("BigInt".to_owned(), bigint_value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable("BigInt".to_owned(), bigint_value);
+    }
+}
+
+pub(crate) fn install_bigint_well_known_symbols(env: &HashMap<String, Value>) {
+    if let Some(prototype) = bigint_prototype(env) {
+        symbol::define_well_known_to_string_tag(env, &prototype, "BigInt");
     }
 }
 
