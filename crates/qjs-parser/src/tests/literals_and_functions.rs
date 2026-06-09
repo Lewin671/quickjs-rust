@@ -141,6 +141,19 @@ fn parses_rest_parameters() {
 }
 
 #[test]
+fn rejects_duplicate_arrow_parameters() {
+    assert!(parse_script("let duplicate = (value, value) => value;").is_err());
+    assert!(parse_script("let duplicate = (value, ...value) => value;").is_err());
+
+    let script =
+        parse_script("function duplicate(value, value) { return value; }").expect("source");
+    let [Stmt::FunctionDecl { params, .. }] = script.body.as_slice() else {
+        panic!("expected function declaration");
+    };
+    assert_eq!(params.positional, ["value", "value"]);
+}
+
+#[test]
 fn parses_new_expression() {
     let script = parse_script("new Point(1, 2);").expect("source should parse");
     let [

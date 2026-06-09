@@ -123,19 +123,21 @@ impl Parser {
             loop {
                 if self.match_kind(&TokenKind::DotDotDot) {
                     let token = self.advance();
+                    let span = token.span;
                     let TokenKind::Identifier(param) = token.kind else {
                         self.cursor = start_cursor;
                         return Ok(None);
                     };
-                    rest = Some(param);
+                    rest = Some((param, span));
                     break;
                 }
                 let token = self.advance();
+                let span = token.span;
                 let TokenKind::Identifier(param) = token.kind else {
                     self.cursor = start_cursor;
                     return Ok(None);
                 };
-                positional.push(param);
+                positional.push((param, span));
                 if !self.match_kind(&TokenKind::Comma) {
                     break;
                 }
@@ -152,7 +154,17 @@ impl Parser {
             self.cursor = start_cursor;
             return Ok(None);
         }
-        Ok(Some(FunctionParams { positional, rest }))
+        let duplicate_span = duplicate_arrow_parameter_span(&positional, rest.as_ref());
+        if let Some(span) = duplicate_span {
+            return Err(ParseError {
+                message: "duplicate arrow parameter name".to_owned(),
+                span,
+            });
+        }
+        Ok(Some(FunctionParams {
+            positional: positional.into_iter().map(|(name, _)| name).collect(),
+            rest: rest.map(|(name, _)| name),
+        }))
     }
 
     pub(crate) fn conditional(&mut self) -> Result<Expr, ParseError> {
@@ -172,4 +184,23 @@ impl Parser {
             span,
         })
     }
+}
+
+fn duplicate_arrow_parameter_span(
+    positional: &[(String, Span)],
+    rest: Option<&(String, Span)>,
+) -> Option<Span> {
+    for (index, (name, _)) in positional.iter().enumerate() {
+        for (candidate, span) in &positional[index + 1..] {
+            if candidate == name {
+                return Some(*span);
+            }
+        }
+        if let Some((rest_name, span)) = rest {
+            if rest_name == name {
+                return Some(*span);
+            }
+        }
+    }
+    None
 }
