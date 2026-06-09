@@ -278,6 +278,7 @@ pub(crate) enum NativeFunction {
     RegExpPrototypeGlobal,
     RegExpPrototypeHasIndices,
     RegExpPrototypeIgnoreCase,
+    RegExpPrototypeMatch,
     RegExpPrototypeMatchAll,
     RegExpPrototypeMultiline,
     RegExpPrototypeReplace,

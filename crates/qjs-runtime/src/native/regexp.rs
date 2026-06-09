@@ -38,6 +38,9 @@ pub(super) fn call_regexp_native(
         NativeFunction::RegExpPrototypeIgnoreCase => {
             regexp::native_regexp_prototype_flag(this_value, env, 'i')?
         }
+        NativeFunction::RegExpPrototypeMatch => {
+            regexp::native_regexp_prototype_match(this_value, argument_values, env)?
+        }
         NativeFunction::RegExpPrototypeMatchAll => {
             regexp::native_regexp_prototype_match_all(this_value, argument_values, env)?
         }

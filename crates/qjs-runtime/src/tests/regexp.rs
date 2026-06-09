@@ -389,6 +389,50 @@ fn evaluates_regexp_symbol_match_all() {
 }
 
 #[test]
+fn evaluates_regexp_symbol_match() {
+    assert_eq!(
+        eval(
+            "typeof RegExp.prototype[Symbol.match] + ':' + RegExp.prototype[Symbol.match].length + ':' + RegExp.prototype[Symbol.match].name;"
+        ),
+        Ok(Value::String("function:1:[Symbol.match]".to_owned()))
+    );
+    assert_eq!(
+        eval("RegExp.prototype[Symbol.match].call(/a./, 'a1 a2')[0];"),
+        Ok(Value::String("a1".to_owned()))
+    );
+    assert_eq!(
+        eval("RegExp.prototype[Symbol.match].call(/a./g, 'a1 a2').join('|');"),
+        Ok(Value::String("a1|a2".to_owned()))
+    );
+    assert_eq!(
+        eval("RegExp.prototype[Symbol.match].call(/z/g, 'a1 a2');"),
+        Ok(Value::Null)
+    );
+    assert_eq!(
+        eval("let re = /(?:)/g; re[Symbol.match]('a').join('|') + ':' + re.lastIndex;"),
+        Ok(Value::String("|:0".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let calls = 0; let re = { global: false, exec(input) { calls = calls + 1; return { 0: input + ':' + calls, index: 0, length: 1 }; } }; RegExp.prototype[Symbol.match].call(re, 123)[0];"
+        ),
+        Ok(Value::String("123:1".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let re = { flags: 'g', lastIndex: 0, exec() { if (this.lastIndex === 0) { this.lastIndex = 1; return { 0: 'a', index: 0, length: 1 }; } return null; } }; RegExp.prototype[Symbol.match].call(re, 'abc').join('|') + ':' + re.lastIndex;"
+        ),
+        Ok(Value::String("a:1".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let re = { get flags() { throw 'flags'; }, get global() { throw 'global'; }, exec() { return null; } }; let caught = false; try { RegExp.prototype[Symbol.match].call(re, 'abc'); } catch (error) { caught = error === 'flags'; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn evaluates_regexp_symbol_replace() {
     assert_eq!(
         eval(

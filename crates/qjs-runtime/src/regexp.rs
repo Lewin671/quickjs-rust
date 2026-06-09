@@ -10,6 +10,7 @@ mod escape;
 mod formatting;
 mod match_all;
 mod matcher;
+mod symbol_match;
 mod symbol_replace;
 mod symbol_search;
 mod symbol_split;
@@ -18,6 +19,7 @@ mod validation;
 pub(crate) use escape::native_regexp_escape;
 use formatting::{canonical_regexp_flags, escape_regexp_source};
 pub(crate) use match_all::{native_regexp_prototype_match_all, native_regexp_string_iterator_next};
+pub(crate) use symbol_match::native_regexp_prototype_match;
 pub(crate) use symbol_replace::native_regexp_prototype_replace;
 pub(crate) use symbol_search::native_regexp_prototype_search;
 pub(crate) use symbol_split::native_regexp_prototype_split;
@@ -95,6 +97,7 @@ pub(crate) fn install_regexp(
             ))),
         );
     }
+    symbol_match::install_regexp_prototype_match(env, &regexp_prototype);
     match_all::install_regexp_prototype_match_all(env, &regexp_prototype);
     symbol_replace::install_regexp_prototype_replace(env, &regexp_prototype);
     symbol_split::install_regexp_prototype_split(env, &regexp_prototype);
