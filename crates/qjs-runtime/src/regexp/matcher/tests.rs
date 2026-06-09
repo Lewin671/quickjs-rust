@@ -51,6 +51,17 @@ fn legacy_decimal_escapes_define_character_class_ranges() {
 }
 
 #[test]
+fn legacy_class_control_escapes_match_digits_and_underscore() {
+    let matched = regexp_match_range(r"[\c0]", "\u{0010}", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 1));
+    let matched = regexp_match_range(r"[\c_]", "\u{001f}", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 1));
+    let matched = regexp_match_range(r"[\c00]+", "0\u{0010}", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 2));
+    assert!(regexp_match_range(r"\c0", "\u{0010}", 0, false, false, false).is_none());
+}
+
+#[test]
 fn top_level_alternatives_match_leftmost_first() {
     let matched = regexp_match_range("1|12", "123", 0, false, false, false).unwrap();
     assert_eq!((matched.start, matched.end), (0, 1));

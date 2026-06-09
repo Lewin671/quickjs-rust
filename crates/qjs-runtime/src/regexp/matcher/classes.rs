@@ -78,6 +78,11 @@ fn class_atom(class: &[char], index: usize, options: MatchOptions) -> Option<Cla
     {
         return Some(escape);
     }
+    if !options.unicode
+        && let Some(escape) = legacy_control_letter_escape(class, index)
+    {
+        return Some(escape);
+    }
     match class.get(index + 1).copied()? {
         'd' | 'D' | 's' | 'S' | 'w' | 'W' => None,
         escaped => Some(ClassAtom {
@@ -103,6 +108,20 @@ fn legacy_octal_escape(class: &[char], index: usize) -> Option<ClassAtom> {
     }
 
     char::from_u32(value).map(|value| ClassAtom { value, next_index })
+}
+
+fn legacy_control_letter_escape(class: &[char], index: usize) -> Option<ClassAtom> {
+    if class.get(index + 1) != Some(&'c') {
+        return None;
+    }
+    let escaped = *class.get(index + 2)?;
+    if !(escaped.is_ascii_digit() || escaped == '_') {
+        return None;
+    }
+    char::from_u32(u32::from(escaped) % 32).map(|value| ClassAtom {
+        value,
+        next_index: index + 3,
+    })
 }
 
 fn class_escape_matches(class: &[char], index: usize, value: char, options: MatchOptions) -> bool {
