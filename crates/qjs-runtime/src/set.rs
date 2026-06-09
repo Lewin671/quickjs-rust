@@ -98,7 +98,13 @@ pub(crate) fn install_set(
         1,
         NativeFunction::SetPrototypeIsSupersetOf,
     );
-    define_set_prototype_function(&set_prototype, "keys", 0, NativeFunction::SetPrototypeKeys);
+    let values_function = Value::Function(Function::new_native(
+        Some("values"),
+        0,
+        NativeFunction::SetPrototypeValues,
+        false,
+    ));
+    set_prototype.define_non_enumerable("keys".to_owned(), values_function.clone());
     define_set_prototype_function(
         &set_prototype,
         "symmetricDifference",
@@ -111,12 +117,7 @@ pub(crate) fn install_set(
         1,
         NativeFunction::SetPrototypeUnion,
     );
-    define_set_prototype_function(
-        &set_prototype,
-        "values",
-        0,
-        NativeFunction::SetPrototypeValues,
-    );
+    set_prototype.define_non_enumerable("values".to_owned(), values_function);
     symbol::define_well_known_iterator_alias(env, &set_prototype, "values");
     set_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
@@ -395,13 +396,6 @@ pub(crate) fn native_set_prototype_has(
     let set = this_set(this_value)?;
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     Ok(Value::Boolean(set.has(&value)))
-}
-
-pub(crate) fn native_set_prototype_keys(
-    this_value: Value,
-    env: &HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
-    set_iterator(this_value, env, SET_ITERATOR_KIND_VALUE)
 }
 
 pub(crate) fn native_set_prototype_values(

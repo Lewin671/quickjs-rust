@@ -4230,3 +4230,4 @@ test/built-ins/Set/prototype/isSubsetOf/size-is-a-number.js
 test/built-ins/Set/prototype/isSupersetOf/size-is-a-number.js
 test/built-ins/Set/prototype/symmetricDifference/size-is-a-number.js
 test/built-ins/Set/prototype/union/size-is-a-number.js
+test/built-ins/Set/prototype/keys/keys.js

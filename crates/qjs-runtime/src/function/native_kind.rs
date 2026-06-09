@@ -178,7 +178,6 @@ pub(crate) enum NativeFunction {
     SetPrototypeIsDisjointFrom,
     SetPrototypeIsSubsetOf,
     SetPrototypeIsSupersetOf,
-    SetPrototypeKeys,
     SetPrototypeSize,
     SetPrototypeSymmetricDifference,
     SetPrototypeUnion,

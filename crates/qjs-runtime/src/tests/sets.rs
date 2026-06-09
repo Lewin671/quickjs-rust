@@ -236,6 +236,10 @@ fn evaluates_set_same_value_zero_values() {
 #[test]
 fn evaluates_set_iterators_and_for_each() {
     assert_eval(
+        "Set.prototype.keys === Set.prototype.values;",
+        Value::Boolean(true),
+    );
+    assert_eval(
         "var set = new Set(); set.add('a'); set.add('b'); var iterator = set.values(); var first = iterator.next(); var second = iterator.next(); var last = iterator.next(); first.value + ':' + first.done + '|' + second.value + ':' + second.done + '|' + (last.value === undefined) + ':' + last.done;",
         Value::String("a:false|b:false|true:true".to_owned()),
     );

@@ -43,7 +43,6 @@ pub(super) fn call_set_native(
         NativeFunction::SetPrototypeIsSupersetOf => {
             set::native_set_prototype_is_superset_of(this_value, argument_values, env)?
         }
-        NativeFunction::SetPrototypeKeys => set::native_set_prototype_keys(this_value, env)?,
         NativeFunction::SetPrototypeSize => set::native_set_prototype_size(this_value)?,
         NativeFunction::SetPrototypeSymmetricDifference => {
             set::native_set_prototype_symmetric_difference(this_value, argument_values, env)?
