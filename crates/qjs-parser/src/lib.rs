@@ -34,6 +34,7 @@ struct Parser {
     source: String,
     tokens: Vec<Token>,
     cursor: usize,
+    strict: bool,
 }
 
 #[cfg(test)]

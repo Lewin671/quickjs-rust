@@ -154,6 +154,18 @@ fn rejects_duplicate_arrow_parameters() {
 }
 
 #[test]
+fn rejects_restricted_arrow_parameter_names_in_strict_mode() {
+    assert!(parse_script("\"use strict\"; let arrow = arguments => 1;").is_err());
+    assert!(parse_script("\"use strict\"; let arrow = (eval) => 1;").is_err());
+    assert!(parse_script("\"use strict\"; let arrow = (value, ...yield) => value;").is_err());
+
+    parse_script("let arrow = (arguments, eval, ...yield) => arguments;")
+        .expect("non-strict arrow parameter names should parse");
+    parse_script("\"use strict\"; function ordinary(arguments, eval) { return arguments; }")
+        .expect("ordinary function parameter validation is outside arrow parsing");
+}
+
+#[test]
 fn parses_new_expression() {
     let script = parse_script("new Point(1, 2);").expect("source should parse");
     let [

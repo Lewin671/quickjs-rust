@@ -8,6 +8,7 @@ impl Parser {
             source,
             tokens,
             cursor: 0,
+            strict: false,
         }
     }
 

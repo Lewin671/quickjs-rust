@@ -10,6 +10,7 @@ use crate::{ParseError, Parser};
 
 impl Parser {
     pub(crate) fn parse_script(&mut self) -> Result<Script, ParseError> {
+        self.strict = self.strict || self.directive_prologue_is_strict(self.cursor);
         let mut body = Vec::new();
         while !self.at(&TokenKind::Eof) {
             body.push(self.statement()?);
@@ -132,11 +133,35 @@ impl Parser {
 
     pub(crate) fn block_body(&mut self) -> Result<Vec<Stmt>, ParseError> {
         self.expect(&TokenKind::LeftBrace)?;
-        let mut body = Vec::new();
-        while !self.at(&TokenKind::RightBrace) && !self.at(&TokenKind::Eof) {
-            body.push(self.statement()?);
+        let previous_strict = self.strict;
+        self.strict = self.strict || self.directive_prologue_is_strict(self.cursor);
+        let result = (|parser: &mut Self| {
+            let mut body = Vec::new();
+            while !parser.at(&TokenKind::RightBrace) && !parser.at(&TokenKind::Eof) {
+                body.push(parser.statement()?);
+            }
+            parser.expect(&TokenKind::RightBrace).map(|()| body)
+        })(self);
+        self.strict = previous_strict;
+        result
+    }
+
+    fn directive_prologue_is_strict(&self, mut cursor: usize) -> bool {
+        while let Some(token) = self.tokens.get(cursor) {
+            let TokenKind::String(value) = &token.kind else {
+                return false;
+            };
+            if value == "use strict" {
+                return true;
+            }
+            cursor += 1;
+            if matches!(
+                self.tokens.get(cursor).map(|token| &token.kind),
+                Some(TokenKind::Semicolon)
+            ) {
+                cursor += 1;
+            }
         }
-        self.expect(&TokenKind::RightBrace)?;
-        Ok(body)
+        false
     }
 }

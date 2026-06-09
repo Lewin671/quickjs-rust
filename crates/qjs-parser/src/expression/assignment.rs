@@ -107,6 +107,12 @@ impl Parser {
                 let TokenKind::Identifier(param) = token.kind else {
                     unreachable!("peek checked identifier");
                 };
+                if self.strict && restricted_strict_arrow_parameter(&param) {
+                    return Err(ParseError {
+                        message: "restricted arrow parameter name in strict mode".to_owned(),
+                        span: token.span,
+                    });
+                }
                 Ok(Some(FunctionParams::positional(vec![param])))
             }
             Some(TokenKind::LeftParen) => self.parenthesized_arrow_parameters(),
@@ -161,6 +167,15 @@ impl Parser {
                 span,
             });
         }
+        let restricted_span = restricted_strict_arrow_parameter_span(&positional, rest.as_ref());
+        if self.strict {
+            if let Some(span) = restricted_span {
+                return Err(ParseError {
+                    message: "restricted arrow parameter name in strict mode".to_owned(),
+                    span,
+                });
+            }
+        }
         Ok(Some(FunctionParams {
             positional: positional.into_iter().map(|(name, _)| name).collect(),
             rest: rest.map(|(name, _)| name),
@@ -203,4 +218,21 @@ fn duplicate_arrow_parameter_span(
         }
     }
     None
+}
+
+fn restricted_strict_arrow_parameter_span(
+    positional: &[(String, Span)],
+    rest: Option<&(String, Span)>,
+) -> Option<Span> {
+    for (name, span) in positional {
+        if restricted_strict_arrow_parameter(name) {
+            return Some(*span);
+        }
+    }
+    let (name, span) = rest?;
+    restricted_strict_arrow_parameter(name).then_some(*span)
+}
+
+fn restricted_strict_arrow_parameter(name: &str) -> bool {
+    matches!(name, "arguments" | "eval" | "yield")
 }
