@@ -153,6 +153,22 @@ fn initializes_global_hoisted_bindings_before_script_execution() {
 }
 
 #[test]
+fn skips_annex_b_function_binding_for_parameter_collisions() {
+    assert_eq!(
+        eval(
+            "var init, after; (function(f) { init = f; if (false) function _f() {} else function f() {} after = f; }(123)); init + ':' + after;"
+        ),
+        Ok(Value::String("123:123".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var init, after; (function(f = 123) { init = f; if (false) function _f() {} else function f() {} after = f; }()); init + ':' + after;"
+        ),
+        Ok(Value::String("123:123".to_owned()))
+    );
+}
+
+#[test]
 fn evaluates_uri_coding_builtins() {
     assert_eq!(eval("encodeURI.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("decodeURI.length;"), Ok(Value::Number(1.0)));

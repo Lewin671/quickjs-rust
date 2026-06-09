@@ -99,8 +99,12 @@ impl Compiler {
             self.local_slot(&param, true);
         }
         self.compile_parameter_defaults(params)?;
-        self.collect_hoisted_locals(body);
-        let blocked = lexical_declared_names(body);
+        let param_blocked = function_param_names(params);
+        self.with_annex_b_blocked_function_names(&param_blocked, |compiler| {
+            compiler.collect_hoisted_locals(body);
+            Ok(())
+        })?;
+        let blocked = function_body_annex_b_blocked_names(params, body);
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
             compiler.compile_hoisted_function_decls(body)?;
             for stmt in body {
@@ -773,6 +777,20 @@ fn lexical_declared_names(body: &[Stmt]) -> Vec<String> {
             Stmt::Switch { cases, .. } => names.extend(switch_lexical_declared_names(cases)),
             _ => {}
         }
+    }
+    names
+}
+
+fn function_body_annex_b_blocked_names(params: &FunctionParams, body: &[Stmt]) -> Vec<String> {
+    let mut names = function_param_names(params);
+    names.extend(lexical_declared_names(body));
+    names
+}
+
+fn function_param_names(params: &FunctionParams) -> Vec<String> {
+    let mut names = params.positional.clone();
+    if let Some(rest) = &params.rest {
+        names.push(rest.clone());
     }
     names
 }
