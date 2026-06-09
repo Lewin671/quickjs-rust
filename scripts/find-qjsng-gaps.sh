@@ -461,7 +461,7 @@ awk -F'\t' -v strategy="$RECOMMEND_STRATEGY" -v batch_cap="$RECOMMEND_BATCH_CAP"
     if (path ~ /(^|\/)(class|dstr|for-await-of|yield)(\/|$)/) {
       return 1
     }
-    if (path ~ /(destructur|proxy|Proxy|realm|Realm|species|superclass)/) {
+    if (path ~ /(destructur|proxy|Proxy|realm|Realm|species|superclass|resizable-buffer|growable-buffer)/) {
       return 1
     }
     return 0

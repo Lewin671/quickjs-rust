@@ -137,9 +137,10 @@ quickjs-rust engine failures over harness-only gaps, and it prefers candidate
 areas with no more than `TEST262_GAP_RECOMMEND_BATCH_CAP` engine gaps, currently
 5. It also computes `hard hints` from paths and skip metadata that usually imply
 larger missing features, such as async, destructuring, class, yield,
-proxy/realm/species behavior, or Annex B global-code semantics. Those hints do
-not hide gaps; they only lower an area's default ranking so an agent can find
-reviewable parity wins before getting stuck on known broad features. Use
+proxy/realm/species behavior, resizable or growable buffers, or Annex B
+global-code semantics. Those hints do not hide gaps; they only lower an area's
+default ranking so an agent can find reviewable parity wins before getting stuck
+on known broad features. Use
 `--strategy fast` for the older small-batch-first behavior,
 `--strategy largest` to restore largest-gap-first recommendation, or
 `--recommend-batch-cap N` to tune how large a default batch may be.
