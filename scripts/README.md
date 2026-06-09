@@ -34,7 +34,8 @@ maintenance, or agent workflow isolation.
   In that mode QuickJS-NG config skips are applied as the shared baseline, and
   quickjs-rust unsupported metadata is reported as a separate harness gap.
   Negative quickjs-rust cases must fail with the expected Test262 phase and
-  error type.
+  error type. Set `QJS_CLI_BIN` to reuse a prebuilt quickjs-rust binary across
+  multiple shard runs.
 - `test262-baseline-metadata.awk`: Internal helper used by
   `test262-baseline.sh` to read Test262 metadata blocks, including inline and
   block-list `flags`, `includes`, and `features` entries.

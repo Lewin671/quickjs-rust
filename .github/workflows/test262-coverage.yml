@@ -181,10 +181,17 @@ jobs:
       - name: Init submodules
         run: git submodule update --init --depth 1 third_party/test262
 
+      - name: Build quickjs-rust once
+        run: cargo build -q -p qjs-cli
+
       - name: Run full Test262 coverage shard
         run: |
           mkdir -p coverage
           status=0
+          target_dir="$(cargo metadata --format-version=1 --no-deps \
+            | sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p' \
+            | head -n 1)"
+          export QJS_CLI_BIN="${target_dir:-$PWD/target}/debug/qjs"
           first_shard=$(( (${{ matrix.group }} - 1) * 2 + 1 ))
           last_shard=$(( first_shard + 1 ))
           for shard in $(seq "$first_shard" "$last_shard"); do
