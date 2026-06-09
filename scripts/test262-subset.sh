@@ -90,6 +90,7 @@ list_entries() {
 emit_test262_host_shim() {
   cat <<'EOF'
 var $262 = {
+  IsHTMLDDA: __quickjsRustIsHTMLDDA,
   createRealm: function() {
     var crossRealmArray = function Array(length) {
       return arguments.length === 0 ? [] : new Array(length);

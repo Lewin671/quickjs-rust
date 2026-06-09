@@ -26,6 +26,34 @@ fn evaluates_variable_declarations() {
 }
 
 #[test]
+fn evaluates_variable_declaration_destructuring() {
+    assert_eq!(
+        eval("let [first = 1, , third] = [undefined, 2, 3]; first + third;"),
+        Ok(Value::Number(4.0))
+    );
+    assert_eq!(
+        eval("const {value, key: renamed = 2} = {value: 5}; value + renamed;"),
+        Ok(Value::Number(7.0))
+    );
+}
+
+#[test]
+fn destructuring_defaults_do_not_treat_html_dda_as_undefined() {
+    assert_eq!(
+        eval(
+            "let initCount = 0; const counter = function() { initCount += 1; }; const [x = counter()] = [__quickjsRustIsHTMLDDA]; (x === __quickjsRustIsHTMLDDA) + ':' + initCount;"
+        ),
+        Ok(Value::String("true:0".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let initCount = 0; const counter = function() { initCount += 1; }; const {x = counter()} = {x: __quickjsRustIsHTMLDDA}; (x === __quickjsRustIsHTMLDDA) + ':' + initCount;"
+        ),
+        Ok(Value::String("true:0".to_owned()))
+    );
+}
+
+#[test]
 fn evaluates_if_else_statements() {
     assert_eq!(
         eval("let x = 1; if (x > 0) { x = 7; } else { x = 3; } x;"),

@@ -1,4 +1,4 @@
-use qjs_ast::{BinaryOp, CatchParam, Expr, ForInLeft, ForInit, Stmt, VarKind};
+use qjs_ast::{BinaryOp, BindingPattern, CatchParam, Expr, ForInLeft, ForInit, Stmt, VarKind};
 
 use crate::parse_script;
 
@@ -15,7 +15,7 @@ fn parses_variable_declaration() {
     };
     assert_eq!(*kind, VarKind::Let);
     assert_eq!(declarations.len(), 2);
-    assert_eq!(declarations[0].name, "answer");
+    assert_eq!(declarations[0].binding.names(), vec!["answer"]);
     assert!(matches!(
         declarations[0].init,
         Some(Expr::Binary {
@@ -23,14 +23,44 @@ fn parses_variable_declaration() {
             ..
         })
     ));
-    assert_eq!(declarations[1].name, "missing");
+    assert_eq!(declarations[1].binding.names(), vec!["missing"]);
     assert!(declarations[1].init.is_none());
+}
+
+#[test]
+fn parses_variable_declaration_binding_patterns() {
+    let script = parse_script("const [first = 1, , third] = xs, {value, key: renamed = 2} = obj;")
+        .expect("source should parse");
+    let [Stmt::VarDecl { declarations, .. }] = script.body.as_slice() else {
+        panic!("expected one variable declaration");
+    };
+
+    assert_eq!(declarations[0].binding.names(), vec!["first", "third"]);
+    assert!(matches!(
+        declarations[0].binding,
+        BindingPattern::Array { .. }
+    ));
+    assert_eq!(declarations[1].binding.names(), vec!["value", "renamed"]);
+    assert!(matches!(
+        declarations[1].binding,
+        BindingPattern::Object { .. }
+    ));
 }
 
 #[test]
 fn rejects_const_without_initializer() {
     let error = parse_script("const answer;").expect_err("const should require initializer");
     assert_eq!(error.message, "const declarations require an initializer");
+}
+
+#[test]
+fn rejects_destructuring_declaration_without_initializer() {
+    let error =
+        parse_script("var [answer];").expect_err("destructuring should require initializer");
+    assert_eq!(
+        error.message,
+        "destructuring declarations require an initializer"
+    );
 }
 #[test]
 fn parses_if_else_statement() {
@@ -87,7 +117,7 @@ fn parses_for_statement() {
     assert!(matches!(
         init,
         Some(ForInit::VarDecl { declarations, .. })
-            if declarations.len() == 1 && declarations[0].name == "i"
+            if declarations.len() == 1 && declarations[0].binding.names() == vec!["i"]
     ));
     assert!(matches!(
         test,

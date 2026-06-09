@@ -30,7 +30,7 @@ fn collect_statement_local_names(body: &[Stmt], names: &mut HashSet<String>) {
                 names.extend(
                     declarations
                         .iter()
-                        .map(|declaration| declaration.name.clone()),
+                        .flat_map(|declaration| declaration.binding.names()),
                 );
             }
             Stmt::FunctionDecl { name, .. } => {
@@ -58,7 +58,7 @@ fn collect_statement_local_names(body: &[Stmt], names: &mut HashSet<String>) {
                     names.extend(
                         declarations
                             .iter()
-                            .map(|declaration| declaration.name.clone()),
+                            .flat_map(|declaration| declaration.binding.names()),
                     );
                 }
                 collect_statement_local_names(std::slice::from_ref(body.as_ref()), names);

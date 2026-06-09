@@ -6,7 +6,9 @@ mod declaration;
 mod script;
 
 pub use control::{CatchClause, CatchParam, ForInLeft, ForInit, SwitchCase};
-pub use declaration::{VarDeclarator, VarKind};
+pub use declaration::{
+    BindingElement, BindingPattern, ObjectBindingProperty, VarDeclarator, VarKind,
+};
 pub use script::Script;
 
 /// A statement node.

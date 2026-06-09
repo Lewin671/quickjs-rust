@@ -170,16 +170,17 @@ impl Compiler {
                 kind, declarations, ..
             } => {
                 for declaration in declarations {
-                    let slot = self.declare_var_kind_slot(&declaration.name, *kind);
-                    if matches!(kind, VarKind::Let | VarKind::Const) {
-                        self.emit(Op::ClearLocal(slot));
+                    for name in declaration.binding.names() {
+                        let slot = self.declare_var_kind_slot(&name, *kind);
+                        if matches!(kind, VarKind::Let | VarKind::Const) {
+                            self.emit(Op::ClearLocal(slot));
+                        }
                     }
                     if let Some(init) = &declaration.init {
                         self.compile_expr(init)?;
-                        self.emit_store_var_initializer(slot, &declaration.name, *kind);
+                        self.compile_binding_initializer(&declaration.binding, *kind)?;
                     } else {
-                        self.emit_load_undefined();
-                        self.emit_store_var_binding(slot, &declaration.name, *kind);
+                        self.compile_binding_uninitialized(&declaration.binding, *kind)?;
                     }
                 }
                 self.emit_load_undefined();

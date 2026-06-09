@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use qjs_ast::{
-    BinaryOp, CatchParam, ForInLeft, ForInit, FunctionParams, Script, Stmt, SwitchCase, VarKind,
+    BinaryOp, BindingPattern, CatchParam, ForInLeft, ForInit, FunctionParams, Script, Stmt,
+    SwitchCase, VarKind,
 };
 
 use crate::{RuntimeError, Value, function::is_strict_function_body};
@@ -171,7 +172,9 @@ impl Compiler {
                     {
                         for declaration in declarations {
                             if *kind == VarKind::Var {
-                                self.local_slot(&declaration.name, true);
+                                for name in declaration.binding.names() {
+                                    self.local_slot(&name, true);
+                                }
                             }
                         }
                     }
@@ -202,7 +205,9 @@ impl Compiler {
                     ..
                 } => {
                     for declaration in declarations {
-                        self.local_slot(&declaration.name, true);
+                        for name in declaration.binding.names() {
+                            self.local_slot(&name, true);
+                        }
                     }
                 }
                 Stmt::Switch { cases, .. } => {
@@ -322,6 +327,86 @@ impl Compiler {
         } else {
             self.emit(Op::StoreLocal(slot));
         }
+    }
+
+    pub(super) fn compile_binding_initializer(
+        &mut self,
+        pattern: &BindingPattern,
+        kind: VarKind,
+    ) -> Result<(), RuntimeError> {
+        match pattern {
+            BindingPattern::Identifier { name, .. } => {
+                let slot = self.declare_var_kind_slot(name, kind);
+                self.emit_store_var_initializer(slot, name, kind);
+            }
+            BindingPattern::Array { elements, .. } => {
+                let source_slot = self.temp_local("array_binding_source");
+                self.emit(Op::StoreLocal(source_slot));
+                for (index, element) in elements.iter().enumerate() {
+                    let Some(element) = element else {
+                        continue;
+                    };
+                    self.emit(Op::LoadLocal(source_slot));
+                    let key = self.const_slot(Value::String(index.to_string()));
+                    self.emit(Op::LoadConst(key));
+                    self.emit(Op::GetProp);
+                    self.compile_binding_default(element.default.as_ref())?;
+                    self.compile_binding_initializer(&element.binding, kind)?;
+                }
+            }
+            BindingPattern::Object { properties, .. } => {
+                let source_slot = self.temp_local("object_binding_source");
+                self.emit(Op::StoreLocal(source_slot));
+                for property in properties {
+                    self.emit(Op::LoadLocal(source_slot));
+                    let key = self.const_slot(Value::String(property.key.clone()));
+                    self.emit(Op::LoadConst(key));
+                    self.emit(Op::GetProp);
+                    self.compile_binding_default(property.default.as_ref())?;
+                    self.compile_binding_initializer(&property.binding, kind)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub(super) fn compile_binding_uninitialized(
+        &mut self,
+        pattern: &BindingPattern,
+        kind: VarKind,
+    ) -> Result<(), RuntimeError> {
+        for name in pattern.names() {
+            let slot = self.declare_var_kind_slot(&name, kind);
+            self.emit_load_undefined();
+            self.emit_store_var_binding(slot, &name, kind);
+        }
+        Ok(())
+    }
+
+    fn compile_binding_default(
+        &mut self,
+        default: Option<&qjs_ast::Expr>,
+    ) -> Result<(), RuntimeError> {
+        let Some(default) = default else {
+            return Ok(());
+        };
+
+        let value_slot = self.temp_local("binding_value");
+        self.emit(Op::StoreLocal(value_slot));
+        self.emit(Op::LoadLocal(value_slot));
+        self.emit_load_undefined();
+        self.emit(Op::Binary(BinaryOp::StrictEq));
+        let keep_existing = self.emit(Op::JumpIfFalse(usize::MAX));
+        self.emit(Op::Pop);
+        self.compile_expr(default)?;
+        let done = self.emit(Op::Jump(usize::MAX));
+        let keep_existing_target = self.code.len();
+        self.patch_jump(keep_existing, keep_existing_target);
+        self.emit(Op::Pop);
+        self.emit(Op::LoadLocal(value_slot));
+        let done_target = self.code.len();
+        self.patch_jump(done, done_target);
+        Ok(())
     }
 
     pub(super) fn resolve_local_slot(&self, name: &str) -> Option<usize> {
@@ -647,9 +732,11 @@ impl Compiler {
                 kind, declarations, ..
             } => {
                 for declaration in declarations {
-                    let slot = self.declare_var_kind_slot(&declaration.name, *kind);
-                    if matches!(kind, VarKind::Let | VarKind::Const) {
-                        self.emit(Op::ClearLocal(slot));
+                    for name in declaration.binding.names() {
+                        let slot = self.declare_var_kind_slot(&name, *kind);
+                        if matches!(kind, VarKind::Let | VarKind::Const) {
+                            self.emit(Op::ClearLocal(slot));
+                        }
                     }
                     let has_init = declaration.init.is_some();
                     if let Some(init) = &declaration.init {
@@ -658,9 +745,9 @@ impl Compiler {
                         self.emit_load_undefined();
                     }
                     if has_init {
-                        self.emit_store_var_initializer(slot, &declaration.name, *kind);
+                        self.compile_binding_initializer(&declaration.binding, *kind)?;
                     } else {
-                        self.emit_store_var_binding(slot, &declaration.name, *kind);
+                        self.compile_binding_uninitialized(&declaration.binding, *kind)?;
                     }
                 }
                 self.emit_load_undefined();
@@ -757,7 +844,7 @@ pub(super) fn for_init_lexical_names(init: &ForInit) -> Vec<String> {
             ..
         } => declarations
             .iter()
-            .map(|declaration| declaration.name.clone())
+            .flat_map(|declaration| declaration.binding.names())
             .collect(),
         ForInit::VarDecl { .. } | ForInit::Expr(_) => Vec::new(),
     }
@@ -793,7 +880,7 @@ fn lexical_declared_names(body: &[Stmt]) -> Vec<String> {
             } => names.extend(
                 declarations
                     .iter()
-                    .map(|declaration| declaration.name.clone()),
+                    .flat_map(|declaration| declaration.binding.names()),
             ),
             Stmt::For {
                 init: Some(init), ..
