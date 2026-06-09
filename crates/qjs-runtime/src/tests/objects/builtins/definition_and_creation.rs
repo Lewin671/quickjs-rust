@@ -116,9 +116,27 @@ fn evaluates_object_definition_and_creation_builtins() {
     );
     assert_eq!(
         eval(
+            "let a = false, b = false, c = false; try { Object.defineProperty([], 'length', { configurable: true }); } catch (error) { a = error instanceof TypeError; } try { Object.defineProperty([], 'length', { enumerable: true }); } catch (error) { b = error instanceof TypeError; } try { Object.defineProperty([], 'length', { get: function() {} }); } catch (error) { c = error instanceof TypeError; } a + ':' + b + ':' + c;"
+        ),
+        Ok(Value::String("true:true:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let array = []; Object.defineProperty(array, 'length', { writable: false }); let caught = false; try { Object.defineProperty(array, 'length', { writable: true }); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
             "let array = []; let valueOfAccessed = false; let toStringAccessed = false; Object.defineProperty(array, 'length', { value: { valueOf: function() { valueOfAccessed = true; return 3; }, toString: function() { toStringAccessed = true; return '2'; } } }); array.length + ':' + valueOfAccessed + ':' + toStringAccessed;"
         ),
         Ok(Value::String("3:true:false".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let array = [1, 2]; let calls = 0; let length = { valueOf: function() { calls += 1; if (calls !== 1) { Object.defineProperty(array, 'length', { writable: false }); } return array.length; } }; let caught = false; try { Object.defineProperty(array, 'length', { value: length, writable: true }); } catch (error) { caught = error instanceof TypeError; } caught + ':' + calls + ':' + Object.getOwnPropertyDescriptor(array, 'length').writable;"
+        ),
+        Ok(Value::String("true:2:false".to_owned()))
     );
     assert_eq!(
         eval(

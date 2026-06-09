@@ -63,4 +63,10 @@ fn evaluates_array_member_access() {
         eval("Array.prototype[1] = 13; let xs = [, ,]; xs[1];"),
         Ok(Value::Number(13.0))
     );
+    assert_eq!(
+        eval(
+            "let xs = [0, 1, 2]; xs[4294967294] = 4; xs.length = 2; xs[2] + ':' + xs[4294967294] + ':' + xs.length;"
+        ),
+        Ok(Value::String("undefined:undefined:2".to_owned()))
+    );
 }

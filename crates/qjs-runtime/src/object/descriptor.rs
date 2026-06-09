@@ -196,6 +196,9 @@ pub(crate) fn define_property_descriptor_on_value_key(
             Ok(true)
         }
         Value::Array(elements) => {
+            if key == "length" {
+                return define_array_length_property(elements, descriptor, env);
+            }
             let existing = crate::array_own_property_descriptor(elements, &key);
             let defines_new_property = existing.is_none();
             let Some(property) = resolve_property_definition(existing, descriptor.clone()) else {
@@ -203,9 +206,6 @@ pub(crate) fn define_property_descriptor_on_value_key(
             };
             if defines_new_property && !elements.is_extensible() {
                 return Ok(false);
-            }
-            if key == "length" {
-                return define_array_length_property(elements, descriptor, env);
             }
             if array_index_key(&key)
                 .is_some_and(|index| index >= elements.len() && !elements.is_length_writable())
@@ -227,21 +227,32 @@ fn define_array_length_property(
     descriptor: PropertyDescriptor,
     env: &mut HashMap<String, Value>,
 ) -> Result<bool, RuntimeError> {
+    if descriptor.value.is_none() {
+        let Some(property) =
+            resolve_property_definition(Some(array_length_property(elements)), descriptor)
+        else {
+            return Ok(false);
+        };
+        elements.set_length_writable(property.writable);
+        return Ok(true);
+    }
+
     if let Some(value) = descriptor.value {
-        let new_len = array_length_from_descriptor_value(value, env)?;
+        let new_len = array_length_from_array_set_length_value(value, env)?;
         let old_len = elements.len();
+        if !elements.is_length_writable() {
+            if descriptor.writable == Some(true) || new_len != old_len {
+                return Ok(false);
+            }
+            return Ok(true);
+        }
         if new_len < old_len {
-            for index in (new_len..old_len).rev() {
-                if crate::array_own_property_descriptor(elements, &index.to_string())
-                    .is_some_and(|property| !property.configurable)
-                {
-                    elements.set_len(index + 1);
-                    if descriptor.writable == Some(false) {
-                        elements.set_length_writable(false);
-                    }
-                    return Ok(false);
+            if let Some(restored_len) = elements.delete_indices_from(new_len) {
+                elements.set_len(restored_len);
+                if descriptor.writable == Some(false) {
+                    elements.set_length_writable(false);
                 }
-                elements.delete_index(index);
+                return Ok(false);
             }
         }
         elements.set_len(new_len);
@@ -249,10 +260,37 @@ fn define_array_length_property(
             return Ok(false);
         }
     }
+    if descriptor.writable == Some(true) && !elements.is_length_writable() {
+        return Ok(false);
+    }
     if let Some(writable) = descriptor.writable {
         elements.set_length_writable(writable);
     }
     Ok(true)
+}
+
+fn array_length_property(elements: &crate::ArrayRef) -> Property {
+    Property::data(
+        Value::Number(elements.len() as f64),
+        false,
+        elements.is_length_writable(),
+        false,
+    )
+}
+
+fn array_length_from_array_set_length_value(
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<usize, RuntimeError> {
+    let length = crate::to_uint32_number(crate::to_number_with_env(value.clone(), env)?);
+    let number = crate::to_number_with_env(value, env)?;
+    if f64::from(length) != number {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "RangeError: invalid array length".to_owned(),
+        });
+    }
+    Ok(length as usize)
 }
 
 pub(crate) fn array_length_from_descriptor_value(

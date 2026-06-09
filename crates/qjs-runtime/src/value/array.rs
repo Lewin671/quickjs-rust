@@ -179,6 +179,32 @@ impl ArrayRef {
         true
     }
 
+    pub(crate) fn delete_indices_from(&self, length: usize) -> Option<usize> {
+        let dense_len = self.elements.borrow().len();
+        if length < dense_len {
+            for index in (length..dense_len).rev() {
+                if !self.delete_index(index) {
+                    return Some(index + 1);
+                }
+            }
+        }
+
+        let mut sparse_indices: Vec<_> = self
+            .properties
+            .borrow()
+            .keys()
+            .filter_map(|key| key.parse::<usize>().ok())
+            .filter(|index| *index >= length && *index <= MAX_ARRAY_INDEX)
+            .collect();
+        sparse_indices.sort_unstable_by(|left, right| right.cmp(left));
+        for index in sparse_indices {
+            if !self.delete_index(index) {
+                return Some(index + 1);
+            }
+        }
+        None
+    }
+
     pub(crate) fn set_property(&self, key: String, value: Value) {
         let mut properties = self.properties.borrow_mut();
         if let Some(property) = properties.get_mut(&key) {
@@ -288,6 +314,28 @@ impl ArrayRef {
         holes.retain(|index| *index < length);
         if length > old_len && length <= MAX_DENSE_STORAGE_LENGTH {
             holes.extend(old_len..length);
+        }
+        if length < old_len {
+            let mut sparse_indices: Vec<_> = self
+                .properties
+                .borrow()
+                .keys()
+                .filter_map(|key| key.parse::<usize>().ok())
+                .filter(|index| *index >= length && *index <= MAX_ARRAY_INDEX)
+                .collect();
+            sparse_indices.sort_unstable_by(|left, right| right.cmp(left));
+            let mut properties = self.properties.borrow_mut();
+            for index in sparse_indices {
+                let key = index.to_string();
+                if properties
+                    .get(&key)
+                    .is_some_and(|property| !property.configurable)
+                {
+                    self.length.set(index + 1);
+                    return;
+                }
+                properties.remove(&key);
+            }
         }
     }
 

@@ -9,6 +9,7 @@ pub(crate) fn install_array(
 ) {
     let array_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
     let array_function = Function::new_native(Some("Array"), 1, NativeFunction::Array, true);
+    array_prototype.define_non_enumerable("length".to_owned(), Value::Number(0.0));
     array_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(array_function.clone()),
