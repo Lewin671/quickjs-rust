@@ -53,6 +53,9 @@ fn own_property_descriptor_key(target: &Value, key: &PropertyKey) -> Option<Prop
         Value::Object(object) => object.own_property(key),
         Value::Map(map) => map.object().own_property(key),
         Value::Set(set) => set.object().own_property(key),
+        Value::Proxy(proxy) => {
+            own_property_descriptor_key(&proxy.target(), &PropertyKey::String(key.to_owned()))
+        }
         Value::Array(elements) => crate::array_own_property_descriptor(elements, key),
         Value::Function(function) => crate::function_own_property_descriptor(function, key),
         Value::String(_)
@@ -72,6 +75,7 @@ fn own_symbol_property_descriptor(target: &Value, key: &PropertyKey) -> Option<P
         Value::Object(object) => object.own_symbol_property(symbol),
         Value::Map(map) => map.object().own_symbol_property(symbol),
         Value::Set(set) => set.object().own_symbol_property(symbol),
+        Value::Proxy(proxy) => own_symbol_property_descriptor(&proxy.target(), key),
         Value::Function(function) => {
             crate::function_own_symbol_property_descriptor(function, symbol)
         }
@@ -199,6 +203,12 @@ fn set_receiver_data_property(
             object.define_property(key.to_owned(), descriptor);
             Ok(true)
         }
+        Value::Proxy(proxy) => set_receiver_data_property(
+            proxy.target(),
+            &PropertyKey::String(key.to_owned()),
+            value,
+            env,
+        ),
         Value::String(_)
         | Value::Number(_)
         | Value::BigInt(_)
@@ -250,6 +260,7 @@ fn set_receiver_symbol_data_property(
             elements.define_symbol_property(symbol.clone(), descriptor);
             Ok(true)
         }
+        Value::Proxy(proxy) => set_receiver_symbol_data_property(proxy.target(), key, value),
         Value::String(_)
         | Value::Number(_)
         | Value::BigInt(_)

@@ -96,6 +96,47 @@ pub(crate) fn native_object_set_prototype_of(
                 thrown: None,
                 message: "Object.setPrototypeOf failed".to_owned(),
             })?,
+        Value::Proxy(proxy) => match proxy.target() {
+            Value::Object(object) => {
+                object.set_prototype(prototype).map_err(|()| RuntimeError {
+                    thrown: None,
+                    message: "Object.setPrototypeOf failed".to_owned(),
+                })?
+            }
+            Value::Map(map) => {
+                map.object()
+                    .set_prototype(prototype)
+                    .map_err(|()| RuntimeError {
+                        thrown: None,
+                        message: "Object.setPrototypeOf failed".to_owned(),
+                    })?
+            }
+            Value::Set(set) => {
+                set.object()
+                    .set_prototype(prototype)
+                    .map_err(|()| RuntimeError {
+                        thrown: None,
+                        message: "Object.setPrototypeOf failed".to_owned(),
+                    })?
+            }
+            Value::Array(elements) => {
+                elements
+                    .set_prototype(prototype)
+                    .map_err(|()| RuntimeError {
+                        thrown: None,
+                        message: "Object.setPrototypeOf failed".to_owned(),
+                    })?
+            }
+            Value::Function(function) => {
+                function
+                    .set_internal_prototype(prototype)
+                    .map_err(|()| RuntimeError {
+                        thrown: None,
+                        message: "Object.setPrototypeOf failed".to_owned(),
+                    })?
+            }
+            _ => {}
+        },
         Value::Array(elements) => elements
             .set_prototype(prototype)
             .map_err(|()| RuntimeError {
@@ -157,6 +198,9 @@ pub(crate) fn native_object_prototype_has_own_property(
         }
         (Value::Set(set), crate::PropertyKey::Symbol(symbol)) => Ok(Value::Boolean(
             set.object().has_own_symbol_property(&symbol),
+        )),
+        (Value::Proxy(proxy), key) => Ok(Value::Boolean(
+            own_property_descriptor_key(proxy.target(), &key)?.is_some(),
         )),
         (Value::Function(function), crate::PropertyKey::String(key)) => Ok(Value::Boolean(
             function_own_property_descriptor(&function, &key).is_some(),
@@ -223,6 +267,7 @@ pub(crate) fn native_object_prototype_is_prototype_of(
         | Value::Array(_)
         | Value::Map(_)
         | Value::Set(_)
+        | Value::Proxy(_)
         | Value::String(_)
         | Value::Number(_)
         | Value::BigInt(_)
@@ -256,7 +301,7 @@ fn builtin_to_string_tag(value: Value) -> String {
         Value::Null => "Null".to_owned(),
         Value::Array(_) => "Array".to_owned(),
         Value::Function(_) => "Function".to_owned(),
-        Value::Map(_) | Value::Set(_) => "Object".to_owned(),
+        Value::Map(_) | Value::Set(_) | Value::Proxy(_) => "Object".to_owned(),
         Value::String(_) => "String".to_owned(),
         Value::Number(_) => "Number".to_owned(),
         Value::BigInt(_) => "BigInt".to_owned(),

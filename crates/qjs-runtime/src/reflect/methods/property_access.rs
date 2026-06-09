@@ -20,9 +20,12 @@ pub(crate) fn native_reflect_get(
         .unwrap_or_else(|| target.clone());
 
     Ok(match target {
-        Value::Object(_) | Value::Map(_) | Value::Set(_) | Value::Array(_) | Value::Function(_) => {
-            property_value_key_with_receiver(target, &key, receiver, env)?
-        }
+        Value::Object(_)
+        | Value::Map(_)
+        | Value::Set(_)
+        | Value::Array(_)
+        | Value::Function(_)
+        | Value::Proxy(_) => property_value_key_with_receiver(target, &key, receiver, env)?,
         Value::String(_)
         | Value::Number(_)
         | Value::BigInt(_)
@@ -43,9 +46,12 @@ pub(crate) fn native_reflect_has(
         env,
     )?;
     match target {
-        Value::Object(_) | Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) => {
-            Ok(Value::Boolean(has_property_key(target, env, &key)?))
-        }
+        Value::Object(_)
+        | Value::Array(_)
+        | Value::Function(_)
+        | Value::Map(_)
+        | Value::Set(_)
+        | Value::Proxy(_) => Ok(Value::Boolean(has_property_key(target, env, &key)?)),
         Value::String(_)
         | Value::Number(_)
         | Value::BigInt(_)

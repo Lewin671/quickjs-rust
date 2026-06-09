@@ -7,6 +7,14 @@ pub(crate) fn native_object_is_extensible(
         Some(Value::Object(object)) => object.is_extensible(),
         Some(Value::Map(map)) => map.object().is_extensible(),
         Some(Value::Set(set)) => set.object().is_extensible(),
+        Some(Value::Proxy(proxy)) => match proxy.target() {
+            Value::Object(object) => object.is_extensible(),
+            Value::Map(map) => map.object().is_extensible(),
+            Value::Set(set) => set.object().is_extensible(),
+            Value::Array(elements) => elements.is_extensible(),
+            Value::Function(function) => function.is_extensible(),
+            _ => false,
+        },
         Some(Value::Array(elements)) => elements.is_extensible(),
         Some(Value::Function(function)) => function.is_extensible(),
         Some(
@@ -29,6 +37,14 @@ pub(crate) fn native_object_prevent_extensions(
         Value::Object(object) => object.prevent_extensions(),
         Value::Map(map) => map.object().prevent_extensions(),
         Value::Set(set) => set.object().prevent_extensions(),
+        Value::Proxy(proxy) => match proxy.target() {
+            Value::Object(object) => object.prevent_extensions(),
+            Value::Map(map) => map.object().prevent_extensions(),
+            Value::Set(set) => set.object().prevent_extensions(),
+            Value::Array(elements) => elements.prevent_extensions(),
+            Value::Function(function) => function.prevent_extensions(),
+            _ => {}
+        },
         Value::Array(elements) => elements.prevent_extensions(),
         Value::Function(function) => function.prevent_extensions(),
         _ => {}
@@ -41,6 +57,14 @@ pub(crate) fn native_object_is_sealed(argument_values: &[Value]) -> Result<Value
         Some(Value::Object(object)) => object.is_sealed(),
         Some(Value::Map(map)) => map.object().is_sealed(),
         Some(Value::Set(set)) => set.object().is_sealed(),
+        Some(Value::Proxy(proxy)) => match proxy.target() {
+            Value::Object(object) => object.is_sealed(),
+            Value::Map(map) => map.object().is_sealed(),
+            Value::Set(set) => set.object().is_sealed(),
+            Value::Array(elements) => elements.is_sealed(),
+            Value::Function(function) => function.is_sealed(),
+            _ => true,
+        },
         Some(Value::Array(elements)) => elements.is_sealed(),
         Some(Value::Function(function)) => function.is_sealed(),
         Some(
@@ -60,6 +84,14 @@ pub(crate) fn native_object_is_frozen(argument_values: &[Value]) -> Result<Value
         Some(Value::Object(object)) => object.is_frozen(),
         Some(Value::Map(map)) => map.object().is_frozen(),
         Some(Value::Set(set)) => set.object().is_frozen(),
+        Some(Value::Proxy(proxy)) => match proxy.target() {
+            Value::Object(object) => object.is_frozen(),
+            Value::Map(map) => map.object().is_frozen(),
+            Value::Set(set) => set.object().is_frozen(),
+            Value::Array(elements) => elements.is_frozen(),
+            Value::Function(function) => function.is_frozen(),
+            _ => true,
+        },
         Some(Value::Array(elements)) => elements.is_frozen(),
         Some(Value::Function(function)) => function.is_frozen(),
         Some(
@@ -80,6 +112,14 @@ pub(crate) fn native_object_seal(argument_values: &[Value]) -> Result<Value, Run
         Value::Object(object) => object.seal(),
         Value::Map(map) => map.object().seal(),
         Value::Set(set) => set.object().seal(),
+        Value::Proxy(proxy) => match proxy.target() {
+            Value::Object(object) => object.seal(),
+            Value::Map(map) => map.object().seal(),
+            Value::Set(set) => set.object().seal(),
+            Value::Array(elements) => elements.seal(),
+            Value::Function(function) => function.seal(),
+            _ => {}
+        },
         Value::Array(elements) => elements.seal(),
         Value::Function(function) => function.seal(),
         _ => {}
@@ -93,6 +133,14 @@ pub(crate) fn native_object_freeze(argument_values: &[Value]) -> Result<Value, R
         Value::Object(object) => object.freeze(),
         Value::Map(map) => map.object().freeze(),
         Value::Set(set) => set.object().freeze(),
+        Value::Proxy(proxy) => match proxy.target() {
+            Value::Object(object) => object.freeze(),
+            Value::Map(map) => map.object().freeze(),
+            Value::Set(set) => set.object().freeze(),
+            Value::Array(elements) => elements.freeze(),
+            Value::Function(function) => function.freeze(),
+            _ => {}
+        },
         Value::Array(elements) => elements.freeze(),
         Value::Function(function) => function.freeze(),
         _ => {}

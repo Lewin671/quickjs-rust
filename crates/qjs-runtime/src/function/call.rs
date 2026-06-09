@@ -83,9 +83,12 @@ pub(crate) fn construct_function(
     let result = call_function(target, this_value.clone(), argument_values, env, true)?;
 
     match result {
-        Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) | Value::Object(_) => {
-            Ok(result)
-        }
+        Value::Array(_)
+        | Value::Function(_)
+        | Value::Map(_)
+        | Value::Set(_)
+        | Value::Object(_)
+        | Value::Proxy(_) => Ok(result),
         _ => Ok(this_value),
     }
 }

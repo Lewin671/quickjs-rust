@@ -48,6 +48,7 @@ fn stringify_value(
         }
         Value::Map(map) => stringify_object(&map.object(), env).map(Some),
         Value::Set(set) => stringify_object(&set.object(), env).map(Some),
+        Value::Proxy(proxy) => stringify_value(proxy.target(), key, in_array, env),
         Value::Undefined | Value::Function(_) if in_array => Ok(Some("null".to_owned())),
         Value::Undefined | Value::Function(_) => Ok(None),
     }

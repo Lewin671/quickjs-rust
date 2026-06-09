@@ -25,7 +25,8 @@ pub(crate) fn native_object_assign(
         | Value::Object(_)
         | Value::Function(_)
         | Value::Map(_)
-        | Value::Set(_)) => value,
+        | Value::Set(_)
+        | Value::Proxy(_)) => value,
         Value::Null | Value::Undefined => {
             return Err(RuntimeError {
                 thrown: None,
@@ -60,7 +61,12 @@ pub(crate) fn native_object(
             Ok(symbol::boxed_symbol(object, env))
         }
         Some(
-            Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) | Value::Object(_),
+            Value::Array(_)
+            | Value::Function(_)
+            | Value::Map(_)
+            | Value::Set(_)
+            | Value::Object(_)
+            | Value::Proxy(_),
         ) => Ok(argument_values[0].clone()),
         Some(Value::Boolean(value)) => Ok(boxed_boolean(*value, env)),
         Some(Value::BigInt(value)) => Ok(boxed_bigint(value.clone(), env)),

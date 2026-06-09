@@ -24,7 +24,7 @@ pub(crate) use descriptor_record::to_property_descriptor_record;
 pub(crate) use enumeration::{
     native_object_entries, native_object_get_own_property_names,
     native_object_get_own_property_symbols, native_object_has_own, native_object_keys,
-    native_object_values,
+    native_object_values, own_property_names, own_property_symbols,
 };
 pub(crate) use from_entries::native_object_from_entries;
 pub(crate) use group_by::native_object_group_by;

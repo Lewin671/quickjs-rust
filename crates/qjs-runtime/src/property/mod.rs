@@ -45,6 +45,10 @@ pub(crate) fn has_property_key(
         Value::Object(object) => Ok(object.contains_property(key)),
         Value::Map(map) => Ok(map.object().contains_property(key)),
         Value::Set(set) => Ok(set.object().contains_property(key)),
+        Value::Proxy(proxy) => {
+            let mut proxy_env = env.clone();
+            crate::proxy::proxy_has(proxy, &PropertyKey::String(key.to_owned()), &mut proxy_env)
+        }
         Value::Array(elements) => Ok(array_has_own_property(&elements, key)
             || array_prototype_property(&elements, env, key).is_some()),
         Value::Function(function) => Ok(function_own_property_descriptor(&function, key).is_some()
@@ -74,6 +78,10 @@ fn has_symbol_property(
         Value::Object(object) => Ok(object.symbol_property(symbol).is_some()),
         Value::Map(map) => Ok(map.object().symbol_property(symbol).is_some()),
         Value::Set(set) => Ok(set.object().symbol_property(symbol).is_some()),
+        Value::Proxy(proxy) => {
+            let mut proxy_env = env.clone();
+            crate::proxy::proxy_has(proxy, key, &mut proxy_env)
+        }
         Value::Function(function) => Ok(function.symbol_property(symbol, env).is_some()),
         Value::Array(elements) => Ok(elements.symbol_property(symbol).is_some()
             || elements
@@ -121,6 +129,9 @@ pub(crate) fn property_value_key_with_receiver(
         Value::Object(object) => property_descriptor_value(object.property(key), receiver, env),
         Value::Map(map) => property_descriptor_value(map.object().property(key), receiver, env),
         Value::Set(set) => property_descriptor_value(set.object().property(key), receiver, env),
+        Value::Proxy(proxy) => {
+            crate::proxy::proxy_get(proxy, &PropertyKey::String(key.to_owned()), receiver, env)
+        }
         Value::Function(function) => property_descriptor_value(
             function_own_property_descriptor(&function, key)
                 .or_else(|| native_error_constructor_parent_descriptor(&function, env, key))
@@ -195,6 +206,7 @@ fn symbol_property_value_with_receiver(
         Value::Object(object) => {
             property_descriptor_value(object.symbol_property(symbol), receiver, env)
         }
+        Value::Proxy(proxy) => crate::proxy::proxy_get(proxy, key, receiver, env),
         Value::Map(map) => {
             property_descriptor_value(map.object().symbol_property(symbol), receiver, env)
         }

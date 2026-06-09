@@ -97,7 +97,7 @@ fn apply_argument_list(
         Value::Object(object) if object.to_string_tag().as_deref() == Some("Symbol") => {
             Err(apply_argument_list_type_error())
         }
-        Value::Object(_) => {
+        Value::Object(_) | Value::Proxy(_) => {
             array_like_values_with_env(arg_array, "Function.prototype.apply argument list", env)
         }
         Value::Function(_) => {

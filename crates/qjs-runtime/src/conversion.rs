@@ -34,7 +34,9 @@ pub(crate) fn to_js_string_with_env(
         }
         Value::Object(object) => object_to_string(Value::Object(object), env),
         Value::Array(_) => array_join(value, ",", env),
-        Value::Function(_) | Value::Map(_) | Value::Set(_) => object_to_string(value, env),
+        Value::Function(_) | Value::Map(_) | Value::Set(_) | Value::Proxy(_) => {
+            object_to_string(value, env)
+        }
     }
 }
 
@@ -63,7 +65,7 @@ pub(crate) fn error_value(value: Value) -> String {
         Value::Undefined => "undefined".to_owned(),
         Value::Function(_) => "function".to_owned(),
         Value::Array(_) => "array".to_owned(),
-        Value::Map(_) | Value::Set(_) => "object".to_owned(),
+        Value::Map(_) | Value::Set(_) | Value::Proxy(_) => "object".to_owned(),
         Value::Object(object) => crate::error::error_object_to_string(&object)
             .or_else(|| object_constructor_name(&object))
             .unwrap_or_else(|| "object".to_owned()),
@@ -99,9 +101,12 @@ pub(crate) fn to_number_with_env(
         Value::Object(object) if symbol::is_symbol_primitive(&object) => {
             Err(symbol_to_number_error())
         }
-        Value::Object(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) | Value::Array(_) => {
-            object_to_number(value, env)
-        }
+        Value::Object(_)
+        | Value::Function(_)
+        | Value::Map(_)
+        | Value::Set(_)
+        | Value::Array(_)
+        | Value::Proxy(_) => object_to_number(value, env),
     }
 }
 
@@ -111,9 +116,12 @@ pub(crate) fn to_primitive_with_env(
 ) -> Result<Value, RuntimeError> {
     match value {
         Value::Object(object) if symbol::is_symbol_primitive(&object) => Ok(Value::Object(object)),
-        Value::Object(_) | Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_) => {
-            to_primitive_with_hint(value, PreferredType::Default, env)
-        }
+        Value::Object(_)
+        | Value::Function(_)
+        | Value::Array(_)
+        | Value::Map(_)
+        | Value::Set(_)
+        | Value::Proxy(_) => to_primitive_with_hint(value, PreferredType::Default, env),
         value => Ok(value),
     }
 }
@@ -327,8 +335,11 @@ pub(crate) fn is_truthy(value: &Value) -> bool {
         Value::String(value) => !value.is_empty(),
         Value::Boolean(value) => *value,
         Value::Null | Value::Undefined => false,
-        Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_) | Value::Object(_) => {
-            true
-        }
+        Value::Function(_)
+        | Value::Array(_)
+        | Value::Map(_)
+        | Value::Set(_)
+        | Value::Object(_)
+        | Value::Proxy(_) => true,
     }
 }

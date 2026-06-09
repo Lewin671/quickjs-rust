@@ -150,11 +150,11 @@ fn move_splice_tail(
                     let value = property_value(receiver.clone(), &from, env)?;
                     set_array_like_property(receiver.clone(), to, value, env)?;
                 } else {
-                    delete_array_like_property(receiver.clone(), &to)?;
+                    delete_array_like_property(receiver.clone(), &to, env)?;
                 }
             }
             for index in (length - delete_count + item_count)..length {
-                delete_array_like_property(receiver.clone(), &index.to_string())?;
+                delete_array_like_property(receiver.clone(), &index.to_string(), env)?;
             }
         }
         std::cmp::Ordering::Greater => {
@@ -165,7 +165,7 @@ fn move_splice_tail(
                     let value = property_value(receiver.clone(), &from, env)?;
                     set_array_like_property(receiver.clone(), to, value, env)?;
                 } else {
-                    delete_array_like_property(receiver.clone(), &to)?;
+                    delete_array_like_property(receiver.clone(), &to, env)?;
                 }
             }
         }

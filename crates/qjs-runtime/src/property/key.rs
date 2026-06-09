@@ -18,9 +18,12 @@ pub(crate) fn to_property_key_value(
         Value::Object(object) if symbol::is_symbol_primitive(&object) => {
             return Ok(PropertyKey::Symbol(object));
         }
-        Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_) | Value::Object(_) => {
-            to_primitive_with_hint(value, PreferredType::String, env)?
-        }
+        Value::Function(_)
+        | Value::Array(_)
+        | Value::Map(_)
+        | Value::Set(_)
+        | Value::Object(_)
+        | Value::Proxy(_) => to_primitive_with_hint(value, PreferredType::String, env)?,
         value => value,
     };
 
@@ -35,11 +38,14 @@ pub(crate) fn to_property_key_value(
         Value::Object(object) if symbol::is_symbol_primitive(&object) => {
             Ok(PropertyKey::Symbol(object))
         }
-        Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_) | Value::Object(_) => {
-            Err(RuntimeError {
-                thrown: None,
-                message: "unsupported property key".to_owned(),
-            })
-        }
+        Value::Function(_)
+        | Value::Array(_)
+        | Value::Map(_)
+        | Value::Set(_)
+        | Value::Object(_)
+        | Value::Proxy(_) => Err(RuntimeError {
+            thrown: None,
+            message: "unsupported property key".to_owned(),
+        }),
     }
 }

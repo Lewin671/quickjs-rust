@@ -515,7 +515,8 @@ impl<'a> Vm<'a> {
         let key_value = self.pop()?;
         let key = self.coerce_property_key(key_value)?;
         let object = self.pop()?;
-        self.stack.push(delete_property_key(object, &key)?);
+        self.stack
+            .push(delete_property_key(object, &key, &mut self.globals)?);
         Ok(())
     }
 

@@ -158,11 +158,12 @@ pub(super) fn enumerable_property_entries_with_symbols(
     Ok(entries)
 }
 
-fn own_property_keys(value: Value) -> Vec<String> {
+pub(crate) fn own_property_keys(value: Value) -> Vec<String> {
     match value {
         Value::Object(object) => object.own_property_keys(),
         Value::Map(map) => map.object().own_property_keys(),
         Value::Set(set) => set.object().own_property_keys(),
+        Value::Proxy(proxy) => own_property_keys(proxy.target()),
         Value::Array(elements) => array_own_property_keys(&elements),
         Value::Function(function) => function_own_property_keys(&function),
         Value::String(value) => crate::string::string_own_property_keys(&value),
@@ -174,11 +175,12 @@ fn own_property_keys(value: Value) -> Vec<String> {
     }
 }
 
-pub(super) fn own_property_names(value: Value) -> Vec<String> {
+pub(crate) fn own_property_names(value: Value) -> Vec<String> {
     match value {
         Value::Object(object) => object.own_property_names(),
         Value::Map(map) => map.object().own_property_names(),
         Value::Set(set) => set.object().own_property_names(),
+        Value::Proxy(proxy) => own_property_names(proxy.target()),
         Value::Array(elements) => array_own_property_names(&elements),
         Value::Function(function) => function_own_property_names(&function),
         Value::String(value) => crate::string::string_own_property_names(&value),
@@ -190,11 +192,12 @@ pub(super) fn own_property_names(value: Value) -> Vec<String> {
     }
 }
 
-pub(super) fn own_property_symbols(value: Value) -> Vec<crate::ObjectRef> {
+pub(crate) fn own_property_symbols(value: Value) -> Vec<crate::ObjectRef> {
     match value {
         Value::Object(object) => object.own_property_symbols(),
         Value::Map(map) => map.object().own_property_symbols(),
         Value::Set(set) => set.object().own_property_symbols(),
+        Value::Proxy(proxy) => own_property_symbols(proxy.target()),
         Value::Function(function) => function_own_property_symbols(&function),
         Value::Array(elements) => elements.own_property_symbols(),
         Value::String(_)

@@ -180,7 +180,12 @@ fn map_entry(
             thrown: None,
             message: "TypeError: Map constructor entry must be an object".to_owned(),
         }),
-        Value::Object(_) | Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) => {
+        Value::Object(_)
+        | Value::Array(_)
+        | Value::Function(_)
+        | Value::Map(_)
+        | Value::Set(_)
+        | Value::Proxy(_) => {
             let key = property_value(entry.clone(), "0", env)?;
             let value = property_value(entry, "1", env)?;
             Ok((key, value))

@@ -23,6 +23,7 @@ mod object;
 mod operations;
 mod promise;
 mod property;
+mod proxy;
 mod reflect;
 mod regexp;
 mod set;
@@ -91,6 +92,7 @@ pub(crate) const RUNTIME_INTRINSIC_NAMES: &[&str] = &[
     "URIError",
     "JSON",
     "Promise",
+    "Proxy",
     "Map",
     "WeakMap",
     "WeakSet",

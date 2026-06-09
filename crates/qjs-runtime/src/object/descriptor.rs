@@ -66,7 +66,8 @@ fn to_object_for_define_properties(
         | Value::Object(_)
         | Value::Function(_)
         | Value::Map(_)
-        | Value::Set(_)) => Ok(value),
+        | Value::Set(_)
+        | Value::Proxy(_)) => Ok(value),
         value @ (Value::String(_) | Value::Number(_) | Value::BigInt(_) | Value::Boolean(_)) => {
             Ok(boxed_primitive(value, env).expect("primitive value should box"))
         }
@@ -101,6 +102,7 @@ pub(super) fn own_property_descriptor_key(
             PropertyKey::String(key) => set.object().own_property(key),
             PropertyKey::Symbol(symbol) => set.object().own_symbol_property(symbol),
         }),
+        Value::Proxy(proxy) => own_property_descriptor_key(proxy.target(), key),
         Value::Function(function) => Ok(match key {
             PropertyKey::String(key) => function_own_property_descriptor(&function, key),
             PropertyKey::Symbol(symbol) => {
@@ -578,9 +580,12 @@ fn is_compatible_descriptor(existing: &Property, descriptor: &Property) -> bool 
 
 fn ensure_define_property_target(target: &Value) -> Result<(), RuntimeError> {
     match target {
-        Value::Object(_) | Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_) => {
-            Ok(())
-        }
+        Value::Object(_)
+        | Value::Function(_)
+        | Value::Array(_)
+        | Value::Map(_)
+        | Value::Set(_)
+        | Value::Proxy(_) => Ok(()),
         Value::String(_) | Value::Number(_) | Value::BigInt(_) | Value::Boolean(_) => {
             Err(RuntimeError {
                 thrown: None,

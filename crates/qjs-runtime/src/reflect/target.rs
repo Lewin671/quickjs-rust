@@ -9,9 +9,12 @@ pub(super) fn ensure_reflect_object_target(
             thrown: None,
             message: format!("{method} target must be an object"),
         }),
-        Value::Object(_) | Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) => {
-            Ok(())
-        }
+        Value::Object(_)
+        | Value::Array(_)
+        | Value::Function(_)
+        | Value::Map(_)
+        | Value::Set(_)
+        | Value::Proxy(_) => Ok(()),
         Value::String(_)
         | Value::Number(_)
         | Value::BigInt(_)

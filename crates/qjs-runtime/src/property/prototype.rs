@@ -95,6 +95,7 @@ pub(crate) fn value_prototype(value: Value, env: &HashMap<String, Value>) -> Opt
         Value::Function(function) => function
             .internal_prototype_override()
             .unwrap_or_else(|| function_intrinsic_prototype(env)),
+        Value::Proxy(proxy) => value_prototype(proxy.target(), env),
         Value::String(_) | Value::Number(_) | Value::BigInt(_) | Value::Boolean(_) => None,
         Value::Null | Value::Undefined => None,
     }

@@ -15,6 +15,7 @@ mod numbers;
 mod objects;
 mod promise_race;
 mod promises;
+mod proxy;
 mod reflect;
 mod regexp;
 mod sets;

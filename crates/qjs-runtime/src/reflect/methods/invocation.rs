@@ -56,9 +56,12 @@ fn ensure_reflect_object_argument_list(value: &Value, name: &str) -> Result<(), 
             thrown: None,
             message: format!("{name} argument list must be an object"),
         }),
-        Value::Object(_) | Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) => {
-            Ok(())
-        }
+        Value::Object(_)
+        | Value::Array(_)
+        | Value::Function(_)
+        | Value::Map(_)
+        | Value::Set(_)
+        | Value::Proxy(_) => Ok(()),
         Value::String(_)
         | Value::Number(_)
         | Value::BigInt(_)
@@ -79,7 +82,11 @@ fn reflect_argument_list(
     ensure_reflect_object_argument_list(&value, name)?;
     match value {
         Value::Array(array) => Ok(array.to_vec()),
-        value @ (Value::Object(_) | Value::Function(_) | Value::Map(_) | Value::Set(_)) => {
+        value @ (Value::Object(_)
+        | Value::Function(_)
+        | Value::Map(_)
+        | Value::Set(_)
+        | Value::Proxy(_)) => {
             let length = to_length_with_env(
                 property_value_key(
                     value.clone(),

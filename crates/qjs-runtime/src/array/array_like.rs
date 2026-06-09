@@ -19,7 +19,7 @@ pub(crate) fn array_like_length(
     let length = match receiver.clone() {
         Value::Array(array) => array.len(),
         Value::String(value) => value.chars().count(),
-        Value::Object(_) => {
+        Value::Object(_) | Value::Proxy(_) => {
             to_length_with_env(property_value(receiver.clone(), "length", env)?, env)?
         }
         Value::Function(function) => function.params.length(),
@@ -50,8 +50,8 @@ pub(crate) fn array_like_values_with_env(
             .chars()
             .map(|character| Value::String(character.to_string()))
             .collect()),
-        Value::Object(object) => {
-            let receiver = Value::Object(object);
+        Value::Object(_) | Value::Proxy(_) => {
+            let receiver = value;
             let length = to_length_with_env(property_value(receiver.clone(), "length", env)?, env)?;
             array_like_values_from_receiver(receiver, length, env)
         }
@@ -109,7 +109,12 @@ pub(crate) fn iterable_values_with_env(
         let step = call_function(next.clone(), iterator.clone(), Vec::new(), env, false)?;
         if !matches!(
             step,
-            Value::Object(_) | Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_)
+            Value::Object(_)
+                | Value::Array(_)
+                | Value::Function(_)
+                | Value::Map(_)
+                | Value::Set(_)
+                | Value::Proxy(_)
         ) {
             return Err(RuntimeError {
                 thrown: None,
@@ -130,7 +135,7 @@ pub(crate) fn array_like_values_from_receiver(
     env: &mut HashMap<String, Value>,
 ) -> Result<Vec<Value>, RuntimeError> {
     match receiver {
-        Value::Object(_) => (0..length)
+        Value::Object(_) | Value::Proxy(_) => (0..length)
             .map(|index| property_value(receiver.clone(), &index.to_string(), env))
             .collect(),
         Value::Array(array) => Ok(array.to_vec()),

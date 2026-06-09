@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     Value, array, array_buffer, bigint, boolean, date, error, global, json, map, math, number,
-    object, promise, reflect, regexp, set, string, symbol, typed_array, weak_map, weak_set,
+    object, promise, proxy, reflect, regexp, set, string, symbol, typed_array, weak_map, weak_set,
 };
 
 pub(crate) fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
@@ -28,6 +28,7 @@ pub(crate) fn initialize_builtins(env: &mut HashMap<String, Value>, global_this:
     error::install_error(env, global_this, object_prototype.clone());
     json::install_json(env, global_this, object_prototype.clone());
     promise::install_promise(env, global_this, object_prototype.clone());
+    proxy::install_proxy(env, global_this, object_prototype.clone());
     map::install_map(env, global_this, object_prototype.clone());
     weak_map::install_weak_map(env, global_this, object_prototype.clone());
     weak_set::install_weak_set(env, global_this, object_prototype.clone());

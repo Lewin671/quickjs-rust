@@ -109,7 +109,12 @@ fn weak_map_entry(
     env: &mut HashMap<String, Value>,
 ) -> Result<(Value, Value), RuntimeError> {
     match entry {
-        Value::Object(_) | Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) => {
+        Value::Object(_)
+        | Value::Array(_)
+        | Value::Function(_)
+        | Value::Map(_)
+        | Value::Set(_)
+        | Value::Proxy(_) => {
             let key = property_value(entry.clone(), "0", env)?;
             let value = property_value(entry, "1", env)?;
             Ok((key, value))

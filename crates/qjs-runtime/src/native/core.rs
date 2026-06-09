@@ -44,6 +44,7 @@ pub(super) fn call_core_native(
             bigint::native_bigint_prototype_value_of(this_value)
         }
         NativeFunction::Eval => global::native_global_eval(argument_values, env),
+        NativeFunction::Proxy => crate::proxy::native_proxy(argument_values, is_construct),
         NativeFunction::Escape => global::native_global_escape(argument_values, env),
         NativeFunction::Unescape => global::native_global_unescape(argument_values, env),
         NativeFunction::Symbol => {

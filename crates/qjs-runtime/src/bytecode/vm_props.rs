@@ -72,8 +72,9 @@ pub(super) fn get_property(
         Value::BigInt(_) => {
             Ok(bigint::inherited_bigint_prototype_property(env, key).unwrap_or(Value::Undefined))
         }
-        Value::Map(_) | Value::Set(_) => property_value(object, key, env),
-        Value::Object(_) => property_value(object, key, env),
+        Value::Map(_) | Value::Set(_) | Value::Proxy(_) | Value::Object(_) => {
+            property_value(object, key, env)
+        }
         _ => Err(RuntimeError {
             thrown: None,
             message: format!("unsupported property `{key}`"),
@@ -172,6 +173,7 @@ pub(super) fn set_property(
             set.object().set(key, value);
             Ok(true)
         }
+        Value::Proxy(proxy) => set_property(proxy.target(), key, value, env),
         _ => Err(RuntimeError {
             thrown: None,
             message: "member assignment target is not an object".to_owned(),
@@ -394,16 +396,29 @@ fn symbol_property_for_set(
     }
 }
 
-pub(super) fn delete_property_key(object: Value, key: &PropertyKey) -> Result<Value, RuntimeError> {
+pub(super) fn delete_property_key(
+    object: Value,
+    key: &PropertyKey,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
     match key {
-        PropertyKey::String(key) => delete_property(object, key),
-        PropertyKey::Symbol(symbol) => delete_symbol_property(object, symbol),
+        PropertyKey::String(key) => delete_property(object, key, env),
+        PropertyKey::Symbol(symbol) => delete_symbol_property(object, symbol, env),
     }
 }
 
-fn delete_property(object: Value, key: &str) -> Result<Value, RuntimeError> {
+fn delete_property(
+    object: Value,
+    key: &str,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
     match object {
         Value::Object(object) => Ok(Value::Boolean(object.delete_own_property(key))),
+        Value::Proxy(proxy) => Ok(Value::Boolean(crate::proxy::proxy_delete_property(
+            proxy,
+            &PropertyKey::String(key.to_owned()),
+            env,
+        )?)),
         Value::Map(map) => Ok(Value::Boolean(map.object().delete_own_property(key))),
         Value::Set(set) => Ok(Value::Boolean(set.object().delete_own_property(key))),
         Value::Array(elements) => Ok(Value::Boolean(match key.parse::<usize>() {
@@ -420,9 +435,18 @@ fn delete_property(object: Value, key: &str) -> Result<Value, RuntimeError> {
     }
 }
 
-fn delete_symbol_property(object: Value, symbol: &ObjectRef) -> Result<Value, RuntimeError> {
+fn delete_symbol_property(
+    object: Value,
+    symbol: &ObjectRef,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
     match object {
         Value::Object(object) => Ok(Value::Boolean(object.delete_own_symbol_property(symbol))),
+        Value::Proxy(proxy) => Ok(Value::Boolean(crate::proxy::proxy_delete_property(
+            proxy,
+            &PropertyKey::Symbol(symbol.clone()),
+            env,
+        )?)),
         Value::Map(map) => Ok(Value::Boolean(
             map.object().delete_own_symbol_property(symbol),
         )),

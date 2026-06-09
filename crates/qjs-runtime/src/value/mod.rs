@@ -14,7 +14,7 @@ pub use object::ObjectRef;
 pub(crate) use property::Property;
 pub use set::SetRef;
 
-use crate::{Function, string};
+use crate::{Function, proxy::ProxyRef, string};
 
 /// A JavaScript value supported by the current runtime subset.
 #[derive(Clone)]
@@ -37,6 +37,8 @@ pub enum Value {
     Array(ArrayRef),
     /// Object value.
     Object(ObjectRef),
+    /// Proxy exotic object value.
+    Proxy(ProxyRef),
     /// Map object value.
     Map(MapRef),
     /// Set object value.
@@ -55,6 +57,7 @@ impl fmt::Debug for Value {
             Self::Function(function) => formatter.debug_tuple("Function").field(function).finish(),
             Self::Array(elements) => formatter.debug_tuple("Array").field(elements).finish(),
             Self::Object(object) => formatter.debug_tuple("Object").field(object).finish(),
+            Self::Proxy(proxy) => formatter.debug_tuple("Proxy").field(proxy).finish(),
             Self::Map(map) => formatter.debug_tuple("Map").field(map).finish(),
             Self::Set(set) => formatter.debug_tuple("Set").field(set).finish(),
         }
@@ -72,6 +75,7 @@ impl PartialEq for Value {
             (Self::Function(left), Self::Function(right)) => left == right,
             (Self::Array(left), Self::Array(right)) => left.ptr_eq(right),
             (Self::Object(left), Self::Object(right)) => left.ptr_eq(right),
+            (Self::Proxy(left), Self::Proxy(right)) => left.ptr_eq(right),
             (Self::Map(left), Self::Map(right)) => left.ptr_eq(right),
             (Self::Set(left), Self::Set(right)) => left.ptr_eq(right),
             _ => false,
@@ -92,6 +96,7 @@ impl Value {
             (Self::Function(left), Self::Function(right)) => left == right,
             (Self::Array(left), Self::Array(right)) => left.ptr_eq(right),
             (Self::Object(left), Self::Object(right)) => left.ptr_eq(right),
+            (Self::Proxy(left), Self::Proxy(right)) => left.ptr_eq(right),
             (Self::Map(left), Self::Map(right)) => left.ptr_eq(right),
             (Self::Set(left), Self::Set(right)) => left.ptr_eq(right),
             _ => false,

@@ -10,6 +10,14 @@ pub(crate) fn native_reflect_is_extensible(
         Value::Object(object) => object.is_extensible(),
         Value::Map(map) => map.object().is_extensible(),
         Value::Set(set) => set.object().is_extensible(),
+        Value::Proxy(proxy) => match proxy.target() {
+            Value::Object(object) => object.is_extensible(),
+            Value::Map(map) => map.object().is_extensible(),
+            Value::Set(set) => set.object().is_extensible(),
+            Value::Array(elements) => elements.is_extensible(),
+            Value::Function(function) => function.is_extensible(),
+            _ => false,
+        },
         Value::Array(elements) => elements.is_extensible(),
         Value::Function(function) => function.is_extensible(),
         Value::String(_)
@@ -30,6 +38,14 @@ pub(crate) fn native_reflect_prevent_extensions(
         Value::Object(object) => object.prevent_extensions(),
         Value::Map(map) => map.object().prevent_extensions(),
         Value::Set(set) => set.object().prevent_extensions(),
+        Value::Proxy(proxy) => match proxy.target() {
+            Value::Object(object) => object.prevent_extensions(),
+            Value::Map(map) => map.object().prevent_extensions(),
+            Value::Set(set) => set.object().prevent_extensions(),
+            Value::Array(elements) => elements.prevent_extensions(),
+            Value::Function(function) => function.prevent_extensions(),
+            _ => {}
+        },
         Value::Array(elements) => elements.prevent_extensions(),
         Value::Function(function) => function.prevent_extensions(),
         Value::String(_)

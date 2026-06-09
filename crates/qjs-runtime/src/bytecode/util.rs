@@ -59,9 +59,12 @@ pub(super) fn typeof_value(value: Value) -> String {
         Value::String(_) => "string",
         Value::Function(_) => "function",
         Value::Object(object) if symbol::is_symbol_primitive(&object) => "symbol",
-        Value::Null | Value::Array(_) | Value::Map(_) | Value::Set(_) | Value::Object(_) => {
-            "object"
-        }
+        Value::Null
+        | Value::Array(_)
+        | Value::Map(_)
+        | Value::Set(_)
+        | Value::Object(_)
+        | Value::Proxy(_) => "object",
     }
     .to_owned()
 }

@@ -27,6 +27,7 @@ pub(crate) fn native_reflect_get_prototype_of(
             .prototype()
             .map(Value::Object)
             .unwrap_or(Value::Null)),
+        Some(Value::Proxy(proxy)) => native_reflect_get_prototype_of(&[proxy.target()], env),
         Some(Value::Array(elements)) => Ok(elements
             .prototype_override()
             .unwrap_or_else(|| array_prototype(env))
@@ -82,6 +83,14 @@ pub(crate) fn native_reflect_set_prototype_of(
         Value::Object(object) => object.set_prototype(prototype).is_ok(),
         Value::Map(map) => map.object().set_prototype(prototype).is_ok(),
         Value::Set(set) => set.object().set_prototype(prototype).is_ok(),
+        Value::Proxy(proxy) => match proxy.target() {
+            Value::Object(object) => object.set_prototype(prototype).is_ok(),
+            Value::Map(map) => map.object().set_prototype(prototype).is_ok(),
+            Value::Set(set) => set.object().set_prototype(prototype).is_ok(),
+            Value::Array(elements) => elements.set_prototype(prototype).is_ok(),
+            Value::Function(function) => function.set_internal_prototype(prototype).is_ok(),
+            _ => false,
+        },
         Value::Array(elements) => elements.set_prototype(prototype).is_ok(),
         Value::Function(function) => function.set_internal_prototype(prototype).is_ok(),
         Value::String(_)

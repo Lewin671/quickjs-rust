@@ -8,6 +8,7 @@ pub(crate) fn native_reflect_own_keys(argument_values: &[Value]) -> Result<Value
         Value::Object(object) => object.own_property_names(),
         Value::Map(map) => map.object().own_property_names(),
         Value::Set(set) => set.object().own_property_names(),
+        Value::Proxy(proxy) => crate::object::own_property_names(proxy.target()),
         Value::Array(elements) => crate::array_own_property_names(&elements),
         Value::Function(function) => crate::function_own_property_names(&function),
         Value::String(_)
@@ -23,6 +24,7 @@ pub(crate) fn native_reflect_own_keys(argument_values: &[Value]) -> Result<Value
         Value::Object(object) => object.own_property_symbols(),
         Value::Map(map) => map.object().own_property_symbols(),
         Value::Set(set) => set.object().own_property_symbols(),
+        Value::Proxy(proxy) => crate::object::own_property_symbols(proxy.target()),
         Value::Array(elements) => elements.own_property_symbols(),
         Value::Function(function) => crate::function_own_property_symbols(&function),
         Value::String(_)
