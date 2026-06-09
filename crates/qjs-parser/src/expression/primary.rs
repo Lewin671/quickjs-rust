@@ -1,5 +1,6 @@
 use qjs_ast::{
-    ArrayElement, Expr, Literal, ObjectProperty, ObjectPropertyKey, ObjectPropertyKind, Span,
+    ArrayElement, CallArgument, Expr, Literal, ObjectProperty, ObjectPropertyKey,
+    ObjectPropertyKind, Span,
 };
 use qjs_lexer::{TemplateSegment, TokenKind};
 
@@ -83,17 +84,19 @@ impl Parser {
             match token.kind {
                 TokenKind::Slash => {
                     let end = token.span.end;
-                    let mut arguments = vec![Expr::Literal(Literal::String {
+                    let mut arguments = vec![CallArgument::Expr(Expr::Literal(Literal::String {
                         value: pattern,
                         span: Span::new(start, end),
-                    })];
+                    }))];
                     if let Some(flags) = self.regexp_flags() {
-                        arguments.push(Expr::Literal(Literal::String {
+                        arguments.push(CallArgument::Expr(Expr::Literal(Literal::String {
                             span: flags.span,
                             value: flags.value,
-                        }));
+                        })));
                     }
-                    let span_end = arguments.last().map_or(end, |argument| argument.span().end);
+                    let span_end = arguments
+                        .last()
+                        .map_or(end, |argument| call_argument_span(argument).end);
                     return Ok(Expr::New {
                         callee: Box::new(Expr::Identifier {
                             name: "RegExp".to_owned(),
@@ -573,15 +576,15 @@ fn keyword_property_name(kind: &TokenKind) -> Option<&'static str> {
 
 fn regexp_constructor_expr(span: Span, pattern: String, flags: String) -> Expr {
     let closing_slash = span.end - flags.len() - 1;
-    let mut arguments = vec![Expr::Literal(Literal::String {
+    let mut arguments = vec![CallArgument::Expr(Expr::Literal(Literal::String {
         value: pattern,
         span: Span::new(span.start, closing_slash + 1),
-    })];
+    }))];
     if !flags.is_empty() {
-        arguments.push(Expr::Literal(Literal::String {
+        arguments.push(CallArgument::Expr(Expr::Literal(Literal::String {
             value: flags,
             span: Span::new(closing_slash + 1, span.end),
-        }));
+        })));
     }
 
     Expr::New {
@@ -591,6 +594,12 @@ fn regexp_constructor_expr(span: Span, pattern: String, flags: String) -> Expr {
         }),
         span,
         arguments,
+    }
+}
+
+fn call_argument_span(argument: &CallArgument) -> Span {
+    match argument {
+        CallArgument::Expr(expr) | CallArgument::Spread(expr) => expr.span(),
     }
 }
 

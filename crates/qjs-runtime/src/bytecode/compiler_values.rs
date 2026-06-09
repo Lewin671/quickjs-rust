@@ -1,7 +1,8 @@
 use std::rc::Rc;
 
 use qjs_ast::{
-    ArrayElement, Expr, MemberProperty, ObjectProperty, ObjectPropertyKey, Stmt, VarKind,
+    ArrayElement, CallArgument, Expr, MemberProperty, ObjectProperty, ObjectPropertyKey, Stmt,
+    VarKind,
 };
 
 use crate::{
@@ -105,15 +106,26 @@ impl Compiler {
     pub(super) fn compile_call(
         &mut self,
         callee: &Expr,
-        arguments: &[Expr],
+        arguments: &[CallArgument],
     ) -> Result<(), RuntimeError> {
+        let has_spread = arguments
+            .iter()
+            .any(|argument| matches!(argument, CallArgument::Spread(_)));
         if let Expr::Member {
             object, property, ..
         } = callee
         {
             self.compile_expr(object)?;
             self.compile_member_key(property)?;
+            if has_spread {
+                self.compile_argument_array(arguments)?;
+                self.emit(Op::CallMethodSpread);
+                return Ok(());
+            }
             for argument in arguments {
+                let CallArgument::Expr(argument) = argument else {
+                    unreachable!("spread arguments are handled above");
+                };
                 self.compile_expr(argument)?;
             }
             self.emit(Op::CallMethod(arguments.len()));
@@ -121,7 +133,15 @@ impl Compiler {
         }
 
         self.compile_expr(callee)?;
+        if has_spread {
+            self.compile_argument_array(arguments)?;
+            self.emit(Op::CallSpread);
+            return Ok(());
+        }
         for argument in arguments {
+            let CallArgument::Expr(argument) = argument else {
+                unreachable!("spread arguments are handled above");
+            };
             self.compile_expr(argument)?;
         }
         self.emit(Op::Call(arguments.len()));
@@ -131,14 +151,36 @@ impl Compiler {
     pub(super) fn compile_new(
         &mut self,
         callee: &Expr,
-        arguments: &[Expr],
+        arguments: &[CallArgument],
     ) -> Result<(), RuntimeError> {
         self.compile_expr(callee)?;
+        if arguments
+            .iter()
+            .any(|argument| matches!(argument, CallArgument::Spread(_)))
+        {
+            self.compile_argument_array(arguments)?;
+            self.emit(Op::NewSpread);
+            return Ok(());
+        }
         for argument in arguments {
+            let CallArgument::Expr(argument) = argument else {
+                unreachable!("spread arguments are handled above");
+            };
             self.compile_expr(argument)?;
         }
         self.emit(Op::New(arguments.len()));
         Ok(())
+    }
+
+    fn compile_argument_array(&mut self, arguments: &[CallArgument]) -> Result<(), RuntimeError> {
+        let elements = arguments
+            .iter()
+            .map(|argument| match argument {
+                CallArgument::Spread(expr) => ArrayElement::Spread(expr.clone()),
+                CallArgument::Expr(expr) => ArrayElement::Expr(expr.clone()),
+            })
+            .collect::<Vec<_>>();
+        self.compile_array(&elements)
     }
 
     pub(super) fn compile_function_decl(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {

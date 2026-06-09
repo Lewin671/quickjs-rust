@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use num_bigint::BigInt;
+
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, function_prototype,
     property_value, symbol, to_length_with_env, to_number_with_env,
@@ -14,10 +16,16 @@ pub(crate) fn install_typed_arrays(
 ) {
     for (name, native) in [
         ("Uint8Array", NativeFunction::Uint8Array),
+        ("Int8Array", NativeFunction::Int8Array),
+        ("Uint8ClampedArray", NativeFunction::Uint8ClampedArray),
         ("Uint16Array", NativeFunction::Uint16Array),
+        ("Int16Array", NativeFunction::Int16Array),
         ("Uint32Array", NativeFunction::Uint32Array),
+        ("Int32Array", NativeFunction::Int32Array),
         ("Float32Array", NativeFunction::Float32Array),
         ("Float64Array", NativeFunction::Float64Array),
+        ("BigInt64Array", NativeFunction::BigInt64Array),
+        ("BigUint64Array", NativeFunction::BigUint64Array),
     ] {
         install_typed_array_constructor(env, global_this, object_prototype.clone(), name, native);
     }
@@ -35,9 +43,17 @@ fn install_typed_array_constructor(
     symbol::define_well_known_to_string_tag(env, &prototype, name);
 
     let constructor = Function::new_native(Some(name), 3, native, true);
+    constructor.properties.borrow_mut().insert(
+        "BYTES_PER_ELEMENT".to_owned(),
+        Property::fixed_non_enumerable(Value::Number(bytes_per_element(native) as f64)),
+    );
     prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(constructor.clone()),
+    );
+    prototype.define_property(
+        "BYTES_PER_ELEMENT".to_owned(),
+        Property::fixed_non_enumerable(Value::Number(bytes_per_element(native) as f64)),
     );
     constructor.properties.borrow_mut().insert(
         "prototype".to_owned(),
@@ -130,11 +146,30 @@ fn coerce_element(
     value: Value,
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
+    if matches!(
+        native,
+        NativeFunction::BigInt64Array | NativeFunction::BigUint64Array
+    ) {
+        return match value {
+            Value::BigInt(value) => Ok(Value::BigInt(value)),
+            Value::Number(value) => Ok(Value::BigInt(BigInt::from(value as i64))),
+            Value::Undefined => Ok(Value::BigInt(BigInt::from(0))),
+            _ => Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: cannot convert value to BigInt typed array element".to_owned(),
+            }),
+        };
+    }
+
     let number = to_number_with_env(value, env)?;
     let value = match native {
         NativeFunction::Uint8Array => modulo_integer(number, 256.0),
+        NativeFunction::Int8Array => signed_integer(number, 8),
+        NativeFunction::Uint8ClampedArray => clamp_uint8(number),
         NativeFunction::Uint16Array => modulo_integer(number, 65_536.0),
+        NativeFunction::Int16Array => signed_integer(number, 16),
         NativeFunction::Uint32Array => modulo_integer(number, 4_294_967_296.0),
+        NativeFunction::Int32Array => signed_integer(number, 32),
         NativeFunction::Float32Array | NativeFunction::Float64Array => number,
         _ => unreachable!("typed array native expected"),
     };
@@ -147,6 +182,39 @@ fn modulo_integer(number: f64, modulo: f64) -> f64 {
     }
     let integer = number.trunc();
     ((integer % modulo) + modulo) % modulo
+}
+
+fn signed_integer(number: f64, bits: u32) -> f64 {
+    let modulo = 2_f64.powi(bits as i32);
+    let value = modulo_integer(number, modulo);
+    let sign = 2_f64.powi(bits as i32 - 1);
+    if value >= sign { value - modulo } else { value }
+}
+
+fn clamp_uint8(number: f64) -> f64 {
+    if number.is_nan() || number <= 0.0 {
+        0.0
+    } else if number >= 255.0 {
+        255.0
+    } else {
+        number.round()
+    }
+}
+
+fn bytes_per_element(native: NativeFunction) -> usize {
+    match native {
+        NativeFunction::Uint8Array
+        | NativeFunction::Int8Array
+        | NativeFunction::Uint8ClampedArray => 1,
+        NativeFunction::Uint16Array | NativeFunction::Int16Array => 2,
+        NativeFunction::Uint32Array | NativeFunction::Int32Array | NativeFunction::Float32Array => {
+            4
+        }
+        NativeFunction::Float64Array
+        | NativeFunction::BigInt64Array
+        | NativeFunction::BigUint64Array => 8,
+        _ => unreachable!("typed array native expected"),
+    }
 }
 
 fn to_typed_array_length(
@@ -166,10 +234,16 @@ fn to_typed_array_length(
 fn typed_array_name(native: NativeFunction) -> &'static str {
     match native {
         NativeFunction::Uint8Array => "Uint8Array",
+        NativeFunction::Int8Array => "Int8Array",
+        NativeFunction::Uint8ClampedArray => "Uint8ClampedArray",
         NativeFunction::Uint16Array => "Uint16Array",
+        NativeFunction::Int16Array => "Int16Array",
         NativeFunction::Uint32Array => "Uint32Array",
+        NativeFunction::Int32Array => "Int32Array",
         NativeFunction::Float32Array => "Float32Array",
         NativeFunction::Float64Array => "Float64Array",
+        NativeFunction::BigInt64Array => "BigInt64Array",
+        NativeFunction::BigUint64Array => "BigUint64Array",
         _ => unreachable!("typed array native expected"),
     }
 }
@@ -187,6 +261,26 @@ mod tests {
         assert_eq!(
             eval("let ta = new Float64Array(3); ta.length + ':' + ta[0] + ':' + ta[2];"),
             Ok(Value::String("3:0:0".to_owned()))
+        );
+    }
+
+    #[test]
+    fn typed_array_integer_constructor_surface() {
+        assert_eq!(
+            eval(
+                "let ta = new Int8Array([127, 128, 255]); ta.length + ':' + ta[0] + ':' + ta[1] + ':' + ta[2];"
+            ),
+            Ok(Value::String("3:127:-128:-1".to_owned()))
+        );
+        assert_eq!(
+            eval("Array.prototype.join.call(new Uint8ClampedArray([-1, 2.6, 300]));"),
+            Ok(Value::String("0,3,255".to_owned()))
+        );
+        assert_eq!(
+            eval(
+                "Int16Array.BYTES_PER_ELEMENT + ':' + Int32Array.prototype.BYTES_PER_ELEMENT + ':' + Object.prototype.toString.call(new Uint8ClampedArray(0));"
+            ),
+            Ok(Value::String("2:4:[object Uint8ClampedArray]".to_owned()))
         );
     }
 

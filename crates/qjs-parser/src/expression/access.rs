@@ -1,4 +1,4 @@
-use qjs_ast::{Expr, MemberProperty, Span};
+use qjs_ast::{CallArgument, Expr, MemberProperty, Span};
 use qjs_lexer::TokenKind;
 
 use crate::helpers::property_name;
@@ -46,7 +46,11 @@ impl Parser {
         let mut arguments = Vec::new();
         if !self.at(&TokenKind::RightParen) {
             loop {
-                arguments.push(self.assignment()?);
+                if self.match_kind(&TokenKind::DotDotDot) {
+                    arguments.push(CallArgument::Spread(self.assignment()?));
+                } else {
+                    arguments.push(CallArgument::Expr(self.assignment()?));
+                }
                 if !self.match_kind(&TokenKind::Comma) {
                     break;
                 }

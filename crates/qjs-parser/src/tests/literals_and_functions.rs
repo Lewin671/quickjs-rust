@@ -1,5 +1,5 @@
 use qjs_ast::{
-    ArrayElement, AssignmentTarget, Expr, Literal, MemberProperty, ObjectPropertyKey,
+    ArrayElement, AssignmentTarget, CallArgument, Expr, Literal, MemberProperty, ObjectPropertyKey,
     ObjectPropertyKind, Stmt,
 };
 
@@ -24,6 +24,13 @@ fn parses_function_declaration_and_call() {
         panic!("expected function call with trailing comma");
     };
     assert_eq!(arguments.len(), 2);
+
+    let script = parse_script("add(0, ...values, 3);").expect("source should parse");
+    let [Stmt::Expr(Expr::Call { arguments, .. })] = script.body.as_slice() else {
+        panic!("expected function call with spread arguments");
+    };
+    assert_eq!(arguments.len(), 3);
+    assert!(matches!(arguments[1], CallArgument::Spread(_)));
 
     let script = parse_script("let f = function named(value) { return value; }; f(1);")
         .expect("source should parse");
@@ -235,6 +242,13 @@ fn parses_new_expression() {
     };
     assert!(matches!(callee.as_ref(), Expr::Identifier { name, .. } if name == "Point"));
     assert_eq!(arguments.len(), 2);
+
+    let script = parse_script("new Point(...coords);").expect("source should parse");
+    let [Stmt::Expr(Expr::New { arguments, .. })] = script.body.as_slice() else {
+        panic!("expected spread new expression statement");
+    };
+    assert_eq!(arguments.len(), 1);
+    assert!(matches!(arguments[0], CallArgument::Spread(_)));
 }
 
 #[test]
@@ -579,7 +593,7 @@ fn parses_regexp_literal_as_regexp_constructor_expression() {
     ));
     assert!(matches!(
         arguments.as_slice(),
-        [Expr::Literal(Literal::String { value, .. })] if value == "."
+        [CallArgument::Expr(Expr::Literal(Literal::String { value, .. }))] if value == "."
     ));
 }
 
@@ -598,7 +612,7 @@ fn parses_regexp_literal_with_escaped_atoms() {
     assert_eq!(*span, qjs_ast::Span::new(0, 6));
     assert!(matches!(
         arguments.as_slice(),
-        [Expr::Literal(Literal::String { value, span })]
+        [CallArgument::Expr(Expr::Literal(Literal::String { value, span }))]
             if value == r#"\(\)"# && *span == qjs_ast::Span::new(0, 6)
     ));
 }
@@ -619,8 +633,8 @@ fn parses_regexp_literal_with_character_class_range() {
     assert!(matches!(
         arguments.as_slice(),
         [
-            Expr::Literal(Literal::String { value: pattern, span: pattern_span }),
-            Expr::Literal(Literal::String { value: flags, span: flags_span })
+            CallArgument::Expr(Expr::Literal(Literal::String { value: pattern, span: pattern_span })),
+            CallArgument::Expr(Expr::Literal(Literal::String { value: flags, span: flags_span }))
         ] if pattern == "[0-9]"
             && *pattern_span == qjs_ast::Span::new(0, 7)
             && flags == "g"
@@ -644,8 +658,8 @@ fn parses_regexp_literal_with_digit_escape_and_flags() {
     assert!(matches!(
         arguments.as_slice(),
         [
-            Expr::Literal(Literal::String { value: pattern, .. }),
-            Expr::Literal(Literal::String { value: flags, .. })
+            CallArgument::Expr(Expr::Literal(Literal::String { value: pattern, .. })),
+            CallArgument::Expr(Expr::Literal(Literal::String { value: flags, .. }))
         ] if pattern == r#"\d{2}"# && flags == "g"
     ));
 }
@@ -665,7 +679,7 @@ fn parses_regexp_literal_with_escaped_slash() {
     assert_eq!(*span, qjs_ast::Span::new(0, 4));
     assert!(matches!(
         arguments.as_slice(),
-        [Expr::Literal(Literal::String { value, span })]
+        [CallArgument::Expr(Expr::Literal(Literal::String { value, span }))]
             if value == r#"\/"# && *span == qjs_ast::Span::new(0, 4)
     ));
 }
@@ -686,8 +700,8 @@ fn parses_regexp_literal_with_braced_unicode_escape_and_u_flag() {
     assert!(matches!(
         arguments.as_slice(),
         [
-            Expr::Literal(Literal::String { value: pattern, span: pattern_span }),
-            Expr::Literal(Literal::String { value: flags, span: flags_span })
+            CallArgument::Expr(Expr::Literal(Literal::String { value: pattern, span: pattern_span })),
+            CallArgument::Expr(Expr::Literal(Literal::String { value: flags, span: flags_span }))
         ] if pattern == r#"\u{1d306}"#
             && *pattern_span == qjs_ast::Span::new(0, 11)
             && flags == "u"
@@ -704,7 +718,7 @@ fn parses_regexp_literal_with_comma() {
 
     assert!(matches!(
         arguments.as_slice(),
-        [Expr::Literal(Literal::String { value, .. })] if value == ","
+        [CallArgument::Expr(Expr::Literal(Literal::String { value, .. }))] if value == ","
     ));
 }
 
@@ -717,7 +731,7 @@ fn parses_regexp_literal_with_space() {
 
     assert!(matches!(
         arguments.as_slice(),
-        [Expr::Literal(Literal::String { value, .. })] if value == " "
+        [CallArgument::Expr(Expr::Literal(Literal::String { value, .. }))] if value == " "
     ));
 }
 
@@ -731,7 +745,7 @@ fn parses_date_format_regexp_literal_smoke() {
 
     assert!(matches!(
         arguments.as_slice(),
-        [Expr::Literal(Literal::String { value, .. })]
+        [CallArgument::Expr(Expr::Literal(Literal::String { value, .. }))]
             if value == r#"^(Sun|Mon) [0-9]{2}:[0-9]{2} GMT[+-][0-9]{4}( \(.+\))?$"#
     ));
 }

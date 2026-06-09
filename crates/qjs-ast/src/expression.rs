@@ -204,8 +204,8 @@ pub enum Expr {
     Call {
         /// Callee expression.
         callee: Box<Expr>,
-        /// Argument expressions.
-        arguments: Vec<Expr>,
+        /// Arguments, including spread arguments.
+        arguments: Vec<CallArgument>,
         /// Source span.
         span: Span,
     },
@@ -213,8 +213,8 @@ pub enum Expr {
     New {
         /// Constructor expression.
         callee: Box<Expr>,
-        /// Argument expressions.
-        arguments: Vec<Expr>,
+        /// Arguments, including spread arguments.
+        arguments: Vec<CallArgument>,
         /// Source span.
         span: Span,
     },
@@ -258,6 +258,15 @@ pub enum ArrayElement {
     /// A normal element expression.
     Expr(Expr),
     /// A spread element expression.
+    Spread(Expr),
+}
+
+/// A function or constructor call argument.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CallArgument {
+    /// A normal argument expression.
+    Expr(Expr),
+    /// A spread argument expression.
     Spread(Expr),
 }
 

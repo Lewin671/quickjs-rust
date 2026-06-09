@@ -585,6 +585,26 @@ fn evaluates_function_declarations_and_calls() {
 }
 
 #[test]
+fn evaluates_spread_call_arguments() {
+    assert_eq!(
+        eval(
+            "function collect(a, b, c, d) { return '' + a + b + c + d; } collect(0, ...[1, 2], 3);"
+        ),
+        Ok(Value::String("0123".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let receiver = { base: 5, add: function(a, b) { return this.base + a + b; } }; receiver.add(...[2, 3]);"
+        ),
+        Ok(Value::Number(10.0))
+    );
+    assert_eq!(
+        eval("function Pair(a, b) { this.sum = a + b; } new Pair(...[4, 6]).sum;"),
+        Ok(Value::Number(10.0))
+    );
+}
+
+#[test]
 fn evaluates_sloppy_undeclared_global_assignment() {
     assert_eq!(
         eval("function set() { sloppyGlobal = 7; } set(); sloppyGlobal + this.sloppyGlobal;"),

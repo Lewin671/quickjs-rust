@@ -40,8 +40,11 @@ pub(super) enum Op {
     DeleteProp,
     Call(usize),
     CallMethod(usize),
+    CallSpread,
+    CallMethodSpread,
     IteratorClose,
     New(usize),
+    NewSpread,
     NewFunction {
         name: Option<String>,
         params: FunctionParams,
@@ -145,7 +148,10 @@ impl Bytecode {
                 op,
                 Op::Call(_)
                     | Op::CallMethod(_)
+                    | Op::CallSpread
+                    | Op::CallMethodSpread
                     | Op::New(_)
+                    | Op::NewSpread
                     | Op::NewFunction { .. }
                     | Op::StoreGlobalStrict(_)
                     | Op::StoreLocalOrGlobalSloppy { .. }

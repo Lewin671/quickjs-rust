@@ -4,9 +4,12 @@ use qjs_ast::ObjectPropertyKind;
 
 use crate::{
     ArrayRef, Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, Property, PropertyKey,
-    RUNTIME_INTRINSIC_NAMES, RuntimeError, Value, array::iterable_values_with_env, call_function,
-    construct_function, function::CompiledUserFunction, initialize_builtins, is_truthy, object,
-    object_prototype, promise, symbol, to_js_string_with_env, to_property_key_value,
+    RUNTIME_INTRINSIC_NAMES, RuntimeError, Value,
+    array::{array_like_values_with_env, iterable_values_with_env},
+    call_function, construct_function,
+    function::CompiledUserFunction,
+    initialize_builtins, is_truthy, object, object_prototype, promise, symbol,
+    to_js_string_with_env, to_property_key_value,
 };
 
 use super::ir::{ArrayElementKind, Bytecode, Op};
@@ -188,8 +191,11 @@ impl<'a> Vm<'a> {
                 Op::DeleteProp => self.delete_prop()?,
                 Op::Call(argc) => self.call(argc)?,
                 Op::CallMethod(argc) => self.call_method(argc)?,
+                Op::CallSpread => self.call_spread()?,
+                Op::CallMethodSpread => self.call_method_spread()?,
                 Op::IteratorClose => self.iterator_close()?,
                 Op::New(argc) => self.construct(argc)?,
+                Op::NewSpread => self.construct_spread()?,
                 Op::NewFunction {
                     name,
                     params,
@@ -523,6 +529,15 @@ impl<'a> Vm<'a> {
     fn call(&mut self, argc: usize) -> Result<(), RuntimeError> {
         let arguments = self.pop_arguments(argc)?;
         let callee = self.pop()?;
+        self.call_callee(callee, Value::Undefined, arguments)
+    }
+
+    fn call_callee(
+        &mut self,
+        callee: Value,
+        this_value: Value,
+        arguments: Vec<Value>,
+    ) -> Result<(), RuntimeError> {
         if let Some(result) = self.try_fast_global_native_call(&callee, &arguments)? {
             if let Some(value) = result {
                 self.stack.push(value);
@@ -530,12 +545,18 @@ impl<'a> Vm<'a> {
             return Ok(());
         }
         let mut env = self.call_env(&callee);
-        let result = call_function(callee, Value::Undefined, arguments, &mut env.env, false);
+        let result = call_function(callee, this_value, arguments, &mut env.env, false);
         self.apply_call_env(env);
         if let Some(result) = self.handle_call_result(result)? {
             self.stack.push(result);
         }
         Ok(())
+    }
+
+    fn call_spread(&mut self) -> Result<(), RuntimeError> {
+        let arguments = self.pop_argument_array("function call spread")?;
+        let callee = self.pop()?;
+        self.call_callee(callee, Value::Undefined, arguments)
     }
 
     fn try_fast_global_native_call(
@@ -581,6 +602,17 @@ impl<'a> Vm<'a> {
 
     fn call_method(&mut self, argc: usize) -> Result<(), RuntimeError> {
         let arguments = self.pop_arguments(argc)?;
+        let (callee, this_value) = self.pop_method_callee()?;
+        self.call_callee(callee, this_value, arguments)
+    }
+
+    fn call_method_spread(&mut self) -> Result<(), RuntimeError> {
+        let arguments = self.pop_argument_array("method call spread")?;
+        let (callee, this_value) = self.pop_method_callee()?;
+        self.call_callee(callee, this_value, arguments)
+    }
+
+    fn pop_method_callee(&mut self) -> Result<(Value, Value), RuntimeError> {
         let key_value = self.pop()?;
         let key = self.coerce_property_key(key_value)?;
         let this_value = self.pop()?;
@@ -592,24 +624,26 @@ impl<'a> Vm<'a> {
             self.apply_env(getter_env);
             callee
         };
-        if let Some(result) = self.try_fast_global_native_call(&callee, &arguments)? {
-            if let Some(value) = result {
-                self.stack.push(value);
-            }
-            return Ok(());
-        }
-        let mut env = self.call_env(&callee);
-        let result = call_function(callee, this_value, arguments, &mut env.env, false);
-        self.apply_call_env(env);
-        if let Some(result) = self.handle_call_result(result)? {
-            self.stack.push(result);
-        }
-        Ok(())
+        Ok((callee, this_value))
     }
 
     fn construct(&mut self, argc: usize) -> Result<(), RuntimeError> {
         let arguments = self.pop_arguments(argc)?;
         let callee = self.pop()?;
+        self.construct_callee(callee, arguments)
+    }
+
+    fn construct_spread(&mut self) -> Result<(), RuntimeError> {
+        let arguments = self.pop_argument_array("constructor spread")?;
+        let callee = self.pop()?;
+        self.construct_callee(callee, arguments)
+    }
+
+    fn construct_callee(
+        &mut self,
+        callee: Value,
+        arguments: Vec<Value>,
+    ) -> Result<(), RuntimeError> {
         let mut env = self.call_env(&callee);
         let result = construct_function(callee.clone(), callee, arguments, &mut env.env);
         self.apply_call_env(env);
@@ -655,6 +689,14 @@ impl<'a> Vm<'a> {
             arguments.push(self.pop()?);
         }
         arguments.reverse();
+        Ok(arguments)
+    }
+
+    fn pop_argument_array(&mut self, context: &str) -> Result<Vec<Value>, RuntimeError> {
+        let value = self.pop()?;
+        let mut env = self.current_env();
+        let arguments = array_like_values_with_env(value, context, &mut env)?;
+        self.apply_env(env);
         Ok(arguments)
     }
 
