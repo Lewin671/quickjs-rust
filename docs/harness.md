@@ -3,6 +3,9 @@
 This runbook defines the expected operating model for autonomous agents working
 on this repository.
 
+Known structural risks in this operating model are recorded in
+`docs/harness-convergence-risks.md`.
+
 ## Baseline
 
 `main` is the stable integration branch. Before starting parallel work:
