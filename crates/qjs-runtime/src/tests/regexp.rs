@@ -320,6 +320,22 @@ fn evaluates_regexp_exec_global_last_index() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "let re = /./ug; let match = re.exec('\\uD834\\uDF06'); match.index + ':' + match[0].length + ':' + re.lastIndex;"
+        ),
+        Ok(Value::String("0:2:2".to_owned()))
+    );
+    assert_eq!(
+        eval("/a/u.exec('\\uD834\\uDF06a').index;"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval(
+            "let re = /(?:)/ug; re.lastIndex = 3; re.exec('\\uD834\\uDF06') === null && re.lastIndex === 0;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]

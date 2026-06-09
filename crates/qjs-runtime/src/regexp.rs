@@ -285,10 +285,15 @@ pub(crate) fn native_regexp_prototype_exec(
     let ignore_case = regexp_flags_contains(&object, 'i');
     let unicode = regexp_flags_contains(&object, 'u');
     let stateful = global || sticky;
-    let start = if stateful {
+    let start_code_unit = if stateful {
         regexp_last_index(&object, env)?
     } else {
         0
+    };
+    let start = if unicode {
+        char_index_from_code_unit_index(&input, start_code_unit)
+    } else {
+        start_code_unit
     };
 
     let match_result = if sticky {
@@ -304,7 +309,12 @@ pub(crate) fn native_regexp_prototype_exec(
         return Ok(Value::Null);
     };
     if stateful {
-        regexp_set_last_index_object(&object, match_result.end)?;
+        let last_index = if unicode {
+            code_unit_index_for_char_index(&input, match_result.end)
+        } else {
+            match_result.end
+        };
+        regexp_set_last_index_object(&object, last_index)?;
     }
     Ok(regexp_match_array(&input, match_result))
 }
@@ -601,11 +611,43 @@ fn regexp_match_array(input: &str, match_result: matcher::RegexpMatch) -> Value 
             .unwrap_or(Value::Undefined)
     }));
     let result = ArrayRef::new(values);
-    result.set_property("index".to_owned(), Value::Number(match_result.start as f64));
+    result.set_property(
+        "index".to_owned(),
+        Value::Number(code_unit_index_for_char_index(input, match_result.start) as f64),
+    );
     result.set_property("input".to_owned(), Value::String(input.to_owned()));
     Value::Array(result)
 }
 
 fn input_slice(input: &str, start: usize, end: usize) -> String {
     input.chars().skip(start).take(end - start).collect()
+}
+
+fn code_unit_index_for_char_index(input: &str, char_index: usize) -> usize {
+    input.chars().take(char_index).map(char_code_unit_len).sum()
+}
+
+fn char_index_from_code_unit_index(input: &str, code_unit_index: usize) -> usize {
+    let mut units = 0usize;
+    let mut chars = 0usize;
+    for (char_index, character) in input.chars().enumerate() {
+        chars = char_index + 1;
+        if units >= code_unit_index {
+            return char_index;
+        }
+        units += char_code_unit_len(character);
+    }
+    if code_unit_index <= units {
+        chars
+    } else {
+        chars + 1
+    }
+}
+
+fn char_code_unit_len(character: char) -> usize {
+    if crate::string::surrogate_escape_code_unit(character).is_some() {
+        1
+    } else {
+        character.len_utf16()
+    }
 }

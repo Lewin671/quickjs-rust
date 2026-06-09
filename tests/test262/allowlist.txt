@@ -3363,6 +3363,7 @@ cases/regexp-prototype-source-accessor.js
 cases/regexp-prototype-source-line-terminator.js
 cases/regexp-prototype-source-value-u.js
 cases/regexp-prototype-source-value-slash.js
+cases/regexp-exec-unicode-lastindex-value.js
 cases/regexp-prototype-symbol-replace-basic.js
 cases/regexp-prototype-symbol-match-basic.js
 cases/regexp-prototype-symbol-split-basic.js
