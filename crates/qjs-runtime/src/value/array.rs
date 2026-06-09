@@ -32,9 +32,16 @@ impl ArrayRef {
 
     pub(crate) fn new_sparse(elements: Vec<Value>, holes: Vec<usize>) -> Self {
         let length = elements.len();
+        let holes: BTreeSet<_> = holes.into_iter().collect();
+        let all_holes = holes.len() == length && (0..length).all(|index| holes.contains(&index));
+        let (elements, holes) = if all_holes {
+            (Vec::new(), BTreeSet::new())
+        } else {
+            (elements, holes)
+        };
         Self {
             elements: Rc::new(RefCell::new(elements)),
-            holes: Rc::new(RefCell::new(holes.into_iter().collect())),
+            holes: Rc::new(RefCell::new(holes)),
             properties: Rc::new(RefCell::new(HashMap::new())),
             symbol_properties: Rc::new(RefCell::new(Vec::new())),
             length: Rc::new(Cell::new(length)),
