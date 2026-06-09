@@ -7,7 +7,7 @@ use crate::{
     function::{collect_function_local_names, is_strict_function_body},
 };
 
-use super::compiler::Compiler;
+use super::compiler::{Compiler, for_init_lexical_names};
 use super::ir::Op;
 use super::util::parse_number_literal;
 
@@ -138,9 +138,13 @@ impl Compiler {
         } else {
             None
         };
-        self.push_loop(result_slot);
-        self.compile_stmt(body)?;
-        self.emit(Op::StoreLocal(result_slot));
+        let blocked = init.map_or_else(Vec::new, for_init_lexical_names);
+        self.with_annex_b_blocked_function_names(&blocked, |compiler| {
+            compiler.push_loop(result_slot);
+            compiler.compile_stmt(body)?;
+            compiler.emit(Op::StoreLocal(result_slot));
+            Ok(())
+        })?;
         let context = self.pop_loop();
         let update_start = self.code.len();
         if let Some(update) = update {
@@ -153,9 +157,8 @@ impl Compiler {
             self.patch_jump(exit_jump, exit);
             self.emit(Op::Pop);
         }
-        self.emit(Op::LoadLocal(result_slot));
-        let done = self.code.len();
-        self.patch_loop_breaks(&context, done);
+        let cleanup_slots = self.current_lexical_slots_for_names(&blocked);
+        self.emit_scoped_loop_completion(result_slot, &cleanup_slots, &context);
         self.patch_loop_continues(&context, update_start);
         Ok(())
     }

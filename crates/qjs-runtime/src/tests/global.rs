@@ -111,6 +111,21 @@ fn evaluates_global_eval_builtin() {
         eval("let value = 1; eval('value = value + 2;'); value;"),
         Ok(Value::Number(3.0))
     );
+    assert_eq!(
+        eval("eval('var leaked = 1;'); leaked;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval("eval('{ let lexical = 1; }'); typeof lexical;"),
+        Ok(Value::String("undefined".to_owned()))
+    );
+    assert!(eval("eval('{ let lexical = 1; } lexical;')").is_err());
+    assert!(eval("eval('{ let f = 123; { function f() {} } } f;')").is_err());
+    assert!(eval("eval('for (let i = 0; i < 1; i++) {} i;')").is_err());
+    assert!(eval("eval('for (let f; ; ) { { function f() {} } break; } f;')").is_err());
+    assert!(eval("eval('for (let k in { a: 1 }) {} k;')").is_err());
+    assert!(eval("eval('for (let v of [1]) {} v;')").is_err());
+    assert!(eval("eval('switch (1) { case 1: let s = 1; } s;')").is_err());
 }
 
 #[test]

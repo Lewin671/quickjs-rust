@@ -2,7 +2,7 @@ use qjs_ast::{AssignmentTarget, BinaryOp, Expr, ForInLeft, Stmt, SwitchCase, Var
 
 use crate::{RuntimeError, Value};
 
-use super::compiler::Compiler;
+use super::compiler::{Compiler, for_in_left_lexical_name, switch_lexical_declared_names};
 use super::ir::Op;
 
 impl Compiler {
@@ -79,9 +79,13 @@ impl Compiler {
         self.emit(Op::StoreLocal(key_slot));
         self.compile_for_in_left(left, key_slot)?;
 
-        self.push_loop(result_slot);
-        self.compile_stmt(body)?;
-        self.emit(Op::StoreLocal(result_slot));
+        let blocked = for_in_left_lexical_name(left).map_or_else(Vec::new, |name| vec![name]);
+        self.with_annex_b_blocked_function_names(&blocked, |compiler| {
+            compiler.push_loop(result_slot);
+            compiler.compile_stmt(body)?;
+            compiler.emit(Op::StoreLocal(result_slot));
+            Ok(())
+        })?;
         let context = self.pop_loop();
 
         let update_start = self.code.len();
@@ -94,9 +98,8 @@ impl Compiler {
         let exit = self.code.len();
         self.patch_jump(exit_jump, exit);
         self.emit(Op::Pop);
-        self.emit(Op::LoadLocal(result_slot));
-        let done = self.code.len();
-        self.patch_loop_breaks(&context, done);
+        let cleanup_slots = self.current_lexical_slots_for_names(&blocked);
+        self.emit_scoped_loop_completion(result_slot, &cleanup_slots, &context);
         self.patch_loop_continues(&context, update_start);
         Ok(())
     }
@@ -141,9 +144,13 @@ impl Compiler {
         self.emit(Op::StoreLocal(value_slot));
         self.compile_for_in_left(left, value_slot)?;
 
-        self.push_loop(result_slot);
-        self.compile_stmt(body)?;
-        self.emit(Op::StoreLocal(result_slot));
+        let blocked = for_in_left_lexical_name(left).map_or_else(Vec::new, |name| vec![name]);
+        self.with_annex_b_blocked_function_names(&blocked, |compiler| {
+            compiler.push_loop(result_slot);
+            compiler.compile_stmt(body)?;
+            compiler.emit(Op::StoreLocal(result_slot));
+            Ok(())
+        })?;
         let context = self.pop_loop();
 
         self.emit(Op::Jump(loop_start));
@@ -151,9 +158,8 @@ impl Compiler {
         let exit = self.code.len();
         self.patch_jump(exit_jump, exit);
         self.emit(Op::Pop);
-        self.emit(Op::LoadLocal(result_slot));
-        let done = self.code.len();
-        self.patch_loop_breaks(&context, done);
+        let cleanup_slots = self.current_lexical_slots_for_names(&blocked);
+        self.emit_scoped_loop_completion(result_slot, &cleanup_slots, &context);
         self.patch_loop_continues(&context, loop_start);
         Ok(())
     }
@@ -198,12 +204,16 @@ impl Compiler {
         }
 
         let no_match_jump = self.emit(Op::Jump(usize::MAX));
+        let blocked = switch_lexical_declared_names(cases);
         self.push_breakable(result_slot);
         let mut case_starts = Vec::with_capacity(cases.len());
-        for case in cases {
-            case_starts.push(self.code.len());
-            self.compile_switch_case(&case.consequent, result_slot)?;
-        }
+        self.with_annex_b_blocked_function_names(&blocked, |compiler| {
+            for case in cases {
+                case_starts.push(compiler.code.len());
+                compiler.compile_switch_case(&case.consequent, result_slot)?;
+            }
+            Ok(())
+        })?;
         let context = self.pop_loop();
         let normal_exit = self.code.len();
         self.patch_jump(
@@ -217,9 +227,8 @@ impl Compiler {
                 self.patch_jump(jump, case_starts[index]);
             }
         }
-        self.emit(Op::LoadLocal(result_slot));
-        let done = self.code.len();
-        self.patch_loop_breaks(&context, done);
+        let cleanup_slots = self.current_lexical_slots_for_names(&blocked);
+        self.emit_scoped_loop_completion(result_slot, &cleanup_slots, &context);
         Ok(())
     }
 

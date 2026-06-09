@@ -144,7 +144,7 @@ pub(super) fn native_global_eval(
     let bytecode = compile_script(&script)?;
     let result = eval_bytecode_with_env(&bytecode, env.clone());
     for name in bytecode
-        .local_names()
+        .hoisted_local_names()
         .chain(bytecode.global_names().iter().map(String::as_str))
     {
         if let Some(value) = result.binding(name) {

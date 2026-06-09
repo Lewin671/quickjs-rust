@@ -127,6 +127,13 @@ impl Bytecode {
         self.locals.iter().map(|local| local.name.as_str())
     }
 
+    pub(crate) fn hoisted_local_names(&self) -> impl Iterator<Item = &str> {
+        self.locals
+            .iter()
+            .filter(|local| local.hoisted)
+            .map(|local| local.name.as_str())
+    }
+
     pub(crate) fn local_slot(&self, name: &str) -> Option<usize> {
         self.local_slots.get(name).copied()
     }

@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use qjs_ast::{BinaryOp, CatchParam, ForInLeft, ForInit, FunctionParams, Script, Stmt, VarKind};
+use qjs_ast::{
+    BinaryOp, CatchParam, ForInLeft, ForInit, FunctionParams, Script, Stmt, SwitchCase, VarKind,
+};
 
 use crate::{RuntimeError, Value, function::is_strict_function_body};
 
@@ -74,10 +76,14 @@ impl Compiler {
     fn compile(mut self, script: &Script) -> Result<Bytecode, RuntimeError> {
         self.strict = is_strict_function_body(&script.body);
         self.collect_hoisted_locals(&script.body);
-        self.compile_hoisted_function_decls(&script.body)?;
-        for stmt in &script.body {
-            self.compile_stmt(stmt)?;
-        }
+        let blocked = lexical_declared_names(&script.body);
+        self.with_annex_b_blocked_function_names(&blocked, |compiler| {
+            compiler.compile_hoisted_function_decls(&script.body)?;
+            for stmt in &script.body {
+                compiler.compile_stmt(stmt)?;
+            }
+            Ok(())
+        })?;
         self.code.push(Op::Return);
         Ok(Bytecode::new(self.constants, self.locals, self.code))
     }
@@ -94,10 +100,14 @@ impl Compiler {
         }
         self.compile_parameter_defaults(params)?;
         self.collect_hoisted_locals(body);
-        self.compile_hoisted_function_decls(body)?;
-        for stmt in body {
-            self.compile_stmt(stmt)?;
-        }
+        let blocked = lexical_declared_names(body);
+        self.with_annex_b_blocked_function_names(&blocked, |compiler| {
+            compiler.compile_hoisted_function_decls(body)?;
+            for stmt in body {
+                compiler.compile_stmt(stmt)?;
+            }
+            Ok(())
+        })?;
         self.emit_load_undefined();
         self.code.push(Op::Return);
         Ok(Bytecode::new(self.constants, self.locals, self.code))
@@ -129,6 +139,11 @@ impl Compiler {
     }
 
     fn collect_hoisted_locals(&mut self, body: &[Stmt]) {
+        let blocked = lexical_declared_names(body);
+        let pushed_blocked = !blocked.is_empty();
+        if pushed_blocked {
+            self.annex_b_blocked_function_names.push(blocked);
+        }
         for stmt in body {
             match stmt {
                 Stmt::Block { body, .. } => self.collect_hoisted_locals(body),
@@ -187,8 +202,18 @@ impl Compiler {
                     }
                 }
                 Stmt::Switch { cases, .. } => {
+                    let blocked = switch_lexical_declared_names(cases);
+                    let pushed_switch_blocked = !blocked.is_empty();
+                    if pushed_switch_blocked {
+                        self.annex_b_blocked_function_names.push(blocked);
+                    }
                     for case in cases {
                         self.collect_hoisted_locals(&case.consequent);
+                    }
+                    if pushed_switch_blocked {
+                        self.annex_b_blocked_function_names
+                            .pop()
+                            .expect("Annex B function blocklist stack should be balanced");
                     }
                 }
                 Stmt::Try {
@@ -219,6 +244,11 @@ impl Compiler {
                 | Stmt::VarDecl { .. }
                 | Stmt::Empty => {}
             }
+        }
+        if pushed_blocked {
+            self.annex_b_blocked_function_names
+                .pop()
+                .expect("Annex B function blocklist stack should be balanced");
         }
     }
 
@@ -297,6 +327,21 @@ impl Compiler {
             .pop()
             .expect("lexical scope stack should be balanced");
         result
+    }
+
+    pub(super) fn current_lexical_slots_for_names(&self, names: &[String]) -> Vec<usize> {
+        let Some(scope) = self.lexical_scopes.last() else {
+            return Vec::new();
+        };
+        let mut slots = Vec::new();
+        for name in names {
+            if let Some(slot) = scope.get(name)
+                && !slots.contains(slot)
+            {
+                slots.push(*slot);
+            }
+        }
+        slots
     }
 
     pub(super) fn with_annex_b_blocked_function_names<T>(
@@ -466,6 +511,38 @@ impl Compiler {
         }
     }
 
+    pub(super) fn emit_scoped_loop_completion(
+        &mut self,
+        result_slot: usize,
+        cleanup_slots: &[usize],
+        context: &LoopContext,
+    ) -> usize {
+        if cleanup_slots.is_empty() {
+            self.emit(Op::LoadLocal(result_slot));
+            let done = self.code.len();
+            self.patch_loop_breaks(context, done);
+            return done;
+        }
+
+        for slot in cleanup_slots {
+            self.emit(Op::ClearLocal(*slot));
+        }
+        self.emit(Op::LoadLocal(result_slot));
+        let normal_done = self.emit(Op::Jump(usize::MAX));
+
+        let break_cleanup = self.code.len();
+        for slot in cleanup_slots {
+            self.emit(Op::ClearLocal(*slot));
+        }
+        let break_done = self.emit(Op::Jump(usize::MAX));
+
+        let done = self.code.len();
+        self.patch_jump(normal_done, done);
+        self.patch_jump(break_done, done);
+        self.patch_loop_breaks(context, break_cleanup);
+        done
+    }
+
     pub(super) fn patch_loop_continues(&mut self, context: &LoopContext, target: usize) {
         for jump in &context.continues {
             self.patch_jump(*jump, target);
@@ -476,18 +553,24 @@ impl Compiler {
         match stmt {
             Stmt::Expr(expr) => self.compile_expr(expr),
             Stmt::Block { body, .. } => self.with_lexical_scope(|compiler| {
-                if body.is_empty() {
-                    compiler.emit_load_undefined();
-                    return Ok(());
-                }
-                compiler.compile_hoisted_function_decls(body)?;
-                for (index, stmt) in body.iter().enumerate() {
-                    compiler.compile_stmt(stmt)?;
-                    if index + 1 != body.len() {
-                        compiler.store_or_pop_statement_list_completion(stmt);
+                let blocked = lexical_declared_names(body);
+                compiler.with_annex_b_blocked_function_names(&blocked, |compiler| {
+                    if body.is_empty() {
+                        compiler.emit_load_undefined();
+                        return Ok(());
                     }
-                }
-                Ok(())
+                    compiler.compile_hoisted_function_decls(body)?;
+                    for (index, stmt) in body.iter().enumerate() {
+                        compiler.compile_stmt(stmt)?;
+                        if index + 1 != body.len() {
+                            compiler.store_or_pop_statement_list_completion(stmt);
+                        }
+                    }
+                    for slot in compiler.current_lexical_slots_for_names(&blocked) {
+                        compiler.emit(Op::ClearLocal(slot));
+                    }
+                    Ok(())
+                })
             }),
             Stmt::If {
                 test,
@@ -631,4 +714,65 @@ pub(super) fn catch_param_annex_b_blocked_names(param: Option<&CatchParam>) -> V
         Some(CatchParam::Object { names }) => names.clone(),
         Some(CatchParam::Identifier(_)) | None => Vec::new(),
     }
+}
+
+pub(super) fn for_init_lexical_names(init: &ForInit) -> Vec<String> {
+    match init {
+        ForInit::VarDecl {
+            kind: VarKind::Let | VarKind::Const,
+            declarations,
+            ..
+        } => declarations
+            .iter()
+            .map(|declaration| declaration.name.clone())
+            .collect(),
+        ForInit::VarDecl { .. } | ForInit::Expr(_) => Vec::new(),
+    }
+}
+
+pub(super) fn for_in_left_lexical_name(left: &ForInLeft) -> Option<String> {
+    match left {
+        ForInLeft::VarDecl {
+            kind: VarKind::Let | VarKind::Const,
+            name,
+            ..
+        } => Some(name.clone()),
+        ForInLeft::VarDecl { .. } | ForInLeft::Target(_) => None,
+    }
+}
+
+pub(super) fn switch_lexical_declared_names(cases: &[SwitchCase]) -> Vec<String> {
+    let mut names = Vec::new();
+    for case in cases {
+        names.extend(lexical_declared_names(&case.consequent));
+    }
+    names
+}
+
+fn lexical_declared_names(body: &[Stmt]) -> Vec<String> {
+    let mut names = Vec::new();
+    for stmt in body {
+        match stmt {
+            Stmt::VarDecl {
+                kind: VarKind::Let | VarKind::Const,
+                declarations,
+                ..
+            } => names.extend(
+                declarations
+                    .iter()
+                    .map(|declaration| declaration.name.clone()),
+            ),
+            Stmt::For {
+                init: Some(init), ..
+            } => names.extend(for_init_lexical_names(init)),
+            Stmt::ForIn { left, .. } | Stmt::ForOf { left, .. } => {
+                if let Some(name) = for_in_left_lexical_name(left) {
+                    names.push(name);
+                }
+            }
+            Stmt::Switch { cases, .. } => names.extend(switch_lexical_declared_names(cases)),
+            _ => {}
+        }
+    }
+    names
 }
