@@ -9,6 +9,8 @@ mod binary;
 mod primary;
 mod unary;
 
+pub(crate) use primary::keyword_property_name;
+
 impl Parser {
     pub(crate) fn expression(&mut self) -> Result<Expr, ParseError> {
         let first = self.assignment()?;

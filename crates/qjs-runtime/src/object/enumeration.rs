@@ -118,7 +118,7 @@ pub(crate) fn native_object_has_own(
     ))
 }
 
-pub(super) fn enumerable_property_entries(
+pub(crate) fn enumerable_property_entries(
     value: Value,
     env: &mut HashMap<String, Value>,
 ) -> Result<Vec<(String, Value)>, RuntimeError> {

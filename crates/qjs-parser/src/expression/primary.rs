@@ -403,7 +403,14 @@ impl Parser {
                 ObjectPropertyKey::Computed(_) => None,
             };
             let params = self.function_parameters()?;
+            reject_duplicate_method_parameters(&params)?;
+            let body_start = self
+                .peek()
+                .expect("parser should always have eof token")
+                .span
+                .start;
             let body = self.block_body()?;
+            self.reject_invalid_function_parameters(&params, &body, body_start)?;
             let end = self
                 .tokens
                 .get(self.cursor.saturating_sub(1))
@@ -486,12 +493,13 @@ impl Parser {
         let key_span = key_token.span;
         let (key, _) = self.object_property_key(key_token)?;
         let params = self.function_parameters()?;
-        if params.length() != 1 {
+        if params.positional.len() != 1 || params.rest.is_some() {
             return Err(ParseError {
                 message: "setter must have exactly one parameter".to_owned(),
                 span: key_span,
             });
         }
+        reject_duplicate_method_parameters(&params)?;
         let body = self.block_body()?;
         let end = self
             .tokens
@@ -541,7 +549,17 @@ fn has_legacy_octal_escape(raw: &str) -> bool {
     false
 }
 
-fn keyword_property_name(kind: &TokenKind) -> Option<&'static str> {
+fn reject_duplicate_method_parameters(params: &qjs_ast::FunctionParams) -> Result<(), ParseError> {
+    if let Some(span) = crate::statement::duplicate_parameter_span(params) {
+        return Err(ParseError {
+            message: "duplicate parameter name".to_owned(),
+            span,
+        });
+    }
+    Ok(())
+}
+
+pub(crate) fn keyword_property_name(kind: &TokenKind) -> Option<&'static str> {
     match kind {
         TokenKind::This => Some("this"),
         TokenKind::Var => Some("var"),

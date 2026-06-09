@@ -1,12 +1,17 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
+use qjs_ast::BindingPattern;
+
 use crate::{
     ArrayRef, Bytecode, Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, Property,
     RUNTIME_INTRINSIC_NAMES, RuntimeError, Value, bytecode::eval_function_bytecode,
     native::call_native_function, object_prototype, symbol,
 };
 
-use super::function_call_this;
+use super::{
+    function_call_this, is_internal_binding_name, parameter_binding_name,
+    rest_parameter_binding_name,
+};
 
 pub(crate) fn call_function(
     callee: Value,
@@ -169,12 +174,12 @@ fn function_env(
             function_call_this(Some(this_value), env, function.is_strict)
         },
     );
-    for (index, param) in function.params.positional.iter().enumerate() {
+    for (index, element) in function.params.positional.iter().enumerate() {
         let value = argument_values
             .get(index)
             .cloned()
             .unwrap_or(Value::Undefined);
-        local_env.insert(param.clone(), value);
+        local_env.insert(parameter_binding_name(&element.binding, index), value);
     }
     if !function.lexical_arguments {
         local_env.insert(
@@ -188,7 +193,10 @@ fn function_env(
             .skip(function.params.positional.len())
             .cloned()
             .collect();
-        local_env.insert(rest.clone(), Value::Array(ArrayRef::new(values)));
+        local_env.insert(
+            rest_parameter_binding_name(rest),
+            Value::Array(ArrayRef::new(values)),
+        );
     }
     FunctionCallEnv {
         env: local_env,
@@ -228,24 +236,31 @@ fn arguments_object(
 }
 
 fn mapped_argument_parameter(function: &Function, index: usize) -> Option<&str> {
-    if function.is_strict
-        || function.params.rest.is_some()
-        || function.params.has_parameter_expressions()
-    {
+    if function.is_strict || !function.params.is_simple() {
         return None;
     }
-    let parameter_name = function
-        .params
-        .positional
-        .get(index)
-        .map(String::as_str)
-        .filter(|name| !name.is_empty())?;
+    let element = function.params.positional.get(index)?;
+    let BindingPattern::Identifier {
+        name: parameter_name,
+        ..
+    } = &element.binding
+    else {
+        return None;
+    };
+    if parameter_name.is_empty() {
+        return None;
+    }
     if function
         .params
         .positional
         .iter()
         .skip(index + 1)
-        .any(|name| name == parameter_name)
+        .any(|element| {
+            matches!(
+                &element.binding,
+                BindingPattern::Identifier { name, .. } if name == parameter_name
+            )
+        })
     {
         None
     } else {
@@ -397,6 +412,9 @@ fn insert_function_capture(
     function_env: &HashMap<String, Value>,
     name: &str,
 ) {
+    if is_internal_binding_name(name) {
+        return;
+    }
     if let Some(value) = function_env.get(name) {
         local_env.insert(name.to_owned(), value.clone());
         if !names.iter().any(|existing| existing == name) {
@@ -431,6 +449,9 @@ fn insert_caller_binding(
     env: &HashMap<String, Value>,
     name: &str,
 ) {
+    if is_internal_binding_name(name) {
+        return;
+    }
     if let Some(value) = env.get(name) {
         local_env.insert(name.to_owned(), value.clone());
         insert_missing_caller_binding_name(caller_binding_names, name);

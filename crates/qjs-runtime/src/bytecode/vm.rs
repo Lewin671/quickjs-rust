@@ -180,6 +180,10 @@ impl<'a> Vm<'a> {
                 Op::NewTemplateObject { cooked, raw } => self.new_template_object(&cooked, &raw),
                 Op::NewObject(kinds) => self.new_object(&kinds)?,
                 Op::EnumerateKeys => self.enumerate_keys()?,
+                Op::IterableToList => self.iterable_to_list()?,
+                Op::ArrayTailFrom { start } => self.array_tail_from(start)?,
+                Op::ObjectRestExcluding { excluded } => self.object_rest_excluding(&excluded)?,
+                Op::RequireObjectCoercible => self.require_object_coercible()?,
                 Op::GetProp => {
                     let result = self.get_prop();
                     self.handle_runtime_result(result)?;
@@ -653,6 +657,59 @@ impl<'a> Vm<'a> {
         Ok(())
     }
 
+    fn iterable_to_list(&mut self) -> Result<(), RuntimeError> {
+        let value = self.pop()?;
+        let mut env = self.current_env();
+        let result = iterable_values_with_env(value, "destructuring", &mut env);
+        self.apply_env(env);
+        if let Some(values) = self.handle_runtime_result(result)? {
+            self.stack.push(Value::Array(ArrayRef::new(values)));
+        }
+        Ok(())
+    }
+
+    fn array_tail_from(&mut self, start: usize) -> Result<(), RuntimeError> {
+        let value = self.pop()?;
+        let Value::Array(elements) = value else {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "array rest source must be an array".to_owned(),
+            });
+        };
+        let values = elements.to_vec().into_iter().skip(start).collect();
+        self.stack.push(Value::Array(ArrayRef::new(values)));
+        Ok(())
+    }
+
+    fn object_rest_excluding(&mut self, excluded: &[String]) -> Result<(), RuntimeError> {
+        let value = self.pop()?;
+        let mut env = self.current_env();
+        let result = object::enumerable_property_entries(value, &mut env);
+        self.apply_env(env);
+        let Some(entries) = self.handle_runtime_result(result)? else {
+            return Ok(());
+        };
+        let rest = ObjectRef::with_prototype(HashMap::new(), object_prototype(&self.globals));
+        for (key, value) in entries {
+            if !excluded.iter().any(|name| name == &key) {
+                rest.set(key, value);
+            }
+        }
+        self.stack.push(Value::Object(rest));
+        Ok(())
+    }
+
+    fn require_object_coercible(&mut self) -> Result<(), RuntimeError> {
+        if matches!(self.stack.last(), Some(Value::Undefined | Value::Null)) {
+            let result: Result<(), RuntimeError> = Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: cannot destructure undefined or null".to_owned(),
+            });
+            self.handle_runtime_result(result)?;
+        }
+        Ok(())
+    }
+
     fn iterator_close(&mut self) -> Result<(), RuntimeError> {
         let iterator = self.pop()?;
         let mut getter_env = self.current_env();
@@ -773,6 +830,9 @@ impl<'a> Vm<'a> {
         binding_names: &mut Vec<String>,
         name: &str,
     ) {
+        if crate::function::is_internal_binding_name(name) {
+            return;
+        }
         if let Some(value) = self.current_local_binding(name) {
             env.insert(name.to_owned(), value.clone());
             if !binding_names.iter().any(|existing| existing == name) {

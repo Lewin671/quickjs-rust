@@ -33,6 +33,19 @@ pub(super) enum Op {
     },
     NewObject(Vec<ObjectPropertyKind>),
     EnumerateKeys,
+    /// Drains an iterable on the stack into an array of its values.
+    IterableToList,
+    /// Replaces an array on the stack with a new array of its elements from `start`.
+    ArrayTailFrom {
+        start: usize,
+    },
+    /// Replaces a value on the stack with an object holding its remaining
+    /// own enumerable string-keyed properties, excluding the listed keys.
+    ObjectRestExcluding {
+        excluded: Vec<String>,
+    },
+    /// Throws a TypeError when the top of the stack is undefined or null.
+    RequireObjectCoercible,
     GetProp,
     SetProp {
         is_strict: bool,

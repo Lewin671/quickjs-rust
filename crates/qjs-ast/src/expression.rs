@@ -1,5 +1,5 @@
 use crate::span::Span;
-use crate::statement::Stmt;
+use crate::statement::{BindingElement, BindingPattern, Stmt};
 
 mod assignment;
 mod literal;
@@ -16,51 +16,57 @@ pub use operator::{BinaryOp, UnaryOp, UpdateOp};
 /// Function formal parameters.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FunctionParams {
-    /// Positional parameter names.
-    pub positional: Vec<String>,
-    /// Default expressions for positional parameters, stored only for non-simple parameter lists.
-    pub defaults: Option<Box<Vec<Option<Expr>>>>,
-    /// Optional rest parameter name.
-    pub rest: Option<String>,
+    /// Positional parameter bindings with optional default initializers.
+    pub positional: Vec<BindingElement>,
+    /// Optional rest parameter binding.
+    pub rest: Option<Box<BindingPattern>>,
 }
 
 impl FunctionParams {
-    /// Creates a parameter list without a rest parameter.
+    /// Creates a simple parameter list from plain identifier names.
     #[must_use]
     pub fn positional(positional: Vec<String>) -> Self {
         Self {
-            positional,
-            defaults: None,
+            positional: positional
+                .into_iter()
+                .map(|name| BindingElement::identifier(name, Span::new(0, 0)))
+                .collect(),
             rest: None,
         }
     }
 
     /// Creates a parameter list.
     #[must_use]
-    pub fn new(positional: Vec<String>, defaults: Vec<Option<Expr>>, rest: Option<String>) -> Self {
-        debug_assert_eq!(positional.len(), defaults.len());
-        let defaults = defaults
-            .iter()
-            .any(Option::is_some)
-            .then(|| Box::new(defaults));
+    pub fn new(positional: Vec<BindingElement>, rest: Option<BindingPattern>) -> Self {
         Self {
             positional,
-            defaults,
-            rest,
+            rest: rest.map(Box::new),
         }
     }
 
-    /// Returns all declared parameter names, including the rest parameter.
+    /// Returns all declared parameter names, including rest bindings.
     #[must_use]
     pub fn names(&self) -> Vec<String> {
-        let mut names = self.positional.clone();
+        self.named_spans()
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect()
+    }
+
+    /// Returns all declared parameter names paired with their identifier spans.
+    #[must_use]
+    pub fn named_spans(&self) -> Vec<(String, Span)> {
+        let mut names = Vec::new();
+        for element in &self.positional {
+            names.extend(element.binding.named_spans());
+        }
         if let Some(rest) = &self.rest {
-            names.push(rest.clone());
+            names.extend(rest.named_spans());
         }
         names
     }
 
-    /// Returns the number of local parameter bindings.
+    /// Returns the number of positional and rest parameter positions.
     #[must_use]
     pub fn binding_count(&self) -> usize {
         self.positional.len() + usize::from(self.rest.is_some())
@@ -75,27 +81,29 @@ impl FunctionParams {
     /// Returns the JavaScript function length.
     #[must_use]
     pub fn length(&self) -> usize {
-        self.defaults
-            .as_ref()
-            .and_then(|defaults| defaults.iter().position(Option::is_some))
+        self.positional
+            .iter()
+            .position(|element| element.default.is_some())
             .unwrap_or(self.positional.len())
     }
 
-    /// Returns true when any positional parameter has a default initializer.
+    /// Returns true when every parameter is a plain identifier without a
+    /// default and there is no rest parameter.
     #[must_use]
-    pub fn has_parameter_expressions(&self) -> bool {
-        self.defaults
-            .as_ref()
-            .is_some_and(|defaults| defaults.iter().any(Option::is_some))
+    pub fn is_simple(&self) -> bool {
+        self.rest.is_none()
+            && self.positional.iter().all(|element| {
+                element.default.is_none()
+                    && matches!(element.binding, BindingPattern::Identifier { .. })
+            })
     }
 
     /// Returns the default initializer for a positional parameter.
     #[must_use]
     pub fn default_at(&self, index: usize) -> Option<&Expr> {
-        self.defaults
-            .as_ref()
-            .and_then(|defaults| defaults.get(index))
-            .and_then(Option::as_ref)
+        self.positional
+            .get(index)
+            .and_then(|element| element.default.as_ref())
     }
 }
 

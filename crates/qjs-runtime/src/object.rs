@@ -22,7 +22,7 @@ pub(crate) use descriptor_query::{
 };
 pub(crate) use descriptor_record::to_property_descriptor_record;
 pub(crate) use enumeration::{
-    native_object_entries, native_object_get_own_property_names,
+    enumerable_property_entries, native_object_entries, native_object_get_own_property_names,
     native_object_get_own_property_symbols, native_object_has_own, native_object_keys,
     native_object_values, own_property_names, own_property_symbols,
 };
