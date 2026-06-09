@@ -39,10 +39,12 @@ maintenance, or agent workflow isolation.
   one subsystem and `--all` when a full focused scan is useful. Unfiltered
   `--all` uses a concurrent multi-shard greedy probe by default, then selects a
   next area by preferring small batches of real runtime or parser failures
-  before pure harness skips. Tune it with `--strategy fast|largest`,
-  `--recommend-batch-cap N`, `--probe-limit N`, and `--probe-shards
-  I/N[,I/N...]`; use `--probe-shard I/N` for a single very fast probe, and use
-  `--exact --all` for a complete audit. Use `--from-report PATH` or
+  before pure harness skips; if no small engine batch is available, it recommends
+  a small harness batch before falling back to a larger engine batch. Tune it
+  with `--strategy fast|largest`, `--recommend-batch-cap N`, `--probe-limit N`,
+  and `--probe-shards I/N[,I/N...]`; use `--probe-shard I/N` for a single very
+  fast probe, and use `--exact --all` for a complete audit. Use
+  `--from-report PATH` or
   `--from-latest-report` to replay a saved `cases.jsonl` and recompute the
   recommendation without rerunning Test262; add `--skip-area test/<prefix>` to
   ignore an area already being worked. Use `--no-recommend` to suppress the

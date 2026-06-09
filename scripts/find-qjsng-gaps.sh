@@ -35,9 +35,9 @@ probe over TEST262_GAP_PROBE_LIMIT cases from each TEST262_GAP_PROBE_SHARDS
 shard, run concurrently. Use --exact --all when a complete audit is required,
 especially to prove there are no remaining gaps.
 The default recommendation strategy is fast-batch greedy: prefer real engine
-gap areas that fit within TEST262_GAP_RECOMMEND_BATCH_CAP, currently 5, so
-agents can clear reviewable slices quickly. Use --strategy largest for the old
-largest-gap-first behavior.
+gap areas that fit within TEST262_GAP_RECOMMEND_BATCH_CAP, currently 5, then
+small harness-gap batches, so agents can clear reviewable slices quickly. Use
+--strategy largest for the old largest-gap-first behavior.
 Use --from-report with a previous output directory or cases.jsonl to recompute
 the greedy recommendation without executing Test262 again. Use --skip-area to
 ignore an area already being worked or already rechecked.
@@ -469,6 +469,8 @@ awk -F'\t' -v strategy="$RECOMMEND_STRATEGY" -v batch_cap="$RECOMMEND_BATCH_CAP"
         score = (engine * 1000000) + (total[area] * 1000) - harness
       } else if (engine > 0 && engine <= batch_cap) {
         score = 1000000000 + (engine * 1000000) + (total[area] * 1000) - harness
+      } else if (engine == 0 && total[area] <= batch_cap) {
+        score = 900000000 + (total[area] * 1000) - harness
       } else if (engine > 0) {
         over = engine - batch_cap
         score = 100000000 - (over * 1000000) + (engine * 1000) + total[area] - harness
@@ -541,9 +543,13 @@ head -n "$TOP_COUNT" "$GAPS_TSV" | awk -F'\t' '{
 }'
 
 if [ "$RECOMMEND" -eq 1 ]; then
-  recommendation="$(awk -F'\t' '$3 > 0 { print; exit }' "$RECOMMENDATIONS_TSV")"
-  if [ -z "$recommendation" ]; then
+  if [ "$RECOMMEND_STRATEGY" = "fast" ]; then
     recommendation="$(sed -n '1p' "$RECOMMENDATIONS_TSV")"
+  else
+    recommendation="$(awk -F'\t' '$3 > 0 { print; exit }' "$RECOMMENDATIONS_TSV")"
+    if [ -z "$recommendation" ]; then
+      recommendation="$(sed -n '1p' "$RECOMMENDATIONS_TSV")"
+    fi
   fi
   if [ -n "$recommendation" ]; then
     IFS=$'\t' read -r _score rec_total rec_engine rec_fail rec_harness rec_area <<<"$recommendation"
@@ -579,7 +585,7 @@ if [ "$RECOMMEND" -eq 1 ]; then
     }' "$GAPS_TSV"
     echo
     echo "Next candidate areas:"
-    awk -F'\t' '$3 > 0 { printf "  %s  engine=%s gaps=%s harness=%s\n", $6, $3, $2, $5; shown++ } shown >= 5 { exit }' "$RECOMMENDATIONS_TSV"
+    awk -F'\t' '{ printf "  %s  engine=%s gaps=%s harness=%s\n", $6, $3, $2, $5; shown++ } shown >= 5 { exit }' "$RECOMMENDATIONS_TSV"
   fi
 fi
 

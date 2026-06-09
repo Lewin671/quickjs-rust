@@ -135,7 +135,9 @@ The default recommendation strategy is fast-batch greedy: it still prioritizes
 real quickjs-rust engine failures over harness gaps, but it prefers candidate
 areas with no more than `TEST262_GAP_RECOMMEND_BATCH_CAP` engine gaps, currently
 5. That keeps the next implementation slice reviewable and prevents one large
-or difficult area from blocking discovery of easier parity wins. Use
+or difficult area from blocking discovery of easier parity wins. When the probe
+has no engine-failure area within that cap, fast-batch greedy recommends a small
+harness-gap batch before falling back to a larger engine-failure area. Use
 `--strategy largest` to restore the old largest-gap-first recommendation, or
 `--recommend-batch-cap N` to tune how large a default batch may be.
 After a global probe has produced a candidate queue, use
