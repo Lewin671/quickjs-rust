@@ -15,6 +15,7 @@ mod reflect;
 mod regexp;
 mod sets;
 mod strings;
+mod typed_arrays;
 mod weak_maps;
 mod weak_sets;
 
@@ -37,6 +38,17 @@ pub(crate) fn call_native_function(
     }
 
     if let Some(value) = array_buffers::call_array_buffer_native(
+        function,
+        native,
+        this_value.clone(),
+        &argument_values,
+        is_construct,
+        env,
+    )? {
+        return Ok(value);
+    }
+
+    if let Some(value) = typed_arrays::call_typed_array_native(
         function,
         native,
         this_value.clone(),

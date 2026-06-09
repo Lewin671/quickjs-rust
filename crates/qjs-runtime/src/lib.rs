@@ -27,6 +27,7 @@ mod regexp;
 mod set;
 mod string;
 mod symbol;
+mod typed_array;
 mod value;
 mod weak_map;
 mod weak_set;
@@ -66,6 +67,11 @@ pub(crate) const RUNTIME_INTRINSIC_NAMES: &[&str] = &[
     "Function",
     "Array",
     "ArrayBuffer",
+    "Uint8Array",
+    "Uint16Array",
+    "Uint32Array",
+    "Float32Array",
+    "Float64Array",
     "BigInt",
     "Number",
     "String",
