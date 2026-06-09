@@ -562,6 +562,9 @@ BASELINE_RUN_LIMIT="$RUN_LIMIT"
 if [ "$RUN_LIMIT" = "all" ] && [ -z "$FILTER_PREFIX" ] && [ "$RECOMMEND" -eq 1 ] && [ "$EXACT_SCAN" -eq 0 ]; then
   PROBE_SCAN=1
   BASELINE_RUN_LIMIT="$PROBE_LIMIT"
+elif [ "$RUN_LIMIT" = "all" ] && [ -z "$FILTER_PREFIX" ] && [ -z "$REPORT_SOURCE" ] && [ "$FROM_LATEST_REPORT" -eq 0 ]; then
+  echo "note: unfiltered --all with --exact or --no-recommend runs the FULL Test262 comparison (hours)." >&2
+  echo "note: for fast iteration use the default probe (drop --exact/--no-recommend) or add --filter." >&2
 fi
 
 baseline_args=(--engine both --summary-json "$SUMMARY_JSON" --case-results-jsonl "$CASES_JSONL" --no-fail)
