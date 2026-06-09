@@ -3355,6 +3355,8 @@ cases/regexp-constructor-from-regexp-like.js
 cases/regexp-constructor-regexp-like-flag-override.js
 cases/regexp-constructor-regexp-like-short-circuit.js
 cases/regexp-decimal-escape-class-range.js
+test/built-ins/RegExp/dotall/with-dotall-unicode.js
+test/built-ins/RegExp/dotall/with-dotall.js
 cases/regexp-dot-without-dotall.js
 cases/regexp-invalid-character-class-range.js
 cases/regexp-prototype-dot-all-accessor.js
