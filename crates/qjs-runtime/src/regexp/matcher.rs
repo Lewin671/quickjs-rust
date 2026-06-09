@@ -98,22 +98,26 @@ fn regexp_match(
             index: start,
             captures: vec![None; group_indices.len()],
         };
-        match_pattern(
-            &pattern,
-            &text,
-            0,
-            pattern.len(),
-            state,
-            &group_indices,
-            options,
-        )
-        .into_iter()
-        .next()
-        .map(|state| RegexpMatch {
-            start,
-            end: state.index,
-            captures: state.captures,
-        })
+        group_alternatives(&pattern, 0, pattern.len())
+            .into_iter()
+            .find_map(|(alternative_start, alternative_end)| {
+                match_pattern(
+                    &pattern,
+                    &text,
+                    alternative_start,
+                    alternative_end,
+                    state.clone(),
+                    &group_indices,
+                    options,
+                )
+                .into_iter()
+                .next()
+            })
+            .map(|state| RegexpMatch {
+                start,
+                end: state.index,
+                captures: state.captures,
+            })
     })
 }
 

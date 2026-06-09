@@ -48,3 +48,21 @@ fn legacy_decimal_escapes_define_character_class_ranges() {
     assert_eq!((matched.start, matched.end), (0, 2));
     assert!(regexp_match_range(r"[\12-\14]+", "\t", 0, false, false).is_none());
 }
+
+#[test]
+fn top_level_alternatives_match_leftmost_first() {
+    let matched = regexp_match_range("1|12", "123", 0, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 1));
+
+    let matched = regexp_match_range("2|12", "1.012", 0, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (3, 5));
+}
+
+#[test]
+fn top_level_alternatives_ignore_character_class_pipes() {
+    let matched = regexp_match_range("[a|b]c|de", "bc", 0, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 2));
+
+    let matched = regexp_match_range("[a|b]c|de", "de", 0, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 2));
+}

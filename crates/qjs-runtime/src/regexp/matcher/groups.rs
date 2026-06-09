@@ -34,6 +34,7 @@ pub(super) fn group_alternatives(
     let mut alternatives = Vec::new();
     let mut start = start_pc;
     let mut escaped = false;
+    let mut in_class = false;
     let mut depth = 0usize;
     for (index, char) in pattern
         .iter()
@@ -46,11 +47,15 @@ pub(super) fn group_alternatives(
             escaped = false;
         } else if char == '\\' {
             escaped = true;
-        } else if char == '(' {
+        } else if char == '[' {
+            in_class = true;
+        } else if char == ']' {
+            in_class = false;
+        } else if !in_class && char == '(' {
             depth += 1;
-        } else if char == ')' && depth > 0 {
+        } else if !in_class && char == ')' && depth > 0 {
             depth -= 1;
-        } else if char == '|' && depth == 0 {
+        } else if !in_class && char == '|' && depth == 0 {
             alternatives.push((start, index));
             start = index + 1;
         }
