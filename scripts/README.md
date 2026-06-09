@@ -50,14 +50,14 @@ maintenance, or agent workflow isolation.
   ignore an area already being worked. Use `--no-recommend` to suppress the
   recommendation.
 - `test262-baseline.sh`: Samples or scans upstream Test262 files to classify
-  unsupported metadata, parser or runtime failures, and timeouts before adding
+  structural not-run cases, parser or runtime failures, and timeouts before adding
   curated local cases. Use `--engine both --all --shard I/N --summary-json PATH
   --no-fail` for asynchronous comparisons against QuickJS-NG's Test262 config.
   In that mode QuickJS-NG config skips are applied as the shared baseline, and
-  quickjs-rust unsupported metadata is reported as a separate harness gap.
-  Keep the quickjs-rust supported-feature list current when a builtin feature
-  is implemented so those cases run as real pass/fail signal instead of harness
-  skips.
+  quickjs-rust skips only structural harness limits such as modules, async tests,
+  unsupported includes, intl402, fixtures, and known unsupported source syntax.
+  Test262 `features` metadata is parsed for QuickJS-NG config alignment, but it
+  does not preemptively skip quickjs-rust cases.
   Negative quickjs-rust cases must fail with the expected Test262 phase and
   error type. Set `QJS_CLI_BIN` to reuse a prebuilt quickjs-rust binary across
   multiple shard runs.

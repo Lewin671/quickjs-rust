@@ -23,7 +23,7 @@ CARGO_BIN="${CARGO:-cargo}"
 usage() {
   cat >&2 <<'USAGE'
 usage: scripts/test262-baseline.sh [--limit N | --all] [--filter test/<prefix>] [--engine quickjs-rust|quickjs-ng|both] [--shard I/N] [--summary-json PATH] [--case-results-jsonl PATH] [--stop-after-limit] [--no-fail]
-Enumerates upstream Test262 cases, classifies harness gaps, and executes a baseline sample.
+Enumerates upstream Test262 cases, classifies not-run cases, and executes a baseline sample.
 USAGE
 }
 
@@ -225,7 +225,6 @@ skip_reason() {
   local rel="$1"
   local flags="$2"
   local includes="$3"
-  local features="$4"
   case "$rel" in
     *_FIXTURE.js) echo "fixture"; return ;;
     test/intl402/*|test/staging/intl402/*) echo "intl402"; return ;;
@@ -237,9 +236,7 @@ skip_reason() {
   elif [ -n "$includes" ] && ! rust_includes_supported "$includes"; then
     echo "includes"
   elif ! rust_source_syntax_supported "$rel"; then
-    echo "features"
-  elif [ -n "$features" ] && ! rust_features_supported "$features" "$rel"; then
-    echo "features"
+    echo "syntax"
   else
     echo ""
   fi
@@ -250,153 +247,6 @@ rust_source_syntax_supported() {
     test/built-ins/BigInt/is-a-constructor.js) return 0 ;;
   esac
   ! grep -Eq 'for[[:space:]]*\([[:space:]]*(var|let|const)[[:space:]]*[\[{][^;)]*[[:space:]]of[[:space:]]|(^|[^[:alnum:]_$])class[[:space:]]' "$TEST262_DIR/$1"
-}
-rust_features_supported() {
-  local entries rel
-  entries="$(list_entries "$1")"
-  rel="${2:-}"
-  case "$rel" in
-    test/built-ins/RegExp/prototype/Symbol.split/*)
-      entries="$(drop_feature_entries "$entries" -e 'Symbol.species')"
-      ;;
-  esac
-  case "$rel" in
-    test/built-ins/String/prototype/toString/non-generic-realm.js|test/built-ins/String/prototype/valueOf/non-generic-realm.js)
-      entries="$(drop_feature_entries "$entries" -e 'cross-realm')"
-      ;;
-  esac
-  case "$rel" in
-    test/built-ins/String/prototype/indexOf/position-tointeger-errors.js|test/built-ins/String/prototype/indexOf/position-tointeger-toprimitive.js|test/built-ins/String/prototype/indexOf/position-tointeger-wrapped-values.js|test/built-ins/String/prototype/indexOf/searchstring-tostring-errors.js|test/built-ins/String/prototype/indexOf/searchstring-tostring-toprimitive.js|test/built-ins/String/prototype/indexOf/searchstring-tostring-wrapped-values.js)
-      entries="$(drop_feature_entries "$entries" -e 'Symbol.toPrimitive' -e 'computed-property-names')"
-      ;;
-  esac
-  case "$rel" in
-    test/built-ins/BigInt/asIntN/bigint-tobigint-errors.js|test/built-ins/BigInt/asIntN/bigint-tobigint-toprimitive.js|test/built-ins/BigInt/asIntN/bigint-tobigint-wrapped-values.js|test/built-ins/BigInt/asIntN/bits-toindex-errors.js|test/built-ins/BigInt/asIntN/bits-toindex-toprimitive.js|test/built-ins/BigInt/asIntN/bits-toindex-wrapped-values.js|test/built-ins/BigInt/asUintN/bigint-tobigint-errors.js|test/built-ins/BigInt/asUintN/bigint-tobigint-toprimitive.js|test/built-ins/BigInt/asUintN/bigint-tobigint-wrapped-values.js|test/built-ins/BigInt/asUintN/bits-toindex-errors.js|test/built-ins/BigInt/asUintN/bits-toindex-toprimitive.js|test/built-ins/BigInt/asUintN/bits-toindex-wrapped-values.js)
-      entries="$(drop_feature_entries "$entries" -e 'Symbol.toPrimitive' -e 'computed-property-names')"
-      ;;
-  esac
-  case "$rel" in
-    test/built-ins/BigInt/prototype/valueOf/cross-realm.js)
-      entries="$(drop_feature_entries "$entries" -e 'cross-realm')"
-      ;;
-  esac
-  case "$rel" in
-    test/built-ins/BigInt/is-a-constructor.js)
-      entries="$(drop_feature_entries "$entries" -e 'Reflect.construct' -e 'arrow-function')"
-      ;;
-  esac
-  case "$rel" in
-    test/built-ins/BigInt/prototype/Symbol.toStringTag.js)
-      entries="$(drop_feature_entries "$entries" -e 'Symbol.toStringTag')"
-      ;;
-  esac
-  case "$rel" in
-    test/built-ins/AggregateError/errors-iterabletolist-failures.js|test/built-ins/AggregateError/errors-iterabletolist.js)
-      entries="$(drop_feature_entries "$entries" -e 'Symbol.iterator')"
-      ;;
-  esac
-  case "$rel" in
-    test/built-ins/Number/string-numeric-separator-literal-*.js)
-      entries="$(drop_feature_entries "$entries" -e 'numeric-separator-literal')"
-      ;;
-  esac
-  case "$rel" in
-    test/built-ins/Symbol/toStringTag/prop-desc.js|test/built-ins/Symbol/prototype/Symbol.toStringTag.js|test/built-ins/Map/prototype/Symbol.toStringTag.js|test/built-ins/Set/prototype/Symbol.toStringTag.js|test/built-ins/WeakMap/prototype/Symbol.toStringTag.js|test/built-ins/WeakSet/prototype/Symbol.toStringTag.js|test/built-ins/Promise/prototype/Symbol.toStringTag.js|test/built-ins/Math/Symbol.toStringTag.js|test/built-ins/JSON/Symbol.toStringTag.js)
-      entries="$(drop_feature_entries "$entries" -e 'Symbol.toStringTag')"
-      ;;
-  esac
-  case "$rel" in
-    test/built-ins/Array/prototype/with/*|test/built-ins/Array/prototype/toReversed/*|test/built-ins/Array/prototype/toSpliced/*|test/built-ins/Array/prototype/toSorted/*)
-      entries="$(drop_feature_entries "$entries" -e 'change-array-by-copy' -e 'exponentiation')"
-      ;;
-  esac
-  case "$rel" in
-    test/built-ins/Array/prototype/concat/create-species-null.js|test/built-ins/Array/prototype/concat/create-species-undef.js)
-      entries="$(drop_feature_entries "$entries" -e 'Symbol.species')"
-      ;;
-  esac
-  case "$rel" in
-    test/built-ins/Array/prototype/concat/create-proto-from-ctor-realm-array.js)
-      entries="$(drop_feature_entries "$entries" -e 'cross-realm' -e 'Symbol.species')"
-      ;;
-  esac
-  case "$rel" in
-    test/annexB/language/statements/if/emulated-undefined.js|test/annexB/language/statements/switch/emulates-undefined.js)
-      entries="$(drop_feature_entries "$entries" -e 'IsHTMLDDA')"
-      ;;
-  esac
-  case "$rel" in
-    test/annexB/language/statements/function/default-parameters-emulates-undefined.js)
-      entries="$(drop_feature_entries "$entries" -e 'default-parameters' -e 'IsHTMLDDA')"
-      ;;
-  esac
-  case "$rel" in
-    test/annexB/language/expressions/conditional/emulates-undefined.js|test/annexB/language/expressions/does-not-equals/emulates-undefined.js|test/annexB/language/expressions/equals/emulates-undefined.js|test/annexB/language/expressions/logical-and/emulates-undefined.js|test/annexB/language/expressions/logical-not/emulates-undefined.js|test/annexB/language/expressions/logical-or/emulates-undefined.js|test/annexB/language/expressions/strict-does-not-equals/emulates-undefined.js|test/annexB/language/expressions/strict-equals/emulates-undefined.js|test/annexB/language/expressions/typeof/emulates-undefined.js)
-      entries="$(drop_feature_entries "$entries" -e 'IsHTMLDDA')"
-      ;;
-  esac
-  case "$rel" in
-    test/annexB/language/expressions/coalesce/emulates-undefined.js)
-      entries="$(drop_feature_entries "$entries" -e 'coalesce-expression' -e 'IsHTMLDDA')"
-      ;;
-  esac
-  case "$rel" in
-    test/annexB/language/expressions/logical-assignment/emulates-undefined-and.js|test/annexB/language/expressions/logical-assignment/emulates-undefined-coalesce.js|test/annexB/language/expressions/logical-assignment/emulates-undefined-or.js)
-      entries="$(drop_feature_entries "$entries" -e 'logical-assignment-operators' -e 'IsHTMLDDA')"
-      ;;
-  esac
-  case "$rel" in
-    test/annexB/built-ins/Array/from/iterator-method-emulates-undefined.js)
-      entries="$(drop_feature_entries "$entries" -e 'Symbol.iterator' -e 'IsHTMLDDA')"
-      ;;
-  esac
-  case "$rel" in
-    test/annexB/built-ins/String/prototype/match/custom-matcher-emulates-undefined.js|test/annexB/built-ins/String/prototype/matchAll/custom-matcher-emulates-undefined.js|test/annexB/built-ins/String/prototype/replace/custom-replacer-emulates-undefined.js|test/annexB/built-ins/String/prototype/replaceAll/custom-replacer-emulates-undefined.js|test/annexB/built-ins/String/prototype/search/custom-searcher-emulates-undefined.js|test/annexB/built-ins/String/prototype/split/custom-splitter-emulates-undefined.js)
-      entries="$(drop_feature_entries "$entries" -e 'IsHTMLDDA')"
-      ;;
-  esac
-  case "$rel" in
-    test/built-ins/Array/prototype/entries/*|test/built-ins/Array/prototype/keys/*|test/built-ins/Array/prototype/values/*|test/built-ins/Array/prototype/Symbol.iterator.js)
-      entries="$(drop_feature_entries "$entries" -e 'Symbol.iterator')"
-      ;;
-  esac
-  case "$rel" in
-    test/built-ins/Map/prototype/Symbol.iterator.js|test/built-ins/Map/prototype/Symbol.iterator/*)
-      entries="$(drop_feature_entries "$entries" -e 'Symbol.iterator')"
-      ;;
-  esac
-  case "$rel" in
-    test/built-ins/Array/from/source-object-iterator-1.js|test/built-ins/Array/from/source-object-iterator-2.js|test/built-ins/Array/from/iter-cstm-ctor.js|test/built-ins/Array/from/iter-cstm-ctor-err.js|test/built-ins/Array/from/iter-map-fn-args.js|test/built-ins/Array/from/iter-map-fn-err.js|test/built-ins/Array/from/iter-map-fn-return.js|test/built-ins/Array/from/iter-map-fn-this-arg.js|test/built-ins/Array/from/iter-map-fn-this-non-strict.js|test/built-ins/Array/from/iter-set-elem-prop.js|test/built-ins/Array/from/iter-set-elem-prop-err.js|test/built-ins/Array/from/iter-set-elem-prop-non-writable.js|test/built-ins/Array/from/iter-set-length.js|test/built-ins/Array/from/iter-set-length-err.js|test/built-ins/Array/from/get-iter-method-err.js|test/built-ins/Array/from/iter-get-iter-err.js|test/built-ins/Array/from/iter-get-iter-val-err.js|test/built-ins/Array/from/iter-adv-err.js)
-      entries="$(drop_feature_entries "$entries" -e 'Symbol.iterator')"
-      ;;
-  esac
-  case "$rel" in
-    test/built-ins/Array/from/iter-set-elem-prop-non-writable.js)
-      entries="$(drop_feature_entries "$entries" -e 'generators')"
-      ;;
-  esac
-  case "$rel" in
-    test/built-ins/Object/entries/*|test/built-ins/Object/keys/*|test/built-ins/Object/values/*)
-      entries="$(drop_feature_entries "$entries" -e 'for-in-order')"
-      ;;
-  esac
-  case "$rel" in
-    test/built-ins/Reflect/getPrototypeOf/*|test/built-ins/Reflect/setPrototypeOf/*)
-      entries="$(drop_feature_entries "$entries" -e 'Reflect' -e 'Reflect.setPrototypeOf')"
-      ;;
-  esac
-  [ -z "$entries" ] || ! grep -Fvx -e 'Symbol' -e 'Symbol.isConcatSpreadable' -e 'Symbol.match' -e 'Symbol.matchAll' \
-    -e 'Symbol.replace' -e 'Symbol.search' -e 'Symbol.split' -e 'Symbol.toPrimitive' \
-    -e 'Reflect' -e 'Reflect.construct' -e 'arrow-function' -e 'AggregateError' -e 'BigInt' -e 'Map' -e 'Set' -e 'WeakMap' -e 'WeakSet' \
-    -e 'set-methods' -e 'upsert' \
-    -e 'array-find-from-last' -e 'Array.prototype.at' -e 'Array.prototype.flat' -e 'Array.prototype.flatMap' -e 'Array.prototype.includes' -e 'Array.prototype.toReversed' -e 'Array.prototype.toSorted' -e 'Array.prototype.toSpliced' -e 'Array.prototype.with' -e 'error-cause' -e 'json-parse-with-source' -e 'Object.hasOwn' -e 'Object.is' -e 'promise-with-resolvers' -e 'RegExp.escape' -e 'regexp-dotall' -e 'string-trimming' -e 'String.fromCodePoint' -e 'String.prototype.at' -e 'String.prototype.endsWith' -e 'String.prototype.includes' -e 'String.prototype.isWellFormed' -e 'String.prototype.matchAll' -e 'String.prototype.replaceAll' -e 'String.prototype.toWellFormed' -e 'String.prototype.trimEnd' -e 'String.prototype.trimStart' -e 'u180e' \
-    <<<"$entries" >/dev/null
-}
-drop_feature_entries() {
-  local entries="$1"
-  shift
-  [ -z "$entries" ] && return
-  printf '%s\n' "$entries" | grep -Fxv "$@" || true
 }
 rust_includes_supported() {
   local include
@@ -641,7 +491,7 @@ run_case() {
     elif [ "$qjsng_kind" = "pass" ]; then
       qjsng_pass_rust_nonpass=$((qjsng_pass_rust_nonpass + 1))
       case "$rust_kind" in
-        skipped) qjsng_pass_rust_harness_gap=$((qjsng_pass_rust_harness_gap + 1)) ;;
+        skipped) qjsng_pass_rust_not_run=$((qjsng_pass_rust_not_run + 1)) ;;
         timeout) qjsng_pass_rust_timeout=$((qjsng_pass_rust_timeout + 1)) ;;
         fail) qjsng_pass_rust_fail=$((qjsng_pass_rust_fail + 1)) ;;
       esac
@@ -680,15 +530,16 @@ write_summary_json() {
     "intl402": $skip_intl402,
     "module": $skip_module,
     "negative": $skip_negative,
-    "raw": $skip_raw
+    "raw": $skip_raw,
+    "syntax": $skip_syntax
   },
-  "rust_harness_gap": $rust_harness_gap,
+  "rust_not_run": $rust_not_run,
   "quickjs_rust": {"pass": $rust_pass, "fail": $rust_fail, "timeout": $rust_timeout, "skipped": $rust_skipped},
   "quickjs_ng": {"pass": $qjsng_pass, "fail": $qjsng_fail, "timeout": $qjsng_timeout, "skipped": $qjsng_skipped},
   "comparison": {
     "both_pass": $both_pass,
     "quickjs_ng_pass_rust_nonpass": $qjsng_pass_rust_nonpass,
-    "quickjs_ng_pass_rust_harness_gap": $qjsng_pass_rust_harness_gap,
+    "quickjs_ng_pass_rust_not_run": $qjsng_pass_rust_not_run,
     "quickjs_ng_pass_rust_fail": $qjsng_pass_rust_fail,
     "quickjs_ng_pass_rust_timeout": $qjsng_pass_rust_timeout,
     "rust_pass_quickjs_ng_nonpass": $rust_pass_qjsng_nonpass,
@@ -706,11 +557,11 @@ fi
 
 scanned=0 total=0 configured=0 eligible=0 run=0 skipped=0
 skip_async=0 skip_features=0 skip_fixture=0 skip_includes=0
-skip_intl402=0 skip_module=0 skip_negative=0 skip_raw=0
-rust_harness_gap=0 rust_pass=0 rust_fail=0 rust_timeout=0 rust_skipped=0
+skip_intl402=0 skip_module=0 skip_negative=0 skip_raw=0 skip_syntax=0
+rust_not_run=0 rust_pass=0 rust_fail=0 rust_timeout=0 rust_skipped=0
 qjsng_pass=0 qjsng_fail=0 qjsng_timeout=0 qjsng_skipped=0
 both_pass=0 qjsng_pass_rust_nonpass=0 rust_pass_qjsng_nonpass=0
-qjsng_pass_rust_harness_gap=0 qjsng_pass_rust_fail=0 qjsng_pass_rust_timeout=0
+qjsng_pass_rust_not_run=0 qjsng_pass_rust_fail=0 qjsng_pass_rust_timeout=0
 both_nonpass=0 both_fail_or_timeout=0
 
 while IFS= read -r file; do
@@ -756,7 +607,7 @@ while IFS= read -r file; do
   if [ "$ENGINE" = "both" ]; then
     configured=$((configured + 1))
     if [ -n "$reason" ]; then
-      rust_harness_gap=$((rust_harness_gap + 1))
+      rust_not_run=$((rust_not_run + 1))
     else
       eligible=$((eligible + 1))
     fi
@@ -764,13 +615,13 @@ while IFS= read -r file; do
     skipped=$((skipped + 1))
     case "$reason" in
       async) skip_async=$((skip_async + 1)) ;;
-      features) skip_features=$((skip_features + 1)) ;;
       fixture) skip_fixture=$((skip_fixture + 1)) ;;
       includes) skip_includes=$((skip_includes + 1)) ;;
       intl402) skip_intl402=$((skip_intl402 + 1)) ;;
       module) skip_module=$((skip_module + 1)) ;;
       negative) skip_negative=$((skip_negative + 1)) ;;
       raw) skip_raw=$((skip_raw + 1)) ;;
+      syntax) skip_syntax=$((skip_syntax + 1)) ;;
     esac
     if [ "$ENGINE" = "quickjs-rust" ]; then
       write_case_result "$rel" "skipped" "$reason" "not-run" ""
@@ -805,7 +656,8 @@ echo "  skipped.intl402: $skip_intl402"
 echo "  skipped.module: $skip_module"
 echo "  skipped.negative: $skip_negative"
 echo "  skipped.raw: $skip_raw"
-echo "  rust.harness_gap: $rust_harness_gap"
+echo "  skipped.syntax: $skip_syntax"
+echo "  rust.not_run: $rust_not_run"
 if needs_rust; then
   echo "  quickjs-rust.pass: $rust_pass"
   echo "  quickjs-rust.fail: $rust_fail"

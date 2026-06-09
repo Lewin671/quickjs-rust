@@ -121,7 +121,8 @@ quickjs-rust. It runs `scripts/test262-baseline.sh --engine both`, stores the
 raw summary and case results under `target/test262-gaps/`, and prints a compact
 report with the total QuickJS-NG-pass/quickjs-rust actionable gap count, the
 split between runtime failures, included timeouts, excluded stress timeouts, and
-harness gaps, top affected areas, and the first cases to investigate. Use
+quickjs-rust not-run cases, top affected areas, and the first cases to
+investigate. Use
 `--filter test/<prefix>` to focus the scan on one Test262 subtree and `--all`
 when the focused scan should be exhaustive. It prints a greedy next area by
 default. For unfiltered `--all` recommendation runs, the default is a bounded
@@ -179,15 +180,15 @@ runners.
 `scripts/test262-baseline.sh` scans upstream Test262 coverage. It can run a
 bounded sample, a full scan with `--all`, a shard with `--shard I/N`, and a
 quickjs-rust/QuickJS-NG comparison with `--engine both`. In that mode QuickJS-NG
-config skips are applied as the shared baseline, and quickjs-rust unsupported
-metadata is reported separately as a harness gap. The metadata helper supports
-the inline and block-list forms used by Test262 `flags`, `includes`, and
-`features` entries. Negative Test262 cases are runnable by the quickjs-rust
+config skips are applied as the shared baseline. The quickjs-rust side reports
+not-run cases only for structural harness limits such as modules, async tests,
+unsupported harness includes, intl402, fixtures, and known unsupported source
+syntax. Test262
+`features` metadata is parsed for QuickJS-NG config alignment, but it does not
+preemptively skip quickjs-rust cases; runnable cases produce normal pass, fail,
+or timeout signal. Negative Test262 cases are runnable by the quickjs-rust
 baseline harness; parse, early, runtime, and resolution failures are matched
 against the Test262 negative metadata before being counted as expected results.
-The quickjs-rust feature allowlist is intentionally explicit; when a runtime
-builtin becomes supported, add its Test262 feature tag there so the gap report
-can distinguish missing behavior from stale harness metadata.
 Raw Test262 cases run without injected harness files. `--stop-after-limit` is
 reserved for bounded probe callers such as `find-qjsng-gaps.sh`; do not use it
 for coverage accounting because it stops enumeration once the run limit is
