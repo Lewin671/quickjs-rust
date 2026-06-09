@@ -5,64 +5,42 @@ Concrete task files live next to this index. For new tasks, copy
 `tasks/TEMPLATE.md` and fill in scope, owner boundary, acceptance criteria, and
 verification commands before assigning an agent.
 
-## Task Files
+## Bootstrap Tasks
 
-- `T001-lexer-coverage.md`
-- `T002-parser-expressions.md`
-- `T003-runtime-values.md`
-- `T004-quickjs-comparison.md`
-- `T005-test262-subset.md`
+Early-engine work items; largely landed, kept for reference and residual
+follow-ups.
 
-## T001: Lexer Coverage
+- `T001-lexer-coverage.md` — lexer comments, templates, punctuators.
+- `T002-parser-expressions.md` — expression precedence parsing.
+- `T003-runtime-values.md` — value types, coercion, environments, errors.
+- `T004-quickjs-comparison.md` — QuickJS-NG smoke comparison runner.
+- `T005-test262-subset.md` — curated Test262 subset harness.
 
-Expand `qjs-lexer` to cover comments, template literals, regex ambiguity notes,
-and more punctuators. Add focused token tests.
+## Conformance Campaigns
 
-- Allowed paths: `crates/qjs-lexer/**`, lexer-specific tests.
-- Coordinate before changing: `crates/qjs-ast/**`.
-- Verification: `cargo test -p qjs-lexer` and `./scripts/check.sh`.
+Campaigns decompose the broad features that the quickwins gap strategy
+intentionally de-prioritizes. Sizes are QuickJS-NG-passing Test262 cases
+measured at commit `3e7feb0` (2026-06-09 full scan); recheck against the
+latest `docs/conformance/burndown.jsonl` entry before starting new work.
 
-## T002: Parser Expressions
+| Task | Campaign | Unlocks (approx.) | Mostly blocked as |
+| --- | --- | ---: | --- |
+| `T006-class-campaign.md` | class | 7,138 | not-run (syntax filter) |
+| `T007-async-foundation-campaign.md` | async/jobs | 5,567 | not-run (async filter) |
+| `T008-destructuring-completion-campaign.md` | destructuring | 2,580 | engine failures |
+| `T009-typedarray-buffers-campaign.md` | TypedArray/buffers | 2,480 | engine failures |
+| `T010-generators-iteration-campaign.md` | generators/iteration | 1,960 | engine failures |
 
-Add precedence parsing for unary, multiplicative, comparison, equality, logical,
-assignment, and comma expressions.
+Campaign working rules:
 
-- Allowed paths: `crates/qjs-parser/**`, parser-specific tests.
-- Coordinate before changing: `crates/qjs-ast/**`, `crates/qjs-runtime/**`.
-- Verification: `cargo test -p qjs-parser` and `./scripts/check.sh`.
-
-## T003: Statements
-
-Add blocks, variable declarations, `if`, loops, `return`, and function
-declarations. Keep AST additions separate from runtime behavior.
-
-- Allowed paths: `crates/qjs-parser/**`, statement parser tests.
-- Coordinate before changing: `crates/qjs-ast/**`.
-- Verification: `cargo test -p qjs-parser` and `./scripts/check.sh`.
-
-## T004: Runtime Values
-
-Introduce JavaScript value types, basic coercion, lexical environments, and
-structured runtime errors.
-
-- Allowed paths: `crates/qjs-runtime/**`, runtime tests.
-- Coordinate before changing: `crates/qjs-ast/**`, `crates/qjs-parser/**`.
-- Verification: `cargo test -p qjs-runtime` and `./scripts/check.sh`.
-
-## T005: Conformance Harness
-
-Create a small test harness that can run local fixtures and later import slices
-of Test262.
-
-- Allowed paths: `tests/test262/**`, harness scripts, test documentation.
-- Coordinate before changing: `Cargo.toml`, `Cargo.lock`, workspace scripts.
-- Verification: `./scripts/test262-subset.sh` and `./scripts/check.sh`.
-
-## T006: QuickJS Comparison Runner
-
-Build `third_party/quickjs-ng` locally and add a script that compares selected
-`qjs-cli` output with QuickJS-NG output for simple smoke programs.
-
-- Allowed paths: `scripts/compare-qjs.sh`, `tests/fixtures/compare-qjs/**`.
-- Coordinate before changing: `crates/qjs-cli/**`.
-- Verification: `./scripts/compare-qjs.sh` and `./scripts/check.sh`.
+- One slice from a campaign's checklist is one reviewable unit; verify with
+  the slice's focused command before and after, like any gap-queue area.
+- Tick the slice checkbox in the task file in the same commit that lands it,
+  so the next session resumes without re-deriving state.
+- When `find-qjsng-gaps.sh` still offers non-hard quick wins, those stay
+  first choice; switch to the highest-priority campaign slice when the
+  recommendation queue is dominated by hard-hinted areas.
+- Smaller feature clusters not yet campaign-sized (BigInt 830,
+  regexp-unicode-property-escapes 581, Proxy 292, explicit-resource-management
+  273) stay in the normal gap queue; promote one to a campaign file when its
+  slices stop fitting in single reviewable units.

@@ -252,7 +252,11 @@ For documentation-only changes:
 
 ## Suggested Autonomous Loop
 
-1. Pick one task from `tasks/`.
+1. Pick one task from `tasks/`. For QuickJS-NG gap work, take quick wins from
+   the `find-qjsng-gaps.sh` recommendation queue while they exist; when the
+   queue is dominated by hard-hinted broad areas, switch to the next unchecked
+   slice of the highest-priority campaign task in `tasks/README.md` instead of
+   re-running global probes.
 2. Read the related crate, `docs/architecture.md`, and `docs/harness.md`.
 3. Implement the smallest useful slice.
 4. Add or update tests.
