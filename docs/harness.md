@@ -135,9 +135,13 @@ Test262 directories. After that sampled candidate queue is built, the default
 global probe exact-checks the top `TEST262_GAP_VERIFY_CANDIDATES` areas,
 currently 8. These focused verification runs execute concurrently, then the
 script prints the final recommendation and a greedy queue from those exact
-focused results. This costs a few additional focused baseline runs, but it
-prevents a sampled broad area from hiding smaller parity wins and gives the
-agent several ready follow-up areas from one global probe.
+focused results. To keep the default greedy loop fast, exact verification skips
+candidate subtrees with more than `TEST262_GAP_VERIFY_AREA_MAX_FILES`
+JavaScript files, currently 150. Broad skipped areas remain visible in the raw
+probe queue, but they do not block the verified recommendation. This costs a
+few additional focused baseline runs, prevents a sampled broad area from hiding
+smaller parity wins, and gives the agent several ready follow-up areas from one
+global probe.
 The default recommendation strategy is quickwins greedy. It prefers real
 quickjs-rust engine failures when they fit in a small reviewable batch. After
 that, it prefers small harness-only batches when at least one case does not
@@ -158,9 +162,10 @@ features. Use
 `--recommend-batch-cap N` to tune how large a default batch may be. Use
 `--recommend-queue N` or `TEST262_GAP_RECOMMEND_QUEUE` to tune how many ranked
 areas the report prints for continuous or parallel follow-up work. Use
-`--verify-candidates N` to tune the exact candidate follow-up, or
-`--verify-candidates 0` when the fastest possible sampled recommendation is
-more useful than a verified one.
+`--verify-candidates N` to tune the exact candidate follow-up,
+`--verify-area-max-files N` to tune how wide a subtree may be before default
+verification skips it, or `--verify-candidates 0` when the fastest possible
+sampled recommendation is more useful than a verified one.
 After a global probe has produced a candidate queue, use
 `--from-report target/test262-gaps/<run>` or `--from-latest-report` to recompute
 the recommendation from the saved `cases.jsonl` without executing Test262

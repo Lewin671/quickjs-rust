@@ -15,6 +15,7 @@ RECOMMEND_STRATEGY="${TEST262_GAP_RECOMMEND_STRATEGY:-quickwins}"
 RECOMMEND_BATCH_CAP="${TEST262_GAP_RECOMMEND_BATCH_CAP:-5}"
 RECOMMEND_QUEUE="${TEST262_GAP_RECOMMEND_QUEUE:-8}"
 VERIFY_CANDIDATES="${TEST262_GAP_VERIFY_CANDIDATES:-8}"
+VERIFY_AREA_MAX_FILES="${TEST262_GAP_VERIFY_AREA_MAX_FILES:-150}"
 INCLUDE_TIMEOUTS=0
 EXACT_SCAN=0
 REPORT_SOURCE=""
@@ -25,7 +26,7 @@ PROBE_SHARDS="${TEST262_GAP_PROBE_SHARDS:-${TEST262_GAP_PROBE_SHARD:-1/16,5/16,9
 
 usage() {
   cat >&2 <<'USAGE'
-usage: scripts/find-qjsng-gaps.sh [--limit N | --all] [--filter test/<prefix>] [--out-dir PATH] [--top N] [--areas N] [--strategy quickwins|fast|largest] [--recommend-batch-cap N] [--recommend-queue N] [--verify-candidates N] [--probe-limit N] [--probe-shard I/N] [--probe-shards I/N[,I/N...]] [--from-report PATH | --from-latest-report] [--skip-area test/<prefix>] [--exact] [--include-timeouts] [--no-recommend]
+usage: scripts/find-qjsng-gaps.sh [--limit N | --all] [--filter test/<prefix>] [--out-dir PATH] [--top N] [--areas N] [--strategy quickwins|fast|largest] [--recommend-batch-cap N] [--recommend-queue N] [--verify-candidates N] [--verify-area-max-files N] [--probe-limit N] [--probe-shard I/N] [--probe-shards I/N[,I/N...]] [--from-report PATH | --from-latest-report] [--skip-area test/<prefix>] [--exact] [--include-timeouts] [--no-recommend]
 
 Runs a QuickJS-NG comparison baseline and prints the cases where QuickJS-NG
 passes but quickjs-rust has an actionable feature gap. Stress timeouts are
@@ -46,9 +47,13 @@ quickwins prefers lower weighted hard hints before larger engine-gap counts. Use
 small-batch-first behavior or --strategy largest for largest-gap-first.
 For default global probes, the script exact-checks the top quickwins candidate
 areas before printing a recommendation, so sampled areas that expand into broad
-work do not outrank smaller exact wins. Use --verify-candidates 0 to disable
-that follow-up, or TEST262_GAP_VERIFY_CANDIDATES to change the default.
-Exact candidate checks run concurrently. The report also prints a greedy
+work do not outrank smaller exact wins. To keep default greedy iteration fast,
+candidate verification skips Test262 subtrees with more than
+TEST262_GAP_VERIFY_AREA_MAX_FILES JavaScript files, currently 150. Use
+--verify-candidates 0 to disable that follow-up,
+TEST262_GAP_VERIFY_CANDIDATES to change how many eligible candidates are
+checked, or --verify-area-max-files to tune the subtree width cap. Exact
+candidate checks run concurrently. The report also prints a greedy
 recommendation queue, controlled by --recommend-queue or
 TEST262_GAP_RECOMMEND_QUEUE, so agents can keep moving without rerunning the
 global probe after every small fix.
@@ -109,6 +114,11 @@ while [ "$#" -gt 0 ]; do
     --verify-candidates)
       [ "$#" -ge 2 ] || { usage; exit 2; }
       VERIFY_CANDIDATES="$2"
+      shift 2
+      ;;
+    --verify-area-max-files)
+      [ "$#" -ge 2 ] || { usage; exit 2; }
+      VERIFY_AREA_MAX_FILES="$2"
       shift 2
       ;;
     --probe-limit)
@@ -227,6 +237,12 @@ esac
 case "$VERIFY_CANDIDATES" in
   ''|*[!0-9]*)
     echo "error: --verify-candidates must be a non-negative integer: $VERIFY_CANDIDATES" >&2
+    exit 2
+    ;;
+esac
+case "$VERIFY_AREA_MAX_FILES" in
+  ''|*[!0-9]*|0)
+    echo "error: --verify-area-max-files must be a positive integer: $VERIFY_AREA_MAX_FILES" >&2
     exit 2
     ;;
 esac
@@ -458,6 +474,18 @@ write_recommendations() {
   ' "$gaps_file" | sort -nr >"$recommendations_file"
 }
 
+test262_area_file_count() {
+  local area="$1"
+  local path="$TEST262_DIR/$area"
+  if [ -f "$path" ]; then
+    printf '1\n'
+  elif [ -d "$path" ]; then
+    find "$path" -type f -name '*.js' | wc -l | tr -d ' '
+  else
+    printf '0\n'
+  fi
+}
+
 if [ -z "$REPORT_CASES_SOURCE" ] && [ -z "${QJS_CLI_BIN:-}" ] && [ "$RUN_LIMIT" = "all" ] && [ -z "$FILTER_PREFIX" ] && [ "$RECOMMEND" -eq 1 ] && [ "$EXACT_SCAN" -eq 0 ]; then
   if command -v cargo >/dev/null 2>&1; then
     CARGO_BIN="cargo"
@@ -633,9 +661,20 @@ if [ "$PROBE_SCAN" -eq 1 ] && [ "$RECOMMEND" -eq 1 ] && [ "$RECOMMEND_STRATEGY" 
   verify_dir="$OUT_DIR/exact-candidates"
   mkdir -p "$verify_dir"
   candidate_areas=()
-  while IFS= read -r area; do
+  skipped_wide_candidates=()
+  while IFS=$'\t' read -r _score _total _engine _fail _harness _hard area; do
+    area_file_count="$(test262_area_file_count "$area")"
+    if [ "$area_file_count" -gt "$VERIFY_AREA_MAX_FILES" ]; then
+      skipped_wide_candidates+=("$area ($area_file_count files)")
+      continue
+    fi
     candidate_areas+=("$area")
-  done < <(awk -F'\t' -v limit="$VERIFY_CANDIDATES" '{ print $7; shown++ } shown >= limit { exit }' "$PROBE_RECOMMENDATIONS_TSV")
+    [ "${#candidate_areas[@]}" -lt "$VERIFY_CANDIDATES" ] || break
+  done <"$PROBE_RECOMMENDATIONS_TSV"
+  if [ "${#skipped_wide_candidates[@]}" -gt 0 ]; then
+    echo "Skipping broad exact candidate areas over $VERIFY_AREA_MAX_FILES files:"
+    printf '  skip exact: %s\n' "${skipped_wide_candidates[@]}"
+  fi
   if [ "${#candidate_areas[@]}" -gt 0 ]; then
     echo "Verifying top greedy candidate areas exactly..."
     verify_pids=()
