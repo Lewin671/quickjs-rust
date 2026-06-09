@@ -107,4 +107,6 @@ jobs:
         run: git submodule update --init --depth 1 third_party/test262
 
       - name: Test262 subset metadata
+        env:
+          TEST262_CASE_TIMEOUT_SECONDS: 30
         run: ./scripts/test262-subset.sh
