@@ -14,7 +14,7 @@ pub(super) fn call_date_native(
 ) -> NativeCallResult {
     let value = match native {
         NativeFunction::Date => {
-            date::native_date(function, this_value, argument_values, is_construct)?
+            date::native_date(function, this_value, argument_values, is_construct, env)?
         }
         NativeFunction::DateNow => date::native_date_now()?,
         NativeFunction::DateParse => date::native_date_parse(argument_values)?,

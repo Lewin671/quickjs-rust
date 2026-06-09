@@ -17,7 +17,7 @@ pub(crate) fn install_bigint(
     object_prototype: ObjectRef,
 ) {
     let bigint_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
-    let bigint_function = Function::new_native(Some("BigInt"), 1, NativeFunction::BigInt, false);
+    let bigint_function = Function::new_native(Some("BigInt"), 1, NativeFunction::BigInt, true);
     bigint_prototype.set_to_string_tag("BigInt");
     bigint_prototype.define_non_enumerable(
         "constructor".to_owned(),
@@ -92,8 +92,15 @@ fn define_static_native(function: &Function, key: &str, length: usize, native: N
 
 pub(crate) fn native_bigint(
     argument_values: &[Value],
+    is_construct: bool,
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
+    if is_construct {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: BigInt is not a constructor".to_owned(),
+        });
+    }
     let value = to_bigint_constructor_value(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,

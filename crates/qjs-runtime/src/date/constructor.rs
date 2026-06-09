@@ -1,5 +1,7 @@
+use std::collections::HashMap;
+
 use crate::{
-    Function, RuntimeError, Value,
+    Function, PreferredType, RuntimeError, Value,
     date::{
         MS_PER_DAY, MS_PER_HOUR, MS_PER_MINUTE, MS_PER_SECOND,
         iso::days_from_civil,
@@ -7,7 +9,7 @@ use crate::{
             current_time_ms, define_date_value, optional_number, parse_date_string, time_clip,
         },
     },
-    to_number,
+    to_number, to_number_with_env, to_primitive_with_hint,
 };
 
 pub(crate) fn native_date(
@@ -15,6 +17,7 @@ pub(crate) fn native_date(
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     if !is_construct {
         return Ok(Value::String(super::iso::format_local_string(
@@ -28,7 +31,7 @@ pub(crate) fn native_date(
             message: "Date constructor requires an object receiver".to_owned(),
         });
     };
-    let date_value = construct_date_value(argument_values)?;
+    let date_value = construct_date_value(argument_values, env)?;
     define_date_value(&object, date_value);
     Ok(Value::Object(object))
 }
@@ -53,14 +56,23 @@ pub(crate) fn native_date_utc(argument_values: &[Value]) -> Result<Value, Runtim
     )?)))
 }
 
-fn construct_date_value(argument_values: &[Value]) -> Result<f64, RuntimeError> {
+fn construct_date_value(
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<f64, RuntimeError> {
     if argument_values.is_empty() {
         return Ok(current_time_ms());
     }
     if argument_values.len() == 1 {
         return match &argument_values[0] {
             Value::String(source) => Ok(parse_date_string(source)),
-            value => to_number(value.clone()).map(time_clip),
+            value => {
+                let primitive = to_primitive_with_hint(value.clone(), PreferredType::Default, env)?;
+                match primitive {
+                    Value::String(source) => Ok(parse_date_string(&source)),
+                    value => to_number_with_env(value, env).map(time_clip),
+                }
+            }
         };
     }
     date_utc_from_arguments(argument_values).map(time_clip)

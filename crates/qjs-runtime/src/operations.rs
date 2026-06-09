@@ -82,6 +82,9 @@ pub(crate) fn eval_binary(
         _ => {}
     }
 
+    let left = to_primitive_with_env(left, env)?;
+    let right = to_primitive_with_env(right, env)?;
+
     if matches!(left, Value::BigInt(_)) || matches!(right, Value::BigInt(_)) {
         return eval_bigint_binary(left, op, right);
     }
@@ -275,13 +278,13 @@ fn abstract_eq(
         }
         (
             Value::Object(_) | Value::Function(_) | Value::Array(_),
-            Value::String(_) | Value::Number(_),
+            Value::String(_) | Value::Number(_) | Value::BigInt(_),
         ) => {
             let primitive = to_primitive_with_env(left.clone(), env)?;
             abstract_eq(&primitive, right, env)
         }
         (
-            Value::String(_) | Value::Number(_),
+            Value::String(_) | Value::Number(_) | Value::BigInt(_),
             Value::Object(_) | Value::Function(_) | Value::Array(_),
         ) => {
             let primitive = to_primitive_with_env(right.clone(), env)?;

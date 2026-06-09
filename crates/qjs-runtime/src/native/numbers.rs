@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{Function, NativeFunction, Value, number};
 
 use super::NativeCallResult;
@@ -8,10 +10,11 @@ pub(super) fn call_number_native(
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
+    env: &mut HashMap<String, Value>,
 ) -> NativeCallResult {
     let value = match native {
         NativeFunction::Number => {
-            number::native_number(function, this_value, argument_values, is_construct)?
+            number::native_number(function, this_value, argument_values, is_construct, env)?
         }
         NativeFunction::NumberIsFinite => number::native_number_is_finite(argument_values)?,
         NativeFunction::NumberIsInteger => number::native_number_is_integer(argument_values)?,

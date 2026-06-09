@@ -236,6 +236,9 @@ skip_reason() {
 }
 rust_source_syntax_supported() {
   # Some upstream files use syntax the Rust parser does not support yet.
+  case "$1" in
+    test/built-ins/BigInt/is-a-constructor.js) return 0 ;;
+  esac
   ! grep -Eq 'for[[:space:]]*\([[:space:]]*(var|let|const)[[:space:]]*[\[{][^;)]*[[:space:]]of[[:space:]]|(^|[^[:alnum:]_$])class[[:space:]]' "$TEST262_DIR/$1"
 }
 rust_features_supported() {
@@ -265,6 +268,11 @@ rust_features_supported() {
   case "$rel" in
     test/built-ins/BigInt/prototype/valueOf/cross-realm.js)
       entries="$(drop_feature_entries "$entries" -e 'cross-realm')"
+      ;;
+  esac
+  case "$rel" in
+    test/built-ins/BigInt/is-a-constructor.js)
+      entries="$(drop_feature_entries "$entries" -e 'Reflect.construct' -e 'arrow-function')"
       ;;
   esac
   case "$rel" in

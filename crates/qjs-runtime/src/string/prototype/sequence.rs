@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use crate::{
     ArrayRef, PropertyKey, RuntimeError, Value, call_function, has_property_key, property_value,
-    property_value_key, regexp, symbol, to_js_string, to_js_string_with_env, to_number,
-    to_number_with_env, to_uint32, to_uint32_number,
+    property_value_key, regexp, symbol, to_js_string_with_env, to_number, to_number_with_env,
+    to_uint32, to_uint32_number,
 };
 
 use super::super::indexing::{string_slice_index, string_substring_index, this_string_value};
@@ -15,7 +15,7 @@ pub(crate) fn native_string_prototype_concat(
 ) -> Result<Value, RuntimeError> {
     let mut result = this_string_value(this_value, env)?;
     for value in argument_values.iter().cloned() {
-        result.push_str(&to_js_string(value)?);
+        result.push_str(&to_js_string_with_env(value, env)?);
     }
     Ok(Value::String(result))
 }

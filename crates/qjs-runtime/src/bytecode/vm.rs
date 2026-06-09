@@ -3,10 +3,10 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use qjs_ast::ObjectPropertyKind;
 
 use crate::{
-    ArrayRef, Function, GLOBAL_THIS_BINDING, ObjectRef, Property, RUNTIME_INTRINSIC_NAMES,
-    RuntimeError, Value, array::iterable_values_with_env, call_function, construct_function,
-    function::CompiledUserFunction, initialize_builtins, is_truthy, object, object_prototype,
-    promise, symbol, to_js_string_with_env, to_property_key_value,
+    ArrayRef, Function, GLOBAL_THIS_BINDING, ObjectRef, Property, PropertyKey,
+    RUNTIME_INTRINSIC_NAMES, RuntimeError, Value, array::iterable_values_with_env, call_function,
+    construct_function, function::CompiledUserFunction, initialize_builtins, is_truthy, object,
+    object_prototype, promise, symbol, to_js_string_with_env, to_property_key_value,
 };
 
 use super::ir::{ArrayElementKind, Bytecode, Op};
@@ -86,6 +86,22 @@ impl<'a> Vm<'a> {
             try_stack: Vec::new(),
             pending_throw: None,
             pending_return: None,
+        }
+    }
+
+    fn coerce_property_key(&mut self, value: Value) -> Result<PropertyKey, RuntimeError> {
+        match value {
+            Value::Object(_)
+            | Value::Function(_)
+            | Value::Array(_)
+            | Value::Map(_)
+            | Value::Set(_) => {
+                let mut key_env = self.current_env();
+                let key = to_property_key_value(value, &mut key_env)?;
+                self.apply_env(key_env);
+                Ok(key)
+            }
+            value => to_property_key_value(value, &mut self.globals),
         }
     }
 
@@ -411,7 +427,8 @@ impl<'a> Vm<'a> {
     }
 
     fn get_prop(&mut self) -> Result<(), RuntimeError> {
-        let key = to_property_key_value(self.pop()?, &mut self.globals)?;
+        let key_value = self.pop()?;
+        let key = self.coerce_property_key(key_value)?;
         let object = self.pop()?;
         let mut env = self.current_env();
         let value = get_property_key(object, &key, &mut env)?;
@@ -422,7 +439,8 @@ impl<'a> Vm<'a> {
 
     fn set_prop(&mut self, is_strict: bool) -> Result<(), RuntimeError> {
         let value = self.pop()?;
-        let key = to_property_key_value(self.pop()?, &mut self.globals)?;
+        let key_value = self.pop()?;
+        let key = self.coerce_property_key(key_value)?;
         let object = self.pop()?;
         if self.symbol_primitive_set_fails(&object, &key) {
             if is_strict {
@@ -469,7 +487,8 @@ impl<'a> Vm<'a> {
     }
 
     fn delete_prop(&mut self) -> Result<(), RuntimeError> {
-        let key = to_property_key_value(self.pop()?, &mut self.globals)?;
+        let key_value = self.pop()?;
+        let key = self.coerce_property_key(key_value)?;
         let object = self.pop()?;
         self.stack.push(delete_property_key(object, &key)?);
         Ok(())
@@ -489,7 +508,8 @@ impl<'a> Vm<'a> {
 
     fn call_method(&mut self, argc: usize) -> Result<(), RuntimeError> {
         let arguments = self.pop_arguments(argc)?;
-        let key = to_property_key_value(self.pop()?, &mut self.globals)?;
+        let key_value = self.pop()?;
+        let key = self.coerce_property_key(key_value)?;
         let this_value = self.pop()?;
         let mut getter_env = self.current_env();
         let callee = get_property_key(this_value.clone(), &key, &mut getter_env)?;

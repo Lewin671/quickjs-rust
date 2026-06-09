@@ -4,6 +4,7 @@ use num_traits::ToPrimitive;
 
 use crate::{
     Function, ObjectRef, Property, RuntimeError, Value, function_prototype, to_int32, to_number,
+    to_number_with_env,
 };
 
 use super::{NUMBER_DATA_PROPERTY, formatting::number_to_js_string};
@@ -13,6 +14,7 @@ pub(crate) fn native_number(
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let number = match argument_values.first() {
         Some(Value::BigInt(value)) => value.to_f64().unwrap_or_else(|| {
@@ -22,7 +24,7 @@ pub(crate) fn native_number(
                 f64::INFINITY
             }
         }),
-        Some(value) => to_number(value.clone())?,
+        Some(value) => to_number_with_env(value.clone(), env)?,
         None => 0.0,
     };
     if !is_construct {

@@ -39,6 +39,10 @@ fn evaluates_bigint_literals_and_constructor() {
     assert_syntax_error("BigInt('0x');");
     assert_syntax_error("BigInt('0b');");
     assert_syntax_error("BigInt('0o');");
+    assert_eval(
+        "function isConstructor(f) { try { Reflect.construct(function(){}, [], f); } catch (e) { return false; } return true; } isConstructor(BigInt);",
+        Value::Boolean(true),
+    );
 }
 
 #[test]
@@ -63,6 +67,7 @@ fn evaluates_bigint_arithmetic_and_equality() {
     );
     assert_eval("1n === 1n;", Value::Boolean(true));
     assert_eval("1n == 1;", Value::Boolean(true));
+    assert_eval("Object(2n) * 3n;", Value::BigInt(6.into()));
     assert_eval("1n === 1;", Value::Boolean(false));
     assert_type_error("1n + 1;");
 }
@@ -94,6 +99,15 @@ fn evaluates_bigint_statics_and_prototype_methods() {
     assert_eval(
         "Object.prototype.toString.call(Object(1n));",
         Value::String("[object BigInt]".to_owned()),
+    );
+    assert_eval("Object(1n) == 1n;", Value::Boolean(true));
+    assert_eval(
+        "let gets = 0; let BigIntToString = BigInt.prototype.toString; Object.defineProperty(BigInt.prototype, 'toString', { get: function() { gets = gets + 1; return BigIntToString; }, configurable: true }); ({ '1': 1 })[Object(1n)]; gets;",
+        Value::Number(1.0),
+    );
+    assert_eval(
+        "let BigIntValueOf = BigInt.prototype.valueOf; Object.defineProperty(BigInt.prototype, 'toString', { value: undefined, configurable: true }); Object.defineProperty(BigInt.prototype, 'valueOf', { get: function() { return function() { return BigIntValueOf.call(this) * 2n; }; }, configurable: true }); ''.concat(Object(1n));",
+        Value::String("2".to_owned()),
     );
     assert_eval(
         "let d = Object.getOwnPropertyDescriptor(BigInt.prototype, Symbol.toStringTag); d.value + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;",
