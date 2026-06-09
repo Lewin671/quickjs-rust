@@ -116,6 +116,30 @@ fn evaluates_array_sequence_builtins() {
     );
     assert_eq!(
         eval(
+            "let calls = 0; let lengthArg = -1; let instance = []; function C(length) { calls = calls + 1; lengthArg = length; return instance; } let a = []; a.constructor = {}; a.constructor[Symbol.species] = C; let out = a.concat(); calls + ':' + lengthArg + ':' + (out === instance);"
+        ),
+        Ok(Value::String("1:0:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let a = []; a.constructor = {}; a.constructor[Symbol.species] = parseInt; let caught = false; try { a.concat(); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "function C() { Object.preventExtensions(this); } let a = []; a.constructor = {}; a.constructor[Symbol.species] = C; let caught = false; try { a.concat(1); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "function C() { Object.defineProperty(this, '0', { set: function() {}, configurable: false }); } let a = []; a.constructor = {}; a.constructor[Symbol.species] = C; let caught = false; try { a.concat(1); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
             "Array.prototype[1] = 1; let x = [0]; x.length = 2; let out = x.concat(); out[0] + ':' + out[1] + ':' + out.hasOwnProperty('1');"
         ),
         Ok(Value::String("0:1:true".to_owned()))

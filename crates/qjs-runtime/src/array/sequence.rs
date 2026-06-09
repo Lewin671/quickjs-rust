@@ -9,7 +9,10 @@ use super::indexing::{array_at_index, array_slice_end, array_slice_start};
 use super::splice::{splice_start_with_env, to_spliced_delete_count};
 use super::{
     array_like::{array_like_length, array_like_receiver},
-    species::validate_array_species_constructor,
+    species::{
+        array_species_create, create_data_property_or_throw, set_array_like_length,
+        validate_array_species_constructor,
+    },
 };
 
 const MAX_ARRAY_LENGTH: usize = u32::MAX as usize;
@@ -21,15 +24,15 @@ pub(crate) fn native_array_prototype_concat(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let receiver = array_like_receiver(this_value, env);
-    validate_array_species_constructor(receiver.clone(), "concat", env)?;
+    let result = array_species_create(receiver.clone(), 0, "concat", env)?;
 
-    let mut result = Vec::new();
-    let mut holes = Vec::new();
-    concat_array_item(&mut result, &mut holes, receiver, env)?;
+    let mut next_index = 0;
+    next_index = concat_array_item(result.clone(), next_index, receiver, env)?;
     for value in argument_values.iter().cloned() {
-        concat_array_item(&mut result, &mut holes, value, env)?;
+        next_index = concat_array_item(result.clone(), next_index, value, env)?;
     }
-    Ok(Value::Array(ArrayRef::new_sparse(result, holes)))
+    set_array_like_length(result.clone(), next_index)?;
+    Ok(result)
 }
 
 pub(crate) fn native_array_prototype_slice(
@@ -197,16 +200,16 @@ pub(crate) fn native_array_prototype_with(
 }
 
 fn concat_array_item(
-    result: &mut Vec<Value>,
-    holes: &mut Vec<usize>,
+    result: Value,
+    next_index: usize,
     value: Value,
     env: &mut HashMap<String, Value>,
-) -> Result<(), RuntimeError> {
+) -> Result<usize, RuntimeError> {
     if is_concat_spreadable(value.clone(), env)? {
-        return concat_spread_array(result, holes, value, env);
+        return concat_spread_array(result, next_index, value, env);
     }
-    result.push(value);
-    Ok(())
+    create_data_property_or_throw(result, next_index.to_string(), value)?;
+    Ok(next_index + 1)
 }
 
 fn is_concat_spreadable(
@@ -239,44 +242,29 @@ fn is_object_like(value: &Value) -> bool {
 }
 
 fn concat_spread_array(
-    result: &mut Vec<Value>,
-    holes: &mut Vec<usize>,
+    result: Value,
+    next_index: usize,
     value: Value,
     env: &mut HashMap<String, Value>,
-) -> Result<(), RuntimeError> {
+) -> Result<usize, RuntimeError> {
     let length = to_length_with_env(property_value(value.clone(), "length", env)?, env)?;
-    let new_length = result
-        .len()
+    let new_length = next_index
         .checked_add(length)
         .ok_or_else(concat_length_error)?;
     if new_length > MAX_SAFE_LENGTH {
         return Err(concat_length_error());
     }
-    if let Value::Object(object) = &value
-        && object_has_no_index_properties_below(object, length)
-    {
-        if new_length > MAX_ARRAY_LENGTH {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "RangeError: invalid array length".to_owned(),
-            });
-        }
-        let start = result.len();
-        result.extend(std::iter::repeat_n(Value::Undefined, length));
-        holes.extend(start..start + length);
-        return Ok(());
-    }
     for index in 0..length {
         let key = index.to_string();
-        let target_index = result.len();
         if has_property(value.clone(), env, &key)? {
-            result.push(property_value(value.clone(), &key, env)?);
-        } else {
-            result.push(Value::Undefined);
-            holes.push(target_index);
+            create_data_property_or_throw(
+                result.clone(),
+                (next_index + index).to_string(),
+                property_value(value.clone(), &key, env)?,
+            )?;
         }
     }
-    Ok(())
+    Ok(new_length)
 }
 
 fn concat_length_error() -> RuntimeError {
@@ -284,25 +272,4 @@ fn concat_length_error() -> RuntimeError {
         thrown: None,
         message: "TypeError: invalid array length".to_owned(),
     }
-}
-
-fn object_has_no_index_properties_below(object: &crate::ObjectRef, length: usize) -> bool {
-    let mut current = Some(object.clone());
-    while let Some(object) = current {
-        if object
-            .own_property_names()
-            .into_iter()
-            .any(|key| is_array_index_below(&key, length))
-        {
-            return false;
-        }
-        current = object.prototype();
-    }
-    true
-}
-
-fn is_array_index_below(key: &str, length: usize) -> bool {
-    key.parse::<usize>()
-        .ok()
-        .is_some_and(|index| index < length && index.to_string() == key)
 }
