@@ -109,6 +109,39 @@ fn parses_function_declaration_and_call() {
 }
 
 #[test]
+fn parses_default_parameters() {
+    let script =
+        parse_script("function pick(a, b = 2) { return b; }").expect("source should parse");
+    let [Stmt::FunctionDecl { params, .. }] = script.body.as_slice() else {
+        panic!("expected function declaration");
+    };
+    assert_eq!(params.positional, ["a", "b"]);
+    assert_eq!(params.length(), 1);
+    assert!(params.default_at(0).is_none());
+    assert!(matches!(
+        params.default_at(1),
+        Some(Expr::Literal(Literal::Number { raw, .. })) if raw == "2"
+    ));
+
+    let script = parse_script("let pick = (a, b = a + 1,) => b;").expect("source should parse");
+    let [Stmt::VarDecl { declarations, .. }] = script.body.as_slice() else {
+        panic!("expected arrow function declaration");
+    };
+    let Some(Expr::Function { params, .. }) = &declarations[0].init else {
+        panic!("expected arrow function initializer");
+    };
+    assert_eq!(params.positional, ["a", "b"]);
+    assert_eq!(params.length(), 1);
+    assert!(params.default_at(1).is_some());
+}
+
+#[test]
+fn rejects_strict_function_body_with_default_parameters() {
+    assert!(parse_script("let pick = (value = 1) => { 'use strict'; return value; };").is_err());
+    assert!(parse_script("function pick(value = 1) { 'use strict'; return value; }").is_err());
+}
+
+#[test]
 fn parses_rest_parameters() {
     let script = parse_script("function collect(first, ...rest) { return rest; }")
         .expect("source should parse");

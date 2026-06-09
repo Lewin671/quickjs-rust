@@ -225,7 +225,10 @@ fn arguments_object(
 }
 
 fn mapped_argument_parameter(function: &Function, index: usize) -> Option<&str> {
-    if function.is_strict || function.params.rest.is_some() {
+    if function.is_strict
+        || function.params.rest.is_some()
+        || function.params.has_parameter_expressions()
+    {
         return None;
     }
     let parameter_name = function

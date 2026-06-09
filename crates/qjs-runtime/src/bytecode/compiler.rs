@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use qjs_ast::{ForInLeft, ForInit, FunctionParams, Script, Stmt, VarKind};
+use qjs_ast::{BinaryOp, ForInLeft, ForInit, FunctionParams, Script, Stmt, VarKind};
 
 use crate::{RuntimeError, Value, function::is_strict_function_body};
 
@@ -90,6 +90,7 @@ impl Compiler {
         for param in params.names() {
             self.local_slot(&param, true);
         }
+        self.compile_parameter_defaults(params)?;
         self.collect_hoisted_locals(body);
         self.compile_hoisted_function_decls(body)?;
         for stmt in body {
@@ -98,6 +99,31 @@ impl Compiler {
         self.emit_load_undefined();
         self.code.push(Op::Return);
         Ok(Bytecode::new(self.constants, self.locals, self.code))
+    }
+
+    fn compile_parameter_defaults(&mut self, params: &FunctionParams) -> Result<(), RuntimeError> {
+        for (index, name) in params.positional.iter().enumerate() {
+            let Some(default) = params.default_at(index) else {
+                continue;
+            };
+            let slot = self
+                .resolve_local_slot(name)
+                .expect("parameter slot should be declared before defaults");
+            self.emit(Op::LoadLocal(slot));
+            self.emit_load_undefined();
+            self.emit(Op::Binary(BinaryOp::StrictEq));
+            let skip_default = self.emit(Op::JumpIfFalse(usize::MAX));
+            self.emit(Op::Pop);
+            self.compile_expr(default)?;
+            self.emit(Op::StoreLocal(slot));
+            let done = self.emit(Op::Jump(usize::MAX));
+            let skip_target = self.code.len();
+            self.patch_jump(skip_default, skip_target);
+            self.emit(Op::Pop);
+            let done_target = self.code.len();
+            self.patch_jump(done, done_target);
+        }
+        Ok(())
     }
 
     fn collect_hoisted_locals(&mut self, body: &[Stmt]) {

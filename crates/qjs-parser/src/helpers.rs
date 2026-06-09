@@ -1,4 +1,4 @@
-use qjs_ast::{AssignmentTarget, Expr, Stmt, VarKind};
+use qjs_ast::{AssignmentTarget, Expr, Literal, Stmt, VarKind};
 use qjs_lexer::TokenKind;
 
 use crate::ParseError;
@@ -89,4 +89,16 @@ pub(crate) fn stmt_end(stmt: &Stmt) -> usize {
         | Stmt::VarDecl { span, .. } => span.end,
         Stmt::Empty => 0,
     }
+}
+
+pub(crate) fn body_has_strict_directive(body: &[Stmt]) -> bool {
+    for stmt in body {
+        let Stmt::Expr(Expr::Literal(Literal::String { value, .. })) = stmt else {
+            return false;
+        };
+        if value == "use strict" {
+            return true;
+        }
+    }
+    false
 }

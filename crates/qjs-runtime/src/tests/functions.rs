@@ -141,9 +141,35 @@ fn evaluates_function_declarations_and_calls() {
         Ok(Value::Number(1.0))
     );
     assert_eq!(
+        eval("function pick(a, b = 4) { return a + b; } pick(3);"),
+        Ok(Value::Number(7.0))
+    );
+    assert_eq!(
+        eval("function pick(a, b = 4) { return a + b; } pick(3, 5);"),
+        Ok(Value::Number(8.0))
+    );
+    assert_eq!(
+        eval("function pick(a, b = a + 1) { return b; } pick(3);"),
+        Ok(Value::Number(4.0))
+    );
+    assert_eq!(
+        eval("function pick(a, b = 4) {} pick.length;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval("function pick(a = 1) { arguments[0] = 9; return a; } pick(undefined);"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
         eval("((first, ...rest) => first + rest[1])('a', 'b', 'c');"),
         Ok(Value::String("ac".to_owned()))
     );
+    assert_eq!(eval("((a, b = a + 1,) => b)(3);"), Ok(Value::Number(4.0)));
+    assert_eq!(
+        eval("((a, b = 4) => a + b)(3, undefined);"),
+        Ok(Value::Number(7.0))
+    );
+    assert_eq!(eval("((a, b = 4) => a + b)(3, 5);"), Ok(Value::Number(8.0)));
     assert_eq!(
         eval("Function.prototype.toString.length;"),
         Ok(Value::Number(0.0))

@@ -1,6 +1,7 @@
 use qjs_ast::{ArrayElement, Expr, FunctionParams, Span, Stmt};
 use qjs_lexer::{Token, TokenKind};
 
+use crate::helpers::body_has_strict_directive;
 use crate::{ParseError, Parser};
 
 impl Parser {
@@ -26,6 +27,7 @@ impl Parser {
             .span
             .start;
         let body = self.block_body()?;
+        reject_strict_body_with_non_simple_params(&params, &body, body_start)?;
         let end = self
             .tokens
             .get(self.cursor.saturating_sub(1))
@@ -61,7 +63,13 @@ impl Parser {
         };
 
         let params = self.function_parameters()?;
+        let body_start = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .start;
         let body = self.block_body()?;
+        reject_strict_body_with_non_simple_params(&params, &body, body_start)?;
         let end = self
             .tokens
             .get(self.cursor.saturating_sub(1))
@@ -102,6 +110,7 @@ impl Parser {
                 .span
                 .start;
             let body = self.block_body()?;
+            reject_strict_body_with_non_simple_params(&params, &body, body_start)?;
             let end = self
                 .tokens
                 .get(self.cursor.saturating_sub(1))
@@ -185,6 +194,7 @@ impl Parser {
     pub(crate) fn function_parameters(&mut self) -> Result<FunctionParams, ParseError> {
         self.expect(&TokenKind::LeftParen)?;
         let mut positional = Vec::new();
+        let mut defaults = Vec::new();
         let mut rest = None;
         if !self.at(&TokenKind::RightParen) {
             loop {
@@ -207,6 +217,12 @@ impl Parser {
                     });
                 };
                 positional.push(param);
+                let default = if self.match_kind(&TokenKind::Equal) {
+                    Some(self.assignment()?)
+                } else {
+                    None
+                };
+                defaults.push(default);
                 if !self.match_kind(&TokenKind::Comma) {
                     break;
                 }
@@ -216,6 +232,20 @@ impl Parser {
             }
         }
         self.expect(&TokenKind::RightParen)?;
-        Ok(FunctionParams { positional, rest })
+        Ok(FunctionParams::new(positional, defaults, rest))
     }
+}
+
+fn reject_strict_body_with_non_simple_params(
+    params: &FunctionParams,
+    body: &[Stmt],
+    span_start: usize,
+) -> Result<(), ParseError> {
+    if params.has_parameter_expressions() && body_has_strict_directive(body) {
+        return Err(ParseError {
+            message: "strict directive not allowed with non-simple parameters".to_owned(),
+            span: Span::new(span_start, span_start),
+        });
+    }
+    Ok(())
 }

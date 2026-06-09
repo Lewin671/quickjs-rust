@@ -1,7 +1,7 @@
 use qjs_ast::{AssignmentOp, Expr, FunctionParams, Span, Stmt};
 use qjs_lexer::TokenKind;
 
-use crate::helpers::assignment_target;
+use crate::helpers::{assignment_target, body_has_strict_directive};
 use crate::{ParseError, Parser};
 
 impl Parser {
@@ -69,6 +69,11 @@ impl Parser {
             return Ok(None);
         };
         self.expect(&TokenKind::Arrow)?;
+        let body_start = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .start;
         let body = if self.at(&TokenKind::LeftBrace) {
             self.block_body()?
         } else {
@@ -79,6 +84,12 @@ impl Parser {
                 span,
             }]
         };
+        if params.has_parameter_expressions() && body_has_strict_directive(&body) {
+            return Err(ParseError {
+                message: "strict directive not allowed with non-simple parameters".to_owned(),
+                span: Span::new(body_start, body_start),
+            });
+        }
         let end = self
             .tokens
             .get(self.cursor.saturating_sub(1))
@@ -131,6 +142,7 @@ impl Parser {
         let start_cursor = self.cursor;
         self.expect(&TokenKind::LeftParen)?;
         let mut positional = Vec::new();
+        let mut defaults = Vec::new();
         let mut rest = None;
         if !self.at(&TokenKind::RightParen) {
             loop {
@@ -151,6 +163,12 @@ impl Parser {
                     return Ok(None);
                 };
                 positional.push((param, span));
+                let default = if self.match_kind(&TokenKind::Equal) {
+                    Some(self.assignment()?)
+                } else {
+                    None
+                };
+                defaults.push(default);
                 if !self.match_kind(&TokenKind::Comma) {
                     break;
                 }
@@ -191,10 +209,11 @@ impl Parser {
                 span,
             });
         }
-        Ok(Some(FunctionParams {
-            positional: positional.into_iter().map(|(name, _)| name).collect(),
-            rest: rest.map(|(name, _)| name),
-        }))
+        Ok(Some(FunctionParams::new(
+            positional.into_iter().map(|(name, _)| name).collect(),
+            defaults,
+            rest.map(|(name, _)| name),
+        )))
     }
 
     fn reject_line_terminator_before_arrow(&self, previous_span: Span) -> Result<(), ParseError> {

@@ -18,6 +18,8 @@ pub use operator::{BinaryOp, UnaryOp, UpdateOp};
 pub struct FunctionParams {
     /// Positional parameter names.
     pub positional: Vec<String>,
+    /// Default expressions for positional parameters, stored only for non-simple parameter lists.
+    pub defaults: Option<Box<Vec<Option<Expr>>>>,
     /// Optional rest parameter name.
     pub rest: Option<String>,
 }
@@ -28,7 +30,23 @@ impl FunctionParams {
     pub fn positional(positional: Vec<String>) -> Self {
         Self {
             positional,
+            defaults: None,
             rest: None,
+        }
+    }
+
+    /// Creates a parameter list.
+    #[must_use]
+    pub fn new(positional: Vec<String>, defaults: Vec<Option<Expr>>, rest: Option<String>) -> Self {
+        debug_assert_eq!(positional.len(), defaults.len());
+        let defaults = defaults
+            .iter()
+            .any(Option::is_some)
+            .then(|| Box::new(defaults));
+        Self {
+            positional,
+            defaults,
+            rest,
         }
     }
 
@@ -57,7 +75,27 @@ impl FunctionParams {
     /// Returns the JavaScript function length.
     #[must_use]
     pub fn length(&self) -> usize {
-        self.positional.len()
+        self.defaults
+            .as_ref()
+            .and_then(|defaults| defaults.iter().position(Option::is_some))
+            .unwrap_or(self.positional.len())
+    }
+
+    /// Returns true when any positional parameter has a default initializer.
+    #[must_use]
+    pub fn has_parameter_expressions(&self) -> bool {
+        self.defaults
+            .as_ref()
+            .is_some_and(|defaults| defaults.iter().any(Option::is_some))
+    }
+
+    /// Returns the default initializer for a positional parameter.
+    #[must_use]
+    pub fn default_at(&self, index: usize) -> Option<&Expr> {
+        self.defaults
+            .as_ref()
+            .and_then(|defaults| defaults.get(index))
+            .and_then(Option::as_ref)
     }
 }
 
