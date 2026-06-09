@@ -39,9 +39,10 @@ especially to prove there are no remaining gaps.
 The default recommendation strategy is quickwins greedy: prefer reviewable
 engine-gap batches, then small harness-only batches that include at least one
 case without broad-feature hints and may only need metadata confirmation, and
-de-prioritize areas whose paths or skip metadata point at broad missing features
+strongly de-prioritize areas whose paths or skip metadata point at broad missing features
 such as async, destructuring, class, yield, proxy, realm, species, resizable
-buffers, or Annex B global-code semantics. Use --strategy fast for the older
+buffers, or Annex B global-code semantics. When all available areas are hard,
+quickwins prefers lower weighted hard hints before larger engine-gap counts. Use --strategy fast for the older
 small-batch-first behavior or --strategy largest for largest-gap-first.
 For default global probes, the script exact-checks the top quickwins candidate
 areas before printing a recommendation, so sampled areas that expand into broad
@@ -338,42 +339,56 @@ write_recommendations() {
   local gaps_file="$1"
   local recommendations_file="$2"
   awk -F'\t' -v strategy="$RECOMMEND_STRATEGY" -v batch_cap="$RECOMMEND_BATCH_CAP" -v test262_dir="$TEST262_DIR" '
-    function metadata_has_hard_hint(path, file, line, hard) {
-      if (path in metadata_hard) {
-        return metadata_hard[path]
+    function metadata_hard_hint_weight(path, file, line, weight) {
+      if (path in metadata_weight) {
+        return metadata_weight[path]
       }
       file = test262_dir "/" path
-      hard = 0
+      weight = 0
       while ((getline line < file) > 0) {
         if (line ~ /^(---\*\/|\*\/)$/) {
           break
         }
-        if (line ~ /(features|flags|includes):/ && line ~ /(async|class|destructur|dstr|for-await-of|yield|Proxy|proxy|realm|Realm|species|resizable-arraybuffer|growable-sharedarraybuffer)/) {
-          hard = 1
-          break
+        if (line ~ /(features|flags|includes):/) {
+          if (line ~ /(resizable-arraybuffer|growable-sharedarraybuffer)/ && weight < 5) {
+            weight = 5
+          }
+          if (line ~ /(async|for-await-of)/ && weight < 4) {
+            weight = 4
+          }
+          if (line ~ /(class|destructur|dstr|yield)/ && weight < 3) {
+            weight = 3
+          }
+          if (line ~ /(Proxy|proxy|realm|Realm|species)/ && weight < 2) {
+            weight = 2
+          }
         }
       }
       close(file)
-      metadata_hard[path] = hard
-      return hard
+      metadata_weight[path] = weight
+      return weight
     }
-    function has_hard_hint(path, skip, area) {
+    function hard_hint_weight(path, skip, area, weight) {
       if (area ~ /annexB\/language\/global-code$/) {
-        return 1
+        return 5
       }
-      if (metadata_has_hard_hint(path)) {
-        return 1
+      weight = metadata_hard_hint_weight(path)
+      if (skip ~ /async/ && weight < 4) {
+        weight = 4
       }
-      if (skip ~ /async/) {
-        return 1
+      if (path ~ /(resizable-buffer|growable-buffer)/ && weight < 5) {
+        weight = 5
       }
-      if (path ~ /(^|\/)(class|dstr|for-await-of|yield)(\/|$)/) {
-        return 1
+      if (path ~ /(^|\/)(for-await-of)(\/|$)/ && weight < 4) {
+        weight = 4
       }
-      if (path ~ /(destructur|proxy|Proxy|realm|Realm|species|superclass|resizable-buffer|growable-buffer)/) {
-        return 1
+      if (path ~ /(^|\/)(class|dstr|yield)(\/|$)/ && weight < 3) {
+        weight = 3
       }
-      return 0
+      if (path ~ /(destructur|proxy|Proxy|realm|Realm|species|superclass)/ && weight < 2) {
+        weight = 2
+      }
+      return weight
     }
     {
       area = $4
@@ -385,8 +400,10 @@ write_recommendations() {
       } else if ($2 == "skipped") {
         skipped[area]++
       }
-      if (has_hard_hint($1, $3, area)) {
+      hard_weight = hard_hint_weight($1, $3, area)
+      if (hard_weight > 0) {
         hard[area]++
+        hard_cost[area] += hard_weight
       }
     }
     END {
@@ -394,6 +411,7 @@ write_recommendations() {
         engine = fail[area] + timeout[area]
         harness = skipped[area] + 0
         hard_hints = hard[area] + 0
+        hard_penalty = hard_cost[area] + 0
         if (strategy == "largest") {
           score = (engine * 1000000) + (total[area] * 1000) - harness
         } else if (strategy == "quickwins") {
@@ -407,22 +425,22 @@ write_recommendations() {
           } else if (engine == 0 && hard_hints == 0) {
             score = 700000000 + (total[area] * 1000) - harness
           } else if (engine == 0 && total[area] <= batch_cap && hard_hints < total[area]) {
-            score = 650000000 + (total[area] * 1000) - (hard_hints * 10000) - harness
+            score = 650000000 + (total[area] * 1000) - (hard_penalty * 10000) - harness
           } else if (engine == 0 && hard_hints < total[area]) {
             over = total[area] - batch_cap
-            score = 625000000 - (over * 1000000) + total[area] - (hard_hints * 10000) - harness
+            score = 625000000 - (over * 1000000) + total[area] - (hard_penalty * 10000) - harness
           } else if (engine == 0 && total[area] <= batch_cap) {
-            score = 400000000 + (total[area] * 1000) - (hard_hints * 10000) - harness
+            score = 400000000 + (total[area] * 1000) - (hard_penalty * 10000) - harness
           } else if (engine == 0) {
             over = total[area] - batch_cap
-            score = 300000000 - (over * 1000000) + total[area] - (hard_hints * 10000) - harness
+            score = 300000000 - (over * 1000000) + total[area] - (hard_penalty * 10000) - harness
           } else if (engine > 0 && engine <= batch_cap) {
-            score = 600000000 + (engine * 1000000) + (total[area] * 1000) - (hard_hints * 10000) - harness
+            score = 600000000 - (hard_penalty * 10000000) - (harness * 100000) + (engine * 1000000) + total[area]
           } else if (engine > 0) {
             over = engine - batch_cap
-            score = 500000000 - (over * 1000000) + (engine * 1000) + total[area] - (hard_hints * 10000) - harness
+            score = 500000000 - (hard_penalty * 10000000) - (over * 1000000) - (harness * 100000) + (engine * 1000) + total[area]
           } else {
-            score = (total[area] * 1000) - (hard_hints * 10000) - harness
+            score = (total[area] * 1000) - (hard_penalty * 10000) - harness
           }
         } else if (engine > 0 && engine <= batch_cap) {
           score = 1000000000 + (engine * 1000000) + (total[area] * 1000) - harness

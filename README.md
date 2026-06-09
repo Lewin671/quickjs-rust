@@ -133,7 +133,8 @@ prints a ranked queue so agents can keep moving without rerunning the global
 probe after every small fix. It prefers small reviewable or mixed metadata
 batches and de-prioritizes broad-feature signals such as async, destructuring,
 class, proxy, realm, species, resizable buffers, or Annex B global-code
-semantics. Use `--exact --all` for final full-range confirmation. Stress
+semantics, with broader hints weighted lower than narrower ones. Use
+`--exact --all` for final full-range confirmation. Stress
 timeouts are reported separately by default; pass `--include-timeouts` when
 performance parity is the task.
 `./scripts/test262-subset.sh` runs only curated
