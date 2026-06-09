@@ -1,168 +1,125 @@
 # quickjs-rust
 
-A Rust-native JavaScript engine aiming for QuickJS-class embeddability,
-correctness, and performance without binding to the C runtime.
+[![CI](https://github.com/Lewin671/quickjs-rust/actions/workflows/ci.yml/badge.svg)](https://github.com/Lewin671/quickjs-rust/actions/workflows/ci.yml)
+[![Test262 Coverage](https://github.com/Lewin671/quickjs-rust/actions/workflows/test262-coverage.yml/badge.svg)](https://github.com/Lewin671/quickjs-rust/actions/workflows/test262-coverage.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-stable-orange.svg)](rust-toolchain.toml)
 
-`quickjs-rust` is a from-scratch JavaScript engine written in safe Rust. It uses
-QuickJS-NG as a behavioral reference, but the goal is not to wrap, translate, or
-clone QuickJS. The goal is to build a mature embeddable runtime with Rust
-ownership, modular internals, span-preserving diagnostics, and conformance-driven
-development from the beginning.
+**A JavaScript engine written from scratch in safe Rust.**
 
-The project is still early, but it is not a demo. The repository already has a
-working engine pipeline:
+`quickjs-rust` is not a binding, wrapper, or translation of QuickJS. It is a
+Rust-native lexer, parser, bytecode compiler, and virtual machine that uses
+[QuickJS-NG](https://github.com/quickjs-ng/quickjs) purely as a behavioral
+reference, with the long-term goal of QuickJS-class embeddability,
+correctness, and performance — without a C runtime underneath.
 
 ```text
-source text
-    |
-    v
-lexer -> parser -> AST -> bytecode compiler -> bytecode VM -> CLI / tests
+source text → lexer → parser → AST → bytecode compiler → bytecode VM → CLI / tests
 ```
 
-That pipeline is being expanded vertically: syntax, AST representation,
-bytecode lowering, runtime semantics, builtins, QuickJS comparison fixtures, and
-curated Test262 coverage move together so each feature can be reviewed and
-verified as engine behavior rather than isolated parser or runtime shortcuts.
+## Highlights
 
-## Why This Exists
+- **100% safe Rust.** `unsafe` is forbidden across the entire workspace.
+- **Conformance-driven.** 18,252 official [Test262](https://github.com/tc39/test262)
+  cases pass today (June 2026, of the 42,672 in the comparison configuration),
+  measured per commit in CI and tracked as a burndown trend in
+  [`docs/conformance/burndown.jsonl`](docs/conformance/burndown.jsonl).
+- **Differential testing.** Behavior is continuously compared against a pinned
+  QuickJS-NG build, and an automated gap finder ranks the next areas to fix.
+- **Diagnostics-first design.** Byte-offset source spans are preserved from the
+  lexer upward, and malformed input always produces structured errors — the
+  engine never panics on bad JavaScript.
+- **Small, reviewable crates.** AST, lexer, parser, runtime, and CLI live in
+  separate crates with strict boundaries and enforced file-size limits.
 
-QuickJS and QuickJS-NG prove that a compact, embeddable JavaScript engine can be
-practical. `quickjs-rust` takes that target seriously while choosing a different
-implementation foundation:
+## Quick Start
 
-- Safe Rust instead of C runtime ownership and memory management.
-- Small crate boundaries for AST, lexer, parser, runtime, and CLI layers.
-- Source spans and structured errors preserved from the lexer upward.
-- A bytecode VM architecture that can grow into a production runtime.
-- QuickJS-NG comparisons and Test262-derived cases as regular development
-  inputs, not late-stage afterthoughts.
+Install Rust with [`rustup`](https://rustup.rs), then:
 
-The long-term bar is a real embeddable JavaScript engine: small enough to reason
-about, strict enough to test, and ergonomic enough for Rust applications to
-embed directly.
+```sh
+git clone --recurse-submodules https://github.com/Lewin671/quickjs-rust.git
+cd quickjs-rust
+./scripts/bootstrap.sh   # initializes submodules if you forgot --recurse-submodules
+```
+
+Run JavaScript through the CLI:
+
+```sh
+$ cargo run -p qjs-cli -- -e 'const fib = (n) => n < 2 ? n : fib(n - 1) + fib(n - 2); fib(10);'
+Number(55.0)
+
+$ cargo run -p qjs-cli -- -e 'const greet = (name) => `Hello, ${name}!`; greet("Rust");'
+String("Hello, Rust!")
+
+$ cargo run -p qjs-cli -- -e '[1, 2, 3, 4].filter(n => n % 2 === 0).map(n => n * 10).join("-");'
+String("20-40")
+```
+
+Run the full local verification suite (format, lints, tests, size guards):
+
+```sh
+./scripts/check.sh
+```
 
 ## Current Status
 
-The engine currently supports a focused JavaScript subset across the full
-pipeline. It can tokenize source text, parse supported syntax into shared AST
-types, compile AST nodes into runtime bytecode, execute selected semantics in
-the VM, and expose that behavior through a thin command-line wrapper.
+The engine executes a substantial JavaScript subset end to end — every
+supported feature flows through the real pipeline (lexer → parser → bytecode →
+VM), never through parser-only or runtime-only shortcuts.
 
-It is not yet a drop-in replacement for QuickJS or QuickJS-NG. Conformance work
-is intentionally incremental: unsupported syntax and runtime behavior are added
-with focused tests, QuickJS comparison fixtures where useful, and curated
-Test262-derived cases when the harness can run them deterministically.
+**Working today:** closures and arrow functions, template literals,
+`for`/`for...of`/`while` loops, `try`/`catch` with real error types, regular
+expressions, and a growing standard library (`Object`, `Array` iteration
+methods, `String`, `Math`, `JSON`, ...).
 
-## Try It
-
-Install Rust 1.85 or newer with `rustup`, then initialize the repository:
-
-```sh
-./scripts/bootstrap.sh
-```
-
-Run a small JavaScript expression through the CLI:
-
-```sh
-cargo run -p qjs-cli -- -e "1 + 2;"
-```
-
-Run the standard local verification suite:
-
-```sh
-./scripts/check.sh
-```
-
-For a fresh clone, either clone submodules up front:
-
-```sh
-git clone --recurse-submodules git@github.com:Lewin671/quickjs-rust.git
-```
-
-or run `./scripts/bootstrap.sh` after cloning. The bootstrap script initializes
-the top-level third-party references and fetches Cargo dependencies.
+**Not yet:** classes, `async`/`await`, generators, destructuring patterns, and
+modules. Conformance work is intentionally incremental; the Test262 burndown
+above is the honest scoreboard.
 
 ## Workspace
 
-- `crates/qjs-ast`: shared syntax tree, statement/expression nodes, and source
-  span types.
-- `crates/qjs-lexer`: tokenizer that emits span-preserving tokens.
-- `crates/qjs-parser`: parser that turns tokens into AST nodes and structured
-  parse errors.
-- `crates/qjs-runtime`: bytecode compiler and VM for JavaScript values,
-  operations, builtins, and evaluation semantics.
-- `crates/qjs-cli`: minimal command-line wrapper for smoke testing engine
-  behavior.
-- `docs/`: architecture notes and human-readable implementation guidance.
-- `scripts/`: bootstrap, verification, source-size, QuickJS comparison, and
-  Test262 subset tooling.
-- `tests/fixtures/`: local JavaScript programs used for smoke comparisons.
-- `tests/test262/`: curated Test262-derived cases, allowlists, and expected
-  failures.
-- `third_party/quickjs-ng`: pinned QuickJS-NG reference implementation.
-- `third_party/test262`: pinned TC39 conformance test corpus.
+| Crate / directory | Role |
+| --- | --- |
+| `crates/qjs-ast` | Shared syntax tree and source-span types |
+| `crates/qjs-lexer` | Tokenizer emitting span-preserving tokens |
+| `crates/qjs-parser` | Tokens → AST, with structured parse errors |
+| `crates/qjs-runtime` | Bytecode compiler, VM, values, and builtins |
+| `crates/qjs-cli` | Thin command-line wrapper for smoke testing |
+| `docs/` | Architecture notes and harness documentation |
+| `scripts/` | Bootstrap, verification, comparison, and Test262 tooling |
+| `tests/test262/` | Curated Test262-derived cases, allowlists, expected failures |
+| `third_party/` | Pinned QuickJS-NG reference and TC39 Test262 corpus (read-only) |
 
-## Verification
+## Verification & Conformance Tooling
 
-The standard project check is:
+`./scripts/check.sh` is the standard gate. Beyond that, the repository ships a
+small conformance harness:
 
 ```sh
-./scripts/check.sh
+./scripts/compare-qjs.sh                 # differential fixtures vs. pinned QuickJS-NG
+./scripts/find-qjsng-gaps.sh             # ranked queue of Test262 areas where NG passes and we don't
+./scripts/test262-subset.sh              # curated, deterministic Test262-derived cases
+./scripts/test262-burndown.sh --help     # record full-scan conformance trend entries
 ```
 
-See `scripts/README.md` for the full script catalog and intended usage.
-
-Useful focused checks include:
-
-```sh
-cargo fmt --all
-cargo test --workspace
-cargo run -p qjs-cli -- -e "1 + 2;"
-./scripts/compare-qjs.sh
-./scripts/find-qjsng-gaps.sh --filter test/built-ins/String --limit 100
-./scripts/test262-subset.sh
-./scripts/source-size-report.sh
-```
-
-`./scripts/compare-qjs.sh` compares selected local fixtures against the pinned
-QuickJS-NG reference. `./scripts/find-qjsng-gaps.sh` summarizes upstream
-Test262 cases where QuickJS-NG passes and `quickjs-rust` does not, and prints a
-greedy next area to investigate. The default quickwins recommendation uses a
-bounded, sharded probe, concurrently exact-checks narrow top candidate areas,
-and prints a ranked queue so agents can keep moving without rerunning the
-global probe after every small fix. It prefers small reviewable or mixed
-metadata batches and de-prioritizes broad-feature signals such as async,
-destructuring, class, proxy, realm, species, resizable buffers, or Annex B
-global-code semantics, with broader hints weighted lower than narrower ones.
-Use
-`--exact --all` for final full-range confirmation. Stress
-timeouts are reported separately by default; pass `--include-timeouts` when
-performance parity is the task.
-`./scripts/test262-subset.sh` runs only curated
-Test262-derived cases that the current harness can execute deterministically;
-cases listed in `tests/test262/expected-failures.txt` may fail until the named
-support gap is implemented, and passing expected-failure cases are reported as
-stale entries.
+See [`scripts/README.md`](scripts/README.md) for the full catalog and
+[`docs/harness.md`](docs/harness.md) for flags, behavior, and the
+agent-integration workflow.
 
 ## Design Principles
 
-- Build vertically through the engine stack instead of adding parser-only or
-  runtime-only shortcuts.
-- Keep public APIs small, typed, and documented when they cross crate
-  boundaries.
-- Return structured errors for source input failures rather than panicking on
-  malformed JavaScript.
-- Preserve byte-offset source spans for future diagnostics.
-- Keep QuickJS-NG and Test262 as references and conformance inputs, not Rust
-  dependencies.
-- Keep first-party modules small enough for direct review.
+- Build vertically through the engine stack; each feature lands with lexer,
+  parser, runtime, and test coverage together.
+- Keep public APIs small, typed, and documented across crate boundaries.
+- Return structured errors for bad input; preserve byte-offset spans for
+  diagnostics.
+- Treat QuickJS-NG and Test262 as references and conformance inputs, never as
+  Rust build dependencies.
 
-For deeper design and workflow context, see:
-
-- `docs/architecture.md` for crate boundaries, span policy, and growth strategy.
-- `docs/harness.md` for autonomous-agent worktree and integration procedures.
-- `AGENTS.md` for repository-specific agent instructions and commit discipline.
+For deeper context: [`docs/architecture.md`](docs/architecture.md) covers crate
+boundaries and growth strategy, and [`AGENTS.md`](AGENTS.md) is the contract
+for autonomous-agent contributions.
 
 ## License
 
-This project is licensed under the MIT license.
+This project is licensed under the [MIT license](LICENSE).
