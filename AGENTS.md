@@ -114,7 +114,9 @@ global error models, or broad architecture docs. Full runbook:
   main-agent ownership.
 - Owners never merge each other's branches. The main agent validates scope
   with `./scripts/validate-agent-branch.sh`, integrates one branch at a time,
-  and runs `./scripts/check.sh` after each integration.
+  and runs `./scripts/check.sh` plus `./scripts/compare-qjs.sh` (for any
+  merge touching `crates/qjs-runtime`) after each integration before
+  pushing.
 - Pushed `agent/**` branches get CI; a red or unexplained latest run blocks
   integration, but green remote CI never replaces local checks.
 - Remove merged worktrees and branches unless retained for diagnosis.
