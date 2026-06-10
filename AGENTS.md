@@ -13,7 +13,7 @@ boundaries and make each change verifiable with focused tests.
 ## Standard Commands
 
 - Fresh checkout setup: `./scripts/bootstrap.sh`
-- Full check (fmt, clippy, tests, file-size guard): `./scripts/check.sh`
+- Full check (fmt, clippy, tests, file-size guard, Test262 subset): `./scripts/check.sh`
 - CLI smoke test: `cargo run -p qjs-cli -- -e "1 + 2;"`
 - QuickJS-NG comparison smoke tests: `./scripts/compare-qjs.sh`
 - Gap discovery: `./scripts/find-qjsng-gaps.sh [--all] [--filter test/<prefix>]`
