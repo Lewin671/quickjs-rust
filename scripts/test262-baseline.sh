@@ -208,7 +208,7 @@ rust_source_syntax_supported() {
   case "$1" in
     test/built-ins/BigInt/is-a-constructor.js) return 0 ;;
   esac
-  ! grep -Eq 'for[[:space:]]*\([[:space:]]*(var|let|const)[[:space:]]*[\[{][^;)]*[[:space:]]of[[:space:]]|(^|[^[:alnum:]_$])class[[:space:]]' "$TEST262_DIR/$1"
+  ! grep -Eq '(^|[^[:alnum:]_$])class[[:space:]]' "$TEST262_DIR/$1"
 }
 rust_includes_supported() {
   local include
