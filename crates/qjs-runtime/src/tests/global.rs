@@ -86,6 +86,27 @@ fn evaluates_global_this_binding() {
 }
 
 #[test]
+fn exposes_print_host_global() {
+    assert_eq!(
+        eval("typeof print;"),
+        Ok(Value::String("function".to_owned()))
+    );
+    assert_eq!(eval("print.length;"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("this.print === print;"), Ok(Value::Boolean(true)));
+    assert_eq!(
+        eval("Object.getOwnPropertyDescriptor(this, 'print').enumerable;"),
+        Ok(Value::Boolean(false))
+    );
+    // Returns undefined regardless of argument count, and is reachable from a
+    // nested call frame (the $DONE async channel prints from a reaction).
+    assert_eq!(eval("print('quiet', 1, 2);"), Ok(Value::Undefined));
+    assert_eq!(
+        eval("(function () { return print('nested'); })();"),
+        Ok(Value::Undefined)
+    );
+}
+
+#[test]
 fn evaluates_global_eval_builtin() {
     assert_eq!(
         eval("typeof eval;"),

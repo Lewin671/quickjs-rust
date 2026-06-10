@@ -57,6 +57,7 @@ pub(super) fn install_globals(env: &mut HashMap<String, Value>, global_this: &Va
         NativeFunction::EncodeUriComponent,
     );
     define_global_function(env, global_this, "eval", 1, NativeFunction::Eval);
+    define_global_function(env, global_this, "print", 1, NativeFunction::Print);
     define_global_function(env, global_this, "escape", 1, NativeFunction::Escape);
     define_global_function(env, global_this, "unescape", 1, NativeFunction::Unescape);
     define_is_html_dda(env, global_this);
@@ -83,6 +84,25 @@ fn define_is_html_dda(env: &mut HashMap<String, Value>, global_this: &Value) {
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable(key.to_owned(), value);
     }
+}
+
+/// Host `print`: stringifies each argument, joins them with spaces, writes the
+/// line to stdout, and returns `undefined`. This is a host shim (QuickJS-NG's
+/// `qjs` exposes the same global) used, among other things, by the Test262
+/// async `$DONE` channel; the runtime stays unaware of Test262 conventions.
+pub(super) fn native_global_print(
+    argument_values: &[Value],
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let mut line = String::new();
+    for (index, value) in argument_values.iter().enumerate() {
+        if index > 0 {
+            line.push(' ');
+        }
+        line.push_str(&to_js_string_with_env(value.clone(), env)?);
+    }
+    println!("{line}");
+    Ok(Value::Undefined)
 }
 
 pub(super) fn native_global_is_finite(argument_values: &[Value]) -> Result<Value, RuntimeError> {

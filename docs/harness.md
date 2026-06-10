@@ -212,10 +212,16 @@ runners.
 bounded sample, a full scan with `--all`, a shard with `--shard I/N`, and a
 quickjs-rust/QuickJS-NG comparison with `--engine both`. In that mode QuickJS-NG
 config skips are applied as the shared baseline. The quickjs-rust side reports
-not-run cases only for structural harness limits such as modules, async tests,
+not-run cases only for structural harness limits such as modules,
 unsupported harness includes, intl402, and fixtures; there is no source-syntax
 pre-filter anymore (the former for-of destructuring and class filters were
-lifted once those features landed). Test262
+lifted once those features landed). Async-flagged cases are no longer
+structurally skipped: the harness includes `doneprintHandle.js` like
+quickjs-ng's runner, the `qjs` CLI exposes a host `print` global and drains the
+promise job queue after evaluation, and positive async cases are judged by the
+`Test262:AsyncTestComplete` / `Test262:AsyncTestFailure` markers `$DONE` prints
+(missing marker or a non-zero exit counts as a failure). Async negative cases
+stay on the negative-metadata path. Test262
 `features` metadata is parsed for QuickJS-NG config alignment, but it does not
 preemptively skip quickjs-rust cases; runnable cases produce normal pass, fail,
 or timeout signal. Negative Test262 cases are runnable by the quickjs-rust

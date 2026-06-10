@@ -30,6 +30,7 @@ pub(super) fn call_core_native(
         }
         NativeFunction::GlobalIsFinite => global::native_global_is_finite(argument_values),
         NativeFunction::GlobalIsNaN => global::native_global_is_nan(argument_values),
+        NativeFunction::Print => global::native_global_print(argument_values, env),
         NativeFunction::IsHtmlDda => Ok(crate::html_dda::native_is_html_dda()),
         NativeFunction::BigInt => bigint::native_bigint(argument_values, is_construct, env),
         NativeFunction::BigIntAsIntN => bigint::native_bigint_as_int_n(argument_values, env),

@@ -28,7 +28,7 @@ not-run, plus the 277 async-iteration actionable gaps.
       return promises, propagate rejections. Plain async functions, methods,
       and arrows reuse the generator suspension machinery; async generators and
       `for await ... of` stay structurally rejected (S5).
-- [ ] S4 Harness: support the async test channel — run `doneprintHandle.js`
+- [x] S4 Harness: support the async test channel — run `doneprintHandle.js`
       includes, treat `$DONE`-reported success/failure as the case result,
       drain jobs before judging. Narrow the async skip in
       `scripts/test262-baseline.sh` to cases the harness still cannot judge,

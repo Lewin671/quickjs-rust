@@ -193,8 +193,6 @@ skip_reason() {
   esac
   if [[ "$flags" == *module* ]]; then
     echo "module"
-  elif [[ "$flags" == *async* ]]; then
-    echo "async"
   elif [ -n "$includes" ] && ! rust_includes_supported "$includes"; then
     echo "includes"
   else
@@ -300,6 +298,13 @@ make_case() {
       printf '\n'
       emit_test262_host_shim
       printf '\n'
+      if [[ "$flags" == *async* ]]; then
+        # Async cases report completion through $DONE; include the upstream
+        # handler (like quickjs-ng's run-test262 does) so it can print the
+        # AsyncTestComplete / AsyncTestFailure markers the wrapper judges by.
+        cat "$TEST262_DIR/harness/doneprintHandle.js"
+        printf '\n'
+      fi
       while IFS= read -r include; do
         cat "$TEST262_DIR/harness/$include"
         printf '\n'
@@ -340,7 +345,7 @@ rust_negative_matches() {
 }
 run_engine_case() {
   local engine="$1" temp="$2" source="$3"
-  local negative_phase="${4:-}" negative_type="${5:-}"
+  local negative_phase="${4:-}" negative_type="${5:-}" is_async="${6:-}"
   local output status first_line
 
   set +e
@@ -354,6 +359,19 @@ run_engine_case() {
   if [ "$status" -eq 0 ]; then
     if [ "$engine" = "quickjs-rust" ] && [ -n "$negative_phase" ]; then
       printf "fail\texpected negative %s%s\n" "$negative_phase" "${negative_type:+ $negative_type}"
+      return
+    fi
+    # Positive async cases report completion through the $DONE channel: the
+    # script and its drained jobs print exactly one marker line. Judge by that
+    # marker, not just a clean exit, so a script that never calls $DONE fails.
+    if [ "$engine" = "quickjs-rust" ] && [ -n "$is_async" ] && [ -z "$negative_phase" ]; then
+      if printf '%s\n' "$output" | grep -q 'Test262:AsyncTestComplete'; then
+        echo "pass"
+      elif first_line="$(printf '%s\n' "$output" | grep -m1 'Test262:AsyncTestFailure')"; then
+        printf "fail\t%s\n" "$first_line"
+      else
+        printf "fail\tasync case produced no \$DONE marker\n"
+      fi
       return
     fi
     echo "pass"
@@ -406,7 +424,10 @@ run_case() {
   local file="$1" flags="$2" rel="$3" includes="$4"
   local rust_skip_reason="$5" qjsng_skip_reason="$6"
   local negative_phase="${7:-}" negative_type="${8:-}"
-  local temp_dir temp rust_result="not-run" qjsng_result="not-run"
+  local temp_dir temp rust_result="not-run" qjsng_result="not-run" is_async=""
+  if [[ "$flags" == *async* ]]; then
+    is_async="async"
+  fi
   temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/qjs-test262-baseline-XXXXXX")"
   temp="$temp_dir/case.js"
   make_case "$file" "$temp" "$flags" "$includes"
@@ -415,7 +436,7 @@ run_case() {
       rust_result="skipped"
       rust_skipped=$((rust_skipped + 1))
     else
-      rust_result="$(run_engine_case quickjs-rust "$temp" "$file" "$negative_phase" "$negative_type")"
+      rust_result="$(run_engine_case quickjs-rust "$temp" "$file" "$negative_phase" "$negative_type" "$is_async")"
       count_engine_result rust "$rust_result"
     fi
   fi

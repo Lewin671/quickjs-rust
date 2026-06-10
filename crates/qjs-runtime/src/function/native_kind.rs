@@ -154,6 +154,7 @@ pub(crate) enum NativeFunction {
     AsyncFunctionAwaitRejected,
     GlobalIsFinite,
     GlobalIsNaN,
+    Print,
     Function,
     FunctionPrototypeApply,
     FunctionPrototypeBind,
