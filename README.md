@@ -72,8 +72,7 @@ VM), never through parser-only or runtime-only shortcuts.
 expressions, and a growing standard library (`Object`, `Array` iteration
 methods, `String`, `Math`, `JSON`, ...).
 
-**Not yet:** classes, `async`/`await`, generators, destructuring patterns, and
-modules. Conformance work is intentionally incremental; the Test262 burndown
+**Not yet:** classes, `async`/`await`, generators, and modules. Conformance work is intentionally incremental; the Test262 burndown
 above is the honest scoreboard.
 
 ## Workspace

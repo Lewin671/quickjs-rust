@@ -21,9 +21,9 @@ syntax pre-filter.
       including nested patterns and rest elements.
 - [x] S2 Parameter defaults: default values in plain and pattern parameters
       (`default-parameters` cluster).
-- [ ] S3 Assignment patterns: destructuring assignment expressions,
+- [x] S3 Assignment patterns: destructuring assignment expressions,
       including object rest (`object-rest`) and evaluation order.
-- [ ] S4 Statement heads: patterns in `for-of`/`for-in` heads and `catch`
+- [x] S4 Statement heads: patterns in `for-of`/`for-in` heads and `catch`
       parameters; lift the for-of pre-filter in
       `scripts/test262-baseline.sh` and record a fresh burndown entry.
 - [ ] S5 Re-cluster: run a focused gap scan over
