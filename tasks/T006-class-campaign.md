@@ -35,12 +35,15 @@ verification command is green and `./scripts/check.sh` passes.
       constructors with `this`-TDZ (ReferenceError before super / super twice),
       default derived constructor forwarding, `extends null` basics, heritage
       non-constructor TypeError, instance prototype chain, and `new.target`
-      propagation so subclass instances get the right prototype. Known
-      follow-ups: `Object.getPrototypeOf(Sub) === Super` reference identity
-      (static inheritance is mirrored, not identity-preserving, because a
-      function cannot yet be a [[Prototype]] value); `super(...)` nested inside
-      an arrow function; subclassing exotic built-ins like `Array`; `new.target`
-      as user-visible syntax.
+      propagation so subclass instances get the right prototype.
+      `Object.getPrototypeOf(Sub) === Super` reference identity is now resolved:
+      functions are first-class [[Prototype]] values (see the `Prototype` enum
+      in `crates/qjs-runtime/src/value/object.rs`), so a subclass constructor's
+      [[Prototype]] is the parent constructor itself (not a mirror snapshot),
+      inherited static members and static `super.x` resolve live, and
+      `Super.isPrototypeOf(Sub)`/`instanceof` walk through a function mid-chain.
+      Known follow-ups: `super(...)` nested inside an arrow function; subclassing
+      exotic built-ins like `Array`; `new.target` as user-visible syntax.
 - [x] S5 Harness: narrow the class pre-filter in
       `scripts/test262-baseline.sh` so runnable class cases execute; record a
       fresh burndown entry from the next full scan. (Filter removed before S4:

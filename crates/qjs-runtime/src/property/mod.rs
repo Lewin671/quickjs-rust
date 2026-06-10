@@ -19,10 +19,11 @@ pub(crate) use function::{
 pub(crate) use key::{PropertyKey, to_property_key_value};
 pub(crate) use prototype::{
     array_as_object_prototype, array_prototype, array_prototype_property, constructor_prototype,
-    function_intrinsic_prototype, function_prototype, function_prototype_property,
+    constructor_prototype_slot, function_intrinsic_prototype, function_prototype,
+    function_prototype_chain_descriptor, function_prototype_property,
     inherited_object_prototype_property, inherited_primitive_prototype_descriptor,
     inherited_primitive_prototype_symbol_descriptor, inherited_string_prototype_property,
-    object_prototype, string_prototype, value_prototype,
+    object_prototype, string_prototype, value_prototype, value_prototype_slot,
 };
 
 pub(crate) fn has_property(
@@ -135,12 +136,7 @@ pub(crate) fn property_value_key_with_receiver(
         Value::Function(function) => property_descriptor_value(
             function_own_property_descriptor(&function, key)
                 .or_else(|| native_error_constructor_parent_descriptor(&function, env, key))
-                .or_else(|| {
-                    function
-                        .internal_prototype_override()
-                        .unwrap_or_else(|| function_intrinsic_prototype(env))
-                        .and_then(|prototype| prototype.property(key))
-                }),
+                .or_else(|| function_prototype_chain_descriptor(&function, env, key)),
             receiver,
             env,
         ),

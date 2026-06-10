@@ -197,8 +197,8 @@ pub(crate) fn construct_function(
     let this_value = if is_derived {
         Value::Undefined
     } else {
-        let prototype = crate::constructor_prototype(&new_target, env);
-        Value::Object(ObjectRef::with_prototype(HashMap::new(), prototype))
+        let prototype = crate::constructor_prototype_slot(&new_target, env);
+        Value::Object(ObjectRef::with_prototype_slot(HashMap::new(), prototype))
     };
 
     let result = call_function(target, this_value.clone(), argument_values, env, true);

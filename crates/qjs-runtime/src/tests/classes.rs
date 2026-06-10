@@ -441,6 +441,52 @@ fn subclass_inherits_static_method() {
 }
 
 #[test]
+fn subclass_constructor_prototype_is_superclass() {
+    // Static inheritance uses real [[Prototype]] identity, not a snapshot.
+    assert_eq!(
+        eval("class A {} class B extends A {} Object.getPrototypeOf(B) === A;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("class A {} class B extends A {} A.isPrototypeOf(B);"),
+        Ok(Value::Boolean(true))
+    );
+    // A base class constructor's [[Prototype]] remains %Function.prototype%.
+    assert_eq!(
+        eval("class A {} Object.getPrototypeOf(A) === Function.prototype;"),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn subclass_static_inheritance_is_live() {
+    // A static member added to the parent after subclassing is visible, proving
+    // the link is by reference rather than a definition-time copy.
+    assert_eq!(
+        eval("class A {} class B extends A {} A.added = 9; B.added;"),
+        Ok(Value::Number(9.0))
+    );
+}
+
+#[test]
+fn subclass_inherits_static_field() {
+    assert_eq!(
+        eval("class A { static x = 99; } class B extends A {} B.x;"),
+        Ok(Value::Number(99.0))
+    );
+}
+
+#[test]
+fn static_super_resolves_through_function_prototype() {
+    assert_eq!(
+        eval(
+            "class A { static who() { return 'super'; } } class B extends A { static who() { return 'sub-' + super.who(); } } B.who();"
+        ),
+        Ok(Value::String("sub-super".to_owned()))
+    );
+}
+
+#[test]
 fn this_before_super_is_reference_error() {
     let result =
         eval("class A {} class B extends A { constructor() { this.x = 1; super(); } } new B();");

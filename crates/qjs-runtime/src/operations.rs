@@ -7,7 +7,7 @@ use qjs_ast::{BinaryOp, UnaryOp};
 use crate::{
     Property, PropertyKey, RuntimeError, Value, call_function, error, has_property_key, is_truthy,
     string, symbol, to_int32_number, to_js_string_with_env, to_number, to_number_with_env,
-    to_primitive_with_env, to_property_key_value, to_uint32_number, value_prototype,
+    to_primitive_with_env, to_property_key_value, to_uint32_number, value_prototype_slot,
 };
 
 pub(crate) fn eval_unary(
@@ -421,7 +421,7 @@ pub(crate) fn ordinary_has_instance(
     if let Some(bound) = &constructor.bound {
         return ordinary_has_instance(left, bound.target.clone(), env);
     }
-    let Some(left_prototype) = value_prototype(left, env) else {
+    let Some(left_prototype) = value_prototype_slot(left, env) else {
         return Ok(false);
     };
     let Some(Property {
@@ -434,7 +434,7 @@ pub(crate) fn ordinary_has_instance(
             message: "function prototype is not an object".to_owned(),
         });
     };
-    Ok(left_prototype.ptr_eq(&prototype) || left_prototype.has_prototype(&prototype))
+    Ok(left_prototype.chain_contains(&prototype))
 }
 
 fn eval_in(

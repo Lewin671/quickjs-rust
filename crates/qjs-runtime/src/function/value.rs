@@ -8,7 +8,7 @@ use std::{
 use qjs_ast::{FunctionParams, Stmt};
 
 use crate::{
-    Bytecode, NativeFunction, ObjectRef, Property, PropertyKey, Value,
+    Bytecode, NativeFunction, ObjectRef, Property, PropertyKey, Prototype, Value,
     bytecode::compile_function_body,
     function::{collect_function_local_names, is_strict_function_body},
     function_intrinsic_prototype, object_prototype,
@@ -90,7 +90,12 @@ pub struct Function {
     extensible: Rc<Cell<bool>>,
     sealed: Rc<Cell<bool>>,
     frozen: Rc<Cell<bool>>,
-    internal_prototype: Rc<RefCell<Option<Option<ObjectRef>>>>,
+    /// Explicit [[Prototype]] override. `None` means "use the default
+    /// %Function.prototype% intrinsic"; `Some(None)` means the prototype was
+    /// set to `null`; `Some(Some(p))` means it points at an object or another
+    /// function (for example a subclass constructor whose [[Prototype]] is its
+    /// superclass).
+    internal_prototype: Rc<RefCell<Option<Option<Prototype>>>>,
     /// Private-name state: per-function storage (static fields and brands on the
     /// constructor) and the private environment a class constructor carries.
     /// Lazily populated; combined behind one allocation to keep `Function`
@@ -536,7 +541,6 @@ impl Function {
     }
 
     pub(crate) fn set_property(&self, key: String, value: Value) {
-        let value = constructor_prototype_property_value(&key, value);
         let mut properties = self.properties.borrow_mut();
         if let Some(property) = properties.get_mut(&key) {
             if property.writable {
@@ -634,10 +638,93 @@ impl Function {
         env: &HashMap<String, Value>,
     ) -> Option<Property> {
         self.own_symbol_property(symbol).or_else(|| {
-            self.internal_prototype_override()
-                .unwrap_or_else(|| function_intrinsic_prototype(env))
-                .and_then(|prototype| prototype.symbol_property(symbol))
+            match self.effective_internal_prototype_with_env(env) {
+                Some(Prototype::Object(prototype)) => prototype.symbol_property(symbol),
+                Some(Prototype::Function(parent)) => parent.chain_symbol_property(symbol),
+                None => None,
+            }
         })
+    }
+
+    /// The function's resolved [[Prototype]] slot, resolving the implicit
+    /// default to %Function.prototype% via the function's captured environment.
+    /// Returns `None` only when the prototype is explicitly `null` or the
+    /// intrinsic cannot be resolved (for example a native function with no
+    /// captured globals).
+    fn effective_internal_prototype(&self) -> Option<Prototype> {
+        self.effective_internal_prototype_with_env(&self.env)
+    }
+
+    fn effective_internal_prototype_with_env(
+        &self,
+        env: &HashMap<String, Value>,
+    ) -> Option<Prototype> {
+        match self.internal_prototype.borrow().clone() {
+            Some(slot) => slot,
+            None => function_intrinsic_prototype(env).map(Prototype::Object),
+        }
+    }
+
+    /// Walks this function's own properties, then its [[Prototype]] chain, for a
+    /// string-keyed property. Used when a function sits inside another value's
+    /// prototype chain.
+    pub(crate) fn chain_property(&self, key: &str) -> Option<Property> {
+        self.own_property(key)
+            .or_else(|| match self.effective_internal_prototype() {
+                Some(Prototype::Object(prototype)) => prototype.property(key),
+                Some(Prototype::Function(parent)) => parent.chain_property(key),
+                None => None,
+            })
+    }
+
+    pub(crate) fn chain_symbol_property(&self, symbol: &ObjectRef) -> Option<Property> {
+        self.own_symbol_property(symbol)
+            .or_else(|| match self.effective_internal_prototype() {
+                Some(Prototype::Object(prototype)) => prototype.symbol_property(symbol),
+                Some(Prototype::Function(parent)) => parent.chain_symbol_property(symbol),
+                None => None,
+            })
+    }
+
+    pub(crate) fn chain_contains_property(&self, key: &str) -> bool {
+        self.own_property(key).is_some()
+            || match self.effective_internal_prototype() {
+                Some(Prototype::Object(prototype)) => prototype.contains_property(key),
+                Some(Prototype::Function(parent)) => parent.chain_contains_property(key),
+                None => false,
+            }
+    }
+
+    /// Whether the object `target` appears in this function's [[Prototype]]
+    /// chain (used by `isPrototypeOf`/`instanceof` when a function is mid-chain).
+    pub(crate) fn chain_contains_object(&self, target: &ObjectRef) -> bool {
+        match self.effective_internal_prototype() {
+            Some(Prototype::Object(prototype)) => {
+                prototype.ptr_eq(target) || prototype.has_prototype(target)
+            }
+            Some(Prototype::Function(parent)) => parent.chain_contains_object(target),
+            None => false,
+        }
+    }
+
+    /// Whether the function `target` appears in this function's [[Prototype]]
+    /// chain (for example a superclass constructor).
+    pub(crate) fn chain_contains_function(&self, target: &Self) -> bool {
+        match self.effective_internal_prototype() {
+            Some(Prototype::Function(parent)) => {
+                parent.ptr_eq(target) || parent.chain_contains_function(target)
+            }
+            Some(Prototype::Object(_)) | None => false,
+        }
+    }
+
+    /// Whether the value `target` (object or function) appears beyond this
+    /// function in the [[Prototype]] chain.
+    pub(crate) fn chain_contains_value(&self, target: &Value) -> bool {
+        match self.effective_internal_prototype() {
+            Some(prototype) => prototype.chain_contains_value(target),
+            None => false,
+        }
     }
 
     pub(crate) fn define_symbol_property(&self, symbol: ObjectRef, property: Property) {
@@ -723,14 +810,28 @@ impl Function {
         self.private_state.borrow().instance_elements.clone()
     }
 
+    /// The explicit [[Prototype]] override as an object slot. A function-valued
+    /// override collapses to `Some(None)` here; callers that must observe the
+    /// function use [`Function::internal_prototype_slot`].
     pub(crate) fn internal_prototype_override(&self) -> Option<Option<ObjectRef>> {
+        self.internal_prototype
+            .borrow()
+            .clone()
+            .map(|slot| slot.and_then(|prototype| prototype.as_object()))
+    }
+
+    /// The raw [[Prototype]] override slot, preserving a function prototype.
+    pub(crate) fn internal_prototype_slot(&self) -> Option<Option<Prototype>> {
         self.internal_prototype.borrow().clone()
     }
 
-    pub(crate) fn set_internal_prototype(&self, prototype: Option<ObjectRef>) -> Result<(), ()> {
+    pub(crate) fn set_internal_prototype_slot(
+        &self,
+        prototype: Option<Prototype>,
+    ) -> Result<(), ()> {
         if matches!(
             self.internal_prototype.borrow().as_ref(),
-            Some(current) if same_prototype(current, &prototype)
+            Some(current) if same_prototype_slot(current, &prototype)
         ) {
             return Ok(());
         }
@@ -739,15 +840,6 @@ impl Function {
         }
         *self.internal_prototype.borrow_mut() = Some(prototype);
         Ok(())
-    }
-}
-
-fn constructor_prototype_property_value(key: &str, value: Value) -> Value {
-    match (key, value) {
-        ("prototype", Value::Function(function)) => {
-            Value::Object(function_as_object_prototype(&function))
-        }
-        (_, value) => value,
     }
 }
 
@@ -768,40 +860,13 @@ fn bound_function_name(target: &Value) -> String {
     format!("bound {target_name}")
 }
 
-/// Builds an object mirroring a constructor's own (static) properties, used as
-/// a subclass constructor's [[Prototype]] so inherited static members and
-/// static `super.x` resolve. This does not provide `getPrototypeOf(Sub) ===
-/// Super` reference identity: the runtime cannot yet store a function as a
-/// [[Prototype]] value.
-pub(crate) fn static_inheritance_mirror(parent: &Function) -> ObjectRef {
-    function_as_object_prototype(parent)
-}
-
-fn function_as_object_prototype(function: &Function) -> ObjectRef {
-    let prototype = function
-        .internal_prototype_override()
-        .unwrap_or_else(|| function_intrinsic_prototype(&function.env));
-    let object = ObjectRef::with_prototype(HashMap::new(), prototype);
-    for key in function.own_property_names() {
-        if let Some(property) = function.own_property(&key) {
-            object.define_property(key, property);
-        }
-    }
-    for symbol in function.own_property_symbols() {
-        if let Some(property) = function.own_symbol_property(&symbol) {
-            object.define_symbol_property(symbol, property);
-        }
-    }
-    object
-}
-
 impl PartialEq for Function {
     fn eq(&self, other: &Self) -> bool {
         self.ptr_eq(other)
     }
 }
 
-fn same_prototype(left: &Option<ObjectRef>, right: &Option<ObjectRef>) -> bool {
+fn same_prototype_slot(left: &Option<Prototype>, right: &Option<Prototype>) -> bool {
     match (left, right) {
         (None, None) => true,
         (Some(left), Some(right)) => left.ptr_eq(right),

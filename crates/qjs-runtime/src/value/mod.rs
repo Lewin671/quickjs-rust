@@ -11,6 +11,7 @@ mod set;
 pub use array::ArrayRef;
 pub use map::MapRef;
 pub use object::ObjectRef;
+pub(crate) use object::Prototype;
 pub(crate) use property::Property;
 pub use set::SetRef;
 

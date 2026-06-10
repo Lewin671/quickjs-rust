@@ -5,7 +5,9 @@ use crate::{
     function::{CompiledUserFunction, InstanceFieldInitializer},
     object, object_prototype, to_property_key_value,
 };
-use crate::{call_function, construct_function, property_value_key_with_receiver, value_prototype};
+use crate::{
+    call_function, construct_function, property_value_key_with_receiver, value_prototype_slot,
+};
 
 use super::ir::{
     ClassConstructorDef, ClassElementDef, ClassFieldDef, ClassFieldInitializerDef,
@@ -78,20 +80,20 @@ impl Vm<'_> {
         });
 
         // Static-side inheritance: a subclass constructor inherits the parent
-        // constructor's static members through its [[Prototype]]. The runtime
-        // models a function's [[Prototype]] as an object, so we mirror the
-        // parent constructor's own properties into a backing object and use it
-        // as the subclass constructor's [[Prototype]]. This makes inherited
-        // static methods and static `super.x` resolve. It does not provide
-        // `Object.getPrototypeOf(Sub) === Super` reference identity (a known
-        // limitation, tracked as a follow-up: functions cannot yet be a
-        // [[Prototype]] value), and the mirror snapshots the parent's static
-        // members at definition time.
-        if let Some(ClassHeritage::Parent(heritage_parent)) = &heritage
-            && let Value::Function(parent) = &heritage_parent.constructor
-        {
-            let mirror = crate::function::static_inheritance_mirror(parent);
-            let _ = constructor_function.set_internal_prototype(Some(mirror));
+        // constructor's static members through its [[Prototype]], which is the
+        // parent constructor itself. Storing the function directly gives
+        // `Object.getPrototypeOf(Sub) === Super` reference identity and lets
+        // inherited static methods and static `super.x` resolve live (rather
+        // than against a definition-time snapshot).
+        if let Some(ClassHeritage::Parent(heritage_parent)) = &heritage {
+            let parent_slot = match &heritage_parent.constructor {
+                Value::Function(parent) => Some(crate::Prototype::Function(parent.clone())),
+                Value::Object(parent) => Some(crate::Prototype::Object(parent.clone())),
+                _ => None,
+            };
+            if let Some(parent_slot) = parent_slot {
+                let _ = constructor_function.set_internal_prototype_slot(Some(parent_slot));
+            }
         }
 
         let prototype = ObjectRef::with_prototype(HashMap::new(), prototype_parent);
@@ -395,9 +397,37 @@ impl Vm<'_> {
                 message: "SyntaxError: 'super' keyword unexpected here".to_owned(),
             });
         };
-        match value_prototype(home, &self.globals) {
-            Some(prototype) => Ok(Value::Object(prototype)),
+        match value_prototype_slot(home, &self.globals) {
+            Some(prototype) => Ok(prototype.to_value()),
             None => Ok(Value::Undefined),
+        }
+    }
+
+    /// Wires a freshly created generator function into the generator intrinsic
+    /// chain: its [[Prototype]] becomes `%GeneratorFunction.prototype%`, and its
+    /// own `prototype` property's [[Prototype]] becomes `%GeneratorPrototype%`
+    /// so generator instances inherit `next`/`return`/`throw`.
+    pub(super) fn wire_generator_function_intrinsics(&self, function: &Function) {
+        if let Some(generator_function_prototype) =
+            crate::generator::generator_function_prototype(&self.globals)
+        {
+            let _ = function.set_internal_prototype_slot(Some(crate::Prototype::Object(
+                generator_function_prototype,
+            )));
+        }
+        // A generator function carries its own `prototype` (the object generator
+        // instances inherit from), distinct from %GeneratorPrototype% but with
+        // it as [[Prototype]]. Generator functions are non-constructable, so the
+        // default `prototype` wiring did not install one; do it here. The
+        // property is writable, non-enumerable, non-configurable.
+        if let Some(generator_prototype) =
+            crate::generator::generator_prototype_intrinsic(&self.globals)
+        {
+            let prototype = ObjectRef::with_prototype(HashMap::new(), Some(generator_prototype));
+            function.define_property(
+                "prototype".to_owned(),
+                Property::data(Value::Object(prototype), false, true, false),
+            );
         }
     }
 }

@@ -576,3 +576,32 @@ fn yield_inside_try_finally_resumes_correctly() {
         7.0
     );
 }
+
+#[test]
+fn generator_function_prototype_chain() {
+    // A generator function's [[Prototype]] is %GeneratorFunction.prototype%,
+    // distinct from %Function.prototype%.
+    assert!(boolean(
+        "Object.getPrototypeOf(function* () {}) !== Function.prototype;"
+    ));
+    // All generator functions share the same %GeneratorFunction.prototype%.
+    assert!(boolean(
+        "Object.getPrototypeOf(function* () {}) === Object.getPrototypeOf(function* () {});"
+    ));
+    // %GeneratorFunction.prototype%'s [[Prototype]] is %Function.prototype%.
+    assert!(boolean(
+        "Object.getPrototypeOf(Object.getPrototypeOf(function* () {})) === Function.prototype;"
+    ));
+    // It carries the GeneratorFunction toStringTag.
+    assert_eq!(
+        string("Object.prototype.toString.call(Object.getPrototypeOf(function* () {}));"),
+        "[object GeneratorFunction]"
+    );
+    // %GeneratorFunction.prototype%.prototype is the shared %GeneratorPrototype%,
+    // which sits in a generator instance's chain.
+    assert!(boolean(
+        "function* g() {} let gp = Object.getPrototypeOf(g).prototype; gp.isPrototypeOf(g());"
+    ));
+    // A generator instance still inherits the iterator protocol methods.
+    assert_eq!(string("typeof (function* () {})().next;"), "function");
+}

@@ -5,9 +5,119 @@ use std::{
     rc::Rc,
 };
 
+use crate::Function;
 use crate::private::{PrivateEnvironment, PrivateStorage};
 
 use super::{Property, Value};
+
+/// A [[Prototype]] slot value. Most prototypes are plain objects, but a
+/// function may also sit in a prototype chain (for example a subclass
+/// constructor whose [[Prototype]] is its superclass, or an object created with
+/// `Object.create(fn)`). The variants keep both forms first-class so property
+/// lookup walks through either uniformly.
+#[derive(Clone)]
+pub(crate) enum Prototype {
+    Object(ObjectRef),
+    Function(Function),
+}
+
+impl Prototype {
+    pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Object(left), Self::Object(right)) => left.ptr_eq(right),
+            (Self::Function(left), Self::Function(right)) => left.ptr_eq(right),
+            _ => false,
+        }
+    }
+
+    /// Walks this prototype (and its own chain) for the data/accessor property
+    /// `key`, returning the first match.
+    fn property(&self, key: &str) -> Option<Property> {
+        match self {
+            Self::Object(object) => object.property(key),
+            Self::Function(function) => function.chain_property(key),
+        }
+    }
+
+    fn get(&self, key: &str) -> Option<Value> {
+        self.property(key).map(|property| property.value)
+    }
+
+    fn symbol_property(&self, symbol: &ObjectRef) -> Option<Property> {
+        match self {
+            Self::Object(object) => object.symbol_property(symbol),
+            Self::Function(function) => function.chain_symbol_property(symbol),
+        }
+    }
+
+    fn contains_property(&self, key: &str) -> bool {
+        match self {
+            Self::Object(object) => object.contains_property(key),
+            Self::Function(function) => function.chain_contains_property(key),
+        }
+    }
+
+    fn to_string_tag(&self) -> Option<String> {
+        match self {
+            Self::Object(object) => object.to_string_tag(),
+            // Functions never carry a Symbol.toStringTag in their own chain by
+            // default; stop the search here.
+            Self::Function(_) => None,
+        }
+    }
+
+    /// Whether the object `target` appears at or beyond this point in the
+    /// chain.
+    pub(crate) fn chain_contains(&self, target: &ObjectRef) -> bool {
+        match self {
+            Self::Object(object) => object.ptr_eq(target) || object.has_prototype(target),
+            Self::Function(function) => function.chain_contains_object(target),
+        }
+    }
+
+    /// Whether the value `target` (object or function) appears at or beyond this
+    /// point in the chain, by reference identity.
+    pub(crate) fn chain_contains_value(&self, target: &Value) -> bool {
+        match (self, target) {
+            (Self::Object(object), Value::Object(target)) => {
+                object.ptr_eq(target) || object.has_prototype(target)
+            }
+            (Self::Object(object), _) => object
+                .prototype_slot()
+                .is_some_and(|next| next.chain_contains_value(target)),
+            (Self::Function(function), Value::Function(target)) => {
+                function.ptr_eq(target) || function.chain_contains_function(target)
+            }
+            (Self::Function(function), _) => function.chain_contains_value(target),
+        }
+    }
+
+    /// Whether this prototype is (or descends to) the object `target`, used to
+    /// reject prototype cycles.
+    fn would_cycle(&self, target: &ObjectRef) -> bool {
+        match self {
+            Self::Object(object) => object.ptr_eq(target) || object.has_prototype(target),
+            Self::Function(_) => false,
+        }
+    }
+
+    /// As an `ObjectRef`, if this prototype is an object (used where callers
+    /// still expect the legacy object-only prototype).
+    pub(crate) fn as_object(&self) -> Option<ObjectRef> {
+        match self {
+            Self::Object(object) => Some(object.clone()),
+            Self::Function(_) => None,
+        }
+    }
+
+    /// The prototype as a JavaScript value, for `getPrototypeOf` and friends.
+    pub(crate) fn to_value(&self) -> Value {
+        match self {
+            Self::Object(object) => Value::Object(object.clone()),
+            Self::Function(function) => Value::Function(function.clone()),
+        }
+    }
+}
 
 /// Object storage reference.
 #[derive(Clone)]
@@ -16,7 +126,7 @@ pub struct ObjectRef {
     property_order: Rc<RefCell<Vec<String>>>,
     symbol_properties: Rc<RefCell<Vec<(ObjectRef, Property)>>>,
     extensible: Rc<Cell<bool>>,
-    prototype: Rc<RefCell<Option<ObjectRef>>>,
+    prototype: Rc<RefCell<Option<Prototype>>>,
     to_string_tag: Rc<RefCell<Option<String>>>,
     raw_json: Rc<Cell<bool>>,
     /// Generator [[GeneratorState]] for generator objects; `None` for ordinary
@@ -49,6 +159,13 @@ impl ObjectRef {
     pub(crate) fn with_prototype(
         properties: HashMap<String, Value>,
         prototype: Option<ObjectRef>,
+    ) -> Self {
+        Self::with_prototype_slot(properties, prototype.map(Prototype::Object))
+    }
+
+    pub(crate) fn with_prototype_slot(
+        properties: HashMap<String, Value>,
+        prototype: Option<Prototype>,
     ) -> Self {
         let mut property_order: Vec<_> = properties.keys().cloned().collect();
         property_order.sort();
@@ -138,6 +255,29 @@ impl ObjectRef {
         })
     }
 
+    /// The raw [[Prototype]] slot, distinguishing object and function
+    /// prototypes.
+    pub(crate) fn prototype_slot(&self) -> Option<Prototype> {
+        self.prototype.borrow().clone()
+    }
+
+    pub(crate) fn set_prototype_slot(&self, prototype: Option<Prototype>) -> Result<(), ()> {
+        if same_prototype_slot(self.prototype.borrow().as_ref(), prototype.as_ref()) {
+            return Ok(());
+        }
+        if !self.extensible.get() {
+            return Err(());
+        }
+        if prototype
+            .as_ref()
+            .is_some_and(|prototype| prototype.would_cycle(self))
+        {
+            return Err(());
+        }
+        *self.prototype.borrow_mut() = prototype;
+        Ok(())
+    }
+
     pub(crate) fn set(&self, key: String, value: Value) {
         let mut properties = self.properties.borrow_mut();
         if let Some(property) = properties.get_mut(&key) {
@@ -184,6 +324,16 @@ impl ObjectRef {
                 .borrow()
                 .as_ref()
                 .is_some_and(|proto| proto.contains_property(key))
+    }
+
+    /// Whether the object `prototype` appears as a function prototype anywhere
+    /// in this object's chain. Used by `isPrototypeOf`/`instanceof` to walk past
+    /// a function sitting mid-chain.
+    pub(crate) fn has_prototype_object(&self, prototype: &ObjectRef) -> bool {
+        self.prototype
+            .borrow()
+            .as_ref()
+            .is_some_and(|proto| proto.chain_contains(prototype))
     }
 
     pub(crate) fn has_own_property(&self, key: &str) -> bool {
@@ -342,39 +492,20 @@ impl ObjectRef {
     }
 
     pub(crate) fn has_prototype(&self, prototype: &ObjectRef) -> bool {
+        self.has_prototype_object(prototype)
+    }
+
+    /// The [[Prototype]] as an object, or `None` if absent or a function. Use
+    /// [`ObjectRef::prototype_slot`] when the function case matters.
+    pub(crate) fn prototype(&self) -> Option<ObjectRef> {
         self.prototype
             .borrow()
             .as_ref()
-            .is_some_and(|proto| proto.ptr_eq(prototype) || proto.has_prototype(prototype))
-    }
-
-    pub(crate) fn prototype(&self) -> Option<ObjectRef> {
-        self.prototype.borrow().clone()
+            .and_then(Prototype::as_object)
     }
 
     pub(crate) fn set_prototype(&self, prototype: Option<ObjectRef>) -> Result<(), ()> {
-        if self
-            .prototype()
-            .as_ref()
-            .map_or(prototype.is_none(), |current| {
-                prototype
-                    .as_ref()
-                    .is_some_and(|prototype| current.ptr_eq(prototype))
-            })
-        {
-            return Ok(());
-        }
-        if !self.extensible.get() {
-            return Err(());
-        }
-        if prototype
-            .as_ref()
-            .is_some_and(|prototype| prototype.ptr_eq(self) || prototype.has_prototype(self))
-        {
-            return Err(());
-        }
-        *self.prototype.borrow_mut() = prototype;
-        Ok(())
+        self.set_prototype_slot(prototype.map(Prototype::Object))
     }
 
     pub(crate) fn to_string_tag(&self) -> Option<String> {
@@ -382,12 +513,20 @@ impl ObjectRef {
             self.prototype
                 .borrow()
                 .as_ref()
-                .and_then(ObjectRef::to_string_tag)
+                .and_then(Prototype::to_string_tag)
         })
     }
 
     pub(crate) fn set_to_string_tag(&self, tag: &str) {
         *self.to_string_tag.borrow_mut() = Some(tag.to_owned());
+    }
+}
+
+fn same_prototype_slot(left: Option<&Prototype>, right: Option<&Prototype>) -> bool {
+    match (left, right) {
+        (None, None) => true,
+        (Some(left), Some(right)) => left.ptr_eq(right),
+        _ => false,
     }
 }
 

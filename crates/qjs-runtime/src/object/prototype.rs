@@ -4,7 +4,7 @@ use crate::{
     PropertyKey, RuntimeError, Value, array_as_object_prototype, array_has_own_property,
     array_prototype, bigint, boolean, call_function, date, error, function_intrinsic_prototype,
     function_own_property_descriptor, function_prototype, number, property_value,
-    property_value_key, regexp, string, symbol, to_property_key_value, value_prototype,
+    property_value_key, regexp, string, symbol, to_property_key_value, value_prototype_slot,
 };
 
 use super::descriptor::own_property_descriptor_key;
@@ -14,18 +14,19 @@ pub(crate) fn native_object_get_prototype_of(
     env: &HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     match argument_values.first() {
-        Some(Value::Object(object)) => {
-            Ok(object.prototype().map(Value::Object).unwrap_or(Value::Null))
-        }
+        Some(Value::Object(object)) => Ok(object
+            .prototype_slot()
+            .map(|prototype| prototype.to_value())
+            .unwrap_or(Value::Null)),
         Some(Value::Map(map)) => Ok(map
             .object()
-            .prototype()
-            .map(Value::Object)
+            .prototype_slot()
+            .map(|prototype| prototype.to_value())
             .unwrap_or(Value::Null)),
         Some(Value::Set(set)) => Ok(set
             .object()
-            .prototype()
-            .map(Value::Object)
+            .prototype_slot()
+            .map(|prototype| prototype.to_value())
             .unwrap_or(Value::Null)),
         Some(Value::Array(elements)) => Ok(elements
             .prototype_override()
@@ -34,11 +35,9 @@ pub(crate) fn native_object_get_prototype_of(
             .unwrap_or(Value::Null)),
         Some(Value::Function(function)) => {
             Ok(error::native_error_constructor_parent(function, env)
-                .or_else(|| {
-                    function
-                        .internal_prototype_override()
-                        .unwrap_or_else(|| function_intrinsic_prototype(env))
-                        .map(Value::Object)
+                .or_else(|| match function.internal_prototype_slot() {
+                    Some(slot) => slot.map(|prototype| prototype.to_value()),
+                    None => function_intrinsic_prototype(env).map(Value::Object),
                 })
                 .unwrap_or(Value::Null))
         }
@@ -65,8 +64,11 @@ pub(crate) fn native_object_set_prototype_of(
                 message: "Object.setPrototypeOf prototype must be an object or null".to_owned(),
             });
         }
-        Value::Object(prototype) => Some(prototype),
-        Value::Array(array) => Some(array_as_object_prototype(&array, env)),
+        Value::Object(prototype) => Some(crate::Prototype::Object(prototype)),
+        Value::Array(array) => Some(crate::Prototype::Object(array_as_object_prototype(
+            &array, env,
+        ))),
+        Value::Function(function) => Some(crate::Prototype::Function(function)),
         Value::Null => None,
         _ => {
             return Err(RuntimeError {
@@ -76,81 +78,49 @@ pub(crate) fn native_object_set_prototype_of(
         }
     };
 
+    let failed = || RuntimeError {
+        thrown: None,
+        message: "Object.setPrototypeOf failed".to_owned(),
+    };
     match &target {
         Value::Object(object) if symbol::is_symbol_primitive(object) => {}
-        Value::Object(object) => object.set_prototype(prototype).map_err(|()| RuntimeError {
-            thrown: None,
-            message: "Object.setPrototypeOf failed".to_owned(),
-        })?,
+        Value::Object(object) => object
+            .set_prototype_slot(prototype)
+            .map_err(|()| failed())?,
         Value::Map(map) => map
             .object()
-            .set_prototype(prototype)
-            .map_err(|()| RuntimeError {
-                thrown: None,
-                message: "Object.setPrototypeOf failed".to_owned(),
-            })?,
+            .set_prototype_slot(prototype)
+            .map_err(|()| failed())?,
         Value::Set(set) => set
             .object()
-            .set_prototype(prototype)
-            .map_err(|()| RuntimeError {
-                thrown: None,
-                message: "Object.setPrototypeOf failed".to_owned(),
-            })?,
+            .set_prototype_slot(prototype)
+            .map_err(|()| failed())?,
         Value::Proxy(proxy) => match proxy.target() {
-            Value::Object(object) => {
-                object.set_prototype(prototype).map_err(|()| RuntimeError {
-                    thrown: None,
-                    message: "Object.setPrototypeOf failed".to_owned(),
-                })?
-            }
-            Value::Map(map) => {
-                map.object()
-                    .set_prototype(prototype)
-                    .map_err(|()| RuntimeError {
-                        thrown: None,
-                        message: "Object.setPrototypeOf failed".to_owned(),
-                    })?
-            }
-            Value::Set(set) => {
-                set.object()
-                    .set_prototype(prototype)
-                    .map_err(|()| RuntimeError {
-                        thrown: None,
-                        message: "Object.setPrototypeOf failed".to_owned(),
-                    })?
-            }
-            Value::Array(elements) => {
-                elements
-                    .set_prototype(prototype)
-                    .map_err(|()| RuntimeError {
-                        thrown: None,
-                        message: "Object.setPrototypeOf failed".to_owned(),
-                    })?
-            }
-            Value::Function(function) => {
-                function
-                    .set_internal_prototype(prototype)
-                    .map_err(|()| RuntimeError {
-                        thrown: None,
-                        message: "Object.setPrototypeOf failed".to_owned(),
-                    })?
-            }
+            Value::Object(object) => object
+                .set_prototype_slot(prototype)
+                .map_err(|()| failed())?,
+            Value::Map(map) => map
+                .object()
+                .set_prototype_slot(prototype)
+                .map_err(|()| failed())?,
+            Value::Set(set) => set
+                .object()
+                .set_prototype_slot(prototype)
+                .map_err(|()| failed())?,
+            Value::Array(elements) => elements
+                .set_prototype(prototype.and_then(|prototype| prototype.as_object()))
+                .map_err(|()| failed())?,
+            Value::Function(function) => function
+                .set_internal_prototype_slot(prototype)
+                .map_err(|()| failed())?,
             _ => {}
         },
         Value::Array(elements) => elements
-            .set_prototype(prototype)
-            .map_err(|()| RuntimeError {
-                thrown: None,
-                message: "Object.setPrototypeOf failed".to_owned(),
-            })?,
-        Value::Function(function) => {
-            function
-                .set_internal_prototype(prototype)
-                .map_err(|()| RuntimeError {
-                    thrown: None,
-                    message: "Object.setPrototypeOf failed".to_owned(),
-                })?
-        }
+            .set_prototype(prototype.and_then(|prototype| prototype.as_object()))
+            .map_err(|()| failed())?,
+        Value::Function(function) => function
+            .set_internal_prototype_slot(prototype)
+            .map_err(|()| failed())?,
         Value::String(_) | Value::Number(_) | Value::BigInt(_) | Value::Boolean(_) => {}
         Value::Null | Value::Undefined => {
             return Err(RuntimeError {
@@ -252,32 +222,23 @@ pub(crate) fn native_object_prototype_is_prototype_of(
     env: &HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    let Some(target_prototype) = value_prototype(target, env) else {
+    let Some(target_prototype) = value_prototype_slot(target, env) else {
         return Ok(Value::Boolean(false));
     };
-    let prototype = match this_value {
-        Value::Object(prototype) => prototype,
-        Value::Null | Value::Undefined => {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "isPrototypeOf called on non-object".to_owned(),
-            });
+    match this_value {
+        Value::Null | Value::Undefined => Err(RuntimeError {
+            thrown: None,
+            message: "isPrototypeOf called on non-object".to_owned(),
+        }),
+        // `this` may be any object (including a function, an array, ...); a
+        // primitive `this` can never appear in a prototype chain.
+        Value::String(_) | Value::Number(_) | Value::BigInt(_) | Value::Boolean(_) => {
+            Ok(Value::Boolean(false))
         }
-        Value::Function(_)
-        | Value::Array(_)
-        | Value::Map(_)
-        | Value::Set(_)
-        | Value::Proxy(_)
-        | Value::String(_)
-        | Value::Number(_)
-        | Value::BigInt(_)
-        | Value::Boolean(_) => {
-            return Ok(Value::Boolean(false));
-        }
-    };
-    Ok(Value::Boolean(
-        target_prototype.ptr_eq(&prototype) || target_prototype.has_prototype(&prototype),
-    ))
+        this_value => Ok(Value::Boolean(
+            target_prototype.chain_contains_value(&this_value),
+        )),
+    }
 }
 
 pub(crate) fn native_object_prototype_to_string(

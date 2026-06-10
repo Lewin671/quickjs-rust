@@ -26,10 +26,17 @@ Implement generator functions and round out the iteration protocol. At commit
       exits the bytecode loop and resume re-enters it, delivering the resume
       value or an injected return/throw completion through the existing
       try/finally unwinder. Scope cuts deferred to later slices: `yield*`
-      delegation (S3, still a structured early error) and the
-      `%GeneratorFunction%` / `%GeneratorFunction.prototype%` intrinsic identity
-      chain (the runtime cannot yet use a function as a `[[Prototype]]`, so
-      `Object.getPrototypeOf(g).constructor` identity is a follow-up).
+      delegation (S3, still a structured early error). The
+      `%GeneratorFunction.prototype%` intrinsic chain is now wired: functions
+      are first-class [[Prototype]] values, so a generator function's
+      [[Prototype]] is `%GeneratorFunction.prototype%` (an object whose
+      [[Prototype]] is `%Function.prototype%`, carrying the "GeneratorFunction"
+      toStringTag and `prototype` = `%GeneratorPrototype%`), and a generator
+      function carries its own `prototype` object inheriting
+      `%GeneratorPrototype%`. Remaining follow-up: the callable
+      `%GeneratorFunction%` constructor intrinsic itself (and the
+      `Object.getPrototypeOf(g).constructor` back-reference to it) is not yet
+      installed, so there is no global `GeneratorFunction` binding.
 - [x] S3 Runtime: `yield*` delegation, including return/throw forwarding and
       iterator-close interaction. `yield*` compiles to `Op::YieldDelegate`,
       which runs the ES2023 14.4.14 loop in the VM: it resolves the inner

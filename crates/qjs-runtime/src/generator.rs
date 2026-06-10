@@ -9,12 +9,17 @@ use std::collections::HashMap;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
     bytecode::{GeneratorOutcome, GeneratorStart, GeneratorState, Resume, resume_generator},
-    object_prototype, symbol,
+    function_intrinsic_prototype, object_prototype, symbol,
 };
 
 /// Intrinsic binding for `%GeneratorPrototype%`, propagated into call frames so
 /// a `function*` can reach it when building its generator objects.
 pub(crate) const GENERATOR_PROTOTYPE_BINDING: &str = "\0GeneratorPrototype";
+
+/// Intrinsic binding for `%GeneratorFunction.prototype%`, the object that sits
+/// between a generator function and `%Function.prototype%` in the prototype
+/// chain.
+pub(crate) const GENERATOR_FUNCTION_PROTOTYPE_BINDING: &str = "\0GeneratorFunctionPrototype";
 
 /// Installs `%GeneratorPrototype%` (with `next`/`return`/`throw`,
 /// `Symbol.iterator`, and the `Generator` toStringTag) and the
@@ -56,16 +61,58 @@ pub(crate) fn install_generator(
     generator_prototype.set_to_string_tag("Generator");
     symbol::define_well_known_to_string_tag(env, &generator_prototype, "Generator");
 
-    // The %GeneratorFunction% / %GeneratorFunction.prototype% intrinsic chain
-    // (so `Object.getPrototypeOf(g).constructor` walks to GeneratorFunction) is
-    // a follow-up: the runtime cannot yet use a function as a [[Prototype]]
-    // value, so wiring it here would not match observable identity.
-    let _ = &object_prototype;
+    // `%GeneratorFunction.prototype%` is the [[Prototype]] every generator
+    // function points at. Its own [[Prototype]] is `%Function.prototype%`, it
+    // exposes `%GeneratorPrototype%` as its `prototype`, and carries the
+    // "GeneratorFunction" toStringTag. The callable `%GeneratorFunction%`
+    // constructor itself is not yet installed (follow-up), so `constructor` and
+    // a global `GeneratorFunction` binding are absent for now.
+    let generator_function_prototype = ObjectRef::with_prototype(
+        HashMap::new(),
+        function_intrinsic_prototype(env).or(Some(object_prototype)),
+    );
+    generator_function_prototype.define_property(
+        "prototype".to_owned(),
+        Property::data(
+            Value::Object(generator_prototype.clone()),
+            false,
+            false,
+            true,
+        ),
+    );
+    generator_function_prototype.set_to_string_tag("GeneratorFunction");
+    symbol::define_well_known_to_string_tag(
+        env,
+        &generator_function_prototype,
+        "GeneratorFunction",
+    );
+    // %GeneratorPrototype%.constructor is %GeneratorFunction.prototype%.
+    generator_prototype.define_property(
+        "constructor".to_owned(),
+        Property::data(
+            Value::Object(generator_function_prototype.clone()),
+            false,
+            false,
+            true,
+        ),
+    );
 
     env.insert(
         GENERATOR_PROTOTYPE_BINDING.to_owned(),
         Value::Object(generator_prototype),
     );
+    env.insert(
+        GENERATOR_FUNCTION_PROTOTYPE_BINDING.to_owned(),
+        Value::Object(generator_function_prototype),
+    );
+}
+
+/// Returns `%GeneratorFunction.prototype%` from the current environment.
+pub(crate) fn generator_function_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+    match env.get(GENERATOR_FUNCTION_PROTOTYPE_BINDING) {
+        Some(Value::Object(object)) => Some(object.clone()),
+        _ => None,
+    }
 }
 
 /// Returns `%GeneratorPrototype%` from the current environment.
@@ -74,6 +121,12 @@ fn generator_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef> {
         Some(Value::Object(object)) => Some(object.clone()),
         _ => None,
     }
+}
+
+/// Returns `%GeneratorPrototype%` from the current environment (public alias for
+/// intrinsic wiring at function-creation time).
+pub(crate) fn generator_prototype_intrinsic(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+    generator_prototype(env)
 }
 
 /// Builds the generator object returned by calling a `function*`: an ordinary

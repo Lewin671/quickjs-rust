@@ -251,25 +251,27 @@ impl<'a> Vm<'a> {
                 } => {
                     let env = self.function_capture_env(&bytecode, &local_names);
                     self.refresh_captured_env(&env);
-                    self.stack.push(Value::Function(Function::new_user_compiled(
-                        CompiledUserFunction {
-                            name,
-                            params,
-                            env,
-                            bytecode,
-                            local_names,
-                            constructable,
-                            is_strict,
-                            lexical_this,
-                            lexical_arguments,
-                            is_generator,
-                            is_class_constructor: false,
-                            is_derived_constructor: false,
-                            home_object: None,
-                            super_constructor: None,
-                            captured_env: self.captured_env.clone(),
-                        },
-                    )));
+                    let function = Function::new_user_compiled(CompiledUserFunction {
+                        name,
+                        params,
+                        env,
+                        bytecode,
+                        local_names,
+                        constructable,
+                        is_strict,
+                        lexical_this,
+                        lexical_arguments,
+                        is_generator,
+                        is_class_constructor: false,
+                        is_derived_constructor: false,
+                        home_object: None,
+                        super_constructor: None,
+                        captured_env: self.captured_env.clone(),
+                    });
+                    if is_generator {
+                        self.wire_generator_function_intrinsics(&function);
+                    }
+                    self.stack.push(Value::Function(function));
                 }
                 Op::NewClass {
                     name,

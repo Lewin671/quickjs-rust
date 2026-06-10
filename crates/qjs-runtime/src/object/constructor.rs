@@ -152,9 +152,13 @@ pub(crate) fn native_object_create(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let object = match argument_values.first() {
-        Some(Value::Object(prototype)) => Value::Object(ObjectRef::with_prototype(
+        Some(Value::Object(prototype)) => Value::Object(ObjectRef::with_prototype_slot(
             HashMap::new(),
-            Some(prototype.clone()),
+            Some(crate::Prototype::Object(prototype.clone())),
+        )),
+        Some(Value::Function(prototype)) => Value::Object(ObjectRef::with_prototype_slot(
+            HashMap::new(),
+            Some(crate::Prototype::Function(prototype.clone())),
         )),
         Some(Value::Null) => Value::Object(ObjectRef::new(HashMap::new())),
         _ => {

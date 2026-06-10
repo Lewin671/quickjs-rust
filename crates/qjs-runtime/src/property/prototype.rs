@@ -9,21 +9,36 @@ pub(crate) fn constructor_prototype(
     callee: &Value,
     env: &HashMap<String, Value>,
 ) -> Option<ObjectRef> {
+    constructor_prototype_slot(callee, env).and_then(|prototype| prototype.as_object())
+}
+
+/// The [[Prototype]] a `new`-created instance receives from a constructor's
+/// `prototype` property, preserving a function-valued prototype.
+pub(crate) fn constructor_prototype_slot(
+    callee: &Value,
+    env: &HashMap<String, Value>,
+) -> Option<crate::Prototype> {
     let Value::Function(function) = callee else {
         return None;
     };
     if let Some(bound) = &function.bound {
-        return constructor_prototype(&bound.target, env);
+        return constructor_prototype_slot(&bound.target, env);
     }
     match function.properties.borrow().get("prototype") {
         Some(Property {
             value: Value::Object(prototype),
             ..
-        }) => Some(prototype.clone()),
+        }) => Some(crate::Prototype::Object(prototype.clone())),
+        Some(Property {
+            value: Value::Function(prototype),
+            ..
+        }) => Some(crate::Prototype::Function(prototype.clone())),
         Some(Property {
             value: Value::Array(array),
             ..
-        }) => Some(array_as_object_prototype(array, env)),
+        }) => Some(crate::Prototype::Object(array_as_object_prototype(
+            array, env,
+        ))),
         _ => None,
     }
 }
@@ -101,6 +116,31 @@ pub(crate) fn value_prototype(value: Value, env: &HashMap<String, Value>) -> Opt
     }
 }
 
+/// The immediate [[Prototype]] slot of `value`, preserving a function
+/// prototype. Falls back to the relevant intrinsic when a function or array has
+/// no explicit override.
+pub(crate) fn value_prototype_slot(
+    value: Value,
+    env: &HashMap<String, Value>,
+) -> Option<crate::Prototype> {
+    match value {
+        Value::Object(object) => object.prototype_slot(),
+        Value::Map(map) => map.object().prototype_slot(),
+        Value::Set(set) => set.object().prototype_slot(),
+        Value::Array(elements) => elements
+            .prototype_override()
+            .unwrap_or_else(|| array_prototype(env))
+            .map(crate::Prototype::Object),
+        Value::Function(function) => match function.internal_prototype_slot() {
+            Some(slot) => slot,
+            None => function_intrinsic_prototype(env).map(crate::Prototype::Object),
+        },
+        Value::Proxy(proxy) => value_prototype_slot(proxy.target(), env),
+        Value::String(_) | Value::Number(_) | Value::BigInt(_) | Value::Boolean(_) => None,
+        Value::Null | Value::Undefined => None,
+    }
+}
+
 fn object_prototype_property(env: &HashMap<String, Value>, key: &str) -> Option<Value> {
     object_prototype(env).and_then(|prototype| prototype.get(key))
 }
@@ -142,10 +182,22 @@ pub(crate) fn function_prototype_property(
     env: &HashMap<String, Value>,
     key: &str,
 ) -> Option<Value> {
-    function
-        .internal_prototype_override()
-        .unwrap_or_else(|| function_intrinsic_prototype(env))
-        .and_then(|prototype| prototype.get(key))
+    function_prototype_chain_descriptor(function, env, key).map(|property| property.value)
+}
+
+/// Walks a function's [[Prototype]] chain (object or function) for the
+/// descriptor `key`, resolving the implicit default to %Function.prototype%.
+pub(crate) fn function_prototype_chain_descriptor(
+    function: &Function,
+    env: &HashMap<String, Value>,
+    key: &str,
+) -> Option<Property> {
+    match function.internal_prototype_slot() {
+        Some(Some(crate::Prototype::Object(prototype))) => prototype.property(key),
+        Some(Some(crate::Prototype::Function(parent))) => parent.chain_property(key),
+        Some(None) => None,
+        None => function_intrinsic_prototype(env).and_then(|prototype| prototype.property(key)),
+    }
 }
 
 pub(crate) fn array_prototype_property(

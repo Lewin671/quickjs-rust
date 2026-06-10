@@ -14,18 +14,19 @@ pub(crate) fn native_reflect_get_prototype_of(
             thrown: None,
             message: "Reflect.getPrototypeOf target must be an object".to_owned(),
         }),
-        Some(Value::Object(object)) => {
-            Ok(object.prototype().map(Value::Object).unwrap_or(Value::Null))
-        }
+        Some(Value::Object(object)) => Ok(object
+            .prototype_slot()
+            .map(|prototype| prototype.to_value())
+            .unwrap_or(Value::Null)),
         Some(Value::Map(map)) => Ok(map
             .object()
-            .prototype()
-            .map(Value::Object)
+            .prototype_slot()
+            .map(|prototype| prototype.to_value())
             .unwrap_or(Value::Null)),
         Some(Value::Set(set)) => Ok(set
             .object()
-            .prototype()
-            .map(Value::Object)
+            .prototype_slot()
+            .map(|prototype| prototype.to_value())
             .unwrap_or(Value::Null)),
         Some(Value::Proxy(proxy)) => native_reflect_get_prototype_of(&[proxy.target()], env),
         Some(Value::Array(elements)) => Ok(elements
@@ -35,11 +36,9 @@ pub(crate) fn native_reflect_get_prototype_of(
             .unwrap_or(Value::Null)),
         Some(Value::Function(function)) => {
             Ok(error::native_error_constructor_parent(function, env)
-                .or_else(|| {
-                    function
-                        .internal_prototype_override()
-                        .unwrap_or_else(|| function_intrinsic_prototype(env))
-                        .map(Value::Object)
+                .or_else(|| match function.internal_prototype_slot() {
+                    Some(slot) => slot.map(|prototype| prototype.to_value()),
+                    None => function_intrinsic_prototype(env).map(Value::Object),
                 })
                 .unwrap_or(Value::Null))
         }
@@ -62,8 +61,11 @@ pub(crate) fn native_reflect_set_prototype_of(
                 message: "Reflect.setPrototypeOf prototype must be an object or null".to_owned(),
             });
         }
-        Value::Object(prototype) => Some(prototype),
-        Value::Array(array) => Some(array_as_object_prototype(&array, env)),
+        Value::Object(prototype) => Some(crate::Prototype::Object(prototype)),
+        Value::Array(array) => Some(crate::Prototype::Object(array_as_object_prototype(
+            &array, env,
+        ))),
+        Value::Function(function) => Some(crate::Prototype::Function(function)),
         Value::Null => None,
         _ => {
             return Err(RuntimeError {
@@ -73,6 +75,7 @@ pub(crate) fn native_reflect_set_prototype_of(
         }
     };
 
+    let as_object = |prototype: Option<crate::Prototype>| prototype.and_then(|p| p.as_object());
     let success = match target {
         Value::Object(object) if symbol::is_symbol_primitive(&object) => {
             return Err(RuntimeError {
@@ -80,19 +83,19 @@ pub(crate) fn native_reflect_set_prototype_of(
                 message: "Reflect.setPrototypeOf target must be an object".to_owned(),
             });
         }
-        Value::Object(object) => object.set_prototype(prototype).is_ok(),
-        Value::Map(map) => map.object().set_prototype(prototype).is_ok(),
-        Value::Set(set) => set.object().set_prototype(prototype).is_ok(),
+        Value::Object(object) => object.set_prototype_slot(prototype).is_ok(),
+        Value::Map(map) => map.object().set_prototype_slot(prototype).is_ok(),
+        Value::Set(set) => set.object().set_prototype_slot(prototype).is_ok(),
         Value::Proxy(proxy) => match proxy.target() {
-            Value::Object(object) => object.set_prototype(prototype).is_ok(),
-            Value::Map(map) => map.object().set_prototype(prototype).is_ok(),
-            Value::Set(set) => set.object().set_prototype(prototype).is_ok(),
-            Value::Array(elements) => elements.set_prototype(prototype).is_ok(),
-            Value::Function(function) => function.set_internal_prototype(prototype).is_ok(),
+            Value::Object(object) => object.set_prototype_slot(prototype).is_ok(),
+            Value::Map(map) => map.object().set_prototype_slot(prototype).is_ok(),
+            Value::Set(set) => set.object().set_prototype_slot(prototype).is_ok(),
+            Value::Array(elements) => elements.set_prototype(as_object(prototype)).is_ok(),
+            Value::Function(function) => function.set_internal_prototype_slot(prototype).is_ok(),
             _ => false,
         },
-        Value::Array(elements) => elements.set_prototype(prototype).is_ok(),
-        Value::Function(function) => function.set_internal_prototype(prototype).is_ok(),
+        Value::Array(elements) => elements.set_prototype(as_object(prototype)).is_ok(),
+        Value::Function(function) => function.set_internal_prototype_slot(prototype).is_ok(),
         Value::String(_)
         | Value::Number(_)
         | Value::BigInt(_)
