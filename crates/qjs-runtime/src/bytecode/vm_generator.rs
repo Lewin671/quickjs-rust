@@ -1,0 +1,297 @@
+//! Generator object runtime: the suspend/resume state machine backing
+//! `function*` bodies and the `next`/`return`/`throw` protocol methods.
+//!
+//! A generator object owns the resumable state of its body. Because the VM
+//! keeps all execution state explicitly (instruction pointer, value stack,
+//! locals, environment, and the try/finally stack), a suspended generator is
+//! just that owned state plus the `Rc<Bytecode>` of its body. Resuming rebuilds
+//! a [`Vm`] borrowing the held bytecode, delivers the resume value (or an
+//! injected return/throw completion) at the yield point, and runs until the
+//! next `Op::Yield`, an ordinary return, or an unwound abrupt completion.
+
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
+
+use crate::{ObjectRef, RuntimeError, Value};
+
+use super::ir::Bytecode;
+use super::vm::{Completion, Slot, Vm};
+use super::vm_try::TryFrame;
+
+/// The lifecycle state of a generator object (ES2023 27.5.3 [[GeneratorState]]).
+pub(crate) enum GeneratorState {
+    /// Created but never resumed: the first `next` runs the body from the top.
+    SuspendedStart(Box<GeneratorStart>),
+    /// Suspended at a `yield`: the next resume re-enters the saved VM.
+    SuspendedYield(Box<GeneratorSnapshot>),
+    /// Currently running: re-entrancy is a TypeError.
+    Executing,
+    /// Finished (return or uncaught throw): further `next` returns
+    /// `{ value: undefined, done: true }`.
+    Completed,
+}
+
+/// The captured call frame for a not-yet-started generator.
+pub(crate) struct GeneratorStart {
+    pub(crate) bytecode: Rc<Bytecode>,
+    pub(crate) env: HashMap<String, Value>,
+    pub(crate) captured_env: Rc<RefCell<HashMap<String, Value>>>,
+}
+
+/// A snapshot of a generator body's VM state, taken at a `yield`.
+pub(crate) struct GeneratorSnapshot {
+    bytecode: Rc<Bytecode>,
+    ip: usize,
+    stack: Vec<Value>,
+    locals: Vec<Slot>,
+    globals: HashMap<String, Value>,
+    captured_env: Rc<RefCell<HashMap<String, Value>>>,
+    sloppy_global_names: Vec<String>,
+    try_stack: Vec<TryFrame>,
+}
+
+/// How a suspended generator is resumed.
+pub(crate) enum Resume {
+    /// `next(v)`: deliver `v` as the value of the `yield` expression.
+    Next(Value),
+    /// `return(v)`: inject a return completion at the yield point so enclosing
+    /// `finally` blocks run.
+    Return(Value),
+    /// `throw(v)`: inject `v` as a thrown exception at the yield point.
+    Throw(Value),
+}
+
+/// The outcome of resuming a generator, mapped to an iterator result by the
+/// caller.
+pub(crate) enum GeneratorOutcome {
+    /// The body yielded: `{ value, done: false }`, state SuspendedYield.
+    Yield(Value),
+    /// The body returned (or a `return(v)` completed it): `{ value, done: true }`.
+    Return(Value),
+}
+
+impl Vm<'_> {
+    /// Propagates the body's final values for bindings it shares with the
+    /// resuming caller back into the caller's environment, so a generator that
+    /// mutates an outer `let`/`var` is observed by the resuming frame. Mirrors
+    /// the caller-binding write-back performed for ordinary function calls.
+    fn propagate_to_caller(&self, caller_env: &mut HashMap<String, Value>) {
+        for (name, slot) in caller_env.iter_mut() {
+            if crate::function::is_internal_binding_name(name) {
+                continue;
+            }
+            if let Some(value) = self.binding_value(name) {
+                *slot = value;
+            }
+        }
+    }
+
+    /// Reads a binding by name from the body's current locals (preferred) or
+    /// globals.
+    fn binding_value(&self, name: &str) -> Option<Value> {
+        if let Some(index) = self.bytecode.local_slot(name)
+            && let Some(Some(value)) = self.locals.get(index)
+        {
+            return Some(value.clone());
+        }
+        self.globals.get(name).cloned()
+    }
+
+    /// Captures the running generator body's state at a `yield`.
+    fn into_snapshot(self, bytecode: Rc<Bytecode>) -> GeneratorSnapshot {
+        GeneratorSnapshot {
+            bytecode,
+            ip: self.ip,
+            stack: self.stack,
+            locals: self.locals,
+            globals: self.globals,
+            captured_env: self.captured_env,
+            sloppy_global_names: self.sloppy_global_names,
+            try_stack: self.try_stack,
+        }
+    }
+}
+
+/// Drives a generator from `SuspendedStart`: builds the body VM and runs it.
+fn run_from_start(
+    start: GeneratorStart,
+    caller_env: &mut HashMap<String, Value>,
+) -> Result<(GeneratorState, GeneratorOutcome), RuntimeError> {
+    let GeneratorStart {
+        bytecode,
+        env,
+        captured_env,
+    } = start;
+    let mut vm = Vm::new_with_globals_and_captures(&bytecode, env, captured_env);
+    let result = vm.run_completion();
+    drive(result, vm, &bytecode, caller_env)
+}
+
+/// Resumes a generator suspended at a `yield`, delivering `resume`.
+fn run_from_yield(
+    snapshot: GeneratorSnapshot,
+    resume: Resume,
+    caller_env: &mut HashMap<String, Value>,
+) -> Result<(GeneratorState, GeneratorOutcome), RuntimeError> {
+    let bytecode = snapshot.bytecode.clone();
+    let mut vm =
+        Vm::new_with_globals_and_captures(&bytecode, snapshot.globals, snapshot.captured_env);
+    vm.ip = snapshot.ip;
+    vm.stack = snapshot.stack;
+    vm.locals = snapshot.locals;
+    vm.sloppy_global_names = snapshot.sloppy_global_names;
+    vm.try_stack = snapshot.try_stack;
+
+    let started = match resume {
+        // The yield expression evaluates to the resume value.
+        Resume::Next(value) => {
+            vm.stack.push(value);
+            Ok(())
+        }
+        // A `throw(v)` raises `v` at the yield point so the body's catch/finally
+        // can handle it; an unwound throw is the generator's completion.
+        Resume::Throw(value) => vm.throw_value(value),
+        // A `return(v)` injects a return completion that runs enclosing finally
+        // blocks; with no finally it completes the generator immediately.
+        Resume::Return(value) => match vm.return_value(value) {
+            Ok(Some(returned)) => {
+                vm.propagate_to_caller(caller_env);
+                return Ok((
+                    GeneratorState::Completed,
+                    GeneratorOutcome::Return(returned),
+                ));
+            }
+            Ok(None) => Ok(()),
+            Err(error) => Err(error),
+        },
+    };
+    if let Err(error) = started {
+        // The injected throw/return had no handler: the generator is done.
+        vm.propagate_to_caller(caller_env);
+        return Err(error);
+    }
+    let result = vm.run_completion();
+    drive(result, vm, &bytecode, caller_env)
+}
+
+/// Maps a body run result to a generator state transition and outcome,
+/// capturing a fresh snapshot on `yield`. Before returning, the body's writes
+/// to bindings it shares with the resuming caller propagate back, mirroring the
+/// caller-binding write-back ordinary function calls perform.
+fn drive(
+    result: Result<Completion, RuntimeError>,
+    vm: Vm<'_>,
+    bytecode: &Rc<Bytecode>,
+    caller_env: &mut HashMap<String, Value>,
+) -> Result<(GeneratorState, GeneratorOutcome), RuntimeError> {
+    vm.propagate_to_caller(caller_env);
+    match result {
+        Ok(Completion::Yield(value)) => {
+            let snapshot = vm.into_snapshot(bytecode.clone());
+            Ok((
+                GeneratorState::SuspendedYield(Box::new(snapshot)),
+                GeneratorOutcome::Yield(value),
+            ))
+        }
+        Ok(Completion::Return(value)) => {
+            Ok((GeneratorState::Completed, GeneratorOutcome::Return(value)))
+        }
+        Err(error) => Err(error),
+    }
+}
+
+/// Resumes the generator backing `generator`, applying `resume` and returning
+/// the iterator-result outcome. Enforces the `Executing` re-entrancy guard and
+/// transitions the stored state on every path.
+pub(crate) fn resume_generator(
+    generator: &ObjectRef,
+    resume: Resume,
+    caller_env: &mut HashMap<String, Value>,
+) -> Result<GeneratorOutcome, RuntimeError> {
+    // Take the state out behind the re-entrancy guard: a nested `next` while the
+    // body runs observes `Executing` and is rejected, and we never hold a borrow
+    // of the suspended VM across the body run.
+    let state = {
+        let mut slot = generator.generator_state().borrow_mut();
+        match slot.as_ref() {
+            None => {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: "TypeError: not a generator object".to_owned(),
+                });
+            }
+            Some(GeneratorState::Executing) => {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: "TypeError: generator is already running".to_owned(),
+                });
+            }
+            Some(_) => {}
+        }
+        slot.replace(GeneratorState::Executing)
+            .expect("state present")
+    };
+
+    match state {
+        GeneratorState::Executing => unreachable!("guarded above"),
+        GeneratorState::Completed => {
+            *generator.generator_state().borrow_mut() = Some(GeneratorState::Completed);
+            completed_outcome(resume)
+        }
+        GeneratorState::SuspendedStart(start) => {
+            // The first `next`'s argument is ignored. A `return(v)` before start
+            // completes the generator without running the body; a `throw(v)`
+            // before start completes it and rethrows.
+            match resume {
+                Resume::Next(_) => finish(generator, run_from_start(*start, caller_env)),
+                Resume::Return(value) => {
+                    *generator.generator_state().borrow_mut() = Some(GeneratorState::Completed);
+                    Ok(GeneratorOutcome::Return(value))
+                }
+                Resume::Throw(value) => {
+                    *generator.generator_state().borrow_mut() = Some(GeneratorState::Completed);
+                    Err(throw_completion(value))
+                }
+            }
+        }
+        GeneratorState::SuspendedYield(snapshot) => {
+            finish(generator, run_from_yield(*snapshot, resume, caller_env))
+        }
+    }
+}
+
+/// Stores the post-run state on the generator and returns its outcome, marking
+/// the generator `Completed` when the body run errors.
+fn finish(
+    generator: &ObjectRef,
+    result: Result<(GeneratorState, GeneratorOutcome), RuntimeError>,
+) -> Result<GeneratorOutcome, RuntimeError> {
+    match result {
+        Ok((state, outcome)) => {
+            *generator.generator_state().borrow_mut() = Some(state);
+            Ok(outcome)
+        }
+        Err(error) => {
+            *generator.generator_state().borrow_mut() = Some(GeneratorState::Completed);
+            Err(error)
+        }
+    }
+}
+
+/// The outcome of resuming an already-completed generator: `next`/`return`
+/// produce `{ value, done: true }`, while `throw` rethrows.
+fn completed_outcome(resume: Resume) -> Result<GeneratorOutcome, RuntimeError> {
+    match resume {
+        Resume::Next(_) => Ok(GeneratorOutcome::Return(Value::Undefined)),
+        Resume::Return(value) => Ok(GeneratorOutcome::Return(value)),
+        Resume::Throw(value) => Err(throw_completion(value)),
+    }
+}
+
+/// Builds the runtime error that carries a thrown JavaScript value so an
+/// enclosing `try` (or the host) observes it as an exception.
+pub(crate) fn throw_completion(value: Value) -> RuntimeError {
+    RuntimeError {
+        thrown: Some(Box::new(value.clone())),
+        message: format!("throw statement executed: {}", crate::error_value(value)),
+    }
+}

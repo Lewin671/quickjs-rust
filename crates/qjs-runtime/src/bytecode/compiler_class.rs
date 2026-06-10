@@ -55,12 +55,19 @@ impl Compiler {
         for element in &body.elements {
             match element {
                 ClassElement::Method(member) => {
-                    let Expr::Function { params, body, .. } = &member.value else {
+                    let Expr::Function {
+                        params,
+                        body,
+                        is_generator,
+                        ..
+                    } = &member.value
+                    else {
                         return Err(RuntimeError {
                             thrown: None,
                             message: "class member is not a method".to_owned(),
                         });
                     };
+                    let is_generator = *is_generator;
                     // Class bodies are strict mode code, so every method and the
                     // constructor compile with strict semantics regardless of
                     // context.
@@ -95,6 +102,7 @@ impl Compiler {
                             params: params.clone(),
                             local_names,
                             bytecode: Rc::new(bytecode),
+                            is_generator,
                         };
                         private_elements.push(match member.kind {
                             MethodKind::Getter => ClassPrivateElementDef::Getter {
@@ -125,6 +133,7 @@ impl Compiler {
                         params: params.clone(),
                         local_names,
                         bytecode: Rc::new(bytecode),
+                        is_generator,
                     }));
                 }
                 ClassElement::Field(field) => {

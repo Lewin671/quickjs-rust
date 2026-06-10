@@ -921,20 +921,20 @@ fn destructured_parameter_function_length_skips_defaults() {
 }
 
 #[test]
-fn generator_functions_report_not_yet_supported() {
-    // S1 parses generators and `yield`; evaluation lands in T010 S2. Until then
-    // the compiler reports a structured error rather than panicking.
+fn yield_delegation_reports_not_yet_supported() {
+    // S2 evaluates generators and plain `yield`; `yield*` delegation lands in
+    // T010 S3 and reports a structured error rather than panicking.
     for source in [
-        "function* g() { yield 1; } g();",
-        "(function* () { yield 1; });",
-        "({ *m() { yield 1; } });",
-        "class C { *m() { yield 1; } }",
+        "function* g() { yield* [1, 2]; } g();",
+        "(function* () { yield* [1]; });",
+        "({ *m() { yield* [1]; } });",
+        "class C { *m() { yield* [1]; } }",
     ] {
-        let error = eval(source).expect_err("generator should not yet evaluate");
+        let error = eval(source).expect_err("yield* should not yet evaluate");
         assert!(
             error
                 .message
-                .contains("generator functions are not yet supported"),
+                .contains("yield* delegation is not yet supported"),
             "unexpected error for {source:?}: {}",
             error.message
         );

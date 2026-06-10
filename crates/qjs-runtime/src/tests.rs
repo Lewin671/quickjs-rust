@@ -8,6 +8,7 @@ mod date_setters;
 mod errors;
 mod expressions;
 mod functions;
+mod generators;
 mod global;
 mod json;
 mod maps;

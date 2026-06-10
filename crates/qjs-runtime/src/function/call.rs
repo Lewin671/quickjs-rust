@@ -59,6 +59,29 @@ pub(crate) fn call_function(
         );
     }
     if let Some(bytecode) = &function.bytecode {
+        // Calling a generator function does not run its body: it captures the
+        // call frame and returns a generator object in the SuspendedStart state.
+        if function.is_generator {
+            let function_env = function_env(
+                &function,
+                bytecode,
+                callee,
+                this_value,
+                &argument_values,
+                env,
+                is_construct,
+            );
+            let activation_captured_env = Rc::new(RefCell::new(function_env.env.clone()));
+            return Ok(crate::generator::make_generator_object(
+                &function,
+                crate::bytecode::GeneratorStart {
+                    bytecode: bytecode.clone(),
+                    env: function_env.env,
+                    captured_env: activation_captured_env,
+                },
+                env,
+            ));
+        }
         // A base-class constructor initializes its instance fields right after
         // the receiver is created, before the constructor body runs. A derived
         // constructor defers this until `super(...)` binds `this`.

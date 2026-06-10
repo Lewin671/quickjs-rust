@@ -19,6 +19,9 @@ pub struct ObjectRef {
     prototype: Rc<RefCell<Option<ObjectRef>>>,
     to_string_tag: Rc<RefCell<Option<String>>>,
     raw_json: Rc<Cell<bool>>,
+    /// Generator [[GeneratorState]] for generator objects; `None` for ordinary
+    /// objects. Lazily allocated so non-generator objects pay only one `Rc`.
+    generator_state: Rc<RefCell<Option<crate::bytecode::GeneratorState>>>,
     /// Private-name state: per-object storage (fields and brands) and, for class
     /// prototype objects, the private environment their members resolve `#x`
     /// references through. Lazily populated.
@@ -62,8 +65,15 @@ impl ObjectRef {
             prototype: Rc::new(RefCell::new(prototype)),
             to_string_tag: Rc::new(RefCell::new(None)),
             raw_json: Rc::new(Cell::new(false)),
+            generator_state: Rc::new(RefCell::new(None)),
             private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
         }
+    }
+
+    /// The generator [[GeneratorState]] cell for this object. Non-generator
+    /// objects hold `None`; generator objects store their resumable state here.
+    pub(crate) fn generator_state(&self) -> &Rc<RefCell<Option<crate::bytecode::GeneratorState>>> {
+        &self.generator_state
     }
 
     /// Returns the object's private-name storage, creating it on first use.

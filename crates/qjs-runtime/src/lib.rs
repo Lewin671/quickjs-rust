@@ -12,6 +12,7 @@ mod conversion;
 mod date;
 mod error;
 mod function;
+mod generator;
 mod global;
 mod html_dda;
 mod json;
@@ -78,6 +79,7 @@ pub(crate) const ACTIVE_CONSTRUCTOR_BINDING: &str = "\0active_constructor";
 pub(crate) const RUNTIME_INTRINSIC_NAMES: &[&str] = &[
     GLOBAL_THIS_BINDING,
     symbol::SYMBOL_REGISTRY_BINDING,
+    generator::GENERATOR_PROTOTYPE_BINDING,
     "globalThis",
     "__quickjsRustIsHTMLDDA",
     "undefined",

@@ -92,6 +92,7 @@ pub(super) enum Op {
         is_strict: bool,
         lexical_this: bool,
         lexical_arguments: bool,
+        is_generator: bool,
     },
     /// Builds a class constructor function object, wires its `prototype` and
     /// `constructor` properties, and installs prototype methods. Pushes the
@@ -159,6 +160,10 @@ pub(super) enum Op {
     EndFinally,
     Return,
     Throw,
+    /// Suspends a generator body, yielding the value on top of the stack. When
+    /// the generator is resumed, the resume value (or an injected
+    /// return/throw completion) is delivered at this point.
+    Yield,
 }
 
 /// Compiled definition of a class constructor.
@@ -240,6 +245,8 @@ pub(super) struct ClassMethodDef {
     pub(super) params: FunctionParams,
     pub(super) local_names: Vec<String>,
     pub(super) bytecode: Rc<Bytecode>,
+    /// Whether the method is a generator method (`*m() {}`).
+    pub(super) is_generator: bool,
 }
 
 /// Compiled definition of a public class field. The initializer is compiled

@@ -23,6 +23,13 @@ use super::vm_try::TryFrame;
 
 pub(super) type Slot = Option<Value>;
 
+/// How the bytecode loop exited: an ordinary/abrupt return value, or a
+/// generator `yield` carrying the yielded value.
+pub(super) enum Completion {
+    Return(Value),
+    Yield(Value),
+}
+
 struct VmCallEnv {
     env: HashMap<String, Value>,
     binding_names: Option<Vec<String>>,
@@ -77,7 +84,7 @@ impl<'a> Vm<'a> {
         Self::new_with_globals_and_captures(bytecode, globals, captured_env)
     }
 
-    fn new_with_globals_and_captures(
+    pub(super) fn new_with_globals_and_captures(
         bytecode: &'a Bytecode,
         globals: HashMap<String, Value>,
         captured_env: Rc<RefCell<HashMap<String, Value>>>,
@@ -113,6 +120,19 @@ impl<'a> Vm<'a> {
     }
 
     fn run(&mut self) -> Result<Value, RuntimeError> {
+        match self.run_completion()? {
+            Completion::Return(value) => Ok(value),
+            Completion::Yield(_) => Err(RuntimeError {
+                thrown: None,
+                message: "yield evaluated outside a generator body".to_owned(),
+            }),
+        }
+    }
+
+    /// Runs the bytecode loop until it returns or yields. Generator bodies
+    /// re-enter this loop on each resume; ordinary functions and scripts run it
+    /// once and only ever observe `Completion::Return`.
+    pub(super) fn run_completion(&mut self) -> Result<Completion, RuntimeError> {
         loop {
             let op = self
                 .bytecode
@@ -228,6 +248,7 @@ impl<'a> Vm<'a> {
                     is_strict,
                     lexical_this,
                     lexical_arguments,
+                    is_generator,
                 } => {
                     let env = self.function_capture_env(&bytecode, &local_names);
                     self.refresh_captured_env(&env);
@@ -242,6 +263,7 @@ impl<'a> Vm<'a> {
                             is_strict,
                             lexical_this,
                             lexical_arguments,
+                            is_generator,
                             is_class_constructor: false,
                             is_derived_constructor: false,
                             home_object: None,
@@ -363,18 +385,22 @@ impl<'a> Vm<'a> {
                 Op::ExitTry => self.exit_try()?,
                 Op::EndFinally => {
                     if let Some(value) = self.end_finally()? {
-                        return Ok(value);
+                        return Ok(Completion::Return(value));
                     }
                 }
                 Op::Return => {
                     let value = self.stack.pop().unwrap_or(Value::Undefined);
                     if let Some(value) = self.return_value(value)? {
-                        return Ok(value);
+                        return Ok(Completion::Return(value));
                     }
                 }
                 Op::Throw => {
                     let value = self.pop()?;
                     self.throw_value(value)?;
+                }
+                Op::Yield => {
+                    let value = self.pop()?;
+                    return Ok(Completion::Yield(value));
                 }
             }
         }

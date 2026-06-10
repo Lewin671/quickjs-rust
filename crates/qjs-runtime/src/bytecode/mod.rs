@@ -18,6 +18,7 @@ mod vm_bindings;
 mod vm_call;
 mod vm_class;
 mod vm_errors;
+mod vm_generator;
 mod vm_iter;
 mod vm_ops;
 mod vm_private;
@@ -32,6 +33,9 @@ use crate::{RuntimeError, Value};
 
 pub use ir::Bytecode;
 pub(crate) use vm_class::install_field_value;
+pub(crate) use vm_generator::{
+    GeneratorOutcome, GeneratorStart, GeneratorState, Resume, resume_generator,
+};
 pub(crate) use vm_private::apply_instance_private_elements;
 pub(crate) use vm_result::FunctionBytecodeResult;
 

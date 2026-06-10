@@ -269,12 +269,13 @@ impl Compiler {
                 is_generator,
                 ..
             } => {
-                if *is_generator {
-                    return Err(generators_not_supported());
-                }
                 let is_strict = self.strict || is_strict_function_body(body);
-                let bytecode =
-                    super::compiler::compile_function_body_with_strict(params, body, is_strict)?;
+                let bytecode = super::compiler::compile_function_body_with_strict_generator(
+                    params,
+                    body,
+                    is_strict,
+                    *is_generator,
+                )?;
                 let local_names =
                     collect_function_local_names(name.as_ref(), params, body, !lexical_arguments);
                 self.emit(Op::NewFunction {
@@ -282,10 +283,12 @@ impl Compiler {
                     params: params.clone(),
                     local_names,
                     bytecode: Rc::new(bytecode),
-                    constructable: *constructable,
+                    // A generator function is never constructable.
+                    constructable: *constructable && !*is_generator,
                     is_strict,
                     lexical_this: *lexical_this,
                     lexical_arguments: *lexical_arguments,
+                    is_generator: *is_generator,
                 });
                 Ok(())
             }
@@ -311,7 +314,20 @@ impl Compiler {
                 self.emit(Op::PrivateIn(name.clone()));
                 Ok(())
             }
-            Expr::Yield { .. } => Err(generators_not_supported()),
+            Expr::Yield {
+                argument, delegate, ..
+            } => {
+                if *delegate {
+                    // `yield*` delegation lands in T010 S3.
+                    return Err(yield_delegate_not_supported());
+                }
+                match argument {
+                    Some(argument) => self.compile_expr(argument)?,
+                    None => self.emit_load_undefined(),
+                }
+                self.emit(Op::Yield);
+                Ok(())
+            }
             Expr::Super { span } => Err(RuntimeError {
                 thrown: None,
                 message: format!(
@@ -485,12 +501,12 @@ impl Compiler {
     }
 }
 
-/// Builds the structured error reported when a generator function or `yield`
-/// expression is compiled. Generator evaluation lands in T010 S2; the parser
-/// already accepts the syntax in S1.
-pub(super) fn generators_not_supported() -> RuntimeError {
+/// Builds the structured error reported when a delegating `yield*` expression
+/// is compiled. Plain `yield` and generator bodies are supported in T010 S2;
+/// `yield*` delegation lands in T010 S3.
+pub(super) fn yield_delegate_not_supported() -> RuntimeError {
     RuntimeError {
         thrown: None,
-        message: "SyntaxError: generator functions are not yet supported".to_owned(),
+        message: "SyntaxError: yield* delegation is not yet supported".to_owned(),
     }
 }

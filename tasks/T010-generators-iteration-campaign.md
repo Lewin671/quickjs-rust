@@ -18,9 +18,18 @@ Implement generator functions and round out the iteration protocol. At commit
 
 - [x] S1 Parser: `function*` declarations/expressions, `yield` and `yield*`
       expressions with correct operator-precedence and strict-mode rules.
-- [ ] S2 Runtime: generator objects — suspend/resume state machine,
+- [x] S2 Runtime: generator objects — suspend/resume state machine,
       `next`/`return`/`throw`, completion semantics. Reuse the suspension
       design that T007 S3 will need; coordinate if both are active.
+      A generator object owns its body's resumable VM state
+      (`bytecode::vm_generator::GeneratorState` on `ObjectRef`); `Op::Yield`
+      exits the bytecode loop and resume re-enters it, delivering the resume
+      value or an injected return/throw completion through the existing
+      try/finally unwinder. Scope cuts deferred to later slices: `yield*`
+      delegation (S3, still a structured early error) and the
+      `%GeneratorFunction%` / `%GeneratorFunction.prototype%` intrinsic identity
+      chain (the runtime cannot yet use a function as a `[[Prototype]]`, so
+      `Object.getPrototypeOf(g).constructor` identity is a follow-up).
 - [ ] S3 Runtime: `yield*` delegation, including return/throw forwarding and
       iterator-close interaction.
 - [ ] S4 Iteration protocol cleanup: remaining `Symbol.iterator` gaps on

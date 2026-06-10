@@ -84,6 +84,19 @@ pub(super) fn compile_function_body_with_strict(
     .compile_function(params, body)
 }
 
+/// Compiles a function body. Generator bodies compile through the same path:
+/// `yield` is already gated by the parser and lowers to `Op::Yield`, while the
+/// generator-ness is carried on the resulting function value, not the bytecode.
+/// This wrapper documents the intent at the call sites that handle `*`.
+pub(super) fn compile_function_body_with_strict_generator(
+    params: &FunctionParams,
+    body: &[Stmt],
+    parent_strict: bool,
+    _is_generator: bool,
+) -> Result<Bytecode, RuntimeError> {
+    compile_function_body_with_strict(params, body, parent_strict)
+}
+
 impl Compiler {
     fn compile(mut self, script: &Script) -> Result<Bytecode, RuntimeError> {
         self.strict = is_strict_function_body(&script.body);

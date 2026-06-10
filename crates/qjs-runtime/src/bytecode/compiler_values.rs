@@ -292,26 +292,30 @@ impl Compiler {
         else {
             return Err(unsupported_stmt(stmt));
         };
-        if *is_generator {
-            return Err(super::compiler_expr::generators_not_supported());
-        }
         let blocked_arguments = self.annex_b_arguments_function_name_blocked(name);
         if self.annex_b_function_name_blocked(name) && !blocked_arguments {
             self.emit_load_undefined();
             return Ok(());
         }
         let is_strict = self.strict || is_strict_function_body(body);
-        let bytecode = super::compiler::compile_function_body_with_strict(params, body, is_strict)?;
+        let bytecode = super::compiler::compile_function_body_with_strict_generator(
+            params,
+            body,
+            is_strict,
+            *is_generator,
+        )?;
         let local_names = collect_function_local_names(Some(name), params, body, true);
         self.emit(Op::NewFunction {
             name: Some(name.clone()),
             params: params.clone(),
             local_names,
             bytecode: Rc::new(bytecode),
-            constructable: true,
+            // A generator function is never constructable.
+            constructable: !*is_generator,
             is_strict,
             lexical_this: false,
             lexical_arguments: false,
+            is_generator: *is_generator,
         });
         if blocked_arguments {
             let slot = self.declare_lexical_slot(name, true);

@@ -64,6 +64,9 @@ pub struct Function {
     pub(crate) is_strict: bool,
     pub(crate) lexical_this: bool,
     pub(crate) lexical_arguments: bool,
+    /// Whether this is a generator function (`function*` / `*m()`), which
+    /// returns a generator object when called instead of running its body.
+    pub(crate) is_generator: bool,
     /// Whether this is a class constructor, which must be invoked with `new`.
     pub(crate) is_class_constructor: bool,
     /// Whether this is a derived (extends) class constructor, whose `this` is
@@ -113,6 +116,7 @@ pub(crate) struct CompiledUserFunction {
     pub(crate) is_strict: bool,
     pub(crate) lexical_this: bool,
     pub(crate) lexical_arguments: bool,
+    pub(crate) is_generator: bool,
     pub(crate) is_class_constructor: bool,
     pub(crate) is_derived_constructor: bool,
     pub(crate) home_object: Option<Value>,
@@ -220,6 +224,7 @@ impl Function {
             is_strict,
             lexical_this: lexical_bindings.this,
             lexical_arguments: lexical_bindings.arguments,
+            is_generator: false,
             is_class_constructor: false,
             is_derived_constructor: false,
             home_object: Rc::new(RefCell::new(None)),
@@ -259,6 +264,7 @@ impl Function {
             is_strict,
             lexical_this,
             lexical_arguments,
+            is_generator,
             is_class_constructor,
             is_derived_constructor,
             home_object,
@@ -278,6 +284,7 @@ impl Function {
             is_strict,
             lexical_this,
             lexical_arguments,
+            is_generator,
             is_class_constructor,
             is_derived_constructor,
             home_object: Rc::new(RefCell::new(home_object)),
@@ -363,6 +370,7 @@ impl Function {
             is_strict: false,
             lexical_this: false,
             lexical_arguments: false,
+            is_generator: false,
             is_class_constructor: false,
             is_derived_constructor: false,
             home_object: Rc::new(RefCell::new(None)),
@@ -408,6 +416,7 @@ impl Function {
             is_strict: false,
             lexical_this: false,
             lexical_arguments: false,
+            is_generator: false,
             is_class_constructor: false,
             is_derived_constructor: false,
             home_object: Rc::new(RefCell::new(None)),
