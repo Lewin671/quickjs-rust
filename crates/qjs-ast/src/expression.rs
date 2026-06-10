@@ -247,6 +247,18 @@ pub enum Expr {
         /// contain `yield` expressions and which produces a generator object
         /// when called.
         is_generator: bool,
+        /// Whether this is an async function (`async function`, `async () =>`,
+        /// async method), whose body may contain `await` expressions and which
+        /// produces a promise when called. Both `is_async` and `is_generator`
+        /// are set for an async generator (`async function*`).
+        is_async: bool,
+        /// Source span.
+        span: Span,
+    },
+    /// An `await` expression, valid only inside an async function body.
+    Await {
+        /// The awaited operand.
+        argument: Box<Expr>,
         /// Source span.
         span: Span,
     },
@@ -335,6 +347,7 @@ impl Expr {
             | Self::Call { span, .. }
             | Self::New { span, .. }
             | Self::Function { span, .. }
+            | Self::Await { span, .. }
             | Self::Yield { span, .. }
             | Self::Class { span, .. }
             | Self::Member { span, .. }

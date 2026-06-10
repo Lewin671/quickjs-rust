@@ -13,6 +13,13 @@ impl Parser {
         if let TokenKind::PrivateName(name) = &token.kind {
             return self.private_in_expression(name.clone(), token.span);
         }
+        // `await UnaryExpression` is only a keyword inside an async function
+        // body. In an async parameter list it is an early error; an ordinary
+        // nested function resets the async context, so `await` is an identifier
+        // there again.
+        if self.in_async && matches!(&token.kind, TokenKind::Identifier(name) if name == "await") {
+            return self.await_expression(token.span);
+        }
         if token.kind == TokenKind::PlusPlus || token.kind == TokenKind::MinusMinus {
             self.advance();
             let target = assignment_target(self.unary()?)?;
@@ -60,6 +67,25 @@ impl Parser {
         let span = Span::new(token.span.start, argument.span().end);
         Ok(Expr::Unary {
             op,
+            argument: Box::new(argument),
+            span,
+        })
+    }
+
+    /// Parses an `await UnaryExpression` expression. The caller has confirmed
+    /// an async context and an `await` token, which is the current token.
+    fn await_expression(&mut self, await_span: Span) -> Result<Expr, ParseError> {
+        // `await` is an early error in an async function's parameter list.
+        if self.in_async_params {
+            return Err(ParseError {
+                message: "`await` is not allowed in async function parameters".to_owned(),
+                span: await_span,
+            });
+        }
+        self.advance();
+        let argument = self.unary()?;
+        let span = Span::new(await_span.start, argument.span().end);
+        Ok(Expr::Await {
             argument: Box::new(argument),
             span,
         })

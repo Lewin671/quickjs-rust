@@ -198,18 +198,27 @@ impl Parser {
             self.advance();
         }
 
-        // A leading `*` marks a generator method; `static *m() {}` and
-        // `*#m() {}` are also valid. Accessors may not be generators.
+        // `async` marks an async method when followed (no line terminator) by a
+        // method-name start or `*`; otherwise `async` is the member name.
+        // Accessors may not be async (`get`/`set` cannot be async).
+        let is_async = self.at_async_method_prefix();
+        if is_async {
+            self.advance();
+        }
+
+        // A leading `*` marks a generator method; `static *m() {}`,
+        // `async *m() {}`, and `*#m() {}` are all valid. Accessors may not be
+        // generators.
         let is_generator = self.match_kind(&TokenKind::Star);
 
         // `get`/`set` introduce an accessor only when followed by a member
         // name start; `get() {}` or `set = 1` use them as the name. A generator
-        // marker rules out an accessor prefix.
+        // or async marker rules out an accessor prefix.
         let accessor_token = self
             .peek()
             .cloned()
             .expect("parser should always have eof token");
-        let accessor_kind = if is_generator {
+        let accessor_kind = if is_generator || is_async {
             None
         } else {
             match &accessor_token.kind {
@@ -247,6 +256,12 @@ impl Parser {
                     span: Span::new(member_start, self.previous_end()),
                 });
             }
+            if is_async {
+                return Err(ParseError {
+                    message: "async method requires a parameter list".to_owned(),
+                    span: Span::new(member_start, self.previous_end()),
+                });
+            }
             return self.class_field(is_static, key, key_text.as_deref(), member_start);
         }
 
@@ -259,8 +274,14 @@ impl Parser {
                 span: Span::new(member_start, self.previous_end()),
             });
         }
+        if is_async && is_constructor {
+            return Err(ParseError {
+                message: "class constructor may not be async".to_owned(),
+                span: Span::new(member_start, self.previous_end()),
+            });
+        }
 
-        let params = self.function_parameters_with_yield(is_generator)?;
+        let params = self.function_parameters_with_context(is_generator, is_async)?;
         reject_duplicate_method_parameters(&params)?;
         let body_start = self
             .peek()
@@ -271,17 +292,20 @@ impl Parser {
         // Every class member body may use `super.x`; only a derived-class
         // constructor body may use `super(...)`. Methods reset whatever
         // surrounding context existed (e.g. a class nested in a method). The
-        // yield context follows the generator marker.
+        // yield/await context follows the generator/async markers.
         let previous_method = self.in_method;
         let previous_derived = self.in_derived_constructor;
         let previous_generator = self.in_generator;
+        let previous_async = self.in_async;
         self.in_method = true;
         self.in_derived_constructor = is_constructor && has_heritage;
         self.in_generator = is_generator;
+        self.in_async = is_async;
         let body = self.block_body();
         self.in_method = previous_method;
         self.in_derived_constructor = previous_derived;
         self.in_generator = previous_generator;
+        self.in_async = previous_async;
         let body = body?;
         self.reject_invalid_function_parameters(&params, &body, body_start)?;
         let end = self.previous_end();
@@ -328,6 +352,7 @@ impl Parser {
             lexical_this: false,
             lexical_arguments: false,
             is_generator,
+            is_async,
             span: Span::new(member_start, end),
         };
         Ok(ClassElement::Method(ClassMember {

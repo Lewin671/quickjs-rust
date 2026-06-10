@@ -83,6 +83,17 @@ impl Parser {
             .span
             .start;
         self.expect(&TokenKind::For)?;
+        // `for await (... of ...)` iterates with the async protocol and is only
+        // valid inside an async function. `await` is the contextual keyword
+        // here, recognized only in async context.
+        let is_await = if self.in_async
+            && matches!(self.peek(), Some(token) if matches!(&token.kind, TokenKind::Identifier(name) if name == "await"))
+        {
+            let await_token = self.advance();
+            Some(await_token.span)
+        } else {
+            None
+        };
         self.expect(&TokenKind::LeftParen)?;
         if self.at(&TokenKind::Var) || self.at(&TokenKind::Let) || self.at(&TokenKind::Const) {
             let var_head_start = self.cursor;
@@ -116,7 +127,7 @@ impl Parser {
                         init,
                         span: left_span,
                     };
-                    return self.finish_for_in_of(start, left, true);
+                    return self.finish_for_in_of(start, left, ForKind::In, is_await);
                 }
                 if init.is_none() && self.match_contextual_keyword("of") {
                     let left = ForInLeft::VarDecl {
@@ -125,7 +136,7 @@ impl Parser {
                         init: None,
                         span: left_span,
                     };
-                    return self.finish_for_in_of(start, left, false);
+                    return self.finish_for_in_of(start, left, ForKind::Of, is_await);
                 }
             }
             self.cursor = var_head_start;
@@ -133,13 +144,32 @@ impl Parser {
             let cursor = self.cursor;
             if let Ok(left) = self.assignment_pattern() {
                 if self.match_kind(&TokenKind::In) {
-                    return self.finish_for_in_of(start, ForInLeft::Target(left), true);
+                    return self.finish_for_in_of(
+                        start,
+                        ForInLeft::Target(left),
+                        ForKind::In,
+                        is_await,
+                    );
                 }
                 if self.match_contextual_keyword("of") {
-                    return self.finish_for_in_of(start, ForInLeft::Target(left), false);
+                    return self.finish_for_in_of(
+                        start,
+                        ForInLeft::Target(left),
+                        ForKind::Of,
+                        is_await,
+                    );
                 }
             }
             self.cursor = cursor;
+        }
+
+        // A `for await` head that did not resolve to a for-of loop is a syntax
+        // error: `for await` requires the async iteration `of` form.
+        if let Some(await_span) = is_await {
+            return Err(ParseError {
+                message: "`for await` requires a `for await (... of ...)` loop".to_owned(),
+                span: await_span,
+            });
         }
 
         let init = if self.match_kind(&TokenKind::Semicolon) {
@@ -344,9 +374,19 @@ impl Parser {
         &mut self,
         start: usize,
         left: ForInLeft,
-        is_for_in: bool,
+        kind: ForKind,
+        is_await: Option<Span>,
     ) -> Result<Stmt, ParseError> {
-        let right = if is_for_in {
+        // `for await` is only valid with the `of` form.
+        if kind == ForKind::In
+            && let Some(await_span) = is_await
+        {
+            return Err(ParseError {
+                message: "`for await` may not be used with a for-in loop".to_owned(),
+                span: await_span,
+            });
+        }
+        let right = if kind == ForKind::In {
             self.expression()?
         } else {
             self.assignment()?
@@ -356,20 +396,26 @@ impl Parser {
         let end = stmt_end(&body);
         let span = Span::new(start, end);
         let body = Box::new(body);
-        Ok(if is_for_in {
-            Stmt::ForIn {
+        Ok(match kind {
+            ForKind::In => Stmt::ForIn {
                 left,
                 right,
                 body,
                 span,
-            }
-        } else {
-            Stmt::ForOf {
+            },
+            ForKind::Of => Stmt::ForOf {
                 left,
                 right,
                 body,
+                is_await: is_await.is_some(),
                 span,
-            }
+            },
         })
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ForKind {
+    In,
+    Of,
 }

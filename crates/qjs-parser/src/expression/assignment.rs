@@ -9,6 +9,9 @@ impl Parser {
         if self.in_generator && self.at_yield_keyword() {
             return self.yield_expression();
         }
+        if let Some(arrow) = self.async_arrow_function()? {
+            return Ok(arrow);
+        }
         if let Some(arrow) = self.arrow_function()? {
             return Ok(arrow);
         }
@@ -75,6 +78,108 @@ impl Parser {
             return Ok(None);
         };
         self.expect(&TokenKind::Arrow)?;
+        self.finish_arrow_function(start, params, false).map(Some)
+    }
+
+    /// Parses an async arrow function: `async x => body` or
+    /// `async (params) => body`. `async` is contextual, so this uses
+    /// cover-grammar lookahead — when the tokens after `async` do not form an
+    /// arrow head, the cursor is rewound and `Ok(None)` lets the caller parse
+    /// `async` as a plain identifier (e.g. the `async(x)` call expression).
+    /// There must be no line terminator between `async` and the parameters.
+    fn async_arrow_function(&mut self) -> Result<Option<Expr>, ParseError> {
+        let Some(async_token) = self.peek() else {
+            return Ok(None);
+        };
+        if !matches!(&async_token.kind, TokenKind::Identifier(name) if name == "async") {
+            return Ok(None);
+        }
+        // A following line terminator disqualifies an async arrow head.
+        let Some(next) = self.peek_nth(1) else {
+            return Ok(None);
+        };
+        let async_end = async_token.span.end;
+        let next_start = next.span.start;
+        let next_is_ident = matches!(&next.kind, TokenKind::Identifier(_));
+        let next_is_paren = next.kind == TokenKind::LeftParen;
+        if (!next_is_ident && !next_is_paren)
+            || self.has_line_terminator_between(async_end, next_start)
+        {
+            return Ok(None);
+        }
+
+        let start_cursor = self.cursor;
+        let start = async_token.span.start;
+        self.advance(); // consume `async`
+
+        // Inside the parameter list and body, `await` is the keyword form.
+        let previous_async = self.in_async;
+        self.in_async = true;
+        let parsed = self.async_arrow_head_and_body(start, start_cursor);
+        self.in_async = previous_async;
+        parsed
+    }
+
+    fn async_arrow_head_and_body(
+        &mut self,
+        start: usize,
+        start_cursor: usize,
+    ) -> Result<Option<Expr>, ParseError> {
+        let params = if self.at(&TokenKind::LeftParen) {
+            // `async (params) =>`: reuse the parenthesized cover grammar, which
+            // rewinds on its own when the parentheses are not an arrow head.
+            match self.parenthesized_arrow_parameters()? {
+                Some(params) => params,
+                None => {
+                    self.cursor = start_cursor;
+                    return Ok(None);
+                }
+            }
+        } else {
+            // `async ident =>`: a single identifier parameter, no line
+            // terminator before the arrow.
+            let token = self.advance();
+            let TokenKind::Identifier(param) = token.kind else {
+                unreachable!("caller checked identifier");
+            };
+            if !self.at(&TokenKind::Arrow) {
+                self.cursor = start_cursor;
+                return Ok(None);
+            }
+            self.reject_line_terminator_before_arrow(token.span)?;
+            if param == "await" {
+                return Err(ParseError {
+                    message: "`await` is not allowed as an async arrow parameter".to_owned(),
+                    span: token.span,
+                });
+            }
+            if self.strict && restricted_strict_arrow_parameter(&param) {
+                return Err(ParseError {
+                    message: "restricted arrow parameter name in strict mode".to_owned(),
+                    span: token.span,
+                });
+            }
+            if reserved_arrow_parameter(&param, self.strict) {
+                return Err(ParseError {
+                    message: "reserved arrow parameter name".to_owned(),
+                    span: token.span,
+                });
+            }
+            FunctionParams::positional(vec![param])
+        };
+        self.expect(&TokenKind::Arrow)?;
+        self.finish_arrow_function(start, params, true).map(Some)
+    }
+
+    /// Finishes an arrow function after its parameters and `=>` are consumed,
+    /// parsing the body (with the async context already in effect for an async
+    /// arrow) and assembling the function expression.
+    fn finish_arrow_function(
+        &mut self,
+        start: usize,
+        params: FunctionParams,
+        is_async: bool,
+    ) -> Result<Expr, ParseError> {
         let body_start = self
             .peek()
             .expect("parser should always have eof token")
@@ -102,7 +207,7 @@ impl Parser {
             .expect("parser should always have eof token")
             .span
             .end;
-        Ok(Some(Expr::Function {
+        Ok(Expr::Function {
             name: None,
             params,
             body,
@@ -110,8 +215,9 @@ impl Parser {
             lexical_this: true,
             lexical_arguments: true,
             is_generator: false,
+            is_async,
             span: Span::new(start, end),
-        }))
+        })
     }
 
     fn arrow_parameters(&mut self) -> Result<Option<FunctionParams>, ParseError> {

@@ -21,7 +21,7 @@ not-run, plus the 277 async-iteration actionable gaps.
 - [x] S1 Runtime: promise job queue — enqueue promise reactions as jobs,
       drain the queue after script evaluation. Existing Promise surface keeps
       its semantics; ordering tests at the runtime layer.
-- [ ] S2 Parser: `async function` declarations/expressions and `await`
+- [x] S2 Parser: `async function` declarations/expressions and `await`
       expressions, including arrow forms. Parser-only; spans and focused
       tests.
 - [ ] S3 Runtime: evaluate async functions — suspend/resume on `await`,

@@ -85,6 +85,9 @@ pub enum Stmt {
         right: Expr,
         /// Loop body.
         body: Box<Stmt>,
+        /// Whether this is a `for await (... of ...)` loop, which iterates with
+        /// the async iteration protocol. Only valid inside an async function.
+        is_await: bool,
         /// Source span.
         span: Span,
     },
@@ -118,6 +121,10 @@ pub enum Stmt {
         body: Vec<Stmt>,
         /// Whether this is a generator declaration (`function*`).
         is_generator: bool,
+        /// Whether this is an async function declaration (`async function`).
+        /// Both `is_async` and `is_generator` are set for an async generator
+        /// declaration (`async function*`).
+        is_async: bool,
         /// Source span.
         span: Span,
     },

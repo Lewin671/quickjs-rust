@@ -1,4 +1,5 @@
 mod arrays;
+mod async_functions;
 mod bigint;
 mod bytecode;
 mod classes;

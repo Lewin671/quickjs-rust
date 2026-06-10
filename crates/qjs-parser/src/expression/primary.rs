@@ -8,6 +8,15 @@ use crate::{ParseError, Parser};
 
 impl Parser {
     pub(crate) fn primary(&mut self) -> Result<Expr, ParseError> {
+        // `async function ...` is an async function expression. `async` is
+        // contextual; with no `function` immediately after it is a plain
+        // identifier (and `async ... =>` arrow forms are handled earlier in the
+        // assignment parser).
+        if self.at_async_function_keyword() {
+            let async_token = self.advance();
+            self.expect(&TokenKind::Function)?;
+            return self.function_expression_with_async(async_token.span.start, true);
+        }
         let token = self.advance();
         match token.kind {
             TokenKind::Identifier(name) => {
@@ -352,7 +361,26 @@ impl Parser {
         if !self.at(&TokenKind::RightBrace) {
             loop {
                 if self.at(&TokenKind::Star) {
-                    let property = self.object_generator_method()?;
+                    let property = self.object_generator_method(false, None)?;
+                    properties.push(property);
+                    if !self.match_kind(&TokenKind::Comma) {
+                        break;
+                    }
+                    if self.at(&TokenKind::RightBrace) {
+                        break;
+                    }
+                    continue;
+                }
+                // `async m() {}` / `async *m() {}` async methods. `async` is a
+                // modifier only when it is followed (no line terminator) by a
+                // method-name start; otherwise it is a property name.
+                if self.at_async_method_prefix() {
+                    let async_token = self.advance();
+                    let property = if self.at(&TokenKind::Star) {
+                        self.object_generator_method(true, Some(async_token.span.start))?
+                    } else {
+                        self.object_async_method(async_token.span.start)?
+                    };
                     properties.push(property);
                     if !self.match_kind(&TokenKind::Comma) {
                         break;
@@ -480,6 +508,7 @@ impl Parser {
                 lexical_this: false,
                 lexical_arguments: false,
                 is_generator: false,
+                is_async: false,
                 span: Span::new(key_span.start, end),
             });
         }
@@ -537,6 +566,7 @@ impl Parser {
                 lexical_this: false,
                 lexical_arguments: false,
                 is_generator: false,
+                is_async: false,
                 span: Span::new(start_span.start, end),
             },
         ))
@@ -579,30 +609,36 @@ impl Parser {
                 lexical_this: false,
                 lexical_arguments: false,
                 is_generator: false,
+                is_async: false,
                 span: Span::new(start_span.start, end),
             },
         ))
     }
 
     /// Parses a `*name() { ... }` generator method in an object literal. The
-    /// leading `*` is the current token.
-    fn object_generator_method(&mut self) -> Result<ObjectProperty, ParseError> {
+    /// leading `*` is the current token. `is_async` marks an `async *name()`
+    /// async generator method, with `async_start` the byte offset of `async`.
+    fn object_generator_method(
+        &mut self,
+        is_async: bool,
+        async_start: Option<usize>,
+    ) -> Result<ObjectProperty, ParseError> {
         let star = self.advance();
-        let start = star.span.start;
+        let start = async_start.unwrap_or(star.span.start);
         let key_token = self.advance();
         let (key, _) = self.object_property_key(key_token)?;
         let method_name = match &key {
             ObjectPropertyKey::Literal(name) => Some(name.clone()),
             ObjectPropertyKey::Computed(_) => None,
         };
-        let params = self.function_parameters_with_yield(true)?;
+        let params = self.function_parameters_with_context(true, is_async)?;
         reject_duplicate_method_parameters(&params)?;
         let body_start = self
             .peek()
             .expect("parser should always have eof token")
             .span
             .start;
-        let body = self.function_body(true)?;
+        let body = self.function_body_with_context(true, is_async)?;
         self.reject_invalid_function_parameters(&params, &body, body_start)?;
         let end = self
             .tokens
@@ -618,6 +654,7 @@ impl Parser {
             lexical_this: false,
             lexical_arguments: false,
             is_generator: true,
+            is_async,
             span: Span::new(start, end),
         };
         Ok(ObjectProperty {
@@ -626,6 +663,92 @@ impl Parser {
             value,
             span: Span::new(start, end),
         })
+    }
+
+    /// Parses an `async name() { ... }` async method in an object literal. The
+    /// `async` keyword has already been consumed; `start` is its byte offset.
+    fn object_async_method(&mut self, start: usize) -> Result<ObjectProperty, ParseError> {
+        let key_token = self.advance();
+        let key_span = key_token.span;
+        let (key, _) = self.object_property_key(key_token)?;
+        let method_name = match &key {
+            ObjectPropertyKey::Literal(name) => Some(name.clone()),
+            ObjectPropertyKey::Computed(_) => None,
+        };
+        if !self.at(&TokenKind::LeftParen) {
+            return Err(ParseError {
+                message: "expected `(` after async method name".to_owned(),
+                span: key_span,
+            });
+        }
+        let params = self.function_parameters_with_context(false, true)?;
+        reject_duplicate_method_parameters(&params)?;
+        let body_start = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .start;
+        let body = self.function_body_with_context(false, true)?;
+        self.reject_invalid_function_parameters(&params, &body, body_start)?;
+        let end = self
+            .tokens
+            .get(self.cursor.saturating_sub(1))
+            .expect("parser should always have eof token")
+            .span
+            .end;
+        let value = Expr::Function {
+            name: method_name,
+            params,
+            body,
+            constructable: false,
+            lexical_this: false,
+            lexical_arguments: false,
+            is_generator: false,
+            is_async: true,
+            span: Span::new(start, end),
+        };
+        Ok(ObjectProperty {
+            key,
+            kind: ObjectPropertyKind::Data,
+            value,
+            span: Span::new(start, end),
+        })
+    }
+
+    /// Reports whether the parser is at an `async` method prefix in an object
+    /// literal or class body: an `async` identifier with no following line
+    /// terminator, followed by a token that begins a method name (or `*` for an
+    /// async generator) rather than `(`, `:`, `,`, `}`, or `=` which would make
+    /// `async` itself the property/field name.
+    pub(crate) fn at_async_method_prefix(&self) -> bool {
+        let Some(async_token) = self.peek() else {
+            return false;
+        };
+        if !matches!(&async_token.kind, TokenKind::Identifier(name) if name == "async") {
+            return false;
+        }
+        let Some(next) = self.peek_nth(1) else {
+            return false;
+        };
+        if self.has_line_terminator_between(async_token.span.end, next.span.start) {
+            return false;
+        }
+        token_starts_async_method_name(&next.kind)
+    }
+}
+
+/// Reports whether a token can follow the `async` method modifier as the start
+/// of a method name (or generator marker). Punctuators that would make `async`
+/// a plain property name or field are excluded.
+pub(crate) fn token_starts_async_method_name(kind: &TokenKind) -> bool {
+    match kind {
+        TokenKind::Star
+        | TokenKind::Identifier(_)
+        | TokenKind::PrivateName(_)
+        | TokenKind::String(_)
+        | TokenKind::Number(_)
+        | TokenKind::LeftBracket => true,
+        other => keyword_property_name(other).is_some(),
     }
 }
 

@@ -287,11 +287,15 @@ impl Compiler {
             params,
             body,
             is_generator,
+            is_async,
             ..
         } = stmt
         else {
             return Err(unsupported_stmt(stmt));
         };
+        if *is_async {
+            return Err(super::compiler_expr::async_not_supported());
+        }
         let blocked_arguments = self.annex_b_arguments_function_name_blocked(name);
         if self.annex_b_function_name_blocked(name) && !blocked_arguments {
             self.emit_load_undefined();

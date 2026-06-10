@@ -69,6 +69,14 @@ impl Parser {
             return self.function_declaration();
         }
 
+        // `async function` (with no line terminator between) is an async
+        // function declaration. `async` followed by anything else is a plain
+        // identifier expression statement.
+        if self.at_async_function_keyword() {
+            let async_token = self.advance();
+            return self.function_declaration_with_async(async_token.span.start, true);
+        }
+
         if self.at(&TokenKind::Class) {
             return self.class_declaration();
         }

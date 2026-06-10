@@ -267,8 +267,12 @@ impl Compiler {
                 lexical_this,
                 lexical_arguments,
                 is_generator,
+                is_async,
                 ..
             } => {
+                if *is_async {
+                    return Err(async_not_supported());
+                }
                 let is_strict = self.strict || is_strict_function_body(body);
                 let bytecode = super::compiler::compile_function_body_with_strict_generator(
                     params,
@@ -342,6 +346,7 @@ impl Compiler {
                 self.emit(Op::Yield);
                 Ok(())
             }
+            Expr::Await { .. } => Err(async_not_supported()),
             Expr::Super { span } => Err(RuntimeError {
                 thrown: None,
                 message: format!(
@@ -512,5 +517,15 @@ impl Compiler {
         let end = self.code.len();
         self.patch_jump(end_jump, end);
         Ok(())
+    }
+}
+
+/// Builds the structured error reported when async functions, `await`
+/// expressions, or `for await` loops are evaluated. The parser accepts these
+/// forms (T007 S2); evaluation lands in S3.
+pub(super) fn async_not_supported() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "InternalError: async functions are not yet supported".to_owned(),
     }
 }

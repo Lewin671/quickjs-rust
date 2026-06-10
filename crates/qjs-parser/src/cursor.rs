@@ -15,6 +15,8 @@ impl Parser {
             in_field_initializer: false,
             in_generator: false,
             in_generator_params: false,
+            in_async: false,
+            in_async_params: false,
             private_scopes: Vec::new(),
             pending_private_refs: Vec::new(),
         }

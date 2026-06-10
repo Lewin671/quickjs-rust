@@ -54,6 +54,14 @@ struct Parser {
     /// Whether the parser is inside a generator's formal parameter list, where
     /// a `yield` expression is an early syntax error.
     in_generator_params: bool,
+    /// Whether the parser is inside an async function body (or an arrow nested
+    /// in one), where `await` is a keyword introducing an await expression and
+    /// `await` may not be used as an identifier. Ordinary nested functions
+    /// reset this; arrow functions inherit it.
+    in_async: bool,
+    /// Whether the parser is inside an async function's formal parameter list,
+    /// where an `await` expression is an early syntax error.
+    in_async_params: bool,
     /// Stack of private-name scopes. Each entry holds the private names declared
     /// by one class body currently being parsed; the innermost class is last.
     /// A private reference resolves against any scope in the stack.

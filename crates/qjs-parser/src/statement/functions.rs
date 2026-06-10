@@ -5,12 +5,14 @@ use crate::helpers::body_has_strict_directive;
 use crate::{ParseError, Parser};
 
 impl Parser {
-    pub(super) fn function_declaration(&mut self) -> Result<Stmt, ParseError> {
-        let start = self
-            .peek()
-            .expect("parser should always have eof token")
-            .span
-            .start;
+    /// Parses a function declaration. `is_async` is set when an `async` prefix
+    /// was already consumed by the caller; the `function` keyword is the
+    /// current token.
+    pub(super) fn function_declaration_with_async(
+        &mut self,
+        start: usize,
+        is_async: bool,
+    ) -> Result<Stmt, ParseError> {
         self.expect(&TokenKind::Function)?;
         let is_generator = self.match_kind(&TokenKind::Star);
         let name_token = self.advance();
@@ -26,14 +28,20 @@ impl Parser {
                 span: name_token.span,
             });
         }
+        if is_async && name == "await" {
+            return Err(ParseError {
+                message: "async function declaration may not be named `await`".to_owned(),
+                span: name_token.span,
+            });
+        }
 
-        let params = self.function_parameters_with_yield(is_generator)?;
+        let params = self.function_parameters_with_context(is_generator, is_async)?;
         let body_start = self
             .peek()
             .expect("parser should always have eof token")
             .span
             .start;
-        let body = self.function_body(is_generator)?;
+        let body = self.function_body_with_context(is_generator, is_async)?;
         self.reject_invalid_function_parameters(&params, &body, body_start)?;
         let end = self
             .tokens
@@ -47,11 +55,50 @@ impl Parser {
             params,
             body,
             is_generator,
+            is_async,
             span: Span::new(start.min(body_start), end),
         })
     }
 
+    /// Reports whether the parser is positioned at `async function` with no
+    /// line terminator between the two tokens, which begins an async function
+    /// declaration or expression. `async` is contextual, so a following line
+    /// terminator (which would force ASI) leaves `async` as an identifier.
+    pub(crate) fn at_async_function_keyword(&self) -> bool {
+        let Some(async_token) = self.peek() else {
+            return false;
+        };
+        if !matches!(&async_token.kind, TokenKind::Identifier(name) if name == "async") {
+            return false;
+        }
+        let Some(function_token) = self.peek_nth(1) else {
+            return false;
+        };
+        function_token.kind == TokenKind::Function
+            && !self.has_line_terminator_between(async_token.span.end, function_token.span.start)
+    }
+
+    pub(super) fn function_declaration(&mut self) -> Result<Stmt, ParseError> {
+        let start = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .start;
+        self.function_declaration_with_async(start, false)
+    }
+
     pub(crate) fn function_expression(&mut self, start: usize) -> Result<Expr, ParseError> {
+        self.function_expression_with_async(start, false)
+    }
+
+    /// Parses a function expression. `is_async` is set when an `async` prefix
+    /// was already consumed by the caller; the `function` keyword has already
+    /// been consumed by the caller.
+    pub(crate) fn function_expression_with_async(
+        &mut self,
+        start: usize,
+        is_async: bool,
+    ) -> Result<Expr, ParseError> {
         let is_generator = self.match_kind(&TokenKind::Star);
 
         let name = if let Some(Token {
@@ -70,18 +117,24 @@ impl Parser {
                     span: token.span,
                 });
             }
+            if is_async && name == "await" {
+                return Err(ParseError {
+                    message: "async function expression may not be named `await`".to_owned(),
+                    span: token.span,
+                });
+            }
             Some(name)
         } else {
             None
         };
 
-        let params = self.function_parameters_with_yield(is_generator)?;
+        let params = self.function_parameters_with_context(is_generator, is_async)?;
         let body_start = self
             .peek()
             .expect("parser should always have eof token")
             .span
             .start;
-        let body = self.function_body(is_generator)?;
+        let body = self.function_body_with_context(is_generator, is_async)?;
         self.reject_invalid_function_parameters(&params, &body, body_start)?;
         let end = self
             .tokens
@@ -93,10 +146,11 @@ impl Parser {
             name,
             params,
             body,
-            constructable: !is_generator,
+            constructable: !is_generator && !is_async,
             lexical_this: false,
             lexical_arguments: false,
             is_generator,
+            is_async,
             span: Span::new(start, end),
         })
     }
@@ -106,33 +160,57 @@ impl Parser {
     /// reset the surrounding `super`/yield context; arrows reuse this through
     /// the inherited context instead.
     pub(crate) fn function_body(&mut self, is_generator: bool) -> Result<Vec<Stmt>, ParseError> {
+        self.function_body_with_context(is_generator, false)
+    }
+
+    /// Parses a function body block, setting both the generator yield context
+    /// and the async await context for the duration of the body. Regular
+    /// function boundaries reset the surrounding generator/async context;
+    /// arrows reuse it through the inherited context instead.
+    pub(crate) fn function_body_with_context(
+        &mut self,
+        is_generator: bool,
+        is_async: bool,
+    ) -> Result<Vec<Stmt>, ParseError> {
         let previous_generator = self.in_generator;
+        let previous_async = self.in_async;
         self.in_generator = is_generator;
+        self.in_async = is_async;
         let body = self.without_super_context(Self::block_body);
         self.in_generator = previous_generator;
+        self.in_async = previous_async;
         body
     }
 
     pub(crate) fn function_parameters(&mut self) -> Result<FunctionParams, ParseError> {
-        self.function_parameters_with_yield(false)
+        self.function_parameters_with_context(false, false)
     }
 
     /// Parses a formal parameter list. Generator parameters parse with the
     /// surrounding yield context disabled so a `yield` in a default initializer
-    /// is an early error rather than a yield expression.
-    pub(crate) fn function_parameters_with_yield(
+    /// is an early error rather than a yield expression; async parameters
+    /// likewise make an `await` expression in a default an early error.
+    pub(crate) fn function_parameters_with_context(
         &mut self,
         is_generator: bool,
+        is_async: bool,
     ) -> Result<FunctionParams, ParseError> {
         let previous_generator = self.in_generator;
         let previous_generator_params = self.in_generator_params;
-        // Inside a generator's parameter list `yield` is in the keyword context
-        // (so it is recognized) but a yield expression is an early error.
+        let previous_async = self.in_async;
+        let previous_async_params = self.in_async_params;
+        // Inside a generator/async parameter list `yield`/`await` is in the
+        // keyword context (so it is recognized) but the corresponding
+        // expression is an early error.
         self.in_generator = is_generator;
         self.in_generator_params = is_generator;
+        self.in_async = is_async;
+        self.in_async_params = is_async;
         let params = self.parse_function_parameters();
         self.in_generator = previous_generator;
         self.in_generator_params = previous_generator_params;
+        self.in_async = previous_async;
+        self.in_async_params = previous_async_params;
         params
     }
 

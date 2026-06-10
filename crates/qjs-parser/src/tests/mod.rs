@@ -1,3 +1,4 @@
+mod async_functions;
 mod classes;
 mod expressions;
 mod generators;

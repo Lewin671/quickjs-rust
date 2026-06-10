@@ -712,8 +712,17 @@ impl Compiler {
                 left, right, body, ..
             } => self.compile_for_in(left, right, body),
             Stmt::ForOf {
-                left, right, body, ..
-            } => self.compile_for_of(left, right, body),
+                left,
+                right,
+                body,
+                is_await,
+                ..
+            } => {
+                if *is_await {
+                    return Err(super::compiler_expr::async_not_supported());
+                }
+                self.compile_for_of(left, right, body)
+            }
             Stmt::Return { argument, .. } => {
                 if let Some(argument) = argument {
                     self.compile_expr(argument)?;
