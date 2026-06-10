@@ -33,11 +33,19 @@ pub(super) enum Op {
     },
     NewObject(Vec<ObjectPropertyKind>),
     EnumerateKeys,
-    /// Drains an iterable on the stack into an array of its values.
-    IterableToList,
-    /// Replaces an array on the stack with a new array of its elements from `start`.
-    ArrayTailFrom {
-        start: usize,
+    /// Replaces an iterable on the stack with its iterator object.
+    GetIterator,
+    /// Pops a `next` method and an iterator, advances the iterator one step,
+    /// and pushes the step value (or undefined when exhausted). The boolean
+    /// local at `done_slot` records whether the iterator is done; it is also
+    /// set when the step itself fails, so abrupt completions skip the close.
+    IteratorStep {
+        done_slot: usize,
+    },
+    /// Pops a `next` method and an iterator and pushes an array of the
+    /// remaining iterator values, honoring and updating `done_slot`.
+    IteratorRest {
+        done_slot: usize,
     },
     /// Replaces a value on the stack with an object holding its remaining
     /// own enumerable string-keyed properties, excluding the listed keys.
@@ -55,7 +63,12 @@ pub(super) enum Op {
     CallMethod(usize),
     CallSpread,
     CallMethodSpread,
-    IteratorClose,
+    /// Pops an iterator and calls its `return` method when present. With
+    /// `swallow` set, errors from the close are ignored (the close happens
+    /// while another abrupt completion is already propagating).
+    IteratorClose {
+        swallow: bool,
+    },
     New(usize),
     NewSpread,
     NewFunction {

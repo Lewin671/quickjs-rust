@@ -54,6 +54,95 @@ fn evaluates_variable_declaration_rest_destructuring() {
 }
 
 #[test]
+fn array_destructuring_steps_iterator_lazily_and_closes_when_unfinished() {
+    assert_eq!(
+        eval(
+            "var steps = []; var iterable = {};
+             iterable[Symbol.iterator] = function() {
+               var n = 0;
+               return {
+                 next: function() { n += 1; steps.push('next' + n); return { value: n, done: n > 3 }; },
+                 return: function() { steps.push('return'); return {}; }
+               };
+             };
+             var [first, , third] = iterable;
+             steps.join(',') + '|' + first + '|' + third;"
+        ),
+        Ok(Value::String("next1,next2,next3,return|1|3".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var steps = []; var iterable = {};
+             iterable[Symbol.iterator] = function() {
+               var n = 0;
+               return {
+                 next: function() { n += 1; steps.push('next' + n); return { value: n, done: n > 2 }; },
+                 return: function() { steps.push('return'); return {}; }
+               };
+             };
+             var [head, ...tail] = iterable;
+             steps.join(',') + '|' + head + '|' + tail.join('+');"
+        ),
+        Ok(Value::String("next1,next2,next3|1|2".to_owned()))
+    );
+}
+
+#[test]
+fn array_destructuring_step_errors_skip_iterator_close() {
+    assert_eq!(
+        eval(
+            "var returned = false; var iterable = {};
+             iterable[Symbol.iterator] = function() {
+               var n = 0;
+               return {
+                 next: function() { n += 1; if (n === 2) { throw new Error('boom'); } return { value: n, done: false }; },
+                 return: function() { returned = true; return {}; }
+               };
+             };
+             var caught = '';
+             try { var [a, b] = iterable; } catch (error) { caught = error.message; }
+             caught + ':' + returned;"
+        ),
+        Ok(Value::String("boom:false".to_owned()))
+    );
+}
+
+#[test]
+fn array_destructuring_closes_iterator_on_abrupt_binding_completion() {
+    assert_eq!(
+        eval(
+            "var returned = false; var iterable = {};
+             iterable[Symbol.iterator] = function() {
+               return {
+                 next: function() { return { value: undefined, done: false }; },
+                 return: function() { returned = true; return {}; }
+               };
+             };
+             var caught = '';
+             try { var [a = (function() { throw new Error('dflt'); })()] = iterable; }
+             catch (error) { caught = error.message; }
+             caught + ':' + returned;"
+        ),
+        Ok(Value::String("dflt:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var returned = false; var iterable = {};
+             iterable[Symbol.iterator] = function() {
+               return {
+                 next: function() { return { value: null, done: false }; },
+                 return: function() { returned = true; return {}; }
+               };
+             };
+             var caught = false;
+             try { var [{nested}] = iterable; } catch (error) { caught = true; }
+             caught + ':' + returned;"
+        ),
+        Ok(Value::String("true:true".to_owned()))
+    );
+}
+
+#[test]
 fn destructuring_defaults_do_not_treat_html_dda_as_undefined() {
     assert_eq!(
         eval(

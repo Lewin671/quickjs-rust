@@ -179,7 +179,7 @@ impl Compiler {
 
         let break_cleanup = self.code.len();
         self.emit(Op::LoadLocal(iterator_slot));
-        self.emit(Op::IteratorClose);
+        self.emit(Op::IteratorClose { swallow: false });
         for slot in cleanup_slots {
             self.emit(Op::ClearLocal(*slot));
         }
