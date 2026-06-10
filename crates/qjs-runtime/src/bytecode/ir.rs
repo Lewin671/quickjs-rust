@@ -164,6 +164,18 @@ pub(super) enum Op {
     /// the generator is resumed, the resume value (or an injected
     /// return/throw completion) is delivered at this point.
     Yield,
+    /// Delegates to an inner iterable (`yield* expr`) per ES2023 14.4.14. The
+    /// iterable is on top of the stack on first entry; the op gets its
+    /// iterator and `next` method (stored in the two slots so they survive a
+    /// suspension), then drives the inner iterator: each non-done inner result
+    /// suspends the OUTER generator yielding that result object unwrapped, and
+    /// an `next`/`return`/`throw` resume is forwarded to the inner iterator.
+    /// When the inner iterator is done the op leaves the inner result's `value`
+    /// on the stack as the `yield*` expression value and execution continues.
+    YieldDelegate {
+        iterator_slot: usize,
+        next_slot: usize,
+    },
 }
 
 /// Compiled definition of a class constructor.

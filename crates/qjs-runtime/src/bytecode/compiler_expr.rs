@@ -318,8 +318,22 @@ impl Compiler {
                 argument, delegate, ..
             } => {
                 if *delegate {
-                    // `yield*` delegation lands in T010 S3.
-                    return Err(yield_delegate_not_supported());
+                    // `yield* expr` delegates to the iterable produced by
+                    // `expr` (ES2023 14.4.14). The whole delegation algorithm
+                    // (iterator-get, next/return/throw forwarding, and outer
+                    // suspension on each inner result) lives in the VM op so
+                    // the suspend/resume snapshot stays a plain re-entry point.
+                    match argument {
+                        Some(argument) => self.compile_expr(argument)?,
+                        None => self.emit_load_undefined(),
+                    }
+                    let iterator_slot = self.temp_local("yield_delegate_iterator");
+                    let next_slot = self.temp_local("yield_delegate_next");
+                    self.emit(Op::YieldDelegate {
+                        iterator_slot,
+                        next_slot,
+                    });
+                    return Ok(());
                 }
                 match argument {
                     Some(argument) => self.compile_expr(argument)?,
@@ -498,15 +512,5 @@ impl Compiler {
         let end = self.code.len();
         self.patch_jump(end_jump, end);
         Ok(())
-    }
-}
-
-/// Builds the structured error reported when a delegating `yield*` expression
-/// is compiled. Plain `yield` and generator bodies are supported in T010 S2;
-/// `yield*` delegation lands in T010 S3.
-pub(super) fn yield_delegate_not_supported() -> RuntimeError {
-    RuntimeError {
-        thrown: None,
-        message: "SyntaxError: yield* delegation is not yet supported".to_owned(),
     }
 }

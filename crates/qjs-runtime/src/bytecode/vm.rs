@@ -15,20 +15,14 @@ use crate::{
 use super::ir::{ArrayElementKind, Bytecode, Op};
 use super::util::{stack_underflow, typeof_value};
 use super::vm_call::{insert_scope_call_bindings, user_bytecode_function};
+use super::vm_iter::DelegateStep;
 use super::vm_props::{
     delete_property_key, get_property_key, property_set_uses_setter, set_property_key,
 };
-use super::vm_result::FunctionBytecodeResult;
+use super::vm_result::{Completion, FunctionBytecodeResult, ResumeMode};
 use super::vm_try::TryFrame;
 
 pub(super) type Slot = Option<Value>;
-
-/// How the bytecode loop exited: an ordinary/abrupt return value, or a
-/// generator `yield` carrying the yielded value.
-pub(super) enum Completion {
-    Return(Value),
-    Yield(Value),
-}
 
 struct VmCallEnv {
     env: HashMap<String, Value>,
@@ -69,6 +63,10 @@ pub(super) struct Vm<'a> {
     pub(super) try_stack: Vec<TryFrame>,
     pub(super) pending_throw: Option<Value>,
     pub(super) pending_return: Option<Value>,
+    /// Set just before re-entering a generator body suspended inside a
+    /// `yield*`, so the resumed `Op::YieldDelegate` forwards the resume to the
+    /// inner iterator. `None` for ordinary runs and plain-`yield` resumes.
+    pub(super) resume_mode: Option<ResumeMode>,
 }
 
 impl<'a> Vm<'a> {
@@ -100,6 +98,7 @@ impl<'a> Vm<'a> {
             try_stack: Vec::new(),
             pending_throw: None,
             pending_return: None,
+            resume_mode: None,
         }
     }
 
@@ -122,7 +121,7 @@ impl<'a> Vm<'a> {
     fn run(&mut self) -> Result<Value, RuntimeError> {
         match self.run_completion()? {
             Completion::Return(value) => Ok(value),
-            Completion::Yield(_) => Err(RuntimeError {
+            Completion::Yield(_) | Completion::YieldDelegate(_) => Err(RuntimeError {
                 thrown: None,
                 message: "yield evaluated outside a generator body".to_owned(),
             }),
@@ -402,6 +401,18 @@ impl<'a> Vm<'a> {
                     let value = self.pop()?;
                     return Ok(Completion::Yield(value));
                 }
+                Op::YieldDelegate {
+                    iterator_slot,
+                    next_slot,
+                } => match self.yield_delegate(iterator_slot, next_slot)? {
+                    DelegateStep::Suspend(value) => {
+                        return Ok(Completion::YieldDelegate(value));
+                    }
+                    DelegateStep::Return(value) => {
+                        return Ok(Completion::Return(value));
+                    }
+                    DelegateStep::Continue => {}
+                },
             }
         }
     }

@@ -30,8 +30,15 @@ Implement generator functions and round out the iteration protocol. At commit
       `%GeneratorFunction%` / `%GeneratorFunction.prototype%` intrinsic identity
       chain (the runtime cannot yet use a function as a `[[Prototype]]`, so
       `Object.getPrototypeOf(g).constructor` identity is a follow-up).
-- [ ] S3 Runtime: `yield*` delegation, including return/throw forwarding and
-      iterator-close interaction.
+- [x] S3 Runtime: `yield*` delegation, including return/throw forwarding and
+      iterator-close interaction. `yield*` compiles to `Op::YieldDelegate`,
+      which runs the ES2023 14.4.14 loop in the VM: it resolves the inner
+      iterator once, forwards `next`/`return`/`throw` resumes to it (a
+      `delegating` marker on the suspension routes the resume through
+      `Vm::resume_mode`), suspends the outer generator yielding each non-done
+      inner result object unwrapped, closes a throw-less inner iterator before
+      raising a TypeError, and turns a return-less inner `return` into an outer
+      return completion (running outer `finally` blocks).
 - [ ] S4 Iteration protocol cleanup: remaining `Symbol.iterator` gaps on
       built-in iterables and iterator-close paths beyond the for-of cases
       already landed.

@@ -919,24 +919,3 @@ fn destructured_parameter_function_length_skips_defaults() {
         Ok(Value::Number(0.0))
     );
 }
-
-#[test]
-fn yield_delegation_reports_not_yet_supported() {
-    // S2 evaluates generators and plain `yield`; `yield*` delegation lands in
-    // T010 S3 and reports a structured error rather than panicking.
-    for source in [
-        "function* g() { yield* [1, 2]; } g();",
-        "(function* () { yield* [1]; });",
-        "({ *m() { yield* [1]; } });",
-        "class C { *m() { yield* [1]; } }",
-    ] {
-        let error = eval(source).expect_err("yield* should not yet evaluate");
-        assert!(
-            error
-                .message
-                .contains("yield* delegation is not yet supported"),
-            "unexpected error for {source:?}: {}",
-            error.message
-        );
-    }
-}

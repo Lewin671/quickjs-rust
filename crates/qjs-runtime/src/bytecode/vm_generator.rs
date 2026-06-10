@@ -14,7 +14,8 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use crate::{ObjectRef, RuntimeError, Value};
 
 use super::ir::Bytecode;
-use super::vm::{Completion, Slot, Vm};
+use super::vm::{Slot, Vm};
+use super::vm_result::Completion;
 use super::vm_try::TryFrame;
 
 /// The lifecycle state of a generator object (ES2023 27.5.3 [[GeneratorState]]).
@@ -47,6 +48,10 @@ pub(crate) struct GeneratorSnapshot {
     captured_env: Rc<RefCell<HashMap<String, Value>>>,
     sloppy_global_names: Vec<String>,
     try_stack: Vec<TryFrame>,
+    /// Whether the suspension is inside a `yield*` delegation. When set, a
+    /// resume is forwarded to the inner iterator via `Vm::resume_mode` instead
+    /// of being delivered at the bytecode `yield` point.
+    delegating: bool,
 }
 
 /// How a suspended generator is resumed.
@@ -65,6 +70,10 @@ pub(crate) enum Resume {
 pub(crate) enum GeneratorOutcome {
     /// The body yielded: `{ value, done: false }`, state SuspendedYield.
     Yield(Value),
+    /// The body suspended inside a `yield*`: the carried value is the inner
+    /// iterator's result object, returned to the caller unwrapped (the spec
+    /// hands back the inner result without rebuilding it). State SuspendedYield.
+    YieldDelegate(Value),
     /// The body returned (or a `return(v)` completed it): `{ value, done: true }`.
     Return(Value),
 }
@@ -97,7 +106,7 @@ impl Vm<'_> {
     }
 
     /// Captures the running generator body's state at a `yield`.
-    fn into_snapshot(self, bytecode: Rc<Bytecode>) -> GeneratorSnapshot {
+    fn into_snapshot(self, bytecode: Rc<Bytecode>, delegating: bool) -> GeneratorSnapshot {
         GeneratorSnapshot {
             bytecode,
             ip: self.ip,
@@ -107,6 +116,7 @@ impl Vm<'_> {
             captured_env: self.captured_env,
             sloppy_global_names: self.sloppy_global_names,
             try_stack: self.try_stack,
+            delegating,
         }
     }
 }
@@ -140,6 +150,20 @@ fn run_from_yield(
     vm.locals = snapshot.locals;
     vm.sloppy_global_names = snapshot.sloppy_global_names;
     vm.try_stack = snapshot.try_stack;
+
+    // A suspension inside a `yield*` forwards the resume to the inner iterator:
+    // the re-entered `Op::YieldDelegate` reads `resume_mode` and decides how to
+    // drive (next/return/throw) the inner iterator and whether the outer body
+    // continues, suspends again, or completes.
+    if snapshot.delegating {
+        vm.resume_mode = Some(match resume {
+            Resume::Next(value) => super::vm_result::ResumeMode::Next(value),
+            Resume::Return(value) => super::vm_result::ResumeMode::Return(value),
+            Resume::Throw(value) => super::vm_result::ResumeMode::Throw(value),
+        });
+        let result = vm.run_completion();
+        return drive(result, vm, &bytecode, caller_env);
+    }
 
     let started = match resume {
         // The yield expression evaluates to the resume value.
@@ -186,10 +210,19 @@ fn drive(
     vm.propagate_to_caller(caller_env);
     match result {
         Ok(Completion::Yield(value)) => {
-            let snapshot = vm.into_snapshot(bytecode.clone());
+            let snapshot = vm.into_snapshot(bytecode.clone(), false);
             Ok((
                 GeneratorState::SuspendedYield(Box::new(snapshot)),
                 GeneratorOutcome::Yield(value),
+            ))
+        }
+        Ok(Completion::YieldDelegate(value)) => {
+            // Suspended inside a `yield*`: the yielded value is the inner
+            // iterator's result object, returned to the outer caller unwrapped.
+            let snapshot = vm.into_snapshot(bytecode.clone(), true);
+            Ok((
+                GeneratorState::SuspendedYield(Box::new(snapshot)),
+                GeneratorOutcome::YieldDelegate(value),
             ))
         }
         Ok(Completion::Return(value)) => {

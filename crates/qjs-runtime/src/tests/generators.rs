@@ -373,10 +373,194 @@ fn private_generator_method() {
 }
 
 #[test]
-fn yield_delegation_is_not_yet_supported() {
-    // `yield*` lands in T010 S3; it must report a structured early error.
-    let error = eval("function* g() { yield* [1, 2]; } g();").unwrap_err();
-    assert!(error.message.contains("yield*"), "got: {}", error.message);
+fn yield_delegation_over_array() {
+    assert_eq!(
+        number(
+            "function* g() { yield* [1, 2, 3]; } \
+             let it = g(); let sum = 0; \
+             for (let r = it.next(); !r.done; r = it.next()) sum += r.value; sum;"
+        ),
+        6.0
+    );
+}
+
+#[test]
+fn yield_delegation_over_string() {
+    assert_eq!(
+        string(
+            "function* g() { yield* 'ab'; } \
+             let it = g(); it.next().value + it.next().value;"
+        ),
+        "ab"
+    );
+}
+
+#[test]
+fn yield_delegation_over_generator() {
+    assert_eq!(
+        number(
+            "function* inner() { yield 1; yield 2; } \
+             function* outer() { yield* inner(); yield 3; } \
+             let it = outer(); \
+             it.next().value * 100 + it.next().value * 10 + it.next().value;"
+        ),
+        123.0
+    );
+}
+
+#[test]
+fn yield_delegation_expression_value_is_inner_return() {
+    // `yield* expr` evaluates to the inner iterator's final (done) value.
+    assert_eq!(
+        number(
+            "function* inner() { yield 1; return 42; } \
+             function* outer() { let v = yield* inner(); yield v; } \
+             let it = outer(); it.next(); it.next().value;"
+        ),
+        42.0
+    );
+}
+
+#[test]
+fn yield_delegation_nested_three_levels() {
+    assert_eq!(
+        number(
+            "function* a() { yield 1; yield 2; } \
+             function* b() { yield* a(); yield 3; } \
+             function* c() { yield* b(); yield 4; } \
+             let it = c(); let n = 0; \
+             for (let r = it.next(); !r.done; r = it.next()) n = n * 10 + r.value; n;"
+        ),
+        1234.0
+    );
+}
+
+#[test]
+fn yield_delegation_threads_next_argument_into_inner() {
+    // `next(v)` while delegating delivers `v` to the inner generator's yield.
+    assert_eq!(
+        number(
+            "function* inner() { let x = yield 1; return x; } \
+             function* outer() { let r = yield* inner(); yield r; } \
+             let it = outer(); it.next(); it.next(99).value;"
+        ),
+        99.0
+    );
+}
+
+#[test]
+fn yield_delegation_forwards_throw_into_inner_catch() {
+    assert_eq!(
+        number(
+            "function* inner() { try { yield 1; } catch (e) { yield e + 1; } } \
+             function* outer() { yield* inner(); } \
+             let it = outer(); it.next(); it.throw(40).value;"
+        ),
+        41.0
+    );
+}
+
+#[test]
+fn yield_delegation_throw_without_inner_throw_closes_and_type_errors() {
+    // A throwless inner iterator is closed (its `return` runs) and the outer
+    // `throw` becomes a TypeError at the `yield*` site.
+    assert!(boolean(
+        "let state = { closed: false }; \
+         let iterable = { [Symbol.iterator]() { return this; }, \
+             next() { return { value: 1, done: false }; }, \
+             return() { state.closed = true; return { value: undefined, done: true }; } }; \
+         function* outer() { yield* iterable; } \
+         let it = outer(); it.next(); \
+         let threw = false; \
+         try { it.throw(new TypeError('x')); } catch (e) { threw = true; } \
+         state.closed && threw;"
+    ));
+}
+
+#[test]
+fn yield_delegation_forwards_return_and_runs_inner_finally() {
+    assert_eq!(
+        number(
+            "let cleaned = 0; \
+             function* inner() { try { yield 1; yield 2; } finally { cleaned = 5; } } \
+             function* outer() { yield* inner(); } \
+             let it = outer(); it.next(); it.return(0); cleaned;"
+        ),
+        5.0
+    );
+}
+
+#[test]
+fn yield_delegation_return_without_inner_return_runs_outer_finally() {
+    // An inner iterator with no `return` makes `yield*` a return completion,
+    // which runs the OUTER generator's enclosing finally.
+    assert_eq!(
+        number(
+            "let cleaned = 0; \
+             let iterable = { [Symbol.iterator]() { return this; }, \
+                 next() { return { value: 1, done: false }; } }; \
+             function* outer() { try { yield* iterable; } finally { cleaned = 8; } } \
+             let it = outer(); it.next(); it.return(0); cleaned;"
+        ),
+        8.0
+    );
+}
+
+#[test]
+fn yield_delegation_return_value_is_returned() {
+    // `return(v)` while delegating (inner has no return) completes the outer
+    // generator with `{ value: v, done: true }`.
+    assert_eq!(
+        number(
+            "let iterable = { [Symbol.iterator]() { return this; }, \
+                 next() { return { value: 1, done: false }; } }; \
+             function* outer() { yield* iterable; } \
+             let it = outer(); it.next(); it.return(77).value;"
+        ),
+        77.0
+    );
+}
+
+#[test]
+fn yield_delegation_non_object_inner_result_type_errors() {
+    let error = eval(
+        "let iterable = { [Symbol.iterator]() { return this; }, \
+             next() { return 5; } }; \
+         function* outer() { yield* iterable; } \
+         let it = outer(); it.next();",
+    )
+    .unwrap_err();
+    assert!(
+        error.message.contains("TypeError"),
+        "got: {}",
+        error.message
+    );
+}
+
+#[test]
+fn yield_delegation_mixed_with_plain_yields() {
+    assert_eq!(
+        number(
+            "function* g() { yield 1; yield* [2, 3]; yield 4; } \
+             let it = g(); let n = 0; \
+             for (let r = it.next(); !r.done; r = it.next()) n = n * 10 + r.value; n;"
+        ),
+        1234.0
+    );
+}
+
+#[test]
+fn yield_delegation_over_custom_iterable() {
+    assert_eq!(
+        number(
+            "let iterable = { [Symbol.iterator]() { let i = 0; \
+                 return { next() { i++; return { value: i, done: i > 3 }; } }; } }; \
+             function* g() { yield* iterable; } \
+             let it = g(); let sum = 0; \
+             for (let r = it.next(); !r.done; r = it.next()) sum += r.value; sum;"
+        ),
+        6.0
+    );
 }
 
 #[test]

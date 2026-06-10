@@ -137,6 +137,9 @@ pub(crate) fn call_generator_native(
     let outcome = resume_generator(generator, resume, env)?;
     let result = match outcome {
         GeneratorOutcome::Yield(value) => iterator_result(value, false, env),
+        // `yield*` hands back the inner iterator's result object unchanged
+        // rather than rebuilding it.
+        GeneratorOutcome::YieldDelegate(value) => value,
         GeneratorOutcome::Return(value) => iterator_result(value, true, env),
     };
     Ok(Some(result))
