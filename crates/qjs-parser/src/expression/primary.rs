@@ -54,6 +54,7 @@ impl Parser {
             })),
             TokenKind::Null => Ok(Expr::Literal(Literal::Null { span: token.span })),
             TokenKind::This => Ok(Expr::This { span: token.span }),
+            TokenKind::Super => self.super_expression(token.span),
             TokenKind::Function => self.function_expression(token.span.start),
             TokenKind::Class => self.class_expression(token.span.start),
             TokenKind::RegularExpression { pattern, flags } => {
@@ -72,6 +73,39 @@ impl Parser {
                 span: token.span,
             }),
         }
+    }
+
+    /// Parses a `super` keyword reference, validating that it appears in a
+    /// legal context. `super.x`/`super[x]` require a method or accessor body;
+    /// `super(...)` requires a derived-class constructor body. A bare `super`
+    /// (not followed by `.`, `[`, or `(`) is always a syntax error.
+    fn super_expression(&mut self, span: Span) -> Result<Expr, ParseError> {
+        match self.peek().map(|token| &token.kind) {
+            Some(TokenKind::Dot | TokenKind::LeftBracket) => {
+                if !self.in_method {
+                    return Err(ParseError {
+                        message: "'super' property access is only allowed in methods".to_owned(),
+                        span,
+                    });
+                }
+            }
+            Some(TokenKind::LeftParen) => {
+                if !self.in_derived_constructor {
+                    return Err(ParseError {
+                        message: "'super' calls are only allowed in derived class constructors"
+                            .to_owned(),
+                        span,
+                    });
+                }
+            }
+            _ => {
+                return Err(ParseError {
+                    message: "'super' must be followed by '.', '[', or '('".to_owned(),
+                    span,
+                });
+            }
+        }
+        Ok(Expr::Super { span })
     }
 
     fn regexp_literal(&mut self, start: usize) -> Result<Expr, ParseError> {

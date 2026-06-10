@@ -76,6 +76,8 @@ pub enum TokenKind {
     Class,
     /// `extends`.
     Extends,
+    /// `super`.
+    Super,
     /// `return`.
     Return,
     /// `throw`.

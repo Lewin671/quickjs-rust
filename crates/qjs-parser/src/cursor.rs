@@ -10,6 +10,8 @@ impl Parser {
             cursor: 0,
             strict: false,
             allow_in: true,
+            in_method: false,
+            in_derived_constructor: false,
         }
     }
 

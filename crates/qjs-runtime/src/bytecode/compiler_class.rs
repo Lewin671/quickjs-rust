@@ -1,6 +1,9 @@
 use std::rc::Rc;
 
-use qjs_ast::{ClassBody, ClassMemberKey, Expr, FunctionParams, MethodKind};
+use qjs_ast::{
+    BindingPattern, CallArgument, ClassBody, ClassMemberKey, Expr, FunctionParams, MethodKind,
+    Span, Stmt,
+};
 
 use crate::{RuntimeError, function::collect_function_local_names};
 
@@ -20,6 +23,13 @@ impl Compiler {
         name: Option<&str>,
         body: &ClassBody,
     ) -> Result<(), RuntimeError> {
+        // Evaluate the heritage expression first so the parent constructor is
+        // beneath the computed keys when `NewClass` runs.
+        let has_heritage = body.heritage.is_some();
+        if let Some(heritage) = &body.heritage {
+            self.compile_expr(heritage)?;
+        }
+
         // Evaluate computed keys in source order so their side effects run in
         // class-definition order, ahead of building the constructor.
         let mut computed_key_count = 0usize;
@@ -78,24 +88,56 @@ impl Compiler {
             });
         }
 
-        let constructor = constructor.unwrap_or_else(|| default_constructor(name));
+        let constructor = constructor.unwrap_or_else(|| default_constructor(name, has_heritage));
 
         self.emit(Op::NewClass {
             name: name.map(str::to_owned),
             constructor,
             methods,
             computed_key_count,
+            has_heritage,
         });
         Ok(())
     }
 }
 
-/// Builds the implicit empty default constructor for a base class.
-fn default_constructor(name: Option<&str>) -> ClassConstructorDef {
-    let params = FunctionParams::positional(Vec::new());
+/// Builds the implicit default constructor. A base class gets an empty body;
+/// a derived class gets `constructor(...args) { super(...args); }`, forwarding
+/// its arguments to the parent constructor.
+fn default_constructor(name: Option<&str>, has_heritage: bool) -> ClassConstructorDef {
+    if !has_heritage {
+        let params = FunctionParams::positional(Vec::new());
+        let bytecode =
+            compile_function_body_with_strict(&params, &[], true).expect("empty body compiles");
+        let local_names = collect_function_local_names(None, &params, &[], true);
+        return ClassConstructorDef {
+            name: name.map(str::to_owned),
+            params,
+            local_names,
+            bytecode: Rc::new(bytecode),
+        };
+    }
+
+    // Derived default constructor: `constructor(...args) { super(...args); }`.
+    let zero = Span::new(0, 0);
+    let params = FunctionParams::new(
+        Vec::new(),
+        Some(BindingPattern::Identifier {
+            name: "args".to_owned(),
+            span: zero,
+        }),
+    );
+    let body = vec![Stmt::Expr(Expr::Call {
+        callee: Box::new(Expr::Super { span: zero }),
+        arguments: vec![CallArgument::Spread(Expr::Identifier {
+            name: "args".to_owned(),
+            span: zero,
+        })],
+        span: zero,
+    })];
     let bytecode =
-        compile_function_body_with_strict(&params, &[], true).expect("empty body compiles");
-    let local_names = collect_function_local_names(None, &params, &[], true);
+        compile_function_body_with_strict(&params, &body, true).expect("derived ctor compiles");
+    let local_names = collect_function_local_names(None, &params, &body, true);
     ClassConstructorDef {
         name: name.map(str::to_owned),
         params,

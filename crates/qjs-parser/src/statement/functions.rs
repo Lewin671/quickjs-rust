@@ -26,7 +26,7 @@ impl Parser {
             .expect("parser should always have eof token")
             .span
             .start;
-        let body = self.block_body()?;
+        let body = self.without_super_context(Self::block_body)?;
         self.reject_invalid_function_parameters(&params, &body, body_start)?;
         let end = self
             .tokens
@@ -68,7 +68,7 @@ impl Parser {
             .expect("parser should always have eof token")
             .span
             .start;
-        let body = self.block_body()?;
+        let body = self.without_super_context(Self::block_body)?;
         self.reject_invalid_function_parameters(&params, &body, body_start)?;
         let end = self
             .tokens
@@ -109,7 +109,7 @@ impl Parser {
                 .expect("parser should always have eof token")
                 .span
                 .start;
-            let body = self.block_body()?;
+            let body = self.without_super_context(Self::block_body)?;
             self.reject_invalid_function_parameters(&params, &body, body_start)?;
             let end = self
                 .tokens
@@ -228,6 +228,24 @@ impl Parser {
             });
         }
         Ok(params)
+    }
+
+    /// Runs `body` with `super` contexts cleared, restoring them afterward.
+    /// Regular function and constructor boundaries reset whether `super`
+    /// member access and `super(...)` calls are allowed; arrow functions keep
+    /// the surrounding context, so they do not use this helper.
+    pub(crate) fn without_super_context<T>(
+        &mut self,
+        body: impl FnOnce(&mut Self) -> Result<T, ParseError>,
+    ) -> Result<T, ParseError> {
+        let previous_method = self.in_method;
+        let previous_derived = self.in_derived_constructor;
+        self.in_method = false;
+        self.in_derived_constructor = false;
+        let result = body(self);
+        self.in_method = previous_method;
+        self.in_derived_constructor = previous_derived;
+        result
     }
 
     pub(crate) fn reject_invalid_function_parameters(

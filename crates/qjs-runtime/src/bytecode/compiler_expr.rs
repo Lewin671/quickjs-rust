@@ -289,12 +289,39 @@ impl Compiler {
             Expr::Member {
                 object, property, ..
             } => {
+                if matches!(object.as_ref(), Expr::Super { .. }) {
+                    return self.compile_super_member(property);
+                }
                 self.compile_expr(object)?;
                 self.compile_member_key(property)?;
                 self.emit(Op::GetProp);
                 Ok(())
             }
+            Expr::Super { span } => Err(RuntimeError {
+                thrown: None,
+                message: format!(
+                    "SyntaxError: 'super' keyword unexpected at byte {}",
+                    span.start
+                ),
+            }),
         }
+    }
+
+    /// Compiles `super.x` / `super[expr]` property reads.
+    fn compile_super_member(
+        &mut self,
+        property: &qjs_ast::MemberProperty,
+    ) -> Result<(), RuntimeError> {
+        match property {
+            qjs_ast::MemberProperty::Named(name) => {
+                self.emit(Op::SuperGet { key: name.clone() });
+            }
+            qjs_ast::MemberProperty::Computed(expr) => {
+                self.compile_expr(expr)?;
+                self.emit(Op::SuperGetComputed);
+            }
+        }
+        Ok(())
     }
 
     fn compile_literal(&mut self, literal: &Literal) -> Result<(), RuntimeError> {

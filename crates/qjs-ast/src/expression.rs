@@ -266,6 +266,10 @@ pub enum Expr {
     },
     /// A `this` expression.
     This { span: Span },
+    /// A `super` keyword reference. Only valid as the object of a member
+    /// access (`super.x`, `super[expr]`) or as the callee of a call
+    /// (`super(...)`); the parser enforces those contexts.
+    Super { span: Span },
     /// An identifier reference.
     Identifier { name: String, span: Span },
 }
@@ -312,6 +316,7 @@ impl Expr {
             | Self::Class { span, .. }
             | Self::Member { span, .. }
             | Self::This { span }
+            | Self::Super { span }
             | Self::Identifier { span, .. } => *span,
         }
     }

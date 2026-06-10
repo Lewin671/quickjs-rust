@@ -28,8 +28,19 @@ verification command is green and `./scripts/check.sh` passes.
       `prototype` wiring, `new` semantics, method definitions.
 - [x] S3 Parser + runtime: `static` methods, getters/setters, computed
       method names.
-- [ ] S4 Parser + runtime: `extends`, `super` calls and `super` property
-      access, derived-constructor `this` rules.
+- [x] S4 Parser + runtime: `extends`, `super` calls and `super` property
+      access, derived-constructor `this` rules. Implemented: heritage on class
+      nodes, `super.x`/`super[x]`/`super.x(...)` reads and method calls in
+      instance, static, and accessor bodies, `super(...)` in derived
+      constructors with `this`-TDZ (ReferenceError before super / super twice),
+      default derived constructor forwarding, `extends null` basics, heritage
+      non-constructor TypeError, instance prototype chain, and `new.target`
+      propagation so subclass instances get the right prototype. Known
+      follow-ups: `Object.getPrototypeOf(Sub) === Super` reference identity
+      (static inheritance is mirrored, not identity-preserving, because a
+      function cannot yet be a [[Prototype]] value); `super(...)` nested inside
+      an arrow function; subclassing exotic built-ins like `Array`; `new.target`
+      as user-visible syntax.
 - [x] S5 Harness: narrow the class pre-filter in
       `scripts/test262-baseline.sh` so runnable class cases execute; record a
       fresh burndown entry from the next full scan. (Filter removed before S4:

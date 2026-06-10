@@ -22,8 +22,8 @@ impl Parser {
                 span: name_token.span,
             });
         };
-        self.reject_class_extends()?;
-        let body = self.class_body()?;
+        let heritage = self.class_heritage()?;
+        let body = self.class_body(heritage)?;
         let span = Span::new(start, body.span.end);
         Ok(Stmt::ClassDecl { name, body, span })
     }
@@ -43,24 +43,24 @@ impl Parser {
         } else {
             None
         };
-        self.reject_class_extends()?;
-        let body = self.class_body()?;
+        let heritage = self.class_heritage()?;
+        let body = self.class_body(heritage)?;
         let span = Span::new(start, body.span.end);
         Ok(Expr::Class { name, body, span })
     }
 
-    fn reject_class_extends(&mut self) -> Result<(), ParseError> {
-        if self.at(&TokenKind::Extends) {
-            let token = self.advance();
-            return Err(ParseError {
-                message: "class `extends` clauses are not yet supported".to_owned(),
-                span: token.span,
-            });
+    /// Parses an optional `extends LeftHandSideExpression` heritage clause.
+    fn class_heritage(&mut self) -> Result<Option<Box<Expr>>, ParseError> {
+        if !self.match_kind(&TokenKind::Extends) {
+            return Ok(None);
         }
-        Ok(())
+        // The heritage is a LeftHandSideExpression: a member/call chain, with
+        // `super` not permitted as the bare base.
+        let heritage = self.without_super_context(Self::call)?;
+        Ok(Some(Box::new(heritage)))
     }
 
-    fn class_body(&mut self) -> Result<ClassBody, ParseError> {
+    fn class_body(&mut self, heritage: Option<Box<Expr>>) -> Result<ClassBody, ParseError> {
         let open = self
             .peek()
             .expect("parser should always have eof token")
@@ -70,12 +70,17 @@ impl Parser {
         // Class bodies are always strict-mode code.
         let previous_strict = self.strict;
         self.strict = true;
-        let result = self.class_members(open.start);
+        let result = self.class_members(open.start, heritage);
         self.strict = previous_strict;
         result
     }
 
-    fn class_members(&mut self, start: usize) -> Result<ClassBody, ParseError> {
+    fn class_members(
+        &mut self,
+        start: usize,
+        heritage: Option<Box<Expr>>,
+    ) -> Result<ClassBody, ParseError> {
+        let has_heritage = heritage.is_some();
         let mut members = Vec::new();
         let mut seen_constructor = false;
         while !self.at(&TokenKind::RightBrace) && !self.at(&TokenKind::Eof) {
@@ -83,7 +88,7 @@ impl Parser {
             if self.match_kind(&TokenKind::Semicolon) {
                 continue;
             }
-            let member = self.class_member()?;
+            let member = self.class_member(has_heritage)?;
             if member.kind == MethodKind::Constructor {
                 if seen_constructor {
                     return Err(ParseError {
@@ -102,12 +107,13 @@ impl Parser {
             .end;
         self.expect(&TokenKind::RightBrace)?;
         Ok(ClassBody {
+            heritage,
             members,
             span: Span::new(start, end),
         })
     }
 
-    fn class_member(&mut self) -> Result<ClassMember, ParseError> {
+    fn class_member(&mut self, has_heritage: bool) -> Result<ClassMember, ParseError> {
         let start_token = self
             .peek()
             .cloned()
@@ -166,13 +172,24 @@ impl Parser {
             .expect("parser should always have eof token")
             .span
             .start;
-        let body = self.block_body()?;
-        self.reject_invalid_function_parameters(&params, &body, body_start)?;
-        let end = self.previous_end();
 
         let is_constructor = !is_static
             && accessor_kind.is_none()
             && matches!(key_text.as_deref(), Some("constructor"));
+
+        // Every class member body may use `super.x`; only a derived-class
+        // constructor body may use `super(...)`. Methods reset whatever
+        // surrounding context existed (e.g. a class nested in a method).
+        let previous_method = self.in_method;
+        let previous_derived = self.in_derived_constructor;
+        self.in_method = true;
+        self.in_derived_constructor = is_constructor && has_heritage;
+        let body = self.block_body();
+        self.in_method = previous_method;
+        self.in_derived_constructor = previous_derived;
+        let body = body?;
+        self.reject_invalid_function_parameters(&params, &body, body_start)?;
+        let end = self.previous_end();
 
         let kind = match accessor_kind {
             Some(MethodKind::Getter) => {

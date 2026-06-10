@@ -4,6 +4,7 @@ use crate::{
     Function, ObjectRef, Property, PropertyKey, RuntimeError, Value,
     function::CompiledUserFunction, object, object_prototype, to_property_key_value,
 };
+use crate::{construct_function, property_value_key_with_receiver, value_prototype};
 
 use super::ir::{ClassConstructorDef, ClassMemberKeyDef, ClassMethodDef, ClassMethodKind};
 use super::vm::Vm;
@@ -20,6 +21,7 @@ impl Vm<'_> {
         constructor: &ClassConstructorDef,
         methods: &[ClassMethodDef],
         computed_key_count: usize,
+        has_heritage: bool,
     ) -> Result<Value, RuntimeError> {
         // Computed keys were pushed in member order; pop them and convert to
         // property keys, preserving member order.
@@ -31,10 +33,27 @@ impl Vm<'_> {
         computed_keys.reverse();
         let mut computed_keys = computed_keys.into_iter();
 
+        // The heritage value sits below the computed keys. Resolve the parent
+        // constructor and the prototype the new class prototype inherits from.
+        let heritage = if has_heritage {
+            Some(ClassHeritage::resolve(self.pop()?, &self.globals)?)
+        } else {
+            None
+        };
+        let prototype_parent = match &heritage {
+            Some(ClassHeritage::Null) => None,
+            Some(ClassHeritage::Parent(parent)) => parent.prototype.clone(),
+            None => object_prototype(&self.globals),
+        };
+
         let constructor_env =
             self.function_capture_env(&constructor.bytecode, &constructor.local_names);
         self.refresh_captured_env(&constructor_env);
         let constructor_captured = Rc::new(RefCell::new(constructor_env.clone()));
+        let super_constructor = match &heritage {
+            Some(ClassHeritage::Parent(parent)) => Some(parent.constructor.clone()),
+            _ => None,
+        };
         let constructor_function = Function::new_user_compiled(CompiledUserFunction {
             name: constructor.name.clone(),
             params: constructor.params.clone(),
@@ -46,11 +65,35 @@ impl Vm<'_> {
             lexical_this: false,
             lexical_arguments: false,
             is_class_constructor: true,
+            is_derived_constructor: has_heritage,
+            home_object: None,
+            super_constructor: super_constructor.clone(),
             captured_env: constructor_captured,
         });
 
-        let prototype = ObjectRef::with_prototype(HashMap::new(), object_prototype(&self.globals));
+        // Static-side inheritance: a subclass constructor inherits the parent
+        // constructor's static members through its [[Prototype]]. The runtime
+        // models a function's [[Prototype]] as an object, so we mirror the
+        // parent constructor's own properties into a backing object and use it
+        // as the subclass constructor's [[Prototype]]. This makes inherited
+        // static methods and static `super.x` resolve. It does not provide
+        // `Object.getPrototypeOf(Sub) === Super` reference identity (a known
+        // limitation, tracked as a follow-up: functions cannot yet be a
+        // [[Prototype]] value), and the mirror snapshots the parent's static
+        // members at definition time.
+        if let Some(ClassHeritage::Parent(heritage_parent)) = &heritage
+            && let Value::Function(parent) = &heritage_parent.constructor
+        {
+            let mirror = crate::function::static_inheritance_mirror(parent);
+            let _ = constructor_function.set_internal_prototype(Some(mirror));
+        }
+
+        let prototype = ObjectRef::with_prototype(HashMap::new(), prototype_parent);
         constructor_function.install_class_prototype(prototype.clone());
+
+        // The constructor's home object is its prototype; static `super.x`
+        // resolves through it.
+        *constructor_function.home_object.borrow_mut() = Some(Value::Object(prototype.clone()));
 
         // A class binding is visible to its own methods and constructor under
         // the class name, so methods can reference the class recursively. The
@@ -66,6 +109,13 @@ impl Vm<'_> {
 
             let mut method_env = self.function_capture_env(&method.bytecode, &method.local_names);
             bind_class_inner_name(&mut method_env, name, &constructor_function);
+            // A method's home object resolves `super.x`: instance methods and
+            // accessors use the prototype; static members use the constructor.
+            let home_object = if method.is_static {
+                Value::Function(constructor_function.clone())
+            } else {
+                Value::Object(prototype.clone())
+            };
             let method_function = Function::new_user_compiled(CompiledUserFunction {
                 name: method.name.clone(),
                 params: method.params.clone(),
@@ -77,17 +127,16 @@ impl Vm<'_> {
                 lexical_this: false,
                 lexical_arguments: false,
                 is_class_constructor: false,
+                is_derived_constructor: false,
+                home_object: Some(home_object.clone()),
+                super_constructor: None,
                 captured_env: Rc::new(RefCell::new(method_env)),
             });
             let function_value = Value::Function(method_function);
 
             // Static members live on the constructor; instance members on the
             // prototype.
-            let target = if method.is_static {
-                Value::Function(constructor_function.clone())
-            } else {
-                Value::Object(prototype.clone())
-            };
+            let target = home_object;
 
             let descriptor = match method.method_kind {
                 // Methods are non-enumerable, writable, configurable.
@@ -123,6 +172,126 @@ impl Vm<'_> {
         );
 
         Ok(Value::Function(constructor_function))
+    }
+
+    /// Resolves `super.<key>` (or `super[key]`): the property is looked up on
+    /// the current method's home object [[Prototype]] with the current `this`
+    /// as the receiver, so inherited accessors run with the right `this`.
+    pub(super) fn super_get(&mut self, key: &PropertyKey) -> Result<Value, RuntimeError> {
+        let receiver = self.current_this()?;
+        let lookup_base = self.super_lookup_base()?;
+        let mut env = self.current_env();
+        let value = property_value_key_with_receiver(lookup_base, key, receiver, &mut env)?;
+        self.apply_env(env);
+        Ok(value)
+    }
+
+    /// Resolves `super.<key>` as a method call target, pushing `[this, callee]`
+    /// for a following `CallResolved`.
+    pub(super) fn super_method(&mut self, key: PropertyKey) -> Result<(), RuntimeError> {
+        let receiver = self.current_this()?;
+        let callee = self.super_get(&key)?;
+        self.stack.push(receiver);
+        self.stack.push(callee);
+        Ok(())
+    }
+
+    /// Evaluates `super(...)` in a derived constructor: constructs the parent
+    /// with the current `new.target`, binds the result as `this`, and pushes
+    /// it. Calling `super(...)` after `this` is already bound is a
+    /// ReferenceError.
+    pub(super) fn super_call(&mut self, arguments: Vec<Value>) -> Result<(), RuntimeError> {
+        let result = self.super_call_inner(arguments);
+        if let Some(this_value) = self.handle_runtime_result(result)? {
+            self.globals.insert("this".to_owned(), this_value.clone());
+            self.stack.push(this_value);
+        }
+        Ok(())
+    }
+
+    fn super_call_inner(&mut self, arguments: Vec<Value>) -> Result<Value, RuntimeError> {
+        if self.globals.contains_key("this") {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "ReferenceError: super constructor may only be called once".to_owned(),
+            });
+        }
+        let Some(super_constructor) = self.globals.get(crate::SUPER_CONSTRUCTOR_BINDING).cloned()
+        else {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "SyntaxError: 'super' keyword unexpected here".to_owned(),
+            });
+        };
+        let new_target = self
+            .globals
+            .get(crate::NEW_TARGET_BINDING)
+            .cloned()
+            .unwrap_or_else(|| super_constructor.clone());
+
+        let mut env = self.current_env();
+        let result = construct_function(super_constructor, new_target, arguments, &mut env);
+        self.apply_env(env);
+        result
+    }
+
+    fn current_this(&mut self) -> Result<Value, RuntimeError> {
+        match self.globals.get("this").cloned() {
+            Some(value) => Ok(value),
+            None => Err(RuntimeError {
+                thrown: None,
+                message: "ReferenceError: must call super constructor before accessing 'this'"
+                    .to_owned(),
+            }),
+        }
+    }
+
+    /// Returns the lookup base for `super` property access: the [[Prototype]]
+    /// of the current method's home object.
+    fn super_lookup_base(&self) -> Result<Value, RuntimeError> {
+        let Some(home) = self.globals.get(crate::HOME_OBJECT_BINDING).cloned() else {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "SyntaxError: 'super' keyword unexpected here".to_owned(),
+            });
+        };
+        match value_prototype(home, &self.globals) {
+            Some(prototype) => Ok(Value::Object(prototype)),
+            None => Ok(Value::Undefined),
+        }
+    }
+}
+
+/// The resolved heritage of a class with an `extends` clause.
+enum ClassHeritage {
+    /// `extends null`: the prototype object has a null [[Prototype]].
+    Null,
+    /// `extends <constructor>`: the parent constructor and its `prototype`.
+    Parent(Box<ClassHeritageParent>),
+}
+
+struct ClassHeritageParent {
+    constructor: Value,
+    prototype: Option<ObjectRef>,
+}
+
+impl ClassHeritage {
+    fn resolve(value: Value, env: &HashMap<String, Value>) -> Result<Self, RuntimeError> {
+        match value {
+            Value::Null => Ok(Self::Null),
+            Value::Function(function) if function.constructable => {
+                let prototype =
+                    crate::constructor_prototype(&Value::Function(function.clone()), env);
+                Ok(Self::Parent(Box::new(ClassHeritageParent {
+                    constructor: Value::Function(function),
+                    prototype,
+                })))
+            }
+            _ => Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: class heritage must be a constructor or null".to_owned(),
+            }),
+        }
     }
 }
 

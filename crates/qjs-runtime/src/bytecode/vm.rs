@@ -225,6 +225,9 @@ impl<'a> Vm<'a> {
                             lexical_this,
                             lexical_arguments,
                             is_class_constructor: false,
+                            is_derived_constructor: false,
+                            home_object: None,
+                            super_constructor: None,
                             captured_env: self.captured_env.clone(),
                         },
                     )));
@@ -234,14 +237,52 @@ impl<'a> Vm<'a> {
                     constructor,
                     methods,
                     computed_key_count,
+                    has_heritage,
                 } => {
-                    let value = self.new_class(
+                    let result = self.new_class(
                         name.as_deref(),
                         &constructor,
                         &methods,
                         computed_key_count,
-                    )?;
-                    self.stack.push(value);
+                        has_heritage,
+                    );
+                    if let Some(value) = self.handle_runtime_result(result)? {
+                        self.stack.push(value);
+                    }
+                }
+                Op::SuperGet { key } => {
+                    let result = self.super_get(&PropertyKey::String(key));
+                    if let Some(value) = self.handle_runtime_result(result)? {
+                        self.stack.push(value);
+                    }
+                }
+                Op::SuperGetComputed => {
+                    let key_value = self.pop()?;
+                    let key = self.coerce_property_key(key_value)?;
+                    let result = self.super_get(&key);
+                    if let Some(value) = self.handle_runtime_result(result)? {
+                        self.stack.push(value);
+                    }
+                }
+                Op::SuperMethod { key } => {
+                    let result = self.super_method(PropertyKey::String(key));
+                    self.handle_runtime_result(result)?;
+                }
+                Op::SuperMethodComputed => {
+                    let key_value = self.pop()?;
+                    let key = self.coerce_property_key(key_value)?;
+                    let result = self.super_method(key);
+                    self.handle_runtime_result(result)?;
+                }
+                Op::CallResolved(argc) => self.call_resolved(argc)?,
+                Op::CallResolvedSpread => self.call_resolved_spread()?,
+                Op::SuperCall(argc) => {
+                    let arguments = self.pop_arguments(argc)?;
+                    self.super_call(arguments)?;
+                }
+                Op::SuperCallSpread => {
+                    let arguments = self.pop_argument_array("super call spread")?;
+                    self.super_call(arguments)?;
                 }
                 Op::Typeof => {
                     let value = self.pop()?;
@@ -629,6 +670,22 @@ impl<'a> Vm<'a> {
     fn call_method_spread(&mut self) -> Result<(), RuntimeError> {
         let arguments = self.pop_argument_array("method call spread")?;
         let (callee, this_value) = self.pop_method_callee()?;
+        self.call_callee(callee, this_value, arguments)
+    }
+
+    /// Calls a pre-resolved callee whose receiver and callee are already on the
+    /// stack as `[receiver, callee, args...]`.
+    fn call_resolved(&mut self, argc: usize) -> Result<(), RuntimeError> {
+        let arguments = self.pop_arguments(argc)?;
+        let callee = self.pop()?;
+        let this_value = self.pop()?;
+        self.call_callee(callee, this_value, arguments)
+    }
+
+    fn call_resolved_spread(&mut self) -> Result<(), RuntimeError> {
+        let arguments = self.pop_argument_array("super method call spread")?;
+        let callee = self.pop()?;
+        let this_value = self.pop()?;
         self.call_callee(callee, this_value, arguments)
     }
 

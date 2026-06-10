@@ -3,9 +3,9 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use qjs_ast::BindingPattern;
 
 use crate::{
-    ArrayRef, Bytecode, Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, Property,
-    RUNTIME_INTRINSIC_NAMES, RuntimeError, Value, bytecode::eval_function_bytecode,
-    native::call_native_function, object_prototype, symbol,
+    ArrayRef, Bytecode, Function, GLOBAL_THIS_BINDING, NEW_TARGET_BINDING, NativeFunction,
+    ObjectRef, Property, RUNTIME_INTRINSIC_NAMES, RuntimeError, Value,
+    bytecode::eval_function_bytecode, native::call_native_function, object_prototype, symbol,
 };
 
 use super::{
@@ -66,11 +66,18 @@ pub(crate) fn call_function(
             this_value,
             &argument_values,
             env,
+            is_construct,
         );
         let activation_captured_env = Rc::new(RefCell::new(function_env.env.clone()));
         let result = eval_function_bytecode(bytecode, function_env.env, activation_captured_env);
         propagate_function_captures(&function, &function_env.function_capture_names, &result);
         propagate_caller_bindings(env, &function_env.caller_binding_names, &result);
+        // A derived constructor implicitly returns its (super-bound) `this`
+        // when the body does not return an object, and it is a ReferenceError
+        // to finish without having called `super(...)`.
+        if function.is_derived_constructor && is_construct {
+            return finish_derived_construct(result);
+        }
         return result.value;
     }
 
@@ -78,6 +85,37 @@ pub(crate) fn call_function(
         thrown: None,
         message: "user function has no bytecode body".to_owned(),
     })
+}
+
+fn finish_derived_construct(
+    result: crate::bytecode::FunctionBytecodeResult<'_>,
+) -> Result<Value, RuntimeError> {
+    let bound_this = result.binding("this").cloned();
+    let value = result.value?;
+    match value {
+        Value::Array(_)
+        | Value::Function(_)
+        | Value::Map(_)
+        | Value::Set(_)
+        | Value::Object(_)
+        | Value::Proxy(_) => Ok(value),
+        Value::Undefined => match bound_this {
+            Some(this_value) => Ok(this_value),
+            None => Err(RuntimeError {
+                thrown: None,
+                message: "ReferenceError: must call super constructor before returning \
+                          from derived constructor"
+                    .to_owned(),
+            }),
+        },
+        // A primitive explicit return from a derived constructor is a
+        // TypeError per the spec.
+        _ => Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: derived constructor may only return an object or undefined"
+                .to_owned(),
+        }),
+    }
 }
 
 pub(crate) fn construct_function(
@@ -89,9 +127,33 @@ pub(crate) fn construct_function(
     ensure_constructor(&target)?;
     ensure_constructor(&new_target)?;
 
-    let prototype = crate::constructor_prototype(&new_target, env);
-    let this_value = Value::Object(ObjectRef::with_prototype(HashMap::new(), prototype));
-    let result = call_function(target, this_value.clone(), argument_values, env, true)?;
+    // Make `new.target` visible to the constructor frame (and, via `super(...)`,
+    // to ancestor constructors) so subclass instances get the right prototype.
+    let previous_new_target = env.insert(NEW_TARGET_BINDING.to_owned(), new_target.clone());
+
+    // A derived constructor must create its `this` through `super(...)`, so it
+    // receives no pre-built receiver. Every other constructor gets an ordinary
+    // object whose prototype comes from `new.target.prototype`.
+    let is_derived =
+        matches!(&target, Value::Function(function) if function.is_derived_constructor);
+    let this_value = if is_derived {
+        Value::Undefined
+    } else {
+        let prototype = crate::constructor_prototype(&new_target, env);
+        Value::Object(ObjectRef::with_prototype(HashMap::new(), prototype))
+    };
+
+    let result = call_function(target, this_value.clone(), argument_values, env, true);
+
+    match previous_new_target {
+        Some(previous) => {
+            env.insert(NEW_TARGET_BINDING.to_owned(), previous);
+        }
+        None => {
+            env.remove(NEW_TARGET_BINDING);
+        }
+    }
+    let result = result?;
 
     match result {
         Value::Array(_)
@@ -100,6 +162,9 @@ pub(crate) fn construct_function(
         | Value::Set(_)
         | Value::Object(_)
         | Value::Proxy(_) => Ok(result),
+        // A derived constructor that returns no object must have called
+        // `super(...)`, which bound `this` and is returned as the result.
+        _ if is_derived => Ok(result),
         _ => Ok(this_value),
     }
 }
@@ -134,6 +199,7 @@ fn function_env(
     this_value: Value,
     argument_values: &[Value],
     env: &HashMap<String, Value>,
+    is_construct: bool,
 ) -> FunctionCallEnv {
     let captured_env = function.captured_env.borrow();
     let lexical_this = captured_env.get("this").cloned();
@@ -170,16 +236,24 @@ fn function_env(
         local_env.insert(GLOBAL_THIS_BINDING.to_owned(), global_this);
     }
     if let Some(name) = &function.name {
-        local_env.insert(name.clone(), callee);
+        local_env.insert(name.clone(), callee.clone());
     }
-    local_env.insert(
-        "this".to_owned(),
-        if function.lexical_this {
-            lexical_this.unwrap_or(Value::Undefined)
-        } else {
-            function_call_this(Some(this_value), env, function.is_strict)
-        },
-    );
+    insert_super_bindings(&mut local_env, function, env, is_construct);
+    // A derived-class constructor leaves `this` uninitialized (a TDZ): reading
+    // `this` before `super(...)` is a ReferenceError, and `super(...)` binds
+    // it. Every other function gets its `this` here.
+    if function.is_derived_constructor && is_construct {
+        local_env.remove("this");
+    } else {
+        local_env.insert(
+            "this".to_owned(),
+            if function.lexical_this {
+                lexical_this.unwrap_or(Value::Undefined)
+            } else {
+                function_call_this(Some(this_value), env, function.is_strict)
+            },
+        );
+    }
     for (index, element) in function.params.positional.iter().enumerate() {
         let value = argument_values
             .get(index)
@@ -208,6 +282,49 @@ fn function_env(
         env: local_env,
         function_capture_names,
         caller_binding_names,
+    }
+}
+
+/// Installs the per-frame `super` and `new.target` bindings. A method or
+/// constructor uses its own `[[HomeObject]]`, parent constructor, and (when
+/// constructing) `new.target`; an arrow inherits all three from the enclosing
+/// frame's environment so `super` and `new.target` work lexically inside it.
+fn insert_super_bindings(
+    local_env: &mut HashMap<String, Value>,
+    function: &Function,
+    caller_env: &HashMap<String, Value>,
+    is_construct: bool,
+) {
+    use crate::{HOME_OBJECT_BINDING, NEW_TARGET_BINDING, SUPER_CONSTRUCTOR_BINDING};
+
+    // Methods/constructors use their own home object and parent constructor;
+    // arrows inherit both from the enclosing frame so `super` works lexically.
+    if let Some(home) = function.home_object.borrow().clone() {
+        local_env.insert(HOME_OBJECT_BINDING.to_owned(), home);
+    } else if function.lexical_this
+        && let Some(home) = caller_env.get(HOME_OBJECT_BINDING)
+    {
+        local_env.insert(HOME_OBJECT_BINDING.to_owned(), home.clone());
+    }
+
+    if let Some(super_constructor) = function.super_constructor.borrow().clone() {
+        local_env.insert(SUPER_CONSTRUCTOR_BINDING.to_owned(), super_constructor);
+    } else if function.lexical_this
+        && let Some(super_constructor) = caller_env.get(SUPER_CONSTRUCTOR_BINDING)
+    {
+        local_env.insert(
+            SUPER_CONSTRUCTOR_BINDING.to_owned(),
+            super_constructor.clone(),
+        );
+    }
+
+    // `new.target` reaches a constructor frame from `construct_function` (which
+    // writes it into the call env). Arrows inherit it lexically; ordinary
+    // calls see `new.target` undefined.
+    if (is_construct || function.lexical_this)
+        && let Some(new_target) = caller_env.get(NEW_TARGET_BINDING)
+    {
+        local_env.insert(NEW_TARGET_BINDING.to_owned(), new_target.clone());
     }
 }
 

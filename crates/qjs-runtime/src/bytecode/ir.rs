@@ -91,7 +91,38 @@ pub(super) enum Op {
         /// Number of computed-key values pushed onto the stack before this op,
         /// in member order.
         computed_key_count: usize,
+        /// Whether the class has an `extends` heritage clause. When set, the
+        /// heritage value was pushed onto the stack before the computed keys.
+        has_heritage: bool,
     },
+    /// Reads `super.<key>`: looks the property up on the current method's home
+    /// object prototype, using `this` as the receiver. Pushes the value.
+    SuperGet {
+        key: String,
+    },
+    /// Reads `super[expr]`: pops the key from the stack, then behaves like
+    /// `SuperGet`.
+    SuperGetComputed,
+    /// Loads `super.<key>` as a method, pushing the current `this` (receiver)
+    /// then the resolved callee, so a following `CallResolved` invokes it with
+    /// the right receiver.
+    SuperMethod {
+        key: String,
+    },
+    /// Like `SuperMethod` but pops the computed key from the stack first.
+    SuperMethodComputed,
+    /// Calls a pre-resolved callee. The stack holds `[receiver, callee,
+    /// args...]`; pops the arguments, callee, and receiver, then calls.
+    CallResolved(usize),
+    /// Like `CallResolved` but takes the arguments from an array on the stack:
+    /// `[receiver, callee, args_array]`.
+    CallResolvedSpread,
+    /// Calls the super constructor with the given fixed argument count, binds
+    /// the result as `this`, and pushes it. Enforces the derived-constructor
+    /// `this` TDZ.
+    SuperCall(usize),
+    /// Like `SuperCall` but takes the arguments from an array on the stack.
+    SuperCallSpread,
     Typeof,
     ToString,
     ToNumeric,
@@ -232,6 +263,12 @@ impl Bytecode {
                     | Op::NewSpread
                     | Op::NewFunction { .. }
                     | Op::NewClass { .. }
+                    | Op::SuperCall(_)
+                    | Op::SuperCallSpread
+                    | Op::SuperMethod { .. }
+                    | Op::SuperMethodComputed
+                    | Op::CallResolved(_)
+                    | Op::CallResolvedSpread
                     | Op::StoreGlobalStrict(_)
                     | Op::StoreLocalOrGlobalSloppy { .. }
             )

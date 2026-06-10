@@ -21,4 +21,4 @@ pub(crate) use prototype::{
     native_throw_type_error,
 };
 pub(crate) use strict::is_strict_function_body;
-pub(crate) use value::{CompiledUserFunction, Function};
+pub(crate) use value::{CompiledUserFunction, Function, static_inheritance_mirror};

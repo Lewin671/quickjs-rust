@@ -4,6 +4,9 @@ use crate::span::Span;
 /// A class body shared by class declarations and class expressions.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ClassBody {
+    /// Optional heritage expression from an `extends` clause. This is a
+    /// `LeftHandSideExpression` evaluated to the parent constructor (or `null`).
+    pub heritage: Option<Box<Expr>>,
     /// Class members in source order.
     pub members: Vec<ClassMember>,
     /// Source span covering the `{ ... }` block.

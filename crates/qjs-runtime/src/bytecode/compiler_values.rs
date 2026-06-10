@@ -111,6 +111,49 @@ impl Compiler {
         let has_spread = arguments
             .iter()
             .any(|argument| matches!(argument, CallArgument::Spread(_)));
+
+        // `super(...)` invokes the parent constructor.
+        if matches!(callee, Expr::Super { .. }) {
+            if has_spread {
+                self.compile_argument_array(arguments)?;
+                self.emit(Op::SuperCallSpread);
+                return Ok(());
+            }
+            for argument in arguments {
+                let CallArgument::Expr(argument) = argument else {
+                    unreachable!("spread arguments are handled above");
+                };
+                self.compile_expr(argument)?;
+            }
+            self.emit(Op::SuperCall(arguments.len()));
+            return Ok(());
+        }
+
+        // `super.x(...)` calls a parent-prototype method with the current
+        // `this` as the receiver.
+        if let Expr::Member {
+            object, property, ..
+        } = callee
+            && matches!(object.as_ref(), Expr::Super { .. })
+        {
+            // Resolve the callee from the parent prototype; this leaves
+            // `[this_value, callee]` on the stack.
+            self.compile_super_method(property)?;
+            if has_spread {
+                self.compile_argument_array(arguments)?;
+                self.emit(Op::CallResolvedSpread);
+                return Ok(());
+            }
+            for argument in arguments {
+                let CallArgument::Expr(argument) = argument else {
+                    unreachable!("spread arguments are handled above");
+                };
+                self.compile_expr(argument)?;
+            }
+            self.emit(Op::CallResolved(arguments.len()));
+            return Ok(());
+        }
+
         if let Expr::Member {
             object, property, ..
         } = callee
@@ -169,6 +212,21 @@ impl Compiler {
             self.compile_expr(argument)?;
         }
         self.emit(Op::New(arguments.len()));
+        Ok(())
+    }
+
+    /// Resolves a `super.m` / `super[expr]` method, leaving `[this, callee]`
+    /// on the stack for a following `CallResolved`.
+    fn compile_super_method(&mut self, property: &MemberProperty) -> Result<(), RuntimeError> {
+        match property {
+            MemberProperty::Named(name) => {
+                self.emit(Op::SuperMethod { key: name.clone() });
+            }
+            MemberProperty::Computed(expr) => {
+                self.compile_expr(expr)?;
+                self.emit(Op::SuperMethodComputed);
+            }
+        }
         Ok(())
     }
 

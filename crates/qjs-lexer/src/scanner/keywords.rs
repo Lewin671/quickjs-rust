@@ -25,6 +25,7 @@ pub(super) fn identifier_or_keyword(text: &str) -> TokenKind {
         "function" => TokenKind::Function,
         "class" => TokenKind::Class,
         "extends" => TokenKind::Extends,
+        "super" => TokenKind::Super,
         "return" => TokenKind::Return,
         "throw" => TokenKind::Throw,
         "debugger" => TokenKind::Debugger,

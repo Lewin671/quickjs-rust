@@ -61,6 +61,15 @@ use value::{ArrayRef, MapRef, ObjectRef, Property, SetRef};
 pub use bytecode::{Bytecode, compile_script, eval_bytecode, eval_bytecode_source};
 
 pub(crate) const GLOBAL_THIS_BINDING: &str = "\0global_this";
+/// Per-frame `[[HomeObject]]` for resolving `super.x`. Single-null prefixed so
+/// it never collides with user identifiers but is not treated as an internal
+/// destructuring binding (which use a double-null prefix).
+pub(crate) const HOME_OBJECT_BINDING: &str = "\0home_object";
+/// Per-frame `new.target`, propagated through `super(...)`.
+pub(crate) const NEW_TARGET_BINDING: &str = "\0new_target";
+/// Per-frame parent constructor invoked by `super(...)` in a derived
+/// constructor.
+pub(crate) const SUPER_CONSTRUCTOR_BINDING: &str = "\0super_constructor";
 pub(crate) const RUNTIME_INTRINSIC_NAMES: &[&str] = &[
     GLOBAL_THIS_BINDING,
     symbol::SYMBOL_REGISTRY_BINDING,

@@ -231,9 +231,59 @@ fn rejects_generator_methods() {
 }
 
 #[test]
-fn rejects_extends_clause() {
-    let error = parse_script("class C extends D {}").expect_err("extends is out of scope");
-    assert!(error.message.contains("extends"));
+fn parses_extends_clause_with_identifier_heritage() {
+    let script = parse_script("class C extends D {}").expect("source should parse");
+    let [Stmt::ClassDecl { body, .. }] = script.body.as_slice() else {
+        panic!("expected class declaration");
+    };
+    let Some(heritage) = &body.heritage else {
+        panic!("expected heritage");
+    };
+    let Expr::Identifier { name, .. } = heritage.as_ref() else {
+        panic!("expected identifier heritage");
+    };
+    assert_eq!(name, "D");
+}
+
+#[test]
+fn parses_extends_clause_with_member_and_call_heritage() {
+    let script = parse_script("class C extends mixins.Base(Object) {}").expect("source parses");
+    let [Stmt::ClassDecl { body, .. }] = script.body.as_slice() else {
+        panic!("expected class declaration");
+    };
+    assert!(matches!(body.heritage.as_deref(), Some(Expr::Call { .. })));
+
+    let script = parse_script("let c = class extends null {};").expect("source parses");
+    let [Stmt::VarDecl { declarations, .. }] = script.body.as_slice() else {
+        panic!("expected variable declaration");
+    };
+    let Some(Expr::Class { body, .. }) = &declarations[0].init else {
+        panic!("expected class expression");
+    };
+    assert!(matches!(body.heritage.as_deref(), Some(Expr::Literal(_))));
+}
+
+#[test]
+fn parses_super_member_and_call_in_methods() {
+    parse_script("class C extends D { constructor() { super(); super.x; super.m(); } }")
+        .expect("super inside derived constructor parses");
+    parse_script("class C extends D { m() { return super.n() + super['k']; } }")
+        .expect("super property access inside a method parses");
+    parse_script("class C extends D { static s() { return super.t; } }")
+        .expect("super property access inside a static method parses");
+}
+
+#[test]
+fn rejects_super_outside_valid_contexts() {
+    assert!(parse_script("super.x;").is_err());
+    assert!(parse_script("super();").is_err());
+    assert!(parse_script("function f() { super.x; }").is_err());
+    assert!(parse_script("function f() { super(); }").is_err());
+    // `super()` is not allowed in a non-derived constructor or a plain method.
+    assert!(parse_script("class C { constructor() { super(); } }").is_err());
+    assert!(parse_script("class C extends D { m() { super(); } }").is_err());
+    // A bare `super` reference is always a syntax error.
+    assert!(parse_script("class C extends D { m() { super; } }").is_err());
 }
 
 #[test]

@@ -335,3 +335,166 @@ fn static_keyword_as_static_method() {
         Ok(Value::Number(8.0))
     );
 }
+
+#[test]
+fn subclass_instance_is_instanceof_both() {
+    assert_eq!(
+        eval(
+            "class A {} class B extends A {} let b = new B(); [b instanceof B, b instanceof A].join(',');"
+        ),
+        Ok(Value::String("true,true".to_owned()))
+    );
+}
+
+#[test]
+fn subclass_prototype_chain_links_to_parent() {
+    assert_eq!(
+        eval("class A {} class B extends A {} Object.getPrototypeOf(B.prototype) === A.prototype;"),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn subclass_inherits_parent_method() {
+    assert_eq!(
+        eval("class A { hi() { return 'a'; } } class B extends A {} new B().hi();"),
+        Ok(Value::String("a".to_owned()))
+    );
+}
+
+#[test]
+fn override_delegates_to_super_method() {
+    assert_eq!(
+        eval(
+            "class A { who() { return 'A'; } } class B extends A { who() { return super.who() + 'B'; } } new B().who();"
+        ),
+        Ok(Value::String("AB".to_owned()))
+    );
+}
+
+#[test]
+fn super_call_binds_this_and_forwards_arguments() {
+    assert_eq!(
+        eval(
+            "class A { constructor(x) { this.x = x; } } class B extends A { constructor(x) { super(x * 2); this.y = x; } } let b = new B(5); [b.x, b.y].join(',');"
+        ),
+        Ok(Value::String("10,5".to_owned()))
+    );
+}
+
+#[test]
+fn default_derived_constructor_forwards_arguments() {
+    assert_eq!(
+        eval(
+            "class A { constructor(a, b) { this.sum = a + b; } } class B extends A {} new B(2, 5).sum;"
+        ),
+        Ok(Value::Number(7.0))
+    );
+}
+
+#[test]
+fn super_property_read_uses_parent_prototype() {
+    assert_eq!(
+        eval(
+            "class A { val() { return 1; } } class B extends A { val() { return 2; } use() { return super.val() + this.val(); } } new B().use();"
+        ),
+        Ok(Value::Number(3.0))
+    );
+}
+
+#[test]
+fn super_computed_property_read() {
+    assert_eq!(
+        eval(
+            "class A { m() { return 7; } } class B extends A { go() { let k = 'm'; return super[k](); } } new B().go();"
+        ),
+        Ok(Value::Number(7.0))
+    );
+}
+
+#[test]
+fn super_accessor_delegates_to_parent_getter() {
+    assert_eq!(
+        eval(
+            "class A { get v() { return 10; } } class B extends A { get v() { return super.v + 5; } } new B().v;"
+        ),
+        Ok(Value::Number(15.0))
+    );
+}
+
+#[test]
+fn super_in_static_method_calls_parent_static() {
+    assert_eq!(
+        eval(
+            "class A { static who() { return 'A'; } } class B extends A { static who() { return super.who() + 'B'; } } B.who();"
+        ),
+        Ok(Value::String("AB".to_owned()))
+    );
+}
+
+#[test]
+fn subclass_inherits_static_method() {
+    assert_eq!(
+        eval("class A { static who() { return 'A'; } } class B extends A {} B.who();"),
+        Ok(Value::String("A".to_owned()))
+    );
+}
+
+#[test]
+fn this_before_super_is_reference_error() {
+    let result =
+        eval("class A {} class B extends A { constructor() { this.x = 1; super(); } } new B();");
+    assert!(
+        matches!(&result, Err(error) if error.message.contains("ReferenceError")),
+        "expected ReferenceError, got {result:?}"
+    );
+}
+
+#[test]
+fn super_called_twice_is_reference_error() {
+    let result =
+        eval("class A {} class B extends A { constructor() { super(); super(); } } new B();");
+    assert!(
+        matches!(&result, Err(error) if error.message.contains("ReferenceError")),
+        "expected ReferenceError, got {result:?}"
+    );
+}
+
+#[test]
+fn extends_non_constructor_is_type_error() {
+    let result = eval("try { new (class extends 5 {})(); 'no-throw'; } catch (e) { '' + e; }");
+    assert!(
+        matches!(&result, Ok(Value::String(message)) if message.contains("TypeError")),
+        "expected caught TypeError, got {result:?}"
+    );
+}
+
+#[test]
+fn extends_null_keeps_constructor_callable_and_null_prototype() {
+    assert_eq!(
+        eval("class C extends null {} typeof C;"),
+        Ok(Value::String("function".to_owned()))
+    );
+    assert_eq!(
+        eval("class C extends null {} Object.getPrototypeOf(C.prototype) === null;"),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn new_target_propagates_through_super_for_prototype() {
+    // A subclass instance built via `new B` has `B.prototype` on its chain
+    // even though only the base class constructor allocates `this`.
+    assert_eq!(
+        eval(
+            "class A { constructor() {} } class B extends A {} Object.getPrototypeOf(new B()) === B.prototype;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn derived_methods_are_not_constructable() {
+    let result = eval("class A {} class B extends A { m() {} } new (new B().m)();");
+    assert!(result.is_err(), "class methods must not be constructable");
+}

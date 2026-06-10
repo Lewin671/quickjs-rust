@@ -36,6 +36,13 @@ struct Parser {
     cursor: usize,
     strict: bool,
     allow_in: bool,
+    /// Whether `super.prop`/`super[expr]` member access is currently allowed,
+    /// i.e. the parser is inside a method or accessor body (or an arrow nested
+    /// in one).
+    in_method: bool,
+    /// Whether `super(...)` calls are currently allowed, i.e. the parser is
+    /// inside a derived-class constructor body (or an arrow nested in one).
+    in_derived_constructor: bool,
 }
 
 #[cfg(test)]

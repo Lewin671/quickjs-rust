@@ -33,6 +33,15 @@ pub struct Function {
     pub(crate) lexical_arguments: bool,
     /// Whether this is a class constructor, which must be invoked with `new`.
     pub(crate) is_class_constructor: bool,
+    /// Whether this is a derived (extends) class constructor, whose `this` is
+    /// uninitialized until `super(...)` runs.
+    pub(crate) is_derived_constructor: bool,
+    /// The method/constructor [[HomeObject]] used to resolve `super.x`. For an
+    /// instance method this is the class prototype; for a static method it is
+    /// the constructor; for a derived constructor it is the prototype.
+    pub(crate) home_object: Rc<RefCell<Option<Value>>>,
+    /// For a derived constructor, the parent constructor invoked by `super()`.
+    pub(crate) super_constructor: Rc<RefCell<Option<Value>>>,
     pub(crate) bound: Option<Box<BoundFunction>>,
     /// Function object properties.
     pub(crate) properties: Rc<RefCell<HashMap<String, Property>>>,
@@ -63,6 +72,9 @@ pub(crate) struct CompiledUserFunction {
     pub(crate) lexical_this: bool,
     pub(crate) lexical_arguments: bool,
     pub(crate) is_class_constructor: bool,
+    pub(crate) is_derived_constructor: bool,
+    pub(crate) home_object: Option<Value>,
+    pub(crate) super_constructor: Option<Value>,
     pub(crate) captured_env: Rc<RefCell<HashMap<String, Value>>>,
 }
 
@@ -167,6 +179,9 @@ impl Function {
             lexical_this: lexical_bindings.this,
             lexical_arguments: lexical_bindings.arguments,
             is_class_constructor: false,
+            is_derived_constructor: false,
+            home_object: Rc::new(RefCell::new(None)),
+            super_constructor: Rc::new(RefCell::new(None)),
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
             property_order: Rc::new(RefCell::new(Vec::new())),
@@ -201,6 +216,9 @@ impl Function {
             lexical_this,
             lexical_arguments,
             is_class_constructor,
+            is_derived_constructor,
+            home_object,
+            super_constructor,
             captured_env,
         } = compiled;
         let prototype = ObjectRef::with_prototype(HashMap::new(), object_prototype(&env));
@@ -217,6 +235,9 @@ impl Function {
             lexical_this,
             lexical_arguments,
             is_class_constructor,
+            is_derived_constructor,
+            home_object: Rc::new(RefCell::new(home_object)),
+            super_constructor: Rc::new(RefCell::new(super_constructor)),
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
             property_order: Rc::new(RefCell::new(Vec::new())),
@@ -297,6 +318,9 @@ impl Function {
             lexical_this: false,
             lexical_arguments: false,
             is_class_constructor: false,
+            is_derived_constructor: false,
+            home_object: Rc::new(RefCell::new(None)),
+            super_constructor: Rc::new(RefCell::new(None)),
             bound: Some(Box::new(BoundFunction {
                 target,
                 this_value,
@@ -337,6 +361,9 @@ impl Function {
             lexical_this: false,
             lexical_arguments: false,
             is_class_constructor: false,
+            is_derived_constructor: false,
+            home_object: Rc::new(RefCell::new(None)),
+            super_constructor: Rc::new(RefCell::new(None)),
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
             property_order: Rc::new(RefCell::new(Vec::new())),
@@ -647,6 +674,15 @@ fn bound_function_name(target: &Value) -> String {
         _ => String::new(),
     };
     format!("bound {target_name}")
+}
+
+/// Builds an object mirroring a constructor's own (static) properties, used as
+/// a subclass constructor's [[Prototype]] so inherited static members and
+/// static `super.x` resolve. This does not provide `getPrototypeOf(Sub) ===
+/// Super` reference identity: the runtime cannot yet store a function as a
+/// [[Prototype]] value.
+pub(crate) fn static_inheritance_mirror(parent: &Function) -> ObjectRef {
+    function_as_object_prototype(parent)
 }
 
 fn function_as_object_prototype(function: &Function) -> ObjectRef {
