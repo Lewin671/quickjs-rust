@@ -41,6 +41,18 @@ fn evaluates_symbol_prototype_builtins() {
     );
     assert_eq!(
         eval(
+            "let inFrame = function (s) { return s === Symbol.for('shared'); }; inFrame(Symbol.for('shared'));"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let set = WeakMap.prototype.set; let wrap = function (k) { return set.call(new WeakMap(), k, 1); }; let caught = false; try { wrap(Symbol.for('reg')); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
             "let symbol = Symbol.for('id'); Object(symbol)[Symbol.toPrimitive]('string') === symbol;"
         ),
         Ok(Value::Boolean(true))

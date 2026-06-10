@@ -558,7 +558,7 @@ impl Compiler {
     }
 
     pub(super) fn temp_local(&mut self, prefix: &str) -> usize {
-        let name = format!("\0{prefix}_{}", self.next_temp);
+        let name = format!("\0\0{prefix}_{}", self.next_temp);
         self.next_temp += 1;
         self.local_slot(&name, true)
     }

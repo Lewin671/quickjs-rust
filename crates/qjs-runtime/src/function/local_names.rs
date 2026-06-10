@@ -4,8 +4,12 @@ use qjs_ast::{BindingPattern, CatchParam, ForInLeft, ForInit, FunctionParams, St
 
 /// Returns true for compiler-internal binding names that must never cross
 /// call frames (destructuring temporaries and raw pattern-argument slots).
+///
+/// Frame-local temporaries use a double-NUL prefix. Single-NUL names are
+/// runtime singletons (for example the symbol registry binding) that must
+/// keep flowing between frames.
 pub(crate) fn is_internal_binding_name(name: &str) -> bool {
-    name.starts_with('\u{0}')
+    name.starts_with("\u{0}\u{0}")
 }
 
 /// Returns the call-frame binding name for a positional parameter.
@@ -17,7 +21,7 @@ pub(crate) fn parameter_binding_name(binding: &BindingPattern, index: usize) -> 
     match binding {
         BindingPattern::Identifier { name, .. } => name.clone(),
         BindingPattern::Array { .. } | BindingPattern::Object { .. } => {
-            format!("\u{0}param_pattern_{index}")
+            format!("\u{0}\u{0}param_pattern_{index}")
         }
     }
 }
@@ -27,7 +31,7 @@ pub(crate) fn rest_parameter_binding_name(binding: &BindingPattern) -> String {
     match binding {
         BindingPattern::Identifier { name, .. } => name.clone(),
         BindingPattern::Array { .. } | BindingPattern::Object { .. } => {
-            "\u{0}rest_pattern".to_owned()
+            "\u{0}\u{0}rest_pattern".to_owned()
         }
     }
 }
