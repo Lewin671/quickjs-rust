@@ -285,6 +285,10 @@ impl Compiler {
                 });
                 Ok(())
             }
+            Expr::Class { .. } => Err(RuntimeError {
+                thrown: None,
+                message: "class evaluation is not yet supported".to_owned(),
+            }),
             Expr::Member {
                 object, property, ..
             } => {

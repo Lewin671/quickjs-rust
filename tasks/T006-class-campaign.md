@@ -21,7 +21,7 @@ QuickJS-NG-passing cases are structurally not-run only because the baseline
 Work one slice per reviewable unit, in order. Tick a slice only after its
 verification command is green and `./scripts/check.sh` passes.
 
-- [ ] S1 Parser: class declarations and expressions with constructor and
+- [x] S1 Parser: class declarations and expressions with constructor and
       prototype methods (no extends, no static, no accessors). AST types,
       spans, focused parser tests.
 - [ ] S2 Runtime: instantiate S1 classes — constructor function objects,

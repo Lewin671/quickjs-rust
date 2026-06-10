@@ -55,6 +55,7 @@ impl Parser {
             TokenKind::Null => Ok(Expr::Literal(Literal::Null { span: token.span })),
             TokenKind::This => Ok(Expr::This { span: token.span }),
             TokenKind::Function => self.function_expression(token.span.start),
+            TokenKind::Class => self.class_expression(token.span.start),
             TokenKind::RegularExpression { pattern, flags } => {
                 Ok(regexp_constructor_expr(token.span, pattern, flags))
             }

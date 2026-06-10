@@ -1,3 +1,4 @@
+mod classes;
 mod control;
 mod declarations;
 mod functions;
@@ -55,6 +56,10 @@ impl Parser {
 
         if self.at(&TokenKind::Function) {
             return self.function_declaration();
+        }
+
+        if self.at(&TokenKind::Class) {
+            return self.class_declaration();
         }
 
         if self.at(&TokenKind::Return) {

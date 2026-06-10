@@ -289,6 +289,7 @@ impl Compiler {
                 | Stmt::Break { .. }
                 | Stmt::Continue { .. }
                 | Stmt::VarDecl { .. }
+                | Stmt::ClassDecl { .. }
                 | Stmt::Empty => {}
             }
         }
@@ -766,6 +767,10 @@ impl Compiler {
                 self.emit_load_undefined();
                 Ok(())
             }
+            Stmt::ClassDecl { .. } => Err(RuntimeError {
+                thrown: None,
+                message: "class evaluation is not yet supported".to_owned(),
+            }),
         }
     }
 

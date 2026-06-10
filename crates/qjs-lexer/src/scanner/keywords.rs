@@ -23,6 +23,8 @@ pub(super) fn identifier_or_keyword(text: &str) -> TokenKind {
         "break" => TokenKind::Break,
         "continue" => TokenKind::Continue,
         "function" => TokenKind::Function,
+        "class" => TokenKind::Class,
+        "extends" => TokenKind::Extends,
         "return" => TokenKind::Return,
         "throw" => TokenKind::Throw,
         "debugger" => TokenKind::Debugger,

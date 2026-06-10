@@ -1,3 +1,4 @@
+use crate::class::ClassBody;
 use crate::span::Span;
 use crate::statement::{BindingElement, BindingPattern, Stmt};
 
@@ -245,6 +246,15 @@ pub enum Expr {
         /// Source span.
         span: Span,
     },
+    /// A class expression.
+    Class {
+        /// Optional class name.
+        name: Option<String>,
+        /// Class body.
+        body: ClassBody,
+        /// Source span.
+        span: Span,
+    },
     /// A member access expression.
     Member {
         /// Object expression.
@@ -299,6 +309,7 @@ impl Expr {
             | Self::Call { span, .. }
             | Self::New { span, .. }
             | Self::Function { span, .. }
+            | Self::Class { span, .. }
             | Self::Member { span, .. }
             | Self::This { span }
             | Self::Identifier { span, .. } => *span,

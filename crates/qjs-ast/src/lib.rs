@@ -1,9 +1,11 @@
 //! Shared AST and source span types.
 
+mod class;
 mod expression;
 mod span;
 mod statement;
 
+pub use class::{ClassBody, ClassMember, ClassMemberKey, MethodKind};
 pub use expression::{
     ArrayElement, AssignmentOp, AssignmentTarget, AssignmentTargetElement,
     AssignmentTargetProperty, BinaryOp, CallArgument, Expr, FunctionParams, Literal,

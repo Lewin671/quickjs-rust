@@ -1,3 +1,4 @@
+use crate::class::ClassBody;
 use crate::expression::{Expr, FunctionParams};
 use crate::span::Span;
 
@@ -115,6 +116,15 @@ pub enum Stmt {
         params: FunctionParams,
         /// Function body statements.
         body: Vec<Stmt>,
+        /// Source span.
+        span: Span,
+    },
+    /// A class declaration.
+    ClassDecl {
+        /// Class name.
+        name: String,
+        /// Class body.
+        body: ClassBody,
         /// Source span.
         span: Span,
     },

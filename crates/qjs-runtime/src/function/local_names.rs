@@ -131,6 +131,7 @@ fn collect_statement_local_names(body: &[Stmt], names: &mut HashSet<String>) {
             | Stmt::Debugger { .. }
             | Stmt::Break { .. }
             | Stmt::Continue { .. }
+            | Stmt::ClassDecl { .. }
             | Stmt::Empty => {}
         }
     }

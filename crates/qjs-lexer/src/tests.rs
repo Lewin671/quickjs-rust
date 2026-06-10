@@ -413,7 +413,7 @@ fn template_segment(cooked: &str, raw: &str) -> TemplateSegment {
 fn lexes_declaration_keywords() {
     let tokens =
             lex(
-                "this var let const if else while do for switch case default try catch finally break continue function return throw debugger typeof void in delete new instanceof variable",
+                "this var let const if else while do for switch case default try catch finally break continue function class extends return throw debugger typeof void in delete new instanceof variable",
             )
             .expect("source should lex");
     let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
@@ -438,6 +438,8 @@ fn lexes_declaration_keywords() {
             TokenKind::Break,
             TokenKind::Continue,
             TokenKind::Function,
+            TokenKind::Class,
+            TokenKind::Extends,
             TokenKind::Return,
             TokenKind::Throw,
             TokenKind::Debugger,

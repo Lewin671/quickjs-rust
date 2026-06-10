@@ -72,6 +72,10 @@ pub enum TokenKind {
     Continue,
     /// `function`.
     Function,
+    /// `class`.
+    Class,
+    /// `extends`.
+    Extends,
     /// `return`.
     Return,
     /// `throw`.
