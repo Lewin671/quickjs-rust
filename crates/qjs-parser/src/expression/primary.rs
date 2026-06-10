@@ -10,10 +10,19 @@ impl Parser {
     pub(crate) fn primary(&mut self) -> Result<Expr, ParseError> {
         let token = self.advance();
         match token.kind {
-            TokenKind::Identifier(name) => Ok(Expr::Identifier {
-                name,
-                span: token.span,
-            }),
+            TokenKind::Identifier(name) => {
+                if self.in_field_initializer && name == "arguments" {
+                    return Err(ParseError {
+                        message: "'arguments' is not allowed in a class field initializer"
+                            .to_owned(),
+                        span: token.span,
+                    });
+                }
+                Ok(Expr::Identifier {
+                    name,
+                    span: token.span,
+                })
+            }
             TokenKind::Let => Ok(Expr::Identifier {
                 name: "let".to_owned(),
                 span: token.span,

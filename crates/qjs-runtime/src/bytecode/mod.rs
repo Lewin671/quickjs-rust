@@ -30,6 +30,7 @@ use qjs_parser::parse_script;
 use crate::{RuntimeError, Value};
 
 pub use ir::Bytecode;
+pub(crate) use vm_class::install_field_value;
 pub(crate) use vm_result::FunctionBytecodeResult;
 
 /// Compiles an AST script into runtime bytecode.

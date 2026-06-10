@@ -235,14 +235,14 @@ impl<'a> Vm<'a> {
                 Op::NewClass {
                     name,
                     constructor,
-                    methods,
+                    elements,
                     computed_key_count,
                     has_heritage,
                 } => {
                     let result = self.new_class(
                         name.as_deref(),
                         &constructor,
-                        &methods,
+                        &elements,
                         computed_key_count,
                         has_heritage,
                     );

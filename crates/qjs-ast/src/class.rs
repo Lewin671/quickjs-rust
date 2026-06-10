@@ -7,16 +7,25 @@ pub struct ClassBody {
     /// Optional heritage expression from an `extends` clause. This is a
     /// `LeftHandSideExpression` evaluated to the parent constructor (or `null`).
     pub heritage: Option<Box<Expr>>,
-    /// Class members in source order.
-    pub members: Vec<ClassMember>,
+    /// Class elements (methods and fields) in source order.
+    pub elements: Vec<ClassElement>,
     /// Source span covering the `{ ... }` block.
     pub span: Span,
 }
 
-/// A single member of a class body.
+/// A single element of a class body: a method/accessor/constructor or a field.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ClassElement {
+    /// A method, accessor, or the constructor.
+    Method(ClassMember),
+    /// A public instance or static field.
+    Field(ClassField),
+}
+
+/// A method, accessor, or constructor member of a class body.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ClassMember {
-    /// Member kind. Extensible for later slices (fields).
+    /// Member kind.
     pub kind: MethodKind,
     /// Member key.
     pub key: ClassMemberKey,
@@ -25,6 +34,20 @@ pub struct ClassMember {
     /// The method function expression. Always an `Expr::Function`.
     pub value: Expr,
     /// Source span covering the whole member.
+    pub span: Span,
+}
+
+/// A public class field declaration (`x;`, `x = expr;`, `static x = expr;`).
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ClassField {
+    /// Field key.
+    pub key: ClassMemberKey,
+    /// Optional initializer expression (an `AssignmentExpression`). When absent
+    /// the field initializes to `undefined`.
+    pub initializer: Option<Expr>,
+    /// Whether the field is declared `static`.
+    pub is_static: bool,
+    /// Source span covering the whole field.
     pub span: Span,
 }
 
@@ -37,9 +60,7 @@ pub enum ClassMemberKey {
     Computed(Expr),
 }
 
-/// The kind of a class member.
-///
-/// Fields are added by a later slice.
+/// The kind of a class method member.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MethodKind {
     /// The class constructor.

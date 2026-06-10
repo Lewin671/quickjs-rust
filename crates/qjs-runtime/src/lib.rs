@@ -70,6 +70,10 @@ pub(crate) const NEW_TARGET_BINDING: &str = "\0new_target";
 /// Per-frame parent constructor invoked by `super(...)` in a derived
 /// constructor.
 pub(crate) const SUPER_CONSTRUCTOR_BINDING: &str = "\0super_constructor";
+/// Per-frame class constructor currently executing, used so a derived
+/// constructor can initialize its instance fields once `super(...)` binds
+/// `this`.
+pub(crate) const ACTIVE_CONSTRUCTOR_BINDING: &str = "\0active_constructor";
 pub(crate) const RUNTIME_INTRINSIC_NAMES: &[&str] = &[
     GLOBAL_THIS_BINDING,
     symbol::SYMBOL_REGISTRY_BINDING,

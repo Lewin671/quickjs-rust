@@ -2,11 +2,15 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
     Function, ObjectRef, Property, PropertyKey, RuntimeError, Value,
-    function::CompiledUserFunction, object, object_prototype, to_property_key_value,
+    function::{CompiledUserFunction, InstanceFieldInitializer},
+    object, object_prototype, to_property_key_value,
 };
-use crate::{construct_function, property_value_key_with_receiver, value_prototype};
+use crate::{call_function, construct_function, property_value_key_with_receiver, value_prototype};
 
-use super::ir::{ClassConstructorDef, ClassMemberKeyDef, ClassMethodDef, ClassMethodKind};
+use super::ir::{
+    ClassConstructorDef, ClassElementDef, ClassFieldDef, ClassFieldInitializerDef,
+    ClassMemberKeyDef, ClassMethodDef, ClassMethodKind,
+};
 use super::vm::Vm;
 
 impl Vm<'_> {
@@ -19,7 +23,7 @@ impl Vm<'_> {
         &mut self,
         name: Option<&str>,
         constructor: &ClassConstructorDef,
-        methods: &[ClassMethodDef],
+        elements: &[ClassElementDef],
         computed_key_count: usize,
         has_heritage: bool,
     ) -> Result<Value, RuntimeError> {
@@ -99,68 +103,43 @@ impl Vm<'_> {
         // the class name, so methods can reference the class recursively. The
         // binding is immutable, so each function gets its own captured env
         // seeded with the class value rather than sharing a mutable parent env.
-        for method in methods {
-            let key = match &method.key {
-                ClassMemberKeyDef::Literal(key) => PropertyKey::String(key.clone()),
-                ClassMemberKeyDef::Computed => computed_keys
-                    .next()
-                    .expect("computed key count matches members"),
-            };
+        //
+        // Pass 1: resolve computed keys in source order, install methods
+        // immediately, and stash field definitions with their resolved keys.
+        let mut pending_fields = Vec::new();
+        for element in elements {
+            match element {
+                ClassElementDef::Method(method) => {
+                    let key = resolve_element_key(&method.key, &mut computed_keys);
+                    self.install_method(method, key, &prototype, &constructor_function, name)?;
+                }
+                ClassElementDef::Field(field) => {
+                    let key = resolve_element_key(&field.key, &mut computed_keys);
+                    pending_fields.push((field, key));
+                }
+            }
+        }
 
-            let mut method_env = self.function_capture_env(&method.bytecode, &method.local_names);
-            bind_class_inner_name(&mut method_env, name, &constructor_function);
-            // A method's home object resolves `super.x`: instance methods and
-            // accessors use the prototype; static members use the constructor.
-            let home_object = if method.is_static {
-                Value::Function(constructor_function.clone())
+        // Pass 2: instance fields become constructor initializers (run at
+        // construction time); static fields are evaluated now, after all method
+        // definitions, with `this` = the constructor.
+        for (field, key) in pending_fields {
+            let initializer =
+                self.build_field_initializer(field, &prototype, &constructor_function, name);
+            if field.is_static {
+                let value = match &initializer {
+                    Some(thunk) => self.run_field_initializer(
+                        thunk,
+                        Value::Function(constructor_function.clone()),
+                    )?,
+                    None => Value::Undefined,
+                };
+                install_field_value(&Value::Function(constructor_function.clone()), key, value)?;
             } else {
-                Value::Object(prototype.clone())
-            };
-            let method_function = Function::new_user_compiled(CompiledUserFunction {
-                name: method.name.clone(),
-                params: method.params.clone(),
-                env: method_env.clone(),
-                bytecode: method.bytecode.clone(),
-                local_names: method.local_names.clone(),
-                constructable: false,
-                is_strict: true,
-                lexical_this: false,
-                lexical_arguments: false,
-                is_class_constructor: false,
-                is_derived_constructor: false,
-                home_object: Some(home_object.clone()),
-                super_constructor: None,
-                captured_env: Rc::new(RefCell::new(method_env)),
-            });
-            let function_value = Value::Function(method_function);
-
-            // Static members live on the constructor; instance members on the
-            // prototype.
-            let target = home_object;
-
-            let descriptor = match method.method_kind {
-                // Methods are non-enumerable, writable, configurable.
-                ClassMethodKind::Method => Property::data(function_value, false, true, true),
-                // Accessors are non-enumerable, configurable; merge with an
-                // existing accessor for the same key.
-                ClassMethodKind::Getter => merge_accessor(
-                    &target,
-                    &key,
-                    Property::accessor(Some(function_value), None, false, true),
-                ),
-                ClassMethodKind::Setter => merge_accessor(
-                    &target,
-                    &key,
-                    Property::accessor(None, Some(function_value), false, true),
-                ),
-            };
-
-            let success = object::define_property_on_value_key(target, key, descriptor)?;
-            if !success {
-                return Err(RuntimeError {
-                    thrown: None,
-                    message: "class member definition failed".to_owned(),
-                });
+                constructor_function
+                    .instance_fields
+                    .borrow_mut()
+                    .push(InstanceFieldInitializer { key, initializer });
             }
         }
 
@@ -172,6 +151,132 @@ impl Vm<'_> {
         );
 
         Ok(Value::Function(constructor_function))
+    }
+
+    /// Builds and installs a single method/accessor on the prototype (instance)
+    /// or the constructor (static).
+    fn install_method(
+        &self,
+        method: &ClassMethodDef,
+        key: PropertyKey,
+        prototype: &ObjectRef,
+        constructor_function: &Function,
+        name: Option<&str>,
+    ) -> Result<(), RuntimeError> {
+        let mut method_env = self.function_capture_env(&method.bytecode, &method.local_names);
+        bind_class_inner_name(&mut method_env, name, constructor_function);
+        // A method's home object resolves `super.x`: instance methods and
+        // accessors use the prototype; static members use the constructor.
+        let home_object = if method.is_static {
+            Value::Function(constructor_function.clone())
+        } else {
+            Value::Object(prototype.clone())
+        };
+        let method_function = Function::new_user_compiled(CompiledUserFunction {
+            name: method.name.clone(),
+            params: method.params.clone(),
+            env: method_env.clone(),
+            bytecode: method.bytecode.clone(),
+            local_names: method.local_names.clone(),
+            constructable: false,
+            is_strict: true,
+            lexical_this: false,
+            lexical_arguments: false,
+            is_class_constructor: false,
+            is_derived_constructor: false,
+            home_object: Some(home_object.clone()),
+            super_constructor: None,
+            captured_env: Rc::new(RefCell::new(method_env)),
+        });
+        let function_value = Value::Function(method_function);
+
+        // Static members live on the constructor; instance members on the
+        // prototype.
+        let target = home_object;
+
+        let descriptor = match method.method_kind {
+            // Methods are non-enumerable, writable, configurable.
+            ClassMethodKind::Method => Property::data(function_value, false, true, true),
+            // Accessors are non-enumerable, configurable; merge with an
+            // existing accessor for the same key.
+            ClassMethodKind::Getter => merge_accessor(
+                &target,
+                &key,
+                Property::accessor(Some(function_value), None, false, true),
+            ),
+            ClassMethodKind::Setter => merge_accessor(
+                &target,
+                &key,
+                Property::accessor(None, Some(function_value), false, true),
+            ),
+        };
+
+        let success = object::define_property_on_value_key(target, key, descriptor)?;
+        if !success {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "class member definition failed".to_owned(),
+            });
+        }
+        Ok(())
+    }
+
+    /// Builds the initializer thunk function for a field. The thunk runs with
+    /// `this` bound at call time; its home object resolves `super.x` (instance
+    /// fields use the prototype, static fields the constructor).
+    fn build_field_initializer(
+        &self,
+        field: &ClassFieldDef,
+        prototype: &ObjectRef,
+        constructor_function: &Function,
+        name: Option<&str>,
+    ) -> Option<Function> {
+        let ClassFieldInitializerDef {
+            local_names,
+            bytecode,
+        } = field.initializer.as_ref()?;
+        let mut field_env = self.function_capture_env(bytecode, local_names);
+        bind_class_inner_name(&mut field_env, name, constructor_function);
+        let home_object = if field.is_static {
+            Value::Function(constructor_function.clone())
+        } else {
+            Value::Object(prototype.clone())
+        };
+        Some(Function::new_user_compiled(CompiledUserFunction {
+            name: None,
+            params: qjs_ast::FunctionParams::positional(Vec::new()),
+            env: field_env.clone(),
+            bytecode: bytecode.clone(),
+            local_names: local_names.clone(),
+            constructable: false,
+            is_strict: true,
+            lexical_this: false,
+            lexical_arguments: false,
+            is_class_constructor: false,
+            is_derived_constructor: false,
+            home_object: Some(home_object),
+            super_constructor: None,
+            captured_env: Rc::new(RefCell::new(field_env)),
+        }))
+    }
+
+    /// Runs a field initializer thunk with the given `this` value and returns
+    /// its result.
+    fn run_field_initializer(
+        &mut self,
+        thunk: &Function,
+        this_value: Value,
+    ) -> Result<Value, RuntimeError> {
+        let mut env = self.current_env();
+        let result = call_function(
+            Value::Function(thunk.clone()),
+            this_value,
+            Vec::new(),
+            &mut env,
+            false,
+        );
+        self.apply_env(env);
+        result
     }
 
     /// Resolves `super.<key>` (or `super[key]`): the property is looked up on
@@ -204,9 +309,33 @@ impl Vm<'_> {
         let result = self.super_call_inner(arguments);
         if let Some(this_value) = self.handle_runtime_result(result)? {
             self.globals.insert("this".to_owned(), this_value.clone());
+            // The instance fields of the derived class initialize immediately
+            // after `super(...)` binds `this`, before the rest of the body.
+            let field_result = self.initialize_derived_instance_fields(&this_value);
+            if self.handle_runtime_result(field_result)?.is_none() {
+                return Ok(());
+            }
             self.stack.push(this_value);
         }
         Ok(())
+    }
+
+    /// Runs the active derived constructor's instance-field initializers once
+    /// `super(...)` has bound `this`.
+    fn initialize_derived_instance_fields(
+        &mut self,
+        this_value: &Value,
+    ) -> Result<Value, RuntimeError> {
+        let Some(Value::Function(constructor)) =
+            self.globals.get(crate::ACTIVE_CONSTRUCTOR_BINDING).cloned()
+        else {
+            return Ok(Value::Undefined);
+        };
+        let mut env = self.current_env();
+        let result =
+            crate::function::initialize_instance_fields(&constructor, this_value, &mut env);
+        self.apply_env(env);
+        result.map(|()| Value::Undefined)
     }
 
     fn super_call_inner(&mut self, arguments: Vec<Value>) -> Result<Value, RuntimeError> {
@@ -293,6 +422,38 @@ impl ClassHeritage {
             }),
         }
     }
+}
+
+/// Resolves a class element's key: a literal key is taken directly; a computed
+/// key consumes the next value from the source-ordered computed-key iterator.
+fn resolve_element_key(
+    key: &ClassMemberKeyDef,
+    computed_keys: &mut impl Iterator<Item = PropertyKey>,
+) -> PropertyKey {
+    match key {
+        ClassMemberKeyDef::Literal(key) => PropertyKey::String(key.clone()),
+        ClassMemberKeyDef::Computed => computed_keys
+            .next()
+            .expect("computed key count matches elements"),
+    }
+}
+
+/// Installs a field value on a target via CreateDataPropertyOrThrow semantics:
+/// an enumerable, writable, configurable own data property.
+pub(crate) fn install_field_value(
+    target: &Value,
+    key: PropertyKey,
+    value: Value,
+) -> Result<(), RuntimeError> {
+    let descriptor = Property::data(value, true, true, true);
+    let success = object::define_property_on_value_key(target.clone(), key, descriptor)?;
+    if !success {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: cannot define class field".to_owned(),
+        });
+    }
+    Ok(())
 }
 
 fn bind_class_inner_name(

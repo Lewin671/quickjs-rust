@@ -49,6 +49,16 @@ verification command is green and `./scripts/check.sh` passes.
       real coverage. Burndown entry comes from the next CI full scan.)
 - [ ] S6 Follow-up surface, one slice each as needed: class fields, private
       names (`#x`), static blocks. Re-cluster remaining class gaps first.
+      - [x] Public class fields (instance and static): AST `ClassElement`
+            (`ClassMember`/`ClassField`), parser fields with ASI and the
+            `constructor`/`prototype`/`arguments`/`super` early errors, runtime
+            instance-field initialization (base at construction start, derived
+            after `super()`), static fields evaluated at class definition with
+            `this` = constructor, computed keys evaluated once at definition,
+            and CreateDataPropertyOrThrow attributes (enumerable, writable,
+            configurable).
+      - [ ] Private names (`#x`) — still rejected with a structured error.
+      - [ ] Static initialization blocks — still rejected.
 
 ## Scope
 

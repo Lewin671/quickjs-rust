@@ -87,7 +87,8 @@ pub(super) enum Op {
     NewClass {
         name: Option<String>,
         constructor: ClassConstructorDef,
-        methods: Vec<ClassMethodDef>,
+        /// Class elements (methods, accessors, and fields) in source order.
+        elements: Vec<ClassElementDef>,
         /// Number of computed-key values pushed onto the stack before this op,
         /// in member order.
         computed_key_count: usize,
@@ -171,6 +172,14 @@ pub(super) enum ClassMethodKind {
     Setter,
 }
 
+/// A class element in source order: a method/accessor or a field. Both kinds
+/// may carry a computed key whose value was pushed before `NewClass`.
+#[derive(Clone, Debug)]
+pub(super) enum ClassElementDef {
+    Method(ClassMethodDef),
+    Field(ClassFieldDef),
+}
+
 /// Compiled definition of a class method or accessor.
 #[derive(Clone, Debug)]
 pub(super) struct ClassMethodDef {
@@ -181,6 +190,24 @@ pub(super) struct ClassMethodDef {
     /// from the evaluated key at runtime.
     pub(super) name: Option<String>,
     pub(super) params: FunctionParams,
+    pub(super) local_names: Vec<String>,
+    pub(super) bytecode: Rc<Bytecode>,
+}
+
+/// Compiled definition of a public class field. The initializer is compiled
+/// as a thunk evaluated with `this` bound (the instance for an instance field,
+/// the constructor for a static field); `None` installs `undefined`.
+#[derive(Clone, Debug)]
+pub(super) struct ClassFieldDef {
+    pub(super) key: ClassMemberKeyDef,
+    pub(super) is_static: bool,
+    pub(super) initializer: Option<ClassFieldInitializerDef>,
+}
+
+/// Compiled field initializer thunk: a parameterless function body returning
+/// the field value.
+#[derive(Clone, Debug)]
+pub(super) struct ClassFieldInitializerDef {
     pub(super) local_names: Vec<String>,
     pub(super) bytecode: Rc<Bytecode>,
 }
@@ -305,12 +332,21 @@ fn collect_global_names_from_ops(code: &[Op], names: &mut BTreeSet<String>) {
             }
             Op::NewClass {
                 constructor,
-                methods,
+                elements,
                 ..
             } => {
                 names.extend(constructor.bytecode.global_names().iter().cloned());
-                for method in methods {
-                    names.extend(method.bytecode.global_names().iter().cloned());
+                for element in elements {
+                    match element {
+                        ClassElementDef::Method(method) => {
+                            names.extend(method.bytecode.global_names().iter().cloned());
+                        }
+                        ClassElementDef::Field(field) => {
+                            if let Some(initializer) = &field.initializer {
+                                names.extend(initializer.bytecode.global_names().iter().cloned());
+                            }
+                        }
+                    }
                 }
             }
             _ => {}

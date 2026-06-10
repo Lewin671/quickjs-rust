@@ -59,6 +59,12 @@ pub(crate) fn call_function(
         );
     }
     if let Some(bytecode) = &function.bytecode {
+        // A base-class constructor initializes its instance fields right after
+        // the receiver is created, before the constructor body runs. A derived
+        // constructor defers this until `super(...)` binds `this`.
+        if function.is_class_constructor && !function.is_derived_constructor && is_construct {
+            initialize_instance_fields(&function, &this_value, env)?;
+        }
         let function_env = function_env(
             &function,
             bytecode,
@@ -85,6 +91,32 @@ pub(crate) fn call_function(
         thrown: None,
         message: "user function has no bytecode body".to_owned(),
     })
+}
+
+/// Runs a class constructor's instance-field initializers, in definition
+/// order, installing each field on the receiver via CreateDataPropertyOrThrow.
+/// Each initializer thunk evaluates with `this` = the receiver; a field with no
+/// initializer installs `undefined`.
+pub(crate) fn initialize_instance_fields(
+    function: &Function,
+    this_value: &Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
+    let fields = function.instance_fields.borrow().clone();
+    for field in fields {
+        let value = match &field.initializer {
+            Some(thunk) => call_function(
+                Value::Function(thunk.clone()),
+                this_value.clone(),
+                Vec::new(),
+                env,
+                false,
+            )?,
+            None => Value::Undefined,
+        };
+        crate::bytecode::install_field_value(this_value, field.key.clone(), value)?;
+    }
+    Ok(())
 }
 
 fn finish_derived_construct(
@@ -237,6 +269,11 @@ fn function_env(
     }
     if let Some(name) = &function.name {
         local_env.insert(name.clone(), callee.clone());
+    }
+    // A derived class constructor needs its own constructor value at hand so
+    // that `super(...)` can initialize the instance fields once `this` exists.
+    if function.is_class_constructor && function.is_derived_constructor && is_construct {
+        local_env.insert(crate::ACTIVE_CONSTRUCTOR_BINDING.to_owned(), callee.clone());
     }
     insert_super_bindings(&mut local_env, function, env, is_construct);
     // A derived-class constructor leaves `this` uninitialized (a TDZ): reading

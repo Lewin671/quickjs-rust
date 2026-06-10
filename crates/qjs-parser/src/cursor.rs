@@ -12,6 +12,7 @@ impl Parser {
             allow_in: true,
             in_method: false,
             in_derived_constructor: false,
+            in_field_initializer: false,
         }
     }
 

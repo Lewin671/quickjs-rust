@@ -498,3 +498,134 @@ fn derived_methods_are_not_constructable() {
     let result = eval("class A {} class B extends A { m() {} } new (new B().m)();");
     assert!(result.is_err(), "class methods must not be constructable");
 }
+
+#[test]
+fn instance_field_with_initializer() {
+    assert_eq!(
+        eval("class C { x = 41; } new C().x;"),
+        Ok(Value::Number(41.0))
+    );
+}
+
+#[test]
+fn instance_field_without_initializer_is_undefined() {
+    assert_eq!(eval("class C { x; } new C().x;"), Ok(Value::Undefined));
+}
+
+#[test]
+fn fields_initialize_in_definition_order_seeing_earlier_fields() {
+    // A later field's initializer observes earlier fields through `this`.
+    assert_eq!(
+        eval("class C { a = 1; b = this.a + 1; c = this.b + 1; } new C().c;"),
+        Ok(Value::Number(3.0))
+    );
+}
+
+#[test]
+fn field_shadows_prototype_method_and_is_own_enumerable() {
+    assert_eq!(
+        eval(
+            "class C { m() { return 'method'; } m = 7; } let c = new C(); [typeof c.m, c.m, Object.keys(c).join(',')].join('|');"
+        ),
+        Ok(Value::String("number|7|m".to_owned()))
+    );
+}
+
+#[test]
+fn prototype_methods_stay_non_enumerable_with_fields() {
+    assert_eq!(
+        eval(
+            "class C { x = 1; m() {} } Object.keys(C.prototype).length === 0 && Object.keys(new C()).join(',');"
+        ),
+        Ok(Value::String("x".to_owned()))
+    );
+}
+
+#[test]
+fn static_field_runs_with_this_as_constructor() {
+    assert_eq!(
+        eval("class C { static self = this; } C.self === C;"),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn static_field_value_installed_on_constructor() {
+    assert_eq!(
+        eval("class C { static n = 9; } C.n;"),
+        Ok(Value::Number(9.0))
+    );
+}
+
+#[test]
+fn computed_field_key_evaluated_once_at_definition() {
+    assert_eq!(
+        eval(
+            "var calls = 0; function k() { calls++; return 'f'; } class C { [k()] = 1; } new C(); new C(); calls;"
+        ),
+        Ok(Value::Number(1.0))
+    );
+}
+
+#[test]
+fn computed_field_key_installs_field() {
+    assert_eq!(
+        eval("let key = 'dyn'; class C { [key] = 5; } new C().dyn;"),
+        Ok(Value::Number(5.0))
+    );
+}
+
+#[test]
+fn derived_instance_fields_run_after_super() {
+    // The field initializer sees state established by the base constructor.
+    assert_eq!(
+        eval(
+            "class A { constructor() { this.tag = 'A'; } } class B extends A { x = this.tag + 'B'; } new B().x;"
+        ),
+        Ok(Value::String("AB".to_owned()))
+    );
+}
+
+#[test]
+fn default_derived_constructor_runs_field_init() {
+    assert_eq!(
+        eval(
+            "class A { constructor() { this.a = 1; } } class B extends A { x = 5; } let b = new B(); b.a + b.x;"
+        ),
+        Ok(Value::Number(6.0))
+    );
+}
+
+#[test]
+fn default_base_constructor_runs_field_init() {
+    assert_eq!(
+        eval("class C { x = 3; } new C().x;"),
+        Ok(Value::Number(3.0))
+    );
+}
+
+#[test]
+fn field_initializer_closes_over_class_scope() {
+    assert_eq!(
+        eval("let v = 10; class C { x = v; } new C().x;"),
+        Ok(Value::Number(10.0))
+    );
+}
+
+#[test]
+fn super_property_in_field_initializer() {
+    assert_eq!(
+        eval("class A { get y() { return 8; } } class B extends A { x = super.y; } new B().x;"),
+        Ok(Value::Number(8.0))
+    );
+}
+
+#[test]
+fn instance_fields_are_writable_and_configurable() {
+    assert_eq!(
+        eval(
+            "class C { x = 1; } let c = new C(); let d = Object.getOwnPropertyDescriptor(c, 'x'); [d.writable, d.enumerable, d.configurable].join(',');"
+        ),
+        Ok(Value::String("true,true,true".to_owned()))
+    );
+}

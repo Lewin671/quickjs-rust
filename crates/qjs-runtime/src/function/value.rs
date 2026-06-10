@@ -8,11 +8,23 @@ use std::{
 use qjs_ast::{FunctionParams, Stmt};
 
 use crate::{
-    Bytecode, NativeFunction, ObjectRef, Property, Value,
+    Bytecode, NativeFunction, ObjectRef, Property, PropertyKey, Value,
     bytecode::compile_function_body,
     function::{collect_function_local_names, is_strict_function_body},
     function_intrinsic_prototype, object_prototype,
 };
+
+/// A compiled instance-field initializer attached to a class constructor. It
+/// runs at construction time with `this` bound to the new instance.
+#[derive(Clone)]
+pub(crate) struct InstanceFieldInitializer {
+    /// The property key the field installs (computed keys are resolved at class
+    /// definition time).
+    pub(crate) key: PropertyKey,
+    /// The initializer thunk: a function evaluated with `this` = the instance.
+    /// `None` for a field with no initializer (which installs `undefined`).
+    pub(crate) initializer: Option<Function>,
+}
 
 /// User-defined or native function value.
 #[derive(Clone)]
@@ -42,6 +54,10 @@ pub struct Function {
     pub(crate) home_object: Rc<RefCell<Option<Value>>>,
     /// For a derived constructor, the parent constructor invoked by `super()`.
     pub(crate) super_constructor: Rc<RefCell<Option<Value>>>,
+    /// For a class constructor, the instance-field initializers run when a new
+    /// instance is constructed (base class: at construction start; derived
+    /// class: immediately after `super()` returns).
+    pub(crate) instance_fields: Rc<RefCell<Vec<InstanceFieldInitializer>>>,
     pub(crate) bound: Option<Box<BoundFunction>>,
     /// Function object properties.
     pub(crate) properties: Rc<RefCell<HashMap<String, Property>>>,
@@ -182,6 +198,7 @@ impl Function {
             is_derived_constructor: false,
             home_object: Rc::new(RefCell::new(None)),
             super_constructor: Rc::new(RefCell::new(None)),
+            instance_fields: Rc::new(RefCell::new(Vec::new())),
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
             property_order: Rc::new(RefCell::new(Vec::new())),
@@ -238,6 +255,7 @@ impl Function {
             is_derived_constructor,
             home_object: Rc::new(RefCell::new(home_object)),
             super_constructor: Rc::new(RefCell::new(super_constructor)),
+            instance_fields: Rc::new(RefCell::new(Vec::new())),
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
             property_order: Rc::new(RefCell::new(Vec::new())),
@@ -321,6 +339,7 @@ impl Function {
             is_derived_constructor: false,
             home_object: Rc::new(RefCell::new(None)),
             super_constructor: Rc::new(RefCell::new(None)),
+            instance_fields: Rc::new(RefCell::new(Vec::new())),
             bound: Some(Box::new(BoundFunction {
                 target,
                 this_value,
@@ -364,6 +383,7 @@ impl Function {
             is_derived_constructor: false,
             home_object: Rc::new(RefCell::new(None)),
             super_constructor: Rc::new(RefCell::new(None)),
+            instance_fields: Rc::new(RefCell::new(Vec::new())),
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
             property_order: Rc::new(RefCell::new(Vec::new())),

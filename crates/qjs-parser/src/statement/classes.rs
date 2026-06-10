@@ -1,5 +1,6 @@
 use qjs_ast::{
-    ClassBody, ClassMember, ClassMemberKey, Expr, FunctionParams, MethodKind, Span, Stmt,
+    ClassBody, ClassElement, ClassField, ClassMember, ClassMemberKey, Expr, FunctionParams,
+    MethodKind, Span, Stmt,
 };
 use qjs_lexer::{Token, TokenKind};
 
@@ -81,15 +82,17 @@ impl Parser {
         heritage: Option<Box<Expr>>,
     ) -> Result<ClassBody, ParseError> {
         let has_heritage = heritage.is_some();
-        let mut members = Vec::new();
+        let mut elements = Vec::new();
         let mut seen_constructor = false;
         while !self.at(&TokenKind::RightBrace) && !self.at(&TokenKind::Eof) {
             // Empty members: bare semicolons are allowed between definitions.
             if self.match_kind(&TokenKind::Semicolon) {
                 continue;
             }
-            let member = self.class_member(has_heritage)?;
-            if member.kind == MethodKind::Constructor {
+            let element = self.class_element(has_heritage)?;
+            if let ClassElement::Method(member) = &element
+                && member.kind == MethodKind::Constructor
+            {
                 if seen_constructor {
                     return Err(ParseError {
                         message: "a class may only have one constructor".to_owned(),
@@ -98,7 +101,7 @@ impl Parser {
                 }
                 seen_constructor = true;
             }
-            members.push(member);
+            elements.push(element);
         }
         let end = self
             .peek()
@@ -108,12 +111,12 @@ impl Parser {
         self.expect(&TokenKind::RightBrace)?;
         Ok(ClassBody {
             heritage,
-            members,
+            elements,
             span: Span::new(start, end),
         })
     }
 
-    fn class_member(&mut self, has_heritage: bool) -> Result<ClassMember, ParseError> {
+    fn class_element(&mut self, has_heritage: bool) -> Result<ClassElement, ParseError> {
         let start_token = self
             .peek()
             .cloned()
@@ -159,10 +162,16 @@ impl Parser {
         let (key, key_text) = self.class_member_key()?;
 
         if !self.at(&TokenKind::LeftParen) {
-            return Err(ParseError {
-                message: "class fields are not yet supported".to_owned(),
-                span: Span::new(member_start, self.previous_end()),
-            });
+            // No parameter list follows: this is a field, not a method. A real
+            // `get`/`set` accessor prefix requires a method body, so a field
+            // here would be a malformed accessor.
+            if accessor_kind.is_some() {
+                return Err(ParseError {
+                    message: "expected `(` after accessor name".to_owned(),
+                    span: Span::new(member_start, self.previous_end()),
+                });
+            }
+            return self.class_field(is_static, key, key_text.as_deref(), member_start);
         }
 
         let params = self.function_parameters()?;
@@ -225,13 +234,82 @@ impl Parser {
             lexical_arguments: false,
             span: Span::new(member_start, end),
         };
-        Ok(ClassMember {
+        Ok(ClassElement::Method(ClassMember {
             kind,
             key,
             is_static,
             value,
             span: Span::new(member_start, end),
+        }))
+    }
+
+    /// Parses a public class field after its key has been consumed:
+    /// `= AssignmentExpression`, then ASI (a `;`, a `}`, EOF, or a preceding
+    /// line terminator terminates the field).
+    fn class_field(
+        &mut self,
+        is_static: bool,
+        key: ClassMemberKey,
+        key_text: Option<&str>,
+        member_start: usize,
+    ) -> Result<ClassElement, ParseError> {
+        let key_end = self.previous_end();
+        self.validate_field_restrictions(is_static, key_text, member_start, key_end)?;
+
+        let initializer = if self.match_kind(&TokenKind::Equal) {
+            // Field initializers may use `super.x` but not `arguments`; they
+            // form their own implicit method-like scope.
+            let previous_method = self.in_method;
+            let previous_field_initializer = self.in_field_initializer;
+            self.in_method = true;
+            self.in_field_initializer = true;
+            let expr = self.assignment();
+            self.in_method = previous_method;
+            self.in_field_initializer = previous_field_initializer;
+            Some(expr?)
+        } else {
+            None
+        };
+
+        let end = self.previous_end();
+        self.consume_field_terminator(end)?;
+        Ok(ClassElement::Field(ClassField {
+            key,
+            initializer,
+            is_static,
+            span: Span::new(member_start, end),
+        }))
+    }
+
+    /// Enforces the ASI rule for a field: the next token must be `;`, `}`,
+    /// EOF, or separated from the field by a line terminator. A `;` is
+    /// consumed; the others stay for the surrounding loop.
+    fn consume_field_terminator(&mut self, field_end: usize) -> Result<(), ParseError> {
+        if self.match_kind(&TokenKind::Semicolon) {
+            return Ok(());
+        }
+        if self.at(&TokenKind::RightBrace) || self.at(&TokenKind::Eof) {
+            return Ok(());
+        }
+        let next = self
+            .peek()
+            .expect("parser should always have eof token")
+            .clone();
+        if self.has_line_terminator_between(field_end, next.span.start) {
+            return Ok(());
+        }
+        Err(ParseError {
+            message: "expected `;` or newline after class field".to_owned(),
+            span: next.span,
         })
+    }
+
+    /// Reports whether the source between two byte offsets contains a line
+    /// terminator, used for class-field ASI.
+    fn has_line_terminator_between(&self, start: usize, end: usize) -> bool {
+        self.source
+            .get(start..end)
+            .is_some_and(|slice| slice.chars().any(is_line_terminator))
     }
 
     /// Parses a class member key (literal name or `[expr]`), returning the key
@@ -303,6 +381,39 @@ impl Parser {
         }
         Ok(())
     }
+
+    fn validate_field_restrictions(
+        &self,
+        is_static: bool,
+        key_text: Option<&str>,
+        start: usize,
+        end: usize,
+    ) -> Result<(), ParseError> {
+        let span = Span::new(start, end);
+        match key_text {
+            // An instance field named `constructor` and a static field named
+            // `prototype` are both syntax errors; a static `constructor` field
+            // is likewise forbidden.
+            Some("constructor") => {
+                return Err(ParseError {
+                    message: "class fields may not be named `constructor`".to_owned(),
+                    span,
+                });
+            }
+            Some("prototype") if is_static => {
+                return Err(ParseError {
+                    message: "static class fields may not be named `prototype`".to_owned(),
+                    span,
+                });
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+}
+
+fn is_line_terminator(ch: char) -> bool {
+    matches!(ch, '\n' | '\r' | '\u{2028}' | '\u{2029}')
 }
 
 fn class_member_name(kind: &TokenKind) -> Option<String> {

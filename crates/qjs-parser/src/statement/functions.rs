@@ -240,11 +240,14 @@ impl Parser {
     ) -> Result<T, ParseError> {
         let previous_method = self.in_method;
         let previous_derived = self.in_derived_constructor;
+        let previous_field_initializer = self.in_field_initializer;
         self.in_method = false;
         self.in_derived_constructor = false;
+        self.in_field_initializer = false;
         let result = body(self);
         self.in_method = previous_method;
         self.in_derived_constructor = previous_derived;
+        self.in_field_initializer = previous_field_initializer;
         result
     }
 

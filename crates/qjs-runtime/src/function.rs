@@ -6,7 +6,9 @@ mod prototype;
 mod strict;
 mod value;
 
-pub(crate) use call::{call_function, construct_function, ensure_constructor};
+pub(crate) use call::{
+    call_function, construct_function, ensure_constructor, initialize_instance_fields,
+};
 pub(crate) use call::{native_mapped_argument_get, native_mapped_argument_set};
 pub(crate) use install::install_function;
 pub(crate) use local_names::{
@@ -21,4 +23,6 @@ pub(crate) use prototype::{
     native_throw_type_error,
 };
 pub(crate) use strict::is_strict_function_body;
-pub(crate) use value::{CompiledUserFunction, Function, static_inheritance_mirror};
+pub(crate) use value::{
+    CompiledUserFunction, Function, InstanceFieldInitializer, static_inheritance_mirror,
+};

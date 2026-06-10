@@ -43,6 +43,9 @@ struct Parser {
     /// Whether `super(...)` calls are currently allowed, i.e. the parser is
     /// inside a derived-class constructor body (or an arrow nested in one).
     in_derived_constructor: bool,
+    /// Whether the parser is inside a class field initializer expression, where
+    /// `arguments` is a syntax error.
+    in_field_initializer: bool,
 }
 
 #[cfg(test)]

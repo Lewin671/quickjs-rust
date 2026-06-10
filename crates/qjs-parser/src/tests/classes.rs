@@ -1,6 +1,31 @@
-use qjs_ast::{ClassMemberKey, Expr, MethodKind, Stmt};
+use qjs_ast::{
+    ClassBody, ClassElement, ClassField, ClassMember, ClassMemberKey, Expr, MethodKind, Stmt,
+};
 
 use crate::parse_script;
+
+/// Collects the method/accessor/constructor members of a class body, ignoring
+/// fields.
+fn members(body: &ClassBody) -> Vec<&ClassMember> {
+    body.elements
+        .iter()
+        .filter_map(|element| match element {
+            ClassElement::Method(member) => Some(member),
+            ClassElement::Field(_) => None,
+        })
+        .collect()
+}
+
+/// Collects the field elements of a class body.
+fn fields(body: &ClassBody) -> Vec<&ClassField> {
+    body.elements
+        .iter()
+        .filter_map(|element| match element {
+            ClassElement::Field(field) => Some(field),
+            ClassElement::Method(_) => None,
+        })
+        .collect()
+}
 
 #[test]
 fn parses_class_declaration_with_constructor_and_methods() {
@@ -12,9 +37,9 @@ fn parses_class_declaration_with_constructor_and_methods() {
     };
     assert_eq!(name, "Point");
     assert_eq!(span.start, 0);
-    assert_eq!(body.members.len(), 2);
+    assert_eq!(members(body).len(), 2);
 
-    let constructor = &body.members[0];
+    let constructor = members(body)[0];
     assert_eq!(constructor.kind, MethodKind::Constructor);
     assert_eq!(
         constructor.key,
@@ -33,7 +58,7 @@ fn parses_class_declaration_with_constructor_and_methods() {
     assert_eq!(params.names(), ["x", "y"]);
     assert!(!constructable, "class methods are not constructable");
 
-    let method = &body.members[1];
+    let method = members(body)[1];
     assert_eq!(method.kind, MethodKind::Method);
     assert_eq!(method.key, ClassMemberKey::Literal("norm".to_owned()));
 }
@@ -53,7 +78,7 @@ fn parses_class_expression_named_and_anonymous() {
         panic!("expected named class expression");
     };
     assert_eq!(name, "Named");
-    assert_eq!(body.members.len(), 1);
+    assert_eq!(members(body).len(), 1);
 
     let script = parse_script("let c = class { m() {} };").expect("source should parse");
     let [Stmt::VarDecl { declarations, .. }] = script.body.as_slice() else {
@@ -70,7 +95,7 @@ fn parses_empty_class_body() {
     let [Stmt::ClassDecl { body, .. }] = script.body.as_slice() else {
         panic!("expected class declaration");
     };
-    assert!(body.members.is_empty());
+    assert!(members(body).is_empty());
 }
 
 #[test]
@@ -79,9 +104,15 @@ fn allows_semicolons_between_members() {
     let [Stmt::ClassDecl { body, .. }] = script.body.as_slice() else {
         panic!("expected class declaration");
     };
-    assert_eq!(body.members.len(), 2);
-    assert_eq!(body.members[0].key, ClassMemberKey::Literal("a".to_owned()));
-    assert_eq!(body.members[1].key, ClassMemberKey::Literal("b".to_owned()));
+    assert_eq!(members(body).len(), 2);
+    assert_eq!(
+        members(body)[0].key,
+        ClassMemberKey::Literal("a".to_owned())
+    );
+    assert_eq!(
+        members(body)[1].key,
+        ClassMemberKey::Literal("b".to_owned())
+    );
 }
 
 #[test]
@@ -90,13 +121,13 @@ fn allows_keyword_named_methods() {
     let [Stmt::ClassDecl { body, .. }] = script.body.as_slice() else {
         panic!("expected class declaration");
     };
-    assert_eq!(body.members.len(), 2);
+    assert_eq!(members(body).len(), 2);
     assert_eq!(
-        body.members[0].key,
+        members(body)[0].key,
         ClassMemberKey::Literal("if".to_owned())
     );
     assert_eq!(
-        body.members[1].key,
+        members(body)[1].key,
         ClassMemberKey::Literal("return".to_owned())
     );
 }
@@ -115,13 +146,13 @@ fn parses_static_methods_and_accessors() {
     let [Stmt::ClassDecl { body, .. }] = script.body.as_slice() else {
         panic!("expected class declaration");
     };
-    assert_eq!(body.members.len(), 3);
-    assert!(body.members[0].is_static);
-    assert_eq!(body.members[0].kind, MethodKind::Method);
-    assert!(body.members[1].is_static);
-    assert_eq!(body.members[1].kind, MethodKind::Getter);
-    assert!(body.members[2].is_static);
-    assert_eq!(body.members[2].kind, MethodKind::Setter);
+    assert_eq!(members(body).len(), 3);
+    assert!(members(body)[0].is_static);
+    assert_eq!(members(body)[0].kind, MethodKind::Method);
+    assert!(members(body)[1].is_static);
+    assert_eq!(members(body)[1].kind, MethodKind::Getter);
+    assert!(members(body)[2].is_static);
+    assert_eq!(members(body)[2].kind, MethodKind::Setter);
 }
 
 #[test]
@@ -130,11 +161,14 @@ fn parses_instance_accessors() {
     let [Stmt::ClassDecl { body, .. }] = script.body.as_slice() else {
         panic!("expected class declaration");
     };
-    assert_eq!(body.members.len(), 2);
-    assert_eq!(body.members[0].kind, MethodKind::Getter);
-    assert!(!body.members[0].is_static);
-    assert_eq!(body.members[0].key, ClassMemberKey::Literal("x".to_owned()));
-    assert_eq!(body.members[1].kind, MethodKind::Setter);
+    assert_eq!(members(body).len(), 2);
+    assert_eq!(members(body)[0].kind, MethodKind::Getter);
+    assert!(!members(body)[0].is_static);
+    assert_eq!(
+        members(body)[0].key,
+        ClassMemberKey::Literal("x".to_owned())
+    );
+    assert_eq!(members(body)[1].kind, MethodKind::Setter);
 }
 
 #[test]
@@ -144,11 +178,11 @@ fn parses_computed_member_names() {
     let [Stmt::ClassDecl { body, .. }] = script.body.as_slice() else {
         panic!("expected class declaration");
     };
-    assert_eq!(body.members.len(), 2);
-    assert!(matches!(body.members[0].key, ClassMemberKey::Computed(_)));
-    assert!(!body.members[0].is_static);
-    assert!(matches!(body.members[1].key, ClassMemberKey::Computed(_)));
-    assert!(body.members[1].is_static);
+    assert_eq!(members(body).len(), 2);
+    assert!(matches!(members(body)[0].key, ClassMemberKey::Computed(_)));
+    assert!(!members(body)[0].is_static);
+    assert!(matches!(members(body)[1].key, ClassMemberKey::Computed(_)));
+    assert!(members(body)[1].is_static);
 }
 
 #[test]
@@ -158,21 +192,21 @@ fn allows_static_get_set_as_plain_method_names() {
     let [Stmt::ClassDecl { body, .. }] = script.body.as_slice() else {
         panic!("expected class declaration");
     };
-    assert_eq!(body.members.len(), 3);
-    for member in &body.members {
+    assert_eq!(members(body).len(), 3);
+    for member in members(body) {
         assert_eq!(member.kind, MethodKind::Method);
         assert!(!member.is_static);
     }
     assert_eq!(
-        body.members[0].key,
+        members(body)[0].key,
         ClassMemberKey::Literal("static".to_owned())
     );
     assert_eq!(
-        body.members[1].key,
+        members(body)[1].key,
         ClassMemberKey::Literal("get".to_owned())
     );
     assert_eq!(
-        body.members[2].key,
+        members(body)[2].key,
         ClassMemberKey::Literal("set".to_owned())
     );
 }
@@ -183,12 +217,15 @@ fn parses_string_and_numeric_method_names() {
     let [Stmt::ClassDecl { body, .. }] = script.body.as_slice() else {
         panic!("expected class declaration");
     };
-    assert_eq!(body.members.len(), 2);
+    assert_eq!(members(body).len(), 2);
     assert_eq!(
-        body.members[0].key,
+        members(body)[0].key,
         ClassMemberKey::Literal("str".to_owned())
     );
-    assert_eq!(body.members[1].key, ClassMemberKey::Literal("1".to_owned()));
+    assert_eq!(
+        members(body)[1].key,
+        ClassMemberKey::Literal("1".to_owned())
+    );
 }
 
 #[test]
@@ -287,9 +324,91 @@ fn rejects_super_outside_valid_contexts() {
 }
 
 #[test]
-fn rejects_class_fields() {
-    let error = parse_script("class C { x = 1; }").expect_err("class fields are out of scope");
-    assert!(error.message.contains("field"));
+fn parses_public_fields_with_and_without_initializers() {
+    let script = parse_script("class C { x = 1; y; static z = 2; }").expect("fields should parse");
+    let [Stmt::ClassDecl { body, .. }] = script.body.as_slice() else {
+        panic!("expected class declaration");
+    };
+    let fields = fields(body);
+    assert_eq!(fields.len(), 3);
+    assert_eq!(fields[0].key, ClassMemberKey::Literal("x".to_owned()));
+    assert!(fields[0].initializer.is_some());
+    assert!(!fields[0].is_static);
+    assert_eq!(fields[1].key, ClassMemberKey::Literal("y".to_owned()));
+    assert!(fields[1].initializer.is_none());
+    assert_eq!(fields[2].key, ClassMemberKey::Literal("z".to_owned()));
+    assert!(fields[2].is_static);
+}
+
+#[test]
+fn parses_computed_string_and_numeric_field_keys() {
+    let script = parse_script("class C { [a] = 1; \"s\" = 2; 3 = 4; }").expect("field keys parse");
+    let [Stmt::ClassDecl { body, .. }] = script.body.as_slice() else {
+        panic!("expected class declaration");
+    };
+    let fields = fields(body);
+    assert_eq!(fields.len(), 3);
+    assert!(matches!(fields[0].key, ClassMemberKey::Computed(_)));
+    assert_eq!(fields[1].key, ClassMemberKey::Literal("s".to_owned()));
+    assert_eq!(fields[2].key, ClassMemberKey::Literal("3".to_owned()));
+}
+
+#[test]
+fn field_asi_allows_newline_termination() {
+    parse_script("class C {\n  x = 1\n  y = 2\n}").expect("newline terminates a field");
+}
+
+#[test]
+fn field_asi_rejects_two_fields_on_one_line() {
+    let error = parse_script("class C { x = 1 y = 2 }")
+        .expect_err("two fields on one line without `;` is an error");
+    assert!(error.message.contains("class field"));
+}
+
+#[test]
+fn rejects_instance_field_named_constructor() {
+    let error = parse_script("class C { constructor = 1; }")
+        .expect_err("instance field `constructor` is a syntax error");
+    assert!(error.message.contains("constructor"));
+}
+
+#[test]
+fn rejects_static_field_named_prototype() {
+    let error = parse_script("class C { static prototype = 1; }")
+        .expect_err("static field `prototype` is a syntax error");
+    assert!(error.message.contains("prototype"));
+}
+
+#[test]
+fn allows_field_named_static_or_get() {
+    let script = parse_script("class C { static = 1; get = 2; }").expect("fields parse");
+    let [Stmt::ClassDecl { body, .. }] = script.body.as_slice() else {
+        panic!("expected class declaration");
+    };
+    let fields = fields(body);
+    assert_eq!(fields.len(), 2);
+    assert_eq!(fields[0].key, ClassMemberKey::Literal("static".to_owned()));
+    assert!(!fields[0].is_static);
+    assert_eq!(fields[1].key, ClassMemberKey::Literal("get".to_owned()));
+}
+
+#[test]
+fn allows_super_property_in_field_initializer() {
+    parse_script("class C extends D { x = super.y; }")
+        .expect("super.x is allowed in a field initializer");
+}
+
+#[test]
+fn rejects_arguments_in_field_initializer() {
+    let error = parse_script("class C { x = arguments; }")
+        .expect_err("arguments is a syntax error in a field initializer");
+    assert!(error.message.contains("arguments"));
+}
+
+#[test]
+fn allows_arguments_in_nested_function_inside_field_initializer() {
+    parse_script("class C { x = function () { return arguments; }; }")
+        .expect("a nested function has its own arguments");
 }
 
 #[test]
