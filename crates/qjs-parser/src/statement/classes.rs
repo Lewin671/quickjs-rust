@@ -361,15 +361,15 @@ impl Parser {
     ) -> Result<(), ParseError> {
         let span = Span::new(start, end);
         match key_text {
-            Some("constructor") => {
-                // A getter/setter named `constructor` is a syntax error; a
-                // static member named `constructor` is allowed.
-                if !is_static && matches!(kind, MethodKind::Getter | MethodKind::Setter) {
-                    return Err(ParseError {
-                        message: "class constructor may not be an accessor".to_owned(),
-                        span,
-                    });
-                }
+            // A getter/setter named `constructor` is a syntax error; a
+            // static member named `constructor` is allowed.
+            Some("constructor")
+                if !is_static && matches!(kind, MethodKind::Getter | MethodKind::Setter) =>
+            {
+                return Err(ParseError {
+                    message: "class constructor may not be an accessor".to_owned(),
+                    span,
+                });
             }
             Some("prototype") if is_static => {
                 return Err(ParseError {
