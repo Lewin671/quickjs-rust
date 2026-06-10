@@ -34,6 +34,18 @@ impl Compiler {
                 Ok(())
             }
             AssignmentTarget::Member {
+                object,
+                property: qjs_ast::MemberProperty::Private(name),
+                ..
+            } => {
+                // `obj.#x = value` evaluates to `value`; SetPrivate leaves the
+                // assigned value on the stack.
+                self.compile_expr(object)?;
+                self.compile_expr(value)?;
+                self.emit(Op::SetPrivate(name.clone()));
+                Ok(())
+            }
+            AssignmentTarget::Member {
                 object, property, ..
             } => {
                 self.compile_expr(object)?;
@@ -156,6 +168,14 @@ impl Compiler {
         op: AssignmentOp,
         value: &Expr,
     ) -> Result<(), RuntimeError> {
+        if let AssignmentTarget::Member {
+            object,
+            property: qjs_ast::MemberProperty::Private(name),
+            ..
+        } = target
+        {
+            return self.compile_private_member_compound_assign(object, name, op, value);
+        }
         let AssignmentTarget::Member {
             object, property, ..
         } = target
@@ -199,12 +219,96 @@ impl Compiler {
         Ok(())
     }
 
+    /// Compiles `obj.#x <op>= value` (including `&&=`, `||=`, `??=`). The object
+    /// is read once into a temp, the private member read, combined, and written
+    /// back; the expression evaluates to the stored value.
+    fn compile_private_member_compound_assign(
+        &mut self,
+        object: &Expr,
+        name: &str,
+        op: AssignmentOp,
+        value: &Expr,
+    ) -> Result<(), RuntimeError> {
+        let object_slot = self.temp_local("assign_object");
+        let value_slot = self.temp_local("assign_value");
+        self.compile_expr(object)?;
+        self.emit(Op::StoreLocal(object_slot));
+        self.emit(Op::LoadLocal(object_slot));
+        self.emit(Op::GetPrivate(name.to_owned()));
+        match op {
+            AssignmentOp::LogicalAndAssign
+            | AssignmentOp::LogicalOrAssign
+            | AssignmentOp::NullishAssign => {
+                let jump = match op {
+                    AssignmentOp::LogicalAndAssign => self.emit(Op::JumpIfFalse(usize::MAX)),
+                    AssignmentOp::LogicalOrAssign => self.emit(Op::JumpIfTrue(usize::MAX)),
+                    AssignmentOp::NullishAssign => self.emit(Op::JumpIfNotNullish(usize::MAX)),
+                    _ => unreachable!(),
+                };
+                self.emit(Op::Pop);
+                self.compile_expr(value)?;
+                self.emit(Op::StoreLocal(value_slot));
+                self.emit_private_member_store(object_slot, name, value_slot);
+                let end = self.code.len();
+                self.patch_jump(jump, end);
+            }
+            _ => {
+                self.compile_expr(value)?;
+                self.emit(Op::Binary(assignment_binary_op(op)?));
+                self.emit(Op::StoreLocal(value_slot));
+                self.emit_private_member_store(object_slot, name, value_slot);
+            }
+        }
+        Ok(())
+    }
+
+    fn emit_private_member_store(&mut self, object_slot: usize, name: &str, value_slot: usize) {
+        self.emit(Op::LoadLocal(object_slot));
+        self.emit(Op::LoadLocal(value_slot));
+        self.emit(Op::SetPrivate(name.to_owned()));
+    }
+
+    /// Compiles `obj.#x++` / `++obj.#x` (and `--`). The expression evaluates to
+    /// the numeric value before (postfix) or after (prefix) the update.
+    fn compile_private_member_update(
+        &mut self,
+        object: &Expr,
+        name: &str,
+        op: UpdateOp,
+        prefix: bool,
+    ) -> Result<(), RuntimeError> {
+        let object_slot = self.temp_local("update_object");
+        let old_slot = self.temp_local("update_old");
+        let new_slot = self.temp_local("update_new");
+        self.compile_expr(object)?;
+        self.emit(Op::StoreLocal(object_slot));
+        self.emit(Op::LoadLocal(object_slot));
+        self.emit(Op::GetPrivate(name.to_owned()));
+        self.emit(Op::ToNumeric);
+        self.emit(Op::StoreLocal(old_slot));
+        self.emit(Op::LoadLocal(old_slot));
+        self.emit(Op::Update(op));
+        self.emit(Op::StoreLocal(new_slot));
+        self.emit_private_member_store(object_slot, name, new_slot);
+        self.emit(Op::Pop);
+        self.emit(Op::LoadLocal(if prefix { new_slot } else { old_slot }));
+        Ok(())
+    }
+
     fn compile_member_update(
         &mut self,
         target: &AssignmentTarget,
         op: UpdateOp,
         prefix: bool,
     ) -> Result<(), RuntimeError> {
+        if let AssignmentTarget::Member {
+            object,
+            property: qjs_ast::MemberProperty::Private(name),
+            ..
+        } = target
+        {
+            return self.compile_private_member_update(object, name, op, prefix);
+        }
         let AssignmentTarget::Member {
             object, property, ..
         } = target

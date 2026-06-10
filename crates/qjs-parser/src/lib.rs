@@ -46,6 +46,50 @@ struct Parser {
     /// Whether the parser is inside a class field initializer expression, where
     /// `arguments` is a syntax error.
     in_field_initializer: bool,
+    /// Stack of private-name scopes. Each entry holds the private names declared
+    /// by one class body currently being parsed; the innermost class is last.
+    /// A private reference resolves against any scope in the stack.
+    private_scopes: Vec<PrivateScope>,
+    /// Private-name references seen but not yet resolved to a declaring class.
+    /// Each is retried as classes close; any left when the outermost class
+    /// closes (or at top level) is a syntax error.
+    pending_private_refs: Vec<PendingPrivateRef>,
+}
+
+/// The set of private names declared by one class body, plus accessor tracking
+/// so a getter/setter pair for the same name is not flagged as a duplicate.
+#[derive(Default)]
+struct PrivateScope {
+    /// Declared private names and the kind of declaration, for duplicate
+    /// detection.
+    declarations: Vec<PrivateDeclaration>,
+}
+
+impl PrivateScope {
+    fn declares(&self, name: &str) -> bool {
+        self.declarations
+            .iter()
+            .any(|declaration| declaration.name == name)
+    }
+}
+
+struct PrivateDeclaration {
+    name: String,
+    kind: PrivateDeclKind,
+    is_static: bool,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PrivateDeclKind {
+    Field,
+    Method,
+    Getter,
+    Setter,
+}
+
+struct PendingPrivateRef {
+    name: String,
+    span: qjs_ast::Span,
 }
 
 #[cfg(test)]

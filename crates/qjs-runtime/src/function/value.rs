@@ -26,6 +26,27 @@ pub(crate) struct InstanceFieldInitializer {
     pub(crate) initializer: Option<Function>,
 }
 
+/// A private element applied to each instance at construction time. Methods and
+/// accessors only brand the instance (the function is shared); a field both
+/// brands and installs a per-instance value.
+#[derive(Clone)]
+pub(crate) struct InstancePrivateElement {
+    /// The private-name identity to brand/install on the instance.
+    pub(crate) id: crate::private::PrivateName,
+    /// `Some` for a private field: the initializer thunk (or `None` for an
+    /// initializer-less field, which installs `undefined`). `None` for a
+    /// private method or accessor, which only brands the instance.
+    pub(crate) field_initializer: Option<PrivateFieldInit>,
+}
+
+/// The initializer for an instance private field.
+#[derive(Clone)]
+pub(crate) struct PrivateFieldInit {
+    /// The thunk evaluated with `this` = the instance, or `None` to install
+    /// `undefined`.
+    pub(crate) initializer: Option<Function>,
+}
+
 /// User-defined or native function value.
 #[derive(Clone)]
 pub struct Function {
@@ -67,6 +88,11 @@ pub struct Function {
     sealed: Rc<Cell<bool>>,
     frozen: Rc<Cell<bool>>,
     internal_prototype: Rc<RefCell<Option<Option<ObjectRef>>>>,
+    /// Private-name state: per-function storage (static fields and brands on the
+    /// constructor) and the private environment a class constructor carries.
+    /// Lazily populated; combined behind one allocation to keep `Function`
+    /// small.
+    private_state: Rc<RefCell<crate::private::PrivateState>>,
 }
 
 /// Bound function internal slots.
@@ -207,6 +233,7 @@ impl Function {
             sealed: Rc::new(Cell::new(false)),
             frozen: Rc::new(Cell::new(false)),
             internal_prototype: Rc::new(RefCell::new(None)),
+            private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
         };
         function.define_length_property();
         function.define_name_property();
@@ -264,6 +291,7 @@ impl Function {
             sealed: Rc::new(Cell::new(false)),
             frozen: Rc::new(Cell::new(false)),
             internal_prototype: Rc::new(RefCell::new(None)),
+            private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
         };
         function.define_length_property();
         function.define_name_property();
@@ -352,6 +380,7 @@ impl Function {
             sealed: Rc::new(Cell::new(false)),
             frozen: Rc::new(Cell::new(false)),
             internal_prototype: Rc::new(RefCell::new(None)),
+            private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
         };
         function.define_length_property();
         function.define_name_property();
@@ -392,6 +421,7 @@ impl Function {
             sealed: Rc::new(Cell::new(false)),
             frozen: Rc::new(Cell::new(false)),
             internal_prototype: Rc::new(RefCell::new(None)),
+            private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
         };
         function.define_length_property();
         function.define_name_property();
@@ -649,6 +679,39 @@ impl Function {
             .iter()
             .map(|(symbol, _)| symbol.clone())
             .collect()
+    }
+
+    /// Returns the function's private-name storage, creating it on first use.
+    pub(crate) fn private_storage(&self) -> crate::private::PrivateStorage {
+        self.private_state
+            .borrow_mut()
+            .storage
+            .get_or_insert_with(crate::private::PrivateStorage::new)
+            .clone()
+    }
+
+    /// Sets the private environment carried by a class constructor.
+    pub(crate) fn set_private_environment(&self, environment: crate::private::PrivateEnvironment) {
+        self.private_state.borrow_mut().environment = Some(environment);
+    }
+
+    /// Returns the private environment carried by this constructor, if any.
+    pub(crate) fn private_environment(&self) -> Option<crate::private::PrivateEnvironment> {
+        self.private_state.borrow().environment.clone()
+    }
+
+    /// Records an instance private element (a field initializer or a
+    /// method/accessor brand) applied to each instance at construction time.
+    pub(crate) fn push_instance_private_element(&self, element: InstancePrivateElement) {
+        self.private_state
+            .borrow_mut()
+            .instance_elements
+            .push(element);
+    }
+
+    /// Returns a snapshot of this constructor's instance private elements.
+    pub(crate) fn instance_private_elements(&self) -> Vec<InstancePrivateElement> {
+        self.private_state.borrow().instance_elements.clone()
     }
 
     pub(crate) fn internal_prototype_override(&self) -> Option<Option<ObjectRef>> {

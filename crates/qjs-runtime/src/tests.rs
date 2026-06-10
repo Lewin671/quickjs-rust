@@ -14,6 +14,7 @@ mod maps;
 mod math;
 mod numbers;
 mod objects;
+mod private_names;
 mod promise_race;
 mod promises;
 mod proxy;

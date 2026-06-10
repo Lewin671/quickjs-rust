@@ -20,6 +20,7 @@ mod vm_class;
 mod vm_errors;
 mod vm_iter;
 mod vm_ops;
+mod vm_private;
 mod vm_props;
 mod vm_result;
 mod vm_try;
@@ -31,6 +32,7 @@ use crate::{RuntimeError, Value};
 
 pub use ir::Bytecode;
 pub(crate) use vm_class::install_field_value;
+pub(crate) use vm_private::apply_instance_private_elements;
 pub(crate) use vm_result::FunctionBytecodeResult;
 
 /// Compiles an AST script into runtime bytecode.

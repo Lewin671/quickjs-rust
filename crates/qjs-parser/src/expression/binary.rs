@@ -81,6 +81,12 @@ impl Parser {
         )
     }
 
+    /// Parses a `ShiftExpression`, used as the right operand of a `#x in obj`
+    /// ergonomic brand check.
+    pub(crate) fn shift_expression(&mut self) -> Result<Expr, ParseError> {
+        self.shift()
+    }
+
     fn shift(&mut self) -> Result<Expr, ParseError> {
         self.binary_left_assoc(
             Self::additive,

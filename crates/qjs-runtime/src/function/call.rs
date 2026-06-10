@@ -102,6 +102,9 @@ pub(crate) fn initialize_instance_fields(
     this_value: &Value,
     env: &mut HashMap<String, Value>,
 ) -> Result<(), RuntimeError> {
+    // Private brands and private field values install alongside public fields,
+    // before the constructor body runs, so the body may use `this.#x`.
+    crate::bytecode::apply_instance_private_elements(function, this_value, env)?;
     let fields = function.instance_fields.borrow().clone();
     for field in fields {
         let value = match &field.initializer {

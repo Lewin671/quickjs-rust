@@ -58,6 +58,18 @@ pub(super) enum Op {
     SetProp {
         is_strict: bool,
     },
+    /// Reads a private member `obj.#name`: pops the object, resolves `#name`
+    /// against the current home object's private environment, and pushes the
+    /// field value, the shared method, or the result of the getter. Throws a
+    /// TypeError when the object lacks the private name's brand.
+    GetPrivate(String),
+    /// Writes a private member `obj.#name = value`: pops the value and object,
+    /// stores the field or runs the setter. Throws a TypeError when the object
+    /// lacks the brand or the member is read-only (method/getter-only).
+    SetPrivate(String),
+    /// Evaluates `#name in obj`: pops the object and pushes a boolean brand
+    /// check. Never throws.
+    PrivateIn(String),
     DeleteProp,
     Call(usize),
     CallMethod(usize),
@@ -89,6 +101,10 @@ pub(super) enum Op {
         constructor: ClassConstructorDef,
         /// Class elements (methods, accessors, and fields) in source order.
         elements: Vec<ClassElementDef>,
+        /// Private elements (fields, methods, accessors) in source order. These
+        /// are not ordinary properties; they install into per-object private
+        /// storage keyed by fresh per-evaluation private-name identities.
+        private_elements: Vec<ClassPrivateElementDef>,
         /// Number of computed-key values pushed onto the stack before this op,
         /// in member order.
         computed_key_count: usize,
@@ -178,6 +194,38 @@ pub(super) enum ClassMethodKind {
 pub(super) enum ClassElementDef {
     Method(ClassMethodDef),
     Field(ClassFieldDef),
+}
+
+/// A private class element in source order. Private names are keyed by source
+/// text (`name`, without the `#`); a fresh identity is minted at class
+/// evaluation. Accessor halves for the same name merge into one binding.
+#[derive(Clone, Debug)]
+pub(super) enum ClassPrivateElementDef {
+    /// A private field. The initializer thunk runs at construction (instance)
+    /// or class definition (static); `None` installs `undefined`.
+    Field {
+        name: String,
+        is_static: bool,
+        initializer: Option<ClassFieldInitializerDef>,
+    },
+    /// A private method shared by all instances/the constructor.
+    Method {
+        name: String,
+        is_static: bool,
+        def: ClassMethodDef,
+    },
+    /// A private getter half.
+    Getter {
+        name: String,
+        is_static: bool,
+        def: ClassMethodDef,
+    },
+    /// A private setter half.
+    Setter {
+        name: String,
+        is_static: bool,
+        def: ClassMethodDef,
+    },
 }
 
 /// Compiled definition of a class method or accessor.
@@ -333,6 +381,7 @@ fn collect_global_names_from_ops(code: &[Op], names: &mut BTreeSet<String>) {
             Op::NewClass {
                 constructor,
                 elements,
+                private_elements,
                 ..
             } => {
                 names.extend(constructor.bytecode.global_names().iter().cloned());
@@ -345,6 +394,20 @@ fn collect_global_names_from_ops(code: &[Op], names: &mut BTreeSet<String>) {
                             if let Some(initializer) = &field.initializer {
                                 names.extend(initializer.bytecode.global_names().iter().cloned());
                             }
+                        }
+                    }
+                }
+                for element in private_elements {
+                    match element {
+                        ClassPrivateElementDef::Field { initializer, .. } => {
+                            if let Some(initializer) = initializer {
+                                names.extend(initializer.bytecode.global_names().iter().cloned());
+                            }
+                        }
+                        ClassPrivateElementDef::Method { def, .. }
+                        | ClassPrivateElementDef::Getter { def, .. }
+                        | ClassPrivateElementDef::Setter { def, .. } => {
+                            names.extend(def.bytecode.global_names().iter().cloned());
                         }
                     }
                 }

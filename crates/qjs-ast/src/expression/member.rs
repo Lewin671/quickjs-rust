@@ -7,4 +7,7 @@ pub enum MemberProperty {
     Named(String),
     /// Computed property expression, as in `object[index]`.
     Computed(Box<Expr>),
+    /// Private member access, as in `object.#name`. Holds the private name
+    /// without the leading `#`.
+    Private(String),
 }

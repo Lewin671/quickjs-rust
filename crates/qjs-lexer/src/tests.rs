@@ -402,6 +402,42 @@ fn preserves_template_line_continuations_in_raw_segments() {
     );
 }
 
+#[test]
+fn lexes_private_names() {
+    let tokens = lex("#x #_foo #$bar1").expect("source should lex");
+    let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::PrivateName("x".to_owned()),
+            TokenKind::PrivateName("_foo".to_owned()),
+            TokenKind::PrivateName("$bar1".to_owned()),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn private_name_carries_span() {
+    let tokens = lex("a.#x").expect("source should lex");
+    assert_eq!(tokens[2].kind, TokenKind::PrivateName("x".to_owned()));
+    assert_eq!(tokens[2].span, Span::new(2, 4));
+}
+
+#[test]
+fn rejects_bare_hash() {
+    let error = lex("#").expect_err("bare `#` should fail");
+    assert_eq!(
+        error.message,
+        "`#` must be followed by a private name identifier"
+    );
+    let error = lex("# x").expect_err("`#` followed by space should fail");
+    assert_eq!(
+        error.message,
+        "`#` must be followed by a private name identifier"
+    );
+}
+
 fn template_segment(cooked: &str, raw: &str) -> TemplateSegment {
     TemplateSegment {
         cooked: cooked.to_owned(),

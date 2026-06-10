@@ -10,6 +10,9 @@ impl Parser {
             .peek()
             .expect("parser should always have eof token")
             .clone();
+        if let TokenKind::PrivateName(name) = &token.kind {
+            return self.private_in_expression(name.clone(), token.span);
+        }
         if token.kind == TokenKind::PlusPlus || token.kind == TokenKind::MinusMinus {
             self.advance();
             let target = assignment_target(self.unary()?)?;
@@ -39,6 +42,21 @@ impl Parser {
         };
         self.advance();
         let argument = self.unary()?;
+        // `delete obj.#x` (a private member reference) is a syntax error.
+        if op == UnaryOp::Delete
+            && matches!(
+                &argument,
+                Expr::Member {
+                    property: qjs_ast::MemberProperty::Private(_),
+                    ..
+                }
+            )
+        {
+            return Err(ParseError {
+                message: "cannot delete a private member".to_owned(),
+                span: Span::new(token.span.start, argument.span().end),
+            });
+        }
         let span = Span::new(token.span.start, argument.span().end);
         Ok(Expr::Unary {
             op,
@@ -65,6 +83,30 @@ impl Parser {
             op,
             prefix: false,
             span: Span::new(start, token.span.end),
+        })
+    }
+
+    /// Parses an ergonomic brand check `#name in ShiftExpression`. A private
+    /// name in any other expression position is a syntax error.
+    fn private_in_expression(&mut self, name: String, span: Span) -> Result<Expr, ParseError> {
+        self.advance();
+        if !self.allow_in || !self.at(&TokenKind::In) {
+            return Err(ParseError {
+                message: format!(
+                    "private name `#{name}` is only valid on the left of `in` or as a member \
+                     access"
+                ),
+                span,
+            });
+        }
+        self.note_private_reference(&name, span);
+        self.expect(&TokenKind::In)?;
+        let object = self.shift_expression()?;
+        let full = Span::new(span.start, object.span().end);
+        Ok(Expr::PrivateIn {
+            name,
+            object: Box::new(object),
+            span: full,
         })
     }
 

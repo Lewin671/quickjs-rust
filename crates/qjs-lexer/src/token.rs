@@ -14,6 +14,8 @@ pub struct Token {
 pub enum TokenKind {
     /// Identifier text.
     Identifier(String),
+    /// A private name token (`#x`); holds the name without the leading `#`.
+    PrivateName(String),
     /// Number literal text.
     Number(String),
     /// BigInt literal text without the trailing `n`.

@@ -24,6 +24,7 @@ impl Vm<'_> {
         name: Option<&str>,
         constructor: &ClassConstructorDef,
         elements: &[ClassElementDef],
+        private_elements: &[super::ir::ClassPrivateElementDef],
         computed_key_count: usize,
         has_heritage: bool,
     ) -> Result<Value, RuntimeError> {
@@ -119,6 +120,13 @@ impl Vm<'_> {
                 }
             }
         }
+
+        // Install private elements: register shared private methods/accessors,
+        // brand the constructor with static privates (running static private
+        // field initializers now), and queue instance private brands/fields for
+        // construction time. Done after public methods so private static field
+        // initializers can reference private methods.
+        self.install_private_elements(private_elements, &prototype, &constructor_function, name)?;
 
         // Pass 2: instance fields become constructor initializers (run at
         // construction time); static fields are evaluated now, after all method

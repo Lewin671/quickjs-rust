@@ -21,6 +21,7 @@ mod native;
 mod number;
 mod object;
 mod operations;
+mod private;
 mod promise;
 mod property;
 mod proxy;

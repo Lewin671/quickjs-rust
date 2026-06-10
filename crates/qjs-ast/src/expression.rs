@@ -264,6 +264,15 @@ pub enum Expr {
         /// Source span.
         span: Span,
     },
+    /// A `#name in object` ergonomic brand check expression.
+    PrivateIn {
+        /// The private name without the leading `#`.
+        name: String,
+        /// The object operand on the right of `in`.
+        object: Box<Expr>,
+        /// Source span.
+        span: Span,
+    },
     /// A `this` expression.
     This { span: Span },
     /// A `super` keyword reference. Only valid as the object of a member
@@ -315,6 +324,7 @@ impl Expr {
             | Self::Function { span, .. }
             | Self::Class { span, .. }
             | Self::Member { span, .. }
+            | Self::PrivateIn { span, .. }
             | Self::This { span }
             | Self::Super { span }
             | Self::Identifier { span, .. } => *span,

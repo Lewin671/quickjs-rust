@@ -57,8 +57,20 @@ verification command is green and `./scripts/check.sh` passes.
             `this` = constructor, computed keys evaluated once at definition,
             and CreateDataPropertyOrThrow attributes (enumerable, writable,
             configurable).
-      - [ ] Private names (`#x`) — still rejected with a structured error.
-      - [ ] Static initialization blocks — still rejected.
+      - [x] Private names (`#x`): lexer `PrivateName` token; parser private
+            fields/methods/accessors, `obj.#x` access, `#x in obj` brand checks,
+            and early errors (undeclared name, `#constructor`, duplicates except
+            a get/set pair, `delete this.#x`, `#x` outside a class), with a
+            private-name scope stack so nested classes resolve outer names.
+            Runtime: fresh per-class-evaluation private-name identities, a side
+            private-storage table on objects/constructors (no global state),
+            instance/static private fields, shared private methods and
+            accessors with per-instance/constructor brands, foreign-object
+            access TypeErrors, and compound/increment private assignment.
+            Follow-ups: `obj?.#x` optional chaining and `#x` in
+            generator/async members (engine lacks those forms).
+      - [ ] Static initialization blocks — still rejected with a structured
+            error.
 
 ## Scope
 

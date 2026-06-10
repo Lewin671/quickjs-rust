@@ -3,7 +3,9 @@ use qjs_ast::Span;
 use crate::{LexError, TemplateSegment, Token, TokenKind};
 
 use super::{
-    Lexer, TemplateState, char_class::is_identifier_continue, keywords::identifier_or_keyword,
+    Lexer, TemplateState,
+    char_class::{is_identifier_continue, is_identifier_start},
+    keywords::identifier_or_keyword,
 };
 
 const SURROGATE_ESCAPE_SENTINEL_BASE: u32 = 0xF0000;
@@ -19,6 +21,28 @@ impl Lexer<'_> {
             kind: identifier_or_keyword(text),
             span: Span::new(start, self.cursor),
         });
+    }
+
+    pub(super) fn private_name(&mut self) -> Result<(), LexError> {
+        let start = self.cursor;
+        // Consume the leading `#`.
+        self.advance();
+        let name_start = self.cursor;
+        if !matches!(self.peek(), Some(ch) if is_identifier_start(ch)) {
+            return Err(LexError {
+                message: "`#` must be followed by a private name identifier".to_owned(),
+                span: Span::new(start, self.cursor),
+            });
+        }
+        while matches!(self.peek(), Some(ch) if is_identifier_continue(ch)) {
+            self.advance();
+        }
+        let name = self.source[name_start..self.cursor].to_owned();
+        self.tokens.push(Token {
+            kind: TokenKind::PrivateName(name),
+            span: Span::new(start, self.cursor),
+        });
+        Ok(())
     }
 
     pub(super) fn number(&mut self) -> Result<(), LexError> {

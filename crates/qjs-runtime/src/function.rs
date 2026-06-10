@@ -24,5 +24,6 @@ pub(crate) use prototype::{
 };
 pub(crate) use strict::is_strict_function_body;
 pub(crate) use value::{
-    CompiledUserFunction, Function, InstanceFieldInitializer, static_inheritance_mirror,
+    CompiledUserFunction, Function, InstanceFieldInitializer, InstancePrivateElement,
+    PrivateFieldInit, static_inheritance_mirror,
 };

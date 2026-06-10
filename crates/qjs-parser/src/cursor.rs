@@ -13,6 +13,8 @@ impl Parser {
             in_method: false,
             in_derived_constructor: false,
             in_field_initializer: false,
+            private_scopes: Vec::new(),
+            pending_private_refs: Vec::new(),
         }
     }
 

@@ -5,7 +5,7 @@ use qjs_ast::{
 use qjs_lexer::{Token, TokenKind};
 
 use crate::statement::duplicate_parameter_span;
-use crate::{ParseError, Parser};
+use crate::{ParseError, Parser, PrivateDeclKind, PrivateDeclaration, PrivateScope};
 
 impl Parser {
     /// Parses a `class Name { ... }` declaration.
@@ -71,9 +71,76 @@ impl Parser {
         // Class bodies are always strict-mode code.
         let previous_strict = self.strict;
         self.strict = true;
+        self.private_scopes.push(PrivateScope::default());
         let result = self.class_members(open.start, heritage);
+        // Resolve private references seen inside this class body now that all
+        // of its declarations are known; forward references within the same
+        // class are legal, so resolution happens at class close.
+        self.resolve_pending_private_refs();
+        self.private_scopes.pop();
         self.strict = previous_strict;
         result
+    }
+
+    /// Drops any pending private-name reference that now resolves against a
+    /// private scope currently on the stack. References that remain unresolved
+    /// stay pending for an enclosing class (or the top-level final check).
+    fn resolve_pending_private_refs(&mut self) {
+        let scopes = &self.private_scopes;
+        self.pending_private_refs
+            .retain(|reference| !scopes.iter().any(|scope| scope.declares(&reference.name)));
+    }
+
+    /// Records a private-name reference (member access or `#x in obj`). If it
+    /// does not resolve against any open class scope it is held pending until a
+    /// class that declares it closes.
+    pub(crate) fn note_private_reference(&mut self, name: &str, span: Span) {
+        if self.private_scopes.iter().any(|scope| scope.declares(name)) {
+            return;
+        }
+        self.pending_private_refs.push(crate::PendingPrivateRef {
+            name: name.to_owned(),
+            span,
+        });
+    }
+
+    /// Declares a private name in the innermost class scope, enforcing the
+    /// duplicate rules: any non-accessor duplicate is an error, and a getter or
+    /// setter may only pair with the matching accessor of the same static-ness.
+    fn declare_private_name(
+        &mut self,
+        name: &str,
+        kind: PrivateDeclKind,
+        is_static: bool,
+        span: Span,
+    ) -> Result<(), ParseError> {
+        let scope = self
+            .private_scopes
+            .last_mut()
+            .expect("private declaration requires an open class scope");
+        for existing in &scope.declarations {
+            if existing.name != name {
+                continue;
+            }
+            let pair_allowed = existing.is_static == is_static
+                && matches!(
+                    (existing.kind, kind),
+                    (PrivateDeclKind::Getter, PrivateDeclKind::Setter)
+                        | (PrivateDeclKind::Setter, PrivateDeclKind::Getter)
+                );
+            if !pair_allowed {
+                return Err(ParseError {
+                    message: format!("duplicate private name `#{name}`"),
+                    span,
+                });
+            }
+        }
+        scope.declarations.push(PrivateDeclaration {
+            name: name.to_owned(),
+            kind,
+            is_static,
+        });
+        Ok(())
     }
 
     fn class_members(
@@ -225,6 +292,15 @@ impl Parser {
 
         self.validate_member_restrictions(is_static, kind, key_text.as_deref(), member_start, end)?;
 
+        if let ClassMemberKey::Private(name) = &key {
+            let decl_kind = match kind {
+                MethodKind::Getter => PrivateDeclKind::Getter,
+                MethodKind::Setter => PrivateDeclKind::Setter,
+                _ => PrivateDeclKind::Method,
+            };
+            self.declare_private_name(name, decl_kind, is_static, Span::new(member_start, end))?;
+        }
+
         let value = Expr::Function {
             name: key_text.clone(),
             params,
@@ -255,6 +331,14 @@ impl Parser {
     ) -> Result<ClassElement, ParseError> {
         let key_end = self.previous_end();
         self.validate_field_restrictions(is_static, key_text, member_start, key_end)?;
+        if let ClassMemberKey::Private(name) = &key {
+            self.declare_private_name(
+                name,
+                PrivateDeclKind::Field,
+                is_static,
+                Span::new(member_start, key_end),
+            )?;
+        }
 
         let initializer = if self.match_kind(&TokenKind::Equal) {
             // Field initializers may use `super.x` but not `arguments`; they
@@ -312,8 +396,10 @@ impl Parser {
             .is_some_and(|slice| slice.chars().any(is_line_terminator))
     }
 
-    /// Parses a class member key (literal name or `[expr]`), returning the key
-    /// and its literal text when statically known.
+    /// Parses a class member key (literal name, `[expr]`, or `#name`), returning
+    /// the key and its literal text when statically known. Private names report
+    /// `None` text so the method/field machinery never treats `#x` as a magic
+    /// public name like `constructor`.
     fn class_member_key(&mut self) -> Result<(ClassMemberKey, Option<String>), ParseError> {
         if self.at(&TokenKind::LeftBracket) {
             self.advance();
@@ -325,6 +411,17 @@ impl Parser {
             .peek()
             .cloned()
             .expect("parser should always have eof token");
+        if let TokenKind::PrivateName(name) = &token.kind {
+            if name == "constructor" {
+                return Err(ParseError {
+                    message: "private name `#constructor` is not allowed".to_owned(),
+                    span: token.span,
+                });
+            }
+            let name = name.clone();
+            self.advance();
+            return Ok((ClassMemberKey::Private(name), None));
+        }
         let name = class_member_name(&token.kind).ok_or_else(|| ParseError {
             message: "expected class member name".to_owned(),
             span: token.span,
@@ -337,7 +434,7 @@ impl Parser {
     /// used to disambiguate `static`/`get`/`set` as modifiers versus names.
     fn token_starts_member_after_modifier(&self, offset: usize) -> bool {
         match self.peek_nth(offset).map(|token| &token.kind) {
-            Some(TokenKind::LeftBracket) => true,
+            Some(TokenKind::LeftBracket | TokenKind::PrivateName(_)) => true,
             Some(kind) => class_member_name(kind).is_some(),
             None => false,
         }

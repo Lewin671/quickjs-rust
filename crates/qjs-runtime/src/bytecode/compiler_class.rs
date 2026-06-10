@@ -10,7 +10,7 @@ use crate::{RuntimeError, function::collect_function_local_names};
 use super::compiler::{Compiler, compile_function_body_with_strict};
 use super::ir::{
     ClassConstructorDef, ClassElementDef, ClassFieldDef, ClassFieldInitializerDef,
-    ClassMemberKeyDef, ClassMethodDef, ClassMethodKind, Op,
+    ClassMemberKeyDef, ClassMethodDef, ClassMethodKind, ClassPrivateElementDef, Op,
 };
 
 impl Compiler {
@@ -50,6 +50,7 @@ impl Compiler {
 
         let mut constructor = None;
         let mut elements = Vec::new();
+        let mut private_elements = Vec::new();
 
         for element in &body.elements {
             match element {
@@ -82,6 +83,39 @@ impl Compiler {
                         MethodKind::Setter => ClassMethodKind::Setter,
                         MethodKind::Constructor => unreachable!("handled above"),
                     };
+
+                    // Private methods and accessors are not ordinary properties:
+                    // route them to the private-element list keyed by name.
+                    if let ClassMemberKey::Private(private_name) = &member.key {
+                        let def = ClassMethodDef {
+                            key: ClassMemberKeyDef::Computed,
+                            method_kind,
+                            is_static: member.is_static,
+                            name: Some(format!("#{private_name}")),
+                            params: params.clone(),
+                            local_names,
+                            bytecode: Rc::new(bytecode),
+                        };
+                        private_elements.push(match member.kind {
+                            MethodKind::Getter => ClassPrivateElementDef::Getter {
+                                name: private_name.clone(),
+                                is_static: member.is_static,
+                                def,
+                            },
+                            MethodKind::Setter => ClassPrivateElementDef::Setter {
+                                name: private_name.clone(),
+                                is_static: member.is_static,
+                                def,
+                            },
+                            _ => ClassPrivateElementDef::Method {
+                                name: private_name.clone(),
+                                is_static: member.is_static,
+                                def,
+                            },
+                        });
+                        continue;
+                    }
+
                     let (key, method_name) = compile_member_key(&member.key);
                     elements.push(ClassElementDef::Method(ClassMethodDef {
                         key,
@@ -94,8 +128,16 @@ impl Compiler {
                     }));
                 }
                 ClassElement::Field(field) => {
-                    let (key, _) = compile_member_key(&field.key);
                     let initializer = compile_field_initializer(field.initializer.as_ref())?;
+                    if let ClassMemberKey::Private(private_name) = &field.key {
+                        private_elements.push(ClassPrivateElementDef::Field {
+                            name: private_name.clone(),
+                            is_static: field.is_static,
+                            initializer,
+                        });
+                        continue;
+                    }
+                    let (key, _) = compile_member_key(&field.key);
                     elements.push(ClassElementDef::Field(ClassFieldDef {
                         key,
                         is_static: field.is_static,
@@ -111,6 +153,7 @@ impl Compiler {
             name: name.map(str::to_owned),
             constructor,
             elements,
+            private_elements,
             computed_key_count,
             has_heritage,
         });
@@ -124,6 +167,11 @@ fn compile_member_key(key: &ClassMemberKey) -> (ClassMemberKeyDef, Option<String
             (ClassMemberKeyDef::Literal(key.clone()), Some(key.clone()))
         }
         ClassMemberKey::Computed(_) => (ClassMemberKeyDef::Computed, None),
+        // Private keys are routed to the private-element path before this is
+        // ever reached.
+        ClassMemberKey::Private(name) => {
+            unreachable!("private key #{name} must not reach the ordinary key path")
+        }
     }
 }
 

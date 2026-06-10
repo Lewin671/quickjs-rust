@@ -58,6 +58,9 @@ pub enum ClassMemberKey {
     Literal(String),
     /// A computed key expression, as in `[expr]() {}`.
     Computed(Expr),
+    /// A private name key, as in `#foo() {}` or `#foo;`. Holds the name without
+    /// the leading `#`.
+    Private(String),
 }
 
 /// The kind of a class method member.

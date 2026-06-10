@@ -85,6 +85,12 @@ impl Compiler {
                 Ok(())
             }
             MemberProperty::Computed(expr) => self.compile_expr(expr),
+            // Private members never reach the ordinary key path; callers route
+            // them to dedicated private ops. Reaching here is a compiler bug.
+            MemberProperty::Private(name) => Err(RuntimeError {
+                thrown: None,
+                message: format!("private member #{name} used as an ordinary property key"),
+            }),
         }
     }
 
@@ -97,6 +103,8 @@ impl Compiler {
             self.emit(Op::LoadConst(slot));
             return Ok(());
         };
+        // `delete obj.#x` is a parser early error, so private members never
+        // reach here.
         self.compile_expr(object)?;
         self.compile_member_key(property)?;
         self.emit(Op::DeleteProp);
@@ -139,6 +147,32 @@ impl Compiler {
             // Resolve the callee from the parent prototype; this leaves
             // `[this_value, callee]` on the stack.
             self.compile_super_method(property)?;
+            if has_spread {
+                self.compile_argument_array(arguments)?;
+                self.emit(Op::CallResolvedSpread);
+                return Ok(());
+            }
+            for argument in arguments {
+                let CallArgument::Expr(argument) = argument else {
+                    unreachable!("spread arguments are handled above");
+                };
+                self.compile_expr(argument)?;
+            }
+            self.emit(Op::CallResolved(arguments.len()));
+            return Ok(());
+        }
+
+        // `obj.#m(...)` calls a private method with `obj` as the receiver.
+        if let Expr::Member {
+            object,
+            property: MemberProperty::Private(name),
+            ..
+        } = callee
+        {
+            // Leave `[receiver, callee]` on the stack for `CallResolved`.
+            self.compile_expr(object)?;
+            self.emit(Op::Dup);
+            self.emit(Op::GetPrivate(name.clone()));
             if has_spread {
                 self.compile_argument_array(arguments)?;
                 self.emit(Op::CallResolvedSpread);
@@ -225,6 +259,12 @@ impl Compiler {
             MemberProperty::Computed(expr) => {
                 self.compile_expr(expr)?;
                 self.emit(Op::SuperMethodComputed);
+            }
+            MemberProperty::Private(name) => {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: format!("SyntaxError: super.#{name} is not allowed"),
+                });
             }
         }
         Ok(())

@@ -193,6 +193,24 @@ impl<'a> Vm<'a> {
                     let result = self.set_prop(is_strict);
                     self.handle_runtime_result(result)?;
                 }
+                Op::GetPrivate(name) => {
+                    let result = self.get_private(&name);
+                    if let Some(value) = self.handle_runtime_result(result)? {
+                        self.stack.push(value);
+                    }
+                }
+                Op::SetPrivate(name) => {
+                    let result = self.set_private(&name);
+                    if let Some(value) = self.handle_runtime_result(result)? {
+                        self.stack.push(value);
+                    }
+                }
+                Op::PrivateIn(name) => {
+                    let result = self.private_in(&name);
+                    if let Some(value) = self.handle_runtime_result(result)? {
+                        self.stack.push(value);
+                    }
+                }
                 Op::DeleteProp => self.delete_prop()?,
                 Op::Call(argc) => self.call(argc)?,
                 Op::CallMethod(argc) => self.call_method(argc)?,
@@ -236,6 +254,7 @@ impl<'a> Vm<'a> {
                     name,
                     constructor,
                     elements,
+                    private_elements,
                     computed_key_count,
                     has_heritage,
                 } => {
@@ -243,6 +262,7 @@ impl<'a> Vm<'a> {
                         name.as_deref(),
                         &constructor,
                         &elements,
+                        &private_elements,
                         computed_key_count,
                         has_heritage,
                     );

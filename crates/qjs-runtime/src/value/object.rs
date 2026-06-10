@@ -5,6 +5,8 @@ use std::{
     rc::Rc,
 };
 
+use crate::private::{PrivateEnvironment, PrivateStorage};
+
 use super::{Property, Value};
 
 /// Object storage reference.
@@ -17,6 +19,10 @@ pub struct ObjectRef {
     prototype: Rc<RefCell<Option<ObjectRef>>>,
     to_string_tag: Rc<RefCell<Option<String>>>,
     raw_json: Rc<Cell<bool>>,
+    /// Private-name state: per-object storage (fields and brands) and, for class
+    /// prototype objects, the private environment their members resolve `#x`
+    /// references through. Lazily populated.
+    private_state: Rc<RefCell<crate::private::PrivateState>>,
 }
 
 impl fmt::Debug for ObjectRef {
@@ -56,7 +62,27 @@ impl ObjectRef {
             prototype: Rc::new(RefCell::new(prototype)),
             to_string_tag: Rc::new(RefCell::new(None)),
             raw_json: Rc::new(Cell::new(false)),
+            private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
         }
+    }
+
+    /// Returns the object's private-name storage, creating it on first use.
+    pub(crate) fn private_storage(&self) -> PrivateStorage {
+        self.private_state
+            .borrow_mut()
+            .storage
+            .get_or_insert_with(PrivateStorage::new)
+            .clone()
+    }
+
+    /// Sets the private environment carried by a class prototype object.
+    pub(crate) fn set_private_environment(&self, environment: PrivateEnvironment) {
+        self.private_state.borrow_mut().environment = Some(environment);
+    }
+
+    /// Returns the private environment carried by this object, if any.
+    pub(crate) fn private_environment(&self) -> Option<PrivateEnvironment> {
+        self.private_state.borrow().environment.clone()
     }
 
     pub(crate) fn ptr_eq(&self, other: &Self) -> bool {

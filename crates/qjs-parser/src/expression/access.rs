@@ -108,6 +108,16 @@ impl Parser {
 
     fn finish_named_member(&mut self, object: Expr) -> Result<Expr, ParseError> {
         let property_token = self.advance();
+        if let TokenKind::PrivateName(name) = &property_token.kind {
+            let name = name.clone();
+            self.note_private_reference(&name, property_token.span);
+            let span = Span::new(object.span().start, property_token.span.end);
+            return Ok(Expr::Member {
+                object: Box::new(object),
+                property: MemberProperty::Private(name),
+                span,
+            });
+        }
         let Some(name) = property_name(property_token.kind) else {
             return Err(ParseError {
                 message: "expected property name".to_owned(),

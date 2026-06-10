@@ -292,9 +292,19 @@ impl Compiler {
                 if matches!(object.as_ref(), Expr::Super { .. }) {
                     return self.compile_super_member(property);
                 }
+                if let qjs_ast::MemberProperty::Private(name) = property {
+                    self.compile_expr(object)?;
+                    self.emit(Op::GetPrivate(name.clone()));
+                    return Ok(());
+                }
                 self.compile_expr(object)?;
                 self.compile_member_key(property)?;
                 self.emit(Op::GetProp);
+                Ok(())
+            }
+            Expr::PrivateIn { name, object, .. } => {
+                self.compile_expr(object)?;
+                self.emit(Op::PrivateIn(name.clone()));
                 Ok(())
             }
             Expr::Super { span } => Err(RuntimeError {
@@ -319,6 +329,12 @@ impl Compiler {
             qjs_ast::MemberProperty::Computed(expr) => {
                 self.compile_expr(expr)?;
                 self.emit(Op::SuperGetComputed);
+            }
+            qjs_ast::MemberProperty::Private(name) => {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: format!("SyntaxError: super.#{name} is not allowed"),
+                });
             }
         }
         Ok(())

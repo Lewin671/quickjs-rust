@@ -18,6 +18,17 @@ impl Parser {
         while !self.at(&TokenKind::Eof) {
             body.push(self.statement()?);
         }
+        // Any private-name reference that never resolved to an enclosing class
+        // is a syntax error.
+        if let Some(reference) = self.pending_private_refs.first() {
+            return Err(ParseError {
+                message: format!(
+                    "private name `#{}` is not declared in scope",
+                    reference.name
+                ),
+                span: reference.span,
+            });
+        }
         Ok(Script { body })
     }
 

@@ -72,6 +72,7 @@ impl<'src> Lexer<'src> {
                 ':' => self.single(TokenKind::Colon),
                 '?' => self.question(),
                 ';' => self.single(TokenKind::Semicolon),
+                '#' => self.private_name()?,
                 _ => {
                     let start = self.cursor;
                     self.advance();
