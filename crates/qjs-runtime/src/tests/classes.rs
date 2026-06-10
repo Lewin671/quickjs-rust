@@ -201,3 +201,137 @@ fn method_closes_over_enclosing_scope() {
         Ok(Value::Number(101.0))
     );
 }
+
+#[test]
+fn static_method_installs_on_constructor() {
+    assert_eq!(
+        eval("class C { static make() { return 7; } } C.make();"),
+        Ok(Value::Number(7.0))
+    );
+}
+
+#[test]
+fn static_method_is_not_on_prototype() {
+    assert_eq!(
+        eval("class C { static m() {} } typeof C.prototype.m;"),
+        Ok(Value::String("undefined".to_owned()))
+    );
+}
+
+#[test]
+fn static_method_descriptor_is_non_enumerable_writable_configurable() {
+    assert_eq!(
+        eval(
+            "class C { static m() {} } let d = Object.getOwnPropertyDescriptor(C, 'm'); [d.writable, d.enumerable, d.configurable].join(',');"
+        ),
+        Ok(Value::String("true,false,true".to_owned()))
+    );
+}
+
+#[test]
+fn static_accessor_roundtrips() {
+    assert_eq!(
+        eval(
+            "class C { static get c() { return C._c; } static set c(v) { C._c = v; } } C.c = 11; C.c;"
+        ),
+        Ok(Value::Number(11.0))
+    );
+}
+
+#[test]
+fn instance_getter_reads_state() {
+    assert_eq!(
+        eval("class C { constructor() { this._v = 4; } get v() { return this._v; } } new C().v;"),
+        Ok(Value::Number(4.0))
+    );
+}
+
+#[test]
+fn instance_setter_writes_state() {
+    assert_eq!(
+        eval(
+            "class C { set v(x) { this._v = x * 2; } get v() { return this._v; } } let c = new C(); c.v = 5; c.v;"
+        ),
+        Ok(Value::Number(10.0))
+    );
+}
+
+#[test]
+fn getter_and_setter_merge_into_one_accessor() {
+    assert_eq!(
+        eval(
+            "class C { get x() { return this._x; } set x(v) { this._x = v; } } let d = Object.getOwnPropertyDescriptor(C.prototype, 'x'); [typeof d.get, typeof d.set].join(',');"
+        ),
+        Ok(Value::String("function,function".to_owned()))
+    );
+}
+
+#[test]
+fn accessor_descriptor_is_non_enumerable_configurable() {
+    assert_eq!(
+        eval(
+            "class C { get x() {} } let d = Object.getOwnPropertyDescriptor(C.prototype, 'x'); [d.enumerable, d.configurable].join(',');"
+        ),
+        Ok(Value::String("false,true".to_owned()))
+    );
+}
+
+#[test]
+fn accessor_is_not_own_enumerable_key() {
+    assert_eq!(
+        eval("class C { get x() {} } Object.keys(C.prototype).length;"),
+        Ok(Value::Number(0.0))
+    );
+}
+
+#[test]
+fn computed_method_name_resolves_at_definition() {
+    assert_eq!(
+        eval("let k = 'foo'; class C { [k]() { return 9; } } new C().foo();"),
+        Ok(Value::Number(9.0))
+    );
+}
+
+#[test]
+fn static_computed_method_name() {
+    assert_eq!(
+        eval("let k = 'm'; class C { static [k]() { return 5; } } C.m();"),
+        Ok(Value::Number(5.0))
+    );
+}
+
+#[test]
+fn computed_keys_evaluate_in_source_order() {
+    assert_eq!(
+        eval(
+            "let log = []; function k(n) { log.push(n); return 'm' + n; } class C { [k(1)]() {} [k(2)]() {} } log.join(',');"
+        ),
+        Ok(Value::String("1,2".to_owned()))
+    );
+}
+
+#[test]
+fn symbol_computed_method_name() {
+    assert_eq!(
+        eval("let s = Symbol('s'); class C { [s]() { return 42; } } new C()[s]();"),
+        Ok(Value::Number(42.0))
+    );
+}
+
+#[test]
+fn static_get_set_are_valid_method_names() {
+    assert_eq!(
+        eval(
+            "class C { static() { return 1; } get() { return 2; } set() { return 3; } } let c = new C(); [c.static(), c.get(), c.set()].join(',');"
+        ),
+        Ok(Value::String("1,2,3".to_owned()))
+    );
+}
+
+#[test]
+fn static_keyword_as_static_method() {
+    assert_eq!(
+        eval("class C { static static() { return 8; } } C.static();"),
+        Ok(Value::Number(8.0))
+    );
+}

@@ -12,7 +12,7 @@ use crate::{
     to_js_string_with_env, to_property_key_value,
 };
 
-use super::ir::{ArrayElementKind, Bytecode, ClassConstructorDef, ClassMethodDef, Op};
+use super::ir::{ArrayElementKind, Bytecode, Op};
 use super::util::{stack_underflow, typeof_value};
 use super::vm_call::{insert_scope_call_bindings, user_bytecode_function};
 use super::vm_props::{
@@ -233,8 +233,14 @@ impl<'a> Vm<'a> {
                     name,
                     constructor,
                     methods,
+                    computed_key_count,
                 } => {
-                    let value = self.new_class(name.as_deref(), &constructor, &methods);
+                    let value = self.new_class(
+                        name.as_deref(),
+                        &constructor,
+                        &methods,
+                        computed_key_count,
+                    )?;
                     self.stack.push(value);
                 }
                 Op::Typeof => {
@@ -313,7 +319,7 @@ impl<'a> Vm<'a> {
         }
     }
 
-    fn function_capture_env(
+    pub(super) fn function_capture_env(
         &self,
         function_bytecode: &Bytecode,
         function_local_names: &[String],
@@ -351,71 +357,7 @@ impl<'a> Vm<'a> {
         }
     }
 
-    fn new_class(
-        &self,
-        name: Option<&str>,
-        constructor: &ClassConstructorDef,
-        methods: &[ClassMethodDef],
-    ) -> Value {
-        let constructor_env =
-            self.function_capture_env(&constructor.bytecode, &constructor.local_names);
-        self.refresh_captured_env(&constructor_env);
-        let constructor_captured = Rc::new(RefCell::new(constructor_env.clone()));
-        let constructor_function = Function::new_user_compiled(CompiledUserFunction {
-            name: constructor.name.clone(),
-            params: constructor.params.clone(),
-            env: constructor_env,
-            bytecode: constructor.bytecode.clone(),
-            local_names: constructor.local_names.clone(),
-            constructable: true,
-            is_strict: true,
-            lexical_this: false,
-            lexical_arguments: false,
-            is_class_constructor: true,
-            captured_env: constructor_captured,
-        });
-
-        let prototype = ObjectRef::with_prototype(HashMap::new(), object_prototype(&self.globals));
-        constructor_function.install_class_prototype(prototype.clone());
-
-        // A class binding is visible to its own methods and constructor under
-        // the class name, so methods can reference the class recursively. The
-        // binding is immutable, so each function gets its own captured env
-        // seeded with the class value rather than sharing a mutable parent env.
-        for method in methods {
-            let mut method_env = self.function_capture_env(&method.bytecode, &method.local_names);
-            bind_class_inner_name(&mut method_env, name, &constructor_function);
-            let method_function = Function::new_user_compiled(CompiledUserFunction {
-                name: method.name.clone(),
-                params: method.params.clone(),
-                env: method_env.clone(),
-                bytecode: method.bytecode.clone(),
-                local_names: method.local_names.clone(),
-                constructable: false,
-                is_strict: true,
-                lexical_this: false,
-                lexical_arguments: false,
-                is_class_constructor: false,
-                captured_env: Rc::new(RefCell::new(method_env)),
-            });
-            // Class methods are non-enumerable, writable, and configurable.
-            prototype.define_property(
-                method.key.clone(),
-                Property::data(Value::Function(method_function), false, true, true),
-            );
-        }
-
-        // Seed the constructor's own captured env with the inner class binding.
-        bind_class_inner_name(
-            &mut constructor_function.captured_env.borrow_mut(),
-            name,
-            &constructor_function,
-        );
-
-        Value::Function(constructor_function)
-    }
-
-    fn refresh_captured_env(&self, env: &HashMap<String, Value>) {
+    pub(super) fn refresh_captured_env(&self, env: &HashMap<String, Value>) {
         let mut captured_env = self.captured_env.borrow_mut();
         for (name, value) in env {
             captured_env.insert(name.clone(), value.clone());
@@ -936,17 +878,5 @@ fn direct_get_property_key(value: &Value, key: &PropertyKey) -> Option<Value> {
 fn insert_missing_binding_name(binding_names: &mut Vec<String>, name: &str) {
     if !binding_names.iter().any(|existing| existing == name) {
         binding_names.push(name.to_owned());
-    }
-}
-
-/// Binds the class name to its constructor inside a class function's captured
-/// environment, so methods and the constructor can reference the class by name.
-fn bind_class_inner_name(
-    env: &mut HashMap<String, Value>,
-    name: Option<&str>,
-    constructor: &Function,
-) {
-    if let Some(name) = name {
-        env.insert(name.to_owned(), Value::Function(constructor.clone()));
     }
 }

@@ -108,22 +108,54 @@ impl Parser {
     }
 
     fn class_member(&mut self) -> Result<ClassMember, ParseError> {
-        let token = self
+        let start_token = self
             .peek()
             .cloned()
             .expect("parser should always have eof token");
-        self.reject_unsupported_member_modifier(&token)?;
+        let member_start = start_token.span.start;
 
-        let name = class_member_name(&token.kind).ok_or_else(|| ParseError {
-            message: "expected class member name".to_owned(),
-            span: token.span,
-        })?;
-        self.advance();
+        // `static` is a modifier only when it is followed by another member
+        // start; `static() {}` or `static = 1` use `static` as the name.
+        let is_static = matches!(&start_token.kind, TokenKind::Identifier(name) if name == "static")
+            && self.token_starts_member_after_modifier(1);
+        if is_static {
+            self.advance();
+        }
+
+        // `get`/`set` introduce an accessor only when followed by a member
+        // name start; `get() {}` or `set = 1` use them as the name.
+        let accessor_token = self
+            .peek()
+            .cloned()
+            .expect("parser should always have eof token");
+        let accessor_kind = match &accessor_token.kind {
+            TokenKind::Identifier(name) if name == "get" || name == "set" => {
+                if self.token_starts_member_after_modifier(1) {
+                    self.advance();
+                    Some(if name == "get" {
+                        MethodKind::Getter
+                    } else {
+                        MethodKind::Setter
+                    })
+                } else {
+                    None
+                }
+            }
+            TokenKind::Star => {
+                return Err(ParseError {
+                    message: "generator class methods are not yet supported".to_owned(),
+                    span: accessor_token.span,
+                });
+            }
+            _ => None,
+        };
+
+        let (key, key_text) = self.class_member_key()?;
 
         if !self.at(&TokenKind::LeftParen) {
             return Err(ParseError {
                 message: "class fields are not yet supported".to_owned(),
-                span: token.span,
+                span: Span::new(member_start, self.previous_end()),
             });
         }
 
@@ -136,66 +168,123 @@ impl Parser {
             .start;
         let body = self.block_body()?;
         self.reject_invalid_function_parameters(&params, &body, body_start)?;
-        let end = self
-            .tokens
-            .get(self.cursor.saturating_sub(1))
-            .expect("parser should always have eof token")
-            .span
-            .end;
+        let end = self.previous_end();
 
-        let kind = if name == "constructor" {
-            MethodKind::Constructor
-        } else {
-            MethodKind::Method
+        let is_constructor = !is_static
+            && accessor_kind.is_none()
+            && matches!(key_text.as_deref(), Some("constructor"));
+
+        let kind = match accessor_kind {
+            Some(MethodKind::Getter) => {
+                if !params.is_empty() {
+                    return Err(ParseError {
+                        message: "getter must not have parameters".to_owned(),
+                        span: Span::new(member_start, end),
+                    });
+                }
+                MethodKind::Getter
+            }
+            Some(MethodKind::Setter) => {
+                if params.positional.len() != 1 || params.rest.is_some() {
+                    return Err(ParseError {
+                        message: "setter must have exactly one parameter".to_owned(),
+                        span: Span::new(member_start, end),
+                    });
+                }
+                MethodKind::Setter
+            }
+            _ if is_constructor => MethodKind::Constructor,
+            _ => MethodKind::Method,
         };
+
+        self.validate_member_restrictions(is_static, kind, key_text.as_deref(), member_start, end)?;
+
         let value = Expr::Function {
-            name: Some(name.clone()),
+            name: key_text.clone(),
             params,
             body,
             constructable: false,
             lexical_this: false,
             lexical_arguments: false,
-            span: Span::new(token.span.start, end),
+            span: Span::new(member_start, end),
         };
         Ok(ClassMember {
             kind,
-            key: ClassMemberKey::Literal(name),
+            key,
+            is_static,
             value,
-            span: Span::new(token.span.start, end),
+            span: Span::new(member_start, end),
         })
     }
 
-    fn reject_unsupported_member_modifier(&self, token: &Token) -> Result<(), ParseError> {
-        match &token.kind {
-            TokenKind::Identifier(name) if name == "static" => Err(ParseError {
-                message: "static class members are not yet supported".to_owned(),
-                span: token.span,
-            }),
-            TokenKind::Identifier(name) if name == "get" || name == "set" => {
-                // `get`/`set` used as a plain method name (followed by `(`) is
-                // allowed; an accessor definition is not yet supported.
-                if matches!(
-                    self.peek_nth(1).map(|t| &t.kind),
-                    Some(TokenKind::LeftParen)
-                ) {
-                    Ok(())
-                } else {
-                    Err(ParseError {
-                        message: "class accessors are not yet supported".to_owned(),
-                        span: token.span,
-                    })
+    /// Parses a class member key (literal name or `[expr]`), returning the key
+    /// and its literal text when statically known.
+    fn class_member_key(&mut self) -> Result<(ClassMemberKey, Option<String>), ParseError> {
+        if self.at(&TokenKind::LeftBracket) {
+            self.advance();
+            let expr = self.assignment()?;
+            self.expect(&TokenKind::RightBracket)?;
+            return Ok((ClassMemberKey::Computed(expr), None));
+        }
+        let token = self
+            .peek()
+            .cloned()
+            .expect("parser should always have eof token");
+        let name = class_member_name(&token.kind).ok_or_else(|| ParseError {
+            message: "expected class member name".to_owned(),
+            span: token.span,
+        })?;
+        self.advance();
+        Ok((ClassMemberKey::Literal(name.clone()), Some(name)))
+    }
+
+    /// Reports whether the token `offset` ahead can begin a class member name,
+    /// used to disambiguate `static`/`get`/`set` as modifiers versus names.
+    fn token_starts_member_after_modifier(&self, offset: usize) -> bool {
+        match self.peek_nth(offset).map(|token| &token.kind) {
+            Some(TokenKind::LeftBracket) => true,
+            Some(kind) => class_member_name(kind).is_some(),
+            None => false,
+        }
+    }
+
+    fn previous_end(&self) -> usize {
+        self.tokens
+            .get(self.cursor.saturating_sub(1))
+            .expect("parser should always have eof token")
+            .span
+            .end
+    }
+
+    fn validate_member_restrictions(
+        &self,
+        is_static: bool,
+        kind: MethodKind,
+        key_text: Option<&str>,
+        start: usize,
+        end: usize,
+    ) -> Result<(), ParseError> {
+        let span = Span::new(start, end);
+        match key_text {
+            Some("constructor") => {
+                // A getter/setter named `constructor` is a syntax error; a
+                // static member named `constructor` is allowed.
+                if !is_static && matches!(kind, MethodKind::Getter | MethodKind::Setter) {
+                    return Err(ParseError {
+                        message: "class constructor may not be an accessor".to_owned(),
+                        span,
+                    });
                 }
             }
-            TokenKind::Star => Err(ParseError {
-                message: "generator class methods are not yet supported".to_owned(),
-                span: token.span,
-            }),
-            TokenKind::LeftBracket => Err(ParseError {
-                message: "computed class member names are not yet supported".to_owned(),
-                span: token.span,
-            }),
-            _ => Ok(()),
+            Some("prototype") if is_static => {
+                return Err(ParseError {
+                    message: "classes may not have a static property named `prototype`".to_owned(),
+                    span,
+                });
+            }
+            _ => {}
         }
+        Ok(())
     }
 }
 

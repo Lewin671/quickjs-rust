@@ -16,6 +16,7 @@ mod util;
 mod vm;
 mod vm_bindings;
 mod vm_call;
+mod vm_class;
 mod vm_errors;
 mod vm_iter;
 mod vm_ops;

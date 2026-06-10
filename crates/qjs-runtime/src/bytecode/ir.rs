@@ -88,6 +88,9 @@ pub(super) enum Op {
         name: Option<String>,
         constructor: ClassConstructorDef,
         methods: Vec<ClassMethodDef>,
+        /// Number of computed-key values pushed onto the stack before this op,
+        /// in member order.
+        computed_key_count: usize,
     },
     Typeof,
     ToString,
@@ -119,10 +122,32 @@ pub(super) struct ClassConstructorDef {
     pub(super) bytecode: Rc<Bytecode>,
 }
 
-/// Compiled definition of a class prototype method.
+/// Whether a class member key is a literal name or a computed expression
+/// whose value is taken from the stack at class-evaluation time.
+#[derive(Clone, Debug)]
+pub(super) enum ClassMemberKeyDef {
+    /// A statically known string key.
+    Literal(String),
+    /// A computed key: the value was pushed onto the stack before `NewClass`.
+    Computed,
+}
+
+/// The kind of a class method member.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum ClassMethodKind {
+    Method,
+    Getter,
+    Setter,
+}
+
+/// Compiled definition of a class method or accessor.
 #[derive(Clone, Debug)]
 pub(super) struct ClassMethodDef {
-    pub(super) key: String,
+    pub(super) key: ClassMemberKeyDef,
+    pub(super) method_kind: ClassMethodKind,
+    pub(super) is_static: bool,
+    /// Function `name`, when statically known. Computed keys derive the name
+    /// from the evaluated key at runtime.
     pub(super) name: Option<String>,
     pub(super) params: FunctionParams,
     pub(super) local_names: Vec<String>,

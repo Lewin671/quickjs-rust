@@ -13,10 +13,12 @@ pub struct ClassBody {
 /// A single member of a class body.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ClassMember {
-    /// Member kind. Extensible for later slices (static, accessors, fields).
+    /// Member kind. Extensible for later slices (fields).
     pub kind: MethodKind,
     /// Member key.
     pub key: ClassMemberKey,
+    /// Whether the member is declared `static`.
+    pub is_static: bool,
     /// The method function expression. Always an `Expr::Function`.
     pub value: Expr,
     /// Source span covering the whole member.
@@ -28,16 +30,21 @@ pub struct ClassMember {
 pub enum ClassMemberKey {
     /// A literal identifier or string-style key, for example `foo`.
     Literal(String),
+    /// A computed key expression, as in `[expr]() {}`.
+    Computed(Expr),
 }
 
 /// The kind of a class member.
 ///
-/// Only `Constructor` and `Method` are produced in S1. Later slices extend
-/// this with static methods, getters, setters, and fields.
+/// Fields are added by a later slice.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MethodKind {
     /// The class constructor.
     Constructor,
-    /// A prototype method.
+    /// A prototype or static method.
     Method,
+    /// A getter accessor.
+    Getter,
+    /// A setter accessor.
+    Setter,
 }
