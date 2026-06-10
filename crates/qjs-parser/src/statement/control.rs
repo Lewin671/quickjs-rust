@@ -1,7 +1,7 @@
-use qjs_ast::{CatchClause, CatchParam, ForInLeft, ForInit, Span, Stmt, SwitchCase, VarKind};
+use qjs_ast::{BindingPattern, CatchClause, ForInLeft, ForInit, Span, Stmt, SwitchCase, VarKind};
 use qjs_lexer::TokenKind;
 
-use crate::helpers::{assignment_target, stmt_end, var_kind};
+use crate::helpers::{stmt_end, var_kind};
 use crate::{ParseError, Parser};
 
 impl Parser {
@@ -88,90 +88,56 @@ impl Parser {
             let var_head_start = self.cursor;
             let kind_token = self.advance();
             let kind = var_kind(&kind_token.kind).expect("token should be declaration kind");
-            let name_token = self.advance();
-            let name = for_head_binding_name(&name_token.kind, kind).ok_or_else(|| ParseError {
-                message: "expected binding identifier".to_owned(),
-                span: name_token.span,
-            })?;
-            let init = if kind == VarKind::Var && self.match_kind(&TokenKind::Equal) {
-                Some(self.expression_no_in()?)
-            } else {
-                None
-            };
-            if self.match_kind(&TokenKind::In) {
-                if self.strict && init.is_some() {
-                    return Err(ParseError {
-                        message:
-                            "for-in variable declarations cannot have initializers in strict mode"
-                                .to_owned(),
-                        span: self
-                            .peek()
-                            .expect("parser should always have eof token")
-                            .span,
-                    });
-                }
-                let right = self.expression()?;
-                self.expect(&TokenKind::RightParen)?;
-                let body = self.statement()?;
-                let end = stmt_end(&body);
-                return Ok(Stmt::ForIn {
-                    left: ForInLeft::VarDecl {
+            if let Some(binding) = self.for_head_binding(kind) {
+                let init = if kind == VarKind::Var
+                    && matches!(binding, BindingPattern::Identifier { .. })
+                    && self.match_kind(&TokenKind::Equal)
+                {
+                    Some(self.expression_no_in()?)
+                } else {
+                    None
+                };
+                let left_span = Span::new(kind_token.span.start, binding.span().end);
+                if self.match_kind(&TokenKind::In) {
+                    if self.strict && init.is_some() {
+                        return Err(ParseError {
+                            message:
+                                "for-in variable declarations cannot have initializers in strict mode"
+                                    .to_owned(),
+                            span: self
+                                .peek()
+                                .expect("parser should always have eof token")
+                                .span,
+                        });
+                    }
+                    let left = ForInLeft::VarDecl {
                         kind,
-                        name,
+                        binding,
                         init,
-                        span: Span::new(kind_token.span.start, name_token.span.end),
-                    },
-                    right,
-                    body: Box::new(body),
-                    span: Span::new(start, end),
-                });
-            }
-            if self.match_contextual_keyword("of") {
-                let right = self.expression()?;
-                self.expect(&TokenKind::RightParen)?;
-                let body = self.statement()?;
-                let end = stmt_end(&body);
-                return Ok(Stmt::ForOf {
-                    left: ForInLeft::VarDecl {
+                        span: left_span,
+                    };
+                    return self.finish_for_in_of(start, left, true);
+                }
+                if init.is_none() && self.match_contextual_keyword("of") {
+                    let left = ForInLeft::VarDecl {
                         kind,
-                        name,
+                        binding,
                         init: None,
-                        span: Span::new(kind_token.span.start, name_token.span.end),
-                    },
-                    right,
-                    body: Box::new(body),
-                    span: Span::new(start, end),
-                });
+                        span: left_span,
+                    };
+                    return self.finish_for_in_of(start, left, false);
+                }
             }
             self.cursor = var_head_start;
         } else if !self.at(&TokenKind::Semicolon) {
             let cursor = self.cursor;
-            let left = self.call()?;
-            if self.match_kind(&TokenKind::In) {
-                let left = assignment_target(left)?;
-                let right = self.expression()?;
-                self.expect(&TokenKind::RightParen)?;
-                let body = self.statement()?;
-                let end = stmt_end(&body);
-                return Ok(Stmt::ForIn {
-                    left: ForInLeft::Target(left),
-                    right,
-                    body: Box::new(body),
-                    span: Span::new(start, end),
-                });
-            }
-            if self.match_contextual_keyword("of") {
-                let left = assignment_target(left)?;
-                let right = self.expression()?;
-                self.expect(&TokenKind::RightParen)?;
-                let body = self.statement()?;
-                let end = stmt_end(&body);
-                return Ok(Stmt::ForOf {
-                    left: ForInLeft::Target(left),
-                    right,
-                    body: Box::new(body),
-                    span: Span::new(start, end),
-                });
+            if let Ok(left) = self.assignment_pattern() {
+                if self.match_kind(&TokenKind::In) {
+                    return self.finish_for_in_of(start, ForInLeft::Target(left), true);
+                }
+                if self.match_contextual_keyword("of") {
+                    return self.finish_for_in_of(start, ForInLeft::Target(left), false);
+                }
             }
             self.cursor = cursor;
         }
@@ -335,7 +301,7 @@ impl Parser {
             .start;
         self.expect(&TokenKind::Catch)?;
         let param = if self.match_kind(&TokenKind::LeftParen) {
-            let param = self.catch_param()?;
+            let param = self.binding_pattern()?;
             self.expect(&TokenKind::RightParen)?;
             Some(param)
         } else {
@@ -350,59 +316,60 @@ impl Parser {
         })
     }
 
-    fn catch_param(&mut self) -> Result<CatchParam, ParseError> {
-        if self.match_kind(&TokenKind::LeftBrace) {
-            return self.catch_object_param();
+    /// Parses a for-in/for-of declaration binding, returning `None` (with
+    /// the cursor rewound) when the tokens do not form a binding pattern.
+    fn for_head_binding(&mut self, kind: VarKind) -> Option<BindingPattern> {
+        let cursor = self.cursor;
+        if self.at(&TokenKind::LeftBracket) || self.at(&TokenKind::LeftBrace) {
+            match self.binding_pattern() {
+                Ok(pattern) => return Some(pattern),
+                Err(_) => {
+                    self.cursor = cursor;
+                    return None;
+                }
+            }
         }
-        let token = self.advance();
-        let TokenKind::Identifier(name) = token.kind else {
-            return Err(ParseError {
-                message: "expected catch binding identifier".to_owned(),
-                span: token.span,
-            });
+        let token = self.peek()?;
+        let name = match &token.kind {
+            TokenKind::Identifier(name) => name.clone(),
+            TokenKind::Let if kind == VarKind::Var => "let".to_owned(),
+            _ => return None,
         };
-        Ok(CatchParam::Identifier(name))
+        let span = token.span;
+        self.advance();
+        Some(BindingPattern::Identifier { name, span })
     }
 
-    fn catch_object_param(&mut self) -> Result<CatchParam, ParseError> {
-        let mut names = Vec::new();
-        if self.match_kind(&TokenKind::RightBrace) {
-            return Ok(CatchParam::Object { names });
-        }
-        loop {
-            let token = self.advance();
-            let TokenKind::Identifier(name) = token.kind else {
-                return Err(ParseError {
-                    message: "expected object catch binding identifier".to_owned(),
-                    span: token.span,
-                });
-            };
-            if self.at(&TokenKind::Colon) || self.at(&TokenKind::Equal) {
-                return Err(ParseError {
-                    message: "unsupported object catch binding pattern".to_owned(),
-                    span: self
-                        .peek()
-                        .expect("parser should always have eof token")
-                        .span,
-                });
+    fn finish_for_in_of(
+        &mut self,
+        start: usize,
+        left: ForInLeft,
+        is_for_in: bool,
+    ) -> Result<Stmt, ParseError> {
+        let right = if is_for_in {
+            self.expression()?
+        } else {
+            self.assignment()?
+        };
+        self.expect(&TokenKind::RightParen)?;
+        let body = self.statement()?;
+        let end = stmt_end(&body);
+        let span = Span::new(start, end);
+        let body = Box::new(body);
+        Ok(if is_for_in {
+            Stmt::ForIn {
+                left,
+                right,
+                body,
+                span,
             }
-            names.push(name);
-            if self.match_kind(&TokenKind::RightBrace) {
-                break;
+        } else {
+            Stmt::ForOf {
+                left,
+                right,
+                body,
+                span,
             }
-            self.expect(&TokenKind::Comma)?;
-            if self.match_kind(&TokenKind::RightBrace) {
-                break;
-            }
-        }
-        Ok(CatchParam::Object { names })
-    }
-}
-
-fn for_head_binding_name(kind: &TokenKind, declaration_kind: qjs_ast::VarKind) -> Option<String> {
-    match kind {
-        TokenKind::Identifier(name) => Some(name.clone()),
-        TokenKind::Let if declaration_kind == qjs_ast::VarKind::Var => Some("let".to_owned()),
-        _ => None,
+        })
     }
 }

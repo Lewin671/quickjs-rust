@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use qjs_ast::{BindingPattern, CatchParam, ForInLeft, ForInit, FunctionParams, Stmt};
+use qjs_ast::{BindingPattern, ForInLeft, ForInit, FunctionParams, Stmt};
 
 /// Returns true for compiler-internal binding names that must never cross
 /// call frames (destructuring temporaries and raw pattern-argument slots).
@@ -94,8 +94,8 @@ fn collect_statement_local_names(body: &[Stmt], names: &mut HashSet<String>) {
                 collect_statement_local_names(std::slice::from_ref(body.as_ref()), names);
             }
             Stmt::ForIn { left, body, .. } | Stmt::ForOf { left, body, .. } => {
-                if let ForInLeft::VarDecl { name, .. } = left {
-                    names.insert(name.clone());
+                if let ForInLeft::VarDecl { binding, .. } = left {
+                    names.extend(binding.names());
                 }
                 collect_statement_local_names(std::slice::from_ref(body.as_ref()), names);
             }
@@ -113,14 +113,7 @@ fn collect_statement_local_names(body: &[Stmt], names: &mut HashSet<String>) {
                 collect_statement_local_names(block, names);
                 if let Some(handler) = handler {
                     if let Some(param) = &handler.param {
-                        match param {
-                            CatchParam::Identifier(name) => {
-                                names.insert(name.clone());
-                            }
-                            CatchParam::Object { names: param_names } => {
-                                names.extend(param_names.iter().cloned());
-                            }
-                        }
+                        names.extend(param.names());
                     }
                     collect_statement_local_names(&handler.body, names);
                 }

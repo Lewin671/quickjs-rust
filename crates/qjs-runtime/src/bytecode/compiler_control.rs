@@ -1,8 +1,12 @@
-use qjs_ast::{AssignmentTarget, BinaryOp, Expr, ForInLeft, Stmt, SwitchCase, VarKind};
+use qjs_ast::{
+    AssignmentTarget, BinaryOp, BindingPattern, Expr, ForInLeft, Stmt, SwitchCase, VarKind,
+};
 
 use crate::{RuntimeError, Value};
 
-use super::compiler::{Compiler, for_in_left_lexical_name, switch_lexical_declared_names};
+use super::compiler::{
+    Compiler, LoopIterator, for_in_left_lexical_names, switch_lexical_declared_names,
+};
 use super::ir::Op;
 
 impl Compiler {
@@ -63,6 +67,7 @@ impl Compiler {
         self.emit(Op::StoreLocal(keys_slot));
         self.emit_number(0.0);
         self.emit(Op::StoreLocal(index_slot));
+        let blocked = for_in_left_lexical_names(left);
 
         let loop_start = self.code.len();
         self.emit(Op::LoadLocal(index_slot));
@@ -79,7 +84,6 @@ impl Compiler {
         self.emit(Op::StoreLocal(key_slot));
         self.compile_for_in_left(left, key_slot)?;
 
-        let blocked = for_in_left_lexical_name(left).map_or_else(Vec::new, |name| vec![name]);
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
             compiler.push_loop(result_slot);
             compiler.compile_stmt(body)?;
@@ -111,42 +115,46 @@ impl Compiler {
         body: &Stmt,
     ) -> Result<(), RuntimeError> {
         let result_slot = self.temp_local("for_of_result");
-        let iterable_slot = self.temp_local("for_of_iterable");
         let iterator_slot = self.temp_local("for_of_iterator");
-        let step_slot = self.temp_local("for_of_step");
+        let next_slot = self.temp_local("for_of_next");
+        let done_slot = self.temp_local("for_of_done");
         let value_slot = self.temp_local("for_of_value");
+        let iterator = LoopIterator {
+            iterator_slot,
+            done_slot,
+        };
 
         self.emit_load_undefined();
         self.emit(Op::StoreLocal(result_slot));
         self.compile_expr(right)?;
-        self.emit(Op::StoreLocal(iterable_slot));
-        self.emit(Op::LoadLocal(iterable_slot));
-        self.emit(Op::LoadGlobal("Symbol".to_owned()));
-        self.emit_string("iterator");
-        self.emit(Op::GetProp);
-        self.emit(Op::CallMethod(0));
+        self.emit(Op::GetIterator);
         self.emit(Op::StoreLocal(iterator_slot));
+        self.emit(Op::LoadLocal(iterator_slot));
+        self.emit_string("next");
+        self.emit(Op::GetProp);
+        self.emit(Op::StoreLocal(next_slot));
+        let false_slot = self.const_slot(Value::Boolean(false));
+        self.emit(Op::LoadConst(false_slot));
+        self.emit(Op::StoreLocal(done_slot));
+        let enter = self.emit(Op::EnterTry {
+            catch: None,
+            finally: None,
+            catch_scope: None,
+        });
 
         let loop_start = self.code.len();
         self.emit(Op::LoadLocal(iterator_slot));
-        self.emit_string("next");
-        self.emit(Op::CallMethod(0));
-        self.emit(Op::StoreLocal(step_slot));
-        self.emit(Op::LoadLocal(step_slot));
-        self.emit_string("done");
-        self.emit(Op::GetProp);
+        self.emit(Op::LoadLocal(next_slot));
+        self.emit(Op::IteratorStep { done_slot });
+        self.emit(Op::LoadLocal(done_slot));
         let exit_jump = self.emit(Op::JumpIfTrue(usize::MAX));
         self.emit(Op::Pop);
-
-        self.emit(Op::LoadLocal(step_slot));
-        self.emit_string("value");
-        self.emit(Op::GetProp);
         self.emit(Op::StoreLocal(value_slot));
         self.compile_for_in_left(left, value_slot)?;
 
-        let blocked = for_in_left_lexical_name(left).map_or_else(Vec::new, |name| vec![name]);
+        let blocked = for_in_left_lexical_names(left);
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
-            compiler.push_loop(result_slot);
+            compiler.push_loop_with_iterator(result_slot, iterator);
             compiler.compile_stmt(body)?;
             compiler.emit(Op::StoreLocal(result_slot));
             Ok(())
@@ -158,18 +166,25 @@ impl Compiler {
         let exit = self.code.len();
         self.patch_jump(exit_jump, exit);
         self.emit(Op::Pop);
+        self.emit(Op::Pop);
+        self.emit(Op::ExitTry);
         let cleanup_slots = self.current_lexical_slots_for_names(&blocked);
-        self.emit_for_of_loop_completion(result_slot, iterator_slot, &cleanup_slots, &context);
+        self.emit_for_of_loop_completion(result_slot, iterator, &cleanup_slots, &context, enter);
         self.patch_loop_continues(&context, loop_start);
         Ok(())
     }
 
+    /// Emits the for-of exit paths. The normal path arrives with the
+    /// iterator exhausted and the protected region exited. Breaks exit the
+    /// region and close the iterator with close errors propagating; thrown
+    /// errors close it with close errors swallowed before rethrowing.
     fn emit_for_of_loop_completion(
         &mut self,
         result_slot: usize,
-        iterator_slot: usize,
+        iterator: LoopIterator,
         cleanup_slots: &[usize],
         context: &super::compiler::LoopContext,
+        enter: usize,
     ) {
         for slot in cleanup_slots {
             self.emit(Op::ClearLocal(*slot));
@@ -178,17 +193,24 @@ impl Compiler {
         let normal_done = self.emit(Op::Jump(usize::MAX));
 
         let break_cleanup = self.code.len();
-        self.emit(Op::LoadLocal(iterator_slot));
-        self.emit(Op::IteratorClose { swallow: false });
+        self.emit(Op::ExitTry);
+        self.emit_close_unless_done(iterator.iterator_slot, iterator.done_slot, false);
         for slot in cleanup_slots {
             self.emit(Op::ClearLocal(*slot));
         }
         let break_done = self.emit(Op::Jump(usize::MAX));
 
+        let catch_target = self.code.len();
+        self.emit_close_unless_done(iterator.iterator_slot, iterator.done_slot, true);
+        self.emit(Op::Throw);
+
         let done = self.code.len();
         self.patch_jump(normal_done, done);
         self.patch_jump(break_done, done);
         self.patch_loop_breaks(context, break_cleanup);
+        if let Op::EnterTry { catch, .. } = &mut self.code[enter] {
+            *catch = Some(catch_target);
+        }
     }
 
     pub(super) fn compile_switch(
@@ -281,13 +303,17 @@ impl Compiler {
         key_slot: usize,
     ) -> Result<(), RuntimeError> {
         match left {
-            ForInLeft::VarDecl { name, kind, .. } => {
-                let slot = self.declare_var_kind_slot(name, *kind);
-                if matches!(kind, VarKind::Let | VarKind::Const) {
-                    self.emit(Op::ClearLocal(slot));
+            ForInLeft::VarDecl { binding, kind, .. } => {
+                // Per-iteration bindings: lexical declarations are cleared
+                // before re-initialization each round.
+                for name in binding.names() {
+                    let slot = self.declare_var_kind_slot(&name, *kind);
+                    if matches!(kind, VarKind::Let | VarKind::Const) {
+                        self.emit(Op::ClearLocal(slot));
+                    }
                 }
                 self.emit(Op::LoadLocal(key_slot));
-                self.emit_store_var_initializer(slot, name, *kind);
+                self.compile_binding_initializer(binding, *kind)?;
             }
             ForInLeft::Target(AssignmentTarget::Identifier { name, .. }) => {
                 let slot = self.assignment_slot(name);
@@ -318,7 +344,7 @@ impl Compiler {
 
     fn compile_for_in_initializer(&mut self, left: &ForInLeft) -> Result<(), RuntimeError> {
         let ForInLeft::VarDecl {
-            name,
+            binding: BindingPattern::Identifier { name, .. },
             kind,
             init: Some(init),
             ..

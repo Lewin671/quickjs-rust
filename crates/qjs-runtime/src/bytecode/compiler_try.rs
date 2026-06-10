@@ -1,6 +1,6 @@
-use qjs_ast::{CatchClause, CatchParam, Stmt};
+use qjs_ast::{BindingPattern, CatchClause, Stmt, VarKind};
 
-use crate::{RuntimeError, Value};
+use crate::RuntimeError;
 
 use super::compiler::{Compiler, catch_param_annex_b_blocked_names};
 use super::ir::{CatchScope, Op};
@@ -69,7 +69,7 @@ impl Compiler {
         let target = self.code.len();
         if let Some(param) = &handler.param {
             let slots = self.with_lexical_scope(|compiler| {
-                let slots = compiler.compile_catch_param(param);
+                let slots = compiler.compile_catch_param(param)?;
                 let blocked = catch_param_annex_b_blocked_names(Some(param));
                 compiler.with_annex_b_blocked_function_names(&blocked, |compiler| {
                     compiler.compile_try_body(&handler.body, result_slot)
@@ -86,30 +86,16 @@ impl Compiler {
         Ok((target, None))
     }
 
-    fn compile_catch_param(&mut self, param: &CatchParam) -> Vec<usize> {
-        match param {
-            CatchParam::Identifier(name) => {
-                let slot = self.declare_lexical_slot(name, true);
-                self.emit(Op::StoreLocal(slot));
-                vec![slot]
-            }
-            CatchParam::Object { names } => {
-                let value_slot = self.temp_local("catch_value");
-                self.emit(Op::StoreLocal(value_slot));
-                let mut slots = Vec::with_capacity(names.len() + 1);
-                slots.push(value_slot);
-                for name in names {
-                    let slot = self.declare_lexical_slot(name, true);
-                    let key_slot = self.const_slot(Value::String(name.clone()));
-                    self.emit(Op::LoadLocal(value_slot));
-                    self.emit(Op::LoadConst(key_slot));
-                    self.emit(Op::GetProp);
-                    self.emit(Op::StoreLocal(slot));
-                    slots.push(slot);
-                }
-                slots
-            }
+    /// Binds the thrown value on the stack to the catch parameter pattern,
+    /// returning the lexical slots to clear when the handler exits.
+    fn compile_catch_param(&mut self, param: &BindingPattern) -> Result<Vec<usize>, RuntimeError> {
+        if let BindingPattern::Identifier { name, .. } = param {
+            let slot = self.declare_lexical_slot(name, true);
+            self.emit(Op::StoreLocal(slot));
+            return Ok(vec![slot]);
         }
+        self.compile_binding_initializer(param, VarKind::Let)?;
+        Ok(self.current_lexical_slots_for_names(&param.names()))
     }
 
     fn compile_finally(&mut self, finalizer: &[Stmt]) -> Result<usize, RuntimeError> {

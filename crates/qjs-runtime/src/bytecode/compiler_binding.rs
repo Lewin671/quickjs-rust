@@ -166,14 +166,12 @@ impl Compiler {
     /// it while swallowing close errors, then rethrows the original error.
     pub(super) fn end_array_destructuring(&mut self, destructuring: &ArrayDestructuring) {
         self.emit(Op::ExitTry);
-        let normal_done = self.emit_close_if_not_done(destructuring, false);
+        self.emit_close_unless_done(destructuring.iterator_slot, destructuring.done_slot, false);
         let over_catch = self.emit(Op::Jump(usize::MAX));
-        self.patch_jump(normal_done, over_catch);
 
         let catch_target = self.code.len();
-        let abrupt_done = self.emit_close_if_not_done(destructuring, true);
-        let rethrow = self.emit(Op::Throw);
-        self.patch_jump(abrupt_done, rethrow);
+        self.emit_close_unless_done(destructuring.iterator_slot, destructuring.done_slot, true);
+        self.emit(Op::Throw);
 
         let after = self.code.len();
         self.patch_jump(over_catch, after);
@@ -182,23 +180,24 @@ impl Compiler {
         }
     }
 
-    /// Emits a close of the iterator unless the done flag is set, returning
-    /// the jump emitted on the skip path so the caller can patch it past the
-    /// close. Leaves the rest of the stack untouched.
-    fn emit_close_if_not_done(
+    /// Emits a close of the iterator unless the done flag is set. Both paths
+    /// converge after the close; the rest of the stack stays untouched.
+    pub(super) fn emit_close_unless_done(
         &mut self,
-        destructuring: &ArrayDestructuring,
+        iterator_slot: usize,
+        done_slot: usize,
         swallow: bool,
-    ) -> usize {
-        self.emit(Op::LoadLocal(destructuring.done_slot));
+    ) {
+        self.emit(Op::LoadLocal(done_slot));
         let skip_close = self.emit(Op::JumpIfTrue(usize::MAX));
         self.emit(Op::Pop);
-        self.emit(Op::LoadLocal(destructuring.iterator_slot));
+        self.emit(Op::LoadLocal(iterator_slot));
         self.emit(Op::IteratorClose { swallow });
-        let done = self.emit(Op::Jump(usize::MAX));
+        let after = self.emit(Op::Jump(usize::MAX));
         let skip_target = self.code.len();
         self.patch_jump(skip_close, skip_target);
         self.emit(Op::Pop);
-        done
+        let end = self.code.len();
+        self.patch_jump(after, end);
     }
 }
