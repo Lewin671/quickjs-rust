@@ -5,6 +5,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 mod compiler;
 mod compiler_assign;
 mod compiler_binding;
+mod compiler_class;
 mod compiler_control;
 mod compiler_expr;
 mod compiler_pattern;

@@ -285,10 +285,7 @@ impl Compiler {
                 });
                 Ok(())
             }
-            Expr::Class { .. } => Err(RuntimeError {
-                thrown: None,
-                message: "class evaluation is not yet supported".to_owned(),
-            }),
+            Expr::Class { name, body, .. } => self.compile_class(name.as_deref(), body),
             Expr::Member {
                 object, property, ..
             } => {

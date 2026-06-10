@@ -767,10 +767,15 @@ impl Compiler {
                 self.emit_load_undefined();
                 Ok(())
             }
-            Stmt::ClassDecl { .. } => Err(RuntimeError {
-                thrown: None,
-                message: "class evaluation is not yet supported".to_owned(),
-            }),
+            Stmt::ClassDecl { name, body, .. } => {
+                // Class declarations create a lexical (`let`-like) binding.
+                let slot = self.declare_lexical_slot(name, true);
+                self.emit(Op::ClearLocal(slot));
+                self.compile_class(Some(name), body)?;
+                self.emit(Op::StoreLocal(slot));
+                self.emit_load_undefined();
+                Ok(())
+            }
         }
     }
 
@@ -889,6 +894,7 @@ fn lexical_declared_names(body: &[Stmt]) -> Vec<String> {
                 names.extend(for_in_left_lexical_names(left));
             }
             Stmt::Switch { cases, .. } => names.extend(switch_lexical_declared_names(cases)),
+            Stmt::ClassDecl { name, .. } => names.push(name.clone()),
             _ => {}
         }
     }

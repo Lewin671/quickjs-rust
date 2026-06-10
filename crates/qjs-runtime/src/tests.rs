@@ -1,6 +1,7 @@
 mod arrays;
 mod bigint;
 mod bytecode;
+mod classes;
 mod date;
 mod date_format;
 mod date_setters;

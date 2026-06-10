@@ -24,7 +24,7 @@ verification command is green and `./scripts/check.sh` passes.
 - [x] S1 Parser: class declarations and expressions with constructor and
       prototype methods (no extends, no static, no accessors). AST types,
       spans, focused parser tests.
-- [ ] S2 Runtime: instantiate S1 classes — constructor function objects,
+- [x] S2 Runtime: instantiate S1 classes — constructor function objects,
       `prototype` wiring, `new` semantics, method definitions.
 - [ ] S3 Parser + runtime: `static` methods, getters/setters, computed
       method names.

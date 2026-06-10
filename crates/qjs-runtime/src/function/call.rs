@@ -42,6 +42,12 @@ pub(crate) fn call_function(
             is_construct,
         );
     }
+    if function.is_class_constructor && !is_construct {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: class constructor cannot be invoked without 'new'".to_owned(),
+        });
+    }
     if let Some(native) = function.native {
         return call_native_function(
             &function,

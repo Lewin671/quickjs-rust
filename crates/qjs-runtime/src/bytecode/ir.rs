@@ -81,6 +81,14 @@ pub(super) enum Op {
         lexical_this: bool,
         lexical_arguments: bool,
     },
+    /// Builds a class constructor function object, wires its `prototype` and
+    /// `constructor` properties, and installs prototype methods. Pushes the
+    /// constructor function value.
+    NewClass {
+        name: Option<String>,
+        constructor: ClassConstructorDef,
+        methods: Vec<ClassMethodDef>,
+    },
     Typeof,
     ToString,
     ToNumeric,
@@ -100,6 +108,25 @@ pub(super) enum Op {
     EndFinally,
     Return,
     Throw,
+}
+
+/// Compiled definition of a class constructor.
+#[derive(Clone, Debug)]
+pub(super) struct ClassConstructorDef {
+    pub(super) name: Option<String>,
+    pub(super) params: FunctionParams,
+    pub(super) local_names: Vec<String>,
+    pub(super) bytecode: Rc<Bytecode>,
+}
+
+/// Compiled definition of a class prototype method.
+#[derive(Clone, Debug)]
+pub(super) struct ClassMethodDef {
+    pub(super) key: String,
+    pub(super) name: Option<String>,
+    pub(super) params: FunctionParams,
+    pub(super) local_names: Vec<String>,
+    pub(super) bytecode: Rc<Bytecode>,
 }
 
 #[derive(Clone, Debug)]
@@ -179,6 +206,7 @@ impl Bytecode {
                     | Op::New(_)
                     | Op::NewSpread
                     | Op::NewFunction { .. }
+                    | Op::NewClass { .. }
                     | Op::StoreGlobalStrict(_)
                     | Op::StoreLocalOrGlobalSloppy { .. }
             )
@@ -212,6 +240,16 @@ fn collect_global_names_from_ops(code: &[Op], names: &mut BTreeSet<String>) {
             }
             Op::NewFunction { bytecode, .. } => {
                 names.extend(bytecode.global_names().iter().cloned());
+            }
+            Op::NewClass {
+                constructor,
+                methods,
+                ..
+            } => {
+                names.extend(constructor.bytecode.global_names().iter().cloned());
+                for method in methods {
+                    names.extend(method.bytecode.global_names().iter().cloned());
+                }
             }
             _ => {}
         }

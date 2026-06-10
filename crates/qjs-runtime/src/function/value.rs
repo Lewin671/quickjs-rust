@@ -31,6 +31,8 @@ pub struct Function {
     pub(crate) is_strict: bool,
     pub(crate) lexical_this: bool,
     pub(crate) lexical_arguments: bool,
+    /// Whether this is a class constructor, which must be invoked with `new`.
+    pub(crate) is_class_constructor: bool,
     pub(crate) bound: Option<Box<BoundFunction>>,
     /// Function object properties.
     pub(crate) properties: Rc<RefCell<HashMap<String, Property>>>,
@@ -60,6 +62,7 @@ pub(crate) struct CompiledUserFunction {
     pub(crate) is_strict: bool,
     pub(crate) lexical_this: bool,
     pub(crate) lexical_arguments: bool,
+    pub(crate) is_class_constructor: bool,
     pub(crate) captured_env: Rc<RefCell<HashMap<String, Value>>>,
 }
 
@@ -163,6 +166,7 @@ impl Function {
             is_strict,
             lexical_this: lexical_bindings.this,
             lexical_arguments: lexical_bindings.arguments,
+            is_class_constructor: false,
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
             property_order: Rc::new(RefCell::new(Vec::new())),
@@ -196,6 +200,7 @@ impl Function {
             is_strict,
             lexical_this,
             lexical_arguments,
+            is_class_constructor,
             captured_env,
         } = compiled;
         let prototype = ObjectRef::with_prototype(HashMap::new(), object_prototype(&env));
@@ -211,6 +216,7 @@ impl Function {
             is_strict,
             lexical_this,
             lexical_arguments,
+            is_class_constructor,
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
             property_order: Rc::new(RefCell::new(Vec::new())),
@@ -222,7 +228,10 @@ impl Function {
         };
         function.define_length_property();
         function.define_name_property();
-        if constructable {
+        // Class constructors receive their `prototype` wiring from the class
+        // builder so the property attributes and prototype object can match the
+        // class semantics; ordinary functions get the default prototype here.
+        if constructable && !is_class_constructor {
             prototype
                 .define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
             function.define_property(
@@ -231,6 +240,22 @@ impl Function {
             );
         }
         function
+    }
+
+    /// Installs the class-constructor `prototype` property and its
+    /// `constructor` back-reference with the attributes ECMAScript mandates:
+    /// the constructor's `prototype` is non-writable, non-enumerable, and
+    /// non-configurable, while the prototype's `constructor` is writable,
+    /// non-enumerable, and configurable.
+    pub(crate) fn install_class_prototype(&self, prototype: ObjectRef) {
+        prototype.define_property(
+            "constructor".to_owned(),
+            Property::data(Value::Function(self.clone()), false, true, true),
+        );
+        self.define_property(
+            "prototype".to_owned(),
+            Property::data(Value::Object(prototype), false, false, false),
+        );
     }
 
     pub(crate) fn new_native(
@@ -271,6 +296,7 @@ impl Function {
             is_strict: false,
             lexical_this: false,
             lexical_arguments: false,
+            is_class_constructor: false,
             bound: Some(Box::new(BoundFunction {
                 target,
                 this_value,
@@ -310,6 +336,7 @@ impl Function {
             is_strict: false,
             lexical_this: false,
             lexical_arguments: false,
+            is_class_constructor: false,
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
             property_order: Rc::new(RefCell::new(Vec::new())),
