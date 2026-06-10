@@ -44,6 +44,16 @@ impl Compiler {
                 });
                 Ok(())
             }
+            AssignmentTarget::ArrayPattern { .. } | AssignmentTarget::ObjectPattern { .. } => {
+                self.compile_expr(value)?;
+                let rhs_slot = self.temp_local("destructuring_rhs");
+                self.emit(Op::StoreLocal(rhs_slot));
+                self.emit(Op::LoadLocal(rhs_slot));
+                self.compile_assignment_pattern(target)?;
+                // The assignment expression evaluates to the right-hand value.
+                self.emit(Op::LoadLocal(rhs_slot));
+                Ok(())
+            }
         }
     }
 
@@ -223,7 +233,12 @@ impl Compiler {
         Ok(())
     }
 
-    fn emit_member_store(&mut self, object_slot: usize, key_slot: usize, value_slot: usize) {
+    pub(super) fn emit_member_store(
+        &mut self,
+        object_slot: usize,
+        key_slot: usize,
+        value_slot: usize,
+    ) {
         self.emit(Op::LoadLocal(object_slot));
         self.emit(Op::LoadLocal(key_slot));
         self.emit(Op::LoadLocal(value_slot));

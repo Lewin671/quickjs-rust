@@ -5,9 +5,9 @@ mod span;
 mod statement;
 
 pub use expression::{
-    ArrayElement, AssignmentOp, AssignmentTarget, BinaryOp, CallArgument, Expr, FunctionParams,
-    Literal, MemberProperty, ObjectProperty, ObjectPropertyKey, ObjectPropertyKind, UnaryOp,
-    UpdateOp,
+    ArrayElement, AssignmentOp, AssignmentTarget, AssignmentTargetElement,
+    AssignmentTargetProperty, BinaryOp, CallArgument, Expr, FunctionParams, Literal,
+    MemberProperty, ObjectProperty, ObjectPropertyKey, ObjectPropertyKind, UnaryOp, UpdateOp,
 };
 pub use span::Span;
 pub use statement::{

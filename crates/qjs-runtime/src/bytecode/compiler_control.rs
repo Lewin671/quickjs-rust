@@ -305,6 +305,13 @@ impl Compiler {
                 });
                 self.emit(Op::Pop);
             }
+            ForInLeft::Target(
+                target @ (AssignmentTarget::ArrayPattern { .. }
+                | AssignmentTarget::ObjectPattern { .. }),
+            ) => {
+                self.emit(Op::LoadLocal(key_slot));
+                self.compile_assignment_pattern(target)?;
+            }
         }
         Ok(())
     }
