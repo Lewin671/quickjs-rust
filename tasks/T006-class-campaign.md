@@ -30,9 +30,12 @@ verification command is green and `./scripts/check.sh` passes.
       method names.
 - [ ] S4 Parser + runtime: `extends`, `super` calls and `super` property
       access, derived-constructor `this` rules.
-- [ ] S5 Harness: narrow the class pre-filter in
+- [x] S5 Harness: narrow the class pre-filter in
       `scripts/test262-baseline.sh` so runnable class cases execute; record a
-      fresh burndown entry from the next full scan.
+      fresh burndown entry from the next full scan. (Filter removed before S4:
+      a full local run of `test/language/statements/class` showed 1,046 of
+      4,367 cases already pass with S1–S3, so keeping the filter was hiding
+      real coverage. Burndown entry comes from the next CI full scan.)
 - [ ] S6 Follow-up surface, one slice each as needed: class fields, private
       names (`#x`), static blocks. Re-cluster remaining class gaps first.
 

@@ -213,8 +213,9 @@ bounded sample, a full scan with `--all`, a shard with `--shard I/N`, and a
 quickjs-rust/QuickJS-NG comparison with `--engine both`. In that mode QuickJS-NG
 config skips are applied as the shared baseline. The quickjs-rust side reports
 not-run cases only for structural harness limits such as modules, async tests,
-unsupported harness includes, intl402, fixtures, and known unsupported source
-syntax. Test262
+unsupported harness includes, intl402, and fixtures; there is no source-syntax
+pre-filter anymore (the former for-of destructuring and class filters were
+lifted once those features landed). Test262
 `features` metadata is parsed for QuickJS-NG config alignment, but it does not
 preemptively skip quickjs-rust cases; runnable cases produce normal pass, fail,
 or timeout signal. Negative Test262 cases are runnable by the quickjs-rust

@@ -197,18 +197,9 @@ skip_reason() {
     echo "async"
   elif [ -n "$includes" ] && ! rust_includes_supported "$includes"; then
     echo "includes"
-  elif ! rust_source_syntax_supported "$rel"; then
-    echo "syntax"
   else
     echo ""
   fi
-}
-rust_source_syntax_supported() {
-  # Some upstream files use syntax the Rust parser does not support yet.
-  case "$1" in
-    test/built-ins/BigInt/is-a-constructor.js) return 0 ;;
-  esac
-  ! grep -Eq '(^|[^[:alnum:]_$])class[[:space:]]' "$TEST262_DIR/$1"
 }
 rust_includes_supported() {
   local include
