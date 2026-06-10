@@ -4,8 +4,10 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 mod compiler;
 mod compiler_assign;
+mod compiler_binding;
 mod compiler_control;
 mod compiler_expr;
+mod compiler_pattern;
 mod compiler_try;
 mod compiler_values;
 mod ir;
@@ -14,6 +16,7 @@ mod vm;
 mod vm_bindings;
 mod vm_call;
 mod vm_errors;
+mod vm_iter;
 mod vm_ops;
 mod vm_props;
 mod vm_result;

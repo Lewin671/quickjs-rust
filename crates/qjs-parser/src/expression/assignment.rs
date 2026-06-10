@@ -9,6 +9,9 @@ impl Parser {
         if let Some(arrow) = self.arrow_function()? {
             return Ok(arrow);
         }
+        if let Some(destructuring) = self.try_destructuring_assignment()? {
+            return Ok(destructuring);
+        }
 
         let expr = self.conditional()?;
         let op = if self.match_kind(&TokenKind::Equal) {

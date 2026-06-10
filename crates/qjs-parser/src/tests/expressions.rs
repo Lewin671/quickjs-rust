@@ -276,3 +276,72 @@ fn parses_unary_before_multiplicative() {
     };
     assert!(matches!(object.as_ref(), Expr::This { .. }));
 }
+
+#[test]
+fn parses_destructuring_assignment_patterns() {
+    let script = parse_script("[a, , b = 1, ...rest] = list;").expect("source should parse");
+    let [Stmt::Expr(Expr::Assignment { target, op, .. })] = script.body.as_slice() else {
+        panic!("expected one assignment expression statement");
+    };
+    assert_eq!(*op, AssignmentOp::Assign);
+    let AssignmentTarget::ArrayPattern { elements, rest, .. } = target else {
+        panic!("expected array assignment pattern");
+    };
+    assert_eq!(elements.len(), 3);
+    assert!(elements[1].is_none(), "expected elision element");
+    let element = elements[2].as_ref().expect("expected defaulted element");
+    assert!(element.default.is_some(), "expected default initializer");
+    assert!(
+        matches!(
+            rest.as_deref(),
+            Some(AssignmentTarget::Identifier { name, .. }) if name == "rest"
+        ),
+        "expected identifier rest target"
+    );
+
+    let script = parse_script("({key, renamed: out.field, nested: {inner}, ...rest} = source);")
+        .expect("source should parse");
+    let [Stmt::Expr(Expr::Assignment { target, .. })] = script.body.as_slice() else {
+        panic!("expected one assignment expression statement");
+    };
+    let AssignmentTarget::ObjectPattern {
+        properties, rest, ..
+    } = target
+    else {
+        panic!("expected object assignment pattern");
+    };
+    assert_eq!(properties.len(), 3);
+    assert!(matches!(
+        &properties[0].target,
+        AssignmentTarget::Identifier { name, .. } if name == "key"
+    ));
+    assert!(matches!(
+        &properties[1].target,
+        AssignmentTarget::Member { .. }
+    ));
+    assert!(matches!(
+        &properties[2].target,
+        AssignmentTarget::ObjectPattern { .. }
+    ));
+    assert!(rest.is_some(), "expected object rest target");
+}
+
+#[test]
+fn keeps_member_expressions_on_literal_starts_out_of_patterns() {
+    let script = parse_script("[ {}[key] ] = value;").expect("source should parse");
+    let [Stmt::Expr(Expr::Assignment { target, .. })] = script.body.as_slice() else {
+        panic!("expected one assignment expression statement");
+    };
+    let AssignmentTarget::ArrayPattern { elements, .. } = target else {
+        panic!("expected array assignment pattern");
+    };
+    let element = elements[0].as_ref().expect("expected member element");
+    assert!(matches!(element.target, AssignmentTarget::Member { .. }));
+}
+
+#[test]
+fn rejects_invalid_destructuring_assignments() {
+    assert!(parse_script("[a, ...rest = 1] = list;").is_err());
+    assert!(parse_script("[1] = list;").is_err());
+    assert!(parse_script("({a} = source) , [b] += list;").is_err());
+}

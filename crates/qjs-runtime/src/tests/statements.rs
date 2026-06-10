@@ -54,6 +54,95 @@ fn evaluates_variable_declaration_rest_destructuring() {
 }
 
 #[test]
+fn array_destructuring_steps_iterator_lazily_and_closes_when_unfinished() {
+    assert_eq!(
+        eval(
+            "var steps = []; var iterable = {};
+             iterable[Symbol.iterator] = function() {
+               var n = 0;
+               return {
+                 next: function() { n += 1; steps.push('next' + n); return { value: n, done: n > 3 }; },
+                 return: function() { steps.push('return'); return {}; }
+               };
+             };
+             var [first, , third] = iterable;
+             steps.join(',') + '|' + first + '|' + third;"
+        ),
+        Ok(Value::String("next1,next2,next3,return|1|3".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var steps = []; var iterable = {};
+             iterable[Symbol.iterator] = function() {
+               var n = 0;
+               return {
+                 next: function() { n += 1; steps.push('next' + n); return { value: n, done: n > 2 }; },
+                 return: function() { steps.push('return'); return {}; }
+               };
+             };
+             var [head, ...tail] = iterable;
+             steps.join(',') + '|' + head + '|' + tail.join('+');"
+        ),
+        Ok(Value::String("next1,next2,next3|1|2".to_owned()))
+    );
+}
+
+#[test]
+fn array_destructuring_step_errors_skip_iterator_close() {
+    assert_eq!(
+        eval(
+            "var returned = false; var iterable = {};
+             iterable[Symbol.iterator] = function() {
+               var n = 0;
+               return {
+                 next: function() { n += 1; if (n === 2) { throw new Error('boom'); } return { value: n, done: false }; },
+                 return: function() { returned = true; return {}; }
+               };
+             };
+             var caught = '';
+             try { var [a, b] = iterable; } catch (error) { caught = error.message; }
+             caught + ':' + returned;"
+        ),
+        Ok(Value::String("boom:false".to_owned()))
+    );
+}
+
+#[test]
+fn array_destructuring_closes_iterator_on_abrupt_binding_completion() {
+    assert_eq!(
+        eval(
+            "var returned = false; var iterable = {};
+             iterable[Symbol.iterator] = function() {
+               return {
+                 next: function() { return { value: undefined, done: false }; },
+                 return: function() { returned = true; return {}; }
+               };
+             };
+             var caught = '';
+             try { var [a = (function() { throw new Error('dflt'); })()] = iterable; }
+             catch (error) { caught = error.message; }
+             caught + ':' + returned;"
+        ),
+        Ok(Value::String("dflt:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var returned = false; var iterable = {};
+             iterable[Symbol.iterator] = function() {
+               return {
+                 next: function() { return { value: null, done: false }; },
+                 return: function() { returned = true; return {}; }
+               };
+             };
+             var caught = false;
+             try { var [{nested}] = iterable; } catch (error) { caught = true; }
+             caught + ':' + returned;"
+        ),
+        Ok(Value::String("true:true".to_owned()))
+    );
+}
+
+#[test]
 fn destructuring_defaults_do_not_treat_html_dda_as_undefined() {
     assert_eq!(
         eval(
@@ -365,5 +454,138 @@ fn evaluates_debugger_statement_as_noop() {
     assert_eq!(
         eval("let x = 0; if (true) debugger; x = 2; x;"),
         Ok(Value::Number(2.0))
+    );
+}
+
+#[test]
+fn evaluates_destructuring_loop_heads() {
+    assert_eq!(
+        eval(
+            "var out = []; for (const [a, b = 10] of [[1, 2], [3]]) { out.push(a + ':' + b); }
+             out.join(',');"
+        ),
+        Ok(Value::String("1:2,3:10".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var out = []; for (var {x, y = 9} of [{x: 1}, {x: 2, y: 3}]) { out.push(x + ':' + y); }
+             out.join(',');"
+        ),
+        Ok(Value::String("1:9,2:3".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var a, b, out = []; for ([a, b] of [[1, 2], [3, 4]]) { out.push(a + b); } out.join(',');"
+        ),
+        Ok(Value::String("3,7".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var out = []; for (const [first, second] in {ab: 1}) { out.push(first + second); } out.join(',');"
+        ),
+        Ok(Value::String("ab".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var o = {}, out = []; for ({length: o.len} of ['x', 'xy']) { out.push(o.len); } out.join(',');"
+        ),
+        Ok(Value::String("1,2".to_owned()))
+    );
+}
+
+#[test]
+fn for_of_closes_iterator_on_abrupt_exits() {
+    let source_prefix = "
+        function makeIterable(log) {
+          var iterable = {};
+          iterable[Symbol.iterator] = function() {
+            var n = 0;
+            return {
+              next: function() { n += 1; log.push('next' + n); return { value: n, done: n > 5 }; },
+              return: function() { log.push('return'); return {}; }
+            };
+          };
+          return iterable;
+        }";
+    assert_eq!(
+        eval(&format!(
+            "{source_prefix}
+             var log = []; for (var v of makeIterable(log)) {{ if (v === 2) break; }} log.join(',');"
+        )),
+        Ok(Value::String("next1,next2,return".to_owned()))
+    );
+    assert_eq!(
+        eval(&format!(
+            "{source_prefix}
+             var log = [];
+             try {{ for (var v of makeIterable(log)) {{ if (v === 2) throw new Error('x'); }} }}
+             catch (error) {{}}
+             log.join(',');"
+        )),
+        Ok(Value::String("next1,next2,return".to_owned()))
+    );
+    assert_eq!(
+        eval(&format!(
+            "{source_prefix}
+             var log = [];
+             (function() {{ for (var v of makeIterable(log)) {{ if (v === 2) return; }} }})();
+             log.join(',');"
+        )),
+        Ok(Value::String("next1,next2,return".to_owned()))
+    );
+    assert_eq!(
+        eval(&format!(
+            "{source_prefix}
+             var log = [];
+             outer: for (var a of makeIterable(log)) {{
+               for (var b of makeIterable(log)) {{ break outer; }}
+             }}
+             log.join(',');"
+        )),
+        Ok(Value::String("next1,next1,return,return".to_owned()))
+    );
+    assert_eq!(
+        eval(&format!(
+            "{source_prefix}
+             var log = []; var sum = 0;
+             for (var v of makeIterable(log)) {{ if (v === 2) continue; sum += v; }}
+             sum + '|' + log.join(',');"
+        )),
+        Ok(Value::String(
+            "13|next1,next2,next3,next4,next5,next6".to_owned()
+        ))
+    );
+}
+
+#[test]
+fn evaluates_catch_parameter_patterns() {
+    assert_eq!(
+        eval(
+            "var out = '';
+             try { throw {code: 7, extra: 1}; }
+             catch ({code, missing = 'none', ...rest}) {
+               out = code + ':' + missing + ':' + Object.keys(rest).join('|');
+             }
+             out;"
+        ),
+        Ok(Value::String("7:none:extra".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var out = 0;
+             try { throw [1, [2, 3]]; }
+             catch ([a, [b, c = 9]]) { out = a + b + c; }
+             out;"
+        ),
+        Ok(Value::Number(6.0))
+    );
+    assert_eq!(
+        eval(
+            "var caught = '';
+             try { try { throw null; } catch ({a}) {} }
+             catch (error) { caught = 'rethrown'; }
+             caught;"
+        ),
+        Ok(Value::String("rethrown".to_owned()))
     );
 }

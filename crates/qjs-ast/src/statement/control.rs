@@ -1,6 +1,6 @@
 use crate::expression::{AssignmentTarget, Expr};
 use crate::span::Span;
-use crate::statement::{Stmt, VarDeclarator, VarKind};
+use crate::statement::{BindingPattern, Stmt, VarDeclarator, VarKind};
 
 /// A switch case or default clause.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -16,21 +16,12 @@ pub struct SwitchCase {
 /// A catch clause.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CatchClause {
-    /// Optional catch binding.
-    pub param: Option<CatchParam>,
+    /// Optional catch binding pattern.
+    pub param: Option<BindingPattern>,
     /// Catch block statements.
     pub body: Vec<Stmt>,
     /// Source span.
     pub span: Span,
-}
-
-/// A catch parameter binding.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum CatchParam {
-    /// Identifier binding.
-    Identifier(String),
-    /// Simple object binding pattern with shorthand identifier properties.
-    Object { names: Vec<String> },
 }
 
 /// A for statement initializer.
@@ -56,9 +47,9 @@ pub enum ForInLeft {
     VarDecl {
         /// Declaration kind.
         kind: VarKind,
-        /// Binding name.
-        name: String,
-        /// Optional Annex B initializer.
+        /// Binding pattern.
+        binding: BindingPattern,
+        /// Optional Annex B initializer (sloppy `for (var x = init in ...)`).
         init: Option<Expr>,
         /// Source span.
         span: Span,

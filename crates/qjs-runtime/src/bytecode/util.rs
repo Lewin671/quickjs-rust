@@ -69,6 +69,18 @@ pub(super) fn typeof_value(value: Value) -> String {
     .to_owned()
 }
 
+pub(super) fn is_object_value(value: &Value) -> bool {
+    matches!(
+        value,
+        Value::Array(_)
+            | Value::Function(_)
+            | Value::Map(_)
+            | Value::Object(_)
+            | Value::Proxy(_)
+            | Value::Set(_)
+    )
+}
+
 pub(super) fn stack_underflow() -> RuntimeError {
     RuntimeError {
         thrown: None,

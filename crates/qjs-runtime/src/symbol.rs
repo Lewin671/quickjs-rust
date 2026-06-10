@@ -9,7 +9,7 @@ const SYMBOL_DATA_PROPERTY: &str = "\0SymbolData";
 const SYMBOL_DESCRIPTION_PROPERTY: &str = "\0SymbolDescription";
 const SYMBOL_BOXED_PROPERTY: &str = "\0SymbolBoxed";
 const SYMBOL_WRAPPED_PROPERTY: &str = "\0SymbolWrapped";
-const SYMBOL_REGISTRY_BINDING: &str = "\0SymbolRegistry";
+pub(crate) const SYMBOL_REGISTRY_BINDING: &str = "\0SymbolRegistry";
 const WELL_KNOWN_SYMBOL_NAMES: &[&str] = &[
     "asyncDispose",
     "asyncIterator",

@@ -1,4 +1,4 @@
-use qjs_ast::{BinaryOp, BindingPattern, CatchParam, Expr, ForInLeft, ForInit, Stmt, VarKind};
+use qjs_ast::{BinaryOp, BindingPattern, Expr, ForInLeft, ForInit, Stmt, VarKind};
 
 use crate::parse_script;
 
@@ -138,7 +138,10 @@ fn parses_for_in_statement() {
     };
     assert!(matches!(
         left,
-        ForInLeft::VarDecl { name, .. } if name == "key"
+        ForInLeft::VarDecl {
+            binding: BindingPattern::Identifier { name, .. },
+            ..
+        } if name == "key"
     ));
     assert!(matches!(body.as_ref(), Stmt::Block { .. }));
 
@@ -156,7 +159,7 @@ fn parses_for_in_statement() {
     assert!(matches!(
         left,
         ForInLeft::VarDecl {
-            name,
+            binding: BindingPattern::Identifier { name, .. },
             init: Some(_),
             ..
         } if name == "key"
@@ -176,7 +179,7 @@ fn parses_for_of_statement() {
     assert!(matches!(
         left,
         ForInLeft::VarDecl {
-            name,
+            binding: BindingPattern::Identifier { name, .. },
             kind: VarKind::Const,
             ..
         } if name == "value"
@@ -198,7 +201,7 @@ fn parses_for_of_statement() {
     assert!(matches!(
         left,
         ForInLeft::VarDecl {
-            name,
+            binding: BindingPattern::Identifier { name, .. },
             kind: VarKind::Var,
             ..
         } if name == "let"
@@ -286,10 +289,10 @@ fn parses_try_catch_finally_statement() {
     };
     assert!(matches!(block.as_slice(), [Stmt::Throw { .. }]));
     let handler = handler.as_ref().expect("expected catch clause");
-    assert_eq!(
-        handler.param,
-        Some(CatchParam::Identifier("error".to_owned()))
-    );
+    assert!(matches!(
+        &handler.param,
+        Some(BindingPattern::Identifier { name, .. }) if name == "error"
+    ));
     assert_eq!(handler.body.len(), 1);
     assert!(matches!(
         finalizer.as_deref(),
@@ -317,11 +320,15 @@ fn parses_try_catch_finally_statement() {
     else {
         panic!("expected try statement with catch clause");
     };
+    let Some(BindingPattern::Object { properties, .. }) = &handler.param else {
+        panic!("expected object catch binding pattern");
+    };
     assert_eq!(
-        handler.param,
-        Some(CatchParam::Object {
-            names: vec!["error".to_owned(), "value".to_owned()]
-        })
+        properties
+            .iter()
+            .map(|property| property.key.as_str())
+            .collect::<Vec<_>>(),
+        ["error", "value"]
     );
 }
 
@@ -332,4 +339,62 @@ fn parses_debugger_statement() {
         script.body.as_slice(),
         [Stmt::Debugger { .. }, Stmt::Expr(_)]
     ));
+}
+
+#[test]
+fn parses_destructuring_loop_heads_and_catch_patterns() {
+    let script = parse_script("for (const [a, , b = 1] of pairs) a;").expect("source should parse");
+    let [Stmt::ForOf { left, .. }] = script.body.as_slice() else {
+        panic!("expected one for-of statement");
+    };
+    assert!(matches!(
+        left,
+        ForInLeft::VarDecl {
+            kind: VarKind::Const,
+            binding: BindingPattern::Array { .. },
+            init: None,
+            ..
+        }
+    ));
+
+    let script = parse_script("for (var {key, value} in store) key;").expect("source should parse");
+    let [Stmt::ForIn { left, .. }] = script.body.as_slice() else {
+        panic!("expected one for-in statement");
+    };
+    assert!(matches!(
+        left,
+        ForInLeft::VarDecl {
+            kind: VarKind::Var,
+            binding: BindingPattern::Object { .. },
+            ..
+        }
+    ));
+
+    let script = parse_script("for ([a, b] of pairs) a;").expect("source should parse");
+    let [Stmt::ForOf { left, .. }] = script.body.as_slice() else {
+        panic!("expected one for-of statement");
+    };
+    assert!(matches!(
+        left,
+        ForInLeft::Target(qjs_ast::AssignmentTarget::ArrayPattern { .. })
+    ));
+
+    let script = parse_script("for ({a} in keys) a;").expect("source should parse");
+    let [Stmt::ForIn { left, .. }] = script.body.as_slice() else {
+        panic!("expected one for-in statement");
+    };
+    assert!(matches!(
+        left,
+        ForInLeft::Target(qjs_ast::AssignmentTarget::ObjectPattern { .. })
+    ));
+
+    let script = parse_script("try {} catch ([a, {b = 1}]) { a; }").expect("source should parse");
+    let [Stmt::Try { handler, .. }] = script.body.as_slice() else {
+        panic!("expected one try statement");
+    };
+    let handler = handler.as_ref().expect("expected catch clause");
+    assert!(matches!(handler.param, Some(BindingPattern::Array { .. })));
+
+    // Pattern heads without `of`/`in` still parse as ordinary for loops.
+    parse_script("for (let [a] = [1]; a < 2; a += 1) a;").expect("source should parse");
 }

@@ -259,3 +259,18 @@ fn exposes_builtin_iterator_symbol_properties() {
         Ok(Value::Boolean(true))
     );
 }
+
+#[test]
+fn registered_symbol_checks_work_inside_function_frames() {
+    assert_eq!(
+        eval(
+            "var original = WeakMap.prototype.set;
+             var wrapped = function(map, key) {
+               try { original.call(map, key, 1); return 'no-throw'; }
+               catch (error) { return 'threw:' + (error.constructor === TypeError); }
+             };
+             wrapped(new WeakMap(), Symbol.for('registered'));"
+        ),
+        Ok(Value::String("threw:true".to_owned()))
+    );
+}

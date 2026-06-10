@@ -422,3 +422,76 @@ fn evaluates_in_operator() {
     );
     assert!(eval("'a' in 1;").is_err());
 }
+
+#[test]
+fn evaluates_destructuring_assignment_expressions() {
+    assert_eq!(
+        eval("var a = 1, b = 2; [a, b] = [b, a]; a + ':' + b;"),
+        Ok(Value::String("2:1".to_owned()))
+    );
+    assert_eq!(eval("var y; ({y = 9} = {}); y;"), Ok(Value::Number(9.0)));
+    assert_eq!(
+        eval(
+            "var out = {}; var y, rest; ({x: out.first, y, ...rest} = {x: 1, y: 2, z: 3});
+             out.first + ':' + y + ':' + Object.keys(rest).join('|');"
+        ),
+        Ok(Value::String("1:2:z".to_owned()))
+    );
+    assert_eq!(
+        eval("var x, y; [[x], {p: y = 7}] = [[5], {}]; x + y;"),
+        Ok(Value::Number(12.0))
+    );
+    assert_eq!(
+        eval(
+            "var source = {p: 42}; var p; var result = ({p} = source); (result === source) + ':' + p;"
+        ),
+        Ok(Value::String("true:42".to_owned()))
+    );
+}
+
+#[test]
+fn destructuring_assignment_evaluates_member_targets_before_value_reads() {
+    assert_eq!(
+        eval(
+            "var order = []; var out = {};
+             var target = function() { order.push('lref'); return out; };
+             var source = {};
+             Object.defineProperty(source, 'a', { get: function() { order.push('get'); return 1; } });
+             ({a: target().x} = source);
+             order.join(',') + '|' + out.x;"
+        ),
+        Ok(Value::String("lref,get|1".to_owned()))
+    );
+}
+
+#[test]
+fn destructuring_assignment_closes_iterators() {
+    assert_eq!(
+        eval(
+            "var returned = false; var iterable = {};
+             iterable[Symbol.iterator] = function() {
+               return {
+                 next: function() { return { value: 1, done: false }; },
+                 return: function() { returned = true; return {}; }
+               };
+             };
+             var a; [a] = iterable; returned + ':' + a;"
+        ),
+        Ok(Value::String("true:1".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var nextCount = 0; var returnCount = 0; var iterable = {};
+             var iterator = {
+               next: function() { nextCount += 1; return { done: true }; },
+               return: function() { returnCount += 1; return {}; }
+             };
+             iterable[Symbol.iterator] = function() { return iterator; };
+             var thrower = function() { throw new Error('key'); };
+             var caught = false;
+             try { 0, [ ({})[thrower()] ] = iterable; } catch (error) { caught = true; }
+             caught + ':' + nextCount + ':' + returnCount;"
+        ),
+        Ok(Value::String("true:0:1".to_owned()))
+    );
+}

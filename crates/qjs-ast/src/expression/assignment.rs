@@ -15,6 +15,48 @@ pub enum AssignmentTarget {
         /// Source span.
         span: Span,
     },
+    /// An array destructuring assignment pattern.
+    ArrayPattern {
+        /// Elements in source order. `None` represents an elision.
+        elements: Vec<Option<AssignmentTargetElement>>,
+        /// Optional trailing rest target.
+        rest: Option<Box<AssignmentTarget>>,
+        /// Source span.
+        span: Span,
+    },
+    /// An object destructuring assignment pattern.
+    ObjectPattern {
+        /// Properties in source order.
+        properties: Vec<AssignmentTargetProperty>,
+        /// Optional trailing rest target.
+        rest: Option<Box<AssignmentTarget>>,
+        /// Source span.
+        span: Span,
+    },
+}
+
+/// An array assignment pattern element with an optional default initializer.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AssignmentTargetElement {
+    /// Nested assignment target.
+    pub target: AssignmentTarget,
+    /// Optional default initializer.
+    pub default: Option<Expr>,
+    /// Source span.
+    pub span: Span,
+}
+
+/// An object assignment pattern property.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AssignmentTargetProperty {
+    /// Literal property key.
+    pub key: String,
+    /// Nested assignment target.
+    pub target: AssignmentTarget,
+    /// Optional default initializer.
+    pub default: Option<Expr>,
+    /// Source span.
+    pub span: Span,
 }
 
 impl AssignmentTarget {
@@ -22,7 +64,10 @@ impl AssignmentTarget {
     #[must_use]
     pub const fn span(&self) -> Span {
         match self {
-            Self::Identifier { span, .. } | Self::Member { span, .. } => *span,
+            Self::Identifier { span, .. }
+            | Self::Member { span, .. }
+            | Self::ArrayPattern { span, .. }
+            | Self::ObjectPattern { span, .. } => *span,
         }
     }
 }

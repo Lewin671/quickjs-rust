@@ -6,6 +6,7 @@ use crate::{ParseError, Parser};
 mod access;
 mod assignment;
 mod binary;
+mod pattern;
 mod primary;
 mod unary;
 

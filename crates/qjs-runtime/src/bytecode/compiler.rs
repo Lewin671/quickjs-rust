@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
 use qjs_ast::{
-    BinaryOp, BindingPattern, CatchParam, ForInLeft, ForInit, FunctionParams, Script, Stmt,
-    SwitchCase, VarKind,
+    BinaryOp, BindingPattern, ForInLeft, ForInit, FunctionParams, Script, Stmt, SwitchCase, VarKind,
 };
 
 use crate::{
@@ -33,6 +32,15 @@ pub(super) struct LoopContext {
     labels: Vec<String>,
     breaks: Vec<usize>,
     continues: Vec<usize>,
+    iterator: Option<LoopIterator>,
+}
+
+/// Live iterator state for a `for-of` loop that must be closed when an
+/// abrupt completion leaves the loop.
+#[derive(Clone, Copy)]
+pub(super) struct LoopIterator {
+    pub(super) iterator_slot: usize,
+    pub(super) done_slot: usize,
 }
 
 impl Default for Compiler {
@@ -210,12 +218,14 @@ impl Compiler {
                 }
                 Stmt::ForIn { left, body, .. } | Stmt::ForOf { left, body, .. } => {
                     if let ForInLeft::VarDecl {
-                        name,
+                        binding,
                         kind: VarKind::Var,
                         ..
                     } = left
                     {
-                        self.local_slot(name, true);
+                        for name in binding.names() {
+                            self.local_slot(&name, true);
+                        }
                     }
                     self.collect_hoisted_locals(std::slice::from_ref(body));
                 }
@@ -357,107 +367,6 @@ impl Compiler {
         }
     }
 
-    pub(super) fn compile_binding_initializer(
-        &mut self,
-        pattern: &BindingPattern,
-        kind: VarKind,
-    ) -> Result<(), RuntimeError> {
-        match pattern {
-            BindingPattern::Identifier { name, .. } => {
-                let slot = self.declare_var_kind_slot(name, kind);
-                self.emit_store_var_initializer(slot, name, kind);
-            }
-            BindingPattern::Array { elements, rest, .. } => {
-                self.emit(Op::IterableToList);
-                let source_slot = self.temp_local("array_binding_source");
-                self.emit(Op::StoreLocal(source_slot));
-                for (index, element) in elements.iter().enumerate() {
-                    let Some(element) = element else {
-                        continue;
-                    };
-                    self.emit(Op::LoadLocal(source_slot));
-                    let key = self.const_slot(Value::String(index.to_string()));
-                    self.emit(Op::LoadConst(key));
-                    self.emit(Op::GetProp);
-                    self.compile_binding_default(element.default.as_ref())?;
-                    self.compile_binding_initializer(&element.binding, kind)?;
-                }
-                if let Some(rest) = rest {
-                    self.emit(Op::LoadLocal(source_slot));
-                    self.emit(Op::ArrayTailFrom {
-                        start: elements.len(),
-                    });
-                    self.compile_binding_initializer(rest, kind)?;
-                }
-            }
-            BindingPattern::Object {
-                properties, rest, ..
-            } => {
-                self.emit(Op::RequireObjectCoercible);
-                let source_slot = self.temp_local("object_binding_source");
-                self.emit(Op::StoreLocal(source_slot));
-                for property in properties {
-                    self.emit(Op::LoadLocal(source_slot));
-                    let key = self.const_slot(Value::String(property.key.clone()));
-                    self.emit(Op::LoadConst(key));
-                    self.emit(Op::GetProp);
-                    self.compile_binding_default(property.default.as_ref())?;
-                    self.compile_binding_initializer(&property.binding, kind)?;
-                }
-                if let Some(rest) = rest {
-                    self.emit(Op::LoadLocal(source_slot));
-                    self.emit(Op::ObjectRestExcluding {
-                        excluded: properties
-                            .iter()
-                            .map(|property| property.key.clone())
-                            .collect(),
-                    });
-                    self.compile_binding_initializer(rest, kind)?;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    pub(super) fn compile_binding_uninitialized(
-        &mut self,
-        pattern: &BindingPattern,
-        kind: VarKind,
-    ) -> Result<(), RuntimeError> {
-        for name in pattern.names() {
-            let slot = self.declare_var_kind_slot(&name, kind);
-            self.emit_load_undefined();
-            self.emit_store_var_binding(slot, &name, kind);
-        }
-        Ok(())
-    }
-
-    fn compile_binding_default(
-        &mut self,
-        default: Option<&qjs_ast::Expr>,
-    ) -> Result<(), RuntimeError> {
-        let Some(default) = default else {
-            return Ok(());
-        };
-
-        let value_slot = self.temp_local("binding_value");
-        self.emit(Op::StoreLocal(value_slot));
-        self.emit(Op::LoadLocal(value_slot));
-        self.emit_load_undefined();
-        self.emit(Op::Binary(BinaryOp::StrictEq));
-        let keep_existing = self.emit(Op::JumpIfFalse(usize::MAX));
-        self.emit(Op::Pop);
-        self.compile_expr(default)?;
-        let done = self.emit(Op::Jump(usize::MAX));
-        let keep_existing_target = self.code.len();
-        self.patch_jump(keep_existing, keep_existing_target);
-        self.emit(Op::Pop);
-        self.emit(Op::LoadLocal(value_slot));
-        let done_target = self.code.len();
-        self.patch_jump(done, done_target);
-        Ok(())
-    }
-
     pub(super) fn resolve_local_slot(&self, name: &str) -> Option<usize> {
         self.lexical_scopes
             .iter()
@@ -569,9 +478,16 @@ impl Compiler {
             result_slot,
             allows_continue: true,
             labels,
-            breaks: Vec::new(),
-            continues: Vec::new(),
+            ..LoopContext::default()
         });
+    }
+
+    pub(super) fn push_loop_with_iterator(&mut self, result_slot: usize, iterator: LoopIterator) {
+        self.push_loop(result_slot);
+        self.loop_stack
+            .last_mut()
+            .expect("loop context should exist after push")
+            .iterator = Some(iterator);
     }
 
     pub(super) fn push_breakable(&mut self, result_slot: usize) {
@@ -580,8 +496,7 @@ impl Compiler {
             result_slot,
             allows_continue: false,
             labels,
-            breaks: Vec::new(),
-            continues: Vec::new(),
+            ..LoopContext::default()
         });
     }
 
@@ -610,6 +525,7 @@ impl Compiler {
             });
         };
         self.propagate_current_completion_to(index);
+        self.emit_loop_iterator_closes_above(index);
         let result_slot = self.loop_stack[index].result_slot;
         self.emit(Op::LoadLocal(result_slot));
         let jump = self.emit(Op::Jump(usize::MAX));
@@ -628,9 +544,38 @@ impl Compiler {
             });
         };
         self.propagate_current_completion_to(index);
+        self.emit_loop_iterator_closes_above(index);
         let jump = self.emit(Op::Jump(usize::MAX));
         self.loop_stack[index].continues.push(jump);
         Ok(())
+    }
+
+    /// Closes the live for-of iterators of every loop context nested inside
+    /// the target context, innermost first, exiting their protected regions.
+    /// Used when a labelled break or continue crosses for-of loops.
+    fn emit_loop_iterator_closes_above(&mut self, target_index: usize) {
+        let iterators: Vec<LoopIterator> = self.loop_stack[target_index + 1..]
+            .iter()
+            .filter_map(|context| context.iterator)
+            .collect();
+        for iterator in iterators.into_iter().rev() {
+            self.emit(Op::ExitTry);
+            self.emit_close_unless_done(iterator.iterator_slot, iterator.done_slot, false);
+        }
+    }
+
+    /// Closes every live for-of iterator before a `return` leaves the
+    /// function body, innermost first.
+    fn emit_loop_iterator_closes_for_return(&mut self) {
+        let iterators: Vec<LoopIterator> = self
+            .loop_stack
+            .iter()
+            .filter_map(|context| context.iterator)
+            .collect();
+        for iterator in iterators.into_iter().rev() {
+            self.emit(Op::ExitTry);
+            self.emit_close_unless_done(iterator.iterator_slot, iterator.done_slot, false);
+        }
     }
 
     fn break_context_index(&self, label: Option<&str>) -> Option<usize> {
@@ -761,6 +706,7 @@ impl Compiler {
                 } else {
                     self.emit_load_undefined();
                 }
+                self.emit_loop_iterator_closes_for_return();
                 self.emit(Op::Return);
                 Ok(())
             }
@@ -878,10 +824,10 @@ fn stmt_accepts_pending_label(stmt: &Stmt) -> bool {
     )
 }
 
-pub(super) fn catch_param_annex_b_blocked_names(param: Option<&CatchParam>) -> Vec<String> {
+pub(super) fn catch_param_annex_b_blocked_names(param: Option<&BindingPattern>) -> Vec<String> {
     match param {
-        Some(CatchParam::Object { names }) => names.clone(),
-        Some(CatchParam::Identifier(_)) | None => Vec::new(),
+        Some(BindingPattern::Identifier { .. }) | None => Vec::new(),
+        Some(pattern) => pattern.names(),
     }
 }
 
@@ -899,14 +845,14 @@ pub(super) fn for_init_lexical_names(init: &ForInit) -> Vec<String> {
     }
 }
 
-pub(super) fn for_in_left_lexical_name(left: &ForInLeft) -> Option<String> {
+pub(super) fn for_in_left_lexical_names(left: &ForInLeft) -> Vec<String> {
     match left {
         ForInLeft::VarDecl {
             kind: VarKind::Let | VarKind::Const,
-            name,
+            binding,
             ..
-        } => Some(name.clone()),
-        ForInLeft::VarDecl { .. } | ForInLeft::Target(_) => None,
+        } => binding.names(),
+        ForInLeft::VarDecl { .. } | ForInLeft::Target(_) => Vec::new(),
     }
 }
 
@@ -935,9 +881,7 @@ fn lexical_declared_names(body: &[Stmt]) -> Vec<String> {
                 init: Some(init), ..
             } => names.extend(for_init_lexical_names(init)),
             Stmt::ForIn { left, .. } | Stmt::ForOf { left, .. } => {
-                if let Some(name) = for_in_left_lexical_name(left) {
-                    names.push(name);
-                }
+                names.extend(for_in_left_lexical_names(left));
             }
             Stmt::Switch { cases, .. } => names.extend(switch_lexical_declared_names(cases)),
             _ => {}
