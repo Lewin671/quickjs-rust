@@ -18,7 +18,7 @@ not-run, plus the 277 async-iteration actionable gaps.
 
 ## Slices
 
-- [ ] S1 Runtime: promise job queue — enqueue promise reactions as jobs,
+- [x] S1 Runtime: promise job queue — enqueue promise reactions as jobs,
       drain the queue after script evaluation. Existing Promise surface keeps
       its semantics; ordering tests at the runtime layer.
 - [ ] S2 Parser: `async function` declarations/expressions and `await`

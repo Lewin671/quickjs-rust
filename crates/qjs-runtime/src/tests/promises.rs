@@ -1,7 +1,17 @@
-use crate::{Value, eval, promise};
+use crate::{Value, eval, eval_keep_jobs, promise};
 
 fn assert_eval(source: &str, expected: Value) {
     assert_eq!(eval(source), Ok(expected));
+}
+
+/// Asserts the resolved value of the script's final promise, which records
+/// microtask execution order into the accumulator it eventually resolves with.
+fn assert_job_order(source: &str, expected: &str) {
+    let promise = eval(source).unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&promise),
+        Some(("fulfilled".to_owned(), Value::String(expected.to_owned())))
+    );
 }
 
 #[test]
@@ -230,6 +240,81 @@ fn evaluates_promise_finally_shell() {
     );
     assert!(eval("Promise.prototype.finally.call({});").is_err());
     assert!(eval("Promise.prototype.finally.call(3);").is_err());
+}
+
+#[test]
+fn then_on_settled_promise_runs_asynchronously() {
+    // The reaction for an already-fulfilled promise must be queued, so the
+    // synchronous push runs first and the recorded order is "sync,then".
+    assert_job_order(
+        "var order = []; Promise.resolve(1).then(function() { order.push('then'); }); order.push('sync'); Promise.resolve().then(function() { return order.join(','); });",
+        "sync,then",
+    );
+}
+
+#[test]
+fn reactions_run_fifo_across_promises() {
+    // Two independent settled promises enqueue in source order; their
+    // reactions run FIFO, ahead of the later trailing reaction that reports.
+    assert_job_order(
+        "var order = []; Promise.resolve('a').then(function() { order.push('a'); }); Promise.resolve('b').then(function() { order.push('b'); }); Promise.resolve().then(function() {}).then(function() { return order.join(','); });",
+        "a,b",
+    );
+}
+
+#[test]
+fn chained_then_reactions_run_in_order() {
+    // A `.then` chain enqueues each link only after the previous link runs, so
+    // the chain interleaves one tick at a time with an independent chain.
+    assert_job_order(
+        "var order = []; Promise.resolve().then(function() { order.push('x1'); }).then(function() { order.push('x2'); }); Promise.resolve().then(function() { order.push('y1'); }).then(function() { order.push('y2'); }); Promise.resolve().then(function(){}).then(function(){}).then(function() { return order.join(','); });",
+        "x1,y1,x2,y2",
+    );
+}
+
+#[test]
+fn thenable_resolution_jobs_run_after_queued_reactions() {
+    // Assimilating a thenable enqueues a job to call its `then`; that job runs
+    // after reactions already queued ahead of it, then its resolve schedules
+    // the dependent reaction one tick later still.
+    assert_job_order(
+        "var order = []; Promise.resolve('plain').then(function() { order.push('plain'); }); var thenable = { then: function(resolve) { order.push('thenableThen'); resolve('t'); } }; Promise.resolve(thenable).then(function() { order.push('thenT'); }); Promise.resolve().then(function(){}).then(function(){}).then(function(){}).then(function() { return order.join(','); });",
+        "plain,thenableThen,thenT",
+    );
+}
+
+#[test]
+fn jobs_are_drained_between_evaluations() {
+    // Each `eval` drives its own realm and drains its queue before returning;
+    // no jobs leak into a later evaluation.
+    let first = eval(
+        "var order = []; Promise.resolve().then(function() { order.push('first'); }); Promise.resolve().then(function(){}).then(function() { return order.join(','); });",
+    )
+    .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&first),
+        Some(("fulfilled".to_owned(), Value::String("first".to_owned())))
+    );
+    let second = eval(
+        "var order = []; Promise.resolve().then(function() { order.push('second'); }); Promise.resolve().then(function(){}).then(function() { return order.join(','); });",
+    )
+    .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&second),
+        Some(("fulfilled".to_owned(), Value::String("second".to_owned())))
+    );
+}
+
+#[test]
+fn keep_jobs_defers_reactions_until_run_jobs() {
+    // The explicit-drain API leaves reactions pending until `run_jobs` is
+    // invoked, which the async test harness needs to control drain timing.
+    let mut outcome = eval_keep_jobs(
+        "var order = []; globalThis.order = order; Promise.resolve().then(function() { order.push('deferred'); }); order.join(',');",
+    )
+    .unwrap();
+    assert_eq!(outcome.value, Value::String(String::new()));
+    outcome.run_jobs().unwrap();
 }
 
 #[test]

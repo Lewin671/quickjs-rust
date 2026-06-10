@@ -70,7 +70,7 @@ pub(super) struct Vm<'a> {
 }
 
 impl<'a> Vm<'a> {
-    fn new(bytecode: &'a Bytecode) -> Self {
+    pub(super) fn new(bytecode: &'a Bytecode) -> Self {
         let mut globals = HashMap::new();
         let global_this = Value::Object(ObjectRef::new(HashMap::new()));
         globals.insert("this".to_owned(), global_this.clone());
@@ -118,7 +118,7 @@ impl<'a> Vm<'a> {
         }
     }
 
-    fn run(&mut self) -> Result<Value, RuntimeError> {
+    pub(super) fn run(&mut self) -> Result<Value, RuntimeError> {
         match self.run_completion()? {
             Completion::Return(value) => Ok(value),
             Completion::Yield(_) | Completion::YieldDelegate(_) => Err(RuntimeError {

@@ -61,7 +61,10 @@ pub(crate) use string::string_object_value;
 pub use value::Value;
 use value::{ArrayRef, MapRef, ObjectRef, Property, Prototype, SetRef};
 
-pub use bytecode::{Bytecode, compile_script, eval_bytecode, eval_bytecode_source};
+pub use bytecode::{
+    Bytecode, EvalOutcome, compile_script, eval_bytecode, eval_bytecode_keep_jobs,
+    eval_bytecode_source,
+};
 
 pub(crate) const GLOBAL_THIS_BINDING: &str = "\0global_this";
 /// Per-frame `[[HomeObject]]` for resolving `super.x`. Single-null prefixed so
@@ -195,6 +198,31 @@ pub fn eval_classified(source: &str) -> Result<Value, EvalError> {
         message: error.message,
     })?;
     eval_bytecode(&bytecode).map_err(|error| EvalError {
+        kind: EvalErrorKind::Runtime,
+        message: error.message,
+    })
+}
+
+/// Evaluates source text without draining the promise job queue.
+///
+/// Returns an [`EvalOutcome`] holding the script completion value and the
+/// realm's pending microtasks, so harnesses (for example the Test262 async
+/// `$DONE` channel) can evaluate additional code and then drain reactions
+/// explicitly via [`EvalOutcome::run_jobs`].
+///
+/// # Errors
+///
+/// Returns parser, bytecode compiler, or runtime failures with their stage.
+pub fn eval_keep_jobs(source: &str) -> Result<EvalOutcome, EvalError> {
+    let script = parse_script(source).map_err(|error| EvalError {
+        kind: EvalErrorKind::Parse,
+        message: error.message,
+    })?;
+    let bytecode = compile_script(&script).map_err(|error| EvalError {
+        kind: EvalErrorKind::Early,
+        message: error.message,
+    })?;
+    eval_bytecode_keep_jobs(&bytecode).map_err(|error| EvalError {
         kind: EvalErrorKind::Runtime,
         message: error.message,
     })
