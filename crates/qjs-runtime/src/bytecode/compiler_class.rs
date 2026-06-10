@@ -59,6 +59,7 @@ impl Compiler {
                         params,
                         body,
                         is_generator,
+                        is_async,
                         ..
                     } = &member.value
                     else {
@@ -68,6 +69,11 @@ impl Compiler {
                         });
                     };
                     let is_generator = *is_generator;
+                    // Async generator methods are a separate slice (T007 S5).
+                    if *is_async && is_generator {
+                        return Err(super::compiler_expr::async_not_supported());
+                    }
+                    let is_async = *is_async;
                     // Class bodies are strict mode code, so every method and the
                     // constructor compile with strict semantics regardless of
                     // context.
@@ -103,6 +109,7 @@ impl Compiler {
                             local_names,
                             bytecode: Rc::new(bytecode),
                             is_generator,
+                            is_async,
                         };
                         private_elements.push(match member.kind {
                             MethodKind::Getter => ClassPrivateElementDef::Getter {
@@ -134,6 +141,7 @@ impl Compiler {
                         local_names,
                         bytecode: Rc::new(bytecode),
                         is_generator,
+                        is_async,
                     }));
                 }
                 ClassElement::Field(field) => {

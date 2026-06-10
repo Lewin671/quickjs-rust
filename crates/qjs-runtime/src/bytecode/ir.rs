@@ -93,6 +93,7 @@ pub(super) enum Op {
         lexical_this: bool,
         lexical_arguments: bool,
         is_generator: bool,
+        is_async: bool,
     },
     /// Builds a class constructor function object, wires its `prototype` and
     /// `constructor` properties, and installs prototype methods. Pushes the
@@ -259,6 +260,8 @@ pub(super) struct ClassMethodDef {
     pub(super) bytecode: Rc<Bytecode>,
     /// Whether the method is a generator method (`*m() {}`).
     pub(super) is_generator: bool,
+    /// Whether the method is an async method (`async m() {}`).
+    pub(super) is_async: bool,
 }
 
 /// Compiled definition of a public class field. The initializer is compiled

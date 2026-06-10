@@ -82,6 +82,27 @@ pub(crate) fn call_function(
                 env,
             ));
         }
+        // Calling an async function does not run its body to completion: it
+        // captures the call frame, builds the promise it returns, and drives the
+        // body until the first `await` or completion. The returned promise is
+        // resolved/rejected with the body's eventual outcome (including
+        // parameter-binding errors, which reject rather than throw).
+        if function.is_async {
+            let function_env = function_env(
+                &function,
+                bytecode,
+                callee,
+                this_value,
+                &argument_values,
+                env,
+                is_construct,
+            );
+            return Ok(crate::async_function::call_async_function(
+                &function,
+                function_env.env,
+                env,
+            ));
+        }
         // A base-class constructor initializes its instance fields right after
         // the receiver is created, before the constructor body runs. A derived
         // constructor defers this until `super(...)` binds `this`.

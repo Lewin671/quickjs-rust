@@ -1,18 +1,13 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use qjs_ast::ObjectPropertyKind;
-
 use crate::{
-    ArrayRef, Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, Property, PropertyKey,
-    RUNTIME_INTRINSIC_NAMES, RuntimeError, Value,
-    array::{array_like_values_with_env, iterable_values_with_env},
-    call_function, construct_function,
-    function::CompiledUserFunction,
-    initialize_builtins, is_truthy, object, object_prototype, promise, symbol,
+    Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, PropertyKey, RUNTIME_INTRINSIC_NAMES,
+    RuntimeError, Value, array::array_like_values_with_env, call_function, construct_function,
+    function::CompiledUserFunction, initialize_builtins, is_truthy, promise, symbol,
     to_js_string_with_env, to_property_key_value,
 };
 
-use super::ir::{ArrayElementKind, Bytecode, Op};
+use super::ir::{Bytecode, Op};
 use super::util::{stack_underflow, typeof_value};
 use super::vm_call::{insert_scope_call_bindings, user_bytecode_function};
 use super::vm_iter::DelegateStep;
@@ -248,6 +243,7 @@ impl<'a> Vm<'a> {
                     lexical_this,
                     lexical_arguments,
                     is_generator,
+                    is_async,
                 } => {
                     let env = self.function_capture_env(&bytecode, &local_names);
                     self.refresh_captured_env(&env);
@@ -262,6 +258,7 @@ impl<'a> Vm<'a> {
                         lexical_this,
                         lexical_arguments,
                         is_generator,
+                        is_async,
                         is_class_constructor: false,
                         is_derived_constructor: false,
                         home_object: None,
@@ -270,6 +267,8 @@ impl<'a> Vm<'a> {
                     });
                     if is_generator {
                         self.wire_generator_function_intrinsics(&function);
+                    } else if is_async {
+                        self.wire_async_function_intrinsics(&function);
                     }
                     self.stack.push(Value::Function(function));
                 }
@@ -469,101 +468,6 @@ impl<'a> Vm<'a> {
             .local_slot(name)
             .and_then(|index| self.locals.get(index))
             .and_then(Option::as_ref)
-    }
-
-    fn new_array(&mut self, elements: &[ArrayElementKind]) -> Result<(), RuntimeError> {
-        let value_count = elements
-            .iter()
-            .filter(|element| !matches!(element, ArrayElementKind::Elision))
-            .count();
-        let mut element_values = Vec::with_capacity(value_count);
-        for _ in 0..value_count {
-            element_values.push(self.pop()?);
-        }
-        element_values.reverse();
-
-        let mut values = Vec::new();
-        let mut holes = Vec::new();
-        let mut next_value = element_values.into_iter();
-        for element in elements {
-            match element {
-                ArrayElementKind::Expr => {
-                    values.push(next_value.next().ok_or_else(stack_underflow)?);
-                }
-                ArrayElementKind::Elision => {
-                    holes.push(values.len());
-                    values.push(Value::Undefined);
-                }
-                ArrayElementKind::Spread => {
-                    let value = next_value.next().ok_or_else(stack_underflow)?;
-                    let mut env = self.current_env();
-                    let spread_values = iterable_values_with_env(value, "array spread", &mut env)?;
-                    self.apply_env(env);
-                    values.extend(spread_values);
-                }
-            }
-        }
-        self.stack
-            .push(Value::Array(ArrayRef::new_sparse(values, holes)));
-        Ok(())
-    }
-
-    fn new_template_object(&mut self, cooked: &[String], raw: &[String]) {
-        let cooked_values = cooked
-            .iter()
-            .cloned()
-            .map(Value::String)
-            .collect::<Vec<_>>();
-        let raw_values = raw.iter().cloned().map(Value::String).collect::<Vec<_>>();
-        let cooked_array = ArrayRef::new(cooked_values);
-        let raw_array = ArrayRef::new(raw_values);
-        raw_array.freeze();
-        cooked_array.define_property(
-            "raw".to_owned(),
-            Property::fixed_non_enumerable(Value::Array(raw_array)),
-        );
-        cooked_array.freeze();
-        self.stack.push(Value::Array(cooked_array));
-    }
-
-    fn new_object(&mut self, kinds: &[ObjectPropertyKind]) -> Result<(), RuntimeError> {
-        let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(&self.globals));
-        let mut entries = Vec::with_capacity(kinds.len());
-        for kind in kinds.iter().rev() {
-            let value = self.pop()?;
-            let key = to_property_key_value(self.pop()?, &mut self.globals)?;
-            let descriptor = match kind {
-                ObjectPropertyKind::Data => Property::enumerable(value),
-                ObjectPropertyKind::Getter => Property::accessor(Some(value), None, true, true),
-                ObjectPropertyKind::Setter => Property::accessor(None, Some(value), true, true),
-            };
-            entries.push((key, descriptor));
-        }
-        for (key, mut descriptor) in entries.into_iter().rev() {
-            if descriptor.is_accessor()
-                && let Some(existing) = match &key {
-                    crate::PropertyKey::String(key) => object.own_property(key),
-                    crate::PropertyKey::Symbol(symbol) => object.own_symbol_property(symbol),
-                }
-                && existing.is_accessor()
-            {
-                descriptor.get = descriptor.get.or(existing.get);
-                descriptor.set = descriptor.set.or(existing.set);
-            }
-            let success = object::define_property_on_value_key(
-                Value::Object(object.clone()),
-                key,
-                descriptor,
-            )?;
-            if !success {
-                return Err(RuntimeError {
-                    thrown: None,
-                    message: "object literal property definition failed".to_owned(),
-                });
-            }
-        }
-        self.stack.push(Value::Object(object));
-        Ok(())
     }
 
     fn get_prop(&mut self) -> Result<(), RuntimeError> {

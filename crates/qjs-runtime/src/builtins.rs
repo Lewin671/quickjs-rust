@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use crate::{
-    Value, array, array_buffer, bigint, boolean, date, error, generator, global, json, map, math,
-    number, object, promise, proxy, reflect, regexp, set, string, symbol, typed_array, weak_map,
-    weak_set,
+    Value, array, array_buffer, async_function, bigint, boolean, date, error, generator, global,
+    json, map, math, number, object, promise, proxy, reflect, regexp, set, string, symbol,
+    typed_array, weak_map, weak_set,
 };
 
 pub(crate) fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
@@ -37,5 +37,6 @@ pub(crate) fn initialize_builtins(env: &mut HashMap<String, Value>, global_this:
     math::install_math(env, global_this, object_prototype.clone());
     reflect::install_reflect(env, global_this, object_prototype.clone());
     array::install_array(env, global_this, object_prototype.clone());
+    async_function::install_async_function(env, global_this, object_prototype.clone());
     generator::install_generator(env, global_this, object_prototype);
 }

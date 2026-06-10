@@ -367,6 +367,108 @@ pub(crate) fn is_promise_object(object: &ObjectRef) -> bool {
     object.own_property(PROMISE_STATE).is_some()
 }
 
+/// Creates a fresh pending promise (a "promise capability" in spec terms) whose
+/// `[[Prototype]]` is `%Promise.prototype%`. Used by the async-function driver
+/// for the promise it returns to the caller.
+pub(crate) fn new_pending_promise(env: &HashMap<String, Value>) -> ObjectRef {
+    let promise = ObjectRef::with_prototype(HashMap::new(), promise_prototype_from_env(env));
+    initialize_promise(&promise);
+    promise
+}
+
+/// Resolves `%Promise.prototype%` from the realm: prefer the internal binding,
+/// otherwise read it off the global `Promise` constructor's `prototype`.
+fn promise_prototype_from_env(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+    if let Some(Value::Object(prototype)) = env.get(PROMISE_PROTOTYPE) {
+        return Some(prototype.clone());
+    }
+    match env.get("Promise") {
+        Some(Value::Function(promise)) => match promise.own_property("prototype") {
+            Some(property) => match property.value {
+                Value::Object(prototype) => Some(prototype),
+                _ => None,
+            },
+            None => None,
+        },
+        _ => None,
+    }
+}
+
+/// Resolves a promise capability with `value` (running the
+/// thenable-unwrapping resolution algorithm). Used to settle an async
+/// function's returned promise with the body's return value.
+pub(crate) fn resolve_promise_capability(
+    promise: &ObjectRef,
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) {
+    resolve_promise(promise, value, env);
+}
+
+/// Rejects a promise capability with `reason`. Used to settle an async
+/// function's returned promise when its body throws.
+pub(crate) fn reject_promise_capability(
+    promise: &ObjectRef,
+    reason: Value,
+    env: &mut HashMap<String, Value>,
+) {
+    settle_promise(promise, PROMISE_REJECTED, reason, env);
+}
+
+/// Implements the `await` plumbing: resolves `value` to a promise via
+/// `PromiseResolve(%Promise%, value)`, then schedules `on_fulfilled` /
+/// `on_rejected` as promise reactions whose handlers resume the suspended async
+/// function through the job queue (spec 27.7.5.3 Await). The reactions feed a
+/// throwaway capability promise; only their side effect (resuming the async
+/// state) matters.
+pub(crate) fn perform_await(
+    value: Value,
+    on_fulfilled: Value,
+    on_rejected: Value,
+    env: &mut HashMap<String, Value>,
+) {
+    // PromiseResolve(%Promise%, value): reuse an existing native promise,
+    // otherwise wrap the value in a resolved promise.
+    let promise = if is_promise_value(&value) {
+        match value {
+            Value::Object(promise) => promise,
+            _ => unreachable!("is_promise_value guarantees an object"),
+        }
+    } else {
+        let promise = new_pending_promise(env);
+        resolve_promise(&promise, value, env);
+        promise
+    };
+
+    // The reactions need a result capability to satisfy the reaction-job
+    // contract; the async driver ignores its eventual settlement.
+    let throwaway = new_pending_promise(env);
+    let fulfill_reaction = promise_reaction(on_fulfilled, throwaway.clone(), true);
+    let reject_reaction = promise_reaction(on_rejected, throwaway, false);
+
+    match promise_state(&promise).as_deref() {
+        Some(PROMISE_PENDING) => {
+            add_promise_reaction(&promise, Value::Object(fulfill_reaction));
+            add_promise_reaction(&promise, Value::Object(reject_reaction));
+        }
+        Some(PROMISE_FULFILLED) => {
+            enqueue_promise_reaction_job(
+                env,
+                &fulfill_reaction,
+                promise_result(&promise).unwrap_or(Value::Undefined),
+            );
+        }
+        Some(PROMISE_REJECTED) => {
+            enqueue_promise_reaction_job(
+                env,
+                &reject_reaction,
+                promise_result(&promise).unwrap_or(Value::Undefined),
+            );
+        }
+        _ => {}
+    }
+}
+
 fn initialize_promise(object: &ObjectRef) {
     object.set_to_string_tag("Promise");
     if object.own_property(PROMISE_STATE).is_none() {

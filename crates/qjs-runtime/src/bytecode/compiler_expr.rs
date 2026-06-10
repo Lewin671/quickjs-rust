@@ -270,7 +270,9 @@ impl Compiler {
                 is_async,
                 ..
             } => {
-                if *is_async {
+                // Async generators are a separate slice (T007 S5); only plain
+                // async functions/arrows/methods evaluate here.
+                if *is_async && *is_generator {
                     return Err(async_not_supported());
                 }
                 let is_strict = self.strict || is_strict_function_body(body);
@@ -287,12 +289,13 @@ impl Compiler {
                     params: params.clone(),
                     local_names,
                     bytecode: Rc::new(bytecode),
-                    // A generator function is never constructable.
-                    constructable: *constructable && !*is_generator,
+                    // A generator or async function is never constructable.
+                    constructable: *constructable && !*is_generator && !*is_async,
                     is_strict,
                     lexical_this: *lexical_this,
                     lexical_arguments: *lexical_arguments,
                     is_generator: *is_generator,
+                    is_async: *is_async,
                 });
                 Ok(())
             }
@@ -346,7 +349,17 @@ impl Compiler {
                 self.emit(Op::Yield);
                 Ok(())
             }
-            Expr::Await { .. } => Err(async_not_supported()),
+            Expr::Await { argument, .. } => {
+                // `await expr` suspends the async function body. It reuses the
+                // generator suspension point (`Op::Yield`): the async driver
+                // resolves the awaited value and resumes the body via the job
+                // queue with the fulfillment value or an injected throw. Async
+                // functions contain no `yield`, so the suspension is
+                // unambiguous within an async body.
+                self.compile_expr(argument)?;
+                self.emit(Op::Yield);
+                Ok(())
+            }
             Expr::Super { span } => Err(RuntimeError {
                 thrown: None,
                 message: format!(

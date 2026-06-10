@@ -293,7 +293,8 @@ impl Compiler {
         else {
             return Err(unsupported_stmt(stmt));
         };
-        if *is_async {
+        // Async generators are a separate slice (T007 S5).
+        if *is_async && *is_generator {
             return Err(super::compiler_expr::async_not_supported());
         }
         let blocked_arguments = self.annex_b_arguments_function_name_blocked(name);
@@ -314,12 +315,13 @@ impl Compiler {
             params: params.clone(),
             local_names,
             bytecode: Rc::new(bytecode),
-            // A generator function is never constructable.
-            constructable: !*is_generator,
+            // A generator or async function is never constructable.
+            constructable: !*is_generator && !*is_async,
             is_strict,
             lexical_this: false,
             lexical_arguments: false,
             is_generator: *is_generator,
+            is_async: *is_async,
         });
         if blocked_arguments {
             let slot = self.declare_lexical_slot(name, true);

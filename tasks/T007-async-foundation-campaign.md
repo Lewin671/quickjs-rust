@@ -24,8 +24,10 @@ not-run, plus the 277 async-iteration actionable gaps.
 - [x] S2 Parser: `async function` declarations/expressions and `await`
       expressions, including arrow forms. Parser-only; spans and focused
       tests.
-- [ ] S3 Runtime: evaluate async functions — suspend/resume on `await`,
-      return promises, propagate rejections.
+- [x] S3 Runtime: evaluate async functions — suspend/resume on `await`,
+      return promises, propagate rejections. Plain async functions, methods,
+      and arrows reuse the generator suspension machinery; async generators and
+      `for await ... of` stay structurally rejected (S5).
 - [ ] S4 Harness: support the async test channel — run `doneprintHandle.js`
       includes, treat `$DONE`-reported success/failure as the case result,
       drain jobs before judging. Narrow the async skip in

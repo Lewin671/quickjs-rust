@@ -21,6 +21,7 @@ mod vm_errors;
 mod vm_generator;
 mod vm_iter;
 mod vm_jobs;
+mod vm_literals;
 mod vm_ops;
 mod vm_private;
 mod vm_props;

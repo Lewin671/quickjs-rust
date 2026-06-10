@@ -198,6 +198,12 @@ pub(crate) fn call_native_function(
         return Ok(value);
     }
 
+    if let Some(value) =
+        crate::async_function::call_async_await_native(function, native, &argument_values, env)?
+    {
+        return Ok(value);
+    }
+
     core::call_core_native(
         function,
         native,

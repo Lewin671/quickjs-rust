@@ -165,12 +165,18 @@ impl Vm<'_> {
             lexical_this: false,
             lexical_arguments: false,
             is_generator: def.is_generator,
+            is_async: def.is_async,
             is_class_constructor: false,
             is_derived_constructor: false,
             home_object: Some(home_object),
             super_constructor: None,
             captured_env: Rc::new(RefCell::new(method_env)),
         });
+        if def.is_generator {
+            self.wire_generator_function_intrinsics(&function);
+        } else if def.is_async {
+            self.wire_async_function_intrinsics(&function);
+        }
         Value::Function(function)
     }
 
@@ -203,6 +209,7 @@ impl Vm<'_> {
             lexical_this: false,
             lexical_arguments: false,
             is_generator: false,
+            is_async: false,
             is_class_constructor: false,
             is_derived_constructor: false,
             home_object: Some(home_object),

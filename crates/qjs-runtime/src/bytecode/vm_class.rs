@@ -72,6 +72,7 @@ impl Vm<'_> {
             lexical_this: false,
             lexical_arguments: false,
             is_generator: false,
+            is_async: false,
             is_class_constructor: true,
             is_derived_constructor: has_heritage,
             home_object: None,
@@ -194,12 +195,18 @@ impl Vm<'_> {
             lexical_this: false,
             lexical_arguments: false,
             is_generator: method.is_generator,
+            is_async: method.is_async,
             is_class_constructor: false,
             is_derived_constructor: false,
             home_object: Some(home_object.clone()),
             super_constructor: None,
             captured_env: Rc::new(RefCell::new(method_env)),
         });
+        if method.is_generator {
+            self.wire_generator_function_intrinsics(&method_function);
+        } else if method.is_async {
+            self.wire_async_function_intrinsics(&method_function);
+        }
         let function_value = Value::Function(method_function);
 
         // Static members live on the constructor; instance members on the
@@ -265,6 +272,7 @@ impl Vm<'_> {
             lexical_this: false,
             lexical_arguments: false,
             is_generator: false,
+            is_async: false,
             is_class_constructor: false,
             is_derived_constructor: false,
             home_object: Some(home_object),
@@ -429,6 +437,13 @@ impl Vm<'_> {
                 Property::data(Value::Object(prototype), false, true, false),
             );
         }
+    }
+
+    /// Wires a freshly created async function into the async intrinsic chain:
+    /// its `[[Prototype]]` becomes `%AsyncFunction.prototype%`. Async functions
+    /// are non-constructable and carry no own `prototype` property.
+    pub(super) fn wire_async_function_intrinsics(&self, function: &Function) {
+        crate::async_function::wire_async_function_intrinsics(function, &self.globals);
     }
 }
 

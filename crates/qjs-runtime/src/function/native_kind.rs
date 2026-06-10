@@ -146,6 +146,12 @@ pub(crate) enum NativeFunction {
     GeneratorPrototypeNext,
     GeneratorPrototypeReturn,
     GeneratorPrototypeThrow,
+    /// Resumes a suspended async function with the fulfilled value of the
+    /// awaited promise (`await` onFulfilled reaction).
+    AsyncFunctionAwaitFulfilled,
+    /// Resumes a suspended async function with a throw completion carrying the
+    /// rejection reason of the awaited promise (`await` onRejected reaction).
+    AsyncFunctionAwaitRejected,
     GlobalIsFinite,
     GlobalIsNaN,
     Function,
