@@ -243,6 +243,19 @@ pub enum Expr {
         lexical_this: bool,
         /// Whether `arguments` resolves through the lexical environment.
         lexical_arguments: bool,
+        /// Whether this is a generator function (`function*`), whose body may
+        /// contain `yield` expressions and which produces a generator object
+        /// when called.
+        is_generator: bool,
+        /// Source span.
+        span: Span,
+    },
+    /// A `yield` or `yield*` expression, valid only inside a generator body.
+    Yield {
+        /// The yielded operand, if any. `yield` with no operand carries `None`.
+        argument: Option<Box<Expr>>,
+        /// Whether this is a delegating `yield*` expression.
+        delegate: bool,
         /// Source span.
         span: Span,
     },
@@ -322,6 +335,7 @@ impl Expr {
             | Self::Call { span, .. }
             | Self::New { span, .. }
             | Self::Function { span, .. }
+            | Self::Yield { span, .. }
             | Self::Class { span, .. }
             | Self::Member { span, .. }
             | Self::PrivateIn { span, .. }

@@ -1,4 +1,4 @@
-use qjs_ast::{ArrayElement, Expr, FunctionParams, Span, Stmt};
+use qjs_ast::{Expr, FunctionParams, Span, Stmt};
 use qjs_lexer::{Token, TokenKind};
 
 use crate::helpers::body_has_strict_directive;
@@ -12,6 +12,7 @@ impl Parser {
             .span
             .start;
         self.expect(&TokenKind::Function)?;
+        let is_generator = self.match_kind(&TokenKind::Star);
         let name_token = self.advance();
         let TokenKind::Identifier(name) = name_token.kind else {
             return Err(ParseError {
@@ -19,14 +20,20 @@ impl Parser {
                 span: name_token.span,
             });
         };
+        if is_generator && self.strict && name == "yield" {
+            return Err(ParseError {
+                message: "generator declaration may not be named `yield` in strict mode".to_owned(),
+                span: name_token.span,
+            });
+        }
 
-        let params = self.function_parameters()?;
+        let params = self.function_parameters_with_yield(is_generator)?;
         let body_start = self
             .peek()
             .expect("parser should always have eof token")
             .span
             .start;
-        let body = self.without_super_context(Self::block_body)?;
+        let body = self.function_body(is_generator)?;
         self.reject_invalid_function_parameters(&params, &body, body_start)?;
         let end = self
             .tokens
@@ -39,14 +46,13 @@ impl Parser {
             name,
             params,
             body,
+            is_generator,
             span: Span::new(start.min(body_start), end),
         })
     }
 
     pub(crate) fn function_expression(&mut self, start: usize) -> Result<Expr, ParseError> {
-        if self.match_kind(&TokenKind::Star) {
-            return self.generator_function_expression(start);
-        }
+        let is_generator = self.match_kind(&TokenKind::Star);
 
         let name = if let Some(Token {
             kind: TokenKind::Identifier(_),
@@ -57,18 +63,25 @@ impl Parser {
             let TokenKind::Identifier(name) = token.kind else {
                 unreachable!("peek checked identifier");
             };
+            if is_generator && self.strict && name == "yield" {
+                return Err(ParseError {
+                    message: "generator expression may not be named `yield` in strict mode"
+                        .to_owned(),
+                    span: token.span,
+                });
+            }
             Some(name)
         } else {
             None
         };
 
-        let params = self.function_parameters()?;
+        let params = self.function_parameters_with_yield(is_generator)?;
         let body_start = self
             .peek()
             .expect("parser should always have eof token")
             .span
             .start;
-        let body = self.without_super_context(Self::block_body)?;
+        let body = self.function_body(is_generator)?;
         self.reject_invalid_function_parameters(&params, &body, body_start)?;
         let end = self
             .tokens
@@ -80,118 +93,50 @@ impl Parser {
             name,
             params,
             body,
-            constructable: true,
+            constructable: !is_generator,
             lexical_this: false,
             lexical_arguments: false,
+            is_generator,
             span: Span::new(start, end),
         })
     }
 
-    fn generator_function_expression(&mut self, start: usize) -> Result<Expr, ParseError> {
-        let name = if let Some(Token {
-            kind: TokenKind::Identifier(_),
-            ..
-        }) = self.peek()
-        {
-            let token = self.advance();
-            let TokenKind::Identifier(name) = token.kind else {
-                unreachable!("peek checked identifier");
-            };
-            Some(name)
-        } else {
-            None
-        };
-
-        let params = self.function_parameters()?;
-        if !self.generator_body_is_yield_only() {
-            let body_start = self
-                .peek()
-                .expect("parser should always have eof token")
-                .span
-                .start;
-            let body = self.without_super_context(Self::block_body)?;
-            self.reject_invalid_function_parameters(&params, &body, body_start)?;
-            let end = self
-                .tokens
-                .get(self.cursor.saturating_sub(1))
-                .expect("parser should always have eof token")
-                .span
-                .end;
-            return Ok(Expr::Function {
-                name,
-                params,
-                body,
-                constructable: false,
-                lexical_this: false,
-                lexical_arguments: false,
-                span: Span::new(start.min(body_start), end),
-            });
-        }
-
-        let (elements, body_span) = self.generator_yield_body()?;
-        Ok(Expr::Function {
-            name,
-            params,
-            body: vec![Stmt::Return {
-                argument: Some(Expr::Array {
-                    elements,
-                    span: body_span,
-                }),
-                span: body_span,
-            }],
-            constructable: false,
-            lexical_this: false,
-            lexical_arguments: false,
-            span: Span::new(start, body_span.end),
-        })
-    }
-
-    fn generator_body_is_yield_only(&self) -> bool {
-        match (self.peek(), self.peek_nth(1)) {
-            (Some(open), Some(next)) if open.kind == TokenKind::LeftBrace => {
-                next.kind == TokenKind::RightBrace
-                    || matches!(&next.kind, TokenKind::Identifier(name) if name == "yield")
-            }
-            _ => false,
-        }
-    }
-
-    fn generator_yield_body(&mut self) -> Result<(Vec<ArrayElement>, Span), ParseError> {
-        let start = self
-            .peek()
-            .expect("parser should always have eof token")
-            .span
-            .start;
-        self.expect(&TokenKind::LeftBrace)?;
-        let mut elements = Vec::new();
-        while !self.at(&TokenKind::RightBrace) && !self.at(&TokenKind::Eof) {
-            let token = self.advance();
-            let TokenKind::Identifier(keyword) = token.kind else {
-                return Err(ParseError {
-                    message: "expected `yield` in generator body".to_owned(),
-                    span: token.span,
-                });
-            };
-            if keyword != "yield" {
-                return Err(ParseError {
-                    message: "expected `yield` in generator body".to_owned(),
-                    span: token.span,
-                });
-            }
-            let value = self.assignment()?;
-            elements.push(ArrayElement::Expr(value));
-            self.match_kind(&TokenKind::Semicolon);
-        }
-        let end = self
-            .peek()
-            .expect("parser should always have eof token")
-            .span
-            .end;
-        self.expect(&TokenKind::RightBrace)?;
-        Ok((elements, Span::new(start, end)))
+    /// Parses a function body block, setting the generator yield context for
+    /// the duration of the body. Regular function and generator boundaries
+    /// reset the surrounding `super`/yield context; arrows reuse this through
+    /// the inherited context instead.
+    pub(crate) fn function_body(&mut self, is_generator: bool) -> Result<Vec<Stmt>, ParseError> {
+        let previous_generator = self.in_generator;
+        self.in_generator = is_generator;
+        let body = self.without_super_context(Self::block_body);
+        self.in_generator = previous_generator;
+        body
     }
 
     pub(crate) fn function_parameters(&mut self) -> Result<FunctionParams, ParseError> {
+        self.function_parameters_with_yield(false)
+    }
+
+    /// Parses a formal parameter list. Generator parameters parse with the
+    /// surrounding yield context disabled so a `yield` in a default initializer
+    /// is an early error rather than a yield expression.
+    pub(crate) fn function_parameters_with_yield(
+        &mut self,
+        is_generator: bool,
+    ) -> Result<FunctionParams, ParseError> {
+        let previous_generator = self.in_generator;
+        let previous_generator_params = self.in_generator_params;
+        // Inside a generator's parameter list `yield` is in the keyword context
+        // (so it is recognized) but a yield expression is an early error.
+        self.in_generator = is_generator;
+        self.in_generator_params = is_generator;
+        let params = self.parse_function_parameters();
+        self.in_generator = previous_generator;
+        self.in_generator_params = previous_generator_params;
+        params
+    }
+
+    fn parse_function_parameters(&mut self) -> Result<FunctionParams, ParseError> {
         self.expect(&TokenKind::LeftParen)?;
         let mut positional = Vec::new();
         let mut rest = None;

@@ -283,11 +283,18 @@ impl Compiler {
 
     pub(super) fn compile_function_decl(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
         let Stmt::FunctionDecl {
-            name, params, body, ..
+            name,
+            params,
+            body,
+            is_generator,
+            ..
         } = stmt
         else {
             return Err(unsupported_stmt(stmt));
         };
+        if *is_generator {
+            return Err(super::compiler_expr::generators_not_supported());
+        }
         let blocked_arguments = self.annex_b_arguments_function_name_blocked(name);
         if self.annex_b_function_name_blocked(name) && !blocked_arguments {
             self.emit_load_undefined();

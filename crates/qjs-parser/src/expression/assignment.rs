@@ -6,6 +6,9 @@ use crate::{ParseError, Parser};
 
 impl Parser {
     pub(crate) fn assignment(&mut self) -> Result<Expr, ParseError> {
+        if self.in_generator && self.at_yield_keyword() {
+            return self.yield_expression();
+        }
         if let Some(arrow) = self.arrow_function()? {
             return Ok(arrow);
         }
@@ -106,6 +109,7 @@ impl Parser {
             constructable: false,
             lexical_this: true,
             lexical_arguments: true,
+            is_generator: false,
             span: Span::new(start, end),
         }))
     }
@@ -226,6 +230,70 @@ impl Parser {
         Ok(())
     }
 
+    /// Reports whether the current token is the `yield` keyword. `yield` is
+    /// lexed as a plain identifier, so it is only a keyword inside a generator
+    /// body, which the caller checks via `in_generator`.
+    fn at_yield_keyword(&self) -> bool {
+        matches!(self.peek(), Some(token) if matches!(&token.kind, TokenKind::Identifier(name) if name == "yield"))
+    }
+
+    /// Parses a `yield`, `yield AssignmentExpression`, or
+    /// `yield* AssignmentExpression` expression. The caller has already
+    /// confirmed a generator context and a `yield` token.
+    fn yield_expression(&mut self) -> Result<Expr, ParseError> {
+        let yield_token = self.advance();
+        let start = yield_token.span.start;
+
+        // A yield expression may not appear in a generator's parameter list.
+        if self.in_generator_params {
+            return Err(ParseError {
+                message: "`yield` is not allowed in generator parameters".to_owned(),
+                span: yield_token.span,
+            });
+        }
+
+        // `yield*` requires no line terminator between `yield` and `*`, and the
+        // delegate form always has an operand.
+        if self.at(&TokenKind::Star) {
+            let star = self.peek().expect("star lookahead should be present");
+            if self.has_line_terminator_between(yield_token.span.end, star.span.start) {
+                return Err(ParseError {
+                    message: "no line terminator allowed between `yield` and `*`".to_owned(),
+                    span: star.span,
+                });
+            }
+            self.advance();
+            let argument = self.assignment()?;
+            let span = Span::new(start, argument.span().end);
+            return Ok(Expr::Yield {
+                argument: Some(Box::new(argument)),
+                delegate: true,
+                span,
+            });
+        }
+
+        // A bare `yield` has no operand when a line terminator follows or the
+        // next token cannot begin an AssignmentExpression.
+        let next = self.peek().expect("parser should always have eof token");
+        let no_operand = self.has_line_terminator_between(yield_token.span.end, next.span.start)
+            || !token_can_begin_assignment(&next.kind);
+        if no_operand {
+            return Ok(Expr::Yield {
+                argument: None,
+                delegate: false,
+                span: yield_token.span,
+            });
+        }
+
+        let argument = self.assignment()?;
+        let span = Span::new(start, argument.span().end);
+        Ok(Expr::Yield {
+            argument: Some(Box::new(argument)),
+            delegate: false,
+            span,
+        })
+    }
+
     pub(crate) fn conditional(&mut self) -> Result<Expr, ParseError> {
         let test = self.nullish_coalescing()?;
         if !self.match_kind(&TokenKind::Question) {
@@ -273,4 +341,20 @@ fn reserved_arrow_parameter(name: &str, strict: bool) -> bool {
 
 fn is_line_terminator(ch: char) -> bool {
     matches!(ch, '\n' | '\r' | '\u{2028}' | '\u{2029}')
+}
+
+/// Reports whether a token can begin an AssignmentExpression, used to decide
+/// whether a bare `yield` has an operand. The closing punctuators and
+/// statement separators below cannot begin an expression.
+fn token_can_begin_assignment(kind: &TokenKind) -> bool {
+    !matches!(
+        kind,
+        TokenKind::RightParen
+            | TokenKind::RightBracket
+            | TokenKind::RightBrace
+            | TokenKind::Comma
+            | TokenKind::Semicolon
+            | TokenKind::Colon
+            | TokenKind::Eof
+    )
 }

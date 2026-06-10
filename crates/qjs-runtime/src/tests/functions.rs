@@ -843,9 +843,16 @@ fn destructured_parameters_iterate_iterables() {
         eval("function f([[k, v]]) { return k + '=' + v; } f(new Map([['a', 1]]));"),
         Ok(Value::String("a=1".to_owned()))
     );
+    // A hand-rolled iterable stands in for a generator until generator
+    // evaluation lands in T010 S2.
     assert_eq!(
         eval(
-            "var g = function*() { yield 1; yield 2; yield 3; }; function f([head, ...tail]) { return head + ':' + tail.join('|'); } f(g());"
+            "function range() {
+               var n = 0;
+               return { [Symbol.iterator]() { return this; },
+                        next() { n = n + 1; return { value: n, done: n > 3 }; } };
+             }
+             function f([head, ...tail]) { return head + ':' + tail.join('|'); } f(range());"
         ),
         Ok(Value::String("1:2|3".to_owned()))
     );
@@ -911,4 +918,25 @@ fn destructured_parameter_function_length_skips_defaults() {
         eval("(function(...rest) {}).length;"),
         Ok(Value::Number(0.0))
     );
+}
+
+#[test]
+fn generator_functions_report_not_yet_supported() {
+    // S1 parses generators and `yield`; evaluation lands in T010 S2. Until then
+    // the compiler reports a structured error rather than panicking.
+    for source in [
+        "function* g() { yield 1; } g();",
+        "(function* () { yield 1; });",
+        "({ *m() { yield 1; } });",
+        "class C { *m() { yield 1; } }",
+    ] {
+        let error = eval(source).expect_err("generator should not yet evaluate");
+        assert!(
+            error
+                .message
+                .contains("generator functions are not yet supported"),
+            "unexpected error for {source:?}: {}",
+            error.message
+        );
+    }
 }

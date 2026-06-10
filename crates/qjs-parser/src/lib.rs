@@ -46,6 +46,14 @@ struct Parser {
     /// Whether the parser is inside a class field initializer expression, where
     /// `arguments` is a syntax error.
     in_field_initializer: bool,
+    /// Whether the parser is inside a generator function body (or an arrow
+    /// nested in one), where `yield` is a keyword introducing a yield
+    /// expression. Ordinary nested functions reset this; arrow functions
+    /// inherit it.
+    in_generator: bool,
+    /// Whether the parser is inside a generator's formal parameter list, where
+    /// a `yield` expression is an early syntax error.
+    in_generator_params: bool,
     /// Stack of private-name scopes. Each entry holds the private names declared
     /// by one class body currently being parsed; the innermost class is last.
     /// A private reference resolves against any scope in the stack.

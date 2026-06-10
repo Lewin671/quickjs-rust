@@ -198,32 +198,35 @@ impl Parser {
             self.advance();
         }
 
+        // A leading `*` marks a generator method; `static *m() {}` and
+        // `*#m() {}` are also valid. Accessors may not be generators.
+        let is_generator = self.match_kind(&TokenKind::Star);
+
         // `get`/`set` introduce an accessor only when followed by a member
-        // name start; `get() {}` or `set = 1` use them as the name.
+        // name start; `get() {}` or `set = 1` use them as the name. A generator
+        // marker rules out an accessor prefix.
         let accessor_token = self
             .peek()
             .cloned()
             .expect("parser should always have eof token");
-        let accessor_kind = match &accessor_token.kind {
-            TokenKind::Identifier(name) if name == "get" || name == "set" => {
-                if self.token_starts_member_after_modifier(1) {
-                    self.advance();
-                    Some(if name == "get" {
-                        MethodKind::Getter
+        let accessor_kind = if is_generator {
+            None
+        } else {
+            match &accessor_token.kind {
+                TokenKind::Identifier(name) if name == "get" || name == "set" => {
+                    if self.token_starts_member_after_modifier(1) {
+                        self.advance();
+                        Some(if name == "get" {
+                            MethodKind::Getter
+                        } else {
+                            MethodKind::Setter
+                        })
                     } else {
-                        MethodKind::Setter
-                    })
-                } else {
-                    None
+                        None
+                    }
                 }
+                _ => None,
             }
-            TokenKind::Star => {
-                return Err(ParseError {
-                    message: "generator class methods are not yet supported".to_owned(),
-                    span: accessor_token.span,
-                });
-            }
-            _ => None,
         };
 
         let (key, key_text) = self.class_member_key()?;
@@ -238,10 +241,26 @@ impl Parser {
                     span: Span::new(member_start, self.previous_end()),
                 });
             }
+            if is_generator {
+                return Err(ParseError {
+                    message: "generator method requires a parameter list".to_owned(),
+                    span: Span::new(member_start, self.previous_end()),
+                });
+            }
             return self.class_field(is_static, key, key_text.as_deref(), member_start);
         }
 
-        let params = self.function_parameters()?;
+        let is_constructor = !is_static
+            && accessor_kind.is_none()
+            && matches!(key_text.as_deref(), Some("constructor"));
+        if is_generator && is_constructor {
+            return Err(ParseError {
+                message: "class constructor may not be a generator".to_owned(),
+                span: Span::new(member_start, self.previous_end()),
+            });
+        }
+
+        let params = self.function_parameters_with_yield(is_generator)?;
         reject_duplicate_method_parameters(&params)?;
         let body_start = self
             .peek()
@@ -249,20 +268,20 @@ impl Parser {
             .span
             .start;
 
-        let is_constructor = !is_static
-            && accessor_kind.is_none()
-            && matches!(key_text.as_deref(), Some("constructor"));
-
         // Every class member body may use `super.x`; only a derived-class
         // constructor body may use `super(...)`. Methods reset whatever
-        // surrounding context existed (e.g. a class nested in a method).
+        // surrounding context existed (e.g. a class nested in a method). The
+        // yield context follows the generator marker.
         let previous_method = self.in_method;
         let previous_derived = self.in_derived_constructor;
+        let previous_generator = self.in_generator;
         self.in_method = true;
         self.in_derived_constructor = is_constructor && has_heritage;
+        self.in_generator = is_generator;
         let body = self.block_body();
         self.in_method = previous_method;
         self.in_derived_constructor = previous_derived;
+        self.in_generator = previous_generator;
         let body = body?;
         self.reject_invalid_function_parameters(&params, &body, body_start)?;
         let end = self.previous_end();
@@ -308,6 +327,7 @@ impl Parser {
             constructable: false,
             lexical_this: false,
             lexical_arguments: false,
+            is_generator,
             span: Span::new(member_start, end),
         };
         Ok(ClassElement::Method(ClassMember {
@@ -389,8 +409,8 @@ impl Parser {
     }
 
     /// Reports whether the source between two byte offsets contains a line
-    /// terminator, used for class-field ASI.
-    fn has_line_terminator_between(&self, start: usize, end: usize) -> bool {
+    /// terminator, used for class-field ASI and the `yield`/`*` no-line rule.
+    pub(crate) fn has_line_terminator_between(&self, start: usize, end: usize) -> bool {
         self.source
             .get(start..end)
             .is_some_and(|slice| slice.chars().any(is_line_terminator))
@@ -434,7 +454,11 @@ impl Parser {
     /// used to disambiguate `static`/`get`/`set` as modifiers versus names.
     fn token_starts_member_after_modifier(&self, offset: usize) -> bool {
         match self.peek_nth(offset).map(|token| &token.kind) {
-            Some(TokenKind::LeftBracket | TokenKind::PrivateName(_)) => true,
+            // A `*` after `static` begins a static generator method. `get`/`set`
+            // never combine with `*`, so the star is only meaningful for the
+            // `static` modifier; that is harmless here because accessors are
+            // disambiguated separately.
+            Some(TokenKind::LeftBracket | TokenKind::PrivateName(_) | TokenKind::Star) => true,
             Some(kind) => class_member_name(kind).is_some(),
             None => false,
         }

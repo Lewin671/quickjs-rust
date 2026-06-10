@@ -500,6 +500,7 @@ fn parses_object_literal_and_member_assignment() {
         name,
         body,
         constructable,
+        is_generator,
         ..
     } = &properties[0].value
     else {
@@ -507,12 +508,19 @@ fn parses_object_literal_and_member_assignment() {
     };
     assert_eq!(name.as_deref(), Some("keys"));
     assert!(!constructable);
+    assert!(*is_generator);
     assert!(matches!(
         body.as_slice(),
-        [Stmt::Return {
-            argument: Some(Expr::Array { elements, .. }),
-            ..
-        }] if elements.len() == 2
+        [
+            Stmt::Expr(Expr::Yield {
+                delegate: false,
+                ..
+            }),
+            Stmt::Expr(Expr::Yield {
+                delegate: false,
+                ..
+            }),
+        ]
     ));
 
     let script = parse_script("({ get value() { return 42; } });").expect("source should parse");

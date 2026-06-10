@@ -16,7 +16,7 @@ Implement generator functions and round out the iteration protocol. At commit
 
 ## Slices
 
-- [ ] S1 Parser: `function*` declarations/expressions, `yield` and `yield*`
+- [x] S1 Parser: `function*` declarations/expressions, `yield` and `yield*`
       expressions with correct operator-precedence and strict-mode rules.
 - [ ] S2 Runtime: generator objects — suspend/resume state machine,
       `next`/`return`/`throw`, completion semantics. Reuse the suspension

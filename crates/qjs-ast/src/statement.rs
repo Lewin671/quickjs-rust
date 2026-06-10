@@ -116,6 +116,8 @@ pub enum Stmt {
         params: FunctionParams,
         /// Function body statements.
         body: Vec<Stmt>,
+        /// Whether this is a generator declaration (`function*`).
+        is_generator: bool,
         /// Source span.
         span: Span,
     },

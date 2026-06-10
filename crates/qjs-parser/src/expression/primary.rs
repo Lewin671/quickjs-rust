@@ -351,6 +351,17 @@ impl Parser {
         let mut properties = Vec::new();
         if !self.at(&TokenKind::RightBrace) {
             loop {
+                if self.at(&TokenKind::Star) {
+                    let property = self.object_generator_method()?;
+                    properties.push(property);
+                    if !self.match_kind(&TokenKind::Comma) {
+                        break;
+                    }
+                    if self.at(&TokenKind::RightBrace) {
+                        break;
+                    }
+                    continue;
+                }
                 let key_token = self.advance();
                 let key_span = key_token.span;
                 let (key, kind, value) = if is_get_accessor_start(&key_token.kind)
@@ -453,7 +464,7 @@ impl Parser {
                 .expect("parser should always have eof token")
                 .span
                 .start;
-            let body = self.block_body()?;
+            let body = self.function_body(false)?;
             self.reject_invalid_function_parameters(&params, &body, body_start)?;
             let end = self
                 .tokens
@@ -468,6 +479,7 @@ impl Parser {
                 constructable: false,
                 lexical_this: false,
                 lexical_arguments: false,
+                is_generator: false,
                 span: Span::new(key_span.start, end),
             });
         }
@@ -503,7 +515,7 @@ impl Parser {
                 span: key_span,
             });
         }
-        let body = self.block_body()?;
+        let body = self.function_body(false)?;
         let end = self
             .tokens
             .get(self.cursor.saturating_sub(1))
@@ -524,6 +536,7 @@ impl Parser {
                 constructable: false,
                 lexical_this: false,
                 lexical_arguments: false,
+                is_generator: false,
                 span: Span::new(start_span.start, end),
             },
         ))
@@ -544,7 +557,7 @@ impl Parser {
             });
         }
         reject_duplicate_method_parameters(&params)?;
-        let body = self.block_body()?;
+        let body = self.function_body(false)?;
         let end = self
             .tokens
             .get(self.cursor.saturating_sub(1))
@@ -565,9 +578,54 @@ impl Parser {
                 constructable: false,
                 lexical_this: false,
                 lexical_arguments: false,
+                is_generator: false,
                 span: Span::new(start_span.start, end),
             },
         ))
+    }
+
+    /// Parses a `*name() { ... }` generator method in an object literal. The
+    /// leading `*` is the current token.
+    fn object_generator_method(&mut self) -> Result<ObjectProperty, ParseError> {
+        let star = self.advance();
+        let start = star.span.start;
+        let key_token = self.advance();
+        let (key, _) = self.object_property_key(key_token)?;
+        let method_name = match &key {
+            ObjectPropertyKey::Literal(name) => Some(name.clone()),
+            ObjectPropertyKey::Computed(_) => None,
+        };
+        let params = self.function_parameters_with_yield(true)?;
+        reject_duplicate_method_parameters(&params)?;
+        let body_start = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .start;
+        let body = self.function_body(true)?;
+        self.reject_invalid_function_parameters(&params, &body, body_start)?;
+        let end = self
+            .tokens
+            .get(self.cursor.saturating_sub(1))
+            .expect("parser should always have eof token")
+            .span
+            .end;
+        let value = Expr::Function {
+            name: method_name,
+            params,
+            body,
+            constructable: false,
+            lexical_this: false,
+            lexical_arguments: false,
+            is_generator: true,
+            span: Span::new(start, end),
+        };
+        Ok(ObjectProperty {
+            key,
+            kind: ObjectPropertyKind::Data,
+            value,
+            span: Span::new(start, end),
+        })
     }
 }
 

@@ -262,9 +262,18 @@ fn rejects_static_prototype() {
 }
 
 #[test]
-fn rejects_generator_methods() {
-    let error = parse_script("class C { *gen() {} }").expect_err("generators are out of scope");
-    assert!(error.message.contains("generator"));
+fn parses_class_generator_method() {
+    let script = parse_script("class C { *gen() {} }").expect("generator methods parse");
+    let [Stmt::ClassDecl { body, .. }] = script.body.as_slice() else {
+        panic!("expected class declaration");
+    };
+    let [ClassElement::Method(member)] = body.elements.as_slice() else {
+        panic!("expected one method element");
+    };
+    let Expr::Function { is_generator, .. } = &member.value else {
+        panic!("expected method function value");
+    };
+    assert!(*is_generator);
 }
 
 #[test]

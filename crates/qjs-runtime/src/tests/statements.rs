@@ -47,8 +47,17 @@ fn evaluates_variable_declaration_rest_destructuring() {
         eval("const {p, ...rest} = {p: 1, q: 2, r: 3}; p + ':' + Object.keys(rest).join('|');"),
         Ok(Value::String("1:q|r".to_owned()))
     );
+    // A hand-rolled iterable stands in for a generator until generator
+    // evaluation lands in T010 S2.
     assert_eq!(
-        eval("var g = function*() { yield 1; yield 2; }; let [x, y] = g(); x + y;"),
+        eval(
+            "function range() {
+               var n = 0;
+               return { [Symbol.iterator]() { return this; },
+                        next() { n = n + 1; return { value: n, done: n > 2 }; } };
+             }
+             let [x, y] = range(); x + y;"
+        ),
         Ok(Value::Number(3.0))
     );
 }
