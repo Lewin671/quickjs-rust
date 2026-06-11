@@ -144,7 +144,8 @@ impl Compiler {
                     }));
                 }
                 ClassElement::Field(field) => {
-                    let initializer = compile_field_initializer(field.initializer.as_ref())?;
+                    let initializer =
+                        compile_field_initializer(field.initializer.as_ref(), &field.key)?;
                     if let ClassMemberKey::Private(private_name) = &field.key {
                         private_elements.push(ClassPrivateElementDef::Field {
                             name: private_name.clone(),
@@ -196,19 +197,31 @@ fn compile_member_key(key: &ClassMemberKey) -> (ClassMemberKeyDef, Option<String
 
 /// Compiles a field initializer as a parameterless strict-mode thunk whose body
 /// returns the initializer value. A field without an initializer compiles to
-/// no thunk and installs `undefined`.
+/// no thunk and installs `undefined`. When the field has a statically known
+/// name (a literal or private key), an anonymous function/class initializer
+/// takes that name via NamedEvaluation; computed-key fields keep the empty
+/// name.
 fn compile_field_initializer(
     initializer: Option<&Expr>,
+    key: &ClassMemberKey,
 ) -> Result<Option<ClassFieldInitializerDef>, RuntimeError> {
     let Some(expr) = initializer else {
         return Ok(None);
     };
     let params = FunctionParams::positional(Vec::new());
+    let inferred_name = match key {
+        ClassMemberKey::Literal(name) => Some(name.clone()),
+        ClassMemberKey::Private(name) => Some(format!("#{name}")),
+        ClassMemberKey::Computed(_) => None,
+    };
     let body = vec![Stmt::Return {
         argument: Some(expr.clone()),
         span: expr.span(),
     }];
-    let bytecode = compile_function_body_with_strict(&params, &body, true)?;
+    let bytecode = match inferred_name {
+        Some(name) => super::compiler::compile_named_field_initializer(expr, &name)?,
+        None => compile_function_body_with_strict(&params, &body, true)?,
+    };
     let local_names = collect_function_local_names(None, &params, &body, true);
     Ok(Some(ClassFieldInitializerDef {
         local_names,

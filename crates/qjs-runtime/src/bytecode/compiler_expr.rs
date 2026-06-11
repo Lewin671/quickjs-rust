@@ -177,7 +177,7 @@ impl Compiler {
                         }
                     }
                     if let Some(init) = &declaration.init {
-                        self.compile_expr(init)?;
+                        self.compile_declaration_init(&declaration.binding, init)?;
                         self.compile_binding_initializer(&declaration.binding, *kind)?;
                     } else {
                         self.compile_binding_uninitialized(&declaration.binding, *kind)?;
@@ -363,6 +363,59 @@ impl Compiler {
                     span.start
                 ),
             }),
+        }
+    }
+
+    /// Compiles an expression that supplies a value to a named binding,
+    /// assignment, or property, applying NamedEvaluation (ES2023 §8.3.4): an
+    /// anonymous function, arrow, generator, async, or class expression takes
+    /// `name` as its `name` property. Any other expression (including a *named*
+    /// function/class expression, which keeps its own name) compiles exactly
+    /// like `compile_expr`.
+    pub(super) fn compile_named_expr(
+        &mut self,
+        expr: &Expr,
+        name: &str,
+    ) -> Result<(), RuntimeError> {
+        match expr {
+            Expr::Function {
+                name: None,
+                params,
+                body,
+                constructable,
+                lexical_this,
+                lexical_arguments,
+                is_generator,
+                is_async,
+                ..
+            } => {
+                let is_strict = self.strict || is_strict_function_body(body);
+                let bytecode = super::compiler::compile_function_body_with_strict_generator(
+                    params,
+                    body,
+                    is_strict,
+                    *is_generator,
+                )?;
+                let local_names =
+                    collect_function_local_names(None, params, body, !lexical_arguments);
+                self.emit(Op::NewFunction {
+                    name: Some(name.to_owned()),
+                    params: params.clone(),
+                    local_names,
+                    bytecode: Rc::new(bytecode),
+                    constructable: *constructable && !*is_generator && !*is_async,
+                    is_strict,
+                    lexical_this: *lexical_this,
+                    lexical_arguments: *lexical_arguments,
+                    is_generator: *is_generator,
+                    is_async: *is_async,
+                });
+                Ok(())
+            }
+            Expr::Class {
+                name: None, body, ..
+            } => self.compile_class(Some(name), body),
+            _ => self.compile_expr(expr),
         }
     }
 

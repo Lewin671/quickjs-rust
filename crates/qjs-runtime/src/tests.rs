@@ -15,6 +15,7 @@ mod global;
 mod json;
 mod maps;
 mod math;
+mod named_evaluation;
 mod numbers;
 mod objects;
 mod private_names;

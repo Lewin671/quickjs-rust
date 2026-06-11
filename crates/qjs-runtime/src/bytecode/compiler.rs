@@ -84,6 +84,28 @@ pub(super) fn compile_function_body_with_strict(
     .compile_function(params, body)
 }
 
+/// Compiles a parameterless strict-mode field-initializer thunk that returns
+/// `init`, applying NamedEvaluation so an anonymous function or class field
+/// value (`class C { f = function(){} }`) takes the field name. Used for fields
+/// with a statically known string key; computed-key fields keep the empty name.
+pub(super) fn compile_named_field_initializer(
+    init: &qjs_ast::Expr,
+    name: &str,
+) -> Result<Bytecode, RuntimeError> {
+    let mut compiler = Compiler {
+        strict: true,
+        global_scope: false,
+        ..Compiler::default()
+    };
+    compiler.compile_named_expr(init, name)?;
+    compiler.emit(Op::Return);
+    Ok(Bytecode::new(
+        compiler.constants,
+        compiler.locals,
+        compiler.code,
+    ))
+}
+
 /// Compiles a function body. Generator bodies compile through the same path:
 /// `yield` is already gated by the parser and lowers to `Op::Yield`, while the
 /// generator-ness is carried on the resulting function value, not the bytecode.
@@ -165,7 +187,7 @@ impl Compiler {
                 self.emit(Op::Binary(BinaryOp::StrictEq));
                 let skip_default = self.emit(Op::JumpIfFalse(usize::MAX));
                 self.emit(Op::Pop);
-                self.compile_expr(default)?;
+                self.compile_named_expr(default, name)?;
                 self.emit(Op::StoreLocal(slot));
                 let done = self.emit(Op::Jump(usize::MAX));
                 let skip_target = self.code.len();
@@ -179,7 +201,10 @@ impl Compiler {
                     .resolve_local_slot(&binding_name)
                     .expect("parameter pattern slot should be declared before bindings");
                 self.emit(Op::LoadLocal(slot));
-                self.compile_binding_default(element.default.as_ref())?;
+                self.compile_binding_default(
+                    element.default.as_ref(),
+                    super::compiler_binding::binding_inferred_name(&element.binding),
+                )?;
                 self.compile_binding_initializer(&element.binding, VarKind::Var)?;
             }
         }
@@ -762,7 +787,7 @@ impl Compiler {
                     }
                     let has_init = declaration.init.is_some();
                     if let Some(init) = &declaration.init {
-                        self.compile_expr(init)?;
+                        self.compile_declaration_init(&declaration.binding, init)?;
                     } else {
                         self.emit_load_undefined();
                     }

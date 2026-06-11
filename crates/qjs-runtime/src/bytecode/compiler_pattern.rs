@@ -81,7 +81,10 @@ impl Compiler {
     ) -> Result<(), RuntimeError> {
         let reference = self.prepare_member_reference(&element.target)?;
         self.emit_iterator_step(destructuring);
-        self.compile_binding_default(element.default.as_ref())?;
+        self.compile_binding_default(
+            element.default.as_ref(),
+            assignment_target_inferred_name(&element.target),
+        )?;
         self.store_pattern_value(&element.target, reference.as_ref())
     }
 
@@ -95,7 +98,10 @@ impl Compiler {
         let key = self.const_slot(Value::String(property.key.clone()));
         self.emit(Op::LoadConst(key));
         self.emit(Op::GetProp);
-        self.compile_binding_default(property.default.as_ref())?;
+        self.compile_binding_default(
+            property.default.as_ref(),
+            assignment_target_inferred_name(&property.target),
+        )?;
         self.store_pattern_value(&property.target, reference.as_ref())
     }
 
@@ -148,6 +154,8 @@ impl Compiler {
         }
     }
 
+    // (helper defined as a free function below)
+
     /// Stores the value on top of the stack into an identifier reference,
     /// consuming it.
     fn emit_pattern_identifier_store(&mut self, name: &str) {
@@ -162,5 +170,17 @@ impl Compiler {
                 name: name.to_owned(),
             });
         }
+    }
+}
+
+/// The NamedEvaluation name for a destructuring-assignment default
+/// (`[f = function(){}] = []`), or `None` for member or nested-pattern targets,
+/// which never name their default value.
+fn assignment_target_inferred_name(target: &AssignmentTarget) -> Option<&str> {
+    match target {
+        AssignmentTarget::Identifier { name, .. } => Some(name),
+        AssignmentTarget::Member { .. }
+        | AssignmentTarget::ArrayPattern { .. }
+        | AssignmentTarget::ObjectPattern { .. } => None,
     }
 }

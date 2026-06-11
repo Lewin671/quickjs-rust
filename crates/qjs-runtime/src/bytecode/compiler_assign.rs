@@ -14,8 +14,11 @@ impl Compiler {
     ) -> Result<(), RuntimeError> {
         match target {
             AssignmentTarget::Identifier { name, .. } => {
+                // `f = <anon>` applies NamedEvaluation: an anonymous function or
+                // class assigned to a plain identifier takes that identifier's
+                // name. Member targets (`obj.x = <anon>`) never do.
                 let Some(slot) = self.resolve_local_slot(name) else {
-                    self.compile_expr(value)?;
+                    self.compile_named_expr(value, name)?;
                     self.emit(Op::Dup);
                     if self.strict {
                         self.emit(Op::StoreGlobalStrict(name.clone()));
@@ -28,7 +31,7 @@ impl Compiler {
                     }
                     return Ok(());
                 };
-                self.compile_expr(value)?;
+                self.compile_named_expr(value, name)?;
                 self.emit(Op::Dup);
                 self.emit(Op::StoreLocal(slot));
                 Ok(())
@@ -84,7 +87,9 @@ impl Compiler {
                 self.emit_load_identifier(name, slot);
                 let end_jump = self.emit(Op::JumpIfFalse(usize::MAX));
                 self.emit(Op::Pop);
-                self.compile_expr(value)?;
+                // `f &&= <anon>` names the anonymous value after the target
+                // identifier (ES2023 §13.15.2); arithmetic compounds do not.
+                self.compile_named_expr(value, name)?;
                 self.emit(Op::Dup);
                 self.emit_store_identifier(name, slot);
                 let end = self.code.len();
@@ -94,7 +99,7 @@ impl Compiler {
                 self.emit_load_identifier(name, slot);
                 let end_jump = self.emit(Op::JumpIfTrue(usize::MAX));
                 self.emit(Op::Pop);
-                self.compile_expr(value)?;
+                self.compile_named_expr(value, name)?;
                 self.emit(Op::Dup);
                 self.emit_store_identifier(name, slot);
                 let end = self.code.len();
@@ -104,7 +109,7 @@ impl Compiler {
                 self.emit_load_identifier(name, slot);
                 let end_jump = self.emit(Op::JumpIfNotNullish(usize::MAX));
                 self.emit(Op::Pop);
-                self.compile_expr(value)?;
+                self.compile_named_expr(value, name)?;
                 self.emit(Op::Dup);
                 self.emit_store_identifier(name, slot);
                 let end = self.code.len();

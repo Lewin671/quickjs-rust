@@ -18,6 +18,22 @@ pub(super) struct ArrayDestructuring {
 }
 
 impl Compiler {
+    /// Compiles a declaration initializer, applying NamedEvaluation when the
+    /// binding is a single identifier and the initializer is an anonymous
+    /// function or class. Destructuring patterns never name their values, so
+    /// they fall back to the ordinary expression path.
+    pub(super) fn compile_declaration_init(
+        &mut self,
+        pattern: &BindingPattern,
+        init: &qjs_ast::Expr,
+    ) -> Result<(), RuntimeError> {
+        if let BindingPattern::Identifier { name, .. } = pattern {
+            self.compile_named_expr(init, name)
+        } else {
+            self.compile_expr(init)
+        }
+    }
+
     pub(super) fn compile_binding_initializer(
         &mut self,
         pattern: &BindingPattern,
@@ -36,7 +52,10 @@ impl Compiler {
                         self.emit(Op::Pop);
                         continue;
                     };
-                    self.compile_binding_default(element.default.as_ref())?;
+                    self.compile_binding_default(
+                        element.default.as_ref(),
+                        binding_inferred_name(&element.binding),
+                    )?;
                     self.compile_binding_initializer(&element.binding, kind)?;
                 }
                 if let Some(rest) = rest {
@@ -56,7 +75,10 @@ impl Compiler {
                     let key = self.const_slot(Value::String(property.key.clone()));
                     self.emit(Op::LoadConst(key));
                     self.emit(Op::GetProp);
-                    self.compile_binding_default(property.default.as_ref())?;
+                    self.compile_binding_default(
+                        property.default.as_ref(),
+                        binding_inferred_name(&property.binding),
+                    )?;
                     self.compile_binding_initializer(&property.binding, kind)?;
                 }
                 if let Some(rest) = rest {
@@ -90,6 +112,7 @@ impl Compiler {
     pub(super) fn compile_binding_default(
         &mut self,
         default: Option<&qjs_ast::Expr>,
+        inferred_name: Option<&str>,
     ) -> Result<(), RuntimeError> {
         let Some(default) = default else {
             return Ok(());
@@ -102,7 +125,14 @@ impl Compiler {
         self.emit(Op::Binary(BinaryOp::StrictEq));
         let keep_existing = self.emit(Op::JumpIfFalse(usize::MAX));
         self.emit(Op::Pop);
-        self.compile_expr(default)?;
+        // A default value bound to a single identifier (`{ f = function(){} }`,
+        // `[f = () => {}]`, or a parameter default `g(f = class {})`) gets the
+        // binding name via NamedEvaluation.
+        if let Some(name) = inferred_name {
+            self.compile_named_expr(default, name)?;
+        } else {
+            self.compile_expr(default)?;
+        }
         let done = self.emit(Op::Jump(usize::MAX));
         let keep_existing_target = self.code.len();
         self.patch_jump(keep_existing, keep_existing_target);
@@ -199,5 +229,14 @@ impl Compiler {
         self.emit(Op::Pop);
         let end = self.code.len();
         self.patch_jump(after, end);
+    }
+}
+
+/// The NamedEvaluation name for a binding default, or `None` when the binding
+/// is a nested pattern (which never names its default value).
+pub(super) fn binding_inferred_name(binding: &BindingPattern) -> Option<&str> {
+    match binding {
+        BindingPattern::Identifier { name, .. } => Some(name),
+        BindingPattern::Array { .. } | BindingPattern::Object { .. } => None,
     }
 }

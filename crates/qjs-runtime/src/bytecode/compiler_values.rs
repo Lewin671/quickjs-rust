@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use qjs_ast::{
-    ArrayElement, CallArgument, Expr, MemberProperty, ObjectProperty, ObjectPropertyKey, Stmt,
-    VarKind,
+    ArrayElement, CallArgument, Expr, MemberProperty, ObjectProperty, ObjectPropertyKey,
+    ObjectPropertyKind, Stmt, VarKind,
 };
 
 use crate::{
@@ -63,6 +63,13 @@ impl Compiler {
                 ObjectPropertyKey::Literal(key) => {
                     let slot = self.const_slot(Value::String(key.clone()));
                     self.emit(Op::LoadConst(slot));
+                    // `{ f: <anon> }` names a plain property value after the
+                    // key via NamedEvaluation. Getters/setters and shorthand
+                    // methods already carry their own name from the parser.
+                    if matches!(property.kind, ObjectPropertyKind::Data) {
+                        self.compile_named_expr(&property.value, key)?;
+                        continue;
+                    }
                 }
                 ObjectPropertyKey::Computed(expr) => self.compile_expr(expr)?,
             }
