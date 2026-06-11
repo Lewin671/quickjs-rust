@@ -14,7 +14,7 @@ use crate::{
     ensure_constructor,
 };
 
-use super::{PROMISE_PROTOTYPE, new_pending_promise, resolving_function};
+use super::{PROMISE_PROTOTYPE, new_pending_promise, resolving_function_pair};
 
 /// Internal slot on a GetCapabilitiesExecutor holding the shared capability
 /// record it writes `resolve`/`reject` into.
@@ -44,16 +44,7 @@ pub(crate) fn new_promise_capability(
 
     if is_native_promise_constructor(c, env) {
         let promise = new_pending_promise(env);
-        let resolve = resolving_function(
-            "",
-            NativeFunction::PromiseResolveFunction,
-            Value::Object(promise.clone()),
-        );
-        let reject = resolving_function(
-            "",
-            NativeFunction::PromiseRejectFunction,
-            Value::Object(promise.clone()),
-        );
+        let (resolve, reject) = resolving_function_pair(Value::Object(promise.clone()));
         return Ok(PromiseCapability {
             promise: Value::Object(promise),
             resolve,

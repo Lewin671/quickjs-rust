@@ -6,9 +6,9 @@ use super::{
     PROMISE_FULFILL_REACTION, PROMISE_HANDLER, PROMISE_JOBS, PROMISE_REACTION_ARGUMENT,
     PROMISE_REACTION_CAPABILITY, PROMISE_REACTION_REJECT, PROMISE_REACTION_RESOLVE,
     PROMISE_REJECTED, PROMISE_THEN, PROMISE_THENABLE, PROMISE_THENABLE_CAPABILITY,
-    is_promise_object, reaction_is_fulfill, resolve_promise, resolving_function, settle_promise,
+    is_promise_object, reaction_is_fulfill, resolve_promise, resolving_function_pair,
+    settle_promise,
 };
-use crate::NativeFunction;
 
 pub(super) fn enqueue_promise_reaction_job(
     env: &mut HashMap<String, Value>,
@@ -181,23 +181,14 @@ fn run_promise_thenable_job(
     let then = job
         .own_property(PROMISE_THEN)
         .map_or(Value::Undefined, |property| property.value);
-    let resolve = resolving_function(
-        "resolve",
-        NativeFunction::PromiseResolveFunction,
-        Value::Object(capability.clone()),
-    );
-    let reject = resolving_function(
-        "reject",
-        NativeFunction::PromiseRejectFunction,
-        Value::Object(capability.clone()),
-    );
-    if let Err(error) = call_function(then, thenable, vec![resolve, reject], env, false) {
-        settle_promise(
-            &capability,
-            PROMISE_REJECTED,
-            error.thrown.map_or(Value::Undefined, |value| *value),
-            env,
-        );
+    // resolve/reject share one alreadyResolved guard (CreateResolvingFunctions).
+    let (resolve, reject) = resolving_function_pair(Value::Object(capability.clone()));
+    if let Err(error) = call_function(then, thenable, vec![resolve, reject.clone()], env, false) {
+        // A throw from `then` rejects through the reject function so its
+        // alreadyResolved guard suppresses the rejection if the thenable already
+        // resolved the promise.
+        let reason = crate::error::runtime_error_to_value(error, env);
+        call_function(reject, Value::Undefined, vec![reason], env, false)?;
     }
     Ok(())
 }

@@ -281,6 +281,8 @@ pub(crate) enum NativeFunction {
     PromisePrototypeFinally,
     PromisePrototypeFinallyFulfilled,
     PromisePrototypeFinallyRejected,
+    PromisePrototypeFinallyValueThunk,
+    PromisePrototypeFinallyThrowerThunk,
     PromisePrototypeThen,
     PromiseRace,
     PromiseReject,

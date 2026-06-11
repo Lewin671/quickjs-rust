@@ -1,31 +1,22 @@
 use std::collections::HashMap;
 
-use crate::{
-    Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, ensure_constructor,
-};
+use crate::{Function, ObjectRef, RuntimeError, Value};
 
-use super::{
-    PROMISE_OBJECT_PROTOTYPE, initialize_promise, promise_object_from_function, resolving_function,
-};
+use super::{PROMISE_OBJECT_PROTOTYPE, capability::new_promise_capability};
 
+/// `Promise.withResolvers` (ES2024 27.2.4.8): builds a capability from the
+/// `this` constructor and returns `{ promise, resolve, reject }`.
 pub(crate) fn native_promise_with_resolvers(
     function: &Function,
     this_value: Value,
+    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    ensure_constructor(&this_value)?;
-    let promise = promise_object_from_function(function);
-    initialize_promise(&promise);
+    let capability = new_promise_capability(&this_value, env)?;
     let result = ObjectRef::with_prototype(
         HashMap::from([
-            ("promise".to_owned(), Value::Object(promise.clone())),
-            (
-                "resolve".to_owned(),
-                unnamed_resolving_function(NativeFunction::PromiseResolveFunction, promise.clone()),
-            ),
-            (
-                "reject".to_owned(),
-                unnamed_resolving_function(NativeFunction::PromiseRejectFunction, promise),
-            ),
+            ("promise".to_owned(), capability.promise),
+            ("resolve".to_owned(), capability.resolve),
+            ("reject".to_owned(), capability.reject),
         ]),
         object_prototype(function),
     );
@@ -37,17 +28,4 @@ fn object_prototype(function: &Function) -> Option<ObjectRef> {
         Some(Value::Object(prototype)) => Some(prototype),
         _ => None,
     }
-}
-
-fn unnamed_resolving_function(native: NativeFunction, promise: ObjectRef) -> Value {
-    let Value::Function(mut function) = resolving_function("", native, Value::Object(promise))
-    else {
-        unreachable!("resolving_function returns a function");
-    };
-    function.name = None;
-    function.properties.borrow_mut().insert(
-        "name".to_owned(),
-        Property::data(Value::String(String::new()), false, false, true),
-    );
-    Value::Function(function)
 }

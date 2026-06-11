@@ -1,31 +1,29 @@
 use std::collections::HashMap;
 
-use crate::{Function, RuntimeError, Value, call_function, ensure_constructor};
+use crate::{Function, RuntimeError, Value, call_function};
 
-use super::{
-    PROMISE_REJECTED, initialize_promise, promise_object_from_function, resolve_promise,
-    settle_promise,
-};
+use super::capability::{self, new_promise_capability};
 
+/// `Promise.try` (ES2026 proposal): builds a capability from the `this`
+/// constructor, runs the callback synchronously, and resolves/rejects the
+/// capability with its outcome.
 pub(crate) fn native_promise_try(
-    function: &Function,
+    _function: &Function,
     this_value: Value,
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    ensure_constructor(&this_value)?;
-    let promise = promise_object_from_function(function);
-    initialize_promise(&promise);
+    let capability = new_promise_capability(&this_value, env)?;
     let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let arguments = argument_values.get(1..).unwrap_or(&[]).to_vec();
     match call_function(callback, Value::Undefined, arguments, env, false) {
-        Ok(value) => resolve_promise(&promise, value, env),
-        Err(error) => settle_promise(
-            &promise,
-            PROMISE_REJECTED,
-            error.thrown.map_or(Value::Undefined, |value| *value),
-            env,
-        ),
+        Ok(value) => {
+            capability::capability_resolve(&capability, value, env)?;
+        }
+        Err(error) => {
+            let reason = crate::error::runtime_error_to_value(error, env);
+            capability::capability_reject(&capability, reason, env)?;
+        }
     }
-    Ok(Value::Object(promise))
+    Ok(capability.promise)
 }

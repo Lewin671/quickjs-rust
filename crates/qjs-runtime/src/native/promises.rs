@@ -60,6 +60,12 @@ pub(super) fn call_promise_native(
         NativeFunction::PromisePrototypeFinallyRejected => {
             promise::native_promise_finally_rejected(function, argument_values, env)?
         }
+        NativeFunction::PromisePrototypeFinallyValueThunk => {
+            promise::native_promise_finally_value_thunk(function)?
+        }
+        NativeFunction::PromisePrototypeFinallyThrowerThunk => {
+            promise::native_promise_finally_thrower_thunk(function)?
+        }
         NativeFunction::PromisePrototypeThen => {
             promise::native_promise_then(function, this_value, argument_values, env)?
         }
@@ -76,7 +82,7 @@ pub(super) fn call_promise_native(
             promise::r#try::native_promise_try(function, this_value, argument_values, env)?
         }
         NativeFunction::PromiseWithResolvers => {
-            promise::with_resolvers::native_promise_with_resolvers(function, this_value)?
+            promise::with_resolvers::native_promise_with_resolvers(function, this_value, env)?
         }
         NativeFunction::PromiseRejectFunction => {
             promise::native_promise_reject_function(function, argument_values, env)?

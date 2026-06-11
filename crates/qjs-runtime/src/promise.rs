@@ -23,6 +23,8 @@ pub(crate) use race::native_promise_race;
 
 const PROMISE_FULFILL_REACTION: &str = "\0PromiseFulfillReaction";
 const PROMISE_FINALLY_HANDLER: &str = "\0PromiseFinallyHandler";
+const PROMISE_FINALLY_CONSTRUCTOR: &str = "\0PromiseFinallyConstructor";
+const PROMISE_FINALLY_VALUE: &str = "\0PromiseFinallyValue";
 const PROMISE_HANDLER: &str = "\0PromiseHandler";
 const PROMISE_ALL_INDEX: &str = "\0PromiseAllIndex";
 const PROMISE_ALL_REMAINING: &str = "\0PromiseAllRemaining";
@@ -39,6 +41,7 @@ const PROMISE_REACTION_REJECT: &str = "\0PromiseReactionReject";
 const PROMISE_STATE: &str = "\0PromiseState";
 const PROMISE_RESULT: &str = "\0PromiseResult";
 const PROMISE_TARGET: &str = "\0PromiseTarget";
+const PROMISE_ALREADY_RESOLVED: &str = "\0PromiseAlreadyResolved";
 const PROMISE_THEN: &str = "\0PromiseThen";
 const PROMISE_THENABLE: &str = "\0PromiseThenable";
 const PROMISE_THENABLE_CAPABILITY: &str = "\0PromiseThenableCapability";
@@ -196,12 +199,9 @@ pub(crate) fn native_promise(
     };
     initialize_promise(&object);
     let promise = Value::Object(object.clone());
-    let resolve = resolving_function(
-        "resolve",
-        NativeFunction::PromiseResolveFunction,
-        promise.clone(),
-    );
-    let reject = resolving_function("reject", NativeFunction::PromiseRejectFunction, promise);
+    // The resolve/reject functions are anonymous built-in functions (name "")
+    // sharing one alreadyResolved guard.
+    let (resolve, reject) = resolving_function_pair(promise);
     if let Err(error) = call_function(
         executor,
         Value::Undefined,
@@ -209,12 +209,11 @@ pub(crate) fn native_promise(
         env,
         false,
     ) {
-        settle_promise(
-            &object,
-            PROMISE_REJECTED,
-            error.thrown.map_or(Value::Undefined, |value| *value),
-            env,
-        );
+        // A throw from the executor rejects via the reject function so its
+        // alreadyResolved guard suppresses the rejection when resolve/reject was
+        // already called (e.g. `resolve(x); throw e;`).
+        let reason = crate::error::runtime_error_to_value(error, env);
+        call_function(reject, Value::Undefined, vec![reason], env, false)?;
     }
     Ok(Value::Object(object))
 }
@@ -372,23 +371,29 @@ pub(crate) fn native_promise_catch(
 }
 
 pub(crate) fn native_promise_finally(
-    _function: &Function,
+    function: &Function,
     this_value: Value,
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
+    // 1. Let promise be the this value. 2. If Type(promise) is not Object, throw.
+    let Value::Object(promise) = &this_value else {
+        return Err(promise_receiver_not_object_error());
+    };
+    // 3. Let C be SpeciesConstructor(promise, %Promise%).
+    let constructor = species_constructor(promise, function, env)?;
     let on_finally = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let (on_fulfilled, on_rejected) = if matches!(on_finally, Value::Function(_)) {
         (
-            promise_finally_function(
-                "thenFinally",
+            finally_reaction_function(
                 NativeFunction::PromisePrototypeFinallyFulfilled,
                 on_finally.clone(),
+                constructor.clone(),
             ),
-            promise_finally_function(
-                "catchFinally",
+            finally_reaction_function(
                 NativeFunction::PromisePrototypeFinallyRejected,
                 on_finally,
+                constructor,
             ),
         )
     } else {
@@ -397,23 +402,58 @@ pub(crate) fn native_promise_finally(
     call_promise_then(this_value, vec![on_fulfilled, on_rejected], env)
 }
 
+/// `thenFinally` (ES2023 27.2.5.3.1): runs `onFinally`, wraps the result via
+/// `PromiseResolve(C, result)`, then returns `promise.then(() => value)` so the
+/// original fulfilment value flows through only after the finally promise
+/// settles.
 pub(crate) fn native_promise_finally_fulfilled(
     function: &Function,
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    call_finally_handler(function, env)?;
-    Ok(value)
+    let result = call_finally_handler(function, env)?;
+    let constructor = finally_constructor(function);
+    let promise = promise_resolve(&constructor, result, env)?;
+    let thunk = finally_thunk(NativeFunction::PromisePrototypeFinallyValueThunk, value);
+    call_promise_then(promise, vec![thunk, Value::Undefined], env)
 }
 
+/// `catchFinally` (ES2023 27.2.5.3.2): like `thenFinally`, but the thunk
+/// re-throws the original rejection reason.
 pub(crate) fn native_promise_finally_rejected(
     function: &Function,
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let reason = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    call_finally_handler(function, env)?;
+    let result = call_finally_handler(function, env)?;
+    let constructor = finally_constructor(function);
+    let promise = promise_resolve(&constructor, result, env)?;
+    let thunk = finally_thunk(NativeFunction::PromisePrototypeFinallyThrowerThunk, reason);
+    call_promise_then(promise, vec![thunk, Value::Undefined], env)
+}
+
+/// Value thunk `() => value` returned by `thenFinally`.
+pub(crate) fn native_promise_finally_value_thunk(
+    function: &Function,
+) -> Result<Value, RuntimeError> {
+    Ok(function
+        .env
+        .get(PROMISE_FINALLY_VALUE)
+        .cloned()
+        .unwrap_or(Value::Undefined))
+}
+
+/// Thrower thunk `() => { throw reason; }` returned by `catchFinally`.
+pub(crate) fn native_promise_finally_thrower_thunk(
+    function: &Function,
+) -> Result<Value, RuntimeError> {
+    let reason = function
+        .env
+        .get(PROMISE_FINALLY_VALUE)
+        .cloned()
+        .unwrap_or(Value::Undefined);
     Err(RuntimeError {
         thrown: Some(Box::new(reason)),
         message: "Promise finally rejected".to_owned(),
@@ -425,6 +465,9 @@ pub(crate) fn native_promise_resolve_function(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
+    if resolving_function_already_resolved(function) {
+        return Ok(Value::Undefined);
+    }
     let promise = promise_from_resolving_function(function)?;
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     resolve_promise(&promise, value, env);
@@ -436,6 +479,9 @@ pub(crate) fn native_promise_reject_function(
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
+    if resolving_function_already_resolved(function) {
+        return Ok(Value::Undefined);
+    }
     let promise = promise_from_resolving_function(function)?;
     let reason = argument_values.first().cloned().unwrap_or(Value::Undefined);
     settle_promise(&promise, PROMISE_REJECTED, reason, env);
@@ -619,31 +665,79 @@ fn resolve_promise(object: &ObjectRef, value: Value, env: &mut HashMap<String, V
     enqueue_promise_thenable_job(env, object.clone(), value, then);
 }
 
-fn resolving_function(name: &str, native: NativeFunction, promise: Value) -> Value {
-    let mut function = Function::new_native(Some(name), 1, native, false);
-    function.env.insert(PROMISE_TARGET.to_owned(), promise);
-    Value::Function(function)
+/// Builds the `(resolve, reject)` pair for `promise` sharing one
+/// `alreadyResolved` cell, matching CreateResolvingFunctions (ES2023 27.2.1.3):
+/// only the first of resolve/reject to run settles the promise. Both are
+/// anonymous built-in functions (name "", length 1).
+fn resolving_function_pair(promise: Value) -> (Value, Value) {
+    let already_resolved = Value::Object(ObjectRef::new(HashMap::new()));
+    let mut resolve = Function::new_native(None, 1, NativeFunction::PromiseResolveFunction, false);
+    resolve
+        .env
+        .insert(PROMISE_TARGET.to_owned(), promise.clone());
+    resolve.env.insert(
+        PROMISE_ALREADY_RESOLVED.to_owned(),
+        already_resolved.clone(),
+    );
+    let mut reject = Function::new_native(None, 1, NativeFunction::PromiseRejectFunction, false);
+    reject.env.insert(PROMISE_TARGET.to_owned(), promise);
+    reject
+        .env
+        .insert(PROMISE_ALREADY_RESOLVED.to_owned(), already_resolved);
+    (Value::Function(resolve), Value::Function(reject))
 }
 
-fn promise_finally_function(name: &str, native: NativeFunction, handler: Value) -> Value {
-    let mut function = Function::new_native(Some(name), 1, native, false);
+/// Reads-and-sets the shared single-settlement guard on a resolving function,
+/// returning whether it had already fired.
+fn resolving_function_already_resolved(function: &Function) -> bool {
+    let Some(Value::Object(cell)) = function.env.get(PROMISE_ALREADY_RESOLVED) else {
+        return false;
+    };
+    if cell.own_property("resolved").is_some() {
+        return true;
+    }
+    cell.define_non_enumerable("resolved".to_owned(), Value::Boolean(true));
+    false
+}
+
+/// Builds an anonymous `thenFinally`/`catchFinally` function carrying the
+/// `onFinally` handler and the species constructor `C`.
+fn finally_reaction_function(native: NativeFunction, handler: Value, constructor: Value) -> Value {
+    let mut function = Function::new_native(None, 1, native, false);
     function
         .env
         .insert(PROMISE_FINALLY_HANDLER.to_owned(), handler);
+    function
+        .env
+        .insert(PROMISE_FINALLY_CONSTRUCTOR.to_owned(), constructor);
     Value::Function(function)
+}
+
+/// Builds an anonymous value/thrower thunk capturing the original outcome.
+fn finally_thunk(native: NativeFunction, value: Value) -> Value {
+    let mut function = Function::new_native(None, 0, native, false);
+    function.env.insert(PROMISE_FINALLY_VALUE.to_owned(), value);
+    Value::Function(function)
+}
+
+fn finally_constructor(function: &Function) -> Value {
+    function
+        .env
+        .get(PROMISE_FINALLY_CONSTRUCTOR)
+        .cloned()
+        .unwrap_or(Value::Undefined)
 }
 
 fn call_finally_handler(
     function: &Function,
     env: &mut HashMap<String, Value>,
-) -> Result<(), RuntimeError> {
+) -> Result<Value, RuntimeError> {
     let handler = function
         .env
         .get(PROMISE_FINALLY_HANDLER)
         .cloned()
         .unwrap_or(Value::Undefined);
-    call_function(handler, Value::Undefined, Vec::new(), env, false)?;
-    Ok(())
+    call_function(handler, Value::Undefined, Vec::new(), env, false)
 }
 
 fn call_promise_then(
@@ -663,14 +757,6 @@ fn promise_from_resolving_function(function: &Function) -> Result<ObjectRef, Run
             message: "Promise resolving function is missing its promise".to_owned(),
         }),
     }
-}
-
-fn promise_object_from_function(function: &Function) -> ObjectRef {
-    let prototype = match function.env.get(PROMISE_PROTOTYPE).cloned() {
-        Some(Value::Object(prototype)) => Some(prototype),
-        _ => crate::function_prototype(function),
-    };
-    ObjectRef::with_prototype(HashMap::new(), prototype)
 }
 
 fn is_promise_value(value: &Value) -> bool {

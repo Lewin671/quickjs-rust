@@ -227,6 +227,61 @@ fn promise_self_resolution_rejects_with_type_error() {
 }
 
 #[test]
+fn promise_constructor_resolving_functions_are_anonymous() {
+    assert_eval(
+        "var r; new Promise(function(resolve){ r = resolve; }); r.name + ':' + r.length;",
+        Value::String(":1".to_owned()),
+    );
+}
+
+#[test]
+fn promise_resolve_then_throw_in_executor_is_ignored() {
+    // resolve(value) sets alreadyResolved, so the later throw cannot reject.
+    assert_job_order(
+        "new Promise(function(resolve){ resolve('done'); throw new Error('ignored'); }).then(function(v){ return v; });",
+        "done",
+    );
+}
+
+#[test]
+fn promise_finally_awaits_returned_thenable_before_forwarding() {
+    // finally's onFinally returning a rejected promise overrides the fulfilment.
+    assert_job_order(
+        "Promise.resolve('value').finally(function(){ return Promise.reject('boom'); })\
+           .then(function(){ return 'resolved'; }, function(r){ return 'rejected:' + r; });",
+        "rejected:boom",
+    );
+}
+
+#[test]
+fn promise_finally_forwards_original_value() {
+    assert_job_order(
+        "Promise.resolve('value').finally(function(){ return 99; }).then(function(v){ return v; });",
+        "value",
+    );
+}
+
+#[test]
+fn promise_with_resolvers_uses_this_constructor() {
+    assert_eval(
+        "class P extends Promise {} var r = Promise.withResolvers.call(P); r.promise instanceof P;",
+        Value::Boolean(true),
+    );
+}
+
+#[test]
+fn promise_try_resolves_and_uses_this_constructor() {
+    assert_job_order(
+        "Promise.try(function(){ return 'ok'; }).then(function(v){ return v; });",
+        "ok",
+    );
+    assert_eval(
+        "class P extends Promise {} Promise.try.call(P, function(){}) instanceof P;",
+        Value::Boolean(true),
+    );
+}
+
+#[test]
 fn evaluates_promise_any_shell() {
     assert_eval("typeof Promise.any;", Value::String("function".to_owned()));
     assert_eval("Promise.any.length;", Value::Number(1.0));
