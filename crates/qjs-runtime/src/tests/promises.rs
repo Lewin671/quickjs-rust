@@ -262,6 +262,17 @@ fn promise_finally_forwards_original_value() {
 }
 
 #[test]
+fn promise_finally_invokes_then_on_proxy_receiver() {
+    // finally accepts any object receiver, forwarding to its `then`.
+    assert_eval(
+        "var called = false; var p = new Proxy(Promise.resolve(), {});\
+         Promise.prototype.then = function(){ called = true; };\
+         Promise.prototype.finally.call(p, function(){}); called;",
+        Value::Boolean(true),
+    );
+}
+
+#[test]
 fn promise_with_resolvers_uses_this_constructor() {
     assert_eval(
         "class P extends Promise {} var r = Promise.withResolvers.call(P); r.promise instanceof P;",

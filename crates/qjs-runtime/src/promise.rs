@@ -318,8 +318,18 @@ fn species_constructor(
     promise_function: &Function,
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
+    species_constructor_of(Value::Object(object.clone()), promise_function, env)
+}
+
+/// Like [`species_constructor`] but for any object-typed receiver (including a
+/// Proxy), as `Promise.prototype.finally` permits.
+fn species_constructor_of(
+    object: Value,
+    promise_function: &Function,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
     let default = default_promise_constructor(promise_function, env);
-    let constructor = property_value(Value::Object(object.clone()), "constructor", env)?;
+    let constructor = property_value(object, "constructor", env)?;
     if matches!(constructor, Value::Undefined) {
         return Ok(default);
     }
@@ -377,11 +387,11 @@ pub(crate) fn native_promise_finally(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     // 1. Let promise be the this value. 2. If Type(promise) is not Object, throw.
-    let Value::Object(promise) = &this_value else {
+    if !is_object_value(&this_value) {
         return Err(promise_receiver_not_object_error());
-    };
+    }
     // 3. Let C be SpeciesConstructor(promise, %Promise%).
-    let constructor = species_constructor(promise, function, env)?;
+    let constructor = species_constructor_of(this_value.clone(), function, env)?;
     let on_finally = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let (on_fulfilled, on_rejected) = if matches!(on_finally, Value::Function(_)) {
         (
@@ -416,7 +426,7 @@ pub(crate) fn native_promise_finally_fulfilled(
     let constructor = finally_constructor(function);
     let promise = promise_resolve(&constructor, result, env)?;
     let thunk = finally_thunk(NativeFunction::PromisePrototypeFinallyValueThunk, value);
-    call_promise_then(promise, vec![thunk, Value::Undefined], env)
+    call_promise_then(promise, vec![thunk], env)
 }
 
 /// `catchFinally` (ES2023 27.2.5.3.2): like `thenFinally`, but the thunk
@@ -431,7 +441,7 @@ pub(crate) fn native_promise_finally_rejected(
     let constructor = finally_constructor(function);
     let promise = promise_resolve(&constructor, result, env)?;
     let thunk = finally_thunk(NativeFunction::PromisePrototypeFinallyThrowerThunk, reason);
-    call_promise_then(promise, vec![thunk, Value::Undefined], env)
+    call_promise_then(promise, vec![thunk], env)
 }
 
 /// Value thunk `() => value` returned by `thenFinally`.
