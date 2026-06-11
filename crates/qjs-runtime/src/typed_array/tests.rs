@@ -157,3 +157,150 @@ fn bytes_per_element_surface() {
         Ok(Value::String("2:4".to_owned()))
     );
 }
+
+// --- Prototype methods: iteration / read family (batch 1) --------------------
+
+#[test]
+fn prototype_methods_are_shared_and_brand_checked() {
+    // Methods live on the shared %TypedArray.prototype%, not the concrete one.
+    assert_eq!(
+        eval("Uint8Array.prototype.hasOwnProperty('map');"),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval("Object.getPrototypeOf(Uint8Array.prototype).hasOwnProperty('map');"),
+        Ok(Value::Boolean(true))
+    );
+    // Off-brand receiver throws.
+    assert!(eval("Uint8Array.prototype.join.call({});").is_err());
+}
+
+#[test]
+fn at_and_includes_and_index_of() {
+    assert_eq!(
+        eval("let a = new Int16Array([5, 10, 15]); a.at(-1) + ':' + a.at(0) + ':' + a.at(5);"),
+        Ok(Value::String("15:5:undefined".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([1, 2, 3]); a.indexOf(2) + ':' + a.indexOf(9) + ':' + a.lastIndexOf(3);"
+        ),
+        Ok(Value::String("1:-1:2".to_owned()))
+    );
+    assert_eq!(
+        eval("new Float64Array([NaN]).includes(NaN);"),
+        Ok(Value::Boolean(true))
+    );
+    // indexOf uses strict equality, so NaN is never found.
+    assert_eq!(
+        eval("new Float64Array([NaN]).indexOf(NaN);"),
+        Ok(Value::Number(-1.0))
+    );
+}
+
+#[test]
+fn join_and_to_string() {
+    assert_eq!(
+        eval("new Uint8Array([1, 2, 3]).join('-');"),
+        Ok(Value::String("1-2-3".to_owned()))
+    );
+    assert_eq!(
+        eval("new Uint8Array([1, 2, 3]).toString();"),
+        Ok(Value::String("1,2,3".to_owned()))
+    );
+}
+
+#[test]
+fn iterators_keys_values_entries() {
+    assert_eq!(
+        eval("Array.from(new Uint8Array([7, 8]).keys()).join(',');"),
+        Ok(Value::String("0,1".to_owned()))
+    );
+    assert_eq!(
+        eval("[...new Uint8Array([7, 8])].join(',');"),
+        Ok(Value::String("7,8".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let e = [...new Uint8Array([7, 8]).entries()]; e[0].join(':') + '|' + e[1].join(':');"
+        ),
+        Ok(Value::String("0:7|1:8".to_owned()))
+    );
+    // Symbol.iterator is the same function object as values.
+    assert_eq!(
+        eval(
+            "Object.getPrototypeOf(Uint8Array.prototype)[Symbol.iterator] === Object.getPrototypeOf(Uint8Array.prototype).values;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn for_each_some_every_find() {
+    assert_eq!(
+        eval("let s = 0; new Uint8Array([1, 2, 3]).forEach(x => { s += x; }); s;"),
+        Ok(Value::Number(6.0))
+    );
+    assert_eq!(
+        eval("new Uint8Array([1, 2, 3]).some(x => x > 2);"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("new Uint8Array([1, 2, 3]).every(x => x > 0);"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("new Uint8Array([1, 2, 3]).find(x => x > 1);"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval("new Uint8Array([1, 2, 3]).findLastIndex(x => x < 3);"),
+        Ok(Value::Number(1.0))
+    );
+}
+
+#[test]
+fn map_filter_slice_build_same_kind() {
+    assert_eq!(
+        eval(
+            "let r = new Int16Array([1, 2, 3]).map(x => x * 2); r.constructor === Int16Array ? r.join(',') : 'wrong';"
+        ),
+        Ok(Value::String("2,4,6".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let r = new Uint8Array([1, 2, 3, 4]).filter(x => x % 2 === 0); (r instanceof Uint8Array) + ':' + r.join(',');"
+        ),
+        Ok(Value::String("true:2,4".to_owned()))
+    );
+    assert_eq!(
+        eval("new Uint8Array([1, 2, 3, 4]).slice(1, 3).join(',');"),
+        Ok(Value::String("2,3".to_owned()))
+    );
+    // map applies per-type conversion to the callback result.
+    assert_eq!(
+        eval("new Uint8Array([1]).map(() => 257).join(',');"),
+        Ok(Value::String("1".to_owned()))
+    );
+}
+
+#[test]
+fn reduce_and_reduce_right() {
+    assert_eq!(
+        eval("new Uint8Array([1, 2, 3]).reduce((a, x) => a + x, 100);"),
+        Ok(Value::Number(106.0))
+    );
+    assert_eq!(
+        eval("new Uint8Array([1, 2, 3]).reduceRight((a, x) => a + '' + x, '');"),
+        Ok(Value::String("321".to_owned()))
+    );
+    assert!(eval("new Uint8Array([]).reduce((a, x) => a + x);").is_err());
+}
+
+#[test]
+fn subarray_copies_range() {
+    assert_eq!(
+        eval("new Uint8Array([1, 2, 3, 4]).subarray(1, 3).join(',');"),
+        Ok(Value::String("2,3".to_owned()))
+    );
+}
