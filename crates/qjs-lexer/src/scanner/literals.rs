@@ -5,22 +5,119 @@ use crate::{LexError, TemplateSegment, Token, TokenKind};
 use super::{
     Lexer, TemplateState,
     char_class::{is_identifier_continue, is_identifier_start},
-    keywords::identifier_or_keyword,
+    keywords::{identifier_or_keyword, is_always_reserved_word},
 };
 
 const SURROGATE_ESCAPE_SENTINEL_BASE: u32 = 0xF0000;
 
 impl Lexer<'_> {
-    pub(super) fn identifier(&mut self) {
+    pub(super) fn identifier(&mut self) -> Result<(), LexError> {
         let start = self.cursor;
-        while matches!(self.peek(), Some(ch) if is_identifier_continue(ch)) {
-            self.advance();
+        let mut had_escape = false;
+        // Decoded `IdentifierName` value (escapes resolved to their code
+        // points). Built lazily: only materialized once an escape is seen so
+        // the common escape-free path stays a borrow of the source.
+        let mut decoded: Option<String> = None;
+        let mut first = true;
+
+        loop {
+            match self.peek() {
+                Some('\\') if self.peek_nth(1) == Some('u') => {
+                    had_escape = true;
+                    let buffer =
+                        decoded.get_or_insert_with(|| self.source[start..self.cursor].to_owned());
+                    let escape_start = self.cursor;
+                    self.advance(); // backslash
+                    self.advance(); // `u`
+                    let code_point = self.identifier_unicode_escape(escape_start)?;
+                    let valid = if first {
+                        is_identifier_start(code_point)
+                    } else {
+                        is_identifier_continue(code_point)
+                    };
+                    if !valid {
+                        return Err(LexError {
+                            message: "escaped code point is not a valid identifier character"
+                                .to_owned(),
+                            span: Span::new(escape_start, self.cursor),
+                        });
+                    }
+                    buffer.push(code_point);
+                }
+                Some(ch)
+                    if (first && is_identifier_start(ch))
+                        || (!first && is_identifier_continue(ch)) =>
+                {
+                    if let Some(buffer) = decoded.as_mut() {
+                        buffer.push(ch);
+                    }
+                    self.advance();
+                }
+                _ => break,
+            }
+            first = false;
         }
-        let text = &self.source[start..self.cursor];
+
+        let kind = match decoded {
+            Some(value) => {
+                if is_always_reserved_word(&value) {
+                    return Err(LexError {
+                        message: format!(
+                            "the reserved word `{value}` may not be written with a Unicode escape"
+                        ),
+                        span: Span::new(start, self.cursor),
+                    });
+                }
+                TokenKind::Identifier(value)
+            }
+            None => identifier_or_keyword(&self.source[start..self.cursor]),
+        };
         self.tokens.push(Token {
-            kind: identifier_or_keyword(text),
+            kind,
             span: Span::new(start, self.cursor),
+            had_escape,
         });
+        Ok(())
+    }
+
+    /// Decodes the `UnicodeEscapeSequence` body of an identifier escape. The
+    /// leading `\u` has already been consumed. Unlike string-literal escapes,
+    /// a lone surrogate is invalid here (it cannot name an identifier
+    /// character), so this rejects `D800..=DFFF` rather than producing the
+    /// surrogate sentinel.
+    fn identifier_unicode_escape(&mut self, escape_start: usize) -> Result<char, LexError> {
+        let value = if self.peek() == Some('{') {
+            self.advance();
+            let digits_start = self.cursor;
+            while matches!(self.peek(), Some(ch) if ch.is_ascii_hexdigit()) {
+                self.advance();
+            }
+            if self.cursor == digits_start || self.peek() != Some('}') {
+                return Err(self.invalid_identifier_escape(escape_start));
+            }
+            let value = u32::from_str_radix(&self.source[digits_start..self.cursor], 16)
+                .map_err(|_| self.invalid_identifier_escape(escape_start))?;
+            self.advance(); // `}`
+            value
+        } else {
+            let digits_start = self.cursor;
+            for _ in 0..4 {
+                if !matches!(self.peek(), Some(ch) if ch.is_ascii_hexdigit()) {
+                    return Err(self.invalid_identifier_escape(escape_start));
+                }
+                self.advance();
+            }
+            u32::from_str_radix(&self.source[digits_start..self.cursor], 16)
+                .map_err(|_| self.invalid_identifier_escape(escape_start))?
+        };
+        char::from_u32(value).ok_or_else(|| self.invalid_identifier_escape(escape_start))
+    }
+
+    fn invalid_identifier_escape(&self, escape_start: usize) -> LexError {
+        LexError {
+            message: "invalid Unicode escape sequence in identifier".to_owned(),
+            span: Span::new(escape_start, self.cursor),
+        }
     }
 
     pub(super) fn private_name(&mut self) -> Result<(), LexError> {
@@ -41,6 +138,7 @@ impl Lexer<'_> {
         self.tokens.push(Token {
             kind: TokenKind::PrivateName(name),
             span: Span::new(start, self.cursor),
+            had_escape: false,
         });
         Ok(())
     }
@@ -69,6 +167,7 @@ impl Lexer<'_> {
                     self.tokens.push(Token {
                         kind: TokenKind::BigInt(self.source[start..self.cursor - 1].to_owned()),
                         span: Span::new(start, self.cursor),
+                        had_escape: false,
                     });
                     return Ok(());
                 }
@@ -86,6 +185,7 @@ impl Lexer<'_> {
                 self.tokens.push(Token {
                     kind: TokenKind::Number(self.source[start..self.cursor].to_owned()),
                     span: Span::new(start, self.cursor),
+                    had_escape: false,
                 });
                 return Ok(());
             }
@@ -101,6 +201,7 @@ impl Lexer<'_> {
             self.tokens.push(Token {
                 kind: TokenKind::BigInt(digits.to_owned()),
                 span: Span::new(start, self.cursor),
+                had_escape: false,
             });
             return Ok(());
         }
@@ -120,6 +221,7 @@ impl Lexer<'_> {
         self.tokens.push(Token {
             kind: TokenKind::Number(self.source[start..self.cursor].to_owned()),
             span: Span::new(start, self.cursor),
+            had_escape: false,
         });
         Ok(())
     }
@@ -135,6 +237,7 @@ impl Lexer<'_> {
         self.tokens.push(Token {
             kind: TokenKind::Number(self.source[start..self.cursor].to_owned()),
             span: Span::new(start, self.cursor),
+            had_escape: false,
         });
         Ok(())
     }
@@ -189,6 +292,7 @@ impl Lexer<'_> {
                 self.tokens.push(Token {
                     kind: TokenKind::String(value),
                     span: Span::new(start, self.cursor),
+                    had_escape: false,
                 });
                 return Ok(());
             }
@@ -225,6 +329,7 @@ impl Lexer<'_> {
                 self.tokens.push(Token {
                     kind: TokenKind::TemplateNoSubstitution(TemplateSegment { cooked: value, raw }),
                     span: Span::new(start, self.cursor),
+                    had_escape: false,
                 });
                 return Ok(());
             }
@@ -234,6 +339,7 @@ impl Lexer<'_> {
                 self.tokens.push(Token {
                     kind: TokenKind::TemplateHead(TemplateSegment { cooked: value, raw }),
                     span: Span::new(start, self.cursor),
+                    had_escape: false,
                 });
                 self.template_stack.push(TemplateState { brace_depth: 0 });
                 return Ok(());
@@ -276,6 +382,7 @@ impl Lexer<'_> {
                 self.tokens.push(Token {
                     kind: TokenKind::TemplateTail(TemplateSegment { cooked: value, raw }),
                     span: Span::new(start, self.cursor),
+                    had_escape: false,
                 });
                 return Ok(());
             }
@@ -285,6 +392,7 @@ impl Lexer<'_> {
                 self.tokens.push(Token {
                     kind: TokenKind::TemplateMiddle(TemplateSegment { cooked: value, raw }),
                     span: Span::new(start, self.cursor),
+                    had_escape: false,
                 });
                 return Ok(());
             }

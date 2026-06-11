@@ -301,6 +301,12 @@ impl Parser {
                 span,
             });
         }
+        if self.strict && is_strict_reserved_word(name) {
+            return Err(ParseError {
+                message: format!("`{name}` is a reserved word in strict mode"),
+                span,
+            });
+        }
         Ok(())
     }
 
@@ -374,6 +380,20 @@ fn body_lexically_declared_names(body: &[Stmt]) -> Vec<String> {
         }
     }
     names
+}
+
+/// Reports whether `name` is a word that may not be used as a binding
+/// identifier (or label/reference) in strict-mode code. Covers the
+/// strict-mode future reserved words plus `yield`. `let` and `static` are
+/// contextual and handled by their own dedicated paths, so they are not listed
+/// here; `eval`/`arguments` have their own dedicated diagnostics. The
+/// StringValue comparison is escape-insensitive, so an escaped spelling such as
+/// `package` is rejected the same as `package`.
+pub(crate) fn is_strict_reserved_word(name: &str) -> bool {
+    matches!(
+        name,
+        "implements" | "interface" | "package" | "private" | "protected" | "public" | "yield"
+    )
 }
 
 pub(crate) fn duplicate_parameter_span(params: &FunctionParams) -> Option<Span> {

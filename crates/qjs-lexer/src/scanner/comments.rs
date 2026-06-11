@@ -138,6 +138,7 @@ impl Lexer<'_> {
                     self.tokens.push(crate::Token {
                         kind: TokenKind::RegularExpression { pattern, flags },
                         span: Span::new(start, self.cursor),
+                        had_escape: false,
                     });
                     return Ok(());
                 }

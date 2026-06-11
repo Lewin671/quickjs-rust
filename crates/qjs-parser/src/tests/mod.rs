@@ -1,5 +1,6 @@
 mod async_functions;
 mod classes;
+mod escaped_identifiers;
 mod expressions;
 mod generators;
 mod literals_and_functions;

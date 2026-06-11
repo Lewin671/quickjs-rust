@@ -1,6 +1,137 @@
 use qjs_ast::Span;
 
-use super::{TemplateSegment, TokenKind, lex};
+use super::{TemplateSegment, Token, TokenKind, lex};
+
+fn kinds(source: &str) -> Vec<TokenKind> {
+    lex(source)
+        .expect("source should lex")
+        .into_iter()
+        .map(|token| token.kind)
+        .collect()
+}
+
+#[test]
+fn lexes_unicode_escaped_identifier_four_digit_form() {
+    // `abc` decodes to `abc`.
+    assert_eq!(
+        kinds("\\u0061bc"),
+        vec![TokenKind::Identifier("abc".to_owned()), TokenKind::Eof]
+    );
+}
+
+#[test]
+fn lexes_unicode_escaped_identifier_braced_form() {
+    // `\u{61}` decodes to `a`; an escape may also appear mid-identifier.
+    assert_eq!(
+        kinds("\\u{61} a\\u{62}c"),
+        vec![
+            TokenKind::Identifier("a".to_owned()),
+            TokenKind::Identifier("abc".to_owned()),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn escaped_identifier_carries_had_escape_flag_and_span() {
+    let tokens = lex("a\\u0062c = 1").expect("source should lex");
+    let ident = &tokens[0];
+    assert_eq!(ident.kind, TokenKind::Identifier("abc".to_owned()));
+    assert!(ident.had_escape, "escaped identifier should set had_escape");
+    // Span covers the raw escaped source `abc` (8 bytes).
+    assert_eq!(ident.span, Span::new(0, 8));
+}
+
+#[test]
+fn plain_identifier_has_no_escape_flag() {
+    let tokens = lex("abc").expect("source should lex");
+    assert!(!tokens[0].had_escape);
+}
+
+#[test]
+fn escaped_spelling_of_reserved_word_is_an_identifier_token_then_rejected() {
+    // A bare escaped keyword (`\u{62}reak` -> `break`) is rejected at lex time
+    // because a reserved word may not be written with escapes.
+    assert!(lex("\\u{62}reak").is_err());
+    assert!(lex("\\u0069f").is_err()); // `if`
+    assert!(lex("cl\\u0061ss").is_err()); // `class`
+}
+
+#[test]
+fn unescaped_keyword_still_lexes_as_keyword() {
+    assert_eq!(kinds("break"), vec![TokenKind::Break, TokenKind::Eof]);
+    assert_eq!(kinds("class"), vec![TokenKind::Class, TokenKind::Eof]);
+}
+
+#[test]
+fn var_declaration_with_escaped_value_lexes() {
+    // `var` is a keyword (unescaped); `a` is a plain identifier here.
+    assert_eq!(
+        kinds("var a = 1"),
+        vec![
+            TokenKind::Var,
+            TokenKind::Identifier("a".to_owned()),
+            TokenKind::Equal,
+            TokenKind::Number("1".to_owned()),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn rejects_escape_decoding_to_invalid_identifier_character() {
+    // ` ` is a space: not a valid IdentifierStart.
+    assert!(lex("\\u0020").is_err());
+    // A digit is not a valid IdentifierStart even via escape.
+    assert!(lex("\\u0031").is_err()); // `1`
+    // Lone surrogates cannot name identifier characters.
+    assert!(lex("\\u{d800}").is_err());
+}
+
+#[test]
+fn rejects_malformed_identifier_unicode_escape() {
+    assert!(lex("\\u").is_err());
+    assert!(lex("\\u12").is_err());
+    assert!(lex("\\u{}").is_err());
+    assert!(lex("\\u{61").is_err());
+}
+
+#[test]
+fn escaped_contextual_keyword_is_plain_identifier_with_flag() {
+    // `let`, `yield`, `async` are contextual; the lexer keeps the escaped
+    // spelling as an Identifier carrying the flag so the parser can refuse the
+    // contextual role.
+    for (source, value) in [
+        ("\\u{6c}et", "let"),
+        ("yi\\u0065ld", "yield"),
+        ("async", "async"),
+    ] {
+        let tokens = lex(source).expect("contextual escaped identifier should lex");
+        assert_eq!(tokens[0].kind, TokenKind::Identifier(value.to_owned()));
+    }
+    assert!(
+        lex("\\u{6c}et")
+            .expect("lexes")
+            .iter()
+            .any(|Token { had_escape, .. }| *had_escape)
+    );
+}
+
+#[test]
+fn accepts_non_ascii_identifier_characters() {
+    // `café` and a leading non-ASCII letter should lex as identifiers.
+    assert_eq!(
+        kinds("café"),
+        vec![TokenKind::Identifier("café".to_owned()), TokenKind::Eof]
+    );
+    assert_eq!(
+        kinds("\u{00e9}t\u{00e9}"),
+        vec![
+            TokenKind::Identifier("\u{00e9}t\u{00e9}".to_owned()),
+            TokenKind::Eof,
+        ]
+    );
+}
 
 #[test]
 fn lexes_expression() {
