@@ -7,6 +7,12 @@ pub struct Token {
     pub kind: TokenKind,
     /// Source span.
     pub span: Span,
+    /// Whether an `IdentifierName` token's spelling contained a
+    /// `UnicodeEscapeSequence` (`\uXXXX` or `\u{CodePoint}`). Always `false`
+    /// for non-identifier tokens. Per ECMA-262 11.6.2 a reserved word may not
+    /// be written with escapes, so the parser uses this flag to refuse to
+    /// treat an escaped spelling as a keyword or contextual keyword.
+    pub had_escape: bool,
 }
 
 /// Token categories recognized by the lexer.

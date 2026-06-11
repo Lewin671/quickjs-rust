@@ -115,6 +115,16 @@ impl Parser {
                 span: token.span,
             });
         }
+        // Strict-mode reserved words (including escaped spellings such as
+        // `package`) may not name a binding. The lexer keeps escaped
+        // spellings as Identifier tokens, so this StringValue check is reached
+        // for both plain and escaped forms.
+        if self.strict && crate::statement::functions::is_strict_reserved_word(&name) {
+            return Err(ParseError {
+                message: format!("`{name}` is a reserved word in strict mode"),
+                span: token.span,
+            });
+        }
         Ok(BindingPattern::Identifier {
             name,
             span: token.span,

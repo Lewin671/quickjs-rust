@@ -37,7 +37,8 @@ impl<'src> Lexer<'src> {
                 c if is_js_whitespace_or_line_terminator(c) => {
                     self.advance();
                 }
-                c if is_identifier_start(c) => self.identifier(),
+                c if is_identifier_start(c) => self.identifier()?,
+                '\\' if self.peek_nth(1) == Some('u') => self.identifier()?,
                 c if c.is_ascii_digit() => self.number()?,
                 '"' | '\'' => self.string(ch)?,
                 '`' => self.template_literal()?,
@@ -87,6 +88,7 @@ impl<'src> Lexer<'src> {
         self.tokens.push(Token {
             kind: TokenKind::Eof,
             span: Span::new(self.cursor, self.cursor),
+            had_escape: false,
         });
         Ok(self.tokens)
     }
@@ -101,6 +103,7 @@ impl<'src> Lexer<'src> {
         self.tokens.push(Token {
             kind,
             span: Span::new(start, self.cursor),
+            had_escape: false,
         });
     }
 

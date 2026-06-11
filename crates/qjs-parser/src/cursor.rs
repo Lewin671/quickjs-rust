@@ -35,8 +35,14 @@ impl Parser {
     }
 
     pub(crate) fn match_contextual_keyword(&mut self, keyword: &str) -> bool {
-        if matches!(self.peek(), Some(Token { kind: TokenKind::Identifier(name), .. }) if name == keyword)
-        {
+        // A contextual keyword written with a Unicode escape (e.g. `\u{6f}f`)
+        // does not play its syntactic role: per ECMA-262 a keyword's meaning
+        // requires its literal spelling, so an escaped spelling stays a plain
+        // identifier here.
+        if matches!(
+            self.peek(),
+            Some(Token { kind: TokenKind::Identifier(name), had_escape: false, .. }) if name == keyword
+        ) {
             self.cursor += 1;
             return true;
         }
