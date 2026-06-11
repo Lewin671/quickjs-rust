@@ -238,6 +238,18 @@ pub(super) enum ClassMethodKind {
 pub(super) enum ClassElementDef {
     Method(ClassMethodDef),
     Field(ClassFieldDef),
+    /// A `static { ... }` initialization block, run at class definition with
+    /// `this` = the constructor, in source order with static fields.
+    StaticBlock(ClassStaticBlockDef),
+}
+
+/// Compiled `static { ... }` block: a parameterless thunk whose body runs with
+/// `this` = the constructor (its home object is the constructor too, so
+/// `super.x` resolves against the constructor's prototype).
+#[derive(Clone, Debug)]
+pub(super) struct ClassStaticBlockDef {
+    pub(super) local_names: Vec<String>,
+    pub(super) bytecode: Rc<Bytecode>,
 }
 
 /// A private class element in source order. Private names are keyed by source
@@ -442,6 +454,9 @@ fn collect_global_names_from_ops(code: &[Op], names: &mut BTreeSet<String>) {
                             if let Some(initializer) = &field.initializer {
                                 names.extend(initializer.bytecode.global_names().iter().cloned());
                             }
+                        }
+                        ClassElementDef::StaticBlock(block) => {
+                            names.extend(block.bytecode.global_names().iter().cloned());
                         }
                     }
                 }

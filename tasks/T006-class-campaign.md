@@ -72,8 +72,16 @@ verification command is green and `./scripts/check.sh` passes.
             access TypeErrors, and compound/increment private assignment.
             Follow-ups: `obj?.#x` optional chaining and `#x` in
             generator/async members (engine lacks those forms).
-      - [ ] Static initialization blocks — still rejected with a structured
-            error.
+      - [x] Static initialization blocks (`static { ... }`): AST
+            `ClassElement::StaticBlock`, parser block member (its own
+            var/lexical scope via the block statement list, `super.x` allowed
+            with the constructor as home but `super(...)` rejected, `static` as
+            a plain method name still works when not followed by `{`), and
+            runtime execution as a parameterless strict thunk with
+            `this` = constructor, interleaved with static field initializers in
+            source order at class-definition time. Follow-up: `new.target`
+            inside a static block needs the separate `new.target` syntax (still
+            unsupported engine-wide).
 
 ## Scope
 

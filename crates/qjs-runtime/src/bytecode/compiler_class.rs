@@ -10,7 +10,8 @@ use crate::{RuntimeError, function::collect_function_local_names};
 use super::compiler::{Compiler, compile_function_body_with_strict};
 use super::ir::{
     ClassConstructorDef, ClassElementDef, ClassFieldDef, ClassFieldInitializerDef,
-    ClassMemberKeyDef, ClassMethodDef, ClassMethodKind, ClassPrivateElementDef, Op,
+    ClassMemberKeyDef, ClassMethodDef, ClassMethodKind, ClassPrivateElementDef,
+    ClassStaticBlockDef, Op,
 };
 
 impl Compiler {
@@ -41,6 +42,8 @@ impl Compiler {
             let key = match element {
                 ClassElement::Method(member) => &member.key,
                 ClassElement::Field(field) => &field.key,
+                // Static blocks have no key.
+                ClassElement::StaticBlock(_) => continue,
             };
             if let ClassMemberKey::Computed(expr) = key {
                 self.compile_expr(expr)?;
@@ -157,6 +160,9 @@ impl Compiler {
                         initializer,
                     }));
                 }
+                ClassElement::StaticBlock(block) => {
+                    elements.push(ClassElementDef::StaticBlock(compile_static_block(block)?));
+                }
             }
         }
 
@@ -208,6 +214,18 @@ fn compile_field_initializer(
         local_names,
         bytecode: Rc::new(bytecode),
     }))
+}
+
+/// Compiles a `static { ... }` block into a parameterless strict thunk run at
+/// class definition with `this` = the constructor.
+fn compile_static_block(block: &qjs_ast::StaticBlock) -> Result<ClassStaticBlockDef, RuntimeError> {
+    let params = FunctionParams::positional(Vec::new());
+    let bytecode = compile_function_body_with_strict(&params, &block.body, true)?;
+    let local_names = collect_function_local_names(None, &params, &block.body, true);
+    Ok(ClassStaticBlockDef {
+        local_names,
+        bytecode: Rc::new(bytecode),
+    })
 }
 
 /// Builds the implicit default constructor. A base class gets an empty body;

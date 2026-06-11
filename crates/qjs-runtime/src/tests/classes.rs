@@ -9,6 +9,43 @@ fn instantiates_class_and_reads_field() {
 }
 
 #[test]
+fn static_initialization_block_runs_with_this_as_constructor() {
+    assert_eq!(
+        eval("class C { static { this.x = 7; } } C.x;"),
+        Ok(Value::Number(7.0))
+    );
+}
+
+#[test]
+fn static_blocks_and_fields_run_in_source_order() {
+    // Each block/field appends to a shared array; the order is field, block,
+    // field, block.
+    assert_eq!(
+        eval(
+            "class C { \
+               static log = []; \
+               static a = C.log.push(1); \
+               static { C.log.push(2); } \
+               static b = C.log.push(3); \
+               static { C.log.push(4); } \
+             } C.log.join(',');"
+        ),
+        Ok(Value::String("1,2,3,4".to_owned()))
+    );
+}
+
+#[test]
+fn static_block_can_read_super_property() {
+    assert_eq!(
+        eval(
+            "class B { static base = 10; } \
+             class C extends B { static { this.v = super.base + 1; } } C.v;"
+        ),
+        Ok(Value::Number(11.0))
+    );
+}
+
+#[test]
 fn numeric_literal_member_keys_use_their_canonical_name() {
     // A numeric-literal method/accessor key names the property `ToString(MV)`,
     // so `0b10` defines `"2"` (matching object literals).

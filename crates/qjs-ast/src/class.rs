@@ -1,5 +1,6 @@
 use crate::expression::Expr;
 use crate::span::Span;
+use crate::statement::Stmt;
 
 /// A class body shared by class declarations and class expressions.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -20,6 +21,19 @@ pub enum ClassElement {
     Method(ClassMember),
     /// A public instance or static field.
     Field(ClassField),
+    /// A `static { ... }` initialization block.
+    StaticBlock(StaticBlock),
+}
+
+/// A `static { ... }` initialization block. Its body runs at class-definition
+/// time, in source order interleaved with static fields, with `this` bound to
+/// the constructor.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StaticBlock {
+    /// The block's statement list.
+    pub body: Vec<Stmt>,
+    /// Source span covering `static { ... }`.
+    pub span: Span,
 }
 
 /// A method, accessor, or constructor member of a class body.

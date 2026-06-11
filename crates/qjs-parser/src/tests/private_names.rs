@@ -18,7 +18,9 @@ fn parses_private_instance_and_static_fields() {
         .iter()
         .map(|element| match element {
             ClassElement::Field(field) => (field.key.clone(), field.is_static),
-            ClassElement::Method(_) => panic!("expected only fields"),
+            ClassElement::Method(_) | ClassElement::StaticBlock(_) => {
+                panic!("expected only fields")
+            }
         })
         .collect();
     assert_eq!(
@@ -43,7 +45,7 @@ fn parses_private_methods_and_accessors() {
             ClassElement::Method(member) => {
                 Some((member.key.clone(), member.kind, member.is_static))
             }
-            ClassElement::Field(_) => None,
+            ClassElement::Field(_) | ClassElement::StaticBlock(_) => None,
         })
         .collect();
     assert_eq!(

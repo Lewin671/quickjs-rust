@@ -11,9 +11,16 @@ use crate::{
 
 use super::ir::{
     ClassConstructorDef, ClassElementDef, ClassFieldDef, ClassFieldInitializerDef,
-    ClassMemberKeyDef, ClassMethodDef, ClassMethodKind,
+    ClassMemberKeyDef, ClassMethodDef, ClassMethodKind, ClassStaticBlockDef,
 };
 use super::vm::Vm;
+
+/// A class element whose evaluation is deferred to pass 2 of class definition,
+/// preserving source order so static fields and static blocks interleave.
+enum PendingStaticItem<'a> {
+    Field(&'a ClassFieldDef, PropertyKey),
+    Block(&'a ClassStaticBlockDef),
+}
 
 impl Vm<'_> {
     /// Builds a class constructor function object, wires its `prototype` and
@@ -110,8 +117,9 @@ impl Vm<'_> {
         // seeded with the class value rather than sharing a mutable parent env.
         //
         // Pass 1: resolve computed keys in source order, install methods
-        // immediately, and stash field definitions with their resolved keys.
-        let mut pending_fields = Vec::new();
+        // immediately, and stash field definitions (with their resolved keys)
+        // and static blocks in source order for pass 2.
+        let mut pending = Vec::new();
         for element in elements {
             match element {
                 ClassElementDef::Method(method) => {
@@ -120,7 +128,10 @@ impl Vm<'_> {
                 }
                 ClassElementDef::Field(field) => {
                     let key = resolve_element_key(&field.key, &mut computed_keys);
-                    pending_fields.push((field, key));
+                    pending.push(PendingStaticItem::Field(field, key));
+                }
+                ClassElementDef::StaticBlock(block) => {
+                    pending.push(PendingStaticItem::Block(block));
                 }
             }
         }
@@ -133,25 +144,41 @@ impl Vm<'_> {
         self.install_private_elements(private_elements, &prototype, &constructor_function, name)?;
 
         // Pass 2: instance fields become constructor initializers (run at
-        // construction time); static fields are evaluated now, after all method
-        // definitions, with `this` = the constructor.
-        for (field, key) in pending_fields {
-            let initializer =
-                self.build_field_initializer(field, &prototype, &constructor_function, name);
-            if field.is_static {
-                let value = match &initializer {
-                    Some(thunk) => self.run_field_initializer(
-                        thunk,
-                        Value::Function(constructor_function.clone()),
-                    )?,
-                    None => Value::Undefined,
-                };
-                install_field_value(&Value::Function(constructor_function.clone()), key, value)?;
-            } else {
-                constructor_function
-                    .instance_fields
-                    .borrow_mut()
-                    .push(InstanceFieldInitializer { key, initializer });
+        // construction time); static fields and static blocks are evaluated now,
+        // after all method definitions, in source order, with `this` = the
+        // constructor.
+        for item in pending {
+            match item {
+                PendingStaticItem::Field(field, key) => {
+                    let initializer = self.build_field_initializer(
+                        field,
+                        &prototype,
+                        &constructor_function,
+                        name,
+                    );
+                    if field.is_static {
+                        let value = match &initializer {
+                            Some(thunk) => self.run_field_initializer(
+                                thunk,
+                                Value::Function(constructor_function.clone()),
+                            )?,
+                            None => Value::Undefined,
+                        };
+                        install_field_value(
+                            &Value::Function(constructor_function.clone()),
+                            key,
+                            value,
+                        )?;
+                    } else {
+                        constructor_function
+                            .instance_fields
+                            .borrow_mut()
+                            .push(InstanceFieldInitializer { key, initializer });
+                    }
+                }
+                PendingStaticItem::Block(block) => {
+                    self.run_static_block(block, &constructor_function, name)?;
+                }
             }
         }
 
@@ -284,6 +311,43 @@ impl Vm<'_> {
             super_constructor: None,
             captured_env: Rc::new(RefCell::new(field_env)),
         }))
+    }
+
+    /// Runs a `static { ... }` block at class definition: builds a parameterless
+    /// strict thunk whose home object and `this` are the constructor (so
+    /// `super.x` resolves against the constructor's [[Prototype]]) and calls it.
+    fn run_static_block(
+        &mut self,
+        block: &ClassStaticBlockDef,
+        constructor_function: &Function,
+        name: Option<&str>,
+    ) -> Result<(), RuntimeError> {
+        let ClassStaticBlockDef {
+            local_names,
+            bytecode,
+        } = block;
+        let mut block_env = self.function_capture_env(bytecode, local_names);
+        bind_class_inner_name(&mut block_env, name, constructor_function);
+        let thunk = Function::new_user_compiled(CompiledUserFunction {
+            name: None,
+            params: qjs_ast::FunctionParams::positional(Vec::new()),
+            env: block_env.clone(),
+            bytecode: bytecode.clone(),
+            local_names: local_names.clone(),
+            constructable: false,
+            is_strict: true,
+            lexical_this: false,
+            lexical_arguments: false,
+            is_generator: false,
+            is_async: false,
+            is_class_constructor: false,
+            is_derived_constructor: false,
+            home_object: Some(Value::Function(constructor_function.clone())),
+            super_constructor: None,
+            captured_env: Rc::new(RefCell::new(block_env)),
+        });
+        self.run_field_initializer(&thunk, Value::Function(constructor_function.clone()))?;
+        Ok(())
     }
 
     /// Runs a field initializer thunk with the given `this` value and returns

@@ -190,10 +190,23 @@ impl Parser {
             .expect("parser should always have eof token");
         let member_start = start_token.span.start;
 
+        // `static { ... }` is a static initialization block. `static` here is
+        // not the modifier-then-member form, so detect the block before the
+        // `static`-as-modifier check below.
+        let is_static_keyword =
+            matches!(&start_token.kind, TokenKind::Identifier(name) if name == "static");
+        if is_static_keyword
+            && matches!(
+                self.peek_nth(1).map(|t| &t.kind),
+                Some(TokenKind::LeftBrace)
+            )
+        {
+            return self.static_block(member_start);
+        }
+
         // `static` is a modifier only when it is followed by another member
         // start; `static() {}` or `static = 1` use `static` as the name.
-        let is_static = matches!(&start_token.kind, TokenKind::Identifier(name) if name == "static")
-            && self.token_starts_member_after_modifier(1);
+        let is_static = is_static_keyword && self.token_starts_member_after_modifier(1);
         if is_static {
             self.advance();
         }
@@ -360,6 +373,34 @@ impl Parser {
             key,
             is_static,
             value,
+            span: Span::new(member_start, end),
+        }))
+    }
+
+    /// Parses a `static { ... }` initialization block. The `static` keyword has
+    /// not yet been consumed. The block body runs at class-definition time with
+    /// `this` = constructor, so `super.x` is allowed (it is a method-like home
+    /// context) but `super(...)` is not; `yield`/`await` are not the static
+    /// block's own context.
+    fn static_block(&mut self, member_start: usize) -> Result<ClassElement, ParseError> {
+        self.expect(&TokenKind::Identifier("static".to_owned()))?;
+        let previous_method = self.in_method;
+        let previous_derived = self.in_derived_constructor;
+        let previous_generator = self.in_generator;
+        let previous_async = self.in_async;
+        self.in_method = true;
+        self.in_derived_constructor = false;
+        self.in_generator = false;
+        self.in_async = false;
+        let body = self.block_body();
+        self.in_method = previous_method;
+        self.in_derived_constructor = previous_derived;
+        self.in_generator = previous_generator;
+        self.in_async = previous_async;
+        let body = body?;
+        let end = self.previous_end();
+        Ok(ClassElement::StaticBlock(qjs_ast::StaticBlock {
+            body,
             span: Span::new(member_start, end),
         }))
     }

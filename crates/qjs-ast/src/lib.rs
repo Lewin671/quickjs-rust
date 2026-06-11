@@ -5,7 +5,9 @@ mod expression;
 mod span;
 mod statement;
 
-pub use class::{ClassBody, ClassElement, ClassField, ClassMember, ClassMemberKey, MethodKind};
+pub use class::{
+    ClassBody, ClassElement, ClassField, ClassMember, ClassMemberKey, MethodKind, StaticBlock,
+};
 pub use expression::{
     ArrayElement, AssignmentOp, AssignmentTarget, AssignmentTargetElement,
     AssignmentTargetProperty, BinaryOp, CallArgument, Expr, FunctionParams, Literal,

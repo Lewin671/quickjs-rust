@@ -11,7 +11,7 @@ fn members(body: &ClassBody) -> Vec<&ClassMember> {
         .iter()
         .filter_map(|element| match element {
             ClassElement::Method(member) => Some(member),
-            ClassElement::Field(_) => None,
+            ClassElement::Field(_) | ClassElement::StaticBlock(_) => None,
         })
         .collect()
 }
@@ -22,7 +22,7 @@ fn fields(body: &ClassBody) -> Vec<&ClassField> {
         .iter()
         .filter_map(|element| match element {
             ClassElement::Field(field) => Some(field),
-            ClassElement::Method(_) => None,
+            ClassElement::Method(_) | ClassElement::StaticBlock(_) => None,
         })
         .collect()
 }
@@ -61,6 +61,36 @@ fn parses_class_declaration_with_constructor_and_methods() {
     let method = members(body)[1];
     assert_eq!(method.kind, MethodKind::Method);
     assert_eq!(method.key, ClassMemberKey::Literal("norm".to_owned()));
+}
+
+#[test]
+fn parses_static_initialization_blocks() {
+    let script = parse_script("class C { static x = 1; static { this.y = 2; } }")
+        .expect("static blocks should parse");
+    let [Stmt::ClassDecl { body, .. }] = script.body.as_slice() else {
+        panic!("expected class declaration");
+    };
+    // The block is a distinct element, in source order after the field.
+    assert!(matches!(body.elements[0], ClassElement::Field(_)));
+    let ClassElement::StaticBlock(block) = &body.elements[1] else {
+        panic!("expected a static initialization block");
+    };
+    assert_eq!(block.body.len(), 1);
+}
+
+#[test]
+fn static_is_a_method_name_when_not_followed_by_a_block() {
+    // `static() {}` and `static = 1` use `static` as the member name, not as the
+    // block/modifier keyword.
+    let script = parse_script("class C { static() {} }").expect("source should parse");
+    let [Stmt::ClassDecl { body, .. }] = script.body.as_slice() else {
+        panic!("expected class declaration");
+    };
+    assert_eq!(
+        members(body)[0].key,
+        ClassMemberKey::Literal("static".to_owned())
+    );
+    assert!(!members(body)[0].is_static);
 }
 
 #[test]

@@ -105,7 +105,7 @@ fn parses_class_generator_methods() {
                 assert_eq!(member.kind, MethodKind::Method);
                 Some(*is_generator)
             }
-            ClassElement::Field(_) => None,
+            ClassElement::Field(_) | ClassElement::StaticBlock(_) => None,
         })
         .collect();
     assert_eq!(generators, [true, true, true]);
