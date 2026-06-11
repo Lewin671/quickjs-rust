@@ -276,6 +276,7 @@ pub(crate) enum NativeFunction {
     PromiseAllSettledRejectElement,
     PromiseAllSettledResolveElement,
     PromiseAllResolveElement,
+    PromiseGetCapabilitiesExecutor,
     PromisePrototypeCatch,
     PromisePrototypeFinally,
     PromisePrototypeFinallyFulfilled,

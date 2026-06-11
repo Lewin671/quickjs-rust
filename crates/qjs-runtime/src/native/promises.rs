@@ -43,6 +43,9 @@ pub(super) fn call_promise_native(
         NativeFunction::PromiseAllResolveElement => {
             promise::native_promise_all_resolve_element(function, argument_values, env)?
         }
+        NativeFunction::PromiseGetCapabilitiesExecutor => {
+            promise::native_get_capabilities_executor(function, argument_values, env)?
+        }
         NativeFunction::PromisePrototypeCatch => {
             promise::native_promise_catch(function, this_value, argument_values, env)?
         }
@@ -62,10 +65,10 @@ pub(super) fn call_promise_native(
             promise::native_promise_race(function, argument_values, env)?
         }
         NativeFunction::PromiseReject => {
-            promise::native_promise_reject(function, argument_values, env)?
+            promise::native_promise_reject(this_value, argument_values, env)?
         }
         NativeFunction::PromiseResolve => {
-            promise::native_promise_resolve(function, argument_values, env)?
+            promise::native_promise_resolve(this_value, argument_values, env)?
         }
         NativeFunction::PromiseTry => {
             promise::r#try::native_promise_try(function, this_value, argument_values, env)?

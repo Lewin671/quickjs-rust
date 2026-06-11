@@ -57,6 +57,64 @@ fn evaluates_promise_resolve_reject_shell() {
 }
 
 #[test]
+fn promise_resolve_reject_require_object_receiver() {
+    assert!(eval("Promise.resolve.call(undefined, 1);").is_err());
+    assert!(eval("Promise.resolve.call(86, 1);").is_err());
+    assert!(eval("Promise.reject.call(null, 1);").is_err());
+}
+
+#[test]
+fn promise_resolve_returns_same_promise_only_for_matching_constructor() {
+    assert_eval(
+        "var p = Promise.resolve(1); Promise.resolve(p) === p;",
+        Value::Boolean(true),
+    );
+    assert_eval(
+        "var p = new Promise(function(){}); p.constructor = null; Promise.resolve(p) === p;",
+        Value::Boolean(false),
+    );
+}
+
+#[test]
+fn promise_static_methods_use_this_constructor() {
+    // Promise.resolve.call(C) constructs through C with a capabilities executor.
+    assert_eval(
+        "var calls = 0; function C(exec){ calls++; exec(function(){}, function(){}); }\
+         C.prototype = Promise.prototype;\
+         Promise.resolve.call(C, 1); calls;",
+        Value::Number(1.0),
+    );
+    // A capabilities executor that supplies a non-callable resolve/reject throws.
+    assert!(
+        eval("Promise.resolve.call(function(exec){ exec(undefined, undefined); }, 1);").is_err()
+    );
+}
+
+#[test]
+fn promise_has_symbol_species_accessor() {
+    assert_eval("Promise[Symbol.species] === Promise;", Value::Boolean(true));
+    assert_eval(
+        "Object.getOwnPropertyDescriptor(Promise, Symbol.species).set;",
+        Value::Undefined,
+    );
+    assert_eval(
+        "Object.getOwnPropertyDescriptor(Promise, Symbol.species).get.name;",
+        Value::String("get [Symbol.species]".to_owned()),
+    );
+}
+
+#[test]
+fn promise_then_uses_species_constructor() {
+    // then() builds its result promise via SpeciesConstructor of the receiver.
+    assert_eval(
+        "var observed; class P extends Promise {}\
+         Object.defineProperty(P, Symbol.species, { value: function(exec){ observed = true; exec(function(){}, function(){}); } });\
+         var p = P.resolve(1); p.then(); observed === true;",
+        Value::Boolean(true),
+    );
+}
+
+#[test]
 fn evaluates_promise_all_shell() {
     assert_eval("typeof Promise.all;", Value::String("function".to_owned()));
     assert_eval("Promise.all.length;", Value::Number(1.0));

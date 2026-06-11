@@ -4,9 +4,9 @@ use crate::{ArrayRef, GLOBAL_THIS_BINDING, ObjectRef, RuntimeError, Value, call_
 
 use super::{
     PROMISE_FULFILL_REACTION, PROMISE_HANDLER, PROMISE_JOBS, PROMISE_REACTION_ARGUMENT,
-    PROMISE_REACTION_CAPABILITY, PROMISE_REJECTED, PROMISE_THEN, PROMISE_THENABLE,
-    PROMISE_THENABLE_CAPABILITY, is_promise_object, reaction_is_fulfill, resolve_promise,
-    resolving_function, settle_promise,
+    PROMISE_REACTION_CAPABILITY, PROMISE_REACTION_REJECT, PROMISE_REACTION_RESOLVE,
+    PROMISE_REJECTED, PROMISE_THEN, PROMISE_THENABLE, PROMISE_THENABLE_CAPABILITY,
+    is_promise_object, reaction_is_fulfill, resolve_promise, resolving_function, settle_promise,
 };
 use crate::NativeFunction;
 
@@ -27,6 +27,18 @@ pub(super) fn enqueue_promise_reaction_job(
         .map(|property| property.value)
     {
         job.define_non_enumerable(PROMISE_REACTION_CAPABILITY.to_owned(), capability);
+    }
+    if let Some(resolve) = reaction
+        .own_property(PROMISE_REACTION_RESOLVE)
+        .map(|property| property.value)
+    {
+        job.define_non_enumerable(PROMISE_REACTION_RESOLVE.to_owned(), resolve);
+    }
+    if let Some(reject) = reaction
+        .own_property(PROMISE_REACTION_REJECT)
+        .map(|property| property.value)
+    {
+        job.define_non_enumerable(PROMISE_REACTION_REJECT.to_owned(), reject);
     }
     job.define_non_enumerable(PROMISE_REACTION_ARGUMENT.to_owned(), argument);
     job.define_non_enumerable(
@@ -79,13 +91,6 @@ fn run_promise_reaction_job(
     job: &ObjectRef,
     env: &mut HashMap<String, Value>,
 ) -> Result<(), RuntimeError> {
-    let capability = match job
-        .own_property(PROMISE_REACTION_CAPABILITY)
-        .map(|property| property.value)
-    {
-        Some(Value::Object(promise)) if is_promise_object(&promise) => promise,
-        _ => return Ok(()),
-    };
     let argument = job
         .own_property(PROMISE_REACTION_ARGUMENT)
         .map_or(Value::Undefined, |property| property.value);
@@ -98,20 +103,63 @@ fn run_promise_reaction_job(
         .own_property(PROMISE_HANDLER)
         .map_or(Value::Undefined, |property| property.value);
 
-    match handler {
-        Value::Function(_) => {
-            match call_function(handler, Value::Undefined, vec![argument], env, false) {
-                Ok(value) => resolve_promise(&capability, value, env),
-                Err(error) => settle_promise(
-                    &capability,
-                    PROMISE_REJECTED,
-                    error.thrown.map_or(Value::Undefined, |value| *value),
-                    env,
-                ),
+    // The handler completion produces a value or a thrown reason that is fed to
+    // the result capability's resolve/reject. Missing handler => identity (for
+    // fulfill) or thrower (for reject), per HandleRejection/HandleFulfillment.
+    let completion = match handler {
+        Value::Function(_) => call_function(handler, Value::Undefined, vec![argument], env, false),
+        _ if fulfill => Ok(argument),
+        _ => Err(RuntimeError {
+            thrown: Some(Box::new(argument)),
+            message: "Promise reaction rejected".to_owned(),
+        }),
+    };
+
+    settle_reaction_capability(job, completion, env)
+}
+
+/// Settles the reaction job's result capability with a handler completion,
+/// preferring the stored resolve/reject functions (generic / species path) and
+/// falling back to direct settlement of a native promise capability.
+fn settle_reaction_capability(
+    job: &ObjectRef,
+    completion: Result<Value, RuntimeError>,
+    env: &mut HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
+    let resolve = job
+        .own_property(PROMISE_REACTION_RESOLVE)
+        .map(|property| property.value);
+    let reject = job
+        .own_property(PROMISE_REACTION_REJECT)
+        .map(|property| property.value);
+    if let (Some(resolve), Some(reject)) = (resolve, reject) {
+        match completion {
+            Ok(value) => {
+                call_function(resolve, Value::Undefined, vec![value], env, false)?;
+            }
+            Err(error) => {
+                let reason = error.thrown.map_or(Value::Undefined, |value| *value);
+                call_function(reject, Value::Undefined, vec![reason], env, false)?;
             }
         }
-        _ if fulfill => settle_promise(&capability, super::PROMISE_FULFILLED, argument, env),
-        _ => settle_promise(&capability, PROMISE_REJECTED, argument, env),
+        return Ok(());
+    }
+
+    let capability = match job
+        .own_property(PROMISE_REACTION_CAPABILITY)
+        .map(|property| property.value)
+    {
+        Some(Value::Object(promise)) if is_promise_object(&promise) => promise,
+        _ => return Ok(()),
+    };
+    match completion {
+        Ok(value) => resolve_promise(&capability, value, env),
+        Err(error) => settle_promise(
+            &capability,
+            PROMISE_REJECTED,
+            error.thrown.map_or(Value::Undefined, |value| *value),
+            env,
+        ),
     }
     Ok(())
 }

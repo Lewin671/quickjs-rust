@@ -1,19 +1,21 @@
 use std::collections::HashMap;
 
 use crate::{
-    ArrayRef, Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, call_function,
-    property_value, symbol,
+    ArrayRef, Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value,
+    call_function, ensure_constructor, property_value, property_value_key, symbol,
 };
 
 mod all;
 pub(crate) mod all_settled;
 pub(crate) mod any;
+mod capability;
 mod jobs;
 mod race;
 pub(crate) mod r#try;
 pub(crate) mod with_resolvers;
 
 pub(crate) use all::{native_promise_all, native_promise_all_resolve_element};
+pub(crate) use capability::native_get_capabilities_executor;
 pub(crate) use jobs::drain_promise_jobs;
 use jobs::{enqueue_promise_reaction_job, enqueue_promise_thenable_job};
 pub(crate) use race::native_promise_race;
@@ -29,6 +31,8 @@ const PROMISE_JOBS: &str = "\0PromiseJobs";
 const PROMISE_REACTIONS: &str = "\0PromiseReactions";
 const PROMISE_REACTION_ARGUMENT: &str = "\0PromiseReactionArgument";
 const PROMISE_REACTION_CAPABILITY: &str = "\0PromiseReactionCapability";
+const PROMISE_REACTION_RESOLVE: &str = "\0PromiseReactionResolve";
+const PROMISE_REACTION_REJECT: &str = "\0PromiseReactionReject";
 const PROMISE_STATE: &str = "\0PromiseState";
 const PROMISE_RESULT: &str = "\0PromiseResult";
 const PROMISE_TARGET: &str = "\0PromiseTarget";
@@ -88,6 +92,7 @@ pub(crate) fn install_promise(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(promise_prototype.clone())),
     );
+    symbol::define_species_accessor(env, &promise_function);
     let promise_all = promise_static_function(
         "all",
         1,
@@ -212,30 +217,48 @@ pub(crate) fn native_promise(
 }
 
 pub(crate) fn native_promise_resolve(
-    function: &Function,
+    this_value: Value,
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    if is_promise_value(&value) {
-        return Ok(value);
+    // 1. Let C be the this value. 2. If Type(C) is not Object, throw TypeError.
+    if !is_object_value(&this_value) {
+        return Err(promise_receiver_not_object_error());
     }
-    let promise = promise_object_from_function(function);
-    initialize_promise(&promise);
-    resolve_promise(&promise, value, env);
-    Ok(Value::Object(promise))
+    let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    promise_resolve(&this_value, value, env)
 }
 
 pub(crate) fn native_promise_reject(
-    function: &Function,
+    this_value: Value,
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
+    if !is_object_value(&this_value) {
+        return Err(promise_receiver_not_object_error());
+    }
     let reason = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    let promise = promise_object_from_function(function);
-    initialize_promise(&promise);
-    settle_promise(&promise, PROMISE_REJECTED, reason, env);
-    Ok(Value::Object(promise))
+    let capability = capability::new_promise_capability(&this_value, env)?;
+    capability::capability_reject(&capability, reason, env)?;
+    Ok(capability.promise)
+}
+
+/// `PromiseResolve(C, x)` (ES2023 27.2.4.7.1): returns `x` if it is already a
+/// promise built by `C`, otherwise wraps it in a freshly resolved capability.
+pub(crate) fn promise_resolve(
+    c: &Value,
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    if is_promise_value(&value) {
+        let constructor = property_value(value.clone(), "constructor", env)?;
+        if constructor.same_value(c) {
+            return Ok(value);
+        }
+    }
+    let capability = capability::new_promise_capability(c, env)?;
+    capability::capability_resolve(&capability, value, env)?;
+    Ok(capability.promise)
 }
 
 pub(crate) fn native_promise_then(
@@ -252,10 +275,13 @@ pub(crate) fn native_promise_then(
     }
     let on_fulfilled = callable_or_undefined(argument_values.first());
     let on_rejected = callable_or_undefined(argument_values.get(1));
-    let result_promise = promise_object_from_function(function);
-    initialize_promise(&result_promise);
-    let fulfill_reaction = promise_reaction(on_fulfilled, result_promise.clone(), true);
-    let reject_reaction = promise_reaction(on_rejected, result_promise.clone(), false);
+
+    // C = SpeciesConstructor(promise, %Promise%); resultCapability = NewPromiseCapability(C).
+    let species = species_constructor(&promise, function, env)?;
+    let capability = capability::new_promise_capability(&species, env)?;
+
+    let fulfill_reaction = promise_reaction_for_capability(on_fulfilled, &capability, true);
+    let reject_reaction = promise_reaction_for_capability(on_rejected, &capability, false);
 
     match promise_state(&promise).as_deref() {
         Some(PROMISE_PENDING) => {
@@ -279,7 +305,57 @@ pub(crate) fn native_promise_then(
         _ => return Err(not_a_promise_error()),
     }
 
-    Ok(Value::Object(result_promise))
+    Ok(capability.promise)
+}
+
+/// `SpeciesConstructor(O, defaultConstructor)` (ES2023 7.3.22) specialised to
+/// promises: reads `O.constructor`, then `constructor[Symbol.species]`, falling
+/// back to the realm `%Promise%` when either is undefined/null.
+fn species_constructor(
+    object: &ObjectRef,
+    promise_function: &Function,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let default = default_promise_constructor(promise_function, env);
+    let constructor = property_value(Value::Object(object.clone()), "constructor", env)?;
+    if matches!(constructor, Value::Undefined) {
+        return Ok(default);
+    }
+    if !is_object_value(&constructor) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: constructor property is not an object".to_owned(),
+        });
+    }
+    let species = match symbol::species_symbol(env) {
+        Some(symbol) => property_value_key(constructor, &PropertyKey::Symbol(symbol), env)?,
+        None => return Ok(default),
+    };
+    if matches!(species, Value::Undefined | Value::Null) {
+        return Ok(default);
+    }
+    ensure_constructor(&species)?;
+    Ok(species)
+}
+
+/// Resolves the realm `%Promise%` constructor that serves as the default in
+/// SpeciesConstructor and NewPromiseCapability fallbacks.
+fn default_promise_constructor(promise_function: &Function, env: &HashMap<String, Value>) -> Value {
+    if let Some(prototype) = promise_function
+        .env
+        .get(PROMISE_PROTOTYPE)
+        .and_then(|value| match value {
+            Value::Object(prototype) => Some(prototype),
+            _ => None,
+        })
+        && let Some(Property {
+            value: Value::Function(constructor),
+            ..
+        }) = prototype.own_property("constructor")
+    {
+        return Value::Function(constructor);
+    }
+    env.get("Promise").cloned().unwrap_or(Value::Undefined)
 }
 
 pub(crate) fn native_promise_catch(
@@ -600,6 +676,28 @@ fn is_promise_value(value: &Value) -> bool {
     matches!(value, Value::Object(object) if is_promise_object(object))
 }
 
+/// Whether `value` is an Object in the ECMAScript sense (callable objects and
+/// exotic collections included). Used for the `Type(C) is Object` guards in
+/// `Promise.resolve`/`Promise.reject`.
+fn is_object_value(value: &Value) -> bool {
+    matches!(
+        value,
+        Value::Object(_)
+            | Value::Array(_)
+            | Value::Function(_)
+            | Value::Map(_)
+            | Value::Set(_)
+            | Value::Proxy(_)
+    )
+}
+
+fn promise_receiver_not_object_error() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "TypeError: Promise static method called on a non-object".to_owned(),
+    }
+}
+
 fn not_a_promise_error() -> RuntimeError {
     RuntimeError {
         thrown: None,
@@ -620,6 +718,28 @@ fn promise_reaction(handler: Value, capability: ObjectRef, fulfill: bool) -> Obj
     reaction.define_non_enumerable(
         PROMISE_REACTION_CAPABILITY.to_owned(),
         Value::Object(capability),
+    );
+    reaction.define_non_enumerable(PROMISE_FULFILL_REACTION.to_owned(), Value::Boolean(fulfill));
+    reaction
+}
+
+/// Builds a reaction whose result capability may be an arbitrary (non-native)
+/// promise: the resolve/reject functions are stored so the reaction job calls
+/// them directly instead of settling a native promise object.
+fn promise_reaction_for_capability(
+    handler: Value,
+    capability: &capability::PromiseCapability,
+    fulfill: bool,
+) -> ObjectRef {
+    let reaction = ObjectRef::new(HashMap::new());
+    reaction.define_non_enumerable(PROMISE_HANDLER.to_owned(), handler);
+    reaction.define_non_enumerable(
+        PROMISE_REACTION_RESOLVE.to_owned(),
+        capability.resolve.clone(),
+    );
+    reaction.define_non_enumerable(
+        PROMISE_REACTION_REJECT.to_owned(),
+        capability.reject.clone(),
     );
     reaction.define_non_enumerable(PROMISE_FULFILL_REACTION.to_owned(), Value::Boolean(fulfill));
     reaction
