@@ -432,7 +432,10 @@ impl Vm<'_> {
     }
 
     fn super_call_inner(&mut self, arguments: Vec<Value>) -> Result<Value, RuntimeError> {
-        if self.env.contains_key("this") {
+        // A derived constructor's `this` is a frame-local TDZ until `super(...)`
+        // binds it; the shared realm always carries the *global* `this`, so the
+        // "already bound" check must consult the frame locals layer only.
+        if self.env.locals().contains_key("this") {
             return Err(RuntimeError {
                 thrown: None,
                 message: "ReferenceError: super constructor may only be called once".to_owned(),

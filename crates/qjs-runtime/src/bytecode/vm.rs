@@ -506,9 +506,19 @@ impl<'a> Vm<'a> {
         function_local_names: &[String],
     ) -> HashMap<String, Value> {
         let mut env = HashMap::with_capacity(function_bytecode.locals.len());
-        // Intrinsics and true globals live in the shared realm; a closure capture
-        // only needs the outer *locals* it closes over. Realm reads stay live
-        // through the shared cell at call time.
+        // The created function's `env` field is consulted at construction time to
+        // resolve its `.prototype`'s `[[Prototype]]` (`object_prototype(env)`),
+        // so seed it with the realm intrinsics. This runs only at closure/class
+        // creation (`Op::NewFunction`/`NewClass`), never on the leaf-call path,
+        // so the per-call clone the migration removed stays gone.
+        {
+            let realm = self.realm.borrow();
+            for name in crate::RUNTIME_INTRINSIC_NAMES {
+                if let Some(value) = realm.get(*name) {
+                    env.insert((*name).to_owned(), value.clone());
+                }
+            }
+        }
         for name in function_bytecode.global_names() {
             self.insert_referenced_binding(&mut env, name);
         }
@@ -887,9 +897,15 @@ impl<'a> Vm<'a> {
             return;
         }
         // Only a caller *local* binding needs to ride into the callee's frame
-        // locals; realm bindings are already visible through the shared cell.
-        if let Some(value) = self.current_local_binding(name) {
-            locals.insert(name.to_owned(), value.clone());
+        // locals; realm bindings are already visible through the shared cell. A
+        // caller binding may be a bytecode slot or a frame-local (caller-scope)
+        // binding carried in this frame's `env.locals()`.
+        let value = self
+            .current_local_binding(name)
+            .cloned()
+            .or_else(|| self.env.locals().get(name).cloned());
+        if let Some(value) = value {
+            locals.insert(name.to_owned(), value);
             if !binding_names.iter().any(|existing| existing == name) {
                 binding_names.push(name.to_owned());
             }
