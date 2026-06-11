@@ -20,6 +20,9 @@ pub(super) fn call_array_buffer_native(
             is_construct,
             env,
         )?,
+        NativeFunction::ArrayBufferIsView => {
+            array_buffer::native_array_buffer_is_view(argument_values)?
+        }
         NativeFunction::ArrayBufferPrototypeByteLength => {
             array_buffer::native_array_buffer_prototype_byte_length(this_value)?
         }

@@ -1,0 +1,159 @@
+use crate::{Value, eval};
+
+// --- Intrinsic and brand -----------------------------------------------------
+
+#[test]
+fn typed_array_intrinsic_is_shared_prototype() {
+    assert_eq!(
+        eval("Object.getPrototypeOf(Uint8Array) === Object.getPrototypeOf(Int8Array);"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "Object.getPrototypeOf(Uint8Array.prototype) === Object.getPrototypeOf(Int8Array.prototype);"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("Object.getPrototypeOf(Object.getPrototypeOf(Uint8Array)) === Function.prototype;"),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn typed_array_intrinsic_not_directly_callable_or_constructable() {
+    let intrinsic = "Object.getPrototypeOf(Uint8Array)";
+    assert!(eval(&format!("new ({intrinsic})();")).is_err());
+    assert!(eval(&format!("({intrinsic})();")).is_err());
+}
+
+#[test]
+fn concrete_constructor_requires_new() {
+    assert!(eval("Uint8Array(3);").is_err());
+}
+
+// --- Construction variants ---------------------------------------------------
+
+#[test]
+fn construct_from_length_and_no_args() {
+    assert_eq!(
+        eval("let a = new Float64Array(3); a.length + ':' + a[0] + ':' + a[2];"),
+        Ok(Value::String("3:0:0".to_owned()))
+    );
+    assert_eq!(eval("new Uint8Array().length;"), Ok(Value::Number(0.0)));
+}
+
+#[test]
+fn construct_from_array_like_and_iterable() {
+    assert_eq!(
+        eval("let a = new Uint8Array([1, 258]); a.length + ':' + a[0] + ':' + a[1];"),
+        Ok(Value::String("2:1:2".to_owned()))
+    );
+    assert_eq!(
+        eval("let a = new Int8Array([127, 128, 255]); a[0] + ':' + a[1] + ':' + a[2];"),
+        Ok(Value::String("127:-128:-1".to_owned()))
+    );
+    // Iterable (a Set) is consumed through Symbol.iterator.
+    assert_eq!(
+        eval("let a = new Uint16Array(new Set([7, 8, 7])); a.length + ':' + a[0] + ':' + a[1];"),
+        Ok(Value::String("2:7:8".to_owned()))
+    );
+}
+
+#[test]
+fn construct_from_typed_array_converts_elements() {
+    assert_eq!(
+        eval(
+            "let s = new Uint8Array([1, 2, 3]); let c = new Int16Array(s); c.length + ':' + c[0] + ':' + c[2];"
+        ),
+        Ok(Value::String("3:1:3".to_owned()))
+    );
+}
+
+#[test]
+fn construct_from_buffer_with_offset_and_length() {
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(8); let a = new Uint8Array(b, 2, 4); a.length + ':' + a.byteOffset + ':' + a.byteLength;"
+        ),
+        Ok(Value::String("4:2:4".to_owned()))
+    );
+    // Default length covers the rest of the buffer.
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(8); let a = new Uint32Array(b, 4); a.length + ':' + a.byteOffset;"
+        ),
+        Ok(Value::String("1:4".to_owned()))
+    );
+}
+
+#[test]
+fn construct_from_buffer_validates_alignment_and_bounds() {
+    // Misaligned offset.
+    assert!(eval("new Uint32Array(new ArrayBuffer(8), 2);").is_err());
+    // Length out of range.
+    assert!(eval("new Uint8Array(new ArrayBuffer(4), 0, 8);").is_err());
+    // Buffer not aligned to element size with implicit length.
+    assert!(eval("new Uint32Array(new ArrayBuffer(6));").is_err());
+}
+
+// --- Accessors and brand checks ----------------------------------------------
+
+#[test]
+fn instance_accessors_report_view_geometry() {
+    assert_eq!(
+        eval(
+            "let a = new Int16Array(3); a.buffer.byteLength + ':' + a.byteLength + ':' + a.byteOffset + ':' + a.length;"
+        ),
+        Ok(Value::String("6:6:0:3".to_owned()))
+    );
+}
+
+#[test]
+fn accessors_brand_check_their_receiver() {
+    assert!(
+        eval("Object.getOwnPropertyDescriptor(Object.getPrototypeOf(Uint8Array.prototype), 'byteLength').get.call({});").is_err()
+    );
+    // Symbol.toStringTag accessor returns undefined (does not throw) off-brand.
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(Uint8Array.prototype), Symbol.toStringTag); d.get.call({});"
+        ),
+        Ok(Value::Undefined)
+    );
+}
+
+#[test]
+fn object_to_string_reports_kind() {
+    assert_eq!(
+        eval("Object.prototype.toString.call(new Uint8ClampedArray(0));"),
+        Ok(Value::String("[object Uint8ClampedArray]".to_owned()))
+    );
+}
+
+// --- Element conversion ------------------------------------------------------
+
+#[test]
+fn uint8_clamped_clamps_and_rounds_half_even() {
+    assert_eq!(
+        eval("Array.prototype.join.call(new Uint8ClampedArray([-1, 2.5, 3.5, 300]));"),
+        Ok(Value::String("0,2,4,255".to_owned()))
+    );
+}
+
+#[test]
+fn bigint_arrays_wrap_and_reject_numbers() {
+    assert_eq!(
+        eval("let a = new BigInt64Array([1n, 2n]); typeof a[0] + ':' + a[0] + ':' + a[1];"),
+        Ok(Value::String("bigint:1:2".to_owned()))
+    );
+    assert!(eval("new BigInt64Array([1]);").is_err());
+}
+
+#[test]
+fn bytes_per_element_surface() {
+    assert_eq!(
+        eval("Int16Array.BYTES_PER_ELEMENT + ':' + Int32Array.prototype.BYTES_PER_ELEMENT;"),
+        Ok(Value::String("2:4".to_owned()))
+    );
+}

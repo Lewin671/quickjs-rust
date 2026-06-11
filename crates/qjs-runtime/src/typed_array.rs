@@ -1,51 +1,146 @@
 use std::collections::HashMap;
 
-use num_bigint::BigInt;
-
 use crate::{
-    Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, function_prototype,
-    property_value, symbol, to_length_with_env, to_number_with_env,
+    Function, NativeFunction, ObjectRef, Property, Prototype, RuntimeError, Value, array_buffer,
+    symbol, to_length_with_env,
 };
 
+mod construct;
+mod element;
+
+pub(crate) use construct::native_typed_array;
+
 const MAX_TYPED_ARRAY_LENGTH: usize = 1_000_000;
+
+/// Internal slot naming the concrete TypedArray kind (e.g. `"Uint8Array"`).
+/// Its presence is also the TypedArray brand used by `ArrayBuffer.isView` and
+/// the prototype accessors.
+pub(crate) const TYPED_ARRAY_KIND_PROPERTY: &str = "\0TypedArrayKind";
+/// Internal slot referencing the backing `ArrayBuffer` object.
+pub(crate) const TYPED_ARRAY_BUFFER_PROPERTY: &str = "\0TypedArrayBuffer";
+/// Internal slot holding the byte offset of the view into its buffer.
+pub(crate) const TYPED_ARRAY_BYTE_OFFSET_PROPERTY: &str = "\0TypedArrayByteOffset";
+/// Internal slot holding the element count of the view.
+pub(crate) const TYPED_ARRAY_LENGTH_PROPERTY: &str = "\0TypedArrayArrayLength";
+
+/// Whether `object` carries the TypedArray brand.
+pub(crate) fn is_typed_array_object(object: &ObjectRef) -> bool {
+    object.has_own_property(TYPED_ARRAY_KIND_PROPERTY)
+}
+
+/// The eleven concrete TypedArray kinds, in installation order.
+const TYPED_ARRAY_KINDS: [(&str, NativeFunction); 11] = [
+    ("Uint8Array", NativeFunction::Uint8Array),
+    ("Int8Array", NativeFunction::Int8Array),
+    ("Uint8ClampedArray", NativeFunction::Uint8ClampedArray),
+    ("Uint16Array", NativeFunction::Uint16Array),
+    ("Int16Array", NativeFunction::Int16Array),
+    ("Uint32Array", NativeFunction::Uint32Array),
+    ("Int32Array", NativeFunction::Int32Array),
+    ("Float32Array", NativeFunction::Float32Array),
+    ("Float64Array", NativeFunction::Float64Array),
+    ("BigInt64Array", NativeFunction::BigInt64Array),
+    ("BigUint64Array", NativeFunction::BigUint64Array),
+];
 
 pub(crate) fn install_typed_arrays(
     env: &mut HashMap<String, Value>,
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
+    // %TypedArray% intrinsic: the shared [[Prototype]] of every concrete
+    // constructor, and the holder of %TypedArray.prototype%.
+    let typed_array_prototype =
+        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype.clone()));
+    install_typed_array_prototype_accessors(env, &typed_array_prototype);
+
+    let typed_array_intrinsic =
+        Function::new_native(Some("TypedArray"), 0, NativeFunction::TypedArray, true);
+    typed_array_intrinsic.properties.borrow_mut().insert(
+        "prototype".to_owned(),
+        Property::fixed_non_enumerable(Value::Object(typed_array_prototype.clone())),
+    );
+    typed_array_prototype.define_non_enumerable(
+        "constructor".to_owned(),
+        Value::Function(typed_array_intrinsic.clone()),
+    );
+    symbol::define_species_accessor(env, &typed_array_intrinsic);
+
+    for (name, native) in TYPED_ARRAY_KINDS {
+        install_typed_array_constructor(
+            env,
+            global_this,
+            typed_array_prototype.clone(),
+            &typed_array_intrinsic,
+            name,
+            native,
+        );
+    }
+}
+
+/// Installs `buffer`/`byteLength`/`byteOffset`/`length` accessors and the
+/// `Symbol.toStringTag` accessor on `%TypedArray.prototype%`.
+fn install_typed_array_prototype_accessors(env: &HashMap<String, Value>, prototype: &ObjectRef) {
     for (name, native) in [
-        ("Uint8Array", NativeFunction::Uint8Array),
-        ("Int8Array", NativeFunction::Int8Array),
-        ("Uint8ClampedArray", NativeFunction::Uint8ClampedArray),
-        ("Uint16Array", NativeFunction::Uint16Array),
-        ("Int16Array", NativeFunction::Int16Array),
-        ("Uint32Array", NativeFunction::Uint32Array),
-        ("Int32Array", NativeFunction::Int32Array),
-        ("Float32Array", NativeFunction::Float32Array),
-        ("Float64Array", NativeFunction::Float64Array),
-        ("BigInt64Array", NativeFunction::BigInt64Array),
-        ("BigUint64Array", NativeFunction::BigUint64Array),
+        ("buffer", NativeFunction::TypedArrayPrototypeBuffer),
+        ("byteLength", NativeFunction::TypedArrayPrototypeByteLength),
+        ("byteOffset", NativeFunction::TypedArrayPrototypeByteOffset),
+        ("length", NativeFunction::TypedArrayPrototypeLength),
     ] {
-        install_typed_array_constructor(env, global_this, object_prototype.clone(), name, native);
+        prototype.define_property(
+            name.to_owned(),
+            Property::accessor(
+                Some(Value::Function(Function::new_native(
+                    Some(&format!("get {name}")),
+                    0,
+                    native,
+                    false,
+                ))),
+                None,
+                false,
+                true,
+            ),
+        );
+    }
+    // %TypedArray.prototype%[Symbol.toStringTag] is a configurable accessor with
+    // no setter that returns the constructor name for a branded receiver.
+    if let Some(symbol) = symbol::to_string_tag_symbol(env) {
+        prototype.define_symbol_property(
+            symbol,
+            Property::accessor(
+                Some(Value::Function(Function::new_native(
+                    Some("get [Symbol.toStringTag]"),
+                    0,
+                    NativeFunction::TypedArrayPrototypeToStringTag,
+                    false,
+                ))),
+                None,
+                false,
+                true,
+            ),
+        );
     }
 }
 
 fn install_typed_array_constructor(
     env: &mut HashMap<String, Value>,
     global_this: &Value,
-    object_prototype: ObjectRef,
+    typed_array_prototype: ObjectRef,
+    typed_array_intrinsic: &Function,
     name: &str,
     native: NativeFunction,
 ) {
-    let prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
-    prototype.set_to_string_tag(name);
-    symbol::define_well_known_to_string_tag(env, &prototype, name);
+    // Each concrete prototype inherits from %TypedArray.prototype%.
+    let prototype = ObjectRef::with_prototype(HashMap::new(), Some(typed_array_prototype));
+    let bytes = bytes_per_element(native) as f64;
 
     let constructor = Function::new_native(Some(name), 3, native, true);
+    // Concrete constructors inherit from %TypedArray% (a function prototype).
+    let _ = constructor
+        .set_internal_prototype_slot(Some(Prototype::Function(typed_array_intrinsic.clone())));
     constructor.properties.borrow_mut().insert(
         "BYTES_PER_ELEMENT".to_owned(),
-        Property::fixed_non_enumerable(Value::Number(bytes_per_element(native) as f64)),
+        Property::fixed_non_enumerable(Value::Number(bytes)),
     );
     prototype.define_non_enumerable(
         "constructor".to_owned(),
@@ -53,7 +148,7 @@ fn install_typed_array_constructor(
     );
     prototype.define_property(
         "BYTES_PER_ELEMENT".to_owned(),
-        Property::fixed_non_enumerable(Value::Number(bytes_per_element(native) as f64)),
+        Property::fixed_non_enumerable(Value::Number(bytes)),
     );
     constructor.properties.borrow_mut().insert(
         "prototype".to_owned(),
@@ -67,116 +162,134 @@ fn install_typed_array_constructor(
     }
 }
 
-pub(crate) fn native_typed_array(
-    function: &Function,
-    native: NativeFunction,
+// --- Prototype accessors ----------------------------------------------------
+
+/// `get %TypedArray.prototype%.buffer`: the backing buffer object.
+pub(crate) fn native_typed_array_prototype_buffer(
     this_value: Value,
-    argument_values: &[Value],
-    is_construct: bool,
-    env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    if !is_construct {
-        return Err(RuntimeError {
+    let object = typed_array_receiver(&this_value)?;
+    match object.own_property(TYPED_ARRAY_BUFFER_PROPERTY) {
+        Some(Property { value, .. }) => Ok(value),
+        None => Ok(Value::Undefined),
+    }
+}
+
+/// `get %TypedArray.prototype%[Symbol.toStringTag]`: the kind name, or
+/// `undefined` for a non-branded receiver (the accessor never throws).
+pub(crate) fn native_typed_array_prototype_to_string_tag(
+    this_value: Value,
+) -> Result<Value, RuntimeError> {
+    match this_value {
+        Value::Object(object) if is_typed_array_object(&object) => {
+            match object.own_property(TYPED_ARRAY_KIND_PROPERTY) {
+                Some(Property {
+                    value: Value::String(name),
+                    ..
+                }) => Ok(Value::String(name)),
+                _ => Ok(Value::Undefined),
+            }
+        }
+        _ => Ok(Value::Undefined),
+    }
+}
+
+/// `get %TypedArray.prototype%.byteLength`.
+pub(crate) fn native_typed_array_prototype_byte_length(
+    this_value: Value,
+) -> Result<Value, RuntimeError> {
+    let object = typed_array_receiver(&this_value)?;
+    if typed_array_buffer_detached(&object) {
+        return Ok(Value::Number(0.0));
+    }
+    let length = typed_array_length(&object);
+    let element = bytes_per_element(typed_array_kind(&object)) as f64;
+    Ok(Value::Number(length as f64 * element))
+}
+
+/// `get %TypedArray.prototype%.byteOffset`.
+pub(crate) fn native_typed_array_prototype_byte_offset(
+    this_value: Value,
+) -> Result<Value, RuntimeError> {
+    let object = typed_array_receiver(&this_value)?;
+    if typed_array_buffer_detached(&object) {
+        return Ok(Value::Number(0.0));
+    }
+    Ok(Value::Number(typed_array_byte_offset(&object) as f64))
+}
+
+/// `get %TypedArray.prototype%.length`.
+pub(crate) fn native_typed_array_prototype_length(
+    this_value: Value,
+) -> Result<Value, RuntimeError> {
+    let object = typed_array_receiver(&this_value)?;
+    if typed_array_buffer_detached(&object) {
+        return Ok(Value::Number(0.0));
+    }
+    Ok(Value::Number(typed_array_length(&object) as f64))
+}
+
+fn typed_array_receiver(value: &Value) -> Result<ObjectRef, RuntimeError> {
+    match value {
+        Value::Object(object) if is_typed_array_object(object) => Ok(object.clone()),
+        _ => Err(RuntimeError {
             thrown: None,
-            message: format!(
-                "TypeError: Constructor {} requires 'new'",
-                typed_array_name(native)
-            ),
-        });
-    }
-
-    let object = match this_value {
-        Value::Object(object) => object,
-        _ => ObjectRef::with_prototype(HashMap::new(), function_prototype(function)),
-    };
-    let values = typed_array_values(native, argument_values.first().cloned(), env)?;
-    define_typed_array_data(&object, native, values);
-    Ok(Value::Object(object))
-}
-
-fn typed_array_values(
-    native: NativeFunction,
-    source: Option<Value>,
-    env: &mut HashMap<String, Value>,
-) -> Result<Vec<Value>, RuntimeError> {
-    let Some(source) = source else {
-        return Ok(Vec::new());
-    };
-    if matches!(source, Value::Undefined) {
-        return Ok(Vec::new());
-    }
-    if let Value::Array(array) = source {
-        let mut values = Vec::with_capacity(array.len());
-        for index in 0..array.len() {
-            let value = array.get(index).unwrap_or(Value::Undefined);
-            values.push(coerce_element(native, value, env)?);
-        }
-        return Ok(values);
-    }
-    if matches!(source, Value::Object(_) | Value::Function(_)) {
-        let length = to_typed_array_length(property_value(source.clone(), "length", env)?, env)?;
-        let mut values = Vec::with_capacity(length);
-        for index in 0..length {
-            values.push(coerce_element(
-                native,
-                property_value(source.clone(), &index.to_string(), env)?,
-                env,
-            )?);
-        }
-        return Ok(values);
-    }
-
-    let length = to_typed_array_length(source, env)?;
-    Ok(std::iter::repeat_n(Value::Number(0.0), length).collect())
-}
-
-fn define_typed_array_data(object: &ObjectRef, native: NativeFunction, values: Vec<Value>) {
-    object.set_to_string_tag(typed_array_name(native));
-    object.define_property(
-        "length".to_owned(),
-        Property::data(Value::Number(values.len() as f64), false, true, true),
-    );
-    for (index, value) in values.into_iter().enumerate() {
-        object.define_property(index.to_string(), Property::enumerable(value));
+            message: "TypeError: TypedArray method called on incompatible receiver".to_owned(),
+        }),
     }
 }
 
-fn coerce_element(
-    native: NativeFunction,
-    value: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
-    if matches!(
-        native,
-        NativeFunction::BigInt64Array | NativeFunction::BigUint64Array
-    ) {
-        return match value {
-            Value::BigInt(value) => Ok(Value::BigInt(value)),
-            Value::Number(value) => Ok(Value::BigInt(BigInt::from(value as i64))),
-            Value::Undefined => Ok(Value::BigInt(BigInt::from(0))),
-            _ => Err(RuntimeError {
-                thrown: None,
-                message: "TypeError: cannot convert value to BigInt typed array element".to_owned(),
-            }),
-        };
-    }
+// --- Internal-slot helpers ---------------------------------------------------
 
-    let number = to_number_with_env(value, env)?;
-    let value = match native {
-        NativeFunction::Uint8Array => modulo_integer(number, 256.0),
-        NativeFunction::Int8Array => signed_integer(number, 8),
-        NativeFunction::Uint8ClampedArray => clamp_uint8(number),
-        NativeFunction::Uint16Array => modulo_integer(number, 65_536.0),
-        NativeFunction::Int16Array => signed_integer(number, 16),
-        NativeFunction::Uint32Array => modulo_integer(number, 4_294_967_296.0),
-        NativeFunction::Int32Array => signed_integer(number, 32),
-        NativeFunction::Float32Array | NativeFunction::Float64Array => number,
-        _ => unreachable!("typed array native expected"),
-    };
-    Ok(Value::Number(value))
+pub(crate) fn typed_array_kind(object: &ObjectRef) -> NativeFunction {
+    match object.own_property(TYPED_ARRAY_KIND_PROPERTY) {
+        Some(Property {
+            value: Value::String(name),
+            ..
+        }) => native_for_name(&name),
+        _ => NativeFunction::Uint8Array,
+    }
 }
 
-fn modulo_integer(number: f64, modulo: f64) -> f64 {
+pub(crate) fn typed_array_length(object: &ObjectRef) -> usize {
+    match object.own_property(TYPED_ARRAY_LENGTH_PROPERTY) {
+        Some(Property {
+            value: Value::Number(length),
+            ..
+        }) => length as usize,
+        _ => 0,
+    }
+}
+
+pub(crate) fn typed_array_byte_offset(object: &ObjectRef) -> usize {
+    match object.own_property(TYPED_ARRAY_BYTE_OFFSET_PROPERTY) {
+        Some(Property {
+            value: Value::Number(offset),
+            ..
+        }) => offset as usize,
+        _ => 0,
+    }
+}
+
+pub(crate) fn typed_array_buffer(object: &ObjectRef) -> Option<ObjectRef> {
+    match object.own_property(TYPED_ARRAY_BUFFER_PROPERTY) {
+        Some(Property {
+            value: Value::Object(buffer),
+            ..
+        }) => Some(buffer),
+        _ => None,
+    }
+}
+
+pub(crate) fn typed_array_buffer_detached(object: &ObjectRef) -> bool {
+    typed_array_buffer(object).is_some_and(|buffer| array_buffer::is_detached(&buffer))
+}
+
+// --- Element coercion --------------------------------------------------------
+
+pub(crate) use element::coerce_element;
+
+pub(crate) fn modulo_integer(number: f64, modulo: f64) -> f64 {
     if !number.is_finite() || number == 0.0 {
         return 0.0;
     }
@@ -184,24 +297,42 @@ fn modulo_integer(number: f64, modulo: f64) -> f64 {
     ((integer % modulo) + modulo) % modulo
 }
 
-fn signed_integer(number: f64, bits: u32) -> f64 {
+pub(crate) fn signed_integer(number: f64, bits: u32) -> f64 {
     let modulo = 2_f64.powi(bits as i32);
     let value = modulo_integer(number, modulo);
     let sign = 2_f64.powi(bits as i32 - 1);
     if value >= sign { value - modulo } else { value }
 }
 
-fn clamp_uint8(number: f64) -> f64 {
+pub(crate) fn clamp_uint8(number: f64) -> f64 {
     if number.is_nan() || number <= 0.0 {
         0.0
     } else if number >= 255.0 {
         255.0
     } else {
-        number.round()
+        // Round half to even (per Uint8Clamped conversion).
+        let floor = number.floor();
+        let diff = number - floor;
+        if diff < 0.5 {
+            floor
+        } else if diff > 0.5 {
+            floor + 1.0
+        } else if (floor as i64) % 2 == 0 {
+            floor
+        } else {
+            floor + 1.0
+        }
     }
 }
 
-fn bytes_per_element(native: NativeFunction) -> usize {
+pub(crate) fn is_big_int_kind(native: NativeFunction) -> bool {
+    matches!(
+        native,
+        NativeFunction::BigInt64Array | NativeFunction::BigUint64Array
+    )
+}
+
+pub(crate) fn bytes_per_element(native: NativeFunction) -> usize {
     match native {
         NativeFunction::Uint8Array
         | NativeFunction::Int8Array
@@ -217,7 +348,7 @@ fn bytes_per_element(native: NativeFunction) -> usize {
     }
 }
 
-fn to_typed_array_length(
+pub(crate) fn to_typed_array_length(
     value: Value,
     env: &mut HashMap<String, Value>,
 ) -> Result<usize, RuntimeError> {
@@ -231,7 +362,7 @@ fn to_typed_array_length(
     Ok(length)
 }
 
-fn typed_array_name(native: NativeFunction) -> &'static str {
+pub(crate) fn typed_array_name(native: NativeFunction) -> &'static str {
     match native {
         NativeFunction::Uint8Array => "Uint8Array",
         NativeFunction::Int8Array => "Int8Array",
@@ -248,55 +379,13 @@ fn typed_array_name(native: NativeFunction) -> &'static str {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::{Value, eval};
-
-    #[test]
-    fn typed_array_constructors_create_array_like_objects() {
-        assert_eq!(
-            eval("let ta = new Uint8Array([1, 258]); ta.length + ':' + ta[0] + ':' + ta[1];"),
-            Ok(Value::String("2:1:2".to_owned()))
-        );
-        assert_eq!(
-            eval("let ta = new Float64Array(3); ta.length + ':' + ta[0] + ':' + ta[2];"),
-            Ok(Value::String("3:0:0".to_owned()))
-        );
-    }
-
-    #[test]
-    fn typed_array_integer_constructor_surface() {
-        assert_eq!(
-            eval(
-                "let ta = new Int8Array([127, 128, 255]); ta.length + ':' + ta[0] + ':' + ta[1] + ':' + ta[2];"
-            ),
-            Ok(Value::String("3:127:-128:-1".to_owned()))
-        );
-        assert_eq!(
-            eval("Array.prototype.join.call(new Uint8ClampedArray([-1, 2.6, 300]));"),
-            Ok(Value::String("0,3,255".to_owned()))
-        );
-        assert_eq!(
-            eval(
-                "Int16Array.BYTES_PER_ELEMENT + ':' + Int32Array.prototype.BYTES_PER_ELEMENT + ':' + Object.prototype.toString.call(new Uint8ClampedArray(0));"
-            ),
-            Ok(Value::String("2:4:[object Uint8ClampedArray]".to_owned()))
-        );
-    }
-
-    #[test]
-    fn concat_spreads_opted_in_typed_array_objects() {
-        assert_eq!(
-            eval(
-                "let ta = new Uint16Array([7, 8]); let kept = [].concat(ta); ta[Symbol.isConcatSpreadable] = true; let spread = [].concat(ta); kept.length + ':' + (kept[0] === ta) + ':' + spread.join();"
-            ),
-            Ok(Value::String("1:true:7,8".to_owned()))
-        );
-        assert_eq!(
-            eval(
-                "let ta = new Uint8Array(1); Object.defineProperty(ta, 'length', { value: 4 }); ta[Symbol.isConcatSpreadable] = true; let out = [].concat(ta); out.length + ':' + out[0] + ':' + out.hasOwnProperty('3');"
-            ),
-            Ok(Value::String("4:0:false".to_owned()))
-        );
-    }
+fn native_for_name(name: &str) -> NativeFunction {
+    TYPED_ARRAY_KINDS
+        .iter()
+        .find(|(kind, _)| *kind == name)
+        .map(|(_, native)| *native)
+        .unwrap_or(NativeFunction::Uint8Array)
 }
+
+#[cfg(test)]
+mod tests;

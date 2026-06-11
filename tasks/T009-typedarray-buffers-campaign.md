@@ -17,11 +17,28 @@ gaps: `TypedArray` 2,027, `ArrayBuffer` 263, `DataView` 188 — concentrated in
 
 ## Slices
 
-- [ ] S1 ArrayBuffer core: constructor, `byteLength`, `slice`, species
+- [x] S1 ArrayBuffer core: constructor, `byteLength`, `slice`, species
       handling, detach semantics used by the rest of the family.
-- [ ] S2 %TypedArray% constructors: the nine concrete constructors, from
-      buffer/length/array/iterable, indexed element access with canonical
-      numeric index semantics.
+      `ArrayBuffer.isView`, `ArrayBuffer[Symbol.species]`, brand checks, a
+      detached internal flag, and clean rejection of `maxByteLength`
+      (resizable/growable buffers) are in place. `test/built-ins/ArrayBuffer`
+      moved from 46 to 63 passing.
+- [x] S2 %TypedArray% constructors: the eleven concrete constructors
+      (nine numeric plus BigInt64/BigUint64, since BigInt support made them
+      cheap) share the `%TypedArray%` intrinsic as their `[[Prototype]]`, with
+      `%TypedArray.prototype%` as the shared prototype of each concrete
+      `.prototype`. `%TypedArray%` is not directly callable or constructable.
+      Construction supports no-args / length / typed array / buffer +
+      byteOffset + length (with alignment and bounds validation) / iterable /
+      array-like, backed by a real `ArrayBuffer`. Instance accessors
+      `buffer`/`byteLength`/`byteOffset`/`length` and the prototype
+      `Symbol.toStringTag` getter brand-check their receiver; detached buffers
+      report zero and throw on construction. Per-type element conversion
+      (integer wrapping, float rounding, Uint8Clamped round-half-even, BigInt
+      wrapping) runs at construction. Indexed element reads stay materialized
+      as own properties; indexed *writes* through `array[i] = v` do not yet
+      route per-type conversion through the buffer (needs a VM exotic-index
+      hook, out of this slice's path boundary) — tracked for S3.
 - [ ] S3 %TypedArray%.prototype methods, batched by behavior family
       (iteration, copy/fill/set, sort/search, view accessors); one reviewable
       unit per batch.
