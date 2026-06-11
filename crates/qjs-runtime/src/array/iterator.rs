@@ -1,9 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{
-    ArrayRef, Function, NativeFunction, ObjectRef, RuntimeError, Value, property_value, symbol,
-    to_length_with_env,
-};
+use crate::{ArrayRef, ObjectRef, RuntimeError, Value, property_value, to_length_with_env};
 
 use super::array_like::array_like_length;
 
@@ -53,21 +50,18 @@ fn array_iterator(
     kind: &str,
 ) -> Result<Value, RuntimeError> {
     let source = array_like_length(this_value, context, env)?;
-    let iterator = ObjectRef::new(HashMap::new());
+    // `%ArrayIteratorPrototype%` inherits `%Iterator.prototype%`, so the
+    // instance gets `next`, `Symbol.iterator`, and the iterator helpers through
+    // the chain rather than per-instance own properties.
+    let prototype = crate::iterator::builtin_iterator_prototype(
+        env,
+        crate::iterator::BuiltinIteratorKind::Array,
+    );
+    let iterator = ObjectRef::with_prototype(HashMap::new(), prototype);
     iterator.define_non_enumerable(ITERATED_OBJECT.to_owned(), source.receiver);
     iterator.define_non_enumerable(ITERATOR_NEXT_INDEX.to_owned(), Value::Number(0.0));
     iterator.define_non_enumerable(ITERATOR_DONE.to_owned(), Value::Boolean(false));
     iterator.define_non_enumerable(ITERATOR_KIND.to_owned(), Value::String(kind.to_owned()));
-    iterator.define_non_enumerable(
-        "next".to_owned(),
-        Value::Function(Function::new_native(
-            Some("next"),
-            0,
-            NativeFunction::ArrayIteratorPrototypeNext,
-            false,
-        )),
-    );
-    symbol::define_iterator_identity(env, &iterator);
     Ok(Value::Object(iterator))
 }
 

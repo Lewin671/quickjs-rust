@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use crate::{
     Value, array, array_buffer, async_function, async_generator, bigint, boolean, data_view, date,
-    error, generator, global, json, map, math, number, object, promise, proxy, reflect, regexp,
-    set, string, symbol, typed_array, weak_map, weak_set,
+    error, generator, global, iterator, json, map, math, number, object, promise, proxy, reflect,
+    regexp, set, string, symbol, typed_array, weak_map, weak_set,
 };
 
 pub(crate) fn initialize_builtins(env: &mut HashMap<String, Value>, global_this: &Value) {
@@ -19,6 +19,11 @@ pub(crate) fn initialize_builtins(env: &mut HashMap<String, Value>, global_this:
     number::install_number(env, global_this, object_prototype.clone());
     string::install_string(env, global_this, object_prototype.clone());
     symbol::install_symbol(env, global_this, object_prototype.clone());
+
+    // `%Iterator.prototype%` needs well-known symbols (Symbol.iterator,
+    // Symbol.toStringTag) and must exist before any built-in iterator
+    // prototype (generator, array/string/map/set iterators) inherits it.
+    iterator::install_iterator(env, global_this, object_prototype.clone());
     array_buffer::install_array_buffer(env, global_this, object_prototype.clone());
     typed_array::install_typed_arrays(env, global_this, object_prototype.clone());
     data_view::install_data_view(env, global_this, object_prototype.clone());

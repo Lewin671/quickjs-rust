@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{Function, NativeFunction, ObjectRef, RuntimeError, Value, symbol};
+use crate::{ObjectRef, RuntimeError, Value};
 
 use super::{string_code_units, string_from_code_units};
 
@@ -13,20 +13,14 @@ pub(crate) fn native_string_prototype_iterator(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let source = super::indexing::this_string_value(this_value, env)?;
-    let iterator = ObjectRef::new(HashMap::new());
+    let prototype = crate::iterator::builtin_iterator_prototype(
+        env,
+        crate::iterator::BuiltinIteratorKind::String,
+    );
+    let iterator = ObjectRef::with_prototype(HashMap::new(), prototype);
     iterator.define_non_enumerable(STRING_ITERATOR_STRING.to_owned(), Value::String(source));
     iterator.define_non_enumerable(STRING_ITERATOR_NEXT_INDEX.to_owned(), Value::Number(0.0));
     iterator.define_non_enumerable(STRING_ITERATOR_DONE.to_owned(), Value::Boolean(false));
-    iterator.define_non_enumerable(
-        "next".to_owned(),
-        Value::Function(Function::new_native(
-            Some("next"),
-            0,
-            NativeFunction::StringIteratorPrototypeNext,
-            false,
-        )),
-    );
-    symbol::define_iterator_identity(env, &iterator);
     Ok(Value::Object(iterator))
 }
 

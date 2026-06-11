@@ -428,21 +428,13 @@ fn map_iterator(
     kind: &str,
 ) -> Result<Value, RuntimeError> {
     this_map(this_value.clone())?;
-    let iterator = ObjectRef::new(HashMap::new());
+    let prototype =
+        crate::iterator::builtin_iterator_prototype(env, crate::iterator::BuiltinIteratorKind::Map);
+    let iterator = ObjectRef::with_prototype(HashMap::new(), prototype);
     iterator.define_non_enumerable(MAP_ITERATOR.to_owned(), this_value);
     iterator.define_non_enumerable(MAP_ITERATOR_NEXT_INDEX.to_owned(), Value::Number(0.0));
     iterator.define_non_enumerable(MAP_ITERATOR_DONE.to_owned(), Value::Boolean(false));
     iterator.define_non_enumerable(MAP_ITERATOR_KIND.to_owned(), Value::String(kind.to_owned()));
-    iterator.define_non_enumerable(
-        "next".to_owned(),
-        Value::Function(Function::new_native(
-            Some("next"),
-            0,
-            NativeFunction::MapIteratorPrototypeNext,
-            false,
-        )),
-    );
-    symbol::define_iterator_identity(env, &iterator);
     Ok(Value::Object(iterator))
 }
 

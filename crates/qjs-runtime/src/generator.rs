@@ -30,10 +30,13 @@ pub(crate) fn install_generator(
     _global_this: &Value,
     object_prototype: ObjectRef,
 ) {
-    // The IteratorPrototype layer is modeled by giving %GeneratorPrototype% the
-    // ordinary object prototype and its own Symbol.iterator returning `this`.
-    let generator_prototype =
-        ObjectRef::with_prototype(HashMap::new(), Some(object_prototype.clone()));
+    // %GeneratorPrototype% inherits %Iterator.prototype% (27.5.1), which already
+    // carries `Symbol.iterator` returning `this` plus the iterator helpers, so
+    // generators get those methods. Fall back to the ordinary object prototype
+    // only if the iterator intrinsic is somehow unavailable.
+    let generator_parent =
+        crate::iterator::iterator_prototype(env).unwrap_or(object_prototype.clone());
+    let generator_prototype = ObjectRef::with_prototype(HashMap::new(), Some(generator_parent));
 
     for (name, native) in [
         ("next", NativeFunction::GeneratorPrototypeNext),

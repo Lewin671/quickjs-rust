@@ -204,6 +204,16 @@ pub(crate) fn call_native_function(
         return Ok(value);
     }
 
+    if let Some(value) = crate::iterator::call_iterator_native(
+        native,
+        this_value.clone(),
+        &argument_values,
+        is_construct,
+        env,
+    )? {
+        return Ok(value);
+    }
+
     if let Some(value) =
         crate::generator::call_generator_native(native, this_value.clone(), &argument_values, env)?
     {

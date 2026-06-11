@@ -46,11 +46,21 @@ Implement generator functions and round out the iteration protocol. At commit
       inner result object unwrapped, closes a throw-less inner iterator before
       raising a TypeError, and turns a return-less inner `return` into an outer
       return completion (running outer `finally` blocks).
-- [ ] S4 Iteration protocol cleanup: remaining `Symbol.iterator` gaps on
-      built-in iterables and iterator-close paths beyond the for-of cases
-      already landed.
-- [ ] S5 Iterator helpers (`Iterator.prototype.map/filter/take/...`), batched
-      by method family after S1-S3 land.
+- [x] S4 Iteration protocol cleanup: built-in iterator prototypes (array,
+      string, map, set, generator) now inherit `%Iterator.prototype%`, so
+      every built-in iterator picks up `Symbol.iterator` and the helpers.
+- [x] S5 Iterator helpers: the `Iterator` global (non-constructable,
+      `Iterator.from` with WrapForValidIterator), lazy helpers
+      (`map`/`filter`/`take`/`drop`/`flatMap` on
+      `%IteratorHelperPrototype%`), eager methods
+      (`reduce`/`toArray`/`forEach`/`some`/`every`/`find`), and the
+      validating `constructor`/`Symbol.toStringTag` accessors. Probe:
+      test/built-ins/Iterator 364/514 pass; the residue is mostly
+      `Iterator.concat`, `Iterator.zip*` (newer proposals), and exotic
+      close-order corners.
+
+Campaign core is complete; remaining iterator gaps flow through the normal
+gap queue.
 
 ## Scope
 

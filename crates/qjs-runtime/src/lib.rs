@@ -18,6 +18,7 @@ mod function;
 mod generator;
 mod global;
 mod html_dda;
+mod iterator;
 mod json;
 mod map;
 mod math;
@@ -87,6 +88,14 @@ pub(crate) const RUNTIME_INTRINSIC_NAMES: &[&str] = &[
     GLOBAL_THIS_BINDING,
     symbol::SYMBOL_REGISTRY_BINDING,
     generator::GENERATOR_PROTOTYPE_BINDING,
+    iterator::ITERATOR_PROTOTYPE_BINDING,
+    iterator::ITERATOR_HELPER_PROTOTYPE_BINDING,
+    iterator::WRAP_PROTOTYPE_BINDING,
+    "\0ArrayIteratorPrototype",
+    "\0StringIteratorPrototype",
+    "\0MapIteratorPrototype",
+    "\0SetIteratorPrototype",
+    "Iterator",
     "globalThis",
     "__quickjsRustIsHTMLDDA",
     "undefined",
