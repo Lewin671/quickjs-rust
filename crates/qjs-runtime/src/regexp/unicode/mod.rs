@@ -12,6 +12,10 @@ mod tables;
 
 /// A resolved property escape: a sorted, non-overlapping set of code-point
 /// ranges, optionally negated for `\P{...}`.
+///
+/// `Copy` so callers can resolve a property once at match setup and cheaply
+/// carry the static range slice through the per-character matching loop.
+#[derive(Clone, Copy)]
 pub(crate) struct PropertySet {
     ranges: &'static [(u32, u32)],
 }

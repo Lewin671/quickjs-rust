@@ -195,6 +195,32 @@ fn unicode_property_escapes_match_code_points() {
 }
 
 #[test]
+fn property_escapes_resolve_once_and_match_repeatedly() {
+    // Resolving the property table per character was prohibitively slow; the
+    // matcher now caches each escape's resolution keyed by pattern position.
+    // A long greedy repetition must still match every code point correctly.
+    let letters: String = std::iter::repeat_n('a', 50_000).collect();
+    let matched = regexp_match_range(r"^\p{L}+$", &letters, 0, false, true, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, letters.len()));
+
+    // A single non-letter at the end must fail the anchored match.
+    let mut mixed = letters.clone();
+    mixed.push('5');
+    assert!(regexp_match_range(r"^\p{L}+$", &mixed, 0, false, true, false).is_none());
+
+    // A property escape inside a class followed by a literal range still uses
+    // the correct class-relative bounds after the cached escape.
+    let matched = regexp_match_range(r"^[\p{Lu}a-f]+$", "ABCabf", 0, false, true, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 6));
+    assert!(regexp_match_range(r"^[\p{Lu}a-f]+$", "ABCg", 0, false, true, false).is_none());
+
+    // A negated character class with a cached property escape.
+    let matched = regexp_match_range(r"^[^\p{Nd}]+$", "abc", 0, false, true, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 3));
+    assert!(regexp_match_range(r"^[^\p{Nd}]+$", "ab2", 0, false, true, false).is_none());
+}
+
+#[test]
 fn long_greedy_repetition_does_not_overflow_the_stack() {
     // A greedy quantified atom over a long input must not recurse per
     // repetition; the matcher uses an explicit work stack instead.

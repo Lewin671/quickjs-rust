@@ -11,7 +11,7 @@ mod tests;
 
 use classes::class_match;
 use escapes::{
-    chars_equal, property_escape, regexp_control_escape, regexp_whitespace, regexp_word_char,
+    PropertyCache, chars_equal, regexp_control_escape, regexp_whitespace, regexp_word_char,
     unicode_escape,
 };
 use groups::{
@@ -58,6 +58,7 @@ struct RepeatAtom<'a> {
     quantifier: Quantifier,
     atom_captures: Vec<usize>,
     group_indices: &'a HashMap<usize, usize>,
+    properties: &'a PropertyCache,
     options: MatchOptions,
 }
 
@@ -128,6 +129,7 @@ fn regexp_match(
         return None;
     }
     let group_indices = capture_group_indices(&pattern);
+    let properties = PropertyCache::build(&pattern);
     let options = MatchOptions {
         ignore_case,
         unicode,
@@ -163,6 +165,7 @@ fn regexp_match(
                     alternative_end,
                     state.clone(),
                     &group_indices,
+                    &properties,
                     options,
                 )
                 .into_iter()
@@ -212,6 +215,7 @@ fn capture_group_indices(pattern: &[char]) -> HashMap<usize, usize> {
     indices
 }
 
+#[allow(clippy::too_many_arguments)]
 fn match_pattern(
     pattern: &[char],
     text: &[char],
@@ -219,6 +223,7 @@ fn match_pattern(
     end_pc: usize,
     state: MatchState,
     group_indices: &HashMap<usize, usize>,
+    properties: &PropertyCache,
     options: MatchOptions,
 ) -> Vec<MatchState> {
     if pc == end_pc {
@@ -227,19 +232,37 @@ fn match_pattern(
     match pattern[pc] {
         '^' => {
             if at_line_start(text, state.index, options.multiline) {
-                match_pattern(pattern, text, pc + 1, end_pc, state, group_indices, options)
+                match_pattern(
+                    pattern,
+                    text,
+                    pc + 1,
+                    end_pc,
+                    state,
+                    group_indices,
+                    properties,
+                    options,
+                )
             } else {
                 Vec::new()
             }
         }
         '$' => {
             if at_line_end(text, state.index, options.multiline) {
-                match_pattern(pattern, text, pc + 1, end_pc, state, group_indices, options)
+                match_pattern(
+                    pattern,
+                    text,
+                    pc + 1,
+                    end_pc,
+                    state,
+                    group_indices,
+                    properties,
+                    options,
+                )
             } else {
                 Vec::new()
             }
         }
-        _ => atom_end(pattern, pc, options.unicode)
+        _ => atom_end(pattern, pc, properties, options.unicode)
             .into_iter()
             .flat_map(|atom_end| {
                 let quantifier = quantifier(pattern, atom_end);
@@ -250,6 +273,7 @@ fn match_pattern(
                     quantifier,
                     state.clone(),
                     group_indices,
+                    properties,
                     options,
                 )
                 .into_iter()
@@ -261,6 +285,7 @@ fn match_pattern(
                         end_pc,
                         state,
                         group_indices,
+                        properties,
                         options,
                     )
                 })
@@ -269,13 +294,18 @@ fn match_pattern(
     }
 }
 
-fn atom_end(pattern: &[char], pc: usize, unicode: bool) -> Option<usize> {
+fn atom_end(
+    pattern: &[char],
+    pc: usize,
+    properties: &PropertyCache,
+    unicode: bool,
+) -> Option<usize> {
     match pattern.get(pc)? {
         '\\' if unicode_escape(pattern, pc, unicode).is_some() => {
             unicode_escape(pattern, pc, unicode).map(|escape| escape.next_pc)
         }
-        '\\' if unicode && property_escape_end(pattern, pc).is_some() => {
-            property_escape_end(pattern, pc)
+        '\\' if unicode && properties.get(pc).is_some() => {
+            properties.get(pc).map(|escape| escape.next_pc)
         }
         '\\' if pattern.get(pc + 1) == Some(&'k') && named_backreference(pattern, pc).is_some() => {
             named_backreference(pattern, pc).map(|(_, next_pc)| next_pc)
@@ -296,12 +326,13 @@ fn match_atom(
     pc: usize,
     state: MatchState,
     group_indices: &HashMap<usize, usize>,
+    properties: &PropertyCache,
     options: MatchOptions,
 ) -> Vec<(usize, MatchState)> {
     match pattern[pc] {
-        '\\' => match_escape(pattern, text, pc, state, options),
-        '[' => match_class(pattern, text, pc, state, options),
-        '(' => match_group(pattern, text, pc, state, group_indices, options),
+        '\\' => match_escape(pattern, text, pc, state, properties, options),
+        '[' => match_class(pattern, text, pc, state, properties, options),
+        '(' => match_group(pattern, text, pc, state, group_indices, properties, options),
         '.' => match_any(text, pc + 1, state, options),
         literal => match_literal(text, pc + 1, state, literal, options.ignore_case),
     }
@@ -367,6 +398,7 @@ fn match_escape(
     text: &[char],
     pc: usize,
     mut state: MatchState,
+    properties: &PropertyCache,
     options: MatchOptions,
 ) -> Vec<(usize, MatchState)> {
     let Some(escaped) = pattern.get(pc + 1).copied() else {
@@ -380,7 +412,7 @@ fn match_escape(
     }
     if options.unicode
         && matches!(escaped, 'p' | 'P')
-        && let Some(escape) = property_escape(pattern, pc)
+        && let Some(escape) = properties.get(pc)
     {
         return match_property_escape(text, state, &escape);
     }
@@ -488,10 +520,6 @@ fn match_unicode_escape(
     matches
 }
 
-fn property_escape_end(pattern: &[char], pc: usize) -> Option<usize> {
-    property_escape(pattern, pc).map(|escape| escape.next_pc)
-}
-
 fn match_property_escape(
     text: &[char],
     mut state: MatchState,
@@ -520,6 +548,7 @@ fn match_class(
     text: &[char],
     pc: usize,
     mut state: MatchState,
+    properties: &PropertyCache,
     options: MatchOptions,
 ) -> Vec<(usize, MatchState)> {
     let Some(end) = pattern[pc + 1..].iter().position(|char| *char == ']') else {
@@ -530,7 +559,7 @@ fn match_class(
     let Some((value, next_index)) = regexp_code_point_at(text, state.index, options.unicode) else {
         return Vec::new();
     };
-    if !class_match(class, value, options) {
+    if !class_match(class, pc + 1, value, properties, options) {
         return Vec::new();
     }
     state.index = next_index;
@@ -644,6 +673,7 @@ fn counted_quantifier(pattern: &[char], pc: usize) -> Option<Quantifier> {
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn repeat_atom(
     pattern: &[char],
     text: &[char],
@@ -651,14 +681,26 @@ fn repeat_atom(
     quantifier: Quantifier,
     state: MatchState,
     group_indices: &HashMap<usize, usize>,
+    properties: &PropertyCache,
     options: MatchOptions,
 ) -> Vec<MatchState> {
-    let atom_captures = atom_capture_indices(pattern, atom_pc, group_indices, options.unicode);
+    let atom_captures =
+        atom_capture_indices(pattern, atom_pc, group_indices, properties, options.unicode);
     let mut current = vec![state];
     for _ in 0..quantifier.min {
         current = current
             .into_iter()
-            .flat_map(|state| match_atom(pattern, text, atom_pc, state, group_indices, options))
+            .flat_map(|state| {
+                match_atom(
+                    pattern,
+                    text,
+                    atom_pc,
+                    state,
+                    group_indices,
+                    properties,
+                    options,
+                )
+            })
             .map(|(_, state)| state)
             .collect();
         if current.is_empty() {
@@ -677,6 +719,7 @@ fn repeat_atom(
         quantifier,
         atom_captures,
         group_indices,
+        properties,
         options,
     };
     let mut results = Vec::new();
@@ -729,6 +772,7 @@ fn repeat_atom_from(
                         repeat.atom_pc,
                         state.clone(),
                         repeat.group_indices,
+                        repeat.properties,
                         repeat.options,
                     )
                     .into_iter()
@@ -761,9 +805,10 @@ fn atom_capture_indices(
     pattern: &[char],
     atom_pc: usize,
     group_indices: &HashMap<usize, usize>,
+    properties: &PropertyCache,
     unicode: bool,
 ) -> Vec<usize> {
-    let Some(atom_end) = atom_end(pattern, atom_pc, unicode) else {
+    let Some(atom_end) = atom_end(pattern, atom_pc, properties, unicode) else {
         return Vec::new();
     };
     let mut indices: Vec<_> = group_indices
@@ -776,12 +821,14 @@ fn atom_capture_indices(
     indices
 }
 
+#[allow(clippy::too_many_arguments)]
 fn match_group(
     pattern: &[char],
     text: &[char],
     pc: usize,
     state: MatchState,
     group_indices: &HashMap<usize, usize>,
+    properties: &PropertyCache,
     options: MatchOptions,
 ) -> Vec<(usize, MatchState)> {
     let Some(end) = closing_group(pattern, pc) else {
@@ -796,6 +843,7 @@ fn match_group(
             end,
             state,
             group_indices,
+            properties,
             options,
             negative,
             false,
@@ -809,6 +857,7 @@ fn match_group(
             end,
             state,
             group_indices,
+            properties,
             options,
             negative,
             true,
@@ -829,6 +878,7 @@ fn match_group(
             end,
             state.clone(),
             group_indices,
+            properties,
             options,
         ));
     }
@@ -853,6 +903,7 @@ fn match_lookaround(
     body_end: usize,
     state: MatchState,
     group_indices: &HashMap<usize, usize>,
+    properties: &PropertyCache,
     options: MatchOptions,
     negative: bool,
     behind: bool,
@@ -866,6 +917,7 @@ fn match_lookaround(
             body_end,
             state.clone(),
             group_indices,
+            properties,
             options,
         )
     } else {
@@ -878,6 +930,7 @@ fn match_lookaround(
                 end,
                 state.clone(),
                 group_indices,
+                properties,
                 options,
             ));
         }
@@ -908,6 +961,7 @@ fn match_lookaround(
 /// Match the body of a lookbehind ending at `state.index`. We try every body
 /// start position from 0..=state.index and keep those whose match ends exactly
 /// at `state.index`.
+#[allow(clippy::too_many_arguments)]
 fn match_lookbehind_body(
     pattern: &[char],
     text: &[char],
@@ -915,6 +969,7 @@ fn match_lookbehind_body(
     body_end: usize,
     state: MatchState,
     group_indices: &HashMap<usize, usize>,
+    properties: &PropertyCache,
     options: MatchOptions,
 ) -> Vec<MatchState> {
     let target = state.index;
@@ -925,7 +980,16 @@ fn match_lookbehind_body(
                 index: begin,
                 captures: state.captures.clone(),
             };
-            for matched in match_pattern(pattern, text, start, end, probe, group_indices, options) {
+            for matched in match_pattern(
+                pattern,
+                text,
+                start,
+                end,
+                probe,
+                group_indices,
+                properties,
+                options,
+            ) {
                 if matched.index == target {
                     results.push(matched);
                 }

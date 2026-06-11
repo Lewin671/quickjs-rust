@@ -1,16 +1,76 @@
+use std::collections::HashMap;
+
 use crate::regexp::unicode::{self, PropertySet};
 use crate::string::string_from_code_unit;
 
+/// Resolved `\p{...}` / `\P{...}` escapes for one pattern, keyed by the absolute
+/// position of the leading backslash in the pattern's `char` slice.
+///
+/// Property resolution allocates a body `String` and walks the generated alias
+/// and range tables, which is far too slow to repeat for every character of a
+/// property-escape match (those Test262 cases scan ~1M code points). The cache
+/// resolves each escape exactly once when matching begins, so the hot loop only
+/// performs an O(1) map lookup plus a binary search over the static range slice.
+pub(super) struct PropertyCache {
+    escapes: HashMap<usize, ParsedPropertyEscape>,
+}
+
+impl PropertyCache {
+    /// Resolve every property escape in `pattern` up front.
+    ///
+    /// Tracks character-class nesting so a `\p`/`\P` is treated the same way the
+    /// matcher does inside `[...]` and outside it; all other `\p`/`\P`-shaped
+    /// runs that fail to resolve are simply absent from the cache (validation has
+    /// already rejected genuinely malformed patterns).
+    pub(super) fn build(pattern: &[char]) -> Self {
+        let mut escapes = HashMap::new();
+        let mut index = 0;
+        while index < pattern.len() {
+            if pattern[index] == '\\' {
+                if matches!(pattern.get(index + 1), Some('p' | 'P'))
+                    && let Some(escape) = property_escape(pattern, index)
+                {
+                    let next = escape.next_pc;
+                    escapes.insert(index, escape);
+                    index = next;
+                    continue;
+                }
+                // Skip the escaped character so an escaped brace or `p` inside a
+                // literal does not desynchronize the scan.
+                index += 2;
+                continue;
+            }
+            index += 1;
+        }
+        PropertyCache { escapes }
+    }
+
+    /// Look up the escape whose backslash sits at absolute position `pc`.
+    pub(super) fn get(&self, pc: usize) -> Option<ParsedPropertyEscape> {
+        self.escapes.get(&pc).copied()
+    }
+}
+
 /// A parsed `\p{...}` / `\P{...}` Unicode property escape.
+///
+/// `Copy` so a resolved escape can be cached once per match (keyed by pattern
+/// position) and looked up in the hot per-character loop without re-parsing the
+/// body or re-resolving the property table.
+#[derive(Clone, Copy)]
 pub(super) struct ParsedPropertyEscape {
     pub(super) set: PropertySet,
     pub(super) negated: bool,
     pub(super) next_pc: usize,
 }
 
-/// Parse a property escape at `pc` (pointing at the backslash). Returns `None`
-/// when the escape is not a `\p{...}`/`\P{...}` form; assumes the pattern has
-/// already passed validation so a well-formed body resolves.
+/// Parse and resolve a property escape at `pc` (pointing at the backslash).
+///
+/// Returns `None` when the escape is not a `\p{...}`/`\P{...}` form; assumes the
+/// pattern has already passed validation so a well-formed body resolves.
+///
+/// This allocates a `String` for the body and resolves the property table, so
+/// callers in the per-character matching loop must go through a
+/// [`PropertyCache`] rather than calling this directly each character.
 pub(super) fn property_escape(pattern: &[char], pc: usize) -> Option<ParsedPropertyEscape> {
     let negated = match pattern.get(pc + 1)? {
         'p' => false,

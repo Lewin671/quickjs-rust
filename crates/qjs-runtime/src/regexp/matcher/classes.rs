@@ -1,32 +1,51 @@
 use super::MatchOptions;
 use super::escapes::{
-    chars_equal, class_range_contains, property_escape, regexp_control_escape, regexp_whitespace,
+    PropertyCache, chars_equal, class_range_contains, regexp_control_escape, regexp_whitespace,
     regexp_word_char, unicode_escape,
 };
 use crate::string::surrogate_escape_code_unit;
 
-pub(super) fn class_match(class: &[char], value: char, options: MatchOptions) -> bool {
-    let (negated, class) = if class.first() == Some(&'^') {
-        (true, &class[1..])
+/// Match a single code point against a character class.
+///
+/// `base` is the absolute position of `class[0]` within the full pattern, so
+/// property escapes can be resolved through the per-match [`PropertyCache`]
+/// (which is keyed by absolute pattern position) instead of being re-parsed.
+pub(super) fn class_match(
+    class: &[char],
+    base: usize,
+    value: char,
+    properties: &PropertyCache,
+    options: MatchOptions,
+) -> bool {
+    let (negated, class, base) = if class.first() == Some(&'^') {
+        (true, &class[1..], base + 1)
     } else {
-        (false, class)
+        (false, class, base)
     };
-    let matched = class_match_positive(class, value, options);
+    let matched = class_match_positive(class, base, value, properties, options);
     if negated { !matched } else { matched }
 }
 
-fn class_match_positive(class: &[char], value: char, options: MatchOptions) -> bool {
+fn class_match_positive(
+    class: &[char],
+    base: usize,
+    value: char,
+    properties: &PropertyCache,
+    options: MatchOptions,
+) -> bool {
     let mut index = 0;
     while index < class.len() {
         if options.unicode
             && class[index] == '\\'
             && matches!(class.get(index + 1), Some('p' | 'P'))
-            && let Some(escape) = property_escape(class, index)
+            && let Some(escape) = properties.get(base + index)
         {
             if escape.set.contains(u32::from(value)) != escape.negated {
                 return true;
             }
-            index = escape.next_pc;
+            // `next_pc` is an absolute pattern position; convert back to an
+            // index within this class slice.
+            index = escape.next_pc - base;
             continue;
         }
         if let Some(start) = class_atom(class, index, options) {
