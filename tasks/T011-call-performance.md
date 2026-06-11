@@ -98,9 +98,83 @@ Why the copy exists (constraints any redesign must preserve):
   they perform no property reads. The remaining cost there is the call-boundary
   env clone, addressed by the redesign below.
 
-## Remaining redesign (the real fix)
+## Fresh call-path profile (debug, 2026-06-11, HEAD c02ea14)
 
-Represent realm globals as shared state instead of a cloned map. Sketch:
+`std::time::Instant` accumulators around `call_callee` (vm.rs) and the leaf
+branch of `call_function` (call.rs), 20k plain `f(x){return x+1;}` calls:
+
+| phase | total / 20k | per call |
+| --- | ---: | ---: |
+| `call_env` (caller-side build) | 913 ms | ~46 us |
+| `function_env` (frame build) | 2086 ms | ~104 us |
+| `eval_function_bytecode` (real work) | 29 ms | ~1.5 us |
+| `apply_call_env` (write-back) | 117 ms | ~6 us |
+
+So ~150 us/call of the ~157 us is pure environment building; the actual VM
+loop is ~1.5 us. The redesign target is `call_env` + `function_env`. For a
+trivial leaf call these do **two** independent `HashMap` allocations and copy
+the ~50 `RUNTIME_INTRINSIC_NAMES` entries (String key + Rc value clone) into
+each, plus `function_env`'s `insert_caller_scope_bindings` iterates every
+caller key and runs an O(50) `RUNTIME_INTRINSIC_NAMES.contains` linear scan per
+key. Step 1 (prototype-read fast path) does not touch this path, which is why
+the plain/closure call loops were unchanged by it.
+
+## Remaining redesign (the real fix) — NEXT STEP, not yet landed
+
+The flat `env: &mut HashMap<String, Value>` contract is what forces a fully
+materialized per-call map. Eliminating the copies requires changing that type,
+which is a single serialized whole-crate change (775 signature/usage sites
+across 134 files; verified with
+`grep -rn 'env: &mut HashMap<String, Value>\|env: &HashMap<String, Value>'`).
+It cannot be split into a smaller *compiling* sub-commit, so plan for it as one
+landing.
+
+Concrete migration recipe (in dependency order):
+
+1. Introduce `pub(crate) struct CallEnv { realm: Rc<RefCell<HashMap<String,
+   Value>>>, locals: HashMap<String, Value> }` (suggest `src/function/env.rs`).
+   The `realm` cell holds intrinsics + true globals, shared by `Rc::clone` into
+   every frame; `locals` holds only this/arguments/params/captures/caller
+   scope bindings for the current frame.
+2. Decide read/write layering: `get(name) -> Option<Value>` (OWNED, not
+   `&Value` — a layered value behind a `RefCell` cannot hand out a reference);
+   check `locals` first, then borrow `realm` briefly and clone out. `insert`
+   must route to the right layer — keep the existing `bytecode.local_slot`
+   discrimination: a name with a local slot goes to `locals`, otherwise to
+   `realm`. This is the single biggest correctness risk.
+3. **Borrow discipline**: never hold `realm.borrow()`/`borrow_mut()` across a
+   call back into user code (getters, Proxy traps, valueOf/toString, setters,
+   callbacks). Always clone the needed value out, drop the borrow, then call.
+   Tests that exercise this: anything with getters/Proxy/`Symbol.toPrimitive`
+   under `tests/` and `compare-qjs` `proxy-*`, `symbol-to-primitive.js`.
+4. Migrate the 84 `env.get(...)` sites: most are already `env.get(x).cloned()`
+   and become `env.get(x)`; the `if let Some(v) = env.get(x)` borrow sites need
+   the owned value bound to a local first. The 93 `env.insert` and 2
+   `env.get_mut`/`entry`/`remove`/`keys`/`contains_key` sites each need a
+   `CallEnv` method. The ~1840 `, env` threading sites are unaffected once the
+   parameter type changes.
+5. The 18 `env.clone()` sites (run
+   `grep -rn 'env\.clone()' crates/qjs-runtime/src`) mostly snapshot the env
+   into `Rc<RefCell<HashMap>>` for closure/generator/class `captured_env`.
+   Provide `CallEnv::snapshot_locals() -> HashMap` (or keep capturing the
+   `realm` Rc + a `locals` snapshot) and decide the closure capture model:
+   closures should capture the `realm` Rc (so reassigned builtins stay live)
+   plus a snapshot of the outer `locals` they close over. Preserve observable
+   semantics — `functions::nested_closures_capture_live_outer_bindings` and
+   `async_generators.rs` regression tests are the contract.
+6. VM frame: make `Vm.globals` the shared `Rc<RefCell<HashMap>>`; `current_env`
+   /`apply_env`/`call_env`/`function_env`/`apply_call_env` collapse — global
+   reads/writes hit the realm cell directly, so `propagate_caller_bindings`'
+   write-back scan and the `refresh_from_caller`/`propagate_to_caller`
+   stale-binding workarounds in `vm_generator.rs` likely become unnecessary
+   (re-verify against `async_generators.rs`).
+7. Prototype-resolution helpers in `property/prototype.rs` (`object_prototype`,
+   `array_prototype`, ...) currently take `&HashMap`; either keep that and pass
+   a brief realm borrow, or change them to take the realm cell. The Step 1
+   `try_direct_get` already reads these out of `&self.globals` and should be
+   re-pointed at the realm cell.
+
+Original higher-level sketch below for reference:
 
 1. Store globals as `Rc<RefCell<HashMap<String, Value>>>` (or a `Realm` struct)
    owned once per `Vm`/script and shared by reference into every call frame, so
