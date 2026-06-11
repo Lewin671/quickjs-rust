@@ -254,6 +254,24 @@ pub(crate) fn array_buffer_bytes(object: &ObjectRef) -> Vec<u8> {
     }
 }
 
+/// Replaces the backing bytes of an `ArrayBuffer` (used by typed-array writes).
+pub(crate) fn set_array_buffer_bytes(object: &ObjectRef, bytes: Vec<u8>) {
+    object.define_property(
+        ARRAY_BUFFER_DATA_PROPERTY.to_owned(),
+        Property::non_enumerable(Value::String(bytes_to_string(bytes))),
+    );
+}
+
+/// Builds a fresh, zero-initialized `ArrayBuffer` inheriting from
+/// `%ArrayBuffer.prototype%`. Used when a TypedArray allocates its own buffer.
+pub(crate) fn new_array_buffer(env: &HashMap<String, Value>, length: usize) -> ObjectRef {
+    let constructor = env.get("ArrayBuffer").cloned().unwrap_or(Value::Undefined);
+    let prototype = crate::constructor_prototype(&constructor, env);
+    let object = ObjectRef::with_prototype(HashMap::new(), prototype);
+    define_array_buffer_data(&object, vec![0; length]);
+    object
+}
+
 pub(crate) fn detached_error() -> RuntimeError {
     RuntimeError {
         thrown: None,
