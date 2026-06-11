@@ -3,6 +3,7 @@ use std::collections::HashMap;
 mod array_buffers;
 mod arrays;
 mod core;
+mod data_views;
 mod date;
 mod errors;
 mod json;
@@ -49,6 +50,17 @@ pub(crate) fn call_native_function(
     }
 
     if let Some(value) = typed_arrays::call_typed_array_native(
+        function,
+        native,
+        this_value.clone(),
+        &argument_values,
+        is_construct,
+        env,
+    )? {
+        return Ok(value);
+    }
+
+    if let Some(value) = data_views::call_data_view_native(
         function,
         native,
         this_value.clone(),
