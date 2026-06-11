@@ -267,6 +267,30 @@ fn strict_generator_named_yield_is_error() {
 }
 
 #[test]
+fn generator_expression_named_yield_is_error_even_in_sloppy() {
+    // A generator *expression*'s own name uses `[+Yield]`, so `yield` is never
+    // a legal name regardless of strict mode.
+    assert!(parse_script("(function* yield() {});").is_err());
+}
+
+#[test]
+fn function_named_yield_nested_in_generator_is_error() {
+    // The enclosing Yield context bans `yield` as a binding name, including for
+    // nested ordinary function declarations.
+    assert!(parse_script("function* g() { function yield() {} }").is_err());
+}
+
+#[test]
+fn yield_as_label_in_generator_is_error() {
+    assert!(parse_script("function* g() { yield: 1; }").is_err());
+    // `yield` is also reserved as a label in strict mode.
+    assert!(parse_script("\"use strict\"; yield: 1;").is_err());
+    // In sloppy non-generator code, `yield` is a valid label.
+    assert!(parse_script("yield: 1;").is_ok());
+    assert!(parse_script("function f() { yield: 1; }").is_ok());
+}
+
+#[test]
 fn class_constructor_may_not_be_generator() {
     assert!(parse_script("class C { *constructor() {} }").is_err());
 }

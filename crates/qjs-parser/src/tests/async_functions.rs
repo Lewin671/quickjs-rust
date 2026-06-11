@@ -329,9 +329,70 @@ fn await_as_binding_in_async_is_error() {
 }
 
 #[test]
-fn async_function_named_await_is_error() {
-    assert!(parse_script("async function await() {}").is_err());
+fn async_function_declaration_named_await_at_top_level_is_allowed() {
+    // The BindingIdentifier of an async function *declaration* is checked
+    // against the enclosing Await context. At the top level of a script that
+    // context is sloppy, so `await` is a legal name (Test262
+    // language/expressions/await/await-BindingIdentifier-in-global).
+    let script =
+        parse_script("async function await() { return 1 }").expect("top-level name `await` is ok");
+    let [Stmt::FunctionDecl { name, is_async, .. }] = script.body.as_slice() else {
+        panic!("expected an async function declaration named await");
+    };
+    assert_eq!(name, "await");
+    assert!(is_async);
+}
+
+#[test]
+fn async_function_expression_named_await_is_error() {
+    // An async function *expression*'s own name uses `[+Await]`, so `await` is
+    // never a legal name even outside an enclosing async context.
     assert!(parse_script("(async function await() {});").is_err());
+}
+
+#[test]
+fn function_named_await_nested_in_async_is_error() {
+    // Inside an async function body the enclosing Await context makes `await`
+    // an illegal binding name, including for nested ordinary functions
+    // (Test262 language/expressions/await/await-BindingIdentifier-nested).
+    assert!(parse_script("async function foo() { function await() {} }").is_err());
+    assert!(parse_script("async function foo() { async function await() {} }").is_err());
+}
+
+#[test]
+fn await_as_label_in_async_is_error() {
+    assert!(parse_script("async function f() { await: 1; }").is_err());
+    // A label `await` in sloppy non-async code is a valid label.
+    assert!(parse_script("function f() { await: 1; }").is_ok());
+    assert!(parse_script("await: 1;").is_ok());
+}
+
+#[test]
+fn async_function_strict_name_eval_or_arguments_is_error() {
+    // In strict code an async function named `eval`/`arguments` is a
+    // SyntaxError, matching the rule for ordinary function declarations
+    // (Test262 .../async-function/early-errors-declaration-binding-identifier-*).
+    assert!(parse_script("\"use strict\"; async function eval() {}").is_err());
+    assert!(parse_script("\"use strict\"; async function arguments() {}").is_err());
+    assert!(parse_script("\"use strict\"; function eval() {}").is_err());
+    assert!(parse_script("\"use strict\"; function arguments() {}").is_err());
+    // Sloppy mode still allows these names.
+    assert!(parse_script("async function eval() {}").is_ok());
+    assert!(parse_script("function arguments() {}").is_ok());
+}
+
+#[test]
+fn parameter_conflicting_with_body_lexical_declaration_is_error() {
+    // BoundNames of FormalParameters may not also occur in the
+    // LexicallyDeclaredNames of the body (Test262
+    // .../async-function/early-errors-declaration-formals-body-duplicate).
+    assert!(parse_script("async function foo(bar) { let bar; }").is_err());
+    assert!(parse_script("function foo(bar) { let bar; }").is_err());
+    assert!(parse_script("function foo(bar) { const bar = 1; }").is_err());
+    assert!(parse_script("function foo(bar) { class bar {} }").is_err());
+    // `var` and function declarations are var-scoped, so they do not conflict.
+    assert!(parse_script("function foo(bar) { var bar; }").is_ok());
+    assert!(parse_script("function foo(bar) { function bar() {} }").is_ok());
 }
 
 #[test]

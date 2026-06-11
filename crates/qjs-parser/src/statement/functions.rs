@@ -22,18 +22,10 @@ impl Parser {
                 span: name_token.span,
             });
         };
-        if is_generator && self.strict && name == "yield" {
-            return Err(ParseError {
-                message: "generator declaration may not be named `yield` in strict mode".to_owned(),
-                span: name_token.span,
-            });
-        }
-        if is_async && name == "await" {
-            return Err(ParseError {
-                message: "async function declaration may not be named `await`".to_owned(),
-                span: name_token.span,
-            });
-        }
+        // The BindingIdentifier of a function declaration is checked against the
+        // *enclosing* Yield/Await context and strict mode, not against whether
+        // the function being declared is itself a generator/async function.
+        self.check_binding_identifier(&name, name_token.span)?;
 
         let params = self.function_parameters_with_context(is_generator, is_async)?;
         let body_start = self
@@ -110,19 +102,24 @@ impl Parser {
             let TokenKind::Identifier(name) = token.kind else {
                 unreachable!("peek checked identifier");
             };
-            if is_generator && self.strict && name == "yield" {
+            // A named function expression's BindingIdentifier is in the scope of
+            // its own name, so `await`/`yield` are checked against the inner
+            // generator/async context as well as the enclosing one.
+            if is_generator && name == "yield" {
                 return Err(ParseError {
-                    message: "generator expression may not be named `yield` in strict mode"
+                    message: "function expression may not be named `yield` in a generator"
                         .to_owned(),
                     span: token.span,
                 });
             }
             if is_async && name == "await" {
                 return Err(ParseError {
-                    message: "async function expression may not be named `await`".to_owned(),
+                    message: "function expression may not be named `await` in an async function"
+                        .to_owned(),
                     span: token.span,
                 });
             }
+            self.check_binding_identifier(&name, token.span)?;
             Some(name)
         } else {
             None
@@ -274,6 +271,39 @@ impl Parser {
         result
     }
 
+    /// Validates a BindingIdentifier against the current strict-mode and
+    /// Yield/Await context. `eval`/`arguments` are reserved binding names in
+    /// strict mode; `yield` is reserved in strict mode or inside a generator;
+    /// `await` is reserved inside an async function. Used for function
+    /// declaration names (checked in the enclosing context) and other places
+    /// that bind an identifier.
+    pub(crate) fn check_binding_identifier(
+        &self,
+        name: &str,
+        span: Span,
+    ) -> Result<(), ParseError> {
+        if self.strict && matches!(name, "eval" | "arguments") {
+            return Err(ParseError {
+                message: format!("`{name}` may not be used as a binding name in strict mode"),
+                span,
+            });
+        }
+        if (self.strict || self.in_generator) && name == "yield" {
+            return Err(ParseError {
+                message: "`yield` may not be used as a binding name here".to_owned(),
+                span,
+            });
+        }
+        if self.in_async && name == "await" {
+            return Err(ParseError {
+                message: "`await` may not be used as a binding name in an async function"
+                    .to_owned(),
+                span,
+            });
+        }
+        Ok(())
+    }
+
     pub(crate) fn reject_invalid_function_parameters(
         &self,
         params: &FunctionParams,
@@ -305,8 +335,45 @@ impl Parser {
                 }
             }
         }
+        // A parameter name may not also appear as a lexically declared name
+        // (`let`/`const`/`class`) at the top level of the function body. This
+        // holds for all functions, independent of strict mode.
+        let lexical_names = body_lexically_declared_names(body);
+        for (name, span) in params.named_spans() {
+            if lexical_names.contains(&name) {
+                return Err(ParseError {
+                    message: format!(
+                        "parameter `{name}` conflicts with a lexical declaration in the body"
+                    ),
+                    span,
+                });
+            }
+        }
         Ok(())
     }
+}
+
+/// Collects the names lexically declared at the top level of a function body:
+/// `let`/`const` bindings and `class` declarations. `var` and `function`
+/// declarations are var-scoped, not lexical, so they are excluded.
+fn body_lexically_declared_names(body: &[Stmt]) -> Vec<String> {
+    let mut names = Vec::new();
+    for stmt in body {
+        match stmt {
+            Stmt::VarDecl {
+                kind: qjs_ast::VarKind::Let | qjs_ast::VarKind::Const,
+                declarations,
+                ..
+            } => {
+                for declarator in declarations {
+                    names.extend(declarator.binding.names());
+                }
+            }
+            Stmt::ClassDecl { name, .. } => names.push(name.clone()),
+            _ => {}
+        }
+    }
+    names
 }
 
 pub(crate) fn duplicate_parameter_span(params: &FunctionParams) -> Option<Span> {
