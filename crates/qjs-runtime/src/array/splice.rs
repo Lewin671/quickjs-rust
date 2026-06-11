@@ -7,6 +7,7 @@ use super::{
     mutation::{delete_array_like_property, set_array_like_property},
     species::validate_array_species_constructor,
 };
+use crate::CallEnv;
 
 const MAX_SAFE_INTEGER_LENGTH: usize = 9_007_199_254_740_991;
 const MAX_ARRAY_LENGTH: usize = u32::MAX as usize;
@@ -14,7 +15,7 @@ const MAX_ARRAY_LENGTH: usize = u32::MAX as usize;
 pub(crate) fn native_array_prototype_splice(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if matches!(this_value, Value::String(_)) {
         return Err(splice_length_error());
@@ -71,7 +72,7 @@ pub(crate) fn native_array_prototype_splice(
 pub(super) fn splice_start_with_env(
     length: usize,
     start: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<usize, RuntimeError> {
     let number = match start {
         Value::Undefined => 0.0,
@@ -96,7 +97,7 @@ pub(super) fn splice_delete_count(
     length: usize,
     start: usize,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<usize, RuntimeError> {
     if argument_values.is_empty() {
         return Ok(0);
@@ -119,7 +120,7 @@ fn splice_removed_elements(
     receiver: Value,
     start: usize,
     delete_count: usize,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Vec<Value>, RuntimeError> {
     let mut removed = Vec::with_capacity(delete_count);
     for offset in 0..delete_count {
@@ -139,7 +140,7 @@ fn move_splice_tail(
     start: usize,
     delete_count: usize,
     item_count: usize,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
     match item_count.cmp(&delete_count) {
         std::cmp::Ordering::Less => {
@@ -185,7 +186,7 @@ pub(super) fn to_spliced_delete_count(
     length: usize,
     start: usize,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<usize, RuntimeError> {
     if argument_values.is_empty() {
         return Ok(0);

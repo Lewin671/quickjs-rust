@@ -15,6 +15,7 @@ mod race;
 pub(crate) mod r#try;
 pub(crate) mod with_resolvers;
 
+use crate::CallEnv;
 pub(crate) use all::{native_promise_all, native_promise_all_resolve_element};
 pub(crate) use capability::native_get_capabilities_executor;
 pub(crate) use jobs::drain_promise_jobs;
@@ -51,11 +52,7 @@ const PROMISE_PENDING: &str = "pending";
 const PROMISE_FULFILLED: &str = "fulfilled";
 const PROMISE_REJECTED: &str = "rejected";
 
-pub(crate) fn install_promise(
-    env: &mut HashMap<String, Value>,
-    global_this: &Value,
-    object_prototype: ObjectRef,
-) {
+pub(crate) fn install_promise(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
     let promise_prototype =
         ObjectRef::with_prototype(HashMap::new(), Some(object_prototype.clone()));
     promise_prototype.set_to_string_tag("Promise");
@@ -118,7 +115,7 @@ pub(crate) fn install_promise(
         &promise_prototype,
         &object_prototype,
     );
-    if let Some(aggregate_error) = env.get("AggregateError").cloned() {
+    if let Some(aggregate_error) = env.get("AggregateError") {
         promise_any
             .env
             .insert(PROMISE_AGGREGATE_ERROR.to_owned(), aggregate_error);
@@ -141,7 +138,7 @@ pub(crate) fn install_promise(
     }
 
     let value = Value::Function(promise_function);
-    env.insert("Promise".to_owned(), value.clone());
+    env.insert_realm("Promise".to_owned(), value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable("Promise".to_owned(), value);
     }
@@ -178,7 +175,7 @@ pub(crate) fn native_promise(
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if !is_construct {
         return Err(RuntimeError {
@@ -221,7 +218,7 @@ pub(crate) fn native_promise(
 pub(crate) fn native_promise_resolve(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     // 1. Let C be the this value. 2. If Type(C) is not Object, throw TypeError.
     if !is_object_value(&this_value) {
@@ -234,7 +231,7 @@ pub(crate) fn native_promise_resolve(
 pub(crate) fn native_promise_reject(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if !is_object_value(&this_value) {
         return Err(promise_receiver_not_object_error());
@@ -250,7 +247,7 @@ pub(crate) fn native_promise_reject(
 pub(crate) fn promise_resolve(
     c: &Value,
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if is_promise_value(&value) {
         let constructor = property_value(value.clone(), "constructor", env)?;
@@ -267,7 +264,7 @@ pub(crate) fn native_promise_then(
     function: &Function,
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let Value::Object(promise) = this_value else {
         return Err(not_a_promise_error());
@@ -316,7 +313,7 @@ pub(crate) fn native_promise_then(
 fn species_constructor(
     object: &ObjectRef,
     promise_function: &Function,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     species_constructor_of(Value::Object(object.clone()), promise_function, env)
 }
@@ -326,7 +323,7 @@ fn species_constructor(
 fn species_constructor_of(
     object: Value,
     promise_function: &Function,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let default = default_promise_constructor(promise_function, env);
     let constructor = property_value(object, "constructor", env)?;
@@ -352,7 +349,7 @@ fn species_constructor_of(
 
 /// Resolves the realm `%Promise%` constructor that serves as the default in
 /// SpeciesConstructor and NewPromiseCapability fallbacks.
-fn default_promise_constructor(promise_function: &Function, env: &HashMap<String, Value>) -> Value {
+fn default_promise_constructor(promise_function: &Function, env: &CallEnv) -> Value {
     if let Some(prototype) = promise_function
         .env
         .get(PROMISE_PROTOTYPE)
@@ -367,14 +364,14 @@ fn default_promise_constructor(promise_function: &Function, env: &HashMap<String
     {
         return Value::Function(constructor);
     }
-    env.get("Promise").cloned().unwrap_or(Value::Undefined)
+    env.get("Promise").unwrap_or(Value::Undefined)
 }
 
 pub(crate) fn native_promise_catch(
     _function: &Function,
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let on_rejected = argument_values.first().cloned().unwrap_or(Value::Undefined);
     call_promise_then(this_value, vec![Value::Undefined, on_rejected], env)
@@ -384,7 +381,7 @@ pub(crate) fn native_promise_finally(
     function: &Function,
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     // 1. Let promise be the this value. 2. If Type(promise) is not Object, throw.
     if !is_object_value(&this_value) {
@@ -419,7 +416,7 @@ pub(crate) fn native_promise_finally(
 pub(crate) fn native_promise_finally_fulfilled(
     function: &Function,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let result = call_finally_handler(function, env)?;
@@ -434,7 +431,7 @@ pub(crate) fn native_promise_finally_fulfilled(
 pub(crate) fn native_promise_finally_rejected(
     function: &Function,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let reason = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let result = call_finally_handler(function, env)?;
@@ -473,7 +470,7 @@ pub(crate) fn native_promise_finally_thrower_thunk(
 pub(crate) fn native_promise_resolve_function(
     function: &Function,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if resolving_function_already_resolved(function) {
         return Ok(Value::Undefined);
@@ -487,7 +484,7 @@ pub(crate) fn native_promise_resolve_function(
 pub(crate) fn native_promise_reject_function(
     function: &Function,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if resolving_function_already_resolved(function) {
         return Ok(Value::Undefined);
@@ -505,7 +502,7 @@ pub(crate) fn is_promise_object(object: &ObjectRef) -> bool {
 /// Creates a fresh pending promise (a "promise capability" in spec terms) whose
 /// `[[Prototype]]` is `%Promise.prototype%`. Used by the async-function driver
 /// for the promise it returns to the caller.
-pub(crate) fn new_pending_promise(env: &HashMap<String, Value>) -> ObjectRef {
+pub(crate) fn new_pending_promise(env: &CallEnv) -> ObjectRef {
     let promise = ObjectRef::with_prototype(HashMap::new(), promise_prototype_from_env(env));
     initialize_promise(&promise);
     promise
@@ -513,7 +510,7 @@ pub(crate) fn new_pending_promise(env: &HashMap<String, Value>) -> ObjectRef {
 
 /// Resolves `%Promise.prototype%` from the realm: prefer the internal binding,
 /// otherwise read it off the global `Promise` constructor's `prototype`.
-fn promise_prototype_from_env(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+fn promise_prototype_from_env(env: &CallEnv) -> Option<ObjectRef> {
     if let Some(Value::Object(prototype)) = env.get(PROMISE_PROTOTYPE) {
         return Some(prototype.clone());
     }
@@ -532,21 +529,13 @@ fn promise_prototype_from_env(env: &HashMap<String, Value>) -> Option<ObjectRef>
 /// Resolves a promise capability with `value` (running the
 /// thenable-unwrapping resolution algorithm). Used to settle an async
 /// function's returned promise with the body's return value.
-pub(crate) fn resolve_promise_capability(
-    promise: &ObjectRef,
-    value: Value,
-    env: &mut HashMap<String, Value>,
-) {
+pub(crate) fn resolve_promise_capability(promise: &ObjectRef, value: Value, env: &mut CallEnv) {
     resolve_promise(promise, value, env);
 }
 
 /// Rejects a promise capability with `reason`. Used to settle an async
 /// function's returned promise when its body throws.
-pub(crate) fn reject_promise_capability(
-    promise: &ObjectRef,
-    reason: Value,
-    env: &mut HashMap<String, Value>,
-) {
+pub(crate) fn reject_promise_capability(promise: &ObjectRef, reason: Value, env: &mut CallEnv) {
     settle_promise(promise, PROMISE_REJECTED, reason, env);
 }
 
@@ -560,7 +549,7 @@ pub(crate) fn perform_await(
     value: Value,
     on_fulfilled: Value,
     on_rejected: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) {
     // PromiseResolve(%Promise%, value): reuse an existing native promise,
     // otherwise wrap the value in a resolved promise.
@@ -619,12 +608,7 @@ fn initialize_promise(object: &ObjectRef) {
     }
 }
 
-fn settle_promise(
-    object: &ObjectRef,
-    state: &str,
-    result: Value,
-    env: &mut HashMap<String, Value>,
-) {
+fn settle_promise(object: &ObjectRef, state: &str, result: Value, env: &mut CallEnv) {
     if !matches!(
         object.own_property(PROMISE_STATE).map(|property| property.value),
         Some(Value::String(current)) if current == PROMISE_PENDING
@@ -648,7 +632,7 @@ fn settle_promise(
     }
 }
 
-fn resolve_promise(object: &ObjectRef, value: Value, env: &mut HashMap<String, Value>) {
+fn resolve_promise(object: &ObjectRef, value: Value, env: &mut CallEnv) {
     if matches!(&value, Value::Object(value_object) if value_object.ptr_eq(object)) {
         let reason = crate::error::runtime_error_to_value(
             RuntimeError {
@@ -738,10 +722,7 @@ fn finally_constructor(function: &Function) -> Value {
         .unwrap_or(Value::Undefined)
 }
 
-fn call_finally_handler(
-    function: &Function,
-    env: &mut HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
+fn call_finally_handler(function: &Function, env: &mut CallEnv) -> Result<Value, RuntimeError> {
     let handler = function
         .env
         .get(PROMISE_FINALLY_HANDLER)
@@ -753,7 +734,7 @@ fn call_finally_handler(
 fn call_promise_then(
     this_value: Value,
     argument_values: Vec<Value>,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let then = property_value(this_value.clone(), "then", env)?;
     call_function(then, this_value, argument_values, env, false)
@@ -893,10 +874,7 @@ pub(crate) fn promise_debug_state_result(value: &Value) -> Option<(String, Value
     Some((promise_state(object)?, promise_result(object)?))
 }
 
-fn promise_thenable_then(
-    value: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<Option<Value>, RuntimeError> {
+fn promise_thenable_then(value: Value, env: &mut CallEnv) -> Result<Option<Value>, RuntimeError> {
     if !is_thenable_candidate(&value) {
         return Ok(None);
     }

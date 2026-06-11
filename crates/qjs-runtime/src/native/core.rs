@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::CallEnv;
 use crate::{Function, NativeFunction, RuntimeError, Value, bigint, boolean, global, symbol};
 
 pub(super) fn call_core_native(
@@ -8,7 +9,7 @@ pub(super) fn call_core_native(
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     match native {
         NativeFunction::Boolean => {

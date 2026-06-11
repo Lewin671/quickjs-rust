@@ -8,13 +8,14 @@ use crate::{
 use super::{
     STRING_DATA_PROPERTY, string_code_units, string_from_code_unit, string_from_code_units,
 };
+use crate::CallEnv;
 
 pub(crate) fn native_string(
     function: &Function,
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = match argument_values.first().cloned() {
         Some(Value::Object(object)) if symbol::is_symbol_primitive(&object) => {
@@ -62,7 +63,7 @@ pub(crate) fn native_string_from_code_point(
 
 pub(crate) fn native_string_raw(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let template = require_object_coercible(
         argument_values.first().cloned().unwrap_or(Value::Undefined),

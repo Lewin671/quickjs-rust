@@ -1,14 +1,12 @@
 use std::collections::HashMap;
 
+use crate::CallEnv;
 use crate::{
     ArrayRef, Function, ObjectRef, Property, Value, array_own_property_descriptor,
     array_own_property_names,
 };
 
-pub(crate) fn constructor_prototype(
-    callee: &Value,
-    env: &HashMap<String, Value>,
-) -> Option<ObjectRef> {
+pub(crate) fn constructor_prototype(callee: &Value, env: &CallEnv) -> Option<ObjectRef> {
     constructor_prototype_slot(callee, env).and_then(|prototype| prototype.as_object())
 }
 
@@ -16,7 +14,7 @@ pub(crate) fn constructor_prototype(
 /// `prototype` property, preserving a function-valued prototype.
 pub(crate) fn constructor_prototype_slot(
     callee: &Value,
-    env: &HashMap<String, Value>,
+    env: &CallEnv,
 ) -> Option<crate::Prototype> {
     let Value::Function(function) = callee else {
         return None;
@@ -43,32 +41,32 @@ pub(crate) fn constructor_prototype_slot(
     }
 }
 
-pub(crate) fn object_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+pub(crate) fn object_prototype(env: &CallEnv) -> Option<ObjectRef> {
     let Some(Value::Function(object_function)) = env.get("Object") else {
         return None;
     };
-    function_prototype(object_function)
+    function_prototype(&object_function)
 }
 
-pub(crate) fn array_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+pub(crate) fn array_prototype(env: &CallEnv) -> Option<ObjectRef> {
     let Some(Value::Function(array_function)) = env.get("Array") else {
         return None;
     };
-    function_prototype(array_function)
+    function_prototype(&array_function)
 }
 
-pub(crate) fn string_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+pub(crate) fn string_prototype(env: &CallEnv) -> Option<ObjectRef> {
     let Some(Value::Function(string_function)) = env.get("String") else {
         return None;
     };
-    function_prototype(string_function)
+    function_prototype(&string_function)
 }
 
-pub(crate) fn function_intrinsic_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+pub(crate) fn function_intrinsic_prototype(env: &CallEnv) -> Option<ObjectRef> {
     let Some(Value::Function(function_constructor)) = env.get("Function") else {
         return None;
     };
-    function_prototype(function_constructor)
+    function_prototype(&function_constructor)
 }
 
 pub(crate) fn function_prototype(function: &Function) -> Option<ObjectRef> {
@@ -81,10 +79,7 @@ pub(crate) fn function_prototype(function: &Function) -> Option<ObjectRef> {
     }
 }
 
-pub(crate) fn array_as_object_prototype(
-    array: &ArrayRef,
-    env: &HashMap<String, Value>,
-) -> ObjectRef {
+pub(crate) fn array_as_object_prototype(array: &ArrayRef, env: &CallEnv) -> ObjectRef {
     let prototype = ObjectRef::with_prototype(
         HashMap::new(),
         array
@@ -99,7 +94,7 @@ pub(crate) fn array_as_object_prototype(
     prototype
 }
 
-pub(crate) fn value_prototype(value: Value, env: &HashMap<String, Value>) -> Option<ObjectRef> {
+pub(crate) fn value_prototype(value: Value, env: &CallEnv) -> Option<ObjectRef> {
     match value {
         Value::Object(object) => object.prototype(),
         Value::Map(map) => map.object().prototype(),
@@ -119,10 +114,7 @@ pub(crate) fn value_prototype(value: Value, env: &HashMap<String, Value>) -> Opt
 /// The immediate [[Prototype]] slot of `value`, preserving a function
 /// prototype. Falls back to the relevant intrinsic when a function or array has
 /// no explicit override.
-pub(crate) fn value_prototype_slot(
-    value: Value,
-    env: &HashMap<String, Value>,
-) -> Option<crate::Prototype> {
+pub(crate) fn value_prototype_slot(value: Value, env: &CallEnv) -> Option<crate::Prototype> {
     match value {
         Value::Object(object) => object.prototype_slot(),
         Value::Map(map) => map.object().prototype_slot(),
@@ -141,18 +133,15 @@ pub(crate) fn value_prototype_slot(
     }
 }
 
-fn object_prototype_property(env: &HashMap<String, Value>, key: &str) -> Option<Value> {
+fn object_prototype_property(env: &CallEnv, key: &str) -> Option<Value> {
     object_prototype(env).and_then(|prototype| prototype.get(key))
 }
 
-fn object_prototype_descriptor(env: &HashMap<String, Value>, key: &str) -> Option<Property> {
+fn object_prototype_descriptor(env: &CallEnv, key: &str) -> Option<Property> {
     object_prototype(env).and_then(|prototype| prototype.property(key))
 }
 
-pub(crate) fn inherited_object_prototype_property(
-    env: &HashMap<String, Value>,
-    key: &str,
-) -> Option<Value> {
+pub(crate) fn inherited_object_prototype_property(env: &CallEnv, key: &str) -> Option<Value> {
     if matches!(
         key,
         "hasOwnProperty" | "isPrototypeOf" | "propertyIsEnumerable"
@@ -163,10 +152,7 @@ pub(crate) fn inherited_object_prototype_property(
     }
 }
 
-pub(crate) fn inherited_object_prototype_descriptor(
-    env: &HashMap<String, Value>,
-    key: &str,
-) -> Option<Property> {
+pub(crate) fn inherited_object_prototype_descriptor(env: &CallEnv, key: &str) -> Option<Property> {
     if matches!(
         key,
         "hasOwnProperty" | "isPrototypeOf" | "propertyIsEnumerable"
@@ -179,7 +165,7 @@ pub(crate) fn inherited_object_prototype_descriptor(
 
 pub(crate) fn function_prototype_property(
     function: &Function,
-    env: &HashMap<String, Value>,
+    env: &CallEnv,
     key: &str,
 ) -> Option<Value> {
     function_prototype_chain_descriptor(function, env, key).map(|property| property.value)
@@ -189,7 +175,7 @@ pub(crate) fn function_prototype_property(
 /// descriptor `key`, resolving the implicit default to %Function.prototype%.
 pub(crate) fn function_prototype_chain_descriptor(
     function: &Function,
-    env: &HashMap<String, Value>,
+    env: &CallEnv,
     key: &str,
 ) -> Option<Property> {
     match function.internal_prototype_slot() {
@@ -202,7 +188,7 @@ pub(crate) fn function_prototype_chain_descriptor(
 
 pub(crate) fn array_prototype_property(
     elements: &ArrayRef,
-    env: &HashMap<String, Value>,
+    env: &CallEnv,
     key: &str,
 ) -> Option<Value> {
     elements
@@ -211,15 +197,15 @@ pub(crate) fn array_prototype_property(
         .and_then(|prototype| prototype.get(key))
 }
 
-fn constructor_named_prototype(env: &HashMap<String, Value>, name: &str) -> Option<ObjectRef> {
+fn constructor_named_prototype(env: &CallEnv, name: &str) -> Option<ObjectRef> {
     let Some(Value::Function(function)) = env.get(name) else {
         return None;
     };
-    function_prototype(function)
+    function_prototype(&function)
 }
 
 pub(crate) fn inherited_primitive_prototype_descriptor(
-    env: &HashMap<String, Value>,
+    env: &CallEnv,
     constructor_name: &str,
     key: &str,
 ) -> Option<Property> {
@@ -229,7 +215,7 @@ pub(crate) fn inherited_primitive_prototype_descriptor(
 }
 
 pub(crate) fn inherited_primitive_prototype_symbol_descriptor(
-    env: &HashMap<String, Value>,
+    env: &CallEnv,
     constructor_name: &str,
     symbol: &ObjectRef,
 ) -> Option<Property> {
@@ -238,10 +224,7 @@ pub(crate) fn inherited_primitive_prototype_symbol_descriptor(
         .or_else(|| object_prototype(env).and_then(|prototype| prototype.symbol_property(symbol)))
 }
 
-pub(crate) fn inherited_string_prototype_property(
-    env: &HashMap<String, Value>,
-    key: &str,
-) -> Option<Value> {
+pub(crate) fn inherited_string_prototype_property(env: &CallEnv, key: &str) -> Option<Value> {
     string_prototype(env)
         .and_then(|prototype| prototype.get(key))
         .or_else(|| inherited_object_prototype_property(env, key))

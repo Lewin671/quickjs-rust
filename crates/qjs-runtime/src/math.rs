@@ -4,16 +4,13 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
     array::array_like_values_with_env, symbol, to_number, to_uint32_number,
 };
 
-pub(super) fn install_math(
-    env: &mut HashMap<String, Value>,
-    global_this: &Value,
-    object_prototype: ObjectRef,
-) {
+pub(super) fn install_math(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
     let math_object = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
     math_object.set_to_string_tag("Math");
     symbol::define_well_known_to_string_tag(env, &math_object, "Math");
@@ -68,7 +65,7 @@ pub(super) fn install_math(
     define_math_function(&math_object, "tanh", 1, NativeFunction::MathTanh);
     define_math_function(&math_object, "trunc", 1, NativeFunction::MathTrunc);
     let math_value = Value::Object(math_object);
-    env.insert("Math".to_owned(), math_value.clone());
+    env.insert_realm("Math".to_owned(), math_value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable("Math".to_owned(), math_value);
     }
@@ -214,7 +211,7 @@ pub(super) fn native_math_imul(argument_values: &[Value]) -> Result<Value, Runti
 
 pub(super) fn native_math_sum_precise(
     items: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let mut sum = SumPrecise::new();
     for value in array_like_values_with_env(items, "Math.sumPrecise", env)? {

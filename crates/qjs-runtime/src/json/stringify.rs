@@ -3,10 +3,11 @@ use std::collections::HashMap;
 use crate::{ArrayRef, ObjectRef, RuntimeError, Value, call_function, number};
 
 use super::raw_json_value;
+use crate::CallEnv;
 
 pub(crate) fn native_json_stringify(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     match stringify_value(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -23,7 +24,7 @@ fn stringify_value(
     value: Value,
     key: &str,
     in_array: bool,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Option<String>, RuntimeError> {
     let value = apply_to_json(value, key, env)?;
     match &value {
@@ -54,10 +55,7 @@ fn stringify_value(
     }
 }
 
-fn stringify_array(
-    array: &ArrayRef,
-    env: &mut HashMap<String, Value>,
-) -> Result<String, RuntimeError> {
+fn stringify_array(array: &ArrayRef, env: &mut CallEnv) -> Result<String, RuntimeError> {
     let mut parts = Vec::new();
     for (index, element) in array.to_vec().into_iter().enumerate() {
         parts.push(
@@ -68,10 +66,7 @@ fn stringify_array(
     Ok(format!("[{}]", parts.join(",")))
 }
 
-fn stringify_object(
-    object: &ObjectRef,
-    env: &mut HashMap<String, Value>,
-) -> Result<String, RuntimeError> {
+fn stringify_object(object: &ObjectRef, env: &mut CallEnv) -> Result<String, RuntimeError> {
     let mut parts = Vec::new();
     for key in object.own_property_keys() {
         let Some(value) = object.own_property(&key).map(|property| property.value) else {
@@ -85,11 +80,7 @@ fn stringify_object(
     Ok(format!("{{{}}}", parts.join(",")))
 }
 
-fn apply_to_json(
-    value: Value,
-    key: &str,
-    env: &mut HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
+fn apply_to_json(value: Value, key: &str, env: &mut CallEnv) -> Result<Value, RuntimeError> {
     let Value::Object(object) = &value else {
         return Ok(value);
     };

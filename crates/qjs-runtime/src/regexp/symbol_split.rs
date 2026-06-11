@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::CallEnv;
 use crate::string::advance_string_index;
 use crate::{
     ArrayRef, Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value,
@@ -8,7 +9,7 @@ use crate::{
     to_uint32_number,
 };
 
-pub(crate) fn install_regexp_prototype_split(env: &HashMap<String, Value>, prototype: &ObjectRef) {
+pub(crate) fn install_regexp_prototype_split(env: &CallEnv, prototype: &ObjectRef) {
     if let Some(symbol) = symbol::split_symbol(env) {
         prototype.define_symbol_property(
             symbol,
@@ -25,7 +26,7 @@ pub(crate) fn install_regexp_prototype_split(env: &HashMap<String, Value>, proto
 pub(crate) fn native_regexp_prototype_split(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if !is_object_value(&this_value) {
         return Err(RuntimeError {
@@ -100,10 +101,7 @@ pub(crate) fn native_regexp_prototype_split(
     Ok(Value::Array(ArrayRef::new(parts)))
 }
 
-fn split_regexp_clone(
-    value: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<(Value, bool), RuntimeError> {
+fn split_regexp_clone(value: Value, env: &mut CallEnv) -> Result<(Value, bool), RuntimeError> {
     let constructor = species_constructor(value.clone(), env)?;
     let _ = super::regexp_is_regexp_with_env(value.clone(), env)?;
     let flags = to_js_string_with_env(property_value(value.clone(), "flags", env)?, env)?;
@@ -121,10 +119,7 @@ fn split_regexp_clone(
     Ok((splitter, unicode_matching))
 }
 
-fn species_constructor(
-    value: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
+fn species_constructor(value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
     let default_constructor = regexp_constructor(env)?;
     let constructor = property_value(value, "constructor", env)?;
     if matches!(constructor, Value::Undefined) {
@@ -148,18 +143,14 @@ fn species_constructor(
     Ok(species)
 }
 
-fn regexp_constructor(env: &HashMap<String, Value>) -> Result<Value, RuntimeError> {
-    env.get("RegExp").cloned().ok_or_else(|| RuntimeError {
+fn regexp_constructor(env: &CallEnv) -> Result<Value, RuntimeError> {
+    env.get("RegExp").ok_or_else(|| RuntimeError {
         thrown: None,
         message: "RegExp constructor is not available".to_owned(),
     })
 }
 
-fn regexp_exec(
-    splitter: Value,
-    input: &str,
-    env: &mut HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
+fn regexp_exec(splitter: Value, input: &str, env: &mut CallEnv) -> Result<Value, RuntimeError> {
     let exec = property_value(splitter.clone(), "exec", env)?;
     call_function(
         exec,
@@ -174,7 +165,7 @@ fn append_captures(
     result: Value,
     parts: &mut Vec<Value>,
     limit: usize,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
     let length = to_length_with_env(property_value(result.clone(), "length", env)?, env)?;
     for index in 1..length {
@@ -197,14 +188,11 @@ fn ensure_exec_result_object(value: Value) -> Result<Value, RuntimeError> {
     }
 }
 
-fn regexp_last_index(
-    value: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<usize, RuntimeError> {
+fn regexp_last_index(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
     to_length_with_env(property_value(value, "lastIndex", env)?, env)
 }
 
-fn split_limit(value: Value, env: &mut HashMap<String, Value>) -> Result<usize, RuntimeError> {
+fn split_limit(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
     if matches!(value, Value::Undefined) {
         return Ok(u32::MAX as usize);
     }
@@ -216,11 +204,7 @@ fn split_limit(value: Value, env: &mut HashMap<String, Value>) -> Result<usize, 
     }
 }
 
-fn set_last_index(
-    receiver: Value,
-    value: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<(), RuntimeError> {
+fn set_last_index(receiver: Value, value: Value, env: &mut CallEnv) -> Result<(), RuntimeError> {
     if reflect::ordinary_set(
         receiver.clone(),
         &PropertyKey::String("lastIndex".to_owned()),

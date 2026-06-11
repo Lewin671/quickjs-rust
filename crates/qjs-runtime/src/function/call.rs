@@ -4,12 +4,12 @@ use qjs_ast::BindingPattern;
 
 use crate::{
     ArrayRef, Bytecode, Function, GLOBAL_THIS_BINDING, NEW_TARGET_BINDING, NativeFunction,
-    ObjectRef, Property, RUNTIME_INTRINSIC_NAMES, RuntimeError, Value,
-    bytecode::eval_function_bytecode, native::call_native_function, object_prototype, symbol,
+    ObjectRef, Property, RuntimeError, Value, bytecode::eval_function_bytecode,
+    native::call_native_function, object_prototype, symbol,
 };
 
 use super::{
-    function_call_this, is_internal_binding_name, parameter_binding_name,
+    CallEnv, function_call_this, is_internal_binding_name, parameter_binding_name,
     rest_parameter_binding_name,
 };
 
@@ -17,7 +17,7 @@ pub(crate) fn call_function(
     callee: Value,
     this_value: Value,
     argument_values: Vec<Value>,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
     is_construct: bool,
 ) -> Result<Value, RuntimeError> {
     let Value::Function(function) = callee.clone() else {
@@ -94,7 +94,7 @@ pub(crate) fn call_function(
                 env,
                 is_construct,
             );
-            let activation_captured_env = Rc::new(RefCell::new(function_env.env.clone()));
+            let activation_captured_env = Rc::new(RefCell::new(function_env.env.to_flat_map()));
             return crate::generator::make_generator_object(
                 &function,
                 crate::bytecode::GeneratorStart {
@@ -146,7 +146,7 @@ pub(crate) fn call_function(
         // `captured_env`). A body that creates none never reads it, so skip
         // cloning the whole frame env into it on every leaf call.
         let activation_captured_env = if bytecode.creates_closures() {
-            Rc::new(RefCell::new(function_env.env.clone()))
+            Rc::new(RefCell::new(function_env.env.to_flat_map()))
         } else {
             Rc::new(RefCell::new(HashMap::new()))
         };
@@ -175,7 +175,7 @@ pub(crate) fn call_function(
 pub(crate) fn initialize_instance_fields(
     function: &Function,
     this_value: &Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
     // Private brands and private field values install alongside public fields,
     // before the constructor body runs, so the body may use `this.#x`.
@@ -200,7 +200,7 @@ pub(crate) fn initialize_instance_fields(
 fn finish_derived_construct(
     result: crate::bytecode::FunctionBytecodeResult<'_>,
 ) -> Result<Value, RuntimeError> {
-    let bound_this = result.binding("this").cloned();
+    let bound_this = result.binding("this");
     let value = result.value?;
     match value {
         // A Symbol (or BigInt) primitive is represented as an object reference
@@ -241,7 +241,7 @@ pub(crate) fn construct_function(
     target: Value,
     new_target: Value,
     argument_values: Vec<Value>,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     ensure_constructor(&target)?;
     ensure_constructor(&new_target)?;
@@ -306,7 +306,7 @@ fn not_constructor_error() -> RuntimeError {
 }
 
 struct FunctionCallEnv {
-    env: HashMap<String, Value>,
+    env: CallEnv,
     function_capture_names: Vec<String>,
     caller_binding_names: Vec<String>,
 }
@@ -317,19 +317,14 @@ fn function_env(
     callee: Value,
     this_value: Value,
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &CallEnv,
     is_construct: bool,
 ) -> FunctionCallEnv {
     let captured_env = function.captured_env.borrow();
     let lexical_this = captured_env.get("this").cloned();
     let mut local_env = HashMap::with_capacity(
-        RUNTIME_INTRINSIC_NAMES.len()
-            + captured_env.len()
-            + function.params.binding_count()
-            + argument_values.len()
-            + 3,
+        captured_env.len() + function.params.binding_count() + argument_values.len() + 3,
     );
-    insert_runtime_intrinsics(&mut local_env, &captured_env, env);
     let function_capture_names = insert_function_captures(
         &mut local_env,
         bytecode,
@@ -351,9 +346,6 @@ fn function_env(
         &function.local_names,
         env,
     );
-    if let Some(global_this) = env.get(GLOBAL_THIS_BINDING).cloned() {
-        local_env.insert(GLOBAL_THIS_BINDING.to_owned(), global_this);
-    }
     if let Some(name) = &function.name {
         local_env.insert(name.clone(), callee.clone());
     }
@@ -403,7 +395,7 @@ fn function_env(
         );
     }
     FunctionCallEnv {
-        env: local_env,
+        env: env.with_frame_locals(local_env),
         function_capture_names,
         caller_binding_names,
     }
@@ -416,7 +408,7 @@ fn function_env(
 fn insert_super_bindings(
     local_env: &mut HashMap<String, Value>,
     function: &Function,
-    caller_env: &HashMap<String, Value>,
+    caller_env: &CallEnv,
     is_construct: bool,
 ) {
     use crate::{HOME_OBJECT_BINDING, NEW_TARGET_BINDING, SUPER_CONSTRUCTOR_BINDING};
@@ -428,7 +420,7 @@ fn insert_super_bindings(
     } else if function.lexical_this
         && let Some(home) = caller_env.get(HOME_OBJECT_BINDING)
     {
-        local_env.insert(HOME_OBJECT_BINDING.to_owned(), home.clone());
+        local_env.insert(HOME_OBJECT_BINDING.to_owned(), home);
     }
 
     if let Some(super_constructor) = function.super_constructor.borrow().clone() {
@@ -436,10 +428,7 @@ fn insert_super_bindings(
     } else if function.lexical_this
         && let Some(super_constructor) = caller_env.get(SUPER_CONSTRUCTOR_BINDING)
     {
-        local_env.insert(
-            SUPER_CONSTRUCTOR_BINDING.to_owned(),
-            super_constructor.clone(),
-        );
+        local_env.insert(SUPER_CONSTRUCTOR_BINDING.to_owned(), super_constructor);
     }
 
     // `new.target` reaches a constructor frame from `construct_function` (which
@@ -448,15 +437,11 @@ fn insert_super_bindings(
     if (is_construct || function.lexical_this)
         && let Some(new_target) = caller_env.get(NEW_TARGET_BINDING)
     {
-        local_env.insert(NEW_TARGET_BINDING.to_owned(), new_target.clone());
+        local_env.insert(NEW_TARGET_BINDING.to_owned(), new_target);
     }
 }
 
-fn arguments_object(
-    function: &Function,
-    argument_values: &[Value],
-    env: &HashMap<String, Value>,
-) -> Value {
+fn arguments_object(function: &Function, argument_values: &[Value], env: &CallEnv) -> Value {
     let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
     object.define_property(
         "length".to_owned(),
@@ -558,7 +543,7 @@ fn mapped_argument_setter(parameter_name: String, backing: ObjectRef) -> Value {
     ))
 }
 
-fn define_arguments_iterator(object: &ObjectRef, env: &HashMap<String, Value>) {
+fn define_arguments_iterator(object: &ObjectRef, env: &CallEnv) {
     let Some(iterator) = symbol::iterator_symbol(env) else {
         return;
     };
@@ -575,14 +560,13 @@ fn define_arguments_iterator(object: &ObjectRef, env: &HashMap<String, Value>) {
 
 pub(crate) fn native_mapped_argument_get(
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &CallEnv,
 ) -> Result<Value, RuntimeError> {
     let Some(parameter_name) = mapped_argument_name(argument_values) else {
         return Ok(Value::Undefined);
     };
     Ok(env
         .get(parameter_name)
-        .cloned()
         .or_else(|| {
             mapped_argument_backing(argument_values).and_then(|backing| backing.get("value"))
         })
@@ -591,13 +575,13 @@ pub(crate) fn native_mapped_argument_get(
 
 pub(crate) fn native_mapped_argument_set(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let Some(parameter_name) = mapped_argument_name(argument_values) else {
         return Ok(Value::Undefined);
     };
     let value = argument_values.get(2).cloned().unwrap_or(Value::Undefined);
-    if let Some(binding) = env.get_mut(parameter_name) {
+    if let Some(binding) = env.get_local_mut(parameter_name) {
         *binding = value.clone();
     }
     if let Some(backing) = mapped_argument_backing(argument_values) {
@@ -617,18 +601,6 @@ fn mapped_argument_backing(argument_values: &[Value]) -> Option<ObjectRef> {
     match argument_values.get(1) {
         Some(Value::Object(object)) => Some(object.clone()),
         _ => None,
-    }
-}
-
-fn insert_runtime_intrinsics(
-    local_env: &mut HashMap<String, Value>,
-    function_env: &HashMap<String, Value>,
-    caller_env: &HashMap<String, Value>,
-) {
-    for name in RUNTIME_INTRINSIC_NAMES {
-        if let Some(value) = caller_env.get(*name).or_else(|| function_env.get(*name)) {
-            local_env.insert((*name).to_owned(), value.clone());
-        }
     }
 }
 
@@ -675,7 +647,7 @@ fn insert_caller_bytecode_bindings(
     caller_binding_names: &mut Vec<String>,
     bytecode: &Bytecode,
     function_local_names: &[String],
-    env: &HashMap<String, Value>,
+    env: &CallEnv,
 ) {
     for name in bytecode.global_names() {
         insert_caller_binding(local_env, caller_binding_names, env, name);
@@ -693,13 +665,16 @@ fn insert_caller_bytecode_bindings(
 fn insert_caller_binding(
     local_env: &mut HashMap<String, Value>,
     caller_binding_names: &mut Vec<String>,
-    env: &HashMap<String, Value>,
+    env: &CallEnv,
     name: &str,
 ) {
     if is_internal_binding_name(name) {
         return;
     }
-    if let Some(value) = env.get(name) {
+    // Only the caller's *frame locals* need to ride into the callee frame;
+    // realm bindings (intrinsics and true globals) are visible through the
+    // shared realm cell and must not be copied or written back.
+    if let Some(value) = env.locals().get(name) {
         local_env.insert(name.to_owned(), value.clone());
         insert_missing_caller_binding_name(caller_binding_names, name);
     }
@@ -715,40 +690,44 @@ fn insert_caller_scope_bindings(
     local_env: &mut HashMap<String, Value>,
     caller_binding_names: &mut Vec<String>,
     function_local_names: &[String],
-    env: &HashMap<String, Value>,
+    env: &CallEnv,
 ) {
-    for name in env.keys() {
-        if is_call_frame_binding(name)
-            || RUNTIME_INTRINSIC_NAMES.contains(&name.as_str())
+    // Iterate only the caller's frame locals; realm bindings are shared and need
+    // no per-frame copy. The O(50)-per-key intrinsic scan is gone.
+    let names: Vec<String> = env.locals().keys().cloned().collect();
+    for name in names {
+        if is_call_frame_binding(&name)
             || function_local_names
-                .binary_search_by(|local| local.as_str().cmp(name))
+                .binary_search_by(|local| local.as_str().cmp(&name))
                 .is_ok()
         {
             continue;
         }
-        insert_caller_binding(local_env, caller_binding_names, env, name);
+        insert_caller_binding(local_env, caller_binding_names, env, &name);
     }
 }
 
 fn propagate_caller_bindings(
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
     caller_binding_names: &[String],
     result: &crate::bytecode::FunctionBytecodeResult<'_>,
 ) {
     for name in caller_binding_names {
         if !is_call_frame_binding(name)
-            && let Some(value) = env.get_mut(name)
             && let Some(final_value) = result.binding(name)
+            && let Some(binding) = env.get_local_mut(name)
         {
-            *value = final_value.clone();
+            *binding = final_value;
         }
     }
+    // Sloppy-mode global creation: a new binding the callee introduced is
+    // written to the shared realm so the caller (and every frame) sees it.
     for name in &result.sloppy_global_names {
         if !is_call_frame_binding(name)
             && !env.contains_key(name)
             && let Some(final_value) = result.binding(name)
         {
-            env.insert(name.clone(), final_value.clone());
+            env.insert_realm(name.clone(), final_value);
         }
     }
 }
@@ -766,7 +745,7 @@ fn propagate_function_captures(
         if !is_call_frame_binding(name)
             && let Some(final_value) = result.binding(name)
         {
-            captured_env.insert(name.clone(), final_value.clone());
+            captured_env.insert(name.clone(), final_value);
         }
     }
 }

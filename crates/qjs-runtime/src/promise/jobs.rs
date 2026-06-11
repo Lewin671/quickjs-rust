@@ -9,9 +9,10 @@ use super::{
     is_promise_object, reaction_is_fulfill, resolve_promise, resolving_function_pair,
     settle_promise,
 };
+use crate::CallEnv;
 
 pub(super) fn enqueue_promise_reaction_job(
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
     reaction: &ObjectRef,
     argument: Value,
 ) {
@@ -50,7 +51,7 @@ pub(super) fn enqueue_promise_reaction_job(
 }
 
 pub(super) fn enqueue_promise_thenable_job(
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
     promise: ObjectRef,
     thenable: Value,
     then: Value,
@@ -66,7 +67,7 @@ pub(super) fn enqueue_promise_thenable_job(
     jobs.set(jobs.len(), Value::Object(job));
 }
 
-pub(crate) fn drain_promise_jobs(env: &mut HashMap<String, Value>) -> Result<(), RuntimeError> {
+pub(crate) fn drain_promise_jobs(env: &mut CallEnv) -> Result<(), RuntimeError> {
     loop {
         let jobs = promise_jobs(env);
         let pending = jobs.to_vec();
@@ -87,10 +88,7 @@ pub(crate) fn drain_promise_jobs(env: &mut HashMap<String, Value>) -> Result<(),
     }
 }
 
-fn run_promise_reaction_job(
-    job: &ObjectRef,
-    env: &mut HashMap<String, Value>,
-) -> Result<(), RuntimeError> {
+fn run_promise_reaction_job(job: &ObjectRef, env: &mut CallEnv) -> Result<(), RuntimeError> {
     let argument = job
         .own_property(PROMISE_REACTION_ARGUMENT)
         .map_or(Value::Undefined, |property| property.value);
@@ -124,7 +122,7 @@ fn run_promise_reaction_job(
 fn settle_reaction_capability(
     job: &ObjectRef,
     completion: Result<Value, RuntimeError>,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
     let resolve = job
         .own_property(PROMISE_REACTION_RESOLVE)
@@ -164,10 +162,7 @@ fn settle_reaction_capability(
     Ok(())
 }
 
-fn run_promise_thenable_job(
-    job: &ObjectRef,
-    env: &mut HashMap<String, Value>,
-) -> Result<(), RuntimeError> {
+fn run_promise_thenable_job(job: &ObjectRef, env: &mut CallEnv) -> Result<(), RuntimeError> {
     let capability = match job
         .own_property(PROMISE_THENABLE_CAPABILITY)
         .map(|property| property.value)
@@ -193,12 +188,12 @@ fn run_promise_thenable_job(
     Ok(())
 }
 
-fn promise_jobs(env: &mut HashMap<String, Value>) -> ArrayRef {
-    let global_this = match env.get(GLOBAL_THIS_BINDING).cloned() {
+fn promise_jobs(env: &mut CallEnv) -> ArrayRef {
+    let global_this = match env.get(GLOBAL_THIS_BINDING) {
         Some(Value::Object(global_this)) => global_this,
         _ => {
             let global_this = ObjectRef::new(HashMap::new());
-            env.insert(
+            env.insert_realm(
                 GLOBAL_THIS_BINDING.to_owned(),
                 Value::Object(global_this.clone()),
             );

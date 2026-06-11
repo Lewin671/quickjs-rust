@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, function_prototype,
     to_js_string_with_env,
@@ -28,11 +29,7 @@ const WELL_KNOWN_SYMBOL_NAMES: &[&str] = &[
     "unscopables",
 ];
 
-pub(crate) fn install_symbol(
-    env: &mut HashMap<String, Value>,
-    global_this: &Value,
-    object_prototype: ObjectRef,
-) {
+pub(crate) fn install_symbol(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
     let symbol_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
     symbol_prototype.set_to_string_tag("Symbol");
 
@@ -118,7 +115,7 @@ pub(crate) fn install_symbol(
     );
 
     let symbol_value = Value::Function(symbol_function);
-    env.insert("Symbol".to_owned(), symbol_value.clone());
+    env.insert_realm("Symbol".to_owned(), symbol_value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable("Symbol".to_owned(), symbol_value);
     }
@@ -142,7 +139,7 @@ pub(crate) fn native_symbol(
     function: &Function,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if is_construct {
         return Err(RuntimeError {
@@ -163,7 +160,7 @@ pub(crate) fn native_symbol(
 
 pub(crate) fn native_symbol_for(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let key = to_js_string_with_env(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -184,7 +181,7 @@ pub(crate) fn native_symbol_for(
 
 pub(crate) fn native_symbol_key_for(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let Value::Object(target_object) = target else {
@@ -214,7 +211,7 @@ pub(crate) fn is_symbol_primitive(object: &ObjectRef) -> bool {
     is_symbol_object(object) && object.own_property(SYMBOL_BOXED_PROPERTY).is_none()
 }
 
-pub(crate) fn is_registered_symbol(object: &ObjectRef, env: &HashMap<String, Value>) -> bool {
+pub(crate) fn is_registered_symbol(object: &ObjectRef, env: &CallEnv) -> bool {
     let Some(Value::Object(registry)) = env.get(SYMBOL_REGISTRY_BINDING) else {
         return false;
     };
@@ -226,7 +223,7 @@ pub(crate) fn is_registered_symbol(object: &ObjectRef, env: &HashMap<String, Val
     })
 }
 
-pub(crate) fn boxed_symbol(object: &ObjectRef, env: &HashMap<String, Value>) -> Value {
+pub(crate) fn boxed_symbol(object: &ObjectRef, env: &CallEnv) -> Value {
     let description = symbol_description(object);
     let boxed = symbol_object(symbol_prototype(env), description);
     boxed.define_non_enumerable(SYMBOL_BOXED_PROPERTY.to_owned(), Value::Boolean(true));
@@ -241,63 +238,63 @@ pub(crate) fn symbol_descriptive_string(object: &ObjectRef) -> String {
     symbol_description_string(symbol_description(object))
 }
 
-pub(crate) fn to_string_tag_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+pub(crate) fn to_string_tag_symbol(env: &CallEnv) -> Option<ObjectRef> {
     well_known_symbol(env, "toStringTag")
 }
 
-pub(crate) fn iterator_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+pub(crate) fn iterator_symbol(env: &CallEnv) -> Option<ObjectRef> {
     well_known_symbol(env, "iterator")
 }
 
-pub(crate) fn async_iterator_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+pub(crate) fn async_iterator_symbol(env: &CallEnv) -> Option<ObjectRef> {
     well_known_symbol(env, "asyncIterator")
 }
 
-pub(crate) fn to_primitive_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+pub(crate) fn to_primitive_symbol(env: &CallEnv) -> Option<ObjectRef> {
     well_known_symbol(env, "toPrimitive")
 }
 
-pub(crate) fn has_instance_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+pub(crate) fn has_instance_symbol(env: &CallEnv) -> Option<ObjectRef> {
     well_known_symbol(env, "hasInstance")
 }
 
-pub(crate) fn is_concat_spreadable_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+pub(crate) fn is_concat_spreadable_symbol(env: &CallEnv) -> Option<ObjectRef> {
     well_known_symbol(env, "isConcatSpreadable")
 }
 
-pub(crate) fn match_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+pub(crate) fn match_symbol(env: &CallEnv) -> Option<ObjectRef> {
     well_known_symbol(env, "match")
 }
 
-pub(crate) fn match_all_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+pub(crate) fn match_all_symbol(env: &CallEnv) -> Option<ObjectRef> {
     well_known_symbol(env, "matchAll")
 }
 
-pub(crate) fn replace_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+pub(crate) fn replace_symbol(env: &CallEnv) -> Option<ObjectRef> {
     well_known_symbol(env, "replace")
 }
 
-pub(crate) fn search_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+pub(crate) fn search_symbol(env: &CallEnv) -> Option<ObjectRef> {
     well_known_symbol(env, "search")
 }
 
-pub(crate) fn species_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+pub(crate) fn species_symbol(env: &CallEnv) -> Option<ObjectRef> {
     well_known_symbol(env, "species")
 }
 
-pub(crate) fn split_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+pub(crate) fn split_symbol(env: &CallEnv) -> Option<ObjectRef> {
     well_known_symbol(env, "split")
 }
 
-pub(crate) fn unscopables_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+pub(crate) fn unscopables_symbol(env: &CallEnv) -> Option<ObjectRef> {
     well_known_symbol(env, "unscopables")
 }
 
-fn well_known_symbol(env: &HashMap<String, Value>, name: &str) -> Option<ObjectRef> {
+fn well_known_symbol(env: &CallEnv, name: &str) -> Option<ObjectRef> {
     let Some(Value::Function(symbol_function)) = env.get("Symbol") else {
         return None;
     };
-    well_known_symbol_from_function(symbol_function, name)
+    well_known_symbol_from_function(&symbol_function, name)
 }
 
 fn well_known_symbol_from_function(symbol_function: &Function, name: &str) -> Option<ObjectRef> {
@@ -310,7 +307,7 @@ fn well_known_symbol_from_function(symbol_function: &Function, name: &str) -> Op
     }
 }
 
-fn install_function_has_instance(env: &HashMap<String, Value>, symbol_function: &Function) {
+fn install_function_has_instance(env: &CallEnv, symbol_function: &Function) {
     let Some(symbol) = well_known_symbol_from_function(symbol_function, "hasInstance") else {
         return;
     };
@@ -334,7 +331,7 @@ fn install_function_has_instance(env: &HashMap<String, Value>, symbol_function: 
 }
 
 pub(crate) fn define_well_known_iterator_alias(
-    env: &HashMap<String, Value>,
+    env: &CallEnv,
     object: &ObjectRef,
     method_name: &str,
 ) {
@@ -347,7 +344,7 @@ pub(crate) fn define_well_known_iterator_alias(
     object.define_symbol_property(symbol, Property::non_enumerable(property.value));
 }
 
-pub(crate) fn define_iterator_identity(env: &HashMap<String, Value>, object: &ObjectRef) {
+pub(crate) fn define_iterator_identity(env: &CallEnv, object: &ObjectRef) {
     let Some(symbol) = iterator_symbol(env) else {
         return;
     };
@@ -362,7 +359,7 @@ pub(crate) fn define_iterator_identity(env: &HashMap<String, Value>, object: &Ob
     );
 }
 
-pub(crate) fn define_species_accessor(env: &HashMap<String, Value>, function: &Function) {
+pub(crate) fn define_species_accessor(env: &CallEnv, function: &Function) {
     let Some(symbol) = species_symbol(env) else {
         return;
     };
@@ -382,11 +379,7 @@ pub(crate) fn define_species_accessor(env: &HashMap<String, Value>, function: &F
     );
 }
 
-pub(crate) fn define_well_known_to_string_tag(
-    env: &HashMap<String, Value>,
-    object: &ObjectRef,
-    tag: &str,
-) {
+pub(crate) fn define_well_known_to_string_tag(env: &CallEnv, object: &ObjectRef, tag: &str) {
     if let Some(symbol) = to_string_tag_symbol(env) {
         define_to_string_tag_property(object, symbol, tag);
     }
@@ -481,19 +474,19 @@ fn symbol_object(prototype: Option<ObjectRef>, description: Value) -> ObjectRef 
     object
 }
 
-fn symbol_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+fn symbol_prototype(env: &CallEnv) -> Option<ObjectRef> {
     let Some(Value::Function(symbol_function)) = env.get("Symbol") else {
         return None;
     };
-    function_prototype(symbol_function)
+    function_prototype(&symbol_function)
 }
 
-fn symbol_registry(env: &mut HashMap<String, Value>) -> ObjectRef {
+fn symbol_registry(env: &mut CallEnv) -> ObjectRef {
     if let Some(Value::Object(registry)) = env.get(SYMBOL_REGISTRY_BINDING) {
         return registry.clone();
     }
     let registry = ObjectRef::new(HashMap::new());
-    env.insert(
+    env.insert_realm(
         SYMBOL_REGISTRY_BINDING.to_owned(),
         Value::Object(registry.clone()),
     );

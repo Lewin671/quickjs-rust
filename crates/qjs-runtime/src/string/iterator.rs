@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::{ObjectRef, RuntimeError, Value};
 
 use super::{string_code_units, string_from_code_units};
+use crate::CallEnv;
 
 const STRING_ITERATOR_STRING: &str = "\0string_iterator_string";
 const STRING_ITERATOR_NEXT_INDEX: &str = "\0string_iterator_next_index";
@@ -10,7 +11,7 @@ const STRING_ITERATOR_DONE: &str = "\0string_iterator_done";
 
 pub(crate) fn native_string_prototype_iterator(
     this_value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let source = super::indexing::this_string_value(this_value, env)?;
     let prototype = crate::iterator::builtin_iterator_prototype(

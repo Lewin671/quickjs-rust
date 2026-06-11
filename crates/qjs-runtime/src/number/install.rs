@@ -6,12 +6,9 @@ use crate::{
 };
 
 use super::NUMBER_DATA_PROPERTY;
+use crate::CallEnv;
 
-pub(crate) fn install_number(
-    env: &mut HashMap<String, Value>,
-    global_this: &Value,
-    object_prototype: ObjectRef,
-) {
+pub(crate) fn install_number(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
     let number_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
     let number_function = Function::new_native(Some("Number"), 1, NativeFunction::Number, true);
     number_prototype.define_non_enumerable(NUMBER_DATA_PROPERTY.to_owned(), Value::Number(0.0));
@@ -133,17 +130,17 @@ pub(crate) fn install_number(
         Property::non_enumerable(parse_int_value.clone()),
     );
     let number_value = Value::Function(number_function);
-    env.insert("Number".to_owned(), number_value.clone());
+    env.insert_realm("Number".to_owned(), number_value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable("Number".to_owned(), number_value);
     }
 
-    env.insert("parseFloat".to_owned(), parse_float_value.clone());
+    env.insert_realm("parseFloat".to_owned(), parse_float_value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable("parseFloat".to_owned(), parse_float_value);
     }
 
-    env.insert("parseInt".to_owned(), parse_int_value.clone());
+    env.insert_realm("parseInt".to_owned(), parse_int_value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable("parseInt".to_owned(), parse_int_value);
     }
@@ -168,17 +165,14 @@ fn define_function_property(function: &Function, key: &str, length: usize, nativ
     );
 }
 
-fn number_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+fn number_prototype(env: &CallEnv) -> Option<ObjectRef> {
     let Some(Value::Function(number_function)) = env.get("Number") else {
         return None;
     };
-    function_prototype(number_function)
+    function_prototype(&number_function)
 }
 
-pub(crate) fn inherited_number_prototype_property(
-    env: &HashMap<String, Value>,
-    key: &str,
-) -> Option<Value> {
+pub(crate) fn inherited_number_prototype_property(env: &CallEnv, key: &str) -> Option<Value> {
     number_prototype(env)
         .and_then(|prototype| prototype.get(key))
         .or_else(|| inherited_object_prototype_property(env, key))

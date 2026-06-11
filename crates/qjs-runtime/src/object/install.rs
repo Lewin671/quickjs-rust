@@ -1,8 +1,9 @@
+use crate::CallEnv;
 use std::collections::HashMap;
 
 use crate::{Function, NativeFunction, ObjectRef, Property, Value};
 
-pub(crate) fn install_object(env: &mut HashMap<String, Value>, global_this: &Value) -> ObjectRef {
+pub(crate) fn install_object(env: &mut CallEnv, global_this: &Value) -> ObjectRef {
     let object_prototype = ObjectRef::new(HashMap::new());
     let object_function = Function::new_native(Some("Object"), 1, NativeFunction::Object, true);
     object_prototype.define_non_enumerable(
@@ -149,7 +150,7 @@ pub(crate) fn install_object(env: &mut HashMap<String, Value>, global_this: &Val
     define_object_function(&object_function, "values", 1, NativeFunction::ObjectValues);
 
     let object_value = Value::Function(object_function);
-    env.insert("Object".to_owned(), object_value.clone());
+    env.insert_realm("Object".to_owned(), object_value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable("Object".to_owned(), object_value);
     }

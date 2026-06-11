@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::CallEnv;
 use crate::{
     ObjectRef, PropertyKey, RuntimeError, Value, call_function, is_truthy, object, property_value,
     property_value_key, string_prototype, symbol, to_length_with_env,
@@ -13,7 +14,7 @@ pub(crate) struct ArrayLikeLength {
 pub(crate) fn array_like_length(
     value: Value,
     context: &str,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<ArrayLikeLength, RuntimeError> {
     let receiver = array_like_receiver(value, env);
     let length = match receiver.clone() {
@@ -35,14 +36,14 @@ pub(crate) fn array_like_length(
 }
 
 pub(crate) fn array_like_values(value: Value, context: &str) -> Result<Vec<Value>, RuntimeError> {
-    let mut env = HashMap::new();
+    let mut env = crate::CallEnv::detached();
     array_like_values_with_env(value, context, &mut env)
 }
 
 pub(crate) fn array_like_values_with_env(
     value: Value,
     context: &str,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Vec<Value>, RuntimeError> {
     match value {
         Value::Array(array) => Ok(array.to_vec()),
@@ -79,7 +80,7 @@ pub(crate) fn array_like_values_with_env(
 pub(crate) fn iterable_values_with_env(
     value: Value,
     context: &str,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Vec<Value>, RuntimeError> {
     let Some(iterator_symbol) = symbol::iterator_symbol(env) else {
         return Err(RuntimeError {
@@ -132,7 +133,7 @@ pub(crate) fn iterable_values_with_env(
 pub(crate) fn array_like_values_from_receiver(
     receiver: Value,
     length: usize,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Vec<Value>, RuntimeError> {
     match receiver {
         Value::Object(_) | Value::Proxy(_) => (0..length)
@@ -157,7 +158,7 @@ pub(crate) fn array_like_values_from_receiver(
     }
 }
 
-pub(super) fn array_like_receiver(value: Value, env: &HashMap<String, Value>) -> Value {
+pub(super) fn array_like_receiver(value: Value, env: &CallEnv) -> Value {
     match value {
         Value::Boolean(_) | Value::Number(_) => {
             object::boxed_primitive(value.clone(), env).unwrap_or(value)

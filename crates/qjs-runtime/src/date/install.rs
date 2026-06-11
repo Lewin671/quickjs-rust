@@ -1,12 +1,9 @@
+use crate::CallEnv;
 use std::collections::HashMap;
 
 use crate::{Function, NativeFunction, ObjectRef, Property, Value, symbol};
 
-pub(crate) fn install_date(
-    env: &mut HashMap<String, Value>,
-    global_this: &Value,
-    object_prototype: ObjectRef,
-) {
+pub(crate) fn install_date(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
     let date_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
 
     let date_function = Function::new_native(Some("Date"), 7, NativeFunction::Date, true);
@@ -312,7 +309,7 @@ pub(crate) fn install_date(
     define_date_function(&date_function, "UTC", 7, NativeFunction::DateUtc);
 
     let date_value = Value::Function(date_function);
-    env.insert("Date".to_owned(), date_value.clone());
+    env.insert_realm("Date".to_owned(), date_value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable("Date".to_owned(), date_value);
     }

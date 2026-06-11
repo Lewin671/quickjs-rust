@@ -74,11 +74,14 @@ impl Vm<'_> {
     }
 
     pub(super) fn new_object(&mut self, kinds: &[ObjectPropertyKind]) -> Result<(), RuntimeError> {
-        let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(&self.globals));
+        let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(&self.env));
         let mut entries = Vec::with_capacity(kinds.len());
         for kind in kinds.iter().rev() {
             let value = self.pop()?;
-            let key = to_property_key_value(self.pop()?, &mut self.globals)?;
+            let key_value = self.pop()?;
+            let mut key_env = self.current_env();
+            let key = to_property_key_value(key_value, &mut key_env)?;
+            self.apply_env(key_env);
             let descriptor = match kind {
                 ObjectPropertyKind::Data => Property::enumerable(value),
                 ObjectPropertyKind::Getter => Property::accessor(Some(value), None, true, true),

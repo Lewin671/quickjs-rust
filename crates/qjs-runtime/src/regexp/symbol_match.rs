@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
+use crate::CallEnv;
 use crate::{
     ArrayRef, Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value,
     call_function, property_value, reflect, symbol, to_js_string_with_env, to_length_with_env,
 };
 
-pub(crate) fn install_regexp_prototype_match(env: &HashMap<String, Value>, prototype: &ObjectRef) {
+pub(crate) fn install_regexp_prototype_match(env: &CallEnv, prototype: &ObjectRef) {
     if let Some(symbol) = symbol::match_symbol(env) {
         prototype.define_symbol_property(
             symbol,
@@ -22,7 +23,7 @@ pub(crate) fn install_regexp_prototype_match(env: &HashMap<String, Value>, proto
 pub(crate) fn native_regexp_prototype_match(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if !is_object_value(&this_value) {
         return Err(RuntimeError {
@@ -51,7 +52,7 @@ fn global_match(
     regexp: Value,
     input: &str,
     unicode: bool,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let mut matches = Vec::new();
     loop {
@@ -76,11 +77,7 @@ fn global_match(
     }
 }
 
-fn regexp_exec(
-    regexp: Value,
-    input: &str,
-    env: &mut HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
+fn regexp_exec(regexp: Value, input: &str, env: &mut CallEnv) -> Result<Value, RuntimeError> {
     let exec = property_value(regexp.clone(), "exec", env)?;
     if !matches!(exec, Value::Function(_)) {
         return Err(RuntimeError {
@@ -105,11 +102,7 @@ fn regexp_exec(
     }
 }
 
-fn set_last_index(
-    receiver: Value,
-    value: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<(), RuntimeError> {
+fn set_last_index(receiver: Value, value: Value, env: &mut CallEnv) -> Result<(), RuntimeError> {
     if reflect::ordinary_set(
         receiver.clone(),
         &PropertyKey::String("lastIndex".to_owned()),

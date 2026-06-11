@@ -1,3 +1,4 @@
+use crate::CallEnv;
 use std::{borrow::Cow, collections::HashMap};
 
 use crate::{RuntimeError, Value, to_js_string_with_env};
@@ -8,7 +9,7 @@ use super::super::{string_code_units, string_from_code_unit};
 
 pub(crate) fn native_string_prototype_to_lower_case(
     this_value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     Ok(Value::String(case_convert(
         &this_string_value(this_value, env)?,
@@ -18,7 +19,7 @@ pub(crate) fn native_string_prototype_to_lower_case(
 
 pub(crate) fn native_string_prototype_to_upper_case(
     this_value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     Ok(Value::String(case_convert(
         &this_string_value(this_value, env)?,
@@ -29,7 +30,7 @@ pub(crate) fn native_string_prototype_to_upper_case(
 pub(crate) fn native_string_prototype_locale_compare(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
     let that = to_js_string_with_env(
@@ -50,7 +51,7 @@ pub(crate) fn native_string_prototype_locale_compare(
 pub(crate) fn native_string_prototype_normalize(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
     let form = match argument_values.first() {

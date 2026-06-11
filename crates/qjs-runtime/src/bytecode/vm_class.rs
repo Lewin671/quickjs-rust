@@ -14,6 +14,7 @@ use super::ir::{
     ClassMemberKeyDef, ClassMethodDef, ClassMethodKind, ClassStaticBlockDef,
 };
 use super::vm::Vm;
+use crate::CallEnv;
 
 /// A class element whose evaluation is deferred to pass 2 of class definition,
 /// preserving source order so static fields and static blocks interleave.
@@ -42,7 +43,10 @@ impl Vm<'_> {
         let mut computed_keys = Vec::with_capacity(computed_key_count);
         for _ in 0..computed_key_count {
             let value = self.pop()?;
-            computed_keys.push(to_property_key_value(value, &mut self.globals)?);
+            let mut key_env = self.current_env();
+            let key = to_property_key_value(value, &mut key_env)?;
+            self.apply_env(key_env);
+            computed_keys.push(key);
         }
         computed_keys.reverse();
         let mut computed_keys = computed_keys.into_iter();
@@ -50,14 +54,14 @@ impl Vm<'_> {
         // The heritage value sits below the computed keys. Resolve the parent
         // constructor and the prototype the new class prototype inherits from.
         let heritage = if has_heritage {
-            Some(ClassHeritage::resolve(self.pop()?, &self.globals)?)
+            Some(ClassHeritage::resolve(self.pop()?, &self.env)?)
         } else {
             None
         };
         let prototype_parent = match &heritage {
             Some(ClassHeritage::Null) => None,
             Some(ClassHeritage::Parent(parent)) => parent.prototype.clone(),
-            None => object_prototype(&self.globals),
+            None => object_prototype(&self.env),
         };
 
         let constructor_env =
@@ -232,7 +236,7 @@ impl Vm<'_> {
         if method.is_generator && method.is_async {
             crate::async_generator::wire_async_generator_function_intrinsics(
                 &method_function,
-                &self.globals,
+                &self.env,
             );
         } else if method.is_generator {
             self.wire_generator_function_intrinsics(&method_function);
@@ -398,7 +402,7 @@ impl Vm<'_> {
     pub(super) fn super_call(&mut self, arguments: Vec<Value>) -> Result<(), RuntimeError> {
         let result = self.super_call_inner(arguments);
         if let Some(this_value) = self.handle_runtime_result(result)? {
-            self.globals.insert("this".to_owned(), this_value.clone());
+            self.env.insert("this".to_owned(), this_value.clone());
             // The instance fields of the derived class initialize immediately
             // after `super(...)` binds `this`, before the rest of the body.
             let field_result = self.initialize_derived_instance_fields(&this_value);
@@ -416,8 +420,7 @@ impl Vm<'_> {
         &mut self,
         this_value: &Value,
     ) -> Result<Value, RuntimeError> {
-        let Some(Value::Function(constructor)) =
-            self.globals.get(crate::ACTIVE_CONSTRUCTOR_BINDING).cloned()
+        let Some(Value::Function(constructor)) = self.env.get(crate::ACTIVE_CONSTRUCTOR_BINDING)
         else {
             return Ok(Value::Undefined);
         };
@@ -429,23 +432,21 @@ impl Vm<'_> {
     }
 
     fn super_call_inner(&mut self, arguments: Vec<Value>) -> Result<Value, RuntimeError> {
-        if self.globals.contains_key("this") {
+        if self.env.contains_key("this") {
             return Err(RuntimeError {
                 thrown: None,
                 message: "ReferenceError: super constructor may only be called once".to_owned(),
             });
         }
-        let Some(super_constructor) = self.globals.get(crate::SUPER_CONSTRUCTOR_BINDING).cloned()
-        else {
+        let Some(super_constructor) = self.env.get(crate::SUPER_CONSTRUCTOR_BINDING) else {
             return Err(RuntimeError {
                 thrown: None,
                 message: "SyntaxError: 'super' keyword unexpected here".to_owned(),
             });
         };
         let new_target = self
-            .globals
+            .env
             .get(crate::NEW_TARGET_BINDING)
-            .cloned()
             .unwrap_or_else(|| super_constructor.clone());
 
         let mut env = self.current_env();
@@ -455,7 +456,7 @@ impl Vm<'_> {
     }
 
     fn current_this(&mut self) -> Result<Value, RuntimeError> {
-        match self.globals.get("this").cloned() {
+        match self.env.get("this") {
             Some(value) => Ok(value),
             None => Err(RuntimeError {
                 thrown: None,
@@ -468,13 +469,13 @@ impl Vm<'_> {
     /// Returns the lookup base for `super` property access: the [[Prototype]]
     /// of the current method's home object.
     fn super_lookup_base(&self) -> Result<Value, RuntimeError> {
-        let Some(home) = self.globals.get(crate::HOME_OBJECT_BINDING).cloned() else {
+        let Some(home) = self.env.get(crate::HOME_OBJECT_BINDING) else {
             return Err(RuntimeError {
                 thrown: None,
                 message: "SyntaxError: 'super' keyword unexpected here".to_owned(),
             });
         };
-        match value_prototype_slot(home, &self.globals) {
+        match value_prototype_slot(home, &self.env) {
             Some(prototype) => Ok(prototype.to_value()),
             None => Ok(Value::Undefined),
         }
@@ -486,7 +487,7 @@ impl Vm<'_> {
     /// so generator instances inherit `next`/`return`/`throw`.
     pub(super) fn wire_generator_function_intrinsics(&self, function: &Function) {
         if let Some(generator_function_prototype) =
-            crate::generator::generator_function_prototype(&self.globals)
+            crate::generator::generator_function_prototype(&self.env)
         {
             let _ = function.set_internal_prototype_slot(Some(crate::Prototype::Object(
                 generator_function_prototype,
@@ -498,7 +499,7 @@ impl Vm<'_> {
         // default `prototype` wiring did not install one; do it here. The
         // property is writable, non-enumerable, non-configurable.
         if let Some(generator_prototype) =
-            crate::generator::generator_prototype_intrinsic(&self.globals)
+            crate::generator::generator_prototype_intrinsic(&self.env)
         {
             let prototype = ObjectRef::with_prototype(HashMap::new(), Some(generator_prototype));
             function.define_property(
@@ -512,7 +513,7 @@ impl Vm<'_> {
     /// its `[[Prototype]]` becomes `%AsyncFunction.prototype%`. Async functions
     /// are non-constructable and carry no own `prototype` property.
     pub(super) fn wire_async_function_intrinsics(&self, function: &Function) {
-        crate::async_function::wire_async_function_intrinsics(function, &self.globals);
+        crate::async_function::wire_async_function_intrinsics(function, &self.env);
     }
 }
 
@@ -530,7 +531,7 @@ struct ClassHeritageParent {
 }
 
 impl ClassHeritage {
-    fn resolve(value: Value, env: &HashMap<String, Value>) -> Result<Self, RuntimeError> {
+    fn resolve(value: Value, env: &CallEnv) -> Result<Self, RuntimeError> {
         match value {
             Value::Null => Ok(Self::Null),
             Value::Function(function) if function.constructable => {

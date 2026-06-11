@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::CallEnv;
 use crate::{
     ObjectRef, PreferredType, RuntimeError, Value, number, symbol, to_primitive_with_hint,
 };
@@ -12,7 +13,7 @@ pub(crate) enum PropertyKey {
 
 pub(crate) fn to_property_key_value(
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<PropertyKey, RuntimeError> {
     let primitive = match value {
         Value::Object(object) if symbol::is_symbol_primitive(&object) => {

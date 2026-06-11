@@ -7,6 +7,7 @@ use std::{
 
 use qjs_ast::{FunctionParams, Stmt};
 
+use crate::CallEnv;
 use crate::{
     Bytecode, NativeFunction, ObjectRef, Property, PropertyKey, Prototype, Value,
     bytecode::compile_function_body,
@@ -209,7 +210,10 @@ impl Function {
         constructable: bool,
         lexical_bindings: LexicalBindings,
     ) -> Result<Self, crate::RuntimeError> {
-        let prototype = ObjectRef::with_prototype(HashMap::new(), object_prototype(&env));
+        let prototype = ObjectRef::with_prototype(
+            HashMap::new(),
+            object_prototype(&crate::CallEnv::from_map(env.clone())),
+        );
         let local_names = collect_function_local_names(
             name.as_ref(),
             &params,
@@ -283,7 +287,10 @@ impl Function {
             super_constructor,
             captured_env,
         } = compiled;
-        let prototype = ObjectRef::with_prototype(HashMap::new(), object_prototype(&env));
+        let prototype = ObjectRef::with_prototype(
+            HashMap::new(),
+            object_prototype(&crate::CallEnv::from_map(env.clone())),
+        );
         let function = Self {
             name,
             params,
@@ -642,11 +649,7 @@ impl Function {
         true
     }
 
-    pub(crate) fn symbol_property(
-        &self,
-        symbol: &ObjectRef,
-        env: &HashMap<String, Value>,
-    ) -> Option<Property> {
+    pub(crate) fn symbol_property(&self, symbol: &ObjectRef, env: &CallEnv) -> Option<Property> {
         self.own_symbol_property(symbol).or_else(|| {
             match self.effective_internal_prototype_with_env(env) {
                 Some(Prototype::Object(prototype)) => prototype.symbol_property(symbol),
@@ -662,13 +665,10 @@ impl Function {
     /// intrinsic cannot be resolved (for example a native function with no
     /// captured globals).
     fn effective_internal_prototype(&self) -> Option<Prototype> {
-        self.effective_internal_prototype_with_env(&self.env)
+        self.effective_internal_prototype_with_env(&crate::CallEnv::from_map(self.env.clone()))
     }
 
-    fn effective_internal_prototype_with_env(
-        &self,
-        env: &HashMap<String, Value>,
-    ) -> Option<Prototype> {
+    fn effective_internal_prototype_with_env(&self, env: &CallEnv) -> Option<Prototype> {
         match self.internal_prototype.borrow().clone() {
             Some(slot) => slot,
             None => function_intrinsic_prototype(env).map(Prototype::Object),

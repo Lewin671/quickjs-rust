@@ -20,13 +20,14 @@ use super::{
     coerce_element, is_big_int_kind, is_typed_array_object, typed_array_kind, typed_array_length,
     validate_typed_array,
 };
+use crate::CallEnv;
 
 // --- set --------------------------------------------------------------------
 
 pub(crate) fn native_typed_array_prototype_set(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     let native = typed_array_kind(&object);
@@ -42,10 +43,7 @@ pub(crate) fn native_typed_array_prototype_set(
     Ok(Value::Undefined)
 }
 
-fn set_offset(
-    value: Option<Value>,
-    env: &mut HashMap<String, Value>,
-) -> Result<usize, RuntimeError> {
+fn set_offset(value: Option<Value>, env: &mut CallEnv) -> Result<usize, RuntimeError> {
     let number = to_number_with_env(value.unwrap_or(Value::Undefined), env)?;
     let integer = if number.is_nan() { 0.0 } else { number.trunc() };
     if integer < 0.0 {
@@ -60,7 +58,7 @@ fn set_from_typed_array(
     length: usize,
     source: &ObjectRef,
     offset: usize,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
     if super::typed_array_buffer_detached(source) {
         return Err(array_buffer::detached_error());
@@ -92,7 +90,7 @@ fn set_from_array_like(
     length: usize,
     source: Value,
     offset: usize,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
     let values = array::array_like_values_with_env(source, "TypedArray.prototype.set", env)?;
     if offset + values.len() > length {
@@ -111,7 +109,7 @@ fn set_from_array_like(
 pub(crate) fn native_typed_array_prototype_fill(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     let native = typed_array_kind(&object);
@@ -143,7 +141,7 @@ pub(crate) fn native_typed_array_prototype_fill(
 pub(crate) fn native_typed_array_prototype_copy_within(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     let target = relative_index(
@@ -176,7 +174,7 @@ pub(crate) fn native_typed_array_prototype_copy_within(
 pub(crate) fn native_typed_array_prototype_reverse(
     this_value: Value,
     _argument_values: &[Value],
-    _env: &mut HashMap<String, Value>,
+    _env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     let mut values: Vec<Value> = read_view_elements(&object, 0, length);
@@ -188,7 +186,7 @@ pub(crate) fn native_typed_array_prototype_reverse(
 pub(crate) fn native_typed_array_prototype_to_reversed(
     this_value: Value,
     _argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     let native = typed_array_kind(&object);
@@ -204,7 +202,7 @@ pub(crate) fn native_typed_array_prototype_to_reversed(
 pub(crate) fn native_typed_array_prototype_sort(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     let comparator = sort_comparator(argument_values, "sort")?;
@@ -217,7 +215,7 @@ pub(crate) fn native_typed_array_prototype_sort(
 pub(crate) fn native_typed_array_prototype_to_sorted(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     let native = typed_array_kind(&object);
@@ -250,7 +248,7 @@ fn sort_comparator(
 fn sort_values(
     values: &mut [Value],
     comparator: Option<&Function>,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
     // Insertion sort keeps stability and lets the comparator observe values
     // left-to-right (matching the array implementation in this codebase).
@@ -271,7 +269,7 @@ fn compare(
     left: &Value,
     right: &Value,
     comparator: Option<&Function>,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Ordering, RuntimeError> {
     if let Some(function) = comparator {
         let result = call_function(
@@ -331,7 +329,7 @@ fn number_order(a: f64, b: f64) -> Ordering {
 pub(crate) fn native_typed_array_prototype_with(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     let native = typed_array_kind(&object);
@@ -371,7 +369,7 @@ fn relative_index(
     value: Value,
     length: usize,
     default: i64,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<usize, RuntimeError> {
     let relative = match value {
         Value::Undefined => default as f64,

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::CallEnv;
 use crate::{
     ArrayRef, Function, NativeFunction, ObjectRef, RuntimeError, Value,
     array::iterable_values_with_env, call_function, property_value, symbol,
@@ -9,7 +10,7 @@ const WEAK_SET_ENTRIES: &str = "\0weak_set_entries";
 const WEAK_SET_BRAND: &str = "\0weak_set";
 
 pub(crate) fn install_weak_set(
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
@@ -45,7 +46,7 @@ pub(crate) fn install_weak_set(
     );
 
     let value = Value::Function(weak_set_function);
-    env.insert("WeakSet".to_owned(), value.clone());
+    env.insert_realm("WeakSet".to_owned(), value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable("WeakSet".to_owned(), value);
     }
@@ -55,7 +56,7 @@ pub(crate) fn native_weak_set(
     function: &Function,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if !is_construct {
         return Err(RuntimeError {
@@ -94,7 +95,7 @@ pub(crate) fn native_weak_set(
 pub(crate) fn native_weak_set_prototype_add(
     this_value: Value,
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &CallEnv,
 ) -> Result<Value, RuntimeError> {
     let object = weak_set_object(&this_value)?;
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
@@ -161,11 +162,7 @@ fn weak_set_has(object: ObjectRef, value: &Value) -> bool {
         .is_some_and(|entries| entries.to_vec().iter().any(|entry| entry.same_value(value)))
 }
 
-fn weak_set_add(
-    object: ObjectRef,
-    value: Value,
-    env: &HashMap<String, Value>,
-) -> Result<(), RuntimeError> {
+fn weak_set_add(object: ObjectRef, value: Value, env: &CallEnv) -> Result<(), RuntimeError> {
     if !can_be_held_weakly(&value, env) {
         return Err(RuntimeError {
             thrown: None,
@@ -201,7 +198,7 @@ fn is_weak_set_value(value: &Value) -> bool {
     )
 }
 
-fn can_be_held_weakly(value: &Value, env: &HashMap<String, Value>) -> bool {
+fn can_be_held_weakly(value: &Value, env: &CallEnv) -> bool {
     match value {
         Value::Object(object) if symbol::is_symbol_primitive(object) => {
             !symbol::is_registered_symbol(object, env)

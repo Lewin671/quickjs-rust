@@ -3,11 +3,12 @@ use std::collections::HashMap;
 use crate::{RuntimeError, Value, call_function, object, property_value, to_js_string_with_env};
 
 use super::array_like::{array_like_length, array_like_receiver};
+use crate::CallEnv;
 
 pub(crate) fn native_array_prototype_join(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let separator = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
         Value::Undefined => ",".to_owned(),
@@ -18,7 +19,7 @@ pub(crate) fn native_array_prototype_join(
 
 pub(crate) fn native_array_prototype_to_string(
     this_value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let receiver = array_like_receiver(this_value, env);
     let join = property_value(receiver.clone(), "join", env)?;
@@ -31,7 +32,7 @@ pub(crate) fn native_array_prototype_to_string(
 pub(crate) fn array_join(
     value: Value,
     separator: &str,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<String, RuntimeError> {
     let array_like = array_like_length(value, "Array.prototype.join", env)?;
     let mut parts = Vec::with_capacity(array_like.length);

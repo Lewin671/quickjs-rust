@@ -5,11 +5,12 @@ use crate::{
 };
 
 use super::{array_like::array_like_length, species::validate_array_species_constructor};
+use crate::CallEnv;
 
 pub(crate) fn native_array_prototype_flat(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let source = array_like_length(this_value, "Array.prototype.flat", env)?;
     let depth = flat_depth(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
@@ -22,7 +23,7 @@ pub(crate) fn native_array_prototype_flat(
 pub(crate) fn native_array_prototype_flat_map(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let source = array_like_length(this_value, "Array.prototype.flatMap", env)?;
     let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);
@@ -75,7 +76,7 @@ fn flatten_source_into(
     receiver: Value,
     length: usize,
     depth: usize,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
     for index in 0..length {
         let key = index.to_string();
@@ -92,7 +93,7 @@ fn flatten_value_into(
     result: &mut Vec<Value>,
     value: Value,
     depth: usize,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
     match value {
         Value::Array(array) if depth > 0 => {

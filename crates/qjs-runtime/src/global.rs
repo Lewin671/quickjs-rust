@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use qjs_parser::parse_script;
 
+use crate::CallEnv;
 use crate::{
     Function, GLOBAL_THIS_BINDING, NativeFunction, Property, RuntimeError, Value,
     bytecode::{compile_script, eval_bytecode_with_env},
@@ -9,10 +10,10 @@ use crate::{
     to_js_string_with_env, to_number,
 };
 
-pub(super) fn install_globals(env: &mut HashMap<String, Value>, global_this: &Value) {
-    env.insert("NaN".to_owned(), Value::Number(f64::NAN));
-    env.insert("Infinity".to_owned(), Value::Number(f64::INFINITY));
-    env.insert("globalThis".to_owned(), global_this.clone());
+pub(super) fn install_globals(env: &mut CallEnv, global_this: &Value) {
+    env.insert_realm("NaN".to_owned(), Value::Number(f64::NAN));
+    env.insert_realm("Infinity".to_owned(), Value::Number(f64::INFINITY));
+    env.insert_realm("globalThis".to_owned(), global_this.clone());
     if let Value::Object(global_object) = global_this {
         global_object.define_property(
             "globalThis".to_owned(),
@@ -64,23 +65,23 @@ pub(super) fn install_globals(env: &mut HashMap<String, Value>, global_this: &Va
 }
 
 fn define_global_function(
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
     global_this: &Value,
     key: &str,
     length: usize,
     native: NativeFunction,
 ) {
     let value = Value::Function(Function::new_native(Some(key), length, native, false));
-    env.insert(key.to_owned(), value.clone());
+    env.insert_realm(key.to_owned(), value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable(key.to_owned(), value);
     }
 }
 
-fn define_is_html_dda(env: &mut HashMap<String, Value>, global_this: &Value) {
+fn define_is_html_dda(env: &mut CallEnv, global_this: &Value) {
     let key = "__quickjsRustIsHTMLDDA";
     let value = Value::Function(crate::html_dda::new_is_html_dda_function());
-    env.insert(key.to_owned(), value.clone());
+    env.insert_realm(key.to_owned(), value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable(key.to_owned(), value);
     }
@@ -92,7 +93,7 @@ fn define_is_html_dda(env: &mut HashMap<String, Value>, global_this: &Value) {
 /// async `$DONE` channel; the runtime stays unaware of Test262 conventions.
 pub(super) fn native_global_print(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let mut line = String::new();
     for (index, value) in argument_values.iter().enumerate() {
@@ -117,7 +118,7 @@ pub(super) fn native_global_is_nan(argument_values: &[Value]) -> Result<Value, R
 
 pub(super) fn native_global_encode_uri(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let source = to_js_string_with_env(value, env)?;
@@ -126,7 +127,7 @@ pub(super) fn native_global_encode_uri(
 
 pub(super) fn native_global_encode_uri_component(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let source = to_js_string_with_env(value, env)?;
@@ -135,7 +136,7 @@ pub(super) fn native_global_encode_uri_component(
 
 pub(super) fn native_global_decode_uri(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let source = to_js_string_with_env(value, env)?;
@@ -144,7 +145,7 @@ pub(super) fn native_global_decode_uri(
 
 pub(super) fn native_global_decode_uri_component(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let source = to_js_string_with_env(value, env)?;
@@ -161,7 +162,7 @@ pub(crate) fn decode_uri_component_string(source: &str) -> Result<String, Runtim
 
 pub(super) fn native_global_eval(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let Value::String(source) = value else {
@@ -179,16 +180,13 @@ pub(super) fn native_global_eval(
         .chain(bytecode.global_names().iter().map(String::as_str))
     {
         if let Some(value) = result.binding(name) {
-            env.insert(name.to_owned(), value.clone());
+            env.insert_realm(name.to_owned(), value.clone());
         }
     }
     result.value
 }
 
-fn initialize_eval_global_bindings(
-    bytecode: &crate::bytecode::Bytecode,
-    env: &mut HashMap<String, Value>,
-) {
+fn initialize_eval_global_bindings(bytecode: &crate::bytecode::Bytecode, env: &mut CallEnv) {
     let global_this = env.get(GLOBAL_THIS_BINDING).and_then(|value| match value {
         Value::Object(object) => Some(object.clone()),
         _ => None,
@@ -198,9 +196,9 @@ fn initialize_eval_global_bindings(
             .as_ref()
             .and_then(|object| object.own_property(name))
         {
-            env.insert(name.to_owned(), property.value);
+            env.insert_realm(name.to_owned(), property.value);
         } else {
-            env.entry(name.to_owned()).or_insert(Value::Undefined);
+            env.realm_entry_or_insert(name.to_owned(), Value::Undefined);
             if let Some(global_this) = &global_this {
                 global_this.define_property(
                     name.to_owned(),
@@ -213,7 +211,7 @@ fn initialize_eval_global_bindings(
 
 pub(super) fn native_global_escape(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let source = to_js_string_with_env(value, env)?;
@@ -237,7 +235,7 @@ fn is_escape_unescaped(code_unit: u16) -> bool {
 
 pub(super) fn native_global_unescape(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let source = to_js_string_with_env(value, env)?;

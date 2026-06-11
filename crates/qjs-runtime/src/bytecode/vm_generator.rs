@@ -17,6 +17,7 @@ use super::ir::Bytecode;
 use super::vm::{Slot, Vm};
 use super::vm_result::Completion;
 use super::vm_try::TryFrame;
+use crate::CallEnv;
 
 /// The lifecycle state of a generator object (ES2023 27.5.3 [[GeneratorState]]).
 pub(crate) enum GeneratorState {
@@ -34,7 +35,7 @@ pub(crate) enum GeneratorState {
 /// The captured call frame for a not-yet-started generator.
 pub(crate) struct GeneratorStart {
     pub(crate) bytecode: Rc<Bytecode>,
-    pub(crate) env: HashMap<String, Value>,
+    pub(crate) env: CallEnv,
     pub(crate) captured_env: Rc<RefCell<HashMap<String, Value>>>,
 }
 
@@ -44,7 +45,7 @@ pub(crate) struct GeneratorSnapshot {
     ip: usize,
     stack: Vec<Value>,
     locals: Vec<Slot>,
-    globals: HashMap<String, Value>,
+    env: CallEnv,
     captured_env: Rc<RefCell<HashMap<String, Value>>>,
     sloppy_global_names: Vec<String>,
     try_stack: Vec<TryFrame>,
@@ -88,15 +89,18 @@ impl Vm<'_> {
     /// resuming caller back into the caller's environment, so a generator that
     /// mutates an outer `let`/`var` is observed by the resuming frame. Mirrors
     /// the caller-binding write-back performed for ordinary function calls.
-    fn propagate_to_caller(&self, caller_env: &mut HashMap<String, Value>) {
-        for (name, slot) in caller_env.iter_mut() {
-            if crate::function::is_internal_binding_name(name)
+    fn propagate_to_caller(&self, caller_env: &mut CallEnv) {
+        let names: Vec<String> = caller_env.locals().keys().cloned().collect();
+        for name in names {
+            if crate::function::is_internal_binding_name(&name)
                 || name == "this"
                 || name == "arguments"
             {
                 continue;
             }
-            if let Some(value) = self.binding_value(name) {
+            if let Some(value) = self.binding_value(&name)
+                && let Some(slot) = caller_env.get_local_mut(&name)
+            {
                 *slot = value;
             }
         }
@@ -109,8 +113,11 @@ impl Vm<'_> {
     /// captured snapshot is stale by the time the body runs. Without this
     /// refresh the post-run write-back would clobber the caller's current
     /// values with the stale ones.
-    fn refresh_from_caller(&mut self, caller_env: &HashMap<String, Value>) {
-        for (name, value) in caller_env {
+    fn refresh_from_caller(&mut self, caller_env: &CallEnv) {
+        // The realm is shared by `Rc`, so realm bindings are already live in the
+        // body; only the caller's frame *locals* need to be mirrored into the
+        // body's own frame-local layer.
+        for (name, value) in caller_env.locals() {
             // `this` (and `arguments`) belong to the generator's own frame,
             // never to the resuming caller; internal bindings likewise.
             if crate::function::is_internal_binding_name(name)
@@ -119,21 +126,21 @@ impl Vm<'_> {
             {
                 continue;
             }
-            if let Some(slot) = self.globals.get_mut(name) {
-                *slot = value.clone();
+            if self.env.locals().contains_key(name) {
+                self.env.insert(name.clone(), value.clone());
             }
         }
     }
 
     /// Reads a binding by name from the body's current locals (preferred) or
-    /// globals.
+    /// frame environment.
     fn binding_value(&self, name: &str) -> Option<Value> {
         if let Some(index) = self.bytecode.local_slot(name)
             && let Some(Some(value)) = self.locals.get(index)
         {
             return Some(value.clone());
         }
-        self.globals.get(name).cloned()
+        self.env.get(name)
     }
 
     /// Captures the running generator body's state at a `yield`.
@@ -143,7 +150,7 @@ impl Vm<'_> {
             ip: self.ip,
             stack: self.stack,
             locals: self.locals,
-            globals: self.globals,
+            env: self.env,
             captured_env: self.captured_env,
             sloppy_global_names: self.sloppy_global_names,
             try_stack: self.try_stack,
@@ -159,7 +166,7 @@ impl Vm<'_> {
 /// observable, instead of on the first `next`.
 pub(crate) fn start_suspended_at_body(
     start: GeneratorStart,
-    caller_env: &mut HashMap<String, Value>,
+    caller_env: &mut CallEnv,
 ) -> Result<GeneratorState, RuntimeError> {
     let GeneratorStart {
         bytecode,
@@ -192,7 +199,7 @@ pub(crate) fn start_suspended_at_body(
 /// Drives a generator from `SuspendedStart`: builds the body VM and runs it.
 fn run_from_start(
     start: GeneratorStart,
-    caller_env: &mut HashMap<String, Value>,
+    caller_env: &mut CallEnv,
 ) -> Result<(GeneratorState, GeneratorOutcome), RuntimeError> {
     let GeneratorStart {
         bytecode,
@@ -209,11 +216,10 @@ fn run_from_start(
 fn run_from_yield(
     snapshot: GeneratorSnapshot,
     resume: Resume,
-    caller_env: &mut HashMap<String, Value>,
+    caller_env: &mut CallEnv,
 ) -> Result<(GeneratorState, GeneratorOutcome), RuntimeError> {
     let bytecode = snapshot.bytecode.clone();
-    let mut vm =
-        Vm::new_with_globals_and_captures(&bytecode, snapshot.globals, snapshot.captured_env);
+    let mut vm = Vm::new_with_globals_and_captures(&bytecode, snapshot.env, snapshot.captured_env);
     vm.ip = snapshot.ip;
     vm.stack = snapshot.stack;
     vm.locals = snapshot.locals;
@@ -275,7 +281,7 @@ fn drive(
     result: Result<Completion, RuntimeError>,
     vm: Vm<'_>,
     bytecode: &Rc<Bytecode>,
-    caller_env: &mut HashMap<String, Value>,
+    caller_env: &mut CallEnv,
 ) -> Result<(GeneratorState, GeneratorOutcome), RuntimeError> {
     vm.propagate_to_caller(caller_env);
     match result {
@@ -326,7 +332,7 @@ fn drive(
 pub(crate) fn resume_generator(
     generator: &ObjectRef,
     resume: Resume,
-    caller_env: &mut HashMap<String, Value>,
+    caller_env: &mut CallEnv,
 ) -> Result<GeneratorOutcome, RuntimeError> {
     // Take the state out behind the re-entrancy guard: a nested `next` while the
     // body runs observes `Executing` and is rejected, and we never hold a borrow

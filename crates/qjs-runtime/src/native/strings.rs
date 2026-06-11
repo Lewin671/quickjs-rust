@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::{Function, NativeFunction, Value, string};
 
 use super::NativeCallResult;
+use crate::CallEnv;
 
 pub(super) fn call_string_native(
     function: &Function,
@@ -10,7 +11,7 @@ pub(super) fn call_string_native(
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> NativeCallResult {
     let value = match native {
         NativeFunction::String => {

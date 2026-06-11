@@ -1,14 +1,12 @@
 use std::collections::HashMap;
 
+use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function,
     property_value, reflect, symbol, to_js_string_with_env, to_length_with_env,
 };
 
-pub(crate) fn install_regexp_prototype_replace(
-    env: &HashMap<String, Value>,
-    prototype: &ObjectRef,
-) {
+pub(crate) fn install_regexp_prototype_replace(env: &CallEnv, prototype: &ObjectRef) {
     if let Some(symbol) = symbol::replace_symbol(env) {
         prototype.define_symbol_property(
             symbol,
@@ -25,7 +23,7 @@ pub(crate) fn install_regexp_prototype_replace(
 pub(crate) fn native_regexp_prototype_replace(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if !is_object_value(&this_value) {
         return Err(RuntimeError {
@@ -75,7 +73,7 @@ fn collect_matches(
     input: &str,
     global: bool,
     unicode: bool,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Vec<MatchRecord>, RuntimeError> {
     let mut matches = Vec::new();
     loop {
@@ -99,11 +97,7 @@ fn collect_matches(
     Ok(matches)
 }
 
-fn regexp_exec(
-    regexp: Value,
-    input: &str,
-    env: &mut HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
+fn regexp_exec(regexp: Value, input: &str, env: &mut CallEnv) -> Result<Value, RuntimeError> {
     let exec = property_value(regexp.clone(), "exec", env)?;
     if !matches!(exec, Value::Function(_)) {
         return Err(RuntimeError {
@@ -131,7 +125,7 @@ fn regexp_exec(
 fn match_record(
     exec_result: Value,
     input: &str,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<MatchRecord, RuntimeError> {
     let matched = to_js_string_with_env(property_value(exec_result.clone(), "0", env)?, env)?;
     let position = to_length_with_env(property_value(exec_result.clone(), "index", env)?, env)?
@@ -159,7 +153,7 @@ fn replace_matches(
     input: String,
     matches: Vec<MatchRecord>,
     replacement: Replacement,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let mut result = String::new();
     let mut copied_until = 0usize;
@@ -197,7 +191,7 @@ fn functional_replacement(
     function: Value,
     match_record: &MatchRecord,
     input: String,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<String, RuntimeError> {
     let mut arguments = Vec::with_capacity(4 + match_record.captures.len());
     arguments.push(Value::String(match_record.matched.clone()));
@@ -219,7 +213,7 @@ fn get_substitution(
     input: &str,
     captures: &[Value],
     named_captures: &Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<String, RuntimeError> {
     let mut result = String::new();
     let mut chars = replacement.chars().peekable();
@@ -260,7 +254,7 @@ fn substitute_named_capture(
     result: &mut String,
     chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
     named_captures: &Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
     let mut name = String::new();
     let mut closed = false;
@@ -319,11 +313,7 @@ fn push_capture(result: &mut String, captures: &[Value], index: usize) {
     }
 }
 
-fn set_last_index(
-    receiver: Value,
-    value: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<(), RuntimeError> {
+fn set_last_index(receiver: Value, value: Value, env: &mut CallEnv) -> Result<(), RuntimeError> {
     if reflect::ordinary_set(
         receiver.clone(),
         &PropertyKey::String("lastIndex".to_owned()),

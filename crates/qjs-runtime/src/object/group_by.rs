@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::CallEnv;
 use crate::{
     ArrayRef, ObjectRef, Property, PropertyKey, RuntimeError, Value,
     array::array_like_values_with_env, to_property_key_value,
@@ -7,7 +8,7 @@ use crate::{
 
 pub(crate) fn native_object_group_by(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let items = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let callback = argument_values.get(1).cloned().unwrap_or(Value::Undefined);

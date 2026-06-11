@@ -1,3 +1,4 @@
+use crate::CallEnv;
 use std::collections::HashMap;
 
 use crate::{Function, NativeFunction, ObjectRef, Property, Value, string_prototype, symbol};
@@ -73,11 +74,7 @@ const STRING_PROTOTYPE_METHODS: &[(&str, usize, NativeFunction)] = &[
     ("valueOf", 0, NativeFunction::StringPrototypeValueOf),
 ];
 
-pub(crate) fn install_string(
-    env: &mut HashMap<String, Value>,
-    global_this: &Value,
-    object_prototype: ObjectRef,
-) {
+pub(crate) fn install_string(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
     let string_prototype =
         ObjectRef::with_prototype(HashMap::new(), Some(object_prototype.clone()));
     let string_function = Function::new_native(Some("String"), 1, NativeFunction::String, true);
@@ -108,13 +105,13 @@ pub(crate) fn install_string(
     );
     define_function_property(&string_function, "raw", 1, NativeFunction::StringRaw);
     let string_value = Value::Function(string_function);
-    env.insert("String".to_owned(), string_value.clone());
+    env.insert_realm("String".to_owned(), string_value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable("String".to_owned(), string_value);
     }
 }
 
-pub(crate) fn install_string_well_known_symbols(env: &HashMap<String, Value>) {
+pub(crate) fn install_string_well_known_symbols(env: &CallEnv) {
     let Some(prototype) = string_prototype(env) else {
         return;
     };

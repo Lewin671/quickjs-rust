@@ -4,6 +4,7 @@ use crate::{Function, RUNTIME_INTRINSIC_NAMES, Value};
 
 use super::ir::Bytecode;
 use super::vm::Slot;
+use crate::CallEnv;
 
 pub(super) fn user_bytecode_function(value: &Value) -> Option<&Function> {
     let Value::Function(function) = value else {

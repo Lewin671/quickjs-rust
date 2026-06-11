@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{GLOBAL_THIS_BINDING, Property, RuntimeError, Value};
+use crate::{GLOBAL_THIS_BINDING, Property, RuntimeError, Value, function::CallEnv};
 
 use super::{
     ir::Bytecode,
@@ -36,18 +36,15 @@ impl Vm<'_> {
         }
     }
 
-    pub(super) fn initial_slots(
-        bytecode: &Bytecode,
-        globals: &HashMap<String, Value>,
-    ) -> Vec<Slot> {
+    pub(super) fn initial_slots(bytecode: &Bytecode, env: &CallEnv) -> Vec<Slot> {
         bytecode
             .locals
             .iter()
             .map(|local| {
                 if local.from_env
-                    && let Some(value) = globals.get(&local.name)
+                    && let Some(value) = env.get(&local.name)
                 {
-                    Some(value.clone())
+                    Some(value)
                 } else if local.hoisted {
                     Some(Value::Undefined)
                 } else {
@@ -58,7 +55,10 @@ impl Vm<'_> {
     }
 
     pub(super) fn load_global(&self, name: &str) -> Result<Value, RuntimeError> {
-        self.globals.get(name).cloned().ok_or_else(|| RuntimeError {
+        // A "global" name may actually be a caller-scope binding carried in this
+        // frame's own locals layer (e.g. an outer `var`/`let` the body closes
+        // over); check that first, then the shared realm.
+        self.env.get(name).ok_or_else(|| RuntimeError {
             thrown: None,
             message: format!("ReferenceError: undefined identifier `{name}`"),
         })
@@ -115,7 +115,8 @@ impl Vm<'_> {
         *local = Some(value.clone());
         if local_meta.from_env
             && !local_meta.hoisted
-            && let Some(Value::Object(global_this)) = self.globals.get(GLOBAL_THIS_BINDING)
+            && let Some(Value::Object(global_this)) =
+                self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned()
         {
             global_this.set(local_meta.name, value);
         }
@@ -131,7 +132,7 @@ impl Vm<'_> {
         match self.locals.get(slot) {
             Some(Some(_)) => {
                 self.store_local(slot, value.clone())?;
-                if self.globals.contains_key(&name) {
+                if self.env.contains_key(&name) {
                     self.store_global_sloppy(name, value)?;
                 }
                 Ok(())
@@ -139,11 +140,12 @@ impl Vm<'_> {
             Some(None) => {
                 self.store_global_sloppy(name.clone(), value)?;
                 self.record_sloppy_global_name(&name);
+                let global_value = self.env.get(&name);
                 let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
                     thrown: None,
                     message: "bytecode local index out of bounds".to_owned(),
                 })?;
-                *local = self.globals.get(&name).cloned();
+                *local = global_value;
                 Ok(())
             }
             None => Err(RuntimeError {
@@ -167,7 +169,9 @@ impl Vm<'_> {
         name: String,
         value: Value,
     ) -> Result<(), RuntimeError> {
-        let Some(Value::Object(global_this)) = self.globals.get(GLOBAL_THIS_BINDING) else {
+        let Some(Value::Object(global_this)) =
+            self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned()
+        else {
             return Err(RuntimeError {
                 thrown: None,
                 message: "global object binding is missing".to_owned(),

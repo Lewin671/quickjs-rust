@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use num_bigint::BigInt;
 use num_traits::{One, Signed, Zero};
 
+use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, PreferredType, Property, RuntimeError, Value,
     inherited_object_prototype_property, symbol, to_js_string, to_number, to_number_with_env,
@@ -11,11 +12,7 @@ use crate::{
 
 pub(crate) const BIGINT_DATA_PROPERTY: &str = "\0BigIntData";
 
-pub(crate) fn install_bigint(
-    env: &mut HashMap<String, Value>,
-    global_this: &Value,
-    object_prototype: ObjectRef,
-) {
+pub(crate) fn install_bigint(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
     let bigint_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
     let bigint_function = Function::new_native(Some("BigInt"), 1, NativeFunction::BigInt, true);
     bigint_prototype.set_to_string_tag("BigInt");
@@ -54,13 +51,13 @@ pub(crate) fn install_bigint(
     );
 
     let bigint_value = Value::Function(bigint_function);
-    env.insert("BigInt".to_owned(), bigint_value.clone());
+    env.insert_realm("BigInt".to_owned(), bigint_value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable("BigInt".to_owned(), bigint_value);
     }
 }
 
-pub(crate) fn install_bigint_well_known_symbols(env: &HashMap<String, Value>) {
+pub(crate) fn install_bigint_well_known_symbols(env: &CallEnv) {
     if let Some(prototype) = bigint_prototype(env) {
         symbol::define_well_known_to_string_tag(env, &prototype, "BigInt");
     }
@@ -93,7 +90,7 @@ fn define_static_native(function: &Function, key: &str, length: usize, native: N
 pub(crate) fn native_bigint(
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if is_construct {
         return Err(RuntimeError {
@@ -110,7 +107,7 @@ pub(crate) fn native_bigint(
 
 pub(crate) fn native_bigint_as_int_n(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let bits = to_index(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -136,7 +133,7 @@ pub(crate) fn native_bigint_as_int_n(
 
 pub(crate) fn native_bigint_as_uint_n(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let bits = to_index(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -199,19 +196,13 @@ pub(crate) fn is_bigint_object(object: &ObjectRef) -> bool {
     )
 }
 
-pub(crate) fn inherited_bigint_prototype_property(
-    env: &HashMap<String, Value>,
-    key: &str,
-) -> Option<Value> {
+pub(crate) fn inherited_bigint_prototype_property(env: &CallEnv, key: &str) -> Option<Value> {
     bigint_prototype(env)
         .and_then(|prototype| prototype.get(key))
         .or_else(|| inherited_object_prototype_property(env, key))
 }
 
-pub(crate) fn to_bigint(
-    value: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<BigInt, RuntimeError> {
+pub(crate) fn to_bigint(value: Value, env: &mut CallEnv) -> Result<BigInt, RuntimeError> {
     let primitive = to_primitive_with_hint(value, PreferredType::Number, env)?;
     match primitive {
         Value::BigInt(value) => Ok(value),
@@ -225,10 +216,7 @@ pub(crate) fn to_bigint(
     }
 }
 
-fn to_bigint_constructor_value(
-    value: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<BigInt, RuntimeError> {
+fn to_bigint_constructor_value(value: Value, env: &mut CallEnv) -> Result<BigInt, RuntimeError> {
     let primitive = to_primitive_with_hint(value, PreferredType::Number, env)?;
     match primitive {
         Value::Number(number) if number.is_finite() && number.fract() == 0.0 => {
@@ -243,11 +231,11 @@ fn to_bigint_constructor_value(
     }
 }
 
-fn bigint_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+fn bigint_prototype(env: &CallEnv) -> Option<ObjectRef> {
     let Some(Value::Function(bigint_function)) = env.get("BigInt") else {
         return None;
     };
-    crate::function_prototype(bigint_function)
+    crate::function_prototype(&bigint_function)
 }
 
 fn parse_bigint_text(raw: &str, allow_separators: bool) -> Option<BigInt> {
@@ -303,7 +291,7 @@ fn this_bigint_value(value: Value) -> Result<BigInt, RuntimeError> {
     }
 }
 
-fn to_index(value: Value, env: &mut HashMap<String, Value>) -> Result<usize, RuntimeError> {
+fn to_index(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
     let number = to_number_with_env(value, env)?;
     if number.is_nan() || number == 0.0 {
         return Ok(0);

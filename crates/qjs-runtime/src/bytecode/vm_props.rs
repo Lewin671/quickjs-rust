@@ -13,6 +13,7 @@ use crate::{
 };
 
 use super::vm::Vm;
+use crate::CallEnv;
 
 impl Vm<'_> {
     /// Whether the realm's current Array.prototype owns any indexed property.
@@ -22,7 +23,7 @@ impl Vm<'_> {
     /// count read is itself O(1).
     pub(super) fn array_prototype_has_index_property(&mut self) -> Option<bool> {
         if self.array_prototype_cache.is_none() {
-            self.array_prototype_cache = Some(array_prototype(&self.globals)?);
+            self.array_prototype_cache = Some(array_prototype(&self.realm_env())?);
         }
         self.array_prototype_cache
             .as_ref()
@@ -73,14 +74,15 @@ impl Vm<'_> {
                     .or_else(|| {
                         elements
                             .prototype_override()
-                            .unwrap_or_else(|| array_prototype(&self.globals))
+                            .unwrap_or_else(|| array_prototype(&self.realm_env()))
                             .and_then(|prototype| prototype.property(key))
                     });
                 data_property_value(descriptor)
             }
             Value::Function(function) => {
-                let descriptor = function_own_property_descriptor(function, key)
-                    .or_else(|| function_prototype_chain_descriptor(function, &self.globals, key));
+                let descriptor = function_own_property_descriptor(function, key).or_else(|| {
+                    function_prototype_chain_descriptor(function, &self.realm_env(), key)
+                });
                 match descriptor {
                     Some(property) => data_property_value(Some(property)),
                     // A function with no native-error parent (the only remaining
@@ -98,23 +100,23 @@ impl Vm<'_> {
                     return Some(value);
                 }
                 data_property_value(inherited_primitive_prototype_descriptor(
-                    &self.globals,
+                    &self.realm_env(),
                     "String",
                     key,
                 ))
             }
             Value::Number(_) => data_property_value(inherited_primitive_prototype_descriptor(
-                &self.globals,
+                &self.realm_env(),
                 "Number",
                 key,
             )),
             Value::Boolean(_) => data_property_value(inherited_primitive_prototype_descriptor(
-                &self.globals,
+                &self.realm_env(),
                 "Boolean",
                 key,
             )),
             Value::BigInt(_) => data_property_value(inherited_primitive_prototype_descriptor(
-                &self.globals,
+                &self.realm_env(),
                 "BigInt",
                 key,
             )),
@@ -132,7 +134,7 @@ impl Vm<'_> {
                 let descriptor = elements.symbol_property(symbol).or_else(|| {
                     elements
                         .prototype_override()
-                        .unwrap_or_else(|| array_prototype(&self.globals))
+                        .unwrap_or_else(|| array_prototype(&self.realm_env()))
                         .and_then(|prototype| prototype.symbol_property(symbol))
                 });
                 match descriptor {
@@ -151,15 +153,26 @@ impl Vm<'_> {
         name: String,
         value: Value,
     ) -> Result<(), RuntimeError> {
-        if !self.globals.contains_key(&name) {
+        // A caller-scope binding carried in this frame's locals layer is written
+        // there (and propagated back to the caller on return); only a true realm
+        // global goes to the shared cell.
+        if self.env.locals().contains_key(&name) {
+            self.env.insert(name, value);
+            return Ok(());
+        }
+        if !self.realm.borrow().contains_key(&name) {
             return Err(RuntimeError {
                 thrown: None,
                 message: format!("ReferenceError: undefined identifier `{name}`"),
             });
         }
         self.invalidate_array_prototype_cache(&name);
-        self.globals.insert(name.clone(), value.clone());
-        if let Some(Value::Object(global_this)) = self.globals.get(GLOBAL_THIS_BINDING)
+        self.realm.borrow_mut().insert(name.clone(), value.clone());
+        let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
+            Some(Value::Object(global_this)) => Some(global_this.clone()),
+            _ => None,
+        };
+        if let Some(global_this) = global_this
             && global_this.has_own_property(&name)
         {
             global_this.set(name, value);
@@ -172,13 +185,19 @@ impl Vm<'_> {
         name: String,
         value: Value,
     ) -> Result<(), RuntimeError> {
-        self.invalidate_array_prototype_cache(&name);
-        if let Some(Value::Object(global_this)) = self.globals.get(GLOBAL_THIS_BINDING) {
-            global_this.set(name.clone(), value.clone());
-            self.globals.insert(name, value);
+        if self.env.locals().contains_key(&name) {
+            self.env.insert(name, value);
             return Ok(());
         }
-        self.globals.insert(name, value);
+        self.invalidate_array_prototype_cache(&name);
+        let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
+            Some(Value::Object(global_this)) => Some(global_this.clone()),
+            _ => None,
+        };
+        if let Some(global_this) = global_this {
+            global_this.set(name.clone(), value.clone());
+        }
+        self.realm.borrow_mut().insert(name, value);
         Ok(())
     }
 }
@@ -197,7 +216,7 @@ fn data_property_value(property: Option<Property>) -> Option<Value> {
 pub(super) fn get_property(
     object: Value,
     key: &str,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     match object {
         Value::Array(elements) if key == "length" => Ok(Value::Number(elements.len() as f64)),
@@ -235,7 +254,7 @@ pub(super) fn get_property(
 pub(super) fn get_property_key(
     object: Value,
     key: &PropertyKey,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     match key {
         PropertyKey::String(key) => get_property(object, key, env),
@@ -247,7 +266,7 @@ pub(super) fn set_property(
     object: Value,
     key: String,
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     match object {
         Value::Object(object) => {
@@ -335,7 +354,7 @@ pub(super) fn set_property_key(
     object: Value,
     key: PropertyKey,
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     match key {
         PropertyKey::String(key) => set_property(object, key, value, env),
@@ -347,7 +366,7 @@ fn set_symbol_property(
     object: Value,
     symbol: ObjectRef,
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     match object {
         Value::Object(object) => {
@@ -381,7 +400,7 @@ fn set_function_symbol_property(
     receiver: Value,
     symbol: ObjectRef,
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     let inherited = function.symbol_property(&symbol, env);
     if apply_property_setter(inherited.clone(), receiver, value.clone(), env)? {
@@ -408,7 +427,7 @@ fn set_object_symbol_property(
     receiver: Value,
     symbol: ObjectRef,
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     if apply_property_setter(
         object.symbol_property(&symbol),
@@ -438,7 +457,7 @@ fn set_array_symbol_property(
     receiver: Value,
     symbol: ObjectRef,
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     let inherited = array.symbol_property(&symbol).or_else(|| {
         array
@@ -469,7 +488,7 @@ fn apply_property_setter(
     property: Option<Property>,
     receiver: Value,
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     let Some(property) = property else {
         return Ok(false);
@@ -481,19 +500,11 @@ fn apply_property_setter(
     Ok(property.is_accessor())
 }
 
-pub(super) fn property_set_uses_setter(
-    object: &Value,
-    key: &PropertyKey,
-    env: &HashMap<String, Value>,
-) -> bool {
+pub(super) fn property_set_uses_setter(object: &Value, key: &PropertyKey, env: &CallEnv) -> bool {
     property_for_set(object, key, env).is_some_and(|property| property.set.is_some())
 }
 
-fn property_for_set(
-    object: &Value,
-    key: &PropertyKey,
-    env: &HashMap<String, Value>,
-) -> Option<Property> {
+fn property_for_set(object: &Value, key: &PropertyKey, env: &CallEnv) -> Option<Property> {
     let PropertyKey::String(key) = key else {
         return symbol_property_for_set(object, key, env);
     };
@@ -514,7 +525,7 @@ fn property_for_set(
 
 fn function_property_for_set(
     function: &crate::Function,
-    env: &HashMap<String, Value>,
+    env: &CallEnv,
     key: &str,
 ) -> Option<Property> {
     function.properties.borrow().get(key).cloned().or_else(|| {
@@ -523,11 +534,7 @@ fn function_property_for_set(
     })
 }
 
-fn symbol_property_for_set(
-    object: &Value,
-    key: &PropertyKey,
-    env: &HashMap<String, Value>,
-) -> Option<Property> {
+fn symbol_property_for_set(object: &Value, key: &PropertyKey, env: &CallEnv) -> Option<Property> {
     let PropertyKey::Symbol(symbol) = key else {
         unreachable!("symbol property helper should only receive symbol keys");
     };
@@ -549,7 +556,7 @@ fn symbol_property_for_set(
 pub(super) fn delete_property_key(
     object: Value,
     key: &PropertyKey,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     match key {
         PropertyKey::String(key) => delete_property(object, key, env),
@@ -557,11 +564,7 @@ pub(super) fn delete_property_key(
     }
 }
 
-fn delete_property(
-    object: Value,
-    key: &str,
-    env: &mut HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
+fn delete_property(object: Value, key: &str, env: &mut CallEnv) -> Result<Value, RuntimeError> {
     match object {
         Value::Object(object) => Ok(Value::Boolean(object.delete_own_property(key))),
         Value::Proxy(proxy) => Ok(Value::Boolean(crate::proxy::proxy_delete_property(
@@ -588,7 +591,7 @@ fn delete_property(
 fn delete_symbol_property(
     object: Value,
     symbol: &ObjectRef,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     match object {
         Value::Object(object) => Ok(Value::Boolean(object.delete_own_symbol_property(symbol))),
@@ -614,10 +617,7 @@ fn delete_symbol_property(
     }
 }
 
-pub(super) fn enumerable_keys(
-    value: Value,
-    env: &HashMap<String, Value>,
-) -> Result<Vec<Value>, RuntimeError> {
+pub(super) fn enumerable_keys(value: Value, env: &CallEnv) -> Result<Vec<Value>, RuntimeError> {
     let mut keys = match value.clone() {
         Value::Object(object) => object.own_property_keys(),
         Value::Array(elements) => {

@@ -1,12 +1,9 @@
+use crate::CallEnv;
 use std::collections::HashMap;
 
 use crate::{Function, NativeFunction, ObjectRef, Value, symbol};
 
-pub(crate) fn install_json(
-    env: &mut HashMap<String, Value>,
-    global_this: &Value,
-    object_prototype: ObjectRef,
-) {
+pub(crate) fn install_json(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
     let json_object = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
     json_object.set_to_string_tag("JSON");
     symbol::define_well_known_to_string_tag(env, &json_object, "JSON");
@@ -16,7 +13,7 @@ pub(crate) fn install_json(
     define_json_function(&json_object, "stringify", 3, NativeFunction::JsonStringify);
 
     let json_value = Value::Object(json_object);
-    env.insert("JSON".to_owned(), json_value.clone());
+    env.insert_realm("JSON".to_owned(), json_value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable("JSON".to_owned(), json_value);
     }

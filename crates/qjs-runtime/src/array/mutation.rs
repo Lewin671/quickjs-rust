@@ -10,6 +10,7 @@ use super::{
     array_like::array_like_length,
     indexing::{array_slice_end, array_slice_start},
 };
+use crate::CallEnv;
 
 const MAX_SAFE_INTEGER_LENGTH: usize = 9_007_199_254_740_991;
 const MAX_ARRAY_LENGTH: usize = u32::MAX as usize;
@@ -17,7 +18,7 @@ const MAX_ARRAY_LENGTH: usize = u32::MAX as usize;
 pub(crate) fn native_array_prototype_fill(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let source = array_like_length(this_value, "Array.prototype.fill", env)?;
     let receiver = source.receiver;
@@ -42,7 +43,7 @@ pub(crate) fn native_array_prototype_fill(
 pub(crate) fn native_array_prototype_copy_within(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let source = array_like_length(this_value, "Array.prototype.copyWithin", env)?;
     let receiver = source.receiver;
@@ -90,7 +91,7 @@ pub(super) fn set_array_like_property(
     receiver: Value,
     key: String,
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
     match receiver.clone() {
         Value::Object(object) => {
@@ -138,7 +139,7 @@ fn validate_copy_within_set(
     property: Option<Property>,
     receiver: Value,
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
     let Some(property) = property else {
         return Ok(());
@@ -156,7 +157,7 @@ fn validate_copy_within_set(
 pub(super) fn delete_array_like_property(
     receiver: Value,
     key: &str,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
     match receiver {
         Value::Object(object) if !object.delete_own_property(key) => {
@@ -211,7 +212,7 @@ fn copy_within_delete_error() -> RuntimeError {
 pub(crate) fn native_array_prototype_push(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if matches!(this_value, Value::String(_)) {
         return Err(push_length_error());
@@ -235,7 +236,7 @@ fn push_set_property(
     receiver: Value,
     index: usize,
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
     let key = index.to_string();
     match receiver.clone() {
@@ -284,11 +285,7 @@ fn push_set_property(
     }
 }
 
-fn push_set_length(
-    receiver: Value,
-    length: usize,
-    env: &mut HashMap<String, Value>,
-) -> Result<(), RuntimeError> {
+fn push_set_length(receiver: Value, length: usize, env: &mut CallEnv) -> Result<(), RuntimeError> {
     let value = Value::Number(length as f64);
     match receiver.clone() {
         Value::Object(object) => {
@@ -342,7 +339,7 @@ fn apply_push_setter(
     property: Option<Property>,
     receiver: Value,
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     let Some(property) = property else {
         return Ok(false);
@@ -382,7 +379,7 @@ fn push_length_error() -> RuntimeError {
 
 pub(crate) fn native_array_prototype_pop(
     this_value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if matches!(this_value, Value::String(_)) {
         return Err(pop_length_error());
@@ -432,11 +429,7 @@ fn pop_delete_property(receiver: Value, key: &str) -> Result<(), RuntimeError> {
     }
 }
 
-fn pop_set_length(
-    receiver: Value,
-    length: usize,
-    env: &mut HashMap<String, Value>,
-) -> Result<(), RuntimeError> {
+fn pop_set_length(receiver: Value, length: usize, env: &mut CallEnv) -> Result<(), RuntimeError> {
     let value = Value::Number(length as f64);
     match receiver.clone() {
         Value::Object(object) => {
@@ -484,7 +477,7 @@ fn apply_pop_setter(
     property: Option<Property>,
     receiver: Value,
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     let Some(property) = property else {
         return Ok(false);
@@ -524,7 +517,7 @@ fn pop_length_error() -> RuntimeError {
 
 pub(crate) fn native_array_prototype_reverse(
     this_value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let source = array_like_length(this_value, "Array.prototype.reverse", env)?;
     let receiver = source.receiver;

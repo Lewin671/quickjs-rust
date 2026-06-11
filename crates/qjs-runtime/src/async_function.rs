@@ -15,6 +15,7 @@
 
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
+use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, RuntimeError, Value,
     bytecode::{GeneratorOutcome, GeneratorStart, GeneratorState, Resume, resume_generator},
@@ -34,7 +35,7 @@ const ASYNC_RESULT_PROMISE: &str = "\0AsyncResultPromise";
 /// The callable `%AsyncFunction%` constructor itself is not installed (no global
 /// `AsyncFunction` binding); it is a follow-up.
 pub(crate) fn install_async_function(
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
     _global_this: &Value,
     object_prototype: ObjectRef,
 ) {
@@ -44,14 +45,14 @@ pub(crate) fn install_async_function(
     );
     async_function_prototype.set_to_string_tag("AsyncFunction");
     symbol::define_well_known_to_string_tag(env, &async_function_prototype, "AsyncFunction");
-    env.insert(
+    env.insert_realm(
         ASYNC_FUNCTION_PROTOTYPE_BINDING.to_owned(),
         Value::Object(async_function_prototype),
     );
 }
 
 /// Returns `%AsyncFunction.prototype%` from the current environment.
-pub(crate) fn async_function_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+pub(crate) fn async_function_prototype(env: &CallEnv) -> Option<ObjectRef> {
     match env.get(ASYNC_FUNCTION_PROTOTYPE_BINDING) {
         Some(Value::Object(object)) => Some(object.clone()),
         _ => None,
@@ -65,14 +66,14 @@ pub(crate) fn async_function_prototype(env: &HashMap<String, Value>) -> Option<O
 /// reject the promise rather than throwing synchronously.
 pub(crate) fn call_async_function(
     function: &Function,
-    function_env: HashMap<String, Value>,
-    env: &mut HashMap<String, Value>,
+    function_env: CallEnv,
+    env: &mut CallEnv,
 ) -> Value {
     let bytecode = function
         .bytecode
         .clone()
         .expect("async function has a bytecode body");
-    let captured = Rc::new(RefCell::new(function_env.clone()));
+    let captured = Rc::new(RefCell::new(function_env.to_flat_map()));
     let context = ObjectRef::new(HashMap::new());
     *context.generator_state().borrow_mut() =
         Some(GeneratorState::SuspendedStart(Box::new(GeneratorStart {
@@ -94,12 +95,7 @@ pub(crate) fn call_async_function(
 /// Resumes the suspended async body with `resume`, then settles or re-suspends:
 /// a `Return` resolves the result promise, a thrown completion rejects it, and a
 /// suspension (`await`) schedules reactions that re-enter this driver later.
-fn drive(
-    context: &ObjectRef,
-    result_promise: &ObjectRef,
-    resume: Resume,
-    env: &mut HashMap<String, Value>,
-) {
+fn drive(context: &ObjectRef, result_promise: &ObjectRef, resume: Resume, env: &mut CallEnv) {
     match resume_generator(context, resume, env) {
         Ok(GeneratorOutcome::Await(awaited)) => {
             schedule_await(context, result_promise, awaited, env);
@@ -126,7 +122,7 @@ fn schedule_await(
     context: &ObjectRef,
     result_promise: &ObjectRef,
     awaited: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) {
     let on_fulfilled = await_reaction(
         NativeFunction::AsyncFunctionAwaitFulfilled,
@@ -165,7 +161,7 @@ pub(crate) fn call_async_await_native(
     function: &Function,
     native: NativeFunction,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Option<Value>, RuntimeError> {
     let (Some(Value::Object(context)), Some(Value::Object(result_promise))) = (
         function.env.get(ASYNC_CONTEXT),
@@ -189,7 +185,7 @@ pub(crate) fn call_async_await_native(
 /// `[[Prototype]]` becomes `%AsyncFunction.prototype%`. Async functions have no
 /// own `prototype` property (the non-constructable default wiring already
 /// skipped it).
-pub(crate) fn wire_async_function_intrinsics(function: &Function, env: &HashMap<String, Value>) {
+pub(crate) fn wire_async_function_intrinsics(function: &Function, env: &CallEnv) {
     if let Some(async_function_prototype) = async_function_prototype(env) {
         let _ = function
             .set_internal_prototype_slot(Some(crate::Prototype::Object(async_function_prototype)));

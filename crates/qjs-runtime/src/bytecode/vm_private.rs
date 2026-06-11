@@ -3,6 +3,8 @@
 
 use std::{cell::RefCell, rc::Rc};
 
+use crate::CallEnv;
+
 use crate::{
     Function, ObjectRef, RuntimeError, Value, call_function,
     function::{CompiledUserFunction, InstancePrivateElement, PrivateFieldInit},
@@ -173,10 +175,7 @@ impl Vm<'_> {
             captured_env: Rc::new(RefCell::new(method_env)),
         });
         if def.is_generator && def.is_async {
-            crate::async_generator::wire_async_generator_function_intrinsics(
-                &function,
-                &self.globals,
-            );
+            crate::async_generator::wire_async_generator_function_intrinsics(&function, &self.env);
         } else if def.is_generator {
             self.wire_generator_function_intrinsics(&function);
         } else if def.is_async {
@@ -338,7 +337,7 @@ impl Vm<'_> {
 
     /// Returns the private environment carried by the current home object.
     pub(super) fn current_private_environment(&self) -> Option<PrivateEnvironment> {
-        match self.globals.get(crate::HOME_OBJECT_BINDING) {
+        match self.env.get(crate::HOME_OBJECT_BINDING) {
             Some(Value::Object(object)) => object.private_environment(),
             Some(Value::Function(function)) => function.private_environment(),
             _ => None,
@@ -351,7 +350,7 @@ impl Vm<'_> {
 pub(crate) fn apply_instance_private_elements(
     constructor: &Function,
     this_value: &Value,
-    env: &mut std::collections::HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
     let elements = constructor.instance_private_elements();
     if elements.is_empty() {

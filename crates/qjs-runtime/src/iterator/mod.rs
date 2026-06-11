@@ -18,6 +18,7 @@ mod protocol;
 
 use std::collections::HashMap;
 
+use crate::CallEnv;
 use crate::{Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, symbol};
 
 /// Intrinsic binding for `%Iterator.prototype%`, propagated into call frames so
@@ -76,7 +77,7 @@ impl BuiltinIteratorKind {
 /// Returns the shared `[[Prototype]]` for a built-in iterator instance of the
 /// given kind, so iterator-creation sites can inherit the helpers.
 pub(crate) fn builtin_iterator_prototype(
-    env: &HashMap<String, Value>,
+    env: &CallEnv,
     kind: BuiltinIteratorKind,
 ) -> Option<ObjectRef> {
     match env.get(kind.binding()) {
@@ -86,7 +87,7 @@ pub(crate) fn builtin_iterator_prototype(
 }
 
 /// Returns `%Iterator.prototype%` from the current environment.
-pub(crate) fn iterator_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+pub(crate) fn iterator_prototype(env: &CallEnv) -> Option<ObjectRef> {
     match env.get(ITERATOR_PROTOTYPE_BINDING) {
         Some(Value::Object(object)) => Some(object.clone()),
         _ => None,
@@ -94,7 +95,7 @@ pub(crate) fn iterator_prototype(env: &HashMap<String, Value>) -> Option<ObjectR
 }
 
 /// Returns `%IteratorHelperPrototype%` from the current environment.
-fn iterator_helper_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+fn iterator_helper_prototype(env: &CallEnv) -> Option<ObjectRef> {
     match env.get(ITERATOR_HELPER_PROTOTYPE_BINDING) {
         Some(Value::Object(object)) => Some(object.clone()),
         _ => None,
@@ -104,7 +105,7 @@ fn iterator_helper_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef> 
 /// Installs `%Iterator.prototype%`, `%IteratorHelperPrototype%`, and the
 /// `Iterator` global constructor.
 pub(crate) fn install_iterator(
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
@@ -267,24 +268,24 @@ pub(crate) fn install_iterator(
                 Property::data(Value::String(kind.tag().to_owned()), false, false, true),
             );
         }
-        env.insert(kind.binding().to_owned(), Value::Object(prototype));
+        env.insert_realm(kind.binding().to_owned(), Value::Object(prototype));
     }
 
-    env.insert(
+    env.insert_realm(
         ITERATOR_PROTOTYPE_BINDING.to_owned(),
         Value::Object(iterator_prototype),
     );
-    env.insert(
+    env.insert_realm(
         ITERATOR_HELPER_PROTOTYPE_BINDING.to_owned(),
         Value::Object(helper_prototype),
     );
-    env.insert(
+    env.insert_realm(
         WRAP_PROTOTYPE_BINDING.to_owned(),
         Value::Object(wrap_prototype),
     );
 
     let value = Value::Function(iterator_function);
-    env.insert("Iterator".to_owned(), value.clone());
+    env.insert_realm("Iterator".to_owned(), value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable("Iterator".to_owned(), value);
     }
@@ -298,7 +299,7 @@ pub(crate) fn call_iterator_native(
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Option<Value>, RuntimeError> {
     let result = match native {
         NativeFunction::Iterator => native_iterator_constructor(is_construct, env)?,
@@ -356,10 +357,7 @@ pub(crate) fn call_iterator_native(
 /// without `new` or with `new.target` equal to `Iterator` itself. A subclass
 /// constructor (different `new.target`) receives its ordinary `this` object,
 /// already created with the correct prototype, so it is returned unchanged.
-fn native_iterator_constructor(
-    is_construct: bool,
-    env: &HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
+fn native_iterator_constructor(is_construct: bool, env: &CallEnv) -> Result<Value, RuntimeError> {
     if !is_construct {
         return Err(RuntimeError {
             thrown: None,
@@ -368,7 +366,9 @@ fn native_iterator_constructor(
     }
     let new_target = env.get(crate::NEW_TARGET_BINDING);
     let directly = match (new_target, env.get("Iterator")) {
-        (Some(Value::Function(target)), Some(Value::Function(iterator))) => target.ptr_eq(iterator),
+        (Some(Value::Function(target)), Some(Value::Function(iterator))) => {
+            target.ptr_eq(&iterator)
+        }
         (None, _) | (Some(Value::Undefined), _) => true,
         _ => false,
     };
@@ -399,7 +399,7 @@ fn setter_ignoring_prototype(
     this_value: Value,
     key: Option<SetterKey>,
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &CallEnv,
 ) -> Result<Value, RuntimeError> {
     let Value::Object(receiver) = &this_value else {
         return Err(RuntimeError {
@@ -408,7 +408,7 @@ fn setter_ignoring_prototype(
         });
     };
     if let Some(Value::Object(prototype)) = env.get(ITERATOR_PROTOTYPE_BINDING)
-        && receiver.ptr_eq(prototype)
+        && receiver.ptr_eq(&prototype)
     {
         return Err(RuntimeError {
             thrown: None,

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::CallEnv;
 use crate::reflect::target::ensure_reflect_object_target;
 use crate::{
     ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function,
@@ -8,7 +9,7 @@ use crate::{
 
 pub(crate) fn native_reflect_set(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     ensure_reflect_object_target(&target, "Reflect.set")?;
@@ -32,7 +33,7 @@ pub(crate) fn ordinary_set(
     key: &PropertyKey,
     value: Value,
     receiver: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     if let Some(property) = own_property_descriptor_key(&target, key) {
         return ordinary_set_with_descriptor(property, key, value, receiver, env);
@@ -94,7 +95,7 @@ fn ordinary_set_with_descriptor(
     key: &PropertyKey,
     value: Value,
     receiver: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     if property.is_accessor() {
         let Some(setter) = property.set else {
@@ -113,7 +114,7 @@ fn set_receiver_data_property(
     receiver: Value,
     key: &PropertyKey,
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     let PropertyKey::String(key) = key else {
         return set_receiver_symbol_data_property(receiver, key, value);

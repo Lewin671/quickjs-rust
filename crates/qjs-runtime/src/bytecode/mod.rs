@@ -61,7 +61,7 @@ pub(crate) fn compile_function_body(
 
 pub(crate) fn eval_function_bytecode(
     bytecode: &Bytecode,
-    env: HashMap<String, Value>,
+    env: crate::CallEnv,
     captured_env: Rc<RefCell<HashMap<String, Value>>>,
 ) -> FunctionBytecodeResult<'_> {
     vm::eval_function_bytecode(bytecode, env, captured_env)
@@ -102,7 +102,7 @@ pub fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> {
 pub struct EvalOutcome {
     /// The script's completion value, before any promise reactions ran.
     pub value: Value,
-    env: HashMap<String, Value>,
+    env: crate::CallEnv,
 }
 
 impl EvalOutcome {
@@ -134,8 +134,8 @@ pub fn eval_bytecode_keep_jobs(bytecode: &Bytecode) -> Result<EvalOutcome, Runti
 
 pub(crate) fn eval_bytecode_with_env(
     bytecode: &Bytecode,
-    env: HashMap<String, Value>,
+    env: crate::CallEnv,
 ) -> FunctionBytecodeResult<'_> {
-    let captured_env = Rc::new(RefCell::new(env.clone()));
+    let captured_env = Rc::new(RefCell::new(env.to_flat_map()));
     vm::eval_function_bytecode(bytecode, env, captured_env)
 }

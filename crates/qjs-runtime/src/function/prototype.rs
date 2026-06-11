@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use qjs_ast::Stmt;
 use qjs_parser::parse_script;
 
+use crate::CallEnv;
 use crate::{
     Function, GLOBAL_THIS_BINDING, RuntimeError, Value, array::array_like_values_with_env,
     object::boxed_primitive, property_value, to_js_string_with_env, to_length_with_env,
@@ -13,7 +14,7 @@ pub(crate) fn native_function(
     _this_value: Value,
     argument_values: &[Value],
     _is_construct: bool,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let (params, body) = function_source_parts(argument_values, env)?;
     let source = format!("function anonymous({params}\n) {{\n{body}\n}}");
@@ -39,13 +40,13 @@ pub(crate) fn native_function(
         Some(name),
         params,
         body,
-        env.clone(),
+        env.to_flat_map(),
     )?))
 }
 
 fn function_source_parts(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<(String, String), RuntimeError> {
     let Some((body, params)) = argument_values.split_last() else {
         return Ok((String::new(), String::new()));
@@ -64,7 +65,7 @@ fn function_source_parts(
 pub(crate) fn native_function_prototype_apply(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let Value::Function(_) = this_value else {
         return Err(RuntimeError {
@@ -82,10 +83,7 @@ pub(crate) fn native_function_prototype_apply(
     crate::call_function(this_value, call_this, apply_arguments, env, false)
 }
 
-fn apply_argument_list(
-    arg_array: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<Vec<Value>, RuntimeError> {
+fn apply_argument_list(arg_array: Value, env: &mut CallEnv) -> Result<Vec<Value>, RuntimeError> {
     match arg_array {
         Value::Null | Value::Undefined => Ok(Vec::new()),
         Value::Array(array) => {
@@ -133,7 +131,7 @@ fn apply_argument_list_type_error() -> RuntimeError {
 pub(crate) fn native_function_prototype_call(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let Value::Function(_) = this_value else {
         return Err(RuntimeError {
@@ -173,7 +171,7 @@ pub(crate) fn native_function_prototype_bind(
 pub(crate) fn native_function_prototype_has_instance(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if !matches!(this_value, Value::Function(_)) {
         return Ok(Value::Boolean(false));
@@ -204,17 +202,12 @@ pub(crate) fn native_throw_type_error() -> Result<Value, RuntimeError> {
     })
 }
 
-pub(crate) fn function_call_this(
-    this_arg: Option<Value>,
-    env: &HashMap<String, Value>,
-    is_strict: bool,
-) -> Value {
+pub(crate) fn function_call_this(this_arg: Option<Value>, env: &CallEnv, is_strict: bool) -> Value {
     let this_value = this_arg.unwrap_or(Value::Undefined);
     match this_value {
-        Value::Null | Value::Undefined if !is_strict => env
-            .get(GLOBAL_THIS_BINDING)
-            .cloned()
-            .unwrap_or(Value::Undefined),
+        Value::Null | Value::Undefined if !is_strict => {
+            env.get(GLOBAL_THIS_BINDING).unwrap_or(Value::Undefined)
+        }
         Value::String(_) | Value::Number(_) | Value::Boolean(_) if !is_strict => {
             boxed_primitive(this_value, env).expect("primitive value should box")
         }

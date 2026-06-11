@@ -10,6 +10,7 @@ use crate::{
 };
 
 use super::value::date_value;
+use crate::CallEnv;
 
 pub(crate) fn native_date_prototype_to_iso_string(
     this_value: Value,
@@ -53,7 +54,7 @@ pub(crate) fn native_date_prototype_to_time_string(
 pub(crate) fn native_date_prototype_to_json(
     this_value: Value,
     key: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if !date_value(this_value.clone())?.is_finite() {
         return Ok(Value::Null);
@@ -73,7 +74,7 @@ pub(crate) fn native_date_prototype_to_json(
 pub(crate) fn native_date_prototype_to_primitive(
     this_value: Value,
     hint: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if !matches!(
         this_value,

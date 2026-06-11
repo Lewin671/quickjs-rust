@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::CallEnv;
 use crate::{
     PropertyKey, RuntimeError, Value, call_function, property_value, reflect, symbol,
     to_js_string_with_env,
@@ -8,7 +9,7 @@ use crate::{
 pub(crate) fn native_regexp_prototype_search(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if !is_object_value(&this_value) {
         return Err(RuntimeError {
@@ -55,11 +56,7 @@ fn exec_result_error() -> RuntimeError {
     }
 }
 
-fn set_last_index(
-    receiver: Value,
-    value: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<(), RuntimeError> {
+fn set_last_index(receiver: Value, value: Value, env: &mut CallEnv) -> Result<(), RuntimeError> {
     if reflect::ordinary_set(
         receiver.clone(),
         &PropertyKey::String("lastIndex".to_owned()),

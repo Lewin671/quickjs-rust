@@ -1,10 +1,11 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
-    Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, PropertyKey, RUNTIME_INTRINSIC_NAMES,
-    RuntimeError, Value, array::array_like_values_with_env, call_function, construct_function,
-    function::CompiledUserFunction, initialize_builtins, is_truthy, promise, symbol,
-    to_js_string_with_env, to_property_key_value,
+    Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, PropertyKey, RuntimeError, Value,
+    array::array_like_values_with_env,
+    call_function, construct_function,
+    function::{CallEnv, CompiledUserFunction, Realm},
+    initialize_builtins, is_truthy, promise, symbol, to_js_string_with_env, to_property_key_value,
 };
 
 use super::ir::{Bytecode, Op};
@@ -21,7 +22,7 @@ use super::vm_try::TryFrame;
 pub(super) type Slot = Option<Value>;
 
 struct VmCallEnv {
-    env: HashMap<String, Value>,
+    env: CallEnv,
     binding_names: Option<Vec<String>>,
 }
 
@@ -34,7 +35,7 @@ pub(super) fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> 
 
 pub(super) fn eval_function_bytecode(
     bytecode: &Bytecode,
-    env: HashMap<String, Value>,
+    env: CallEnv,
     captured_env: Rc<RefCell<HashMap<String, Value>>>,
 ) -> FunctionBytecodeResult<'_> {
     let mut vm = Vm::new_with_globals_and_captures(bytecode, env, captured_env);
@@ -42,7 +43,7 @@ pub(super) fn eval_function_bytecode(
     FunctionBytecodeResult {
         value,
         bytecode,
-        globals: vm.globals,
+        env: vm.frame_call_env(),
         locals: vm.locals,
         sloppy_global_names: vm.sloppy_global_names,
     }
@@ -53,7 +54,13 @@ pub(super) struct Vm<'a> {
     pub(super) ip: usize,
     pub(super) stack: Vec<Value>,
     pub(super) locals: Vec<Slot>,
-    pub(super) globals: HashMap<String, Value>,
+    /// The frame environment: the shared realm cell plus this frame's own
+    /// internal/caller-scope bindings (`this`, `arguments`, `new.target`,
+    /// `super`/home, and caller-scope names the body references). Slot-based
+    /// locals live in `locals`; everything previously kept in the per-frame
+    /// `globals` map that is *not* a slot now lives in `env.locals()`.
+    pub(super) env: CallEnv,
+    pub(super) realm: Realm,
     pub(super) captured_env: Rc<RefCell<HashMap<String, Value>>>,
     pub(super) sloppy_global_names: Vec<String>,
     pub(super) try_stack: Vec<TryFrame>,
@@ -82,23 +89,35 @@ impl<'a> Vm<'a> {
         globals.insert("this".to_owned(), global_this.clone());
         globals.insert(GLOBAL_THIS_BINDING.to_owned(), global_this.clone());
         globals.insert("undefined".to_owned(), Value::Undefined);
-        initialize_builtins(&mut globals, &global_this);
-        Self::initialize_script_global_bindings(bytecode, &mut globals);
-        let captured_env = Rc::new(RefCell::new(globals.clone()));
-        Self::new_with_globals_and_captures(bytecode, globals, captured_env)
+        // The realm cell is live before builtin installation: every `install_*`
+        // runs against a `CallEnv` over it and writes intrinsics straight to the
+        // shared cell (`insert_realm`), so no install-vs-runtime signature split
+        // is needed.
+        let realm: Realm = Rc::new(RefCell::new(globals));
+        let mut env = CallEnv::new(Rc::clone(&realm));
+        initialize_builtins(&mut env, &global_this);
+        {
+            let mut globals = realm.borrow_mut();
+            Self::initialize_script_global_bindings(bytecode, &mut globals);
+        }
+        let captured_env = Rc::new(RefCell::new(realm.borrow().clone()));
+        Self::new_with_globals_and_captures(bytecode, env, captured_env)
     }
 
     pub(super) fn new_with_globals_and_captures(
         bytecode: &'a Bytecode,
-        globals: HashMap<String, Value>,
+        env: CallEnv,
         captured_env: Rc<RefCell<HashMap<String, Value>>>,
     ) -> Self {
+        let realm = env.realm_rc();
+        let locals = Self::initial_slots(bytecode, &env);
         Self {
             bytecode,
             ip: 0,
             stack: Vec::with_capacity(64),
-            locals: Self::initial_slots(bytecode, &globals),
-            globals,
+            locals,
+            env,
+            realm,
             captured_env,
             sloppy_global_names: Vec::new(),
             try_stack: Vec::new(),
@@ -108,6 +127,31 @@ impl<'a> Vm<'a> {
             stop_at_prologue: false,
             array_prototype_cache: None,
         }
+    }
+
+    /// Builds a `CallEnv` over the shared realm whose `locals` are this frame's
+    /// live slot bindings. Used to thread the environment into runtime builtins
+    /// and to capture the frame state on return.
+    pub(super) fn frame_call_env(&self) -> CallEnv {
+        let mut locals = self.env.snapshot_locals();
+        for (index, slot) in self.locals.iter().enumerate() {
+            if let Some(value) = slot {
+                locals.insert(self.bytecode.locals[index].name.clone(), value.clone());
+            }
+        }
+        CallEnv::with_locals(self.realm_rc(), locals)
+    }
+
+    /// A clone of the shared realm `Rc`.
+    pub(super) fn realm_rc(&self) -> Realm {
+        Rc::clone(&self.realm)
+    }
+
+    /// A `CallEnv` over the shared realm with *empty* frame locals. Cheap (no
+    /// slot clone): use it for the prototype-resolution helpers that only read
+    /// realm intrinsics by name and never touch frame locals.
+    pub(super) fn realm_env(&self) -> CallEnv {
+        CallEnv::new(self.realm_rc())
     }
 
     fn coerce_property_key(&mut self, value: Value) -> Result<PropertyKey, RuntimeError> {
@@ -122,7 +166,10 @@ impl<'a> Vm<'a> {
                 self.apply_env(key_env);
                 Ok(key)
             }
-            value => to_property_key_value(value, &mut self.globals),
+            value => {
+                let mut key_env = self.current_env();
+                to_property_key_value(value, &mut key_env)
+            }
         }
     }
 
@@ -196,7 +243,7 @@ impl<'a> Vm<'a> {
                     self.handle_runtime_result(result)?;
                 }
                 Op::TypeofGlobal(name) => {
-                    let value = self.globals.get(&name).cloned().unwrap_or(Value::Undefined);
+                    let value = self.env.get(&name).unwrap_or(Value::Undefined);
                     self.stack.push(Value::String(typeof_value(value)));
                 }
                 Op::Pop => {
@@ -288,7 +335,7 @@ impl<'a> Vm<'a> {
                     if is_generator && is_async {
                         crate::async_generator::wire_async_generator_function_intrinsics(
                             &function,
-                            &self.globals,
+                            &self.realm_env(),
                         );
                     } else if is_generator {
                         self.wire_generator_function_intrinsics(&function);
@@ -458,9 +505,10 @@ impl<'a> Vm<'a> {
         function_bytecode: &Bytecode,
         function_local_names: &[String],
     ) -> HashMap<String, Value> {
-        let mut env =
-            HashMap::with_capacity(RUNTIME_INTRINSIC_NAMES.len() + function_bytecode.locals.len());
-        self.insert_runtime_intrinsics(&mut env);
+        let mut env = HashMap::with_capacity(function_bytecode.locals.len());
+        // Intrinsics and true globals live in the shared realm; a closure capture
+        // only needs the outer *locals* it closes over. Realm reads stay live
+        // through the shared cell at call time.
         for name in function_bytecode.global_names() {
             self.insert_referenced_binding(&mut env, name);
         }
@@ -475,18 +523,8 @@ impl<'a> Vm<'a> {
         env
     }
 
-    fn insert_runtime_intrinsics(&self, env: &mut HashMap<String, Value>) {
-        for name in RUNTIME_INTRINSIC_NAMES {
-            if let Some(value) = self.globals.get(*name) {
-                env.insert((*name).to_owned(), value.clone());
-            }
-        }
-    }
-
     fn insert_referenced_binding(&self, env: &mut HashMap<String, Value>, name: &str) {
         if let Some(value) = self.current_local_binding(name) {
-            env.insert(name.to_owned(), value.clone());
-        } else if let Some(value) = self.globals.get(name) {
             env.insert(name.to_owned(), value.clone());
         }
     }
@@ -562,14 +600,9 @@ impl<'a> Vm<'a> {
             return Ok(());
         }
         let updates_global_binding = self.is_global_object(&object);
-        let wrote_data = if property_set_uses_setter(&object, &key, &self.globals) {
-            let mut env = self.current_env();
-            let wrote_data = set_property_key(object, key.clone(), value.clone(), &mut env)?;
-            self.apply_env(env);
-            wrote_data
-        } else {
-            set_property_key(object, key.clone(), value.clone(), &mut self.globals)?
-        };
+        let mut env = self.current_env();
+        let wrote_data = set_property_key(object, key.clone(), value.clone(), &mut env)?;
+        self.apply_env(env);
         if !wrote_data && is_strict {
             return Err(RuntimeError {
                 thrown: None,
@@ -581,15 +614,18 @@ impl<'a> Vm<'a> {
             && let crate::PropertyKey::String(key) = key
         {
             self.invalidate_array_prototype_cache(&key);
-            self.globals.insert(key, value.clone());
+            self.realm.borrow_mut().insert(key, value.clone());
         }
         self.stack.push(value);
         Ok(())
     }
 
     fn symbol_primitive_set_fails(&self, object: &Value, key: &crate::PropertyKey) -> bool {
-        matches!(object, Value::Object(object) if symbol::is_symbol_primitive(object))
-            && !property_set_uses_setter(object, key, &self.globals)
+        if !matches!(object, Value::Object(object) if symbol::is_symbol_primitive(object)) {
+            return false;
+        }
+        let env = self.current_env();
+        !property_set_uses_setter(object, key, &env)
     }
 
     fn is_global_object(&self, value: &Value) -> bool {
@@ -597,7 +633,7 @@ impl<'a> Vm<'a> {
             return false;
         };
         matches!(
-            self.globals.get(GLOBAL_THIS_BINDING),
+            self.realm.borrow().get(GLOBAL_THIS_BINDING),
             Some(Value::Object(global_object)) if object.ptr_eq(global_object)
         )
     }
@@ -606,8 +642,10 @@ impl<'a> Vm<'a> {
         let key_value = self.pop()?;
         let key = self.coerce_property_key(key_value)?;
         let object = self.pop()?;
-        self.stack
-            .push(delete_property_key(object, &key, &mut self.globals)?);
+        let mut env = self.current_env();
+        let result = delete_property_key(object, &key, &mut env)?;
+        self.apply_env(env);
+        self.stack.push(result);
         Ok(())
     }
 
@@ -779,41 +817,34 @@ impl<'a> Vm<'a> {
         Ok(arguments)
     }
 
-    pub(super) fn current_env(&self) -> HashMap<String, Value> {
-        let mut env = self.globals.clone();
-        for (index, local) in self.locals.iter().enumerate() {
-            if let Some(value) = local {
-                env.insert(self.bytecode.locals[index].name.clone(), value.clone());
-            }
-        }
-        env
+    pub(super) fn current_env(&self) -> CallEnv {
+        self.frame_call_env()
     }
 
     fn call_env(&self, callee: &Value) -> VmCallEnv {
         if let Some(function) = user_bytecode_function(callee) {
-            let mut env = HashMap::with_capacity(RUNTIME_INTRINSIC_NAMES.len());
-            self.insert_runtime_intrinsics(&mut env);
+            let mut locals = HashMap::new();
             let mut binding_names = Vec::new();
             if let Some(bytecode) = &function.bytecode {
                 self.insert_referenced_call_bindings(
-                    &mut env,
+                    &mut locals,
                     &mut binding_names,
                     bytecode,
                     &function.local_names,
                 );
                 if bytecode.requires_scope_call_bindings() {
                     insert_scope_call_bindings(
-                        &mut env,
+                        &mut locals,
                         &mut binding_names,
                         self.bytecode,
                         &self.locals,
-                        &self.globals,
+                        &self.realm.borrow(),
                         &function.local_names,
                     );
                 }
             }
             return VmCallEnv {
-                env,
+                env: CallEnv::with_locals(self.realm_rc(), locals),
                 binding_names: Some(binding_names),
             };
         }
@@ -825,13 +856,13 @@ impl<'a> Vm<'a> {
 
     fn insert_referenced_call_bindings(
         &self,
-        env: &mut HashMap<String, Value>,
+        locals: &mut HashMap<String, Value>,
         binding_names: &mut Vec<String>,
         function_bytecode: &Bytecode,
         function_local_names: &[String],
     ) {
         for name in function_bytecode.global_names() {
-            self.insert_call_binding(env, binding_names, name);
+            self.insert_call_binding(locals, binding_names, name);
         }
         for name in function_bytecode.sloppy_global_assignment_names() {
             insert_missing_binding_name(binding_names, name);
@@ -841,27 +872,27 @@ impl<'a> Vm<'a> {
                 .binary_search_by(|local| local.as_str().cmp(name))
                 .is_err()
             {
-                self.insert_call_binding(env, binding_names, name);
+                self.insert_call_binding(locals, binding_names, name);
             }
         }
     }
 
     fn insert_call_binding(
         &self,
-        env: &mut HashMap<String, Value>,
+        locals: &mut HashMap<String, Value>,
         binding_names: &mut Vec<String>,
         name: &str,
     ) {
         if crate::function::is_internal_binding_name(name) {
             return;
         }
+        // Only a caller *local* binding needs to ride into the callee's frame
+        // locals; realm bindings are already visible through the shared cell.
         if let Some(value) = self.current_local_binding(name) {
-            env.insert(name.to_owned(), value.clone());
+            locals.insert(name.to_owned(), value.clone());
             if !binding_names.iter().any(|existing| existing == name) {
                 binding_names.push(name.to_owned());
             }
-        } else if let Some(value) = self.globals.get(name) {
-            env.insert(name.to_owned(), value.clone());
         }
     }
 
@@ -873,31 +904,37 @@ impl<'a> Vm<'a> {
         }
     }
 
-    fn apply_selected_env(&mut self, env: HashMap<String, Value>, binding_names: &[String]) {
+    fn apply_selected_env(&mut self, env: CallEnv, binding_names: &[String]) {
         for name in binding_names {
             let Some(value) = env.get(name) else {
                 continue;
             };
             if let Some(index) = self.bytecode.local_slot(name) {
-                self.locals[index] = Some(value.clone());
-            } else {
-                self.invalidate_array_prototype_cache(name);
-                self.globals.insert(name.clone(), value.clone());
+                self.locals[index] = Some(value);
             }
+            // Realm bindings need no write-back: the callee mutated the shared
+            // cell directly.
         }
     }
 
-    pub(super) fn apply_env(&mut self, env: HashMap<String, Value>) {
-        for (index, local) in self.bytecode.locals.iter().enumerate() {
-            if self.locals[index].is_some()
-                && let Some(value) = env.get(&local.name)
-            {
-                self.locals[index] = Some(value.clone());
-            }
-        }
-        for (name, value) in env {
-            if self.bytecode.local_slot(&name).is_none() {
-                self.globals.insert(name, value);
+    pub(super) fn apply_env(&mut self, env: CallEnv) {
+        // The realm layer is shared by `Rc`, so global writes are already live.
+        // Write each non-realm local back to its slot, to the frame's own
+        // internal/caller-scope binding layer, or (for a genuinely new binding)
+        // to the shared realm.
+        let locals = env.into_locals();
+        for (name, value) in locals {
+            if let Some(index) = self.bytecode.local_slot(&name) {
+                if self.locals[index].is_some() {
+                    self.locals[index] = Some(value);
+                }
+            } else if self.env.locals().contains_key(&name) {
+                self.env.insert(name, value);
+            } else if self.realm.borrow().contains_key(&name) {
+                // Already a realm binding (shared cell) — leave it; a mutation
+                // would have hit the cell directly.
+            } else {
+                self.env.insert(name, value);
             }
         }
     }
@@ -911,6 +948,11 @@ impl<'a> Vm<'a> {
         promise::drain_promise_jobs(&mut env)?;
         self.apply_env(env);
         Ok(())
+    }
+
+    /// A short immutable borrow of the shared realm map.
+    pub(super) fn realm_borrow(&self) -> std::cell::Ref<'_, HashMap<String, Value>> {
+        self.realm.borrow()
     }
 
     pub(super) fn record_sloppy_global_name(&mut self, name: &str) {

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::CallEnv;
 use crate::{
     PropertyKey, RuntimeError, Value, array::array_join, call_function, date, number,
     property_value, property_value_key, symbol,
@@ -13,13 +14,13 @@ pub(crate) enum PreferredType {
 }
 
 pub(crate) fn to_js_string(value: Value) -> Result<String, RuntimeError> {
-    let mut env = HashMap::new();
+    let mut env = crate::CallEnv::detached();
     to_js_string_with_env(value, &mut env)
 }
 
 pub(crate) fn to_js_string_with_env(
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<String, RuntimeError> {
     match value {
         Value::Number(number) => Ok(number::number_to_js_string(number)),
@@ -80,14 +81,11 @@ fn object_constructor_name(object: &crate::ObjectRef) -> Option<String> {
 }
 
 pub(crate) fn to_number(value: Value) -> Result<f64, RuntimeError> {
-    let mut env = HashMap::new();
+    let mut env = crate::CallEnv::detached();
     to_number_with_env(value, &mut env)
 }
 
-pub(crate) fn to_number_with_env(
-    value: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<f64, RuntimeError> {
+pub(crate) fn to_number_with_env(value: Value, env: &mut CallEnv) -> Result<f64, RuntimeError> {
     match value {
         Value::Number(number) => Ok(number),
         Value::BigInt(_) => Err(RuntimeError {
@@ -112,7 +110,7 @@ pub(crate) fn to_number_with_env(
 
 pub(crate) fn to_primitive_with_env(
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     match value {
         Value::Object(object) if symbol::is_symbol_primitive(&object) => Ok(Value::Object(object)),
@@ -182,7 +180,7 @@ fn parse_radix_string_number(digits: &str, radix: u32) -> f64 {
 pub(crate) fn to_primitive_with_hint(
     value: Value,
     hint: PreferredType,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if let Some(symbol) = symbol::to_primitive_symbol(env) {
         let method = property_value_key(value.clone(), &PropertyKey::Symbol(symbol), env)?;
@@ -215,7 +213,7 @@ pub(crate) fn to_primitive_with_hint(
 pub(crate) fn ordinary_to_primitive(
     value: Value,
     hint: PreferredType,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let methods = match hint {
         PreferredType::String => ["toString", "valueOf"],
@@ -240,15 +238,12 @@ pub(crate) fn ordinary_to_primitive(
     })
 }
 
-fn object_to_number(value: Value, env: &mut HashMap<String, Value>) -> Result<f64, RuntimeError> {
+fn object_to_number(value: Value, env: &mut CallEnv) -> Result<f64, RuntimeError> {
     let primitive = to_primitive_with_hint(value, PreferredType::Number, env)?;
     to_number_with_env(primitive, env)
 }
 
-fn object_to_string(
-    value: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<String, RuntimeError> {
+fn object_to_string(value: Value, env: &mut CallEnv) -> Result<String, RuntimeError> {
     let primitive = to_primitive_with_hint(value, PreferredType::String, env)?;
     to_js_string_with_env(primitive, env)
 }
@@ -306,14 +301,11 @@ pub(crate) fn to_uint16(value: Value) -> Result<u16, RuntimeError> {
 }
 
 pub(crate) fn to_length(value: Value) -> Result<usize, RuntimeError> {
-    let mut env = HashMap::new();
+    let mut env = crate::CallEnv::detached();
     to_length_with_env(value, &mut env)
 }
 
-pub(crate) fn to_length_with_env(
-    value: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<usize, RuntimeError> {
+pub(crate) fn to_length_with_env(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
     const MAX_SAFE_INTEGER_LENGTH: usize = 9_007_199_254_740_991;
     let number = to_number_with_env(value, env)?;
     if number.is_nan() || number <= 0.0 {

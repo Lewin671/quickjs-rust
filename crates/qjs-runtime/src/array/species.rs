@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::CallEnv;
 use crate::{
     ArrayRef, Property, PropertyKey, RuntimeError, Value, construct_function, ensure_constructor,
     property_value, property_value_key, symbol,
@@ -9,7 +10,7 @@ pub(super) fn array_species_create(
     receiver: Value,
     length: usize,
     method: &str,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if !is_array_species_receiver(&receiver)? {
         return Ok(Value::Array(ArrayRef::new(vec![Value::Undefined; length])));
@@ -45,7 +46,7 @@ pub(super) fn array_species_create(
 pub(super) fn validate_array_species_constructor(
     receiver: Value,
     method: &str,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
     if !matches!(receiver, Value::Array(_)) {
         return Ok(());
@@ -113,7 +114,7 @@ fn is_object_like(value: &Value) -> bool {
 
 fn is_cross_realm_array_constructor(
     constructor: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     if !is_object_like(&constructor) {
         return Ok(false);

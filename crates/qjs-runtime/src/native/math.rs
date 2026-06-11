@@ -3,11 +3,12 @@ use std::collections::HashMap;
 use crate::{NativeFunction, Value, math as math_builtins};
 
 use super::NativeCallResult;
+use crate::CallEnv;
 
 pub(super) fn call_math_native(
     native: NativeFunction,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> NativeCallResult {
     let value = match native {
         NativeFunction::MathAbs => math_builtins::native_math_unary(argument_values, f64::abs)?,

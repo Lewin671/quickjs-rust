@@ -20,6 +20,7 @@ mod typed_arrays;
 mod weak_maps;
 mod weak_sets;
 
+use crate::CallEnv;
 use crate::{Function, NativeFunction, RuntimeError, Value};
 
 type NativeCallResult = Result<Option<Value>, RuntimeError>;
@@ -30,7 +31,7 @@ pub(crate) fn call_native_function(
     this_value: Value,
     argument_values: Vec<Value>,
     is_construct: bool,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if let Some(value) =
         arrays::call_array_native(native, this_value.clone(), &argument_values, env)?

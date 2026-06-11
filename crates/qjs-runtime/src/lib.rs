@@ -47,8 +47,8 @@ pub(crate) use conversion::{
     to_number_with_env, to_primitive_with_env, to_primitive_with_hint, to_uint16, to_uint32,
     to_uint32_number,
 };
+pub(crate) use function::{CallEnv, Realm, call_function, construct_function, ensure_constructor};
 use function::{Function, NativeFunction};
-pub(crate) use function::{call_function, construct_function, ensure_constructor};
 pub(crate) use property::{
     PropertyKey, array_as_object_prototype, array_has_own_property, array_own_property_descriptor,
     array_own_property_keys, array_own_property_names, array_prototype, array_prototype_property,

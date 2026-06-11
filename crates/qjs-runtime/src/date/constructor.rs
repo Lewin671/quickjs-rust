@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::CallEnv;
 use crate::{
     Function, PreferredType, RuntimeError, Value,
     date::{
@@ -17,7 +18,7 @@ pub(crate) fn native_date(
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if !is_construct {
         return Ok(Value::String(super::iso::format_local_string(
@@ -56,10 +57,7 @@ pub(crate) fn native_date_utc(argument_values: &[Value]) -> Result<Value, Runtim
     )?)))
 }
 
-fn construct_date_value(
-    argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
-) -> Result<f64, RuntimeError> {
+fn construct_date_value(argument_values: &[Value], env: &mut CallEnv) -> Result<f64, RuntimeError> {
     if argument_values.is_empty() {
         return Ok(current_time_ms());
     }

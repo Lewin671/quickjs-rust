@@ -9,6 +9,7 @@ use super::{
     capability::{self, PromiseCapability},
     perform::{self, ElementHandler},
 };
+use crate::CallEnv;
 
 /// `Promise.any` (ES2023 27.2.4.3): fulfils with the first input to fulfil, or
 /// rejects with an `AggregateError` collecting every rejection reason.
@@ -16,7 +17,7 @@ pub(crate) fn native_promise_any(
     function: &Function,
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let iterable = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let aggregate_error = function.env.get(PROMISE_AGGREGATE_ERROR).cloned();
@@ -39,7 +40,7 @@ impl ElementHandler for AnyHandler {
         &mut self,
         index: usize,
         capability: &PromiseCapability,
-        _env: &mut HashMap<String, Value>,
+        _env: &mut CallEnv,
     ) -> Result<(Value, Value), RuntimeError> {
         self.errors.set(index, Value::Undefined);
         perform::increment_remaining(&self.remaining);
@@ -80,7 +81,7 @@ impl ElementHandler for AnyHandler {
         &mut self,
         _count: usize,
         capability: &PromiseCapability,
-        env: &mut HashMap<String, Value>,
+        env: &mut CallEnv,
     ) -> Result<(), RuntimeError> {
         if perform::decrement_remaining(&self.remaining) == 0.0 {
             let error = build_aggregate_error(self.aggregate_error.clone(), &self.errors, env);
@@ -96,7 +97,7 @@ impl ElementHandler for AnyHandler {
 pub(crate) fn native_promise_any_reject_element(
     function: &Function,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if already_called(function) {
         return Ok(Value::Undefined);
@@ -147,11 +148,11 @@ pub(crate) fn native_promise_any_reject_element(
 fn build_aggregate_error(
     constructor: Option<Value>,
     errors: &ArrayRef,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Value {
     let errors_value = Value::Array(errors.clone());
     let message = Value::String("All promises were rejected".to_owned());
-    let constructor = constructor.or_else(|| env.get("AggregateError").cloned());
+    let constructor = constructor.or_else(|| env.get("AggregateError"));
     if let Some(constructor) = constructor {
         if let Ok(value) = crate::construct_function(
             constructor.clone(),

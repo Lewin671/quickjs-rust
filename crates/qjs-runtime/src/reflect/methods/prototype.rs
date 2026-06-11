@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::CallEnv;
 use crate::{
     RuntimeError, Value, array_as_object_prototype, array_prototype, error,
     function_intrinsic_prototype, symbol,
@@ -7,7 +8,7 @@ use crate::{
 
 pub(crate) fn native_reflect_get_prototype_of(
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &CallEnv,
 ) -> Result<Value, RuntimeError> {
     match argument_values.first() {
         Some(Value::Object(object)) if symbol::is_symbol_primitive(object) => Err(RuntimeError {
@@ -51,7 +52,7 @@ pub(crate) fn native_reflect_get_prototype_of(
 
 pub(crate) fn native_reflect_set_prototype_of(
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &CallEnv,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let prototype = match argument_values.get(1).cloned().unwrap_or(Value::Undefined) {

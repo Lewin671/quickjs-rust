@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
+use crate::CallEnv;
 use crate::reflect::target::ensure_reflect_object_target;
 use crate::{RuntimeError, Value, object};
 
 pub(crate) fn native_reflect_define_property(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     ensure_reflect_object_target(&target, "Reflect.defineProperty")?;
@@ -25,7 +26,7 @@ pub(crate) fn native_reflect_define_property(
 
 pub(crate) fn native_reflect_delete_property(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     ensure_reflect_object_target(&target, "Reflect.deleteProperty")?;
@@ -71,7 +72,7 @@ fn delete_object_property(object: crate::ObjectRef, key: &crate::PropertyKey) ->
 
 pub(crate) fn native_reflect_get_own_property_descriptor(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     ensure_reflect_object_target(&target, "Reflect.getOwnPropertyDescriptor")?;

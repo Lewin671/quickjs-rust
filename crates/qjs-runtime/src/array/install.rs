@@ -1,12 +1,9 @@
 use std::collections::HashMap;
 
+use crate::CallEnv;
 use crate::{Function, NativeFunction, ObjectRef, Property, Value, symbol};
 
-pub(crate) fn install_array(
-    env: &mut HashMap<String, Value>,
-    global_this: &Value,
-    object_prototype: ObjectRef,
-) {
+pub(crate) fn install_array(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
     let array_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
     let array_function = Function::new_native(Some("Array"), 1, NativeFunction::Array, true);
     array_prototype.define_non_enumerable("length".to_owned(), Value::Number(0.0));
@@ -255,7 +252,7 @@ pub(crate) fn install_array(
     define_array_function(&array_function, "of", 0, NativeFunction::ArrayOf);
 
     let array_value = Value::Function(array_function);
-    env.insert("Array".to_owned(), array_value.clone());
+    env.insert_realm("Array".to_owned(), array_value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable("Array".to_owned(), array_value);
     }
@@ -285,7 +282,7 @@ fn define_array_function(function: &Function, key: &str, length: usize, native: 
     );
 }
 
-fn define_array_unscopables(env: &HashMap<String, Value>, prototype: &ObjectRef) {
+fn define_array_unscopables(env: &CallEnv, prototype: &ObjectRef) {
     let Some(symbol) = symbol::unscopables_symbol(env) else {
         return;
     };

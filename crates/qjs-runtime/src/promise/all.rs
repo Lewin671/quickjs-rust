@@ -8,13 +8,14 @@ use super::{
     capability::PromiseCapability,
     perform::{self, ElementHandler},
 };
+use crate::CallEnv;
 
 /// `Promise.all` (ES2023 27.2.4.1): resolves with an array of every fulfilled
 /// value once all input promises fulfil, or rejects with the first rejection.
 pub(crate) fn native_promise_all(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let iterable = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let handler = AllHandler {
@@ -34,7 +35,7 @@ impl ElementHandler for AllHandler {
         &mut self,
         index: usize,
         capability: &PromiseCapability,
-        _env: &mut HashMap<String, Value>,
+        _env: &mut CallEnv,
     ) -> Result<(Value, Value), RuntimeError> {
         // Reserve the slot so out-of-order fulfilment writes the right index.
         self.values.set(index, Value::Undefined);
@@ -70,7 +71,7 @@ impl ElementHandler for AllHandler {
         &mut self,
         _count: usize,
         capability: &PromiseCapability,
-        env: &mut HashMap<String, Value>,
+        env: &mut CallEnv,
     ) -> Result<(), RuntimeError> {
         // Final decrement: if every element already settled, resolve now.
         if perform::decrement_remaining(&self.remaining) == 0.0 {
@@ -91,7 +92,7 @@ impl ElementHandler for AllHandler {
 pub(crate) fn native_promise_all_resolve_element(
     function: &Function,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if already_called(function) {
         return Ok(Value::Undefined);

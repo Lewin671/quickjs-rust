@@ -8,7 +8,7 @@ const RAW_JSON_PROPERTY: &str = "rawJSON";
 
 pub(crate) fn native_json_raw_json(argument_values: &[Value]) -> Result<Value, RuntimeError> {
     let text = to_js_string(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
-    match parse_json_text(&text, &HashMap::new())? {
+    match parse_json_text(&text, &crate::CallEnv::detached())? {
         Value::Array(_) | Value::Object(_) => {
             return Err(RuntimeError {
                 thrown: None,

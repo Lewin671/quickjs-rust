@@ -1,3 +1,4 @@
+use crate::CallEnv;
 use crate::{
     RuntimeError, Value,
     date::{
@@ -25,7 +26,7 @@ pub(crate) fn native_date_prototype_set_time(
 pub(crate) fn native_date_prototype_set_year(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let object = date_object(this_value)?;
     let millis = date_value_from_object(&object)?;

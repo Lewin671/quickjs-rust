@@ -12,10 +12,11 @@ use super::{
     },
     enumeration::enumerable_property_entries,
 };
+use crate::CallEnv;
 
 pub(crate) fn native_object_define_property(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let key = to_property_key_value(
@@ -37,7 +38,7 @@ pub(crate) fn native_object_define_property(
 
 pub(crate) fn native_object_define_properties(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     ensure_define_property_target(&target)?;
@@ -57,10 +58,7 @@ pub(crate) fn native_object_define_properties(
     Ok(target)
 }
 
-fn to_object_for_define_properties(
-    value: Value,
-    env: &HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
+fn to_object_for_define_properties(value: Value, env: &CallEnv) -> Result<Value, RuntimeError> {
     match value {
         value @ (Value::Array(_)
         | Value::Object(_)
@@ -129,7 +127,7 @@ fn define_property_descriptor_on_value(
     target: Value,
     key: String,
     descriptor: PropertyDescriptor,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     define_property_descriptor_on_value_key(target, PropertyKey::String(key), descriptor, env)
 }
@@ -138,7 +136,7 @@ pub(crate) fn define_property_descriptor_on_value_key(
     target: Value,
     key: PropertyKey,
     descriptor: PropertyDescriptor,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     let key = match key {
         PropertyKey::String(key) => key,
@@ -233,7 +231,7 @@ pub(crate) fn define_property_descriptor_on_value_key(
 fn define_array_length_property(
     elements: &crate::ArrayRef,
     descriptor: PropertyDescriptor,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     if descriptor.value.is_none() {
         let Some(property) =
@@ -280,7 +278,7 @@ fn define_array_length_property(
 pub(crate) fn define_array_length_value(
     elements: &crate::ArrayRef,
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     define_array_length_property(elements, PropertyDescriptor::data_value(value), env)
 }
@@ -296,7 +294,7 @@ fn array_length_property(elements: &crate::ArrayRef) -> Property {
 
 fn array_length_from_array_set_length_value(
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<usize, RuntimeError> {
     let length = crate::to_uint32_number(crate::to_number_with_env(value.clone(), env)?);
     let number = crate::to_number_with_env(value, env)?;
@@ -311,7 +309,7 @@ fn array_length_from_array_set_length_value(
 
 pub(crate) fn array_length_from_descriptor_value(
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<usize, RuntimeError> {
     let number = crate::to_number_with_env(value, env)?;
     let length = crate::to_uint32_number(number);

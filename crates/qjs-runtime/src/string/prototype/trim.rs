@@ -3,17 +3,18 @@ use std::collections::HashMap;
 use crate::{RuntimeError, Value, string_object_value};
 
 use super::super::indexing::this_string_value;
+use crate::CallEnv;
 
 pub(crate) fn native_string_prototype_trim(
     this_value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     Ok(Value::String(trim_js(&this_string_value(this_value, env)?)))
 }
 
 pub(crate) fn native_string_prototype_trim_end(
     this_value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     Ok(Value::String(trim_js_end(&this_string_value(
         this_value, env,
@@ -22,7 +23,7 @@ pub(crate) fn native_string_prototype_trim_end(
 
 pub(crate) fn native_string_prototype_trim_start(
     this_value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     Ok(Value::String(trim_js_start(&this_string_value(
         this_value, env,
@@ -31,7 +32,7 @@ pub(crate) fn native_string_prototype_trim_start(
 
 pub(crate) fn native_string_prototype_to_string(
     this_value: Value,
-    _env: &mut HashMap<String, Value>,
+    _env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     Ok(Value::String(strict_this_string_value(this_value)?))
 }

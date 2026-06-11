@@ -32,7 +32,7 @@ pub(crate) type Realm = Rc<RefCell<HashMap<String, Value>>>;
 ///
 /// Cloning a `CallEnv` shares the realm by `Rc::clone` and copies only the
 /// (small) frame locals, so a per-call clone no longer copies the realm.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[allow(dead_code)]
 pub(crate) struct CallEnv {
     realm: Realm,
@@ -47,6 +47,27 @@ impl CallEnv {
     pub(crate) fn new(realm: Realm) -> Self {
         Self {
             realm,
+            locals: HashMap::new(),
+        }
+    }
+
+    /// Builds a standalone environment over a fresh, empty realm. Used by the
+    /// no-context conversion helpers (`to_js_string`, `array_like_values`,
+    /// `parse_json_text`) that run without a live VM; intrinsic lookups simply
+    /// return `None`, matching the prior empty-`HashMap` behavior.
+    pub(crate) fn detached() -> Self {
+        Self {
+            realm: Rc::new(RefCell::new(HashMap::new())),
+            locals: HashMap::new(),
+        }
+    }
+
+    /// Wraps an owned flat map as a detached environment: the whole map becomes
+    /// the realm layer with empty locals. Used by capture-env paths (function
+    /// creation env, snapshots) that still carry a flat `HashMap`.
+    pub(crate) fn from_map(map: HashMap<String, Value>) -> Self {
+        Self {
+            realm: Rc::new(RefCell::new(map)),
             locals: HashMap::new(),
         }
     }
@@ -109,6 +130,17 @@ impl CallEnv {
         self.realm.borrow_mut().insert(name, value)
     }
 
+    /// Defines `name` in the shared realm only if it is not already bound there.
+    /// Used by global-binding initialization (script and indirect-eval scopes).
+    pub(crate) fn realm_entry_or_insert(&self, name: String, value: Value) {
+        self.realm.borrow_mut().entry(name).or_insert(value);
+    }
+
+    /// True if the shared realm cell binds `name`.
+    pub(crate) fn realm_contains(&self, name: &str) -> bool {
+        self.realm.borrow().contains_key(name)
+    }
+
     /// Removes a frame-local binding.
     pub(crate) fn remove(&mut self, name: &str) -> Option<Value> {
         self.locals.remove(name)
@@ -117,5 +149,30 @@ impl CallEnv {
     /// Mutates an existing frame-local binding in place, if present.
     pub(crate) fn get_local_mut(&mut self, name: &str) -> Option<&mut Value> {
         self.locals.get_mut(name)
+    }
+
+    /// A snapshot of just the frame locals layer.
+    pub(crate) fn snapshot_locals(&self) -> HashMap<String, Value> {
+        self.locals.clone()
+    }
+
+    /// A fully materialized map merging the shared realm and this frame's
+    /// locals (locals shadow realm). Used by the legacy generator/async capture
+    /// paths that still snapshot a flat `HashMap`; prefer keeping the realm
+    /// shared where possible.
+    pub(crate) fn to_flat_map(&self) -> HashMap<String, Value> {
+        let mut map = self.realm.borrow().clone();
+        for (name, value) in &self.locals {
+            map.insert(name.clone(), value.clone());
+        }
+        map
+    }
+
+    /// Builds a `CallEnv` over the same realm, replacing the locals layer.
+    pub(crate) fn with_frame_locals(&self, locals: HashMap<String, Value>) -> Self {
+        Self {
+            realm: Rc::clone(&self.realm),
+            locals,
+        }
     }
 }

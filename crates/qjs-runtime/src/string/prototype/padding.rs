@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::{RuntimeError, Value, to_js_string_with_env, to_length_with_env};
 
 use super::super::indexing::this_string_value;
+use crate::CallEnv;
 
 #[derive(Clone, Copy)]
 pub(crate) enum StringPadKind {
@@ -13,7 +14,7 @@ pub(crate) enum StringPadKind {
 pub(crate) fn native_string_prototype_pad(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
     kind: StringPadKind,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;

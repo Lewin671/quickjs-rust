@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::CallEnv;
 use crate::{
     PropertyKey, RuntimeError, Value, array::array_like_values_from_receiver, construct_function,
     ensure_constructor, property_value_key, symbol, to_length_with_env,
@@ -7,7 +8,7 @@ use crate::{
 
 pub(crate) fn native_reflect_apply(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if !matches!(target, Value::Function(_)) {
@@ -26,7 +27,7 @@ pub(crate) fn native_reflect_apply(
 
 pub(crate) fn native_reflect_construct(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     ensure_reflect_constructor(&target, "target")?;
@@ -77,7 +78,7 @@ fn ensure_reflect_object_argument_list(value: &Value, name: &str) -> Result<(), 
 fn reflect_argument_list(
     value: Value,
     name: &str,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Vec<Value>, RuntimeError> {
     ensure_reflect_object_argument_list(&value, name)?;
     match value {

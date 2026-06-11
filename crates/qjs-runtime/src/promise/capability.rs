@@ -15,6 +15,7 @@ use crate::{
 };
 
 use super::{PROMISE_PROTOTYPE, new_pending_promise, resolving_function_pair};
+use crate::CallEnv;
 
 /// Internal slot on a GetCapabilitiesExecutor holding the shared capability
 /// record it writes `resolve`/`reject` into.
@@ -38,7 +39,7 @@ pub(crate) struct PromiseCapability {
 /// resolve/reject it captured, validating that both are callable.
 pub(crate) fn new_promise_capability(
     c: &Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<PromiseCapability, RuntimeError> {
     ensure_constructor(c)?;
 
@@ -94,7 +95,7 @@ pub(crate) fn new_promise_capability(
 pub(crate) fn native_get_capabilities_executor(
     function: &Function,
     argument_values: &[Value],
-    _env: &mut HashMap<String, Value>,
+    _env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let Some(Value::Object(record)) = function.env.get(CAPABILITY_RECORD).cloned() else {
         return Err(RuntimeError {
@@ -129,7 +130,7 @@ pub(crate) fn native_get_capabilities_executor(
 
 /// Returns true when `c` is the realm's own `%Promise%` constructor, so the
 /// capability can be built without observable user code.
-fn is_native_promise_constructor(c: &Value, env: &HashMap<String, Value>) -> bool {
+fn is_native_promise_constructor(c: &Value, env: &CallEnv) -> bool {
     let Value::Function(function) = c else {
         return false;
     };
@@ -145,7 +146,7 @@ fn is_native_promise_constructor(c: &Value, env: &HashMap<String, Value>) -> boo
         .own_property("prototype")
         .map(|property| property.value)
     {
-        Some(Value::Object(prototype)) => prototype.ptr_eq(realm_prototype),
+        Some(Value::Object(prototype)) => prototype.ptr_eq(&realm_prototype),
         _ => true,
     }
 }
@@ -155,7 +156,7 @@ fn is_native_promise_constructor(c: &Value, env: &HashMap<String, Value>) -> boo
 pub(crate) fn capability_resolve(
     capability: &PromiseCapability,
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     call_function(
         capability.resolve.clone(),
@@ -170,7 +171,7 @@ pub(crate) fn capability_resolve(
 pub(crate) fn capability_reject(
     capability: &PromiseCapability,
     reason: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     call_function(
         capability.reject.clone(),

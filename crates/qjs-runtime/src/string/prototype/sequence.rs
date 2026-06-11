@@ -7,11 +7,12 @@ use crate::{
 };
 
 use super::super::indexing::{string_slice_index, string_substring_index, this_string_value};
+use crate::CallEnv;
 
 pub(crate) fn native_string_prototype_concat(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let mut result = this_string_value(this_value, env)?;
     for value in argument_values.iter().cloned() {
@@ -23,7 +24,7 @@ pub(crate) fn native_string_prototype_concat(
 pub(crate) fn native_string_prototype_repeat(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
     let count = to_number(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
@@ -44,7 +45,7 @@ pub(crate) fn native_string_prototype_repeat(
 pub(crate) fn native_string_prototype_slice(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
     let chars: Vec<_> = value.chars().collect();
@@ -70,7 +71,7 @@ pub(crate) fn native_string_prototype_slice(
 pub(crate) fn native_string_prototype_split(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let separator_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let limit_value = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
@@ -130,10 +131,7 @@ pub(crate) fn native_string_prototype_split(
     Ok(Value::Array(ArrayRef::new(parts)))
 }
 
-fn symbol_split_method(
-    value: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<Option<Value>, RuntimeError> {
+fn symbol_split_method(value: Value, env: &mut CallEnv) -> Result<Option<Value>, RuntimeError> {
     if !is_object_value(&value) {
         return Ok(None);
     }
@@ -168,7 +166,7 @@ fn string_split_regexp(
     input: String,
     separator: Value,
     limit: usize,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let regexp = string_split_regexp_clone(separator, env)?;
     let mut parts = Vec::new();
@@ -237,11 +235,8 @@ fn string_split_regexp(
     )))
 }
 
-fn string_split_regexp_clone(
-    separator: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
-    let constructor = env.get("RegExp").cloned().ok_or_else(|| RuntimeError {
+fn string_split_regexp_clone(separator: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+    let constructor = env.get("RegExp").ok_or_else(|| RuntimeError {
         thrown: None,
         message: "RegExp constructor is not available".to_owned(),
     })?;
@@ -254,10 +249,7 @@ fn string_split_regexp_clone(
     )
 }
 
-fn regexp_match_index(
-    match_value: &Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<usize, RuntimeError> {
+fn regexp_match_index(match_value: &Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
     let index = property_value(match_value.clone(), "index", env)?;
     let number = to_number_with_env(index, env)?;
     if number.is_nan() || number <= 0.0 {
@@ -271,10 +263,7 @@ fn input_char_slice(input: &str, start: usize, end: usize) -> String {
     input.chars().skip(start).take(end - start).collect()
 }
 
-fn string_split_limit(
-    value: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<usize, RuntimeError> {
+fn string_split_limit(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
     if matches!(value, Value::Undefined) {
         return Ok(u32::MAX as usize);
     }
@@ -289,7 +278,7 @@ fn string_split_limit(
 pub(crate) fn native_string_prototype_substr(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
     let chars: Vec<_> = value.chars().collect();
@@ -309,7 +298,7 @@ pub(crate) fn native_string_prototype_substr(
 pub(crate) fn native_string_prototype_substring(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
     let chars: Vec<_> = value.chars().collect();
