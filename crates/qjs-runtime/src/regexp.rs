@@ -288,6 +288,7 @@ pub(crate) fn native_regexp_prototype_exec(
     let ignore_case = regexp_flags_contains(&object, 'i');
     let unicode = regexp_flags_contains(&object, 'u');
     let dot_all = regexp_flags_contains(&object, 's');
+    let multiline = regexp_flags_contains(&object, 'm');
     let stateful = global || sticky;
     let last_index = regexp_last_index(&this_value, env)?;
     let start_code_unit = if stateful { last_index } else { 0 };
@@ -298,9 +299,25 @@ pub(crate) fn native_regexp_prototype_exec(
     };
 
     let match_result = if sticky {
-        matcher::regexp_match_at(&source, &input, start, ignore_case, unicode, dot_all)
+        matcher::regexp_match_at(
+            &source,
+            &input,
+            start,
+            ignore_case,
+            unicode,
+            dot_all,
+            multiline,
+        )
     } else {
-        matcher::regexp_match_range(&source, &input, start, ignore_case, unicode, dot_all)
+        matcher::regexp_match_range(
+            &source,
+            &input,
+            start,
+            ignore_case,
+            unicode,
+            dot_all,
+            multiline,
+        )
     };
 
     let Some(match_result) = match_result else {

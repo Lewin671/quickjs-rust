@@ -1,5 +1,26 @@
-use super::regexp_match_range;
+use super::regexp_match_range as regexp_match_range_inner;
+use super::{RegexpMatch, regexp_match_at};
 use crate::string::string_from_code_unit;
+
+/// Test wrapper keeping the historical six-argument signature (multiline off).
+fn regexp_match_range(
+    source: &str,
+    input: &str,
+    start_index: usize,
+    ignore_case: bool,
+    unicode: bool,
+    dot_all: bool,
+) -> Option<RegexpMatch> {
+    regexp_match_range_inner(
+        source,
+        input,
+        start_index,
+        ignore_case,
+        unicode,
+        dot_all,
+        false,
+    )
+}
 
 #[test]
 fn captures_greedy_quantified_group_range() {
@@ -186,4 +207,35 @@ fn long_greedy_repetition_does_not_overflow_the_stack() {
     let mut mismatch = input.clone();
     mismatch.push('x');
     assert!(regexp_match_range(r"^\d+$", &mismatch, 0, false, false, false).is_none());
+}
+
+#[test]
+fn multiline_anchors_match_around_line_terminators() {
+    // Without the multiline flag, `$` only matches at end of input.
+    let input = "pairs\nmakes\tdouble";
+    assert!(regexp_match_range_inner("s$", input, 0, false, false, false, false).is_none());
+    // With multiline, `$` matches before a `\n` (the `s` in "pairs").
+    let matched = regexp_match_range_inner("s$", input, 0, false, false, false, true).unwrap();
+    assert_eq!((matched.start, matched.end), (4, 5));
+
+    // `^` matches after a line terminator in multiline mode.
+    let matched =
+        regexp_match_range_inner("^makes", "pairs\nmakes", 0, false, false, false, true).unwrap();
+    assert_eq!((matched.start, matched.end), (6, 11));
+    assert!(
+        regexp_match_range_inner("^makes", "pairs\nmakes", 0, false, false, false, false).is_none()
+    );
+
+    // All ECMAScript line terminators are recognized.
+    for terminator in ['\n', '\r', '\u{2028}', '\u{2029}'] {
+        let input = format!("a{terminator}b");
+        assert!(
+            regexp_match_range_inner("^b", &input, 0, false, false, false, true).is_some(),
+            "`^b` should match after U+{:04X}",
+            terminator as u32
+        );
+    }
+
+    // Sticky multiline still honors line boundaries.
+    assert!(regexp_match_at("^b", "a\nb", 2, false, false, false, true).is_some());
 }

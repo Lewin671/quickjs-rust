@@ -43,6 +43,7 @@ struct MatchOptions {
     ignore_case: bool,
     unicode: bool,
     dot_all: bool,
+    multiline: bool,
 }
 
 struct RepeatAtom<'a> {
@@ -62,6 +63,7 @@ pub(super) fn regexp_match_range(
     ignore_case: bool,
     unicode: bool,
     dot_all: bool,
+    multiline: bool,
 ) -> Option<RegexpMatch> {
     regexp_match(
         source,
@@ -70,6 +72,7 @@ pub(super) fn regexp_match_range(
         ignore_case,
         unicode,
         dot_all,
+        multiline,
         false,
     )
 }
@@ -81,6 +84,7 @@ pub(super) fn regexp_match_at(
     ignore_case: bool,
     unicode: bool,
     dot_all: bool,
+    multiline: bool,
 ) -> Option<RegexpMatch> {
     regexp_match(
         source,
@@ -89,10 +93,12 @@ pub(super) fn regexp_match_at(
         ignore_case,
         unicode,
         dot_all,
+        multiline,
         true,
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn regexp_match(
     source: &str,
     input: &str,
@@ -100,6 +106,7 @@ fn regexp_match(
     ignore_case: bool,
     unicode: bool,
     dot_all: bool,
+    multiline: bool,
     exact_start: bool,
 ) -> Option<RegexpMatch> {
     let source = normalized_regexp_source(source);
@@ -120,10 +127,11 @@ fn regexp_match(
         ignore_case,
         unicode,
         dot_all,
+        multiline,
     };
     let starts: Vec<_> = if exact_start {
         vec![start_index]
-    } else if pattern.first() == Some(&'^') {
+    } else if pattern.first() == Some(&'^') && !multiline {
         if start_index == 0 {
             vec![0]
         } else {
@@ -213,14 +221,14 @@ fn match_pattern(
     }
     match pattern[pc] {
         '^' => {
-            if state.index == 0 {
+            if at_line_start(text, state.index, options.multiline) {
                 match_pattern(pattern, text, pc + 1, end_pc, state, group_indices, options)
             } else {
                 Vec::new()
             }
         }
         '$' => {
-            if state.index == text.len() {
+            if at_line_end(text, state.index, options.multiline) {
                 match_pattern(pattern, text, pc + 1, end_pc, state, group_indices, options)
             } else {
                 Vec::new()
@@ -309,6 +317,24 @@ fn match_any(
 
 fn is_line_terminator(value: char) -> bool {
     matches!(value, '\n' | '\r' | '\u{2028}' | '\u{2029}')
+}
+
+/// `^` assertion: matches at the start of input, or (in multiline mode) right
+/// after a line terminator.
+fn at_line_start(text: &[char], index: usize, multiline: bool) -> bool {
+    if index == 0 {
+        return true;
+    }
+    multiline && text.get(index - 1).copied().is_some_and(is_line_terminator)
+}
+
+/// `$` assertion: matches at the end of input, or (in multiline mode) right
+/// before a line terminator.
+fn at_line_end(text: &[char], index: usize, multiline: bool) -> bool {
+    if index == text.len() {
+        return true;
+    }
+    multiline && text.get(index).copied().is_some_and(is_line_terminator)
 }
 
 fn match_literal(
