@@ -1,6 +1,20 @@
 use crate::{Value, eval};
 
 #[test]
+fn numeric_literal_keys_use_their_canonical_name() {
+    // The property name of a numeric literal is `ToString(MV)`, so different
+    // notations for the same value name the same property.
+    assert_eq!(
+        eval("let o = { 0b10: 'a', 0x10: 'b', 1.0: 'c' }; o[2] + o[16] + o[1];"),
+        Ok(Value::String("abc".to_owned()))
+    );
+    assert_eq!(
+        eval("let o = { 0o17: 'x' }; o['15'];"),
+        Ok(Value::String("x".to_owned()))
+    );
+}
+
+#[test]
 fn evaluates_object_literals_and_member_access() {
     assert_eq!(
         eval("let o = { answer: 40 + 2 }; o.answer;"),

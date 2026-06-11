@@ -450,9 +450,11 @@ impl Parser {
                 };
                 Ok((ObjectPropertyKey::Literal(name), Some(value)))
             }
-            TokenKind::String(name) | TokenKind::Number(name) => {
-                Ok((ObjectPropertyKey::Literal(name), None))
-            }
+            TokenKind::String(name) => Ok((ObjectPropertyKey::Literal(name), None)),
+            TokenKind::Number(raw) => Ok((
+                ObjectPropertyKey::Literal(crate::helpers::numeric_property_key(&raw)),
+                None,
+            )),
             TokenKind::True => Ok((ObjectPropertyKey::Literal("true".to_owned()), None)),
             TokenKind::False => Ok((ObjectPropertyKey::Literal("false".to_owned()), None)),
             TokenKind::Null => Ok((ObjectPropertyKey::Literal("null".to_owned()), None)),

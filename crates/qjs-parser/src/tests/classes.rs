@@ -64,6 +64,19 @@ fn parses_class_declaration_with_constructor_and_methods() {
 }
 
 #[test]
+fn canonicalizes_numeric_member_keys() {
+    let script =
+        parse_script("class C { 0b10() {} get 0x10() {} 1.0() {} }").expect("source should parse");
+    let [Stmt::ClassDecl { body, .. }] = script.body.as_slice() else {
+        panic!("expected class declaration");
+    };
+    let keys: Vec<&ClassMemberKey> = members(body).iter().map(|member| &member.key).collect();
+    assert_eq!(keys[0], &ClassMemberKey::Literal("2".to_owned()));
+    assert_eq!(keys[1], &ClassMemberKey::Literal("16".to_owned()));
+    assert_eq!(keys[2], &ClassMemberKey::Literal("1".to_owned()));
+}
+
+#[test]
 fn parses_class_expression_named_and_anonymous() {
     let script = parse_script("let c = class Named { m() {} };").expect("source should parse");
     let [Stmt::VarDecl { declarations, .. }] = script.body.as_slice() else {

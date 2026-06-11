@@ -9,6 +9,20 @@ fn instantiates_class_and_reads_field() {
 }
 
 #[test]
+fn numeric_literal_member_keys_use_their_canonical_name() {
+    // A numeric-literal method/accessor key names the property `ToString(MV)`,
+    // so `0b10` defines `"2"` (matching object literals).
+    assert_eq!(
+        eval("class C { get 0b10() { return 'g'; } } C.prototype['2'];"),
+        Ok(Value::String("g".to_owned()))
+    );
+    assert_eq!(
+        eval("class C { 0x10() { return 5; } } new C()['16']();"),
+        Ok(Value::Number(5.0))
+    );
+}
+
+#[test]
 fn calls_prototype_method() {
     assert_eq!(
         eval(

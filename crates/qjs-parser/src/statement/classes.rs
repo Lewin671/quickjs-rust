@@ -471,6 +471,13 @@ impl Parser {
             message: "expected class member name".to_owned(),
             span: token.span,
         })?;
+        // A numeric-literal member key names the property `ToString(MV)`, so
+        // `0b10() {}` defines the method `"2"`, matching object literals.
+        let name = if let TokenKind::Number(raw) = &token.kind {
+            crate::helpers::numeric_property_key(raw)
+        } else {
+            name
+        };
         self.advance();
         Ok((ClassMemberKey::Literal(name.clone()), Some(name)))
     }
