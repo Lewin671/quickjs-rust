@@ -39,9 +39,28 @@ gaps: `TypedArray` 2,027, `ArrayBuffer` 263, `DataView` 188 — concentrated in
       as own properties; indexed *writes* through `array[i] = v` do not yet
       route per-type conversion through the buffer (needs a VM exotic-index
       hook, out of this slice's path boundary) — tracked for S3.
-- [ ] S3 %TypedArray%.prototype methods, batched by behavior family
+- [x] S3 %TypedArray%.prototype methods, batched by behavior family
       (iteration, copy/fill/set, sort/search, view accessors); one reviewable
-      unit per batch.
+      unit per batch. Two commits on `%TypedArray.prototype%`: batch 1
+      (iteration/read) — `at`, `indexOf`, `lastIndexOf`, `includes`, `join`,
+      `keys`/`values`/`entries` (`Symbol.iterator` aliased to `values`),
+      `forEach`, `map`, `filter`, `reduce`, `reduceRight`, `some`, `every`,
+      `find`, `findIndex`, `findLast`, `findLastIndex`, `slice`, `subarray`,
+      `toString`, `toLocaleString`; batch 2 (write/order) — `set` (array-like
+      and typed-array sources with offset/range checks), `fill`, `copyWithin`,
+      `reverse`, `sort` (default numeric ordering, NaN last, `-0` before `+0`,
+      stable; comparator supported), `toReversed`, `toSorted`, `with`. All
+      methods are brand-checked, reject detached buffers, and route reads/writes
+      through the backing buffer; writes also refresh the materialized index
+      property (indexed `array[i] = v` still bypasses conversion — a VM hook out
+      of scope). `map`/`filter`/`slice`/`subarray`/`toReversed`/`toSorted`/
+      `with` build a new typed array of the receiver's concrete kind (species
+      via the concrete constructor, since per-instance `Symbol.species`
+      machinery is not yet wired for typed arrays). `subarray` currently copies
+      its range rather than aliasing the shared buffer (a shared-view slot would
+      replace the copy). BigInt arrays reject `Number` in `set`/`fill`/`with`,
+      and mixed BigInt/Number `set` throws. `test/built-ins/TypedArray/prototype`
+      moved from 44 to 196 passing (limit 800 after-scan).
 - [ ] S4 DataView: constructor and get/set accessors with endianness and
       bounds checks.
 - [ ] S5 Re-cluster remaining gaps; resizable/growable buffers,

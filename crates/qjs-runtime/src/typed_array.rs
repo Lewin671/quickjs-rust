@@ -7,8 +7,12 @@ use crate::{
 
 mod construct;
 mod element;
+mod iteration;
+mod ordering;
 
 pub(crate) use construct::native_typed_array;
+pub(crate) use iteration::*;
+pub(crate) use ordering::*;
 
 const MAX_TYPED_ARRAY_LENGTH: usize = 1_000_000;
 
@@ -53,6 +57,7 @@ pub(crate) fn install_typed_arrays(
     let typed_array_prototype =
         ObjectRef::with_prototype(HashMap::new(), Some(object_prototype.clone()));
     install_typed_array_prototype_accessors(env, &typed_array_prototype);
+    install_typed_array_prototype_methods(env, &typed_array_prototype);
 
     let typed_array_intrinsic =
         Function::new_native(Some("TypedArray"), 0, NativeFunction::TypedArray, true);
@@ -120,6 +125,85 @@ fn install_typed_array_prototype_accessors(env: &HashMap<String, Value>, prototy
             ),
         );
     }
+}
+
+/// Installs the shared `%TypedArray.prototype%` methods (ES2023 23.2.3),
+/// brand-checked through their receiver.
+fn install_typed_array_prototype_methods(env: &HashMap<String, Value>, prototype: &ObjectRef) {
+    for (name, length, native) in [
+        ("at", 1, NativeFunction::TypedArrayPrototypeAt),
+        ("indexOf", 1, NativeFunction::TypedArrayPrototypeIndexOf),
+        (
+            "lastIndexOf",
+            1,
+            NativeFunction::TypedArrayPrototypeLastIndexOf,
+        ),
+        ("includes", 1, NativeFunction::TypedArrayPrototypeIncludes),
+        ("join", 1, NativeFunction::TypedArrayPrototypeJoin),
+        ("keys", 0, NativeFunction::TypedArrayPrototypeKeys),
+        ("values", 0, NativeFunction::TypedArrayPrototypeValues),
+        ("entries", 0, NativeFunction::TypedArrayPrototypeEntries),
+        ("forEach", 1, NativeFunction::TypedArrayPrototypeForEach),
+        ("map", 1, NativeFunction::TypedArrayPrototypeMap),
+        ("filter", 1, NativeFunction::TypedArrayPrototypeFilter),
+        ("reduce", 1, NativeFunction::TypedArrayPrototypeReduce),
+        (
+            "reduceRight",
+            1,
+            NativeFunction::TypedArrayPrototypeReduceRight,
+        ),
+        ("some", 1, NativeFunction::TypedArrayPrototypeSome),
+        ("every", 1, NativeFunction::TypedArrayPrototypeEvery),
+        ("find", 1, NativeFunction::TypedArrayPrototypeFind),
+        ("findIndex", 1, NativeFunction::TypedArrayPrototypeFindIndex),
+        ("findLast", 1, NativeFunction::TypedArrayPrototypeFindLast),
+        (
+            "findLastIndex",
+            1,
+            NativeFunction::TypedArrayPrototypeFindLastIndex,
+        ),
+        ("slice", 2, NativeFunction::TypedArrayPrototypeSlice),
+        ("subarray", 2, NativeFunction::TypedArrayPrototypeSubarray),
+        ("toString", 0, NativeFunction::TypedArrayPrototypeToString),
+        (
+            "toLocaleString",
+            0,
+            NativeFunction::TypedArrayPrototypeToLocaleString,
+        ),
+        ("set", 1, NativeFunction::TypedArrayPrototypeSet),
+        ("fill", 1, NativeFunction::TypedArrayPrototypeFill),
+        (
+            "copyWithin",
+            2,
+            NativeFunction::TypedArrayPrototypeCopyWithin,
+        ),
+        ("reverse", 0, NativeFunction::TypedArrayPrototypeReverse),
+        ("sort", 1, NativeFunction::TypedArrayPrototypeSort),
+        (
+            "toReversed",
+            0,
+            NativeFunction::TypedArrayPrototypeToReversed,
+        ),
+        ("toSorted", 1, NativeFunction::TypedArrayPrototypeToSorted),
+        ("with", 2, NativeFunction::TypedArrayPrototypeWith),
+    ] {
+        define_prototype_method(prototype, name, length, native);
+    }
+    // %TypedArray.prototype%[Symbol.iterator] is the same function object as
+    // `values`.
+    symbol::define_well_known_iterator_alias(env, prototype, "values");
+}
+
+fn define_prototype_method(
+    prototype: &ObjectRef,
+    name: &str,
+    length: usize,
+    native: NativeFunction,
+) {
+    prototype.define_non_enumerable(
+        name.to_owned(),
+        Value::Function(Function::new_native(Some(name), length, native, false)),
+    );
 }
 
 fn install_typed_array_constructor(
@@ -232,11 +316,36 @@ pub(crate) fn native_typed_array_prototype_length(
 fn typed_array_receiver(value: &Value) -> Result<ObjectRef, RuntimeError> {
     match value {
         Value::Object(object) if is_typed_array_object(object) => Ok(object.clone()),
-        _ => Err(RuntimeError {
-            thrown: None,
-            message: "TypeError: TypedArray method called on incompatible receiver".to_owned(),
-        }),
+        _ => Err(typed_array_receiver_error()),
     }
+}
+
+pub(crate) fn typed_array_receiver_error() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "TypeError: TypedArray method called on incompatible receiver".to_owned(),
+    }
+}
+
+/// Brand-checks `value` as a typed array and validates its buffer is attached,
+/// throwing `TypeError` otherwise. Returns the receiver and its current length.
+pub(crate) fn validate_typed_array(value: &Value) -> Result<(ObjectRef, usize), RuntimeError> {
+    let object = typed_array_receiver(value)?;
+    if typed_array_buffer_detached(&object) {
+        return Err(array_buffer::detached_error());
+    }
+    Ok((object.clone(), typed_array_length(&object)))
+}
+
+/// Builds a fresh typed array of `native`'s kind backed by a new buffer, with
+/// the given already-coerced element values, materializing index reads. Used by
+/// the methods that return a new typed array (`map`, `filter`, `slice`, …).
+pub(crate) fn create_typed_array_of_kind(
+    native: NativeFunction,
+    values: Vec<Value>,
+    env: &HashMap<String, Value>,
+) -> ObjectRef {
+    construct::create_with_values(native, values, env)
 }
 
 // --- Internal-slot helpers ---------------------------------------------------
