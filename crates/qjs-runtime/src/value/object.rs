@@ -124,6 +124,11 @@ impl Prototype {
 pub struct ObjectRef {
     properties: Rc<RefCell<HashMap<String, Property>>>,
     property_order: Rc<RefCell<Vec<String>>>,
+    /// Count of own string keys that parse as array indices. Maintained as keys
+    /// are added and removed so `has_own_index_property` is an O(1) check; this
+    /// keeps the `array[i] = x` fast path from scanning a prototype's keys on
+    /// every write.
+    index_property_count: Rc<Cell<usize>>,
     symbol_properties: Rc<RefCell<Vec<(ObjectRef, Property)>>>,
     extensible: Rc<Cell<bool>>,
     prototype: Rc<RefCell<Option<Prototype>>>,
@@ -173,6 +178,10 @@ impl ObjectRef {
     ) -> Self {
         let mut property_order: Vec<_> = properties.keys().cloned().collect();
         property_order.sort();
+        let index_property_count = property_order
+            .iter()
+            .filter(|key| is_array_index_key(key))
+            .count();
         Self {
             properties: Rc::new(RefCell::new(
                 properties
@@ -181,6 +190,7 @@ impl ObjectRef {
                     .collect(),
             )),
             property_order: Rc::new(RefCell::new(property_order)),
+            index_property_count: Rc::new(Cell::new(index_property_count)),
             symbol_properties: Rc::new(RefCell::new(Vec::new())),
             extensible: Rc::new(Cell::new(true)),
             prototype: Rc::new(RefCell::new(prototype)),
@@ -260,6 +270,14 @@ impl ObjectRef {
         })
     }
 
+    /// Whether any own property key parses as an array index. Used to gate the
+    /// dense `array[i] = x` fast path: a default prototype with no own indexed
+    /// property cannot intercept an index store with an inherited accessor or a
+    /// non-writable data property.
+    pub(crate) fn has_own_index_property(&self) -> bool {
+        self.index_property_count.get() > 0
+    }
+
     pub(crate) fn symbol_property(&self, symbol: &ObjectRef) -> Option<Property> {
         self.own_symbol_property(symbol).or_else(|| {
             self.prototype
@@ -303,6 +321,10 @@ impl ObjectRef {
         if !self.extensible.get() {
             return;
         }
+        if is_array_index_key(&key) {
+            self.index_property_count
+                .set(self.index_property_count.get() + 1);
+        }
         self.property_order.borrow_mut().push(key.clone());
         properties.insert(key, Property::enumerable(value));
     }
@@ -310,6 +332,10 @@ impl ObjectRef {
     pub(crate) fn define_property(&self, key: String, property: Property) {
         let mut properties = self.properties.borrow_mut();
         if !properties.contains_key(&key) {
+            if is_array_index_key(&key) {
+                self.index_property_count
+                    .set(self.index_property_count.get() + 1);
+            }
             self.property_order.borrow_mut().push(key.clone());
         }
         properties.insert(key, property);
@@ -437,7 +463,11 @@ impl ObjectRef {
         {
             return false;
         }
-        properties.remove(key);
+        let removed = properties.remove(key);
+        if removed.is_some() && is_array_index_key(key) {
+            self.index_property_count
+                .set(self.index_property_count.get().saturating_sub(1));
+        }
         self.property_order
             .borrow_mut()
             .retain(|existing| existing != key);
@@ -552,4 +582,8 @@ fn array_index_property_key(key: &str) -> Option<u32> {
     key.parse::<u32>()
         .ok()
         .filter(|index| *index < u32::MAX && index.to_string() == key)
+}
+
+fn is_array_index_key(key: &str) -> bool {
+    array_index_property_key(key).is_some()
 }

@@ -49,10 +49,13 @@ pub(crate) fn native_string_from_char_code(
 pub(crate) fn native_string_from_code_point(
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
-    let mut result = String::new();
+    // Reserve roughly one byte per argument up front (BMP code points are one to
+    // three UTF-8 bytes) and push each code point directly into the accumulator
+    // instead of allocating a throwaway `String` per argument.
+    let mut result = String::with_capacity(argument_values.len());
     for value in argument_values.iter().cloned() {
         let code_point = to_code_point(value)?;
-        result.push_str(&string_from_code_point(code_point));
+        push_code_point(&mut result, code_point);
     }
     Ok(Value::String(result))
 }
@@ -98,13 +101,19 @@ fn to_code_point(value: Value) -> Result<u32, RuntimeError> {
     Ok(number as u32)
 }
 
-fn string_from_code_point(code_point: u32) -> String {
-    if code_point <= 0xFFFF {
-        return string_from_code_unit(code_point as u16);
+/// Appends `code_point` to `result` without an intermediate allocation. A BMP
+/// code point routes through the code-unit path so lone surrogates keep their
+/// sentinel escaping; anything else is a `char` pushed directly.
+fn push_code_point(result: &mut String, code_point: u32) {
+    // A non-surrogate code point (BMP or supplementary) is a real scalar value
+    // and pushes as a `char`. Lone surrogates have no scalar value, so they keep
+    // the sentinel escaping the code-unit helper applies.
+    match char::from_u32(code_point) {
+        Some(character) => result.push(character),
+        // Only lone surrogates (and only values up to 0xFFFF) lack a scalar
+        // value, so the code-unit helper can apply its sentinel escaping.
+        None => result.push_str(&string_from_code_unit(code_point as u16)),
     }
-    char::from_u32(code_point)
-        .unwrap_or(char::REPLACEMENT_CHARACTER)
-        .to_string()
 }
 
 fn require_object_coercible(value: Value, context: &str) -> Result<Value, RuntimeError> {

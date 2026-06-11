@@ -128,6 +128,59 @@ impl ArrayRef {
         self.holes.borrow_mut().clear();
     }
 
+    /// Whether `index` can be written straight into dense storage with the same
+    /// observable result as the generic property-set path, assuming the array
+    /// uses the default Array.prototype and that prototype owns no indexed
+    /// property (both verified by the caller). Requires the index to stay in
+    /// dense range, the array to be mutable and extensible enough to take the
+    /// write, and to have no own special descriptor at the index (which could be
+    /// an accessor or a non-writable data property).
+    /// Whether this array has no [[Prototype]] override and therefore resolves
+    /// to the realm's default Array.prototype.
+    pub(crate) fn uses_default_prototype(&self) -> bool {
+        self.prototype.borrow().is_none()
+    }
+
+    /// Reads every element `0..length` directly out of dense storage as an
+    /// argument list, returning `None` when a generic property lookup is needed
+    /// instead. The fast path requires fully dense storage (length matches the
+    /// element vector with no holes), no own indexed/length descriptors that
+    /// could intercept the read, the default prototype, and that prototype owning
+    /// no indexed property whose value an absent element would inherit.
+    pub(crate) fn dense_argument_values(&self, env: &HashMap<String, Value>) -> Option<Vec<Value>> {
+        let elements = self.elements.borrow();
+        if self.length.get() != elements.len() || !self.holes.borrow().is_empty() {
+            return None;
+        }
+        if !self.properties.borrow().is_empty() {
+            return None;
+        }
+        match self.prototype.borrow().as_ref() {
+            Some(Some(_)) => return None,
+            Some(None) => {}
+            None => {
+                if crate::array_prototype(env)
+                    .is_some_and(|prototype| prototype.has_own_index_property())
+                {
+                    return None;
+                }
+            }
+        }
+        Some(elements.clone())
+    }
+
+    pub(crate) fn dense_index_store_eligible(&self, index: usize) -> bool {
+        if index >= MAX_DENSE_STORAGE_LENGTH || self.frozen.get() || !self.length_writable.get() {
+            return false;
+        }
+        let within_length = index < self.length.get();
+        if !within_length && !self.extensible.get() {
+            return false;
+        }
+        let properties = self.properties.borrow();
+        properties.is_empty() || !properties.contains_key(&index.to_string())
+    }
+
     pub(crate) fn set(&self, index: usize, value: Value) {
         if index > MAX_ARRAY_INDEX {
             self.set_property(index.to_string(), value);

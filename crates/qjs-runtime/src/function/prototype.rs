@@ -89,6 +89,13 @@ fn apply_argument_list(
     match arg_array {
         Value::Null | Value::Undefined => Ok(Vec::new()),
         Value::Array(array) => {
+            // A dense array with the default prototype and no exotic indexed
+            // properties reads straight out of element storage, skipping the
+            // per-index string-key allocation and prototype walk of the generic
+            // property lookup. This is the hot path for `fn.apply(this, bigArray)`.
+            if let Some(values) = array.dense_argument_values(env) {
+                return Ok(values);
+            }
             let receiver = Value::Array(array.clone());
             (0..array.len())
                 .map(|index| property_value(receiver.clone(), &index.to_string(), env))

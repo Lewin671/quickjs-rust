@@ -13,6 +13,29 @@ use crate::{
 use super::vm::Vm;
 
 impl Vm<'_> {
+    /// Whether the realm's current Array.prototype owns any indexed property.
+    /// Returns `None` when no Array.prototype is reachable. The Array.prototype
+    /// object is cached so the hot path skips the `Array`-binding lookup; the
+    /// cache is dropped when the `Array` global is reassigned. The own-index
+    /// count read is itself O(1).
+    pub(super) fn array_prototype_has_index_property(&mut self) -> Option<bool> {
+        if self.array_prototype_cache.is_none() {
+            self.array_prototype_cache = Some(array_prototype(&self.globals)?);
+        }
+        self.array_prototype_cache
+            .as_ref()
+            .map(ObjectRef::has_own_index_property)
+    }
+
+    /// Drops the cached Array.prototype when the `Array` global binding itself is
+    /// rewritten, so a later index store resolves the replacement constructor's
+    /// prototype.
+    pub(super) fn invalidate_array_prototype_cache(&mut self, name: &str) {
+        if name == "Array" {
+            self.array_prototype_cache = None;
+        }
+    }
+
     pub(super) fn store_global_strict(
         &mut self,
         name: String,
@@ -24,6 +47,7 @@ impl Vm<'_> {
                 message: format!("ReferenceError: undefined identifier `{name}`"),
             });
         }
+        self.invalidate_array_prototype_cache(&name);
         self.globals.insert(name.clone(), value.clone());
         if let Some(Value::Object(global_this)) = self.globals.get(GLOBAL_THIS_BINDING)
             && global_this.has_own_property(&name)
@@ -38,6 +62,7 @@ impl Vm<'_> {
         name: String,
         value: Value,
     ) -> Result<(), RuntimeError> {
+        self.invalidate_array_prototype_cache(&name);
         if let Some(Value::Object(global_this)) = self.globals.get(GLOBAL_THIS_BINDING) {
             global_this.set(name.clone(), value.clone());
             self.globals.insert(name, value);
@@ -561,4 +586,14 @@ pub(super) fn fast_number_unary(op: UnaryOp, argument: &Value) -> Option<Value> 
         _ => return None,
     };
     Some(value)
+}
+
+/// Returns the value as an array index when it is a non-negative integer that
+/// fits the array-index range (`< 2^32 - 1`). Used to take the dense-store fast
+/// path for `array[i] = x` without round-tripping the index through a string.
+pub(super) fn array_index_from_number(number: f64) -> Option<usize> {
+    if number < 0.0 || number.fract() != 0.0 || number > (u32::MAX - 1) as f64 {
+        return None;
+    }
+    Some(number as usize)
 }

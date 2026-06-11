@@ -12,7 +12,8 @@ use super::util::{stack_underflow, typeof_value};
 use super::vm_call::{insert_scope_call_bindings, user_bytecode_function};
 use super::vm_iter::DelegateStep;
 use super::vm_props::{
-    delete_property_key, get_property_key, property_set_uses_setter, set_property_key,
+    array_index_from_number, delete_property_key, get_property_key, property_set_uses_setter,
+    set_property_key,
 };
 use super::vm_result::{Completion, FunctionBytecodeResult, ResumeMode};
 use super::vm_try::TryFrame;
@@ -62,6 +63,11 @@ pub(super) struct Vm<'a> {
     /// `yield*`, so the resumed `Op::YieldDelegate` forwards the resume to the
     /// inner iterator. `None` for ordinary runs and plain-`yield` resumes.
     pub(super) resume_mode: Option<ResumeMode>,
+    /// Cached realm Array.prototype, used to keep the `a[i] = x` fast path from
+    /// re-resolving the `Array` binding on every store. Invalidated whenever the
+    /// `Array` global binding is written so a reassigned constructor takes
+    /// effect.
+    pub(super) array_prototype_cache: Option<ObjectRef>,
     /// When set, `Op::FunctionPrologueEnd` suspends the body so a generator or
     /// async generator can run its parameter prologue synchronously at the call
     /// and pause at the start of the body. Cleared for ordinary runs and once
@@ -100,6 +106,7 @@ impl<'a> Vm<'a> {
             pending_return: None,
             resume_mode: None,
             stop_at_prologue: false,
+            array_prototype_cache: None,
         }
     }
 
@@ -517,6 +524,31 @@ impl<'a> Vm<'a> {
     fn set_prop(&mut self, is_strict: bool) -> Result<(), RuntimeError> {
         let value = self.pop()?;
         let key_value = self.pop()?;
+        // Fast path: writing a real array index to a plain array with the
+        // default prototype, no own descriptor at that index, and no exotic
+        // inherited index accessor. This is the dominant pattern in tight
+        // `a[i] = x` append loops, so it skips the string-key allocation and
+        // the per-write prototype-chain setter probe taken by the generic path.
+        if let Value::Number(number) = &key_value
+            && let Some(index) = array_index_from_number(*number)
+            && let Some(Value::Array(elements)) = self.stack.last()
+            && elements.uses_default_prototype()
+            && elements.dense_index_store_eligible(index)
+        {
+            let elements = elements.clone();
+            // A plain array with the default prototype takes the dense-store fast
+            // path when the index has no own special descriptor and the realm's
+            // Array.prototype carries no own indexed property that an OrdinarySet
+            // would have to honor. Both checks are O(1), so a tight `a[i] = x`
+            // loop avoids the string-key allocation and prototype walk of the
+            // generic path.
+            if !self.array_prototype_has_index_property().unwrap_or(true) {
+                self.pop()?;
+                elements.set(index, value.clone());
+                self.stack.push(value);
+                return Ok(());
+            }
+        }
         let key = self.coerce_property_key(key_value)?;
         let object = self.pop()?;
         if self.symbol_primitive_set_fails(&object, &key) {
@@ -548,6 +580,7 @@ impl<'a> Vm<'a> {
             && wrote_data
             && let crate::PropertyKey::String(key) = key
         {
+            self.invalidate_array_prototype_cache(&key);
             self.globals.insert(key, value.clone());
         }
         self.stack.push(value);
@@ -848,6 +881,7 @@ impl<'a> Vm<'a> {
             if let Some(index) = self.bytecode.local_slot(name) {
                 self.locals[index] = Some(value.clone());
             } else {
+                self.invalidate_array_prototype_cache(name);
                 self.globals.insert(name.clone(), value.clone());
             }
         }
