@@ -1,100 +1,101 @@
 use std::collections::HashMap;
 
-use crate::{ArrayRef, Function, NativeFunction, ObjectRef, RuntimeError, Value, array};
+use crate::{ArrayRef, Function, NativeFunction, ObjectRef, RuntimeError, Value, call_function};
 
 use super::{
-    PROMISE_ALL_INDEX, PROMISE_ALL_REMAINING, PROMISE_ALL_VALUES, PROMISE_FULFILLED,
-    PROMISE_REJECTED, PROMISE_TARGET, call_promise_then, initialize_promise,
-    promise_from_resolving_function, promise_object_from_function, resolve_promise,
-    resolving_function, settle_promise,
+    PROMISE_ALL_ALREADY_CALLED, PROMISE_ALL_CAPABILITY_RESOLVE, PROMISE_ALL_INDEX,
+    PROMISE_ALL_REMAINING, PROMISE_ALL_VALUES,
+    capability::PromiseCapability,
+    perform::{self, ElementHandler},
 };
 
+/// `Promise.all` (ES2023 27.2.4.1): resolves with an array of every fulfilled
+/// value once all input promises fulfil, or rejects with the first rejection.
 pub(crate) fn native_promise_all(
-    function: &Function,
+    this_value: Value,
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let promise = promise_object_from_function(function);
-    initialize_promise(&promise);
-    let items = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    let values = match array::array_like_values_with_env(items, "Promise.all", env) {
-        Ok(values) => values,
-        Err(error) => {
-            settle_promise(
-                &promise,
-                PROMISE_REJECTED,
-                error
-                    .thrown
-                    .map_or(Value::String(error.message), |value| *value),
-                env,
-            );
-            return Ok(Value::Object(promise));
-        }
+    let iterable = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let handler = AllHandler {
+        values: ArrayRef::new(Vec::new()),
+        remaining: perform::new_remaining(1),
     };
+    perform::run_combinator(this_value, iterable, "Promise.all", handler, env)
+}
 
-    if values.is_empty() {
-        settle_promise(
-            &promise,
-            PROMISE_FULFILLED,
-            Value::Array(ArrayRef::new(Vec::new())),
-            env,
+struct AllHandler {
+    values: ArrayRef,
+    remaining: ObjectRef,
+}
+
+impl ElementHandler for AllHandler {
+    fn on_element(
+        &mut self,
+        index: usize,
+        capability: &PromiseCapability,
+        _env: &mut HashMap<String, Value>,
+    ) -> Result<(Value, Value), RuntimeError> {
+        // Reserve the slot so out-of-order fulfilment writes the right index.
+        self.values.set(index, Value::Undefined);
+        perform::increment_remaining(&self.remaining);
+
+        let already_called = ObjectRef::new(HashMap::new());
+        let mut on_fulfilled =
+            Function::new_native(None, 1, NativeFunction::PromiseAllResolveElement, false);
+        on_fulfilled.env.insert(
+            PROMISE_ALL_CAPABILITY_RESOLVE.to_owned(),
+            capability.resolve.clone(),
         );
-        return Ok(Value::Object(promise));
-    }
-
-    let result_values = ArrayRef::new(vec![Value::Undefined; values.len()]);
-    let remaining = ObjectRef::new(HashMap::from([(
-        "count".to_owned(),
-        Value::Number(values.len() as f64),
-    )]));
-    let reject = resolving_function(
-        "reject",
-        NativeFunction::PromiseRejectFunction,
-        Value::Object(promise.clone()),
-    );
-
-    for (index, value) in values.into_iter().enumerate() {
-        let element_promise = promise_object_from_function(function);
-        initialize_promise(&element_promise);
-        resolve_promise(&element_promise, value, env);
-
-        let mut on_fulfilled = Function::new_native(
-            Some("Promise.all resolve element"),
-            1,
-            NativeFunction::PromiseAllResolveElement,
-            false,
-        );
-        on_fulfilled
-            .env
-            .insert(PROMISE_TARGET.to_owned(), Value::Object(promise.clone()));
         on_fulfilled
             .env
             .insert(PROMISE_ALL_INDEX.to_owned(), Value::Number(index as f64));
         on_fulfilled.env.insert(
             PROMISE_ALL_VALUES.to_owned(),
-            Value::Array(result_values.clone()),
+            Value::Array(self.values.clone()),
         );
         on_fulfilled.env.insert(
             PROMISE_ALL_REMAINING.to_owned(),
-            Value::Object(remaining.clone()),
+            Value::Object(self.remaining.clone()),
+        );
+        on_fulfilled.env.insert(
+            PROMISE_ALL_ALREADY_CALLED.to_owned(),
+            Value::Object(already_called),
         );
 
-        call_promise_then(
-            Value::Object(element_promise),
-            vec![Value::Function(on_fulfilled), reject.clone()],
-            env,
-        )?;
+        Ok((Value::Function(on_fulfilled), capability.reject.clone()))
     }
 
-    Ok(Value::Object(promise))
+    fn on_complete(
+        &mut self,
+        _count: usize,
+        capability: &PromiseCapability,
+        env: &mut HashMap<String, Value>,
+    ) -> Result<(), RuntimeError> {
+        // Final decrement: if every element already settled, resolve now.
+        if perform::decrement_remaining(&self.remaining) == 0.0 {
+            super::capability::capability_resolve(
+                capability,
+                Value::Array(self.values.clone()),
+                env,
+            )?;
+        }
+        Ok(())
+    }
 }
 
+/// Promise.all Resolve Element function (ES2023 27.2.4.1.3): records the
+/// fulfilled value at its index and, when the last outstanding element settles,
+/// resolves the result capability with the values array. Guarded so it runs at
+/// most once.
 pub(crate) fn native_promise_all_resolve_element(
     function: &Function,
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let promise = promise_from_resolving_function(function)?;
+    if already_called(function) {
+        return Ok(Value::Undefined);
+    }
     let index = match function.env.get(PROMISE_ALL_INDEX) {
         Some(Value::Number(index)) if *index >= 0.0 => *index as usize,
         _ => {
@@ -125,17 +126,31 @@ pub(crate) fn native_promise_all_resolve_element(
 
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     values.set(index, value);
-    let next_remaining = match remaining
-        .own_property("count")
-        .map(|property| property.value)
-    {
-        Some(Value::Number(count)) if count > 0.0 => count - 1.0,
-        _ => 0.0,
-    };
-    remaining.set("count".to_owned(), Value::Number(next_remaining));
-    if next_remaining == 0.0 {
-        settle_promise(&promise, PROMISE_FULFILLED, Value::Array(values), env);
+    if perform::decrement_remaining(&remaining) == 0.0 {
+        let resolve = function
+            .env
+            .get(PROMISE_ALL_CAPABILITY_RESOLVE)
+            .cloned()
+            .unwrap_or(Value::Undefined);
+        call_function(
+            resolve,
+            Value::Undefined,
+            vec![Value::Array(values)],
+            env,
+            false,
+        )?;
     }
-
     Ok(Value::Undefined)
+}
+
+/// Reads-and-sets the single-call guard, returning whether it was already set.
+pub(super) fn already_called(function: &Function) -> bool {
+    let Some(Value::Object(cell)) = function.env.get(PROMISE_ALL_ALREADY_CALLED) else {
+        return false;
+    };
+    if cell.own_property("called").is_some() {
+        return true;
+    }
+    cell.define_non_enumerable("called".to_owned(), Value::Boolean(true));
+    false
 }

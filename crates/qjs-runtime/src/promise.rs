@@ -10,6 +10,7 @@ pub(crate) mod all_settled;
 pub(crate) mod any;
 mod capability;
 mod jobs;
+mod perform;
 mod race;
 pub(crate) mod r#try;
 pub(crate) mod with_resolvers;
@@ -26,6 +27,8 @@ const PROMISE_HANDLER: &str = "\0PromiseHandler";
 const PROMISE_ALL_INDEX: &str = "\0PromiseAllIndex";
 const PROMISE_ALL_REMAINING: &str = "\0PromiseAllRemaining";
 const PROMISE_ALL_VALUES: &str = "\0PromiseAllValues";
+const PROMISE_ALL_CAPABILITY_RESOLVE: &str = "\0PromiseAllCapabilityResolve";
+const PROMISE_ALL_ALREADY_CALLED: &str = "\0PromiseAllAlreadyCalled";
 const PROMISE_AGGREGATE_ERROR: &str = "\0PromiseAggregateError";
 const PROMISE_JOBS: &str = "\0PromiseJobs";
 const PROMISE_REACTIONS: &str = "\0PromiseReactions";
@@ -591,12 +594,14 @@ fn settle_promise(
 
 fn resolve_promise(object: &ObjectRef, value: Value, env: &mut HashMap<String, Value>) {
     if matches!(&value, Value::Object(value_object) if value_object.ptr_eq(object)) {
-        settle_promise(
-            object,
-            PROMISE_REJECTED,
-            Value::String("TypeError: promise resolved with itself".to_owned()),
+        let reason = crate::error::runtime_error_to_value(
+            RuntimeError {
+                thrown: None,
+                message: "TypeError: Chaining cycle detected for promise".to_owned(),
+            },
             env,
         );
+        settle_promise(object, PROMISE_REJECTED, reason, env);
         return;
     }
     let then = match promise_thenable_then(value.clone(), env) {
@@ -606,12 +611,8 @@ fn resolve_promise(object: &ObjectRef, value: Value, env: &mut HashMap<String, V
             return;
         }
         Err(error) => {
-            settle_promise(
-                object,
-                PROMISE_REJECTED,
-                error.thrown.map_or(Value::Undefined, |value| *value),
-                env,
-            );
+            let reason = crate::error::runtime_error_to_value(error, env);
+            settle_promise(object, PROMISE_REJECTED, reason, env);
             return;
         }
     };
@@ -677,18 +678,17 @@ fn is_promise_value(value: &Value) -> bool {
 }
 
 /// Whether `value` is an Object in the ECMAScript sense (callable objects and
-/// exotic collections included). Used for the `Type(C) is Object` guards in
-/// `Promise.resolve`/`Promise.reject`.
+/// exotic collections included). Symbol primitives are boxed as objects
+/// internally, so they are excluded explicitly. Used for the `Type(C) is Object`
+/// guards in `Promise.resolve`/`Promise.reject`.
 fn is_object_value(value: &Value) -> bool {
-    matches!(
-        value,
-        Value::Object(_)
-            | Value::Array(_)
-            | Value::Function(_)
-            | Value::Map(_)
-            | Value::Set(_)
-            | Value::Proxy(_)
-    )
+    match value {
+        Value::Object(object) => !symbol::is_symbol_primitive(object),
+        Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) | Value::Proxy(_) => {
+            true
+        }
+        _ => false,
+    }
 }
 
 fn promise_receiver_not_object_error() -> RuntimeError {

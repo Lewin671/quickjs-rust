@@ -16,15 +16,17 @@ pub(super) fn call_promise_native(
         NativeFunction::Promise => {
             promise::native_promise(function, this_value, argument_values, is_construct, env)?
         }
-        NativeFunction::PromiseAll => promise::native_promise_all(function, argument_values, env)?,
+        NativeFunction::PromiseAll => {
+            promise::native_promise_all(this_value, argument_values, env)?
+        }
         NativeFunction::PromiseAny => {
-            promise::any::native_promise_any(function, argument_values, env)?
+            promise::any::native_promise_any(function, this_value, argument_values, env)?
         }
         NativeFunction::PromiseAnyRejectElement => {
             promise::any::native_promise_any_reject_element(function, argument_values, env)?
         }
         NativeFunction::PromiseAllSettled => {
-            promise::all_settled::native_promise_all_settled(function, argument_values, env)?
+            promise::all_settled::native_promise_all_settled(this_value, argument_values, env)?
         }
         NativeFunction::PromiseAllSettledRejectElement => {
             promise::all_settled::native_promise_all_settled_reject_element(
@@ -62,7 +64,7 @@ pub(super) fn call_promise_native(
             promise::native_promise_then(function, this_value, argument_values, env)?
         }
         NativeFunction::PromiseRace => {
-            promise::native_promise_race(function, argument_values, env)?
+            promise::native_promise_race(this_value, argument_values, env)?
         }
         NativeFunction::PromiseReject => {
             promise::native_promise_reject(this_value, argument_values, env)?

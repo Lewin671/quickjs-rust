@@ -130,6 +130,103 @@ fn evaluates_promise_all_shell() {
 }
 
 #[test]
+fn promise_all_resolves_with_value_array() {
+    assert_job_order(
+        "Promise.all([1, Promise.resolve(2), 3]).then(function(v){ return v.join(','); });",
+        "1,2,3",
+    );
+}
+
+#[test]
+fn promise_all_rejects_on_first_rejection() {
+    assert_job_order(
+        "Promise.all([1, Promise.reject('boom')]).then(null, function(r){ return r; });",
+        "boom",
+    );
+}
+
+#[test]
+fn promise_all_reads_constructor_resolve_once_per_element() {
+    // promiseResolve = Get(C, "resolve") is read once and called per element.
+    assert_eval(
+        "var getCount = 0, callCount = 0; var real = Promise.resolve;\
+         Object.defineProperty(Promise, 'resolve', { configurable: true, get: function(){ getCount++; return function(){ callCount++; return real.apply(Promise, arguments); }; } });\
+         Promise.all([1, 2, 3]); getCount + ':' + callCount;",
+        Value::String("1:3".to_owned()),
+    );
+}
+
+#[test]
+fn promise_all_rejects_with_type_error_for_non_iterable() {
+    assert_job_order(
+        "Promise.all(null).then(null, function(r){ return r instanceof TypeError ? 'type-error' : 'other'; });",
+        "type-error",
+    );
+}
+
+#[test]
+fn promise_all_settled_result_objects_have_spec_shape() {
+    assert_job_order(
+        "Promise.allSettled([Promise.resolve(1), Promise.reject(2)]).then(function(v){\
+           return Object.keys(v[0]).join(',') + '|' + Object.keys(v[1]).join(',') + '|' + v[0].status + ',' + v[0].value + ',' + v[1].status + ',' + v[1].reason;\
+         });",
+        "status,value|status,reason|fulfilled,1,rejected,2",
+    );
+}
+
+#[test]
+fn promise_all_settled_result_objects_inherit_object_prototype() {
+    assert_job_order(
+        "Promise.allSettled([Promise.resolve(1)]).then(function(v){ return Object.getPrototypeOf(v[0]) === Object.prototype ? 'ok' : 'no'; });",
+        "ok",
+    );
+}
+
+#[test]
+fn promise_any_fulfils_with_first_value() {
+    assert_job_order(
+        "Promise.any([Promise.reject(1), Promise.resolve('ok')]).then(function(v){ return v; });",
+        "ok",
+    );
+}
+
+#[test]
+fn promise_any_rejects_with_aggregate_error() {
+    assert_job_order(
+        "Promise.any([Promise.reject(1), Promise.reject(2)]).then(null, function(e){ return (e instanceof AggregateError) + ':' + e.errors.join(','); });",
+        "true:1,2",
+    );
+}
+
+#[test]
+fn promise_race_settles_with_first_settlement() {
+    assert_job_order(
+        "Promise.race([Promise.resolve('a'), Promise.resolve('b')]).then(function(v){ return v; });",
+        "a",
+    );
+}
+
+#[test]
+fn promise_combinators_use_this_constructor() {
+    // Promise.all.call(C, ...) constructs the result through C.
+    assert_eval(
+        "var built = false; function C(exec){ built = true; exec(function(){}, function(){}); }\
+         C.resolve = function(v){ return Promise.resolve(v); };\
+         Promise.all.call(C, []); built;",
+        Value::Boolean(true),
+    );
+}
+
+#[test]
+fn promise_self_resolution_rejects_with_type_error() {
+    assert_job_order(
+        "var q = Promise.resolve().then(function(){ return q; });\
+         q.then(null, function(e){ return e instanceof TypeError ? 'type-error' : 'other'; });",
+        "type-error",
+    );
+}
+
+#[test]
 fn evaluates_promise_any_shell() {
     assert_eval("typeof Promise.any;", Value::String("function".to_owned()));
     assert_eval("Promise.any.length;", Value::Number(1.0));

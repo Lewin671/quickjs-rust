@@ -1,82 +1,85 @@
 use std::collections::HashMap;
 
-use crate::{ArrayRef, Function, NativeFunction, ObjectRef, RuntimeError, Value, array};
-
-use super::{
-    PROMISE_ALL_INDEX, PROMISE_ALL_REMAINING, PROMISE_ALL_VALUES, PROMISE_FULFILLED,
-    PROMISE_REJECTED, PROMISE_TARGET, call_promise_then, initialize_promise,
-    promise_from_resolving_function, promise_object_from_function, resolve_promise, settle_promise,
+use crate::{
+    ArrayRef, Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, call_function,
 };
 
+use super::{
+    PROMISE_ALL_ALREADY_CALLED, PROMISE_ALL_CAPABILITY_RESOLVE, PROMISE_ALL_INDEX,
+    PROMISE_ALL_REMAINING, PROMISE_ALL_VALUES, PROMISE_FULFILLED, PROMISE_REJECTED,
+    all::already_called,
+    capability::PromiseCapability,
+    perform::{self, ElementHandler},
+};
+
+/// `Promise.allSettled` (ES2023 27.2.4.2): always fulfils, with an array of
+/// `{ status, value }` / `{ status, reason }` records once every input settles.
 pub(crate) fn native_promise_all_settled(
-    function: &Function,
+    this_value: Value,
     argument_values: &[Value],
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
-    let promise = promise_object_from_function(function);
-    initialize_promise(&promise);
-    let items = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    let values = match array::array_like_values_with_env(items, "Promise.allSettled", env) {
-        Ok(values) => values,
-        Err(error) => {
-            settle_promise(
-                &promise,
-                PROMISE_REJECTED,
-                error
-                    .thrown
-                    .map_or(Value::String(error.message), |value| *value),
-                env,
-            );
-            return Ok(Value::Object(promise));
-        }
+    let iterable = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let handler = AllSettledHandler {
+        values: ArrayRef::new(Vec::new()),
+        remaining: perform::new_remaining(1),
     };
+    perform::run_combinator(this_value, iterable, "Promise.allSettled", handler, env)
+}
 
-    if values.is_empty() {
-        settle_promise(
-            &promise,
-            PROMISE_FULFILLED,
-            Value::Array(ArrayRef::new(Vec::new())),
-            env,
-        );
-        return Ok(Value::Object(promise));
-    }
+struct AllSettledHandler {
+    values: ArrayRef,
+    remaining: ObjectRef,
+}
 
-    let result_values = ArrayRef::new(vec![Value::Undefined; values.len()]);
-    let remaining = ObjectRef::new(HashMap::from([(
-        "count".to_owned(),
-        Value::Number(values.len() as f64),
-    )]));
+impl ElementHandler for AllSettledHandler {
+    fn on_element(
+        &mut self,
+        index: usize,
+        capability: &PromiseCapability,
+        _env: &mut HashMap<String, Value>,
+    ) -> Result<(Value, Value), RuntimeError> {
+        self.values.set(index, Value::Undefined);
+        perform::increment_remaining(&self.remaining);
 
-    for (index, value) in values.into_iter().enumerate() {
-        let element_promise = promise_object_from_function(function);
-        initialize_promise(&element_promise);
-        resolve_promise(&element_promise, value, env);
-
-        let on_fulfilled = settlement_element_function(
-            "Promise.allSettled resolve element",
+        // A single alreadyCalled record is shared by the resolve and reject
+        // element functions for this index, so only the first observed
+        // settlement is recorded.
+        let already_called = ObjectRef::new(HashMap::new());
+        let on_fulfilled = element_function(
             NativeFunction::PromiseAllSettledResolveElement,
-            promise.clone(),
             index,
-            result_values.clone(),
-            remaining.clone(),
+            &self.values,
+            &self.remaining,
+            &already_called,
+            capability,
         );
-        let on_rejected = settlement_element_function(
-            "Promise.allSettled reject element",
+        let on_rejected = element_function(
             NativeFunction::PromiseAllSettledRejectElement,
-            promise.clone(),
             index,
-            result_values.clone(),
-            remaining.clone(),
+            &self.values,
+            &self.remaining,
+            &already_called,
+            capability,
         );
-
-        call_promise_then(
-            Value::Object(element_promise),
-            vec![Value::Function(on_fulfilled), Value::Function(on_rejected)],
-            env,
-        )?;
+        Ok((Value::Function(on_fulfilled), Value::Function(on_rejected)))
     }
 
-    Ok(Value::Object(promise))
+    fn on_complete(
+        &mut self,
+        _count: usize,
+        capability: &PromiseCapability,
+        env: &mut HashMap<String, Value>,
+    ) -> Result<(), RuntimeError> {
+        if perform::decrement_remaining(&self.remaining) == 0.0 {
+            super::capability::capability_resolve(
+                capability,
+                Value::Array(self.values.clone()),
+                env,
+            )?;
+        }
+        Ok(())
+    }
 }
 
 pub(crate) fn native_promise_all_settled_resolve_element(
@@ -95,27 +98,33 @@ pub(crate) fn native_promise_all_settled_reject_element(
     settle_element(function, argument_values, env, PROMISE_REJECTED)
 }
 
-fn settlement_element_function(
-    name: &str,
+fn element_function(
     native: NativeFunction,
-    promise: ObjectRef,
     index: usize,
-    values: ArrayRef,
-    remaining: ObjectRef,
+    values: &ArrayRef,
+    remaining: &ObjectRef,
+    already_called: &ObjectRef,
+    capability: &PromiseCapability,
 ) -> Function {
-    let mut function = Function::new_native(Some(name), 1, native, false);
-    function
-        .env
-        .insert(PROMISE_TARGET.to_owned(), Value::Object(promise));
+    let mut function = Function::new_native(None, 1, native, false);
     function
         .env
         .insert(PROMISE_ALL_INDEX.to_owned(), Value::Number(index as f64));
     function
         .env
-        .insert(PROMISE_ALL_VALUES.to_owned(), Value::Array(values));
-    function
-        .env
-        .insert(PROMISE_ALL_REMAINING.to_owned(), Value::Object(remaining));
+        .insert(PROMISE_ALL_VALUES.to_owned(), Value::Array(values.clone()));
+    function.env.insert(
+        PROMISE_ALL_REMAINING.to_owned(),
+        Value::Object(remaining.clone()),
+    );
+    function.env.insert(
+        PROMISE_ALL_ALREADY_CALLED.to_owned(),
+        Value::Object(already_called.clone()),
+    );
+    function.env.insert(
+        PROMISE_ALL_CAPABILITY_RESOLVE.to_owned(),
+        capability.resolve.clone(),
+    );
     function
 }
 
@@ -125,7 +134,9 @@ fn settle_element(
     env: &mut HashMap<String, Value>,
     state: &str,
 ) -> Result<Value, RuntimeError> {
-    let promise = promise_from_resolving_function(function)?;
+    if already_called(function) {
+        return Ok(Value::Undefined);
+    }
     let index = match function.env.get(PROMISE_ALL_INDEX) {
         Some(Value::Number(index)) if *index >= 0.0 => *index as usize,
         _ => {
@@ -155,39 +166,38 @@ fn settle_element(
     };
 
     let settled_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    values.set(index, settled_result_object(state, settled_value));
-    let next_remaining = match remaining
-        .own_property("count")
-        .map(|property| property.value)
-    {
-        Some(Value::Number(count)) if count > 0.0 => count - 1.0,
-        _ => 0.0,
-    };
-    remaining.set("count".to_owned(), Value::Number(next_remaining));
-    if next_remaining == 0.0 {
-        settle_promise(&promise, PROMISE_FULFILLED, Value::Array(values), env);
+    values.set(index, settled_result_object(state, settled_value, env));
+    if perform::decrement_remaining(&remaining) == 0.0 {
+        let resolve = function
+            .env
+            .get(PROMISE_ALL_CAPABILITY_RESOLVE)
+            .cloned()
+            .unwrap_or(Value::Undefined);
+        call_function(
+            resolve,
+            Value::Undefined,
+            vec![Value::Array(values)],
+            env,
+            false,
+        )?;
     }
-
     Ok(Value::Undefined)
 }
 
-fn settled_result_object(state: &str, value: Value) -> Value {
-    let object = if state == PROMISE_FULFILLED {
-        ObjectRef::new(HashMap::from([
-            (
-                "status".to_owned(),
-                Value::String(PROMISE_FULFILLED.to_owned()),
-            ),
-            ("value".to_owned(), value),
-        ]))
+/// Builds an ordinary object `{ status, value }` or `{ status, reason }` with
+/// the spec property order, `%Object.prototype%`, and default data attributes
+/// (writable, enumerable, configurable).
+fn settled_result_object(state: &str, value: Value, env: &HashMap<String, Value>) -> Value {
+    let object = ObjectRef::with_prototype(HashMap::new(), crate::object_prototype(env));
+    object.define_property(
+        "status".to_owned(),
+        Property::data(Value::String(state.to_owned()), true, true, true),
+    );
+    let (key, value_key) = if state == PROMISE_FULFILLED {
+        ("value", value)
     } else {
-        ObjectRef::new(HashMap::from([
-            (
-                "status".to_owned(),
-                Value::String(PROMISE_REJECTED.to_owned()),
-            ),
-            ("reason".to_owned(), value),
-        ]))
+        ("reason", value)
     };
+    object.define_property(key.to_owned(), Property::data(value_key, true, true, true));
     Value::Object(object)
 }

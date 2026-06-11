@@ -255,6 +255,54 @@ pub(crate) fn is_error_object(object: &ObjectRef) -> bool {
     object.own_property(ERROR_DATA_PROPERTY).is_some()
 }
 
+/// Materializes the thrown JavaScript value for a `RuntimeError`.
+///
+/// Engine-internal errors carry their reason in `thrown` when one exists;
+/// otherwise the `message` encodes a native error (`"TypeError: ..."`) that is
+/// reconstructed into a real Error object using the realm's constructors. This
+/// mirrors the VM's catch-path reification so values rejected from native code
+/// (combinators, async functions) are observably `instanceof TypeError`.
+pub(crate) fn runtime_error_to_value(error: RuntimeError, env: &HashMap<String, Value>) -> Value {
+    if let Some(thrown) = error.thrown {
+        return *thrown;
+    }
+    let message = error
+        .message
+        .trim_start_matches("throw statement executed: ");
+    let (constructor_name, detail) = split_native_error_message(message);
+    if let Some(Value::Function(function)) = env.get(constructor_name) {
+        if let Ok(value) = native_error(
+            function,
+            Value::Undefined,
+            &[Value::String(detail.clone())],
+            false,
+        ) {
+            return value;
+        }
+    }
+    Value::String(message.to_owned())
+}
+
+/// Splits a `"TypeError: detail"`-style message into its constructor name and
+/// detail, defaulting to `TypeError` when no recognised prefix is present.
+fn split_native_error_message(message: &str) -> (&'static str, String) {
+    for (name, _) in NATIVE_ERRORS {
+        if let Some(detail) = message
+            .strip_prefix(name)
+            .and_then(|rest| rest.strip_prefix(": "))
+        {
+            return (name, detail.to_owned());
+        }
+    }
+    if let Some(detail) = message
+        .strip_prefix("Error")
+        .and_then(|rest| rest.strip_prefix(": "))
+    {
+        return ("Error", detail.to_owned());
+    }
+    ("TypeError", message.to_owned())
+}
+
 pub(crate) fn error_object_to_string(object: &ObjectRef) -> Option<String> {
     if !is_error_object(object) {
         return None;
