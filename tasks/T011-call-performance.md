@@ -220,6 +220,124 @@ accessor descriptor to preserve semantics.
 ./scripts/test262-baseline.sh --all --filter test/built-ins/TypedArray/prototype/fill --engine quickjs-rust 2>&1 | tail -5
 ```
 
+## Status: WIP — `CallEnv` foundation landed, migration in progress
+
+The shared-realm `CallEnv` type is implemented and compiling
+(`crates/qjs-runtime/src/function/env.rs`, exported from `function.rs`). The
+crate still builds and the test suite is unchanged because nothing else has
+been re-pointed at it yet. The remaining mechanical migration (775 signature
+sites) is the bulk of the work and is NOT yet done — the branch builds today
+precisely because the flat-`HashMap` model is still in place everywhere except
+the new, currently-unused type.
+
+### Design decided (read before resuming)
+
+`CallEnv { realm: Rc<RefCell<HashMap<String, Value>>>, locals: HashMap }`.
+
+- `realm` is the shared cell: runtime intrinsics + true globals. `Rc::clone`d
+  into every frame, so reassigned builtins and sloppy globals are live for
+  free.
+- `locals` is the per-frame layer: `this`/`arguments`/params/captures/
+  caller-scope bindings. Only this is cloned per call.
+- `get(name) -> Option<Value>` (OWNED): locals first, then a short realm
+  borrow + clone. `contains_key`, `remove`, `get_local_mut` operate on locals.
+- `insert(name, value)` writes to **locals** (the frame layer). The VM
+  write-back (`apply_env`/`apply_call_env`) keeps routing locals entries to
+  real locals-or-globals via `bytecode.local_slot`, exactly as today. This
+  preserves the existing "build a frame, then write back" contract for runtime
+  builtins with no per-site routing decisions.
+- `insert_realm(name, value)` writes straight to the shared cell — used by the
+  builtin **install path** and explicit global definition.
+
+### Critical routing/borrow rules (the correctness contract)
+
+1. The **install path stays on `&mut HashMap`**, NOT `CallEnv`.
+   `initialize_builtins` and every `install_*` (object/install.rs, array/
+   install.rs, ...) run once in `Vm::new` against the raw realm map *before any
+   frame exists*; leave their signatures as `env: &mut HashMap<String, Value>`.
+   They populate the map; `Vm::new` then wraps it: `let realm =
+   Rc::new(RefCell::new(globals));`. CAUTION: install and runtime builtins live
+   in the SAME files and share the `env: &mut HashMap` parameter name — a blind
+   per-file sed will wrongly convert install signatures. Convert by function,
+   not by file: install_* + the helpers they call keep `&mut HashMap`; runtime
+   builtins (the ones reachable from `call_native_function`) move to `&CallEnv`/
+   `&mut CallEnv`.
+2. NEVER hold `realm.borrow()`/`borrow_mut()` across a call back into user code
+   (getters/setters/Proxy traps/`valueOf`/`toString`/iterators). `CallEnv::get`
+   already drops its borrow before returning an owned value; keep it that way at
+   every new call site.
+3. `env.clone()` now shares the realm Rc and copies only locals — this is the
+   intended closure-capture model. The `Rc<RefCell<HashMap>>` `captured_env`
+   fields (Function, GeneratorStart/Snapshot, vm_class, vm_private,
+   async_*) must be reworked to capture `realm: Realm` + a `locals` snapshot
+   instead of a deep `HashMap` snapshot. Preserve
+   `functions::nested_closures_capture_live_outer_bindings` and the
+   `async_generators.rs` stale-binding regression tests.
+
+### Mechanical migration order (compiler-driven; nothing compiles mid-way)
+
+1. **VM core (`bytecode/vm.rs`)**: replace `globals: HashMap<String, Value>`
+   with `realm: Realm`. `Vm::new` builds the map, wraps it in the realm cell.
+   - `current_env()` is deleted; reads go straight to the realm
+     (`self.realm.borrow().get(...)`) or a `CallEnv` over `self.realm`.
+   - `call_env`/`function_env`/`apply_env`/`apply_call_env` collapse: build a
+     `CallEnv::new(self.realm_rc())` whose `locals` are only the frame's
+     referenced caller bindings (keep `insert_referenced_call_bindings` /
+     `insert_scope_call_bindings`, but they fill `locals`, not a full clone).
+     Global reads/writes hit the realm directly, so the
+     `propagate_caller_bindings` write-back scan over realm names goes away
+     (locals write-back via `local_slot` stays).
+   - 66 `self.globals` sites across 11 `bytecode/vm_*.rs` files become
+     `self.realm.borrow()`/`borrow_mut()` (short borrows!) or `self.realm_rc()`.
+     `vm_call.rs` / `vm_bindings.rs` take `globals: &HashMap` params — change to
+     `&Realm` or pass a borrow.
+   - `array_prototype_cache` and `try_direct_get` (vm_props.rs) re-point from
+     `&self.globals` to `&self.realm.borrow()` (short borrow; clone the
+     prototype ObjectRef out before any re-entrant call).
+2. **`function/call.rs`**: `call_function`/`construct_function`/
+   `function_env`/`initialize_instance_fields`/`native_mapped_argument_*` take
+   `env: &mut CallEnv`. `function_env` builds the frame `locals` (no intrinsics
+   copy — those live in the shared realm). `insert_runtime_intrinsics` is
+   deleted (realm already has them). `insert_caller_scope_bindings`'
+   O(50)-per-key intrinsic scan goes away. `propagate_caller_bindings`'
+   realm-name write-back is unnecessary (shared cell); keep only the
+   locals/caller-binding write-back.
+3. **`eval_function_bytecode`** (vm.rs) takes the realm + locals instead of a
+   flat `HashMap` + `captured_env: Rc<RefCell<HashMap>>`.
+4. **`property/{mod.rs,prototype.rs}`** and every helper there: change
+   `env: &HashMap` → `env: &CallEnv` (or `&Realm` for the pure prototype
+   lookups — they only read `Object`/`Array`/`String`/`Function`). `env.get("Object")`
+   etc. now returns `Option<Value>` (owned); the `let Some(Value::Function(f)) =
+   env.get(...)` patterns still match on the owned value. The two
+   `let mut proxy_env = env.clone()` sites become `CallEnv` clones.
+5. **Builtins (the 1419 `, env` threading sites)**: once the parameter type
+   flips to `&CallEnv`/`&mut CallEnv`, threading is mechanical. The 82
+   `env.get(x).cloned()` become `env.get(x)`; the `if let Some(v) = env.get(x)`
+   borrow sites bind the owned value first. The 93 `env.insert` sites: runtime
+   inserts → `CallEnv::insert` (frame) or, where they define a true global,
+   `insert_realm`. Hand-review each. The 9 get_mut/entry/remove/keys/
+   contains_key sites (enumerated in the recipe above) each map to a `CallEnv`
+   method.
+6. **Generators/async (`vm_generator.rs`, async_*.rs)**: snapshots store the
+   `Realm` Rc + a locals snapshot instead of a `globals` map copy. The
+   `refresh_from_caller`/`propagate_to_caller` workarounds likely become
+   unnecessary because the realm cell is shared — remove them ONLY if the
+   `async_generators.rs` regression tests still pass without them.
+7. **`global.rs` indirect eval** (`eval_bytecode_with_env`, the `env.clone()` at
+   global.rs:176 and the `entry().or_insert` at :203) and `bytecode/mod.rs`
+   `eval_bytecode_with_env` (:139): these build a fresh realm/captured env for
+   eval'd code — pass the realm cell through.
+
+### Verification gates (must all pass before commit)
+
+- `cargo test -p qjs-runtime` (577 tests), `cargo test -p qjs-parser`
+- `cargo fmt`, `./scripts/check.sh` exit 0, `./scripts/compare-qjs.sh` exit 0
+- Timings (debug): 20k plain-call loop + 20k closure-call loop in single-digit
+  µs/call; `fill/coerced-indexes.js` well under 10s; `TypedArray/prototype/fill`
+  timeouts → ~0.
+- Watch for double-borrow panics in tests touching getters/Proxy/
+  `Symbol.toPrimitive` — those mean rule 2 was violated.
+
 ## Notes
 
 - The 19 `TypedArray/prototype/fill` failures in the baseline scan are
