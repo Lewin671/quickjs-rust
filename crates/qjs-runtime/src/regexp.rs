@@ -16,6 +16,7 @@ mod symbol_match;
 mod symbol_replace;
 mod symbol_search;
 mod symbol_split;
+mod unicode;
 mod validation;
 
 pub(crate) use escape::native_regexp_escape;
@@ -287,6 +288,8 @@ pub(crate) fn native_regexp_prototype_exec(
     let ignore_case = regexp_flags_contains(&object, 'i');
     let unicode = regexp_flags_contains(&object, 'u');
     let dot_all = regexp_flags_contains(&object, 's');
+    let multiline = regexp_flags_contains(&object, 'm');
+    let has_indices = regexp_flags_contains(&object, 'd');
     let stateful = global || sticky;
     let last_index = regexp_last_index(&this_value, env)?;
     let start_code_unit = if stateful { last_index } else { 0 };
@@ -297,9 +300,25 @@ pub(crate) fn native_regexp_prototype_exec(
     };
 
     let match_result = if sticky {
-        matcher::regexp_match_at(&source, &input, start, ignore_case, unicode, dot_all)
+        matcher::regexp_match_at(
+            &source,
+            &input,
+            start,
+            ignore_case,
+            unicode,
+            dot_all,
+            multiline,
+        )
     } else {
-        matcher::regexp_match_range(&source, &input, start, ignore_case, unicode, dot_all)
+        matcher::regexp_match_range(
+            &source,
+            &input,
+            start,
+            ignore_case,
+            unicode,
+            dot_all,
+            multiline,
+        )
     };
 
     let Some(match_result) = match_result else {
@@ -316,7 +335,14 @@ pub(crate) fn native_regexp_prototype_exec(
         };
         regexp_set_last_index_object(&object, last_index, env)?;
     }
-    Ok(regexp_match_array(&input, match_result, unicode))
+    let group_names = matcher::regexp_group_names(&source);
+    Ok(regexp_match_array(
+        &input,
+        match_result,
+        unicode,
+        &group_names,
+        has_indices,
+    ))
 }
 
 pub(crate) fn native_regexp_prototype_to_string(this_value: Value) -> Result<Value, RuntimeError> {
@@ -612,15 +638,22 @@ fn regexp_set_last_index_object(
     Ok(())
 }
 
-fn regexp_match_array(input: &str, match_result: matcher::RegexpMatch, unicode: bool) -> Value {
-    let mut values = Vec::with_capacity(1 + match_result.captures.len());
+fn regexp_match_array(
+    input: &str,
+    match_result: matcher::RegexpMatch,
+    unicode: bool,
+    group_names: &[Option<String>],
+    has_indices: bool,
+) -> Value {
+    let captures = match_result.captures.clone();
+    let mut values = Vec::with_capacity(1 + captures.len());
     values.push(Value::String(input_slice(
         input,
         match_result.start,
         match_result.end,
         unicode,
     )));
-    values.extend(match_result.captures.into_iter().map(|capture| {
+    values.extend(captures.iter().map(|capture| {
         capture
             .map(|(start, end)| Value::String(input_slice(input, start, end, unicode)))
             .unwrap_or(Value::Undefined)
@@ -633,7 +666,106 @@ fn regexp_match_array(input: &str, match_result: matcher::RegexpMatch, unicode: 
     };
     result.set_property("index".to_owned(), Value::Number(index as f64));
     result.set_property("input".to_owned(), Value::String(input.to_owned()));
+    result.set_property(
+        "groups".to_owned(),
+        regexp_groups_object(input, &captures, unicode, group_names),
+    );
+    if has_indices {
+        result.set_property(
+            "indices".to_owned(),
+            regexp_indices_array(
+                input,
+                (match_result.start, match_result.end),
+                &captures,
+                unicode,
+                group_names,
+            ),
+        );
+    }
     Value::Array(result)
+}
+
+/// Build the `indices` array for the `d` flag: a parallel array of
+/// `[startCodeUnit, endCodeUnit]` pairs (or `undefined` for unmatched groups),
+/// with a `groups` property mirroring the named captures.
+fn regexp_indices_array(
+    input: &str,
+    whole: (usize, usize),
+    captures: &[Option<(usize, usize)>],
+    unicode: bool,
+    group_names: &[Option<String>],
+) -> Value {
+    let mut entries = Vec::with_capacity(1 + captures.len());
+    entries.push(index_pair_value(input, Some(whole), unicode));
+    entries.extend(
+        captures
+            .iter()
+            .map(|capture| index_pair_value(input, *capture, unicode)),
+    );
+    let indices = ArrayRef::new(entries);
+
+    let groups = if group_names.is_empty() {
+        Value::Undefined
+    } else {
+        let object = ObjectRef::with_prototype(HashMap::new(), None);
+        for (capture_index, name) in group_names.iter().enumerate() {
+            let Some(name) = name else { continue };
+            let value = index_pair_value(
+                input,
+                captures.get(capture_index).copied().flatten(),
+                unicode,
+            );
+            object.set(name.clone(), value);
+        }
+        Value::Object(object)
+    };
+    indices.set_property("groups".to_owned(), groups);
+    Value::Array(indices)
+}
+
+/// Convert a char-index range into a `[start, end]` array of code-unit
+/// positions, or `undefined` when the range is absent.
+fn index_pair_value(input: &str, range: Option<(usize, usize)>, unicode: bool) -> Value {
+    let Some((start, end)) = range else {
+        return Value::Undefined;
+    };
+    let to_units = |char_index: usize| -> f64 {
+        if unicode {
+            code_unit_index_for_char_index(input, char_index) as f64
+        } else {
+            char_index as f64
+        }
+    };
+    Value::Array(ArrayRef::new(vec![
+        Value::Number(to_units(start)),
+        Value::Number(to_units(end)),
+    ]))
+}
+
+/// Build the `groups` property for a match result: `undefined` when the pattern
+/// has no named groups, otherwise a null-prototype object mapping each name to
+/// its captured substring (or `undefined` when the group did not participate).
+fn regexp_groups_object(
+    input: &str,
+    captures: &[Option<(usize, usize)>],
+    unicode: bool,
+    group_names: &[Option<String>],
+) -> Value {
+    if group_names.is_empty() {
+        return Value::Undefined;
+    }
+    let groups = ObjectRef::with_prototype(HashMap::new(), None);
+    for (capture_index, name) in group_names.iter().enumerate() {
+        let Some(name) = name else { continue };
+        let value = captures
+            .get(capture_index)
+            .copied()
+            .flatten()
+            .map(|(start, end)| Value::String(input_slice(input, start, end, unicode)))
+            .unwrap_or(Value::Undefined);
+        groups.set(name.clone(), value);
+    }
+    Value::Object(groups)
 }
 
 fn input_slice(input: &str, start: usize, end: usize, unicode: bool) -> String {

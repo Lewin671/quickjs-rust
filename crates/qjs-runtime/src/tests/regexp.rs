@@ -678,3 +678,90 @@ fn evaluates_regexp_exec_date_format_shape() {
         Ok(Value::Boolean(true))
     );
 }
+
+#[test]
+fn evaluates_regexp_named_capture_groups() {
+    // The `groups` object exposes named captures and is null-prototyped.
+    assert_eq!(
+        eval(
+            r#"let m = /(?<year>\d{4})-(?<month>\d{2})/.exec("2024-06"); m.groups.year + "/" + m.groups.month;"#
+        ),
+        Ok(Value::String("2024/06".to_owned()))
+    );
+    assert_eq!(
+        eval(r#"Object.getPrototypeOf(/(?<a>.)/.exec("x").groups);"#),
+        Ok(Value::Null)
+    );
+    // `groups` is undefined when there are no named groups.
+    assert_eq!(eval(r#"/(\d+)/.exec("42").groups;"#), Ok(Value::Undefined));
+    // Unmatched named groups are present with value undefined.
+    assert_eq!(
+        eval(
+            r#"let m = /(?<a>x)|(?<b>y)/.exec("y"); m.groups.a === undefined && m.groups.b === "y";"#
+        ),
+        Ok(Value::Boolean(true))
+    );
+    // `\k<name>` backreferences.
+    assert_eq!(
+        eval(r#"/(?<c>.)\k<c>/.test("aa");"#),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(r#"/^(?<c>.)\k<c>$/.test("ab");"#),
+        Ok(Value::Boolean(false))
+    );
+    // `$<name>` substitution in String.prototype.replace.
+    assert_eq!(
+        eval(r#""2024-06".replace(/(?<y>\d{4})-(?<m>\d{2})/, "$<m>/$<y>");"#),
+        Ok(Value::String("06/2024".to_owned()))
+    );
+    // Lookahead and lookbehind assertions.
+    assert_eq!(
+        eval(r#"/(?<=\$)\d+/.exec("$100")[0];"#),
+        Ok(Value::String("100".to_owned()))
+    );
+    assert_eq!(eval(r#"/q(?=u)/.test("queue");"#), Ok(Value::Boolean(true)));
+    assert_eq!(
+        eval(r#"/q(?!u)/.test("queue");"#),
+        Ok(Value::Boolean(false))
+    );
+}
+
+#[test]
+fn evaluates_regexp_match_indices_d_flag() {
+    // No `indices` property without the `d` flag.
+    assert_eq!(eval(r#"/a/.exec("a").indices;"#), Ok(Value::Undefined));
+    // Whole-match and capture index pairs are code-unit positions.
+    assert_eq!(
+        eval(
+            r#"let m = /(a)(b)/d.exec("xab"); m.indices[0].join(",") + ":" + m.indices[1].join(",") + ":" + m.indices[2].join(",");"#
+        ),
+        Ok(Value::String("1,3:1,2:2,3".to_owned()))
+    );
+    // Unmatched optional groups produce undefined entries.
+    assert_eq!(
+        eval(r#"let m = /(a)(b)?/d.exec("a"); m.indices[2];"#),
+        Ok(Value::Undefined)
+    );
+    // The indices array carries a `groups` object for named captures, or
+    // undefined when there are none.
+    assert_eq!(
+        eval(r#"/a/d.exec("a").indices.groups;"#),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval(r#"let m = /(?<g>b)/d.exec("ab"); m.indices.groups.g.join(",");"#),
+        Ok(Value::String("1,2".to_owned()))
+    );
+    assert_eq!(
+        eval(r#"Object.getPrototypeOf(/(?<g>b)/d.exec("ab").indices.groups);"#),
+        Ok(Value::Null)
+    );
+    // Astral matches report code-unit (UTF-16) positions under the `u` flag.
+    assert_eq!(
+        eval(
+            r#"let m = /(?<emoji>\u{1F600})/du.exec("x\u{1F600}y"); m.indices.groups.emoji.join(",");"#
+        ),
+        Ok(Value::String("1,3".to_owned()))
+    );
+}

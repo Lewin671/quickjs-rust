@@ -1,4 +1,40 @@
+use crate::regexp::unicode::{self, PropertySet};
 use crate::string::string_from_code_unit;
+
+/// A parsed `\p{...}` / `\P{...}` Unicode property escape.
+pub(super) struct ParsedPropertyEscape {
+    pub(super) set: PropertySet,
+    pub(super) negated: bool,
+    pub(super) next_pc: usize,
+}
+
+/// Parse a property escape at `pc` (pointing at the backslash). Returns `None`
+/// when the escape is not a `\p{...}`/`\P{...}` form; assumes the pattern has
+/// already passed validation so a well-formed body resolves.
+pub(super) fn property_escape(pattern: &[char], pc: usize) -> Option<ParsedPropertyEscape> {
+    let negated = match pattern.get(pc + 1)? {
+        'p' => false,
+        'P' => true,
+        _ => return None,
+    };
+    if pattern.get(pc + 2) != Some(&'{') {
+        return None;
+    }
+    let mut index = pc + 3;
+    while pattern.get(index).is_some_and(|value| *value != '}') {
+        index += 1;
+    }
+    if pattern.get(index) != Some(&'}') {
+        return None;
+    }
+    let body: String = pattern[pc + 3..index].iter().collect();
+    let set = unicode::resolve_property(&body)?;
+    Some(ParsedPropertyEscape {
+        set,
+        negated,
+        next_pc: index + 1,
+    })
+}
 
 pub(super) struct ParsedEscape {
     pub(super) value: char,

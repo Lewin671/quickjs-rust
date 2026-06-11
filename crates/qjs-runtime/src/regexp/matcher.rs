@@ -11,10 +11,16 @@ mod tests;
 
 use classes::class_match;
 use escapes::{
-    chars_equal, regexp_control_escape, regexp_whitespace, regexp_word_char, unicode_escape,
+    chars_equal, property_escape, regexp_control_escape, regexp_whitespace, regexp_word_char,
+    unicode_escape,
 };
-use groups::{closing_group, group_alternatives, is_non_capturing_group};
+use groups::{
+    GroupKind, closing_group, group_alternatives, group_kind, is_non_capturing_group,
+    named_backreference, named_group_index,
+};
 use normalization::normalized_regexp_source;
+
+pub(super) use groups::regexp_group_names;
 
 #[derive(Clone)]
 pub(super) struct RegexpMatch {
@@ -42,6 +48,7 @@ struct MatchOptions {
     ignore_case: bool,
     unicode: bool,
     dot_all: bool,
+    multiline: bool,
 }
 
 struct RepeatAtom<'a> {
@@ -61,6 +68,7 @@ pub(super) fn regexp_match_range(
     ignore_case: bool,
     unicode: bool,
     dot_all: bool,
+    multiline: bool,
 ) -> Option<RegexpMatch> {
     regexp_match(
         source,
@@ -69,6 +77,7 @@ pub(super) fn regexp_match_range(
         ignore_case,
         unicode,
         dot_all,
+        multiline,
         false,
     )
 }
@@ -80,6 +89,7 @@ pub(super) fn regexp_match_at(
     ignore_case: bool,
     unicode: bool,
     dot_all: bool,
+    multiline: bool,
 ) -> Option<RegexpMatch> {
     regexp_match(
         source,
@@ -88,10 +98,12 @@ pub(super) fn regexp_match_at(
         ignore_case,
         unicode,
         dot_all,
+        multiline,
         true,
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn regexp_match(
     source: &str,
     input: &str,
@@ -99,6 +111,7 @@ fn regexp_match(
     ignore_case: bool,
     unicode: bool,
     dot_all: bool,
+    multiline: bool,
     exact_start: bool,
 ) -> Option<RegexpMatch> {
     let source = normalized_regexp_source(source);
@@ -119,10 +132,11 @@ fn regexp_match(
         ignore_case,
         unicode,
         dot_all,
+        multiline,
     };
     let starts: Vec<_> = if exact_start {
         vec![start_index]
-    } else if pattern.first() == Some(&'^') {
+    } else if pattern.first() == Some(&'^') && !multiline {
         if start_index == 0 {
             vec![0]
         } else {
@@ -212,14 +226,14 @@ fn match_pattern(
     }
     match pattern[pc] {
         '^' => {
-            if state.index == 0 {
+            if at_line_start(text, state.index, options.multiline) {
                 match_pattern(pattern, text, pc + 1, end_pc, state, group_indices, options)
             } else {
                 Vec::new()
             }
         }
         '$' => {
-            if state.index == text.len() {
+            if at_line_end(text, state.index, options.multiline) {
                 match_pattern(pattern, text, pc + 1, end_pc, state, group_indices, options)
             } else {
                 Vec::new()
@@ -259,6 +273,12 @@ fn atom_end(pattern: &[char], pc: usize, unicode: bool) -> Option<usize> {
     match pattern.get(pc)? {
         '\\' if unicode_escape(pattern, pc, unicode).is_some() => {
             unicode_escape(pattern, pc, unicode).map(|escape| escape.next_pc)
+        }
+        '\\' if unicode && property_escape_end(pattern, pc).is_some() => {
+            property_escape_end(pattern, pc)
+        }
+        '\\' if pattern.get(pc + 1) == Some(&'k') && named_backreference(pattern, pc).is_some() => {
+            named_backreference(pattern, pc).map(|(_, next_pc)| next_pc)
         }
         '\\' => Some(pc + 2),
         '[' => pattern[pc + 1..]
@@ -307,6 +327,24 @@ fn is_line_terminator(value: char) -> bool {
     matches!(value, '\n' | '\r' | '\u{2028}' | '\u{2029}')
 }
 
+/// `^` assertion: matches at the start of input, or (in multiline mode) right
+/// after a line terminator.
+fn at_line_start(text: &[char], index: usize, multiline: bool) -> bool {
+    if index == 0 {
+        return true;
+    }
+    multiline && text.get(index - 1).copied().is_some_and(is_line_terminator)
+}
+
+/// `$` assertion: matches at the end of input, or (in multiline mode) right
+/// before a line terminator.
+fn at_line_end(text: &[char], index: usize, multiline: bool) -> bool {
+    if index == text.len() {
+        return true;
+    }
+    multiline && text.get(index).copied().is_some_and(is_line_terminator)
+}
+
 fn match_literal(
     text: &[char],
     next_pc: usize,
@@ -339,6 +377,19 @@ fn match_escape(
     {
         let capture = state.captures[index - 1];
         return match_backreference(text, state, capture, pc + 2, options);
+    }
+    if options.unicode
+        && matches!(escaped, 'p' | 'P')
+        && let Some(escape) = property_escape(pattern, pc)
+    {
+        return match_property_escape(text, state, &escape);
+    }
+    if escaped == 'k'
+        && let Some((name, next_pc)) = named_backreference(pattern, pc)
+    {
+        let capture = named_group_index(pattern, &name)
+            .and_then(|index| state.captures.get(index).copied().flatten());
+        return match_backreference(text, state, capture, next_pc, options);
     }
     let Some(value) = text.get(state.index).copied() else {
         return Vec::new();
@@ -435,6 +486,26 @@ fn match_unicode_escape(
         matches.push((next_pc, matched));
     }
     matches
+}
+
+fn property_escape_end(pattern: &[char], pc: usize) -> Option<usize> {
+    property_escape(pattern, pc).map(|escape| escape.next_pc)
+}
+
+fn match_property_escape(
+    text: &[char],
+    mut state: MatchState,
+    escape: &escapes::ParsedPropertyEscape,
+) -> Vec<(usize, MatchState)> {
+    let Some((value, next_index)) = regexp_code_point_at(text, state.index, true) else {
+        return Vec::new();
+    };
+    let matched = escape.set.contains(u32::from(value));
+    if matched == escape.negated {
+        return Vec::new();
+    }
+    state.index = next_index;
+    vec![(escape.next_pc, state)]
 }
 
 fn code_unit_char(code_unit: u16) -> char {
@@ -615,38 +686,65 @@ fn repeat_atom(
     results
 }
 
+/// Explicit-stack DFS over repetitions of a quantified atom, producing accept
+/// states in the same priority order as the natural recursion (greedy: longest
+/// match first; lazy: shortest first). Using an explicit stack avoids native
+/// stack overflow on long inputs such as `^\p{Nd}+$` over thousands of chars.
 fn repeat_atom_from(
     repeat: &RepeatAtom<'_>,
     state: MatchState,
     count: usize,
     results: &mut Vec<MatchState>,
 ) {
-    if !repeat.quantifier.greedy {
-        results.push(repeat_accept_state(
-            state.clone(),
-            count,
-            &repeat.atom_captures,
-        ));
+    // Each frame is a state we are expanding at a given repetition count.
+    // For greedy matching we want to emit the accept state for a frame only
+    // after all of its descendants, so we expand children first (pushed in
+    // reverse so the first child is processed first) and defer the accept.
+    enum Work {
+        Expand(MatchState, usize),
+        Accept(MatchState, usize),
     }
-
-    if repeat.quantifier.max.is_none_or(|max| count < max) {
-        for (_, next_state) in match_atom(
-            repeat.pattern,
-            repeat.text,
-            repeat.atom_pc,
-            state.clone(),
-            repeat.group_indices,
-            repeat.options,
-        ) {
-            if next_state.index == state.index {
-                continue;
+    let mut stack = vec![Work::Expand(state, count)];
+    while let Some(work) = stack.pop() {
+        match work {
+            Work::Accept(state, count) => {
+                results.push(repeat_accept_state(state, count, &repeat.atom_captures));
             }
-            repeat_atom_from(repeat, next_state, count + 1, results);
-        }
-    }
+            Work::Expand(state, count) => {
+                if repeat.quantifier.greedy {
+                    // Defer this frame's own accept until after its children.
+                    stack.push(Work::Accept(state.clone(), count));
+                } else {
+                    results.push(repeat_accept_state(
+                        state.clone(),
+                        count,
+                        &repeat.atom_captures,
+                    ));
+                }
 
-    if repeat.quantifier.greedy {
-        results.push(repeat_accept_state(state, count, &repeat.atom_captures));
+                if repeat.quantifier.max.is_none_or(|max| count < max) {
+                    let mut children: Vec<MatchState> = match_atom(
+                        repeat.pattern,
+                        repeat.text,
+                        repeat.atom_pc,
+                        state.clone(),
+                        repeat.group_indices,
+                        repeat.options,
+                    )
+                    .into_iter()
+                    .filter_map(|(_, next_state)| {
+                        (next_state.index != state.index).then_some(next_state)
+                    })
+                    .collect();
+                    // Process children in order: push in reverse so the first
+                    // child is on top of the stack.
+                    children.reverse();
+                    for next_state in children {
+                        stack.push(Work::Expand(next_state, count + 1));
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -689,11 +787,38 @@ fn match_group(
     let Some(end) = closing_group(pattern, pc) else {
         return Vec::new();
     };
+    let kind = group_kind(pattern, pc);
+    if let GroupKind::Lookahead { negative } = kind {
+        return match_lookaround(
+            pattern,
+            text,
+            pc + 3,
+            end,
+            state,
+            group_indices,
+            options,
+            negative,
+            false,
+        );
+    }
+    if let GroupKind::Lookbehind { negative } = kind {
+        return match_lookaround(
+            pattern,
+            text,
+            pc + 4,
+            end,
+            state,
+            group_indices,
+            options,
+            negative,
+            true,
+        );
+    }
     let group_index = group_indices.get(&pc).copied();
-    let group_start = if is_non_capturing_group(pattern, pc) {
-        pc + 3
-    } else {
-        pc + 1
+    let group_start = match kind {
+        GroupKind::Named { body_offset } => pc + body_offset,
+        GroupKind::NonCapturing => pc + 3,
+        _ => pc + 1,
     };
     let mut matches = Vec::new();
     for (start, end) in group_alternatives(pattern, group_start, end) {
@@ -716,4 +841,96 @@ fn match_group(
             (end + 1, matched)
         })
         .collect()
+}
+
+/// Match a lookahead (`forward = false`) or lookbehind (`forward = true`)
+/// assertion. The assertion is zero-width: on success the index is unchanged.
+#[allow(clippy::too_many_arguments)]
+fn match_lookaround(
+    pattern: &[char],
+    text: &[char],
+    body_start: usize,
+    body_end: usize,
+    state: MatchState,
+    group_indices: &HashMap<usize, usize>,
+    options: MatchOptions,
+    negative: bool,
+    behind: bool,
+) -> Vec<(usize, MatchState)> {
+    let close_pc = body_end + 1;
+    let inner = if behind {
+        match_lookbehind_body(
+            pattern,
+            text,
+            body_start,
+            body_end,
+            state.clone(),
+            group_indices,
+            options,
+        )
+    } else {
+        let mut results = Vec::new();
+        for (start, end) in group_alternatives(pattern, body_start, body_end) {
+            results.extend(match_pattern(
+                pattern,
+                text,
+                start,
+                end,
+                state.clone(),
+                group_indices,
+                options,
+            ));
+        }
+        results
+    };
+
+    if negative {
+        // Negative assertions succeed when the body fails to match, and they
+        // never capture (captures inside are reset to None on success).
+        if inner.is_empty() {
+            vec![(close_pc, state)]
+        } else {
+            Vec::new()
+        }
+    } else {
+        // Positive assertions keep the captures established by the body but
+        // restore the index to its position before the assertion.
+        inner
+            .into_iter()
+            .map(|mut matched| {
+                matched.index = state.index;
+                (close_pc, matched)
+            })
+            .collect()
+    }
+}
+
+/// Match the body of a lookbehind ending at `state.index`. We try every body
+/// start position from 0..=state.index and keep those whose match ends exactly
+/// at `state.index`.
+fn match_lookbehind_body(
+    pattern: &[char],
+    text: &[char],
+    body_start: usize,
+    body_end: usize,
+    state: MatchState,
+    group_indices: &HashMap<usize, usize>,
+    options: MatchOptions,
+) -> Vec<MatchState> {
+    let target = state.index;
+    let mut results = Vec::new();
+    for begin in 0..=target {
+        for (start, end) in group_alternatives(pattern, body_start, body_end) {
+            let probe = MatchState {
+                index: begin,
+                captures: state.captures.clone(),
+            };
+            for matched in match_pattern(pattern, text, start, end, probe, group_indices, options) {
+                if matched.index == target {
+                    results.push(matched);
+                }
+            }
+        }
+    }
+    results
 }

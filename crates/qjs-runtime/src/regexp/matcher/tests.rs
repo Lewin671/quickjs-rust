@@ -1,5 +1,26 @@
-use super::regexp_match_range;
+use super::regexp_match_range as regexp_match_range_inner;
+use super::{RegexpMatch, regexp_match_at};
 use crate::string::string_from_code_unit;
+
+/// Test wrapper keeping the historical six-argument signature (multiline off).
+fn regexp_match_range(
+    source: &str,
+    input: &str,
+    start_index: usize,
+    ignore_case: bool,
+    unicode: bool,
+    dot_all: bool,
+) -> Option<RegexpMatch> {
+    regexp_match_range_inner(
+        source,
+        input,
+        start_index,
+        ignore_case,
+        unicode,
+        dot_all,
+        false,
+    )
+}
 
 #[test]
 fn captures_greedy_quantified_group_range() {
@@ -151,4 +172,114 @@ fn whitespace_escapes_use_ecmascript_character_set() {
         assert!(regexp_match_range(r"^\S$", &input, 0, false, false, false).is_some());
         assert!(regexp_match_range(r"^[\S]$", &input, 0, false, false, false).is_some());
     }
+}
+
+#[test]
+fn unicode_property_escapes_match_code_points() {
+    // General_Category, scripts, and binary properties, positive and negated.
+    assert!(regexp_match_range(r"^\p{Nd}$", "5", 0, false, true, false).is_some());
+    assert!(regexp_match_range(r"^\p{Lu}$", "A", 0, false, true, false).is_some());
+    assert!(regexp_match_range(r"^\p{Lu}$", "a", 0, false, true, false).is_none());
+    assert!(regexp_match_range(r"^\P{Lu}$", "a", 0, false, true, false).is_some());
+    assert!(regexp_match_range(r"^\p{L}$", "\u{00E9}", 0, false, true, false).is_some());
+    assert!(regexp_match_range(r"^\p{Script=Greek}$", "\u{03B1}", 0, false, true, false).is_some());
+    // Astral code point matched as a single code point.
+    assert!(regexp_match_range(r"^\p{Any}$", "\u{1F600}", 0, false, true, false).is_some());
+    // Inside a character class, optionally combined with other atoms.
+    assert!(regexp_match_range(r"^[\p{Nd}\p{Lu}]$", "5", 0, false, true, false).is_some());
+    assert!(regexp_match_range(r"^[\p{Nd}A-F]$", "C", 0, false, true, false).is_some());
+    assert!(regexp_match_range(r"^[^\p{Nd}]$", "x", 0, false, true, false).is_some());
+    assert!(regexp_match_range(r"^[^\p{Nd}]$", "5", 0, false, true, false).is_none());
+    // In non-unicode mode `\p` is an identity escape for the literal `p`.
+    assert!(regexp_match_range(r"\p{Nd}", "p{Nd}", 0, false, false, false).is_some());
+}
+
+#[test]
+fn long_greedy_repetition_does_not_overflow_the_stack() {
+    // A greedy quantified atom over a long input must not recurse per
+    // repetition; the matcher uses an explicit work stack instead.
+    let input: String = std::iter::repeat_n('0', 200_000).collect();
+    let matched = regexp_match_range(r"^\d+$", &input, 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, input.len()));
+
+    // A trailing mismatch must still terminate without exploring exponential
+    // backtracking states.
+    let mut mismatch = input.clone();
+    mismatch.push('x');
+    assert!(regexp_match_range(r"^\d+$", &mismatch, 0, false, false, false).is_none());
+}
+
+#[test]
+fn multiline_anchors_match_around_line_terminators() {
+    // Without the multiline flag, `$` only matches at end of input.
+    let input = "pairs\nmakes\tdouble";
+    assert!(regexp_match_range_inner("s$", input, 0, false, false, false, false).is_none());
+    // With multiline, `$` matches before a `\n` (the `s` in "pairs").
+    let matched = regexp_match_range_inner("s$", input, 0, false, false, false, true).unwrap();
+    assert_eq!((matched.start, matched.end), (4, 5));
+
+    // `^` matches after a line terminator in multiline mode.
+    let matched =
+        regexp_match_range_inner("^makes", "pairs\nmakes", 0, false, false, false, true).unwrap();
+    assert_eq!((matched.start, matched.end), (6, 11));
+    assert!(
+        regexp_match_range_inner("^makes", "pairs\nmakes", 0, false, false, false, false).is_none()
+    );
+
+    // All ECMAScript line terminators are recognized.
+    for terminator in ['\n', '\r', '\u{2028}', '\u{2029}'] {
+        let input = format!("a{terminator}b");
+        assert!(
+            regexp_match_range_inner("^b", &input, 0, false, false, false, true).is_some(),
+            "`^b` should match after U+{:04X}",
+            terminator as u32
+        );
+    }
+
+    // Sticky multiline still honors line boundaries.
+    assert!(regexp_match_at("^b", "a\nb", 2, false, false, false, true).is_some());
+}
+
+#[test]
+fn named_groups_capture_and_backreference() {
+    let matched = regexp_match_range(
+        r"(?<year>\d{4})-(?<month>\d{2})",
+        "2024-06",
+        0,
+        false,
+        false,
+        false,
+    )
+    .unwrap();
+    assert_eq!((matched.start, matched.end), (0, 7));
+    assert_eq!(matched.captures, vec![Some((0, 4)), Some((5, 7))]);
+
+    // `\k<name>` matches the same text as the named group.
+    let matched = regexp_match_range(r"(?<c>.)\k<c>", "abxx", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (2, 4));
+    assert!(regexp_match_range(r"^(?<c>.)\k<c>$", "ab", 0, false, false, false).is_none());
+}
+
+#[test]
+fn lookahead_assertions_are_zero_width() {
+    let matched = regexp_match_range(r"a(?=b)", "ab", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 1));
+    assert!(regexp_match_range(r"a(?=b)", "ac", 0, false, false, false).is_none());
+
+    let matched = regexp_match_range(r"a(?!b)", "ac", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 1));
+    assert!(regexp_match_range(r"a(?!b)", "ab", 0, false, false, false).is_none());
+}
+
+#[test]
+fn lookbehind_assertions_match_preceding_text() {
+    let matched = regexp_match_range(r"(?<=\$)\d+", "$100", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (1, 4));
+    assert!(regexp_match_range(r"(?<=\$)\d+", "100", 0, false, false, false).is_none());
+
+    let matched = regexp_match_range(r"(?<!\$)\d+", "a100", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (1, 4));
+    // The first digit after `$` is excluded, so matching starts one later.
+    let matched = regexp_match_range(r"(?<!\$)\d+", "$100", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (2, 4));
 }

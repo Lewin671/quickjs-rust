@@ -1,3 +1,4 @@
+use super::unicode;
 use crate::RuntimeError;
 
 pub(super) fn validate_regexp_init(source: &str, flags: &str) -> Result<(), RuntimeError> {
@@ -32,6 +33,12 @@ fn validate_regexp_pattern(source: &str, unicode: bool) -> Result<(), RuntimeErr
                     && let Some(end) = braced_escape_end(&pattern, index + 2)
                 {
                     index = end + 1;
+                    has_atom = true;
+                    continue;
+                }
+                if unicode && matches!(pattern[index + 1], 'p' | 'P') {
+                    let end = validate_property_escape(&pattern, index)?;
+                    index = end;
                     has_atom = true;
                     continue;
                 }
@@ -110,7 +117,7 @@ fn regexp_capture_count(pattern: &[char]) -> usize {
             '[' => {
                 index = class_end(pattern, index).map_or(pattern.len(), |end| end + 1);
             }
-            '(' if !matches!(pattern.get(index + 1..index + 3), Some(['?', ':'])) => {
+            '(' if is_capturing_group(pattern, index) => {
                 count += 1;
                 index += 1;
             }
@@ -118,6 +125,20 @@ fn regexp_capture_count(pattern: &[char]) -> usize {
         }
     }
     count
+}
+
+/// A `(` opens a capturing group unless it is `(?:`, `(?=`, `(?!`, `(?<=`, or
+/// `(?<!`. A `(?<name>` named group is capturing.
+fn is_capturing_group(pattern: &[char], index: usize) -> bool {
+    if pattern.get(index + 1) != Some(&'?') {
+        return true;
+    }
+    match pattern.get(index + 2) {
+        Some(':') | Some('=') | Some('!') => false,
+        // `(?<=` / `(?<!` are lookbehind (non-capturing); `(?<name>` captures.
+        Some('<') => !matches!(pattern.get(index + 3), Some('=') | Some('!')),
+        _ => true,
+    }
 }
 
 fn class_end(pattern: &[char], start: usize) -> Option<usize> {
@@ -141,6 +162,10 @@ fn validate_class_ranges(
     let mut index = start;
     while index < end {
         if pattern[index] == '\\' {
+            if unicode && matches!(pattern.get(index + 1), Some('p' | 'P')) {
+                index = validate_property_escape(pattern, index)?;
+                continue;
+            }
             index = class_escape_end(pattern, index, unicode);
             continue;
         }
@@ -154,6 +179,23 @@ fn validate_class_ranges(
         index += 1;
     }
     Ok(())
+}
+
+/// Validate a `\p{...}` / `\P{...}` Unicode property escape (unicode mode).
+/// `start` points at the backslash. Returns the index just past the closing
+/// brace, or a SyntaxError when the body is not a valid property expression.
+fn validate_property_escape(pattern: &[char], start: usize) -> Result<usize, RuntimeError> {
+    if pattern.get(start + 2) != Some(&'{') {
+        return Err(regexp_syntax_error("invalid regular expression pattern"));
+    }
+    let Some(close) = braced_escape_end(pattern, start + 2) else {
+        return Err(regexp_syntax_error("invalid regular expression pattern"));
+    };
+    let body: String = pattern[start + 3..close].iter().collect();
+    if unicode::resolve_property(&body).is_none() {
+        return Err(regexp_syntax_error("invalid regular expression pattern"));
+    }
+    Ok(close + 1)
 }
 
 fn class_escape_end(pattern: &[char], start: usize, unicode: bool) -> usize {

@@ -178,7 +178,9 @@ fn replace_matches(
                 match_record.start,
                 &input,
                 &match_record.captures,
-            ),
+                &match_record.groups,
+                env,
+            )?,
         };
         result.push_str(&replacement_string);
         copied_until = match_record.end;
@@ -209,13 +211,16 @@ fn functional_replacement(
     to_js_string_with_env(value, env)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn get_substitution(
     replacement: &str,
     matched: &str,
     position: usize,
     input: &str,
     captures: &[Value],
-) -> String {
+    named_captures: &Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<String, RuntimeError> {
     let mut result = String::new();
     let mut chars = replacement.chars().peekable();
     while let Some(character) = chars.next() {
@@ -237,13 +242,45 @@ fn get_substitution(
                 input.chars().count(),
             )),
             '0'..='9' => substitute_capture(&mut result, &mut chars, captures, next),
+            '<' if !matches!(named_captures, Value::Undefined) => {
+                substitute_named_capture(&mut result, &mut chars, named_captures, env)?;
+            }
             _ => {
                 result.push('$');
                 result.push(next);
             }
         }
     }
-    result
+    Ok(result)
+}
+
+/// Handle a `$<name>` substitution. `named_captures` is known to be defined.
+/// An unterminated `$<` (no closing `>`) is emitted literally per spec.
+fn substitute_named_capture(
+    result: &mut String,
+    chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
+    named_captures: &Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<(), RuntimeError> {
+    let mut name = String::new();
+    let mut closed = false;
+    for value in chars.by_ref() {
+        if value == '>' {
+            closed = true;
+            break;
+        }
+        name.push(value);
+    }
+    if !closed {
+        result.push_str("$<");
+        result.push_str(&name);
+        return Ok(());
+    }
+    let capture = property_value(named_captures.clone(), &name, env)?;
+    if !matches!(capture, Value::Undefined) {
+        result.push_str(&to_js_string_with_env(capture, env)?);
+    }
+    Ok(())
 }
 
 fn substitute_capture(
