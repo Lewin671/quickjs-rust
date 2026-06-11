@@ -61,8 +61,23 @@ gaps: `TypedArray` 2,027, `ArrayBuffer` 263, `DataView` 188 — concentrated in
       replace the copy). BigInt arrays reject `Number` in `set`/`fill`/`with`,
       and mixed BigInt/Number `set` throws. `test/built-ins/TypedArray/prototype`
       moved from 44 to 196 passing (limit 800 after-scan).
-- [ ] S4 DataView: constructor and get/set accessors with endianness and
-      bounds checks.
+- [x] S4 DataView: `new DataView(buffer [, byteOffset [, byteLength]])` over an
+      `ArrayBuffer` (TypeError for non-buffers; SharedArrayBuffer absent),
+      `ToIndex` coercion with RangeError on OOB offset/length and detach
+      re-checks ordered per spec. Prototype `buffer`/`byteLength`/`byteOffset`
+      accessors brand-check and throw on detached (for the two byte accessors).
+      All ten element families have `get*`/`set*` with a `littleEndian` flag
+      (default big-endian), `ToIndex` offset, RangeError on OOB, and per-spec
+      coercion order — `set*` coerces the value (`ToNumber`/`ToBigInt`) before
+      the detach/bounds checks. `Symbol.toStringTag` is a `"DataView"` data
+      property (writable false, configurable true). Byte encode/decode is local
+      via big-endian `to_be_bytes` with a reversal for little-endian.
+      `test/built-ins/DataView` moved from 0 to 369 passing (--all scan). The
+      remaining failures are out of this slice: `getFloat16`/`setFloat16` (38,
+      Float16 proposal), `*-sab.js` (SharedArrayBuffer), `resizable-array-buffer`
+      cases, and `detached-buffer` cases that need a JS-facing
+      `$DETACHBUFFER`/detach hook in `ArrayBuffer` (tracked for S1/S5); the
+      DataView-side detach guards are already in place.
 - [ ] S5 Re-cluster remaining gaps; resizable/growable buffers,
       SharedArrayBuffer, and Atomics stay out of scope until this point and
       get their own slices only if the burndown trend justifies them.
