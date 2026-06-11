@@ -239,3 +239,47 @@ fn multiline_anchors_match_around_line_terminators() {
     // Sticky multiline still honors line boundaries.
     assert!(regexp_match_at("^b", "a\nb", 2, false, false, false, true).is_some());
 }
+
+#[test]
+fn named_groups_capture_and_backreference() {
+    let matched = regexp_match_range(
+        r"(?<year>\d{4})-(?<month>\d{2})",
+        "2024-06",
+        0,
+        false,
+        false,
+        false,
+    )
+    .unwrap();
+    assert_eq!((matched.start, matched.end), (0, 7));
+    assert_eq!(matched.captures, vec![Some((0, 4)), Some((5, 7))]);
+
+    // `\k<name>` matches the same text as the named group.
+    let matched = regexp_match_range(r"(?<c>.)\k<c>", "abxx", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (2, 4));
+    assert!(regexp_match_range(r"^(?<c>.)\k<c>$", "ab", 0, false, false, false).is_none());
+}
+
+#[test]
+fn lookahead_assertions_are_zero_width() {
+    let matched = regexp_match_range(r"a(?=b)", "ab", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 1));
+    assert!(regexp_match_range(r"a(?=b)", "ac", 0, false, false, false).is_none());
+
+    let matched = regexp_match_range(r"a(?!b)", "ac", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 1));
+    assert!(regexp_match_range(r"a(?!b)", "ab", 0, false, false, false).is_none());
+}
+
+#[test]
+fn lookbehind_assertions_match_preceding_text() {
+    let matched = regexp_match_range(r"(?<=\$)\d+", "$100", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (1, 4));
+    assert!(regexp_match_range(r"(?<=\$)\d+", "100", 0, false, false, false).is_none());
+
+    let matched = regexp_match_range(r"(?<!\$)\d+", "a100", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (1, 4));
+    // The first digit after `$` is excluded, so matching starts one later.
+    let matched = regexp_match_range(r"(?<!\$)\d+", "$100", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (2, 4));
+}

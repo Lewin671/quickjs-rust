@@ -117,7 +117,7 @@ fn regexp_capture_count(pattern: &[char]) -> usize {
             '[' => {
                 index = class_end(pattern, index).map_or(pattern.len(), |end| end + 1);
             }
-            '(' if !matches!(pattern.get(index + 1..index + 3), Some(['?', ':'])) => {
+            '(' if is_capturing_group(pattern, index) => {
                 count += 1;
                 index += 1;
             }
@@ -125,6 +125,20 @@ fn regexp_capture_count(pattern: &[char]) -> usize {
         }
     }
     count
+}
+
+/// A `(` opens a capturing group unless it is `(?:`, `(?=`, `(?!`, `(?<=`, or
+/// `(?<!`. A `(?<name>` named group is capturing.
+fn is_capturing_group(pattern: &[char], index: usize) -> bool {
+    if pattern.get(index + 1) != Some(&'?') {
+        return true;
+    }
+    match pattern.get(index + 2) {
+        Some(':') | Some('=') | Some('!') => false,
+        // `(?<=` / `(?<!` are lookbehind (non-capturing); `(?<name>` captures.
+        Some('<') => !matches!(pattern.get(index + 3), Some('=') | Some('!')),
+        _ => true,
+    }
 }
 
 fn class_end(pattern: &[char], start: usize) -> Option<usize> {
