@@ -17,8 +17,12 @@ gaps: `TypedArray` 2,027, `ArrayBuffer` 263, `DataView` 188 — concentrated in
 
 ## Slices
 
-- [ ] S1 ArrayBuffer core: constructor, `byteLength`, `slice`, species
+- [x] S1 ArrayBuffer core: constructor, `byteLength`, `slice`, species
       handling, detach semantics used by the rest of the family.
+      `ArrayBuffer.isView`, `ArrayBuffer[Symbol.species]`, brand checks, a
+      detached internal flag, and clean rejection of `maxByteLength`
+      (resizable/growable buffers) are in place. `test/built-ins/ArrayBuffer`
+      moved from 46 to 63 passing.
 - [ ] S2 %TypedArray% constructors: the nine concrete constructors, from
       buffer/length/array/iterable, indexed element access with canonical
       numeric index semantics.

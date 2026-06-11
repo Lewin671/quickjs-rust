@@ -9,6 +9,15 @@ use crate::{
 
 const MAX_TYPED_ARRAY_LENGTH: usize = 1_000_000;
 
+/// Internal slot marking an object as a TypedArray view, also used by
+/// `ArrayBuffer.isView`.
+pub(crate) const TYPED_ARRAY_KIND_PROPERTY: &str = "\0TypedArrayKind";
+
+/// Whether `object` carries the TypedArray brand.
+pub(crate) fn is_typed_array_object(object: &ObjectRef) -> bool {
+    object.has_own_property(TYPED_ARRAY_KIND_PROPERTY)
+}
+
 pub(crate) fn install_typed_arrays(
     env: &mut HashMap<String, Value>,
     global_this: &Value,
@@ -132,6 +141,10 @@ fn typed_array_values(
 
 fn define_typed_array_data(object: &ObjectRef, native: NativeFunction, values: Vec<Value>) {
     object.set_to_string_tag(typed_array_name(native));
+    object.define_property(
+        TYPED_ARRAY_KIND_PROPERTY.to_owned(),
+        Property::non_enumerable(Value::String(typed_array_name(native).to_owned())),
+    );
     object.define_property(
         "length".to_owned(),
         Property::data(Value::Number(values.len() as f64), false, true, true),

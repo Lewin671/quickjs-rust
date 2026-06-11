@@ -45,6 +45,7 @@ pub(crate) enum NativeFunction {
     ArrayPrototypeValues,
     ArrayIteratorPrototypeNext,
     ArrayBuffer,
+    ArrayBufferIsView,
     ArrayBufferPrototypeByteLength,
     ArrayBufferPrototypeSlice,
     Uint8Array,
