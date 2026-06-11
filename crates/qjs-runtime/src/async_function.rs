@@ -101,12 +101,13 @@ fn drive(
     env: &mut HashMap<String, Value>,
 ) {
     match resume_generator(context, resume, env) {
-        Ok(GeneratorOutcome::Yield(awaited)) => {
+        Ok(GeneratorOutcome::Await(awaited)) => {
             schedule_await(context, result_promise, awaited, env);
         }
-        // An async body never delegates (`yield*` is gated to generators), but
-        // treat a delegate suspension defensively as a normal await.
-        Ok(GeneratorOutcome::YieldDelegate(awaited)) => {
+        // An async body suspends only at `await` (`Op::Await`); `yield` and
+        // `yield*` are gated to generators. Treat a stray yield suspension
+        // defensively as a normal await so a malformed body never deadlocks.
+        Ok(GeneratorOutcome::Yield(awaited) | GeneratorOutcome::YieldDelegate(awaited)) => {
             schedule_await(context, result_promise, awaited, env);
         }
         Ok(GeneratorOutcome::Return(value)) => {

@@ -193,6 +193,10 @@ pub(crate) fn call_generator_native(
         // `yield*` hands back the inner iterator's result object unchanged
         // rather than rebuilding it.
         GeneratorOutcome::YieldDelegate(value) => value,
+        // A plain generator body emits no `Op::Await`, so an await suspension
+        // never reaches here; treat the awaited value as a plain yield rather
+        // than panicking on a malformed body.
+        GeneratorOutcome::Await(value) => iterator_result(value, false, env),
         GeneratorOutcome::Return(value) => iterator_result(value, true, env),
     };
     Ok(Some(result))

@@ -204,6 +204,24 @@ pub(crate) fn call_native_function(
         return Ok(value);
     }
 
+    if let Some(value) = crate::async_generator::call_async_generator_native(
+        native,
+        this_value.clone(),
+        &argument_values,
+        env,
+    )? {
+        return Ok(value);
+    }
+
+    if let Some(value) = crate::async_generator::call_async_generator_reaction(
+        function,
+        native,
+        &argument_values,
+        env,
+    )? {
+        return Ok(value);
+    }
+
     core::call_core_native(
         function,
         native,

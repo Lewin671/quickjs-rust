@@ -249,6 +249,10 @@ pub(crate) fn iterator_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef>
     well_known_symbol(env, "iterator")
 }
 
+pub(crate) fn async_iterator_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+    well_known_symbol(env, "asyncIterator")
+}
+
 pub(crate) fn to_primitive_symbol(env: &HashMap<String, Value>) -> Option<ObjectRef> {
     well_known_symbol(env, "toPrimitive")
 }

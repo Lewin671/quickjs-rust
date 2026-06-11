@@ -17,6 +17,12 @@ pub(crate) struct FunctionBytecodeResult<'a> {
 pub(super) enum Completion {
     Return(Value),
     Yield(Value),
+    /// An `await` (`Op::Await`) suspended the body. The carried value is the
+    /// operand being awaited. On resume the fulfillment value (or an injected
+    /// throw for a rejection) is delivered at the `await` site. Distinct from
+    /// `Yield` so an async generator's driver can route the suspension to a
+    /// promise reaction rather than to its consumer's next/return/throw.
+    Await(Value),
     /// A `yield*` suspended the generator while delegating to an inner
     /// iterator. The yielded value is the inner iterator's result object
     /// (returned to the outer caller unwrapped). On resume the next/return/

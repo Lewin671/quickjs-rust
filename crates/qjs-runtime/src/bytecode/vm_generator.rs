@@ -74,6 +74,11 @@ pub(crate) enum GeneratorOutcome {
     /// iterator's result object, returned to the caller unwrapped (the spec
     /// hands back the inner result without rebuilding it). State SuspendedYield.
     YieldDelegate(Value),
+    /// The body suspended at an `await` (`Op::Await`): the carried value is the
+    /// operand being awaited. The async/async-generator driver resolves it and
+    /// resumes the body via a promise reaction. State SuspendedYield. Plain
+    /// generators never produce this (they emit no `Op::Await`).
+    Await(Value),
     /// The body returned (or a `return(v)` completed it): `{ value, done: true }`.
     Return(Value),
 }
@@ -85,11 +90,37 @@ impl Vm<'_> {
     /// the caller-binding write-back performed for ordinary function calls.
     fn propagate_to_caller(&self, caller_env: &mut HashMap<String, Value>) {
         for (name, slot) in caller_env.iter_mut() {
-            if crate::function::is_internal_binding_name(name) {
+            if crate::function::is_internal_binding_name(name)
+                || name == "this"
+                || name == "arguments"
+            {
                 continue;
             }
             if let Some(value) = self.binding_value(name) {
                 *slot = value;
+            }
+        }
+    }
+
+    /// Refreshes the body's view of bindings it shares with the resuming
+    /// caller. A generator captures its environment when the generator function
+    /// is called, but it resumes later — the caller may have reassigned shared
+    /// bindings in between (`var it = g()` itself is the common case), so the
+    /// captured snapshot is stale by the time the body runs. Without this
+    /// refresh the post-run write-back would clobber the caller's current
+    /// values with the stale ones.
+    fn refresh_from_caller(&mut self, caller_env: &HashMap<String, Value>) {
+        for (name, value) in caller_env {
+            // `this` (and `arguments`) belong to the generator's own frame,
+            // never to the resuming caller; internal bindings likewise.
+            if crate::function::is_internal_binding_name(name)
+                || name == "this"
+                || name == "arguments"
+            {
+                continue;
+            }
+            if let Some(slot) = self.globals.get_mut(name) {
+                *slot = value.clone();
             }
         }
     }
@@ -132,6 +163,7 @@ fn run_from_start(
         captured_env,
     } = start;
     let mut vm = Vm::new_with_globals_and_captures(&bytecode, env, captured_env);
+    vm.refresh_from_caller(caller_env);
     let result = vm.run_completion();
     drive(result, vm, &bytecode, caller_env)
 }
@@ -150,6 +182,7 @@ fn run_from_yield(
     vm.locals = snapshot.locals;
     vm.sloppy_global_names = snapshot.sloppy_global_names;
     vm.try_stack = snapshot.try_stack;
+    vm.refresh_from_caller(caller_env);
 
     // A suspension inside a `yield*` forwards the resume to the inner iterator:
     // the re-entered `Op::YieldDelegate` reads `resume_mode` and decides how to
@@ -214,6 +247,17 @@ fn drive(
             Ok((
                 GeneratorState::SuspendedYield(Box::new(snapshot)),
                 GeneratorOutcome::Yield(value),
+            ))
+        }
+        Ok(Completion::Await(value)) => {
+            // An `await` suspends like a non-delegating yield: the resume
+            // delivers the fulfillment value (or injects a throw) at the await
+            // site. Only the outcome tag differs, so the driver routes the
+            // suspension to a promise reaction instead of to a consumer.
+            let snapshot = vm.into_snapshot(bytecode.clone(), false);
+            Ok((
+                GeneratorState::SuspendedYield(Box::new(snapshot)),
+                GeneratorOutcome::Await(value),
             ))
         }
         Ok(Completion::YieldDelegate(value)) => {

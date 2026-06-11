@@ -293,10 +293,6 @@ impl Compiler {
         else {
             return Err(unsupported_stmt(stmt));
         };
-        // Async generators are a separate slice (T007 S5).
-        if *is_async && *is_generator {
-            return Err(super::compiler_expr::async_not_supported());
-        }
         let blocked_arguments = self.annex_b_arguments_function_name_blocked(name);
         if self.annex_b_function_name_blocked(name) && !blocked_arguments {
             self.emit_load_undefined();

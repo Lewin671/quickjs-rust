@@ -152,6 +152,38 @@ pub(crate) enum NativeFunction {
     /// Resumes a suspended async function with a throw completion carrying the
     /// rejection reason of the awaited promise (`await` onRejected reaction).
     AsyncFunctionAwaitRejected,
+    /// `%AsyncGeneratorPrototype%.next`: enqueues a resume-next request and
+    /// returns a promise of the next iterator result.
+    AsyncGeneratorPrototypeNext,
+    /// `%AsyncGeneratorPrototype%.return`: enqueues a resume-return request.
+    AsyncGeneratorPrototypeReturn,
+    /// `%AsyncGeneratorPrototype%.throw`: enqueues a resume-throw request.
+    AsyncGeneratorPrototypeThrow,
+    /// `%AsyncGeneratorPrototype%[Symbol.asyncIterator]`: returns `this`.
+    AsyncGeneratorPrototypeAsyncIterator,
+    /// Internal `await` fulfillment reaction inside an async generator body:
+    /// resumes the body with the fulfilled value and continues draining.
+    AsyncGeneratorAwaitFulfilled,
+    /// Internal `await` rejection reaction inside an async generator body:
+    /// resumes the body with an injected throw and continues draining.
+    AsyncGeneratorAwaitRejected,
+    /// Fulfillment reaction for a `yield`'s implicit operand await: resolves the
+    /// front request with `{ value, done: false }` and drains the next request.
+    AsyncGeneratorYieldFulfilled,
+    /// Rejection reaction for a `yield`'s implicit operand await: resumes the
+    /// body with a throw at the yield site (per AsyncGeneratorYield).
+    AsyncGeneratorYieldRejected,
+    /// Fulfillment reaction for `CreateAsyncFromSyncIterator`'s value await:
+    /// resolves the wrapper promise with `{ value, done }`.
+    AsyncFromSyncIteratorValueFulfilled,
+    /// Rejection reaction for `CreateAsyncFromSyncIterator`'s value await:
+    /// rejects the wrapper promise with the rejection reason.
+    AsyncFromSyncIteratorValueRejected,
+    /// The `next`/`return`/`throw` methods of a CreateAsyncFromSyncIterator
+    /// wrapper object: forwards to the sync iterator and awaits each value.
+    AsyncFromSyncIteratorNext,
+    AsyncFromSyncIteratorReturn,
+    AsyncFromSyncIteratorThrow,
     GlobalIsFinite,
     GlobalIsNaN,
     Print,

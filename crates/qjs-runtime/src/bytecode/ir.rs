@@ -35,6 +35,18 @@ pub(super) enum Op {
     EnumerateKeys,
     /// Replaces an iterable on the stack with its iterator object.
     GetIterator,
+    /// Replaces an iterable on the stack with its async iterator object,
+    /// following GetIterator(obj, async): looks up `Symbol.asyncIterator`, and
+    /// when absent wraps the sync iterator via CreateAsyncFromSyncIterator. Used
+    /// by `for await ... of`.
+    GetAsyncIterator,
+    /// Processes the awaited result of an async iterator `next()` call (the
+    /// result object is on top of the stack after an `Op::Await`). Validates it
+    /// is an object, records `done` in `done_slot`, and pushes the `value`. Used
+    /// by `for await ... of`.
+    AsyncIteratorComplete {
+        done_slot: usize,
+    },
     /// Pops a `next` method and an iterator, advances the iterator one step,
     /// and pushes the step value (or undefined when exhausted). The boolean
     /// local at `done_slot` records whether the iterator is done; it is also
@@ -165,6 +177,13 @@ pub(super) enum Op {
     /// the generator is resumed, the resume value (or an injected
     /// return/throw completion) is delivered at this point.
     Yield,
+    /// Suspends an async function or async generator body at an `await`,
+    /// awaiting the value on top of the stack. Distinct from `Op::Yield` so an
+    /// async generator can tell a consumer-facing `yield` (driven by
+    /// next/return/throw) apart from an `await` (driven by a promise reaction).
+    /// Plain generators never emit this op; plain async functions treat
+    /// `Await` and `Yield` suspensions identically.
+    Await,
     /// Delegates to an inner iterable (`yield* expr`) per ES2023 14.4.14. The
     /// iterable is on top of the stack on first entry; the op gets its
     /// iterator and `next` method (stored in the two slots so they survive a

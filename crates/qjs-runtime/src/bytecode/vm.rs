@@ -116,10 +116,12 @@ impl<'a> Vm<'a> {
     pub(super) fn run(&mut self) -> Result<Value, RuntimeError> {
         match self.run_completion()? {
             Completion::Return(value) => Ok(value),
-            Completion::Yield(_) | Completion::YieldDelegate(_) => Err(RuntimeError {
-                thrown: None,
-                message: "yield evaluated outside a generator body".to_owned(),
-            }),
+            Completion::Yield(_) | Completion::YieldDelegate(_) | Completion::Await(_) => {
+                Err(RuntimeError {
+                    thrown: None,
+                    message: "yield evaluated outside a generator body".to_owned(),
+                })
+            }
         }
     }
 
@@ -195,6 +197,10 @@ impl<'a> Vm<'a> {
                 Op::NewObject(kinds) => self.new_object(&kinds)?,
                 Op::EnumerateKeys => self.enumerate_keys()?,
                 Op::GetIterator => self.get_iterator()?,
+                Op::GetAsyncIterator => self.get_async_iterator()?,
+                Op::AsyncIteratorComplete { done_slot } => {
+                    self.async_iterator_complete(done_slot)?
+                }
                 Op::IteratorStep { done_slot } => self.iterator_step(done_slot)?,
                 Op::IteratorRest { done_slot } => self.iterator_rest(done_slot)?,
                 Op::ObjectRestExcluding { excluded } => self.object_rest_excluding(&excluded)?,
@@ -265,7 +271,12 @@ impl<'a> Vm<'a> {
                         super_constructor: None,
                         captured_env: self.captured_env.clone(),
                     });
-                    if is_generator {
+                    if is_generator && is_async {
+                        crate::async_generator::wire_async_generator_function_intrinsics(
+                            &function,
+                            &self.globals,
+                        );
+                    } else if is_generator {
                         self.wire_generator_function_intrinsics(&function);
                     } else if is_async {
                         self.wire_async_function_intrinsics(&function);
@@ -401,6 +412,10 @@ impl<'a> Vm<'a> {
                 Op::Yield => {
                     let value = self.pop()?;
                     return Ok(Completion::Yield(value));
+                }
+                Op::Await => {
+                    let value = self.pop()?;
+                    return Ok(Completion::Await(value));
                 }
                 Op::YieldDelegate {
                     iterator_slot,

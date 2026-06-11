@@ -33,8 +33,18 @@ not-run, plus the 277 async-iteration actionable gaps.
       drain jobs before judging. Narrow the async skip in
       `scripts/test262-baseline.sh` to cases the harness still cannot judge,
       and record a fresh burndown entry.
-- [ ] S5 Parser + runtime: `for await ... of` and async generators. Depends
-      on T010 generator slices; re-cluster remaining async gaps first.
+- [x] S5 Parser + runtime: `for await ... of` and async generators. Async
+      generator objects reuse the generator suspension machinery with a
+      per-generator request queue; suspensions are tagged await vs yield;
+      `yield` awaits its operand; for-await-of wraps sync iterators via
+      CreateAsyncFromSyncIterator. Probes: for-await-of 1216/1234 pass,
+      expressions/async-generator 356/623. Follow-ups: callable
+      %AsyncGeneratorFunction% constructor (matches the skipped
+      %GeneratorFunction%/%AsyncFunction% constructors), remaining
+      async-generator early errors.
+
+Campaign core is complete; remaining async gaps flow through the normal
+gap queue.
 
 ## Scope
 

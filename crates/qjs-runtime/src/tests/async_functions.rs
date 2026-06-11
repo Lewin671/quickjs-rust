@@ -1,6 +1,7 @@
 //! Async function evaluation (T007 S3): async functions return promises that
-//! settle with the body's completion, `await` suspends and resumes via the job
-//! queue, and async generators / `for await` stay structurally rejected (S5).
+//! settle with the body's completion, and `await` suspends and resumes via the
+//! job queue. Async generators and `for await` are covered in
+//! `tests/async_generators.rs` (S5).
 //!
 //! Runtime observation: [`crate::eval`] drains the realm job queue before
 //! returning, so a `then` callback that writes into an array the script also
@@ -25,17 +26,6 @@ fn eval_log(source: &str) -> String {
             .join(","),
         other => panic!("expected an array log, got {other:?}"),
     }
-}
-
-fn expect_async_unsupported(source: &str) {
-    let error = eval(source).expect_err("async generators / for-await stay unsupported");
-    assert!(
-        error
-            .message
-            .contains("async functions are not yet supported"),
-        "unexpected error for {source:?}: {}",
-        error.message
-    );
 }
 
 #[test]
@@ -251,19 +241,4 @@ fn async_arrow_is_not_constructable() {
         "unexpected error: {}",
         error.message
     );
-}
-
-#[test]
-fn async_generator_declaration_is_unsupported() {
-    expect_async_unsupported("async function* g() {} g();");
-}
-
-#[test]
-fn async_generator_method_is_unsupported() {
-    expect_async_unsupported("({ async *m() {} }).m();");
-}
-
-#[test]
-fn for_await_of_is_unsupported() {
-    expect_async_unsupported("async function f() { for await (const x of []) {} } f();");
 }

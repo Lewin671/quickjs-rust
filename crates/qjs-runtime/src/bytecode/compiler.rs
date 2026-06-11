@@ -719,7 +719,7 @@ impl Compiler {
                 ..
             } => {
                 if *is_await {
-                    return Err(super::compiler_expr::async_not_supported());
+                    return self.compile_for_await_of(left, right, body);
                 }
                 self.compile_for_of(left, right, body)
             }

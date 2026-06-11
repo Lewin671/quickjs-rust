@@ -132,6 +132,10 @@ pub struct ObjectRef {
     /// Generator [[GeneratorState]] for generator objects; `None` for ordinary
     /// objects. Lazily allocated so non-generator objects pay only one `Rc`.
     generator_state: Rc<RefCell<Option<crate::bytecode::GeneratorState>>>,
+    /// Async-generator internal state (the [[AsyncGeneratorQueue]] of pending
+    /// requests plus the draining flag) for async generator objects; `None` for
+    /// every other object.
+    async_generator_state: Rc<RefCell<Option<crate::async_generator::AsyncGeneratorInternal>>>,
     /// Private-name state: per-object storage (fields and brands) and, for class
     /// prototype objects, the private environment their members resolve `#x`
     /// references through. Lazily populated.
@@ -183,6 +187,7 @@ impl ObjectRef {
             to_string_tag: Rc::new(RefCell::new(None)),
             raw_json: Rc::new(Cell::new(false)),
             generator_state: Rc::new(RefCell::new(None)),
+            async_generator_state: Rc::new(RefCell::new(None)),
             private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
         }
     }
@@ -191,6 +196,15 @@ impl ObjectRef {
     /// objects hold `None`; generator objects store their resumable state here.
     pub(crate) fn generator_state(&self) -> &Rc<RefCell<Option<crate::bytecode::GeneratorState>>> {
         &self.generator_state
+    }
+
+    /// The async-generator internal-state cell for this object. Ordinary objects
+    /// (and plain generators) hold `None`; async generator objects store their
+    /// request queue and draining flag here.
+    pub(crate) fn async_generator_state(
+        &self,
+    ) -> &Rc<RefCell<Option<crate::async_generator::AsyncGeneratorInternal>>> {
+        &self.async_generator_state
     }
 
     /// Returns the object's private-name storage, creating it on first use.

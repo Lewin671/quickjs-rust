@@ -48,6 +48,99 @@ impl Compiler {
         self.compile_for_of_scoped(left, right, body)
     }
 
+    pub(super) fn compile_for_await_of(
+        &mut self,
+        left: &ForInLeft,
+        right: &Expr,
+        body: &Stmt,
+    ) -> Result<(), RuntimeError> {
+        if matches!(
+            left,
+            ForInLeft::VarDecl {
+                kind: VarKind::Let | VarKind::Const,
+                ..
+            }
+        ) {
+            return self.with_lexical_scope(|compiler| {
+                compiler.compile_for_await_of_scoped(left, right, body)
+            });
+        }
+        self.compile_for_await_of_scoped(left, right, body)
+    }
+
+    /// Compiles `for await (x of y)`: gets the async iterator, and on each pass
+    /// calls `next()`, awaits the result promise, and validates/destructures the
+    /// iterator result. Closing on break/throw reuses the sync close (calling
+    /// `return()`); awaiting the close result is a known residual edge.
+    fn compile_for_await_of_scoped(
+        &mut self,
+        left: &ForInLeft,
+        right: &Expr,
+        body: &Stmt,
+    ) -> Result<(), RuntimeError> {
+        let result_slot = self.temp_local("for_await_result");
+        let iterator_slot = self.temp_local("for_await_iterator");
+        let next_slot = self.temp_local("for_await_next");
+        let done_slot = self.temp_local("for_await_done");
+        let value_slot = self.temp_local("for_await_value");
+        let iterator = LoopIterator {
+            iterator_slot,
+            done_slot,
+        };
+
+        self.emit_load_undefined();
+        self.emit(Op::StoreLocal(result_slot));
+        self.compile_expr(right)?;
+        self.emit(Op::GetAsyncIterator);
+        self.emit(Op::StoreLocal(iterator_slot));
+        self.emit(Op::LoadLocal(iterator_slot));
+        self.emit_string("next");
+        self.emit(Op::GetProp);
+        self.emit(Op::StoreLocal(next_slot));
+        let false_slot = self.const_slot(Value::Boolean(false));
+        self.emit(Op::LoadConst(false_slot));
+        self.emit(Op::StoreLocal(done_slot));
+        let enter = self.emit(Op::EnterTry {
+            catch: None,
+            finally: None,
+            catch_scope: None,
+        });
+
+        let loop_start = self.code.len();
+        // result = await iterator.next(); validate; extract value/done.
+        self.emit(Op::LoadLocal(iterator_slot));
+        self.emit(Op::LoadLocal(next_slot));
+        self.emit(Op::CallResolved(0));
+        self.emit(Op::Await);
+        self.emit(Op::AsyncIteratorComplete { done_slot });
+        self.emit(Op::LoadLocal(done_slot));
+        let exit_jump = self.emit(Op::JumpIfTrue(usize::MAX));
+        self.emit(Op::Pop);
+        self.emit(Op::StoreLocal(value_slot));
+        self.compile_for_in_left(left, value_slot)?;
+
+        let blocked = for_in_left_lexical_names(left);
+        self.with_annex_b_blocked_function_names(&blocked, |compiler| {
+            compiler.push_loop_with_iterator(result_slot, iterator);
+            compiler.compile_stmt(body)?;
+            compiler.emit(Op::StoreLocal(result_slot));
+            Ok(())
+        })?;
+        let context = self.pop_loop();
+
+        self.emit(Op::Jump(loop_start));
+
+        let exit = self.code.len();
+        self.patch_jump(exit_jump, exit);
+        self.emit(Op::Pop);
+        self.emit(Op::Pop);
+        self.emit(Op::ExitTry);
+        let cleanup_slots = self.current_lexical_slots_for_names(&blocked);
+        self.emit_for_of_loop_completion(result_slot, iterator, &cleanup_slots, &context, enter);
+        self.patch_loop_continues(&context, loop_start);
+        Ok(())
+    }
+
     fn compile_for_in_scoped(
         &mut self,
         left: &ForInLeft,

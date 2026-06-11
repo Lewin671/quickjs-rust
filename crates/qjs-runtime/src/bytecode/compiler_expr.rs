@@ -270,11 +270,6 @@ impl Compiler {
                 is_async,
                 ..
             } => {
-                // Async generators are a separate slice (T007 S5); only plain
-                // async functions/arrows/methods evaluate here.
-                if *is_async && *is_generator {
-                    return Err(async_not_supported());
-                }
                 let is_strict = self.strict || is_strict_function_body(body);
                 let bytecode = super::compiler::compile_function_body_with_strict_generator(
                     params,
@@ -350,14 +345,15 @@ impl Compiler {
                 Ok(())
             }
             Expr::Await { argument, .. } => {
-                // `await expr` suspends the async function body. It reuses the
-                // generator suspension point (`Op::Yield`): the async driver
-                // resolves the awaited value and resumes the body via the job
-                // queue with the fulfillment value or an injected throw. Async
-                // functions contain no `yield`, so the suspension is
-                // unambiguous within an async body.
+                // `await expr` suspends the async function (or async generator)
+                // body at a dedicated `Op::Await`. The driver resolves the
+                // awaited value and resumes the body via the job queue with the
+                // fulfillment value or an injected throw. Keeping `Await`
+                // distinct from `Yield` lets an async generator route an await
+                // suspension to a promise reaction and a `yield` suspension to
+                // its consumer.
                 self.compile_expr(argument)?;
-                self.emit(Op::Yield);
+                self.emit(Op::Await);
                 Ok(())
             }
             Expr::Super { span } => Err(RuntimeError {
@@ -530,15 +526,5 @@ impl Compiler {
         let end = self.code.len();
         self.patch_jump(end_jump, end);
         Ok(())
-    }
-}
-
-/// Builds the structured error reported when async functions, `await`
-/// expressions, or `for await` loops are evaluated. The parser accepts these
-/// forms (T007 S2); evaluation lands in S3.
-pub(super) fn async_not_supported() -> RuntimeError {
-    RuntimeError {
-        thrown: None,
-        message: "InternalError: async functions are not yet supported".to_owned(),
     }
 }

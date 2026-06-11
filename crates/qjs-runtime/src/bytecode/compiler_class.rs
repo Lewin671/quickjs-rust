@@ -69,10 +69,6 @@ impl Compiler {
                         });
                     };
                     let is_generator = *is_generator;
-                    // Async generator methods are a separate slice (T007 S5).
-                    if *is_async && is_generator {
-                        return Err(super::compiler_expr::async_not_supported());
-                    }
                     let is_async = *is_async;
                     // Class bodies are strict mode code, so every method and the
                     // constructor compile with strict semantics regardless of

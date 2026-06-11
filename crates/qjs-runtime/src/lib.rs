@@ -5,6 +5,7 @@ use qjs_parser::parse_script;
 mod array;
 mod array_buffer;
 mod async_function;
+mod async_generator;
 mod bigint;
 mod boolean;
 mod builtins;

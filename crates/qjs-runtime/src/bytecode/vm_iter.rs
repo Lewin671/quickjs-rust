@@ -39,6 +39,51 @@ impl Vm<'_> {
         Ok(())
     }
 
+    pub(super) fn get_async_iterator(&mut self) -> Result<(), RuntimeError> {
+        let value = self.pop()?;
+        let mut env = self.current_env();
+        let result = crate::async_generator::get_async_iterator(value, &mut env);
+        self.apply_env(env);
+        if let Some(iterator) = self.handle_runtime_result(result)? {
+            self.stack.push(iterator);
+        }
+        Ok(())
+    }
+
+    /// Processes the awaited result of an async iterator `next()` (`for await`):
+    /// the result object is on top of the stack. Validates it is an object,
+    /// records `done`, and replaces it with the `value`.
+    pub(super) fn async_iterator_complete(&mut self, done_slot: usize) -> Result<(), RuntimeError> {
+        let result = self.pop()?;
+        self.store_local(done_slot, Value::Boolean(true))?;
+        if !is_object_value(&result) {
+            let error: Result<(), RuntimeError> = Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: iterator result is not an object".to_owned(),
+            });
+            self.handle_runtime_result(error)?;
+            return Ok(());
+        }
+        let mut env = self.current_env();
+        let done = property_value(result.clone(), "done", &mut env).map(|value| is_truthy(&value));
+        self.apply_env(env);
+        let Some(done) = self.handle_runtime_result(done)? else {
+            return Ok(());
+        };
+        self.store_local(done_slot, Value::Boolean(done))?;
+        if done {
+            self.stack.push(Value::Undefined);
+            return Ok(());
+        }
+        let mut env = self.current_env();
+        let value = property_value(result, "value", &mut env);
+        self.apply_env(env);
+        if let Some(value) = self.handle_runtime_result(value)? {
+            self.stack.push(value);
+        }
+        Ok(())
+    }
+
     pub(super) fn iterator_step(&mut self, done_slot: usize) -> Result<(), RuntimeError> {
         let next = self.pop()?;
         let iterator = self.pop()?;
@@ -358,6 +403,15 @@ fn get_iterator_method(
         });
     }
     Ok(method)
+}
+
+/// Public wrapper around the sync `GetIterator(value)` algorithm, reused by the
+/// async-from-sync iterator path (`for await` over a non-async iterable).
+pub(crate) fn sync_iterator_for_value(
+    value: Value,
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    iterator_for_value(value, env)
 }
 
 fn iterator_for_value(

@@ -1,5 +1,6 @@
 mod arrays;
 mod async_functions;
+mod async_generators;
 mod bigint;
 mod bytecode;
 mod classes;

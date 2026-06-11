@@ -59,6 +59,26 @@ pub(crate) fn call_function(
         );
     }
     if let Some(bytecode) = &function.bytecode {
+        // Calling an async generator function captures the call frame and
+        // returns an async generator object whose next/return/throw drive the
+        // body and yield promises of iterator results. Checked before the plain
+        // generator and async branches because both flags are set.
+        if function.is_generator && function.is_async {
+            let function_env = function_env(
+                &function,
+                bytecode,
+                callee,
+                this_value,
+                &argument_values,
+                env,
+                is_construct,
+            );
+            return Ok(crate::async_generator::call_async_generator_function(
+                &function,
+                function_env.env,
+                env,
+            ));
+        }
         // Calling a generator function does not run its body: it captures the
         // call frame and returns a generator object in the SuspendedStart state.
         if function.is_generator {
