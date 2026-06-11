@@ -1,7 +1,7 @@
 use super::MatchOptions;
 use super::escapes::{
-    chars_equal, class_range_contains, regexp_control_escape, regexp_whitespace, regexp_word_char,
-    unicode_escape,
+    chars_equal, class_range_contains, property_escape, regexp_control_escape, regexp_whitespace,
+    regexp_word_char, unicode_escape,
 };
 use crate::string::surrogate_escape_code_unit;
 
@@ -18,6 +18,17 @@ pub(super) fn class_match(class: &[char], value: char, options: MatchOptions) ->
 fn class_match_positive(class: &[char], value: char, options: MatchOptions) -> bool {
     let mut index = 0;
     while index < class.len() {
+        if options.unicode
+            && class[index] == '\\'
+            && matches!(class.get(index + 1), Some('p' | 'P'))
+            && let Some(escape) = property_escape(class, index)
+        {
+            if escape.set.contains(u32::from(value)) != escape.negated {
+                return true;
+            }
+            index = escape.next_pc;
+            continue;
+        }
         if let Some(start) = class_atom(class, index, options) {
             if class.get(start.next_index) == Some(&'-')
                 && let Some(end) = class_atom(class, start.next_index + 1, options)

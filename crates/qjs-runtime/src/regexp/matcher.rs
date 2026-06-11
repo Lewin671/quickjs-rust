@@ -11,7 +11,8 @@ mod tests;
 
 use classes::class_match;
 use escapes::{
-    chars_equal, regexp_control_escape, regexp_whitespace, regexp_word_char, unicode_escape,
+    chars_equal, property_escape, regexp_control_escape, regexp_whitespace, regexp_word_char,
+    unicode_escape,
 };
 use groups::{closing_group, group_alternatives, is_non_capturing_group};
 use normalization::normalized_regexp_source;
@@ -260,6 +261,9 @@ fn atom_end(pattern: &[char], pc: usize, unicode: bool) -> Option<usize> {
         '\\' if unicode_escape(pattern, pc, unicode).is_some() => {
             unicode_escape(pattern, pc, unicode).map(|escape| escape.next_pc)
         }
+        '\\' if unicode && property_escape_end(pattern, pc).is_some() => {
+            property_escape_end(pattern, pc)
+        }
         '\\' => Some(pc + 2),
         '[' => pattern[pc + 1..]
             .iter()
@@ -339,6 +343,12 @@ fn match_escape(
     {
         let capture = state.captures[index - 1];
         return match_backreference(text, state, capture, pc + 2, options);
+    }
+    if options.unicode
+        && matches!(escaped, 'p' | 'P')
+        && let Some(escape) = property_escape(pattern, pc)
+    {
+        return match_property_escape(text, state, &escape);
     }
     let Some(value) = text.get(state.index).copied() else {
         return Vec::new();
@@ -435,6 +445,26 @@ fn match_unicode_escape(
         matches.push((next_pc, matched));
     }
     matches
+}
+
+fn property_escape_end(pattern: &[char], pc: usize) -> Option<usize> {
+    property_escape(pattern, pc).map(|escape| escape.next_pc)
+}
+
+fn match_property_escape(
+    text: &[char],
+    mut state: MatchState,
+    escape: &escapes::ParsedPropertyEscape,
+) -> Vec<(usize, MatchState)> {
+    let Some((value, next_index)) = regexp_code_point_at(text, state.index, true) else {
+        return Vec::new();
+    };
+    let matched = escape.set.contains(u32::from(value));
+    if matched == escape.negated {
+        return Vec::new();
+    }
+    state.index = next_index;
+    vec![(escape.next_pc, state)]
 }
 
 fn code_unit_char(code_unit: u16) -> char {
@@ -615,38 +645,65 @@ fn repeat_atom(
     results
 }
 
+/// Explicit-stack DFS over repetitions of a quantified atom, producing accept
+/// states in the same priority order as the natural recursion (greedy: longest
+/// match first; lazy: shortest first). Using an explicit stack avoids native
+/// stack overflow on long inputs such as `^\p{Nd}+$` over thousands of chars.
 fn repeat_atom_from(
     repeat: &RepeatAtom<'_>,
     state: MatchState,
     count: usize,
     results: &mut Vec<MatchState>,
 ) {
-    if !repeat.quantifier.greedy {
-        results.push(repeat_accept_state(
-            state.clone(),
-            count,
-            &repeat.atom_captures,
-        ));
+    // Each frame is a state we are expanding at a given repetition count.
+    // For greedy matching we want to emit the accept state for a frame only
+    // after all of its descendants, so we expand children first (pushed in
+    // reverse so the first child is processed first) and defer the accept.
+    enum Work {
+        Expand(MatchState, usize),
+        Accept(MatchState, usize),
     }
-
-    if repeat.quantifier.max.is_none_or(|max| count < max) {
-        for (_, next_state) in match_atom(
-            repeat.pattern,
-            repeat.text,
-            repeat.atom_pc,
-            state.clone(),
-            repeat.group_indices,
-            repeat.options,
-        ) {
-            if next_state.index == state.index {
-                continue;
+    let mut stack = vec![Work::Expand(state, count)];
+    while let Some(work) = stack.pop() {
+        match work {
+            Work::Accept(state, count) => {
+                results.push(repeat_accept_state(state, count, &repeat.atom_captures));
             }
-            repeat_atom_from(repeat, next_state, count + 1, results);
-        }
-    }
+            Work::Expand(state, count) => {
+                if repeat.quantifier.greedy {
+                    // Defer this frame's own accept until after its children.
+                    stack.push(Work::Accept(state.clone(), count));
+                } else {
+                    results.push(repeat_accept_state(
+                        state.clone(),
+                        count,
+                        &repeat.atom_captures,
+                    ));
+                }
 
-    if repeat.quantifier.greedy {
-        results.push(repeat_accept_state(state, count, &repeat.atom_captures));
+                if repeat.quantifier.max.is_none_or(|max| count < max) {
+                    let mut children: Vec<MatchState> = match_atom(
+                        repeat.pattern,
+                        repeat.text,
+                        repeat.atom_pc,
+                        state.clone(),
+                        repeat.group_indices,
+                        repeat.options,
+                    )
+                    .into_iter()
+                    .filter_map(|(_, next_state)| {
+                        (next_state.index != state.index).then_some(next_state)
+                    })
+                    .collect();
+                    // Process children in order: push in reverse so the first
+                    // child is on top of the stack.
+                    children.reverse();
+                    for next_state in children {
+                        stack.push(Work::Expand(next_state, count + 1));
+                    }
+                }
+            }
+        }
     }
 }
 
