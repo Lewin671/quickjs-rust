@@ -173,6 +173,27 @@ fn calling_class_without_new_throws_type_error() {
 }
 
 #[test]
+fn derived_constructor_returning_symbol_throws_type_error() {
+    // A Symbol (a primitive, not an Object) returned from a derived constructor
+    // does not override `this`; it is a TypeError like any other primitive.
+    assert_eq!(
+        eval(
+            "class B {} class D extends B { constructor() { super(); return Symbol(); } } \
+             try { new D(); 'no throw'; } catch (e) { e instanceof TypeError ? 'TypeError' : 'other'; }"
+        ),
+        Ok(Value::String("TypeError".to_owned()))
+    );
+    // An object return still overrides `this`.
+    assert_eq!(
+        eval(
+            "class B {} class D extends B { constructor() { super(); return { tag: 9 }; } } \
+             new D().tag;"
+        ),
+        Ok(Value::Number(9.0))
+    );
+}
+
+#[test]
 fn method_is_not_constructable() {
     assert_eq!(
         eval(

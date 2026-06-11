@@ -195,6 +195,12 @@ fn finish_derived_construct(
     let bound_this = result.binding("this").cloned();
     let value = result.value?;
     match value {
+        // A Symbol (or BigInt) primitive is represented as an object reference
+        // but is not an Object, so it does not override `this`; it is a TypeError
+        // like any other primitive return.
+        Value::Object(ref object) if crate::symbol::is_symbol_primitive(object) => {
+            Err(primitive_derived_return_error())
+        }
         Value::Array(_)
         | Value::Function(_)
         | Value::Map(_)
@@ -212,11 +218,14 @@ fn finish_derived_construct(
         },
         // A primitive explicit return from a derived constructor is a
         // TypeError per the spec.
-        _ => Err(RuntimeError {
-            thrown: None,
-            message: "TypeError: derived constructor may only return an object or undefined"
-                .to_owned(),
-        }),
+        _ => Err(primitive_derived_return_error()),
+    }
+}
+
+fn primitive_derived_return_error() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "TypeError: derived constructor may only return an object or undefined".to_owned(),
     }
 }
 
