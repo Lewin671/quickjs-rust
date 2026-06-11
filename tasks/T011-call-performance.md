@@ -83,6 +83,21 @@ Why the copy exists (constraints any redesign must preserve):
   ~10.4s (debug). Guarded by
   `functions::nested_closures_capture_live_outer_bindings`.
 
+- Read-only prototype-chain get fast path (`Vm::try_direct_get` in
+  `vm_props.rs`, wired into `get_prop` and `pop_method_callee`): a property get
+  whose descriptor is a plain data property is now resolved straight off the
+  base value's own/linked prototype chain, reading the realm intrinsics
+  (`Array.prototype`, `String.prototype`, %Function.prototype%, ...) out of
+  `&self.globals` rather than cloning the full `current_env()` map. Any accessor
+  descriptor, a `Proxy` target, a native-function base with a possible
+  native-error parent, or a symbol on a function/primitive still falls through
+  to the clone-and-writeback path, so observable semantics are unchanged
+  (verified by `cargo test -p qjs-runtime` and `compare-qjs`). This removes the
+  two `current_env()` clones per method call. `fill/coerced-indexes.js`
+  ~74.6s -> ~55.4s (debug); the plain/closure call loops are unchanged because
+  they perform no property reads. The remaining cost there is the call-boundary
+  env clone, addressed by the redesign below.
+
 ## Remaining redesign (the real fix)
 
 Represent realm globals as shared state instead of a cloned map. Sketch:

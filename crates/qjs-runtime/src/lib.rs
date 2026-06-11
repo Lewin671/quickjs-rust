@@ -56,10 +56,11 @@ pub(crate) use property::{
     function_delete_own_symbol_property, function_intrinsic_prototype,
     function_own_property_descriptor, function_own_property_keys, function_own_property_names,
     function_own_property_symbols, function_own_symbol_property_descriptor, function_prototype,
-    function_prototype_property, has_property, has_property_key,
-    inherited_object_prototype_property, inherited_string_prototype_property, object_prototype,
-    property_value, property_value_key, property_value_key_with_receiver, string_prototype,
-    to_property_key_value, value_prototype, value_prototype_slot,
+    function_prototype_chain_descriptor, function_prototype_property, has_property,
+    has_property_key, inherited_object_prototype_property,
+    inherited_primitive_prototype_descriptor, inherited_string_prototype_property,
+    object_prototype, property_value, property_value_key, property_value_key_with_receiver,
+    string_prototype, to_property_key_value, value_prototype, value_prototype_slot,
 };
 pub(crate) use string::string_object_value;
 pub use value::Value;

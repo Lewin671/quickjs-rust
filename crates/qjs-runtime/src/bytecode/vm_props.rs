@@ -5,9 +5,11 @@ use qjs_ast::{BinaryOp, UnaryOp};
 use crate::{
     GLOBAL_THIS_BINDING, ObjectRef, Property, PropertyKey, RuntimeError, Value, array_prototype,
     bigint, boolean, call_function, function_delete_own_property,
-    function_delete_own_symbol_property, function_own_property_keys,
-    inherited_string_prototype_property, number, object::define_array_length_value, property_value,
-    property_value_key, string, to_int32_number, to_uint32_number, value_prototype,
+    function_delete_own_symbol_property, function_own_property_descriptor,
+    function_own_property_keys, function_prototype_chain_descriptor,
+    inherited_primitive_prototype_descriptor, inherited_string_prototype_property, number,
+    object::define_array_length_value, property_value, property_value_key, string, to_int32_number,
+    to_uint32_number, value_prototype,
 };
 
 use super::vm::Vm;
@@ -33,6 +35,114 @@ impl Vm<'_> {
     pub(super) fn invalidate_array_prototype_cache(&mut self, name: &str) {
         if name == "Array" {
             self.array_prototype_cache = None;
+        }
+    }
+
+    /// Resolves a property get through the prototype chain without cloning the
+    /// realm env, returning `Some(value)` only when the descriptor is a plain
+    /// data property (no getter). Returns `None` to signal that the generic
+    /// clone-and-writeback path is required: any accessor descriptor, a Proxy
+    /// target, or a primitive base that needs intrinsic lookups not covered
+    /// here. Prototype intrinsics are read out of `&self.globals` directly,
+    /// avoiding the full `current_env()` map copy on the dominant method-call
+    /// and member-read patterns.
+    pub(super) fn try_direct_get(&self, object: &Value, key: &PropertyKey) -> Option<Value> {
+        match key {
+            PropertyKey::String(name) => self.try_direct_get_string(object, name),
+            PropertyKey::Symbol(symbol) => self.try_direct_get_symbol(object, symbol),
+        }
+    }
+
+    fn try_direct_get_string(&self, object: &Value, key: &str) -> Option<Value> {
+        match object {
+            Value::Object(object) => data_property_value(object.property(key)),
+            Value::Map(map) => data_property_value(map.object().property(key)),
+            Value::Set(set) => data_property_value(set.object().property(key)),
+            Value::Array(elements) => {
+                if key == "length" {
+                    return Some(Value::Number(elements.len() as f64));
+                }
+                // Mirror the order in `property_value_key`: a present dense
+                // element wins, then an own (possibly accessor) descriptor, then
+                // the prototype chain. `data_property_value` bails on accessors.
+                let descriptor = key
+                    .parse::<usize>()
+                    .ok()
+                    .and_then(|index| elements.get(index).map(Property::enumerable))
+                    .or_else(|| elements.property(key))
+                    .or_else(|| {
+                        elements
+                            .prototype_override()
+                            .unwrap_or_else(|| array_prototype(&self.globals))
+                            .and_then(|prototype| prototype.property(key))
+                    });
+                data_property_value(descriptor)
+            }
+            Value::Function(function) => {
+                let descriptor = function_own_property_descriptor(function, key)
+                    .or_else(|| function_prototype_chain_descriptor(function, &self.globals, key));
+                match descriptor {
+                    Some(property) => data_property_value(Some(property)),
+                    // A function with no native-error parent (the only remaining
+                    // generic branch) resolves to undefined; bail when a parent
+                    // could contribute so the slow path stays authoritative.
+                    None if function.native.is_none() => Some(Value::Undefined),
+                    None => None,
+                }
+            }
+            Value::String(value) => {
+                if key == "length" {
+                    return Some(Value::Number(string::string_code_units(value).len() as f64));
+                }
+                if let Some(value) = string::string_property(value, key) {
+                    return Some(value);
+                }
+                data_property_value(inherited_primitive_prototype_descriptor(
+                    &self.globals,
+                    "String",
+                    key,
+                ))
+            }
+            Value::Number(_) => data_property_value(inherited_primitive_prototype_descriptor(
+                &self.globals,
+                "Number",
+                key,
+            )),
+            Value::Boolean(_) => data_property_value(inherited_primitive_prototype_descriptor(
+                &self.globals,
+                "Boolean",
+                key,
+            )),
+            Value::BigInt(_) => data_property_value(inherited_primitive_prototype_descriptor(
+                &self.globals,
+                "BigInt",
+                key,
+            )),
+            // Proxy needs trap dispatch; Null/Undefined raise catchable errors.
+            Value::Proxy(_) | Value::Null | Value::Undefined => None,
+        }
+    }
+
+    fn try_direct_get_symbol(&self, object: &Value, symbol: &ObjectRef) -> Option<Value> {
+        match object {
+            Value::Object(object) => data_property_value(object.symbol_property(symbol)),
+            Value::Map(map) => data_property_value(map.object().symbol_property(symbol)),
+            Value::Set(set) => data_property_value(set.object().symbol_property(symbol)),
+            Value::Array(elements) => {
+                let descriptor = elements.symbol_property(symbol).or_else(|| {
+                    elements
+                        .prototype_override()
+                        .unwrap_or_else(|| array_prototype(&self.globals))
+                        .and_then(|prototype| prototype.symbol_property(symbol))
+                });
+                match descriptor {
+                    Some(property) => data_property_value(Some(property)),
+                    None => Some(Value::Undefined),
+                }
+            }
+            // Function symbol lookup and the primitive wrappers go through the
+            // slow path so their intrinsic resolution stays in one place.
+            _ => None,
         }
     }
 
@@ -70,6 +180,17 @@ impl Vm<'_> {
         }
         self.globals.insert(name, value);
         Ok(())
+    }
+}
+
+/// Extracts a plain data value from a resolved descriptor. Returns `None` for
+/// an accessor (a getter must run, which the slow path handles) so the caller
+/// falls back to the clone-and-writeback get path.
+fn data_property_value(property: Option<Property>) -> Option<Value> {
+    match property {
+        None => Some(Value::Undefined),
+        Some(property) if property.get.is_some() || property.accessor => None,
+        Some(property) => Some(property.value),
     }
 }
 

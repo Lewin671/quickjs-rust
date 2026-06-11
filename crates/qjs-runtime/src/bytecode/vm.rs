@@ -509,7 +509,7 @@ impl<'a> Vm<'a> {
         let key_value = self.pop()?;
         let key = self.coerce_property_key(key_value)?;
         let object = self.pop()?;
-        let value = if let Some(value) = direct_get_property_key(&object, &key) {
+        let value = if let Some(value) = self.try_direct_get(&object, &key) {
             value
         } else {
             let mut env = self.current_env();
@@ -725,7 +725,7 @@ impl<'a> Vm<'a> {
         let key_value = self.pop()?;
         let key = self.coerce_property_key(key_value)?;
         let this_value = self.pop()?;
-        let callee = if let Some(callee) = direct_function_data_property(&this_value, &key) {
+        let callee = if let Some(callee) = self.try_direct_get(&this_value, &key) {
             callee
         } else {
             let mut getter_env = self.current_env();
@@ -936,33 +936,6 @@ fn fast_string_from_char_code_numbers(arguments: &[Value]) -> String {
         })
         .collect();
     crate::string::string_from_code_units(&code_units)
-}
-
-fn direct_function_data_property(this_value: &Value, key: &PropertyKey) -> Option<Value> {
-    let (Value::Function(function), PropertyKey::String(name)) = (this_value, key) else {
-        return None;
-    };
-    function
-        .properties
-        .borrow()
-        .get(name)
-        .filter(|property| !property.accessor)
-        .map(|property| property.value.clone())
-}
-
-fn direct_get_property_key(value: &Value, key: &PropertyKey) -> Option<Value> {
-    let PropertyKey::String(name) = key else {
-        return None;
-    };
-    match value {
-        Value::Array(array) if name == "length" => Some(Value::Number(array.len() as f64)),
-        Value::Array(array) => name
-            .parse::<usize>()
-            .ok()
-            .and_then(|index| array.get(index)),
-        Value::Function(_) => direct_function_data_property(value, key),
-        _ => None,
-    }
 }
 
 fn insert_missing_binding_name(binding_names: &mut Vec<String>, name: &str) {
