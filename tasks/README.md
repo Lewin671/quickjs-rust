@@ -44,3 +44,10 @@ Campaign working rules:
   regexp-unicode-property-escapes 581, Proxy 292, explicit-resource-management
   273) stay in the normal gap queue; promote one to a campaign file when its
   slices stop fitting in single reviewable units.
+
+## Performance
+
+- `T011-call-performance.md` — cut per-call environment-cloning cost. The
+  leaf-call activation-snapshot clone is landed; the remaining
+  shared-realm-globals redesign unblocks ~370 `TypedArray/*` cases that time
+  out under heavy nested-call load (e.g. `fill/coerced-indexes.js`).
