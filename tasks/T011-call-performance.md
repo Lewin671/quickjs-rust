@@ -522,3 +522,16 @@ subtle semantic regressions, and the `nested_closures_capture_live_outer_binding
 - Profiling was done with temporary `std::time::Instant` accumulators and
   `eprintln` counters in `call.rs`/`vm.rs`/`lib.rs`, all removed before
   committing. `cargo flamegraph` is not installed and new deps are forbidden.
+
+## RELAY HANDOFF — leg 2 (2026-06-11): migration LANDED & COMPILING
+
+Full `CallEnv`/realm migration is done and `cargo check/build -p qjs-runtime`
+is clean (0 errors). `cargo test -p qjs-runtime`: 565/577 pass. Remaining 12
+failures share ONE root cause: top-level script `var`s are bytecode *slots*, but
+a deferred closure (promise `.then`/await-resume, indirect `eval`) writing/reading
+them routes through `store_global`/realm, so the slot and realm diverge across the
+async/eval boundary (`globalThis.o` works; bare `var o` doesn't). Fix: either make
+top-level `var`s realm-backed, or sync slot<->realm in `Vm::drain_promise_jobs`.
+The 12: 8 async (`async_*`), eval (`evaluates_global_eval_builtin`,
+`evaluates_function_declarations_and_calls`), `this_before_super_is_reference_error`
+(derived-ctor `this` TDZ falls through to realm global `this` — gate `load_global`).
