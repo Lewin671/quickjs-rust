@@ -8,9 +8,11 @@ use crate::{
 mod construct;
 mod element;
 mod iteration;
+mod ordering;
 
 pub(crate) use construct::native_typed_array;
 pub(crate) use iteration::*;
+pub(crate) use ordering::*;
 
 const MAX_TYPED_ARRAY_LENGTH: usize = 1_000_000;
 
@@ -168,6 +170,22 @@ fn install_typed_array_prototype_methods(env: &HashMap<String, Value>, prototype
             0,
             NativeFunction::TypedArrayPrototypeToLocaleString,
         ),
+        ("set", 1, NativeFunction::TypedArrayPrototypeSet),
+        ("fill", 1, NativeFunction::TypedArrayPrototypeFill),
+        (
+            "copyWithin",
+            2,
+            NativeFunction::TypedArrayPrototypeCopyWithin,
+        ),
+        ("reverse", 0, NativeFunction::TypedArrayPrototypeReverse),
+        ("sort", 1, NativeFunction::TypedArrayPrototypeSort),
+        (
+            "toReversed",
+            0,
+            NativeFunction::TypedArrayPrototypeToReversed,
+        ),
+        ("toSorted", 1, NativeFunction::TypedArrayPrototypeToSorted),
+        ("with", 2, NativeFunction::TypedArrayPrototypeWith),
     ] {
         define_prototype_method(prototype, name, length, native);
     }

@@ -221,7 +221,6 @@ pub(crate) fn get_view_element(object: &ObjectRef, index: usize) -> Value {
 /// persisting both the backing buffer and the materialized own property so
 /// ordinary `array[i]` reads stay consistent. Coercion must happen first via
 /// [`coerce_element`]. Used by the write/order-family methods.
-#[allow(dead_code)]
 pub(crate) fn set_view_element(object: &ObjectRef, index: usize, value: Value) {
     let native = typed_array_kind(object);
     if let Some(buffer) = super::typed_array_buffer(object) {

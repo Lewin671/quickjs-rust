@@ -135,6 +135,30 @@ pub(super) fn call_typed_array_native(
                 env,
             )?
         }
+        NativeFunction::TypedArrayPrototypeSet => {
+            typed_array::native_typed_array_prototype_set(this_value, argument_values, env)?
+        }
+        NativeFunction::TypedArrayPrototypeFill => {
+            typed_array::native_typed_array_prototype_fill(this_value, argument_values, env)?
+        }
+        NativeFunction::TypedArrayPrototypeCopyWithin => {
+            typed_array::native_typed_array_prototype_copy_within(this_value, argument_values, env)?
+        }
+        NativeFunction::TypedArrayPrototypeReverse => {
+            typed_array::native_typed_array_prototype_reverse(this_value, argument_values, env)?
+        }
+        NativeFunction::TypedArrayPrototypeSort => {
+            typed_array::native_typed_array_prototype_sort(this_value, argument_values, env)?
+        }
+        NativeFunction::TypedArrayPrototypeToReversed => {
+            typed_array::native_typed_array_prototype_to_reversed(this_value, argument_values, env)?
+        }
+        NativeFunction::TypedArrayPrototypeToSorted => {
+            typed_array::native_typed_array_prototype_to_sorted(this_value, argument_values, env)?
+        }
+        NativeFunction::TypedArrayPrototypeWith => {
+            typed_array::native_typed_array_prototype_with(this_value, argument_values, env)?
+        }
         _ => return Ok(None),
     };
     Ok(Some(value))
