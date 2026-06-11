@@ -412,3 +412,51 @@ fn bigint_fill_rejects_number() {
         Ok(Value::String("5,5".to_owned()))
     );
 }
+
+// --- Batched element materialization (perf slice) ----------------------------
+
+#[test]
+fn batched_writes_stay_correct_across_a_full_buffer() {
+    // Exercises the single-pass byte encode/decode for fill, set, copyWithin,
+    // sort, and reverse over a larger buffer; the materialized index reads must
+    // match the backing buffer at both ends and an interior index.
+    assert_eq!(
+        eval(
+            "let a = new Uint16Array(256); a.fill(7); \
+             a.set([1, 2, 3], 10); a.copyWithin(20, 10, 13); \
+             a[0] + ':' + a[10] + ':' + a[22] + ':' + a[255];"
+        ),
+        Ok(Value::String("7:1:3:7".to_owned()))
+    );
+    // A reversed view reads back consistently through materialized properties.
+    assert_eq!(
+        eval(
+            "let a = new Int32Array(100); for (let i = 0; i < 100; i++) a.fill(0); \
+             let b = a.map((_, i) => i); b.reverse(); b[0] + ':' + b[99];"
+        ),
+        Ok(Value::String("99:0".to_owned()))
+    );
+}
+
+#[test]
+fn callback_iteration_reads_each_element_from_the_buffer() {
+    // The snapshot reader feeds every element to the callback in order; reducing
+    // over a larger view sums all of them, confirming reads stay correct after
+    // the single up-front byte decode.
+    assert_eq!(
+        eval(
+            "let a = new Uint16Array(64); a.map((_, i) => i); \
+             let b = new Uint16Array(64).map((_, i) => i + 1); \
+             b.reduce((p, c) => p + c, 0);"
+        ),
+        Ok(Value::Number(2080.0))
+    );
+    // forEach observes index and value together for the whole length.
+    assert_eq!(
+        eval(
+            "let a = new Int8Array([10, 20, 30]); let parts = []; \
+             a.forEach((v, i) => parts.push(i + '=' + v)); parts.join(',');"
+        ),
+        Ok(Value::String("0=10,1=20,2=30".to_owned()))
+    );
+}

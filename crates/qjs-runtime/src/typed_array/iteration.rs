@@ -11,7 +11,7 @@ use crate::{
     to_js_string_with_env, to_number_with_env,
 };
 
-use super::element::get_view_element;
+use super::element::{ViewSnapshot, get_view_element, read_view_elements};
 use super::{
     typed_array_buffer_detached, typed_array_kind, typed_array_length, validate_typed_array,
 };
@@ -127,9 +127,10 @@ pub(crate) fn native_typed_array_prototype_index_of(
         length,
         env,
     )?;
-    for index in start..length {
-        if strict_same(&get_view_element(&object, index), &search) {
-            return Ok(Value::Number(index as f64));
+    let scanned = read_view_elements(&object, start, length - start);
+    for (offset, value) in scanned.iter().enumerate() {
+        if strict_same(value, &search) {
+            return Ok(Value::Number((start + offset) as f64));
         }
     }
     Ok(Value::Number(-1.0))
@@ -161,8 +162,9 @@ pub(crate) fn native_typed_array_prototype_last_index_of(
             }
         }
     };
+    let scanned = read_view_elements(&object, 0, start + 1);
     for index in (0..=start).rev() {
-        if strict_same(&get_view_element(&object, index), &search) {
+        if strict_same(&scanned[index], &search) {
             return Ok(Value::Number(index as f64));
         }
     }
@@ -184,8 +186,9 @@ pub(crate) fn native_typed_array_prototype_includes(
         length,
         env,
     )?;
-    for index in start..length {
-        if same_value_zero(&get_view_element(&object, index), &search) {
+    let scanned = read_view_elements(&object, start, length - start);
+    for value in &scanned {
+        if same_value_zero(value, &search) {
             return Ok(Value::Boolean(true));
         }
     }
@@ -231,9 +234,9 @@ pub(crate) fn native_typed_array_prototype_join(
         Value::Undefined => ",".to_owned(),
         value => to_js_string_with_env(value, env)?,
     };
+    let elements = read_view_elements(&object, 0, length);
     let mut parts = Vec::with_capacity(length);
-    for index in 0..length {
-        let element = get_view_element(&object, index);
+    for element in elements {
         parts.push(to_js_string_with_env(element, env)?);
     }
     Ok(Value::String(parts.join(&separator)))
@@ -255,9 +258,9 @@ pub(crate) fn native_typed_array_prototype_to_locale_string(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
+    let elements = read_view_elements(&object, 0, length);
     let mut parts = Vec::with_capacity(length);
-    for index in 0..length {
-        let element = get_view_element(&object, index);
+    for element in elements {
         let part = call_to_locale_string(element, env)?;
         parts.push(part);
     }
@@ -380,8 +383,9 @@ pub(crate) fn native_typed_array_prototype_for_each(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("forEach", this_value, argument_values)?;
+    let snapshot = ViewSnapshot::capture(&iteration.object);
     for index in 0..iteration.length {
-        let value = get_view_element(&iteration.object, index);
+        let value = snapshot.get(index);
         call_callback(&iteration, value, index, env)?;
     }
     Ok(Value::Undefined)
@@ -393,8 +397,9 @@ pub(crate) fn native_typed_array_prototype_some(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("some", this_value, argument_values)?;
+    let snapshot = ViewSnapshot::capture(&iteration.object);
     for index in 0..iteration.length {
-        let value = get_view_element(&iteration.object, index);
+        let value = snapshot.get(index);
         if is_truthy(&call_callback(&iteration, value, index, env)?) {
             return Ok(Value::Boolean(true));
         }
@@ -408,8 +413,9 @@ pub(crate) fn native_typed_array_prototype_every(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("every", this_value, argument_values)?;
+    let snapshot = ViewSnapshot::capture(&iteration.object);
     for index in 0..iteration.length {
-        let value = get_view_element(&iteration.object, index);
+        let value = snapshot.get(index);
         if !is_truthy(&call_callback(&iteration, value, index, env)?) {
             return Ok(Value::Boolean(false));
         }
@@ -423,8 +429,9 @@ pub(crate) fn native_typed_array_prototype_find(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("find", this_value, argument_values)?;
+    let snapshot = ViewSnapshot::capture(&iteration.object);
     for index in 0..iteration.length {
-        let value = get_view_element(&iteration.object, index);
+        let value = snapshot.get(index);
         if is_truthy(&call_callback(&iteration, value.clone(), index, env)?) {
             return Ok(value);
         }
@@ -438,8 +445,9 @@ pub(crate) fn native_typed_array_prototype_find_index(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("findIndex", this_value, argument_values)?;
+    let snapshot = ViewSnapshot::capture(&iteration.object);
     for index in 0..iteration.length {
-        let value = get_view_element(&iteration.object, index);
+        let value = snapshot.get(index);
         if is_truthy(&call_callback(&iteration, value, index, env)?) {
             return Ok(Value::Number(index as f64));
         }
@@ -453,8 +461,9 @@ pub(crate) fn native_typed_array_prototype_find_last(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("findLast", this_value, argument_values)?;
+    let snapshot = ViewSnapshot::capture(&iteration.object);
     for index in (0..iteration.length).rev() {
-        let value = get_view_element(&iteration.object, index);
+        let value = snapshot.get(index);
         if is_truthy(&call_callback(&iteration, value.clone(), index, env)?) {
             return Ok(value);
         }
@@ -468,8 +477,9 @@ pub(crate) fn native_typed_array_prototype_find_last_index(
     env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("findLastIndex", this_value, argument_values)?;
+    let snapshot = ViewSnapshot::capture(&iteration.object);
     for index in (0..iteration.length).rev() {
-        let value = get_view_element(&iteration.object, index);
+        let value = snapshot.get(index);
         if is_truthy(&call_callback(&iteration, value, index, env)?) {
             return Ok(Value::Number(index as f64));
         }
@@ -486,9 +496,10 @@ pub(crate) fn native_typed_array_prototype_map(
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("map", this_value, argument_values)?;
     let native = typed_array_kind(&iteration.object);
+    let snapshot = ViewSnapshot::capture(&iteration.object);
     let mut mapped = Vec::with_capacity(iteration.length);
     for index in 0..iteration.length {
-        let value = get_view_element(&iteration.object, index);
+        let value = snapshot.get(index);
         let result = call_callback(&iteration, value, index, env)?;
         mapped.push(super::coerce_element(native, result, env)?);
     }
@@ -504,9 +515,10 @@ pub(crate) fn native_typed_array_prototype_filter(
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("filter", this_value, argument_values)?;
     let native = typed_array_kind(&iteration.object);
+    let snapshot = ViewSnapshot::capture(&iteration.object);
     let mut kept = Vec::new();
     for index in 0..iteration.length {
-        let value = get_view_element(&iteration.object, index);
+        let value = snapshot.get(index);
         if is_truthy(&call_callback(&iteration, value.clone(), index, env)?) {
             kept.push(value);
         }
@@ -523,16 +535,17 @@ pub(crate) fn native_typed_array_prototype_reduce(
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     let callback = require_callback("reduce", argument_values)?;
+    let snapshot = ViewSnapshot::capture(&object);
     let (mut accumulator, mut index) = if argument_values.len() >= 2 {
         (argument_values[1].clone(), 0)
     } else {
         if length == 0 {
             return Err(reduce_empty_error());
         }
-        (get_view_element(&object, 0), 1)
+        (snapshot.get(0), 1)
     };
     while index < length {
-        let value = get_view_element(&object, index);
+        let value = snapshot.get(index);
         accumulator = call_function(
             callback.clone(),
             Value::Undefined,
@@ -557,17 +570,18 @@ pub(crate) fn native_typed_array_prototype_reduce_right(
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     let callback = require_callback("reduceRight", argument_values)?;
+    let snapshot = ViewSnapshot::capture(&object);
     let (mut accumulator, mut next) = if argument_values.len() >= 2 {
         (argument_values[1].clone(), length)
     } else {
         if length == 0 {
             return Err(reduce_empty_error());
         }
-        (get_view_element(&object, length - 1), length - 1)
+        (snapshot.get(length - 1), length - 1)
     };
     while next > 0 {
         next -= 1;
-        let value = get_view_element(&object, next);
+        let value = snapshot.get(next);
         accumulator = call_function(
             callback.clone(),
             Value::Undefined,
@@ -624,12 +638,11 @@ pub(crate) fn native_typed_array_prototype_slice(
         length as i64,
         env,
     )?;
-    let mut values = Vec::new();
-    let mut index = start;
-    while index < end {
-        values.push(get_view_element(&object, index));
-        index += 1;
-    }
+    let values = if start < end {
+        read_view_elements(&object, start, end - start)
+    } else {
+        Vec::new()
+    };
     Ok(Value::Object(super::create_typed_array_of_kind(
         native, values, env,
     )))
@@ -658,12 +671,11 @@ pub(crate) fn native_typed_array_prototype_subarray(
         length as i64,
         env,
     )?;
-    let mut values = Vec::new();
-    let mut index = start;
-    while index < end {
-        values.push(get_view_element(&object, index));
-        index += 1;
-    }
+    let values = if start < end {
+        read_view_elements(&object, start, end - start)
+    } else {
+        Vec::new()
+    };
     Ok(Value::Object(super::create_typed_array_of_kind(
         native, values, env,
     )))

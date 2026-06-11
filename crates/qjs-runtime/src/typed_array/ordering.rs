@@ -2,10 +2,11 @@
 //! `set`, `fill`, `copyWithin`, `reverse`, `sort`, `toReversed`, `toSorted`,
 //! `with`.
 //!
-//! Writes route per-type conversion through [`element::set_view_element`],
-//! which persists the backing buffer and refreshes the materialized index
-//! property so ordinary `array[i]` reads stay consistent (indexed *writes*
-//! through `array[i] = v` are still not hooked — see the campaign notes).
+//! Writes route per-type conversion through [`element::set_view_elements`],
+//! which persists the backing buffer in one pass and refreshes the materialized
+//! index properties so ordinary `array[i]` reads stay consistent (indexed
+//! *writes* through `array[i] = v` are still not hooked — see the campaign
+//! notes).
 
 use std::{cmp::Ordering, collections::HashMap};
 
@@ -14,7 +15,7 @@ use crate::{
     to_number_with_env,
 };
 
-use super::element::{get_view_element, set_view_element};
+use super::element::{read_view_elements, set_view_elements};
 use super::{
     coerce_element, is_big_int_kind, is_typed_array_object, typed_array_kind, typed_array_length,
     validate_typed_array,
@@ -76,13 +77,12 @@ fn set_from_typed_array(
         return Err(range_error("source is too large"));
     }
     // Snapshot the source first so overlapping buffers behave per spec.
-    let values: Vec<Value> = (0..source_length)
-        .map(|index| get_view_element(source, index))
-        .collect();
-    for (index, value) in values.into_iter().enumerate() {
-        let coerced = coerce_element(native, value, env)?;
-        set_view_element(object, offset + index, coerced);
+    let values = read_view_elements(source, 0, source_length);
+    let mut coerced = Vec::with_capacity(values.len());
+    for value in values {
+        coerced.push(coerce_element(native, value, env)?);
     }
+    set_view_elements(object, offset, coerced);
     Ok(())
 }
 
@@ -98,10 +98,11 @@ fn set_from_array_like(
     if offset + values.len() > length {
         return Err(range_error("source is too large"));
     }
-    for (index, value) in values.into_iter().enumerate() {
-        let coerced = coerce_element(native, value, env)?;
-        set_view_element(object, offset + index, coerced);
+    let mut coerced = Vec::with_capacity(values.len());
+    for value in values {
+        coerced.push(coerce_element(native, value, env)?);
     }
+    set_view_elements(object, offset, coerced);
     Ok(())
 }
 
@@ -131,10 +132,8 @@ pub(crate) fn native_typed_array_prototype_fill(
         length as i64,
         env,
     )?;
-    let mut index = start;
-    while index < end {
-        set_view_element(&object, index, value.clone());
-        index += 1;
+    if start < end {
+        set_view_elements(&object, start, std::iter::repeat_n(value, end - start));
     }
     Ok(this_value)
 }
@@ -167,12 +166,8 @@ pub(crate) fn native_typed_array_prototype_copy_within(
     )?;
     let count = end.saturating_sub(start).min(length.saturating_sub(target));
     // Snapshot the source range to handle overlap correctly.
-    let snapshot: Vec<Value> = (0..count)
-        .map(|offset| get_view_element(&object, start + offset))
-        .collect();
-    for (offset, value) in snapshot.into_iter().enumerate() {
-        set_view_element(&object, target + offset, value);
-    }
+    let snapshot = read_view_elements(&object, start, count);
+    set_view_elements(&object, target, snapshot);
     Ok(this_value)
 }
 
@@ -184,16 +179,9 @@ pub(crate) fn native_typed_array_prototype_reverse(
     _env: &mut HashMap<String, Value>,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
-    let mut low = 0;
-    let mut high = length;
-    while high > low + 1 {
-        high -= 1;
-        let a = get_view_element(&object, low);
-        let b = get_view_element(&object, high);
-        set_view_element(&object, low, b);
-        set_view_element(&object, high, a);
-        low += 1;
-    }
+    let mut values: Vec<Value> = read_view_elements(&object, 0, length);
+    values.reverse();
+    set_view_elements(&object, 0, values);
     Ok(this_value)
 }
 
@@ -204,7 +192,7 @@ pub(crate) fn native_typed_array_prototype_to_reversed(
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     let native = typed_array_kind(&object);
-    let mut values: Vec<Value> = (0..length).map(|i| get_view_element(&object, i)).collect();
+    let mut values: Vec<Value> = read_view_elements(&object, 0, length);
     values.reverse();
     Ok(Value::Object(super::create_typed_array_of_kind(
         native, values, env,
@@ -220,11 +208,9 @@ pub(crate) fn native_typed_array_prototype_sort(
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     let comparator = sort_comparator(argument_values, "sort")?;
-    let mut values: Vec<Value> = (0..length).map(|i| get_view_element(&object, i)).collect();
+    let mut values: Vec<Value> = read_view_elements(&object, 0, length);
     sort_values(&mut values, comparator.as_ref(), env)?;
-    for (index, value) in values.into_iter().enumerate() {
-        set_view_element(&object, index, value);
-    }
+    set_view_elements(&object, 0, values);
     Ok(this_value)
 }
 
@@ -236,7 +222,7 @@ pub(crate) fn native_typed_array_prototype_to_sorted(
     let (object, length) = validate_typed_array(&this_value)?;
     let native = typed_array_kind(&object);
     let comparator = sort_comparator(argument_values, "toSorted")?;
-    let mut values: Vec<Value> = (0..length).map(|i| get_view_element(&object, i)).collect();
+    let mut values: Vec<Value> = read_view_elements(&object, 0, length);
     sort_values(&mut values, comparator.as_ref(), env)?;
     Ok(Value::Object(super::create_typed_array_of_kind(
         native, values, env,
@@ -372,7 +358,7 @@ pub(crate) fn native_typed_array_prototype_with(
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    let mut values: Vec<Value> = (0..length).map(|i| get_view_element(&object, i)).collect();
+    let mut values: Vec<Value> = read_view_elements(&object, 0, length);
     values[actual] = replacement;
     Ok(Value::Object(super::create_typed_array_of_kind(
         native, values, env,
