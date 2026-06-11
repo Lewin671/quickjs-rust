@@ -1,6 +1,27 @@
 use crate::{Value, eval};
 
 #[test]
+fn private_async_generator_method_is_an_async_generator() {
+    // A private `async *#m` must be wired as an async generator (its objects
+    // carry the AsyncGenerator prototype), not a sync generator.
+    assert_eq!(
+        eval(
+            "class C { async *#m() { yield 1; } get m() { return this.#m; } } \
+             Object.prototype.toString.call(new C().m());"
+        ),
+        Ok(Value::String("[object AsyncGenerator]".to_owned()))
+    );
+    // A private sync `*#m` stays a sync generator.
+    assert_eq!(
+        eval(
+            "class C { *#m() { yield 1; } get m() { return this.#m; } } \
+             Object.prototype.toString.call(new C().m());"
+        ),
+        Ok(Value::String("[object Generator]".to_owned()))
+    );
+}
+
+#[test]
 fn reads_private_instance_field() {
     assert_eq!(
         eval("class C { #x = 5; getX() { return this.#x; } } new C().getX();"),

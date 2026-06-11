@@ -172,7 +172,12 @@ impl Vm<'_> {
             super_constructor: None,
             captured_env: Rc::new(RefCell::new(method_env)),
         });
-        if def.is_generator {
+        if def.is_generator && def.is_async {
+            crate::async_generator::wire_async_generator_function_intrinsics(
+                &function,
+                &self.globals,
+            );
+        } else if def.is_generator {
             self.wire_generator_function_intrinsics(&function);
         } else if def.is_async {
             self.wire_async_function_intrinsics(&function);
