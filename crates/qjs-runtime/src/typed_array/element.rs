@@ -217,20 +217,108 @@ pub(crate) fn get_view_element(object: &ObjectRef, index: usize) -> Value {
     read_element(native, &bytes, byte_index)
 }
 
-/// Writes an already-coerced `value` into element `index` of `object`,
-/// persisting both the backing buffer and the materialized own property so
-/// ordinary `array[i]` reads stay consistent. Coercion must happen first via
-/// [`coerce_element`]. Used by the write/order-family methods.
-pub(crate) fn set_view_element(object: &ObjectRef, index: usize, value: Value) {
-    let native = typed_array_kind(object);
-    if let Some(buffer) = super::typed_array_buffer(object) {
-        if !array_buffer::is_detached(&buffer) {
-            let mut bytes = array_buffer::array_buffer_bytes(&buffer);
-            let element = bytes_per_element(native);
-            let byte_index = typed_array_byte_offset(object) + index * element;
-            write_element(native, &mut bytes, byte_index, &value);
-            array_buffer::set_array_buffer_bytes(&buffer, bytes);
+/// A one-shot decoded view of a typed array's backing bytes, used to read many
+/// elements during a callback-driven iteration (forEach/map/reduce/...) without
+/// re-decoding the byte string on every access. The buffer handle is retained
+/// so each read can honor a detachment performed by a user callback: once the
+/// buffer is detached, reads return the neutral element, matching the
+/// element-at-a-time [`get_view_element`] behavior.
+pub(crate) struct ViewSnapshot {
+    native: NativeFunction,
+    buffer: Option<ObjectRef>,
+    bytes: Vec<u8>,
+    base: usize,
+    element: usize,
+}
+
+impl ViewSnapshot {
+    /// Decodes the current backing bytes of `object` once.
+    pub(crate) fn capture(object: &ObjectRef) -> Self {
+        let native = typed_array_kind(object);
+        let buffer =
+            super::typed_array_buffer(object).filter(|buffer| !array_buffer::is_detached(buffer));
+        let bytes = buffer
+            .as_ref()
+            .map(array_buffer::array_buffer_bytes)
+            .unwrap_or_default();
+        ViewSnapshot {
+            native,
+            buffer,
+            bytes,
+            base: typed_array_byte_offset(object),
+            element: bytes_per_element(native),
         }
     }
-    object.define_property(index.to_string(), Property::data(value, true, true, false));
+
+    /// Reads element `index` from the captured bytes, or the neutral element if
+    /// the buffer has since been detached.
+    pub(crate) fn get(&self, index: usize) -> Value {
+        match &self.buffer {
+            Some(buffer) if !array_buffer::is_detached(buffer) => {
+                read_element(self.native, &self.bytes, self.base + index * self.element)
+            }
+            _ => zero_value(self.native),
+        }
+    }
+}
+
+/// Reads `count` elements of a branded typed-array view starting at `start`,
+/// decoding the backing-buffer bytes exactly once. Returns neutral elements for
+/// a detached or buffer-less view. This is the bulk counterpart to
+/// [`get_view_element`]: a `(0..length).map(get_view_element)` snapshot would
+/// re-decode the whole byte string per element (O(n^2)); this stays O(n).
+pub(crate) fn read_view_elements(object: &ObjectRef, start: usize, count: usize) -> Vec<Value> {
+    let native = typed_array_kind(object);
+    let buffer =
+        super::typed_array_buffer(object).filter(|buffer| !array_buffer::is_detached(buffer));
+    let Some(buffer) = buffer else {
+        return std::iter::repeat_n(zero_value(native), count).collect();
+    };
+    let bytes = array_buffer::array_buffer_bytes(&buffer);
+    let element = bytes_per_element(native);
+    let base = typed_array_byte_offset(object);
+    (0..count)
+        .map(|offset| read_element(native, &bytes, base + (start + offset) * element))
+        .collect()
+}
+
+/// Writes the already-coerced `values` into the contiguous element range
+/// starting at `start`, persisting both the backing buffer and the materialized
+/// own properties so ordinary `array[i]` reads stay consistent. Coercion must
+/// happen first via [`coerce_element`]. Used by the write/order-family methods.
+///
+/// The backing-buffer bytes are decoded once, mutated in place, and re-encoded
+/// once. This keeps fill/set/copyWithin/sort/reverse at O(n) total instead of
+/// O(n) per element (the byte buffer is a string slot, so a per-element
+/// read-modify-write round trip would be O(n^2)).
+pub(crate) fn set_view_elements<I>(object: &ObjectRef, start: usize, values: I)
+where
+    I: IntoIterator<Item = Value>,
+{
+    let native = typed_array_kind(object);
+    let element = bytes_per_element(native);
+    let base = typed_array_byte_offset(object);
+
+    let buffer =
+        super::typed_array_buffer(object).filter(|buffer| !array_buffer::is_detached(buffer));
+
+    match buffer {
+        Some(buffer) => {
+            let mut bytes = array_buffer::array_buffer_bytes(&buffer);
+            for (offset, value) in values.into_iter().enumerate() {
+                let index = start + offset;
+                write_element(native, &mut bytes, base + index * element, &value);
+                object.define_property(index.to_string(), Property::data(value, true, true, false));
+            }
+            array_buffer::set_array_buffer_bytes(&buffer, bytes);
+        }
+        None => {
+            // Detached or buffer-less: keep the materialized properties in sync
+            // even though there is no backing storage to write through.
+            for (offset, value) in values.into_iter().enumerate() {
+                let index = start + offset;
+                object.define_property(index.to_string(), Property::data(value, true, true, false));
+            }
+        }
+    }
 }
