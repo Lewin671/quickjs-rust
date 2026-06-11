@@ -75,9 +75,13 @@ pub(super) fn get_property(
         Value::Map(_) | Value::Set(_) | Value::Proxy(_) | Value::Object(_) => {
             property_value(object, key, env)
         }
-        _ => Err(RuntimeError {
+        Value::Undefined => Err(RuntimeError {
             thrown: None,
-            message: format!("unsupported property `{key}`"),
+            message: format!("TypeError: Cannot read properties of undefined (reading '{key}')"),
+        }),
+        Value::Null => Err(RuntimeError {
+            thrown: None,
+            message: format!("TypeError: Cannot read properties of null (reading '{key}')"),
         }),
     }
 }

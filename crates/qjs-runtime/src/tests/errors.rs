@@ -233,3 +233,19 @@ fn evaluates_aggregate_error_builtin() {
     assert!(eval("new AggregateError(null);").is_err());
     assert!(eval("new AggregateError(1);").is_err());
 }
+
+#[test]
+fn method_call_on_null_or_undefined_is_catchable_type_error() {
+    assert_eq!(
+        eval("try { null.foo(); } catch (e) { e instanceof TypeError; }").expect("eval"),
+        Value::Boolean(true)
+    );
+    assert_eq!(
+        eval("var u; try { u.bar(1, 2); } catch (e) { e instanceof TypeError; }").expect("eval"),
+        Value::Boolean(true)
+    );
+    assert_eq!(
+        eval("try { undefined.baz; } catch (e) { e.message; }").expect("eval"),
+        Value::String("Cannot read properties of undefined (reading 'baz')".to_owned())
+    );
+}

@@ -641,13 +641,21 @@ impl<'a> Vm<'a> {
 
     fn call_method(&mut self, argc: usize) -> Result<(), RuntimeError> {
         let arguments = self.pop_arguments(argc)?;
-        let (callee, this_value) = self.pop_method_callee()?;
+        // Method resolution errors (e.g. reading a property of undefined) are
+        // catchable runtime errors, not VM faults.
+        let resolved = self.pop_method_callee();
+        let Some((callee, this_value)) = self.handle_runtime_result(resolved)? else {
+            return Ok(());
+        };
         self.call_callee(callee, this_value, arguments)
     }
 
     fn call_method_spread(&mut self) -> Result<(), RuntimeError> {
         let arguments = self.pop_argument_array("method call spread")?;
-        let (callee, this_value) = self.pop_method_callee()?;
+        let resolved = self.pop_method_callee();
+        let Some((callee, this_value)) = self.handle_runtime_result(resolved)? else {
+            return Ok(());
+        };
         self.call_callee(callee, this_value, arguments)
     }
 
