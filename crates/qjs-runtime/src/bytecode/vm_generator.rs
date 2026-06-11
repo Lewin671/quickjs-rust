@@ -152,6 +152,43 @@ impl Vm<'_> {
     }
 }
 
+/// Runs a generator's parameter prologue synchronously, returning a snapshot
+/// suspended at the start of the body. Mirrors `FunctionDeclarationInstantiation`
+/// running at the call: a parameter-binding error (a destructuring failure or a
+/// throwing default initializer) propagates here, before the generator object is
+/// observable, instead of on the first `next`.
+pub(crate) fn start_suspended_at_body(
+    start: GeneratorStart,
+    caller_env: &mut HashMap<String, Value>,
+) -> Result<GeneratorState, RuntimeError> {
+    let GeneratorStart {
+        bytecode,
+        env,
+        captured_env,
+    } = start;
+    let mut vm = Vm::new_with_globals_and_captures(&bytecode, env, captured_env);
+    vm.stop_at_prologue = true;
+    vm.refresh_from_caller(caller_env);
+    let result = vm.run_completion();
+    vm.propagate_to_caller(caller_env);
+    match result {
+        // Suspended exactly at the prologue boundary: capture the body-start
+        // state for the first resume.
+        Ok(Completion::PrologueEnd) => Ok(GeneratorState::SuspendedYield(Box::new(
+            vm.into_snapshot(bytecode.clone(), false),
+        ))),
+        // A function with no executable prologue suspension (should not happen,
+        // since every compiled function emits the marker) — treat a clean return
+        // as an empty body that has already finished is wrong here, so surface a
+        // structured error rather than silently mis-driving the generator.
+        Ok(_) => Err(RuntimeError {
+            thrown: None,
+            message: "generator prologue did not reach the body boundary".to_owned(),
+        }),
+        Err(error) => Err(error),
+    }
+}
+
 /// Drives a generator from `SuspendedStart`: builds the body VM and runs it.
 fn run_from_start(
     start: GeneratorStart,
@@ -272,6 +309,13 @@ fn drive(
         Ok(Completion::Return(value)) => {
             Ok((GeneratorState::Completed, GeneratorOutcome::Return(value)))
         }
+        // The prologue boundary only suspends a freshly created generator (via
+        // `start_suspended_at_body`, which never routes through `drive`), so a
+        // running body never observes it here.
+        Ok(Completion::PrologueEnd) => Err(RuntimeError {
+            thrown: None,
+            message: "unexpected prologue boundary in a running generator body".to_owned(),
+        }),
         Err(error) => Err(error),
     }
 }

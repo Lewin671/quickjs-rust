@@ -158,22 +158,24 @@ pub(crate) fn async_generator_prototype(env: &HashMap<String, Value>) -> Option<
 
 /// Builds the async generator object returned by calling an `async function*`:
 /// an ordinary object whose [[Prototype]] is the function's own `prototype`
-/// (when an object) or `%AsyncGeneratorPrototype%`, carrying the captured call
-/// frame as its initial `SuspendedStart` state plus an empty request queue.
+/// (when an object) or `%AsyncGeneratorPrototype%`, plus an empty request queue.
+/// The parameter prologue runs synchronously here, so a binding error throws at
+/// the call before the object exists; the object then carries the body-start
+/// state for the first resume.
 pub(crate) fn make_async_generator_object(
     function: &Function,
     start: GeneratorStart,
-    env: &HashMap<String, Value>,
-) -> Value {
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let state = crate::bytecode::start_suspended_at_body(start, env)?;
     let prototype = async_generator_object_prototype(function, env);
     let generator = ObjectRef::with_prototype(HashMap::new(), prototype);
-    *generator.generator_state().borrow_mut() =
-        Some(GeneratorState::SuspendedStart(Box::new(start)));
+    *generator.generator_state().borrow_mut() = Some(state);
     *generator.async_generator_state().borrow_mut() = Some(AsyncGeneratorInternal {
         queue: Vec::new(),
         draining: false,
     });
-    Value::Object(generator)
+    Ok(Value::Object(generator))
 }
 
 fn async_generator_object_prototype(
@@ -774,8 +776,8 @@ fn async_from_sync_value_fulfilled(
 pub(crate) fn call_async_generator_function(
     function: &Function,
     function_env: HashMap<String, Value>,
-    env: &HashMap<String, Value>,
-) -> Value {
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
     let bytecode = function
         .bytecode
         .clone()

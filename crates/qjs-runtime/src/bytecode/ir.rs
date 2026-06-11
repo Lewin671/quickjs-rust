@@ -173,6 +173,13 @@ pub(super) enum Op {
     EndFinally,
     Return,
     Throw,
+    /// Marks the boundary between parameter instantiation and the function body.
+    /// Emitted once per function, after the parameter-binding prologue. Ordinary
+    /// function and script runs treat it as a no-op; when starting a generator or
+    /// async generator the VM runs to this op and suspends, so a parameter-binding
+    /// error throws synchronously at the call (before the generator object is
+    /// created) per `FunctionDeclarationInstantiation`.
+    FunctionPrologueEnd,
     /// Suspends a generator body, yielding the value on top of the stack. When
     /// the generator is resumed, the resume value (or an injected
     /// return/throw completion) is delivered at this point.

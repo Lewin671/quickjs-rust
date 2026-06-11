@@ -73,14 +73,17 @@ pub(crate) fn call_function(
                 env,
                 is_construct,
             );
-            return Ok(crate::async_generator::call_async_generator_function(
+            return crate::async_generator::call_async_generator_function(
                 &function,
                 function_env.env,
                 env,
-            ));
+            );
         }
-        // Calling a generator function does not run its body: it captures the
-        // call frame and returns a generator object in the SuspendedStart state.
+        // Calling a generator function does not run its body, but it does run
+        // the parameter prologue synchronously (per FunctionDeclarationInstantiation)
+        // and then returns a generator object suspended at the start of the body.
+        // A parameter-binding error therefore throws at the call, before the
+        // generator object exists.
         if function.is_generator {
             let function_env = function_env(
                 &function,
@@ -92,7 +95,7 @@ pub(crate) fn call_function(
                 is_construct,
             );
             let activation_captured_env = Rc::new(RefCell::new(function_env.env.clone()));
-            return Ok(crate::generator::make_generator_object(
+            return crate::generator::make_generator_object(
                 &function,
                 crate::bytecode::GeneratorStart {
                     bytecode: bytecode.clone(),
@@ -100,7 +103,7 @@ pub(crate) fn call_function(
                     captured_env: activation_captured_env,
                 },
                 env,
-            ));
+            );
         }
         // Calling an async function does not run its body to completion: it
         // captures the call frame, builds the promise it returns, and drives the

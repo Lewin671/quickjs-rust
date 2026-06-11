@@ -62,6 +62,11 @@ pub(super) struct Vm<'a> {
     /// `yield*`, so the resumed `Op::YieldDelegate` forwards the resume to the
     /// inner iterator. `None` for ordinary runs and plain-`yield` resumes.
     pub(super) resume_mode: Option<ResumeMode>,
+    /// When set, `Op::FunctionPrologueEnd` suspends the body so a generator or
+    /// async generator can run its parameter prologue synchronously at the call
+    /// and pause at the start of the body. Cleared for ordinary runs and once
+    /// the prologue boundary is passed.
+    pub(super) stop_at_prologue: bool,
 }
 
 impl<'a> Vm<'a> {
@@ -94,6 +99,7 @@ impl<'a> Vm<'a> {
             pending_throw: None,
             pending_return: None,
             resume_mode: None,
+            stop_at_prologue: false,
         }
     }
 
@@ -116,12 +122,13 @@ impl<'a> Vm<'a> {
     pub(super) fn run(&mut self) -> Result<Value, RuntimeError> {
         match self.run_completion()? {
             Completion::Return(value) => Ok(value),
-            Completion::Yield(_) | Completion::YieldDelegate(_) | Completion::Await(_) => {
-                Err(RuntimeError {
-                    thrown: None,
-                    message: "yield evaluated outside a generator body".to_owned(),
-                })
-            }
+            Completion::Yield(_)
+            | Completion::YieldDelegate(_)
+            | Completion::Await(_)
+            | Completion::PrologueEnd => Err(RuntimeError {
+                thrown: None,
+                message: "yield evaluated outside a generator body".to_owned(),
+            }),
         }
     }
 
@@ -408,6 +415,12 @@ impl<'a> Vm<'a> {
                 Op::Throw => {
                     let value = self.pop()?;
                     self.throw_value(value)?;
+                }
+                Op::FunctionPrologueEnd => {
+                    if self.stop_at_prologue {
+                        self.stop_at_prologue = false;
+                        return Ok(Completion::PrologueEnd);
+                    }
                 }
                 Op::Yield => {
                     let value = self.pop()?;

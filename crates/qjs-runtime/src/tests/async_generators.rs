@@ -27,6 +27,22 @@ fn eval_log(source: &str) -> String {
 }
 
 #[test]
+fn calling_async_generator_runs_the_parameter_prologue_synchronously() {
+    // Unlike async functions (whose parameter-binding errors reject the returned
+    // promise), an async generator runs FunctionDeclarationInstantiation at the
+    // call, so a throwing default initializer throws synchronously before the
+    // async generator object exists. This matches QuickJS-NG.
+    let result = eval(
+        "async function* g([x = (() => { throw new TypeError('boom'); })()]) { yield x; } \
+         g([undefined]);",
+    );
+    assert!(
+        matches!(&result, Err(error) if error.message.contains("boom")),
+        "async-generator parameter-binding error should throw at the call, got {result:?}"
+    );
+}
+
+#[test]
 fn calling_async_generator_returns_an_async_generator() {
     // The returned object is neither a plain promise nor a sync iterator result;
     // its next() returns a promise.

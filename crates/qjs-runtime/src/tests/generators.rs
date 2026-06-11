@@ -35,6 +35,25 @@ fn calling_a_generator_does_not_run_the_body() {
 }
 
 #[test]
+fn calling_a_generator_runs_the_parameter_prologue() {
+    // FunctionDeclarationInstantiation runs synchronously at the call, so a
+    // throwing default initializer surfaces before the generator object exists,
+    // not on the first `next`.
+    let result = eval(
+        "function* g([x = (() => { throw new TypeError('boom'); })()]) { yield x; } g([undefined]);",
+    );
+    assert!(
+        matches!(&result, Err(error) if error.message.contains("boom")),
+        "parameter-binding error should throw at the call, got {result:?}"
+    );
+    // The body still does not run until the first `next`: only the prologue ran.
+    assert_eq!(
+        number("let ran = 0; function* g(x = (ran = 1)) { ran = 2; yield x; } g(); ran;"),
+        1.0
+    );
+}
+
+#[test]
 fn yields_values_in_sequence() {
     assert_eq!(
         number(

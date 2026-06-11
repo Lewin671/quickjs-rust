@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
-    bytecode::{GeneratorOutcome, GeneratorStart, GeneratorState, Resume, resume_generator},
+    bytecode::{GeneratorOutcome, GeneratorStart, Resume, resume_generator},
     function_intrinsic_prototype, object_prototype, symbol,
 };
 
@@ -131,18 +131,20 @@ pub(crate) fn generator_prototype_intrinsic(env: &HashMap<String, Value>) -> Opt
 
 /// Builds the generator object returned by calling a `function*`: an ordinary
 /// object whose [[Prototype]] is the function's own `prototype` (when an
-/// object) or `%GeneratorPrototype%`, carrying the captured call frame as its
-/// initial `SuspendedStart` state.
+/// object) or `%GeneratorPrototype%`. The parameter prologue runs synchronously
+/// here (per `FunctionDeclarationInstantiation`), so a binding error throws at
+/// the call before the object exists; the object then carries the body-start
+/// state for the first resume.
 pub(crate) fn make_generator_object(
     function: &Function,
     start: GeneratorStart,
-    env: &HashMap<String, Value>,
-) -> Value {
+    env: &mut HashMap<String, Value>,
+) -> Result<Value, RuntimeError> {
+    let state = crate::bytecode::start_suspended_at_body(start, env)?;
     let prototype = generator_object_prototype(function, env);
     let generator = ObjectRef::with_prototype(HashMap::new(), prototype);
-    *generator.generator_state().borrow_mut() =
-        Some(GeneratorState::SuspendedStart(Box::new(start)));
-    Value::Object(generator)
+    *generator.generator_state().borrow_mut() = Some(state);
+    Ok(Value::Object(generator))
 }
 
 /// Resolves the [[Prototype]] for a generator object: the function's own

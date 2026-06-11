@@ -37,6 +37,7 @@ pub use ir::Bytecode;
 pub(crate) use vm_class::install_field_value;
 pub(crate) use vm_generator::{
     GeneratorOutcome, GeneratorStart, GeneratorState, Resume, resume_generator,
+    start_suspended_at_body,
 };
 pub(crate) use vm_iter::sync_iterator_for_value;
 pub(crate) use vm_private::apply_instance_private_elements;

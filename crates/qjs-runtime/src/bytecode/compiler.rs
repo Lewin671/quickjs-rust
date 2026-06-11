@@ -129,6 +129,10 @@ impl Compiler {
             self.local_slot(&binding_name, true);
         }
         self.compile_parameter_bindings(params)?;
+        // Mark the end of parameter instantiation. Generators/async generators
+        // run their prologue synchronously at the call and suspend here; other
+        // functions skip past it.
+        self.emit(Op::FunctionPrologueEnd);
         let param_blocked = function_param_names(params);
         self.with_annex_b_blocked_function_names(&param_blocked, |compiler| {
             compiler.collect_hoisted_locals(body);

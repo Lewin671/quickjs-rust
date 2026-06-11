@@ -29,6 +29,13 @@ pub(super) enum Completion {
     /// throw is forwarded to the inner iterator rather than delivered at the
     /// `yield*` site.
     YieldDelegate(Value),
+    /// The body reached `Op::FunctionPrologueEnd`, the boundary after parameter
+    /// instantiation. Used only when starting a generator/async-generator: the
+    /// spec performs `FunctionDeclarationInstantiation` synchronously at the
+    /// call (so a parameter-binding error throws before the generator object
+    /// exists), then suspends at the start of the body. The carried snapshot
+    /// state is captured by the generator driver.
+    PrologueEnd,
 }
 
 /// How a delegating `yield*` is resumed: this mirrors `Resume` but is staged on
