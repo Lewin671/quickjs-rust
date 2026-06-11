@@ -141,7 +141,15 @@ pub(crate) fn call_function(
             env,
             is_construct,
         );
-        let activation_captured_env = Rc::new(RefCell::new(function_env.env.clone()));
+        // The activation captured env is only ever read when the body creates a
+        // nested closure or class (those ops snapshot it into the new function's
+        // `captured_env`). A body that creates none never reads it, so skip
+        // cloning the whole frame env into it on every leaf call.
+        let activation_captured_env = if bytecode.creates_closures() {
+            Rc::new(RefCell::new(function_env.env.clone()))
+        } else {
+            Rc::new(RefCell::new(HashMap::new()))
+        };
         let result = eval_function_bytecode(bytecode, function_env.env, activation_captured_env);
         propagate_function_captures(&function, &function_env.function_capture_names, &result);
         propagate_caller_bindings(env, &function_env.caller_binding_names, &result);

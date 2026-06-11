@@ -386,6 +386,16 @@ impl Bytecode {
         self.local_slots.get(name).copied()
     }
 
+    /// Whether the body can create a nested closure, class, generator, or async
+    /// function whose activation snapshot reads the per-call captured-env Rc. When
+    /// false, the activation captured env is never read, so the caller can skip
+    /// cloning the whole frame env into it.
+    pub(crate) fn creates_closures(&self) -> bool {
+        self.code
+            .iter()
+            .any(|op| matches!(op, Op::NewFunction { .. } | Op::NewClass { .. }))
+    }
+
     pub(crate) fn requires_scope_call_bindings(&self) -> bool {
         self.code.iter().any(|op| {
             matches!(
