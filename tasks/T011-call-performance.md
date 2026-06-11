@@ -338,6 +338,183 @@ the new, currently-unused type.
 - Watch for double-borrow panics in tests touching getters/Proxy/
   `Symbol.toPrimitive` — those mean rule 2 was violated.
 
+## RELAY HANDOFF — leg 1 (agent-i, 2026-06-11)
+
+**Leg status: WIP, no migration edits committed. The tree is CLEAN at the
+foundation state (HEAD 6368cf7); `cargo check -p qjs-runtime` error count = 0.**
+This leg was spent fully scoping the migration surface and the closure/generator
+capture rework, not flipping signatures. No `CallEnv` wiring was committed
+because the migration has no compiling intermediate state and a partial flip
+would have left an incoherent tree with inaccurate notes — per the task's
+"accuracy of the handoff over extra distance" rule, the scoped map below is the
+deliverable. `crates/qjs-runtime/src/function/env.rs` `CallEnv`/`Realm` remain
+as the (still unused) foundation; everything else is untouched.
+
+### What is migrated vs remaining
+
+- **Migrated: nothing yet** beyond the pre-existing `CallEnv`/`Realm` foundation
+  type (already present and exported from `function.rs:15`).
+- **Remaining: the entire mechanical migration** (all 775 signature sites, 134
+  files). The recipe order in "Mechanical migration order" above is correct and
+  validated against the current source; the notes below pin down the exact
+  surface so the next relay does not have to re-derive it.
+
+### Verified migration surface (current HEAD; use these as the worklist)
+
+Site counts (re-run to confirm before starting):
+- 775 `env: &mut HashMap<String, Value>` / `env: &HashMap<String, Value>` sites,
+  134 files.
+- 82 `env.get(...)`, 93 `env.insert(...)`, 18 `env.clone()`, 8
+  get_mut/entry/remove/keys/contains_key, 1209 `, env)` threading sites.
+- 63 `self.globals` sites across 11 `bytecode/vm_*.rs` files; distribution:
+  vm.rs 16, vm_props.rs 15, vm_class.rs 14, vm_bindings.rs 5, vm_generator.rs 3,
+  vm_errors.rs 2, vm_literals.rs 2, vm_ops.rs 2, vm_private.rs 2, vm_iter.rs 1,
+  vm_result.rs 1.
+- `self.captured_env`: vm.rs 2, vm_generator.rs 2, vm_class.rs 1.
+- `current_env()` callers: vm.rs 8, vm_iter.rs 15, vm_ops.rs 4, vm_class.rs 4,
+  vm_private.rs 2, vm_literals.rs 1, vm_props.rs 1, vm_jobs.rs 1.
+- `.apply_env(` callers: vm_iter.rs 15, vm.rs 8, vm_class.rs 4, vm_ops.rs 4,
+  vm_private.rs 2, vm_literals.rs 1.
+
+### Capture-model rework (step 6 — the delicate part), pinned down
+
+`Function.captured_env: Rc<RefCell<HashMap<String, Value>>>` appears at:
+- `function/value.rs:59` (the `Function` struct field) and `:134` (the
+  `CompiledUserFunction` builder field). Plus `CompiledUserFunction` ALSO carries
+  `pub env: HashMap<String, Value>` at `value.rs:55-57` — that is the function's
+  *captured creation env*, a second snapshot to rework alongside `captured_env`.
+- Construction sites in `value.rs`: `:224`/`:284`/`:291`/`:378`/`:420`/`:425`.
+- `bytecode/vm_generator.rs`: `GeneratorStart.captured_env` (:38) and
+  `GeneratorStart.env` (:37); `GeneratorSnapshot.globals` (:47) and
+  `.captured_env` (:48); `into_snapshot` (:140) threads both.
+- `bytecode/vm.rs`: `Vm.captured_env` field (:57), set in
+  `new_with_globals_and_captures` (:91), read in `Op::NewFunction`
+  (`self.captured_env.clone()` :286) and `refresh_captured_env` (:494).
+- async machinery: `async_function.rs` / `async_generator.rs` consume the same
+  `function_env.env` + caller `env` (see `call.rs:76,123`).
+
+Per the decided design (lines 269-275): each of these `Rc<RefCell<HashMap>>`
+snapshots must become `realm: Realm` (shared Rc) + a `locals: HashMap` snapshot.
+The regression contract is `functions::nested_closures_capture_live_outer_bindings`
+and the `async_generators.rs` stale-binding tests. NOTE: if the realm is truly
+shared, the `vm_generator.rs` `refresh_from_caller` (:112) /
+`propagate_to_caller` (:91) workarounds for realm-name staleness should be
+deletable — but ONLY remove them if those async/generator tests still pass; they
+also currently propagate *locals* the body shares with the caller, so re-check
+whether the locals-propagation half is still needed after the split.
+
+### CRITICAL install-vs-runtime classification (the "convert by function, not
+file" trap), enumerated
+
+The native-call boundary is `native.rs:27` `call_native_function(.., env: &mut
+HashMap)`. Everything reachable from it is a **runtime builtin → moves to
+`&CallEnv`/`&mut CallEnv`**. Everything in an `install_*` path runs once in
+`Vm::new` before any frame → **stays `&mut HashMap` / `&HashMap`**.
+
+`install_*` functions that STAY on the raw map (do NOT convert):
+- symbol.rs: `install_symbol` (:31), `install_well_known_symbols` (:127),
+  `install_function_has_instance` (:313, takes `&HashMap`)
+- array_buffer.rs `install_array_buffer` (:17)
+- bigint.rs `install_bigint` (:14), `install_bigint_well_known_symbols` (:63)
+- async_generator.rs `install_async_generator` (:71)
+- boolean.rs `install_boolean` (:10); proxy.rs `install_proxy` (:68)
+- weak_map.rs `install_weak_map` (:11); weak_set.rs `install_weak_set` (:11)
+- error.rs `install_error` (:19), `install_error_cause` (:185),
+  `install_native_error` (:330)
+- global.rs `install_globals` (:12); promise.rs `install_promise` (:54)
+- set.rs `install_set` (:18); math.rs `install_math` (:12)
+- async_function.rs `install_async_function` (:36)
+- typed_array.rs `install_typed_arrays` (:50),
+  `install_typed_array_prototype_accessors` (:88, `&HashMap`),
+  `install_typed_array_prototype_methods` (:132, `&HashMap`),
+  `install_typed_array_constructor` (:209)
+- generator.rs `install_generator` (:28); regexp.rs `install_regexp` (:34)
+- map.rs `install_map` (:17); data_view.rs `install_data_view` (:48)
+- regexp/symbol_split.rs `install_regexp_prototype_split` (:11, `&HashMap`)
+- typed_array/construct.rs `install_view` (:256)
+- regexp/symbol_replace.rs `install_regexp_prototype_replace` (:8)
+- regexp/match_all.rs `install_regexp_prototype_match_all` (:14)
+- regexp/symbol_match.rs `install_regexp_prototype_match` (:8, `&HashMap`)
+- array/install.rs `install_array`; date/install.rs `install_date`
+- reflect/install.rs `install_reflect`; function/install.rs `install_function`
+- function/value.rs `install_class_prototype` (:337)
+- number/install.rs `install_number`; iterator/mod.rs `install_iterator` (:106)
+- json/install.rs `install_json`; object/install.rs `install_object` (:5)
+- bytecode/vm_class.rs `install_method` (:197), `install_field_value` (:568)
+- bytecode/vm_private.rs `install_private_elements` (:23)
+- string/install.rs `install_string` (:76),
+  `install_string_well_known_symbols` (:117, `&HashMap`)
+
+The files where install + runtime builtins SHARE the `env: &mut HashMap` param
+name (so a per-file sed corrupts the install signature) — convert function by
+function here: symbol.rs (27 env sites), promise.rs (25), async_generator.rs
+(25), regexp.rs (17), set.rs (13), global.rs (12), map.rs (11),
+regexp/symbol_split.rs (10), regexp/symbol_replace.rs (10), bigint.rs (10),
+typed_array/construct.rs (9), generator.rs (8), error.rs (8), array_buffer.rs
+(8), regexp/match_all.rs (7), iterator/mod.rs (7), data_view.rs (7),
+async_function.rs (7), weak_map.rs (6), typed_array.rs (6), weak_set.rs (5),
+regexp/symbol_match.rs (5), proxy.rs (5).
+
+### Property + prototype layer (step 4), pinned down
+
+env-typed function sites: property/mod.rs 9, property/prototype.rs 20,
+property/key.rs 1, plus vm_props.rs property helpers (get_property/set_property/
+property_set_uses_setter/etc. — ~20 `&mut HashMap`/`&HashMap` sites). The pure
+prototype lookups in `property/prototype.rs` (`object_prototype`,
+`array_prototype`, `string_prototype`, `function_intrinsic_prototype`,
+`constructor_named_prototype`, and the `inherited_*` family) ONLY read
+`Object`/`Array`/`String`/`Function` by name via `env.get(name)` — they are the
+ideal `&CallEnv` (or `&Realm`) conversions, and `CallEnv::get` returning owned
+`Option<Value>` keeps the existing `let Some(Value::Function(f)) = env.get(..)`
+matches working unchanged. `vm_props.rs::try_direct_get` and
+`array_prototype_has_index_property` currently read `&self.globals`; re-point to
+a short `self.realm.borrow()` and clone the prototype `ObjectRef` out BEFORE any
+re-entrant call (rule 2).
+
+### Public/adjacent surfaces that carry the realm (do not miss these)
+
+- `bytecode/mod.rs`: `EvalOutcome.env: HashMap` (:105) + `EvalOutcome::run_jobs`
+  (:116) → `vm_jobs::run_pending_jobs(&mut env)`; `eval_function_bytecode`
+  (:62), `eval_bytecode_with_env` (:135, builds `captured_env` from
+  `env.clone()` at :139).
+- `bytecode/vm_jobs.rs`: `eval_bytecode_keep_jobs` returns `(Value, HashMap)`
+  (:21, builds via `vm.current_env()`), `run_pending_jobs(env: &mut HashMap)`
+  (:31). The returned map IS the realm — return the `Realm` Rc instead.
+- `vm.rs`: `VmCallEnv` struct (:23) + `call_env`/`apply_call_env`/
+  `apply_selected_env`/`apply_env`/`current_env`/`insert_runtime_intrinsics`/
+  `insert_referenced_binding`/`function_capture_env`/`refresh_captured_env`
+  collapse per recipe step 1.
+- `call.rs`: `function_env` + the `FunctionCallEnv` struct, `insert_runtime_*`,
+  `insert_caller_scope_bindings` (the O(50)-per-key intrinsic scan at :714-731
+  is what step 2 removes), `propagate_caller_bindings` (:733, realm write-back
+  half becomes unnecessary; keep locals/caller-binding half),
+  `construct_function`'s `env.insert(NEW_TARGET_BINDING..)` (:251) +
+  `env.remove` (:272) → these are frame locals, route to `CallEnv::insert`/
+  `remove`. `native_mapped_argument_get/set` (:576/:592) read/write a parameter
+  binding by name → `CallEnv::get`/`get_local_mut`.
+
+### env.insert routing decisions (the per-site correctness risk)
+
+Per the decided design (lines 244-250): `CallEnv::insert` writes to the **frame
+locals** layer and the existing VM write-back routes them to real
+locals-or-globals via `bytecode.local_slot` — so MOST runtime `env.insert` sites
+become `CallEnv::insert` with no per-site routing decision. Only sites that
+define a *true global* (e.g. sloppy-mode global creation, explicit global
+definition) use `insert_realm`. The `vm_call.rs::insert_scope_call_bindings`
+`env.entry().or_insert_with` (:82) fills frame locals → `CallEnv` locals.
+`store_global_strict`/`store_global_sloppy` (vm_props.rs:149/170) and
+`define_global_var` write the realm directly → `self.realm.borrow_mut()`.
+
+### Recommended execution order for the next relay
+
+Follow the recipe (VM core → call.rs → eval entry → property/prototype →
+builtins by batch → generators/async/class capture LAST). Do NOT try to make
+intermediate states compile; gauge progress with
+`cargo check -p qjs-runtime 2>&1 | grep -c '^error'` (falling = progress).
+Budget the capture-model rework (step 6) generously — it is the only part with
+subtle semantic regressions, and the `nested_closures_capture_live_outer_bindings`
++ `async_generators.rs` tests are the contract.
+
 ## Notes
 
 - The 19 `TypedArray/prototype/fill` failures in the baseline scan are
