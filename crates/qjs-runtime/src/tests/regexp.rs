@@ -726,3 +726,42 @@ fn evaluates_regexp_named_capture_groups() {
         Ok(Value::Boolean(false))
     );
 }
+
+#[test]
+fn evaluates_regexp_match_indices_d_flag() {
+    // No `indices` property without the `d` flag.
+    assert_eq!(eval(r#"/a/.exec("a").indices;"#), Ok(Value::Undefined));
+    // Whole-match and capture index pairs are code-unit positions.
+    assert_eq!(
+        eval(
+            r#"let m = /(a)(b)/d.exec("xab"); m.indices[0].join(",") + ":" + m.indices[1].join(",") + ":" + m.indices[2].join(",");"#
+        ),
+        Ok(Value::String("1,3:1,2:2,3".to_owned()))
+    );
+    // Unmatched optional groups produce undefined entries.
+    assert_eq!(
+        eval(r#"let m = /(a)(b)?/d.exec("a"); m.indices[2];"#),
+        Ok(Value::Undefined)
+    );
+    // The indices array carries a `groups` object for named captures, or
+    // undefined when there are none.
+    assert_eq!(
+        eval(r#"/a/d.exec("a").indices.groups;"#),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval(r#"let m = /(?<g>b)/d.exec("ab"); m.indices.groups.g.join(",");"#),
+        Ok(Value::String("1,2".to_owned()))
+    );
+    assert_eq!(
+        eval(r#"Object.getPrototypeOf(/(?<g>b)/d.exec("ab").indices.groups);"#),
+        Ok(Value::Null)
+    );
+    // Astral matches report code-unit (UTF-16) positions under the `u` flag.
+    assert_eq!(
+        eval(
+            r#"let m = /(?<emoji>\u{1F600})/du.exec("x\u{1F600}y"); m.indices.groups.emoji.join(",");"#
+        ),
+        Ok(Value::String("1,3".to_owned()))
+    );
+}
