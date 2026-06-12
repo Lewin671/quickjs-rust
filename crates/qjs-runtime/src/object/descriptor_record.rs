@@ -206,6 +206,17 @@ pub(crate) fn property_descriptor_record_object(descriptor: &PropertyDescriptor)
 }
 
 impl PropertyDescriptor {
+    pub(crate) fn data(value: Value, writable: bool, enumerable: bool, configurable: bool) -> Self {
+        Self {
+            value: Some(value),
+            writable: Some(writable),
+            get: None,
+            set: None,
+            enumerable: Some(enumerable),
+            configurable: Some(configurable),
+        }
+    }
+
     pub(super) fn data_value(value: Value) -> Self {
         Self {
             value: Some(value),
