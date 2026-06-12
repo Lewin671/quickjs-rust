@@ -1182,6 +1182,11 @@ test/built-ins/Array/from/source-object-missing.js
 test/built-ins/Array/from/source-object-iterator-2.js
 test/built-ins/Array/from/source-object-without.js
 test/built-ins/Array/from/this-null.js
+test/built-ins/Array/fromAsync/builtin.js
+test/built-ins/Array/fromAsync/length.js
+test/built-ins/Array/fromAsync/name.js
+test/built-ins/Array/fromAsync/not-a-constructor.js
+test/built-ins/Array/fromAsync/prop-desc.js
 cases/array-of-basic.js
 cases/array-of-empty.js
 cases/array-of-length.js

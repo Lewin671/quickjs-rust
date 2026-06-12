@@ -1,4 +1,4 @@
-use crate::{Value, eval};
+use crate::{Value, eval, promise};
 
 #[test]
 fn evaluates_array_constructor_length_argument() {
@@ -151,10 +151,89 @@ fn exposes_array_from_async_static_surface() {
         Ok(Value::Boolean(true))
     );
     assert_eq!(
-        eval(
-            "let caught = false; try { Array.fromAsync([]); } catch (error) { caught = error instanceof TypeError; } caught;"
-        ),
+        eval("Array.fromAsync([]) instanceof Promise;"),
         Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn array_from_async_resolves_array_like_and_sync_iterable_inputs() {
+    assert_eq!(
+        promise::promise_debug_state_result(
+            &eval(
+                "Array.fromAsync({ length: 3, 0: 'a', 1: 'b' }).then(function(value) { return value.length + ':' + value[0] + ':' + value[1] + ':' + value[2]; });"
+            )
+            .unwrap()
+        ),
+        Some((
+            "fulfilled".to_owned(),
+            Value::String("3:a:b:undefined".to_owned())
+        ))
+    );
+    assert_eq!(
+        promise::promise_debug_state_result(
+            &eval("Array.fromAsync('hi', function(value, index) { return value + index; }).then(function(value) { return value.join(''); });")
+                .unwrap()
+        ),
+        Some(("fulfilled".to_owned(), Value::String("h0i1".to_owned())))
+    );
+    assert_eq!(
+        promise::promise_debug_state_result(
+            &eval(
+                "Number.prototype.length = 2; Number.prototype[0] = 'x'; Number.prototype[1] = 'y'; Array.fromAsync(1).then(function(value) { return value.join(''); });"
+            )
+            .unwrap()
+        ),
+        Some(("fulfilled".to_owned(), Value::String("xy".to_owned())))
+    );
+    assert_eq!(
+        promise::promise_debug_state_result(
+            &eval(
+                "BigInt.prototype.length = 2; BigInt.prototype[0] = 1; BigInt.prototype[1] = 2; Array.fromAsync(1n).then(function(value) { return value.join(':'); });"
+            )
+            .unwrap()
+        ),
+        Some(("fulfilled".to_owned(), Value::String("1:2".to_owned())))
+    );
+}
+
+#[test]
+fn array_from_async_rejects_early_errors() {
+    assert_eq!(
+        promise::promise_debug_state_result(
+            &eval(
+                "Array.fromAsync([], null).then(null, function(error) { return error instanceof TypeError; });"
+            )
+            .unwrap()
+        ),
+        Some(("fulfilled".to_owned(), Value::Boolean(true)))
+    );
+    assert_eq!(
+        promise::promise_debug_state_result(
+            &eval(
+                "Array.fromAsync(null).then(null, function(error) { return error instanceof TypeError; });"
+            )
+            .unwrap()
+        ),
+        Some(("fulfilled".to_owned(), Value::Boolean(true)))
+    );
+    assert_eq!(
+        promise::promise_debug_state_result(
+            &eval(
+                "Array.fromAsync({ get length() { throw new RangeError('boom'); } }).then(null, function(error) { return error instanceof RangeError; });"
+            )
+            .unwrap()
+        ),
+        Some(("fulfilled".to_owned(), Value::Boolean(true)))
+    );
+    assert_eq!(
+        promise::promise_debug_state_result(
+            &eval(
+                "Array.fromAsync.call({}, { length: 4294967296 }).then(null, function(error) { return error instanceof RangeError; });"
+            )
+            .unwrap()
+        ),
+        Some(("fulfilled".to_owned(), Value::Boolean(true)))
     );
 }
 

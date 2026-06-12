@@ -10,7 +10,9 @@ use crate::{
     symbol,
 };
 
-use super::array_like::array_like_values_with_env;
+use super::array_like::{
+    array_like_length, array_like_values_from_receiver, array_like_values_with_env,
+};
 use crate::CallEnv;
 
 pub(crate) fn native_array(
@@ -69,11 +71,35 @@ pub(crate) fn native_array_from(
     array_from_values(items, mapping.as_ref(), this_arg, constructor, env)
 }
 
-pub(crate) fn native_array_from_async() -> Result<Value, RuntimeError> {
-    Err(RuntimeError {
-        thrown: None,
-        message: "TypeError: Array.fromAsync is not implemented".to_owned(),
-    })
+pub(crate) fn native_array_from_async(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let items = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let map_fn = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
+    let this_arg = argument_values.get(2).cloned().unwrap_or(Value::Undefined);
+    let mapping = match map_fn {
+        Value::Undefined => None,
+        Value::Function(_) => Some(map_fn),
+        _ => {
+            return array_from_async_rejected(
+                RuntimeError {
+                    thrown: None,
+                    message: "TypeError: Array.fromAsync map function is not callable".to_owned(),
+                },
+                env,
+            );
+        }
+    };
+
+    let constructor = array_from_constructor(this_value);
+    let result =
+        array_from_async_array_like_result(items, mapping.as_ref(), this_arg, constructor, env);
+    match result {
+        Ok(value) => array_from_async_resolved(value, env),
+        Err(error) => array_from_async_rejected(error, env),
+    }
 }
 
 struct ArrayFromElements {
@@ -149,6 +175,105 @@ fn array_from_array_like_result(
     Ok(target)
 }
 
+fn array_from_async_array_like_result(
+    items: Value,
+    mapping: Option<&Value>,
+    this_arg: Value,
+    constructor: Option<Value>,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    if matches!(items, Value::Null | Value::Undefined) {
+        array_like_values_with_env(items.clone(), "Array.fromAsync", env)?;
+    }
+
+    let async_iterator_method = match symbol::async_iterator_symbol(env) {
+        Some(async_iterator_symbol) => property_value_key(
+            items.clone(),
+            &PropertyKey::Symbol(async_iterator_symbol),
+            env,
+        )?,
+        None => Value::Undefined,
+    };
+    if !matches!(async_iterator_method, Value::Undefined | Value::Null) {
+        if matches!(async_iterator_method, Value::Function(_)) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: Array.fromAsync async iterator path is not implemented"
+                    .to_owned(),
+            });
+        }
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Array.fromAsync async iterator method is not callable".to_owned(),
+        });
+    }
+
+    let iterator_method = match symbol::iterator_symbol(env) {
+        Some(iterator_symbol) => {
+            property_value_key(items.clone(), &PropertyKey::Symbol(iterator_symbol), env)?
+        }
+        None => Value::Undefined,
+    };
+    match iterator_method {
+        Value::Undefined | Value::Null => {}
+        Value::Function(_) => {
+            return array_from_iterable_result(
+                items,
+                iterator_method,
+                mapping,
+                this_arg,
+                constructor,
+                env,
+            );
+        }
+        _ => {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: Array.fromAsync iterator method is not callable".to_owned(),
+            });
+        }
+    }
+
+    let source = array_like_length(items, "Array.fromAsync", env)?;
+    if constructor.is_none() && source.length > u32::MAX as usize {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "RangeError: invalid array length".to_owned(),
+        });
+    }
+    let values =
+        map_array_like_receiver_values(source.receiver, source.length, mapping, this_arg, env)?;
+    array_from_array_like_result(
+        constructor,
+        ArrayFromElements {
+            construct_length: Some(values.len()),
+            values,
+        },
+        env,
+    )
+}
+
+fn array_from_async_resolved(value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+    let promise_constructor = promise_constructor(env)?;
+    crate::promise::promise_resolve(&promise_constructor, value, env)
+}
+
+fn array_from_async_rejected(
+    error: RuntimeError,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let promise_constructor = promise_constructor(env)?;
+    let reason = crate::error::runtime_error_to_value(error, env);
+    crate::promise::native_promise_reject(promise_constructor, &[reason], env)
+}
+
+fn promise_constructor(env: &CallEnv) -> Result<Value, RuntimeError> {
+    env.get("Promise").ok_or_else(|| RuntimeError {
+        thrown: None,
+        message: "TypeError: Promise constructor is unavailable".to_owned(),
+    })
+}
+
 fn array_from_constructor(value: Value) -> Option<Value> {
     match &value {
         Value::Function(Function {
@@ -188,6 +313,26 @@ fn map_array_like_values(
     env: &mut CallEnv,
 ) -> Result<Vec<Value>, RuntimeError> {
     let values = array_like_values_with_env(items, "Array.from", env)?;
+    map_array_from_values(values, mapping, this_arg, env)
+}
+
+fn map_array_like_receiver_values(
+    receiver: Value,
+    length: usize,
+    mapping: Option<&Value>,
+    this_arg: Value,
+    env: &mut CallEnv,
+) -> Result<Vec<Value>, RuntimeError> {
+    let values = array_like_values_from_receiver(receiver, length, env)?;
+    map_array_from_values(values, mapping, this_arg, env)
+}
+
+fn map_array_from_values(
+    values: Vec<Value>,
+    mapping: Option<&Value>,
+    this_arg: Value,
+    env: &mut CallEnv,
+) -> Result<Vec<Value>, RuntimeError> {
     let mut result = Vec::with_capacity(values.len());
     for (index, value) in values.into_iter().enumerate() {
         result.push(array_from_mapped_value(

@@ -20,7 +20,7 @@ pub(crate) fn array_like_length(
     let length = match receiver.clone() {
         Value::Array(array) => array.len(),
         Value::String(value) => value.chars().count(),
-        Value::Object(_) | Value::Proxy(_) => {
+        Value::BigInt(_) | Value::Object(_) | Value::Proxy(_) => {
             to_length_with_env(property_value(receiver.clone(), "length", env)?, env)?
         }
         Value::Function(function) => function.params.length(),
@@ -51,8 +51,12 @@ pub(crate) fn array_like_values_with_env(
             .chars()
             .map(|character| Value::String(character.to_string()))
             .collect()),
-        Value::Object(_) | Value::Proxy(_) => {
-            let receiver = value;
+        Value::Boolean(_)
+        | Value::BigInt(_)
+        | Value::Number(_)
+        | Value::Object(_)
+        | Value::Proxy(_) => {
+            let receiver = array_like_receiver(value, env);
             let length = to_length_with_env(property_value(receiver.clone(), "length", env)?, env)?;
             array_like_values_from_receiver(receiver, length, env)
         }
@@ -160,7 +164,7 @@ pub(crate) fn array_like_values_from_receiver(
 
 pub(super) fn array_like_receiver(value: Value, env: &CallEnv) -> Value {
     match value {
-        Value::Boolean(_) | Value::Number(_) => {
+        Value::Boolean(_) | Value::BigInt(_) | Value::Number(_) => {
             object::boxed_primitive(value.clone(), env).unwrap_or(value)
         }
         Value::String(value) => {
