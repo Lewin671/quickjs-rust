@@ -180,6 +180,12 @@ fn evaluates_array_sequence_builtins() {
     );
     assert_eq!(
         eval(
+            "let item = new Uint8Array(1); Object.defineProperty(item, 'length', { value: 4 }); item[Symbol.isConcatSpreadable] = true; let out = [].concat(item); out.length + ':' + out[0] + ':' + out.hasOwnProperty('1') + ':' + (out[1] === undefined);"
+        ),
+        Ok(Value::String("4:0:false:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
             "let proto = { 2: 'p' }; let item = Object.create(proto); item.length = 4; item[Symbol.isConcatSpreadable] = true; let out = [].concat(item); out.length + ':' + out.hasOwnProperty('2') + ':' + out[2];"
         ),
         Ok(Value::String("4:true:p".to_owned()))

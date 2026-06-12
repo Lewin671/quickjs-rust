@@ -280,13 +280,6 @@ fn install_view(
         TYPED_ARRAY_LENGTH_PROPERTY.to_owned(),
         Property::non_enumerable(Value::Number(length as f64)),
     );
-    // Keep a non-configurable, non-writable own `length` for ergonomic
-    // `array.length` reads (the prototype accessor also covers detach).
-    object.define_property(
-        "length".to_owned(),
-        Property::data(Value::Number(length as f64), false, false, false),
-    );
-
     // Persist element bytes into the buffer and materialize index properties.
     let element = bytes_per_element(native);
     let mut bytes = array_buffer::array_buffer_bytes(&buffer);
