@@ -279,7 +279,7 @@ pub(crate) fn construct_function(
     let this_value = if is_derived {
         Value::Undefined
     } else {
-        let prototype = crate::constructor_prototype_slot(&new_target, env);
+        let prototype = construct_prototype_slot(&new_target, env)?;
         Value::Object(ObjectRef::with_prototype_slot(HashMap::new(), prototype))
     };
 
@@ -307,6 +307,35 @@ pub(crate) fn construct_function(
         _ if is_derived => Ok(result),
         _ => Ok(this_value),
     }
+}
+
+fn construct_prototype_slot(
+    new_target: &Value,
+    env: &mut CallEnv,
+) -> Result<Option<crate::Prototype>, RuntimeError> {
+    if let Value::Proxy(_) = new_target {
+        return prototype_value_to_slot(
+            crate::property_value(new_target.clone(), "prototype", env)?,
+            env,
+        );
+    }
+    Ok(crate::constructor_prototype_slot(new_target, env))
+}
+
+fn prototype_value_to_slot(
+    value: Value,
+    env: &CallEnv,
+) -> Result<Option<crate::Prototype>, RuntimeError> {
+    Ok(match value {
+        Value::Object(prototype) if !symbol::is_symbol_primitive(&prototype) => {
+            Some(crate::Prototype::Object(prototype))
+        }
+        Value::Function(prototype) => Some(crate::Prototype::Function(prototype)),
+        Value::Array(array) => Some(crate::Prototype::Object(crate::array_as_object_prototype(
+            &array, env,
+        ))),
+        _ => None,
+    })
 }
 
 pub(crate) fn ensure_constructor(value: &Value) -> Result<(), RuntimeError> {
