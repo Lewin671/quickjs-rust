@@ -10,8 +10,11 @@ use crate::CallEnv;
 
 pub(crate) fn native_object_get_prototype_of(
     argument_values: &[Value],
-    env: &CallEnv,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
+    if let Some(Value::Proxy(proxy)) = argument_values.first() {
+        return crate::proxy::proxy_get_prototype_of(proxy.clone(), env);
+    }
     match argument_values.first() {
         Some(Value::Object(object)) => Ok(object
             .prototype_slot()
@@ -51,81 +54,91 @@ pub(crate) fn native_object_get_prototype_of(
     }
 }
 
+/// Converts a JavaScript prototype value (object or null) into a `Prototype`
+/// slot, erroring on anything that is not an object or null.
+fn prototype_slot_from_value(
+    prototype: Value,
+    operation: &str,
+    env: &CallEnv,
+) -> Result<Option<crate::Prototype>, RuntimeError> {
+    match prototype {
+        Value::Object(prototype) if symbol::is_symbol_primitive(&prototype) => Err(RuntimeError {
+            thrown: None,
+            message: format!("{operation} prototype must be an object or null"),
+        }),
+        Value::Object(prototype) => Ok(Some(crate::Prototype::Object(prototype))),
+        Value::Array(array) => Ok(Some(crate::Prototype::Object(array_as_object_prototype(
+            &array, env,
+        )))),
+        Value::Function(function) => Ok(Some(crate::Prototype::Function(function))),
+        Value::Null => Ok(None),
+        _ => Err(RuntimeError {
+            thrown: None,
+            message: format!("{operation} prototype must be an object or null"),
+        }),
+    }
+}
+
+/// Ordinary `[[SetPrototypeOf]]` over a value (forwarding through a Proxy to its
+/// target), returning whether the assignment succeeded. Does not invoke traps.
+pub(crate) fn ordinary_set_prototype_of(
+    target: &Value,
+    prototype: Value,
+    env: &CallEnv,
+) -> Result<bool, RuntimeError> {
+    let prototype = prototype_slot_from_value(prototype, "Object.setPrototypeOf", env)?;
+    Ok(match target {
+        Value::Object(object) if symbol::is_symbol_primitive(object) => true,
+        Value::Object(object) => object.set_prototype_slot(prototype).is_ok(),
+        Value::Map(map) => map.object().set_prototype_slot(prototype).is_ok(),
+        Value::Set(set) => set.object().set_prototype_slot(prototype).is_ok(),
+        Value::Proxy(proxy) => {
+            return ordinary_set_prototype_of(&proxy.target(), prototype_to_value(prototype), env);
+        }
+        Value::Array(elements) => elements
+            .set_prototype(prototype.and_then(|prototype| prototype.as_object()))
+            .is_ok(),
+        Value::Function(function) => function.set_internal_prototype_slot(prototype).is_ok(),
+        Value::String(_) | Value::Number(_) | Value::BigInt(_) | Value::Boolean(_) => true,
+        Value::Null | Value::Undefined => true,
+    })
+}
+
+fn prototype_to_value(prototype: Option<crate::Prototype>) -> Value {
+    prototype
+        .map(|prototype| prototype.to_value())
+        .unwrap_or(Value::Null)
+}
+
 pub(crate) fn native_object_set_prototype_of(
     argument_values: &[Value],
-    env: &CallEnv,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    let prototype = match argument_values.get(1).cloned().unwrap_or(Value::Undefined) {
-        Value::Object(prototype) if symbol::is_symbol_primitive(&prototype) => {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "Object.setPrototypeOf prototype must be an object or null".to_owned(),
-            });
-        }
-        Value::Object(prototype) => Some(crate::Prototype::Object(prototype)),
-        Value::Array(array) => Some(crate::Prototype::Object(array_as_object_prototype(
-            &array, env,
-        ))),
-        Value::Function(function) => Some(crate::Prototype::Function(function)),
-        Value::Null => None,
-        _ => {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "Object.setPrototypeOf prototype must be an object or null".to_owned(),
-            });
-        }
-    };
+    let prototype_value = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
+    // Validate the prototype value shape eagerly (matches spec ordering).
+    let _ = prototype_slot_from_value(prototype_value.clone(), "Object.setPrototypeOf", env)?;
 
     let failed = || RuntimeError {
         thrown: None,
         message: "Object.setPrototypeOf failed".to_owned(),
     };
     match &target {
-        Value::Object(object) if symbol::is_symbol_primitive(object) => {}
-        Value::Object(object) => object
-            .set_prototype_slot(prototype)
-            .map_err(|()| failed())?,
-        Value::Map(map) => map
-            .object()
-            .set_prototype_slot(prototype)
-            .map_err(|()| failed())?,
-        Value::Set(set) => set
-            .object()
-            .set_prototype_slot(prototype)
-            .map_err(|()| failed())?,
-        Value::Proxy(proxy) => match proxy.target() {
-            Value::Object(object) => object
-                .set_prototype_slot(prototype)
-                .map_err(|()| failed())?,
-            Value::Map(map) => map
-                .object()
-                .set_prototype_slot(prototype)
-                .map_err(|()| failed())?,
-            Value::Set(set) => set
-                .object()
-                .set_prototype_slot(prototype)
-                .map_err(|()| failed())?,
-            Value::Array(elements) => elements
-                .set_prototype(prototype.and_then(|prototype| prototype.as_object()))
-                .map_err(|()| failed())?,
-            Value::Function(function) => function
-                .set_internal_prototype_slot(prototype)
-                .map_err(|()| failed())?,
-            _ => {}
-        },
-        Value::Array(elements) => elements
-            .set_prototype(prototype.and_then(|prototype| prototype.as_object()))
-            .map_err(|()| failed())?,
-        Value::Function(function) => function
-            .set_internal_prototype_slot(prototype)
-            .map_err(|()| failed())?,
-        Value::String(_) | Value::Number(_) | Value::BigInt(_) | Value::Boolean(_) => {}
+        Value::Proxy(proxy) => {
+            if !crate::proxy::proxy_set_prototype_of(proxy.clone(), prototype_value, env)? {
+                return Err(failed());
+            }
+        }
         Value::Null | Value::Undefined => {
             return Err(RuntimeError {
                 thrown: None,
                 message: "Object.setPrototypeOf target must not be null or undefined".to_owned(),
             });
+        }
+        _ => {
+            if !ordinary_set_prototype_of(&target, prototype_value, env)? {
+                return Err(failed());
+            }
         }
     }
     Ok(target)
@@ -136,7 +149,7 @@ pub(crate) fn native_object_set_prototype_of(
 /// `let O = ToObject(RequireObjectCoercible(this)); return O.[[GetPrototypeOf]]()`.
 pub(crate) fn native_object_prototype_get_proto(
     this_value: Value,
-    env: &CallEnv,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     match this_value {
         Value::Null | Value::Undefined => Err(RuntimeError {
@@ -157,7 +170,7 @@ pub(crate) fn native_object_prototype_get_proto(
 pub(crate) fn native_object_prototype_set_proto(
     this_value: Value,
     argument_values: &[Value],
-    env: &CallEnv,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if matches!(this_value, Value::Null | Value::Undefined) {
         return Err(RuntimeError {

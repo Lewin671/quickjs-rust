@@ -414,6 +414,83 @@ pub(crate) fn proxy_prevent_extensions(
     Ok(true)
 }
 
+/// The ordinary `[[Prototype]]` of a value as a JavaScript value (object or
+/// null), without dispatching through any Proxy trap.
+fn ordinary_prototype_value(target: &Value, env: &CallEnv) -> Value {
+    crate::value_prototype_slot(target.clone(), env)
+        .map(|prototype| prototype.to_value())
+        .unwrap_or(Value::Null)
+}
+
+/// `[[GetPrototypeOf]]` for an exotic Proxy: invoke the `getPrototypeOf` trap.
+/// The trap must return an object or null, and when the target is
+/// non-extensible the result must equal the target's own prototype.
+pub(crate) fn proxy_get_prototype_of(
+    proxy: ProxyRef,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let target = proxy.target_result()?;
+    let handler = proxy.handler_result()?;
+    let Some(trap) = proxy_trap(handler.clone(), "getPrototypeOf", env)? else {
+        return Ok(ordinary_prototype_value(&target, env));
+    };
+    let result = call_function(trap, handler, vec![target.clone()], env, false)?;
+    match &result {
+        Value::Null => {}
+        Value::Object(object) if !crate::symbol::is_symbol_primitive(object) => {}
+        Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) | Value::Proxy(_) => {}
+        _ => {
+            return Err(invariant_error(
+                "getPrototypeOf trap must return an object or null",
+            ));
+        }
+    }
+    if !crate::object::ordinary_value_is_extensible(&target) {
+        let target_prototype = ordinary_prototype_value(&target, env);
+        if !result.same_value(&target_prototype) {
+            return Err(invariant_error(
+                "getPrototypeOf trap result disagrees with a non-extensible target",
+            ));
+        }
+    }
+    Ok(result)
+}
+
+/// `[[SetPrototypeOf]]` for an exotic Proxy: invoke the `setPrototypeOf` trap.
+/// A truthy result on a non-extensible target requires the requested prototype
+/// to equal the target's current prototype. `prototype_value` is the requested
+/// prototype as a value (an object or null).
+pub(crate) fn proxy_set_prototype_of(
+    proxy: ProxyRef,
+    prototype_value: Value,
+    env: &mut CallEnv,
+) -> Result<bool, RuntimeError> {
+    let target = proxy.target_result()?;
+    let handler = proxy.handler_result()?;
+    let Some(trap) = proxy_trap(handler.clone(), "setPrototypeOf", env)? else {
+        return crate::object::ordinary_set_prototype_of(&target, prototype_value, env);
+    };
+    let result = call_function(
+        trap,
+        handler,
+        vec![target.clone(), prototype_value.clone()],
+        env,
+        false,
+    )?;
+    if !is_truthy(&result) {
+        return Ok(false);
+    }
+    if !crate::object::ordinary_value_is_extensible(&target) {
+        let target_prototype = ordinary_prototype_value(&target, env);
+        if !prototype_value.same_value(&target_prototype) {
+            return Err(invariant_error(
+                "setPrototypeOf trap changed the prototype of a non-extensible target",
+            ));
+        }
+    }
+    Ok(true)
+}
+
 /// `[[Call]]` for an exotic Proxy: invoke the `apply` trap with
 /// `(target, thisArgument, argumentsList)`, or forward to the target when the
 /// trap is absent. The target must itself be callable.

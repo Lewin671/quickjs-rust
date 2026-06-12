@@ -233,3 +233,42 @@ fn evaluates_proxy_extensibility_traps() {
         Ok(Value::Boolean(true))
     );
 }
+
+#[test]
+fn evaluates_proxy_prototype_traps() {
+    // getPrototypeOf trap result is returned for Object.getPrototypeOf.
+    assert_eq!(
+        eval(
+            "let proto = { tag: 1 }; let p = new Proxy({}, { getPrototypeOf: function() { return proto; } }); Object.getPrototypeOf(p) === proto;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    // A non-object, non-null trap result is a TypeError.
+    assert_eq!(
+        eval(
+            "let p = new Proxy({}, { getPrototypeOf: function() { return 5; } }); let caught = false; try { Object.getPrototypeOf(p); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    // getPrototypeOf on a non-extensible target must report the real prototype.
+    assert_eq!(
+        eval(
+            "let t = Object.preventExtensions({}); let p = new Proxy(t, { getPrototypeOf: function() { return { x: 1 }; } }); let caught = false; try { Object.getPrototypeOf(p); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    // setPrototypeOf trap success is reflected through Reflect.setPrototypeOf.
+    assert_eq!(
+        eval(
+            "let seen; let p = new Proxy({}, { setPrototypeOf: function(target, proto) { seen = proto; return true; } }); let r = Reflect.setPrototypeOf(p, null); r + ':' + (seen === null);"
+        ),
+        Ok(Value::String("true:true".to_owned()))
+    );
+    // Changing the prototype of a non-extensible target is a TypeError.
+    assert_eq!(
+        eval(
+            "let t = Object.preventExtensions({}); let p = new Proxy(t, { setPrototypeOf: function() { return true; } }); let caught = false; try { Object.setPrototypeOf(p, {}); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
