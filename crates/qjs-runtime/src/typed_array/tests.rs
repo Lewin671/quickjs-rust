@@ -187,6 +187,10 @@ fn bigint_arrays_wrap_and_reject_numbers() {
         eval("let a = new BigInt64Array([1n, 2n]); typeof a[0] + ':' + a[0] + ':' + a[1];"),
         Ok(Value::String("bigint:1:2".to_owned()))
     );
+    assert_eq!(
+        eval("let a = new BigInt64Array(['0', true]); typeof a[0] + ':' + a[0] + ':' + a[1];"),
+        Ok(Value::String("bigint:0:1".to_owned()))
+    );
     assert!(eval("new BigInt64Array([1]);").is_err());
 }
 
