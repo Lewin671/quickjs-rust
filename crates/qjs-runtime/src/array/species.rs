@@ -11,7 +11,7 @@ pub(super) fn array_species_create(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if !is_array_species_receiver(&receiver)? {
-        return Ok(Value::Array(ArrayRef::new(vec![Value::Undefined; length])));
+        return Ok(Value::Array(ArrayRef::new_with_length(length)));
     }
 
     let mut constructor = property_value(receiver, "constructor", env)?;
@@ -27,7 +27,7 @@ pub(super) fn array_species_create(
         }
     }
     if matches!(constructor, Value::Undefined) {
-        return Ok(Value::Array(ArrayRef::new(vec![Value::Undefined; length])));
+        return Ok(Value::Array(ArrayRef::new_with_length(length)));
     }
     ensure_constructor(&constructor).map_err(|_| RuntimeError {
         thrown: None,

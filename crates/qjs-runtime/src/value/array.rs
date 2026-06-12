@@ -31,6 +31,21 @@ impl ArrayRef {
         Self::new_sparse(elements, Vec::new())
     }
 
+    pub(crate) fn new_with_length(length: usize) -> Self {
+        Self {
+            elements: Rc::new(RefCell::new(Vec::new())),
+            holes: Rc::new(RefCell::new(BTreeSet::new())),
+            properties: Rc::new(RefCell::new(HashMap::new())),
+            symbol_properties: Rc::new(RefCell::new(Vec::new())),
+            length: Rc::new(Cell::new(length)),
+            length_writable: Rc::new(Cell::new(true)),
+            extensible: Rc::new(Cell::new(true)),
+            sealed: Rc::new(Cell::new(false)),
+            frozen: Rc::new(Cell::new(false)),
+            prototype: Rc::new(RefCell::new(None)),
+        }
+    }
+
     pub(crate) fn new_sparse(elements: Vec<Value>, holes: Vec<usize>) -> Self {
         let length = elements.len();
         let holes: BTreeSet<_> = holes.into_iter().collect();

@@ -171,6 +171,30 @@ fn evaluates_array_iteration_builtins() {
         Ok(Value::Number(1.0))
     );
     assert_eq!(
+        eval(
+            "let xs = [1, , 3]; let result = xs.map(function(value) { return value * 2; }); result.length + ':' + Object.prototype.hasOwnProperty.call(result, '1') + ':' + result[0] + ':' + result[2];"
+        ),
+        Ok(Value::String("3:false:2:6".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let target; function C(length) { this.lengthValue = length; target = this; } let xs = [2, 4]; xs.constructor = {}; xs.constructor[Symbol.species] = C; let result = xs.map(function(value) { return value + 1; }); result === target && result.lengthValue === 2 && result[0] === 3 && result[1] === 5 && !Object.prototype.hasOwnProperty.call(result, 'length');"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let target = {}; Object.preventExtensions(target); function C() { return target; } let xs = [1]; xs.constructor = {}; xs.constructor[Symbol.species] = C; let caught = false; try { xs.map(function(value) { return value; }); } catch (error) { caught = error.constructor === TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let target = {}; Object.defineProperty(target, '0', { value: 1, configurable: false }); function C() { return target; } let xs = [2]; xs.constructor = {}; xs.constructor[Symbol.species] = C; let caught = false; try { xs.map(function(value) { return value; }); } catch (error) { caught = error.constructor === TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("[1, 2, 3, 4].filter(function(value) { return value > 2; }).join();"),
         Ok(Value::String("3,4".to_owned()))
     );

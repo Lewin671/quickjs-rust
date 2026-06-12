@@ -1,4 +1,9 @@
-use super::{array_like::array_like_length, species::validate_array_species_constructor};
+use super::{
+    array_like::array_like_length,
+    species::{
+        array_species_create, create_data_property_or_throw, validate_array_species_constructor,
+    },
+};
 use crate::CallEnv;
 use crate::{
     ArrayRef, RuntimeError, Value, array_prototype, call_function, has_property, is_truthy,
@@ -119,18 +124,18 @@ pub(crate) fn native_array_prototype_map(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_array_iteration("map", this_value, argument_values, env)?;
-    let mut mapped = vec![Value::Undefined; iteration.source_len];
-    let mut holes = (0..iteration.source_len).collect::<Vec<_>>();
+    let result =
+        array_species_create(iteration.receiver.clone(), iteration.source_len, "map", env)?;
     for index in dynamic_iteration_indices(&iteration, env) {
         let key = index.to_string();
         if has_property(iteration.receiver.clone(), env, &key)? {
             let value = property_value(iteration.receiver.clone(), &key, env)?;
-            mapped[index] = call_iteration_callback(&iteration, value, index, env)?;
-            holes.retain(|hole| *hole != index);
+            let mapped = call_iteration_callback(&iteration, value, index, env)?;
+            create_data_property_or_throw(result.clone(), key, mapped, env)?;
         }
     }
 
-    Ok(Value::Array(ArrayRef::new_sparse(mapped, holes)))
+    Ok(result)
 }
 
 fn dynamic_iteration_indices(iteration: &ArrayIteration, env: &CallEnv) -> Vec<usize> {
