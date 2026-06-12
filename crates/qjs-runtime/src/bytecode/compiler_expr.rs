@@ -364,6 +364,24 @@ impl Compiler {
                 self.emit(Op::Await);
                 Ok(())
             }
+            Expr::ImportCall {
+                specifier, options, ..
+            } => {
+                // Evaluate the options argument first (when present) so it sits
+                // below the specifier; both are left on the stack for the op.
+                if let Some(options) = options {
+                    self.compile_expr(options)?;
+                }
+                self.compile_expr(specifier)?;
+                self.emit(Op::ImportCall {
+                    has_options: options.is_some(),
+                });
+                Ok(())
+            }
+            Expr::ImportMeta { .. } => {
+                self.emit(Op::ImportMeta);
+                Ok(())
+            }
             Expr::Super { span } => Err(RuntimeError {
                 thrown: None,
                 message: format!(

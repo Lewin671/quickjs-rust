@@ -32,11 +32,27 @@ pub(crate) type Realm = Rc<RefCell<HashMap<String, Value>>>;
 ///
 /// Cloning a `CallEnv` shares the realm by `Rc::clone` and copies only the
 /// (small) frame locals, so a per-call clone no longer copies the realm.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 #[allow(dead_code)]
 pub(crate) struct CallEnv {
     realm: Realm,
     locals: HashMap<String, Value>,
+    /// The realm's dynamic-import host (module graph + resolver + active
+    /// referrer), shared by `Rc::clone` into every frame and the job queue so a
+    /// dynamic `import()` reached at any depth can load and cache modules. `None`
+    /// when the code was not entered with a module host (the host then reports a
+    /// dynamic-import-unsupported rejection).
+    module_host: Option<crate::module::ModuleHostRef>,
+}
+
+impl std::fmt::Debug for CallEnv {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CallEnv")
+            .field("realm", &self.realm)
+            .field("locals", &self.locals)
+            .field("module_host", &self.module_host.is_some())
+            .finish()
+    }
 }
 
 // The realm-cell migration (tasks/T011-call-performance.md) wires these in
@@ -48,7 +64,18 @@ impl CallEnv {
         Self {
             realm,
             locals: HashMap::new(),
+            module_host: None,
         }
+    }
+
+    /// The realm's dynamic-import host, if one was installed.
+    pub(crate) fn module_host(&self) -> Option<crate::module::ModuleHostRef> {
+        self.module_host.clone()
+    }
+
+    /// Installs (or replaces) the dynamic-import host on this environment.
+    pub(crate) fn set_module_host(&mut self, host: crate::module::ModuleHostRef) {
+        self.module_host = Some(host);
     }
 
     /// Builds a standalone environment over a fresh, empty realm. Used by the
@@ -59,6 +86,7 @@ impl CallEnv {
         Self {
             realm: Rc::new(RefCell::new(HashMap::new())),
             locals: HashMap::new(),
+            module_host: None,
         }
     }
 
@@ -69,12 +97,17 @@ impl CallEnv {
         Self {
             realm: Rc::new(RefCell::new(map)),
             locals: HashMap::new(),
+            module_host: None,
         }
     }
 
     /// Builds an environment over `realm` with the given frame locals.
     pub(crate) fn with_locals(realm: Realm, locals: HashMap<String, Value>) -> Self {
-        Self { realm, locals }
+        Self {
+            realm,
+            locals,
+            module_host: None,
+        }
     }
 
     /// The shared realm cell, for sharing into a new frame or snapshot.
@@ -177,6 +210,7 @@ impl CallEnv {
         Self {
             realm: Rc::clone(&self.realm),
             locals,
+            module_host: self.module_host.clone(),
         }
     }
 }

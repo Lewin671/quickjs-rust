@@ -528,7 +528,18 @@ run_case_worker() {
     is_module="module"
   fi
   temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/qjs-test262-baseline-XXXXXX")"
-  temp="$temp_dir/case.js"
+  # Script-goal cases may use dynamic `import()` with specifiers relative to the
+  # test file (e.g. `import('./x_FIXTURE.js')`). Place the combined script next
+  # to the original test so those specifiers resolve against the test's own
+  # directory, then remove it after the run. Module cases run the original file
+  # directly under the Module goal and keep their script `temp` in temp_dir.
+  local case_dir
+  if [ -z "$is_module" ]; then
+    case_dir="$(dirname "$file")"
+    temp="$case_dir/.qjs-baseline-case-$$-$RANDOM.js"
+  else
+    temp="$temp_dir/case.js"
+  fi
   if [ -n "$is_module" ]; then
     # Module cases run the test file directly under the Module goal; harness
     # includes become a script prelude (see make_module_prelude). The combined
@@ -552,6 +563,11 @@ run_case_worker() {
     fi
   fi
   rm -rf "$temp_dir"
+  # A script-goal case writes its combined script into the test's own directory
+  # (see above); remove it once both engine legs have run.
+  if [ -z "$is_module" ] && [ -f "$temp" ]; then
+    rm -f "$temp"
+  fi
   printf '%s\n' "$rust_result" >"$WORK_DIR/$idx.rust"
   printf '%s\n' "$qjsng_result" >"$WORK_DIR/$idx.qjsng"
   if [ -n "$CASE_RESULTS_JSONL" ]; then

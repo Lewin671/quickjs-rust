@@ -222,6 +222,31 @@ pub fn eval_classified(source: &str) -> Result<Value, EvalError> {
     })
 }
 
+/// Evaluates *script*-goal source with a dynamic-import host rooted at
+/// `referrer` (e.g. the script's file path), so a dynamic `import()` in the
+/// script resolves specifiers through `resolver`. Preserves the failure stage
+/// like [`eval_classified`].
+///
+/// # Errors
+///
+/// Returns parser, bytecode compiler, or runtime failures with their stage.
+pub fn eval_classified_with_resolver(
+    source: &str,
+    referrer: &str,
+    resolver: Box<dyn ModuleResolver>,
+) -> Result<Value, EvalError> {
+    let script = parse_script(source).map_err(|error| EvalError {
+        kind: EvalErrorKind::Parse,
+        message: error.message,
+    })?;
+    let bytecode = compile_script_classified(&script).map_err(compile_error_stage)?;
+    let host = module::new_script_module_host(referrer, resolver);
+    bytecode::eval_bytecode_with_module_host(&bytecode, host).map_err(|error| EvalError {
+        kind: EvalErrorKind::Runtime,
+        message: error.message,
+    })
+}
+
 /// Maps a bytecode-compilation failure to its harness stage. Invalid regexp
 /// literals (`/pattern/flags`) are parse-phase errors; every other compiler
 /// rejection is an early error.

@@ -258,3 +258,78 @@ fn module_export_after_var_uses_existing_binding() {
             .expect("module should parse");
     assert_eq!(script.body.len(), 3);
 }
+
+// --- dynamic import / import.meta (T012 S4) ----------------------------------
+
+/// Extracts the sole expression-statement expression from a *script*.
+fn sole_script_expr(source: &str) -> qjs_ast::Expr {
+    let script = parse_script(source).expect("script source should parse");
+    match script.body.as_slice() {
+        [Stmt::Expr(expr)] => expr.clone(),
+        other => panic!("expected a single expression statement, got {other:?}"),
+    }
+}
+
+#[test]
+fn parses_dynamic_import_call_in_script() {
+    let expr = sole_script_expr("import('./mod.js');");
+    let qjs_ast::Expr::ImportCall {
+        specifier, options, ..
+    } = expr
+    else {
+        panic!("expected an ImportCall expression, got {expr:?}");
+    };
+    assert!(matches!(
+        *specifier,
+        qjs_ast::Expr::Literal(qjs_ast::Literal::String { .. })
+    ));
+    assert!(options.is_none());
+}
+
+#[test]
+fn parses_dynamic_import_call_in_module() {
+    let script = parse_module("import('./mod.js');").expect("module should parse");
+    assert!(matches!(
+        script.body.as_slice(),
+        [Stmt::Expr(qjs_ast::Expr::ImportCall { .. })]
+    ));
+}
+
+#[test]
+fn parses_dynamic_import_with_options_and_trailing_comma() {
+    let expr = sole_script_expr("import('./mod.js', { with: { type: 'json' } },);");
+    let qjs_ast::Expr::ImportCall { options, .. } = expr else {
+        panic!("expected an ImportCall expression, got {expr:?}");
+    };
+    assert!(options.is_some());
+}
+
+#[test]
+fn parses_import_meta() {
+    let script = parse_module("import.meta;").expect("module should parse");
+    assert!(matches!(
+        script.body.as_slice(),
+        [Stmt::Expr(qjs_ast::Expr::ImportMeta { .. })]
+    ));
+}
+
+#[test]
+fn rejects_new_import_call() {
+    assert!(parse_script("new import('./mod.js');").is_err());
+    assert!(parse_module("new import('./mod.js');").is_err());
+}
+
+#[test]
+fn rejects_empty_import_call() {
+    assert!(parse_script("import();").is_err());
+}
+
+#[test]
+fn rejects_spread_import_argument() {
+    assert!(parse_script("import(...['./mod.js']);").is_err());
+}
+
+#[test]
+fn rejects_three_argument_import_call() {
+    assert!(parse_script("import('./mod.js', {}, '');").is_err());
+}

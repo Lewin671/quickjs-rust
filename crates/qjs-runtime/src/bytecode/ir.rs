@@ -234,6 +234,17 @@ pub(super) enum Op {
         iterator_slot: usize,
         next_slot: usize,
     },
+    /// Dynamic `import(specifier)`. The specifier value is on top of the stack
+    /// (and the options argument below it when `has_options` is set). Coerces
+    /// the specifier to a string, builds a Promise capability, schedules a host
+    /// load job, and leaves the capability's promise on the stack. A coercion
+    /// failure rejects the promise rather than throwing (IfAbruptRejectPromise).
+    ImportCall {
+        has_options: bool,
+    },
+    /// `import.meta`. Only meaningful in module code; reported as a SyntaxError
+    /// in a script (where no module host is installed).
+    ImportMeta,
 }
 
 /// Compiled definition of a class constructor.
