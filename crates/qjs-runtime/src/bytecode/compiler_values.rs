@@ -250,7 +250,10 @@ impl Compiler {
         arguments: &[CallArgument],
         span: Span,
     ) -> Result<(), RuntimeError> {
-        validate_regexp_literal_new(callee, arguments, span)?;
+        if let Err(error) = validate_regexp_literal_new(callee, arguments, span) {
+            self.regexp_literal_error = true;
+            return Err(error);
+        }
         self.compile_expr(callee)?;
         if arguments
             .iter()

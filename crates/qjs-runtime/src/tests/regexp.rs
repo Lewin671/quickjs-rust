@@ -9,9 +9,13 @@ fn rejects_invalid_regexp_literal_at_parse_phase() {
         "throw 'unreached'; /(/;",
         "throw 'unreached'; /a/gg;",
         "throw 'unreached'; /\\2(a)/u;",
+        "throw 'unreached'; /.(?<!.){2,3}/;",
+        "throw 'unreached'; /a/biu;",
     ] {
         let error = eval_classified(source).expect_err("invalid regexp literal must fail");
-        assert_eq!(error.kind, EvalErrorKind::Early, "source: {source}");
+        // Invalid regexp literals are parse-phase errors (kind=parse), so the
+        // harness accepts them for Test262 `negative: phase: parse` cases.
+        assert_eq!(error.kind, EvalErrorKind::Parse, "source: {source}");
         assert!(
             error.message.contains("SyntaxError"),
             "expected SyntaxError, got {} for {source}",

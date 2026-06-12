@@ -67,8 +67,8 @@ pub use value::Value;
 use value::{ArrayRef, MapRef, ObjectRef, Property, Prototype, SetRef};
 
 pub use bytecode::{
-    Bytecode, EvalOutcome, compile_script, eval_bytecode, eval_bytecode_keep_jobs,
-    eval_bytecode_source,
+    Bytecode, CompileError, EvalOutcome, compile_script, compile_script_classified, eval_bytecode,
+    eval_bytecode_keep_jobs, eval_bytecode_source,
 };
 
 pub(crate) const GLOBAL_THIS_BINDING: &str = "\0global_this";
@@ -208,14 +208,25 @@ pub fn eval_classified(source: &str) -> Result<Value, EvalError> {
         kind: EvalErrorKind::Parse,
         message: error.message,
     })?;
-    let bytecode = compile_script(&script).map_err(|error| EvalError {
-        kind: EvalErrorKind::Early,
-        message: error.message,
-    })?;
+    let bytecode = compile_script_classified(&script).map_err(compile_error_stage)?;
     eval_bytecode(&bytecode).map_err(|error| EvalError {
         kind: EvalErrorKind::Runtime,
         message: error.message,
     })
+}
+
+/// Maps a bytecode-compilation failure to its harness stage. Invalid regexp
+/// literals (`/pattern/flags`) are parse-phase errors; every other compiler
+/// rejection is an early error.
+fn compile_error_stage(error: CompileError) -> EvalError {
+    EvalError {
+        kind: if error.parse_stage {
+            EvalErrorKind::Parse
+        } else {
+            EvalErrorKind::Early
+        },
+        message: error.error.message,
+    }
 }
 
 /// Evaluates source text without draining the promise job queue.
@@ -233,10 +244,7 @@ pub fn eval_keep_jobs(source: &str) -> Result<EvalOutcome, EvalError> {
         kind: EvalErrorKind::Parse,
         message: error.message,
     })?;
-    let bytecode = compile_script(&script).map_err(|error| EvalError {
-        kind: EvalErrorKind::Early,
-        message: error.message,
-    })?;
+    let bytecode = compile_script_classified(&script).map_err(compile_error_stage)?;
     eval_bytecode_keep_jobs(&bytecode).map_err(|error| EvalError {
         kind: EvalErrorKind::Runtime,
         message: error.message,

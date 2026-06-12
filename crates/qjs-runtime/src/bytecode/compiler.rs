@@ -31,6 +31,9 @@ pub(super) struct Compiler {
     /// Break/continue/return that leave one or more of them emit `Op::ExitWith`
     /// for each scope crossed, keeping the VM's with-object stack balanced.
     pub(super) with_depth: usize,
+    /// Set when an invalid `/.../` regexp literal aborted compilation; such
+    /// literals are parse-phase errors, not generic early errors.
+    pub(super) regexp_literal_error: bool,
 }
 
 #[derive(Default)]
@@ -70,12 +73,16 @@ impl Default for Compiler {
             global_hoisted: std::collections::HashSet::new(),
             annex_b_blocked_function_names: Vec::new(),
             with_depth: 0,
+            regexp_literal_error: false,
         }
     }
 }
 
-pub(super) fn compile_script(script: &Script) -> Result<Bytecode, RuntimeError> {
-    Compiler::default().compile(script)
+pub(super) fn compile_script(script: &Script) -> Result<Bytecode, super::CompileError> {
+    let mut compiler = Compiler::default();
+    let result = compiler.compile_into(script);
+    let parse_stage = compiler.regexp_literal_error;
+    result.map_err(|error| super::CompileError { error, parse_stage })
 }
 
 pub(super) fn compile_function_body(
@@ -133,7 +140,7 @@ pub(super) fn compile_function_body_with_strict_generator(
 }
 
 impl Compiler {
-    fn compile(mut self, script: &Script) -> Result<Bytecode, RuntimeError> {
+    fn compile_into(&mut self, script: &Script) -> Result<Bytecode, RuntimeError> {
         self.strict = is_strict_function_body(&script.body);
         self.collect_hoisted_locals(&script.body);
         let blocked = lexical_declared_names(&script.body);
@@ -146,9 +153,9 @@ impl Compiler {
         })?;
         self.code.push(Op::Return);
         Ok(Bytecode::with_scope(
-            self.constants,
-            self.locals,
-            self.code,
+            std::mem::take(&mut self.constants),
+            std::mem::take(&mut self.locals),
+            std::mem::take(&mut self.code),
             true,
         ))
     }
