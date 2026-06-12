@@ -147,6 +147,18 @@ fn instance_accessors_report_view_geometry() {
         ),
         Ok(Value::String("6:6:0:3".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array(1); Object.getOwnPropertyDescriptor(a, 'length') === undefined;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array(1); Object.defineProperty(a, 'length', { value: 4 }); a.length;"
+        ),
+        Ok(Value::Number(4.0))
+    );
 }
 
 #[test]
