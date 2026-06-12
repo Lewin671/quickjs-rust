@@ -4,11 +4,16 @@ use crate::span::Span;
 
 mod control;
 mod declaration;
+mod module;
 mod script;
 
 pub use control::{CatchClause, ForInLeft, ForInit, SwitchCase};
 pub use declaration::{
     BindingElement, BindingPattern, ObjectBindingProperty, VarDeclarator, VarKind,
+};
+pub use module::{
+    DefaultExport, ExportDecl, ExportSpecifier, ImportDecl, ImportSpecifier, ModuleDecl,
+    ModuleExportName,
 };
 pub use script::Script;
 
@@ -199,4 +204,7 @@ pub enum Stmt {
     },
     /// An empty statement represented by `;`.
     Empty,
+    /// A module-level `import` or `export` declaration. Only produced when
+    /// parsing under the Module goal symbol.
+    ModuleDecl(ModuleDecl),
 }

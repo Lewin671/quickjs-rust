@@ -10,6 +10,7 @@ use crate::{
 };
 
 use super::ir::{Bytecode, Local, Op};
+use super::util::{stmt_accepts_pending_label, stmt_updates_statement_list_completion};
 
 pub(super) struct Compiler {
     pub(super) constants: Vec<Value>,
@@ -357,6 +358,7 @@ impl Compiler {
                 | Stmt::Continue { .. }
                 | Stmt::VarDecl { .. }
                 | Stmt::ClassDecl { .. }
+                | Stmt::ModuleDecl(_)
                 | Stmt::Empty => {}
             }
         }
@@ -841,6 +843,7 @@ impl Compiler {
                 self.emit_load_undefined();
                 Ok(())
             }
+            Stmt::ModuleDecl(_) => Err(super::util::unsupported_module_item()),
         }
     }
 
@@ -883,26 +886,6 @@ impl Compiler {
         self.patch_loop_breaks(&context, done);
         Ok(())
     }
-}
-
-fn stmt_updates_statement_list_completion(stmt: &Stmt) -> bool {
-    !matches!(
-        stmt,
-        Stmt::Debugger { .. } | Stmt::Empty | Stmt::FunctionDecl { .. } | Stmt::VarDecl { .. }
-    )
-}
-
-fn stmt_accepts_pending_label(stmt: &Stmt) -> bool {
-    matches!(
-        stmt,
-        Stmt::Labelled { .. }
-            | Stmt::While { .. }
-            | Stmt::DoWhile { .. }
-            | Stmt::For { .. }
-            | Stmt::ForIn { .. }
-            | Stmt::ForOf { .. }
-            | Stmt::Switch { .. }
-    )
 }
 
 pub(super) fn catch_param_annex_b_blocked_names(param: Option<&BindingPattern>) -> Vec<String> {

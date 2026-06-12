@@ -8,6 +8,7 @@ impl Parser {
             source,
             tokens,
             cursor: 0,
+            goal: crate::Goal::Script,
             strict: false,
             allow_in: true,
             in_method: false,

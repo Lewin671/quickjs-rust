@@ -30,10 +30,42 @@ pub fn parse_script(source: &str) -> Result<Script, ParseError> {
     Parser::new(tokens, source.to_owned()).parse_script()
 }
 
+/// Parses source text as a module (the Module goal symbol).
+///
+/// Module source permits top-level `import` and `export` declarations and is
+/// always strict mode. The returned [`Script`] body contains the module items
+/// as [`qjs_ast::Stmt::ModuleDecl`] entries alongside ordinary statements.
+///
+/// # Errors
+///
+/// Returns a structured error for lexing or parsing failures.
+pub fn parse_module(source: &str) -> Result<Script, ParseError> {
+    let tokens = lex(source).map_err(|error| ParseError {
+        message: error.message,
+        span: error.span,
+    })?;
+    let mut parser = Parser::new(tokens, source.to_owned());
+    parser.goal = Goal::Module;
+    parser.strict = true;
+    parser.parse_script()
+}
+
+/// The grammar goal symbol the parser is operating under. Module source allows
+/// top-level `import`/`export` and is implicitly strict; script source does
+/// not and treats `import`/`export` identifiers as ordinary names.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Goal {
+    Script,
+    Module,
+}
+
 struct Parser {
     source: String,
     tokens: Vec<Token>,
     cursor: usize,
+    /// The grammar goal symbol: script or module. Module source allows
+    /// top-level `import`/`export` declarations.
+    goal: Goal,
     strict: bool,
     allow_in: bool,
     /// Whether `super.prop`/`super[expr]` member access is currently allowed,

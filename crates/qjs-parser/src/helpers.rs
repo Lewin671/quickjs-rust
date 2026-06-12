@@ -170,6 +170,7 @@ pub(crate) fn stmt_end(stmt: &Stmt) -> usize {
         | Stmt::Continue { span, .. }
         | Stmt::VarDecl { span, .. }
         | Stmt::With { span, .. } => span.end,
+        Stmt::ModuleDecl(decl) => decl.span().end,
         Stmt::Empty => 0,
     }
 }

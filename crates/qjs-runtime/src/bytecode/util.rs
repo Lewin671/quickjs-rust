@@ -97,6 +97,39 @@ pub(super) fn unsupported_stmt(stmt: &Stmt) -> RuntimeError {
     }
 }
 
+/// Module `import`/`export` items parse under the Module goal but the runtime
+/// does not yet support module linking or evaluation (T012).
+pub(super) fn unsupported_module_item() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "modules are not yet supported".to_owned(),
+    }
+}
+
+/// Whether `stmt`'s value updates a statement list's completion value (used to
+/// decide between storing and popping the result of each statement).
+pub(super) fn stmt_updates_statement_list_completion(stmt: &Stmt) -> bool {
+    !matches!(
+        stmt,
+        Stmt::Debugger { .. } | Stmt::Empty | Stmt::FunctionDecl { .. } | Stmt::VarDecl { .. }
+    )
+}
+
+/// Whether a pending label may attach directly to `stmt` (the iteration and
+/// switch statements that observe labelled break/continue).
+pub(super) fn stmt_accepts_pending_label(stmt: &Stmt) -> bool {
+    matches!(
+        stmt,
+        Stmt::Labelled { .. }
+            | Stmt::While { .. }
+            | Stmt::DoWhile { .. }
+            | Stmt::For { .. }
+            | Stmt::ForIn { .. }
+            | Stmt::ForOf { .. }
+            | Stmt::Switch { .. }
+    )
+}
+
 pub(super) fn unsupported_target(target: &AssignmentTarget) -> RuntimeError {
     RuntimeError {
         thrown: None,

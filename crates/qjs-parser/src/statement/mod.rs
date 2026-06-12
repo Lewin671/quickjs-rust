@@ -2,6 +2,7 @@ mod classes;
 mod control;
 mod declarations;
 mod functions;
+mod module;
 
 pub(crate) use functions::duplicate_parameter_span;
 mod simple;
@@ -9,14 +10,18 @@ mod simple;
 use qjs_ast::{Script, Span, Stmt};
 use qjs_lexer::TokenKind;
 
-use crate::{ParseError, Parser};
+use crate::{Goal, ParseError, Parser};
 
 impl Parser {
     pub(crate) fn parse_script(&mut self) -> Result<Script, ParseError> {
         self.strict = self.strict || self.directive_prologue_is_strict(self.cursor);
         let mut body = Vec::new();
         while !self.at(&TokenKind::Eof) {
-            body.push(self.statement()?);
+            if self.goal == Goal::Module {
+                body.push(self.module_item()?);
+            } else {
+                body.push(self.statement()?);
+            }
         }
         // Any private-name reference that never resolved to an enclosing class
         // is a syntax error.

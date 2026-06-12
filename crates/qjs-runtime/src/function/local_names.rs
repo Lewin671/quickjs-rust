@@ -132,6 +132,7 @@ fn collect_statement_local_names(body: &[Stmt], names: &mut HashSet<String>) {
             | Stmt::Break { .. }
             | Stmt::Continue { .. }
             | Stmt::ClassDecl { .. }
+            | Stmt::ModuleDecl(_)
             | Stmt::Empty => {}
         }
     }
