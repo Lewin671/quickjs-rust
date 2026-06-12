@@ -268,6 +268,16 @@ pub(super) fn set_property(
 ) -> Result<bool, RuntimeError> {
     match object {
         Value::Object(object) => {
+            // Integer-indexed writes on a typed array route through the
+            // per-kind numeric conversion and the backing buffer
+            // (IntegerIndexedElementSet) before the ordinary property path.
+            if crate::typed_array::is_typed_array_object(&object) {
+                if let crate::typed_array::IndexedWrite::Handled =
+                    crate::typed_array::set_indexed_element(&object, &key, value.clone(), env)?
+                {
+                    return Ok(true);
+                }
+            }
             if apply_property_setter(
                 object.property(&key),
                 Value::Object(object.clone()),

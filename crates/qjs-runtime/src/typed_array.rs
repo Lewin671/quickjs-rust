@@ -12,6 +12,7 @@ mod iteration;
 mod ordering;
 
 pub(crate) use construct::native_typed_array;
+pub(crate) use element::{IndexedWrite, set_indexed_element};
 pub(crate) use iteration::*;
 pub(crate) use ordering::*;
 
