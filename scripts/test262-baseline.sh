@@ -214,6 +214,7 @@ emit_test262_host_shim() {
   cat <<'EOF'
 var $262 = {
   IsHTMLDDA: __quickjsRustIsHTMLDDA,
+  detachArrayBuffer: __quickjsRustDetachArrayBuffer,
   createRealm: function() {
     var crossRealmArray = function Array(length) {
       return arguments.length === 0 ? [] : new Array(length);

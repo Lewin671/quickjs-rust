@@ -267,6 +267,29 @@ pub(crate) fn new_array_buffer(env: &CallEnv, length: usize) -> ObjectRef {
     object
 }
 
+/// DetachArrayBuffer: clears the backing data and marks `object` detached.
+/// Idempotent; a non-ArrayBuffer argument is ignored. Used by the Test262 host
+/// `$262.detachArrayBuffer` hook.
+pub(crate) fn detach(object: &ObjectRef) {
+    object.delete_own_property(ARRAY_BUFFER_DATA_PROPERTY);
+    object.define_property(
+        ARRAY_BUFFER_DETACHED_PROPERTY.to_owned(),
+        Property::non_enumerable(Value::Boolean(true)),
+    );
+}
+
+/// Host hook backing `$262.detachArrayBuffer(buffer)`: detaches `buffer` when
+/// it is an `ArrayBuffer`, returning `null` (the spec's DetachArrayBuffer
+/// result) in all cases.
+pub(crate) fn native_detach_array_buffer(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+    if let Some(Value::Object(object)) = argument_values.first() {
+        if is_array_buffer_object(object) {
+            detach(object);
+        }
+    }
+    Ok(Value::Null)
+}
+
 pub(crate) fn detached_error() -> RuntimeError {
     RuntimeError {
         thrown: None,
@@ -393,6 +416,25 @@ mod tests {
             eval("new ArrayBuffer(8, undefined).byteLength;"),
             Ok(Value::Number(8.0))
         );
+    }
+
+    #[test]
+    fn detach_array_buffer_host_hook_marks_detached() {
+        // The Test262 host hook detaches the buffer: byteLength reads 0 and the
+        // typed-array view observes a detached buffer (methods throw).
+        assert_eq!(
+            eval("let b = new ArrayBuffer(8); __quickjsRustDetachArrayBuffer(b); b.byteLength;"),
+            Ok(Value::Number(0.0))
+        );
+        assert!(
+            eval(
+                "let b = new ArrayBuffer(8); let a = new Uint8Array(b); \
+                 __quickjsRustDetachArrayBuffer(b); a.fill(1);"
+            )
+            .is_err()
+        );
+        // A non-ArrayBuffer argument is ignored and the hook returns null.
+        assert_eq!(eval("__quickjsRustDetachArrayBuffer({});"), Ok(Value::Null));
     }
 
     #[test]
