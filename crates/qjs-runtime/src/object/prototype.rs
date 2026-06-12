@@ -322,7 +322,7 @@ pub(crate) fn native_object_prototype_to_string(
     this_value: Value,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let tag = builtin_to_string_tag(this_value.clone());
+    let tag = builtin_to_string_tag(this_value.clone())?;
     let tag = match symbol::to_string_tag_symbol(env) {
         Some(symbol) => match property_value_key(this_value, &PropertyKey::Symbol(symbol), env)? {
             Value::String(tag) => tag,
@@ -333,13 +333,22 @@ pub(crate) fn native_object_prototype_to_string(
     Ok(Value::String(format!("[object {tag}]")))
 }
 
-fn builtin_to_string_tag(value: Value) -> String {
-    match value {
+fn builtin_to_string_tag(value: Value) -> Result<String, RuntimeError> {
+    Ok(match value {
         Value::Undefined => "Undefined".to_owned(),
         Value::Null => "Null".to_owned(),
         Value::Array(_) => "Array".to_owned(),
         Value::Function(_) => "Function".to_owned(),
-        Value::Map(_) | Value::Set(_) | Value::Proxy(_) => "Object".to_owned(),
+        Value::Map(_) | Value::Set(_) => "Object".to_owned(),
+        Value::Proxy(proxy) => {
+            if crate::proxy::proxy_target_is_array_result(&proxy)? {
+                "Array".to_owned()
+            } else if crate::proxy::proxy_is_callable(&proxy) {
+                "Function".to_owned()
+            } else {
+                "Object".to_owned()
+            }
+        }
         Value::String(_) => "String".to_owned(),
         Value::Number(_) => "Number".to_owned(),
         Value::BigInt(_) => "BigInt".to_owned(),
@@ -367,7 +376,7 @@ fn builtin_to_string_tag(value: Value) -> String {
                 "Object".to_owned()
             }
         }
-    }
+    })
 }
 
 pub(crate) fn native_object_prototype_to_locale_string(

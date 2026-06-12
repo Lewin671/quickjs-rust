@@ -202,3 +202,38 @@ fn array_prototype_methods_reject_undefined_this_before_arguments() {
         Ok(Value::Boolean(true))
     );
 }
+
+#[test]
+fn array_prototype_to_string_falls_back_to_intrinsic_object_to_string() {
+    assert_eq!(
+        eval(
+            "delete Object.prototype.toString; \
+             let object = Array.prototype.toString.call({ join: null }); \
+             let target = []; \
+             target.join = undefined; \
+             let proxy = new Proxy(target, {}); \
+             let array = Array.prototype.toString.call(proxy); \
+             let callable = Array.prototype.toString.call(new Proxy(function() {}, {})); \
+             object + ':' + array + ':' + callable;"
+        ),
+        Ok(Value::String(
+            "[object Object]:[object Array]:[object Function]".to_owned()
+        ))
+    );
+}
+
+#[test]
+fn array_prototype_to_string_reads_join_before_length() {
+    assert_eq!(
+        eval(
+            "let order = []; \
+             let object = { \
+               get join() { order.push('join'); return null; }, \
+               get length() { order.push('length'); return 0; } \
+             }; \
+             Array.prototype.toString.call(object); \
+             order.join(',');"
+        ),
+        Ok(Value::String("join".to_owned()))
+    );
+}

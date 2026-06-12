@@ -1,6 +1,6 @@
 use crate::{RuntimeError, Value, call_function, object, property_value, to_js_string_with_env};
 
-use super::array_like::array_like_length;
+use super::array_like::{array_like_length, array_like_receiver};
 use crate::CallEnv;
 
 pub(crate) fn native_array_prototype_join(
@@ -22,7 +22,15 @@ pub(crate) fn native_array_prototype_to_string(
     this_value: Value,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let receiver = array_like_length(this_value, "Array.prototype.toString", env)?.receiver;
+    let receiver = match this_value {
+        Value::Null | Value::Undefined => {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "Array.prototype.toString called on null or undefined".to_owned(),
+            });
+        }
+        value => array_like_receiver(value, env),
+    };
     let join = property_value(receiver.clone(), "join", env)?;
     if matches!(join, Value::Function(_)) {
         return call_function(join, receiver, Vec::new(), env, false);
