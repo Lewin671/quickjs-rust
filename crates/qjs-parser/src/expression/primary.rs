@@ -392,7 +392,12 @@ impl Parser {
                 }
                 let key_token = self.advance();
                 let key_span = key_token.span;
+                // A `\u`-escaped `get`/`set` is never the accessor keyword
+                // (12.7.2): it is treated as an ordinary property name, which
+                // makes `get m() {}` a SyntaxError.
+                let key_had_escape = key_token.had_escape;
                 let (key, kind, is_proto_setter, value) = if is_get_accessor_start(&key_token.kind)
+                    && !key_had_escape
                     && !self.at(&TokenKind::Colon)
                     && !self.at(&TokenKind::Comma)
                     && !self.at(&TokenKind::LeftParen)
@@ -401,6 +406,7 @@ impl Parser {
                     let (key, kind, value) = self.object_getter_property(key_span)?;
                     (key, kind, false, value)
                 } else if is_set_accessor_start(&key_token.kind)
+                    && !key_had_escape
                     && !self.at(&TokenKind::Colon)
                     && !self.at(&TokenKind::Comma)
                     && !self.at(&TokenKind::LeftParen)
@@ -742,7 +748,11 @@ impl Parser {
         let Some(async_token) = self.peek() else {
             return false;
         };
-        if !matches!(&async_token.kind, TokenKind::Identifier(name) if name == "async") {
+        // A `\u`-escaped spelling of `async` is never the method modifier
+        // keyword (12.7.2): `async m() {}` is a SyntaxError, not a method.
+        if async_token.had_escape
+            || !matches!(&async_token.kind, TokenKind::Identifier(name) if name == "async")
+        {
             return false;
         }
         let Some(next) = self.peek_nth(1) else {

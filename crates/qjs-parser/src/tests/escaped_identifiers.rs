@@ -56,3 +56,28 @@ fn escaped_always_reserved_word_is_rejected_at_lex_time() {
     assert!(parse_script("var \\u{62}reak = 1;").is_err());
     assert!(parse_script("\\u0069f (true) {}").is_err());
 }
+
+#[test]
+fn escaped_get_set_accessor_keywords_are_rejected() {
+    // `get`/`set` cannot spell the accessor contextual keyword, so
+    // `get m() {}` becomes a syntax error (a property name with no `:`).
+    assert!(parse_script("({ g\\u0065t m() {} });").is_err());
+    assert!(parse_script("({ s\\u0065t m(v) {} });").is_err());
+}
+
+#[test]
+fn escaped_async_method_modifier_is_rejected() {
+    // `async m() {}` is not an async method; `async` is treated as a
+    // property name, making the following method name a syntax error.
+    assert!(parse_script("({ \\u0061sync m() {} });").is_err());
+}
+
+#[test]
+fn unescaped_get_set_async_are_still_keywords_or_names() {
+    // The unescaped accessor/method forms keep working.
+    assert!(parse_script("({ get m() { return 1; } });").is_ok());
+    assert!(parse_script("({ set m(v) {} });").is_ok());
+    assert!(parse_script("({ async m() {} });").is_ok());
+    // And the bare spellings remain valid property names.
+    assert!(parse_script("({ get: 1, set: 2, async: 3 });").is_ok());
+}
