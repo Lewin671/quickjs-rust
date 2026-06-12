@@ -18,7 +18,7 @@ use crate::CallEnv;
 pub(super) fn eval_bytecode_keep_jobs(
     bytecode: &Bytecode,
 ) -> Result<(Value, CallEnv), RuntimeError> {
-    let mut vm = Vm::new(bytecode);
+    let mut vm = Vm::new(bytecode)?;
     let value = vm.run()?;
     Ok((value, vm.current_env()))
 }

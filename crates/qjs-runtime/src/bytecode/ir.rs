@@ -399,6 +399,7 @@ pub struct Bytecode {
     pub(super) locals: Vec<Local>,
     local_slots: HashMap<String, usize>,
     global_names: Vec<String>,
+    global_lexical_names: Vec<String>,
     sloppy_global_assignment_names: Vec<String>,
     /// Whether this bytecode is global script code (top-level scripts and
     /// eval bodies). Global `var`/function bindings live in the realm, and
@@ -419,11 +420,22 @@ impl Bytecode {
         code: Vec<Op>,
         global_scope: bool,
     ) -> Self {
+        Self::with_scope_and_global_lexical_names(constants, locals, code, global_scope, Vec::new())
+    }
+
+    pub(super) fn with_scope_and_global_lexical_names(
+        constants: Vec<Value>,
+        locals: Vec<Local>,
+        code: Vec<Op>,
+        global_scope: bool,
+        global_lexical_names: Vec<String>,
+    ) -> Self {
         Self {
             constants,
             local_slots: collect_local_slots(&locals),
             locals,
             global_names: collect_global_names(&code),
+            global_lexical_names,
             sloppy_global_assignment_names: collect_sloppy_global_assignment_names(&code),
             global_scope,
             code,
@@ -432,6 +444,10 @@ impl Bytecode {
 
     pub(crate) fn global_names(&self) -> &[String] {
         &self.global_names
+    }
+
+    pub(crate) fn global_lexical_names(&self) -> &[String] {
+        &self.global_lexical_names
     }
 
     pub(crate) fn sloppy_global_assignment_names(&self) -> &[String] {

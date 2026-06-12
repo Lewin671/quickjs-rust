@@ -184,7 +184,7 @@ pub(super) fn native_global_eval(
         message: error.message,
     })?;
     let bytecode = compile_script(&script)?;
-    initialize_eval_global_bindings(&bytecode, env);
+    initialize_eval_global_bindings(&bytecode, env)?;
     let result = eval_bytecode_with_env(&bytecode, env.clone());
     for name in bytecode
         .hoisted_local_names()
@@ -204,11 +204,29 @@ pub(super) fn native_global_eval(
     result.value
 }
 
-fn initialize_eval_global_bindings(bytecode: &crate::bytecode::Bytecode, env: &mut CallEnv) {
+fn initialize_eval_global_bindings(
+    bytecode: &crate::bytecode::Bytecode,
+    env: &mut CallEnv,
+) -> Result<(), RuntimeError> {
     let global_this = env.get(GLOBAL_THIS_BINDING).and_then(|value| match value {
         Value::Object(object) => Some(object.clone()),
         _ => None,
     });
+    if let Some(global_this) = &global_this {
+        for name in bytecode.global_lexical_names() {
+            if global_this
+                .own_property(name)
+                .is_some_and(|property| !property.configurable)
+            {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: format!(
+                        "SyntaxError: global lexical declaration `{name}` conflicts with an existing var binding"
+                    ),
+                });
+            }
+        }
+    }
     for name in bytecode.hoisted_local_names() {
         if let Some(property) = global_this
             .as_ref()
@@ -225,6 +243,7 @@ fn initialize_eval_global_bindings(bytecode: &crate::bytecode::Bytecode, env: &m
             }
         }
     }
+    Ok(())
 }
 
 pub(super) fn native_global_escape(

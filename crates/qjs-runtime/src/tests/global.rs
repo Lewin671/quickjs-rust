@@ -157,6 +157,15 @@ fn evaluates_global_eval_builtin() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "{ function evalLexCollisionFn() {} } \
+             let caught = false; \
+             try { eval('var evalLexCollisionVar; let evalLexCollisionFn;'); } catch (error) { caught = error instanceof SyntaxError; } \
+             caught + ':' + (typeof evalLexCollisionVar);"
+        ),
+        Ok(Value::String("true:undefined".to_owned()))
+    );
 }
 
 #[test]
@@ -170,6 +179,15 @@ fn initializes_global_hoisted_bindings_before_script_execution() {
             "{ function f() {} } var d = Object.getOwnPropertyDescriptor(this, 'f'); d.enumerable + ':' + d.writable + ':' + d.configurable;"
         ),
         Ok(Value::String("true:true:false".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "eval(\"Object.defineProperty(this, 'annexGlobalFn', { value: 'x', enumerable: false, writable: true, configurable: true });\"); \
+             eval(\"{ function annexGlobalFn() { return 9; } }\"); \
+             let d = Object.getOwnPropertyDescriptor(this, 'annexGlobalFn'); \
+             annexGlobalFn() + ':' + d.enumerable + ':' + d.writable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("9:false:true:true".to_owned()))
     );
 }
 

@@ -30,7 +30,7 @@ struct VmCallEnv {
 }
 
 pub(super) fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> {
-    let mut vm = Vm::new(bytecode);
+    let mut vm = Vm::new(bytecode)?;
     let value = vm.run()?;
     vm.drain_promise_jobs()?;
     Ok(value)
@@ -94,7 +94,7 @@ pub(super) struct Vm<'a> {
 }
 
 impl<'a> Vm<'a> {
-    pub(super) fn new(bytecode: &'a Bytecode) -> Self {
+    pub(super) fn new(bytecode: &'a Bytecode) -> Result<Self, RuntimeError> {
         let mut globals = HashMap::new();
         let global_this = Value::Object(ObjectRef::new(HashMap::new()));
         globals.insert("this".to_owned(), global_this.clone());
@@ -109,14 +109,18 @@ impl<'a> Vm<'a> {
         initialize_builtins(&mut env, &global_this);
         {
             let mut globals = realm.borrow_mut();
-            Self::initialize_script_global_bindings(bytecode, &mut globals);
+            Self::initialize_script_global_bindings(bytecode, &mut globals)?;
         }
         // The script frame captures nothing: its `var`/function bindings live
         // in the shared realm, so closures read them through the realm cell
         // instead of a creation-time snapshot (which would freeze hoisted
         // bindings at `undefined`).
         let captured_env = Rc::new(RefCell::new(HashMap::new()));
-        Self::new_with_globals_and_captures(bytecode, env, captured_env)
+        Ok(Self::new_with_globals_and_captures(
+            bytecode,
+            env,
+            captured_env,
+        ))
     }
 
     pub(super) fn new_with_globals_and_captures(

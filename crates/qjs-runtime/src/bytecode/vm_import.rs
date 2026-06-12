@@ -18,7 +18,7 @@ pub(super) fn eval_bytecode_with_module_host(
     bytecode: &Bytecode,
     host: crate::module::ModuleHostRef,
 ) -> Result<Value, RuntimeError> {
-    let mut vm = Vm::new(bytecode);
+    let mut vm = Vm::new(bytecode)?;
     vm.module_host = Some(host);
     let value = vm.run()?;
     vm.drain_promise_jobs()?;

@@ -162,6 +162,7 @@ impl Compiler {
         self.collect_hoisted_locals(&script.body);
         self.predeclare_current_scope_lexicals(&script.body);
         let blocked = lexical_declared_names(&script.body);
+        let global_lexical_names = blocked.clone();
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
             compiler.compile_hoisted_function_decls(&script.body)?;
             for stmt in &script.body {
@@ -170,11 +171,12 @@ impl Compiler {
             Ok(())
         })?;
         self.code.push(Op::Return);
-        Ok(Bytecode::with_scope(
+        Ok(Bytecode::with_scope_and_global_lexical_names(
             std::mem::take(&mut self.constants),
             std::mem::take(&mut self.locals),
             std::mem::take(&mut self.code),
             true,
+            global_lexical_names,
         ))
     }
 

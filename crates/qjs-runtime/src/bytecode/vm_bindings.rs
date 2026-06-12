@@ -54,13 +54,28 @@ impl Vm<'_> {
     pub(super) fn initialize_script_global_bindings(
         bytecode: &Bytecode,
         globals: &mut HashMap<String, Value>,
-    ) {
+    ) -> Result<(), RuntimeError> {
         let global_this = globals
             .get(GLOBAL_THIS_BINDING)
             .and_then(|value| match value {
                 Value::Object(object) => Some(object.clone()),
                 _ => None,
             });
+        if let Some(global_this) = &global_this {
+            for name in bytecode.global_lexical_names() {
+                if global_this
+                    .own_property(name)
+                    .is_some_and(|property| !property.configurable)
+                {
+                    return Err(RuntimeError {
+                        thrown: None,
+                        message: format!(
+                            "SyntaxError: global lexical declaration `{name}` conflicts with an existing var binding"
+                        ),
+                    });
+                }
+            }
+        }
         for name in bytecode.hoisted_local_names() {
             if let Some(property) = global_this
                 .as_ref()
@@ -77,6 +92,7 @@ impl Vm<'_> {
                 }
             }
         }
+        Ok(())
     }
 
     pub(super) fn initial_slots(bytecode: &Bytecode, env: &CallEnv) -> Vec<Slot> {
@@ -371,6 +387,16 @@ impl Vm<'_> {
                 message: "global object binding is missing".to_owned(),
             });
         };
+        if global_this.has_own_property(&name) {
+            global_this.set(name.clone(), value.clone());
+            let value = global_this
+                .own_property(&name)
+                .map(|property| property.value)
+                .unwrap_or(value);
+            self.invalidate_array_prototype_cache(&name);
+            self.realm.borrow_mut().insert(name, value);
+            return Ok(());
+        }
         global_this.define_property(
             name.clone(),
             Property::data(value.clone(), true, true, false),

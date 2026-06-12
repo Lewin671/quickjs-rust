@@ -27,7 +27,7 @@ use super::vm_generator::{GeneratorStart, GeneratorState};
 pub(super) fn eval_prelude_script(bytecode: &Bytecode, realm: &Realm) -> Result<(), RuntimeError> {
     {
         let mut globals = realm.borrow_mut();
-        Vm::initialize_script_global_bindings(bytecode, &mut globals);
+        Vm::initialize_script_global_bindings(bytecode, &mut globals)?;
     }
     let env = CallEnv::new(Rc::clone(realm));
     let captured_env = Rc::new(RefCell::new(HashMap::new()));
@@ -68,7 +68,7 @@ pub(super) fn eval_module_body(
 ) -> Result<CallEnv, RuntimeError> {
     {
         let mut globals = realm.borrow_mut();
-        Vm::initialize_script_global_bindings(bytecode, &mut globals);
+        Vm::initialize_script_global_bindings(bytecode, &mut globals)?;
         for (name, value) in imports {
             globals.insert(name, value);
         }
