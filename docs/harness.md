@@ -245,8 +245,10 @@ JSONL artifacts, and diagnostic ordering are unchanged, while per-case
 progress lines on stdout interleave in completion order. Lower
 `TEST262_BASELINE_JOBS` when several baseline instances share one machine.
 The
-`Test262 Coverage` GitHub Actions workflow runs once for each successful `CI`
-commit, runs the sharded quickjs-rust scan and QuickJS-NG baseline in parallel,
+`Test262 Coverage` GitHub Actions workflow starts for each successful `CI`
+commit, but a newer push to the same branch cancels a superseded in-flight
+run, so rapid push sequences settle on the latest commit's scan. It
+runs the sharded quickjs-rust scan and QuickJS-NG baseline in parallel,
 uploads shard summaries, and aggregates the result into the workflow summary
 without delaying the main CI workflow. CI uploads the checked commit's
 `qjs-cli` debug binary, and coverage jobs reuse that artifact instead of
