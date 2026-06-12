@@ -104,6 +104,12 @@ fn evaluates_object_definition_and_creation_builtins() {
     );
     assert_eq!(
         eval(
+            "let a = false, b = false, c = false; try { Object.defineProperty([], 'length', { value: -1, configurable: true }); } catch (error) { a = error instanceof RangeError; } try { Object.defineProperty([], 'length', { value: NaN, enumerable: true }); } catch (error) { b = error instanceof RangeError; } let array = []; Object.defineProperty(array, 'length', { writable: false }); try { Object.defineProperty(array, 'length', { value: Number.MAX_SAFE_INTEGER, writable: true }); } catch (error) { c = error instanceof RangeError; } a + ':' + b + ':' + c;"
+        ),
+        Ok(Value::String("true:true:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
             "let caught = false; let array = [0, 1, 2]; Object.defineProperty(array, '2', { configurable: false }); try { Object.defineProperty(array, 'length', { value: 1 }); } catch (error) { caught = error instanceof TypeError; } caught + ':' + array.length + ':' + array[2];"
         ),
         Ok(Value::String("true:3:2".to_owned()))

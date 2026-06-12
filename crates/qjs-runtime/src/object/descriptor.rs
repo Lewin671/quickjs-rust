@@ -253,11 +253,16 @@ fn define_array_length_property(
     descriptor: PropertyDescriptor,
     env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
+    let new_len = descriptor
+        .value
+        .clone()
+        .map(|value| array_length_from_array_set_length_value(value, env))
+        .transpose()?;
     if descriptor.configurable_field() == Some(true) || descriptor.enumerable_field() == Some(true)
     {
         return Ok(false);
     }
-    if descriptor.value.is_none() {
+    if new_len.is_none() {
         let Some(property) =
             resolve_property_definition(Some(array_length_property(elements)), descriptor)
         else {
@@ -267,8 +272,7 @@ fn define_array_length_property(
         return Ok(true);
     }
 
-    if let Some(value) = descriptor.value {
-        let new_len = array_length_from_array_set_length_value(value, env)?;
+    if let Some(new_len) = new_len {
         let old_len = elements.len();
         if !elements.is_length_writable() {
             if descriptor.writable == Some(true) || new_len != old_len {
