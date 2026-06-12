@@ -3,7 +3,8 @@ use crate::CallEnv;
 use num_bigint::BigInt;
 
 use crate::{
-    NativeFunction, ObjectRef, Property, RuntimeError, Value, array_buffer, to_number_with_env,
+    NativeFunction, ObjectRef, Property, RuntimeError, Value, array_buffer, bigint,
+    to_number_with_env,
 };
 
 use super::{
@@ -43,20 +44,12 @@ pub(crate) fn coerce_element(
 fn coerce_big_int_element(
     native: NativeFunction,
     value: Value,
-    _env: &mut CallEnv,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    // ToBigInt: only BigInt and boolean coerce; numbers and the rest throw.
-    let big = match value {
-        Value::BigInt(value) => value,
-        Value::Boolean(flag) => BigInt::from(u8::from(flag)),
-        _ => {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "TypeError: cannot convert value to a BigInt typed array element"
-                    .to_owned(),
-            });
-        }
-    };
+    let big = bigint::to_bigint(value, env).map_err(|_| RuntimeError {
+        thrown: None,
+        message: "TypeError: cannot convert value to a BigInt typed array element".to_owned(),
+    })?;
     Ok(Value::BigInt(wrap_big_int(native, big)))
 }
 
