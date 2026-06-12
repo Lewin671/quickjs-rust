@@ -345,3 +345,16 @@ fn rejects_invalid_destructuring_assignments() {
     assert!(parse_script("[1] = list;").is_err());
     assert!(parse_script("({a} = source) , [b] += list;").is_err());
 }
+
+#[test]
+fn rejects_strict_assignment_to_eval_or_arguments() {
+    // Simple and compound assignment to `eval`/`arguments` is an early
+    // SyntaxError in strict mode.
+    assert!(parse_script("'use strict'; eval = 1;").is_err());
+    assert!(parse_script("'use strict'; arguments = 1;").is_err());
+    assert!(parse_script("'use strict'; eval += 1;").is_err());
+    assert!(parse_script("'use strict'; arguments *= 2;").is_err());
+    // Sloppy mode permits both.
+    assert!(parse_script("eval = 1;").is_ok());
+    assert!(parse_script("arguments += 1;").is_ok());
+}
