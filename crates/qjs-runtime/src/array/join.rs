@@ -1,6 +1,6 @@
 use crate::{RuntimeError, Value, call_function, object, property_value, to_js_string_with_env};
 
-use super::array_like::{array_like_length, array_like_receiver};
+use super::array_like::array_like_length;
 use crate::CallEnv;
 
 pub(crate) fn native_array_prototype_join(
@@ -8,18 +8,21 @@ pub(crate) fn native_array_prototype_join(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
+    let array_like = array_like_length(this_value, "Array.prototype.join", env)?;
     let separator = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
         Value::Undefined => ",".to_owned(),
         value => to_js_string_with_env(value, env)?,
     };
-    Ok(Value::String(array_join(this_value, &separator, env)?))
+    Ok(Value::String(array_join_array_like(
+        array_like, &separator, env,
+    )?))
 }
 
 pub(crate) fn native_array_prototype_to_string(
     this_value: Value,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let receiver = array_like_receiver(this_value, env);
+    let receiver = array_like_length(this_value, "Array.prototype.toString", env)?.receiver;
     let join = property_value(receiver.clone(), "join", env)?;
     if matches!(join, Value::Function(_)) {
         return call_function(join, receiver, Vec::new(), env, false);
@@ -33,6 +36,14 @@ pub(crate) fn array_join(
     env: &mut CallEnv,
 ) -> Result<String, RuntimeError> {
     let array_like = array_like_length(value, "Array.prototype.join", env)?;
+    array_join_array_like(array_like, separator, env)
+}
+
+fn array_join_array_like(
+    array_like: super::array_like::ArrayLikeLength,
+    separator: &str,
+    env: &mut CallEnv,
+) -> Result<String, RuntimeError> {
     let mut parts = Vec::with_capacity(array_like.length);
     for index in 0..array_like.length {
         let element = property_value(array_like.receiver.clone(), &index.to_string(), env)?;

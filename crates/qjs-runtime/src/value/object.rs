@@ -134,6 +134,7 @@ pub struct ObjectRef {
     prototype: Rc<RefCell<Option<Prototype>>>,
     to_string_tag: Rc<RefCell<Option<String>>>,
     raw_json: Rc<Cell<bool>>,
+    array_prototype_exotic: Rc<Cell<bool>>,
     /// Generator [[GeneratorState]] for generator objects; `None` for ordinary
     /// objects. Lazily allocated so non-generator objects pay only one `Rc`.
     generator_state: Rc<RefCell<Option<crate::bytecode::GeneratorState>>>,
@@ -156,6 +157,7 @@ impl fmt::Debug for ObjectRef {
             .field("has_prototype", &self.prototype.borrow().is_some())
             .field("to_string_tag", &self.to_string_tag.borrow())
             .field("raw_json", &self.raw_json.get())
+            .field("array_prototype_exotic", &self.array_prototype_exotic.get())
             .finish()
     }
 }
@@ -196,6 +198,7 @@ impl ObjectRef {
             prototype: Rc::new(RefCell::new(prototype)),
             to_string_tag: Rc::new(RefCell::new(None)),
             raw_json: Rc::new(Cell::new(false)),
+            array_prototype_exotic: Rc::new(Cell::new(false)),
             generator_state: Rc::new(RefCell::new(None)),
             async_generator_state: Rc::new(RefCell::new(None)),
             private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
@@ -246,6 +249,14 @@ impl ObjectRef {
 
     pub(crate) fn is_raw_json(&self) -> bool {
         self.raw_json.get()
+    }
+
+    pub(crate) fn mark_array_prototype_exotic(&self) {
+        self.array_prototype_exotic.set(true);
+    }
+
+    pub(crate) fn is_array_prototype_exotic(&self) -> bool {
+        self.array_prototype_exotic.get()
     }
 
     pub(crate) fn get(&self, key: &str) -> Option<Value> {
@@ -320,6 +331,19 @@ impl ObjectRef {
         }
         if !self.extensible.get() {
             return;
+        }
+        if self.array_prototype_exotic.get()
+            && let Some(index) = array_index_property_key(&key)
+            && let Some(length_property) = properties.get_mut("length")
+            && length_property.writable
+        {
+            let current_length = match length_property.value {
+                Value::Number(length) if length.is_finite() && length >= 0.0 => length as u32,
+                _ => 0,
+            };
+            if index >= current_length {
+                length_property.value = Value::Number((index + 1) as f64);
+            }
         }
         if is_array_index_key(&key) {
             self.index_property_count

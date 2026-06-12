@@ -361,6 +361,8 @@ fn builtin_to_string_tag(value: Value) -> String {
                 "Error".to_owned()
             } else if object.to_string_tag().as_deref() == Some("Arguments") {
                 "Arguments".to_owned()
+            } else if object.is_array_prototype_exotic() {
+                "Array".to_owned()
             } else {
                 "Object".to_owned()
             }

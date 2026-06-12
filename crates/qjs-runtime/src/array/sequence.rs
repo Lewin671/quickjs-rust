@@ -6,7 +6,7 @@ use crate::{
 use super::indexing::{array_at_index, array_slice_end, array_slice_start};
 use super::splice::{splice_start_with_env, to_spliced_delete_count};
 use super::{
-    array_like::{array_like_length, array_like_receiver},
+    array_like::array_like_length,
     species::{
         array_species_create, create_data_property_or_throw, set_array_like_length,
         validate_array_species_constructor,
@@ -22,7 +22,7 @@ pub(crate) fn native_array_prototype_concat(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let receiver = array_like_receiver(this_value, env);
+    let receiver = array_like_length(this_value, "Array.prototype.concat", env)?.receiver;
     let result = array_species_create(receiver.clone(), 0, "concat", env)?;
 
     let mut next_index = 0;

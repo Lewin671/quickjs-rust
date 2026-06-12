@@ -167,3 +167,38 @@ fn evaluates_array_builtins() {
     assert!(eval("Array(-1);").is_err());
     assert!(eval("Array(1.5);").is_err());
 }
+
+#[test]
+fn array_prototype_is_array_exotic_object() {
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(Array.prototype, 'length'); \
+             Array.prototype[2] = 42; \
+             d.writable + ':' + d.enumerable + ':' + d.configurable + ':' + \
+             Array.prototype.length + ':' + Array.prototype[2] + ':' + \
+             Object.prototype.toString.call(Array.prototype);"
+        ),
+        Ok(Value::String(
+            "true:false:false:3:42:[object Array]".to_owned()
+        ))
+    );
+}
+
+#[test]
+fn array_prototype_methods_reject_undefined_this_before_arguments() {
+    assert_eq!(
+        eval(
+            "let concat = Array.prototype.concat; \
+             let join = Array.prototype.join; \
+             let toString = Array.prototype.toString; \
+             let toLocaleString = Array.prototype.toLocaleString; \
+             let count = 0; \
+             try { concat(); } catch (error) { if (error instanceof TypeError) count++; } \
+             try { join({ get toString() { throw new Error('separator'); } }); } catch (error) { if (error instanceof TypeError) count++; } \
+             try { toString(); } catch (error) { if (error instanceof TypeError) count++; } \
+             try { toLocaleString(); } catch (error) { if (error instanceof TypeError) count++; } \
+             count === 4;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
