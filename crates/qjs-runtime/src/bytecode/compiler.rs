@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use qjs_ast::{
-    BinaryOp, BindingPattern, ForInLeft, ForInit, FunctionParams, Script, Stmt, SwitchCase, VarKind,
+    BinaryOp, BindingPattern, ForInLeft, ForInit, FunctionParams, Script, Stmt, VarKind,
 };
 
 use crate::{
@@ -9,6 +9,11 @@ use crate::{
     function::{is_strict_function_body, parameter_binding_name, rest_parameter_binding_name},
 };
 
+use super::compiler_lexical::{
+    catch_param_annex_b_blocked_names, current_scope_lexical_declared_bindings,
+    function_body_annex_b_blocked_names, function_param_names, lexical_declared_names,
+    nested_block_annex_b_blocked_names, switch_lexical_declared_names,
+};
 use super::ir::{Bytecode, Local, Op};
 use super::util::{stmt_accepts_pending_label, stmt_updates_statement_list_completion};
 
@@ -155,6 +160,7 @@ impl Compiler {
     fn compile_into(&mut self, script: &Script) -> Result<Bytecode, RuntimeError> {
         self.strict = self.strict || is_strict_function_body(&script.body);
         self.collect_hoisted_locals(&script.body);
+        self.predeclare_current_scope_lexicals(&script.body);
         let blocked = lexical_declared_names(&script.body);
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
             compiler.compile_hoisted_function_decls(&script.body)?;
@@ -199,6 +205,7 @@ impl Compiler {
         })?;
         let blocked = function_body_annex_b_blocked_names(params, body);
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
+            compiler.predeclare_current_scope_lexicals(body);
             compiler.compile_hoisted_function_decls(body)?;
             for stmt in body {
                 compiler.compile_stmt(stmt)?;
@@ -471,6 +478,39 @@ impl Compiler {
         slots
     }
 
+    pub(super) fn active_lexical_captures(
+        &self,
+        function_bytecode: &Bytecode,
+        function_local_names: &[String],
+    ) -> Vec<(String, usize)> {
+        let mut captures = Vec::new();
+        for name in function_bytecode
+            .global_names()
+            .iter()
+            .map(String::as_str)
+            .chain(function_bytecode.local_names())
+        {
+            if function_local_names
+                .binary_search_by(|local| local.as_str().cmp(name))
+                .is_ok()
+            {
+                continue;
+            }
+            if let Some(slot) = self.resolve_active_lexical_slot(name)
+                && !captures.iter().any(|(_, existing)| *existing == slot)
+            {
+                captures.push((name.to_owned(), slot));
+            }
+        }
+        captures
+    }
+
+    pub(super) fn predeclare_current_scope_lexicals(&mut self, body: &[Stmt]) {
+        for (name, mutable) in current_scope_lexical_declared_bindings(body) {
+            self.declare_lexical_slot(&name, mutable);
+        }
+    }
+
     pub(super) fn with_annex_b_blocked_function_names<T>(
         &mut self,
         names: &[String],
@@ -508,6 +548,13 @@ impl Compiler {
         self.lexical_scopes
             .last_mut()
             .expect("compiler should always have a lexical scope")
+    }
+
+    fn resolve_active_lexical_slot(&self, name: &str) -> Option<usize> {
+        self.lexical_scopes
+            .iter()
+            .rev()
+            .find_map(|scope| scope.get(name).copied())
     }
 
     pub(super) fn const_slot(&mut self, value: Value) -> usize {
@@ -726,6 +773,7 @@ impl Compiler {
             Stmt::Block { body, .. } => self.with_lexical_scope(|compiler| {
                 let blocked = lexical_declared_names(body);
                 compiler.with_annex_b_blocked_function_names(&blocked, |compiler| {
+                    compiler.predeclare_current_scope_lexicals(body);
                     if body.is_empty() {
                         compiler.emit_load_undefined();
                         return Ok(());
@@ -897,97 +945,4 @@ impl Compiler {
         self.patch_loop_breaks(&context, done);
         Ok(())
     }
-}
-
-pub(super) fn catch_param_annex_b_blocked_names(param: Option<&BindingPattern>) -> Vec<String> {
-    match param {
-        Some(BindingPattern::Identifier { .. }) | None => Vec::new(),
-        Some(pattern) => pattern.names(),
-    }
-}
-
-pub(super) fn for_init_lexical_names(init: &ForInit) -> Vec<String> {
-    match init {
-        ForInit::VarDecl {
-            kind: VarKind::Let | VarKind::Const,
-            declarations,
-            ..
-        } => declarations
-            .iter()
-            .flat_map(|declaration| declaration.binding.names())
-            .collect(),
-        ForInit::VarDecl { .. } | ForInit::Expr(_) => Vec::new(),
-    }
-}
-
-pub(super) fn for_in_left_lexical_names(left: &ForInLeft) -> Vec<String> {
-    match left {
-        ForInLeft::VarDecl {
-            kind: VarKind::Let | VarKind::Const,
-            binding,
-            ..
-        } => binding.names(),
-        ForInLeft::VarDecl { .. } | ForInLeft::Target(_) => Vec::new(),
-    }
-}
-
-pub(super) fn switch_lexical_declared_names(cases: &[SwitchCase]) -> Vec<String> {
-    let mut names = Vec::new();
-    for case in cases {
-        names.extend(lexical_declared_names(&case.consequent));
-    }
-    names
-}
-
-fn lexical_declared_names(body: &[Stmt]) -> Vec<String> {
-    let mut names = Vec::new();
-    for stmt in body {
-        match stmt {
-            Stmt::VarDecl {
-                kind: VarKind::Let | VarKind::Const,
-                declarations,
-                ..
-            } => names.extend(
-                declarations
-                    .iter()
-                    .flat_map(|declaration| declaration.binding.names()),
-            ),
-            Stmt::For {
-                init: Some(init), ..
-            } => names.extend(for_init_lexical_names(init)),
-            Stmt::ForIn { left, .. } | Stmt::ForOf { left, .. } => {
-                names.extend(for_in_left_lexical_names(left));
-            }
-            Stmt::Switch { cases, .. } => names.extend(switch_lexical_declared_names(cases)),
-            Stmt::ClassDecl { name, .. } => names.push(name.clone()),
-            _ => {}
-        }
-    }
-    names
-}
-
-fn nested_block_annex_b_blocked_names(body: &[Stmt]) -> Vec<String> {
-    let mut names = lexical_declared_names(body);
-    for stmt in body {
-        if let Stmt::FunctionDecl { name, .. } = stmt
-            && !names.iter().any(|existing| existing == name)
-        {
-            names.push(name.clone());
-        }
-    }
-    names
-}
-
-fn function_body_annex_b_blocked_names(params: &FunctionParams, body: &[Stmt]) -> Vec<String> {
-    let mut names = function_param_names(params);
-    names.extend(lexical_declared_names(body));
-    names
-}
-
-fn function_param_names(params: &FunctionParams) -> Vec<String> {
-    let mut names = params.names();
-    if !names.iter().any(|name| name == "arguments") {
-        names.push("arguments".to_owned());
-    }
-    names
 }

@@ -330,10 +330,12 @@ impl Compiler {
             *is_generator,
         )?;
         let local_names = collect_function_local_names(Some(name), params, body, true);
+        let lexical_captures = self.active_lexical_captures(&bytecode, &local_names);
         self.emit(Op::NewFunction {
             name: Some(name.clone()),
             params: params.clone(),
             local_names,
+            lexical_captures,
             bytecode: Rc::new(bytecode),
             // A generator or async function is never constructable.
             constructable: !*is_generator && !*is_async,

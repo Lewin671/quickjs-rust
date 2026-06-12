@@ -383,9 +383,6 @@ fn function_env(
     is_construct: bool,
 ) -> FunctionCallEnv {
     let captured_env = function.captured_env.borrow();
-    if captured_env.contains_key("flag") {
-        eprintln!("DBG fn-env: captured has flag for fn {:?}", function.name);
-    }
     let lexical_this = captured_env.get("this").cloned();
     let mut local_env = HashMap::with_capacity(
         captured_env.len() + function.params.binding_count() + argument_values.len() + 3,
@@ -704,9 +701,6 @@ fn insert_function_capture(
         return;
     }
     if let Some(value) = function_env.get(name) {
-        if name == "flag" {
-            eprintln!("DBG capture-from-function-env flag={:?}", value);
-        }
         local_env.insert(name.to_owned(), value.clone());
         if !names.iter().any(|existing| existing == name) {
             names.push(name.to_owned());
@@ -747,9 +741,6 @@ fn insert_caller_binding(
     // realm bindings (intrinsics and true globals) are visible through the
     // shared realm cell and must not be copied or written back.
     if let Some(value) = env.locals().get(name) {
-        if name == "flag" {
-            eprintln!("DBG caller-binding flag={:?}", value);
-        }
         local_env.insert(name.to_owned(), value.clone());
         insert_missing_caller_binding_name(caller_binding_names, name);
     }

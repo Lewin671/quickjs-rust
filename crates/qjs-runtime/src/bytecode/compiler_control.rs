@@ -4,8 +4,10 @@ use qjs_ast::{
 
 use crate::{RuntimeError, Value};
 
-use super::compiler::{
-    Compiler, LoopIterator, for_in_left_lexical_names, switch_lexical_declared_names,
+use super::compiler::{Compiler, LoopIterator};
+use super::compiler_lexical::{
+    current_scope_lexical_declared_bindings, for_in_left_lexical_names,
+    switch_lexical_declared_names,
 };
 use super::ir::Op;
 
@@ -347,6 +349,12 @@ impl Compiler {
 
         let no_match_jump = self.emit(Op::Jump(usize::MAX));
         let blocked = switch_lexical_declared_names(cases);
+        for (name, mutable) in cases
+            .iter()
+            .flat_map(|case| current_scope_lexical_declared_bindings(&case.consequent))
+        {
+            self.declare_lexical_slot(&name, mutable);
+        }
         self.push_breakable(result_slot);
         let mut case_starts = Vec::with_capacity(cases.len());
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {

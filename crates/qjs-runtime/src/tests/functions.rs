@@ -118,6 +118,12 @@ fn evaluates_function_declarations_and_calls() {
     );
     assert_eq!(
         eval(
+            "let calls = 0; function callback() { calls = calls + 1; return calls; } function helper(fn) { return fn(); } helper(function() { return callback(); }) + ':' + calls;"
+        ),
+        Ok(Value::String("1:1".to_owned()))
+    );
+    assert_eq!(
+        eval(
             "function makePair() { let index = 0; return [function() { index = index + 1; return index; }, function() { index = index + 1; return index; }]; } let pair = makePair(); pair[0]() + ':' + pair[1]() + ':' + pair[0]();"
         ),
         Ok(Value::String("1:2:3".to_owned()))

@@ -123,6 +123,51 @@ fn evaluates_weak_map_get_or_insert() {
 }
 
 #[test]
+fn evaluates_weak_map_get_or_insert_computed() {
+    assert_eq!(
+        eval(
+            "let calls = 0; let key = {}; let map = new WeakMap(); map.set(key, 1); map.getOrInsertComputed(key, function() { calls = calls + 1; return 2; }) + ':' + map.get(key) + ':' + calls;"
+        ),
+        Ok(Value::String("1:1:0".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "\"use strict\"; let key = {}; let seen; let map = new WeakMap(); map.getOrInsertComputed(key, function(arg) { seen = arg === key && this === undefined && arguments.length === 1; return 2; }) + ':' + map.get(key) + ':' + seen;"
+        ),
+        Ok(Value::String("2:2:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let key = Symbol('key'); let map = new WeakMap(); map.getOrInsertComputed(key, function(arg) { return arg === key ? 3 : 4; }) + ':' + map.get(key);"
+        ),
+        Ok(Value::String("3:3".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let key = {}; let map = new WeakMap(); map.getOrInsertComputed(key, function() { map.set(key, 1); return 2; }); map.get(key);"
+        ),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval("WeakMap.prototype.getOrInsertComputed.length;"),
+        Ok(Value::Number(2.0))
+    );
+    assert!(eval("WeakMap.prototype.getOrInsertComputed.call({}, {}, function() {});").is_err());
+    assert!(eval("new WeakMap().getOrInsertComputed({}, 1);").is_err());
+    assert!(
+        eval("let key = {}; let map = new WeakMap([[key, 1]]); map.getOrInsertComputed(key, 1);")
+            .is_err()
+    );
+    assert!(eval("new WeakMap().getOrInsertComputed('key', function() { return 1; });").is_err());
+    assert_eq!(
+        eval(
+            "let key = {}; let map = new WeakMap(); try { map.getOrInsertComputed(key, function() { throw new Error('boom'); }); } catch (error) {} map.has(key);"
+        ),
+        Ok(Value::Boolean(false))
+    );
+}
+
+#[test]
 fn evaluates_weak_map_object_key_identity() {
     assert_eq!(
         eval(

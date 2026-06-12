@@ -335,6 +335,7 @@ impl<'a> Vm<'a> {
                     name,
                     params,
                     local_names,
+                    lexical_captures,
                     bytecode,
                     constructable,
                     is_strict,
@@ -343,7 +344,8 @@ impl<'a> Vm<'a> {
                     is_generator,
                     is_async,
                 } => {
-                    let env = self.function_capture_env(&bytecode, &local_names);
+                    let mut env = self.function_capture_env(&bytecode, &local_names);
+                    self.insert_lexical_captures(&mut env, &lexical_captures);
                     self.refresh_captured_env(&env);
                     let function = Function::new_user_compiled(CompiledUserFunction {
                         name,
@@ -879,9 +881,6 @@ impl<'a> Vm<'a> {
             .current_local_binding(name)
             .cloned()
             .or_else(|| self.env.locals().get(name).cloned());
-        if name == "flag" && value.is_some() {
-            eprintln!("DBG vm-call-binding flag={:?}", value);
-        }
         if let Some(value) = value {
             locals.insert(name.to_owned(), value);
             if !binding_names.iter().any(|existing| existing == name) {

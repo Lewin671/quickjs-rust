@@ -2,7 +2,8 @@ use qjs_ast::{BindingPattern, CatchClause, Stmt, VarKind};
 
 use crate::RuntimeError;
 
-use super::compiler::{Compiler, catch_param_annex_b_blocked_names};
+use super::compiler::Compiler;
+use super::compiler_lexical::catch_param_annex_b_blocked_names;
 use super::ir::{CatchScope, Op};
 
 impl Compiler {

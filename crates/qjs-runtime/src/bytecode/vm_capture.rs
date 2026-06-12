@@ -54,6 +54,25 @@ impl Vm<'_> {
         }
     }
 
+    pub(super) fn insert_lexical_captures(
+        &self,
+        env: &mut HashMap<String, Value>,
+        captures: &[(String, usize)],
+    ) {
+        for (name, slot) in captures {
+            if env.contains_key(name) {
+                continue;
+            }
+            let value = self
+                .locals
+                .get(*slot)
+                .and_then(Option::as_ref)
+                .cloned()
+                .unwrap_or(Value::Undefined);
+            env.insert(name.clone(), value);
+        }
+    }
+
     pub(super) fn refresh_captured_env(&self, env: &HashMap<String, Value>) {
         let mut captured_env = self.captured_env.borrow_mut();
         for (name, value) in env {

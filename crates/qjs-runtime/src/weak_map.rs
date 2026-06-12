@@ -42,6 +42,12 @@ pub(crate) fn install_weak_map(
     );
     define_weak_map_prototype_function(
         &weak_map_prototype,
+        "getOrInsertComputed",
+        2,
+        NativeFunction::WeakMapPrototypeGetOrInsertComputed,
+    );
+    define_weak_map_prototype_function(
+        &weak_map_prototype,
         "has",
         1,
         NativeFunction::WeakMapPrototypeHas,
@@ -176,6 +182,35 @@ pub(crate) fn native_weak_map_prototype_get_or_insert(
         return Ok(value);
     }
     let value = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
+    weak_map_set(object, key, value.clone(), env)?;
+    Ok(value)
+}
+
+pub(crate) fn native_weak_map_prototype_get_or_insert_computed(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let object = weak_map_object(&this_value)?;
+    let key = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let callback = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
+    if !matches!(callback, Value::Function(_)) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: WeakMap.prototype.getOrInsertComputed callback must be callable"
+                .to_owned(),
+        });
+    }
+    if !can_be_held_weakly(&key, env) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: WeakMap key must be an object".to_owned(),
+        });
+    }
+    if let Some(value) = weak_map_get(object.clone(), &key) {
+        return Ok(value);
+    }
+    let value = crate::call_function(callback, Value::Undefined, vec![key.clone()], env, false)?;
     weak_map_set(object, key, value.clone(), env)?;
     Ok(value)
 }

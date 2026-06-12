@@ -7,7 +7,8 @@ use crate::{
     function::{collect_function_local_names, is_strict_function_body},
 };
 
-use super::compiler::{Compiler, for_init_lexical_names};
+use super::compiler::Compiler;
+use super::compiler_lexical::for_init_lexical_names;
 use super::ir::Op;
 use super::util::parse_number_literal;
 
@@ -287,10 +288,12 @@ impl Compiler {
                 )?;
                 let local_names =
                     collect_function_local_names(name.as_ref(), params, body, !lexical_arguments);
+                let lexical_captures = self.active_lexical_captures(&bytecode, &local_names);
                 self.emit(Op::NewFunction {
                     name: name.clone(),
                     params: params.clone(),
                     local_names,
+                    lexical_captures,
                     bytecode: Rc::new(bytecode),
                     // A generator or async function is never constructable.
                     constructable: *constructable && !*is_generator && !*is_async,
@@ -424,10 +427,12 @@ impl Compiler {
                 )?;
                 let local_names =
                     collect_function_local_names(None, params, body, !lexical_arguments);
+                let lexical_captures = self.active_lexical_captures(&bytecode, &local_names);
                 self.emit(Op::NewFunction {
                     name: Some(name.to_owned()),
                     params: params.clone(),
                     local_names,
+                    lexical_captures,
                     bytecode: Rc::new(bytecode),
                     constructable: *constructable && !*is_generator && !*is_async,
                     is_strict,

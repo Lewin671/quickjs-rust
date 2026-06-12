@@ -130,6 +130,7 @@ pub(super) enum Op {
         name: Option<String>,
         params: FunctionParams,
         local_names: Vec<String>,
+        lexical_captures: Vec<(String, usize)>,
         bytecode: Rc<Bytecode>,
         constructable: bool,
         is_strict: bool,
