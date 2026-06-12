@@ -147,6 +147,34 @@ fn array_copy_within_uses_resizable_typed_array_elements() {
 }
 
 #[test]
+fn array_prototype_iterators_validate_resizable_view_on_next() {
+    assert_eq!(
+        eval(
+            "let reads = 0; \
+             let object = { get length() { reads++; return 1; }, 0: 7 }; \
+             let iterator = Array.prototype.values.call(object); \
+             let before = reads; \
+             iterator.next(); \
+             before + ':' + reads;"
+        ),
+        Ok(Value::String("0:1".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let a = new Uint8Array(b, 0, 4); \
+             b.resize(3); \
+             let created = false; \
+             try { Array.prototype.entries.call(a); created = true; } catch (e) {} \
+             let threw = false; \
+             try { Array.from(Array.prototype.entries.call(a)); } catch (e) { threw = e instanceof TypeError; } \
+             created + ':' + threw;"
+        ),
+        Ok(Value::String("true:true".to_owned()))
+    );
+}
+
+#[test]
 fn construct_from_buffer_validates_alignment_and_bounds() {
     // Misaligned offset.
     assert!(eval("new Uint32Array(new ArrayBuffer(8), 2);").is_err());

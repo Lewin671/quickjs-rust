@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{ArrayRef, ObjectRef, RuntimeError, Value, property_value, to_length_with_env};
 
-use super::array_like::array_like_length;
+use super::array_like::array_like_receiver;
 use crate::CallEnv;
 
 const ITERATED_OBJECT: &str = "\0array_iterator_object";
@@ -50,7 +50,15 @@ fn array_iterator(
     context: &str,
     kind: &str,
 ) -> Result<Value, RuntimeError> {
-    let source = array_like_length(this_value, context, env)?;
+    let receiver = match this_value {
+        Value::Null | Value::Undefined => {
+            return Err(RuntimeError {
+                thrown: None,
+                message: format!("{context} called on null or undefined"),
+            });
+        }
+        value => array_like_receiver(value, env),
+    };
     // `%ArrayIteratorPrototype%` inherits `%Iterator.prototype%`, so the
     // instance gets `next`, `Symbol.iterator`, and the iterator helpers through
     // the chain rather than per-instance own properties.
@@ -59,7 +67,7 @@ fn array_iterator(
         crate::iterator::BuiltinIteratorKind::Array,
     );
     let iterator = ObjectRef::with_prototype(HashMap::new(), prototype);
-    iterator.define_non_enumerable(ITERATED_OBJECT.to_owned(), source.receiver);
+    iterator.define_non_enumerable(ITERATED_OBJECT.to_owned(), receiver);
     iterator.define_non_enumerable(ITERATOR_NEXT_INDEX.to_owned(), Value::Number(0.0));
     iterator.define_non_enumerable(ITERATOR_DONE.to_owned(), Value::Boolean(false));
     iterator.define_non_enumerable(ITERATOR_KIND.to_owned(), Value::String(kind.to_owned()));
@@ -82,6 +90,15 @@ pub(crate) fn native_array_iterator_next(
 
     let target = iterator_slot(&iterator, ITERATED_OBJECT)?;
     let index = iterator_index(&iterator)?;
+    if let Value::Object(object) = &target
+        && crate::typed_array::is_typed_array_object(object)
+        && crate::typed_array::typed_array_is_out_of_bounds(object)
+    {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Array iterator next on out-of-bounds TypedArray".to_owned(),
+        });
+    }
     let length = to_length_with_env(property_value(target.clone(), "length", env)?, env)?;
     if index >= length {
         iterator.define_non_enumerable(ITERATOR_DONE.to_owned(), Value::Boolean(true));
