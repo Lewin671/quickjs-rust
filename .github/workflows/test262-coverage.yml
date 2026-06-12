@@ -11,13 +11,18 @@ on:
         required: false
         type: string
 
-# One coverage run per branch: a newer push supersedes an in-flight run for
-# the same branch instead of queueing a full 32-shard scan per commit. The
-# main CI workflow already cancels superseded runs per branch, so rapid pushes
-# never had a complete per-commit burndown guarantee; the burndown trend in
+# One coverage run per branch: a newer successful CI run supersedes an
+# in-flight run for the same branch instead of queueing a full 32-shard scan
+# per commit. Failed or cancelled workflow_run events use a unique group so
+# they cannot cancel useful coverage that they would not replace. The main CI
+# workflow already cancels superseded runs per branch, so rapid pushes never
+# had a complete per-commit burndown guarantee; the burndown trend in
 # docs/conformance/burndown.jsonl only needs the latest state per branch.
 concurrency:
-  group: test262-coverage-${{ github.event.workflow_run.head_branch || github.ref_name }}
+  group: >-
+    ${{ (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
+        && format('test262-coverage-{0}', github.event.workflow_run.head_branch || github.ref_name)
+        || format('test262-coverage-skip-{0}', github.run_id) }}
   cancel-in-progress: true
 
 jobs:
