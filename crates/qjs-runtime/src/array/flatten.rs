@@ -1,9 +1,17 @@
 use crate::{
-    ArrayRef, RuntimeError, Value, call_function, has_property, property_value, to_number_with_env,
+    ArrayRef, RuntimeError, Value, call_function, has_property, property_value, to_length_with_env,
+    to_number_with_env,
 };
 
-use super::{array_like::array_like_length, species::validate_array_species_constructor};
+use super::{
+    array_like::array_like_length,
+    species::{
+        array_species_create, create_data_property_or_throw, validate_array_species_constructor,
+    },
+};
 use crate::CallEnv;
+
+const MAX_SAFE_LENGTH: usize = (1usize << 53) - 1;
 
 pub(crate) fn native_array_prototype_flat(
     this_value: Value,
@@ -15,10 +23,16 @@ pub(crate) fn native_array_prototype_flat(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    validate_array_species_constructor(source.receiver.clone(), "flat", env)?;
-    let mut result = Vec::new();
-    flatten_source_into(&mut result, source.receiver, source.length, depth, env)?;
-    Ok(Value::Array(ArrayRef::new(result)))
+    let result = array_species_create(source.receiver.clone(), 0, "flat", env)?;
+    flatten_source_into_result(
+        result.clone(),
+        0,
+        source.receiver,
+        source.length,
+        depth,
+        env,
+    )?;
+    Ok(result)
 }
 
 pub(crate) fn native_array_prototype_flat_map(
@@ -90,6 +104,44 @@ fn flatten_source_into(
     Ok(())
 }
 
+fn flatten_source_into_result(
+    target: Value,
+    mut target_index: usize,
+    receiver: Value,
+    length: usize,
+    depth: usize,
+    env: &mut CallEnv,
+) -> Result<usize, RuntimeError> {
+    for source_index in 0..length {
+        let key = source_index.to_string();
+        if !has_property(receiver.clone(), env, &key)? {
+            continue;
+        }
+        let value = property_value(receiver.clone(), &key, env)?;
+        if should_flatten(value.clone(), depth)? {
+            let element_length = flattenable_length(value.clone(), env)?;
+            target_index = flatten_source_into_result(
+                target.clone(),
+                target_index,
+                value,
+                element_length,
+                depth.saturating_sub(1),
+                env,
+            )?;
+        } else {
+            if target_index >= MAX_SAFE_LENGTH {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: "TypeError: invalid array length".to_owned(),
+                });
+            }
+            create_data_property_or_throw(target.clone(), target_index.to_string(), value, env)?;
+            target_index += 1;
+        }
+    }
+    Ok(target_index)
+}
+
 fn flatten_value_into(
     result: &mut Vec<Value>,
     value: Value,
@@ -109,4 +161,22 @@ fn flatten_value_into(
         value => result.push(value),
     }
     Ok(())
+}
+
+fn should_flatten(value: Value, depth: usize) -> Result<bool, RuntimeError> {
+    if depth == 0 {
+        return Ok(false);
+    }
+    match value {
+        Value::Array(_) => Ok(true),
+        Value::Proxy(proxy) => crate::proxy::proxy_target_is_array_result(&proxy),
+        _ => Ok(false),
+    }
+}
+
+fn flattenable_length(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
+    match value {
+        Value::Array(array) => Ok(array.len()),
+        value => to_length_with_env(property_value(value, "length", env)?, env),
+    }
 }

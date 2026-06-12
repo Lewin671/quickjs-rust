@@ -386,7 +386,10 @@ test/built-ins/Array/prototype/flat/null-undefined-elements.js
 test/built-ins/Array/prototype/flat/null-undefined-input-throws.js
 test/built-ins/Array/prototype/flat/positive-infinity.js
 test/built-ins/Array/prototype/flat/prop-desc.js
+test/built-ins/Array/prototype/flat/proxy-access-count.js
 test/built-ins/Array/prototype/flat/symbol-object-create-null-depth-throws.js
+test/built-ins/Array/prototype/flat/target-array-non-extensible.js
+test/built-ins/Array/prototype/flat/target-array-with-non-configurable-property.js
 cases/array-flat-map-basic.js
 cases/array-flat-map-callback-arguments.js
 cases/array-flat-map-depth.js
