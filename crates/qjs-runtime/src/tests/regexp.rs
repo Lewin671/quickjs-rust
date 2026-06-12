@@ -355,6 +355,28 @@ fn evaluates_regexp_exec_literal_match() {
         Ok(Value::Number(3.0))
     );
     assert_eq!(
+        eval("new RegExp('\\\\cA').test('\\x01');"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let re = new RegExp('\\\\c' + String.fromCharCode(0x0410)); re.test('\\\\c' + String.fromCharCode(0x0410)) + ':' + re.test('c' + String.fromCharCode(0x0410));"
+        ),
+        Ok(Value::String("true:false".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "new RegExp('[\\\\c!]').test('\\\\') + ':' + new RegExp('[\\\\c!]').test('c') + ':' + new RegExp('[\\\\c!]').test('!') + ':' + new RegExp('[\\\\c!]').test('\\x01');"
+        ),
+        Ok(Value::String("true:true:true:false".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            r#"/\k<a>/.test("k<a>") + ":" + /\k<a>\1/.test("k<a>\x01") + ":" + /\1(b)\k<a>/.test("bk<a>");"#
+        ),
+        Ok(Value::String("true:true:true".to_owned()))
+    );
+    assert_eq!(
         eval(
             "/\\s/.test('\\u0085') + ':' + /\\S/.test('\\u0085') + ':' + /[\\s]/.test('\\u202f') + ':' + /[\\S]/.test('\\u180e');"
         ),

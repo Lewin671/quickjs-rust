@@ -112,6 +112,38 @@ pub(super) fn regexp_control_escape(escaped: char) -> char {
     }
 }
 
+pub(super) fn control_letter_escape(pattern: &[char], pc: usize) -> Option<ParsedEscape> {
+    if pattern.get(pc + 1) != Some(&'c') {
+        return None;
+    }
+    let escaped = *pattern.get(pc + 2)?;
+    if !escaped.is_ascii_alphabetic() {
+        return None;
+    }
+    char::from_u32(u32::from(escaped) % 32).map(|value| ParsedEscape {
+        value,
+        next_pc: pc + 3,
+    })
+}
+
+pub(super) fn legacy_octal_escape(pattern: &[char], pc: usize) -> Option<ParsedEscape> {
+    let mut next_pc = pc + 1;
+    let first = pattern.get(next_pc)?.to_digit(8)?;
+    let max_digits = if first <= 3 { 3 } else { 2 };
+    let mut value = 0;
+    let mut digit_count = 0;
+    while digit_count < max_digits {
+        let Some(digit) = pattern.get(next_pc).and_then(|value| value.to_digit(8)) else {
+            break;
+        };
+        value = value * 8 + digit;
+        digit_count += 1;
+        next_pc += 1;
+    }
+
+    char::from_u32(value).map(|value| ParsedEscape { value, next_pc })
+}
+
 pub(super) fn chars_equal(left: char, right: char, ignore_case: bool) -> bool {
     if ignore_case {
         left.eq_ignore_ascii_case(&right)

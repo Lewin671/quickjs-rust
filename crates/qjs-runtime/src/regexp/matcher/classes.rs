@@ -1,7 +1,7 @@
 use super::MatchOptions;
 use super::escapes::{
-    PropertyCache, chars_equal, class_range_contains, regexp_control_escape, regexp_whitespace,
-    regexp_word_char, unicode_escape,
+    PropertyCache, chars_equal, class_range_contains, control_letter_escape, regexp_control_escape,
+    regexp_whitespace, regexp_word_char, unicode_escape,
 };
 use crate::string::surrogate_escape_code_unit;
 
@@ -103,6 +103,12 @@ fn class_atom(class: &[char], index: usize, options: MatchOptions) -> Option<Cla
             next_index: escape.next_pc,
         });
     }
+    if let Some(escape) = control_letter_escape(class, index) {
+        return Some(ClassAtom {
+            value: escape.value,
+            next_index: escape.next_pc,
+        });
+    }
     if !options.unicode
         && let Some(escape) = legacy_octal_escape(class, index)
     {
@@ -112,6 +118,12 @@ fn class_atom(class: &[char], index: usize, options: MatchOptions) -> Option<Cla
         && let Some(escape) = legacy_control_letter_escape(class, index)
     {
         return Some(escape);
+    }
+    if !options.unicode && class.get(index + 1) == Some(&'c') {
+        return Some(ClassAtom {
+            value: '\\',
+            next_index: index + 1,
+        });
     }
     match class.get(index + 1).copied()? {
         'd' | 'D' | 's' | 'S' | 'w' | 'W' => None,

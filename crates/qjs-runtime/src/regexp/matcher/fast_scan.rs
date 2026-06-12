@@ -10,11 +10,12 @@
 //! points inside the matcher's budget.
 
 use super::escapes::{
-    self, chars_equal, regexp_control_escape, regexp_whitespace, regexp_word_char, unicode_escape,
+    self, chars_equal, control_letter_escape, regexp_control_escape, regexp_whitespace,
+    regexp_word_char, unicode_escape,
 };
-use super::groups::named_backreference;
+use super::groups::{named_backreference, named_group_index};
 use super::{
-    MatchOptions, MatchState, PropertyCache, Quantifier, class_match, code_unit_char,
+    MatchOptions, MatchState, PropertyCache, Quantifier, class_end, class_match, code_unit_char,
     is_line_terminator, regexp_code_point_at,
 };
 use crate::string::advance_string_index;
@@ -51,10 +52,7 @@ pub(super) fn simple_atom_matcher<'a>(
     match pattern[atom_pc] {
         '.' => Some(SimpleAtom::AnyChar),
         '[' => {
-            let end = pattern[atom_pc + 1..]
-                .iter()
-                .position(|char| *char == ']')?;
-            let class_end = atom_pc + 1 + end;
+            let class_end = class_end(pattern, atom_pc)?;
             Some(SimpleAtom::Class {
                 class: &pattern[atom_pc + 1..class_end],
                 base: atom_pc + 1,
@@ -66,7 +64,11 @@ pub(super) fn simple_atom_matcher<'a>(
             if escaped.to_digit(10).is_some_and(|value| value >= 1) {
                 return None;
             }
-            if escaped == 'k' && named_backreference(pattern, atom_pc).is_some() {
+            if escaped == 'k'
+                && named_backreference(pattern, atom_pc)
+                    .as_ref()
+                    .is_some_and(|(name, _)| named_group_index(pattern, name).is_some())
+            {
                 return None;
             }
             if options.unicode
@@ -79,6 +81,12 @@ pub(super) fn simple_atom_matcher<'a>(
                 && let Some(escape) = unicode_escape(pattern, atom_pc, options.unicode)
             {
                 return Some(SimpleAtom::UnicodeEscape(escape.value));
+            }
+            if let Some(escape) = control_letter_escape(pattern, atom_pc) {
+                return Some(SimpleAtom::UnicodeEscape(escape.value));
+            }
+            if !options.unicode && escaped == 'c' {
+                return Some(SimpleAtom::Literal('\\'));
             }
             Some(SimpleAtom::Escape(escaped))
         }

@@ -119,6 +119,32 @@ fn legacy_class_control_escapes_match_digits_and_underscore() {
 }
 
 #[test]
+fn annex_b_control_escape_fallbacks_match_literals() {
+    let matched = regexp_match_range(r"\cA", "\u{0001}", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 1));
+    assert!(regexp_match_range(r"\cЖ", "cЖ", 0, false, false, false).is_none());
+    let matched = regexp_match_range(r"\cЖ", r"\cЖ", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 3));
+
+    let matched = regexp_match_range(r"[\c!]+", r"\c!", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 3));
+    assert!(regexp_match_range(r"[\c!]", "\u{0001}", 0, false, false, false).is_none());
+    let matched =
+        regexp_match_range(r"[0-9A-Za-z_\$(|)\[\]\/\\^]", "$", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 1));
+}
+
+#[test]
+fn annex_b_malformed_named_backreferences_are_identity_escapes() {
+    let matched = regexp_match_range(r"\k<a>", "k<a>", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 4));
+    let matched = regexp_match_range(r"\k<a>\1", "k<a>\u{0001}", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 5));
+    let matched = regexp_match_range(r"\1(b)\k<a>", "bk<a>", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 5));
+}
+
+#[test]
 fn top_level_alternatives_match_leftmost_first() {
     let matched = regexp_match_range("1|12", "123", 0, false, false, false).unwrap();
     assert_eq!((matched.start, matched.end), (0, 1));

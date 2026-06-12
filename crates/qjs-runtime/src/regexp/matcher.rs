@@ -13,8 +13,8 @@ mod tests;
 
 use classes::class_match;
 use escapes::{
-    PropertyCache, chars_equal, regexp_control_escape, regexp_whitespace, regexp_word_char,
-    unicode_escape,
+    PropertyCache, chars_equal, control_letter_escape, legacy_octal_escape, regexp_control_escape,
+    regexp_whitespace, regexp_word_char, unicode_escape,
 };
 use fast_scan::{repeat_simple_atom, simple_atom_matcher};
 use groups::{
@@ -311,14 +311,22 @@ fn atom_end(
         '\\' if unicode && properties.get(pc).is_some() => {
             properties.get(pc).map(|escape| escape.next_pc)
         }
-        '\\' if pattern.get(pc + 1) == Some(&'k') && named_backreference(pattern, pc).is_some() => {
+        '\\' if control_letter_escape(pattern, pc).is_some() => {
+            control_letter_escape(pattern, pc).map(|escape| escape.next_pc)
+        }
+        '\\' if !unicode && pattern.get(pc + 1) == Some(&'c') => Some(pc + 1),
+        '\\' if !unicode && legacy_octal_escape(pattern, pc).is_some() => {
+            legacy_octal_escape(pattern, pc).map(|escape| escape.next_pc)
+        }
+        '\\' if pattern.get(pc + 1) == Some(&'k')
+            && named_backreference(pattern, pc)
+                .as_ref()
+                .is_some_and(|(name, _)| named_group_index(pattern, name).is_some()) =>
+        {
             named_backreference(pattern, pc).map(|(_, next_pc)| next_pc)
         }
         '\\' => Some(pc + 2),
-        '[' => pattern[pc + 1..]
-            .iter()
-            .position(|char| *char == ']')
-            .map(|end| pc + 2 + end),
+        '[' => class_end(pattern, pc).map(|end| end + 1),
         '(' => closing_group(pattern, pc).map(|end| end + 1),
         _ => Some(pc + 1),
     }
@@ -414,6 +422,18 @@ fn match_escape(
         let capture = state.captures[index - 1];
         return match_backreference(text, state, capture, pc + 2, options);
     }
+    if !options.unicode
+        && escaped.is_ascii_digit()
+        && let Some(escape) = legacy_octal_escape(pattern, pc)
+    {
+        return match_unicode_escape(
+            text,
+            state,
+            escape.value,
+            escape.next_pc,
+            options.ignore_case,
+        );
+    }
     if options.unicode
         && matches!(escaped, 'p' | 'P')
         && let Some(escape) = properties.get(pc)
@@ -422,10 +442,22 @@ fn match_escape(
     }
     if escaped == 'k'
         && let Some((name, next_pc)) = named_backreference(pattern, pc)
+        && let Some(group_index) = named_group_index(pattern, &name)
     {
-        let capture = named_group_index(pattern, &name)
-            .and_then(|index| state.captures.get(index).copied().flatten());
+        let capture = state.captures.get(group_index).copied().flatten();
         return match_backreference(text, state, capture, next_pc, options);
+    }
+    if escaped == 'c' {
+        if let Some(escape) = control_letter_escape(pattern, pc) {
+            return match_unicode_escape(
+                text,
+                state,
+                escape.value,
+                escape.next_pc,
+                options.ignore_case,
+            );
+        }
+        return match_literal(text, pc + 1, state, '\\', options.ignore_case);
     }
     let Some(value) = text.get(state.index).copied() else {
         return Vec::new();
@@ -555,10 +587,9 @@ fn match_class(
     properties: &PropertyCache,
     options: MatchOptions,
 ) -> Vec<(usize, MatchState)> {
-    let Some(end) = pattern[pc + 1..].iter().position(|char| *char == ']') else {
+    let Some(class_end) = class_end(pattern, pc) else {
         return Vec::new();
     };
-    let class_end = pc + 1 + end;
     let class = &pattern[pc + 1..class_end];
     let Some((value, next_index)) = regexp_code_point_at(text, state.index, options.unicode) else {
         return Vec::new();
@@ -568,6 +599,18 @@ fn match_class(
     }
     state.index = next_index;
     vec![(class_end + 1, state)]
+}
+
+pub(super) fn class_end(pattern: &[char], start: usize) -> Option<usize> {
+    let mut index = start + 1;
+    while index < pattern.len() {
+        match pattern[index] {
+            '\\' => index += 2,
+            ']' => return Some(index),
+            _ => index += 1,
+        }
+    }
+    None
 }
 
 fn regexp_code_point_at(text: &[char], index: usize, unicode: bool) -> Option<(char, usize)> {

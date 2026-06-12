@@ -4266,6 +4266,9 @@ test/language/expressions/arrow-function/lexical-arguments.js
 test/language/expressions/arrow-function/lexical-this.js
 test/language/expressions/arrow-function/params-trailing-comma-multiple.js
 test/language/expressions/arrow-function/params-trailing-comma-single.js
+test/annexB/built-ins/RegExp/named-groups/non-unicode-malformed.js
+test/annexB/built-ins/RegExp/RegExp-control-escape-russian-letter.js
+test/annexB/built-ins/RegExp/RegExp-invalid-control-escape-character-class.js
 test/annexB/language/eval-code/direct/func-block-decl-eval-func-skip-early-err-try.js
 test/annexB/language/eval-code/direct/func-if-decl-else-decl-a-eval-func-update.js
 test/annexB/language/eval-code/direct/func-if-decl-else-decl-b-eval-func-update.js
