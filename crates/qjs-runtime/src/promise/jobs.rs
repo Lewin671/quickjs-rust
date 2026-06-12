@@ -3,13 +3,14 @@ use std::collections::HashMap;
 use crate::{ArrayRef, GLOBAL_THIS_BINDING, ObjectRef, RuntimeError, Value, call_function};
 
 use super::{
-    PROMISE_FULFILL_REACTION, PROMISE_HANDLER, PROMISE_JOBS, PROMISE_REACTION_ARGUMENT,
-    PROMISE_REACTION_CAPABILITY, PROMISE_REACTION_REJECT, PROMISE_REACTION_RESOLVE,
-    PROMISE_REJECTED, PROMISE_THEN, PROMISE_THENABLE, PROMISE_THENABLE_CAPABILITY,
-    is_promise_object, reaction_is_fulfill, resolve_promise, resolving_function_pair,
-    settle_promise,
+    PROMISE_FULFILL_REACTION, PROMISE_HANDLER, PROMISE_IMPORT_REJECT, PROMISE_IMPORT_RESOLVE,
+    PROMISE_IMPORT_SPECIFIER, PROMISE_JOBS, PROMISE_REACTION_ARGUMENT, PROMISE_REACTION_CAPABILITY,
+    PROMISE_REACTION_REJECT, PROMISE_REACTION_RESOLVE, PROMISE_REJECTED, PROMISE_THEN,
+    PROMISE_THENABLE, PROMISE_THENABLE_CAPABILITY, is_promise_object, reaction_is_fulfill,
+    resolve_promise, resolving_function_pair, settle_promise,
 };
 use crate::CallEnv;
+use crate::module::ImportErrorKind;
 
 pub(super) fn enqueue_promise_reaction_job(
     env: &mut CallEnv,
@@ -67,6 +68,28 @@ pub(super) fn enqueue_promise_thenable_job(
     jobs.set(jobs.len(), Value::Object(job));
 }
 
+/// Schedules a dynamic-`import()` load job. When drained it consults the
+/// realm's module host to load/link/evaluate `specifier`, then settles the
+/// capability through its `resolve`/`reject` functions — so any `.then` handler
+/// attached to the import promise runs only after the current job, matching the
+/// host-job ordering of `import()`.
+pub(super) fn enqueue_dynamic_import_job(
+    env: &mut CallEnv,
+    resolve: Value,
+    reject: Value,
+    specifier: String,
+) {
+    let job = ObjectRef::new(HashMap::new());
+    job.define_non_enumerable(PROMISE_IMPORT_RESOLVE.to_owned(), resolve);
+    job.define_non_enumerable(PROMISE_IMPORT_REJECT.to_owned(), reject);
+    job.define_non_enumerable(
+        PROMISE_IMPORT_SPECIFIER.to_owned(),
+        Value::String(specifier),
+    );
+    let jobs = promise_jobs(env);
+    jobs.set(jobs.len(), Value::Object(job));
+}
+
 pub(crate) fn drain_promise_jobs(env: &mut CallEnv) -> Result<(), RuntimeError> {
     loop {
         let jobs = promise_jobs(env);
@@ -79,13 +102,73 @@ pub(crate) fn drain_promise_jobs(env: &mut CallEnv) -> Result<(), RuntimeError> 
             let Value::Object(job) = job else {
                 continue;
             };
-            if job.own_property(PROMISE_THENABLE).is_some() {
+            if job.own_property(PROMISE_IMPORT_SPECIFIER).is_some() {
+                run_dynamic_import_job(&job, env)?;
+            } else if job.own_property(PROMISE_THENABLE).is_some() {
                 run_promise_thenable_job(&job, env)?;
             } else {
                 run_promise_reaction_job(&job, env)?;
             }
         }
     }
+}
+
+/// Performs one dynamic-import load job: resolves the specifier through the
+/// realm module host and settles the capability with the module namespace or a
+/// load error. A missing host (script evaluated without module support) rejects
+/// with a TypeError.
+fn run_dynamic_import_job(job: &ObjectRef, env: &mut CallEnv) -> Result<(), RuntimeError> {
+    let resolve = job
+        .own_property(PROMISE_IMPORT_RESOLVE)
+        .map_or(Value::Undefined, |property| property.value);
+    let reject = job
+        .own_property(PROMISE_IMPORT_REJECT)
+        .map_or(Value::Undefined, |property| property.value);
+    let specifier = match job
+        .own_property(PROMISE_IMPORT_SPECIFIER)
+        .map(|property| property.value)
+    {
+        Some(Value::String(specifier)) => specifier,
+        _ => String::new(),
+    };
+
+    let outcome = match env.module_host() {
+        Some(host) => host.borrow_mut().import(&specifier),
+        None => {
+            let reason = error_reason(
+                "TypeError: dynamic import is not supported in this context",
+                env,
+            );
+            call_function(reject, Value::Undefined, vec![reason], env, false)?;
+            return Ok(());
+        }
+    };
+    match outcome {
+        Ok(namespace) => {
+            call_function(resolve, Value::Undefined, vec![namespace], env, false)?;
+        }
+        Err(error) => {
+            let message = match error.kind {
+                ImportErrorKind::Syntax => format!("SyntaxError: {}", error.message),
+                ImportErrorKind::Runtime => error.message,
+            };
+            let reason = error_reason(&message, env);
+            call_function(reject, Value::Undefined, vec![reason], env, false)?;
+        }
+    }
+    Ok(())
+}
+
+/// Builds a thrown value for a `"TypeError: ..."`-style import-failure message,
+/// constructing the matching native error object.
+fn error_reason(message: &str, env: &CallEnv) -> Value {
+    crate::error::runtime_error_to_value(
+        RuntimeError {
+            thrown: None,
+            message: message.to_owned(),
+        },
+        env,
+    )
 }
 
 fn run_promise_reaction_job(job: &ObjectRef, env: &mut CallEnv) -> Result<(), RuntimeError> {

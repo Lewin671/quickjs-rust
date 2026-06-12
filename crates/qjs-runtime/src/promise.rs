@@ -46,6 +46,10 @@ const PROMISE_ALREADY_RESOLVED: &str = "\0PromiseAlreadyResolved";
 const PROMISE_THEN: &str = "\0PromiseThen";
 const PROMISE_THENABLE: &str = "\0PromiseThenable";
 const PROMISE_THENABLE_CAPABILITY: &str = "\0PromiseThenableCapability";
+/// Job slots for a dynamic-`import()` load job (see [`jobs`]).
+const PROMISE_IMPORT_RESOLVE: &str = "\0PromiseImportResolve";
+const PROMISE_IMPORT_REJECT: &str = "\0PromiseImportReject";
+const PROMISE_IMPORT_SPECIFIER: &str = "\0PromiseImportSpecifier";
 const PROMISE_OBJECT_PROTOTYPE: &str = "\0PromiseObjectPrototype";
 const PROMISE_PROTOTYPE: &str = "\0PromisePrototype";
 const PROMISE_PENDING: &str = "pending";
@@ -506,6 +510,28 @@ pub(crate) fn new_pending_promise(env: &CallEnv) -> ObjectRef {
     let promise = ObjectRef::with_prototype(HashMap::new(), promise_prototype_from_env(env));
     initialize_promise(&promise);
     promise
+}
+
+/// Runtime semantics of `import(specifier)` (ES2023 13.3.10.1). Builds a fresh
+/// `%Promise%` capability (always the realm's native Promise, independent of any
+/// reassigned global `Promise`), coerces `specifier` to a string, and — unless
+/// that coercion throws (in which case the promise rejects, never the call) —
+/// schedules a host load job that settles the promise with the module namespace
+/// or a load/link/evaluate error. Returns the capability's promise.
+pub(crate) fn dynamic_import(specifier: Value, env: &mut CallEnv) -> Value {
+    let promise = new_pending_promise(env);
+    let (resolve, reject) = resolving_function_pair(Value::Object(promise.clone()));
+    let specifier_string = match crate::to_js_string_with_env(specifier, env) {
+        Ok(string) => string,
+        Err(error) => {
+            // IfAbruptRejectPromise: a ToString failure rejects the promise.
+            let reason = crate::error::runtime_error_to_value(error, env);
+            let _ = call_function(reject, Value::Undefined, vec![reason], env, false);
+            return Value::Object(promise);
+        }
+    };
+    jobs::enqueue_dynamic_import_job(env, resolve, reject, specifier_string);
+    Value::Object(promise)
 }
 
 /// Resolves `%Promise.prototype%` from the realm: prefer the internal binding,

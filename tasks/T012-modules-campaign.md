@@ -60,11 +60,29 @@ pass/fail signal.
       includes as module-scope preludes, and lift the `module` skip in
       `scripts/test262-baseline.sh` to only cases the channel still cannot
       judge. Record a fresh burndown entry.
-- [ ] S4 Runtime: dynamic `import()`. `import(specifier)` is a call-like
+- [x] S4 Runtime: dynamic `import()`. `import(specifier)` is a call-like
       expression returning a promise that resolves to the module namespace,
       reusing the T007 job queue; rejects on resolution/link/eval errors.
       Valid in both script and module goal. Probe
       `test/language/expressions/dynamic-import`.
+      Implemented: parser `Expr::ImportCall`/`Expr::ImportMeta` (valid in both
+      goals; `new import(...)`, empty/spread args, and a third argument are
+      early SyntaxErrors; `import.meta` parses but is a runtime SyntaxError in a
+      script); runtime `Op::ImportCall` builds a native `%Promise%` capability,
+      coerces the specifier to a string (a ToString throw rejects rather than
+      throwing), and schedules a host load job. A per-realm `ModuleHost` (shared
+      module graph + owned resolver + active referrer) rides on `CallEnv`, so a
+      dynamic import reached from any frame or microtask resolves against the
+      running referrer and reuses the realm's one graph (same key => same
+      namespace). The job-queue ordering matches the spec (`.then` callbacks run
+      after the current job). `eval_module*` now takes an owned `Box<dyn
+      ModuleResolver>`; `eval_classified_with_resolver` wires a host into
+      script-goal evaluation (the CLI roots it at the script's directory / cwd).
+      The baseline harness writes a script-goal case beside its source so
+      `import('./x_FIXTURE.js')` resolves. KNOWN GAPs (out of S4 scope): the
+      `import.source`/`import.defer` source-phase/defer proposals are parse
+      SyntaxErrors; `new.target` as a specifier and exact URIError propagation
+      from a rejected module body are pre-existing engine limitations.
 - [ ] S5 Parser + runtime: top-level `await`. Permit `await` at module top
       level (Module goal only), reusing the async suspend/resume machinery
       from T007 so a module with top-level await becomes an async evaluation

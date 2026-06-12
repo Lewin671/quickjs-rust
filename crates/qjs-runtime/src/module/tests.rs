@@ -9,7 +9,7 @@ fn run(main: &str, deps: &[(&str, &str)]) -> Result<Value, crate::EvalError> {
     for (key, source) in deps {
         resolver = resolver.with(key, source);
     }
-    eval_module(main, "main", &mut resolver)
+    eval_module(main, "main", Box::new(resolver))
 }
 
 /// Reads a named export off a namespace object value.
@@ -160,12 +160,12 @@ fn module_vars_do_not_leak_to_global_this() {
 fn prelude_script_bindings_are_visible_to_module() {
     // A prelude script (mirroring Test262 harness includes) installs a global
     // helper that the module body then calls; its value flows into an export.
-    let mut resolver = MapResolver::new();
+    let resolver = MapResolver::new();
     let namespace = eval_module_with_prelude(
         Some("function helper() { return 11; }"),
         "export const v = helper();",
         "main",
-        &mut resolver,
+        Box::new(resolver),
     )
     .expect("module with prelude evaluates");
     assert_eq!(export(&namespace, "v"), Value::Number(11.0));
@@ -173,12 +173,12 @@ fn prelude_script_bindings_are_visible_to_module() {
 
 #[test]
 fn prelude_throw_is_a_runtime_error() {
-    let mut resolver = MapResolver::new();
+    let resolver = MapResolver::new();
     let error = eval_module_with_prelude(
         Some("throw new Error('boom');"),
         "export const v = 1;",
         "main",
-        &mut resolver,
+        Box::new(resolver),
     )
     .expect_err("prelude failure surfaces");
     assert_eq!(error.kind, EvalErrorKind::Runtime);
@@ -190,4 +190,117 @@ fn module_body_is_strict_mode() {
     let error =
         run("undeclared = 1;\nexport const v = 1;", &[]).expect_err("strict assignment rejected");
     assert_eq!(error.kind, EvalErrorKind::Runtime);
+}
+
+// --- dynamic import (T012 S4) ---------------------------------------------
+
+/// Reads the elements of an exported array value as a comma-joined string. The
+/// exported binding holds the array by reference, so a `.then` callback that
+/// pushes to it during the post-evaluation job drain is observable here.
+fn export_log(namespace: &Value, name: &str) -> String {
+    match export(namespace, name) {
+        Value::Array(array) => array
+            .to_vec()
+            .into_iter()
+            .map(|value| match value {
+                Value::String(text) => text,
+                Value::Number(number) => number.to_string(),
+                Value::Boolean(flag) => flag.to_string(),
+                other => format!("{other:?}"),
+            })
+            .collect::<Vec<_>>()
+            .join(","),
+        other => panic!("expected an array export, got {other:?}"),
+    }
+}
+
+#[test]
+fn dynamic_import_from_module_resolves_namespace() {
+    // `import('dep')` resolves to the dependency's namespace; the `.then`
+    // callback records its named export into the shared exported array.
+    let namespace = run(
+        "export const log = [];\n\
+         import('dep').then(ns => log.push(ns.value));",
+        &[("dep", "export const value = 42;")],
+    )
+    .expect("graph evaluates");
+    assert_eq!(export_log(&namespace, "log"), "42");
+}
+
+#[test]
+fn dynamic_import_rejects_unresolvable_specifier() {
+    let namespace = run(
+        "export const log = [];\n\
+         import('missing').then(() => log.push('ok'), () => log.push('rejected'));",
+        &[],
+    )
+    .expect("graph evaluates");
+    assert_eq!(export_log(&namespace, "log"), "rejected");
+}
+
+#[test]
+fn dynamic_import_caches_same_namespace() {
+    // Two imports of the same specifier resolve to the identical namespace
+    // object (same key => same module record).
+    let namespace = run(
+        "export const log = [];\n\
+         Promise.all([import('dep'), import('dep')]).then(([a, b]) => log.push(a === b));",
+        &[("dep", "export const value = 1;")],
+    )
+    .expect("graph evaluates");
+    assert_eq!(export_log(&namespace, "log"), "true");
+}
+
+#[test]
+fn dynamic_import_coerces_specifier_to_string() {
+    // The specifier is coerced via ToString; an object with a custom toString
+    // resolves to the named module.
+    let namespace = run(
+        "export const log = [];\n\
+         const spec = { toString() { return 'dep'; } };\n\
+         import(spec).then(ns => log.push(ns.value));",
+        &[("dep", "export const value = 5;")],
+    )
+    .expect("graph evaluates");
+    assert_eq!(export_log(&namespace, "log"), "5");
+}
+
+#[test]
+fn dynamic_import_rejects_on_module_body_error() {
+    let namespace = run(
+        "export const log = [];\n\
+         import('boom').then(() => log.push('ok'), () => log.push('rejected'));",
+        &[("boom", "throw new Error('explode');")],
+    )
+    .expect("graph evaluates");
+    assert_eq!(export_log(&namespace, "log"), "rejected");
+}
+
+#[test]
+fn dynamic_import_then_runs_after_current_job() {
+    // The synchronous body completes (pushing "sync") before the import's
+    // `.then` callback (pushing "async") runs as a later microtask.
+    let namespace = run(
+        "export const log = [];\n\
+         import('dep').then(() => log.push('async'));\n\
+         log.push('sync');",
+        &[("dep", "export const value = 1;")],
+    )
+    .expect("graph evaluates");
+    assert_eq!(export_log(&namespace, "log"), "sync,async");
+}
+
+#[test]
+fn dynamic_import_in_script_resolves_namespace() {
+    // A dynamic import works under the Script goal too, against an in-memory
+    // resolver, with the namespace recorded through a shared exported array.
+    // (Driven via a module here so the resolver is available; the call site is
+    // an ordinary expression valid in both goals.)
+    let namespace = run(
+        "export const log = [];\n\
+         (function () { import('dep').then(ns => log.push(ns.value)); })();",
+        &[("dep", "export const value = 99;")],
+    )
+    .expect("graph evaluates");
+    assert_eq!(export_log(&namespace, "log"), "99");
 }

@@ -62,6 +62,8 @@ pub(super) fn eval_module_body(
     bytecode: &Bytecode,
     realm: &Realm,
     imports: HashMap<String, Value>,
+    host: Option<crate::module::ModuleHostRef>,
+    drain: bool,
 ) -> Result<CallEnv, RuntimeError> {
     {
         let mut globals = realm.borrow_mut();
@@ -70,10 +72,20 @@ pub(super) fn eval_module_body(
             globals.insert(name, value);
         }
     }
-    let env = CallEnv::new(Rc::clone(realm));
+    let mut env = CallEnv::new(Rc::clone(realm));
+    // Wire the realm's dynamic-import host so an `import()` in this module body
+    // (or in a closure it creates) can load further modules.
+    if let Some(host) = host {
+        env.set_module_host(host);
+    }
     let captured_env = Rc::new(RefCell::new(HashMap::new()));
     let mut vm = Vm::new_with_globals_and_captures(bytecode, env, captured_env);
     vm.run()?;
-    vm.drain_promise_jobs()?;
+    // The dynamic-import path defers job draining to the outer queue loop so the
+    // module graph (borrowed while this body runs) is not re-borrowed by a
+    // nested dynamic-import job mid-evaluation.
+    if drain {
+        vm.drain_promise_jobs()?;
+    }
     Ok(vm.current_env())
 }

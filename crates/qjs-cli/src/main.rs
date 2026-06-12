@@ -7,8 +7,8 @@ use std::{
 };
 
 use qjs_runtime::{
-    EvalError, EvalErrorKind, ModuleResolveError, ModuleResolver, ResolvedModule, Value, eval,
-    eval_classified, eval_module_with_prelude,
+    EvalError, EvalErrorKind, ModuleResolveError, ModuleResolver, ResolvedModule, Value,
+    eval_classified_with_resolver, eval_module_with_prelude,
 };
 
 fn main() -> ExitCode {
@@ -67,26 +67,41 @@ fn run() -> Result<(), CliError> {
         return run_module(&first, prelude_path.as_deref(), test262_error_format);
     }
 
-    let (source, script_args) = if first == "-e" {
+    let (source, script_args, referrer) = if first == "-e" {
         let source = args.next().ok_or_else(|| CliError {
             message: "missing source after -e".to_owned(),
         })?;
-        (source, vec!["-e".to_owned()])
+        // A `-e` script has no file: root its dynamic-import referrer at a
+        // synthetic file in the current directory so relative specifiers resolve
+        // against the cwd.
+        let referrer = env::current_dir()
+            .map(|dir| dir.join("<eval>").to_string_lossy().into_owned())
+            .unwrap_or_else(|_| "<eval>".to_owned());
+        (source, vec!["-e".to_owned()], referrer)
     } else {
         let source = fs::read_to_string(&first).map_err(|error| CliError {
             message: format!("failed to read `{first}`: {error}"),
         })?;
+        // Resolve dynamic imports against the script file's directory.
+        let referrer = fs::canonicalize(&first)
+            .map(|path| path.to_string_lossy().into_owned())
+            .unwrap_or_else(|_| first.clone());
         let script_args = std::iter::once(first).chain(args).collect();
-        (source, script_args)
+        (source, script_args, referrer)
     };
 
     let source = with_script_args(&source, &script_args);
+    // A script may use dynamic `import()`; install a filesystem-backed host so
+    // those imports resolve relative to the script (or the cwd for `-e`).
     let value = if test262_error_format {
-        eval_classified(&source).map_err(format_test262_error)?
+        eval_classified_with_resolver(&source, &referrer, Box::new(FsResolver))
+            .map_err(format_test262_error)?
     } else {
-        eval(&source).map_err(|error| CliError {
-            message: error.message,
-        })?
+        eval_classified_with_resolver(&source, &referrer, Box::new(FsResolver)).map_err(
+            |error| CliError {
+                message: error.message,
+            },
+        )?
     };
     if raw_output {
         print_raw(&value);
@@ -119,8 +134,8 @@ fn run_module(
     let root_key = fs::canonicalize(file)
         .map(|path| path.to_string_lossy().into_owned())
         .unwrap_or_else(|_| file.to_owned());
-    let mut resolver = FsResolver;
-    let result = eval_module_with_prelude(prelude.as_deref(), &source, &root_key, &mut resolver);
+    let result =
+        eval_module_with_prelude(prelude.as_deref(), &source, &root_key, Box::new(FsResolver));
     match result {
         Ok(_) => Ok(()),
         Err(error) if test262_error_format => Err(format_test262_error(error)),

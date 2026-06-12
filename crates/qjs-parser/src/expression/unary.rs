@@ -139,6 +139,14 @@ impl Parser {
     fn new_expression(&mut self, start: usize) -> Result<Expr, ParseError> {
         self.expect(&TokenKind::New)?;
         let callee = self.member_chain()?;
+        // `import(...)` is a CallExpression and `import.meta` a meta-property;
+        // neither is a valid constructor for `new` (no-new-call-expression).
+        if matches!(callee, Expr::ImportCall { .. } | Expr::ImportMeta { .. }) {
+            return Err(ParseError {
+                message: "`import` is not a valid `new` operand".to_owned(),
+                span: callee.span(),
+            });
+        }
         let mut expr = if self.match_kind(&TokenKind::LeftParen) {
             let call = self.finish_call(callee)?;
             let Expr::Call {

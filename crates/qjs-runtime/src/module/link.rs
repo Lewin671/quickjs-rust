@@ -26,6 +26,9 @@ pub(super) struct LinkError {
 pub(super) enum LinkErrorKind {
     Parse,
     Syntax,
+    /// A runtime failure raised while evaluating a module body (used only on the
+    /// dynamic-import path, where it rejects the import promise).
+    Runtime,
 }
 
 impl LinkError {
@@ -66,6 +69,12 @@ struct Module {
 pub(super) struct ModuleGraph {
     modules: HashMap<String, Module>,
     realm: bytecode::ModuleRealm,
+    /// The realm's dynamic-import host, set once the graph is wrapped in a host
+    /// so module bodies can reach it for nested `import()`. `None` until then.
+    host: Option<super::host::ModuleHostRef>,
+    /// The owned host resolver, retained for the realm's lifetime so a dynamic
+    /// `import()` can resolve specifiers long after the initial load.
+    resolver: Option<Box<dyn ModuleResolver>>,
 }
 
 impl ModuleGraph {
@@ -73,7 +82,82 @@ impl ModuleGraph {
         Self {
             modules: HashMap::new(),
             realm: bytecode::new_module_realm(),
+            host: None,
+            resolver: None,
         }
+    }
+
+    /// Records the dynamic-import host so evaluated module bodies carry it.
+    pub(super) fn set_host(&mut self, host: super::host::ModuleHostRef) {
+        self.host = Some(host);
+    }
+
+    /// Installs the owned host resolver.
+    pub(super) fn set_resolver(&mut self, resolver: Box<dyn ModuleResolver>) {
+        self.resolver = Some(resolver);
+    }
+
+    /// Loads the root module using the graph's own (owned) resolver.
+    pub(super) fn load_root(&mut self, specifier: &str, source: &str) -> Result<String, LinkError> {
+        let mut resolver = self.resolver.take().expect("resolver installed");
+        let result = self.load(specifier, source, resolver.as_mut());
+        self.resolver = Some(resolver);
+        result
+    }
+
+    /// Resolves and evaluates `specifier` against `referrer` using the graph's
+    /// own resolver, returning the requested module's namespace object.
+    pub(super) fn import_dynamic_owned(
+        &mut self,
+        specifier: &str,
+        referrer: &str,
+    ) -> Result<Value, LinkError> {
+        let mut resolver = self.resolver.take().expect("resolver installed");
+        let result = self.import_dynamic(specifier, referrer, resolver.as_mut());
+        self.resolver = Some(resolver);
+        result
+    }
+
+    /// The shared graph realm (`Rc::clone`), used to wire the dynamic-import
+    /// host into a module's evaluation environment.
+    pub(super) fn realm(&self) -> bytecode::ModuleRealm {
+        self.realm.clone()
+    }
+
+    /// Loads, links, and evaluates the module reached by resolving `specifier`
+    /// from `referrer`, returning its namespace object. Reuses any module
+    /// already present in the graph so the same key yields the same namespace.
+    /// This is the dynamic-`import()` entry point.
+    pub(super) fn import_dynamic(
+        &mut self,
+        specifier: &str,
+        referrer: &str,
+        resolver: &mut dyn ModuleResolver,
+    ) -> Result<Value, LinkError> {
+        let resolved = resolver.resolve(specifier, referrer).map_err(|error| {
+            LinkError::syntax(format!(
+                "{} (importing '{specifier}' from '{referrer}')",
+                error.message
+            ))
+        })?;
+        let key = resolved.key.clone();
+        if !self.modules.contains_key(&key) {
+            let record = build_record(&resolved.source).map_err(|message| LinkError {
+                kind: LinkErrorKind::Parse,
+                message,
+            })?;
+            self.insert_and_load_dependencies(key.clone(), record, resolver)?;
+        }
+        self.link(&key)?;
+        self.evaluate_with_drain(&key, false)
+            .map_err(|error| LinkError {
+                // A runtime failure during module evaluation rejects the import
+                // promise; reuse the Runtime variant as a transport and carry
+                // the message through verbatim.
+                kind: LinkErrorKind::Runtime,
+                message: error.message,
+            })?;
+        Ok(self.namespace(&key))
     }
 
     /// Evaluates a prelude *script* against the graph's shared realm before any
@@ -227,8 +311,18 @@ impl ModuleGraph {
     }
 
     /// Evaluates the graph rooted at `key` with a post-order DFS over
-    /// dependencies, then evaluates `key` itself.
+    /// dependencies, then evaluates `key` itself. `drain` controls whether each
+    /// module body drains its promise jobs: the top-level static path drains;
+    /// the dynamic-import path defers to the outer job-queue loop so the (then
+    /// borrowed) graph is not re-entered mid-evaluation.
     pub(super) fn evaluate(&mut self, key: &str) -> Result<(), RuntimeError> {
+        // Defer promise-job draining (including dynamic `import()`) to the
+        // top-level loop run with the graph borrow released, so a job can
+        // re-borrow the graph without a double-borrow panic.
+        self.evaluate_with_drain(key, false)
+    }
+
+    fn evaluate_with_drain(&mut self, key: &str, drain: bool) -> Result<(), RuntimeError> {
         match self.status(key) {
             Status::Evaluating | Status::Evaluated => return Ok(()),
             _ => {}
@@ -236,22 +330,23 @@ impl ModuleGraph {
         self.set_status(key, Status::Evaluating);
         let deps = self.dependency_keys(key);
         for dep in deps {
-            self.evaluate(&dep)?;
+            self.evaluate_with_drain(&dep, drain)?;
         }
-        self.evaluate_body(key)?;
+        self.evaluate_body(key, drain)?;
         self.set_status(key, Status::Evaluated);
         Ok(())
     }
 
     /// Compiles and runs one module body against a fresh realm seeded with its
     /// resolved imports, then records its exported binding values.
-    fn evaluate_body(&mut self, key: &str) -> Result<(), RuntimeError> {
+    fn evaluate_body(&mut self, key: &str, drain: bool) -> Result<(), RuntimeError> {
         let imports = self.import_bindings(key)?;
         let compiled = {
             let module = &self.modules[key];
             bytecode::compile_module(&module.record.body)?
         };
-        let env = bytecode::eval_module_body(&compiled, &self.realm, imports)?;
+        let host = self.host.clone();
+        let env = bytecode::eval_module_body(&compiled, &self.realm, imports, host, drain)?;
         // Snapshot exported binding values from the module's frame environment.
         let export_pairs = self.collect_export_values(key, &env)?;
         let module = self.modules.get_mut(key).expect("module exists");

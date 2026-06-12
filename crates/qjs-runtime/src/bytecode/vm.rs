@@ -64,6 +64,10 @@ pub(super) struct Vm<'a> {
     /// `globals` map that is *not* a slot now lives in `env.locals()`.
     pub(super) env: CallEnv,
     pub(super) realm: Realm,
+    /// The realm's dynamic-import host, carried so every `CallEnv` this VM
+    /// produces (frame envs, nested call envs, the job-draining env) keeps the
+    /// host reachable for a dynamic `import()` at any depth.
+    pub(super) module_host: Option<crate::module::ModuleHostRef>,
     pub(super) captured_env: Rc<RefCell<HashMap<String, Value>>>,
     pub(super) sloppy_global_names: Vec<String>,
     pub(super) try_stack: Vec<TryFrame>,
@@ -121,6 +125,7 @@ impl<'a> Vm<'a> {
         captured_env: Rc<RefCell<HashMap<String, Value>>>,
     ) -> Self {
         let realm = env.realm_rc();
+        let module_host = env.module_host();
         let locals = Self::initial_slots(bytecode, &env);
         Self {
             bytecode,
@@ -129,6 +134,7 @@ impl<'a> Vm<'a> {
             locals,
             env,
             realm,
+            module_host,
             captured_env,
             sloppy_global_names: Vec::new(),
             try_stack: Vec::new(),
@@ -151,7 +157,7 @@ impl<'a> Vm<'a> {
                 locals.insert(self.bytecode.locals[index].name.clone(), value.clone());
             }
         }
-        CallEnv::with_locals(self.realm_rc(), locals)
+        self.attach_host(CallEnv::with_locals(self.realm_rc(), locals))
     }
 
     /// A clone of the shared realm `Rc`.
@@ -163,7 +169,7 @@ impl<'a> Vm<'a> {
     /// slot clone): use it for the prototype-resolution helpers that only read
     /// realm intrinsics by name and never touch frame locals.
     pub(super) fn realm_env(&self) -> CallEnv {
-        CallEnv::new(self.realm_rc())
+        self.attach_host(CallEnv::new(self.realm_rc()))
     }
 
     pub(super) fn coerce_property_key(
@@ -521,70 +527,15 @@ impl<'a> Vm<'a> {
                     }
                     DelegateStep::Continue => {}
                 },
-            }
-        }
-    }
-
-    pub(super) fn function_capture_env(
-        &self,
-        function_bytecode: &Bytecode,
-        function_local_names: &[String],
-    ) -> HashMap<String, Value> {
-        let mut env = HashMap::with_capacity(function_bytecode.locals.len());
-        // The created function's `env` field is consulted at construction time to
-        // resolve its `.prototype`'s `[[Prototype]]` (`object_prototype(env)`),
-        // so seed it with the realm intrinsics. This runs only at closure/class
-        // creation (`Op::NewFunction`/`NewClass`), never on the leaf-call path,
-        // so the per-call clone the migration removed stays gone.
-        {
-            let realm = self.realm.borrow();
-            for name in crate::RUNTIME_INTRINSIC_NAMES {
-                if let Some(value) = realm.get(*name) {
-                    env.insert((*name).to_owned(), value.clone());
+                Op::ImportCall { has_options } => self.import_call(has_options)?,
+                Op::ImportMeta => {
+                    return Err(RuntimeError {
+                        thrown: None,
+                        message: "SyntaxError: 'import.meta' is only valid in a module".to_owned(),
+                    });
                 }
             }
         }
-        for name in function_bytecode.global_names() {
-            self.insert_referenced_binding(&mut env, name);
-        }
-        for name in function_bytecode.local_names() {
-            if function_local_names
-                .binary_search_by(|local| local.as_str().cmp(name))
-                .is_err()
-            {
-                self.insert_referenced_binding(&mut env, name);
-            }
-        }
-        env
-    }
-
-    fn insert_referenced_binding(&self, env: &mut HashMap<String, Value>, name: &str) {
-        if name == "flag" {
-            eprintln!(
-                "DBG capture-env-build flag={:?}",
-                self.current_local_binding(name)
-            );
-        }
-        if let Some(value) = self.current_local_binding(name) {
-            env.insert(name.to_owned(), value.clone());
-        }
-    }
-
-    pub(super) fn refresh_captured_env(&self, env: &HashMap<String, Value>) {
-        let mut captured_env = self.captured_env.borrow_mut();
-        for (name, value) in env {
-            if name == "flag" {
-                eprintln!("DBG refresh_captured_env inserts flag={value:?}");
-            }
-            captured_env.insert(name.clone(), value.clone());
-        }
-    }
-
-    fn current_local_binding(&self, name: &str) -> Option<&Value> {
-        self.bytecode
-            .local_slot(name)
-            .and_then(|index| self.locals.get(index))
-            .and_then(Option::as_ref)
     }
 
     fn get_prop(&mut self) -> Result<(), RuntimeError> {
@@ -877,7 +828,7 @@ impl<'a> Vm<'a> {
             }
             return VmCallEnv {
                 injected: locals.clone(),
-                env: CallEnv::with_locals(self.realm_rc(), locals),
+                env: self.attach_host(CallEnv::with_locals(self.realm_rc(), locals)),
                 binding_names: Some(binding_names),
             };
         }

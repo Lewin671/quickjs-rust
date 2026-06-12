@@ -16,9 +16,11 @@ mod util;
 mod vm;
 mod vm_bindings;
 mod vm_call;
+mod vm_capture;
 mod vm_class;
 mod vm_errors;
 mod vm_generator;
+mod vm_import;
 mod vm_iter;
 mod vm_jobs;
 mod vm_literals;
@@ -115,6 +117,21 @@ pub fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> {
     vm::eval_bytecode(bytecode)
 }
 
+/// Evaluates compiled script bytecode with a dynamic-import `host` installed on
+/// its environment, so a dynamic `import()` in the script resolves and loads
+/// modules through the host. Drains the promise job queue (including any import
+/// jobs) before returning the completion value.
+///
+/// # Errors
+///
+/// Returns runtime failures or malformed bytecode failures.
+pub fn eval_bytecode_with_module_host(
+    bytecode: &Bytecode,
+    host: crate::module::ModuleHostRef,
+) -> Result<Value, RuntimeError> {
+    vm_import::eval_bytecode_with_module_host(bytecode, host)
+}
+
 /// Script completion paired with its realm's pending microtask queue.
 ///
 /// Produced by [`eval_bytecode_keep_jobs`] for callers (the Test262 async
@@ -200,8 +217,10 @@ pub(crate) fn eval_module_body(
     bytecode: &Bytecode,
     realm: &ModuleRealm,
     imports: HashMap<String, Value>,
+    host: Option<crate::module::ModuleHostRef>,
+    drain: bool,
 ) -> Result<crate::CallEnv, RuntimeError> {
-    vm_module::eval_module_body(bytecode, realm, imports)
+    vm_module::eval_module_body(bytecode, realm, imports, host, drain)
 }
 
 pub(crate) fn eval_bytecode_with_env(

@@ -17,6 +17,12 @@ impl Parser {
             self.expect(&TokenKind::Function)?;
             return self.function_expression_with_async(async_token.span.start, true);
         }
+        // `import(...)` dynamic import and `import.meta` meta-property. `import`
+        // is a contextual keyword (lexed as an identifier); a following `(` or
+        // `.` selects these expression forms rather than a plain reference.
+        if self.at_import_expression() {
+            return self.import_expression();
+        }
         let token = self.advance();
         match token.kind {
             TokenKind::Identifier(name) => {

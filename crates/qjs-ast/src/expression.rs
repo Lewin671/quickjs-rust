@@ -298,6 +298,22 @@ pub enum Expr {
         /// Source span.
         span: Span,
     },
+    /// A dynamic `import(specifier)` call expression. Valid under both the
+    /// Script and Module goals; evaluates to a promise for the requested
+    /// module's namespace object. The optional `options` argument carries the
+    /// import-attributes/options second argument when present (currently
+    /// evaluated for side effects but otherwise ignored).
+    ImportCall {
+        /// The module specifier expression (an `AssignmentExpression`).
+        specifier: Box<Expr>,
+        /// The optional second (options/attributes) argument.
+        options: Option<Box<Expr>>,
+        /// Source span.
+        span: Span,
+    },
+    /// An `import.meta` meta-property. Only meaningful under the Module goal;
+    /// the runtime reports a SyntaxError when it appears in a script.
+    ImportMeta { span: Span },
     /// A `this` expression.
     This { span: Span },
     /// A `super` keyword reference. Only valid as the object of a member
@@ -352,6 +368,8 @@ impl Expr {
             | Self::Class { span, .. }
             | Self::Member { span, .. }
             | Self::PrivateIn { span, .. }
+            | Self::ImportCall { span, .. }
+            | Self::ImportMeta { span }
             | Self::This { span }
             | Self::Super { span }
             | Self::Identifier { span, .. } => *span,
