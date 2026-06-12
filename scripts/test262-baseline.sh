@@ -115,11 +115,35 @@ if [ "$SHARD_INDEX" -gt "$SHARD_TOTAL" ]; then
   echo "error: --shard index must be <= shard total: $SHARD_INDEX/$SHARD_TOTAL" >&2
   exit 2
 fi
+TEST262_BASELINE_JOBS="${TEST262_BASELINE_JOBS:-$(qjs_detect_jobs)}"
+case "$TEST262_BASELINE_JOBS" in
+  ''|*[!0-9]*|0)
+    echo "error: TEST262_BASELINE_JOBS must be a positive integer: $TEST262_BASELINE_JOBS" >&2
+    exit 2
+    ;;
+esac
 if [ ! -d "$TEST262_DIR/test" ]; then
   echo "error: missing $TEST262_DIR/test; run ./scripts/bootstrap.sh first" >&2
   exit 1
 fi
+if ! xargs -P 1 -n 1 true </dev/null >/dev/null 2>&1; then
+  echo "error: xargs does not support -P; parallel Test262 baseline execution is unavailable" >&2
+  exit 1
+fi
 qjs_require_run_with_timeout
+
+# Scratch space for the parallel case runners: the work queue plus per-case
+# result, JSONL, and message files keyed by queue index.
+WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/qjs-test262-baseline-work-XXXXXX")"
+QUEUE_FILE="$WORK_DIR/queue"
+: >"$QUEUE_FILE"
+cleanup() {
+  rm -rf "$WORK_DIR"
+  if [ -n "${QUICKJS_NG_CONF:-}" ]; then
+    rm -f "$QUICKJS_NG_CONF" "$QUICKJS_NG_FEATURES" "$QUICKJS_NG_SKIP_FEATURES" "$QUICKJS_NG_EXCLUDES"
+  fi
+}
+trap cleanup EXIT
 
 needs_rust() {
   [ "$ENGINE" = "quickjs-rust" ] || [ "$ENGINE" = "both" ]
@@ -143,7 +167,6 @@ if needs_quickjs_ng; then
   QUICKJS_NG_FEATURES="$(mktemp "${TMPDIR:-/tmp}/qjsng-test262-features-XXXXXX")"
   QUICKJS_NG_SKIP_FEATURES="$(mktemp "${TMPDIR:-/tmp}/qjsng-test262-skip-features-XXXXXX")"
   QUICKJS_NG_EXCLUDES="$(mktemp "${TMPDIR:-/tmp}/qjsng-test262-excludes-XXXXXX")"
-  trap 'rm -f "$QUICKJS_NG_CONF" "$QUICKJS_NG_FEATURES" "$QUICKJS_NG_SKIP_FEATURES" "$QUICKJS_NG_EXCLUDES"' EXIT
   sed \
     -e "s#^harnessdir=.*#harnessdir=$TEST262_DIR/harness#" \
     -e "s#^testdir=.*#testdir=$TEST262_DIR/test#" \
@@ -178,6 +201,10 @@ if needs_quickjs_ng; then
         print line > excludes
       }
     ' "$QUICKJS_NG_CONF"
+  # Feature membership is checked per case feature; keep the lists in shell
+  # strings so the checks are in-process matches instead of grep spawns.
+  QUICKJS_NG_FEATURES_SET="$(cat "$QUICKJS_NG_FEATURES")"
+  QUICKJS_NG_SKIP_FEATURES_SET="$(cat "$QUICKJS_NG_SKIP_FEATURES")"
 fi
 
 metadata_for() {
@@ -202,14 +229,22 @@ skip_reason() {
 }
 rust_includes_supported() {
   local include
-  while IFS= read -r include; do
+  split_entries "$1"
+  for include in ${SPLIT_ENTRIES[@]+"${SPLIT_ENTRIES[@]}"}; do
     [ -f "$TEST262_DIR/harness/$include" ] || return 1
-  done < <(list_entries "$1")
+  done
 }
-list_entries() {
-  printf '%s\n' "$1" | tr -d '[]' | tr ',' '\n' \
-    | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' \
-    | sed '/^$/d'
+# Splits a Test262 metadata list ("[a.js, b.js]" or "a.js, b.js") into the
+# SPLIT_ENTRIES array without spawning a process. Harness file and feature
+# names never contain whitespace or glob characters.
+split_entries() {
+  local raw="$1"
+  raw="${raw//[\[\],]/ }"
+  SPLIT_ENTRIES=()
+  local part
+  for part in $raw; do
+    SPLIT_ENTRIES+=("$part")
+  done
 }
 emit_test262_host_shim() {
   cat <<'EOF'
@@ -257,6 +292,12 @@ list_test262_cases() {
   find "$TEST262_DIR/test" -type f -name '*.js' | sort
 }
 
+line_set_contains() {
+  case $'\n'"$1"$'\n' in
+    *$'\n'"$2"$'\n'*) return 0 ;;
+  esac
+  return 1
+}
 quickjs_ng_skip_reason() {
   local rel="$1"
   local features="$2"
@@ -269,16 +310,17 @@ quickjs_ng_skip_reason() {
     return
   fi
 
-  while IFS= read -r feature; do
-    if grep -Fx -- "$feature" "$QUICKJS_NG_SKIP_FEATURES" >/dev/null 2>&1; then
+  split_entries "$features"
+  for feature in ${SPLIT_ENTRIES[@]+"${SPLIT_ENTRIES[@]}"}; do
+    if line_set_contains "$QUICKJS_NG_SKIP_FEATURES_SET" "$feature"; then
       echo "feature"
       return
     fi
-    if ! grep -Fx -- "$feature" "$QUICKJS_NG_FEATURES" >/dev/null 2>&1; then
+    if ! line_set_contains "$QUICKJS_NG_FEATURES_SET" "$feature"; then
       echo "unknown-feature"
       return
     fi
-  done < <(list_entries "$features")
+  done
   echo ""
 }
 make_case() {
@@ -307,10 +349,11 @@ make_case() {
         cat "$TEST262_DIR/harness/doneprintHandle.js"
         printf '\n'
       fi
-      while IFS= read -r include; do
+      split_entries "$includes"
+      for include in ${SPLIT_ENTRIES[@]+"${SPLIT_ENTRIES[@]}"}; do
         cat "$TEST262_DIR/harness/$include"
         printf '\n'
-      done < <(list_entries "$includes")
+      done
       cat "$source"
     fi
   } >"$output"
@@ -336,10 +379,11 @@ make_module_prelude() {
       cat "$TEST262_DIR/harness/doneprintHandle.js"
       printf '\n'
     fi
-    while IFS= read -r include; do
+    split_entries "$includes"
+    for include in ${SPLIT_ENTRIES[@]+"${SPLIT_ENTRIES[@]}"}; do
       cat "$TEST262_DIR/harness/$include"
       printf '\n'
-    done < <(list_entries "$includes")
+    done
   } >"$output"
 }
 rust_error_field() {
@@ -451,9 +495,7 @@ result_kind() {
     *) echo "fail" ;;
   esac
 }
-write_case_result() {
-  [ -n "$CASE_RESULTS_JSONL" ] || return 0
-  mkdir -p "$(dirname "$CASE_RESULTS_JSONL")"
+format_case_result() {
   printf '{"path":"%s","rust":"%s","rust_result":"%s","rust_skip":"%s","quickjs_ng":"%s","quickjs_ng_result":"%s","quickjs_ng_skip":"%s"}\n' \
     "$(json_escape "$1")" \
     "$(json_escape "$(result_kind "$2")")" \
@@ -461,15 +503,24 @@ write_case_result() {
     "$(json_escape "$3")" \
     "$(json_escape "$(result_kind "$4")")" \
     "$(json_escape "$(result_kind "$4")")" \
-    "$(json_escape "$5")" \
-    >>"$CASE_RESULTS_JSONL"
+    "$(json_escape "$5")"
 }
-run_case() {
-  local file="$1" flags="$2" rel="$3" includes="$4"
-  local rust_skip_reason="$5" qjsng_skip_reason="$6"
-  local negative_phase="${7:-}" negative_type="${8:-}"
+write_case_result() {
+  [ -n "$CASE_RESULTS_JSONL" ] || return 0
+  format_case_result "$@" >>"$CASE_RESULTS_JSONL"
+}
+# Executes one queued case inside a parallel xargs worker. Every argument
+# carries a leading "x" sentinel because BSD xargs drops empty NUL-separated
+# fields, which would misalign the record. Results, the JSONL line, and
+# diagnostic messages land under $WORK_DIR keyed by the queue index; the
+# aggregation pass after the queue drains folds them into counters in order.
+run_case_worker() {
+  local idx="${1#x}" file="${2#x}" flags="${3#x}" rel="${4#x}" includes="${5#x}"
+  local rust_skip_reason="${6#x}" qjsng_skip_reason="${7#x}"
+  local negative_phase="${8#x}" negative_type="${9#x}"
   local temp_dir temp rust_result="not-run" qjsng_result="not-run" is_async=""
   local is_module="" module_prelude=""
+  printf 'test262-baseline [%s]: %s\n' "$idx" "$rel"
   if [[ "$flags" == *async* ]]; then
     is_async="async"
   fi
@@ -489,34 +540,68 @@ run_case() {
   if [ "$ENGINE" = "quickjs-rust" ] || [ "$ENGINE" = "both" ]; then
     if [ -n "$rust_skip_reason" ]; then
       rust_result="skipped"
-      rust_skipped=$((rust_skipped + 1))
     else
       rust_result="$(run_engine_case quickjs-rust "$temp" "$file" "$negative_phase" "$negative_type" "$is_async" "$module_prelude")"
-      count_engine_result rust "$rust_result"
     fi
   fi
   if [ "$ENGINE" = "quickjs-ng" ] || [ "$ENGINE" = "both" ]; then
     if [ -n "$qjsng_skip_reason" ]; then
       qjsng_result="skipped"
-      qjsng_skipped=$((qjsng_skipped + 1))
     else
       qjsng_result="$(run_engine_case quickjs-ng "$temp" "$file")"
-      count_engine_result qjsng "$qjsng_result"
     fi
   fi
   rm -rf "$temp_dir"
-  write_case_result "$rel" "$rust_result" "$rust_skip_reason" "$qjsng_result" "$qjsng_skip_reason"
+  printf '%s\n' "$rust_result" >"$WORK_DIR/$idx.rust"
+  printf '%s\n' "$qjsng_result" >"$WORK_DIR/$idx.qjsng"
+  if [ -n "$CASE_RESULTS_JSONL" ]; then
+    format_case_result "$rel" "$rust_result" "$rust_skip_reason" "$qjsng_result" "$qjsng_skip_reason" >"$WORK_DIR/$idx.jsonl"
+  fi
+  {
+    case "$rust_result" in
+      skipped) echo "quickjs-rust skipped: $rel ($rust_skip_reason)" ;;
+      timeout) echo "quickjs-rust timeout: $rel" ;;
+      fail*) printf 'quickjs-rust fail: %s\t%s\n' "$rel" "${rust_result#fail	}" ;;
+    esac
+    case "$qjsng_result" in
+      skipped) echo "quickjs-ng skipped: $rel ($qjsng_skip_reason)" ;;
+      timeout) echo "quickjs-ng timeout: $rel" ;;
+      fail*) printf 'quickjs-ng fail: %s\t%s\n' "$rel" "${qjsng_result#fail	}" ;;
+    esac
+  } >"$WORK_DIR/$idx.msg"
+}
 
-  case "$rust_result" in
-    skipped) echo "quickjs-rust skipped: $rel ($rust_skip_reason)" >&2 ;;
-    timeout) echo "quickjs-rust timeout: $rel" >&2 ;;
-    fail*) printf 'quickjs-rust fail: %s\t%s\n' "$rel" "${rust_result#fail	}" >&2 ;;
-  esac
-  case "$qjsng_result" in
-    skipped) echo "quickjs-ng skipped: $rel ($qjsng_skip_reason)" >&2 ;;
-    timeout) echo "quickjs-ng timeout: $rel" >&2 ;;
-    fail*) printf 'quickjs-ng fail: %s\t%s\n' "$rel" "${qjsng_result#fail	}" >&2 ;;
-  esac
+# Folds one finished case back into the serial counters, replaying its JSONL
+# line and diagnostics in queue order so output stays deterministic.
+aggregate_case() {
+  local idx="$1"
+  local rust_result="not-run" qjsng_result="not-run"
+  if [ -s "$WORK_DIR/$idx.rust" ]; then
+    IFS= read -r rust_result <"$WORK_DIR/$idx.rust" || true
+  fi
+  if [ -s "$WORK_DIR/$idx.qjsng" ]; then
+    IFS= read -r qjsng_result <"$WORK_DIR/$idx.qjsng" || true
+  fi
+  if [ "$ENGINE" = "quickjs-rust" ] || [ "$ENGINE" = "both" ]; then
+    if [ "$rust_result" = "skipped" ]; then
+      rust_skipped=$((rust_skipped + 1))
+    else
+      count_engine_result rust "$rust_result"
+    fi
+  fi
+  if [ "$ENGINE" = "quickjs-ng" ] || [ "$ENGINE" = "both" ]; then
+    if [ "$qjsng_result" = "skipped" ]; then
+      qjsng_skipped=$((qjsng_skipped + 1))
+    else
+      count_engine_result qjsng "$qjsng_result"
+    fi
+  fi
+  if [ -n "$CASE_RESULTS_JSONL" ] && [ -f "$WORK_DIR/$idx.jsonl" ]; then
+    cat "$WORK_DIR/$idx.jsonl" >>"$CASE_RESULTS_JSONL"
+  fi
+  if [ -s "$WORK_DIR/$idx.msg" ]; then
+    cat "$WORK_DIR/$idx.msg" >&2
+  fi
 
   if [ "$ENGINE" = "both" ]; then
     rust_kind="$(result_kind "$rust_result")"
@@ -542,7 +627,8 @@ run_case() {
 }
 
 json_escape() {
-  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+  local value="${1//\\/\\\\}"
+  printf '%s' "${value//\"/\\\"}"
 }
 
 write_summary_json() {
@@ -673,9 +759,47 @@ while IFS= read -r file; do
   fi
 
   run=$((run + 1))
-  printf 'test262-baseline [%d]: %s\n' "$run" "$rel"
-  run_case "$file" "$flags" "$rel" "$includes" "$reason" "$qjsng_reason" "$negative_phase" "$negative_type"
+  printf '%s\0' "x$run" "x$file" "x$flags" "x$rel" "x$includes" \
+    "x$reason" "x$qjsng_reason" "x$negative_phase" "x$negative_type" >>"$QUEUE_FILE"
 done < <(list_test262_cases)
+
+# Drain the queue with parallel workers, then fold per-case results back into
+# the counters in queue order.
+if [ "$run" -gt 0 ]; then
+  export CASE_RESULTS_JSONL
+  export CASE_TIMEOUT_SECONDS
+  export ENGINE
+  export QJS_CLI_BIN="${QJS_CLI_BIN:-}"
+  export QUICKJS_NG_CONF="${QUICKJS_NG_CONF:-}"
+  export QUICKJS_NG_RUNNER
+  export RUN_WITH_TIMEOUT
+  export TEST262_DIR
+  export WORK_DIR
+  export -f emit_test262_host_shim
+  export -f format_case_result
+  export -f json_escape
+  export -f make_case
+  export -f make_module_prelude
+  export -f result_kind
+  export -f run_case_worker
+  export -f run_engine_case
+  export -f rust_error_field
+  export -f rust_negative_matches
+  export -f split_entries
+  set +e
+  xargs -0 -n 9 -P "$TEST262_BASELINE_JOBS" bash -c 'run_case_worker "$@"' _ <"$QUEUE_FILE"
+  worker_status=$?
+  set -e
+  if [ "$worker_status" -ne 0 ]; then
+    echo "error: Test262 baseline worker failed before completing all cases" >&2
+    exit 1
+  fi
+  case_index=1
+  while [ "$case_index" -le "$run" ]; do
+    aggregate_case "$case_index"
+    case_index=$((case_index + 1))
+  done
+fi
 
 echo "summary:"
 echo "  engine: $ENGINE"

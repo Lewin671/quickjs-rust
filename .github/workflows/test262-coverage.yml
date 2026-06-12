@@ -207,21 +207,18 @@ jobs:
               | head -n 1)"
             export QJS_CLI_BIN="${target_dir:-$PWD/target}/debug/qjs"
           fi
+          # test262-baseline.sh parallelizes case execution internally, so the
+          # group's two shards run sequentially instead of racing for cores.
           first_shard=$(( (${{ matrix.group }} - 1) * 2 + 1 ))
           last_shard=$(( first_shard + 1 ))
           for shard in $(seq "$first_shard" "$last_shard"); do
-            (
-              ./scripts/test262-baseline.sh \
-                --all \
-                --engine quickjs-rust \
-                --shard "$shard/32" \
-                --summary-json "coverage/summary-${shard}.json" \
-                --case-results-jsonl "coverage/cases-${shard}.jsonl" \
-                --no-fail
-            ) &
-          done
-          for job in $(jobs -pr); do
-            wait "$job" || status=1
+            ./scripts/test262-baseline.sh \
+              --all \
+              --engine quickjs-rust \
+              --shard "$shard/32" \
+              --summary-json "coverage/summary-${shard}.json" \
+              --case-results-jsonl "coverage/cases-${shard}.jsonl" \
+              --no-fail || status=1
           done
           exit "$status"
 
