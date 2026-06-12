@@ -85,6 +85,26 @@ fn evaluates_string_addition() {
 }
 
 #[test]
+fn accumulates_string_concatenation_in_place() {
+    // The string `+` path appends the right operand onto the left operand's
+    // buffer instead of allocating a fresh `len(left) + len(right)` string.
+    // Exercise a `s += chunk` accumulation with mixed operand types to confirm
+    // the reused buffer still produces the spec-correct result.
+    assert_eq!(
+        eval("let s = ''; for (let i = 0; i < 5; i++) { s += 'ab'; s += i; s += true; } s;"),
+        Ok(Value::String(
+            "ab0trueab1trueab2trueab3trueab4true".to_owned()
+        ))
+    );
+    // A non-string left operand promoted by a string right operand must not be
+    // corrupted by the in-place append.
+    assert_eq!(
+        eval("let s = 1; s = s + 'x'; s += 2; s;"),
+        Ok(Value::String("1x2".to_owned()))
+    );
+}
+
+#[test]
 fn evaluates_template_literal_substitutions() {
     assert_eq!(
         eval("let name = 'quickjs'; `hello ${name}`;"),

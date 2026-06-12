@@ -64,11 +64,15 @@ pub(crate) fn eval_binary(
             let left = to_primitive_with_env(left, env)?;
             let right = to_primitive_with_env(right, env)?;
             if matches!(left, Value::String(_)) || matches!(right, Value::String(_)) {
-                return Ok(Value::String(format!(
-                    "{}{}",
-                    to_js_string_with_env(left, env)?,
-                    to_js_string_with_env(right, env)?
-                )));
+                // Reuse the left operand's allocation rather than building a
+                // fresh `len(left) + len(right)` buffer each time. This turns a
+                // `s += chunk` accumulation loop from O(n^2) copying into the
+                // amortized O(n) growth of a single owned `String`, because
+                // `to_js_string_with_env` returns a `Value::String`'s backing
+                // buffer by move (no copy).
+                let mut accumulator = to_js_string_with_env(left, env)?;
+                accumulator.push_str(&to_js_string_with_env(right, env)?);
+                return Ok(Value::String(accumulator));
             }
             if matches!(left, Value::BigInt(_)) || matches!(right, Value::BigInt(_)) {
                 return eval_bigint_binary(left, op, right);
