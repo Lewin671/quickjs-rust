@@ -62,7 +62,9 @@ fn validate_regexp_pattern(source: &str, unicode: bool) -> Result<(), RuntimeErr
                 index = end + 1;
                 has_atom = true;
             }
-            ']' => return Err(regexp_syntax_error("invalid regular expression pattern")),
+            ']' if unicode => {
+                return Err(regexp_syntax_error("invalid regular expression pattern"));
+            }
             '(' => {
                 let Some(end) = group_end(&pattern, index) else {
                     return Err(regexp_syntax_error("invalid regular expression pattern"));
@@ -80,7 +82,9 @@ fn validate_regexp_pattern(source: &str, unicode: bool) -> Result<(), RuntimeErr
                 index = end + 1;
                 has_atom = true;
             }
-            ')' => return Err(regexp_syntax_error("invalid regular expression pattern")),
+            ')' if unicode => {
+                return Err(regexp_syntax_error("invalid regular expression pattern"));
+            }
             '?' | '*' | '+' if !has_atom => {
                 return Err(regexp_syntax_error("invalid regular expression pattern"));
             }
@@ -449,6 +453,10 @@ mod tests {
         accepts("{", "");
         accepts("a{", "");
         accepts("x{2}", "");
+        accepts("]", "");
+        accepts(")", "");
+        rejects("]", "u");
+        rejects(")", "u");
     }
 
     #[test]

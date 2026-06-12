@@ -392,6 +392,18 @@ fn evaluates_regexp_exec_literal_match() {
         ),
         Ok(Value::String("1:4:1\n\n\n\n\nl".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "/]/.test(']') + ':' + /{/.test('{') + ':' + /}/.test('}') + ':' + /x{o}x/.test('x{o}x');"
+        ),
+        Ok(Value::String("true:true:true:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "/\\00/.exec('\\x00')[0].charCodeAt(0) + ':' + /\\07/.exec('\\x07')[0].charCodeAt(0) + ':' + /\\0111/.exec('\\x091')[0].length + ':' + /\\0003/.exec('\\x003')[0].length;"
+        ),
+        Ok(Value::String("0:7:2:2".to_owned()))
+    );
 }
 
 #[test]

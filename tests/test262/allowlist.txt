@@ -4335,6 +4335,8 @@ test/annexB/language/global-code/switch-case-global-existing-non-enumerable-glob
 test/annexB/language/global-code/switch-dflt-global-existing-global-init.js
 test/annexB/language/global-code/switch-dflt-global-existing-non-enumerable-global-init.js
 test/annexB/language/literals/regexp/class-escape.js
+test/annexB/language/literals/regexp/extended-pattern-char.js
+test/annexB/language/literals/regexp/legacy-octal-escape.js
 test/annexB/language/statements/for-in/nonstrict-initializer.js
 test/annexB/language/statements/const/dstr/array-pattern-emulates-undefined.js
 test/annexB/language/statements/const/dstr/object-pattern-emulates-undefined.js
