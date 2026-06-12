@@ -46,18 +46,26 @@ check_limit() {
   local filter_regex="${5:-}"
 
   local files
-  files="$(list_files "$pattern" | filter_files "$filter_mode" "$filter_regex")"
+  files="$(list_files "$pattern" | filter_files "$filter_mode" "$filter_regex" | sort)"
+  [ -n "$files" ] || return 0
 
-  while IFS= read -r file; do
-    [ -n "$file" ] || continue
-    file="${file#"$ROOT_DIR/"}"
-    local lines
-    lines="$(wc -l <"$ROOT_DIR/$file" | tr -d ' ')"
-    if [ "$lines" -gt "$limit" ]; then
-      printf 'error: %s has %s lines; limit is %s for %s files\n' "$file" "$lines" "$limit" "$label" >&2
-      status=1
-    fi
-  done < <(printf '%s\n' "$files" | sort)
+  # One batched `wc -l` instead of one process per file; `wc` keeps argument
+  # order, and xargs may emit one `total` line per batch.
+  if ! printf '%s\n' "$files" | tr '\n' '\0' \
+    | (cd "$ROOT_DIR" && xargs -0 wc -l) \
+    | awk -v limit="$limit" -v label="$label" -v root="$ROOT_DIR/" '
+        $2 == "total" { next }
+        ($1 + 0) > limit {
+          path = $0
+          sub(/^[[:space:]]*[0-9]+[[:space:]]/, "", path)
+          sub(root, "", path)
+          printf "error: %s has %s lines; limit is %s for %s files\n", path, $1, limit, label > "/dev/stderr"
+          bad = 1
+        }
+        END { exit bad }
+      '; then
+    status=1
+  fi
 }
 
 check_limit "Rust source" 1000 '*.rs' exclude '/src/tests/'
