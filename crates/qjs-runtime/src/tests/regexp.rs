@@ -1,4 +1,36 @@
-use crate::{Value, eval};
+use crate::{EvalErrorKind, Value, eval, eval_classified};
+
+#[test]
+fn rejects_invalid_regexp_literal_at_parse_phase() {
+    // A regexp literal with an invalid pattern/flags must fail before the
+    // script body runs, mirroring Test262's `negative: phase: parse` cases.
+    for source in [
+        "throw 'unreached'; /]/u;",
+        "throw 'unreached'; /(/;",
+        "throw 'unreached'; /a/gg;",
+        "throw 'unreached'; /\\2(a)/u;",
+    ] {
+        let error = eval_classified(source).expect_err("invalid regexp literal must fail");
+        assert_eq!(error.kind, EvalErrorKind::Early, "source: {source}");
+        assert!(
+            error.message.contains("SyntaxError"),
+            "expected SyntaxError, got {} for {source}",
+            error.message
+        );
+    }
+}
+
+#[test]
+fn accepts_valid_regexp_literal_during_compilation() {
+    assert_eq!(
+        eval("/[0-9]+/g.source;"),
+        Ok(Value::String("[0-9]+".to_owned()))
+    );
+    // A genuine `new RegExp(...)` with a runtime-built invalid pattern still
+    // fails at runtime, not at the parse/early stage.
+    let error = eval_classified("new RegExp('(');").expect_err("invalid pattern must fail");
+    assert_eq!(error.kind, EvalErrorKind::Runtime);
+}
 
 #[test]
 fn evaluates_regexp_constructor_identity() {

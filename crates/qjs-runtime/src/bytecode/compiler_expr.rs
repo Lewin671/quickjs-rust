@@ -263,8 +263,10 @@ impl Compiler {
                 callee, arguments, ..
             } => self.compile_call(callee, arguments),
             Expr::New {
-                callee, arguments, ..
-            } => self.compile_new(callee, arguments),
+                callee,
+                arguments,
+                span,
+            } => self.compile_new(callee, arguments, *span),
             Expr::Function {
                 name,
                 params,

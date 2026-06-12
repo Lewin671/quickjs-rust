@@ -58,6 +58,8 @@ pub(super) fn typeof_value(value: Value) -> String {
         Value::BigInt(_) => "bigint",
         Value::String(_) => "string",
         Value::Function(_) => "function",
+        // A Proxy reports `function` exactly when its target is callable.
+        Value::Proxy(ref proxy) if crate::proxy::proxy_is_callable(proxy) => "function",
         Value::Object(object) if symbol::is_symbol_primitive(&object) => "symbol",
         Value::Null
         | Value::Array(_)

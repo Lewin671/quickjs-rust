@@ -203,6 +203,80 @@ pub(crate) fn proxy_delete_property(
     Ok(is_truthy(&result))
 }
 
+/// `[[Call]]` for an exotic Proxy: invoke the `apply` trap with
+/// `(target, thisArgument, argumentsList)`, or forward to the target when the
+/// trap is absent. The target must itself be callable.
+pub(crate) fn proxy_apply(
+    proxy: ProxyRef,
+    this_value: Value,
+    arguments: Vec<Value>,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let target = proxy.target_result()?;
+    let handler = proxy.handler_result()?;
+    let Some(trap) = proxy_trap(handler.clone(), "apply", env)? else {
+        return crate::call_function(target, this_value, arguments, env, false);
+    };
+    let arguments_array = Value::Array(crate::ArrayRef::new(arguments));
+    crate::call_function(
+        trap,
+        handler,
+        vec![target, this_value, arguments_array],
+        env,
+        false,
+    )
+}
+
+/// `[[Construct]]` for an exotic Proxy: invoke the `construct` trap with
+/// `(target, argumentsList, newTarget)`, or forward to the target when the trap
+/// is absent. The trap must return an object.
+pub(crate) fn proxy_construct(
+    proxy: ProxyRef,
+    new_target: Value,
+    arguments: Vec<Value>,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let target = proxy.target_result()?;
+    let handler = proxy.handler_result()?;
+    let Some(trap) = proxy_trap(handler.clone(), "construct", env)? else {
+        return crate::construct_function(target, new_target, arguments, env);
+    };
+    let arguments_array = Value::Array(crate::ArrayRef::new(arguments));
+    let result = crate::call_function(
+        trap,
+        handler,
+        vec![target, arguments_array, new_target],
+        env,
+        false,
+    )?;
+    if is_proxy_object_target(&result) {
+        Ok(result)
+    } else {
+        Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: proxy [[Construct]] must return an object".to_owned(),
+        })
+    }
+}
+
+/// A Proxy is callable when (recursively) its target is callable.
+pub(crate) fn proxy_is_callable(proxy: &ProxyRef) -> bool {
+    match proxy.target_result() {
+        Ok(Value::Function(_)) => true,
+        Ok(Value::Proxy(inner)) => proxy_is_callable(&inner),
+        _ => false,
+    }
+}
+
+/// A Proxy is a constructor when (recursively) its target is a constructor.
+pub(crate) fn proxy_is_constructor(proxy: &ProxyRef) -> bool {
+    match proxy.target_result() {
+        Ok(Value::Function(function)) => function.constructable,
+        Ok(Value::Proxy(inner)) => proxy_is_constructor(&inner),
+        _ => false,
+    }
+}
+
 pub(crate) fn proxy_target_is_array_result(proxy: &ProxyRef) -> Result<bool, RuntimeError> {
     match proxy.target_result()? {
         Value::Array(_) => Ok(true),

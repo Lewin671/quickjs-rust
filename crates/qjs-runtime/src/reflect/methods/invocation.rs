@@ -9,7 +9,12 @@ pub(crate) fn native_reflect_apply(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    if !matches!(target, Value::Function(_)) {
+    let callable = match &target {
+        Value::Function(_) => true,
+        Value::Proxy(proxy) => crate::proxy::proxy_is_callable(proxy),
+        _ => false,
+    };
+    if !callable {
         return Err(RuntimeError {
             thrown: None,
             message: "Reflect.apply target is not callable".to_owned(),

@@ -28,6 +28,7 @@ pub(crate) use symbol_replace::native_regexp_prototype_replace;
 pub(crate) use symbol_search::native_regexp_prototype_search;
 pub(crate) use symbol_split::native_regexp_prototype_split;
 use validation::validate_regexp_init;
+pub(crate) use validation::validate_regexp_init as validate_regexp_literal;
 
 const REGEXP_SOURCE_PROPERTY: &str = "\0RegExpSource";
 const REGEXP_FLAGS_PROPERTY: &str = "\0RegExpFlags";

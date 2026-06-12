@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use qjs_ast::{
-    ArrayElement, CallArgument, Expr, MemberProperty, ObjectProperty, ObjectPropertyKey,
-    ObjectPropertyKind, Stmt, VarKind,
+    ArrayElement, CallArgument, Expr, Literal, MemberProperty, ObjectProperty, ObjectPropertyKey,
+    ObjectPropertyKind, Span, Stmt, VarKind,
 };
 
 use crate::{
@@ -248,7 +248,9 @@ impl Compiler {
         &mut self,
         callee: &Expr,
         arguments: &[CallArgument],
+        span: Span,
     ) -> Result<(), RuntimeError> {
+        validate_regexp_literal_new(callee, arguments, span)?;
         self.compile_expr(callee)?;
         if arguments
             .iter()
@@ -351,4 +353,40 @@ impl Compiler {
         self.emit_load_undefined();
         Ok(())
     }
+}
+
+/// Reports a regexp literal whose pattern or flags are invalid as an early
+/// (parse-phase) error.
+///
+/// The parser desugars a `/pattern/flags` literal into a `new RegExp(...)`
+/// expression. Unlike a hand-written `new RegExp(...)` call, the literal must
+/// fail at parse time, so its validity is checked statically here during
+/// bytecode compilation instead of when the constructor runs. The desugared
+/// shape is recognized by its single-character `RegExp` callee whose span
+/// coincides with the start of the `new` expression (a real constructor call
+/// would carry the six-character `RegExp` identifier span placed after `new`).
+fn validate_regexp_literal_new(
+    callee: &Expr,
+    arguments: &[CallArgument],
+    span: Span,
+) -> Result<(), RuntimeError> {
+    let Expr::Identifier {
+        name,
+        span: callee_span,
+    } = callee
+    else {
+        return Ok(());
+    };
+    if name != "RegExp" || callee_span.start != span.start || callee_span.end != span.start + 1 {
+        return Ok(());
+    }
+    let mut literals = arguments.iter().filter_map(|argument| match argument {
+        CallArgument::Expr(Expr::Literal(Literal::String { value, .. })) => Some(value.as_str()),
+        _ => None,
+    });
+    let Some(pattern) = literals.next() else {
+        return Ok(());
+    };
+    let flags = literals.next().unwrap_or("");
+    crate::regexp::validate_regexp_literal(pattern, flags)
 }

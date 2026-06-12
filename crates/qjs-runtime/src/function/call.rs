@@ -20,6 +20,20 @@ pub(crate) fn call_function(
     env: &mut CallEnv,
     is_construct: bool,
 ) -> Result<Value, RuntimeError> {
+    // An exotic Proxy whose target is callable dispatches through its `apply`
+    // trap (or forwards to the target). Construction routes through
+    // `construct_function`, so only the call path is handled here.
+    if let Value::Proxy(proxy) = &callee {
+        if is_construct {
+            return crate::proxy::proxy_construct(
+                proxy.clone(),
+                callee.clone(),
+                argument_values,
+                env,
+            );
+        }
+        return crate::proxy::proxy_apply(proxy.clone(), this_value, argument_values, env);
+    }
     let Value::Function(function) = callee.clone() else {
         return Err(RuntimeError {
             thrown: None,
@@ -243,6 +257,13 @@ pub(crate) fn construct_function(
     argument_values: Vec<Value>,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
+    // A constructor Proxy dispatches through its `construct` trap. The trap (or
+    // a forwarded target construction) produces the instance directly, so the
+    // ordinary receiver-allocation path below is skipped.
+    if let Value::Proxy(proxy) = &target {
+        ensure_constructor(&new_target)?;
+        return crate::proxy::proxy_construct(proxy.clone(), new_target, argument_values, env);
+    }
     ensure_constructor(&target)?;
     ensure_constructor(&new_target)?;
 
@@ -289,13 +310,11 @@ pub(crate) fn construct_function(
 }
 
 pub(crate) fn ensure_constructor(value: &Value) -> Result<(), RuntimeError> {
-    let Value::Function(function) = value else {
-        return Err(not_constructor_error());
-    };
-    if !function.constructable {
-        return Err(not_constructor_error());
+    match value {
+        Value::Function(function) if function.constructable => Ok(()),
+        Value::Proxy(proxy) if crate::proxy::proxy_is_constructor(proxy) => Ok(()),
+        _ => Err(not_constructor_error()),
     }
-    Ok(())
 }
 
 fn not_constructor_error() -> RuntimeError {

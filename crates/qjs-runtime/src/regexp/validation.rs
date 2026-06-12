@@ -1,7 +1,7 @@
 use super::unicode;
 use crate::RuntimeError;
 
-pub(super) fn validate_regexp_init(source: &str, flags: &str) -> Result<(), RuntimeError> {
+pub(crate) fn validate_regexp_init(source: &str, flags: &str) -> Result<(), RuntimeError> {
     validate_regexp_flags(flags)?;
     validate_regexp_pattern(source, flags.contains('u'))
 }
