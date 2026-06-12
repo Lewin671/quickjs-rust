@@ -223,6 +223,26 @@ pub(crate) enum IndexedWrite {
     NotIndexed,
 }
 
+/// Result of resolving a typed-array integer-indexed read/existence query.
+pub(crate) enum IndexedRead {
+    /// `key` was a canonical numeric index and the element exists.
+    Present(Box<Value>),
+    /// `key` was a canonical numeric index but not a valid element index.
+    Missing,
+    /// `key` is not a canonical numeric index; use ordinary property lookup.
+    NotIndexed,
+}
+
+pub(crate) fn indexed_element_value(object: &ObjectRef, key: &str) -> IndexedRead {
+    let Some(number) = canonical_numeric_index(key) else {
+        return IndexedRead::NotIndexed;
+    };
+    let Some(index) = valid_integer_index(object, number) else {
+        return IndexedRead::Missing;
+    };
+    IndexedRead::Present(Box::new(get_view_element(object, index)))
+}
+
 /// Performs the integer-indexed write for `key = value` on a branded typed
 /// array. Coercion of `value` always runs first (its observable side effects
 /// must happen even for out-of-range or detached writes). When `key` names a
@@ -250,17 +270,24 @@ pub(crate) fn set_indexed_element(
     if super::typed_array_buffer_detached(object) {
         return Ok(IndexedWrite::Handled);
     }
-    let length = typed_array_length(object);
-    if !number.is_finite()
+    let Some(index) = valid_integer_index(object, number) else {
+        return Ok(IndexedWrite::Handled);
+    };
+
+    set_view_elements(object, index, std::iter::once(coerced));
+    Ok(IndexedWrite::Handled)
+}
+
+fn valid_integer_index(object: &ObjectRef, number: f64) -> Option<usize> {
+    if super::typed_array_buffer_detached(object)
+        || !number.is_finite()
         || number.fract() != 0.0
         || number.is_sign_negative()
-        || (number as usize) >= length
     {
-        return Ok(IndexedWrite::Handled);
+        return None;
     }
-
-    set_view_elements(object, number as usize, std::iter::once(coerced));
-    Ok(IndexedWrite::Handled)
+    let index = number as usize;
+    (index < typed_array_length(object)).then_some(index)
 }
 
 // --- view-level element access ----------------------------------------------
@@ -273,6 +300,9 @@ pub(crate) fn get_view_element(object: &ObjectRef, index: usize) -> Value {
         return zero_value(native);
     };
     if array_buffer::is_detached(&buffer) {
+        return zero_value(native);
+    }
+    if index >= typed_array_length(object) {
         return zero_value(native);
     }
     let bytes = array_buffer::array_buffer_bytes(&buffer);
@@ -338,11 +368,19 @@ pub(crate) fn read_view_elements(object: &ObjectRef, start: usize, count: usize)
     let Some(buffer) = buffer else {
         return std::iter::repeat_n(zero_value(native), count).collect();
     };
+    let length = typed_array_length(object);
     let bytes = array_buffer::array_buffer_bytes(&buffer);
     let element = bytes_per_element(native);
     let base = typed_array_byte_offset(object);
     (0..count)
-        .map(|offset| read_element(native, &bytes, base + (start + offset) * element))
+        .map(|offset| {
+            let index = start + offset;
+            if index < length {
+                read_element(native, &bytes, base + index * element)
+            } else {
+                zero_value(native)
+            }
+        })
         .collect()
 }
 
@@ -362,6 +400,7 @@ where
     let native = typed_array_kind(object);
     let element = bytes_per_element(native);
     let base = typed_array_byte_offset(object);
+    let length = typed_array_length(object);
 
     let buffer =
         super::typed_array_buffer(object).filter(|buffer| !array_buffer::is_detached(buffer));
@@ -371,6 +410,9 @@ where
             let mut bytes = array_buffer::array_buffer_bytes(&buffer);
             for (offset, value) in values.into_iter().enumerate() {
                 let index = start + offset;
+                if index >= length {
+                    continue;
+                }
                 write_element(native, &mut bytes, base + index * element, &value);
                 object.define_property(index.to_string(), Property::data(value, true, true, false));
             }

@@ -102,6 +102,51 @@ fn construct_from_buffer_with_offset_and_length() {
 }
 
 #[test]
+fn resizable_buffer_views_track_effective_length() {
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(8, { maxByteLength: 16 }); \
+             let fixed = new Uint8Array(b, 0, 4); \
+             let tracking = new Uint8Array(b, 2); \
+             b.resize(3); \
+             fixed.length + ':' + fixed.byteLength + ':' + fixed.byteOffset + '|' \
+             + tracking.length + ':' + tracking.byteLength + ':' + tracking.byteOffset;"
+        ),
+        Ok(Value::String("0:0:0|1:1:2".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(8, { maxByteLength: 16 }); \
+             let a = new Uint8Array(b); a[0] = 7; b.resize(2); b.resize(4); \
+             a.length + ':' + a[0] + ':' + a[2];"
+        ),
+        Ok(Value::String("4:7:0".to_owned()))
+    );
+}
+
+#[test]
+fn array_copy_within_uses_resizable_typed_array_elements() {
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let a = new Uint8Array(b); a.set([0, 1, 2, 3]); \
+             Array.prototype.copyWithin.call(a, 1, 2); \
+             Array.prototype.join.call(a);"
+        ),
+        Ok(Value::String("0,2,3,3".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let fixed = new Uint8Array(b, 0, 4); fixed.set([0, 1, 2, 3]); \
+             b.resize(2); Array.prototype.copyWithin.call(fixed, 0, 1); \
+             fixed.length + ':' + fixed[0] + ':' + Array.prototype.join.call(new Uint8Array(b));"
+        ),
+        Ok(Value::String("0:undefined:0,1".to_owned()))
+    );
+}
+
+#[test]
 fn construct_from_buffer_validates_alignment_and_bounds() {
     // Misaligned offset.
     assert!(eval("new Uint32Array(new ArrayBuffer(8), 2);").is_err());

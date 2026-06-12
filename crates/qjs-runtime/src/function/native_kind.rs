@@ -47,6 +47,9 @@ pub(crate) enum NativeFunction {
     ArrayBuffer,
     ArrayBufferIsView,
     ArrayBufferPrototypeByteLength,
+    ArrayBufferPrototypeMaxByteLength,
+    ArrayBufferPrototypeResizable,
+    ArrayBufferPrototypeResize,
     ArrayBufferPrototypeSlice,
     TypedArray,
     // %TypedArray% static methods.

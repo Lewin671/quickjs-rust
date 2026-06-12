@@ -38,7 +38,18 @@ pub(crate) fn has_property_key(
         return has_symbol_property(value, env, key);
     };
     match value {
-        Value::Object(object) => Ok(object.contains_property(key)),
+        Value::Object(object) => {
+            if crate::typed_array::is_typed_array_object(&object) {
+                return match crate::typed_array::indexed_element_value(&object, key) {
+                    crate::typed_array::IndexedRead::Present(_) => Ok(true),
+                    crate::typed_array::IndexedRead::Missing => Ok(false),
+                    crate::typed_array::IndexedRead::NotIndexed => {
+                        Ok(object.contains_property(key))
+                    }
+                };
+            }
+            Ok(object.contains_property(key))
+        }
         Value::Map(map) => Ok(map.object().contains_property(key)),
         Value::Set(set) => Ok(set.object().contains_property(key)),
         Value::Proxy(proxy) => {
@@ -122,7 +133,16 @@ pub(crate) fn property_value_key_with_receiver(
         return symbol_property_value_with_receiver(target, key, receiver, env);
     };
     match target {
-        Value::Object(object) => property_descriptor_value(object.property(key), receiver, env),
+        Value::Object(object) => {
+            if crate::typed_array::is_typed_array_object(&object) {
+                match crate::typed_array::indexed_element_value(&object, key) {
+                    crate::typed_array::IndexedRead::Present(value) => return Ok(*value),
+                    crate::typed_array::IndexedRead::Missing => return Ok(Value::Undefined),
+                    crate::typed_array::IndexedRead::NotIndexed => {}
+                }
+            }
+            property_descriptor_value(object.property(key), receiver, env)
+        }
         Value::Map(map) => property_descriptor_value(map.object().property(key), receiver, env),
         Value::Set(set) => property_descriptor_value(set.object().property(key), receiver, env),
         Value::Proxy(proxy) => {

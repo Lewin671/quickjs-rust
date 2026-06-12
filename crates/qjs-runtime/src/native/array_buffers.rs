@@ -25,6 +25,15 @@ pub(super) fn call_array_buffer_native(
         NativeFunction::ArrayBufferPrototypeByteLength => {
             array_buffer::native_array_buffer_prototype_byte_length(this_value)?
         }
+        NativeFunction::ArrayBufferPrototypeMaxByteLength => {
+            array_buffer::native_array_buffer_prototype_max_byte_length(this_value)?
+        }
+        NativeFunction::ArrayBufferPrototypeResizable => {
+            array_buffer::native_array_buffer_prototype_resizable(this_value)?
+        }
+        NativeFunction::ArrayBufferPrototypeResize => {
+            array_buffer::native_array_buffer_prototype_resize(this_value, argument_values, env)?
+        }
         NativeFunction::ArrayBufferPrototypeSlice => {
             array_buffer::native_array_buffer_prototype_slice(this_value, argument_values, env)?
         }

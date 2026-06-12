@@ -13,6 +13,8 @@ pub(crate) const ARRAY_BUFFER_DATA_PROPERTY: &str = "\0ArrayBufferData";
 /// cleared and every accessor that reaches the buffer observes a detached
 /// state.
 pub(crate) const ARRAY_BUFFER_DETACHED_PROPERTY: &str = "\0ArrayBufferDetached";
+/// Internal slot holding the maximum byte length for resizable ArrayBuffers.
+pub(crate) const ARRAY_BUFFER_MAX_BYTE_LENGTH_PROPERTY: &str = "\0ArrayBufferMaxByteLength";
 const MAX_ARRAY_BUFFER_LENGTH: usize = 1_000_000;
 
 pub(crate) fn install_array_buffer(
@@ -42,6 +44,37 @@ pub(crate) fn install_array_buffer(
             false,
             true,
         ),
+    );
+    for (name, native) in [
+        (
+            "maxByteLength",
+            NativeFunction::ArrayBufferPrototypeMaxByteLength,
+        ),
+        ("resizable", NativeFunction::ArrayBufferPrototypeResizable),
+    ] {
+        array_buffer_prototype.define_property(
+            name.to_owned(),
+            Property::accessor(
+                Some(Value::Function(Function::new_native(
+                    Some(&format!("get {name}")),
+                    0,
+                    native,
+                    false,
+                ))),
+                None,
+                false,
+                true,
+            ),
+        );
+    }
+    array_buffer_prototype.define_non_enumerable(
+        "resize".to_owned(),
+        Value::Function(Function::new_native(
+            Some("resize"),
+            1,
+            NativeFunction::ArrayBufferPrototypeResize,
+            false,
+        )),
     );
     array_buffer_prototype.define_non_enumerable(
         "slice".to_owned(),
@@ -91,15 +124,21 @@ pub(crate) fn native_array_buffer(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    // `maxByteLength` (resizable/growable buffers) is not supported yet. The
-    // options object is still consumed per spec so a poisoned getter throws, and
-    // a present `maxByteLength` is rejected cleanly rather than silently ignored.
-    reject_resizable_options(argument_values.get(1).cloned(), env)?;
+    let max_byte_length = resizable_max_byte_length(argument_values.get(1).cloned(), env)?;
+    if max_byte_length.is_some_and(|max| max < length) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "RangeError: maxByteLength is smaller than ArrayBuffer length".to_owned(),
+        });
+    }
     let object = match this_value {
         Value::Object(object) => object,
         _ => ObjectRef::with_prototype(HashMap::new(), function_prototype(function)),
     };
     define_array_buffer_data(&object, vec![0; length]);
+    if let Some(max) = max_byte_length {
+        define_array_buffer_max_byte_length(&object, max);
+    }
     Ok(Value::Object(object))
 }
 
@@ -122,6 +161,59 @@ pub(crate) fn native_array_buffer_prototype_byte_length(
         return Ok(Value::Number(0.0));
     }
     Ok(Value::Number(array_buffer_bytes(&object).len() as f64))
+}
+
+pub(crate) fn native_array_buffer_prototype_max_byte_length(
+    this_value: Value,
+) -> Result<Value, RuntimeError> {
+    let object = array_buffer_object(&this_value)?;
+    if is_detached(&object) {
+        return Ok(Value::Number(0.0));
+    }
+    Ok(Value::Number(
+        array_buffer_max_byte_length(&object).unwrap_or_else(|| array_buffer_bytes(&object).len())
+            as f64,
+    ))
+}
+
+pub(crate) fn native_array_buffer_prototype_resizable(
+    this_value: Value,
+) -> Result<Value, RuntimeError> {
+    let object = array_buffer_object(&this_value)?;
+    Ok(Value::Boolean(
+        !is_detached(&object) && is_resizable(&object),
+    ))
+}
+
+pub(crate) fn native_array_buffer_prototype_resize(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let object = array_buffer_object(&this_value)?;
+    if is_detached(&object) {
+        return Err(detached_error());
+    }
+    let Some(max_byte_length) = array_buffer_max_byte_length(&object) else {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: ArrayBuffer is not resizable".to_owned(),
+        });
+    };
+    let new_length = to_index(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
+    if new_length > max_byte_length {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "RangeError: ArrayBuffer resize length exceeds maxByteLength".to_owned(),
+        });
+    }
+    let mut bytes = array_buffer_bytes(&object);
+    bytes.resize(new_length, 0);
+    set_array_buffer_bytes(&object, bytes);
+    Ok(Value::Undefined)
 }
 
 pub(crate) fn native_array_buffer_prototype_slice(
@@ -168,24 +260,24 @@ pub(crate) fn native_array_buffer_prototype_slice(
     Ok(Value::Object(result))
 }
 
-fn reject_resizable_options(options: Option<Value>, env: &mut CallEnv) -> Result<(), RuntimeError> {
+fn resizable_max_byte_length(
+    options: Option<Value>,
+    env: &mut CallEnv,
+) -> Result<Option<usize>, RuntimeError> {
     let Some(options) = options else {
-        return Ok(());
+        return Ok(None);
     };
     if matches!(options, Value::Undefined) {
-        return Ok(());
+        return Ok(None);
     }
     if !is_object_value(&options) {
-        return Ok(());
+        return Ok(None);
     }
     let max = property_value(options, "maxByteLength", env)?;
     if matches!(max, Value::Undefined) {
-        return Ok(());
+        return Ok(None);
     }
-    Err(RuntimeError {
-        thrown: None,
-        message: "TypeError: resizable ArrayBuffer (maxByteLength) is not supported".to_owned(),
-    })
+    Ok(Some(to_index(max, env)?))
 }
 
 fn validate_species_constructor(value: Value, env: &mut CallEnv) -> Result<(), RuntimeError> {
@@ -217,6 +309,13 @@ fn define_array_buffer_data(object: &ObjectRef, bytes: Vec<u8>) {
     object.set_to_string_tag("ArrayBuffer");
 }
 
+fn define_array_buffer_max_byte_length(object: &ObjectRef, max_byte_length: usize) {
+    object.define_property(
+        ARRAY_BUFFER_MAX_BYTE_LENGTH_PROPERTY.to_owned(),
+        Property::non_enumerable(Value::Number(max_byte_length as f64)),
+    );
+}
+
 /// Whether `object` carries the `ArrayBuffer` brand (data slot or detached
 /// marker), used for brand checks and `ArrayBuffer.isView` consumers.
 pub(crate) fn is_array_buffer_object(object: &ObjectRef) -> bool {
@@ -236,6 +335,20 @@ pub(crate) fn array_buffer_object(value: &Value) -> Result<ObjectRef, RuntimeErr
 pub(crate) fn is_detached(object: &ObjectRef) -> bool {
     object.has_own_property(ARRAY_BUFFER_DETACHED_PROPERTY)
         || !object.has_own_property(ARRAY_BUFFER_DATA_PROPERTY)
+}
+
+pub(crate) fn is_resizable(object: &ObjectRef) -> bool {
+    object.has_own_property(ARRAY_BUFFER_MAX_BYTE_LENGTH_PROPERTY)
+}
+
+pub(crate) fn array_buffer_max_byte_length(object: &ObjectRef) -> Option<usize> {
+    match object.own_property(ARRAY_BUFFER_MAX_BYTE_LENGTH_PROPERTY) {
+        Some(Property {
+            value: Value::Number(length),
+            ..
+        }) => Some(length as usize),
+        _ => None,
+    }
 }
 
 /// The backing bytes of a (non-detached) `ArrayBuffer`.
@@ -405,12 +518,27 @@ mod tests {
     }
 
     #[test]
-    fn array_buffer_max_byte_length_is_rejected() {
-        assert!(eval("new ArrayBuffer(8, { maxByteLength: 16 });").is_err());
+    fn array_buffer_resize_and_resizable_accessors() {
+        assert_eq!(
+            eval(
+                "let b = new ArrayBuffer(8, { maxByteLength: 16 }); \
+                 b.resizable + ':' + b.byteLength + ':' + b.maxByteLength;"
+            ),
+            Ok(Value::String("true:8:16".to_owned()))
+        );
+        assert_eq!(
+            eval(
+                "let b = new ArrayBuffer(8, { maxByteLength: 16 }); \
+                 b.resize(12); b.byteLength + ':' + new Uint8Array(b)[10];"
+            ),
+            Ok(Value::String("12:0".to_owned()))
+        );
+        assert!(eval("new ArrayBuffer(8, { maxByteLength: 4 });").is_err());
+        assert!(eval("let b = new ArrayBuffer(8); b.resize(4);").is_err());
         // A plain or undefined options argument must still succeed.
         assert_eq!(
-            eval("new ArrayBuffer(8, {}).byteLength;"),
-            Ok(Value::Number(8.0))
+            eval("let b = new ArrayBuffer(8, {}); b.resizable + ':' + b.maxByteLength;"),
+            Ok(Value::String("false:8".to_owned()))
         );
         assert_eq!(
             eval("new ArrayBuffer(8, undefined).byteLength;"),

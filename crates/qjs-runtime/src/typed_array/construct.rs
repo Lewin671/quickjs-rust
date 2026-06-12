@@ -8,9 +8,9 @@ use crate::{
 use super::element::{read_elements, write_element};
 use super::{
     TYPED_ARRAY_BUFFER_PROPERTY, TYPED_ARRAY_BYTE_OFFSET_PROPERTY, TYPED_ARRAY_KIND_PROPERTY,
-    TYPED_ARRAY_LENGTH_PROPERTY, bytes_per_element, coerce_element, is_big_int_kind,
-    is_typed_array_object, to_typed_array_length, typed_array_kind, typed_array_length,
-    typed_array_name,
+    TYPED_ARRAY_LENGTH_PROPERTY, TYPED_ARRAY_LENGTH_TRACKING_PROPERTY, bytes_per_element,
+    coerce_element, is_big_int_kind, is_typed_array_object, to_typed_array_length,
+    typed_array_kind, typed_array_length, typed_array_name,
 };
 use crate::CallEnv;
 
@@ -88,7 +88,7 @@ fn initialize_from_length(
         Value::Number(0.0)
     };
     let values = std::iter::repeat_n(zero, length).collect();
-    install_view(object, native, buffer, 0, length, values);
+    install_view(object, native, buffer, 0, length, false, values);
     Ok(())
 }
 
@@ -117,7 +117,7 @@ fn initialize_from_typed_array(
         values.push(coerce_element(native, element, env)?);
     }
     let buffer = array_buffer_for(length * bytes_per_element(native), env);
-    install_view(object, native, buffer, 0, length, values);
+    install_view(object, native, buffer, 0, length, false, values);
     Ok(())
 }
 
@@ -150,6 +150,7 @@ fn initialize_from_buffer(
     }
     let buffer_byte_length = array_buffer::array_buffer_bytes(&buffer).len();
 
+    let length_tracking = explicit_length.is_none() && array_buffer::is_resizable(&buffer);
     let (length, byte_length) = match explicit_length {
         Some(length) => {
             let byte_length = length
@@ -179,7 +180,15 @@ fn initialize_from_buffer(
     let bytes = array_buffer::array_buffer_bytes(&buffer);
     let values = read_elements(native, &bytes, offset, length);
     let _ = byte_length;
-    install_view(object, native, buffer, offset, length, values);
+    install_view(
+        object,
+        native,
+        buffer,
+        offset,
+        length,
+        length_tracking,
+        values,
+    );
     Ok(())
 }
 
@@ -209,7 +218,7 @@ fn initialize_from_object(
     }
     let length = values.len();
     let buffer = array_buffer_for(length * bytes_per_element(native), env);
-    install_view(object, native, buffer, 0, length, values);
+    install_view(object, native, buffer, 0, length, false, values);
     Ok(())
 }
 
@@ -232,7 +241,7 @@ pub(crate) fn create_with_values(
     let object = ObjectRef::with_prototype(HashMap::new(), prototype);
     let length = values.len();
     let buffer = array_buffer_for(length * bytes_per_element(native), env);
-    install_view(&object, native, buffer, 0, length, values);
+    install_view(&object, native, buffer, 0, length, false, values);
     object
 }
 
@@ -260,6 +269,7 @@ fn install_view(
     buffer: ObjectRef,
     byte_offset: usize,
     length: usize,
+    length_tracking: bool,
     values: Vec<Value>,
 ) {
     let name = typed_array_name(native);
@@ -279,6 +289,10 @@ fn install_view(
     object.define_property(
         TYPED_ARRAY_LENGTH_PROPERTY.to_owned(),
         Property::non_enumerable(Value::Number(length as f64)),
+    );
+    object.define_property(
+        TYPED_ARRAY_LENGTH_TRACKING_PROPERTY.to_owned(),
+        Property::non_enumerable(Value::Boolean(length_tracking)),
     );
     // Persist element bytes into the buffer and materialize index properties.
     let element = bytes_per_element(native);

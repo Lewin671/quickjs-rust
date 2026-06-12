@@ -12,7 +12,7 @@ mod iteration;
 mod ordering;
 
 pub(crate) use construct::{native_typed_array, native_typed_array_from, native_typed_array_of};
-pub(crate) use element::{IndexedWrite, set_indexed_element};
+pub(crate) use element::{IndexedRead, IndexedWrite, indexed_element_value, set_indexed_element};
 pub(crate) use iteration::*;
 pub(crate) use ordering::*;
 
@@ -28,6 +28,8 @@ pub(crate) const TYPED_ARRAY_BUFFER_PROPERTY: &str = "\0TypedArrayBuffer";
 pub(crate) const TYPED_ARRAY_BYTE_OFFSET_PROPERTY: &str = "\0TypedArrayByteOffset";
 /// Internal slot holding the element count of the view.
 pub(crate) const TYPED_ARRAY_LENGTH_PROPERTY: &str = "\0TypedArrayArrayLength";
+/// Internal slot marking views whose length tracks a resizable ArrayBuffer.
+pub(crate) const TYPED_ARRAY_LENGTH_TRACKING_PROPERTY: &str = "\0TypedArrayLengthTracking";
 
 /// Whether `object` carries the TypedArray brand.
 pub(crate) fn is_typed_array_object(object: &ObjectRef) -> bool {
@@ -322,6 +324,9 @@ pub(crate) fn native_typed_array_prototype_byte_offset(
     if typed_array_buffer_detached(&object) {
         return Ok(Value::Number(0.0));
     }
+    if typed_array_is_out_of_bounds(&object) {
+        return Ok(Value::Number(0.0));
+    }
     Ok(Value::Number(typed_array_byte_offset(&object) as f64))
 }
 
@@ -384,12 +389,75 @@ pub(crate) fn typed_array_kind(object: &ObjectRef) -> NativeFunction {
 }
 
 pub(crate) fn typed_array_length(object: &ObjectRef) -> usize {
-    match object.own_property(TYPED_ARRAY_LENGTH_PROPERTY) {
+    let fixed_length = match object.own_property(TYPED_ARRAY_LENGTH_PROPERTY) {
         Some(Property {
             value: Value::Number(length),
             ..
         }) => length as usize,
-        _ => 0,
+        _ => return 0,
+    };
+    let Some(buffer) = typed_array_buffer(object) else {
+        return fixed_length;
+    };
+    if array_buffer::is_detached(&buffer) {
+        return 0;
+    }
+    let buffer_byte_length = array_buffer::array_buffer_bytes(&buffer).len();
+    let offset = typed_array_byte_offset(object);
+    let element = bytes_per_element(typed_array_kind(object));
+    if typed_array_is_length_tracking(object) {
+        if offset > buffer_byte_length {
+            return 0;
+        }
+        return (buffer_byte_length - offset) / element;
+    }
+    let Some(byte_length) = fixed_length.checked_mul(element) else {
+        return 0;
+    };
+    if offset
+        .checked_add(byte_length)
+        .is_none_or(|end| end > buffer_byte_length)
+    {
+        0
+    } else {
+        fixed_length
+    }
+}
+
+pub(crate) fn typed_array_is_length_tracking(object: &ObjectRef) -> bool {
+    matches!(
+        object.own_property(TYPED_ARRAY_LENGTH_TRACKING_PROPERTY),
+        Some(Property {
+            value: Value::Boolean(true),
+            ..
+        })
+    )
+}
+
+pub(crate) fn typed_array_is_out_of_bounds(object: &ObjectRef) -> bool {
+    let Some(buffer) = typed_array_buffer(object) else {
+        return false;
+    };
+    if array_buffer::is_detached(&buffer) {
+        return false;
+    }
+    if typed_array_is_length_tracking(object) {
+        typed_array_byte_offset(object) > array_buffer::array_buffer_bytes(&buffer).len()
+    } else {
+        let fixed_length = match object.own_property(TYPED_ARRAY_LENGTH_PROPERTY) {
+            Some(Property {
+                value: Value::Number(length),
+                ..
+            }) => length as usize,
+            _ => 0,
+        };
+        let element = bytes_per_element(typed_array_kind(object));
+        let byte_length = fixed_length.checked_mul(element);
+        byte_length.is_none_or(|byte_length| {
+            typed_array_byte_offset(object)
+                .checked_add(byte_length)
+                .is_none_or(|end| end > array_buffer::array_buffer_bytes(&buffer).len())
+        })
     }
 }
 

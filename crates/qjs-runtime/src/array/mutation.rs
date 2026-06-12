@@ -93,6 +93,13 @@ pub(super) fn set_array_like_property(
 ) -> Result<(), RuntimeError> {
     match receiver.clone() {
         Value::Object(object) => {
+            if crate::typed_array::is_typed_array_object(&object) {
+                if let crate::typed_array::IndexedWrite::Handled =
+                    crate::typed_array::set_indexed_element(&object, &key, value.clone(), env)?
+                {
+                    return Ok(());
+                }
+            }
             validate_copy_within_set(object.property(&key), receiver, value.clone(), env)?;
             object.set(key, value);
             Ok(())

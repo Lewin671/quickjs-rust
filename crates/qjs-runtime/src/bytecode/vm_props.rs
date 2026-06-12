@@ -72,7 +72,18 @@ impl Vm<'_> {
 
     fn try_direct_get_string(&self, object: &Value, key: &str) -> Option<Value> {
         match object {
-            Value::Object(object) => data_property_value(object.property(key)),
+            Value::Object(object) => {
+                if crate::typed_array::is_typed_array_object(object) {
+                    match crate::typed_array::indexed_element_value(object, key) {
+                        crate::typed_array::IndexedRead::Present(value) => return Some(*value),
+                        crate::typed_array::IndexedRead::Missing => {
+                            return Some(Value::Undefined);
+                        }
+                        crate::typed_array::IndexedRead::NotIndexed => {}
+                    }
+                }
+                data_property_value(object.property(key))
+            }
             Value::Map(map) => data_property_value(map.object().property(key)),
             Value::Set(set) => data_property_value(set.object().property(key)),
             Value::Array(elements) => {
