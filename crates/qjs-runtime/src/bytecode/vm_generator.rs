@@ -38,6 +38,15 @@ pub(crate) struct GeneratorStart {
     pub(crate) env: CallEnv,
     pub(crate) captured_env: Rc<RefCell<HashMap<String, Value>>>,
     pub(crate) refresh_captured_slots_on_resume: bool,
+    pub(crate) capture_writeback: Option<CaptureWriteback>,
+}
+
+/// The original closure capture cell an async activation must update when it
+/// mutates bindings captured from an enclosing function.
+#[derive(Clone)]
+pub(crate) struct CaptureWriteback {
+    pub(crate) target: Rc<RefCell<HashMap<String, Value>>>,
+    pub(crate) names: Vec<String>,
 }
 
 /// A snapshot of a generator body's VM state, taken at a `yield`.
@@ -49,6 +58,7 @@ pub(crate) struct GeneratorSnapshot {
     env: CallEnv,
     captured_env: Rc<RefCell<HashMap<String, Value>>>,
     refresh_captured_slots_on_resume: bool,
+    capture_writeback: Option<CaptureWriteback>,
     sloppy_global_names: Vec<String>,
     try_stack: Vec<TryFrame>,
     /// Whether the suspension is inside a `yield*` delegation. When set, a
@@ -151,6 +161,31 @@ impl Vm<'_> {
         }
     }
 
+    /// Writes this activation's current captured binding values back into the
+    /// closure environment it was called from. Ordinary functions do this at
+    /// return in `function::call`; async functions complete later through the
+    /// generator driver, so the write-back has to travel with the resumable
+    /// state.
+    fn write_back_function_captures(&self, writeback: Option<&CaptureWriteback>) {
+        let Some(writeback) = writeback else {
+            return;
+        };
+        let mut target = writeback.target.borrow_mut();
+        for name in &writeback.names {
+            if crate::function::is_internal_binding_name(name)
+                || matches!(
+                    name.as_str(),
+                    crate::GLOBAL_THIS_BINDING | "this" | "arguments"
+                )
+            {
+                continue;
+            }
+            if let Some(value) = self.binding_value(name) {
+                target.insert(name.clone(), value);
+            }
+        }
+    }
+
     /// Reads a binding by name from the body's current locals (preferred) or
     /// frame environment.
     fn binding_value(&self, name: &str) -> Option<Value> {
@@ -168,6 +203,7 @@ impl Vm<'_> {
         bytecode: Rc<Bytecode>,
         delegating: bool,
         refresh_captured_slots_on_resume: bool,
+        capture_writeback: Option<CaptureWriteback>,
     ) -> GeneratorSnapshot {
         GeneratorSnapshot {
             bytecode,
@@ -177,6 +213,7 @@ impl Vm<'_> {
             env: self.env,
             captured_env: self.captured_env,
             refresh_captured_slots_on_resume,
+            capture_writeback,
             sloppy_global_names: self.sloppy_global_names,
             try_stack: self.try_stack,
             delegating,
@@ -198,18 +235,26 @@ pub(crate) fn start_suspended_at_body(
         env,
         captured_env,
         refresh_captured_slots_on_resume,
+        capture_writeback,
     } = start;
     let mut vm = Vm::new_with_globals_and_captures(&bytecode, env, captured_env);
+    vm.capture_writeback = capture_writeback.clone();
     vm.stop_at_prologue = true;
     vm.refresh_from_caller(caller_env);
     let result = vm.run_completion();
     vm.propagate_to_caller(caller_env);
+    vm.write_back_function_captures(capture_writeback.as_ref());
     match result {
         // Suspended exactly at the prologue boundary: capture the body-start
         // state for the first resume.
-        Ok(Completion::PrologueEnd) => Ok(GeneratorState::SuspendedYield(Box::new(
-            vm.into_snapshot(bytecode.clone(), false, refresh_captured_slots_on_resume),
-        ))),
+        Ok(Completion::PrologueEnd) => {
+            Ok(GeneratorState::SuspendedYield(Box::new(vm.into_snapshot(
+                bytecode.clone(),
+                false,
+                refresh_captured_slots_on_resume,
+                capture_writeback,
+            ))))
+        }
         // A function with no executable prologue suspension (should not happen,
         // since every compiled function emits the marker) — treat a clean return
         // as an empty body that has already finished is wrong here, so surface a
@@ -232,8 +277,10 @@ fn run_from_start(
         env,
         captured_env,
         refresh_captured_slots_on_resume,
+        capture_writeback,
     } = start;
     let mut vm = Vm::new_with_globals_and_captures(&bytecode, env, captured_env);
+    vm.capture_writeback = capture_writeback.clone();
     vm.refresh_from_caller(caller_env);
     let result = vm.run_completion();
     drive(
@@ -242,6 +289,7 @@ fn run_from_start(
         &bytecode,
         caller_env,
         refresh_captured_slots_on_resume,
+        capture_writeback,
     )
 }
 
@@ -253,11 +301,13 @@ fn run_from_yield(
 ) -> Result<(GeneratorState, GeneratorOutcome), RuntimeError> {
     let bytecode = snapshot.bytecode.clone();
     let mut vm = Vm::new_with_globals_and_captures(&bytecode, snapshot.env, snapshot.captured_env);
+    vm.capture_writeback = snapshot.capture_writeback.clone();
     vm.ip = snapshot.ip;
     vm.stack = snapshot.stack;
     vm.locals = snapshot.locals;
     vm.sloppy_global_names = snapshot.sloppy_global_names;
     vm.try_stack = snapshot.try_stack;
+    let capture_writeback = snapshot.capture_writeback;
     if snapshot.refresh_captured_slots_on_resume {
         vm.refresh_from_captured_env();
     }
@@ -281,6 +331,7 @@ fn run_from_yield(
             &bytecode,
             caller_env,
             refresh_captured_slots_on_resume,
+            capture_writeback,
         );
     }
 
@@ -298,6 +349,7 @@ fn run_from_yield(
         Resume::Return(value) => match vm.return_value(value) {
             Ok(Some(returned)) => {
                 vm.propagate_to_caller(caller_env);
+                vm.write_back_function_captures(capture_writeback.as_ref());
                 return Ok((
                     GeneratorState::Completed,
                     GeneratorOutcome::Return(returned),
@@ -310,6 +362,7 @@ fn run_from_yield(
     if let Err(error) = started {
         // The injected throw/return had no handler: the generator is done.
         vm.propagate_to_caller(caller_env);
+        vm.write_back_function_captures(capture_writeback.as_ref());
         return Err(error);
     }
     let result = vm.run_completion();
@@ -319,6 +372,7 @@ fn run_from_yield(
         &bytecode,
         caller_env,
         refresh_captured_slots_on_resume,
+        capture_writeback,
     )
 }
 
@@ -332,12 +386,18 @@ fn drive(
     bytecode: &Rc<Bytecode>,
     caller_env: &mut CallEnv,
     refresh_captured_slots_on_resume: bool,
+    capture_writeback: Option<CaptureWriteback>,
 ) -> Result<(GeneratorState, GeneratorOutcome), RuntimeError> {
     vm.propagate_to_caller(caller_env);
+    vm.write_back_function_captures(capture_writeback.as_ref());
     match result {
         Ok(Completion::Yield(value)) => {
-            let snapshot =
-                vm.into_snapshot(bytecode.clone(), false, refresh_captured_slots_on_resume);
+            let snapshot = vm.into_snapshot(
+                bytecode.clone(),
+                false,
+                refresh_captured_slots_on_resume,
+                capture_writeback,
+            );
             Ok((
                 GeneratorState::SuspendedYield(Box::new(snapshot)),
                 GeneratorOutcome::Yield(value),
@@ -348,8 +408,12 @@ fn drive(
             // delivers the fulfillment value (or injects a throw) at the await
             // site. Only the outcome tag differs, so the driver routes the
             // suspension to a promise reaction instead of to a consumer.
-            let snapshot =
-                vm.into_snapshot(bytecode.clone(), false, refresh_captured_slots_on_resume);
+            let snapshot = vm.into_snapshot(
+                bytecode.clone(),
+                false,
+                refresh_captured_slots_on_resume,
+                capture_writeback,
+            );
             Ok((
                 GeneratorState::SuspendedYield(Box::new(snapshot)),
                 GeneratorOutcome::Await(value),
@@ -358,8 +422,12 @@ fn drive(
         Ok(Completion::YieldDelegate(value)) => {
             // Suspended inside a `yield*`: the yielded value is the inner
             // iterator's result object, returned to the outer caller unwrapped.
-            let snapshot =
-                vm.into_snapshot(bytecode.clone(), true, refresh_captured_slots_on_resume);
+            let snapshot = vm.into_snapshot(
+                bytecode.clone(),
+                true,
+                refresh_captured_slots_on_resume,
+                capture_writeback,
+            );
             Ok((
                 GeneratorState::SuspendedYield(Box::new(snapshot)),
                 GeneratorOutcome::YieldDelegate(value),

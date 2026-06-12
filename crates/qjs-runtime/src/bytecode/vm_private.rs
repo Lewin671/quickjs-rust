@@ -173,6 +173,7 @@ impl Vm<'_> {
             home_object: Some(home_object),
             super_constructor: None,
             captured_env: Rc::new(RefCell::new(method_env)),
+            capture_writeback: self.capture_writeback.clone(),
         });
         if def.is_generator && def.is_async {
             crate::async_generator::wire_async_generator_function_intrinsics(&function, &self.env);
@@ -219,6 +220,7 @@ impl Vm<'_> {
             home_object: Some(home_object),
             super_constructor: None,
             captured_env: Rc::new(RefCell::new(field_env)),
+            capture_writeback: self.capture_writeback.clone(),
         })
     }
 

@@ -10,7 +10,7 @@ use qjs_ast::{FunctionParams, Stmt};
 use crate::CallEnv;
 use crate::{
     Bytecode, NativeFunction, ObjectRef, Property, PropertyKey, Prototype, Value,
-    bytecode::compile_function_body,
+    bytecode::{CaptureWriteback, compile_function_body},
     function::{collect_function_local_names, is_strict_function_body},
     function_intrinsic_prototype, object_prototype,
 };
@@ -58,6 +58,7 @@ pub struct Function {
     /// Environment captured when the function was created.
     pub env: HashMap<String, Value>,
     pub(crate) captured_env: Rc<RefCell<HashMap<String, Value>>>,
+    pub(crate) capture_writeback: Option<CaptureWriteback>,
     pub(crate) local_names: Vec<String>,
     pub(crate) bytecode: Option<Rc<Bytecode>>,
     pub(crate) native: Option<NativeFunction>,
@@ -133,6 +134,7 @@ pub(crate) struct CompiledUserFunction {
     pub(crate) home_object: Option<Value>,
     pub(crate) super_constructor: Option<Value>,
     pub(crate) captured_env: Rc<RefCell<HashMap<String, Value>>>,
+    pub(crate) capture_writeback: Option<CaptureWriteback>,
 }
 
 #[derive(Clone, Copy)]
@@ -231,6 +233,7 @@ impl Function {
             params,
             env,
             captured_env,
+            capture_writeback: None,
             local_names,
             bytecode: Some(bytecode),
             native: None,
@@ -286,6 +289,7 @@ impl Function {
             home_object,
             super_constructor,
             captured_env,
+            capture_writeback,
         } = compiled;
         let prototype = ObjectRef::with_prototype(
             HashMap::new(),
@@ -296,6 +300,7 @@ impl Function {
             params,
             env,
             captured_env,
+            capture_writeback,
             local_names,
             bytecode: Some(bytecode),
             native: None,
@@ -383,6 +388,7 @@ impl Function {
             params: FunctionParams::positional(vec![String::new(); length]),
             env: HashMap::new(),
             captured_env: Rc::new(RefCell::new(HashMap::new())),
+            capture_writeback: None,
             local_names: Vec::new(),
             bytecode: None,
             native: None,
@@ -430,6 +436,7 @@ impl Function {
             params: FunctionParams::positional(params),
             env,
             captured_env,
+            capture_writeback: None,
             local_names: Vec::new(),
             bytecode: None,
             native,

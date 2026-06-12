@@ -109,6 +109,12 @@ pub(crate) fn call_function(
                 is_construct,
             );
             let activation_captured_env = Rc::new(RefCell::new(function_env.env.snapshot_locals()));
+            let capture_writeback = (!function_env.function_capture_names.is_empty()).then(|| {
+                crate::bytecode::CaptureWriteback {
+                    target: Rc::clone(&function.captured_env),
+                    names: function_env.function_capture_names,
+                }
+            });
             return crate::generator::make_generator_object(
                 &function,
                 crate::bytecode::GeneratorStart {
@@ -116,6 +122,7 @@ pub(crate) fn call_function(
                     env: function_env.env,
                     captured_env: activation_captured_env,
                     refresh_captured_slots_on_resume: true,
+                    capture_writeback,
                 },
                 env,
             );
@@ -138,6 +145,7 @@ pub(crate) fn call_function(
             return Ok(crate::async_function::call_async_function(
                 &function,
                 function_env.env,
+                function_env.function_capture_names,
                 env,
             ));
         }
@@ -165,7 +173,18 @@ pub(crate) fn call_function(
         } else {
             Rc::new(RefCell::new(HashMap::new()))
         };
-        let result = eval_function_bytecode(bytecode, function_env.env, activation_captured_env);
+        let activation_writeback = (!function_env.function_capture_names.is_empty()).then(|| {
+            crate::bytecode::CaptureWriteback {
+                target: Rc::clone(&function.captured_env),
+                names: function_env.function_capture_names.clone(),
+            }
+        });
+        let result = eval_function_bytecode(
+            bytecode,
+            function_env.env,
+            activation_captured_env,
+            activation_writeback,
+        );
         propagate_function_captures(&function, &function_env.function_capture_names, &result);
         propagate_caller_bindings(env, &function_env.caller_binding_names, &result);
         // A derived constructor implicitly returns its (super-bound) `this`
@@ -804,11 +823,22 @@ fn propagate_function_captures(
     function_capture_names: &[String],
     result: &crate::bytecode::FunctionBytecodeResult<'_>,
 ) {
-    if function_capture_names.is_empty() {
+    write_function_capture_values(&function.captured_env, function_capture_names, result);
+    if let Some(writeback) = &function.capture_writeback {
+        write_function_capture_values(&writeback.target, &writeback.names, result);
+    }
+}
+
+fn write_function_capture_values(
+    target: &Rc<RefCell<HashMap<String, Value>>>,
+    names: &[String],
+    result: &crate::bytecode::FunctionBytecodeResult<'_>,
+) {
+    if names.is_empty() {
         return;
     }
-    let mut captured_env = function.captured_env.borrow_mut();
-    for name in function_capture_names {
+    let mut captured_env = target.borrow_mut();
+    for name in names {
         if !is_call_frame_binding(name)
             && let Some(final_value) = result.binding(name)
         {

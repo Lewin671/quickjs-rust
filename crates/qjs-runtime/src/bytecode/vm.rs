@@ -11,6 +11,7 @@ use crate::{
 use super::ir::{Bytecode, Op};
 use super::util::{stack_underflow, typeof_value};
 use super::vm_call::{insert_scope_call_bindings, user_bytecode_function};
+use super::vm_generator::CaptureWriteback;
 use super::vm_iter::DelegateStep;
 use super::vm_props::{
     array_index_from_number, get_property_key, property_set_uses_setter, set_property_key,
@@ -40,8 +41,10 @@ pub(super) fn eval_function_bytecode(
     bytecode: &Bytecode,
     env: CallEnv,
     captured_env: Rc<RefCell<HashMap<String, Value>>>,
+    capture_writeback: Option<CaptureWriteback>,
 ) -> FunctionBytecodeResult<'_> {
     let mut vm = Vm::new_with_globals_and_captures(bytecode, env, captured_env);
+    vm.capture_writeback = capture_writeback;
     let value = vm.run();
     FunctionBytecodeResult {
         value,
@@ -69,6 +72,7 @@ pub(super) struct Vm<'a> {
     /// host reachable for a dynamic `import()` at any depth.
     pub(super) module_host: Option<crate::module::ModuleHostRef>,
     pub(super) captured_env: Rc<RefCell<HashMap<String, Value>>>,
+    pub(super) capture_writeback: Option<CaptureWriteback>,
     pub(super) sloppy_global_names: Vec<String>,
     pub(super) try_stack: Vec<TryFrame>,
     pub(super) pending_throw: Option<Value>,
@@ -140,6 +144,7 @@ impl<'a> Vm<'a> {
             realm,
             module_host,
             captured_env,
+            capture_writeback: None,
             sloppy_global_names: Vec::new(),
             try_stack: Vec::new(),
             pending_throw: None,
@@ -370,6 +375,7 @@ impl<'a> Vm<'a> {
                         home_object: None,
                         super_constructor: None,
                         captured_env: self.captured_env.clone(),
+                        capture_writeback: self.capture_writeback.clone(),
                     });
                     if is_generator && is_async {
                         crate::async_generator::wire_async_generator_function_intrinsics(

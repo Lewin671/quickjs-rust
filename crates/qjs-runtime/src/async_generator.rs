@@ -749,6 +749,7 @@ pub(crate) fn call_async_generator_function(
             env: function_env,
             captured_env: captured,
             refresh_captured_slots_on_resume: true,
+            capture_writeback: None,
         },
         env,
     )

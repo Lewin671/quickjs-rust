@@ -133,6 +133,7 @@ fn eval_async_module_body(bytecode: &Bytecode, mut env: CallEnv) -> Result<CallE
             env: function_env,
             captured_env: Rc::clone(&captured_env),
             refresh_captured_slots_on_resume: false,
+            capture_writeback: None,
         })));
 
     let result_promise = crate::async_function::drive_async_module(&context, &mut env);

@@ -8,7 +8,7 @@ pub(super) enum SetRecord {
     Set(SetRef),
     Map(MapRef),
     SetLike {
-        object: Value,
+        object: Box<Value>,
         size: f64,
         has: Box<Value>,
         keys: Box<Value>,
@@ -39,7 +39,7 @@ impl SetRecord {
             Self::SetLike { object, has, .. } => {
                 let result = call_function(
                     (**has).clone(),
-                    object.clone(),
+                    (**object).clone(),
                     vec![value.clone()],
                     env,
                     false,
@@ -55,7 +55,7 @@ impl SetRecord {
             Self::Map(map) => Ok(map.entries().into_iter().map(|(key, _)| key).collect()),
             Self::SetLike { object, keys, .. } => {
                 let values =
-                    call_function((**keys).clone(), object.clone(), Vec::new(), env, false)?;
+                    call_function((**keys).clone(), (**object).clone(), Vec::new(), env, false)?;
                 iterator_values(values, "Set-like keys", env)
             }
         }
@@ -71,7 +71,7 @@ impl SetRecord {
             Self::Map(map) => Ok(map.entries().into_iter().any(|(key, _)| set.has(&key))),
             Self::SetLike { object, keys, .. } => {
                 let values =
-                    call_function((**keys).clone(), object.clone(), Vec::new(), env, false)?;
+                    call_function((**keys).clone(), (**object).clone(), Vec::new(), env, false)?;
                 iterator_has_value_in_set(values, set, env)
             }
         }
@@ -83,7 +83,7 @@ impl SetRecord {
             Self::Map(map) => Ok(map.entries().into_iter().all(|(key, _)| set.has(&key))),
             Self::SetLike { object, keys, .. } => {
                 let values =
-                    call_function((**keys).clone(), object.clone(), Vec::new(), env, false)?;
+                    call_function((**keys).clone(), (**object).clone(), Vec::new(), env, false)?;
                 iterator_all_values_in_set(values, set, env)
             }
         }
@@ -114,7 +114,7 @@ impl SetRecord {
             });
         }
         Ok(Self::SetLike {
-            object,
+            object: Box::new(object),
             size,
             has: Box::new(has),
             keys: Box::new(keys),

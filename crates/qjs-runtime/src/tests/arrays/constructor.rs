@@ -324,6 +324,28 @@ fn array_from_async_closes_sync_iterators_when_awaited_value_rejects() {
 }
 
 #[test]
+fn array_from_async_sync_iterator_close_writes_back_captured_generator_locals() {
+    assert_eq!(
+        promise::promise_debug_state_result(
+            &eval(
+                "var log = []; \
+                 async function outer() { \
+                   let closed = 0; \
+                   let bad = { then(resolve, reject) { reject('bad'); } }; \
+                   function* input() { \
+                     try { yield bad; } finally { closed += 1; } \
+                   } \
+                   try { await Array.fromAsync(input()); } finally { log.push(closed); } \
+                 } \
+                 outer().then(function() { return log.join(','); }, function() { return log.join(','); });"
+            )
+            .unwrap()
+        ),
+        Some(("fulfilled".to_owned(), Value::String("1".to_owned())))
+    );
+}
+
+#[test]
 fn array_from_async_boxes_sloppy_primitive_this_arg() {
     assert_eq!(
         promise::promise_debug_state_result(

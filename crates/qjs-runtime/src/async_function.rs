@@ -18,7 +18,10 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, RuntimeError, Value,
-    bytecode::{GeneratorOutcome, GeneratorStart, GeneratorState, Resume, resume_generator},
+    bytecode::{
+        CaptureWriteback, GeneratorOutcome, GeneratorStart, GeneratorState, Resume,
+        resume_generator,
+    },
     function_intrinsic_prototype, promise, symbol,
 };
 
@@ -67,6 +70,7 @@ pub(crate) fn async_function_prototype(env: &CallEnv) -> Option<ObjectRef> {
 pub(crate) fn call_async_function(
     function: &Function,
     function_env: CallEnv,
+    function_capture_names: Vec<String>,
     env: &mut CallEnv,
 ) -> Value {
     let bytecode = function
@@ -74,6 +78,10 @@ pub(crate) fn call_async_function(
         .clone()
         .expect("async function has a bytecode body");
     let captured = Rc::new(RefCell::new(function_env.snapshot_locals()));
+    let capture_writeback = (!function_capture_names.is_empty()).then(|| CaptureWriteback {
+        target: Rc::clone(&function.captured_env),
+        names: function_capture_names,
+    });
     let context = ObjectRef::new(HashMap::new());
     *context.generator_state().borrow_mut() =
         Some(GeneratorState::SuspendedStart(Box::new(GeneratorStart {
@@ -81,6 +89,7 @@ pub(crate) fn call_async_function(
             env: function_env,
             captured_env: captured,
             refresh_captured_slots_on_resume: true,
+            capture_writeback,
         })));
 
     let result_promise = promise::new_pending_promise(env);

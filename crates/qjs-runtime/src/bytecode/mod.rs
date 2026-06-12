@@ -40,7 +40,7 @@ use crate::{RuntimeError, Value};
 pub use ir::Bytecode;
 pub(crate) use vm_class::install_field_value;
 pub(crate) use vm_generator::{
-    GeneratorOutcome, GeneratorStart, GeneratorState, Resume, resume_generator,
+    CaptureWriteback, GeneratorOutcome, GeneratorStart, GeneratorState, Resume, resume_generator,
     start_suspended_at_body,
 };
 pub(crate) use vm_iter::sync_iterator_for_value;
@@ -94,8 +94,9 @@ pub(crate) fn eval_function_bytecode(
     bytecode: &Bytecode,
     env: crate::CallEnv,
     captured_env: Rc<RefCell<HashMap<String, Value>>>,
+    capture_writeback: Option<CaptureWriteback>,
 ) -> FunctionBytecodeResult<'_> {
-    vm::eval_function_bytecode(bytecode, env, captured_env)
+    vm::eval_function_bytecode(bytecode, env, captured_env, capture_writeback)
 }
 
 /// Compiles and evaluates source text through the bytecode VM.
@@ -233,5 +234,5 @@ pub(crate) fn eval_bytecode_with_env(
     env: crate::CallEnv,
 ) -> FunctionBytecodeResult<'_> {
     let captured_env = Rc::new(RefCell::new(env.snapshot_locals()));
-    vm::eval_function_bytecode(bytecode, env, captured_env)
+    vm::eval_function_bytecode(bytecode, env, captured_env, None)
 }

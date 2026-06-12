@@ -82,6 +82,61 @@ fn await_preserves_local_writes_from_suspended_closures() {
 }
 
 #[test]
+fn async_closure_writes_back_captured_locals_on_completion() {
+    assert_eq!(
+        eval_log(
+            "var o = []; \
+             async function outer() { \
+               let count = 0; \
+               let increment = async function() { count += 1; return 'ok'; }; \
+               await increment(); \
+               o.push(count); \
+             } \
+             outer(); o;"
+        ),
+        "1"
+    );
+}
+
+#[test]
+fn awaited_api_async_callback_writes_back_captured_locals() {
+    assert_eq!(
+        eval_log(
+            "var o = []; \
+             async function outer() { \
+               let count = 0; \
+               await Array.fromAsync([1, 2, 3], async function(value) { \
+                 count += 1; \
+                 return value; \
+               }); \
+               o.push(count); \
+             } \
+             outer(); o;"
+        ),
+        "3"
+    );
+}
+
+#[test]
+fn nested_thenable_method_writes_back_transitive_captured_locals() {
+    assert_eq!(
+        eval_log(
+            "var o = []; \
+             async function outer() { \
+               let count = 0; \
+               function makeThenable(value) { \
+                 return { then(resolve) { count += 1; resolve(value); } }; \
+               } \
+               await makeThenable('ok'); \
+               o.push(count); \
+             } \
+             outer(); o;"
+        ),
+        "1"
+    );
+}
+
+#[test]
 fn await_of_rejected_promise_in_try_catch() {
     assert_eq!(
         eval_log(
