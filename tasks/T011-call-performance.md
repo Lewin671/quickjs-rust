@@ -547,3 +547,13 @@ captures are locals-only with write-through/pull sync between script
 slots and the shared captured Rc, and call write-back skips bindings the
 callee never modified. Measured: `fill/coerced-indexes.js` 74s -> 2.2s
 (timeouts 0); 20k-call loop ~4.3s -> ~2.8s.
+
+## Follow-up: string accumulation load-clone
+
+`s += chunk` loops remain O(n^2) because loading `s` clones the whole
+backing String from the realm each iteration (Value::String is an owned
+String). The concat itself now appends in place (commit on main,
+"Append string concatenation onto the left operand's buffer"); the
+remaining fix is a shared string representation (Rc<str>/rope) — a
+Value-wide change. Blocks ~200 RegExp property-escapes cases whose
+harness builds ~1M-char strings.
