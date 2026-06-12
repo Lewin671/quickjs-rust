@@ -50,6 +50,28 @@ pub(crate) use vm_result::FunctionBytecodeResult;
 ///
 /// Returns an error for syntax currently outside the bytecode compiler subset.
 pub fn compile_script(script: &Script) -> Result<Bytecode, RuntimeError> {
+    compiler::compile_script(script).map_err(|error| error.error)
+}
+
+/// A bytecode-compilation failure tagged with the stage a conformance harness
+/// should attribute it to.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CompileError {
+    /// The underlying compiler error.
+    pub error: RuntimeError,
+    /// `true` when the failure is an invalid `/pattern/flags` regexp literal,
+    /// which JavaScript rejects at parse phase rather than at evaluation.
+    pub parse_stage: bool,
+}
+
+/// Compiles an AST script, preserving whether the failure is a parse-phase
+/// error (an invalid regexp literal) for stage-sensitive harnesses.
+///
+/// # Errors
+///
+/// Returns a [`CompileError`] for syntax outside the bytecode compiler subset
+/// or for a statically invalid regexp literal.
+pub fn compile_script_classified(script: &Script) -> Result<Bytecode, CompileError> {
     compiler::compile_script(script)
 }
 
