@@ -296,77 +296,50 @@ pub(crate) fn set_property(
                     return Ok(true);
                 }
             }
-            if apply_property_setter(
-                object.property(&key),
-                Value::Object(object.clone()),
-                value.clone(),
-                env,
-            )? {
-                return Ok(false);
-            }
-            object.set(key, value);
-            Ok(true)
+            let receiver = Value::Object(object.clone());
+            ordinary_set_object(&object, receiver, key, value, env)
         }
         Value::Function(function) => {
-            if apply_property_setter(
-                function_property_for_set(&function, env, &key),
-                Value::Function(function.clone()),
-                value.clone(),
-                env,
-            )? {
-                return Ok(false);
+            let receiver = Value::Function(function.clone());
+            let inherited = function_property_for_set(&function, env, &key);
+            match apply_set_step(inherited, receiver, value.clone(), env)? {
+                SetStep::Done(ok) => Ok(ok),
+                SetStep::WriteData => {
+                    function.set_property(key, value);
+                    Ok(true)
+                }
             }
-            function.set_property(key, value);
-            Ok(true)
         }
         Value::Array(elements) => {
             if key == "length" {
                 define_array_length_value(&elements, value, env)
             } else {
+                let receiver = Value::Array(elements.clone());
                 let property = elements.property(&key).or_else(|| {
                     elements
                         .prototype_override()
                         .unwrap_or_else(|| array_prototype(env))
                         .and_then(|prototype| prototype.property(&key))
                 });
-                if apply_property_setter(
-                    property,
-                    Value::Array(elements.clone()),
-                    value.clone(),
-                    env,
-                )? {
-                    return Ok(false);
+                match apply_set_step(property, receiver, value.clone(), env)? {
+                    SetStep::Done(ok) => Ok(ok),
+                    SetStep::WriteData => {
+                        match key.parse::<usize>() {
+                            Ok(index) => elements.set(index, value),
+                            Err(_) => elements.set_property(key, value),
+                        };
+                        Ok(true)
+                    }
                 }
-                match key.parse::<usize>() {
-                    Ok(index) => elements.set(index, value),
-                    Err(_) => elements.set_property(key, value),
-                };
-                Ok(true)
             }
         }
         Value::Map(map) => {
-            if apply_property_setter(
-                map.object().property(&key),
-                Value::Map(map.clone()),
-                value.clone(),
-                env,
-            )? {
-                return Ok(false);
-            }
-            map.object().set(key, value);
-            Ok(true)
+            let receiver = Value::Map(map.clone());
+            ordinary_set_object(&map.object(), receiver, key, value, env)
         }
         Value::Set(set) => {
-            if apply_property_setter(
-                set.object().property(&key),
-                Value::Set(set.clone()),
-                value.clone(),
-                env,
-            )? {
-                return Ok(false);
-            }
-            set.object().set(key, value);
-            Ok(true)
+            let receiver = Value::Set(set.clone());
+            ordinary_set_object(&set.object(), receiver, key, value, env)
         }
         Value::Proxy(proxy) => set_property(proxy.target(), key, value, env),
         _ => Err(RuntimeError {
@@ -429,18 +402,17 @@ fn set_function_symbol_property(
     env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     let inherited = function.symbol_property(&symbol, env);
-    if apply_property_setter(inherited.clone(), receiver, value.clone(), env)? {
-        return Ok(false);
+    match apply_set_step(inherited, receiver, value.clone(), env)? {
+        SetStep::Done(ok) => return Ok(ok),
+        SetStep::WriteData => {}
     }
     let descriptor = match function.own_symbol_property(&symbol) {
-        Some(existing) if !existing.writable => return Ok(false),
         Some(existing) => Property::data(
             value,
             existing.enumerable,
             existing.writable,
             existing.configurable,
         ),
-        None if inherited.is_some_and(|property| !property.writable) => return Ok(false),
         None if !function.is_extensible() => return Ok(false),
         None => Property::enumerable(value),
     };
@@ -455,16 +427,16 @@ fn set_object_symbol_property(
     value: Value,
     env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
-    if apply_property_setter(
+    match apply_set_step(
         object.symbol_property(&symbol),
         receiver,
         value.clone(),
         env,
     )? {
-        return Ok(false);
+        SetStep::Done(ok) => return Ok(ok),
+        SetStep::WriteData => {}
     }
     let descriptor = match object.own_symbol_property(&symbol) {
-        Some(existing) if !existing.writable => return Ok(false),
         Some(existing) => Property::data(
             value,
             existing.enumerable,
@@ -491,18 +463,17 @@ fn set_array_symbol_property(
             .unwrap_or_else(|| array_prototype(env))
             .and_then(|prototype| prototype.symbol_property(&symbol))
     });
-    if apply_property_setter(inherited.clone(), receiver, value.clone(), env)? {
-        return Ok(false);
+    match apply_set_step(inherited, receiver, value.clone(), env)? {
+        SetStep::Done(ok) => return Ok(ok),
+        SetStep::WriteData => {}
     }
     let descriptor = match array.own_symbol_property(&symbol) {
-        Some(existing) if !existing.writable => return Ok(false),
         Some(existing) => Property::data(
             value,
             existing.enumerable,
             existing.writable,
             existing.configurable,
         ),
-        None if inherited.is_some_and(|property| !property.writable) => return Ok(false),
         None if !array.is_extensible() => return Ok(false),
         None => Property::enumerable(value),
     };
@@ -510,20 +481,70 @@ fn set_array_symbol_property(
     Ok(true)
 }
 
-fn apply_property_setter(
+/// Result of inspecting the resolved (own or inherited) property in the first
+/// part of OrdinarySet. `Done(ok)` means the operation finished: a setter ran
+/// (`true`), or it was rejected by a non-writable data property or a
+/// getter-only accessor (`false`). `WriteData` means the caller should create
+/// or overwrite an own data property and report success.
+enum SetStep {
+    Done(bool),
+    WriteData,
+}
+
+/// Implements the property-inspection prelude of OrdinarySet for a resolved
+/// own-or-inherited `property`. Returns whether `[[Set]]` succeeded, or signals
+/// that a data write should follow.
+fn apply_set_step(
     property: Option<Property>,
     receiver: Value,
     value: Value,
     env: &mut CallEnv,
-) -> Result<bool, RuntimeError> {
+) -> Result<SetStep, RuntimeError> {
     let Some(property) = property else {
-        return Ok(false);
+        return Ok(SetStep::WriteData);
     };
-    if let Some(setter) = property.set {
-        call_function(setter, receiver, vec![value], env, false)?;
-        return Ok(true);
+    if property.is_accessor() {
+        // Accessor property: succeed only when a setter exists.
+        return match property.set {
+            Some(setter) => {
+                call_function(setter, receiver, vec![value], env, false)?;
+                Ok(SetStep::Done(true))
+            }
+            None => Ok(SetStep::Done(false)),
+        };
     }
-    Ok(property.is_accessor())
+    // Data property (own or inherited). A non-writable data property in the
+    // chain rejects the write entirely; OrdinarySet otherwise falls through to
+    // creating/overwriting an own data property.
+    if !property.writable {
+        return Ok(SetStep::Done(false));
+    }
+    Ok(SetStep::WriteData)
+}
+
+/// OrdinarySet for objects backed by an [`ObjectRef`] (plain objects, Map, Set
+/// exotic wrappers). Honors own and inherited non-writable data properties and
+/// accessors, returning the `[[Set]]` success boolean.
+fn ordinary_set_object(
+    object: &ObjectRef,
+    receiver: Value,
+    key: String,
+    value: Value,
+    env: &mut CallEnv,
+) -> Result<bool, RuntimeError> {
+    match apply_set_step(object.property(&key), receiver, value.clone(), env)? {
+        SetStep::Done(ok) => Ok(ok),
+        SetStep::WriteData => {
+            // Creating an own property (the key is only inherited or absent)
+            // requires an extensible receiver. An own writable data property is
+            // overwritten in place regardless of extensibility.
+            if object.own_property(&key).is_none() && !object.is_extensible() {
+                return Ok(false);
+            }
+            object.set(key, value);
+            Ok(true)
+        }
+    }
 }
 
 pub(super) fn property_set_uses_setter(object: &Value, key: &PropertyKey, env: &CallEnv) -> bool {
