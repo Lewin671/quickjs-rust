@@ -212,10 +212,16 @@ runners.
 bounded sample, a full scan with `--all`, a shard with `--shard I/N`, and a
 quickjs-rust/QuickJS-NG comparison with `--engine both`. In that mode QuickJS-NG
 config skips are applied as the shared baseline. The quickjs-rust side reports
-not-run cases only for structural harness limits such as modules,
-unsupported harness includes, intl402, and fixtures; there is no source-syntax
-pre-filter anymore (the former for-of destructuring and class filters were
-lifted once those features landed). Async-flagged cases are no longer
+not-run cases only for structural harness limits such as unsupported harness
+includes, intl402, and fixtures; there is no source-syntax pre-filter anymore
+(the former for-of destructuring and class filters were lifted once those
+features landed). Module-flagged cases are no longer structurally skipped: they
+run through the `qjs --module --prelude <file>` channel, where the test file is
+evaluated under the Module goal, relative specifiers resolve against the test
+file's directory (`_FIXTURE.js` files are the imported modules and stay
+non-executed standalone), and the harness includes are installed as a script
+prelude in the module graph's realm. Module resolution-phase negatives surface
+as early errors and are matched accordingly. Async-flagged cases are no longer
 structurally skipped: the harness includes `doneprintHandle.js` like
 quickjs-ng's runner, the `qjs` CLI exposes a host `print` global and drains the
 promise job queue after evaluation, and positive async cases are judged by the

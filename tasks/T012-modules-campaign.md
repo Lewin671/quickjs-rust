@@ -55,7 +55,7 @@ pass/fail signal.
       object exports are live. Full primitive live-binding indirection (a
       load-path indirection table or realm-hoisting module lexicals) is deferred
       to a follow-up. Module top-level `await` stays a parse error (S5).
-- [ ] S3 Harness: module channel. Run module-flagged Test262 cases as modules,
+- [x] S3 Harness: module channel. Run module-flagged Test262 cases as modules,
       resolve relative specifiers against the test's directory, wire harness
       includes as module-scope preludes, and lift the `module` skip in
       `scripts/test262-baseline.sh` to only cases the channel still cannot

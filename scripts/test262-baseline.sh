@@ -191,9 +191,10 @@ skip_reason() {
     *_FIXTURE.js) echo "fixture"; return ;;
     test/intl402/*|test/staging/intl402/*) echo "intl402"; return ;;
   esac
-  if [[ "$flags" == *module* ]]; then
-    echo "module"
-  elif [ -n "$includes" ] && ! rust_includes_supported "$includes"; then
+  # Module-flagged cases run through the qjs-cli module channel (see
+  # make_module_prelude / run_engine_case), so they are no longer skipped;
+  # only their unsupported harness includes still gate them.
+  if [ -n "$includes" ] && ! rust_includes_supported "$includes"; then
     echo "includes"
   else
     echo ""
@@ -314,6 +315,33 @@ make_case() {
     fi
   } >"$output"
 }
+# Builds the module-scope prelude file for a module-flagged case: the same
+# harness includes make_case prepends to a script, but written to a standalone
+# file. The prelude is SCRIPT code (assert.js/sta.js/host shim/$DONE handler +
+# requested includes); the test file itself is evaluated under the Module goal.
+# Module bodies are always strict, so onlyStrict needs no directive here.
+make_module_prelude() {
+  local output="$1"
+  local flags="$2"
+  local includes="$3"
+  local include
+  {
+    cat "$TEST262_DIR/harness/assert.js"
+    printf '\n'
+    cat "$TEST262_DIR/harness/sta.js"
+    printf '\n'
+    emit_test262_host_shim
+    printf '\n'
+    if [[ "$flags" == *async* ]]; then
+      cat "$TEST262_DIR/harness/doneprintHandle.js"
+      printf '\n'
+    fi
+    while IFS= read -r include; do
+      cat "$TEST262_DIR/harness/$include"
+      printf '\n'
+    done < <(list_entries "$includes")
+  } >"$output"
+}
 rust_error_field() {
   local field="$1"
   local output="$2"
@@ -332,8 +360,13 @@ rust_negative_matches() {
     early)
       [ "$kind" = "parse" ] || [ "$kind" = "early" ] || return 1
       ;;
-    runtime|resolution)
+    runtime)
       [ "$kind" = "runtime" ] || return 1
+      ;;
+    resolution)
+      # Module instantiation/resolution SyntaxErrors (unresolvable imports,
+      # ambiguous star exports) surface as early (link-phase) errors here.
+      [ "$kind" = "parse" ] || [ "$kind" = "early" ] || [ "$kind" = "runtime" ] || return 1
       ;;
     "")
       ;;
@@ -347,11 +380,21 @@ rust_negative_matches() {
 run_engine_case() {
   local engine="$1" temp="$2" source="$3"
   local negative_phase="${4:-}" negative_type="${5:-}" is_async="${6:-}"
+  local module_prelude="${7:-}"
   local output status first_line
 
   set +e
   case "$engine" in
-    quickjs-rust) output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$QJS_CLI_BIN" --error-format=test262 "$temp" 2>&1)" ;;
+    quickjs-rust)
+      if [ -n "$module_prelude" ]; then
+        # Module-flagged case: run the test file under the Module goal with the
+        # harness includes installed as a script prelude. The engine reads the
+        # original test file so relative imports resolve against its directory.
+        output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$QJS_CLI_BIN" --error-format=test262 --module --prelude "$module_prelude" "$source" 2>&1)"
+      else
+        output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$QJS_CLI_BIN" --error-format=test262 "$temp" 2>&1)"
+      fi
+      ;;
     quickjs-ng) output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$QUICKJS_NG_RUNNER" -c "$QUICKJS_NG_CONF" -t 1 -f "$source" 2>&1)" ;;
   esac
   status=$?
@@ -426,18 +469,29 @@ run_case() {
   local rust_skip_reason="$5" qjsng_skip_reason="$6"
   local negative_phase="${7:-}" negative_type="${8:-}"
   local temp_dir temp rust_result="not-run" qjsng_result="not-run" is_async=""
+  local is_module="" module_prelude=""
   if [[ "$flags" == *async* ]]; then
     is_async="async"
   fi
+  if [[ "$flags" == *module* ]]; then
+    is_module="module"
+  fi
   temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/qjs-test262-baseline-XXXXXX")"
   temp="$temp_dir/case.js"
+  if [ -n "$is_module" ]; then
+    # Module cases run the test file directly under the Module goal; harness
+    # includes become a script prelude (see make_module_prelude). The combined
+    # script `temp` is only used for the quickjs-ng leg.
+    module_prelude="$temp_dir/prelude.js"
+    make_module_prelude "$module_prelude" "$flags" "$includes"
+  fi
   make_case "$file" "$temp" "$flags" "$includes"
   if [ "$ENGINE" = "quickjs-rust" ] || [ "$ENGINE" = "both" ]; then
     if [ -n "$rust_skip_reason" ]; then
       rust_result="skipped"
       rust_skipped=$((rust_skipped + 1))
     else
-      rust_result="$(run_engine_case quickjs-rust "$temp" "$file" "$negative_phase" "$negative_type" "$is_async")"
+      rust_result="$(run_engine_case quickjs-rust "$temp" "$file" "$negative_phase" "$negative_type" "$is_async" "$module_prelude")"
       count_engine_result rust "$rust_result"
     fi
   fi
