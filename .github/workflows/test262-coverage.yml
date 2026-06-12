@@ -11,9 +11,19 @@ on:
         required: false
         type: string
 
+# One coverage run per branch: a newer successful CI run supersedes an
+# in-flight run for the same branch instead of queueing a full 32-shard scan
+# per commit. Failed or cancelled workflow_run events use a unique group so
+# they cannot cancel useful coverage that they would not replace. The main CI
+# workflow already cancels superseded runs per branch, so rapid pushes never
+# had a complete per-commit burndown guarantee; the burndown trend in
+# docs/conformance/burndown.jsonl only needs the latest state per branch.
 concurrency:
-  group: test262-coverage-${{ github.event.workflow_run.head_sha || github.sha }}
-  cancel-in-progress: false
+  group: >-
+    ${{ (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
+        && format('test262-coverage-{0}', github.event.workflow_run.head_branch || github.ref_name)
+        || format('test262-coverage-skip-{0}', github.run_id) }}
+  cancel-in-progress: true
 
 jobs:
   quickjs-ng-baseline-cache:
@@ -207,21 +217,18 @@ jobs:
               | head -n 1)"
             export QJS_CLI_BIN="${target_dir:-$PWD/target}/debug/qjs"
           fi
+          # test262-baseline.sh parallelizes case execution internally, so the
+          # group's two shards run sequentially instead of racing for cores.
           first_shard=$(( (${{ matrix.group }} - 1) * 2 + 1 ))
           last_shard=$(( first_shard + 1 ))
           for shard in $(seq "$first_shard" "$last_shard"); do
-            (
-              ./scripts/test262-baseline.sh \
-                --all \
-                --engine quickjs-rust \
-                --shard "$shard/32" \
-                --summary-json "coverage/summary-${shard}.json" \
-                --case-results-jsonl "coverage/cases-${shard}.jsonl" \
-                --no-fail
-            ) &
-          done
-          for job in $(jobs -pr); do
-            wait "$job" || status=1
+            ./scripts/test262-baseline.sh \
+              --all \
+              --engine quickjs-rust \
+              --shard "$shard/32" \
+              --summary-json "coverage/summary-${shard}.json" \
+              --case-results-jsonl "coverage/cases-${shard}.jsonl" \
+              --no-fail || status=1
           done
           exit "$status"
 
