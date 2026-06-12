@@ -80,6 +80,12 @@ pub(super) fn call_object_native(
         NativeFunction::ObjectPrototypeValueOf => {
             object::native_object_prototype_value_of(this_value, env)?
         }
+        NativeFunction::ObjectPrototypeGetProto => {
+            object::native_object_prototype_get_proto(this_value, env)?
+        }
+        NativeFunction::ObjectPrototypeSetProto => {
+            object::native_object_prototype_set_proto(this_value, argument_values, env)?
+        }
         _ => return Ok(None),
     };
 

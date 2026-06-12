@@ -46,6 +46,25 @@ pub(crate) fn install_object(env: &mut CallEnv, global_this: &Value) -> ObjectRe
         0,
         NativeFunction::ObjectPrototypeValueOf,
     );
+    object_prototype.define_property(
+        "__proto__".to_owned(),
+        Property::accessor(
+            Some(Value::Function(Function::new_native(
+                Some("get __proto__"),
+                0,
+                NativeFunction::ObjectPrototypeGetProto,
+                false,
+            ))),
+            Some(Value::Function(Function::new_native(
+                Some("set __proto__"),
+                1,
+                NativeFunction::ObjectPrototypeSetProto,
+                false,
+            ))),
+            false,
+            true,
+        ),
+    );
     object_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(object_prototype.clone())),

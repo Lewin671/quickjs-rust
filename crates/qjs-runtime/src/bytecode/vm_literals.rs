@@ -9,11 +9,11 @@ use std::collections::HashMap;
 use qjs_ast::ObjectPropertyKind;
 
 use crate::{
-    ArrayRef, ObjectRef, Property, RuntimeError, Value, array::iterable_values_with_env, object,
-    object_prototype, to_property_key_value,
+    ArrayRef, ObjectRef, Property, Prototype, RuntimeError, Value, array::iterable_values_with_env,
+    object, object_prototype, to_property_key_value,
 };
 
-use super::ir::ArrayElementKind;
+use super::ir::{ArrayElementKind, ObjectPropertyMeta};
 use super::util::stack_underflow;
 use super::vm::Vm;
 
@@ -73,21 +73,53 @@ impl Vm<'_> {
         self.stack.push(Value::Array(cooked_array));
     }
 
-    pub(super) fn new_object(&mut self, kinds: &[ObjectPropertyKind]) -> Result<(), RuntimeError> {
+    pub(super) fn new_object(&mut self, kinds: &[ObjectPropertyMeta]) -> Result<(), RuntimeError> {
         let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(&self.env));
+        // Proto-setter entries (`{ __proto__: expr }`) set [[Prototype]] in
+        // source order rather than defining an own property; collect them
+        // separately so ordinary properties keep their stack-popping order.
         let mut entries = Vec::with_capacity(kinds.len());
-        for kind in kinds.iter().rev() {
+        let mut proto_assignments = Vec::new();
+        for meta in kinds.iter().rev() {
             let value = self.pop()?;
             let key_value = self.pop()?;
+            if meta.is_proto_setter {
+                proto_assignments.push(value);
+                continue;
+            }
             let mut key_env = self.current_env();
             let key = to_property_key_value(key_value, &mut key_env)?;
             self.apply_env(key_env);
-            let descriptor = match kind {
+            let descriptor = match meta.kind {
                 ObjectPropertyKind::Data => Property::enumerable(value),
                 ObjectPropertyKind::Getter => Property::accessor(Some(value), None, true, true),
                 ObjectPropertyKind::Setter => Property::accessor(None, Some(value), true, true),
             };
             entries.push((key, descriptor));
+        }
+        // Apply prototype assignments in source order (reverse of pop order).
+        for proto in proto_assignments.into_iter().rev() {
+            let prototype = match proto {
+                Value::Null => Some(None),
+                Value::Object(object) if crate::symbol::is_symbol_primitive(&object) => None,
+                Value::Object(object) => Some(Some(Prototype::Object(object))),
+                Value::Function(function) => Some(Some(Prototype::Function(function))),
+                Value::Array(array) => Some(Some(Prototype::Object(
+                    crate::array_as_object_prototype(&array, &self.env),
+                ))),
+                Value::Map(map) => Some(Some(Prototype::Object(map.object()))),
+                Value::Set(set) => Some(Some(Prototype::Object(set.object()))),
+                // Proxy and primitive proto values are ignored by the special form.
+                _ => None,
+            };
+            if let Some(prototype) = prototype {
+                object
+                    .set_prototype_slot(prototype)
+                    .map_err(|()| RuntimeError {
+                        thrown: None,
+                        message: "object literal __proto__ assignment failed".to_owned(),
+                    })?;
+            }
         }
         for (key, mut descriptor) in entries.into_iter().rev() {
             if descriptor.is_accessor()

@@ -392,29 +392,37 @@ impl Parser {
                 }
                 let key_token = self.advance();
                 let key_span = key_token.span;
-                let (key, kind, value) = if is_get_accessor_start(&key_token.kind)
+                let (key, kind, is_proto_setter, value) = if is_get_accessor_start(&key_token.kind)
                     && !self.at(&TokenKind::Colon)
                     && !self.at(&TokenKind::Comma)
                     && !self.at(&TokenKind::LeftParen)
                     && !self.at(&TokenKind::RightBrace)
                 {
-                    self.object_getter_property(key_span)?
+                    let (key, kind, value) = self.object_getter_property(key_span)?;
+                    (key, kind, false, value)
                 } else if is_set_accessor_start(&key_token.kind)
                     && !self.at(&TokenKind::Colon)
                     && !self.at(&TokenKind::Comma)
                     && !self.at(&TokenKind::LeftParen)
                     && !self.at(&TokenKind::RightBrace)
                 {
-                    self.object_setter_property(key_span)?
+                    let (key, kind, value) = self.object_setter_property(key_span)?;
+                    (key, kind, false, value)
                 } else {
                     let (key, shorthand_value) = self.object_property_key(key_token)?;
-                    let value = self.object_property_value(key_span, &key, shorthand_value)?;
-                    (key, ObjectPropertyKind::Data, value)
+                    let (value, is_colon_data) =
+                        self.object_property_value(key_span, &key, shorthand_value)?;
+                    // `{ __proto__: expr }` sets [[Prototype]] only for the
+                    // literal-key colon data form, not shorthand/computed/method.
+                    let is_proto_setter = is_colon_data
+                        && matches!(&key, ObjectPropertyKey::Literal(name) if name == "__proto__");
+                    (key, ObjectPropertyKind::Data, is_proto_setter, value)
                 };
                 let span = Span::new(key_span.start, value.span().end);
                 properties.push(ObjectProperty {
                     key,
                     kind,
+                    is_proto_setter,
                     value,
                     span,
                 });
@@ -476,12 +484,15 @@ impl Parser {
         }
     }
 
+    /// Parses an object property value. The returned flag is `true` only for
+    /// the plain colon data form (`PropertyName : AssignmentExpression`), which
+    /// is the only shape eligible for the `__proto__` prototype special form.
     fn object_property_value(
         &mut self,
         key_span: Span,
         key: &ObjectPropertyKey,
         shorthand_value: Option<Expr>,
-    ) -> Result<Expr, ParseError> {
+    ) -> Result<(Expr, bool), ParseError> {
         if self.at(&TokenKind::LeftParen) {
             let method_name = match key {
                 ObjectPropertyKey::Literal(name) => Some(name.clone()),
@@ -502,25 +513,28 @@ impl Parser {
                 .expect("parser should always have eof token")
                 .span
                 .end;
-            return Ok(Expr::Function {
-                name: method_name,
-                params,
-                body,
-                constructable: false,
-                lexical_this: false,
-                lexical_arguments: false,
-                is_generator: false,
-                is_async: false,
-                span: Span::new(key_span.start, end),
-            });
+            return Ok((
+                Expr::Function {
+                    name: method_name,
+                    params,
+                    body,
+                    constructable: false,
+                    lexical_this: false,
+                    lexical_arguments: false,
+                    is_generator: false,
+                    is_async: false,
+                    span: Span::new(key_span.start, end),
+                },
+                false,
+            ));
         }
 
         if self.match_kind(&TokenKind::Colon) {
-            return self.assignment();
+            return Ok((self.assignment()?, true));
         }
 
         if let Some(value) = shorthand_value {
-            return Ok(value);
+            return Ok((value, false));
         }
 
         Err(ParseError {
@@ -662,6 +676,7 @@ impl Parser {
         Ok(ObjectProperty {
             key,
             kind: ObjectPropertyKind::Data,
+            is_proto_setter: false,
             value,
             span: Span::new(start, end),
         })
@@ -712,6 +727,7 @@ impl Parser {
         Ok(ObjectProperty {
             key,
             kind: ObjectPropertyKind::Data,
+            is_proto_setter: false,
             value,
             span: Span::new(start, end),
         })

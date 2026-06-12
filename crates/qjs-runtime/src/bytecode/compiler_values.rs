@@ -11,7 +11,7 @@ use crate::{
 };
 
 use super::compiler::Compiler;
-use super::ir::{ArrayElementKind, Op};
+use super::ir::{ArrayElementKind, ObjectPropertyMeta, Op};
 use super::util::unsupported_stmt;
 
 impl Compiler {
@@ -65,8 +65,12 @@ impl Compiler {
                     self.emit(Op::LoadConst(slot));
                     // `{ f: <anon> }` names a plain property value after the
                     // key via NamedEvaluation. Getters/setters and shorthand
-                    // methods already carry their own name from the parser.
-                    if matches!(property.kind, ObjectPropertyKind::Data) {
+                    // methods already carry their own name from the parser, and
+                    // the `__proto__:` prototype special form evaluates its
+                    // value without NamedEvaluation.
+                    if matches!(property.kind, ObjectPropertyKind::Data)
+                        && !property.is_proto_setter
+                    {
                         self.compile_named_expr(&property.value, key)?;
                         continue;
                     }
@@ -76,7 +80,13 @@ impl Compiler {
             self.compile_expr(&property.value)?;
         }
         self.emit(Op::NewObject(
-            properties.iter().map(|property| property.kind).collect(),
+            properties
+                .iter()
+                .map(|property| ObjectPropertyMeta {
+                    kind: property.kind,
+                    is_proto_setter: property.is_proto_setter,
+                })
+                .collect(),
         ));
         Ok(())
     }

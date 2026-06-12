@@ -8,6 +8,11 @@ pub struct ObjectProperty {
     pub key: ObjectPropertyKey,
     /// Property definition kind.
     pub kind: ObjectPropertyKind,
+    /// Whether this is the `{ __proto__: expr }` prototype special form
+    /// (Annex B.3.1): a colon data property whose literal key is `__proto__`.
+    /// Shorthand, computed, and method/accessor `__proto__` forms set this to
+    /// `false` and stay ordinary properties.
+    pub is_proto_setter: bool,
     /// Property value expression.
     pub value: Expr,
     /// Source span.

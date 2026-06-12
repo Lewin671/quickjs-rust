@@ -142,8 +142,10 @@ fn evaluates_object_enumeration_builtins() {
         Ok(Value::String("0|1|2|5|length".to_owned()))
     );
     assert_eq!(
+        // constructor, hasOwnProperty, isPrototypeOf, propertyIsEnumerable,
+        // toLocaleString, toString, valueOf, plus the `__proto__` accessor.
         eval("Object.getOwnPropertyNames(Object.prototype).length;"),
-        Ok(Value::Number(7.0))
+        Ok(Value::Number(8.0))
     );
     assert_eq!(
         eval("Object.getOwnPropertyNames(Object.prototype)[0];"),

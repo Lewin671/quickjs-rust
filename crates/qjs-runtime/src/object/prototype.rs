@@ -131,6 +131,71 @@ pub(crate) fn native_object_set_prototype_of(
     Ok(target)
 }
 
+/// `get Object.prototype.__proto__`: B.2.2.1.1.
+///
+/// `let O = ToObject(RequireObjectCoercible(this)); return O.[[GetPrototypeOf]]()`.
+pub(crate) fn native_object_prototype_get_proto(
+    this_value: Value,
+    env: &CallEnv,
+) -> Result<Value, RuntimeError> {
+    match this_value {
+        Value::Null | Value::Undefined => Err(RuntimeError {
+            thrown: None,
+            message: "Object.prototype.__proto__ called on null or undefined".to_owned(),
+        }),
+        // ToObject never fails for the remaining primitive/object cases; the
+        // existing getPrototypeOf logic walks the same prototype slots.
+        this_value => native_object_get_prototype_of(std::slice::from_ref(&this_value), env),
+    }
+}
+
+/// `set Object.prototype.__proto__`: B.2.2.1.2.
+///
+/// `RequireObjectCoercible(this)`; if the value is neither Object nor Null, or
+/// `this` is not an Object, this is a no-op returning `undefined`; otherwise
+/// `this.[[SetPrototypeOf]](value)` and throw on failure.
+pub(crate) fn native_object_prototype_set_proto(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &CallEnv,
+) -> Result<Value, RuntimeError> {
+    if matches!(this_value, Value::Null | Value::Undefined) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "Object.prototype.__proto__ called on null or undefined".to_owned(),
+        });
+    }
+    let proto = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    // Only Object or Null proto values are honored; anything else is ignored.
+    let proto_is_object_or_null = match &proto {
+        Value::Object(object) => !symbol::is_symbol_primitive(object),
+        Value::Array(_)
+        | Value::Function(_)
+        | Value::Map(_)
+        | Value::Set(_)
+        | Value::Proxy(_)
+        | Value::Null => true,
+        _ => false,
+    };
+    if !proto_is_object_or_null {
+        return Ok(Value::Undefined);
+    }
+    // [[SetPrototypeOf]] only applies to objects; primitive `this` is a no-op.
+    if !matches!(
+        this_value,
+        Value::Object(_)
+            | Value::Array(_)
+            | Value::Function(_)
+            | Value::Map(_)
+            | Value::Set(_)
+            | Value::Proxy(_)
+    ) {
+        return Ok(Value::Undefined);
+    }
+    native_object_set_prototype_of(&[this_value, proto], env)?;
+    Ok(Value::Undefined)
+}
+
 fn constructor_prototype_value(name: &str, env: &CallEnv) -> Value {
     let Some(Value::Function(function)) = env.get(name) else {
         return Value::Null;
