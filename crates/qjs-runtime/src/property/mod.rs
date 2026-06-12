@@ -44,23 +44,32 @@ pub(crate) fn has_property_key(
                     crate::typed_array::IndexedRead::Present(_) => Ok(true),
                     crate::typed_array::IndexedRead::Missing => Ok(false),
                     crate::typed_array::IndexedRead::NotIndexed => {
-                        Ok(object.contains_property(key))
+                        object_has_property(&object, env, key)
                     }
                 };
             }
-            Ok(object.contains_property(key))
+            object_has_property(&object, env, key)
         }
-        Value::Map(map) => Ok(map.object().contains_property(key)),
-        Value::Set(set) => Ok(set.object().contains_property(key)),
+        Value::Map(map) => object_has_property(&map.object(), env, key),
+        Value::Set(set) => object_has_property(&set.object(), env, key),
         Value::Proxy(proxy) => {
             let mut proxy_env = env.clone();
             crate::proxy::proxy_has(proxy, &PropertyKey::String(key.to_owned()), &mut proxy_env)
         }
-        Value::Array(elements) => Ok(array_has_own_property(&elements, key)
-            || array_prototype_property(&elements, env, key).is_some()),
-        Value::Function(function) => Ok(function_own_property_descriptor(&function, key).is_some()
-            || native_error_constructor_parent_descriptor(&function, env, key).is_some()
-            || function_prototype_property(&function, env, key).is_some()),
+        Value::Array(elements) => {
+            if array_has_own_property(&elements, key) {
+                return Ok(true);
+            }
+            match elements.prototype_slot_override() {
+                Some(prototype) => prototype_has_property(prototype, env, key),
+                None => prototype_has_property(
+                    array_prototype(env).map(crate::Prototype::Object),
+                    env,
+                    key,
+                ),
+            }
+        }
+        Value::Function(function) => function_has_property(&function, env, key),
         Value::String(_)
         | Value::Number(_)
         | Value::BigInt(_)
@@ -70,6 +79,185 @@ pub(crate) fn has_property_key(
             thrown: None,
             message: "property target must be an object".to_owned(),
         }),
+    }
+}
+
+fn object_has_property(
+    object: &crate::ObjectRef,
+    env: &CallEnv,
+    key: &str,
+) -> Result<bool, RuntimeError> {
+    if object.has_own_property(key) {
+        return Ok(true);
+    }
+    prototype_has_property(object.prototype_slot(), env, key)
+}
+
+fn prototype_has_property(
+    prototype: Option<crate::Prototype>,
+    env: &CallEnv,
+    key: &str,
+) -> Result<bool, RuntimeError> {
+    match prototype {
+        Some(crate::Prototype::Object(object)) => object_has_property(&object, env, key),
+        Some(crate::Prototype::Function(function)) => function_has_property(&function, env, key),
+        Some(crate::Prototype::Proxy(proxy)) => {
+            let mut proxy_env = env.clone();
+            crate::proxy::proxy_has(proxy, &PropertyKey::String(key.to_owned()), &mut proxy_env)
+        }
+        None => Ok(false),
+    }
+}
+
+fn function_has_property(
+    function: &crate::Function,
+    env: &CallEnv,
+    key: &str,
+) -> Result<bool, RuntimeError> {
+    if function_own_property_descriptor(function, key).is_some()
+        || native_error_constructor_parent_descriptor(function, env, key).is_some()
+    {
+        return Ok(true);
+    }
+    match function.internal_prototype_slot() {
+        Some(slot) => prototype_has_property(slot, env, key),
+        None => prototype_has_property(
+            function_intrinsic_prototype(env).map(crate::Prototype::Object),
+            env,
+            key,
+        ),
+    }
+}
+
+pub(crate) fn own_or_inherited_descriptor(value: Value, key: &str) -> Option<Property> {
+    match value {
+        Value::Object(object) => object.property(key),
+        Value::Map(map) => map.object().property(key),
+        Value::Set(set) => set.object().property(key),
+        Value::Array(elements) => {
+            crate::array_own_property_descriptor(&elements, key).or_else(|| {
+                elements
+                    .prototype_slot_override()
+                    .and_then(|slot| slot)
+                    .and_then(|prototype| prototype_descriptor_without_traps(prototype, key))
+            })
+        }
+        Value::Function(function) => function.chain_property(key),
+        Value::Proxy(proxy) => proxy
+            .target_result()
+            .ok()
+            .and_then(|target| own_or_inherited_descriptor(target, key)),
+        Value::String(value) => crate::string::string_own_property_descriptor(&value, key),
+        Value::Number(_)
+        | Value::BigInt(_)
+        | Value::Boolean(_)
+        | Value::Null
+        | Value::Undefined => None,
+    }
+}
+
+fn prototype_descriptor_without_traps(prototype: crate::Prototype, key: &str) -> Option<Property> {
+    match prototype {
+        crate::Prototype::Object(object) => object.property(key),
+        crate::Prototype::Function(function) => function.chain_property(key),
+        crate::Prototype::Proxy(proxy) => proxy
+            .target_result()
+            .ok()
+            .and_then(|target| own_or_inherited_descriptor(target, key)),
+    }
+}
+
+pub(crate) fn own_or_inherited_symbol_descriptor(
+    value: Value,
+    symbol: &crate::ObjectRef,
+) -> Option<Property> {
+    match value {
+        Value::Object(object) => object.symbol_property(symbol),
+        Value::Map(map) => map.object().symbol_property(symbol),
+        Value::Set(set) => set.object().symbol_property(symbol),
+        Value::Array(elements) => elements.symbol_property(symbol).or_else(|| {
+            elements
+                .prototype_slot_override()
+                .and_then(|slot| slot)
+                .and_then(|prototype| prototype_symbol_descriptor_without_traps(prototype, symbol))
+        }),
+        Value::Function(function) => function.chain_symbol_property(symbol),
+        Value::Proxy(proxy) => proxy
+            .target_result()
+            .ok()
+            .and_then(|target| own_or_inherited_symbol_descriptor(target, symbol)),
+        Value::String(_)
+        | Value::Number(_)
+        | Value::BigInt(_)
+        | Value::Boolean(_)
+        | Value::Null
+        | Value::Undefined => None,
+    }
+}
+
+fn prototype_symbol_descriptor_without_traps(
+    prototype: crate::Prototype,
+    symbol: &crate::ObjectRef,
+) -> Option<Property> {
+    match prototype {
+        crate::Prototype::Object(object) => object.symbol_property(symbol),
+        crate::Prototype::Function(function) => function.chain_symbol_property(symbol),
+        crate::Prototype::Proxy(proxy) => proxy
+            .target_result()
+            .ok()
+            .and_then(|target| own_or_inherited_symbol_descriptor(target, symbol)),
+    }
+}
+
+pub(crate) fn value_has_prototype_object(value: Value, target: &crate::ObjectRef) -> bool {
+    match value {
+        Value::Object(object) => object.has_prototype(target),
+        Value::Map(map) => map.object().has_prototype(target),
+        Value::Set(set) => set.object().has_prototype(target),
+        Value::Array(elements) => elements
+            .prototype_slot_override()
+            .and_then(|slot| slot)
+            .is_some_and(|prototype| prototype.chain_contains(target)),
+        Value::Function(function) => function.chain_contains_object(target),
+        Value::Proxy(proxy) => proxy
+            .target_result()
+            .is_ok_and(|target_value| value_has_prototype_object(target_value, target)),
+        Value::String(_)
+        | Value::Number(_)
+        | Value::BigInt(_)
+        | Value::Boolean(_)
+        | Value::Null
+        | Value::Undefined => false,
+    }
+}
+
+pub(crate) fn value_has_prototype_value(value: Value, target: &Value) -> bool {
+    match value {
+        Value::Object(object) => object
+            .prototype_slot()
+            .is_some_and(|prototype| prototype.chain_contains_value(target)),
+        Value::Map(map) => map
+            .object()
+            .prototype_slot()
+            .is_some_and(|prototype| prototype.chain_contains_value(target)),
+        Value::Set(set) => set
+            .object()
+            .prototype_slot()
+            .is_some_and(|prototype| prototype.chain_contains_value(target)),
+        Value::Array(elements) => elements
+            .prototype_slot_override()
+            .and_then(|slot| slot)
+            .is_some_and(|prototype| prototype.chain_contains_value(target)),
+        Value::Function(function) => function.chain_contains_value(target),
+        Value::Proxy(proxy) => proxy
+            .target_result()
+            .is_ok_and(|target_value| value_has_prototype_value(target_value, target)),
+        Value::String(_)
+        | Value::Number(_)
+        | Value::BigInt(_)
+        | Value::Boolean(_)
+        | Value::Null
+        | Value::Undefined => false,
     }
 }
 

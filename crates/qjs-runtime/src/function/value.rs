@@ -661,6 +661,9 @@ impl Function {
             match self.effective_internal_prototype_with_env(env) {
                 Some(Prototype::Object(prototype)) => prototype.symbol_property(symbol),
                 Some(Prototype::Function(parent)) => parent.chain_symbol_property(symbol),
+                Some(Prototype::Proxy(proxy)) => proxy.target_result().ok().and_then(|target| {
+                    crate::property::own_or_inherited_symbol_descriptor(target, symbol)
+                }),
                 None => None,
             }
         })
@@ -690,6 +693,10 @@ impl Function {
             .or_else(|| match self.effective_internal_prototype() {
                 Some(Prototype::Object(prototype)) => prototype.property(key),
                 Some(Prototype::Function(parent)) => parent.chain_property(key),
+                Some(Prototype::Proxy(proxy)) => proxy
+                    .target_result()
+                    .ok()
+                    .and_then(|target| crate::property::own_or_inherited_descriptor(target, key)),
                 None => None,
             })
     }
@@ -699,17 +706,11 @@ impl Function {
             .or_else(|| match self.effective_internal_prototype() {
                 Some(Prototype::Object(prototype)) => prototype.symbol_property(symbol),
                 Some(Prototype::Function(parent)) => parent.chain_symbol_property(symbol),
+                Some(Prototype::Proxy(proxy)) => proxy.target_result().ok().and_then(|target| {
+                    crate::property::own_or_inherited_symbol_descriptor(target, symbol)
+                }),
                 None => None,
             })
-    }
-
-    pub(crate) fn chain_contains_property(&self, key: &str) -> bool {
-        self.own_property(key).is_some()
-            || match self.effective_internal_prototype() {
-                Some(Prototype::Object(prototype)) => prototype.contains_property(key),
-                Some(Prototype::Function(parent)) => parent.chain_contains_property(key),
-                None => false,
-            }
     }
 
     /// Whether the object `target` appears in this function's [[Prototype]]
@@ -720,6 +721,9 @@ impl Function {
                 prototype.ptr_eq(target) || prototype.has_prototype(target)
             }
             Some(Prototype::Function(parent)) => parent.chain_contains_object(target),
+            Some(Prototype::Proxy(proxy)) => proxy.target_result().is_ok_and(|target_value| {
+                crate::property::value_has_prototype_object(target_value, target)
+            }),
             None => false,
         }
     }
@@ -731,6 +735,12 @@ impl Function {
             Some(Prototype::Function(parent)) => {
                 parent.ptr_eq(target) || parent.chain_contains_function(target)
             }
+            Some(Prototype::Proxy(proxy)) => proxy.target_result().is_ok_and(|target_value| {
+                crate::property::value_has_prototype_value(
+                    target_value,
+                    &Value::Function(target.clone()),
+                )
+            }),
             Some(Prototype::Object(_)) | None => false,
         }
     }

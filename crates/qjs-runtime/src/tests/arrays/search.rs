@@ -86,6 +86,21 @@ fn evaluates_array_search_builtins() {
         ),
         Ok(Value::String("1:1".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "let array = [5, undefined, 7]; \
+             let log = []; \
+             let proxy = new Proxy(Array.prototype, { \
+               has: function(target, key) { log.push('has:' + key); return key in target; }, \
+               get: function() { throw new Error('unexpected get'); } \
+             }); \
+             Object.setPrototypeOf(array, proxy); \
+             let fromIndex = { valueOf: function() { array.length = 0; return 2; } }; \
+             Array.prototype.lastIndexOf.call(array, 100, fromIndex); \
+             log.join('|');"
+        ),
+        Ok(Value::String("has:2|has:1|has:0".to_owned()))
+    );
     assert_eq!(eval("[1, 2, 3].includes(2);"), Ok(Value::Boolean(true)));
     assert_eq!(eval("[1, 2, 3].includes(4);"), Ok(Value::Boolean(false)));
     assert_eq!(eval("[1, 2, 3].includes(1, 1);"), Ok(Value::Boolean(false)));

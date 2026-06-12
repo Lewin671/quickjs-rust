@@ -5,8 +5,8 @@ use std::{
     rc::Rc,
 };
 
-use crate::Function;
 use crate::private::{PrivateEnvironment, PrivateStorage};
+use crate::{Function, proxy::ProxyRef};
 
 use super::{Property, Value};
 
@@ -19,6 +19,7 @@ use super::{Property, Value};
 pub(crate) enum Prototype {
     Object(ObjectRef),
     Function(Function),
+    Proxy(ProxyRef),
 }
 
 impl Prototype {
@@ -26,6 +27,7 @@ impl Prototype {
         match (self, other) {
             (Self::Object(left), Self::Object(right)) => left.ptr_eq(right),
             (Self::Function(left), Self::Function(right)) => left.ptr_eq(right),
+            (Self::Proxy(left), Self::Proxy(right)) => left.ptr_eq(right),
             _ => false,
         }
     }
@@ -36,6 +38,10 @@ impl Prototype {
         match self {
             Self::Object(object) => object.property(key),
             Self::Function(function) => function.chain_property(key),
+            Self::Proxy(proxy) => match proxy.target_result() {
+                Ok(target) => crate::property::own_or_inherited_descriptor(target, key),
+                Err(_) => None,
+            },
         }
     }
 
@@ -47,13 +53,10 @@ impl Prototype {
         match self {
             Self::Object(object) => object.symbol_property(symbol),
             Self::Function(function) => function.chain_symbol_property(symbol),
-        }
-    }
-
-    fn contains_property(&self, key: &str) -> bool {
-        match self {
-            Self::Object(object) => object.contains_property(key),
-            Self::Function(function) => function.chain_contains_property(key),
+            Self::Proxy(proxy) => match proxy.target_result() {
+                Ok(target) => crate::property::own_or_inherited_symbol_descriptor(target, symbol),
+                Err(_) => None,
+            },
         }
     }
 
@@ -63,6 +66,7 @@ impl Prototype {
             // Functions never carry a Symbol.toStringTag in their own chain by
             // default; stop the search here.
             Self::Function(_) => None,
+            Self::Proxy(_) => None,
         }
     }
 
@@ -72,6 +76,13 @@ impl Prototype {
         match self {
             Self::Object(object) => object.ptr_eq(target) || object.has_prototype(target),
             Self::Function(function) => function.chain_contains_object(target),
+            Self::Proxy(proxy) => match proxy.target_result() {
+                Ok(Value::Object(object)) => object.ptr_eq(target) || object.has_prototype(target),
+                Ok(proxy_target) => {
+                    crate::property::value_has_prototype_object(proxy_target, target)
+                }
+                Err(_) => false,
+            },
         }
     }
 
@@ -89,6 +100,13 @@ impl Prototype {
                 function.ptr_eq(target) || function.chain_contains_function(target)
             }
             (Self::Function(function), _) => function.chain_contains_value(target),
+            (Self::Proxy(proxy), Value::Proxy(target)) => proxy.ptr_eq(target),
+            (Self::Proxy(proxy), _) => match proxy.target_result() {
+                Ok(proxy_target) => {
+                    crate::property::value_has_prototype_value(proxy_target, target)
+                }
+                Err(_) => false,
+            },
         }
     }
 
@@ -98,6 +116,13 @@ impl Prototype {
         match self {
             Self::Object(object) => object.ptr_eq(target) || object.has_prototype(target),
             Self::Function(_) => false,
+            Self::Proxy(proxy) => match proxy.target_result() {
+                Ok(Value::Object(object)) => object.ptr_eq(target) || object.has_prototype(target),
+                Ok(proxy_target) => {
+                    crate::property::value_has_prototype_object(proxy_target, target)
+                }
+                Err(_) => false,
+            },
         }
     }
 
@@ -106,7 +131,7 @@ impl Prototype {
     pub(crate) fn as_object(&self) -> Option<ObjectRef> {
         match self {
             Self::Object(object) => Some(object.clone()),
-            Self::Function(_) => None,
+            Self::Function(_) | Self::Proxy(_) => None,
         }
     }
 
@@ -115,6 +140,7 @@ impl Prototype {
         match self {
             Self::Object(object) => Value::Object(object.clone()),
             Self::Function(function) => Value::Function(function.clone()),
+            Self::Proxy(proxy) => Value::Proxy(proxy.clone()),
         }
     }
 }
@@ -379,15 +405,6 @@ impl ObjectRef {
 
     pub(crate) fn define_non_enumerable(&self, key: String, value: Value) {
         self.define_property(key, Property::non_enumerable(value));
-    }
-
-    pub(crate) fn contains_property(&self, key: &str) -> bool {
-        self.properties.borrow().contains_key(key)
-            || self
-                .prototype
-                .borrow()
-                .as_ref()
-                .is_some_and(|proto| proto.contains_property(key))
     }
 
     /// Whether the object `prototype` appears as a function prototype anywhere

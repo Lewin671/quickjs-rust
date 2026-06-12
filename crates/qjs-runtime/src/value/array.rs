@@ -5,7 +5,7 @@ use std::{
     rc::Rc,
 };
 
-use super::{ObjectRef, Property, Value};
+use super::{ObjectRef, Property, Prototype, Value};
 use crate::CallEnv;
 
 const MAX_DENSE_STORAGE_LENGTH: usize = 1_000_000;
@@ -23,7 +23,7 @@ pub struct ArrayRef {
     extensible: Rc<Cell<bool>>,
     sealed: Rc<Cell<bool>>,
     frozen: Rc<Cell<bool>>,
-    prototype: Rc<RefCell<Option<Option<ObjectRef>>>>,
+    prototype: Rc<RefCell<Option<Option<Prototype>>>>,
 }
 
 impl ArrayRef {
@@ -442,6 +442,13 @@ impl ArrayRef {
     }
 
     pub(crate) fn prototype_override(&self) -> Option<Option<ObjectRef>> {
+        self.prototype
+            .borrow()
+            .clone()
+            .map(|prototype| prototype.and_then(|prototype| prototype.as_object()))
+    }
+
+    pub(crate) fn prototype_slot_override(&self) -> Option<Option<Prototype>> {
         self.prototype.borrow().clone()
     }
 
@@ -476,10 +483,10 @@ impl ArrayRef {
             .collect()
     }
 
-    pub(crate) fn set_prototype(&self, prototype: Option<ObjectRef>) -> Result<(), ()> {
+    pub(crate) fn set_prototype_slot(&self, prototype: Option<Prototype>) -> Result<(), ()> {
         if matches!(
             self.prototype.borrow().as_ref(),
-            Some(current) if same_prototype(current, &prototype)
+            Some(current) if same_prototype_slot(current.as_ref(), prototype.as_ref())
         ) {
             return Ok(());
         }
@@ -500,7 +507,7 @@ impl fmt::Debug for ArrayRef {
     }
 }
 
-fn same_prototype(left: &Option<ObjectRef>, right: &Option<ObjectRef>) -> bool {
+fn same_prototype_slot(left: Option<&Prototype>, right: Option<&Prototype>) -> bool {
     match (left, right) {
         (None, None) => true,
         (Some(left), Some(right)) => left.ptr_eq(right),

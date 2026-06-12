@@ -27,11 +27,14 @@ pub(crate) fn native_reflect_get_prototype_of(
             .prototype_slot()
             .map(|prototype| prototype.to_value())
             .unwrap_or(Value::Null)),
-        Some(Value::Array(elements)) => Ok(elements
-            .prototype_override()
-            .unwrap_or_else(|| array_prototype(env))
-            .map(Value::Object)
-            .unwrap_or(Value::Null)),
+        Some(Value::Array(elements)) => Ok(match elements.prototype_slot_override() {
+            Some(slot) => slot
+                .map(|prototype| prototype.to_value())
+                .unwrap_or(Value::Null),
+            None => array_prototype(env)
+                .map(Value::Object)
+                .unwrap_or(Value::Null),
+        }),
         Some(Value::Function(function)) => {
             Ok(error::native_error_constructor_parent(function, env)
                 .or_else(|| match function.internal_prototype_slot() {
@@ -60,7 +63,8 @@ pub(crate) fn native_reflect_set_prototype_of(
                 message: "Reflect.setPrototypeOf prototype must be an object or null".to_owned(),
             });
         }
-        Value::Object(_) | Value::Array(_) | Value::Function(_) | Value::Null => {}
+        Value::Object(_) | Value::Array(_) | Value::Function(_) | Value::Proxy(_) | Value::Null => {
+        }
         _ => {
             return Err(RuntimeError {
                 thrown: None,

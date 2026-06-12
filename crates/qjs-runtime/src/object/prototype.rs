@@ -30,11 +30,14 @@ pub(crate) fn native_object_get_prototype_of(
             .prototype_slot()
             .map(|prototype| prototype.to_value())
             .unwrap_or(Value::Null)),
-        Some(Value::Array(elements)) => Ok(elements
-            .prototype_override()
-            .unwrap_or_else(|| array_prototype(env))
-            .map(Value::Object)
-            .unwrap_or(Value::Null)),
+        Some(Value::Array(elements)) => Ok(match elements.prototype_slot_override() {
+            Some(slot) => slot
+                .map(|prototype| prototype.to_value())
+                .unwrap_or(Value::Null),
+            None => array_prototype(env)
+                .map(Value::Object)
+                .unwrap_or(Value::Null),
+        }),
         Some(Value::Function(function)) => {
             Ok(error::native_error_constructor_parent(function, env)
                 .or_else(|| match function.internal_prototype_slot() {
@@ -71,6 +74,7 @@ fn prototype_slot_from_value(
             &array, env,
         )))),
         Value::Function(function) => Ok(Some(crate::Prototype::Function(function))),
+        Value::Proxy(proxy) => Ok(Some(crate::Prototype::Proxy(proxy))),
         Value::Null => Ok(None),
         _ => Err(RuntimeError {
             thrown: None,
@@ -95,9 +99,7 @@ pub(crate) fn ordinary_set_prototype_of(
         Value::Proxy(proxy) => {
             return ordinary_set_prototype_of(&proxy.target(), prototype_to_value(prototype), env);
         }
-        Value::Array(elements) => elements
-            .set_prototype(prototype.and_then(|prototype| prototype.as_object()))
-            .is_ok(),
+        Value::Array(elements) => elements.set_prototype_slot(prototype).is_ok(),
         Value::Function(function) => function.set_internal_prototype_slot(prototype).is_ok(),
         Value::String(_) | Value::Number(_) | Value::BigInt(_) | Value::Boolean(_) => true,
         Value::Null | Value::Undefined => true,

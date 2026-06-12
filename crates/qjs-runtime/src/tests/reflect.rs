@@ -251,6 +251,18 @@ fn evaluates_reflect_prototype_builtins() {
         Ok(Value::Boolean(true))
     );
     assert_eq!(
+        eval(
+            "let log = []; let proto = new Proxy({}, { has: function(target, key) { log.push(key); return key === 'marker'; } }); let object = {}; Reflect.setPrototypeOf(object, proto); Reflect.has(object, 'marker') + ':' + log.join('|');"
+        ),
+        Ok(Value::String("true:marker".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let log = []; let proto = new Proxy({ marker: 1 }, { get: function(target, key, receiver) { log.push(key); return Reflect.get(target, key, receiver); } }); let array = []; Reflect.setPrototypeOf(array, proto); Reflect.getPrototypeOf(array).marker + ':' + log.join('|');"
+        ),
+        Ok(Value::String("1:marker".to_owned()))
+    );
+    assert_eq!(
         eval("Reflect.has(function f() {}, 'call');"),
         Ok(Value::Boolean(true))
     );

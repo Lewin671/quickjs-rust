@@ -121,10 +121,10 @@ pub(crate) fn value_prototype_slot(value: Value, env: &CallEnv) -> Option<crate:
         Value::Object(object) => object.prototype_slot(),
         Value::Map(map) => map.object().prototype_slot(),
         Value::Set(set) => set.object().prototype_slot(),
-        Value::Array(elements) => elements
-            .prototype_override()
-            .unwrap_or_else(|| array_prototype(env))
-            .map(crate::Prototype::Object),
+        Value::Array(elements) => match elements.prototype_slot_override() {
+            Some(slot) => slot,
+            None => array_prototype(env).map(crate::Prototype::Object),
+        },
         Value::Function(function) => match function.internal_prototype_slot() {
             Some(slot) => slot,
             None => function_intrinsic_prototype(env).map(crate::Prototype::Object),
@@ -183,6 +183,10 @@ pub(crate) fn function_prototype_chain_descriptor(
     match function.internal_prototype_slot() {
         Some(Some(crate::Prototype::Object(prototype))) => prototype.property(key),
         Some(Some(crate::Prototype::Function(parent))) => parent.chain_property(key),
+        Some(Some(crate::Prototype::Proxy(proxy))) => proxy
+            .target_result()
+            .ok()
+            .and_then(|target| crate::property::own_or_inherited_descriptor(target, key)),
         Some(None) => None,
         None => function_intrinsic_prototype(env).and_then(|prototype| prototype.property(key)),
     }
