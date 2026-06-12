@@ -129,6 +129,22 @@ fn evaluates_array_builtins() {
     assert_eq!(eval("Array.isArray({});"), Ok(Value::Boolean(false)));
     assert_eq!(eval("Array.isArray('abc');"), Ok(Value::Boolean(false)));
     assert_eq!(
+        eval(
+            "let objectProxy = new Proxy({}, {}); \
+             let arrayProxy = new Proxy([], {}); \
+             let arrayProxyProxy = new Proxy(arrayProxy, {}); \
+             Array.isArray(objectProxy) + ':' + Array.isArray(arrayProxy) + ':' + Array.isArray(arrayProxyProxy);"
+        ),
+        Ok(Value::String("false:true:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let handle = Proxy.revocable([], {}); handle.revoke(); \
+             let caught = false; try { Array.isArray(handle.proxy); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("Array.prototype.constructor === Array;"),
         Ok(Value::Boolean(true))
     );

@@ -1138,6 +1138,8 @@ test/built-ins/Array/prototype/indexOf/prop-desc.js
 cases/array-instanceof-basic.js
 cases/array-is-array-basic.js
 test/built-ins/Array/isArray/15.4.3.2-0-5.js
+test/built-ins/Array/isArray/proxy.js
+test/built-ins/Array/isArray/proxy-revoked.js
 cases/array-is-array-length.js
 cases/array-is-array-name.js
 cases/array-from-array-basic.js
