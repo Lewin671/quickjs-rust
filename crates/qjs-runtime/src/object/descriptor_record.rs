@@ -70,10 +70,16 @@ pub(crate) fn to_property_descriptor_record(
     value: Value,
     env: &mut CallEnv,
 ) -> Result<PropertyDescriptor, RuntimeError> {
-    if !matches!(
-        value,
-        Value::Object(_) | Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_)
-    ) {
+    // Symbols are represented as `Value::Object` wrappers, but a Symbol is a
+    // primitive and is not a valid property descriptor object.
+    let is_object = match &value {
+        Value::Object(object) => !crate::symbol::is_symbol_primitive(object),
+        Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_) | Value::Proxy(_) => {
+            true
+        }
+        _ => false,
+    };
+    if !is_object {
         return Err(RuntimeError {
             thrown: None,
             message: "property descriptor must be an object".to_owned(),

@@ -105,3 +105,34 @@ fn evaluates_object_descriptor_queries() {
     assert!(eval("Object.getOwnPropertyDescriptors(null);").is_err());
     assert!(eval("Object.getOwnPropertyDescriptors(undefined);").is_err());
 }
+
+#[test]
+fn define_property_rejects_symbol_descriptor() {
+    // A Symbol is a primitive, not a valid property descriptor object.
+    assert!(eval("Object.defineProperty({}, 'a', Symbol());").is_err());
+}
+
+#[test]
+fn strict_delete_of_non_configurable_property_throws() {
+    // Strict-mode `delete` of a non-configurable property is a TypeError; the
+    // sloppy form silently returns false.
+    assert!(
+        eval("'use strict'; let o = {}; Object.defineProperty(o, 'x', { value: 1 }); delete o.x;")
+            .is_err()
+    );
+    assert_eq!(
+        eval("let o = {}; Object.defineProperty(o, 'x', { value: 1 }); delete o.x;"),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval(
+            "'use strict'; let s = Symbol(); let o = {}; Object.defineProperty(o, s, { value: 1 }); let threw = false; try { delete o[s]; } catch (e) { threw = e instanceof TypeError; } threw;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    // Deleting a configurable property still succeeds in strict mode.
+    assert_eq!(
+        eval("'use strict'; let o = { x: 1 }; delete o.x;"),
+        Ok(Value::Boolean(true))
+    );
+}

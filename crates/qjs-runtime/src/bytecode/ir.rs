@@ -82,7 +82,11 @@ pub(super) enum Op {
     /// Evaluates `#name in obj`: pops the object and pushes a boolean brand
     /// check. Never throws.
     PrivateIn(String),
-    DeleteProp,
+    /// `delete obj[key]`. In strict mode a failed deletion of a
+    /// non-configurable property throws a TypeError instead of returning false.
+    DeleteProp {
+        is_strict: bool,
+    },
     Call(usize),
     CallMethod(usize),
     CallSpread,

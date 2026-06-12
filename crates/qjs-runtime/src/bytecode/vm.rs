@@ -300,7 +300,10 @@ impl<'a> Vm<'a> {
                         self.stack.push(value);
                     }
                 }
-                Op::DeleteProp => self.delete_prop()?,
+                Op::DeleteProp { is_strict } => {
+                    let result = self.delete_prop(is_strict);
+                    self.handle_runtime_result(result)?;
+                }
                 Op::Call(argc) => self.call(argc)?,
                 Op::CallMethod(argc) => self.call_method(argc)?,
                 Op::CallSpread => self.call_spread()?,
@@ -665,13 +668,20 @@ impl<'a> Vm<'a> {
         )
     }
 
-    fn delete_prop(&mut self) -> Result<(), RuntimeError> {
+    fn delete_prop(&mut self, is_strict: bool) -> Result<(), RuntimeError> {
         let key_value = self.pop()?;
         let key = self.coerce_property_key(key_value)?;
         let object = self.pop()?;
         let mut env = self.current_env();
         let result = delete_property_key(object, &key, &mut env)?;
         self.apply_env(env);
+        // Strict-mode `delete` of a non-configurable property is a TypeError.
+        if is_strict && matches!(result, Value::Boolean(false)) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "cannot delete non-configurable property in strict mode".to_owned(),
+            });
+        }
         self.stack.push(result);
         Ok(())
     }

@@ -124,7 +124,9 @@ impl Compiler {
         // reach here.
         self.compile_expr(object)?;
         self.compile_member_key(property)?;
-        self.emit(Op::DeleteProp);
+        self.emit(Op::DeleteProp {
+            is_strict: self.strict,
+        });
         Ok(())
     }
 
