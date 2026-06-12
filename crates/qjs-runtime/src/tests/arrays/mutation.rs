@@ -177,6 +177,18 @@ fn evaluates_array_mutation_builtins() {
     );
     assert_eq!(
         eval(
+            "let traps = []; \
+             let target = { 0: 'a', 1: 'b', length: 2 }; \
+             let proxy = new Proxy(target, { \
+               set: function(t, key, value, receiver) { traps.push('set:' + key + ':' + value); return Reflect.set(t, key, value, receiver); } \
+             }); \
+             Array.prototype.reverse.call(proxy); \
+             traps.join('|') + ':' + target[0] + ':' + target[1];"
+        ),
+        Ok(Value::String("set:0:b|set:1:a:b:a".to_owned()))
+    );
+    assert_eq!(
+        eval(
             "let array = ['first', 'second']; Object.defineProperty(array, '0', { get: function() { array.length = 0; return 'first'; }, configurable: true }); array.reverse(); (0 in array) + ':' + (1 in array) + ':' + array[1];"
         ),
         Ok(Value::String("false:true:first".to_owned()))

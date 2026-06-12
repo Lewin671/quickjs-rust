@@ -136,6 +136,20 @@ pub(super) fn set_array_like_property(
             function.set_property(key, value);
             Ok(())
         }
+        Value::Proxy(proxy) => {
+            let succeeded = crate::proxy::proxy_set(
+                proxy,
+                &crate::PropertyKey::String(key),
+                value,
+                receiver,
+                env,
+            )?;
+            if succeeded {
+                Ok(())
+            } else {
+                Err(copy_within_set_error())
+            }
+        }
         _ => Ok(()),
     }
 }

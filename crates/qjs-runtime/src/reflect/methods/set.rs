@@ -2,7 +2,9 @@ use crate::CallEnv;
 use crate::reflect::target::ensure_reflect_object_target;
 use crate::{
     ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function,
-    object::define_array_length_value,
+    object::{
+        PropertyDescriptor, define_array_length_value, define_property_descriptor_on_value_key,
+    },
 };
 
 pub(crate) fn native_reflect_set(
@@ -206,12 +208,27 @@ fn set_receiver_data_property(
             object.define_property(key.to_owned(), descriptor);
             Ok(true)
         }
-        Value::Proxy(proxy) => set_receiver_data_property(
-            proxy.target(),
-            &PropertyKey::String(key.to_owned()),
-            value,
-            env,
-        ),
+        Value::Proxy(proxy) => {
+            let receiver = Value::Proxy(proxy.clone());
+            let key = PropertyKey::String(key.to_owned());
+            let existing = crate::proxy::proxy_get_own_property_descriptor(
+                proxy,
+                &key,
+                env,
+                |target, _env| crate::object::own_property_descriptor_key(target, &key),
+            )?;
+            let descriptor = match existing {
+                Some(existing) if !existing.writable => return Ok(false),
+                Some(existing) => PropertyDescriptor::data(
+                    value,
+                    existing.writable,
+                    existing.enumerable,
+                    existing.configurable,
+                ),
+                None => PropertyDescriptor::data(value, true, true, true),
+            };
+            define_property_descriptor_on_value_key(receiver, key, descriptor, env)
+        }
         Value::String(_)
         | Value::Number(_)
         | Value::BigInt(_)
