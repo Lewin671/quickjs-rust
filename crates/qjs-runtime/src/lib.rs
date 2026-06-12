@@ -79,6 +79,7 @@ pub use bytecode::{
 };
 
 pub(crate) const GLOBAL_THIS_BINDING: &str = "\0global_this";
+pub(crate) const DIRECT_EVAL_BINDING: &str = "\0\0direct_eval";
 /// Per-frame `[[HomeObject]]` for resolving `super.x`. Single-null prefixed so
 /// it never collides with user identifiers but is not treated as an internal
 /// destructuring binding (which use a double-null prefix).

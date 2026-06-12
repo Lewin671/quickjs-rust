@@ -57,6 +57,10 @@ pub fn compile_script(script: &Script) -> Result<Bytecode, RuntimeError> {
     compiler::compile_script(script).map_err(|error| error.error)
 }
 
+pub(crate) fn compile_direct_eval_script(script: &Script) -> Result<Bytecode, RuntimeError> {
+    compiler::compile_direct_eval_script(script)
+}
+
 /// A bytecode-compilation failure tagged with the stage a conformance harness
 /// should attribute it to.
 #[derive(Clone, Debug, PartialEq)]

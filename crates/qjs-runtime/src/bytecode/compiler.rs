@@ -91,6 +91,14 @@ pub(super) fn compile_script(script: &Script) -> Result<Bytecode, super::Compile
     result.map_err(|error| super::CompileError { error, parse_stage })
 }
 
+pub(super) fn compile_direct_eval_script(script: &Script) -> Result<Bytecode, RuntimeError> {
+    let mut compiler = Compiler {
+        global_scope: false,
+        ..Compiler::default()
+    };
+    compiler.compile_eval_into(script)
+}
+
 /// Compiles a module body. Module code is global-scope bytecode (its top-level
 /// `var`/function bindings live in the module realm) but always strict mode,
 /// regardless of a leading directive prologue.
@@ -177,6 +185,28 @@ impl Compiler {
             std::mem::take(&mut self.code),
             true,
             global_lexical_names,
+        ))
+    }
+
+    fn compile_eval_into(&mut self, script: &Script) -> Result<Bytecode, RuntimeError> {
+        self.strict = self.strict || is_strict_function_body(&script.body);
+        self.collect_hoisted_locals(&script.body);
+        self.predeclare_current_scope_lexicals(&script.body);
+        let blocked = lexical_declared_names(&script.body);
+        self.with_annex_b_blocked_function_names(&blocked, |compiler| {
+            compiler.compile_hoisted_function_decls(&script.body)?;
+            for stmt in &script.body {
+                compiler.compile_stmt(stmt)?;
+            }
+            Ok(())
+        })?;
+        self.code.push(Op::Return);
+        Ok(Bytecode::with_scope_and_global_lexical_names(
+            std::mem::take(&mut self.constants),
+            std::mem::take(&mut self.locals),
+            std::mem::take(&mut self.code),
+            false,
+            blocked,
         ))
     }
 

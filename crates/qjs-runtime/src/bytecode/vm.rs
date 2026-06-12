@@ -329,8 +329,10 @@ impl<'a> Vm<'a> {
                     self.handle_runtime_result(result)?;
                 }
                 Op::Call(argc) => self.call(argc)?,
+                Op::CallDirectEval(argc) => self.call_direct_eval(argc)?,
                 Op::CallMethod(argc) => self.call_method(argc)?,
                 Op::CallSpread => self.call_spread()?,
+                Op::CallDirectEvalSpread => self.call_direct_eval_spread()?,
                 Op::CallMethodSpread => self.call_method_spread()?,
                 Op::IteratorClose { swallow } => self.iterator_close(swallow)?,
                 Op::New(argc) => self.construct(argc)?,
@@ -645,11 +647,36 @@ impl<'a> Vm<'a> {
         self.call_callee(callee, Value::Undefined, arguments)
     }
 
+    fn call_direct_eval(&mut self, argc: usize) -> Result<(), RuntimeError> {
+        let arguments = self.pop_arguments(argc)?;
+        let callee = self.pop()?;
+        self.call_callee_with_direct_eval(callee, Value::Undefined, arguments)
+    }
+
     fn call_callee(
         &mut self,
         callee: Value,
         this_value: Value,
         arguments: Vec<Value>,
+    ) -> Result<(), RuntimeError> {
+        self.call_callee_with_marker(callee, this_value, arguments, false)
+    }
+
+    fn call_callee_with_direct_eval(
+        &mut self,
+        callee: Value,
+        this_value: Value,
+        arguments: Vec<Value>,
+    ) -> Result<(), RuntimeError> {
+        self.call_callee_with_marker(callee, this_value, arguments, true)
+    }
+
+    fn call_callee_with_marker(
+        &mut self,
+        callee: Value,
+        this_value: Value,
+        arguments: Vec<Value>,
+        direct_eval: bool,
     ) -> Result<(), RuntimeError> {
         if let Some(result) = self.try_fast_global_native_call(&callee, &arguments)? {
             if let Some(value) = result {
@@ -658,7 +685,12 @@ impl<'a> Vm<'a> {
             return Ok(());
         }
         let mut env = self.call_env(&callee);
+        if direct_eval {
+            env.env
+                .insert(crate::DIRECT_EVAL_BINDING.to_owned(), Value::Boolean(true));
+        }
         let result = call_function(callee, this_value, arguments, &mut env.env, false);
+        env.env.remove(crate::DIRECT_EVAL_BINDING);
         self.apply_call_env(env);
         if let Some(result) = self.handle_call_result(result)? {
             self.stack.push(result);
@@ -670,6 +702,12 @@ impl<'a> Vm<'a> {
         let arguments = self.pop_argument_array("function call spread")?;
         let callee = self.pop()?;
         self.call_callee(callee, Value::Undefined, arguments)
+    }
+
+    fn call_direct_eval_spread(&mut self) -> Result<(), RuntimeError> {
+        let arguments = self.pop_argument_array("direct eval spread")?;
+        let callee = self.pop()?;
+        self.call_callee_with_direct_eval(callee, Value::Undefined, arguments)
     }
 
     fn try_fast_global_native_call(

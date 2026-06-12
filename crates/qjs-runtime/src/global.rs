@@ -1,9 +1,10 @@
 use qjs_parser::parse_script;
+use std::collections::HashSet;
 
 use crate::CallEnv;
 use crate::{
     Function, GLOBAL_THIS_BINDING, NativeFunction, Property, RuntimeError, Value,
-    bytecode::{compile_script, eval_bytecode_with_env},
+    bytecode::{compile_direct_eval_script, eval_bytecode_with_env},
     string::{string_code_units, string_from_code_unit},
     to_js_string_with_env, to_number_with_env,
 };
@@ -183,33 +184,68 @@ pub(super) fn native_global_eval(
         thrown: None,
         message: error.message,
     })?;
-    let bytecode = compile_script(&script)?;
-    initialize_eval_global_bindings(&bytecode, env)?;
-    let result = eval_bytecode_with_env(&bytecode, env.clone());
+    let direct_eval = matches!(
+        env.get(crate::DIRECT_EVAL_BINDING),
+        Some(Value::Boolean(true))
+    );
+    let mut eval_env = if direct_eval {
+        env.clone()
+    } else {
+        CallEnv::new(env.realm_rc())
+    };
+    let direct_function_eval = direct_eval && eval_env.get_local("this").is_some();
+    let bytecode = compile_direct_eval_script(&script)?;
+    if !direct_function_eval {
+        validate_eval_global_lexical_bindings(&bytecode, &eval_env)?;
+    }
+    let caller_locals = eval_env.locals().keys().cloned().collect::<HashSet<_>>();
+    initialize_direct_eval_bindings(
+        &bytecode,
+        &mut eval_env,
+        direct_function_eval,
+        &caller_locals,
+    );
+    let result = eval_bytecode_with_env(&bytecode, eval_env.clone());
     for name in bytecode
         .hoisted_local_names()
         .chain(bytecode.global_names().iter().map(String::as_str))
     {
         if let Some(value) = result.binding(name) {
-            if env.locals().contains_key(name) {
+            if caller_locals.contains(name) {
                 // A caller frame binding (an outer `let`/`var` the eval'd code
                 // assigned): write it back through the frame so the caller's
                 // slot sees the update.
-                env.insert(name.to_owned(), value.clone());
+                eval_env.insert(name.to_owned(), value.clone());
+            } else if direct_function_eval {
+                eval_env.insert(name.to_owned(), value.clone());
             } else {
-                env.insert_realm(name.to_owned(), value.clone());
+                define_eval_global_binding(&mut eval_env, name, value.clone());
             }
         }
+    }
+    if !direct_eval {
+        let hoisted = bytecode.hoisted_local_names().collect::<HashSet<_>>();
+        for name in bytecode.local_names() {
+            if hoisted.contains(name) {
+                continue;
+            }
+            if let Some(value) = result.binding(name) {
+                eval_env.insert_realm(name.to_owned(), value.clone());
+            }
+        }
+    }
+    if direct_eval {
+        *env = eval_env;
     }
     result.value
 }
 
-fn initialize_eval_global_bindings(
+fn validate_eval_global_lexical_bindings(
     bytecode: &crate::bytecode::Bytecode,
-    env: &mut CallEnv,
+    env: &CallEnv,
 ) -> Result<(), RuntimeError> {
     let global_this = env.get(GLOBAL_THIS_BINDING).and_then(|value| match value {
-        Value::Object(object) => Some(object.clone()),
+        Value::Object(object) => Some(object),
         _ => None,
     });
     if let Some(global_this) = &global_this {
@@ -227,23 +263,63 @@ fn initialize_eval_global_bindings(
             }
         }
     }
+    Ok(())
+}
+
+fn initialize_direct_eval_bindings(
+    bytecode: &crate::bytecode::Bytecode,
+    env: &mut CallEnv,
+    direct_function_eval: bool,
+    caller_locals: &HashSet<String>,
+) {
+    if !env.locals().contains_key("this")
+        && let Some(value) = env.get("this")
+    {
+        env.insert("this".to_owned(), value);
+    }
     for name in bytecode.hoisted_local_names() {
+        if caller_locals.contains(name) {
+            continue;
+        }
+        if direct_function_eval {
+            if !env.locals().contains_key(name) {
+                env.insert(name.to_owned(), Value::Undefined);
+            }
+            continue;
+        }
+        let global_this = env.get(GLOBAL_THIS_BINDING).and_then(|value| match value {
+            Value::Object(object) => Some(object),
+            _ => None,
+        });
         if let Some(property) = global_this
             .as_ref()
             .and_then(|object| object.own_property(name))
         {
+            env.insert(name.to_owned(), property.value.clone());
             env.insert_realm(name.to_owned(), property.value);
         } else {
-            env.realm_entry_or_insert(name.to_owned(), Value::Undefined);
-            if let Some(global_this) = &global_this {
-                global_this.define_property(
-                    name.to_owned(),
-                    Property::data(Value::Undefined, true, true, true),
-                );
-            }
+            env.insert(name.to_owned(), Value::Undefined);
+            define_eval_global_binding(env, name, Value::Undefined);
         }
     }
-    Ok(())
+}
+
+fn define_eval_global_binding(env: &mut CallEnv, name: &str, value: Value) {
+    let global_this = env.get(GLOBAL_THIS_BINDING).and_then(|value| match value {
+        Value::Object(object) => Some(object),
+        _ => None,
+    });
+    if let Some(global_this) = global_this {
+        if global_this.has_own_property(name) {
+            global_this.set(name.to_owned(), value.clone());
+        } else {
+            global_this.define_property(
+                name.to_owned(),
+                Property::data(value.clone(), true, true, true),
+            );
+        }
+    }
+    env.insert_realm(name.to_owned(), value);
 }
 
 pub(super) fn native_global_escape(

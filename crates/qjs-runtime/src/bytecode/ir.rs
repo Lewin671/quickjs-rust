@@ -115,8 +115,10 @@ pub(super) enum Op {
         is_strict: bool,
     },
     Call(usize),
+    CallDirectEval(usize),
     CallMethod(usize),
     CallSpread,
+    CallDirectEvalSpread,
     CallMethodSpread,
     /// Pops an iterator and calls its `return` method when present. With
     /// `swallow` set, errors from the close are ignored (the close happens
@@ -492,8 +494,10 @@ impl Bytecode {
             matches!(
                 op,
                 Op::Call(_)
+                    | Op::CallDirectEval(_)
                     | Op::CallMethod(_)
                     | Op::CallSpread
+                    | Op::CallDirectEvalSpread
                     | Op::CallMethodSpread
                     | Op::New(_)
                     | Op::NewSpread

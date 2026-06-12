@@ -228,10 +228,15 @@ impl Compiler {
             return Ok(());
         }
 
+        let direct_eval = matches!(callee, Expr::Identifier { name, .. } if name == "eval");
         self.compile_expr(callee)?;
         if has_spread {
             self.compile_argument_array(arguments)?;
-            self.emit(Op::CallSpread);
+            if direct_eval {
+                self.emit(Op::CallDirectEvalSpread);
+            } else {
+                self.emit(Op::CallSpread);
+            }
             return Ok(());
         }
         for argument in arguments {
@@ -240,7 +245,11 @@ impl Compiler {
             };
             self.compile_expr(argument)?;
         }
-        self.emit(Op::Call(arguments.len()));
+        if direct_eval {
+            self.emit(Op::CallDirectEval(arguments.len()));
+        } else {
+            self.emit(Op::Call(arguments.len()));
+        }
         Ok(())
     }
 

@@ -169,6 +169,56 @@ fn evaluates_global_eval_builtin() {
 }
 
 #[test]
+fn evaluates_direct_eval_annex_b_function_bindings_in_function_frames() {
+    assert_eq!(
+        eval(
+            "var init, changed; \
+             (function() { eval('init = f; f = 123; changed = f; { function f() {} }'); }()); \
+             String(init) + ':' + changed + ':' + typeof f;"
+        ),
+        Ok(Value::String("undefined:123:undefined".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var init, after; \
+             (function(f) { eval('init = f; { function f() {} } after = typeof f;'); }(123)); \
+             init + ':' + after + ':' + typeof f;"
+        ),
+        Ok(Value::String("123:function:undefined".to_owned()))
+    );
+}
+
+#[test]
+fn evaluates_global_eval_annex_b_bindings_as_configurable() {
+    assert_eq!(
+        eval(
+            "eval('if (true) { function test262Fn() {} }'); \
+             let d = Object.getOwnPropertyDescriptor(this, 'test262Fn'); \
+             typeof test262Fn + ':' + d.configurable;"
+        ),
+        Ok(Value::String("function:true".to_owned()))
+    );
+}
+
+#[test]
+fn evaluates_indirect_eval_against_global_scope() {
+    assert_eq!(
+        eval(
+            "let local = 1; \
+             (function() { let local = 2; return (0, eval)('typeof local'); }());"
+        ),
+        Ok(Value::String("undefined".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "(function(source) { return (0, eval)(source); }('let indirectLexical = 1;')); \
+             indirectLexical + ':' + Object.prototype.hasOwnProperty.call(this, 'indirectLexical');"
+        ),
+        Ok(Value::String("1:false".to_owned()))
+    );
+}
+
+#[test]
 fn initializes_global_hoisted_bindings_before_script_execution() {
     assert_eq!(
         eval("var before = f; { function f() { return 9; } } before === undefined && f() === 9;"),
