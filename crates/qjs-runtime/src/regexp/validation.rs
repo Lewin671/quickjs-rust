@@ -20,6 +20,7 @@ fn validate_regexp_flags(flags: &str) -> Result<(), RuntimeError> {
 fn validate_regexp_pattern(source: &str, unicode: bool) -> Result<(), RuntimeError> {
     let pattern: Vec<_> = source.chars().collect();
     let capture_count = regexp_capture_count(&pattern);
+    validate_named_group_references(&pattern, unicode)?;
     let mut index = 0;
     let mut has_atom = false;
     while index < pattern.len() {
@@ -66,6 +67,16 @@ fn validate_regexp_pattern(source: &str, unicode: bool) -> Result<(), RuntimeErr
                 let Some(end) = group_end(&pattern, index) else {
                     return Err(regexp_syntax_error("invalid regular expression pattern"));
                 };
+                // Lookbehind assertions are not `QuantifiableAssertion`s, so a
+                // quantifier immediately after `(?<=...)` / `(?<!...)` is a
+                // SyntaxError in both Annex-B and non-Annex-B modes.
+                if is_lookbehind_group(&pattern, index)
+                    && pattern
+                        .get(end + 1)
+                        .is_some_and(|next| matches!(next, '*' | '+' | '?' | '{'))
+                {
+                    return Err(regexp_syntax_error("invalid regular expression pattern"));
+                }
                 index = end + 1;
                 has_atom = true;
             }
@@ -91,10 +102,17 @@ fn validate_regexp_pattern(source: &str, unicode: bool) -> Result<(), RuntimeErr
                     }
                     has_atom = false;
                 }
-                Some(_) | None if unicode => {
+                // A well-formed `{n}`/`{n,}`/`{n,m}` with nothing to quantify is
+                // an `InvalidBracedQuantifier`, a SyntaxError in both Annex-B and
+                // non-Annex-B modes (the production has higher precedence than
+                // treating `{` as a literal `ExtendedPatternCharacter`).
+                Some(_) => {
                     return Err(regexp_syntax_error("invalid regular expression pattern"));
                 }
-                _ => {
+                None if unicode => {
+                    return Err(regexp_syntax_error("invalid regular expression pattern"));
+                }
+                None => {
                     index += 1;
                     has_atom = true;
                 }
@@ -292,9 +310,166 @@ fn counted_quantifier_bounds(
     Some((min, has_max.then_some(max), index + 1))
 }
 
+/// Does the `(` at `index` open a lookbehind assertion (`(?<=` / `(?<!`)?
+fn is_lookbehind_group(pattern: &[char], index: usize) -> bool {
+    pattern.get(index + 1) == Some(&'?')
+        && pattern.get(index + 2) == Some(&'<')
+        && matches!(pattern.get(index + 3), Some('=') | Some('!'))
+}
+
+/// Validate `\k<name>` named backreferences against the named groups declared
+/// in the pattern.
+///
+/// A `\k<name>` is a `GroupName` (and so must resolve) whenever the pattern
+/// contains any named group, or when the `u` flag is set. In Annex-B mode with
+/// no named groups at all, a bare `\k` is an `IdentityEscape` and is left to
+/// the matcher, matching upstream behavior.
+fn validate_named_group_references(pattern: &[char], unicode: bool) -> Result<(), RuntimeError> {
+    let names = collect_named_group_names(pattern);
+    let treat_k_as_reference = unicode || !names.is_empty();
+    if !treat_k_as_reference {
+        return Ok(());
+    }
+
+    let mut index = 0;
+    let mut in_class = false;
+    while index < pattern.len() {
+        match pattern[index] {
+            '\\' if !in_class && pattern.get(index + 1) == Some(&'k') => {
+                let Some((name, next)) = parse_group_name(pattern, index + 2) else {
+                    return Err(regexp_syntax_error("invalid regular expression pattern"));
+                };
+                if !names.contains(&name) {
+                    return Err(regexp_syntax_error("invalid regular expression pattern"));
+                }
+                index = next;
+            }
+            '\\' => index += 2,
+            '[' => {
+                in_class = true;
+                index += 1;
+            }
+            ']' => {
+                in_class = false;
+                index += 1;
+            }
+            _ => index += 1,
+        }
+    }
+    Ok(())
+}
+
+/// Collect the names of every `(?<name>` group, rejecting duplicate names.
+fn collect_named_group_names(pattern: &[char]) -> Vec<String> {
+    let mut names = Vec::new();
+    let mut index = 0;
+    let mut in_class = false;
+    while index < pattern.len() {
+        match pattern[index] {
+            '\\' => index += 2,
+            '[' => {
+                in_class = true;
+                index += 1;
+            }
+            ']' => {
+                in_class = false;
+                index += 1;
+            }
+            '(' if !in_class
+                && pattern.get(index + 1) == Some(&'?')
+                && pattern.get(index + 2) == Some(&'<')
+                && !matches!(pattern.get(index + 3), Some('=') | Some('!')) =>
+            {
+                if let Some((name, next)) = parse_group_name(pattern, index + 2) {
+                    names.push(name);
+                    index = next;
+                } else {
+                    index += 1;
+                }
+            }
+            _ => index += 1,
+        }
+    }
+    names
+}
+
+/// Parse a `<name>` starting at `start` (pointing at `<`). Returns the name and
+/// the index just past `>`.
+fn parse_group_name(pattern: &[char], start: usize) -> Option<(String, usize)> {
+    if pattern.get(start) != Some(&'<') {
+        return None;
+    }
+    let mut index = start + 1;
+    let mut name = String::new();
+    while let Some(&value) = pattern.get(index) {
+        if value == '>' {
+            if name.is_empty() {
+                return None;
+            }
+            return Some((name, index + 1));
+        }
+        name.push(value);
+        index += 1;
+    }
+    None
+}
+
 fn regexp_syntax_error(message: &str) -> RuntimeError {
     RuntimeError {
         thrown: None,
         message: format!("SyntaxError: {message}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_regexp_init;
+
+    fn accepts(source: &str, flags: &str) {
+        assert!(
+            validate_regexp_init(source, flags).is_ok(),
+            "expected /{source}/{flags} to be valid"
+        );
+    }
+
+    fn rejects(source: &str, flags: &str) {
+        assert!(
+            validate_regexp_init(source, flags).is_err(),
+            "expected /{source}/{flags} to be a SyntaxError"
+        );
+    }
+
+    #[test]
+    fn rejects_braced_quantifier_without_atom() {
+        rejects("{2}", "");
+        rejects("{2,}", "");
+        rejects("{2,4}", "");
+        rejects("{2}", "u");
+        // A malformed brace stays a literal in Annex-B mode.
+        accepts("{", "");
+        accepts("a{", "");
+        accepts("x{2}", "");
+    }
+
+    #[test]
+    fn rejects_quantified_lookbehind() {
+        rejects(".(?<=.)?", "");
+        rejects(".(?<=.)*", "");
+        rejects(".(?<!.)+", "");
+        rejects(".(?<=.){2}", "u");
+        // Lookahead remains a QuantifiableAssertion in Annex-B mode.
+        accepts(".(?=.)?", "");
+        accepts("(?<=a)b", "");
+    }
+
+    #[test]
+    fn rejects_dangling_named_backreference() {
+        rejects("(?<a>.)\\k<b>", "");
+        rejects("(?<a>a)\\k<ab>", "");
+        rejects("\\k<a>(?<b>x)", "");
+        rejects("\\k<a>", "u");
+        accepts("(?<a>.)\\k<a>", "");
+        // With no named group and no `u` flag, `\k` is an identity escape.
+        accepts("\\k<a>", "");
     }
 }
