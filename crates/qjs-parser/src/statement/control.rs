@@ -209,6 +209,32 @@ impl Parser {
         })
     }
 
+    pub(super) fn with_statement(&mut self) -> Result<Stmt, ParseError> {
+        let start = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .start;
+        // `with` is a SyntaxError in strict-mode code (ECMA-262 14.11.1).
+        if self.strict {
+            return Err(ParseError {
+                message: "`with` statements are not allowed in strict mode".to_owned(),
+                span: Span::new(start, start + "with".len()),
+            });
+        }
+        self.expect(&TokenKind::With)?;
+        self.expect(&TokenKind::LeftParen)?;
+        let object = self.expression()?;
+        self.expect(&TokenKind::RightParen)?;
+        let body = self.statement()?;
+        let end = stmt_end(&body);
+        Ok(Stmt::With {
+            object,
+            body: Box::new(body),
+            span: Span::new(start, end),
+        })
+    }
+
     pub(super) fn switch_statement(&mut self) -> Result<Stmt, ParseError> {
         let start = self
             .peek()

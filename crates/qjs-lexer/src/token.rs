@@ -98,6 +98,8 @@ pub enum TokenKind {
     Void,
     /// `in`.
     In,
+    /// `with`.
+    With,
     /// `delete`.
     Delete,
     /// `new`.

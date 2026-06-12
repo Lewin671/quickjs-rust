@@ -17,7 +17,18 @@ impl Compiler {
                 // `f = <anon>` applies NamedEvaluation: an anonymous function or
                 // class assigned to a plain identifier takes that identifier's
                 // name. Member targets (`obj.x = <anon>`) never do.
-                let Some(slot) = self.resolve_local_slot(name) else {
+                let slot = self.resolve_local_slot(name);
+                if self.inside_with() {
+                    self.compile_named_expr(value, name)?;
+                    self.emit(Op::Dup);
+                    self.emit(Op::StoreIdentWith {
+                        name: name.clone(),
+                        slot,
+                        is_strict: self.strict,
+                    });
+                    return Ok(());
+                }
+                let Some(slot) = slot else {
                     self.compile_named_expr(value, name)?;
                     self.emit(Op::Dup);
                     if self.strict || self.is_global_hoisted(name) {
@@ -152,7 +163,12 @@ impl Compiler {
     }
 
     fn emit_load_identifier(&mut self, name: &str, slot: Option<usize>) {
-        if let Some(slot) = slot {
+        if self.inside_with() {
+            self.emit(Op::LoadIdentWith {
+                name: name.to_owned(),
+                slot,
+            });
+        } else if let Some(slot) = slot {
             self.emit(Op::LoadLocal(slot));
         } else {
             self.emit(Op::LoadGlobal(name.to_owned()));
@@ -160,7 +176,13 @@ impl Compiler {
     }
 
     fn emit_store_identifier(&mut self, name: &str, slot: Option<usize>) {
-        if let Some(slot) = slot {
+        if self.inside_with() {
+            self.emit(Op::StoreIdentWith {
+                name: name.to_owned(),
+                slot,
+                is_strict: self.strict,
+            });
+        } else if let Some(slot) = slot {
             self.emit(Op::StoreLocal(slot));
         } else {
             self.emit(Op::StoreGlobalStrict(name.to_owned()));
@@ -359,7 +381,14 @@ impl Compiler {
     pub(super) fn compile_typeof(&mut self, argument: &Expr) -> Result<(), RuntimeError> {
         match argument {
             Expr::Identifier { name, .. } => {
-                if let Some(slot) = self.resolve_local_slot(name) {
+                let slot = self.resolve_local_slot(name);
+                if self.inside_with() {
+                    self.emit(Op::TypeofIdentWith {
+                        name: name.clone(),
+                        slot,
+                    });
+                    return Ok(());
+                } else if let Some(slot) = slot {
                     self.emit(Op::LoadLocalOrUndefined(slot));
                 } else {
                     self.emit(Op::TypeofGlobal(name.clone()));

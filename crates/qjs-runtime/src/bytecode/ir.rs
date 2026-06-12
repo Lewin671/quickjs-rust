@@ -22,6 +22,33 @@ pub(super) enum Op {
         name: String,
     },
     TypeofGlobal(String),
+    /// Pushes the with-object on top of the with-object stack. The object is
+    /// popped from the operand stack. Used when entering a `with` body.
+    EnterWith,
+    /// Pops the innermost with-object off the with-object stack. Used when
+    /// leaving a `with` body (normally or via break/continue/return).
+    ExitWith,
+    /// Loads an identifier from inside a `with` body: consults the with-object
+    /// stack (honoring `Symbol.unscopables` and the prototype chain) first, then
+    /// falls back to the local slot when present, otherwise the global scope.
+    LoadIdentWith {
+        name: String,
+        slot: Option<usize>,
+    },
+    /// Stores to an identifier from inside a `with` body, mirroring
+    /// `LoadIdentWith` resolution. `is_strict` selects strict vs sloppy global
+    /// store semantics for the fallback.
+    StoreIdentWith {
+        name: String,
+        slot: Option<usize>,
+        is_strict: bool,
+    },
+    /// `typeof name` from inside a `with` body, never throwing for an unresolved
+    /// name. Mirrors `LoadIdentWith` resolution.
+    TypeofIdentWith {
+        name: String,
+        slot: Option<usize>,
+    },
     Pop,
     Dup,
     NewArray {
@@ -471,6 +498,13 @@ fn collect_global_names_from_ops(code: &[Op], names: &mut BTreeSet<String>) {
                 names.insert(name.clone());
             }
             Op::StoreLocalOrGlobalSloppy { name, .. } => {
+                names.insert(name.clone());
+            }
+            Op::LoadIdentWith { name, slot: None }
+            | Op::StoreIdentWith {
+                name, slot: None, ..
+            }
+            | Op::TypeofIdentWith { name, slot: None } => {
                 names.insert(name.clone());
             }
             Op::NewFunction { bytecode, .. } => {

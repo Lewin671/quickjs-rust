@@ -61,6 +61,10 @@ impl Parser {
             return self.switch_statement();
         }
 
+        if self.at(&TokenKind::With) {
+            return self.with_statement();
+        }
+
         if self.at(&TokenKind::Try) {
             return self.try_statement();
         }

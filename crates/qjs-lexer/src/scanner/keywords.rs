@@ -32,6 +32,7 @@ pub(super) fn identifier_or_keyword(text: &str) -> TokenKind {
         "typeof" => TokenKind::Typeof,
         "void" => TokenKind::Void,
         "in" => TokenKind::In,
+        "with" => TokenKind::With,
         "delete" => TokenKind::Delete,
         "new" => TokenKind::New,
         "instanceof" => TokenKind::Instanceof,

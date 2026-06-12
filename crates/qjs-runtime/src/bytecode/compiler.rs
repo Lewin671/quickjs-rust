@@ -27,6 +27,10 @@ pub(super) struct Compiler {
     /// deferred closures, direct eval, and promise jobs observe one binding.
     global_hoisted: std::collections::HashSet<String>,
     annex_b_blocked_function_names: Vec<Vec<String>>,
+    /// Count of `with` scopes currently open around the code being compiled.
+    /// Break/continue/return that leave one or more of them emit `Op::ExitWith`
+    /// for each scope crossed, keeping the VM's with-object stack balanced.
+    pub(super) with_depth: usize,
 }
 
 #[derive(Default)]
@@ -37,6 +41,9 @@ pub(super) struct LoopContext {
     breaks: Vec<usize>,
     continues: Vec<usize>,
     iterator: Option<LoopIterator>,
+    /// The compiler's `with_depth` when this loop was entered. A break or
+    /// continue targeting it must close every `with` scope opened since.
+    with_depth: usize,
 }
 
 /// Live iterator state for a `for-of` loop that must be closed when an
@@ -62,6 +69,7 @@ impl Default for Compiler {
             global_scope: true,
             global_hoisted: std::collections::HashSet::new(),
             annex_b_blocked_function_names: Vec::new(),
+            with_depth: 0,
         }
     }
 }
@@ -286,7 +294,7 @@ impl Compiler {
                         self.local_slot(name, true);
                     }
                 }
-                Stmt::Labelled { body, .. } => {
+                Stmt::Labelled { body, .. } | Stmt::With { body, .. } => {
                     self.collect_hoisted_locals(std::slice::from_ref(body));
                 }
                 Stmt::VarDecl {
@@ -514,6 +522,7 @@ impl Compiler {
             result_slot,
             allows_continue: true,
             labels,
+            with_depth: self.with_depth,
             ..LoopContext::default()
         });
     }
@@ -532,6 +541,7 @@ impl Compiler {
             result_slot,
             allows_continue: false,
             labels,
+            with_depth: self.with_depth,
             ..LoopContext::default()
         });
     }
@@ -562,6 +572,7 @@ impl Compiler {
         };
         self.propagate_current_completion_to(index);
         self.emit_loop_iterator_closes_above(index);
+        self.emit_with_exits_above(self.loop_stack[index].with_depth);
         let result_slot = self.loop_stack[index].result_slot;
         self.emit(Op::LoadLocal(result_slot));
         let jump = self.emit(Op::Jump(usize::MAX));
@@ -581,6 +592,7 @@ impl Compiler {
         };
         self.propagate_current_completion_to(index);
         self.emit_loop_iterator_closes_above(index);
+        self.emit_with_exits_above(self.loop_stack[index].with_depth);
         let jump = self.emit(Op::Jump(usize::MAX));
         self.loop_stack[index].continues.push(jump);
         Ok(())
@@ -752,6 +764,7 @@ impl Compiler {
                     self.emit_load_undefined();
                 }
                 self.emit_loop_iterator_closes_for_return();
+                self.emit_with_exits_above(0);
                 self.emit(Op::Return);
                 Ok(())
             }
@@ -793,6 +806,7 @@ impl Compiler {
                 self.emit_load_undefined();
                 Ok(())
             }
+            Stmt::With { object, body, .. } => self.compile_with(object, body),
             Stmt::Labelled { label, body, .. } => self.compile_labelled(label, body),
             Stmt::Break { label, .. } => self.compile_break(label.as_deref()),
             Stmt::Continue { label, .. } => self.compile_continue(label.as_deref()),
@@ -835,6 +849,12 @@ impl Compiler {
 
     fn current_loop_result_slot(&self) -> Option<usize> {
         self.loop_stack.last().map(|context| context.result_slot)
+    }
+
+    /// Whether the code currently being compiled is inside a `with` body, so
+    /// identifier references must consult the with-object stack at runtime.
+    pub(super) fn inside_with(&self) -> bool {
+        self.with_depth > 0
     }
 
     fn compile_labelled(&mut self, label: &str, body: &Stmt) -> Result<(), RuntimeError> {

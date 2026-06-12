@@ -12,6 +12,9 @@ pub(super) struct TryFrame {
     catch_scope: Option<CatchScope>,
     catch_scope_active: bool,
     stack_depth: usize,
+    /// Depth of the with-object stack when this try region was entered, so an
+    /// exception unwinds any `with` scopes opened inside the protected region.
+    with_depth: usize,
 }
 
 impl Vm<'_> {
@@ -27,6 +30,7 @@ impl Vm<'_> {
             catch_scope,
             catch_scope_active: false,
             stack_depth: self.stack.len(),
+            with_depth: self.with_stack.len(),
         });
     }
 
@@ -40,8 +44,10 @@ impl Vm<'_> {
     pub(super) fn throw_value(&mut self, value: Value) -> Result<(), RuntimeError> {
         if let Some(frame) = self.try_stack.last_mut() {
             self.stack.truncate(frame.stack_depth);
+            let with_depth = frame.with_depth;
             if let Some(catch) = frame.catch.take() {
                 frame.catch_scope_active = true;
+                self.with_stack.truncate(with_depth);
                 self.stack.push(value);
                 self.ip = catch;
                 return Ok(());
@@ -50,6 +56,7 @@ impl Vm<'_> {
 
         if let Some(frame) = self.try_stack.pop() {
             self.stack.truncate(frame.stack_depth);
+            self.with_stack.truncate(frame.with_depth);
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
             if let Some(finally) = frame.finally {
                 self.pending_throw = Some(value);
@@ -68,6 +75,7 @@ impl Vm<'_> {
     pub(super) fn return_value(&mut self, value: Value) -> Result<Option<Value>, RuntimeError> {
         while let Some(frame) = self.try_stack.pop() {
             self.stack.truncate(frame.stack_depth);
+            self.with_stack.truncate(frame.with_depth);
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
             if let Some(finally) = frame.finally {
                 self.pending_return = Some(value);

@@ -838,6 +838,7 @@ pub(crate) fn keyword_property_name(kind: &TokenKind) -> Option<&'static str> {
         TokenKind::Typeof => Some("typeof"),
         TokenKind::Void => Some("void"),
         TokenKind::In => Some("in"),
+        TokenKind::With => Some("with"),
         TokenKind::Delete => Some("delete"),
         TokenKind::New => Some("new"),
         TokenKind::Instanceof => Some("instanceof"),

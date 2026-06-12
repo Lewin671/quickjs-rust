@@ -1,13 +1,56 @@
 use std::collections::HashMap;
 
-use crate::{GLOBAL_THIS_BINDING, Property, RuntimeError, Value, function::CallEnv};
+use crate::{
+    GLOBAL_THIS_BINDING, Property, PropertyKey, RuntimeError, Value, function::CallEnv, is_truthy,
+    property::has_property, property_value_key, symbol::unscopables_symbol,
+};
 
+use super::util::typeof_value;
 use super::{
-    ir::Bytecode,
+    ir::{Bytecode, Op},
     vm::{Slot, Vm},
+    vm_props::{get_property, set_property_key},
 };
 
 impl Vm<'_> {
+    /// Executes a `with`-related opcode: scope push/pop and the with-aware
+    /// identifier load/store/typeof. Centralizing the stack interaction here
+    /// keeps the main bytecode loop terse.
+    pub(super) fn run_with_op(&mut self, op: Op) -> Result<(), RuntimeError> {
+        match op {
+            Op::EnterWith => {
+                let object = self.pop()?;
+                self.with_stack.push(object);
+            }
+            Op::ExitWith => {
+                self.with_stack.pop();
+            }
+            Op::LoadIdentWith { name, slot } => {
+                let result = self.load_ident_with(&name, slot);
+                if let Some(value) = self.handle_runtime_result(result)? {
+                    self.stack.push(value);
+                }
+            }
+            Op::StoreIdentWith {
+                name,
+                slot,
+                is_strict,
+            } => {
+                let value = self.pop()?;
+                let result = self.store_ident_with(&name, slot, is_strict, value);
+                self.handle_runtime_result(result)?;
+            }
+            Op::TypeofIdentWith { name, slot } => {
+                let result = self.typeof_ident_with(&name, slot);
+                if let Some(value) = self.handle_runtime_result(result)? {
+                    self.stack.push(value);
+                }
+            }
+            _ => unreachable!("run_with_op received a non-with opcode"),
+        }
+        Ok(())
+    }
+
     pub(super) fn initialize_script_global_bindings(
         bytecode: &Bytecode,
         globals: &mut HashMap<String, Value>,
@@ -109,6 +152,106 @@ impl Vm<'_> {
         global_this
             .own_property(name)
             .map(|property| property.value)
+    }
+
+    /// Resolves an identifier inside a `with` body to the innermost with-object
+    /// that binds `name` (an own-or-inherited property not filtered out by the
+    /// object's `Symbol.unscopables`). Returns `None` when no with-object binds
+    /// it, in which case the caller falls back to ordinary scope resolution.
+    fn with_binding_object(&self, name: &str) -> Result<Option<Value>, RuntimeError> {
+        let env = self.realm_env();
+        for object in self.with_stack.iter().rev() {
+            if !has_property(object.clone(), &env, name)? {
+                continue;
+            }
+            if self.is_unscopable(object, name)? {
+                continue;
+            }
+            return Ok(Some(object.clone()));
+        }
+        Ok(None)
+    }
+
+    /// Whether `name` is excluded from a with-object's bindings by its
+    /// `Symbol.unscopables` (a property whose value is truthy).
+    fn is_unscopable(&self, object: &Value, name: &str) -> Result<bool, RuntimeError> {
+        let mut env = self.current_env();
+        let Some(symbol) = unscopables_symbol(&env) else {
+            return Ok(false);
+        };
+        let unscopables =
+            property_value_key(object.clone(), &PropertyKey::Symbol(symbol), &mut env)?;
+        match unscopables {
+            Value::Object(_) | Value::Function(_) | Value::Array(_) => {
+                let blocked = get_property(unscopables, name, &mut env)?;
+                Ok(is_truthy(&blocked))
+            }
+            _ => Ok(false),
+        }
+    }
+
+    pub(super) fn load_ident_with(
+        &mut self,
+        name: &str,
+        slot: Option<usize>,
+    ) -> Result<Value, RuntimeError> {
+        if let Some(object) = self.with_binding_object(name)? {
+            let mut env = self.current_env();
+            let value = get_property(object, name, &mut env)?;
+            self.apply_env(env);
+            return Ok(value);
+        }
+        match slot {
+            Some(slot) => self.load_local(slot),
+            None => self.load_global(name),
+        }
+    }
+
+    pub(super) fn store_ident_with(
+        &mut self,
+        name: &str,
+        slot: Option<usize>,
+        is_strict: bool,
+        value: Value,
+    ) -> Result<(), RuntimeError> {
+        if let Some(object) = self.with_binding_object(name)? {
+            let mut env = self.current_env();
+            set_property_key(
+                object,
+                PropertyKey::String(name.to_owned()),
+                value,
+                &mut env,
+            )?;
+            self.apply_env(env);
+            return Ok(());
+        }
+        match slot {
+            Some(slot) => self.store_local(slot, value),
+            None if is_strict => self.store_global_strict(name.to_owned(), value),
+            None => {
+                self.store_global_sloppy(name.to_owned(), value)?;
+                self.record_sloppy_global_name(name);
+                Ok(())
+            }
+        }
+    }
+
+    pub(super) fn typeof_ident_with(
+        &mut self,
+        name: &str,
+        slot: Option<usize>,
+    ) -> Result<Value, RuntimeError> {
+        if let Some(object) = self.with_binding_object(name)? {
+            let mut env = self.current_env();
+            let value = get_property(object, name, &mut env)?;
+            self.apply_env(env);
+            return Ok(Value::String(typeof_value(value)));
+        }
+        let value = match slot {
+            Some(slot) => self.load_local_or_undefined(slot)?,
+            None => self.env.get(name).unwrap_or(Value::Undefined),
+        };
+        Ok(Value::String(typeof_value(value)))
     }
 
     pub(super) fn load_local(&self, slot: usize) -> Result<Value, RuntimeError> {

@@ -469,4 +469,26 @@ impl Compiler {
         let slot = self.const_slot(Value::String(value.to_owned()));
         self.emit(Op::LoadConst(slot));
     }
+
+    pub(super) fn compile_with(&mut self, object: &Expr, body: &Stmt) -> Result<(), RuntimeError> {
+        // The completion value of a `with` is its body's completion value.
+        self.compile_expr(object)?;
+        self.emit(Op::EnterWith);
+        self.with_depth += 1;
+        let result = self.compile_stmt(body);
+        self.with_depth -= 1;
+        result?;
+        self.emit(Op::ExitWith);
+        Ok(())
+    }
+
+    /// Emits an `Op::ExitWith` for each `with` scope opened above `target_depth`,
+    /// keeping the VM's with-object stack balanced when control jumps out of one
+    /// or more `with` bodies. Does not change the compiler's own `with_depth`,
+    /// since the surrounding scope keeps compiling after the jump.
+    pub(super) fn emit_with_exits_above(&mut self, target_depth: usize) {
+        for _ in target_depth..self.with_depth {
+            self.emit(Op::ExitWith);
+        }
+    }
 }

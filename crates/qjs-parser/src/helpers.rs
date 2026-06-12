@@ -33,6 +33,7 @@ pub(crate) fn property_name(kind: TokenKind) -> Option<String> {
         TokenKind::Typeof => Some("typeof".to_owned()),
         TokenKind::Void => Some("void".to_owned()),
         TokenKind::In => Some("in".to_owned()),
+        TokenKind::With => Some("with".to_owned()),
         TokenKind::Delete => Some("delete".to_owned()),
         TokenKind::Instanceof => Some("instanceof".to_owned()),
         _ => None,
@@ -167,7 +168,8 @@ pub(crate) fn stmt_end(stmt: &Stmt) -> usize {
         | Stmt::Debugger { span }
         | Stmt::Break { span, .. }
         | Stmt::Continue { span, .. }
-        | Stmt::VarDecl { span, .. } => span.end,
+        | Stmt::VarDecl { span, .. }
+        | Stmt::With { span, .. } => span.end,
         Stmt::Empty => 0,
     }
 }

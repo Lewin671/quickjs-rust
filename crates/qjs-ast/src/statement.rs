@@ -188,6 +188,15 @@ pub enum Stmt {
         /// Source span.
         span: Span,
     },
+    /// A `with` statement (sloppy mode only).
+    With {
+        /// The object whose properties augment the scope of `body`.
+        object: Expr,
+        /// The statement executed with the augmented scope.
+        body: Box<Stmt>,
+        /// Source span.
+        span: Span,
+    },
     /// An empty statement represented by `;`.
     Empty,
 }

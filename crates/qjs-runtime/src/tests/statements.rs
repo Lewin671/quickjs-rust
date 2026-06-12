@@ -1,6 +1,87 @@
 use crate::{Value, eval};
 
 #[test]
+fn with_statement_resolves_object_bindings() {
+    // The with-object shadows outer and global names for free references.
+    assert_eq!(eval("with ({ a: 1 }) { a; }"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("var x = 5; with ({}) { x; }"), Ok(Value::Number(5.0)));
+    // Assignments inside the body write back to the with-object property.
+    assert_eq!(
+        eval("var o = { a: 1 }; with (o) { a = 2; } o.a;"),
+        Ok(Value::Number(2.0))
+    );
+    // Getters on the with-object run during identifier resolution.
+    assert_eq!(
+        eval("with ({ get a() { return 42; } }) { a; }"),
+        Ok(Value::Number(42.0))
+    );
+    // typeof inside the body consults the with-object.
+    assert_eq!(
+        eval("with ({ a: 1 }) { typeof a; }"),
+        Ok(Value::String("number".to_owned()))
+    );
+    // The body resolves `this` from the surrounding scope, not the object.
+    assert_eq!(
+        eval("function f() { with ({ x: 10 }) { return x; } } f();"),
+        Ok(Value::Number(10.0))
+    );
+}
+
+#[test]
+fn with_statement_honors_symbol_unscopables() {
+    // A truthy `Symbol.unscopables` entry hides the property, so the free name
+    // resolves to the outer binding instead.
+    assert_eq!(
+        eval(
+            "var a = 1;
+             var o = { a: 2 };
+             o[Symbol.unscopables] = { a: true };
+             with (o) { a; }"
+        ),
+        Ok(Value::Number(1.0))
+    );
+    // A falsy entry leaves the property visible.
+    assert_eq!(
+        eval(
+            "var a = 1;
+             var o = { a: 2 };
+             o[Symbol.unscopables] = { a: false };
+             with (o) { a; }"
+        ),
+        Ok(Value::Number(2.0))
+    );
+}
+
+#[test]
+fn with_statement_unwinds_on_abrupt_completion() {
+    // break out of a with body keeps the with-object stack balanced.
+    assert_eq!(
+        eval(
+            "var r = 0;
+             for (var i = 0; i < 3; i++) {
+                 with ({}) { if (i === 1) break; r += i; }
+             }
+             r;"
+        ),
+        Ok(Value::Number(0.0))
+    );
+    // A throw crossing a with body restores the outer scope.
+    assert_eq!(
+        eval(
+            "var x = 7;
+             try { with ({ x: 1 }) { throw 0; } } catch (e) {}
+             x;"
+        ),
+        Ok(Value::Number(7.0))
+    );
+}
+
+#[test]
+fn with_statement_rejected_in_strict_mode() {
+    assert!(eval("'use strict'; with ({}) {}").is_err());
+}
+
+#[test]
 fn evaluates_variable_declarations() {
     assert_eq!(
         eval("let x = 2; const y = 3; x * y;"),

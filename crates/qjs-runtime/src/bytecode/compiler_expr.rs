@@ -193,7 +193,13 @@ impl Compiler {
         match expr {
             Expr::Literal(literal) => self.compile_literal(literal),
             Expr::Identifier { name, .. } => {
-                if let Some(slot) = self.resolve_local_slot(name) {
+                let slot = self.resolve_local_slot(name);
+                if self.inside_with() {
+                    self.emit(Op::LoadIdentWith {
+                        name: name.clone(),
+                        slot,
+                    });
+                } else if let Some(slot) = slot {
                     self.emit(Op::LoadLocal(slot));
                 } else {
                     self.emit(Op::LoadGlobal(name.clone()));

@@ -398,3 +398,20 @@ fn parses_destructuring_loop_heads_and_catch_patterns() {
     // Pattern heads without `of`/`in` still parse as ordinary for loops.
     parse_script("for (let [a] = [1]; a < 2; a += 1) a;").expect("source should parse");
 }
+
+#[test]
+fn parses_with_statement() {
+    let script = parse_script("with (obj) body;").expect("source should parse");
+    let [Stmt::With { object, body, .. }] = script.body.as_slice() else {
+        panic!("expected one with statement");
+    };
+    assert!(matches!(object, Expr::Identifier { name, .. } if name == "obj"));
+    assert!(matches!(body.as_ref(), Stmt::Expr(Expr::Identifier { .. })));
+
+    // `with` remains usable as a property name (it is a reserved word only as a
+    // statement keyword).
+    parse_script("array.with(0, 9);").expect("source should parse");
+
+    // `with` is a SyntaxError in strict-mode code.
+    assert!(parse_script("'use strict'; with (obj) {}").is_err());
+}

@@ -83,6 +83,10 @@ pub(super) struct Vm<'a> {
     /// and pause at the start of the body. Cleared for ordinary runs and once
     /// the prologue boundary is passed.
     pub(super) stop_at_prologue: bool,
+    /// Object-environment records introduced by enclosing `with` statements,
+    /// innermost last. Identifier resolution inside a `with` body consults these
+    /// (honoring `Symbol.unscopables`) before frame and global scopes.
+    pub(super) with_stack: Vec<Value>,
 }
 
 impl<'a> Vm<'a> {
@@ -133,6 +137,7 @@ impl<'a> Vm<'a> {
             resume_mode: None,
             stop_at_prologue: false,
             array_prototype_cache: None,
+            with_stack: Vec::new(),
         }
     }
 
@@ -255,6 +260,13 @@ impl<'a> Vm<'a> {
                 Op::TypeofGlobal(name) => {
                     let value = self.env.get(&name).unwrap_or(Value::Undefined);
                     self.stack.push(Value::String(typeof_value(value)));
+                }
+                op @ (Op::EnterWith
+                | Op::ExitWith
+                | Op::LoadIdentWith { .. }
+                | Op::StoreIdentWith { .. }
+                | Op::TypeofIdentWith { .. }) => {
+                    self.run_with_op(op)?;
                 }
                 Op::Pop => {
                     self.pop()?;
