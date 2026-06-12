@@ -228,7 +228,7 @@ impl PropertyDescriptor {
         }
     }
 
-    fn is_accessor_descriptor(&self) -> bool {
+    pub(crate) fn is_accessor_descriptor(&self) -> bool {
         self.get.is_some() || self.set.is_some()
     }
 
@@ -244,6 +244,10 @@ impl PropertyDescriptor {
 
     pub(crate) fn configurable_field(&self) -> Option<bool> {
         self.configurable
+    }
+
+    pub(crate) fn enumerable_field(&self) -> Option<bool> {
+        self.enumerable
     }
 
     pub(crate) fn writable_field(&self) -> Option<bool> {

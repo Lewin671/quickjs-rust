@@ -122,6 +122,12 @@ fn evaluates_object_definition_and_creation_builtins() {
     );
     assert_eq!(
         eval(
+            "let a = [1]; let b = false, c = false; try { Object.defineProperty(a, 'length', { value: 1, configurable: true }); } catch (error) { b = error instanceof TypeError; } try { Object.defineProperty(a, 'length', { value: 2, configurable: true }); } catch (error) { c = error instanceof TypeError; } b + ':' + c + ':' + a.length;"
+        ),
+        Ok(Value::String("true:true:1".to_owned()))
+    );
+    assert_eq!(
+        eval(
             "let array = []; Object.defineProperty(array, 'length', { writable: false }); let caught = false; try { Object.defineProperty(array, 'length', { writable: true }); } catch (error) { caught = error instanceof TypeError; } caught;"
         ),
         Ok(Value::Boolean(true))
@@ -258,6 +264,24 @@ fn evaluates_object_definition_and_creation_builtins() {
             "let accessed = false; let args = (function() { return arguments; })(1, 2, 3); Object.defineProperty(args, '0', { get: function() { accessed = true; return 12; } }); args[0] + ':' + accessed;"
         ),
         Ok(Value::String("12:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "(function(a, b) { Object.defineProperty(arguments, '0', { value: 20, writable: false, enumerable: false, configurable: false }); let d = Object.getOwnPropertyDescriptor(arguments, '0'); return a + ':' + d.value + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable; })(0, 1);"
+        ),
+        Ok(Value::String("20:20:false:false:false".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "(function(a) { Object.defineProperty(arguments, '0', { value: 10, writable: false }); Object.defineProperty(arguments, '0', { value: 20 }); let d = Object.getOwnPropertyDescriptor(arguments, '0'); return a + ':' + d.value + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable; })(0);"
+        ),
+        Ok(Value::String("10:20:false:true:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "(function(a) { Object.defineProperty(arguments, '0', { value: 10, writable: false, configurable: false }); let caught = false; try { Object.defineProperty(arguments, '0', { value: 20 }); } catch (error) { caught = error instanceof TypeError; } return caught + ':' + a + ':' + arguments[0]; })(0);"
+        ),
+        Ok(Value::String("true:10:10".to_owned()))
     );
     assert_eq!(
         eval(
