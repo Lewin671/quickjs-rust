@@ -30,12 +30,31 @@ pass/fail signal.
       `qjs-ast` with spans. The runtime compiles any module item to a
       structured "modules are not yet supported" error. Focused parser tests
       in `tests/modules.rs`. Script-mode parsing is unchanged.
-- [ ] S2 Runtime: module records + instantiation. Build a Source Text Module
+- [x] S2 Runtime: module records + instantiation. Build a Source Text Module
       Record per module: parse, collect import entries / local + indirect /
       star export entries, link the module graph (resolve imports to exporting
       modules, allocate environment bindings), and construct Module Namespace
       exotic objects. No execution yet beyond evaluating linked module bodies
       in dependency order; ordering and binding tests at the runtime layer.
+      Implemented: `eval_module(source, specifier, &mut resolver)` plus a
+      `ModuleResolver` host callback (`MapResolver` for in-memory graphs);
+      module records in `crates/qjs-runtime/src/module/` (records, link/eval,
+      namespace, resolver); cyclic-graph DFS with Unlinked/Linking/Linked/
+      Evaluating/Evaluated states; SyntaxError on unresolvable imports, missing
+      named exports, and ambiguous star exports; `export * from` aggregation;
+      sealed namespace objects (sorted names, `Symbol.toStringTag` "Module").
+      Live-binding mechanism: all modules in a graph share ONE realm cell
+      (separate from the script realm, so module bindings never leak to the
+      process `globalThis`); a module's top-level `var`/`function` bindings live
+      in that cell, so a function exported by one module and called from another
+      reads the exporter's bindings live, and cyclic modules see each other's
+      hoisted functions. KNOWN GAP: a re-exported *primitive* `let`/`const`
+      binding is seeded as a snapshot at link time (top-level lexicals are frame
+      slots, not realm-hoisted), so a later reassignment of an exported
+      `let`/`const` primitive is not yet observed at the importer. Functions and
+      object exports are live. Full primitive live-binding indirection (a
+      load-path indirection table or realm-hoisting module lexicals) is deferred
+      to a follow-up. Module top-level `await` stays a parse error (S5).
 - [ ] S3 Harness: module channel. Run module-flagged Test262 cases as modules,
       resolve relative specifiers against the test's directory, wire harness
       includes as module-scope preludes, and lift the `module` skip in

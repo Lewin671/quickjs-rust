@@ -40,6 +40,10 @@ mod value;
 mod weak_map;
 mod weak_set;
 
+mod module;
+
+pub use module::{MapResolver, ModuleResolveError, ModuleResolver, ResolvedModule, eval_module};
+
 use builtins::initialize_builtins;
 pub(crate) use conversion::{
     PreferredType, error_value, is_truthy, ordinary_to_primitive, to_int32_number,

@@ -22,6 +22,7 @@ mod vm_generator;
 mod vm_iter;
 mod vm_jobs;
 mod vm_literals;
+mod vm_module;
 mod vm_ops;
 mod vm_private;
 mod vm_props;
@@ -153,6 +154,35 @@ impl EvalOutcome {
 pub fn eval_bytecode_keep_jobs(bytecode: &Bytecode) -> Result<EvalOutcome, RuntimeError> {
     let (value, env) = vm_jobs::eval_bytecode_keep_jobs(bytecode)?;
     Ok(EvalOutcome { value, env })
+}
+
+/// A shared realm for a module graph (see [`vm_module::new_module_realm`]).
+pub(crate) type ModuleRealm = crate::function::Realm;
+
+/// Builds the shared realm for a module graph. See
+/// [`vm_module::new_module_realm`].
+pub(crate) fn new_module_realm() -> ModuleRealm {
+    vm_module::new_module_realm()
+}
+
+/// Compiles a module body to strict global-scope bytecode.
+///
+/// # Errors
+///
+/// Returns a compiler error for syntax outside the bytecode subset.
+pub(crate) fn compile_module(script: &Script) -> Result<Bytecode, RuntimeError> {
+    compiler::compile_module(script)
+}
+
+/// Evaluates a module body against the shared graph realm seeded with the
+/// module's resolved imports. Returns the module's frame environment so the
+/// caller can read its exported bindings. See [`vm_module::eval_module_body`].
+pub(crate) fn eval_module_body(
+    bytecode: &Bytecode,
+    realm: &ModuleRealm,
+    imports: HashMap<String, Value>,
+) -> Result<crate::CallEnv, RuntimeError> {
+    vm_module::eval_module_body(bytecode, realm, imports)
 }
 
 pub(crate) fn eval_bytecode_with_env(
