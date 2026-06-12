@@ -268,6 +268,10 @@ impl Compiler {
                 arguments,
                 span,
             } => self.compile_new(callee, arguments, *span),
+            Expr::NewTarget { .. } => {
+                self.emit(Op::LoadNewTarget);
+                Ok(())
+            }
             Expr::Function {
                 name,
                 params,

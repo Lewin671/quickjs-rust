@@ -245,6 +245,7 @@ impl<'a> Vm<'a> {
                 Op::LoadLocalOrUndefined(slot) => {
                     self.stack.push(self.load_local_or_undefined(slot)?)
                 }
+                Op::LoadNewTarget => self.stack.push(self.load_new_target()),
                 Op::StoreLocal(slot) => {
                     let value = self.pop()?;
                     let result = self.store_local(slot, value);

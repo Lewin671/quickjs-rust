@@ -111,6 +111,9 @@ fn is_array_species_receiver(value: &Value) -> Result<bool, RuntimeError> {
 }
 
 fn is_object_like(value: &Value) -> bool {
+    if matches!(value, Value::Object(object) if symbol::is_symbol_primitive(object)) {
+        return false;
+    }
     matches!(
         value,
         Value::Object(_) | Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_)

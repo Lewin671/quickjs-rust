@@ -48,3 +48,57 @@ fn skips_missing_flattened_indexes_but_reads_inherited_indexes() {
 fn rejects_array_flat_map_non_callable_callback() {
     assert!(eval("[1].flatMap(null);").is_err());
 }
+
+#[test]
+fn evaluates_array_flat_map_species_result_object() {
+    assert_eq!(
+        eval(
+            "let calls = 0; let lengthArg = -1; let instance = {}; \
+             function C(length) { calls = calls + 1; lengthArg = length; return instance; } \
+             let a = [[1], [2]]; a.constructor = {}; a.constructor[Symbol.species] = C; \
+             let out = a.flatMap(function(value) { return value; }); \
+             (out === instance) + ':' + calls + ':' + lengthArg + ':' + out[0] + ':' + out[1] + ':' + Object.prototype.hasOwnProperty.call(out, 'length');"
+        ),
+        Ok(Value::String("true:1:0:1:2:false".to_owned()))
+    );
+}
+
+#[test]
+fn rejects_array_flat_map_species_result_write_failures() {
+    assert_eq!(
+        eval(
+            "function C() { this.length = 0; Object.preventExtensions(this); } \
+             let a = [[1]]; a.constructor = {}; a.constructor[Symbol.species] = C; \
+             let caught = false; try { a.flatMap(function(value) { return value; }); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "function C() { Object.defineProperty(this, '0', { set: function() {}, configurable: false }); } \
+             let a = [1]; a.constructor = {}; a.constructor[Symbol.species] = C; \
+             let caught = false; try { a.flatMap(function(value) { return value; }); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn evaluates_array_flat_map_proxy_access_order() {
+    assert_eq!(
+        eval(
+            "let getCalls = []; let hasCalls = []; \
+             let handler = { \
+               get: function(target, key) { getCalls[getCalls.length] = key; return target[key]; }, \
+               has: function(target, key) { hasCalls[hasCalls.length] = key; return Reflect.has(target, key); } \
+             }; \
+             let tier2 = new Proxy([4, 3], handler); \
+             let tier1 = new Proxy([2, [3, 4, 2, 2], 5, tier2, 6], handler); \
+             Array.prototype.flatMap.call(tier1, function(value) { return value; }); \
+             getCalls.join(',') + '|' + hasCalls.join(',');"
+        ),
+        Ok(Value::String(
+            "length,constructor,0,1,2,3,length,0,1,4|0,1,2,3,0,1,4".to_owned(),
+        ))
+    );
+}

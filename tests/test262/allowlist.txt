@@ -402,6 +402,14 @@ test/built-ins/Array/prototype/flatMap/length.js
 test/built-ins/Array/prototype/flatMap/mapperfunction-throws.js
 test/built-ins/Array/prototype/flatMap/name.js
 test/built-ins/Array/prototype/flatMap/prop-desc.js
+test/built-ins/Array/prototype/flatMap/proxy-access-count.js
+test/built-ins/Array/prototype/flatMap/target-array-non-extensible.js
+test/built-ins/Array/prototype/flatMap/target-array-with-non-configurable-property.js
+test/built-ins/Array/prototype/flatMap/this-value-ctor-non-object.js
+test/built-ins/Array/prototype/flatMap/this-value-ctor-object-species-bad-throws.js
+test/built-ins/Array/prototype/flatMap/this-value-ctor-object-species-custom-ctor-poisoned-throws.js
+test/built-ins/Array/prototype/flatMap/this-value-ctor-object-species-custom-ctor.js
+test/built-ins/Array/prototype/flatMap/this-value-ctor-object-species.js
 test/built-ins/Array/prototype/flatMap/this-value-null-undefined-throws.js
 test/built-ins/Array/prototype/flatMap/thisArg-argument.js
 cases/array-flat-null-undefined.js

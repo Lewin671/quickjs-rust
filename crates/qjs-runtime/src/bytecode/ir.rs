@@ -12,6 +12,7 @@ pub(super) enum Op {
     LoadConst(usize),
     LoadLocal(usize),
     LoadLocalOrUndefined(usize),
+    LoadNewTarget,
     StoreLocal(usize),
     ClearLocal(usize),
     DefineGlobalVar(String),

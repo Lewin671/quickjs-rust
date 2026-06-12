@@ -719,6 +719,14 @@ fn evaluates_new_expressions() {
         Ok(Value::Number(3.0))
     );
     assert_eq!(
+        eval("function F() { return new.target; } F() === undefined;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("function C() { this.ok = new.target === C; } new C().ok;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("function C() {} C.prototype.value = 4; let instance = new C(); instance.value;"),
         Ok(Value::Number(4.0))
     );

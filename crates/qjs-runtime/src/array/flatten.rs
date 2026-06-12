@@ -1,13 +1,11 @@
 use crate::{
-    ArrayRef, RuntimeError, Value, call_function, has_property, property_value, to_length_with_env,
+    RuntimeError, Value, call_function, has_property, property_value, to_length_with_env,
     to_number_with_env,
 };
 
 use super::{
     array_like::array_like_length,
-    species::{
-        array_species_create, create_data_property_or_throw, validate_array_species_constructor,
-    },
+    species::{array_species_create, create_data_property_or_throw},
 };
 use crate::CallEnv;
 
@@ -48,10 +46,10 @@ pub(crate) fn native_array_prototype_flat_map(
             message: "Array.prototype.flatMap callback is not callable".to_owned(),
         });
     }
-    validate_array_species_constructor(source.receiver.clone(), "flatMap", env)?;
+    let result = array_species_create(source.receiver.clone(), 0, "flatMap", env)?;
 
     let callback_this = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
-    let mut result = Vec::new();
+    let mut target_index = 0;
     for index in 0..source.length {
         let key = index.to_string();
         if !has_property(source.receiver.clone(), env, &key)? {
@@ -65,10 +63,10 @@ pub(crate) fn native_array_prototype_flat_map(
             env,
             false,
         )?;
-        flatten_value_into(&mut result, mapped, 1, env)?;
+        target_index = flatten_value_into_result(result.clone(), target_index, mapped, 1, env)?;
     }
 
-    Ok(Value::Array(ArrayRef::new(result)))
+    Ok(result)
 }
 
 fn flat_depth(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
@@ -84,24 +82,6 @@ fn flat_depth(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
         return Ok(usize::MAX);
     }
     Ok(number.trunc() as usize)
-}
-
-fn flatten_source_into(
-    result: &mut Vec<Value>,
-    receiver: Value,
-    length: usize,
-    depth: usize,
-    env: &mut CallEnv,
-) -> Result<(), RuntimeError> {
-    for index in 0..length {
-        let key = index.to_string();
-        if !has_property(receiver.clone(), env, &key)? {
-            continue;
-        }
-        let value = property_value(receiver.clone(), &key, env)?;
-        flatten_value_into(result, value, depth, env)?;
-    }
-    Ok(())
 }
 
 fn flatten_source_into_result(
@@ -142,25 +122,33 @@ fn flatten_source_into_result(
     Ok(target_index)
 }
 
-fn flatten_value_into(
-    result: &mut Vec<Value>,
+fn flatten_value_into_result(
+    target: Value,
+    target_index: usize,
     value: Value,
     depth: usize,
     env: &mut CallEnv,
-) -> Result<(), RuntimeError> {
-    match value {
-        Value::Array(array) if depth > 0 => {
-            flatten_source_into(
-                result,
-                Value::Array(array.clone()),
-                array.len(),
-                depth.saturating_sub(1),
-                env,
-            )?;
-        }
-        value => result.push(value),
+) -> Result<usize, RuntimeError> {
+    if should_flatten(value.clone(), depth)? {
+        let element_length = flattenable_length(value.clone(), env)?;
+        return flatten_source_into_result(
+            target,
+            target_index,
+            value,
+            element_length,
+            depth.saturating_sub(1),
+            env,
+        );
     }
-    Ok(())
+
+    if target_index >= MAX_SAFE_LENGTH {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: invalid array length".to_owned(),
+        });
+    }
+    create_data_property_or_throw(target, target_index.to_string(), value, env)?;
+    Ok(target_index + 1)
 }
 
 fn should_flatten(value: Value, depth: usize) -> Result<bool, RuntimeError> {

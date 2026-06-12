@@ -138,6 +138,20 @@ impl Parser {
 
     fn new_expression(&mut self, start: usize) -> Result<Expr, ParseError> {
         self.expect(&TokenKind::New)?;
+        if self.match_kind(&TokenKind::Dot) {
+            let property = self.advance();
+            if !matches!(&property.kind, TokenKind::Identifier(name) if name == "target")
+                || property.had_escape
+            {
+                return Err(ParseError {
+                    message: "only `new.target` is a valid `new.` meta-property".to_owned(),
+                    span: property.span,
+                });
+            }
+            return Ok(Expr::NewTarget {
+                span: Span::new(start, property.span.end),
+            });
+        }
         let callee = self.member_chain()?;
         // `import(...)` is a CallExpression and `import.meta` a meta-property;
         // neither is a valid constructor for `new` (no-new-call-expression).

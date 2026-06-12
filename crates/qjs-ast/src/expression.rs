@@ -229,6 +229,11 @@ pub enum Expr {
         /// Source span.
         span: Span,
     },
+    /// The `new.target` meta-property.
+    NewTarget {
+        /// Source span.
+        span: Span,
+    },
     /// A function expression.
     Function {
         /// Optional function name.
@@ -362,6 +367,7 @@ impl Expr {
             | Self::Update { span, .. }
             | Self::Call { span, .. }
             | Self::New { span, .. }
+            | Self::NewTarget { span }
             | Self::Function { span, .. }
             | Self::Await { span, .. }
             | Self::Yield { span, .. }

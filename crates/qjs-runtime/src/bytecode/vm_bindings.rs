@@ -159,6 +159,12 @@ impl Vm<'_> {
         })
     }
 
+    pub(super) fn load_new_target(&self) -> Value {
+        self.env
+            .get(crate::NEW_TARGET_BINDING)
+            .unwrap_or(Value::Undefined)
+    }
+
     /// Reads an own property of the realm's `globalThis` object, if any.
     pub(super) fn global_this_property(&self, name: &str) -> Option<Value> {
         let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {

@@ -272,6 +272,23 @@ fn parses_new_expression() {
 }
 
 #[test]
+fn parses_new_target_meta_property() {
+    let script = parse_script("function C() { return new.target; }").expect("source should parse");
+    let [Stmt::FunctionDecl { body, .. }] = script.body.as_slice() else {
+        panic!("expected function declaration");
+    };
+    let [
+        Stmt::Return {
+            argument: Some(Expr::NewTarget { .. }),
+            ..
+        },
+    ] = body.as_slice()
+    else {
+        panic!("expected return new.target statement");
+    };
+}
+
+#[test]
 fn parses_member_access_after_new_expression() {
     let script = parse_script("new String('abc').length;").expect("source should parse");
     let [
