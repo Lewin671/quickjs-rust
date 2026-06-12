@@ -31,7 +31,11 @@ impl Vm<'_> {
                 Value::Function(function) if function.native.is_some_and(error::is_native_error)
             )
         {
-            return operations::ordinary_has_instance(left, right, &self.env).map(Value::Boolean);
+            let mut env = self.current_env();
+            let result =
+                operations::ordinary_has_instance(left, right, &mut env).map(Value::Boolean);
+            self.apply_env(env);
+            return result;
         }
         let mut env = self.current_env();
         let result = operations::eval_binary(left, op, right, &mut env);

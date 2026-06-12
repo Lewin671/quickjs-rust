@@ -600,6 +600,20 @@ fn extends_null_keeps_constructor_callable_and_null_prototype() {
 }
 
 #[test]
+fn superclass_html_dda_prototype_is_an_object_for_heritage() {
+    assert_eq!(
+        eval(
+            "function Superclass() {} \
+             Superclass.prototype = __quickjsRustIsHTMLDDA; \
+             class C extends Superclass {} \
+             let c = new C(); \
+             (c instanceof C) + ':' + (c instanceof Superclass);"
+        ),
+        Ok(Value::String("true:true".to_owned()))
+    );
+}
+
+#[test]
 fn new_target_propagates_through_super_for_prototype() {
     // A subclass instance built via `new B` has `B.prototype` on its chain
     // even though only the base class constructor allocates `this`.

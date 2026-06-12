@@ -6,8 +6,8 @@ use qjs_ast::{BinaryOp, UnaryOp};
 
 use crate::CallEnv;
 use crate::{
-    Property, PropertyKey, RuntimeError, Value, call_function, error, has_property_key, is_truthy,
-    string, symbol, to_int32_number, to_js_string_with_env, to_number_with_env,
+    PropertyKey, RuntimeError, Value, call_function, error, has_property_key, is_truthy,
+    property_value, string, symbol, to_int32_number, to_js_string_with_env, to_number_with_env,
     to_primitive_with_env, to_property_key_value, to_uint32_number, value_prototype_slot,
 };
 
@@ -407,7 +407,7 @@ fn eval_instanceof(left: Value, right: Value, env: &mut CallEnv) -> Result<Value
 pub(crate) fn ordinary_has_instance(
     left: Value,
     right: Value,
-    env: &CallEnv,
+    env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     let Value::Function(constructor) = right else {
         return Err(RuntimeError {
@@ -421,17 +421,26 @@ pub(crate) fn ordinary_has_instance(
     let Some(left_prototype) = value_prototype_slot(left, env) else {
         return Ok(false);
     };
-    let Some(Property {
-        value: Value::Object(prototype),
-        ..
-    }) = constructor.properties.borrow().get("prototype").cloned()
-    else {
+    let prototype = property_value(Value::Function(constructor), "prototype", env)?;
+    if !instanceof_prototype_is_object(&prototype) {
         return Err(RuntimeError {
             thrown: None,
             message: "function prototype is not an object".to_owned(),
         });
-    };
-    Ok(left_prototype.chain_contains(&prototype))
+    }
+    Ok(left_prototype.chain_contains_value(&prototype))
+}
+
+fn instanceof_prototype_is_object(value: &Value) -> bool {
+    matches!(
+        value,
+        Value::Object(_)
+            | Value::Array(_)
+            | Value::Function(_)
+            | Value::Map(_)
+            | Value::Set(_)
+            | Value::Proxy(_)
+    )
 }
 
 fn eval_in(left: Value, right: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {

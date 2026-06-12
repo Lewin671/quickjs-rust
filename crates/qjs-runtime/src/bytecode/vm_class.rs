@@ -1,9 +1,9 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
-    Function, ObjectRef, Property, PropertyKey, RuntimeError, Value,
+    Function, ObjectRef, Property, PropertyKey, RuntimeError, Value, array_as_object_prototype,
     function::{CompiledUserFunction, InstanceFieldInitializer},
-    object, object_prototype, to_property_key_value,
+    object, object_prototype, property_value, to_property_key_value,
 };
 use crate::{
     call_function, construct_function, property_value_key_with_receiver, value_prototype_slot,
@@ -54,14 +54,17 @@ impl Vm<'_> {
         // The heritage value sits below the computed keys. Resolve the parent
         // constructor and the prototype the new class prototype inherits from.
         let heritage = if has_heritage {
-            Some(ClassHeritage::resolve(self.pop()?, &self.env)?)
+            let mut heritage_env = self.current_env();
+            let heritage = ClassHeritage::resolve(self.pop()?, &mut heritage_env)?;
+            self.apply_env(heritage_env);
+            Some(heritage)
         } else {
             None
         };
         let prototype_parent = match &heritage {
             Some(ClassHeritage::Null) => None,
             Some(ClassHeritage::Parent(parent)) => parent.prototype.clone(),
-            None => object_prototype(&self.env),
+            None => object_prototype(&self.env).map(crate::Prototype::Object),
         };
 
         let constructor_env =
@@ -108,7 +111,7 @@ impl Vm<'_> {
             }
         }
 
-        let prototype = ObjectRef::with_prototype(HashMap::new(), prototype_parent);
+        let prototype = ObjectRef::with_prototype_slot(HashMap::new(), prototype_parent);
         constructor_function.install_class_prototype(prototype.clone());
 
         // The constructor's home object is its prototype; static `super.x`
@@ -534,18 +537,21 @@ enum ClassHeritage {
 
 struct ClassHeritageParent {
     constructor: Value,
-    prototype: Option<ObjectRef>,
+    prototype: Option<crate::Prototype>,
 }
 
 impl ClassHeritage {
-    fn resolve(value: Value, env: &CallEnv) -> Result<Self, RuntimeError> {
+    fn resolve(value: Value, env: &mut CallEnv) -> Result<Self, RuntimeError> {
         match value {
             Value::Null => Ok(Self::Null),
             Value::Function(function) if function.constructable => {
-                let prototype =
-                    crate::constructor_prototype(&Value::Function(function.clone()), env);
+                let constructor = Value::Function(function);
+                let prototype = class_heritage_prototype_slot(
+                    property_value(constructor.clone(), "prototype", env)?,
+                    env,
+                )?;
                 Ok(Self::Parent(Box::new(ClassHeritageParent {
-                    constructor: Value::Function(function),
+                    constructor,
                     prototype,
                 })))
             }
@@ -554,6 +560,31 @@ impl ClassHeritage {
                 message: "TypeError: class heritage must be a constructor or null".to_owned(),
             }),
         }
+    }
+}
+
+fn class_heritage_prototype_slot(
+    value: Value,
+    env: &CallEnv,
+) -> Result<Option<crate::Prototype>, RuntimeError> {
+    match value {
+        Value::Null => Ok(None),
+        Value::Object(prototype) if crate::symbol::is_symbol_primitive(&prototype) => {
+            Err(class_heritage_prototype_error())
+        }
+        Value::Object(prototype) => Ok(Some(crate::Prototype::Object(prototype))),
+        Value::Function(prototype) => Ok(Some(crate::Prototype::Function(prototype))),
+        Value::Array(array) => Ok(Some(crate::Prototype::Object(array_as_object_prototype(
+            &array, env,
+        )))),
+        _ => Err(class_heritage_prototype_error()),
+    }
+}
+
+fn class_heritage_prototype_error() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "TypeError: superclass prototype must be an object or null".to_owned(),
     }
 }
 

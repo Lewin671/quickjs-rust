@@ -4345,6 +4345,7 @@ test/annexB/language/literals/regexp/class-escape.js
 test/annexB/language/literals/regexp/extended-pattern-char.js
 test/annexB/language/literals/regexp/legacy-octal-escape.js
 test/annexB/language/statements/for-in/nonstrict-initializer.js
+test/annexB/language/statements/class/subclass/superclass-prototype-emulates-undefined.js
 test/annexB/language/statements/const/dstr/array-pattern-emulates-undefined.js
 test/annexB/language/statements/const/dstr/object-pattern-emulates-undefined.js
 test/built-ins/Array/length/15.4.5.1-3.d-1.js
