@@ -15,6 +15,7 @@ use crate::{
 
 use super::ir::Bytecode;
 use super::vm::Vm;
+use super::vm_generator::{GeneratorStart, GeneratorState};
 
 /// Evaluates a prelude *script* against the shared graph `realm` before any
 /// module body runs. The prelude is ordinary (non-module) script code — for the
@@ -78,6 +79,12 @@ pub(super) fn eval_module_body(
     if let Some(host) = host {
         env.set_module_host(host);
     }
+    // A module body with top-level `await` evaluates like an async function body
+    // (16.2.1.5.3 AsyncModuleExecution): it suspends at each `await` and resumes
+    // through the realm job queue, settling a result promise on completion.
+    if bytecode.contains_top_level_await() {
+        return eval_async_module_body(bytecode, env);
+    }
     let captured_env = Rc::new(RefCell::new(HashMap::new()));
     let mut vm = Vm::new_with_globals_and_captures(bytecode, env, captured_env);
     vm.run()?;
@@ -88,4 +95,65 @@ pub(super) fn eval_module_body(
         vm.drain_promise_jobs()?;
     }
     Ok(vm.current_env())
+}
+
+/// Evaluates a module body that contains top-level `await`. The body is staged
+/// as a `SuspendedStart` async context and driven to completion, draining the
+/// realm job queue so each `await` resumes and the module settles before its
+/// dependents evaluate. A rejected completion is surfaced as a `RuntimeError`
+/// (carrying the rejection reason) so the linker propagates it to the caller /
+/// the import promise.
+///
+/// The body's top-level `var`/`function` bindings live in the shared realm and
+/// its top-level `let`/`const` bindings write through to the shared
+/// `captured_env` cell (see `Vm::store_local`); the returned `CallEnv` merges
+/// both so the linker reads every export after the module has settled.
+///
+/// Residue: a top-level `await` of a *dynamic* `import()` cannot drain here
+/// (the module graph is borrowed by the static evaluation, so a nested import
+/// job would re-borrow it); that path is left to the outer queue loop.
+fn eval_async_module_body(bytecode: &Bytecode, mut env: CallEnv) -> Result<CallEnv, RuntimeError> {
+    let realm = env.realm_rc();
+    // Seed the shared captured-env cell with every top-level local name so each
+    // `store_local` (notably a `let`/`const` export written after an `await`
+    // resumes) writes through to it; the linker reads these settled lexical
+    // exports back after the module's promise settles. `var`/`function` exports
+    // live in the realm and are read from there.
+    let captured_env: Rc<RefCell<HashMap<String, Value>>> = Rc::new(RefCell::new(
+        bytecode
+            .local_names()
+            .map(|name| (name.to_owned(), Value::Undefined))
+            .collect(),
+    ));
+    let function_env = env.clone();
+    let context = ObjectRef::new(HashMap::new());
+    *context.generator_state().borrow_mut() =
+        Some(GeneratorState::SuspendedStart(Box::new(GeneratorStart {
+            bytecode: Rc::new(bytecode.clone()),
+            env: function_env,
+            captured_env: Rc::clone(&captured_env),
+        })));
+
+    let result_promise = crate::async_function::drive_async_module(&context, &mut env);
+    // Resume the suspended `await`s and run any reactions the module scheduled.
+    crate::promise::drain_promise_jobs(&mut env)?;
+    if let Some(Err(reason)) = crate::promise::settled_outcome(&result_promise) {
+        return Err(RuntimeError {
+            thrown: Some(Box::new(reason)),
+            message: "module top-level await rejected".to_owned(),
+        });
+    }
+    // Materialize the settled module frame: realm bindings (var/function) plus
+    // the captured lexical slots (let/const) written through during evaluation.
+    // A top-level `var`/`function` export lives in the realm and must be read
+    // from there, so drop any captured local that shadows a realm binding (the
+    // seed leaves it `Undefined`); the remaining captured locals are the
+    // module's lexical exports.
+    let locals: HashMap<String, Value> = captured_env
+        .borrow()
+        .iter()
+        .filter(|(name, _)| !realm.borrow().contains_key(name.as_str()))
+        .map(|(name, value)| (name.clone(), value.clone()))
+        .collect();
+    Ok(CallEnv::with_locals(realm, locals))
 }
