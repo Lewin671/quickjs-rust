@@ -260,7 +260,7 @@ pub(super) fn get_property_key(
     }
 }
 
-pub(super) fn set_property(
+pub(crate) fn set_property(
     object: Value,
     key: String,
     value: Value,

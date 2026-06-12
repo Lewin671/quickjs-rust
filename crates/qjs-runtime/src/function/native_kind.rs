@@ -49,6 +49,9 @@ pub(crate) enum NativeFunction {
     ArrayBufferPrototypeByteLength,
     ArrayBufferPrototypeSlice,
     TypedArray,
+    // %TypedArray% static methods.
+    TypedArrayFrom,
+    TypedArrayOf,
     TypedArrayPrototypeBuffer,
     TypedArrayPrototypeByteLength,
     TypedArrayPrototypeByteOffset,

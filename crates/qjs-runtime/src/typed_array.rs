@@ -11,7 +11,7 @@ mod element;
 mod iteration;
 mod ordering;
 
-pub(crate) use construct::native_typed_array;
+pub(crate) use construct::{native_typed_array, native_typed_array_from, native_typed_array_of};
 pub(crate) use element::{IndexedWrite, set_indexed_element};
 pub(crate) use iteration::*;
 pub(crate) use ordering::*;
@@ -72,6 +72,7 @@ pub(crate) fn install_typed_arrays(
         Value::Function(typed_array_intrinsic.clone()),
     );
     symbol::define_species_accessor(env, &typed_array_intrinsic);
+    install_typed_array_static_methods(&typed_array_intrinsic);
 
     for (name, native) in TYPED_ARRAY_KINDS {
         install_typed_array_constructor(
@@ -81,6 +82,26 @@ pub(crate) fn install_typed_arrays(
             &typed_array_intrinsic,
             name,
             native,
+        );
+    }
+}
+
+/// Installs the `%TypedArray%.from` and `%TypedArray%.of` static methods on the
+/// shared intrinsic; concrete constructors inherit them through the function
+/// prototype chain.
+fn install_typed_array_static_methods(intrinsic: &Function) {
+    for (name, length, native) in [
+        ("from", 1, NativeFunction::TypedArrayFrom),
+        ("of", 0, NativeFunction::TypedArrayOf),
+    ] {
+        intrinsic.properties.borrow_mut().insert(
+            name.to_owned(),
+            Property::non_enumerable(Value::Function(Function::new_native(
+                Some(name),
+                length,
+                native,
+                false,
+            ))),
         );
     }
 }

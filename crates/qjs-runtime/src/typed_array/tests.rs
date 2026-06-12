@@ -97,6 +97,46 @@ fn construct_from_buffer_validates_alignment_and_bounds() {
     assert!(eval("new Uint32Array(new ArrayBuffer(6));").is_err());
 }
 
+// --- Static methods: from / of ----------------------------------------------
+
+#[test]
+fn typed_array_of_constructs_and_coerces() {
+    assert_eq!(
+        eval("let a = Uint8Array.of(5, 6, 257); a.length + ':' + a[0] + ':' + a[2];"),
+        Ok(Value::String("3:5:1".to_owned()))
+    );
+    // `of` is shared across the concrete constructors via %TypedArray%.
+    assert_eq!(
+        eval("Uint8Array.of === Int8Array.of;"),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn typed_array_from_iterable_array_like_and_mapfn() {
+    assert_eq!(
+        eval("let a = Uint8Array.from([1, 2, 300]); a.length + ':' + a[0] + ':' + a[2];"),
+        Ok(Value::String("3:1:44".to_owned()))
+    );
+    // Array-like (no Symbol.iterator) source.
+    assert_eq!(
+        eval("let a = Int8Array.from({ length: 2, 0: 10, 1: 20 }); a[0] + ':' + a[1];"),
+        Ok(Value::String("10:20".to_owned()))
+    );
+    // mapfn receives (value, index).
+    assert_eq!(
+        eval("let a = Int8Array.from([1, 2, 3], (v, i) => v * 10 + i); a[0] + ':' + a[2];"),
+        Ok(Value::String("10:32".to_owned()))
+    );
+    // A non-callable mapfn throws.
+    assert!(eval("Uint8Array.from([1], 5);").is_err());
+    // BigInt arrays round-trip BigInt elements.
+    assert_eq!(
+        eval("let a = BigInt64Array.from([1n, 2n]); typeof a[0] + ':' + a[1];"),
+        Ok(Value::String("bigint:2".to_owned()))
+    );
+}
+
 // --- Accessors and brand checks ----------------------------------------------
 
 #[test]

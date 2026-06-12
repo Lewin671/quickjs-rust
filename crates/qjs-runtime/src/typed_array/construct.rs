@@ -297,6 +297,105 @@ fn install_view(
     array_buffer::set_array_buffer_bytes(&buffer, bytes);
 }
 
+// --- static methods (%TypedArray%.from / %TypedArray%.of) --------------------
+
+/// `%TypedArray%.of(...items)` (ES2024 23.2.2.2): constructs `new this(len)` via
+/// the `this` constructor and assigns each item through `[[Set]]`, applying the
+/// per-kind conversion. `this` must be a constructor.
+pub(crate) fn native_typed_array_of(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    crate::ensure_constructor(&this_value)?;
+    let length = argument_values.len();
+    let result = crate::construct_function(
+        this_value.clone(),
+        this_value,
+        vec![Value::Number(length as f64)],
+        env,
+    )?;
+    for (index, value) in argument_values.iter().enumerate() {
+        set_result_element(&result, index, value.clone(), env)?;
+    }
+    Ok(result)
+}
+
+/// `%TypedArray%.from(source [, mapfn [, thisArg]])` (ES2024 23.2.2.1):
+/// constructs `new this(len)` and assigns each (optionally mapped) source
+/// element through `[[Set]]`. `this` must be a constructor; a present `mapfn`
+/// must be callable.
+pub(crate) fn native_typed_array_from(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    crate::ensure_constructor(&this_value)?;
+    let source = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let map_fn = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
+    let this_arg = argument_values.get(2).cloned().unwrap_or(Value::Undefined);
+
+    let mapping = match &map_fn {
+        Value::Undefined => false,
+        Value::Function(_) => true,
+        _ => {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: TypedArray.from mapfn is not callable".to_owned(),
+            });
+        }
+    };
+
+    // Collect the source values: iterable via Symbol.iterator, else array-like.
+    let iterator_method = match crate::symbol::iterator_symbol(env) {
+        Some(symbol) => {
+            crate::property_value_key(source.clone(), &crate::PropertyKey::Symbol(symbol), env)?
+        }
+        None => Value::Undefined,
+    };
+    let raw_values = if matches!(iterator_method, Value::Function(_)) {
+        crate::array::iterable_values_with_env(source, "TypedArray.from", env)?
+    } else {
+        crate::array::array_like_values_with_env(source, "TypedArray.from", env)?
+    };
+
+    let length = raw_values.len();
+    let result = crate::construct_function(
+        this_value.clone(),
+        this_value,
+        vec![Value::Number(length as f64)],
+        env,
+    )?;
+    for (index, value) in raw_values.into_iter().enumerate() {
+        let value = if mapping {
+            crate::call_function(
+                map_fn.clone(),
+                this_arg.clone(),
+                vec![value, Value::Number(index as f64)],
+                env,
+                false,
+            )?
+        } else {
+            value
+        };
+        set_result_element(&result, index, value, env)?;
+    }
+    Ok(result)
+}
+
+/// Assigns element `index = value` on the freshly constructed `from`/`of`
+/// result through the ordinary `[[Set]]` path so a typed-array result applies
+/// IntegerIndexedElementSet (and a custom-constructor result observes the set).
+fn set_result_element(
+    result: &Value,
+    index: usize,
+    value: Value,
+    env: &mut CallEnv,
+) -> Result<(), RuntimeError> {
+    crate::bytecode::set_object_property(result.clone(), index.to_string(), value, env)?;
+    Ok(())
+}
+
 // --- helpers -----------------------------------------------------------------
 
 /// ToIndex: a non-negative integer, throwing RangeError otherwise.

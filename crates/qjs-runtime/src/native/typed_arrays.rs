@@ -31,6 +31,12 @@ pub(super) fn call_typed_array_native(
             is_construct,
             env,
         )?,
+        NativeFunction::TypedArrayFrom => {
+            typed_array::native_typed_array_from(this_value, argument_values, env)?
+        }
+        NativeFunction::TypedArrayOf => {
+            typed_array::native_typed_array_of(this_value, argument_values, env)?
+        }
         NativeFunction::TypedArrayPrototypeBuffer => {
             typed_array::native_typed_array_prototype_buffer(this_value)?
         }
