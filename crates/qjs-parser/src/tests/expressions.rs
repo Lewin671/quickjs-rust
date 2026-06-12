@@ -358,3 +358,14 @@ fn rejects_strict_assignment_to_eval_or_arguments() {
     assert!(parse_script("eval = 1;").is_ok());
     assert!(parse_script("arguments += 1;").is_ok());
 }
+
+#[test]
+fn rejects_strict_destructuring_target_eval_or_arguments() {
+    // `eval`/`arguments` are not valid simple targets inside a destructuring
+    // assignment under strict mode.
+    assert!(parse_script("'use strict'; [arguments] = [];").is_err());
+    assert!(parse_script("'use strict'; [eval] = [];").is_err());
+    assert!(parse_script("'use strict'; ({ a: arguments } = {});").is_err());
+    // Sloppy mode permits them.
+    assert!(parse_script("[arguments] = [];").is_ok());
+}

@@ -70,7 +70,19 @@ impl Parser {
 
     fn simple_assignment_target(&mut self) -> Result<AssignmentTarget, ParseError> {
         let expr = self.call()?;
-        assignment_target(expr)
+        let target = assignment_target(expr)?;
+        // Strict mode: `eval` and `arguments` are not valid simple assignment
+        // targets, including inside a destructuring pattern.
+        if self.strict
+            && let AssignmentTarget::Identifier { name, span } = &target
+            && matches!(name.as_str(), "eval" | "arguments")
+        {
+            return Err(ParseError {
+                message: format!("`{name}` may not be a destructuring target in strict mode"),
+                span: *span,
+            });
+        }
+        Ok(target)
     }
 
     fn array_assignment_pattern(&mut self) -> Result<AssignmentTarget, ParseError> {
