@@ -30,7 +30,7 @@ pub(super) fn call_reflect_native(
         NativeFunction::ReflectIsExtensible => {
             reflect::native_reflect_is_extensible(argument_values, env)?
         }
-        NativeFunction::ReflectOwnKeys => reflect::native_reflect_own_keys(argument_values)?,
+        NativeFunction::ReflectOwnKeys => reflect::native_reflect_own_keys(argument_values, env)?,
         NativeFunction::ReflectPreventExtensions => {
             reflect::native_reflect_prevent_extensions(argument_values, env)?
         }

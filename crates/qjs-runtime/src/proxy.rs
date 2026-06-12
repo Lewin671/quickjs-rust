@@ -491,6 +491,115 @@ pub(crate) fn proxy_set_prototype_of(
     Ok(true)
 }
 
+/// `[[OwnPropertyKeys]]` for an exotic Proxy: invoke the `ownKeys` trap and
+/// validate it against the target. When the trap is absent the ordinary target
+/// keys (strings then symbols) are returned.
+pub(crate) fn proxy_own_keys(
+    proxy: ProxyRef,
+    env: &mut CallEnv,
+) -> Result<Vec<PropertyKey>, RuntimeError> {
+    let target = proxy.target_result()?;
+    let handler = proxy.handler_result()?;
+    let Some(trap) = proxy_trap(handler.clone(), "ownKeys", env)? else {
+        return Ok(ordinary_own_keys(&target));
+    };
+    let result = call_function(trap, handler, vec![target.clone()], env, false)?;
+
+    // CreateListFromArrayLike, restricted to String and Symbol elements.
+    let elements = match &result {
+        Value::Array(array) => array.to_vec(),
+        _ => {
+            return Err(invariant_error("ownKeys trap result must be an array-like"));
+        }
+    };
+    let mut keys: Vec<PropertyKey> = Vec::with_capacity(elements.len());
+    let mut seen_strings: Vec<String> = Vec::new();
+    let mut seen_symbols: Vec<ObjectRef> = Vec::new();
+    for element in elements {
+        match element {
+            Value::String(name) => {
+                if seen_strings.contains(&name) {
+                    return Err(invariant_error("ownKeys trap returned duplicate keys"));
+                }
+                seen_strings.push(name.clone());
+                keys.push(PropertyKey::String(name));
+            }
+            Value::Object(object) if crate::symbol::is_symbol_primitive(&object) => {
+                if seen_symbols.iter().any(|seen| seen.ptr_eq(&object)) {
+                    return Err(invariant_error("ownKeys trap returned duplicate keys"));
+                }
+                seen_symbols.push(object.clone());
+                keys.push(PropertyKey::Symbol(object));
+            }
+            _ => {
+                return Err(invariant_error(
+                    "ownKeys trap result must contain only strings and symbols",
+                ));
+            }
+        }
+    }
+
+    // Collect the target's own keys and split by configurability.
+    let target_keys = ordinary_own_keys(&target);
+    let extensible_target = crate::object::ordinary_value_is_extensible(&target);
+    let mut non_configurable: Vec<PropertyKey> = Vec::new();
+    let mut configurable_count = 0usize;
+    for key in &target_keys {
+        match crate::object::own_property_descriptor_key(target.clone(), key)? {
+            Some(descriptor) if !descriptor.configurable => non_configurable.push(key.clone()),
+            Some(_) => configurable_count += 1,
+            None => {}
+        }
+    }
+
+    // Every non-configurable target key must be present in the trap result.
+    for key in &non_configurable {
+        if !keys.iter().any(|present| property_keys_equal(present, key)) {
+            return Err(invariant_error(
+                "ownKeys trap omitted a non-configurable target key",
+            ));
+        }
+    }
+    // A non-extensible target requires the trap result to be exactly its keys.
+    if !extensible_target {
+        if keys.len() != non_configurable.len() + configurable_count {
+            return Err(invariant_error(
+                "ownKeys trap result disagrees with a non-extensible target",
+            ));
+        }
+        for key in &target_keys {
+            if !keys.iter().any(|present| property_keys_equal(present, key)) {
+                return Err(invariant_error(
+                    "ownKeys trap omitted a key of a non-extensible target",
+                ));
+            }
+        }
+    }
+    Ok(keys)
+}
+
+/// The ordinary own keys of a value: string-keyed names followed by symbols,
+/// forwarding through a Proxy to its target without dispatching traps.
+fn ordinary_own_keys(target: &Value) -> Vec<PropertyKey> {
+    crate::object::own_property_names(target.clone())
+        .into_iter()
+        .map(PropertyKey::String)
+        .chain(
+            crate::object::own_property_symbols(target.clone())
+                .into_iter()
+                .map(PropertyKey::Symbol),
+        )
+        .collect()
+}
+
+fn property_keys_equal(left: &PropertyKey, right: &PropertyKey) -> bool {
+    match (left, right) {
+        (PropertyKey::String(left), PropertyKey::String(right)) => left == right,
+        (PropertyKey::Symbol(left), PropertyKey::Symbol(right)) => left.ptr_eq(right),
+        _ => false,
+    }
+}
+
 /// `[[Call]]` for an exotic Proxy: invoke the `apply` trap with
 /// `(target, thisArgument, argumentsList)`, or forward to the target when the
 /// trap is absent. The target must itself be callable.

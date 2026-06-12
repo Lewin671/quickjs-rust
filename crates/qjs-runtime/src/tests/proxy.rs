@@ -272,3 +272,42 @@ fn evaluates_proxy_prototype_traps() {
         Ok(Value::Boolean(true))
     );
 }
+
+#[test]
+fn evaluates_proxy_own_keys_trap() {
+    // The trap result order is preserved through Reflect.ownKeys.
+    assert_eq!(
+        eval(
+            "let p = new Proxy({}, { ownKeys: function() { return ['b', 'a']; } }); Reflect.ownKeys(p).join(',');"
+        ),
+        Ok(Value::String("b,a".to_owned()))
+    );
+    // Duplicate keys in the trap result are a TypeError.
+    assert_eq!(
+        eval(
+            "let p = new Proxy({}, { ownKeys: function() { return ['a', 'a']; } }); let caught = false; try { Reflect.ownKeys(p); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    // Non-string/symbol elements are a TypeError.
+    assert_eq!(
+        eval(
+            "let p = new Proxy({}, { ownKeys: function() { return [1]; } }); let caught = false; try { Reflect.ownKeys(p); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    // Omitting a non-configurable target key is a TypeError.
+    assert_eq!(
+        eval(
+            "let t = {}; Object.defineProperty(t, 'a', { value: 1, configurable: false }); let p = new Proxy(t, { ownKeys: function() { return []; } }); let caught = false; try { Reflect.ownKeys(p); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    // A non-extensible target requires its keys exactly.
+    assert_eq!(
+        eval(
+            "let t = { a: 1 }; Object.preventExtensions(t); let p = new Proxy(t, { ownKeys: function() { return ['a', 'b']; } }); let caught = false; try { Reflect.ownKeys(p); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}

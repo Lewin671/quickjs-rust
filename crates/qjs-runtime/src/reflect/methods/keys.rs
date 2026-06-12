@@ -1,17 +1,35 @@
 use crate::reflect::target::ensure_reflect_object_target;
-use crate::{RuntimeError, Value};
+use crate::{CallEnv, PropertyKey, RuntimeError, Value};
 
-pub(crate) fn native_reflect_own_keys(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+pub(crate) fn native_reflect_own_keys(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     ensure_reflect_object_target(&target, "Reflect.ownKeys")?;
+
+    // An exotic Proxy consults its `ownKeys` trap, returning a validated mix of
+    // string and symbol keys in trap order.
+    if let Value::Proxy(proxy) = &target {
+        let keys = crate::proxy::proxy_own_keys(proxy.clone(), env)?;
+        return Ok(Value::Array(crate::ArrayRef::new(
+            keys.into_iter()
+                .map(|key| match key {
+                    PropertyKey::String(name) => Value::String(name),
+                    PropertyKey::Symbol(symbol) => Value::Object(symbol),
+                })
+                .collect(),
+        )));
+    }
+
     let names = match target.clone() {
         Value::Object(object) => object.own_property_names(),
         Value::Map(map) => map.object().own_property_names(),
         Value::Set(set) => set.object().own_property_names(),
-        Value::Proxy(proxy) => crate::object::own_property_names(proxy.target()),
         Value::Array(elements) => crate::array_own_property_names(&elements),
         Value::Function(function) => crate::function_own_property_names(&function),
-        Value::String(_)
+        Value::Proxy(_)
+        | Value::String(_)
         | Value::Number(_)
         | Value::BigInt(_)
         | Value::Boolean(_)
@@ -24,10 +42,10 @@ pub(crate) fn native_reflect_own_keys(argument_values: &[Value]) -> Result<Value
         Value::Object(object) => object.own_property_symbols(),
         Value::Map(map) => map.object().own_property_symbols(),
         Value::Set(set) => set.object().own_property_symbols(),
-        Value::Proxy(proxy) => crate::object::own_property_symbols(proxy.target()),
         Value::Array(elements) => elements.own_property_symbols(),
         Value::Function(function) => crate::function_own_property_symbols(&function),
-        Value::String(_)
+        Value::Proxy(_)
+        | Value::String(_)
         | Value::Number(_)
         | Value::BigInt(_)
         | Value::Boolean(_)
