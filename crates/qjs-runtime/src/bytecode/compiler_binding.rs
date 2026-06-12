@@ -230,6 +230,37 @@ impl Compiler {
         let end = self.code.len();
         self.patch_jump(after, end);
     }
+    pub(super) fn declare_var_kind_slot(&mut self, name: &str, kind: VarKind) -> usize {
+        match kind {
+            VarKind::Var => self.local_slot(name, true),
+            VarKind::Let => self.declare_lexical_slot(name, true),
+            VarKind::Const => self.declare_lexical_slot(name, false),
+        }
+    }
+
+    fn var_initializer_slot(&self, name: &str, declared_slot: usize, kind: VarKind) -> usize {
+        if kind != VarKind::Var {
+            return declared_slot;
+        }
+        self.resolve_local_slot(name).unwrap_or(declared_slot)
+    }
+
+    pub(super) fn emit_store_var_initializer(&mut self, slot: usize, name: &str, kind: VarKind) {
+        let store_slot = self.var_initializer_slot(name, slot, kind);
+        if store_slot != slot && kind == VarKind::Var {
+            self.emit(Op::StoreLocal(store_slot));
+        } else {
+            self.emit_store_var_binding(store_slot, name, kind);
+        }
+    }
+
+    pub(super) fn emit_store_var_binding(&mut self, slot: usize, name: &str, kind: VarKind) {
+        if self.global_scope && kind == VarKind::Var {
+            self.emit(Op::DefineGlobalVar(name.to_owned()));
+        } else {
+            self.emit(Op::StoreLocal(slot));
+        }
+    }
 }
 
 /// The NamedEvaluation name for a binding default, or `None` when the binding

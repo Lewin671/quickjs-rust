@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::CallEnv;
 use crate::{
     ObjectRef, PreferredType, RuntimeError, Value, number, symbol, to_primitive_with_hint,

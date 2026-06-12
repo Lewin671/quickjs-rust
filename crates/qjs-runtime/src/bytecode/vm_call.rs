@@ -1,10 +1,9 @@
 use std::collections::HashMap;
 
-use crate::{Function, RUNTIME_INTRINSIC_NAMES, Value};
+use crate::{Function, Value};
 
 use super::ir::Bytecode;
 use super::vm::Slot;
-use crate::CallEnv;
 
 pub(super) fn user_bytecode_function(value: &Value) -> Option<&Function> {
     let Value::Function(function) = value else {
@@ -44,9 +43,11 @@ pub(super) fn insert_scope_call_bindings(
     binding_names: &mut Vec<String>,
     bytecode: &Bytecode,
     locals: &[Slot],
-    globals: &HashMap<String, Value>,
     function_local_names: &[String],
 ) {
+    // Only the caller's live frame slots ride into the callee; realm bindings
+    // are visible through the shared cell and copying them would give the
+    // callee a frozen snapshot that masks later realm writes.
     for (index, local) in bytecode.locals.iter().enumerate() {
         if function_local_names
             .binary_search_by(|name| name.as_str().cmp(&local.name))
@@ -57,17 +58,6 @@ pub(super) fn insert_scope_call_bindings(
         if let Some(Some(value)) = locals.get(index) {
             insert_binding(env, binding_names, &local.name, value);
         }
-    }
-    for (name, value) in globals {
-        if name == crate::GLOBAL_THIS_BINDING
-            || RUNTIME_INTRINSIC_NAMES.contains(&name.as_str())
-            || function_local_names
-                .binary_search_by(|local| local.as_str().cmp(name))
-                .is_ok()
-        {
-            continue;
-        }
-        insert_binding(env, binding_names, name, value);
     }
 }
 

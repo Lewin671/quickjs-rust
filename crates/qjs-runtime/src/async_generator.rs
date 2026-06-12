@@ -741,7 +741,7 @@ pub(crate) fn call_async_generator_function(
         .bytecode
         .clone()
         .expect("async generator has a bytecode body");
-    let captured = Rc::new(RefCell::new(function_env.to_flat_map()));
+    let captured = Rc::new(RefCell::new(function_env.snapshot_locals()));
     make_async_generator_object(
         function,
         GeneratorStart {

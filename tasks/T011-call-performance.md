@@ -535,3 +535,15 @@ top-level `var`s realm-backed, or sync slot<->realm in `Vm::drain_promise_jobs`.
 The 12: 8 async (`async_*`), eval (`evaluates_global_eval_builtin`,
 `evaluates_function_declarations_and_calls`), `this_before_super_is_reference_error`
 (derived-ctor `this` TDZ falls through to realm global `this` — gate `load_global`).
+
+## Status: LANDED (2026-06-11)
+
+The realm-env migration is complete and green: 577/577 runtime tests,
+full check.sh (4294-case subset) and compare-qjs.sh pass. Script-level
+`var`/function bindings now live realm-only (no slots), `this` is
+frame-resolved with a derived-constructor TDZ, user-code-reaching
+conversions (`to_number`/`to_js_string`/... ) thread `CallEnv`, closure
+captures are locals-only with write-through/pull sync between script
+slots and the shared captured Rc, and call write-back skips bindings the
+callee never modified. Measured: `fill/coerced-indexes.js` 74s -> 2.2s
+(timeouts 0); 20k-call loop ~4.3s -> ~2.8s.

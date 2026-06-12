@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::CallEnv;
 use crate::{
     RuntimeError, Value, string_object_value, string_prototype, to_js_string_with_env,

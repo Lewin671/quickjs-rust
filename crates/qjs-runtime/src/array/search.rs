@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{RuntimeError, Value, has_property, property_value};
 
 use super::array_like::array_like_length;

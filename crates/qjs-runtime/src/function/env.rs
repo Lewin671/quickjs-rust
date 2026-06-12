@@ -147,6 +147,10 @@ impl CallEnv {
     }
 
     /// Mutates an existing frame-local binding in place, if present.
+    pub(crate) fn get_local(&self, name: &str) -> Option<Value> {
+        self.locals.get(name).cloned()
+    }
+
     pub(crate) fn get_local_mut(&mut self, name: &str) -> Option<&mut Value> {
         self.locals.get_mut(name)
     }

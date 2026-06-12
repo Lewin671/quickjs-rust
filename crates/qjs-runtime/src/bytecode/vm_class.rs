@@ -172,6 +172,7 @@ impl Vm<'_> {
                             &Value::Function(constructor_function.clone()),
                             key,
                             value,
+                            &mut self.realm_env(),
                         )?;
                     } else {
                         constructor_function
@@ -266,7 +267,10 @@ impl Vm<'_> {
             ),
         };
 
-        let success = object::define_property_on_value_key(target, key, descriptor)?;
+        // Member definition only needs realm access (array length coercion on
+        // concrete values); no frame bindings can change here.
+        let mut prop_env = self.realm_env();
+        let success = object::define_property_on_value_key(target, key, descriptor, &mut prop_env)?;
         if !success {
             return Err(RuntimeError {
                 thrown: None,
@@ -573,9 +577,10 @@ pub(crate) fn install_field_value(
     target: &Value,
     key: PropertyKey,
     value: Value,
+    env: &mut crate::CallEnv,
 ) -> Result<(), RuntimeError> {
     let descriptor = Property::data(value, true, true, true);
-    let success = object::define_property_on_value_key(target.clone(), key, descriptor)?;
+    let success = object::define_property_on_value_key(target.clone(), key, descriptor, env)?;
     if !success {
         return Err(RuntimeError {
             thrown: None,

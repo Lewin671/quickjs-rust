@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{
     Property, RuntimeError, Value, array_own_property_descriptor, array_prototype, call_function,
     function_delete_own_property, function_own_property_descriptor, has_property, property_value,

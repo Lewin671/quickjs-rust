@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{ArrayRef, ObjectRef, RuntimeError, Value, call_function, number};
 
 use super::raw_json_value;

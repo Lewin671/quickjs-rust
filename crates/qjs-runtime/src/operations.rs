@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, collections::HashMap};
+use std::cmp::Ordering;
 
 use num_bigint::{BigInt, Sign};
 use num_traits::{ToPrimitive, Zero};
@@ -7,7 +7,7 @@ use qjs_ast::{BinaryOp, UnaryOp};
 use crate::CallEnv;
 use crate::{
     Property, PropertyKey, RuntimeError, Value, call_function, error, has_property_key, is_truthy,
-    string, symbol, to_int32_number, to_js_string_with_env, to_number, to_number_with_env,
+    string, symbol, to_int32_number, to_js_string_with_env, to_number_with_env,
     to_primitive_with_env, to_property_key_value, to_uint32_number, value_prototype_slot,
 };
 
@@ -264,10 +264,10 @@ fn abstract_eq(left: &Value, right: &Value, env: &mut CallEnv) -> Result<bool, R
         (Value::BigInt(left), Value::Number(right))
         | (Value::Number(right), Value::BigInt(left)) => Ok(number_bigint_eq(*right, left)),
         (Value::Number(_), Value::String(value)) => {
-            Ok(left == &Value::Number(to_number(Value::String(value.clone()))?))
+            Ok(left == &Value::Number(to_number_with_env(Value::String(value.clone()), env)?))
         }
         (Value::String(value), Value::Number(_)) => {
-            Ok(&Value::Number(to_number(Value::String(value.clone()))?) == right)
+            Ok(&Value::Number(to_number_with_env(Value::String(value.clone()), env)?) == right)
         }
         (Value::Boolean(value), _) => {
             abstract_eq(&Value::Number(if *value { 1.0 } else { 0.0 }), right, env)

@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use qjs_ast::{BinaryOp, UnaryOp};
 
 use crate::{
@@ -160,7 +158,7 @@ impl Vm<'_> {
             self.env.insert(name, value);
             return Ok(());
         }
-        if !self.realm.borrow().contains_key(&name) {
+        if !self.realm.borrow().contains_key(&name) && self.global_this_property(&name).is_none() {
             return Err(RuntimeError {
                 thrown: None,
                 message: format!("ReferenceError: undefined identifier `{name}`"),

@@ -4,8 +4,6 @@
 //! with a throw completion) when the callback or a derived step completes
 //! abruptly.
 
-use std::collections::HashMap;
-
 use crate::{
     ArrayRef, NativeFunction, RuntimeError, Value, call_function, is_truthy, property_value,
 };

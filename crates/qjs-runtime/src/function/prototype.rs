@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use qjs_ast::Stmt;
 use qjs_parser::parse_script;
 

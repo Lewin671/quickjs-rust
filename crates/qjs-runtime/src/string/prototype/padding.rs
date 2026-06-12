@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{RuntimeError, Value, to_js_string_with_env, to_length_with_env};
 
 use super::super::indexing::this_string_value;

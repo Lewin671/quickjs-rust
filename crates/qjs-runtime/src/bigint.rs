@@ -6,7 +6,7 @@ use num_traits::{One, Signed, Zero};
 use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, PreferredType, Property, RuntimeError, Value,
-    inherited_object_prototype_property, symbol, to_js_string, to_number, to_number_with_env,
+    inherited_object_prototype_property, symbol, to_js_string_with_env, to_number_with_env,
     to_primitive_with_hint,
 };
 
@@ -153,12 +153,13 @@ pub(crate) fn native_bigint_as_uint_n(
 pub(crate) fn native_bigint_prototype_to_string(
     this_value: Value,
     argument_values: &[Value],
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = this_bigint_value(this_value)?;
     let radix = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
         Value::Undefined => 10,
         value => {
-            let radix = to_number(value)?;
+            let radix = to_number_with_env(value, env)?;
             if !radix.is_finite() || radix.fract() != 0.0 || !(2.0..=36.0).contains(&radix) {
                 return Err(RuntimeError {
                     thrown: None,
@@ -212,7 +213,8 @@ pub(crate) fn to_bigint(value: Value, env: &mut CallEnv) -> Result<BigInt, Runti
             parse_bigint_string_value(value.trim()).ok_or_else(invalid_bigint_string)
         }
         Value::Null | Value::Undefined => Err(invalid_bigint_conversion()),
-        value => parse_bigint_string_value(&to_js_string(value)?).ok_or_else(invalid_bigint_string),
+        value => parse_bigint_string_value(&to_js_string_with_env(value, env)?)
+            .ok_or_else(invalid_bigint_string),
     }
 }
 

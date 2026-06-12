@@ -1,5 +1,4 @@
 use crate::CallEnv;
-use std::collections::HashMap;
 
 use num_bigint::BigInt;
 

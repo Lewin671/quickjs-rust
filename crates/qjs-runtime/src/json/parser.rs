@@ -1,13 +1,16 @@
 use std::collections::HashMap;
 
 use crate::CallEnv;
-use crate::{ArrayRef, ObjectRef, RuntimeError, Value, object_prototype, to_js_string};
+use crate::{ArrayRef, ObjectRef, RuntimeError, Value, object_prototype, to_js_string_with_env};
 
 pub(crate) fn native_json_parse(
     argument_values: &[Value],
-    env: &CallEnv,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let source = to_js_string(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    let source = to_js_string_with_env(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     parse_json_text(&source, env)
 }
 

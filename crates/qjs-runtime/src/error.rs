@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, function_prototype,
-    has_property, property_value, property_value_key, symbol, to_js_string, to_js_string_with_env,
+    has_property, property_value, property_value_key, symbol, to_js_string_with_env,
 };
 
 const ERROR_DATA_PROPERTY: &str = "\0ErrorData";
@@ -83,6 +83,7 @@ pub(crate) fn native_error(
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let object = match (is_construct, this_value) {
         (true, Value::Object(object)) => object,
@@ -94,7 +95,7 @@ pub(crate) fn native_error(
             object.define_property(
                 "message".to_owned(),
                 Property::data(
-                    Value::String(to_js_string(message.clone())?),
+                    Value::String(to_js_string_with_env(message.clone(), env)?),
                     false,
                     true,
                     true,
@@ -207,7 +208,10 @@ pub(crate) fn native_error_constructor_parent(function: &Function, env: &CallEnv
         .and_then(|_| env.get("Error"))
 }
 
-pub(crate) fn native_error_prototype_to_string(this_value: Value) -> Result<Value, RuntimeError> {
+pub(crate) fn native_error_prototype_to_string(
+    this_value: Value,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
     let Value::Object(object) = this_value else {
         return Err(RuntimeError {
             thrown: None,
@@ -217,11 +221,11 @@ pub(crate) fn native_error_prototype_to_string(this_value: Value) -> Result<Valu
 
     let name = match object.get("name") {
         Some(Value::Undefined) | None => "Error".to_owned(),
-        Some(value) => to_js_string(value)?,
+        Some(value) => to_js_string_with_env(value, env)?,
     };
     let message = match object.get("message") {
         Some(Value::Undefined) | None => String::new(),
-        Some(value) => to_js_string(value)?,
+        Some(value) => to_js_string_with_env(value, env)?,
     };
 
     Ok(Value::String(match (name.is_empty(), message.is_empty()) {
@@ -264,6 +268,7 @@ pub(crate) fn runtime_error_to_value(error: RuntimeError, env: &CallEnv) -> Valu
             Value::Undefined,
             &[Value::String(detail.clone())],
             false,
+            &mut CallEnv::new(env.realm_rc()),
         ) {
             return value;
         }

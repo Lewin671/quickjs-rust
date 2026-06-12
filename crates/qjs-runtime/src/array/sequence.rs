@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{
     ArrayRef, PropertyKey, RuntimeError, Value, has_property, is_truthy, property_value,
     property_value_key, symbol, to_length_with_env,
@@ -32,7 +30,7 @@ pub(crate) fn native_array_prototype_concat(
     for value in argument_values.iter().cloned() {
         next_index = concat_array_item(result.clone(), next_index, value, env)?;
     }
-    set_array_like_length(result.clone(), next_index)?;
+    set_array_like_length(result.clone(), next_index, env)?;
     Ok(result)
 }
 
@@ -209,7 +207,7 @@ fn concat_array_item(
     if is_concat_spreadable(value.clone(), env)? {
         return concat_spread_array(result, next_index, value, env);
     }
-    create_data_property_or_throw(result, next_index.to_string(), value)?;
+    create_data_property_or_throw(result, next_index.to_string(), value, env)?;
     Ok(next_index + 1)
 }
 
@@ -264,6 +262,7 @@ fn concat_spread_array(
                 result.clone(),
                 (next_index + index).to_string(),
                 property_value(value.clone(), &key, env)?,
+                env,
             )?;
         }
     }

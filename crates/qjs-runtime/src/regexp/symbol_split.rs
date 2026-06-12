@@ -1,12 +1,10 @@
-use std::collections::HashMap;
-
 use crate::CallEnv;
 use crate::string::advance_string_index;
 use crate::{
     ArrayRef, Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value,
     call_function, construct_function, ensure_constructor, property_value, property_value_key,
-    reflect, symbol, to_js_string_with_env, to_length_with_env, to_number_with_env, to_uint32,
-    to_uint32_number,
+    reflect, symbol, to_js_string_with_env, to_length_with_env, to_number_with_env,
+    to_uint32_number, to_uint32_with_env,
 };
 
 pub(crate) fn install_regexp_prototype_split(env: &CallEnv, prototype: &ObjectRef) {
@@ -200,7 +198,7 @@ fn split_limit(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
         Value::Object(_) | Value::Function(_) | Value::Array(_) => {
             Ok(to_uint32_number(to_number_with_env(value, env)?) as usize)
         }
-        value => Ok(to_uint32(value)? as usize),
+        value => Ok(to_uint32_with_env(value, env)? as usize),
     }
 }
 

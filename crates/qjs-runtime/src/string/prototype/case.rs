@@ -1,5 +1,5 @@
 use crate::CallEnv;
-use std::{borrow::Cow, collections::HashMap};
+use std::borrow::Cow;
 
 use crate::{RuntimeError, Value, to_js_string_with_env};
 use unicode_normalization::UnicodeNormalization;

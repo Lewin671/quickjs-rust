@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{NativeFunction, Value, array};
 
 use super::NativeCallResult;

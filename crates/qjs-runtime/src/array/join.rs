@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{RuntimeError, Value, call_function, object, property_value, to_js_string_with_env};
 
 use super::array_like::{array_like_length, array_like_receiver};

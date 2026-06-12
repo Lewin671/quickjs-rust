@@ -73,7 +73,7 @@ pub(crate) fn call_async_function(
         .bytecode
         .clone()
         .expect("async function has a bytecode body");
-    let captured = Rc::new(RefCell::new(function_env.to_flat_map()));
+    let captured = Rc::new(RefCell::new(function_env.snapshot_locals()));
     let context = ObjectRef::new(HashMap::new());
     *context.generator_state().borrow_mut() =
         Some(GeneratorState::SuspendedStart(Box::new(GeneratorStart {

@@ -161,7 +161,7 @@ impl Compiler {
     fn emit_pattern_identifier_store(&mut self, name: &str) {
         if let Some(slot) = self.resolve_local_slot(name) {
             self.emit(Op::StoreLocal(slot));
-        } else if self.strict {
+        } else if self.strict || self.is_global_hoisted(name) {
             self.emit(Op::StoreGlobalStrict(name.to_owned()));
         } else {
             let slot = self.assignment_slot(name);

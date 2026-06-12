@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{Function, RuntimeError, Value, call_function};
 
 use super::capability::{self, new_promise_capability};

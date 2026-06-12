@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use qjs_parser::parse_script;
 
 use crate::CallEnv;
@@ -7,7 +5,7 @@ use crate::{
     Function, GLOBAL_THIS_BINDING, NativeFunction, Property, RuntimeError, Value,
     bytecode::{compile_script, eval_bytecode_with_env},
     string::{string_code_units, string_from_code_unit},
-    to_js_string_with_env, to_number,
+    to_js_string_with_env, to_number_with_env,
 };
 
 pub(super) fn install_globals(env: &mut CallEnv, global_this: &Value) {
@@ -106,14 +104,20 @@ pub(super) fn native_global_print(
     Ok(Value::Undefined)
 }
 
-pub(super) fn native_global_is_finite(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+pub(super) fn native_global_is_finite(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    Ok(Value::Boolean(to_number(value)?.is_finite()))
+    Ok(Value::Boolean(to_number_with_env(value, env)?.is_finite()))
 }
 
-pub(super) fn native_global_is_nan(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+pub(super) fn native_global_is_nan(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    Ok(Value::Boolean(to_number(value)?.is_nan()))
+    Ok(Value::Boolean(to_number_with_env(value, env)?.is_nan()))
 }
 
 pub(super) fn native_global_encode_uri(
@@ -180,7 +184,14 @@ pub(super) fn native_global_eval(
         .chain(bytecode.global_names().iter().map(String::as_str))
     {
         if let Some(value) = result.binding(name) {
-            env.insert_realm(name.to_owned(), value.clone());
+            if env.locals().contains_key(name) {
+                // A caller frame binding (an outer `let`/`var` the eval'd code
+                // assigned): write it back through the frame so the caller's
+                // slot sees the update.
+                env.insert(name.to_owned(), value.clone());
+            } else {
+                env.insert_realm(name.to_owned(), value.clone());
+            }
         }
     }
     result.value

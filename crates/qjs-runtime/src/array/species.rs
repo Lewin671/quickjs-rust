@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::CallEnv;
 use crate::{
     ArrayRef, Property, PropertyKey, RuntimeError, Value, construct_function, ensure_constructor,
@@ -67,11 +65,13 @@ pub(super) fn create_data_property_or_throw(
     target: Value,
     key: String,
     value: Value,
+    env: &mut crate::CallEnv,
 ) -> Result<(), RuntimeError> {
     if crate::object::define_property_on_value_key(
         target,
         PropertyKey::String(key),
         Property::data(value, true, true, true),
+        env,
     )? {
         return Ok(());
     }
@@ -81,11 +81,16 @@ pub(super) fn create_data_property_or_throw(
     })
 }
 
-pub(super) fn set_array_like_length(target: Value, length: usize) -> Result<(), RuntimeError> {
+pub(super) fn set_array_like_length(
+    target: Value,
+    length: usize,
+    env: &mut crate::CallEnv,
+) -> Result<(), RuntimeError> {
     if crate::object::define_property_on_value_key(
         target,
         PropertyKey::String("length".to_owned()),
         Property::data(Value::Number(length as f64), false, true, false),
+        env,
     )? {
         return Ok(());
     }

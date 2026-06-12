@@ -1,7 +1,7 @@
-use std::{cmp::Ordering, collections::HashMap};
+use std::cmp::Ordering;
 
 use crate::{
-    ArrayRef, Function, RuntimeError, Value, call_function, property_value, to_js_string,
+    ArrayRef, Function, RuntimeError, Value, call_function, property_value, to_js_string_with_env,
     to_number_with_env,
 };
 
@@ -139,6 +139,7 @@ fn compare_values(
             Ok(Ordering::Greater)
         }
     } else {
-        Ok(to_js_string(left.clone())?.cmp(&to_js_string(right.clone())?))
+        Ok(to_js_string_with_env(left.clone(), env)?
+            .cmp(&to_js_string_with_env(right.clone(), env)?))
     }
 }

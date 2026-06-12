@@ -3,8 +3,6 @@
 //! `IteratorClose` variants (swallowing for a normal completion, preserving the
 //! pending error for an abrupt one).
 
-use std::collections::HashMap;
-
 use crate::CallEnv;
 use crate::{RuntimeError, Value, call_function, is_truthy, property_value};
 

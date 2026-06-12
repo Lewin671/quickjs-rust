@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{
     ObjectRef, Property, PropertyKey, RuntimeError, Value, function_own_property_descriptor,
     function_own_symbol_property_descriptor, to_property_key_value,
@@ -410,6 +408,7 @@ pub(crate) fn define_property_on_value_key(
     target: Value,
     key: PropertyKey,
     descriptor: Property,
+    env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     let key = match key {
         PropertyKey::String(key) => key,
@@ -480,7 +479,7 @@ pub(crate) fn define_property_on_value_key(
             }
             if key == "length" {
                 if !matches!(descriptor.value, Value::Undefined) {
-                    elements.set_len(crate::to_length(descriptor.value)?);
+                    elements.set_len(crate::to_length_with_env(descriptor.value, env)?);
                 }
                 elements.set_length_writable(descriptor.writable);
             } else {
@@ -492,6 +491,7 @@ pub(crate) fn define_property_on_value_key(
             proxy.target_result()?,
             PropertyKey::String(key),
             descriptor,
+            env,
         ),
         _ => {
             ensure_define_property_target(&target)?;

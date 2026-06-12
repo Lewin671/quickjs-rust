@@ -1,7 +1,5 @@
-use std::collections::HashMap;
-
 use crate::{
-    ArrayRef, RuntimeError, Value, call_function, has_property, property_value, to_number,
+    ArrayRef, RuntimeError, Value, call_function, has_property, property_value, to_number_with_env,
 };
 
 use super::{array_like::array_like_length, species::validate_array_species_constructor};
@@ -13,7 +11,10 @@ pub(crate) fn native_array_prototype_flat(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let source = array_like_length(this_value, "Array.prototype.flat", env)?;
-    let depth = flat_depth(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    let depth = flat_depth(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     validate_array_species_constructor(source.receiver.clone(), "flat", env)?;
     let mut result = Vec::new();
     flatten_source_into(&mut result, source.receiver, source.length, depth, env)?;
@@ -56,10 +57,10 @@ pub(crate) fn native_array_prototype_flat_map(
     Ok(Value::Array(ArrayRef::new(result)))
 }
 
-fn flat_depth(value: Value) -> Result<usize, RuntimeError> {
+fn flat_depth(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
     let number = match value {
         Value::Undefined => return Ok(1),
-        value => to_number(value)?,
+        value => to_number_with_env(value, env)?,
     };
 
     if number.is_nan() || number <= 0.0 {

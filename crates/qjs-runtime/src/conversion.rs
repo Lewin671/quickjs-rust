@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::CallEnv;
 use crate::{
     PropertyKey, RuntimeError, Value, array::array_join, call_function, date, number,
@@ -11,11 +9,6 @@ pub(crate) enum PreferredType {
     Default,
     String,
     Number,
-}
-
-pub(crate) fn to_js_string(value: Value) -> Result<String, RuntimeError> {
-    let mut env = crate::CallEnv::detached();
-    to_js_string_with_env(value, &mut env)
 }
 
 pub(crate) fn to_js_string_with_env(
@@ -266,12 +259,12 @@ impl PreferredType {
     }
 }
 
-pub(crate) fn to_int32(value: Value) -> Result<i32, RuntimeError> {
-    to_number(value).map(to_int32_number)
+pub(crate) fn to_int32_with_env(value: Value, env: &mut CallEnv) -> Result<i32, RuntimeError> {
+    to_number_with_env(value, env).map(to_int32_number)
 }
 
-pub(crate) fn to_uint32(value: Value) -> Result<u32, RuntimeError> {
-    to_number(value).map(to_uint32_number)
+pub(crate) fn to_uint32_with_env(value: Value, env: &mut CallEnv) -> Result<u32, RuntimeError> {
+    to_number_with_env(value, env).map(to_uint32_number)
 }
 
 pub(crate) fn to_int32_number(number: f64) -> i32 {
@@ -291,18 +284,13 @@ pub(crate) fn to_uint32_number(number: f64) -> u32 {
     number.trunc().rem_euclid(TWO_32) as u32
 }
 
-pub(crate) fn to_uint16(value: Value) -> Result<u16, RuntimeError> {
-    let number = to_number(value)?;
+pub(crate) fn to_uint16_with_env(value: Value, env: &mut CallEnv) -> Result<u16, RuntimeError> {
+    let number = to_number_with_env(value, env)?;
     if !number.is_finite() || number == 0.0 {
         return Ok(0);
     }
     const TWO_16: f64 = 65_536.0;
     Ok(number.trunc().rem_euclid(TWO_16) as u16)
-}
-
-pub(crate) fn to_length(value: Value) -> Result<usize, RuntimeError> {
-    let mut env = crate::CallEnv::detached();
-    to_length_with_env(value, &mut env)
 }
 
 pub(crate) fn to_length_with_env(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {

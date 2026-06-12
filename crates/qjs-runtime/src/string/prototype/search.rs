@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{
     PropertyKey, RuntimeError, Value, call_function, construct_function, property_value,
     property_value_key, regexp, symbol, to_js_string_with_env,

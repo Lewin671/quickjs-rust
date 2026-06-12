@@ -94,7 +94,7 @@ pub(crate) fn call_function(
                 env,
                 is_construct,
             );
-            let activation_captured_env = Rc::new(RefCell::new(function_env.env.to_flat_map()));
+            let activation_captured_env = Rc::new(RefCell::new(function_env.env.snapshot_locals()));
             return crate::generator::make_generator_object(
                 &function,
                 crate::bytecode::GeneratorStart {
@@ -146,7 +146,7 @@ pub(crate) fn call_function(
         // `captured_env`). A body that creates none never reads it, so skip
         // cloning the whole frame env into it on every leaf call.
         let activation_captured_env = if bytecode.creates_closures() {
-            Rc::new(RefCell::new(function_env.env.to_flat_map()))
+            Rc::new(RefCell::new(function_env.env.snapshot_locals()))
         } else {
             Rc::new(RefCell::new(HashMap::new()))
         };
@@ -192,7 +192,7 @@ pub(crate) fn initialize_instance_fields(
             )?,
             None => Value::Undefined,
         };
-        crate::bytecode::install_field_value(this_value, field.key.clone(), value)?;
+        crate::bytecode::install_field_value(this_value, field.key.clone(), value, env)?;
     }
     Ok(())
 }
@@ -321,6 +321,9 @@ fn function_env(
     is_construct: bool,
 ) -> FunctionCallEnv {
     let captured_env = function.captured_env.borrow();
+    if captured_env.contains_key("flag") {
+        eprintln!("DBG fn-env: captured has flag for fn {:?}", function.name);
+    }
     let lexical_this = captured_env.get("this").cloned();
     let mut local_env = HashMap::with_capacity(
         captured_env.len() + function.params.binding_count() + argument_values.len() + 3,
@@ -364,7 +367,11 @@ fn function_env(
         local_env.insert(
             "this".to_owned(),
             if function.lexical_this {
-                lexical_this.unwrap_or(Value::Undefined)
+                // A top-level arrow has no captured `this`; fall back to the
+                // realm's global `this`.
+                lexical_this
+                    .or_else(|| env.get("this"))
+                    .unwrap_or(Value::Undefined)
             } else {
                 function_call_this(Some(this_value), env, function.is_strict)
             },
@@ -635,6 +642,9 @@ fn insert_function_capture(
         return;
     }
     if let Some(value) = function_env.get(name) {
+        if name == "flag" {
+            eprintln!("DBG capture-from-function-env flag={:?}", value);
+        }
         local_env.insert(name.to_owned(), value.clone());
         if !names.iter().any(|existing| existing == name) {
             names.push(name.to_owned());
@@ -675,6 +685,9 @@ fn insert_caller_binding(
     // realm bindings (intrinsics and true globals) are visible through the
     // shared realm cell and must not be copied or written back.
     if let Some(value) = env.locals().get(name) {
+        if name == "flag" {
+            eprintln!("DBG caller-binding flag={:?}", value);
+        }
         local_env.insert(name.to_owned(), value.clone());
         insert_missing_caller_binding_name(caller_binding_names, name);
     }

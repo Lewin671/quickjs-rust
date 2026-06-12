@@ -20,7 +20,7 @@ impl Compiler {
                 let Some(slot) = self.resolve_local_slot(name) else {
                     self.compile_named_expr(value, name)?;
                     self.emit(Op::Dup);
-                    if self.strict {
+                    if self.strict || self.is_global_hoisted(name) {
                         self.emit(Op::StoreGlobalStrict(name.clone()));
                     } else {
                         let slot = self.assignment_slot(name);

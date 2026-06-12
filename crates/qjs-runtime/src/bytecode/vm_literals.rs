@@ -100,10 +100,12 @@ impl Vm<'_> {
                 descriptor.get = descriptor.get.or(existing.get);
                 descriptor.set = descriptor.set.or(existing.set);
             }
+            let mut prop_env = self.realm_env();
             let success = object::define_property_on_value_key(
                 Value::Object(object.clone()),
                 key,
                 descriptor,
+                &mut prop_env,
             )?;
             if !success {
                 return Err(RuntimeError {

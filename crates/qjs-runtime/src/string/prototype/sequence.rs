@@ -1,9 +1,7 @@
-use std::collections::HashMap;
-
 use crate::{
     ArrayRef, PropertyKey, RuntimeError, Value, call_function, has_property_key, property_value,
-    property_value_key, regexp, symbol, to_js_string_with_env, to_number, to_number_with_env,
-    to_uint32, to_uint32_number,
+    property_value_key, regexp, symbol, to_js_string_with_env, to_number_with_env,
+    to_uint32_number, to_uint32_with_env,
 };
 
 use super::super::indexing::{string_slice_index, string_substring_index, this_string_value};
@@ -27,7 +25,10 @@ pub(crate) fn native_string_prototype_repeat(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
-    let count = to_number(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    let count = to_number_with_env(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     if count.is_infinite() || count < 0.0 {
         return Err(RuntimeError {
             thrown: None,
@@ -271,7 +272,7 @@ fn string_split_limit(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeE
         Value::Object(_) | Value::Function(_) | Value::Array(_) => {
             Ok(to_uint32_number(to_number_with_env(value, env)?) as usize)
         }
-        value => Ok(to_uint32(value)? as usize),
+        value => Ok(to_uint32_with_env(value, env)? as usize),
     }
 }
 
@@ -286,11 +287,13 @@ pub(crate) fn native_string_prototype_substr(
     let start = string_substr_start(
         length,
         argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
     )?;
     let count = string_substr_count(
         length,
         start,
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
     )?;
     Ok(Value::String(chars[start..start + count].iter().collect()))
 }
@@ -323,8 +326,12 @@ pub(crate) fn native_string_prototype_substring(
     Ok(Value::String(chars[from..to].iter().collect()))
 }
 
-fn string_substr_start(length: usize, value: Value) -> Result<usize, RuntimeError> {
-    let number = to_number(value)?;
+fn string_substr_start(
+    length: usize,
+    value: Value,
+    env: &mut CallEnv,
+) -> Result<usize, RuntimeError> {
+    let number = to_number_with_env(value, env)?;
     if number.is_nan() {
         return Ok(0);
     }
@@ -336,13 +343,18 @@ fn string_substr_start(length: usize, value: Value) -> Result<usize, RuntimeErro
     }
 }
 
-fn string_substr_count(length: usize, start: usize, value: Value) -> Result<usize, RuntimeError> {
+fn string_substr_count(
+    length: usize,
+    start: usize,
+    value: Value,
+    env: &mut CallEnv,
+) -> Result<usize, RuntimeError> {
     let remaining = length - start;
     if matches!(value, Value::Undefined) {
         return Ok(remaining);
     }
 
-    let number = to_number(value)?;
+    let number = to_number_with_env(value, env)?;
     if number.is_nan() || number <= 0.0 {
         return Ok(0);
     }

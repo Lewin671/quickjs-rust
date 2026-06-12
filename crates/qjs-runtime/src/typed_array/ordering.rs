@@ -8,7 +8,7 @@
 //! *writes* through `array[i] = v` are still not hooked — see the campaign
 //! notes).
 
-use std::{cmp::Ordering, collections::HashMap};
+use std::cmp::Ordering;
 
 use crate::{
     Function, NativeFunction, ObjectRef, RuntimeError, Value, array, array_buffer, call_function,

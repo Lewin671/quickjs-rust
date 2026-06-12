@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{RuntimeError, Value};
 
 use super::super::indexing::this_string_value;

@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{
     PreferredType, RuntimeError, Value, call_function,
     date::iso::{

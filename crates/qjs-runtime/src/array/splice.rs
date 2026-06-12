@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{ArrayRef, RuntimeError, Value, has_property, property_value, to_number_with_env};
 
 use super::{

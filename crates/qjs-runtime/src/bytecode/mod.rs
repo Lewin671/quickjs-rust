@@ -136,6 +136,6 @@ pub(crate) fn eval_bytecode_with_env(
     bytecode: &Bytecode,
     env: crate::CallEnv,
 ) -> FunctionBytecodeResult<'_> {
-    let captured_env = Rc::new(RefCell::new(env.to_flat_map()));
+    let captured_env = Rc::new(RefCell::new(env.snapshot_locals()));
     vm::eval_function_bytecode(bytecode, env, captured_env)
 }

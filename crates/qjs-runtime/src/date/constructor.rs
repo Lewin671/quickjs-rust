@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::CallEnv;
 use crate::{
     Function, PreferredType, RuntimeError, Value,
@@ -10,7 +8,7 @@ use crate::{
             current_time_ms, define_date_value, optional_number, parse_date_string, time_clip,
         },
     },
-    to_number, to_number_with_env, to_primitive_with_hint,
+    to_number_with_env, to_primitive_with_hint,
 };
 
 pub(crate) fn native_date(
@@ -41,19 +39,26 @@ pub(crate) fn native_date_now() -> Result<Value, RuntimeError> {
     Ok(Value::Number(current_time_ms()))
 }
 
-pub(crate) fn native_date_parse(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+pub(crate) fn native_date_parse(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
     match argument_values.first() {
         Some(Value::String(source)) => Ok(Value::Number(parse_date_string(source))),
-        Some(value) => Ok(Value::Number(parse_date_string(&crate::to_js_string(
-            value.clone(),
-        )?))),
+        Some(value) => Ok(Value::Number(parse_date_string(
+            &crate::to_js_string_with_env(value.clone(), env)?,
+        ))),
         None => Ok(Value::Number(f64::NAN)),
     }
 }
 
-pub(crate) fn native_date_utc(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+pub(crate) fn native_date_utc(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
     Ok(Value::Number(time_clip(date_utc_from_arguments(
         argument_values,
+        env,
     )?)))
 }
 
@@ -73,12 +78,21 @@ fn construct_date_value(argument_values: &[Value], env: &mut CallEnv) -> Result<
             }
         };
     }
-    date_utc_from_arguments(argument_values).map(time_clip)
+    date_utc_from_arguments(argument_values, env).map(time_clip)
 }
 
-fn date_utc_from_arguments(argument_values: &[Value]) -> Result<f64, RuntimeError> {
-    let year = to_number(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
-    let month = to_number(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
+fn date_utc_from_arguments(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<f64, RuntimeError> {
+    let year = to_number_with_env(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
+    let month = to_number_with_env(
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     if !year.is_finite() || !month.is_finite() {
         return Ok(f64::NAN);
     }

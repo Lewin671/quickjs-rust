@@ -6,8 +6,6 @@
 //! timing (the async Test262 harness, the CLI) use [`eval_bytecode_keep_jobs`]
 //! and drain explicitly with [`run_pending_jobs`].
 
-use std::collections::HashMap;
-
 use crate::{RuntimeError, Value, promise};
 
 use super::ir::Bytecode;

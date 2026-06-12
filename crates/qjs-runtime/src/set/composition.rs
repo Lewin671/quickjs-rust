@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::CallEnv;
 use crate::{
     MapRef, RuntimeError, SetRef, Value, array::array_like_values_with_env, call_function,

@@ -1,7 +1,13 @@
-use crate::{RuntimeError, Value, to_int32, to_js_string};
+use crate::{CallEnv, RuntimeError, Value, to_int32_with_env, to_js_string_with_env};
 
-pub(crate) fn native_parse_float(argument_values: &[Value]) -> Result<Value, RuntimeError> {
-    let input = to_js_string(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+pub(crate) fn native_parse_float(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let input = to_js_string_with_env(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     Ok(Value::Number(parse_float_string(&input)))
 }
 
@@ -62,12 +68,18 @@ fn parse_float_string(input: &str) -> f64 {
     input[..end].parse::<f64>().unwrap_or(f64::NAN)
 }
 
-pub(crate) fn native_parse_int(argument_values: &[Value]) -> Result<Value, RuntimeError> {
-    let input = to_js_string(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+pub(crate) fn native_parse_int(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let input = to_js_string_with_env(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     let radix = argument_values
         .get(1)
         .cloned()
-        .map(to_int32)
+        .map(|value| to_int32_with_env(value, env))
         .transpose()?
         .unwrap_or(0);
     Ok(Value::Number(parse_int_string(&input, radix)))

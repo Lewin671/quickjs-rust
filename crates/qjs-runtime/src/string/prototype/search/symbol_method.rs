@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::CallEnv;
 use crate::{
     ObjectRef, PropertyKey, RuntimeError, Value, has_property_key, property_value_key, symbol,

@@ -66,6 +66,7 @@ impl Vm<'_> {
             Value::Undefined,
             &[Value::String(message)],
             false,
+            &mut self.realm_env(),
         )
     }
 

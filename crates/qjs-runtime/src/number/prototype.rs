@@ -4,7 +4,7 @@ use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 
 use crate::{
-    Function, ObjectRef, Property, RuntimeError, Value, function_prototype, to_int32,
+    Function, ObjectRef, Property, RuntimeError, Value, function_prototype, to_int32_with_env,
     to_number_with_env,
 };
 
@@ -44,10 +44,13 @@ pub(crate) fn native_number(
 pub(crate) fn native_number_prototype_to_string(
     this_value: Value,
     argument_values: &[Value],
+    env: &mut crate::CallEnv,
 ) -> Result<Value, RuntimeError> {
     let number = this_number_value(this_value)?;
-    let radix =
-        number_to_string_radix(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    let radix = number_to_string_radix(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     Ok(Value::String(number_to_radix_string(number, radix)?))
 }
 
@@ -147,11 +150,11 @@ fn this_number_value(value: Value) -> Result<f64, RuntimeError> {
     }
 }
 
-fn number_to_string_radix(value: Value) -> Result<u32, RuntimeError> {
+fn number_to_string_radix(value: Value, env: &mut crate::CallEnv) -> Result<u32, RuntimeError> {
     if matches!(value, Value::Undefined) {
         return Ok(10);
     }
-    let radix = to_int32(value)?;
+    let radix = to_int32_with_env(value, env)?;
     if !(2..=36).contains(&radix) {
         return Err(RuntimeError {
             thrown: None,

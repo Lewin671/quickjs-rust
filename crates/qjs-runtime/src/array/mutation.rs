@@ -1,9 +1,7 @@
-use std::collections::HashMap;
-
 use crate::{
     Property, RuntimeError, Value, array_own_property_descriptor, array_prototype, call_function,
     function_delete_own_property, function_own_property_descriptor, has_property, property_value,
-    to_length,
+    to_length_with_env,
 };
 
 use super::{
@@ -105,7 +103,7 @@ pub(super) fn set_array_like_property(
             {
                 return Err(copy_within_set_error());
             }
-            elements.set_len(to_length(value)?);
+            elements.set_len(to_length_with_env(value, env)?);
             Ok(())
         }
         Value::Array(elements) => {
