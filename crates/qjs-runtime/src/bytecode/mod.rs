@@ -174,6 +174,25 @@ pub(crate) fn compile_module(script: &Script) -> Result<Bytecode, RuntimeError> 
     compiler::compile_module(script)
 }
 
+/// Compiles and evaluates a prelude *script* against the shared graph realm
+/// before any module body runs, so its top-level bindings are visible to every
+/// module. See [`vm_module::eval_prelude_script`].
+///
+/// # Errors
+///
+/// Returns parser, compiler, or VM runtime failures.
+pub(crate) fn eval_prelude_script(
+    source: &str,
+    realm: &ModuleRealm,
+) -> Result<(), crate::RuntimeError> {
+    let script = parse_script(source).map_err(|error| crate::RuntimeError {
+        thrown: None,
+        message: error.message,
+    })?;
+    let bytecode = compile_script(&script)?;
+    vm_module::eval_prelude_script(&bytecode, realm)
+}
+
 /// Evaluates a module body against the shared graph realm seeded with the
 /// module's resolved imports. Returns the module's frame environment so the
 /// caller can read its exported bindings. See [`vm_module::eval_module_body`].

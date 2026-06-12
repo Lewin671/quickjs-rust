@@ -42,7 +42,10 @@ mod weak_set;
 
 mod module;
 
-pub use module::{MapResolver, ModuleResolveError, ModuleResolver, ResolvedModule, eval_module};
+pub use module::{
+    MapResolver, ModuleResolveError, ModuleResolver, ResolvedModule, eval_module,
+    eval_module_with_prelude,
+};
 
 use builtins::initialize_builtins;
 pub(crate) use conversion::{

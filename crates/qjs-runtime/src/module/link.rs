@@ -76,6 +76,13 @@ impl ModuleGraph {
         }
     }
 
+    /// Evaluates a prelude *script* against the graph's shared realm before any
+    /// module body runs, so its top-level bindings (e.g. Test262 harness
+    /// includes) are visible to every module in the graph.
+    pub(super) fn eval_prelude(&self, source: &str) -> Result<(), RuntimeError> {
+        bytecode::eval_prelude_script(source, &self.realm)
+    }
+
     /// Loads the module identified by `(specifier, source)` and, depth-first,
     /// every module it requests, returning the root module's canonical key.
     pub(super) fn load(

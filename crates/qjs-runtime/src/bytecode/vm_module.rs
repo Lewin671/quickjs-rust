@@ -16,6 +16,26 @@ use crate::{
 use super::ir::Bytecode;
 use super::vm::Vm;
 
+/// Evaluates a prelude *script* against the shared graph `realm` before any
+/// module body runs. The prelude is ordinary (non-module) script code — for the
+/// Test262 channel, the harness includes (`assert.js`, `sta.js`, the host shim,
+/// and the async `$DONE` handler) — whose top-level `var`/`function` bindings
+/// must be visible to every module in the graph. Pending promise jobs are
+/// drained so a prelude that schedules microtasks settles before module
+/// evaluation.
+pub(super) fn eval_prelude_script(bytecode: &Bytecode, realm: &Realm) -> Result<(), RuntimeError> {
+    {
+        let mut globals = realm.borrow_mut();
+        Vm::initialize_script_global_bindings(bytecode, &mut globals);
+    }
+    let env = CallEnv::new(Rc::clone(realm));
+    let captured_env = Rc::new(RefCell::new(HashMap::new()));
+    let mut vm = Vm::new_with_globals_and_captures(bytecode, env, captured_env);
+    vm.run()?;
+    vm.drain_promise_jobs()?;
+    Ok(())
+}
+
 /// Builds a fresh realm for a module graph: built-ins, a graph-private
 /// `globalThis`, and `this` = undefined (module top-level `this`).
 pub(super) fn new_module_realm() -> Realm {

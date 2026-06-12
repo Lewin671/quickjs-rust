@@ -50,7 +50,31 @@ pub fn eval_module(
     specifier: &str,
     resolver: &mut dyn ModuleResolver,
 ) -> Result<Value, EvalError> {
+    eval_module_with_prelude(None, source, specifier, resolver)
+}
+
+/// Like [`eval_module`], but first evaluates `prelude` as a *script* in the
+/// module graph's shared realm, so its top-level bindings are visible to every
+/// module. Used by the Test262 module channel to install harness includes
+/// (`assert.js`, `sta.js`, the `$DONE` handler) as a module-scope prelude.
+///
+/// # Errors
+///
+/// Returns a [`EvalError`] for a prelude/parse/link failure or a runtime
+/// failure during module evaluation (same classification as [`eval_module`]).
+pub fn eval_module_with_prelude(
+    prelude: Option<&str>,
+    source: &str,
+    specifier: &str,
+    resolver: &mut dyn ModuleResolver,
+) -> Result<Value, EvalError> {
     let mut graph = link::ModuleGraph::new();
+    if let Some(prelude) = prelude {
+        graph.eval_prelude(prelude).map_err(|error| EvalError {
+            kind: EvalErrorKind::Runtime,
+            message: error.message,
+        })?;
+    }
     let root = graph
         .load(specifier, source, resolver)
         .map_err(link_error)?;

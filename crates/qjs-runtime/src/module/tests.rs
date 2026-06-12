@@ -1,6 +1,6 @@
 //! Module record, linking, evaluation, and namespace tests (T012 S2).
 
-use crate::{EvalErrorKind, MapResolver, Value, eval_module};
+use crate::{EvalErrorKind, MapResolver, Value, eval_module, eval_module_with_prelude};
 
 /// Evaluates the module graph rooted at `"main"`, with extra `(key, source)`
 /// modules registered in an in-memory resolver. Returns the root namespace.
@@ -154,6 +154,34 @@ fn module_vars_do_not_leak_to_global_this() {
     run("var leaked = 123;\nexport const v = leaked;", &[]).expect("module evaluates");
     let result = crate::eval("typeof leaked;").expect("script evaluates");
     assert_eq!(result, Value::String("undefined".to_owned()));
+}
+
+#[test]
+fn prelude_script_bindings_are_visible_to_module() {
+    // A prelude script (mirroring Test262 harness includes) installs a global
+    // helper that the module body then calls; its value flows into an export.
+    let mut resolver = MapResolver::new();
+    let namespace = eval_module_with_prelude(
+        Some("function helper() { return 11; }"),
+        "export const v = helper();",
+        "main",
+        &mut resolver,
+    )
+    .expect("module with prelude evaluates");
+    assert_eq!(export(&namespace, "v"), Value::Number(11.0));
+}
+
+#[test]
+fn prelude_throw_is_a_runtime_error() {
+    let mut resolver = MapResolver::new();
+    let error = eval_module_with_prelude(
+        Some("throw new Error('boom');"),
+        "export const v = 1;",
+        "main",
+        &mut resolver,
+    )
+    .expect_err("prelude failure surfaces");
+    assert_eq!(error.kind, EvalErrorKind::Runtime);
 }
 
 #[test]

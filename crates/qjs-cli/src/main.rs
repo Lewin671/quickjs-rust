@@ -1,8 +1,15 @@
 //! Command-line entry point for the rewrite.
 
-use std::{env, fs, process::ExitCode};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+    process::ExitCode,
+};
 
-use qjs_runtime::{EvalError, EvalErrorKind, Value, eval, eval_classified};
+use qjs_runtime::{
+    EvalError, EvalErrorKind, ModuleResolveError, ModuleResolver, ResolvedModule, Value, eval,
+    eval_classified, eval_module_with_prelude,
+};
 
 fn main() -> ExitCode {
     match run() {
@@ -20,25 +27,45 @@ struct CliError {
 
 fn run() -> Result<(), CliError> {
     let mut args = env::args().skip(1).collect::<Vec<_>>().into_iter();
-    let raw_output = matches!(args.as_slice().first().map(String::as_str), Some("--raw"));
-    if raw_output {
-        args.next();
-    }
-    let test262_error_format = matches!(
-        args.as_slice().first().map(String::as_str),
-        Some("--error-format=test262")
-    );
-    if test262_error_format {
-        args.next();
+    let mut raw_output = false;
+    let mut test262_error_format = false;
+    let mut module_mode = false;
+    let mut prelude_path: Option<String> = None;
+    loop {
+        match args.as_slice().first().map(String::as_str) {
+            Some("--raw") => {
+                raw_output = true;
+                args.next();
+            }
+            Some("--error-format=test262") => {
+                test262_error_format = true;
+                args.next();
+            }
+            Some("--module") => {
+                module_mode = true;
+                args.next();
+            }
+            Some("--prelude") => {
+                args.next();
+                prelude_path = Some(args.next().ok_or_else(|| CliError {
+                    message: "missing path after --prelude".to_owned(),
+                })?);
+            }
+            _ => break,
+        }
     }
 
     let Some(first) = args.next() else {
         return Err(CliError {
             message:
-                "usage: qjs [--raw] [--error-format=test262] (-e <source> | <file> [script-arg...])"
+                "usage: qjs [--raw] [--error-format=test262] [--module [--prelude <file>]] (-e <source> | <file> [script-arg...])"
                     .to_owned(),
         });
     };
+
+    if module_mode {
+        return run_module(&first, prelude_path.as_deref(), test262_error_format);
+    }
 
     let (source, script_args) = if first == "-e" {
         let source = args.next().ok_or_else(|| CliError {
@@ -67,6 +94,67 @@ fn run() -> Result<(), CliError> {
         println!("{value:?}");
     }
     Ok(())
+}
+
+/// Evaluates `file` under the Module goal. Relative specifiers resolve against
+/// the importing file's directory (canonicalized keys). An optional `prelude`
+/// file is evaluated as a script in the module graph's realm first, so Test262
+/// harness includes (which are script code) are visible to the module.
+fn run_module(
+    file: &str,
+    prelude_path: Option<&str>,
+    test262_error_format: bool,
+) -> Result<(), CliError> {
+    let source = fs::read_to_string(file).map_err(|error| CliError {
+        message: format!("failed to read `{file}`: {error}"),
+    })?;
+    let prelude = match prelude_path {
+        Some(path) => Some(fs::read_to_string(path).map_err(|error| CliError {
+            message: format!("failed to read prelude `{path}`: {error}"),
+        })?),
+        None => None,
+    };
+    // Canonicalize the root specifier so relative imports resolve against a
+    // stable absolute directory and the graph deduplicates by real path.
+    let root_key = fs::canonicalize(file)
+        .map(|path| path.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| file.to_owned());
+    let mut resolver = FsResolver;
+    let result = eval_module_with_prelude(prelude.as_deref(), &source, &root_key, &mut resolver);
+    match result {
+        Ok(_) => Ok(()),
+        Err(error) if test262_error_format => Err(format_test262_error(error)),
+        Err(error) => Err(CliError {
+            message: error.message,
+        }),
+    }
+}
+
+/// A filesystem [`ModuleResolver`]: resolves a (relative) specifier against the
+/// importing module's directory and canonicalizes the result so the graph keys
+/// modules by their real path. Lives in the CLI because the engine stays
+/// agnostic of any host file layout.
+struct FsResolver;
+
+impl ModuleResolver for FsResolver {
+    fn resolve(
+        &mut self,
+        specifier: &str,
+        referrer: &str,
+    ) -> Result<ResolvedModule, ModuleResolveError> {
+        let base_dir = Path::new(referrer)
+            .parent()
+            .map_or_else(|| PathBuf::from("."), Path::to_path_buf);
+        let candidate = base_dir.join(specifier);
+        let canonical = fs::canonicalize(&candidate).map_err(|error| ModuleResolveError {
+            message: format!("Cannot resolve module '{specifier}': {error}"),
+        })?;
+        let key = canonical.to_string_lossy().into_owned();
+        let source = fs::read_to_string(&canonical).map_err(|error| ModuleResolveError {
+            message: format!("Cannot load module '{specifier}': {error}"),
+        })?;
+        Ok(ResolvedModule { key, source })
+    }
 }
 
 fn format_test262_error(error: EvalError) -> CliError {
