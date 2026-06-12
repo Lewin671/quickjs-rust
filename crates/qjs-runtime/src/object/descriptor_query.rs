@@ -27,7 +27,19 @@ pub(crate) fn native_object_get_own_property_descriptor(
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    let Some(property) = own_property_descriptor_key(target, &key)? else {
+    // An exotic Proxy consults its `getOwnPropertyDescriptor` trap; an absent
+    // trap forwards to the ordinary descriptor lookup on the target.
+    let property = if let Value::Proxy(proxy) = &target {
+        crate::proxy::proxy_get_own_property_descriptor(
+            proxy.clone(),
+            &key,
+            env,
+            |target, _env| own_property_descriptor_key(target, &key),
+        )?
+    } else {
+        own_property_descriptor_key(target, &key)?
+    };
+    let Some(property) = property else {
         return Ok(Value::Undefined);
     };
     Ok(Value::Object(property_descriptor_object(

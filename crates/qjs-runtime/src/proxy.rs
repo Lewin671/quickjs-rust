@@ -203,6 +203,217 @@ pub(crate) fn proxy_delete_property(
     Ok(is_truthy(&result))
 }
 
+/// `[[DefineOwnProperty]]` for an exotic Proxy: invoke the `defineProperty`
+/// trap with `(target, key, descriptorObject)`. When the trap is absent the
+/// definition forwards to the target through `forward`. On a truthy trap
+/// return, the target-consistency invariants are enforced.
+pub(crate) fn proxy_define_property(
+    proxy: ProxyRef,
+    key: &PropertyKey,
+    descriptor: &crate::object::PropertyDescriptor,
+    env: &mut CallEnv,
+    forward: impl FnOnce(Value, &mut CallEnv) -> Result<bool, RuntimeError>,
+) -> Result<bool, RuntimeError> {
+    let target = proxy.target_result()?;
+    let handler = proxy.handler_result()?;
+    let Some(trap) = proxy_trap(handler.clone(), "defineProperty", env)? else {
+        return forward(target, env);
+    };
+    let descriptor_object =
+        Value::Object(crate::object::property_descriptor_record_object(descriptor));
+    let result = call_function(
+        trap,
+        handler,
+        vec![
+            target.clone(),
+            property_key_to_value(key),
+            descriptor_object,
+        ],
+        env,
+        false,
+    )?;
+    if !is_truthy(&result) {
+        return Ok(false);
+    }
+
+    // Target-consistency invariants (ECMA-262 10.5.6).
+    let target_descriptor = crate::object::own_property_descriptor_key(target.clone(), key)?;
+    let extensible_target = crate::object::ordinary_value_is_extensible(&target);
+    let setting_config_false = descriptor.configurable_field() == Some(false);
+    match target_descriptor {
+        None => {
+            if !extensible_target {
+                return Err(invariant_error(
+                    "defineProperty trap added a property to a non-extensible target",
+                ));
+            }
+            if setting_config_false {
+                return Err(invariant_error(
+                    "defineProperty trap defined a non-configurable property absent on the target",
+                ));
+            }
+        }
+        Some(existing) => {
+            if !descriptor.is_compatible_for_proxy_define(Some(&existing), extensible_target) {
+                return Err(invariant_error(
+                    "defineProperty trap result is incompatible with the existing target property",
+                ));
+            }
+            if setting_config_false && existing.configurable {
+                return Err(invariant_error(
+                    "defineProperty trap reported a configurable target property as non-configurable",
+                ));
+            }
+            if existing.configurable
+                && !existing.accessor
+                && setting_config_false
+                && descriptor.writable_field() == Some(false)
+            {
+                // A configurable target property cannot be reported as a
+                // non-configurable, non-writable data property.
+                return Err(invariant_error(
+                    "defineProperty trap reported a non-configurable non-writable data property on a configurable target",
+                ));
+            }
+        }
+    }
+    Ok(true)
+}
+
+/// `[[GetOwnProperty]]` for an exotic Proxy: invoke the
+/// `getOwnPropertyDescriptor` trap with `(target, key)`. The trap must return
+/// an object or undefined; the result is validated against the target.
+pub(crate) fn proxy_get_own_property_descriptor(
+    proxy: ProxyRef,
+    key: &PropertyKey,
+    env: &mut CallEnv,
+    forward: impl FnOnce(Value, &mut CallEnv) -> Result<Option<Property>, RuntimeError>,
+) -> Result<Option<Property>, RuntimeError> {
+    let target = proxy.target_result()?;
+    let handler = proxy.handler_result()?;
+    let Some(trap) = proxy_trap(handler.clone(), "getOwnPropertyDescriptor", env)? else {
+        return forward(target, env);
+    };
+    let result = call_function(
+        trap,
+        handler,
+        vec![target.clone(), property_key_to_value(key)],
+        env,
+        false,
+    )?;
+
+    let target_descriptor = crate::object::own_property_descriptor_key(target.clone(), key)?;
+    let extensible_target = crate::object::ordinary_value_is_extensible(&target);
+
+    let record = match &result {
+        Value::Undefined => {
+            // Trap returned undefined: the property must be absent or
+            // configurable on an extensible target.
+            match target_descriptor {
+                None => return Ok(None),
+                Some(target_descriptor) => {
+                    if !target_descriptor.configurable {
+                        return Err(invariant_error(
+                            "getOwnPropertyDescriptor trap hid a non-configurable target property",
+                        ));
+                    }
+                    if !extensible_target {
+                        return Err(invariant_error(
+                            "getOwnPropertyDescriptor trap hid a property of a non-extensible target",
+                        ));
+                    }
+                    return Ok(None);
+                }
+            }
+        }
+        Value::Object(object) if !crate::symbol::is_symbol_primitive(object) => {
+            crate::object::to_property_descriptor_record(result.clone(), env)?
+        }
+        Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) | Value::Proxy(_) => {
+            crate::object::to_property_descriptor_record(result.clone(), env)?
+        }
+        _ => {
+            return Err(invariant_error(
+                "getOwnPropertyDescriptor trap must return an object or undefined",
+            ));
+        }
+    };
+
+    // Trap returned a descriptor object: check it is compatible with the
+    // target, and that a non-configurable claim is backed by the target.
+    if !record.is_compatible_for_proxy_define(target_descriptor.as_ref(), extensible_target) {
+        return Err(invariant_error(
+            "getOwnPropertyDescriptor trap result is incompatible with the target",
+        ));
+    }
+    if record.configurable_field() == Some(false) {
+        let backed = target_descriptor
+            .as_ref()
+            .is_some_and(|existing| !existing.configurable);
+        if !backed {
+            return Err(invariant_error(
+                "getOwnPropertyDescriptor trap reported a non-configurable property not backed by the target",
+            ));
+        }
+        if record.writable_field() == Some(false) {
+            let writable_backed = target_descriptor
+                .as_ref()
+                .is_some_and(|existing| !existing.accessor && !existing.writable);
+            if !writable_backed {
+                return Err(invariant_error(
+                    "getOwnPropertyDescriptor trap reported a non-configurable non-writable property not backed by the target",
+                ));
+            }
+        }
+    }
+    Ok(Some(record.complete_for_get_own()))
+}
+
+/// `[[IsExtensible]]` for an exotic Proxy: invoke the `isExtensible` trap, then
+/// enforce that the boolean result matches the target's own extensibility.
+pub(crate) fn proxy_is_extensible(
+    proxy: ProxyRef,
+    env: &mut CallEnv,
+) -> Result<bool, RuntimeError> {
+    let target = proxy.target_result()?;
+    let handler = proxy.handler_result()?;
+    let Some(trap) = proxy_trap(handler.clone(), "isExtensible", env)? else {
+        return Ok(crate::object::ordinary_value_is_extensible(&target));
+    };
+    let result = call_function(trap, handler, vec![target.clone()], env, false)?;
+    let trap_result = is_truthy(&result);
+    if trap_result != crate::object::ordinary_value_is_extensible(&target) {
+        return Err(invariant_error(
+            "isExtensible trap result disagrees with the target",
+        ));
+    }
+    Ok(trap_result)
+}
+
+/// `[[PreventExtensions]]` for an exotic Proxy: invoke the `preventExtensions`
+/// trap; a truthy result requires that the target is already non-extensible.
+pub(crate) fn proxy_prevent_extensions(
+    proxy: ProxyRef,
+    env: &mut CallEnv,
+) -> Result<bool, RuntimeError> {
+    let target = proxy.target_result()?;
+    let handler = proxy.handler_result()?;
+    let Some(trap) = proxy_trap(handler.clone(), "preventExtensions", env)? else {
+        crate::object::ordinary_prevent_extensions(&target);
+        return Ok(true);
+    };
+    let result = call_function(trap, handler, vec![target.clone()], env, false)?;
+    if !is_truthy(&result) {
+        return Ok(false);
+    }
+    if crate::object::ordinary_value_is_extensible(&target) {
+        return Err(invariant_error(
+            "preventExtensions trap reported success while the target is still extensible",
+        ));
+    }
+    Ok(true)
+}
+
 /// `[[Call]]` for an exotic Proxy: invoke the `apply` trap with
 /// `(target, thisArgument, argumentsList)`, or forward to the target when the
 /// trap is absent. The target must itself be callable.
@@ -289,6 +500,13 @@ fn revoked_proxy_error() -> RuntimeError {
     RuntimeError {
         thrown: None,
         message: "TypeError: revoked proxy".to_owned(),
+    }
+}
+
+fn invariant_error(detail: &str) -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: format!("TypeError: proxy {detail}"),
     }
 }
 

@@ -136,3 +136,100 @@ fn evaluates_proxy_traps_used_by_array_operations() {
         Ok(Value::Boolean(true))
     );
 }
+
+#[test]
+fn evaluates_proxy_define_property_trap() {
+    // The trap receives the key and a descriptor object built from the request.
+    // The target carries the property so the non-configurable invariant holds.
+    assert_eq!(
+        eval(
+            "let t = {}; Object.defineProperty(t, 'a', { value: 0, writable: true, configurable: false }); let seen; let p = new Proxy(t, { defineProperty: function(target, key, desc) { seen = key + ':' + desc.value + ':' + desc.configurable; return true; } }); Object.defineProperty(p, 'a', { value: 1, configurable: false }); seen;"
+        ),
+        Ok(Value::String("a:1:false".to_owned()))
+    );
+    // Defining a property on a non-extensible target through a trap that does
+    // not actually add it violates the invariant.
+    assert_eq!(
+        eval(
+            "let t = Object.preventExtensions({}); let p = new Proxy(t, { defineProperty: function() { return true; } }); let caught = false; try { Object.defineProperty(p, 'a', { value: 1 }); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    // Reporting a non-configurable definition absent on the target is a
+    // TypeError.
+    assert_eq!(
+        eval(
+            "let p = new Proxy({}, { defineProperty: function() { return true; } }); let caught = false; try { Object.defineProperty(p, 'a', { value: 1, configurable: false }); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    // A falsy trap result fails the Object.defineProperty.
+    assert_eq!(
+        eval(
+            "let p = new Proxy({}, { defineProperty: function() { return false; } }); let caught = false; try { Object.defineProperty(p, 'a', { value: 1 }); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn evaluates_proxy_get_own_property_descriptor_trap() {
+    // The trap value is reflected in the returned descriptor.
+    assert_eq!(
+        eval(
+            "let p = new Proxy({}, { getOwnPropertyDescriptor: function() { return { value: 9, configurable: true, enumerable: true, writable: true }; } }); Object.getOwnPropertyDescriptor(p, 'a').value;"
+        ),
+        Ok(Value::Number(9.0))
+    );
+    // Returning undefined for a non-configurable target property is rejected.
+    assert_eq!(
+        eval(
+            "let t = {}; Object.defineProperty(t, 'a', { value: 1, configurable: false }); let p = new Proxy(t, { getOwnPropertyDescriptor: function() { return undefined; } }); let caught = false; try { Object.getOwnPropertyDescriptor(p, 'a'); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    // A non-object, non-undefined trap result is a TypeError.
+    assert_eq!(
+        eval(
+            "let p = new Proxy({}, { getOwnPropertyDescriptor: function() { return 5; } }); let caught = false; try { Object.getOwnPropertyDescriptor(p, 'a'); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    // Reporting a property as non-configurable while the target lacks it fails.
+    assert_eq!(
+        eval(
+            "let p = new Proxy({}, { getOwnPropertyDescriptor: function() { return { value: 1, configurable: false }; } }); let caught = false; try { Object.getOwnPropertyDescriptor(p, 'a'); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn evaluates_proxy_extensibility_traps() {
+    // isExtensible trap result must agree with the target.
+    assert_eq!(
+        eval(
+            "let p = new Proxy({}, { isExtensible: function(target) { return Reflect.isExtensible(target); } }); Object.isExtensible(p);"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let p = new Proxy({}, { isExtensible: function() { return false; } }); let caught = false; try { Object.isExtensible(p); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    // preventExtensions trap must actually leave the target non-extensible.
+    assert_eq!(
+        eval(
+            "let count = 0; let p = new Proxy({}, { preventExtensions: function(target) { count++; Object.preventExtensions(target); return true; } }); Object.preventExtensions(p); count + ':' + Object.isExtensible(p);"
+        ),
+        Ok(Value::String("1:false".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let p = new Proxy({}, { preventExtensions: function() { return true; } }); let caught = false; try { Object.preventExtensions(p); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}

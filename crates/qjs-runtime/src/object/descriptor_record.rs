@@ -163,6 +163,48 @@ pub(crate) struct PropertyDescriptor {
     configurable: Option<bool>,
 }
 
+/// Builds a plain descriptor object carrying only the fields that the
+/// descriptor record actually specifies. Used to forward a `defineProperty`
+/// request to a Proxy handler trap, which receives a descriptor object rather
+/// than a record.
+pub(crate) fn property_descriptor_record_object(descriptor: &PropertyDescriptor) -> ObjectRef {
+    let result = ObjectRef::new(HashMap::new());
+    if let Some(value) = &descriptor.value {
+        result.define_property("value".to_owned(), Property::enumerable(value.clone()));
+    }
+    if let Some(writable) = descriptor.writable {
+        result.define_property(
+            "writable".to_owned(),
+            Property::enumerable(Value::Boolean(writable)),
+        );
+    }
+    if let Some(get) = &descriptor.get {
+        result.define_property(
+            "get".to_owned(),
+            Property::enumerable(get.clone().unwrap_or(Value::Undefined)),
+        );
+    }
+    if let Some(set) = &descriptor.set {
+        result.define_property(
+            "set".to_owned(),
+            Property::enumerable(set.clone().unwrap_or(Value::Undefined)),
+        );
+    }
+    if let Some(enumerable) = descriptor.enumerable {
+        result.define_property(
+            "enumerable".to_owned(),
+            Property::enumerable(Value::Boolean(enumerable)),
+        );
+    }
+    if let Some(configurable) = descriptor.configurable {
+        result.define_property(
+            "configurable".to_owned(),
+            Property::enumerable(Value::Boolean(configurable)),
+        );
+    }
+    result
+}
+
 impl PropertyDescriptor {
     pub(super) fn data_value(value: Value) -> Self {
         Self {
@@ -181,6 +223,39 @@ impl PropertyDescriptor {
 
     fn is_data_descriptor(&self) -> bool {
         self.value.is_some() || self.writable.is_some()
+    }
+
+    /// Completes a descriptor returned by a Proxy `getOwnPropertyDescriptor`
+    /// trap into a full property, filling absent fields with their defaults.
+    pub(crate) fn complete_for_get_own(self) -> Property {
+        self.complete_new_property()
+    }
+
+    pub(crate) fn configurable_field(&self) -> Option<bool> {
+        self.configurable
+    }
+
+    pub(crate) fn writable_field(&self) -> Option<bool> {
+        self.writable
+    }
+
+    /// Whether this descriptor (as returned by a Proxy `defineProperty` request)
+    /// is compatible with an existing target property under the
+    /// IsCompatiblePropertyDescriptor rules, given the target's extensibility.
+    pub(crate) fn is_compatible_for_proxy_define(
+        &self,
+        existing: Option<&Property>,
+        extensible: bool,
+    ) -> bool {
+        match existing {
+            None => extensible,
+            Some(existing) => {
+                if existing.configurable {
+                    return true;
+                }
+                self.is_compatible_with_non_configurable(existing)
+            }
+        }
     }
 
     fn complete_new_property(self) -> Property {

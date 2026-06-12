@@ -28,11 +28,11 @@ pub(super) fn call_reflect_native(
         }
         NativeFunction::ReflectHas => reflect::native_reflect_has(argument_values, env)?,
         NativeFunction::ReflectIsExtensible => {
-            reflect::native_reflect_is_extensible(argument_values)?
+            reflect::native_reflect_is_extensible(argument_values, env)?
         }
         NativeFunction::ReflectOwnKeys => reflect::native_reflect_own_keys(argument_values)?,
         NativeFunction::ReflectPreventExtensions => {
-            reflect::native_reflect_prevent_extensions(argument_values)?
+            reflect::native_reflect_prevent_extensions(argument_values, env)?
         }
         NativeFunction::ReflectSet => reflect::native_reflect_set(argument_values, env)?,
         NativeFunction::ReflectSetPrototypeOf => {
