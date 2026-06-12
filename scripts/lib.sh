@@ -7,6 +7,26 @@
 # Helpers return non-zero instead of exiting so each caller keeps its own
 # failure policy.
 
+# Echoes the number of online CPUs, falling back to sysctl and then to 1.
+# Used as the default parallelism for the Test262 runners.
+qjs_detect_jobs() {
+  local jobs=""
+  if command -v getconf >/dev/null 2>&1; then
+    jobs="$(getconf _NPROCESSORS_ONLN 2>/dev/null || true)"
+  fi
+  case "$jobs" in
+    ''|*[!0-9]*|0)
+      if command -v sysctl >/dev/null 2>&1; then
+        jobs="$(sysctl -n hw.ncpu 2>/dev/null || true)"
+      fi
+      ;;
+  esac
+  case "$jobs" in
+    ''|*[!0-9]*|0) jobs=1 ;;
+  esac
+  echo "$jobs"
+}
+
 # Echoes a usable cargo binary, honoring $CARGO and the rustup default
 # install location. Returns 1 when no cargo is available.
 qjs_resolve_cargo() {

@@ -22,26 +22,7 @@ trim_ws() {
   printf '%s' "$value"
 }
 
-detect_jobs() {
-  local jobs
-  jobs=""
-  if command -v getconf >/dev/null 2>&1; then
-    jobs="$(getconf _NPROCESSORS_ONLN 2>/dev/null || true)"
-  fi
-  case "$jobs" in
-    ''|*[!0-9]*|0)
-      if command -v sysctl >/dev/null 2>&1; then
-        jobs="$(sysctl -n hw.ncpu 2>/dev/null || true)"
-      fi
-      ;;
-  esac
-  case "$jobs" in
-    ''|*[!0-9]*|0) jobs=1 ;;
-  esac
-  echo "$jobs"
-}
-
-TEST262_JOBS="${TEST262_JOBS:-$(detect_jobs)}"
+TEST262_JOBS="${TEST262_JOBS:-$(qjs_detect_jobs)}"
 case "$TEST262_JOBS" in
   ''|*[!0-9]*)
     echo "error: TEST262_JOBS must be a positive integer: $TEST262_JOBS" >&2
@@ -83,10 +64,17 @@ if ! xargs -P 1 -n 1 true </dev/null >/dev/null 2>&1; then
   exit 1
 fi
 
-list_entries() {
-  printf '%s\n' "$1" | tr -d '[]' | tr ',' '\n' \
-    | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' \
-    | sed '/^$/d'
+# Splits a Test262 metadata list ("[a.js, b.js]" or "a.js, b.js") into the
+# SPLIT_ENTRIES array without spawning a process. Harness file names never
+# contain whitespace or glob characters.
+split_entries() {
+  local raw="$1"
+  raw="${raw//[\[\],]/ }"
+  SPLIT_ENTRIES=()
+  local part
+  for part in $raw; do
+    SPLIT_ENTRIES+=("$part")
+  done
 }
 emit_test262_host_shim() {
   cat <<'EOF'
@@ -114,12 +102,13 @@ metadata_for() {
 validate_includes() {
   local includes="$1"
   local include
-  while IFS= read -r include; do
+  split_entries "$includes"
+  for include in ${SPLIT_ENTRIES[@]+"${SPLIT_ENTRIES[@]}"}; do
     if [ ! -f "$TEST262_DIR/harness/$include" ]; then
       echo "error: Test262 include does not exist: $include" >&2
       return 1
     fi
-  done < <(list_entries "$includes")
+  done
 }
 
 case_path_for_entry() {
@@ -158,8 +147,12 @@ validate_entry_path() {
   esac
 }
 
+# Validates one allowlist entry and, for upstream entries, caches the parsed
+# metadata under $RESULT_DIR/meta/<index> so the run phase does not parse it a
+# second time. Runs in parallel via xargs.
 validate_case_entry() {
-  local entry="$1"
+  local current="$1"
+  local entry="$2"
   local case_path
   local derived_from
   local flags
@@ -188,13 +181,14 @@ validate_case_entry() {
       fi
       ;;
     test/*.js)
+      metadata_for "$case_path" >"$RESULT_DIR/meta/$current"
       {
         read -r flags
         read -r includes
         read -r features
         read -r negative_phase
         read -r negative_type
-      } < <(metadata_for "$case_path")
+      } <"$RESULT_DIR/meta/$current"
       if [[ "$flags" == *module* ]] || [[ "$flags" == *async* ]]; then
         echo "error: upstream subset entry uses unsupported flags ($flags): $entry" >&2
         return 1
@@ -214,31 +208,32 @@ make_upstream_case() {
   local flags="$3"
   local includes="$4"
   local include
+  if [[ "$flags" == *raw* ]]; then
+    cat "$source" >"$output"
+    return
+  fi
+  local parts=("$PRELUDE_FILE")
+  split_entries "$includes"
+  for include in ${SPLIT_ENTRIES[@]+"${SPLIT_ENTRIES[@]}"}; do
+    parts+=("$TEST262_DIR/harness/$include")
+  done
+  parts+=("$source")
   {
-    if [[ "$flags" == *raw* ]]; then
-      cat "$source"
-    else
-      if [[ "$flags" == *onlyStrict* ]]; then
-        printf '"use strict";\n'
-      fi
-      cat "$TEST262_DIR/harness/assert.js"
-      printf '\n'
-      cat "$TEST262_DIR/harness/sta.js"
-      printf '\n'
-      emit_test262_host_shim
-      printf '\n'
-      while IFS= read -r include; do
-        cat "$TEST262_DIR/harness/$include"
-        printf '\n'
-      done < <(list_entries "$includes")
-      cat "$source"
+    if [[ "$flags" == *onlyStrict* ]]; then
+      printf '"use strict";\n'
     fi
+    # `awk 1` concatenates while normalizing a missing trailing newline, so
+    # adjacent files never merge lines.
+    awk 1 "${parts[@]}"
   } >"$output"
 }
 
+RESULT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/qjs-test262-subset-XXXXXX")"
+trap 'rm -rf "$RESULT_DIR"' EXIT
+mkdir -p "$RESULT_DIR/meta"
+
 allowlist_count=0
 allowlist_entries=()
-expected_failure_entries=()
 while IFS= read -r line; do
   entry="${line%%#*}"
   entry="$(trim_ws "$entry")"
@@ -246,34 +241,17 @@ while IFS= read -r line; do
 
   allowlist_count=$((allowlist_count + 1))
   allowlist_entries+=("$entry")
-  validate_case_entry "$entry"
-
 done < "$ALLOWLIST"
 
-entry_in_allowlist() {
-  local wanted="$1"
-  local allowlist_entry
-  for allowlist_entry in "${allowlist_entries[@]}"; do
-    if [ "$allowlist_entry" = "$wanted" ]; then
-      return 0
-    fi
-  done
-  return 1
-}
+if [ "$allowlist_count" -eq 0 ]; then
+  echo "error: Test262 allowlist is empty; add at least one runnable subset case" >&2
+  exit 1
+fi
 
-entry_in_expected_failures() {
-  local wanted="$1"
-  local expected_failure_entry
-  if [ "${#expected_failure_entries[@]}" -gt 0 ]; then
-    for expected_failure_entry in "${expected_failure_entries[@]}"; do
-      if [ "$expected_failure_entry" = "$wanted" ]; then
-        return 0
-      fi
-    done
-  fi
-  return 1
-}
+ALLOWLIST_FILE="$RESULT_DIR/allowlist.list"
+printf '%s\n' "${allowlist_entries[@]}" >"$ALLOWLIST_FILE"
 
+expected_failure_entries=()
 while IFS= read -r line; do
   trimmed="$(trim_ws "$line")"
   [ -z "$trimmed" ] && continue
@@ -288,44 +266,73 @@ while IFS= read -r line; do
 
   entry="${line%%#*}"
   entry="$(trim_ws "$entry")"
-  if ! validate_case_entry "$entry"; then
-    echo "error: expected failure entry does not exist: $(entry_label "$entry")" >&2
-    exit 1
-  fi
-  if ! entry_in_allowlist "$entry"; then
-    echo "error: expected failure entry is not in allowlist: $(entry_label "$entry")" >&2
-    exit 1
-  fi
-  if entry_in_expected_failures "$entry"; then
-    echo "error: duplicate expected failure entry: $(entry_label "$entry")" >&2
-    exit 1
-  fi
-
   expected_failure_entries+=("$entry")
 done < "$EXPECTED_FAILURES"
 
-if [ "$allowlist_count" -eq 0 ]; then
-  echo "error: Test262 allowlist is empty; add at least one runnable subset case" >&2
+EXPECTED_FAILURE_SET=""
+if [ "${#expected_failure_entries[@]}" -gt 0 ]; then
+  EXPECTED_FAILURE_FILE="$RESULT_DIR/expected-failures.list"
+  printf '%s\n' "${expected_failure_entries[@]}" >"$EXPECTED_FAILURE_FILE"
+
+  # Batch membership and duplicate checks instead of per-entry array scans.
+  missing="$(grep -Fxv -f "$ALLOWLIST_FILE" "$EXPECTED_FAILURE_FILE" || true)"
+  if [ -n "$missing" ]; then
+    while IFS= read -r entry; do
+      echo "error: expected failure entry is not in allowlist: $(entry_label "$entry")" >&2
+    done <<<"$missing"
+    exit 1
+  fi
+  duplicates="$(sort "$EXPECTED_FAILURE_FILE" | uniq -d)"
+  if [ -n "$duplicates" ]; then
+    while IFS= read -r entry; do
+      echo "error: duplicate expected failure entry: $(entry_label "$entry")" >&2
+    done <<<"$duplicates"
+    exit 1
+  fi
+  EXPECTED_FAILURE_SET="$(printf '%s\n' "${expected_failure_entries[@]}")"
+fi
+
+export LOCAL_CASE_DIR
+export METADATA_PARSER
+export RESULT_DIR
+export TEST262_DIR
+export -f case_path_for_entry
+export -f entry_label
+export -f metadata_for
+export -f split_entries
+export -f validate_case_entry
+export -f validate_entry_path
+export -f validate_includes
+
+# Validate entries in parallel; expected-failure entries are a validated
+# subset of the allowlist after the membership check above.
+set +e
+for index in "${!allowlist_entries[@]}"; do
+  current=$((index + 1))
+  printf '%s\0%s\0' "$current" "${allowlist_entries[$index]}"
+done | xargs -0 -n 2 -P "$TEST262_JOBS" bash -c 'validate_case_entry "$1" "$2"' _
+validate_status=$?
+set -e
+if [ "$validate_status" -ne 0 ]; then
+  echo "error: Test262 allowlist validation failed" >&2
   exit 1
 fi
 
 echo "building qjs-cli for Test262 subset"
 QJS_CLI_BIN="$(qjs_build_cli_bin "$CARGO_BIN")"
 
-RESULT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/qjs-test262-subset-XXXXXX")"
-trap 'rm -rf "$RESULT_DIR"' EXIT
-EXPECTED_FAILURE_LIST="$RESULT_DIR/expected-failures.list"
-if [ "${#expected_failure_entries[@]}" -gt 0 ]; then
-  for entry in "${expected_failure_entries[@]}"; do
-    printf '%s\n' "$entry"
-  done
-else
-  true
-fi >"$EXPECTED_FAILURE_LIST"
+# Pre-concatenate the harness prelude shared by every non-raw upstream case.
+PRELUDE_FILE="$RESULT_DIR/prelude.js"
+{
+  awk 1 "$TEST262_DIR/harness/assert.js" "$TEST262_DIR/harness/sta.js"
+  emit_test262_host_shim
+} >"$PRELUDE_FILE"
 
 is_expected_failure() {
-  local wanted="$1"
-  grep -Fx -- "$wanted" "$EXPECTED_FAILURE_LIST" >/dev/null 2>&1
+  case $'\n'"$EXPECTED_FAILURE_SET"$'\n' in
+    *$'\n'"$1"$'\n'*) return 0 ;;
+  esac
+  return 1
 }
 
 run_test262_case() {
@@ -355,7 +362,7 @@ run_test262_case() {
         read -r features
         read -r negative_phase
         read -r negative_type
-      } < <(metadata_for "$case_path")
+      } <"$RESULT_DIR/meta/$current"
       exec_path="$RESULT_DIR/$current.case.js"
       make_upstream_case "$case_path" "$exec_path" "$flags" "$includes"
       ;;
@@ -388,19 +395,12 @@ run_test262_case() {
 
 export ALLOWLIST_COUNT="$allowlist_count"
 export CASE_TIMEOUT_SECONDS
-export EXPECTED_FAILURE_LIST
-export LOCAL_CASE_DIR
-export METADATA_PARSER
+export EXPECTED_FAILURE_SET
+export PRELUDE_FILE
 export QJS_CLI_BIN
-export RESULT_DIR
 export RUN_WITH_TIMEOUT
-export TEST262_DIR
 export -f is_expected_failure
-export -f case_path_for_entry
-export -f emit_test262_host_shim
-export -f list_entries
 export -f make_upstream_case
-export -f metadata_for
 export -f run_test262_case
 
 set +e
