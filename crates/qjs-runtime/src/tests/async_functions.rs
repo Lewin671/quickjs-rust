@@ -65,6 +65,23 @@ fn await_of_resolved_promise() {
 }
 
 #[test]
+fn await_preserves_local_writes_from_suspended_closures() {
+    assert_eq!(
+        eval_log(
+            "var o = []; \
+             async function f() { \
+               let count = 0; \
+               let thenable = { then(resolve) { count += 1; resolve('ok'); } }; \
+               await thenable; \
+               o.push(count); \
+             } \
+             f(); o;"
+        ),
+        "1"
+    );
+}
+
+#[test]
 fn await_of_rejected_promise_in_try_catch() {
     assert_eq!(
         eval_log(

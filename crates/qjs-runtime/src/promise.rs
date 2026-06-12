@@ -926,6 +926,11 @@ fn promise_thenable_then(value: Value, env: &mut CallEnv) -> Result<Option<Value
 fn is_thenable_candidate(value: &Value) -> bool {
     matches!(
         value,
-        Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Object(_) | Value::Set(_)
+        Value::Array(_)
+            | Value::Function(_)
+            | Value::Map(_)
+            | Value::Object(_)
+            | Value::Proxy(_)
+            | Value::Set(_)
     )
 }

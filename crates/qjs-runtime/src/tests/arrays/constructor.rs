@@ -224,6 +224,25 @@ fn array_from_async_awaits_thenable_inputs_and_map_results() {
 }
 
 #[test]
+fn array_from_async_thenable_writes_remain_visible_after_async_await() {
+    assert_eq!(
+        promise::promise_debug_state_result(
+            &eval(
+                "async function f() { \
+                   let count = 0; \
+                   let thenable = { then(resolve) { count += 1; resolve(7); } }; \
+                   await Array.fromAsync({ length: 1, 0: thenable }); \
+                   return count; \
+                 } \
+                 f();"
+            )
+            .unwrap()
+        ),
+        Some(("fulfilled".to_owned(), Value::Number(1.0)))
+    );
+}
+
+#[test]
 fn array_from_async_rejects_early_errors() {
     assert_eq!(
         promise::promise_debug_state_result(

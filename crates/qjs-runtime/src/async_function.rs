@@ -80,6 +80,7 @@ pub(crate) fn call_async_function(
             bytecode,
             env: function_env,
             captured_env: captured,
+            refresh_captured_slots_on_resume: true,
         })));
 
     let result_promise = promise::new_pending_promise(env);

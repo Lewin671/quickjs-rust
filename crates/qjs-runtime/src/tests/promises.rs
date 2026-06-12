@@ -623,6 +623,22 @@ fn assimilates_promise_thenables_after_script() {
         promise::promise_debug_state_result(&returned),
         Some(("fulfilled".to_owned(), Value::Number(16.0)))
     );
+
+    let proxied = eval(
+        "let calls = []; \
+         let thenable = new Proxy({ then: function(resolve) { calls.push('call'); resolve(17); } }, { \
+           get: function(target, key, receiver) { calls.push(String(key)); return Reflect.get(target, key, receiver); } \
+         }); \
+         Promise.resolve(thenable).then(function(value) { return calls.join(',') + ':' + value; });",
+    )
+    .unwrap();
+    assert_eq!(
+        promise::promise_debug_state_result(&proxied),
+        Some((
+            "fulfilled".to_owned(),
+            Value::String("then,call:17".to_owned())
+        ))
+    );
 }
 
 #[test]

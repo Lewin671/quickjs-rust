@@ -115,6 +115,7 @@ pub(crate) fn call_function(
                     bytecode: bytecode.clone(),
                     env: function_env.env,
                     captured_env: activation_captured_env,
+                    refresh_captured_slots_on_resume: true,
                 },
                 env,
             );
