@@ -57,6 +57,18 @@ fn evaluates_array_of_static_constructor() {
     );
     assert_eq!(
         eval(
+            "function C() {} C.prototype = null; Object.getPrototypeOf(Array.of.call(C, 1, 2, 3)) === Object.prototype;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let marker = {}; function T() { return new Proxy({}, { defineProperty: function() { throw marker; } }); } let caught = false; try { Array.of.call(T, 'Bob'); } catch (error) { caught = error === marker; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
             "let hits = 0; let value = 0; function Pack() { Object.defineProperty(this, 'length', { set: function(next) { hits = hits + 1; value = next; } }); } Array.of.call(Pack, 'a', 'b'); hits + ':' + value;"
         ),
         Ok(Value::String("1:2".to_owned()))
@@ -105,6 +117,12 @@ fn evaluates_array_from_static_constructor() {
     assert_eq!(
         eval(
             "function C() { Object.preventExtensions(this); } let caught = false; try { Array.from.call(C, { length: 1 }); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "function C() {} C.prototype = null; Object.getPrototypeOf(Array.from.call(C, [])) === Object.prototype;"
         ),
         Ok(Value::Boolean(true))
     );

@@ -4,7 +4,7 @@ use qjs_ast::BindingPattern;
 
 use crate::{
     ArrayRef, Bytecode, Function, GLOBAL_THIS_BINDING, NEW_TARGET_BINDING, NativeFunction,
-    ObjectRef, Property, RuntimeError, Value, bytecode::eval_function_bytecode,
+    ObjectRef, Property, RuntimeError, Value, bytecode::eval_function_bytecode, function_prototype,
     native::call_native_function, object_prototype, symbol,
 };
 
@@ -279,7 +279,7 @@ pub(crate) fn construct_function(
     let this_value = if is_derived {
         Value::Undefined
     } else {
-        let prototype = crate::constructor_prototype_slot(&new_target, env);
+        let prototype = construct_prototype_slot(&target, &new_target, env)?;
         Value::Object(ObjectRef::with_prototype_slot(HashMap::new(), prototype))
     };
 
@@ -306,6 +306,49 @@ pub(crate) fn construct_function(
         // `super(...)`, which bound `this` and is returned as the result.
         _ if is_derived => Ok(result),
         _ => Ok(this_value),
+    }
+}
+
+fn construct_prototype_slot(
+    target: &Value,
+    new_target: &Value,
+    env: &mut CallEnv,
+) -> Result<Option<crate::Prototype>, RuntimeError> {
+    let prototype = if let Value::Proxy(_) = new_target {
+        prototype_value_to_slot(
+            crate::property_value(new_target.clone(), "prototype", env)?,
+            env,
+        )
+    } else {
+        crate::constructor_prototype_slot(new_target, env)
+    };
+    Ok(prototype.or_else(|| default_construct_prototype_slot(target, env)))
+}
+
+fn prototype_value_to_slot(value: Value, env: &CallEnv) -> Option<crate::Prototype> {
+    match value {
+        Value::Object(prototype) if !symbol::is_symbol_primitive(&prototype) => {
+            Some(crate::Prototype::Object(prototype))
+        }
+        Value::Function(prototype) => Some(crate::Prototype::Function(prototype)),
+        Value::Array(array) => Some(crate::Prototype::Object(crate::array_as_object_prototype(
+            &array, env,
+        ))),
+        _ => None,
+    }
+}
+
+fn default_construct_prototype_slot(target: &Value, env: &CallEnv) -> Option<crate::Prototype> {
+    match target {
+        Value::Function(function) if function.native.is_some() => {
+            function_prototype(function).map(crate::Prototype::Object)
+        }
+        Value::Function(_) => object_prototype(env).map(crate::Prototype::Object),
+        Value::Proxy(proxy) => proxy
+            .target_result()
+            .ok()
+            .and_then(|target| default_construct_prototype_slot(&target, env)),
+        _ => object_prototype(env).map(crate::Prototype::Object),
     }
 }
 

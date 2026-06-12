@@ -1,7 +1,13 @@
 use crate::{
     ArrayRef, Function, Property, PropertyKey, RuntimeError, Value, array_prototype, call_function,
-    construct_function, is_truthy, object::array_length_from_descriptor_value, property_value,
-    property_value_key, reflect::ordinary_set, symbol,
+    construct_function, is_truthy,
+    object::{
+        PropertyDescriptor, array_length_from_descriptor_value,
+        define_property_descriptor_on_value_key,
+    },
+    property_value, property_value_key,
+    reflect::ordinary_set,
+    symbol,
 };
 
 use super::array_like::array_like_values_with_env;
@@ -133,12 +139,13 @@ fn array_from_array_like_result(
         .unwrap_or_default();
     let target = construct_function(constructor.clone(), constructor, arguments, env)?;
     for (index, value) in elements.values.into_iter().enumerate() {
-        create_data_property_or_throw(target.clone(), index.to_string(), value)?;
+        create_data_property_or_throw(target.clone(), index.to_string(), value, env)?;
     }
     create_data_property_or_throw(
         target.clone(),
         "length".to_owned(),
         Value::Number(length as f64),
+        env,
     )?;
     Ok(target)
 }
@@ -157,52 +164,14 @@ fn create_data_property_or_throw(
     target: Value,
     key: String,
     value: Value,
+    env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
-    match target {
-        Value::Object(object) => {
-            if object
-                .own_property(&key)
-                .is_some_and(|property| !property.configurable)
-                || (!object.has_own_property(&key) && !object.is_extensible())
-            {
-                return Err(create_data_property_error());
-            }
-            object.define_property(key, Property::enumerable(value));
-            Ok(())
-        }
-        Value::Array(array) => {
-            array.define_property(key, Property::enumerable(value));
-            Ok(())
-        }
-        Value::Function(function) => {
-            function.define_property(key, Property::enumerable(value));
-            Ok(())
-        }
-        Value::Map(map) => {
-            let object = map.object();
-            if object
-                .own_property(&key)
-                .is_some_and(|property| !property.configurable)
-                || (!object.has_own_property(&key) && !object.is_extensible())
-            {
-                return Err(create_data_property_error());
-            }
-            object.define_property(key, Property::enumerable(value));
-            Ok(())
-        }
-        Value::Set(set) => {
-            let object = set.object();
-            if object
-                .own_property(&key)
-                .is_some_and(|property| !property.configurable)
-                || (!object.has_own_property(&key) && !object.is_extensible())
-            {
-                return Err(create_data_property_error());
-            }
-            object.define_property(key, Property::enumerable(value));
-            Ok(())
-        }
-        _ => Err(create_data_property_error()),
+    let key = PropertyKey::String(key);
+    let descriptor = PropertyDescriptor::data(value, true, true, true);
+    if define_property_descriptor_on_value_key(target, key, descriptor, env)? {
+        Ok(())
+    } else {
+        Err(create_data_property_error())
     }
 }
 
@@ -275,7 +244,8 @@ fn array_from_iterable_result(
                 return Err(error);
             }
         };
-        if let Err(error) = create_data_property_or_throw(target.clone(), index.to_string(), value)
+        if let Err(error) =
+            create_data_property_or_throw(target.clone(), index.to_string(), value, env)
         {
             let _ = close_array_from_iterator(iterator, env);
             return Err(error);
@@ -367,7 +337,7 @@ pub(crate) fn native_array_of(
         Value::Array(ArrayRef::new(Vec::new()))
     };
     for (index, value) in argument_values.iter().enumerate() {
-        create_array_of_data_property(&result, index.to_string(), value.clone())?;
+        create_array_of_data_property(&result, index.to_string(), value.clone(), env)?;
     }
     set_array_of_length(&result, Value::Number(length as f64), env)?;
     Ok(result)
@@ -377,67 +347,17 @@ fn create_array_of_data_property(
     target: &Value,
     key: String,
     value: Value,
+    env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
-    let property = Property::data(value, true, true, true);
-    let success = match target {
-        Value::Object(object) => {
-            let existing = object.own_property(&key);
-            if can_create_array_of_data_property(existing.as_ref(), object.is_extensible()) {
-                object.define_property(key, property);
-                true
-            } else {
-                false
-            }
-        }
-        Value::Function(function) => {
-            let existing = function.own_property(&key);
-            if can_create_array_of_data_property(existing.as_ref(), function.is_extensible()) {
-                function.define_property(key, property);
-                true
-            } else {
-                false
-            }
-        }
-        Value::Array(array) => {
-            array.define_property(key, property);
-            true
-        }
-        Value::Map(map) => {
-            let object = map.object();
-            let existing = object.own_property(&key);
-            if can_create_array_of_data_property(existing.as_ref(), object.is_extensible()) {
-                object.define_property(key, property);
-                true
-            } else {
-                false
-            }
-        }
-        Value::Set(set) => {
-            let object = set.object();
-            let existing = object.own_property(&key);
-            if can_create_array_of_data_property(existing.as_ref(), object.is_extensible()) {
-                object.define_property(key, property);
-                true
-            } else {
-                false
-            }
-        }
-        _ => false,
-    };
-    if success {
+    let key = PropertyKey::String(key);
+    let descriptor = PropertyDescriptor::data(value, true, true, true);
+    if define_property_descriptor_on_value_key(target.clone(), key, descriptor, env)? {
         Ok(())
     } else {
         Err(RuntimeError {
             thrown: None,
             message: "TypeError: cannot create array property".to_owned(),
         })
-    }
-}
-
-fn can_create_array_of_data_property(existing: Option<&Property>, extensible: bool) -> bool {
-    match existing {
-        Some(property) => property.configurable,
-        None => extensible,
     }
 }
 

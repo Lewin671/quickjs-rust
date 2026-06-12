@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::CallEnv;
 use crate::{
     ArrayRef, Function, ObjectRef, Property, Value, array_own_property_descriptor,
-    array_own_property_names,
+    array_own_property_names, symbol,
 };
 
 pub(crate) fn constructor_prototype(callee: &Value, env: &CallEnv) -> Option<ObjectRef> {
@@ -26,7 +26,9 @@ pub(crate) fn constructor_prototype_slot(
         Some(Property {
             value: Value::Object(prototype),
             ..
-        }) => Some(crate::Prototype::Object(prototype.clone())),
+        }) if !symbol::is_symbol_primitive(prototype) => {
+            Some(crate::Prototype::Object(prototype.clone()))
+        }
         Some(Property {
             value: Value::Function(prototype),
             ..
