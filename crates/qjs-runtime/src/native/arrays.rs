@@ -1,9 +1,10 @@
-use crate::{NativeFunction, Value, array};
+use crate::{Function, NativeFunction, Value, array};
 
 use super::NativeCallResult;
 use crate::CallEnv;
 
 pub(super) fn call_array_native(
+    function: &Function,
     native: NativeFunction,
     this_value: Value,
     argument_values: &[Value],
@@ -14,6 +15,33 @@ pub(super) fn call_array_native(
         NativeFunction::ArrayFrom => array::native_array_from(this_value, argument_values, env)?,
         NativeFunction::ArrayFromAsync => {
             array::native_array_from_async(this_value, argument_values, env)?
+        }
+        NativeFunction::ArrayFromAsyncArrayLikeMappedFulfilled => {
+            array::native_array_from_async_array_like_mapped_fulfilled(
+                function,
+                argument_values,
+                env,
+            )?
+        }
+        NativeFunction::ArrayFromAsyncArrayLikeValueFulfilled => {
+            array::native_array_from_async_array_like_value_fulfilled(
+                function,
+                argument_values,
+                env,
+            )?
+        }
+        NativeFunction::ArrayFromAsyncIteratorMappedFulfilled => {
+            array::native_array_from_async_iterator_mapped_fulfilled(
+                function,
+                argument_values,
+                env,
+            )?
+        }
+        NativeFunction::ArrayFromAsyncIteratorStepFulfilled => {
+            array::native_array_from_async_iterator_step_fulfilled(function, argument_values, env)?
+        }
+        NativeFunction::ArrayFromAsyncRejected => {
+            array::native_array_from_async_rejected(function, argument_values, env)?
         }
         NativeFunction::ArrayIsArray => array::native_array_is_array(argument_values, env)?,
         NativeFunction::ArrayOf => array::native_array_of(this_value, argument_values, env)?,

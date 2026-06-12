@@ -32,7 +32,7 @@ pub(crate) fn call_native_function(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if let Some(value) =
-        arrays::call_array_native(native, this_value.clone(), &argument_values, env)?
+        arrays::call_array_native(function, native, this_value.clone(), &argument_values, env)?
     {
         return Ok(value);
     }

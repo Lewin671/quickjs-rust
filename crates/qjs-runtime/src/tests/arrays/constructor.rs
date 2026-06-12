@@ -198,6 +198,32 @@ fn array_from_async_resolves_array_like_and_sync_iterable_inputs() {
 }
 
 #[test]
+fn array_from_async_awaits_thenable_inputs_and_map_results() {
+    assert_eq!(
+        promise::promise_debug_state_result(
+            &eval(
+                "let count = 0; \
+                 let thenable = { then(resolve) { count++; resolve(7); } }; \
+                 Array.fromAsync({ length: 1, 0: thenable }).then(function() { return count; });"
+            )
+            .unwrap()
+        ),
+        Some(("fulfilled".to_owned(), Value::Number(1.0)))
+    );
+    assert_eq!(
+        promise::promise_debug_state_result(
+            &eval(
+                "let count = 0; \
+                 let thenable = { then(resolve) { count++; resolve(8); } }; \
+                 Array.fromAsync([1], function() { return thenable; }).then(function(value) { return count + ':' + value[0]; });"
+            )
+            .unwrap()
+        ),
+        Some(("fulfilled".to_owned(), Value::String("1:8".to_owned())))
+    );
+}
+
+#[test]
 fn array_from_async_rejects_early_errors() {
     assert_eq!(
         promise::promise_debug_state_result(

@@ -20,8 +20,12 @@ pub(crate) use array_like::{
     iterable_values_with_env,
 };
 pub(crate) use constructor::{
-    native_array, native_array_from, native_array_from_async, native_array_is_array,
-    native_array_of,
+    native_array, native_array_from, native_array_from_async,
+    native_array_from_async_array_like_mapped_fulfilled,
+    native_array_from_async_array_like_value_fulfilled,
+    native_array_from_async_iterator_mapped_fulfilled,
+    native_array_from_async_iterator_step_fulfilled, native_array_from_async_rejected,
+    native_array_is_array, native_array_of,
 };
 pub(crate) use flatten::{native_array_prototype_flat, native_array_prototype_flat_map};
 pub(crate) use install::install_array;

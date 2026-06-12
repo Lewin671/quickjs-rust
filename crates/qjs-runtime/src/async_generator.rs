@@ -572,7 +572,7 @@ pub(crate) fn get_async_iterator(value: Value, env: &mut CallEnv) -> Result<Valu
 
 /// CreateAsyncFromSyncIterator: builds a wrapper object whose `next`/`return`/
 /// `throw` forward to the sync iterator and await each result value.
-fn create_async_from_sync_iterator(sync_iterator: Value, env: &CallEnv) -> Value {
+pub(crate) fn create_async_from_sync_iterator(sync_iterator: Value, env: &CallEnv) -> Value {
     let wrapper = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
     for (name, native) in [
         ("next", NativeFunction::AsyncFromSyncIteratorNext),
