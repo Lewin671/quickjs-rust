@@ -94,6 +94,35 @@ fn evaluates_weak_map_basic_methods() {
 }
 
 #[test]
+fn evaluates_weak_map_get_or_insert() {
+    assert_eq!(
+        eval(
+            "let key = {}; let map = new WeakMap(); map.set(key, 1); map.getOrInsert(key, 2) + ':' + map.get(key);"
+        ),
+        Ok(Value::String("1:1".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let key = {}; let map = new WeakMap(); map.getOrInsert(key, 2) + ':' + map.get(key);"
+        ),
+        Ok(Value::String("2:2".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let key = Symbol('key'); let map = new WeakMap(); map.getOrInsert(key, 3) + ':' + map.get(key);"
+        ),
+        Ok(Value::String("3:3".to_owned()))
+    );
+    assert_eq!(
+        eval("WeakMap.prototype.getOrInsert.length;"),
+        Ok(Value::Number(2.0))
+    );
+    assert!(eval("WeakMap.prototype.getOrInsert.call({}, {}, 1);").is_err());
+    assert!(eval("new WeakMap().getOrInsert('key', 1);").is_err());
+    assert!(eval("new WeakMap().getOrInsert(Symbol.for('key'), 1);").is_err());
+}
+
+#[test]
 fn evaluates_weak_map_object_key_identity() {
     assert_eq!(
         eval(

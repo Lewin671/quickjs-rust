@@ -21,6 +21,9 @@ pub(super) fn call_weak_map_native(
         NativeFunction::WeakMapPrototypeGet => {
             weak_map::native_weak_map_prototype_get(this_value, argument_values)?
         }
+        NativeFunction::WeakMapPrototypeGetOrInsert => {
+            weak_map::native_weak_map_prototype_get_or_insert(this_value, argument_values, env)?
+        }
         NativeFunction::WeakMapPrototypeHas => {
             weak_map::native_weak_map_prototype_has(this_value, argument_values)?
         }

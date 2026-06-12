@@ -309,6 +309,7 @@ pub(crate) enum NativeFunction {
     WeakMap,
     WeakMapPrototypeDelete,
     WeakMapPrototypeGet,
+    WeakMapPrototypeGetOrInsert,
     WeakMapPrototypeHas,
     WeakMapPrototypeSet,
     WeakSet,

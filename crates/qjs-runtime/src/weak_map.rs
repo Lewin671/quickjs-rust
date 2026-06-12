@@ -36,6 +36,12 @@ pub(crate) fn install_weak_map(
     );
     define_weak_map_prototype_function(
         &weak_map_prototype,
+        "getOrInsert",
+        2,
+        NativeFunction::WeakMapPrototypeGetOrInsert,
+    );
+    define_weak_map_prototype_function(
+        &weak_map_prototype,
         "has",
         1,
         NativeFunction::WeakMapPrototypeHas,
@@ -151,6 +157,27 @@ pub(crate) fn native_weak_map_prototype_get(
         return Ok(Value::Undefined);
     }
     Ok(weak_map_get(object, &key).unwrap_or(Value::Undefined))
+}
+
+pub(crate) fn native_weak_map_prototype_get_or_insert(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &CallEnv,
+) -> Result<Value, RuntimeError> {
+    let object = weak_map_object(&this_value)?;
+    let key = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    if !can_be_held_weakly(&key, env) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: WeakMap key must be an object".to_owned(),
+        });
+    }
+    if let Some(value) = weak_map_get(object.clone(), &key) {
+        return Ok(value);
+    }
+    let value = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
+    weak_map_set(object, key, value.clone(), env)?;
+    Ok(value)
 }
 
 pub(crate) fn native_weak_map_prototype_has(
