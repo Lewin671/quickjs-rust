@@ -60,6 +60,13 @@ pub(super) fn install_globals(env: &mut CallEnv, global_this: &Value) {
     define_global_function(env, global_this, "escape", 1, NativeFunction::Escape);
     define_global_function(env, global_this, "unescape", 1, NativeFunction::Unescape);
     define_is_html_dda(env, global_this);
+    define_global_function(
+        env,
+        global_this,
+        "__quickjsRustDetachArrayBuffer",
+        1,
+        NativeFunction::DetachArrayBuffer,
+    );
 }
 
 fn define_global_function(

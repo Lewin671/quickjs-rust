@@ -97,6 +97,46 @@ fn construct_from_buffer_validates_alignment_and_bounds() {
     assert!(eval("new Uint32Array(new ArrayBuffer(6));").is_err());
 }
 
+// --- Static methods: from / of ----------------------------------------------
+
+#[test]
+fn typed_array_of_constructs_and_coerces() {
+    assert_eq!(
+        eval("let a = Uint8Array.of(5, 6, 257); a.length + ':' + a[0] + ':' + a[2];"),
+        Ok(Value::String("3:5:1".to_owned()))
+    );
+    // `of` is shared across the concrete constructors via %TypedArray%.
+    assert_eq!(
+        eval("Uint8Array.of === Int8Array.of;"),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn typed_array_from_iterable_array_like_and_mapfn() {
+    assert_eq!(
+        eval("let a = Uint8Array.from([1, 2, 300]); a.length + ':' + a[0] + ':' + a[2];"),
+        Ok(Value::String("3:1:44".to_owned()))
+    );
+    // Array-like (no Symbol.iterator) source.
+    assert_eq!(
+        eval("let a = Int8Array.from({ length: 2, 0: 10, 1: 20 }); a[0] + ':' + a[1];"),
+        Ok(Value::String("10:20".to_owned()))
+    );
+    // mapfn receives (value, index).
+    assert_eq!(
+        eval("let a = Int8Array.from([1, 2, 3], (v, i) => v * 10 + i); a[0] + ':' + a[2];"),
+        Ok(Value::String("10:32".to_owned()))
+    );
+    // A non-callable mapfn throws.
+    assert!(eval("Uint8Array.from([1], 5);").is_err());
+    // BigInt arrays round-trip BigInt elements.
+    assert_eq!(
+        eval("let a = BigInt64Array.from([1n, 2n]); typeof a[0] + ':' + a[1];"),
+        Ok(Value::String("bigint:2".to_owned()))
+    );
+}
+
 // --- Accessors and brand checks ----------------------------------------------
 
 #[test]
@@ -148,6 +188,58 @@ fn bigint_arrays_wrap_and_reject_numbers() {
         Ok(Value::String("bigint:1:2".to_owned()))
     );
     assert!(eval("new BigInt64Array([1]);").is_err());
+}
+
+#[test]
+fn indexed_write_routes_through_per_kind_conversion() {
+    // Direct `ta[i] = v` writes apply the per-kind numeric conversion and
+    // persist through the backing buffer (IntegerIndexedElementSet).
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array(3); a[0] = 257; a[1] = -1; a[2] = 3.9; \
+             a[0] + ',' + a[1] + ',' + a[2] + '|' \
+             + Array.prototype.join.call(new Uint8Array(a.buffer));"
+        ),
+        Ok(Value::String("1,255,3|1,255,3".to_owned()))
+    );
+    assert_eq!(
+        eval("let c = new Uint8ClampedArray(1); c[0] = 300; c[0];"),
+        Ok(Value::Number(255.0))
+    );
+    assert_eq!(
+        eval("let b = new BigInt64Array(1); b[0] = 5n; typeof b[0] + ':' + b[0];"),
+        Ok(Value::String("bigint:5".to_owned()))
+    );
+}
+
+#[test]
+fn indexed_write_drops_out_of_range_and_canonical_indices() {
+    // Out-of-range and non-integer canonical numeric indices never create a
+    // property, but coercion side effects still run.
+    assert_eq!(
+        eval("let a = new Uint8Array(2); a[5] = 9; a[5] === undefined && a.length === 2;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("let a = new Uint8Array(2); a['1.5'] = 7; a['1.5'];"),
+        Ok(Value::Undefined)
+    );
+    // ToNumber side effects fire even for an out-of-range index.
+    assert_eq!(
+        eval(
+            "let log = []; let a = new Uint8Array(1); \
+             a[3] = { valueOf() { log.push('x'); return 0; } }; log.join(',');"
+        ),
+        Ok(Value::String("x".to_owned()))
+    );
+}
+
+#[test]
+fn non_numeric_property_writes_still_work() {
+    assert_eq!(
+        eval("let a = new Uint8Array(1); a.foo = 'bar'; a.foo;"),
+        Ok(Value::String("bar".to_owned()))
+    );
 }
 
 #[test]

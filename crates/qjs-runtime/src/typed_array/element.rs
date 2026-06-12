@@ -8,7 +8,7 @@ use crate::{
 
 use super::{
     bytes_per_element, clamp_uint8, is_big_int_kind, modulo_integer, signed_integer,
-    typed_array_byte_offset, typed_array_kind,
+    typed_array_byte_offset, typed_array_kind, typed_array_length,
 };
 
 /// Coerces an arbitrary value to the canonical element value for `native`,
@@ -197,6 +197,77 @@ fn big_int_of(value: &Value) -> i64 {
         }
         _ => 0,
     }
+}
+
+/// Whether `key` is a CanonicalNumericIndexString: the string form of a Number
+/// such that `String(ToNumber(key)) === key`. These are the keys that a typed
+/// array treats as integer-indexed exotic slots (so writes to them never create
+/// ordinary properties), e.g. `"0"`, `"-0"`, `"1.5"`, `"Infinity"`, `"NaN"`.
+/// Returns the numeric value when `key` is canonical.
+pub(crate) fn canonical_numeric_index(key: &str) -> Option<f64> {
+    if key == "-0" {
+        return Some(-0.0);
+    }
+    let number: f64 = key.parse().ok()?;
+    // Reparse round-trips through Rust formatting which differs from JS for some
+    // inputs; require the JS-style string form to match exactly.
+    if crate::number::number_to_js_string(number) == key {
+        Some(number)
+    } else {
+        None
+    }
+}
+
+/// Result of attempting a typed-array integer-indexed write
+/// (IntegerIndexedElementSet, ES2024 10.4.5.16).
+pub(crate) enum IndexedWrite {
+    /// `key` was a canonical numeric index; the write was fully handled here
+    /// (value coerced and, when in range with an attached buffer, stored). The
+    /// ordinary property path must not run.
+    Handled,
+    /// `key` is not a canonical numeric index; the caller should fall back to
+    /// the ordinary property-set path.
+    NotIndexed,
+}
+
+/// Performs the integer-indexed write for `key = value` on a branded typed
+/// array. Coercion of `value` always runs first (its observable side effects
+/// must happen even for out-of-range or detached writes). When `key` names a
+/// canonical numeric index, the write is handled here: stored into the backing
+/// buffer and materialized property when the index is in range and the buffer
+/// is attached, and silently dropped otherwise.
+pub(crate) fn set_indexed_element(
+    object: &ObjectRef,
+    key: &str,
+    value: Value,
+    env: &mut CallEnv,
+) -> Result<IndexedWrite, RuntimeError> {
+    let Some(number) = canonical_numeric_index(key) else {
+        return Ok(IndexedWrite::NotIndexed);
+    };
+
+    let native = typed_array_kind(object);
+    // ToNumber/ToBigInt side effects run regardless of whether the slot is in
+    // range; a coercion that throws propagates.
+    let coerced = coerce_element(native, value, env)?;
+
+    // Out-of-range, fractional, negative-zero, or non-integer indices, and
+    // writes through a detached buffer, are all dropped without creating a
+    // property — but only after the coercion above has run.
+    if super::typed_array_buffer_detached(object) {
+        return Ok(IndexedWrite::Handled);
+    }
+    let length = typed_array_length(object);
+    if !number.is_finite()
+        || number.fract() != 0.0
+        || number.is_sign_negative()
+        || (number as usize) >= length
+    {
+        return Ok(IndexedWrite::Handled);
+    }
+
+    set_view_elements(object, number as usize, std::iter::once(coerced));
+    Ok(IndexedWrite::Handled)
 }
 
 // --- view-level element access ----------------------------------------------

@@ -49,6 +49,9 @@ pub(crate) enum NativeFunction {
     ArrayBufferPrototypeByteLength,
     ArrayBufferPrototypeSlice,
     TypedArray,
+    // %TypedArray% static methods.
+    TypedArrayFrom,
+    TypedArrayOf,
     TypedArrayPrototypeBuffer,
     TypedArrayPrototypeByteLength,
     TypedArrayPrototypeByteOffset,
@@ -124,6 +127,7 @@ pub(crate) enum NativeFunction {
     BigInt64Array,
     BigUint64Array,
     IsHtmlDda,
+    DetachArrayBuffer,
     IteratorPrototypeIterator,
     // %Iterator% intrinsic (ES2025 Iterator Helpers).
     Iterator,

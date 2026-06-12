@@ -28,6 +28,9 @@ pub(super) fn call_array_buffer_native(
         NativeFunction::ArrayBufferPrototypeSlice => {
             array_buffer::native_array_buffer_prototype_slice(this_value, argument_values, env)?
         }
+        NativeFunction::DetachArrayBuffer => {
+            array_buffer::native_detach_array_buffer(argument_values)?
+        }
         _ => return Ok(None),
     };
     Ok(Some(value))
