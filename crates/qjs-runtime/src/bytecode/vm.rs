@@ -13,8 +13,7 @@ use super::util::{stack_underflow, typeof_value};
 use super::vm_call::{insert_scope_call_bindings, user_bytecode_function};
 use super::vm_iter::DelegateStep;
 use super::vm_props::{
-    array_index_from_number, delete_property_key, get_property_key, property_set_uses_setter,
-    set_property_key,
+    array_index_from_number, get_property_key, property_set_uses_setter, set_property_key,
 };
 use super::vm_result::{Completion, FunctionBytecodeResult, ResumeMode};
 use super::vm_try::TryFrame;
@@ -162,7 +161,10 @@ impl<'a> Vm<'a> {
         CallEnv::new(self.realm_rc())
     }
 
-    fn coerce_property_key(&mut self, value: Value) -> Result<PropertyKey, RuntimeError> {
+    pub(super) fn coerce_property_key(
+        &mut self,
+        value: Value,
+    ) -> Result<PropertyKey, RuntimeError> {
         match value {
             Value::Object(_)
             | Value::Function(_)
@@ -666,24 +668,6 @@ impl<'a> Vm<'a> {
             self.realm.borrow().get(GLOBAL_THIS_BINDING),
             Some(Value::Object(global_object)) if object.ptr_eq(global_object)
         )
-    }
-
-    fn delete_prop(&mut self, is_strict: bool) -> Result<(), RuntimeError> {
-        let key_value = self.pop()?;
-        let key = self.coerce_property_key(key_value)?;
-        let object = self.pop()?;
-        let mut env = self.current_env();
-        let result = delete_property_key(object, &key, &mut env)?;
-        self.apply_env(env);
-        // Strict-mode `delete` of a non-configurable property is a TypeError.
-        if is_strict && matches!(result, Value::Boolean(false)) {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "cannot delete non-configurable property in strict mode".to_owned(),
-            });
-        }
-        self.stack.push(result);
-        Ok(())
     }
 
     fn call(&mut self, argc: usize) -> Result<(), RuntimeError> {

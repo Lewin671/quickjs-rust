@@ -37,6 +37,24 @@ impl Vm<'_> {
         }
     }
 
+    pub(super) fn delete_prop(&mut self, is_strict: bool) -> Result<(), RuntimeError> {
+        let key_value = self.pop()?;
+        let key = self.coerce_property_key(key_value)?;
+        let object = self.pop()?;
+        let mut env = self.current_env();
+        let result = delete_property_key(object, &key, &mut env)?;
+        self.apply_env(env);
+        // Strict-mode `delete` of a non-configurable property is a TypeError.
+        if is_strict && matches!(result, Value::Boolean(false)) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "cannot delete non-configurable property in strict mode".to_owned(),
+            });
+        }
+        self.stack.push(result);
+        Ok(())
+    }
+
     /// Resolves a property get through the prototype chain without cloning the
     /// realm env, returning `Some(value)` only when the descriptor is a plain
     /// data property (no getter). Returns `None` to signal that the generic
