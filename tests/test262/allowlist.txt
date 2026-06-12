@@ -2598,6 +2598,12 @@ cases/array-splice-result-length-range.js
 cases/array-to-string-basic.js
 cases/array-to-string-boolean-primitive.js
 cases/array-to-string-length.js
+test/built-ins/Array/prototype/toLocaleString/S15.4.4.3_A1_T1.js
+test/built-ins/Array/prototype/toLocaleString/S15.4.4.3_A3_T1.js
+test/built-ins/Array/prototype/toLocaleString/invoke-element-tolocalestring.js
+test/built-ins/Array/prototype/toLocaleString/primitive_this_value.js
+test/built-ins/Array/prototype/toLocaleString/primitive_this_value_getter.js
+test/built-ins/Array/prototype/toLocaleString/user-provided-tolocalestring-shrink.js
 cases/array-to-reversed-basic.js
 cases/array-to-reversed-array-like.js
 cases/array-to-reversed-copy-semantics.js

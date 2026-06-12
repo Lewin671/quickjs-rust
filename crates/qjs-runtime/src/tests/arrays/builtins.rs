@@ -115,6 +115,28 @@ fn evaluates_array_builtins() {
         eval("[1, 'x', true].toLocaleString();"),
         Ok(Value::String("1,x,true".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "let calls = 0; let item = { toLocaleString: function() { calls++; return 'item'; } }; \
+             [undefined, item, null, item].toLocaleString(); calls;"
+        ),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval(
+            "'use strict'; Boolean.prototype.toString = function() { return typeof this; }; \
+             [true, false].toLocaleString();"
+        ),
+        Ok(Value::String("boolean,boolean".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let calls = 0; let item = { toLocaleString: function() { calls++; return 'proto'; } }; \
+             Array.prototype[1] = item; let xs = [item]; xs.length = 2; \
+             let result = xs.toLocaleString() + ':' + calls; delete Array.prototype[1]; result;"
+        ),
+        Ok(Value::String("proto,proto:2".to_owned()))
+    );
     assert_eq!(eval("Array().length;"), Ok(Value::Number(0.0)));
     assert_eq!(eval("Array(1, 2)[1];"), Ok(Value::Number(2.0)));
     assert_eq!(

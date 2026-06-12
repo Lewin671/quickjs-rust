@@ -38,6 +38,27 @@ pub(crate) fn native_array_prototype_to_string(
     object::native_object_prototype_to_string(receiver, env)
 }
 
+pub(crate) fn native_array_prototype_to_locale_string(
+    this_value: Value,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let array_like = array_like_length(this_value, "Array.prototype.toLocaleString", env)?;
+    let mut parts = Vec::with_capacity(array_like.length);
+    for index in 0..array_like.length {
+        let element = property_value(array_like.receiver.clone(), &index.to_string(), env)?;
+        let part = match element {
+            Value::Null | Value::Undefined => String::new(),
+            value => {
+                let method = property_value(value.clone(), "toLocaleString", env)?;
+                let localized = call_function(method, value, Vec::new(), env, false)?;
+                to_js_string_with_env(localized, env)?
+            }
+        };
+        parts.push(part);
+    }
+    Ok(Value::String(parts.join(",")))
+}
+
 pub(crate) fn array_join(
     value: Value,
     separator: &str,

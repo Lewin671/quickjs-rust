@@ -138,7 +138,7 @@ pub(super) fn call_array_native(
             array::native_array_prototype_to_string(this_value, env)?
         }
         NativeFunction::ArrayPrototypeToLocaleString => {
-            array::native_array_prototype_to_string(this_value, env)?
+            array::native_array_prototype_to_locale_string(this_value, env)?
         }
         NativeFunction::ArrayPrototypeToReversed => {
             array::native_array_prototype_to_reversed(this_value, env)?
