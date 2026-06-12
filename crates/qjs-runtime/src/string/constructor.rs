@@ -2,19 +2,20 @@ use std::collections::HashMap;
 
 use crate::{
     Function, ObjectRef, Property, RuntimeError, Value, function_prototype, property_value, symbol,
-    to_js_string_with_env, to_length_with_env, to_number, to_uint16,
+    to_js_string_with_env, to_length_with_env, to_number_with_env, to_uint16_with_env,
 };
 
 use super::{
     STRING_DATA_PROPERTY, string_code_units, string_from_code_unit, string_from_code_units,
 };
+use crate::CallEnv;
 
 pub(crate) fn native_string(
     function: &Function,
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = match argument_values.first().cloned() {
         Some(Value::Object(object)) if symbol::is_symbol_primitive(&object) => {
@@ -37,10 +38,11 @@ pub(crate) fn native_string(
 
 pub(crate) fn native_string_from_char_code(
     argument_values: &[Value],
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let mut result = String::new();
     for value in argument_values.iter().cloned() {
-        let code_unit = to_uint16(value)?;
+        let code_unit = to_uint16_with_env(value, env)?;
         result.push_str(&string_from_code_unit(code_unit));
     }
     Ok(Value::String(result))
@@ -48,13 +50,14 @@ pub(crate) fn native_string_from_char_code(
 
 pub(crate) fn native_string_from_code_point(
     argument_values: &[Value],
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     // Reserve roughly one byte per argument up front (BMP code points are one to
     // three UTF-8 bytes) and push each code point directly into the accumulator
     // instead of allocating a throwaway `String` per argument.
     let mut result = String::with_capacity(argument_values.len());
     for value in argument_values.iter().cloned() {
-        let code_point = to_code_point(value)?;
+        let code_point = to_code_point(value, env)?;
         push_code_point(&mut result, code_point);
     }
     Ok(Value::String(result))
@@ -62,7 +65,7 @@ pub(crate) fn native_string_from_code_point(
 
 pub(crate) fn native_string_raw(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let template = require_object_coercible(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -88,8 +91,8 @@ pub(crate) fn native_string_raw(
     Ok(Value::String(result))
 }
 
-fn to_code_point(value: Value) -> Result<u32, RuntimeError> {
-    let number = to_number(value)?;
+fn to_code_point(value: Value, env: &mut CallEnv) -> Result<u32, RuntimeError> {
+    let number = to_number_with_env(value, env)?;
     if !number.is_finite() || number < 0.0 || number > 0x10FFFF as f64 || number.trunc() != number {
         return Err(RuntimeError {
             thrown: None,

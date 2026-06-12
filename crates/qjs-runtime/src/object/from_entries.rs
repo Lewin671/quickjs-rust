@@ -5,11 +5,12 @@ use crate::{
     function_prototype_property, object_prototype, to_property_key_value,
 };
 
+use crate::CallEnv;
 use crate::array::array_like_values;
 
 pub(crate) fn native_object_from_entries(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let iterable = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let result = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
@@ -30,11 +31,7 @@ pub(crate) fn native_object_from_entries(
     Ok(Value::Object(result))
 }
 
-fn entry_component(
-    entry: Value,
-    index: usize,
-    env: &HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
+fn entry_component(entry: Value, index: usize, env: &CallEnv) -> Result<Value, RuntimeError> {
     match entry {
         Value::Array(array) => Ok(array_entry_component(&array, index, env)),
         Value::Object(object) => Ok(object.get(&index.to_string()).unwrap_or(Value::Undefined)),
@@ -46,18 +43,14 @@ fn entry_component(
     }
 }
 
-fn array_entry_component(array: &ArrayRef, index: usize, env: &HashMap<String, Value>) -> Value {
+fn array_entry_component(array: &ArrayRef, index: usize, env: &CallEnv) -> Value {
     array
         .get(index)
         .or_else(|| array_prototype_property(array, env, &index.to_string()))
         .unwrap_or(Value::Undefined)
 }
 
-fn function_entry_component(
-    function: &Function,
-    index: usize,
-    env: &HashMap<String, Value>,
-) -> Value {
+fn function_entry_component(function: &Function, index: usize, env: &CallEnv) -> Value {
     let key = index.to_string();
     function
         .properties

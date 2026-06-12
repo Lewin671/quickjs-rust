@@ -1,11 +1,10 @@
-use std::collections::HashMap;
-
+use crate::CallEnv;
 use crate::{RuntimeError, Value, to_number_with_env};
 
 pub(super) fn array_at_index(
     length: usize,
     index: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Option<usize>, RuntimeError> {
     let number = match index {
         Value::Undefined => 0.0,
@@ -31,7 +30,7 @@ pub(super) fn array_at_index(
 pub(super) fn array_search_start_index(
     length: usize,
     from_index: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<usize, RuntimeError> {
     let number = match from_index {
         Value::Undefined => 0.0,
@@ -58,7 +57,7 @@ pub(super) fn array_search_start_index(
 pub(super) fn array_search_end_index(
     length: usize,
     from_index: Option<Value>,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Option<usize>, RuntimeError> {
     let number = match from_index {
         None => return Ok(Some(length - 1)),
@@ -82,7 +81,7 @@ pub(super) fn array_search_end_index(
 pub(super) fn array_slice_start(
     length: usize,
     start: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<usize, RuntimeError> {
     let number = match start {
         Value::Undefined => 0.0,
@@ -94,7 +93,7 @@ pub(super) fn array_slice_start(
 pub(super) fn array_slice_end(
     length: usize,
     end: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<usize, RuntimeError> {
     let number = match end {
         Value::Undefined => return Ok(length),

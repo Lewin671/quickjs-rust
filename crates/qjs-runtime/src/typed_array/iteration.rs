@@ -15,6 +15,7 @@ use super::element::{ViewSnapshot, get_view_element, read_view_elements};
 use super::{
     typed_array_buffer_detached, typed_array_kind, typed_array_length, validate_typed_array,
 };
+use crate::CallEnv;
 
 // --- shared iteration scaffolding -------------------------------------------
 
@@ -52,7 +53,7 @@ fn call_callback(
     iteration: &Iteration,
     value: Value,
     index: usize,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     call_function(
         iteration.callback.clone(),
@@ -73,7 +74,7 @@ fn relative_index(
     value: Value,
     length: usize,
     default: i64,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<usize, RuntimeError> {
     let relative = match value {
         Value::Undefined => default as f64,
@@ -95,7 +96,7 @@ fn relative_index(
 pub(crate) fn native_typed_array_prototype_at(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     let argument = argument_values.first().cloned().unwrap_or(Value::Undefined);
@@ -115,7 +116,7 @@ pub(crate) fn native_typed_array_prototype_at(
 pub(crate) fn native_typed_array_prototype_index_of(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     if length == 0 {
@@ -139,7 +140,7 @@ pub(crate) fn native_typed_array_prototype_index_of(
 pub(crate) fn native_typed_array_prototype_last_index_of(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     if length == 0 {
@@ -174,7 +175,7 @@ pub(crate) fn native_typed_array_prototype_last_index_of(
 pub(crate) fn native_typed_array_prototype_includes(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     if length == 0 {
@@ -198,7 +199,7 @@ pub(crate) fn native_typed_array_prototype_includes(
 fn search_start_index(
     value: Value,
     length: usize,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<usize, RuntimeError> {
     let number = to_number_with_env(value, env)?;
     let from = if number.is_nan() { 0.0 } else { number.trunc() };
@@ -227,7 +228,7 @@ fn same_value_zero(left: &Value, right: &Value) -> bool {
 pub(crate) fn native_typed_array_prototype_join(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     let separator = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
@@ -245,7 +246,7 @@ pub(crate) fn native_typed_array_prototype_join(
 pub(crate) fn native_typed_array_prototype_to_string(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     // %TypedArray.prototype.toString% is %Array.prototype.toString%, which calls
     // the receiver's own `join` and falls back to Object.prototype.toString.
@@ -255,7 +256,7 @@ pub(crate) fn native_typed_array_prototype_to_string(
 pub(crate) fn native_typed_array_prototype_to_locale_string(
     this_value: Value,
     _argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     let elements = read_view_elements(&object, 0, length);
@@ -267,10 +268,7 @@ pub(crate) fn native_typed_array_prototype_to_locale_string(
     Ok(Value::String(parts.join(",")))
 }
 
-fn call_to_locale_string(
-    value: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<String, RuntimeError> {
+fn call_to_locale_string(value: Value, env: &mut CallEnv) -> Result<String, RuntimeError> {
     // Per spec, invoke each element's `toLocaleString`. Numbers/BigInts have
     // their own; we route through the generic string conversion which already
     // mirrors `Number.prototype.toLocaleString` basics for these element types.
@@ -288,30 +286,26 @@ const ITERATOR_KIND_KEY_VALUE: &str = "key+value";
 
 pub(crate) fn native_typed_array_prototype_keys(
     this_value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     make_iterator(this_value, ITERATOR_KIND_KEY, env)
 }
 
 pub(crate) fn native_typed_array_prototype_values(
     this_value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     make_iterator(this_value, ITERATOR_KIND_VALUE, env)
 }
 
 pub(crate) fn native_typed_array_prototype_entries(
     this_value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     make_iterator(this_value, ITERATOR_KIND_KEY_VALUE, env)
 }
 
-fn make_iterator(
-    this_value: Value,
-    kind: &str,
-    env: &mut HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
+fn make_iterator(this_value: Value, kind: &str, env: &mut CallEnv) -> Result<Value, RuntimeError> {
     let (object, _length) = validate_typed_array(&this_value)?;
     let iterator = ObjectRef::new(HashMap::new());
     iterator.define_non_enumerable(ITERATED_OBJECT.to_owned(), Value::Object(object));
@@ -380,7 +374,7 @@ fn iterator_result(value: Value, done: bool) -> Value {
 pub(crate) fn native_typed_array_prototype_for_each(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("forEach", this_value, argument_values)?;
     let snapshot = ViewSnapshot::capture(&iteration.object);
@@ -394,7 +388,7 @@ pub(crate) fn native_typed_array_prototype_for_each(
 pub(crate) fn native_typed_array_prototype_some(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("some", this_value, argument_values)?;
     let snapshot = ViewSnapshot::capture(&iteration.object);
@@ -410,7 +404,7 @@ pub(crate) fn native_typed_array_prototype_some(
 pub(crate) fn native_typed_array_prototype_every(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("every", this_value, argument_values)?;
     let snapshot = ViewSnapshot::capture(&iteration.object);
@@ -426,7 +420,7 @@ pub(crate) fn native_typed_array_prototype_every(
 pub(crate) fn native_typed_array_prototype_find(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("find", this_value, argument_values)?;
     let snapshot = ViewSnapshot::capture(&iteration.object);
@@ -442,7 +436,7 @@ pub(crate) fn native_typed_array_prototype_find(
 pub(crate) fn native_typed_array_prototype_find_index(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("findIndex", this_value, argument_values)?;
     let snapshot = ViewSnapshot::capture(&iteration.object);
@@ -458,7 +452,7 @@ pub(crate) fn native_typed_array_prototype_find_index(
 pub(crate) fn native_typed_array_prototype_find_last(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("findLast", this_value, argument_values)?;
     let snapshot = ViewSnapshot::capture(&iteration.object);
@@ -474,7 +468,7 @@ pub(crate) fn native_typed_array_prototype_find_last(
 pub(crate) fn native_typed_array_prototype_find_last_index(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("findLastIndex", this_value, argument_values)?;
     let snapshot = ViewSnapshot::capture(&iteration.object);
@@ -492,7 +486,7 @@ pub(crate) fn native_typed_array_prototype_find_last_index(
 pub(crate) fn native_typed_array_prototype_map(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("map", this_value, argument_values)?;
     let native = typed_array_kind(&iteration.object);
@@ -511,7 +505,7 @@ pub(crate) fn native_typed_array_prototype_map(
 pub(crate) fn native_typed_array_prototype_filter(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("filter", this_value, argument_values)?;
     let native = typed_array_kind(&iteration.object);
@@ -531,7 +525,7 @@ pub(crate) fn native_typed_array_prototype_filter(
 pub(crate) fn native_typed_array_prototype_reduce(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     let callback = require_callback("reduce", argument_values)?;
@@ -566,7 +560,7 @@ pub(crate) fn native_typed_array_prototype_reduce(
 pub(crate) fn native_typed_array_prototype_reduce_right(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     let callback = require_callback("reduceRight", argument_values)?;
@@ -622,7 +616,7 @@ fn reduce_empty_error() -> RuntimeError {
 pub(crate) fn native_typed_array_prototype_slice(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     let native = typed_array_kind(&object);
@@ -651,7 +645,7 @@ pub(crate) fn native_typed_array_prototype_slice(
 pub(crate) fn native_typed_array_prototype_subarray(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     // subarray shares the backing buffer; without a shared-buffer view model we
     // produce an independent copy of the range, which keeps element values and

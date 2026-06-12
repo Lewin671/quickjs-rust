@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-
+use crate::CallEnv;
 use crate::{Function, NativeFunction, RuntimeError, Value, bigint, boolean, global, symbol};
 
 pub(super) fn call_core_native(
@@ -8,7 +7,7 @@ pub(super) fn call_core_native(
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     match native {
         NativeFunction::Boolean => {
@@ -28,18 +27,18 @@ pub(super) fn call_core_native(
         NativeFunction::EncodeUriComponent => {
             global::native_global_encode_uri_component(argument_values, env)
         }
-        NativeFunction::GlobalIsFinite => global::native_global_is_finite(argument_values),
-        NativeFunction::GlobalIsNaN => global::native_global_is_nan(argument_values),
+        NativeFunction::GlobalIsFinite => global::native_global_is_finite(argument_values, env),
+        NativeFunction::GlobalIsNaN => global::native_global_is_nan(argument_values, env),
         NativeFunction::Print => global::native_global_print(argument_values, env),
         NativeFunction::IsHtmlDda => Ok(crate::html_dda::native_is_html_dda()),
         NativeFunction::BigInt => bigint::native_bigint(argument_values, is_construct, env),
         NativeFunction::BigIntAsIntN => bigint::native_bigint_as_int_n(argument_values, env),
         NativeFunction::BigIntAsUintN => bigint::native_bigint_as_uint_n(argument_values, env),
         NativeFunction::BigIntPrototypeToString => {
-            bigint::native_bigint_prototype_to_string(this_value, argument_values)
+            bigint::native_bigint_prototype_to_string(this_value, argument_values, env)
         }
         NativeFunction::BigIntPrototypeToLocaleString => {
-            bigint::native_bigint_prototype_to_string(this_value, &[])
+            bigint::native_bigint_prototype_to_string(this_value, &[], env)
         }
         NativeFunction::BigIntPrototypeValueOf => {
             bigint::native_bigint_prototype_value_of(this_value)

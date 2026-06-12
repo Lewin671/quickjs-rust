@@ -1,12 +1,9 @@
+use crate::CallEnv;
 use std::collections::HashMap;
 
 use crate::{Function, NativeFunction, ObjectRef, Value};
 
-pub(crate) fn install_reflect(
-    env: &mut HashMap<String, Value>,
-    global_this: &Value,
-    object_prototype: ObjectRef,
-) {
+pub(crate) fn install_reflect(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
     let reflect_object = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
     define_reflect_function(&reflect_object, "apply", 3, NativeFunction::ReflectApply);
     define_reflect_function(
@@ -68,7 +65,7 @@ pub(crate) fn install_reflect(
     );
 
     let reflect_value = Value::Object(reflect_object);
-    env.insert("Reflect".to_owned(), reflect_value.clone());
+    env.insert_realm("Reflect".to_owned(), reflect_value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable("Reflect".to_owned(), reflect_value);
     }

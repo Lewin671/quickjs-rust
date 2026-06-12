@@ -1,11 +1,10 @@
-use std::collections::HashMap;
-
 use crate::{
     Property, RuntimeError, Value, array_own_property_descriptor, array_prototype, call_function,
     function_delete_own_property, function_own_property_descriptor, has_property, property_value,
 };
 
 use super::array_like::array_like_length;
+use crate::CallEnv;
 
 const MAX_SAFE_INTEGER_LENGTH: usize = 9_007_199_254_740_991;
 const MAX_ARRAY_LENGTH: usize = u32::MAX as usize;
@@ -13,7 +12,7 @@ const MAX_ARRAY_LENGTH: usize = u32::MAX as usize;
 pub(crate) fn native_array_prototype_unshift(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if matches!(this_value, Value::String(_)) {
         return Err(unshift_length_error());
@@ -53,7 +52,7 @@ fn unshift_set_property(
     receiver: Value,
     key: &str,
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
     match receiver.clone() {
         Value::Object(object) => {
@@ -136,7 +135,7 @@ fn unshift_delete_property(receiver: Value, key: &str) -> Result<(), RuntimeErro
 fn unshift_set_length(
     receiver: Value,
     length: usize,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
     let value = Value::Number(length as f64);
     match receiver.clone() {
@@ -194,7 +193,7 @@ fn apply_unshift_setter(
     property: Option<Property>,
     receiver: Value,
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     let Some(property) = property else {
         return Ok(false);

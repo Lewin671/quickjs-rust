@@ -12,10 +12,11 @@ use crate::{
 
 use super::descriptor::native_object_define_properties;
 use super::enumeration::enumerable_property_entries_with_symbols;
+use crate::CallEnv;
 
 pub(crate) fn native_object_assign(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let target = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
         Value::Object(object) if symbol::is_symbol_primitive(&object) => {
@@ -54,7 +55,7 @@ pub(crate) fn native_object(
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
-    env: &HashMap<String, Value>,
+    env: &CallEnv,
 ) -> Result<Value, RuntimeError> {
     match argument_values.first() {
         Some(Value::Object(object)) if symbol::is_symbol_primitive(object) => {
@@ -80,7 +81,7 @@ pub(crate) fn native_object(
     }
 }
 
-pub(crate) fn boxed_primitive(value: Value, env: &HashMap<String, Value>) -> Option<Value> {
+pub(crate) fn boxed_primitive(value: Value, env: &CallEnv) -> Option<Value> {
     match value {
         Value::Boolean(value) => Some(boxed_boolean(value, env)),
         Value::BigInt(value) => Some(boxed_bigint(value, env)),
@@ -93,25 +94,25 @@ pub(crate) fn boxed_primitive(value: Value, env: &HashMap<String, Value>) -> Opt
     }
 }
 
-fn boxed_bigint(value: num_bigint::BigInt, env: &HashMap<String, Value>) -> Value {
+fn boxed_bigint(value: num_bigint::BigInt, env: &CallEnv) -> Value {
     let object = ObjectRef::with_prototype(HashMap::new(), constructor_prototype("BigInt", env));
     object.define_non_enumerable(BIGINT_DATA_PROPERTY.to_owned(), Value::BigInt(value));
     Value::Object(object)
 }
 
-fn boxed_boolean(value: bool, env: &HashMap<String, Value>) -> Value {
+fn boxed_boolean(value: bool, env: &CallEnv) -> Value {
     let object = ObjectRef::with_prototype(HashMap::new(), constructor_prototype("Boolean", env));
     object.define_non_enumerable(BOOLEAN_DATA_PROPERTY.to_owned(), Value::Boolean(value));
     Value::Object(object)
 }
 
-fn boxed_number(value: f64, env: &HashMap<String, Value>) -> Value {
+fn boxed_number(value: f64, env: &CallEnv) -> Value {
     let object = ObjectRef::with_prototype(HashMap::new(), constructor_prototype("Number", env));
     object.define_non_enumerable(NUMBER_DATA_PROPERTY.to_owned(), Value::Number(value));
     Value::Object(object)
 }
 
-fn boxed_string(value: &str, env: &HashMap<String, Value>) -> Value {
+fn boxed_string(value: &str, env: &CallEnv) -> Value {
     let object = ObjectRef::with_prototype(HashMap::new(), constructor_prototype("String", env));
     object.define_non_enumerable(
         STRING_DATA_PROPERTY.to_owned(),
@@ -140,16 +141,16 @@ fn boxed_string(value: &str, env: &HashMap<String, Value>) -> Value {
     Value::Object(object)
 }
 
-fn constructor_prototype(name: &str, env: &HashMap<String, Value>) -> Option<ObjectRef> {
+fn constructor_prototype(name: &str, env: &CallEnv) -> Option<ObjectRef> {
     let Some(Value::Function(function)) = env.get(name) else {
         return None;
     };
-    function_prototype(function)
+    function_prototype(&function)
 }
 
 pub(crate) fn native_object_create(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let object = match argument_values.first() {
         Some(Value::Object(prototype)) => Value::Object(ObjectRef::with_prototype_slot(
@@ -191,7 +192,7 @@ fn assign_property(
     target: Value,
     key: PropertyKey,
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
     if crate::reflect::ordinary_set(target.clone(), &key, value, target, env)? {
         return Ok(());

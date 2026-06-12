@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::{ArrayRef, ObjectRef, RuntimeError, Value, property_value, to_length_with_env};
 
 use super::array_like::array_like_length;
+use crate::CallEnv;
 
 const ITERATED_OBJECT: &str = "\0array_iterator_object";
 const ITERATOR_NEXT_INDEX: &str = "\0array_iterator_next_index";
@@ -14,7 +15,7 @@ const ITERATOR_KIND_KEY_VALUE: &str = "key+value";
 
 pub(crate) fn native_array_prototype_entries(
     this_value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     array_iterator(
         this_value,
@@ -26,14 +27,14 @@ pub(crate) fn native_array_prototype_entries(
 
 pub(crate) fn native_array_prototype_keys(
     this_value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     array_iterator(this_value, env, "Array.prototype.keys", ITERATOR_KIND_KEY)
 }
 
 pub(crate) fn native_array_prototype_values(
     this_value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     array_iterator(
         this_value,
@@ -45,7 +46,7 @@ pub(crate) fn native_array_prototype_values(
 
 fn array_iterator(
     this_value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
     context: &str,
     kind: &str,
 ) -> Result<Value, RuntimeError> {
@@ -67,7 +68,7 @@ fn array_iterator(
 
 pub(crate) fn native_array_iterator_next(
     this_value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let Value::Object(iterator) = this_value else {
         return Err(RuntimeError {

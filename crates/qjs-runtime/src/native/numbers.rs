@@ -1,8 +1,7 @@
-use std::collections::HashMap;
-
 use crate::{Function, NativeFunction, Value, number};
 
 use super::NativeCallResult;
+use crate::CallEnv;
 
 pub(super) fn call_number_native(
     function: &Function,
@@ -10,7 +9,7 @@ pub(super) fn call_number_native(
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> NativeCallResult {
     let value = match native {
         NativeFunction::Number => {
@@ -32,16 +31,16 @@ pub(super) fn call_number_native(
             number::native_number_prototype_to_precision(this_value, argument_values, env)?
         }
         NativeFunction::NumberPrototypeToString => {
-            number::native_number_prototype_to_string(this_value, argument_values)?
+            number::native_number_prototype_to_string(this_value, argument_values, env)?
         }
         NativeFunction::NumberPrototypeToLocaleString => {
-            number::native_number_prototype_to_string(this_value, &[])?
+            number::native_number_prototype_to_string(this_value, &[], env)?
         }
         NativeFunction::NumberPrototypeValueOf => {
             number::native_number_prototype_value_of(this_value)?
         }
-        NativeFunction::ParseFloat => number::native_parse_float(argument_values)?,
-        NativeFunction::ParseInt => number::native_parse_int(argument_values)?,
+        NativeFunction::ParseFloat => number::native_parse_float(argument_values, env)?,
+        NativeFunction::ParseInt => number::native_parse_int(argument_values, env)?,
         _ => return Ok(None),
     };
 

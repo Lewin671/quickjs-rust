@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, function_prototype,
     inherited_object_prototype_property, is_truthy,
@@ -7,11 +8,7 @@ use crate::{
 
 pub(crate) const BOOLEAN_DATA_PROPERTY: &str = "\0BooleanData";
 
-pub(super) fn install_boolean(
-    env: &mut HashMap<String, Value>,
-    global_this: &Value,
-    object_prototype: ObjectRef,
-) {
+pub(super) fn install_boolean(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
     let boolean_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
     let boolean_function = Function::new_native(Some("Boolean"), 1, NativeFunction::Boolean, true);
     boolean_prototype
@@ -43,17 +40,17 @@ pub(super) fn install_boolean(
         Property::fixed_non_enumerable(Value::Object(boolean_prototype)),
     );
     let boolean_value = Value::Function(boolean_function);
-    env.insert("Boolean".to_owned(), boolean_value.clone());
+    env.insert_realm("Boolean".to_owned(), boolean_value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable("Boolean".to_owned(), boolean_value);
     }
 }
 
-fn boolean_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+fn boolean_prototype(env: &CallEnv) -> Option<ObjectRef> {
     let Some(Value::Function(boolean_function)) = env.get("Boolean") else {
         return None;
     };
-    function_prototype(boolean_function)
+    function_prototype(&boolean_function)
 }
 
 pub(super) fn native_boolean(
@@ -107,10 +104,7 @@ fn this_boolean_value(value: Value) -> Result<bool, RuntimeError> {
     }
 }
 
-pub(super) fn inherited_boolean_prototype_property(
-    env: &HashMap<String, Value>,
-    key: &str,
-) -> Option<Value> {
+pub(super) fn inherited_boolean_prototype_property(env: &CallEnv, key: &str) -> Option<Value> {
     boolean_prototype(env)
         .and_then(|prototype| prototype.get(key))
         .or_else(|| inherited_object_prototype_property(env, key))

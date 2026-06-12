@@ -6,6 +6,7 @@
 
 use std::collections::HashMap;
 
+use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
     bytecode::{GeneratorOutcome, GeneratorStart, Resume, resume_generator},
@@ -26,7 +27,7 @@ pub(crate) const GENERATOR_FUNCTION_PROTOTYPE_BINDING: &str = "\0GeneratorFuncti
 /// `%GeneratorFunction.prototype%` object, recording both under intrinsic
 /// bindings so generator function calls can wire generator objects.
 pub(crate) fn install_generator(
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
     _global_this: &Value,
     object_prototype: ObjectRef,
 ) {
@@ -100,18 +101,18 @@ pub(crate) fn install_generator(
         ),
     );
 
-    env.insert(
+    env.insert_realm(
         GENERATOR_PROTOTYPE_BINDING.to_owned(),
         Value::Object(generator_prototype),
     );
-    env.insert(
+    env.insert_realm(
         GENERATOR_FUNCTION_PROTOTYPE_BINDING.to_owned(),
         Value::Object(generator_function_prototype),
     );
 }
 
 /// Returns `%GeneratorFunction.prototype%` from the current environment.
-pub(crate) fn generator_function_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+pub(crate) fn generator_function_prototype(env: &CallEnv) -> Option<ObjectRef> {
     match env.get(GENERATOR_FUNCTION_PROTOTYPE_BINDING) {
         Some(Value::Object(object)) => Some(object.clone()),
         _ => None,
@@ -119,7 +120,7 @@ pub(crate) fn generator_function_prototype(env: &HashMap<String, Value>) -> Opti
 }
 
 /// Returns `%GeneratorPrototype%` from the current environment.
-fn generator_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+fn generator_prototype(env: &CallEnv) -> Option<ObjectRef> {
     match env.get(GENERATOR_PROTOTYPE_BINDING) {
         Some(Value::Object(object)) => Some(object.clone()),
         _ => None,
@@ -128,7 +129,7 @@ fn generator_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef> {
 
 /// Returns `%GeneratorPrototype%` from the current environment (public alias for
 /// intrinsic wiring at function-creation time).
-pub(crate) fn generator_prototype_intrinsic(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+pub(crate) fn generator_prototype_intrinsic(env: &CallEnv) -> Option<ObjectRef> {
     generator_prototype(env)
 }
 
@@ -141,7 +142,7 @@ pub(crate) fn generator_prototype_intrinsic(env: &HashMap<String, Value>) -> Opt
 pub(crate) fn make_generator_object(
     function: &Function,
     start: GeneratorStart,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let state = crate::bytecode::start_suspended_at_body(start, env)?;
     let prototype = generator_object_prototype(function, env);
@@ -152,10 +153,7 @@ pub(crate) fn make_generator_object(
 
 /// Resolves the [[Prototype]] for a generator object: the function's own
 /// `prototype` property when it is an object, otherwise `%GeneratorPrototype%`.
-fn generator_object_prototype(
-    function: &Function,
-    env: &HashMap<String, Value>,
-) -> Option<ObjectRef> {
+fn generator_object_prototype(function: &Function, env: &CallEnv) -> Option<ObjectRef> {
     if let Some(Value::Object(prototype)) = function
         .own_property("prototype")
         .map(|property| property.value)
@@ -170,7 +168,7 @@ pub(crate) fn call_generator_native(
     native: NativeFunction,
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Option<Value>, RuntimeError> {
     let resume = match native {
         NativeFunction::GeneratorPrototypeNext => {
@@ -207,7 +205,7 @@ pub(crate) fn call_generator_native(
     Ok(Some(result))
 }
 
-fn iterator_result(value: Value, done: bool, env: &HashMap<String, Value>) -> Value {
+fn iterator_result(value: Value, done: bool, env: &CallEnv) -> Value {
     let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
     object.define_property("value".to_owned(), Property::enumerable(value));
     object.define_property(

@@ -1,19 +1,20 @@
-use std::{cmp::Ordering, collections::HashMap};
+use std::cmp::Ordering;
 
 use num_bigint::{BigInt, Sign};
 use num_traits::{ToPrimitive, Zero};
 use qjs_ast::{BinaryOp, UnaryOp};
 
+use crate::CallEnv;
 use crate::{
     Property, PropertyKey, RuntimeError, Value, call_function, error, has_property_key, is_truthy,
-    string, symbol, to_int32_number, to_js_string_with_env, to_number, to_number_with_env,
+    string, symbol, to_int32_number, to_js_string_with_env, to_number_with_env,
     to_primitive_with_env, to_property_key_value, to_uint32_number, value_prototype_slot,
 };
 
 pub(crate) fn eval_unary(
     op: UnaryOp,
     argument: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     match op {
         UnaryOp::Not => Ok(Value::Boolean(!is_truthy(&argument))),
@@ -45,7 +46,7 @@ pub(crate) fn eval_binary(
     left: Value,
     op: BinaryOp,
     right: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if op == BinaryOp::In {
         return eval_in(left, right, env);
@@ -199,7 +200,7 @@ fn eval_relational(
     left: Value,
     op: BinaryOp,
     right: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let left = to_primitive_with_env(left, env)?;
     let right = to_primitive_with_env(right, env)?;
@@ -251,11 +252,7 @@ fn strict_eq(left: &Value, right: &Value) -> bool {
     }
 }
 
-fn abstract_eq(
-    left: &Value,
-    right: &Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<bool, RuntimeError> {
+fn abstract_eq(left: &Value, right: &Value, env: &mut CallEnv) -> Result<bool, RuntimeError> {
     match (left, right) {
         (Value::Null, Value::Undefined) | (Value::Undefined, Value::Null) => Ok(true),
         (left, Value::Null | Value::Undefined) if crate::html_dda::is_html_dda(left) => Ok(true),
@@ -267,10 +264,10 @@ fn abstract_eq(
         (Value::BigInt(left), Value::Number(right))
         | (Value::Number(right), Value::BigInt(left)) => Ok(number_bigint_eq(*right, left)),
         (Value::Number(_), Value::String(value)) => {
-            Ok(left == &Value::Number(to_number(Value::String(value.clone()))?))
+            Ok(left == &Value::Number(to_number_with_env(Value::String(value.clone()), env)?))
         }
         (Value::String(value), Value::Number(_)) => {
-            Ok(&Value::Number(to_number(Value::String(value.clone()))?) == right)
+            Ok(&Value::Number(to_number_with_env(Value::String(value.clone()), env)?) == right)
         }
         (Value::Boolean(value), _) => {
             abstract_eq(&Value::Number(if *value { 1.0 } else { 0.0 }), right, env)
@@ -300,7 +297,7 @@ fn eval_bigint_mixed_relational(
     left: Value,
     op: BinaryOp,
     right: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let left = match left {
         Value::BigInt(value) => BigIntComparable::BigInt(value),
@@ -378,11 +375,7 @@ fn bigint_division_by_zero_error() -> RuntimeError {
     }
 }
 
-fn eval_instanceof(
-    left: Value,
-    right: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
+fn eval_instanceof(left: Value, right: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
     if matches!(
         &right,
         Value::Function(function) if function.native.is_some_and(error::is_native_error)
@@ -410,7 +403,7 @@ fn eval_instanceof(
 pub(crate) fn ordinary_has_instance(
     left: Value,
     right: Value,
-    env: &HashMap<String, Value>,
+    env: &CallEnv,
 ) -> Result<bool, RuntimeError> {
     let Value::Function(constructor) = right else {
         return Err(RuntimeError {
@@ -437,11 +430,7 @@ pub(crate) fn ordinary_has_instance(
     Ok(left_prototype.chain_contains(&prototype))
 }
 
-fn eval_in(
-    left: Value,
-    right: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
+fn eval_in(left: Value, right: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
     let key = to_property_key_value(left, env)?;
     has_property_key(right, env, &key)
         .map(Value::Boolean)

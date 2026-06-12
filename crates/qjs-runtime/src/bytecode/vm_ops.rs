@@ -31,8 +31,7 @@ impl Vm<'_> {
                 Value::Function(function) if function.native.is_some_and(error::is_native_error)
             )
         {
-            return operations::ordinary_has_instance(left, right, &self.globals)
-                .map(Value::Boolean);
+            return operations::ordinary_has_instance(left, right, &self.env).map(Value::Boolean);
         }
         let mut env = self.current_env();
         let result = operations::eval_binary(left, op, right, &mut env);
@@ -108,7 +107,7 @@ impl Vm<'_> {
 
     pub(super) fn enumerate_keys(&mut self) -> Result<(), RuntimeError> {
         let value = self.pop()?;
-        let keys = enumerable_keys(value, &self.globals)?;
+        let keys = enumerable_keys(value, &self.env)?;
         self.stack.push(Value::Array(ArrayRef::new(keys)));
         Ok(())
     }

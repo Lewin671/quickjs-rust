@@ -18,6 +18,7 @@ use crate::{
 };
 
 use super::protocol::{iterator_close_on_throw, iterator_step, iterator_value};
+use crate::CallEnv;
 
 const HELPER_KIND: &str = "\0iterator_helper_kind";
 const HELPER_UNDERLYING: &str = "\0iterator_helper_underlying";
@@ -66,7 +67,7 @@ impl HelperKind {
 fn iterator_direct(
     this_value: &Value,
     method: &str,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<(Value, Value), RuntimeError> {
     if !matches!(this_value, Value::Object(_)) {
         return Err(RuntimeError {
@@ -83,7 +84,7 @@ pub(super) fn native_lazy_helper(
     native: NativeFunction,
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let (kind, method) = match native {
         NativeFunction::IteratorPrototypeMap => (HelperKind::Map, "map"),
@@ -143,10 +144,7 @@ pub(super) fn native_lazy_helper(
 
 /// ToIntegerOrInfinity for the take/drop limit, surfacing NaN as a distinct
 /// value so the caller can raise the RangeError the proposal requires.
-fn number_to_integer_or_infinity(
-    value: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<f64, RuntimeError> {
+fn number_to_integer_or_infinity(value: Value, env: &mut CallEnv) -> Result<f64, RuntimeError> {
     let number = to_number_with_env(value, env)?;
     if number.is_nan() {
         return Ok(f64::NAN);
@@ -192,7 +190,7 @@ fn iterator_result(value: Value, done: bool) -> Value {
 /// `%IteratorHelperPrototype%.next`.
 pub(super) fn native_helper_next(
     this_value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let Value::Object(helper) = this_value else {
         return Err(not_a_helper());
@@ -230,7 +228,7 @@ fn advance(
     helper: &ObjectRef,
     iterator: &Value,
     next: &Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Option<Value>, RuntimeError> {
     match kind {
         HelperKind::Map => advance_map(helper, iterator, next, env),
@@ -262,7 +260,7 @@ fn advance_map(
     helper: &ObjectRef,
     iterator: &Value,
     next: &Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Option<Value>, RuntimeError> {
     let Some(result) = iterator_step(iterator, next, env)? else {
         return Ok(None);
@@ -286,7 +284,7 @@ fn advance_filter(
     helper: &ObjectRef,
     iterator: &Value,
     next: &Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Option<Value>, RuntimeError> {
     loop {
         let Some(result) = iterator_step(iterator, next, env)? else {
@@ -316,7 +314,7 @@ fn advance_take(
     helper: &ObjectRef,
     iterator: &Value,
     next: &Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Option<Value>, RuntimeError> {
     let remaining = match helper_slot(helper, HELPER_REMAINING) {
         Some(Value::Number(n)) => n,
@@ -340,7 +338,7 @@ fn advance_drop(
     helper: &ObjectRef,
     iterator: &Value,
     next: &Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Option<Value>, RuntimeError> {
     let mut remaining = match helper_slot(helper, HELPER_REMAINING) {
         Some(Value::Number(n)) => n,
@@ -364,7 +362,7 @@ fn advance_flat_map(
     helper: &ObjectRef,
     iterator: &Value,
     next: &Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Option<Value>, RuntimeError> {
     loop {
         // Drain the in-progress inner iterator first.
@@ -416,10 +414,7 @@ fn advance_flat_map(
 /// reads `Symbol.iterator` (falling back to treating `obj` itself as the
 /// iterator when absent) and returns an inner record packaged as an object
 /// carrying the iterator and its `next` method.
-fn get_iterator_flattenable(
-    value: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
+fn get_iterator_flattenable(value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
     if !matches!(
         value,
         Value::Object(_) | Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_)
@@ -441,7 +436,7 @@ fn get_iterator_flattenable(
 /// in-progress inner iterator for `flatMap`) and marks the helper done.
 pub(super) fn native_helper_return(
     this_value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let Value::Object(helper) = this_value else {
         return Err(not_a_helper());

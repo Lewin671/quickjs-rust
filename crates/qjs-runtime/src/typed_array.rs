@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, Prototype, RuntimeError, Value, array_buffer,
     symbol, to_length_with_env,
@@ -48,7 +49,7 @@ const TYPED_ARRAY_KINDS: [(&str, NativeFunction); 11] = [
 ];
 
 pub(crate) fn install_typed_arrays(
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
@@ -85,7 +86,7 @@ pub(crate) fn install_typed_arrays(
 
 /// Installs `buffer`/`byteLength`/`byteOffset`/`length` accessors and the
 /// `Symbol.toStringTag` accessor on `%TypedArray.prototype%`.
-fn install_typed_array_prototype_accessors(env: &HashMap<String, Value>, prototype: &ObjectRef) {
+fn install_typed_array_prototype_accessors(env: &CallEnv, prototype: &ObjectRef) {
     for (name, native) in [
         ("buffer", NativeFunction::TypedArrayPrototypeBuffer),
         ("byteLength", NativeFunction::TypedArrayPrototypeByteLength),
@@ -129,7 +130,7 @@ fn install_typed_array_prototype_accessors(env: &HashMap<String, Value>, prototy
 
 /// Installs the shared `%TypedArray.prototype%` methods (ES2023 23.2.3),
 /// brand-checked through their receiver.
-fn install_typed_array_prototype_methods(env: &HashMap<String, Value>, prototype: &ObjectRef) {
+fn install_typed_array_prototype_methods(env: &CallEnv, prototype: &ObjectRef) {
     for (name, length, native) in [
         ("at", 1, NativeFunction::TypedArrayPrototypeAt),
         ("indexOf", 1, NativeFunction::TypedArrayPrototypeIndexOf),
@@ -207,7 +208,7 @@ fn define_prototype_method(
 }
 
 fn install_typed_array_constructor(
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
     global_this: &Value,
     typed_array_prototype: ObjectRef,
     typed_array_intrinsic: &Function,
@@ -240,7 +241,7 @@ fn install_typed_array_constructor(
     );
 
     let value = Value::Function(constructor);
-    env.insert(name.to_owned(), value.clone());
+    env.insert_realm(name.to_owned(), value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable(name.to_owned(), value);
     }
@@ -343,7 +344,7 @@ pub(crate) fn validate_typed_array(value: &Value) -> Result<(ObjectRef, usize), 
 pub(crate) fn create_typed_array_of_kind(
     native: NativeFunction,
     values: Vec<Value>,
-    env: &HashMap<String, Value>,
+    env: &CallEnv,
 ) -> ObjectRef {
     construct::create_with_values(native, values, env)
 }
@@ -459,7 +460,7 @@ pub(crate) fn bytes_per_element(native: NativeFunction) -> usize {
 
 pub(crate) fn to_typed_array_length(
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<usize, RuntimeError> {
     let length = to_length_with_env(value, env)?;
     if length > MAX_TYPED_ARRAY_LENGTH {

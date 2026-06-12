@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{
     ArrayRef, Property, PropertyKey, RuntimeError, Value, array_own_property_keys,
     array_own_property_names, function_own_property_keys, function_own_property_names,
@@ -7,6 +5,7 @@ use crate::{
 };
 
 use super::descriptor::{own_property_descriptor, own_property_descriptor_key};
+use crate::CallEnv;
 
 pub(crate) fn native_object_keys(argument_values: &[Value]) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
@@ -25,7 +24,7 @@ pub(crate) fn native_object_keys(argument_values: &[Value]) -> Result<Value, Run
 
 pub(crate) fn native_object_values(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if matches!(target, Value::Null | Value::Undefined) {
@@ -45,7 +44,7 @@ pub(crate) fn native_object_values(
 
 pub(crate) fn native_object_entries(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if matches!(target, Value::Null | Value::Undefined) {
@@ -99,7 +98,7 @@ pub(crate) fn native_object_get_own_property_symbols(
 
 pub(crate) fn native_object_has_own(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if matches!(target, Value::Null | Value::Undefined) {
@@ -120,7 +119,7 @@ pub(crate) fn native_object_has_own(
 
 pub(crate) fn enumerable_property_entries(
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Vec<(String, Value)>, RuntimeError> {
     let keys = own_property_keys(value.clone());
     let mut entries = Vec::with_capacity(keys.len());
@@ -137,7 +136,7 @@ pub(crate) fn enumerable_property_entries(
 
 pub(super) fn enumerable_property_entries_with_symbols(
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Vec<(PropertyKey, Value)>, RuntimeError> {
     let string_keys = own_property_keys(value.clone())
         .into_iter()

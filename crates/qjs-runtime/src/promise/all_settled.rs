@@ -11,13 +11,14 @@ use super::{
     capability::PromiseCapability,
     perform::{self, ElementHandler},
 };
+use crate::CallEnv;
 
 /// `Promise.allSettled` (ES2023 27.2.4.2): always fulfils, with an array of
 /// `{ status, value }` / `{ status, reason }` records once every input settles.
 pub(crate) fn native_promise_all_settled(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let iterable = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let handler = AllSettledHandler {
@@ -37,7 +38,7 @@ impl ElementHandler for AllSettledHandler {
         &mut self,
         index: usize,
         capability: &PromiseCapability,
-        _env: &mut HashMap<String, Value>,
+        _env: &mut CallEnv,
     ) -> Result<(Value, Value), RuntimeError> {
         self.values.set(index, Value::Undefined);
         perform::increment_remaining(&self.remaining);
@@ -69,7 +70,7 @@ impl ElementHandler for AllSettledHandler {
         &mut self,
         _count: usize,
         capability: &PromiseCapability,
-        env: &mut HashMap<String, Value>,
+        env: &mut CallEnv,
     ) -> Result<(), RuntimeError> {
         if perform::decrement_remaining(&self.remaining) == 0.0 {
             super::capability::capability_resolve(
@@ -85,7 +86,7 @@ impl ElementHandler for AllSettledHandler {
 pub(crate) fn native_promise_all_settled_resolve_element(
     function: &Function,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     settle_element(function, argument_values, env, PROMISE_FULFILLED)
 }
@@ -93,7 +94,7 @@ pub(crate) fn native_promise_all_settled_resolve_element(
 pub(crate) fn native_promise_all_settled_reject_element(
     function: &Function,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     settle_element(function, argument_values, env, PROMISE_REJECTED)
 }
@@ -131,7 +132,7 @@ fn element_function(
 fn settle_element(
     function: &Function,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
     state: &str,
 ) -> Result<Value, RuntimeError> {
     if already_called(function) {
@@ -187,7 +188,7 @@ fn settle_element(
 /// Builds an ordinary object `{ status, value }` or `{ status, reason }` with
 /// the spec property order, `%Object.prototype%`, and default data attributes
 /// (writable, enumerable, configurable).
-fn settled_result_object(state: &str, value: Value, env: &HashMap<String, Value>) -> Value {
+fn settled_result_object(state: &str, value: Value, env: &CallEnv) -> Value {
     let object = ObjectRef::with_prototype(HashMap::new(), crate::object_prototype(env));
     object.define_property(
         "status".to_owned(),

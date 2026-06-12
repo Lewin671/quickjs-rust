@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{
     ArrayRef, Function, Property, PropertyKey, RuntimeError, Value, array_prototype, call_function,
     construct_function, is_truthy, object::array_length_from_descriptor_value, property_value,
@@ -7,10 +5,11 @@ use crate::{
 };
 
 use super::array_like::array_like_values_with_env;
+use crate::CallEnv;
 
 pub(crate) fn native_array(
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if let [Value::Number(length)] = argument_values {
         let length = array_length_from_descriptor_value(Value::Number(*length), env)?;
@@ -25,7 +24,7 @@ pub(crate) fn native_array(
 
 pub(crate) fn native_array_is_array(
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &CallEnv,
 ) -> Result<Value, RuntimeError> {
     let is_array = match argument_values.first() {
         Some(Value::Array(_)) => true,
@@ -40,7 +39,7 @@ pub(crate) fn native_array_is_array(
 pub(crate) fn native_array_from(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let items = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let map_fn = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
@@ -77,7 +76,7 @@ fn array_from_values(
     mapping: Option<&Value>,
     this_arg: Value,
     constructor: Option<Value>,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if matches!(items, Value::Null | Value::Undefined) {
         let elements = array_like_values_with_env(items, "Array.from", env).map(|values| {
@@ -121,7 +120,7 @@ fn array_from_values(
 fn array_from_array_like_result(
     constructor: Option<Value>,
     elements: ArrayFromElements,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let length = elements.values.len();
     let Some(constructor) = constructor else {
@@ -218,7 +217,7 @@ fn map_array_like_values(
     items: Value,
     mapping: Option<&Value>,
     this_arg: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Vec<Value>, RuntimeError> {
     let values = array_like_values_with_env(items, "Array.from", env)?;
     let mut result = Vec::with_capacity(values.len());
@@ -240,7 +239,7 @@ fn array_from_iterable_result(
     mapping: Option<&Value>,
     this_arg: Value,
     constructor: Option<Value>,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let target = match constructor {
         Some(constructor) => construct_function(constructor.clone(), constructor, Vec::new(), env)?,
@@ -286,10 +285,7 @@ fn array_from_iterable_result(
     Ok(target)
 }
 
-fn close_array_from_iterator(
-    iterator: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<(), RuntimeError> {
+fn close_array_from_iterator(iterator: Value, env: &mut CallEnv) -> Result<(), RuntimeError> {
     match property_value(iterator.clone(), "return", env)? {
         Value::Undefined | Value::Null => Ok(()),
         return_method @ Value::Function(_) => {
@@ -313,7 +309,7 @@ fn close_array_from_iterator(
 fn set_array_from_length(
     target: Value,
     length: usize,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
     let key = PropertyKey::String("length".to_owned());
     let value = Value::Number(length as f64);
@@ -332,7 +328,7 @@ fn array_from_mapped_value(
     index: usize,
     mapping: Option<&Value>,
     this_arg: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if let Some(callback) = mapping {
         call_function(
@@ -357,7 +353,7 @@ fn is_iterator_result_object(value: &Value) -> bool {
 pub(crate) fn native_array_of(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let length = argument_values.len();
     let result = if matches!(&this_value, Value::Function(function) if function.constructable) {
@@ -448,7 +444,7 @@ fn can_create_array_of_data_property(existing: Option<&Property>, extensible: bo
 fn set_array_of_length(
     target: &Value,
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
     match target {
         Value::Object(object) => set_object_array_of_length(
@@ -506,7 +502,7 @@ fn set_object_array_of_length(
     existing: Option<Property>,
     value: Value,
     define: impl FnOnce(Property),
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
     if let Some(existing) = existing {
         if existing.accessor {

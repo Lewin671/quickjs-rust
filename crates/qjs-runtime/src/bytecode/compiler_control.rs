@@ -409,9 +409,18 @@ impl Compiler {
                 self.compile_binding_initializer(binding, *kind)?;
             }
             ForInLeft::Target(AssignmentTarget::Identifier { name, .. }) => {
-                let slot = self.assignment_slot(name);
                 self.emit(Op::LoadLocal(key_slot));
-                self.emit(Op::StoreLocal(slot));
+                if let Some(slot) = self.resolve_local_slot(name) {
+                    self.emit(Op::StoreLocal(slot));
+                } else if self.strict || self.is_global_hoisted(name) {
+                    self.emit(Op::StoreGlobalStrict(name.clone()));
+                } else {
+                    let slot = self.assignment_slot(name);
+                    self.emit(Op::StoreLocalOrGlobalSloppy {
+                        slot,
+                        name: name.clone(),
+                    });
+                }
             }
             ForInLeft::Target(AssignmentTarget::Member {
                 object, property, ..

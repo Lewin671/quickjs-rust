@@ -10,6 +10,7 @@ use crate::{
 use super::util::is_object_value;
 use super::vm::Vm;
 use super::vm_result::ResumeMode;
+use crate::CallEnv;
 
 /// The outcome of one pass through the `yield*` delegation op.
 pub(super) enum DelegateStep {
@@ -144,7 +145,7 @@ impl Vm<'_> {
         let Some(entries) = self.handle_runtime_result(result)? else {
             return Ok(());
         };
-        let rest = ObjectRef::with_prototype(HashMap::new(), object_prototype(&self.globals));
+        let rest = ObjectRef::with_prototype(HashMap::new(), object_prototype(&self.env));
         for (key, value) in entries {
             if !excluded.iter().any(|name| name == &key) {
                 rest.set(key, value);
@@ -378,7 +379,7 @@ enum InnerStep {
 /// 14.4.14 performs once up front.
 fn resolve_delegate_iterator(
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<(Value, Value), RuntimeError> {
     let iterator = iterator_for_value(value, env)?;
     let next = property_value(iterator.clone(), "next", env)?;
@@ -390,7 +391,7 @@ fn resolve_delegate_iterator(
 fn get_iterator_method(
     iterator: &Value,
     name: &str,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let method = property_value(iterator.clone(), name, env)?;
     if matches!(method, Value::Undefined | Value::Null) {
@@ -409,15 +410,12 @@ fn get_iterator_method(
 /// async-from-sync iterator path (`for await` over a non-async iterable).
 pub(crate) fn sync_iterator_for_value(
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     iterator_for_value(value, env)
 }
 
-fn iterator_for_value(
-    value: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
+fn iterator_for_value(value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
     if matches!(value, Value::Undefined | Value::Null) {
         return Err(RuntimeError {
             thrown: None,
@@ -450,7 +448,7 @@ fn iterator_for_value(
 fn iterator_step_value(
     iterator: &Value,
     next: &Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Option<Value>, RuntimeError> {
     let result = call_function(next.clone(), iterator.clone(), Vec::new(), env, false)?;
     if !is_object_value(&result) {
@@ -468,7 +466,7 @@ fn iterator_step_value(
 fn iterator_rest_values(
     iterator: &Value,
     next: &Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Vec<Value>, RuntimeError> {
     let mut values = Vec::new();
     while let Some(value) = iterator_step_value(iterator, next, env)? {
@@ -477,7 +475,7 @@ fn iterator_rest_values(
     Ok(values)
 }
 
-fn close_iterator(iterator: &Value, env: &mut HashMap<String, Value>) -> Result<(), RuntimeError> {
+fn close_iterator(iterator: &Value, env: &mut CallEnv) -> Result<(), RuntimeError> {
     let return_method = property_value(iterator.clone(), "return", env)?;
     if matches!(return_method, Value::Null | Value::Undefined) {
         return Ok(());

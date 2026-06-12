@@ -4,16 +4,13 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
-    array::array_like_values_with_env, symbol, to_number, to_uint32_number,
+    array::array_like_values_with_env, symbol, to_number_with_env, to_uint32_number,
 };
 
-pub(super) fn install_math(
-    env: &mut HashMap<String, Value>,
-    global_this: &Value,
-    object_prototype: ObjectRef,
-) {
+pub(super) fn install_math(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
     let math_object = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
     math_object.set_to_string_tag("Math");
     symbol::define_well_known_to_string_tag(env, &math_object, "Math");
@@ -68,7 +65,7 @@ pub(super) fn install_math(
     define_math_function(&math_object, "tanh", 1, NativeFunction::MathTanh);
     define_math_function(&math_object, "trunc", 1, NativeFunction::MathTrunc);
     let math_value = Value::Object(math_object);
-    env.insert("Math".to_owned(), math_value.clone());
+    env.insert_realm("Math".to_owned(), math_value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable("Math".to_owned(), math_value);
     }
@@ -91,31 +88,56 @@ fn define_math_function(object: &ObjectRef, key: &str, length: usize, native: Na
 pub(super) fn native_math_unary(
     argument_values: &[Value],
     operation: fn(f64) -> f64,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let argument = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    Ok(Value::Number(operation(to_number(argument)?)))
+    Ok(Value::Number(operation(to_number_with_env(argument, env)?)))
 }
 
-pub(super) fn native_math_atan2(argument_values: &[Value]) -> Result<Value, RuntimeError> {
-    let y = to_number(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
-    let x = to_number(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
+pub(super) fn native_math_atan2(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let y = to_number_with_env(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
+    let x = to_number_with_env(
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     Ok(Value::Number(y.atan2(x)))
 }
 
-pub(super) fn native_math_fround(argument_values: &[Value]) -> Result<Value, RuntimeError> {
-    let number = to_number(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+pub(super) fn native_math_fround(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let number = to_number_with_env(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     Ok(Value::Number(f64::from(number as f32)))
 }
 
-pub(super) fn native_math_f16round(argument_values: &[Value]) -> Result<Value, RuntimeError> {
-    let number = to_number(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+pub(super) fn native_math_f16round(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let number = to_number_with_env(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     Ok(Value::Number(round_to_binary16(number)))
 }
 
-pub(super) fn native_math_hypot(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+pub(super) fn native_math_hypot(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
     let mut sum = 0.0;
     for value in argument_values.iter().cloned() {
-        let number = to_number(value)?;
+        let number = to_number_with_env(value, env)?;
         if number.is_nan() {
             return Ok(Value::Number(f64::NAN));
         }
@@ -127,14 +149,17 @@ pub(super) fn native_math_hypot(argument_values: &[Value]) -> Result<Value, Runt
     Ok(Value::Number(sum.sqrt()))
 }
 
-pub(super) fn native_math_max(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+pub(super) fn native_math_max(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
     if argument_values.is_empty() {
         return Ok(Value::Number(f64::NEG_INFINITY));
     }
 
     let mut maximum = f64::NEG_INFINITY;
     for value in argument_values.iter().cloned() {
-        let number = to_number(value)?;
+        let number = to_number_with_env(value, env)?;
         if number.is_nan() {
             return Ok(Value::Number(f64::NAN));
         }
@@ -145,14 +170,17 @@ pub(super) fn native_math_max(argument_values: &[Value]) -> Result<Value, Runtim
     Ok(Value::Number(maximum))
 }
 
-pub(super) fn native_math_min(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+pub(super) fn native_math_min(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
     if argument_values.is_empty() {
         return Ok(Value::Number(f64::INFINITY));
     }
 
     let mut minimum = f64::INFINITY;
     for value in argument_values.iter().cloned() {
-        let number = to_number(value)?;
+        let number = to_number_with_env(value, env)?;
         if number.is_nan() {
             return Ok(Value::Number(f64::NAN));
         }
@@ -163,9 +191,18 @@ pub(super) fn native_math_min(argument_values: &[Value]) -> Result<Value, Runtim
     Ok(Value::Number(minimum))
 }
 
-pub(super) fn native_math_pow(argument_values: &[Value]) -> Result<Value, RuntimeError> {
-    let base = to_number(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
-    let exponent = to_number(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
+pub(super) fn native_math_pow(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let base = to_number_with_env(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
+    let exponent = to_number_with_env(
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     Ok(Value::Number(base.powf(exponent)))
 }
 
@@ -173,8 +210,14 @@ pub(super) fn native_math_random() -> Result<Value, RuntimeError> {
     Ok(Value::Number(random_unit_interval()))
 }
 
-pub(super) fn native_math_round(argument_values: &[Value]) -> Result<Value, RuntimeError> {
-    let number = to_number(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+pub(super) fn native_math_round(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let number = to_number_with_env(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     if number.is_nan() || number.is_infinite() || number == 0.0 {
         return Ok(Value::Number(number));
     }
@@ -187,8 +230,14 @@ pub(super) fn native_math_round(argument_values: &[Value]) -> Result<Value, Runt
     }
 }
 
-pub(super) fn native_math_sign(argument_values: &[Value]) -> Result<Value, RuntimeError> {
-    let number = to_number(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+pub(super) fn native_math_sign(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let number = to_number_with_env(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     if number.is_nan() || number == 0.0 {
         Ok(Value::Number(number))
     } else if number.is_sign_negative() {
@@ -198,23 +247,38 @@ pub(super) fn native_math_sign(argument_values: &[Value]) -> Result<Value, Runti
     }
 }
 
-pub(super) fn native_math_clz32(argument_values: &[Value]) -> Result<Value, RuntimeError> {
-    let number = to_number(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+pub(super) fn native_math_clz32(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let number = to_number_with_env(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     Ok(Value::Number(f64::from(
         to_uint32_number(number).leading_zeros(),
     )))
 }
 
-pub(super) fn native_math_imul(argument_values: &[Value]) -> Result<Value, RuntimeError> {
-    let left = to_number(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
-    let right = to_number(argument_values.get(1).cloned().unwrap_or(Value::Undefined))?;
+pub(super) fn native_math_imul(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let left = to_number_with_env(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
+    let right = to_number_with_env(
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     let product = to_uint32_number(left).wrapping_mul(to_uint32_number(right));
     Ok(Value::Number(f64::from(product as i32)))
 }
 
 pub(super) fn native_math_sum_precise(
     items: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let mut sum = SumPrecise::new();
     for value in array_like_values_with_env(items, "Math.sumPrecise", env)? {

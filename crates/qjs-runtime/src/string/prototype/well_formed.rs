@@ -1,13 +1,12 @@
-use std::collections::HashMap;
-
 use crate::{RuntimeError, Value};
 
 use super::super::indexing::this_string_value;
 use super::super::{string_code_units, surrogate_escape_code_unit};
+use crate::CallEnv;
 
 pub(crate) fn native_string_prototype_is_well_formed(
     this_value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
     Ok(Value::Boolean(is_well_formed(&value)))
@@ -15,7 +14,7 @@ pub(crate) fn native_string_prototype_is_well_formed(
 
 pub(crate) fn native_string_prototype_to_well_formed(
     this_value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
     Ok(Value::String(to_well_formed(&value)))

@@ -6,6 +6,7 @@ use std::{
 };
 
 use super::{ObjectRef, Property, Value};
+use crate::CallEnv;
 
 const MAX_DENSE_STORAGE_LENGTH: usize = 1_000_000;
 const MAX_ARRAY_INDEX: usize = u32::MAX as usize - 1;
@@ -147,7 +148,7 @@ impl ArrayRef {
     /// element vector with no holes), no own indexed/length descriptors that
     /// could intercept the read, the default prototype, and that prototype owning
     /// no indexed property whose value an absent element would inherit.
-    pub(crate) fn dense_argument_values(&self, env: &HashMap<String, Value>) -> Option<Vec<Value>> {
+    pub(crate) fn dense_argument_values(&self, env: &CallEnv) -> Option<Vec<Value>> {
         let elements = self.elements.borrow();
         if self.length.get() != elements.len() || !self.holes.borrow().is_empty() {
             return None;

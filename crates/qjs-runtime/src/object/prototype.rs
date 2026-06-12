@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{
     PropertyKey, RuntimeError, Value, array_as_object_prototype, array_has_own_property,
     array_prototype, bigint, boolean, call_function, date, error, function_intrinsic_prototype,
@@ -8,10 +6,11 @@ use crate::{
 };
 
 use super::descriptor::own_property_descriptor_key;
+use crate::CallEnv;
 
 pub(crate) fn native_object_get_prototype_of(
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &CallEnv,
 ) -> Result<Value, RuntimeError> {
     match argument_values.first() {
         Some(Value::Object(object)) => Ok(object
@@ -54,7 +53,7 @@ pub(crate) fn native_object_get_prototype_of(
 
 pub(crate) fn native_object_set_prototype_of(
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &CallEnv,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let prototype = match argument_values.get(1).cloned().unwrap_or(Value::Undefined) {
@@ -132,11 +131,11 @@ pub(crate) fn native_object_set_prototype_of(
     Ok(target)
 }
 
-fn constructor_prototype_value(name: &str, env: &HashMap<String, Value>) -> Value {
+fn constructor_prototype_value(name: &str, env: &CallEnv) -> Value {
     let Some(Value::Function(function)) = env.get(name) else {
         return Value::Null;
     };
-    function_prototype(function)
+    function_prototype(&function)
         .map(Value::Object)
         .unwrap_or(Value::Null)
 }
@@ -144,7 +143,7 @@ fn constructor_prototype_value(name: &str, env: &HashMap<String, Value>) -> Valu
 pub(crate) fn native_object_prototype_has_own_property(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let key = to_property_key_value(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -199,7 +198,7 @@ pub(crate) fn native_object_prototype_has_own_property(
 pub(crate) fn native_object_prototype_property_is_enumerable(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let key = to_property_key_value(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -219,7 +218,7 @@ pub(crate) fn native_object_prototype_property_is_enumerable(
 pub(crate) fn native_object_prototype_is_prototype_of(
     this_value: Value,
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &CallEnv,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let Some(target_prototype) = value_prototype_slot(target, env) else {
@@ -243,7 +242,7 @@ pub(crate) fn native_object_prototype_is_prototype_of(
 
 pub(crate) fn native_object_prototype_to_string(
     this_value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let tag = builtin_to_string_tag(this_value.clone());
     let tag = match symbol::to_string_tag_symbol(env) {
@@ -293,7 +292,7 @@ fn builtin_to_string_tag(value: Value) -> String {
 
 pub(crate) fn native_object_prototype_to_locale_string(
     this_value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     match this_value {
         Value::Null | Value::Undefined => Err(RuntimeError {
@@ -309,7 +308,7 @@ pub(crate) fn native_object_prototype_to_locale_string(
 
 pub(crate) fn native_object_prototype_value_of(
     this_value: Value,
-    env: &HashMap<String, Value>,
+    env: &CallEnv,
 ) -> Result<Value, RuntimeError> {
     match this_value {
         Value::Null | Value::Undefined => Err(RuntimeError {

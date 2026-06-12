@@ -1,30 +1,31 @@
 use std::collections::HashMap;
 
-use crate::{ArrayRef, ObjectRef, RuntimeError, Value, object_prototype, to_js_string};
+use crate::CallEnv;
+use crate::{ArrayRef, ObjectRef, RuntimeError, Value, object_prototype, to_js_string_with_env};
 
 pub(crate) fn native_json_parse(
     argument_values: &[Value],
-    env: &HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let source = to_js_string(argument_values.first().cloned().unwrap_or(Value::Undefined))?;
+    let source = to_js_string_with_env(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
     parse_json_text(&source, env)
 }
 
-pub(crate) fn parse_json_text(
-    source: &str,
-    env: &HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
+pub(crate) fn parse_json_text(source: &str, env: &CallEnv) -> Result<Value, RuntimeError> {
     JsonParser::new(source, env).parse()
 }
 
 struct JsonParser<'a> {
     source: &'a str,
     cursor: usize,
-    env: &'a HashMap<String, Value>,
+    env: &'a CallEnv,
 }
 
 impl<'a> JsonParser<'a> {
-    fn new(source: &'a str, env: &'a HashMap<String, Value>) -> Self {
+    fn new(source: &'a str, env: &'a CallEnv) -> Self {
         Self {
             source,
             cursor: 0,

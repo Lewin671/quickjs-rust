@@ -1,8 +1,7 @@
-use std::collections::HashMap;
-
 use crate::{Function, NativeFunction, Value, set};
 
 use super::NativeCallResult;
+use crate::CallEnv;
 
 pub(super) fn call_set_native(
     function: &Function,
@@ -10,7 +9,7 @@ pub(super) fn call_set_native(
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> NativeCallResult {
     let value = match native {
         NativeFunction::Set => set::native_set(function, argument_values, is_construct, env)?,

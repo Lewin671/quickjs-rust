@@ -17,6 +17,7 @@
 
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
+use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
     bytecode::{GeneratorOutcome, GeneratorStart, GeneratorState, Resume, resume_generator},
@@ -69,7 +70,7 @@ pub(crate) struct AsyncGeneratorInternal {
 /// installed (matching the skipped `%GeneratorFunction%` / `%AsyncFunction%`
 /// constructors); no global binding exists for it.
 pub(crate) fn install_async_generator(
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
     _global_this: &Value,
     object_prototype: ObjectRef,
 ) {
@@ -128,20 +129,18 @@ pub(crate) fn install_async_generator(
         ),
     );
 
-    env.insert(
+    env.insert_realm(
         ASYNC_GENERATOR_PROTOTYPE_BINDING.to_owned(),
         Value::Object(async_generator_prototype),
     );
-    env.insert(
+    env.insert_realm(
         ASYNC_GENERATOR_FUNCTION_PROTOTYPE_BINDING.to_owned(),
         Value::Object(async_generator_function_prototype),
     );
 }
 
 /// Returns `%AsyncGeneratorFunction.prototype%` from the current environment.
-pub(crate) fn async_generator_function_prototype(
-    env: &HashMap<String, Value>,
-) -> Option<ObjectRef> {
+pub(crate) fn async_generator_function_prototype(env: &CallEnv) -> Option<ObjectRef> {
     match env.get(ASYNC_GENERATOR_FUNCTION_PROTOTYPE_BINDING) {
         Some(Value::Object(object)) => Some(object.clone()),
         _ => None,
@@ -149,7 +148,7 @@ pub(crate) fn async_generator_function_prototype(
 }
 
 /// Returns `%AsyncGeneratorPrototype%` from the current environment.
-pub(crate) fn async_generator_prototype(env: &HashMap<String, Value>) -> Option<ObjectRef> {
+pub(crate) fn async_generator_prototype(env: &CallEnv) -> Option<ObjectRef> {
     match env.get(ASYNC_GENERATOR_PROTOTYPE_BINDING) {
         Some(Value::Object(object)) => Some(object.clone()),
         _ => None,
@@ -165,7 +164,7 @@ pub(crate) fn async_generator_prototype(env: &HashMap<String, Value>) -> Option<
 pub(crate) fn make_async_generator_object(
     function: &Function,
     start: GeneratorStart,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let state = crate::bytecode::start_suspended_at_body(start, env)?;
     let prototype = async_generator_object_prototype(function, env);
@@ -178,10 +177,7 @@ pub(crate) fn make_async_generator_object(
     Ok(Value::Object(generator))
 }
 
-fn async_generator_object_prototype(
-    function: &Function,
-    env: &HashMap<String, Value>,
-) -> Option<ObjectRef> {
+fn async_generator_object_prototype(function: &Function, env: &CallEnv) -> Option<ObjectRef> {
     if let Some(Value::Object(prototype)) = function
         .own_property("prototype")
         .map(|property| property.value)
@@ -197,7 +193,7 @@ pub(crate) fn call_async_generator_native(
     native: NativeFunction,
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Option<Value>, RuntimeError> {
     if matches!(native, NativeFunction::AsyncGeneratorPrototypeAsyncIterator) {
         return Ok(Some(this_value));
@@ -231,12 +227,7 @@ pub(crate) fn call_async_generator_native(
 
 /// AsyncGeneratorEnqueue: appends a request and, unless the queue is already
 /// being drained, starts draining.
-fn enqueue(
-    generator: &ObjectRef,
-    kind: RequestKind,
-    capability: ObjectRef,
-    env: &mut HashMap<String, Value>,
-) {
+fn enqueue(generator: &ObjectRef, kind: RequestKind, capability: ObjectRef, env: &mut CallEnv) {
     {
         let mut slot = generator.async_generator_state().borrow_mut();
         let Some(state) = slot.as_mut() else { return };
@@ -252,7 +243,7 @@ fn enqueue(
 /// Serves the front request: resumes the body once and dispatches on the
 /// outcome. Each path either re-enters `drain` synchronously (when the request
 /// settles without an await) or schedules a reaction that re-enters it later.
-fn drain(generator: &ObjectRef, env: &mut HashMap<String, Value>) {
+fn drain(generator: &ObjectRef, env: &mut CallEnv) {
     loop {
         // If the generator has completed, settle any queued requests directly.
         if matches!(
@@ -305,7 +296,7 @@ fn drain(generator: &ObjectRef, env: &mut HashMap<String, Value>) {
 /// generator: a queued `next`/`return` yields `{ value: undefined, done: true }`
 /// (or `{ value, done: true }` for a `return(v)`), while a `throw` rejects.
 /// Returns whether a request was served (so the caller keeps draining).
-fn settle_completed_front(generator: &ObjectRef, env: &mut HashMap<String, Value>) -> bool {
+fn settle_completed_front(generator: &ObjectRef, env: &mut CallEnv) -> bool {
     let request = {
         let mut slot = generator.async_generator_state().borrow_mut();
         let Some(state) = slot.as_mut() else {
@@ -350,29 +341,20 @@ fn set_draining(generator: &ObjectRef, value: bool) {
 }
 
 /// Resolves the front request with `{ value, done }`, dequeues it.
-fn resolve_front(
-    generator: &ObjectRef,
-    value: Value,
-    done: bool,
-    env: &mut HashMap<String, Value>,
-) {
+fn resolve_front(generator: &ObjectRef, value: Value, done: bool, env: &mut CallEnv) {
     if let Some(request) = dequeue_front(generator) {
         settle_resolve(&request.capability, value, done, env);
     }
 }
 
 /// Resolves the front request with an already-built iterator result object.
-fn resolve_front_with_result(
-    generator: &ObjectRef,
-    result: Value,
-    env: &mut HashMap<String, Value>,
-) {
+fn resolve_front_with_result(generator: &ObjectRef, result: Value, env: &mut CallEnv) {
     if let Some(request) = dequeue_front(generator) {
         promise::resolve_promise_capability(&request.capability, result, env);
     }
 }
 
-fn reject_front(generator: &ObjectRef, reason: Value, env: &mut HashMap<String, Value>) {
+fn reject_front(generator: &ObjectRef, reason: Value, env: &mut CallEnv) {
     if let Some(request) = dequeue_front(generator) {
         promise::reject_promise_capability(&request.capability, reason, env);
     }
@@ -389,12 +371,7 @@ fn dequeue_front(generator: &ObjectRef) -> Option<AsyncGeneratorRequest> {
 }
 
 /// Settles a capability with an iterator result `{ value, done }`.
-fn settle_resolve(
-    capability: &ObjectRef,
-    value: Value,
-    done: bool,
-    env: &mut HashMap<String, Value>,
-) {
+fn settle_resolve(capability: &ObjectRef, value: Value, done: bool, env: &mut CallEnv) {
     let result = iterator_result(value, done, env);
     promise::resolve_promise_capability(capability, result, env);
 }
@@ -402,11 +379,7 @@ fn settle_resolve(
 /// Schedules an internal `await` (from `Op::Await` in the body): on fulfillment
 /// the body resumes with the value; on rejection it resumes with a throw. The
 /// front request stays in flight.
-fn schedule_internal_await(
-    generator: &ObjectRef,
-    awaited: Value,
-    env: &mut HashMap<String, Value>,
-) {
+fn schedule_internal_await(generator: &ObjectRef, awaited: Value, env: &mut CallEnv) {
     let on_fulfilled = reaction(NativeFunction::AsyncGeneratorAwaitFulfilled, generator);
     let on_rejected = reaction(NativeFunction::AsyncGeneratorAwaitRejected, generator);
     promise::perform_await(awaited, on_fulfilled, on_rejected, env);
@@ -415,7 +388,7 @@ fn schedule_internal_await(
 /// Schedules the implicit `await` of a `yield`'s operand. On fulfillment the
 /// front request resolves with `{ value, done: false }` and draining continues;
 /// on rejection the body resumes with a throw at the yield site.
-fn schedule_yield_await(generator: &ObjectRef, value: Value, env: &mut HashMap<String, Value>) {
+fn schedule_yield_await(generator: &ObjectRef, value: Value, env: &mut CallEnv) {
     let on_fulfilled = reaction(NativeFunction::AsyncGeneratorYieldFulfilled, generator);
     let on_rejected = reaction(NativeFunction::AsyncGeneratorYieldRejected, generator);
     promise::perform_await(value, on_fulfilled, on_rejected, env);
@@ -436,7 +409,7 @@ pub(crate) fn call_async_generator_reaction(
     function: &Function,
     native: NativeFunction,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Option<Value>, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     match native {
@@ -494,7 +467,7 @@ pub(crate) fn call_async_generator_reaction(
 
 /// Resumes the body for an in-flight request (after an internal await fired),
 /// re-entering the drain loop. Used by the await reactions.
-fn resume_body(generator: &ObjectRef, resume: Resume, env: &mut HashMap<String, Value>) {
+fn resume_body(generator: &ObjectRef, resume: Resume, env: &mut CallEnv) {
     // Mark draining so a reaction enqueued during the body run does not start a
     // second drain loop.
     set_draining(generator, true);
@@ -525,10 +498,7 @@ fn resume_body(generator: &ObjectRef, resume: Resume, env: &mut HashMap<String, 
 /// intrinsic chain: its `[[Prototype]]` becomes
 /// `%AsyncGeneratorFunction.prototype%` and its own `prototype` property's
 /// `[[Prototype]]` becomes `%AsyncGeneratorPrototype%`.
-pub(crate) fn wire_async_generator_function_intrinsics(
-    function: &Function,
-    env: &HashMap<String, Value>,
-) {
+pub(crate) fn wire_async_generator_function_intrinsics(function: &Function, env: &CallEnv) {
     if let Some(prototype) = async_generator_function_prototype(env) {
         let _ = function.set_internal_prototype_slot(Some(crate::Prototype::Object(prototype)));
     }
@@ -541,7 +511,7 @@ pub(crate) fn wire_async_generator_function_intrinsics(
     }
 }
 
-fn iterator_result(value: Value, done: bool, env: &HashMap<String, Value>) -> Value {
+fn iterator_result(value: Value, done: bool, env: &CallEnv) -> Value {
     let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
     object.define_property("value".to_owned(), Property::enumerable(value));
     object.define_property(
@@ -562,10 +532,7 @@ fn not_an_async_generator_value() -> Value {
 /// GetIterator(obj, async): looks up `Symbol.asyncIterator`; if absent, gets the
 /// sync iterator via `Symbol.iterator` and wraps it in a
 /// CreateAsyncFromSyncIterator object. Returns the async iterator object.
-pub(crate) fn get_async_iterator(
-    value: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
+pub(crate) fn get_async_iterator(value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
     if matches!(value, Value::Undefined | Value::Null) {
         return Err(RuntimeError {
             thrown: None,
@@ -605,7 +572,7 @@ pub(crate) fn get_async_iterator(
 
 /// CreateAsyncFromSyncIterator: builds a wrapper object whose `next`/`return`/
 /// `throw` forward to the sync iterator and await each result value.
-fn create_async_from_sync_iterator(sync_iterator: Value, env: &HashMap<String, Value>) -> Value {
+fn create_async_from_sync_iterator(sync_iterator: Value, env: &CallEnv) -> Value {
     let wrapper = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
     for (name, native) in [
         ("next", NativeFunction::AsyncFromSyncIteratorNext),
@@ -629,7 +596,7 @@ fn async_from_sync_method(
     function: &Function,
     native: NativeFunction,
     argument: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Value {
     let capability = promise::new_pending_promise(env);
     let Some(sync_iterator) = function.env.get(SYNC_ITERATOR).cloned() else {
@@ -743,11 +710,7 @@ fn value_await_reaction(native: NativeFunction, capability: &ObjectRef, done: bo
     Value::Function(function)
 }
 
-fn async_from_sync_value_rejected(
-    function: &Function,
-    reason: Value,
-    env: &mut HashMap<String, Value>,
-) {
+fn async_from_sync_value_rejected(function: &Function, reason: Value, env: &mut CallEnv) {
     let Some(Value::Object(capability)) = function.env.get(WRAP_PROMISE) else {
         return;
     };
@@ -755,11 +718,7 @@ fn async_from_sync_value_rejected(
     promise::reject_promise_capability(&capability, reason, env);
 }
 
-fn async_from_sync_value_fulfilled(
-    function: &Function,
-    value: Value,
-    env: &mut HashMap<String, Value>,
-) {
+fn async_from_sync_value_fulfilled(function: &Function, value: Value, env: &mut CallEnv) {
     let (Some(Value::Object(capability)), Some(Value::Boolean(done))) =
         (function.env.get(WRAP_PROMISE), function.env.get(WRAP_DONE))
     else {
@@ -775,14 +734,14 @@ fn async_from_sync_value_fulfilled(
 /// `call.rs`. Mirrors the generator path but builds an async generator object.
 pub(crate) fn call_async_generator_function(
     function: &Function,
-    function_env: HashMap<String, Value>,
-    env: &mut HashMap<String, Value>,
+    function_env: CallEnv,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let bytecode = function
         .bytecode
         .clone()
         .expect("async generator has a bytecode body");
-    let captured = Rc::new(RefCell::new(function_env.clone()));
+    let captured = Rc::new(RefCell::new(function_env.snapshot_locals()));
     make_async_generator_object(
         function,
         GeneratorStart {

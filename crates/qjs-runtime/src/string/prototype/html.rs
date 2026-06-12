@@ -1,8 +1,7 @@
-use std::collections::HashMap;
-
 use crate::{RuntimeError, Value, to_js_string_with_env};
 
 use super::super::indexing::this_string_value;
+use crate::CallEnv;
 
 pub(crate) enum StringHtmlKind {
     Anchor,
@@ -23,7 +22,7 @@ pub(crate) enum StringHtmlKind {
 pub(crate) fn native_string_prototype_html(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
     kind: StringHtmlKind,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
@@ -77,7 +76,7 @@ fn html_with_attribute(
     attribute_name: &str,
     attribute_value: Value,
     value: String,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<String, RuntimeError> {
     let attribute_value = to_js_string_with_env(attribute_value, env)?.replace('"', "&quot;");
     Ok(format!(

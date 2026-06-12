@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use crate::CallEnv;
 
 use num_bigint::BigInt;
 
@@ -18,7 +18,7 @@ use super::{
 pub(crate) fn coerce_element(
     native: NativeFunction,
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if is_big_int_kind(native) {
         return coerce_big_int_element(native, value, env);
@@ -43,7 +43,7 @@ pub(crate) fn coerce_element(
 fn coerce_big_int_element(
     native: NativeFunction,
     value: Value,
-    _env: &mut HashMap<String, Value>,
+    _env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     // ToBigInt: only BigInt and boolean coerce; numbers and the rest throw.
     let big = match value {

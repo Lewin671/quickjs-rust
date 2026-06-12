@@ -42,13 +42,13 @@ mod weak_set;
 
 use builtins::initialize_builtins;
 pub(crate) use conversion::{
-    PreferredType, error_value, is_truthy, ordinary_to_primitive, to_int32, to_int32_number,
-    to_js_string, to_js_string_with_env, to_length, to_length_with_env, to_number,
-    to_number_with_env, to_primitive_with_env, to_primitive_with_hint, to_uint16, to_uint32,
-    to_uint32_number,
+    PreferredType, error_value, is_truthy, ordinary_to_primitive, to_int32_number,
+    to_int32_with_env, to_js_string_with_env, to_length_with_env, to_number, to_number_with_env,
+    to_primitive_with_env, to_primitive_with_hint, to_uint16_with_env, to_uint32_number,
+    to_uint32_with_env,
 };
+pub(crate) use function::{CallEnv, call_function, construct_function, ensure_constructor};
 use function::{Function, NativeFunction};
-pub(crate) use function::{call_function, construct_function, ensure_constructor};
 pub(crate) use property::{
     PropertyKey, array_as_object_prototype, array_has_own_property, array_own_property_descriptor,
     array_own_property_keys, array_own_property_names, array_prototype, array_prototype_property,

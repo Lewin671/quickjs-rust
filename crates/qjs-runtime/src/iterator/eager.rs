@@ -4,19 +4,18 @@
 //! with a throw completion) when the callback or a derived step completes
 //! abruptly.
 
-use std::collections::HashMap;
-
 use crate::{
     ArrayRef, NativeFunction, RuntimeError, Value, call_function, is_truthy, property_value,
 };
 
 use super::protocol::{iterator_close_on_throw, iterator_step, iterator_value};
+use crate::CallEnv;
 
 /// Validates the receiver and reads its `next` method (GetIteratorDirect).
 fn iterator_direct(
     this_value: &Value,
     method: &str,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<(Value, Value), RuntimeError> {
     if !matches!(this_value, Value::Object(_)) {
         return Err(RuntimeError {
@@ -32,7 +31,7 @@ fn require_callback(
     argument_values: &[Value],
     iterator: &Value,
     method: &str,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if !matches!(callback, Value::Function(_)) {
@@ -50,7 +49,7 @@ pub(super) fn native_eager_helper(
     native: NativeFunction,
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     match native {
         NativeFunction::IteratorPrototypeReduce => reduce(this_value, argument_values, env),
@@ -84,7 +83,7 @@ pub(super) fn native_eager_helper(
 fn reduce(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let (iterator, next) = iterator_direct(&this_value, "reduce", env)?;
     let reducer = require_callback(argument_values, &iterator, "reduce", env)?;
@@ -129,7 +128,7 @@ fn reduce(
     Ok(accumulator)
 }
 
-fn to_array(this_value: Value, env: &mut HashMap<String, Value>) -> Result<Value, RuntimeError> {
+fn to_array(this_value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
     let (iterator, next) = iterator_direct(&this_value, "toArray", env)?;
     let mut items = Vec::new();
     while let Some(result) = iterator_step(&iterator, &next, env)? {
@@ -141,7 +140,7 @@ fn to_array(this_value: Value, env: &mut HashMap<String, Value>) -> Result<Value
 fn for_each(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let (iterator, next) = iterator_direct(&this_value, "forEach", env)?;
     let callback = require_callback(argument_values, &iterator, "forEach", env)?;
@@ -172,7 +171,7 @@ enum PredicateKind {
 fn predicate(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
     method: &str,
     kind: PredicateKind,
 ) -> Result<Value, RuntimeError> {

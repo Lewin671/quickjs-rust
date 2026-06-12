@@ -1,18 +1,19 @@
-use std::{cmp::Ordering, collections::HashMap};
+use std::cmp::Ordering;
 
 use crate::{
-    ArrayRef, Function, RuntimeError, Value, call_function, property_value, to_js_string,
+    ArrayRef, Function, RuntimeError, Value, call_function, property_value, to_js_string_with_env,
     to_number_with_env,
 };
 
 use super::array_like::array_like_length;
+use crate::CallEnv;
 
 const MAX_ARRAY_LENGTH: usize = u32::MAX as usize;
 
 pub(crate) fn native_array_prototype_sort(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let Value::Array(array) = this_value.clone() else {
         return Err(RuntimeError {
@@ -30,7 +31,7 @@ pub(crate) fn native_array_prototype_sort(
 pub(crate) fn native_array_prototype_to_sorted(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let comparator = array_sort_comparator(argument_values, "Array.prototype.toSorted")?;
     let values = to_sorted_array_like_values(this_value, env)?;
@@ -43,7 +44,7 @@ pub(crate) fn native_array_prototype_to_sorted(
 
 fn to_sorted_array_like_values(
     this_value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Vec<Value>, RuntimeError> {
     let source = array_like_length(this_value, "Array.prototype.toSorted", env)?;
     if source.length > MAX_ARRAY_LENGTH {
@@ -66,7 +67,7 @@ fn to_sorted_array_like_values(
 fn sorted_array_values(
     values: Vec<Value>,
     comparator: Option<&Function>,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Vec<Value>, RuntimeError> {
     let mut defined = Vec::new();
     let mut undefined_count = 0;
@@ -100,7 +101,7 @@ fn array_sort_comparator(
 fn insertion_sort(
     values: &mut [Value],
     comparator: Option<&Function>,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
     for index in 1..values.len() {
         let mut candidate = index;
@@ -119,7 +120,7 @@ fn compare_values(
     left: &Value,
     right: &Value,
     comparator: Option<&Function>,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Ordering, RuntimeError> {
     if let Some(function) = comparator {
         let result = call_function(
@@ -138,6 +139,7 @@ fn compare_values(
             Ok(Ordering::Greater)
         }
     } else {
-        Ok(to_js_string(left.clone())?.cmp(&to_js_string(right.clone())?))
+        Ok(to_js_string_with_env(left.clone(), env)?
+            .cmp(&to_js_string_with_env(right.clone(), env)?))
     }
 }

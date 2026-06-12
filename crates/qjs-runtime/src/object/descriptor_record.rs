@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::CallEnv;
 use crate::{ObjectRef, Property, RuntimeError, Value, has_property, is_truthy, property_value};
 
 pub(crate) fn resolve_property_definition(
@@ -67,7 +68,7 @@ fn resolve_existing_property_definition(
 
 pub(crate) fn to_property_descriptor_record(
     value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<PropertyDescriptor, RuntimeError> {
     if !matches!(
         value,

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function,
     construct_function, property_value, reflect, symbol, to_js_string_with_env, to_length_with_env,
@@ -11,10 +12,7 @@ const REGEXP_STRING_ITERATOR_GLOBAL: &str = "\0regexp_string_iterator_global";
 const REGEXP_STRING_ITERATOR_UNICODE: &str = "\0regexp_string_iterator_unicode";
 const REGEXP_STRING_ITERATOR_DONE: &str = "\0regexp_string_iterator_done";
 
-pub(crate) fn install_regexp_prototype_match_all(
-    env: &HashMap<String, Value>,
-    prototype: &ObjectRef,
-) {
+pub(crate) fn install_regexp_prototype_match_all(env: &CallEnv, prototype: &ObjectRef) {
     if let Some(symbol) = symbol::match_all_symbol(env) {
         prototype.define_symbol_property(
             symbol,
@@ -31,7 +29,7 @@ pub(crate) fn install_regexp_prototype_match_all(
 pub(crate) fn native_regexp_prototype_match_all(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if !is_object_value(&this_value) {
         return Err(RuntimeError {
@@ -84,7 +82,7 @@ pub(crate) fn native_regexp_prototype_match_all(
 
 pub(crate) fn native_regexp_string_iterator_next(
     this_value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let Value::Object(iterator) = this_value else {
         return Err(RuntimeError {
@@ -126,12 +124,8 @@ pub(crate) fn native_regexp_string_iterator_next(
     Ok(iterator_result(match_result, false))
 }
 
-fn regexp_clone(
-    regexp: Value,
-    flags: &str,
-    env: &mut HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
-    let constructor = env.get("RegExp").cloned().ok_or_else(|| RuntimeError {
+fn regexp_clone(regexp: Value, flags: &str, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+    let constructor = env.get("RegExp").ok_or_else(|| RuntimeError {
         thrown: None,
         message: "RegExp constructor is not available".to_owned(),
     })?;
@@ -143,11 +137,7 @@ fn regexp_clone(
     )
 }
 
-fn regexp_exec(
-    regexp: Value,
-    input: &str,
-    env: &mut HashMap<String, Value>,
-) -> Result<Value, RuntimeError> {
+fn regexp_exec(regexp: Value, input: &str, env: &mut CallEnv) -> Result<Value, RuntimeError> {
     let exec = property_value(regexp.clone(), "exec", env)?;
     if !matches!(exec, Value::Function(_)) {
         return Err(RuntimeError {
@@ -177,18 +167,11 @@ fn ensure_exec_result_object(value: Value) -> Result<Value, RuntimeError> {
     }
 }
 
-fn match_result_value(
-    value: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<String, RuntimeError> {
+fn match_result_value(value: Value, env: &mut CallEnv) -> Result<String, RuntimeError> {
     to_js_string_with_env(property_value(value, "0", env)?, env)
 }
 
-fn set_last_index(
-    receiver: Value,
-    value: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<(), RuntimeError> {
+fn set_last_index(receiver: Value, value: Value, env: &mut CallEnv) -> Result<(), RuntimeError> {
     if reflect::ordinary_set(
         receiver.clone(),
         &PropertyKey::String("lastIndex".to_owned()),

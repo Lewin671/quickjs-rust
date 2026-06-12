@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-
+use crate::CallEnv;
 use crate::{
     MapRef, RuntimeError, SetRef, Value, array::array_like_values_with_env, call_function,
     is_truthy, property_value, to_number_with_env,
@@ -19,7 +18,7 @@ pub(super) enum SetRecord {
 impl SetRecord {
     pub(super) fn from_arguments(
         argument_values: &[Value],
-        env: &mut HashMap<String, Value>,
+        env: &mut CallEnv,
     ) -> Result<Self, RuntimeError> {
         match argument_values.first().cloned().unwrap_or(Value::Undefined) {
             Value::Set(set) => Ok(Self::Set(set)),
@@ -33,11 +32,7 @@ impl SetRecord {
         }
     }
 
-    pub(super) fn has(
-        &self,
-        value: &Value,
-        env: &mut HashMap<String, Value>,
-    ) -> Result<bool, RuntimeError> {
+    pub(super) fn has(&self, value: &Value, env: &mut CallEnv) -> Result<bool, RuntimeError> {
         match self {
             Self::Set(set) => Ok(set.has(value)),
             Self::Map(map) => Ok(map.has(value)),
@@ -54,10 +49,7 @@ impl SetRecord {
         }
     }
 
-    pub(super) fn keys(
-        &self,
-        env: &mut HashMap<String, Value>,
-    ) -> Result<Vec<Value>, RuntimeError> {
+    pub(super) fn keys(&self, env: &mut CallEnv) -> Result<Vec<Value>, RuntimeError> {
         match self {
             Self::Set(set) => Ok(set.values()),
             Self::Map(map) => Ok(map.entries().into_iter().map(|(key, _)| key).collect()),
@@ -72,7 +64,7 @@ impl SetRecord {
     pub(super) fn has_any_in_set(
         &self,
         set: &SetRef,
-        env: &mut HashMap<String, Value>,
+        env: &mut CallEnv,
     ) -> Result<bool, RuntimeError> {
         match self {
             Self::Set(other) => Ok(other.values().into_iter().any(|value| set.has(&value))),
@@ -85,11 +77,7 @@ impl SetRecord {
         }
     }
 
-    pub(super) fn all_in_set(
-        &self,
-        set: &SetRef,
-        env: &mut HashMap<String, Value>,
-    ) -> Result<bool, RuntimeError> {
+    pub(super) fn all_in_set(&self, set: &SetRef, env: &mut CallEnv) -> Result<bool, RuntimeError> {
         match self {
             Self::Set(other) => Ok(other.values().into_iter().all(|value| set.has(&value))),
             Self::Map(map) => Ok(map.entries().into_iter().all(|(key, _)| set.has(&key))),
@@ -109,10 +97,7 @@ impl SetRecord {
         }
     }
 
-    fn from_set_like_object(
-        object: Value,
-        env: &mut HashMap<String, Value>,
-    ) -> Result<Self, RuntimeError> {
+    fn from_set_like_object(object: Value, env: &mut CallEnv) -> Result<Self, RuntimeError> {
         let size = set_record_size(property_value(object.clone(), "size", env)?, env)?;
         let has = property_value(object.clone(), "has", env)?;
         if !matches!(has, Value::Function(_)) {
@@ -140,7 +125,7 @@ impl SetRecord {
 fn iterator_all_values_in_set(
     value: Value,
     set: &SetRef,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     if !matches!(value, Value::Object(_)) {
         return Ok(array_like_values_with_env(value, "Set-like keys", env)?
@@ -167,7 +152,7 @@ fn iterator_all_values_in_set(
     }
 }
 
-fn set_record_size(value: Value, env: &mut HashMap<String, Value>) -> Result<f64, RuntimeError> {
+fn set_record_size(value: Value, env: &mut CallEnv) -> Result<f64, RuntimeError> {
     let size = to_number_with_env(value, env)?;
     if size.is_nan() {
         return Err(RuntimeError {
@@ -188,7 +173,7 @@ fn set_record_size(value: Value, env: &mut HashMap<String, Value>) -> Result<f64
 fn iterator_has_value_in_set(
     value: Value,
     set: &SetRef,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     if !matches!(value, Value::Object(_)) {
         return Ok(array_like_values_with_env(value, "Set-like keys", env)?
@@ -215,7 +200,7 @@ fn iterator_has_value_in_set(
     }
 }
 
-fn close_iterator(iterator: Value, env: &mut HashMap<String, Value>) -> Result<(), RuntimeError> {
+fn close_iterator(iterator: Value, env: &mut CallEnv) -> Result<(), RuntimeError> {
     let return_method = property_value(iterator.clone(), "return", env)?;
     match return_method {
         Value::Undefined => Ok(()),
@@ -233,7 +218,7 @@ fn close_iterator(iterator: Value, env: &mut HashMap<String, Value>) -> Result<(
 fn iterator_values(
     value: Value,
     context: &str,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Vec<Value>, RuntimeError> {
     if !matches!(value, Value::Object(_)) {
         return array_like_values_with_env(value, context, env);

@@ -1,14 +1,13 @@
-use std::collections::HashMap;
-
 use crate::{NativeFunction, Value, array};
 
 use super::NativeCallResult;
+use crate::CallEnv;
 
 pub(super) fn call_array_native(
     native: NativeFunction,
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> NativeCallResult {
     let value = match native {
         NativeFunction::Array => array::native_array(argument_values, env)?,

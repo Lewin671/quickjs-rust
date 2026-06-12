@@ -1,5 +1,6 @@
 use std::{cell::RefCell, collections::HashMap, fmt, rc::Rc};
 
+use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function,
     has_property_key, is_truthy, property_value, property_value_key_with_receiver,
@@ -65,11 +66,7 @@ impl ProxyRef {
     }
 }
 
-pub(crate) fn install_proxy(
-    env: &mut HashMap<String, Value>,
-    global_this: &Value,
-    _object_prototype: ObjectRef,
-) {
+pub(crate) fn install_proxy(env: &mut CallEnv, global_this: &Value, _object_prototype: ObjectRef) {
     let proxy_function = Function::new_native(Some("Proxy"), 2, NativeFunction::Proxy, true);
     proxy_function.define_property(
         "revocable".to_owned(),
@@ -81,7 +78,7 @@ pub(crate) fn install_proxy(
         ))),
     );
     let proxy_value = Value::Function(proxy_function);
-    env.insert("Proxy".to_owned(), proxy_value.clone());
+    env.insert_realm("Proxy".to_owned(), proxy_value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable("Proxy".to_owned(), proxy_value);
     }
@@ -150,7 +147,7 @@ pub(crate) fn proxy_get(
     proxy: ProxyRef,
     key: &PropertyKey,
     receiver: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let target = proxy.target_result()?;
     let handler = proxy.handler_result()?;
@@ -169,7 +166,7 @@ pub(crate) fn proxy_get(
 pub(crate) fn proxy_has(
     proxy: ProxyRef,
     key: &PropertyKey,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     let target = proxy.target_result()?;
     let handler = proxy.handler_result()?;
@@ -189,7 +186,7 @@ pub(crate) fn proxy_has(
 pub(crate) fn proxy_delete_property(
     proxy: ProxyRef,
     key: &PropertyKey,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     let target = proxy.target_result()?;
     let handler = proxy.handler_result()?;
@@ -224,7 +221,7 @@ fn revoked_proxy_error() -> RuntimeError {
 fn proxy_trap(
     handler: Value,
     name: &str,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Option<Value>, RuntimeError> {
     match property_value(handler, name, env)? {
         Value::Undefined | Value::Null => Ok(None),

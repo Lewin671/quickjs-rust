@@ -66,12 +66,13 @@ impl Vm<'_> {
             Value::Undefined,
             &[Value::String(message)],
             false,
+            &mut self.realm_env(),
         )
     }
 
     fn native_error_constructor(&self, name: &str) -> Option<Value> {
-        self.globals.get(name).cloned().or_else(|| {
-            let Some(Value::Object(global_this)) = self.globals.get(GLOBAL_THIS_BINDING) else {
+        self.env.get(name).or_else(|| {
+            let Some(Value::Object(global_this)) = self.env.get(GLOBAL_THIS_BINDING) else {
                 return None;
             };
             global_this.get(name)

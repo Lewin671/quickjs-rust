@@ -1,3 +1,4 @@
+use crate::CallEnv;
 use std::collections::HashMap;
 
 use crate::{
@@ -15,7 +16,7 @@ pub(crate) const ARRAY_BUFFER_DETACHED_PROPERTY: &str = "\0ArrayBufferDetached";
 const MAX_ARRAY_BUFFER_LENGTH: usize = 1_000_000;
 
 pub(crate) fn install_array_buffer(
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
@@ -67,7 +68,7 @@ pub(crate) fn install_array_buffer(
     symbol::define_species_accessor(env, &array_buffer_function);
 
     let array_buffer_value = Value::Function(array_buffer_function);
-    env.insert("ArrayBuffer".to_owned(), array_buffer_value.clone());
+    env.insert_realm("ArrayBuffer".to_owned(), array_buffer_value.clone());
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable("ArrayBuffer".to_owned(), array_buffer_value);
     }
@@ -78,7 +79,7 @@ pub(crate) fn native_array_buffer(
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if !is_construct {
         return Err(RuntimeError {
@@ -126,7 +127,7 @@ pub(crate) fn native_array_buffer_prototype_byte_length(
 pub(crate) fn native_array_buffer_prototype_slice(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let object = array_buffer_object(&this_value)?;
     if is_detached(&object) {
@@ -150,7 +151,7 @@ pub(crate) fn native_array_buffer_prototype_slice(
     // `constructor` throws; the species slot itself is left at the default so
     // the result is always a plain ArrayBuffer for now.
     validate_species_constructor(this_value.clone(), env)?;
-    let constructor = env.get("ArrayBuffer").cloned().unwrap_or(Value::Undefined);
+    let constructor = env.get("ArrayBuffer").unwrap_or(Value::Undefined);
     let prototype = crate::constructor_prototype(&constructor, env);
     let result = ObjectRef::with_prototype(HashMap::new(), prototype);
     // Re-read the source after the user-observable index coercion above, which
@@ -167,10 +168,7 @@ pub(crate) fn native_array_buffer_prototype_slice(
     Ok(Value::Object(result))
 }
 
-fn reject_resizable_options(
-    options: Option<Value>,
-    env: &mut HashMap<String, Value>,
-) -> Result<(), RuntimeError> {
+fn reject_resizable_options(options: Option<Value>, env: &mut CallEnv) -> Result<(), RuntimeError> {
     let Some(options) = options else {
         return Ok(());
     };
@@ -190,10 +188,7 @@ fn reject_resizable_options(
     })
 }
 
-fn validate_species_constructor(
-    value: Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<(), RuntimeError> {
+fn validate_species_constructor(value: Value, env: &mut CallEnv) -> Result<(), RuntimeError> {
     let constructor = property_value(value, "constructor", env)?;
     if matches!(constructor, Value::Undefined) || is_object_value(&constructor) {
         return Ok(());
@@ -264,8 +259,8 @@ pub(crate) fn set_array_buffer_bytes(object: &ObjectRef, bytes: Vec<u8>) {
 
 /// Builds a fresh, zero-initialized `ArrayBuffer` inheriting from
 /// `%ArrayBuffer.prototype%`. Used when a TypedArray allocates its own buffer.
-pub(crate) fn new_array_buffer(env: &HashMap<String, Value>, length: usize) -> ObjectRef {
-    let constructor = env.get("ArrayBuffer").cloned().unwrap_or(Value::Undefined);
+pub(crate) fn new_array_buffer(env: &CallEnv, length: usize) -> ObjectRef {
+    let constructor = env.get("ArrayBuffer").unwrap_or(Value::Undefined);
     let prototype = crate::constructor_prototype(&constructor, env);
     let object = ObjectRef::with_prototype(HashMap::new(), prototype);
     define_array_buffer_data(&object, vec![0; length]);
@@ -286,7 +281,7 @@ fn array_buffer_receiver_error() -> RuntimeError {
     }
 }
 
-fn to_index(value: Value, env: &mut HashMap<String, Value>) -> Result<usize, RuntimeError> {
+fn to_index(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
     let number = to_number_with_env(value, env)?;
     let integer = if number.is_nan() { 0.0 } else { number.trunc() };
     if integer < 0.0 || !integer.is_finite() || integer > MAX_ARRAY_BUFFER_LENGTH as f64 {
@@ -302,7 +297,7 @@ fn slice_index(
     value: Value,
     length: usize,
     default: usize,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<usize, RuntimeError> {
     if matches!(value, Value::Undefined) {
         return Ok(default);

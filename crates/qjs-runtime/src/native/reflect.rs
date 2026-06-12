@@ -1,13 +1,12 @@
-use std::collections::HashMap;
-
 use crate::{NativeFunction, Value, reflect};
 
 use super::NativeCallResult;
+use crate::CallEnv;
 
 pub(super) fn call_reflect_native(
     native: NativeFunction,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> NativeCallResult {
     let value = match native {
         NativeFunction::ReflectApply => reflect::native_reflect_apply(argument_values, env)?,

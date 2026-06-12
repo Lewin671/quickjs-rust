@@ -1,8 +1,7 @@
-use std::collections::HashMap;
-
 use crate::{Function, RuntimeError, Value, call_function};
 
 use super::capability::{self, new_promise_capability};
+use crate::CallEnv;
 
 /// `Promise.try` (ES2026 proposal): builds a capability from the `this`
 /// constructor, runs the callback synchronously, and resolves/rejects the
@@ -11,7 +10,7 @@ pub(crate) fn native_promise_try(
     _function: &Function,
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let capability = new_promise_capability(&this_value, env)?;
     let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);

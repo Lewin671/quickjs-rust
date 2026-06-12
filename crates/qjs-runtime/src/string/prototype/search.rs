@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{
     PropertyKey, RuntimeError, Value, call_function, construct_function, property_value,
     property_value_key, regexp, symbol, to_js_string_with_env,
@@ -12,6 +10,7 @@ use super::super::indexing::{
 mod errors;
 mod substitution;
 mod symbol_method;
+use crate::CallEnv;
 use errors::{replace_all_regexp_flags_error, string_method_null_error};
 use substitution::get_substitution;
 use symbol_method::{
@@ -21,7 +20,7 @@ use symbol_method::{
 pub(crate) fn native_string_prototype_ends_with(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
     let search_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
@@ -39,7 +38,7 @@ pub(crate) fn native_string_prototype_ends_with(
 pub(crate) fn native_string_prototype_includes(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
     let search_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
@@ -62,7 +61,7 @@ pub(crate) fn native_string_prototype_includes(
 pub(crate) fn native_string_prototype_index_of(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
     let search = to_js_string_with_env(
@@ -85,7 +84,7 @@ pub(crate) fn native_string_prototype_index_of(
 pub(crate) fn native_string_prototype_last_index_of(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
     let search = to_js_string_with_env(
@@ -119,7 +118,7 @@ pub(crate) fn native_string_prototype_last_index_of(
 pub(crate) fn native_string_prototype_match(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if matches!(this_value, Value::Null | Value::Undefined) {
         return Err(string_method_null_error());
@@ -145,7 +144,7 @@ pub(crate) fn native_string_prototype_match(
 pub(crate) fn native_string_prototype_match_all(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if matches!(this_value, Value::Null | Value::Undefined) {
         return Err(string_method_null_error());
@@ -191,7 +190,7 @@ pub(crate) fn native_string_prototype_match_all(
 pub(crate) fn native_string_prototype_replace_all(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if matches!(this_value, Value::Null | Value::Undefined) {
         return Err(string_method_null_error());
@@ -249,7 +248,7 @@ pub(crate) fn native_string_prototype_replace_all(
 pub(crate) fn native_string_prototype_replace(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if matches!(this_value, Value::Null | Value::Undefined) {
         return Err(string_method_null_error());
@@ -293,7 +292,7 @@ pub(crate) fn native_string_prototype_replace(
 pub(crate) fn native_string_prototype_search(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if matches!(this_value, Value::Null | Value::Undefined) {
         return Err(string_method_null_error());
@@ -320,7 +319,7 @@ pub(crate) fn native_string_prototype_search(
 pub(crate) fn native_string_prototype_starts_with(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
     let search_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
@@ -356,7 +355,7 @@ fn string_replace_all(
     input: String,
     search: String,
     replacement: Replacement,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let matches = string_match_positions(&input, &search);
     replace_matches(input, matches, replacement, env)
@@ -366,7 +365,7 @@ fn regexp_replace_all(
     input: String,
     regexp: Value,
     replacement_value: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let replacement = if matches!(replacement_value, Value::Function(_)) {
         Replacement::Function(Box::new(replacement_value))
@@ -433,7 +432,7 @@ fn string_first_match_position(input: &str, search: &str) -> Option<StringMatch>
 fn regexp_match_positions(
     input: &str,
     regexp: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Vec<StringMatch>, RuntimeError> {
     regexp::regexp_set_last_index(&regexp, 0);
     let mut matches = Vec::new();
@@ -474,7 +473,7 @@ fn regexp_match_positions(
 fn regexp_first_match_position(
     input: &str,
     regexp: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Option<StringMatch>, RuntimeError> {
     regexp::regexp_set_last_index(&regexp, 0);
     let exec = property_value(regexp.clone(), "exec", env)?;
@@ -507,7 +506,7 @@ fn replace_matches(
     input: String,
     matches: Vec<StringMatch>,
     replacement: Replacement,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let mut result = String::new();
     let mut copied_until = 0usize;
@@ -540,7 +539,7 @@ fn functional_replacement(
     function: Value,
     string_match: &StringMatch,
     input: String,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<String, RuntimeError> {
     let mut arguments = Vec::with_capacity(3 + string_match.captures.len());
     arguments.push(Value::String(string_match.matched.clone()));
@@ -551,10 +550,7 @@ fn functional_replacement(
     to_js_string_with_env(value, env)
 }
 
-fn regexp_match_index(
-    match_value: &Value,
-    env: &mut HashMap<String, Value>,
-) -> Result<usize, RuntimeError> {
+fn regexp_match_index(match_value: &Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
     let index = property_value(match_value.clone(), "index", env)?;
     match index {
         Value::Number(number) if number.is_finite() && number > 0.0 => Ok(number.trunc() as usize),
@@ -566,11 +562,11 @@ fn input_char_slice(input: &str, start: usize, end: usize) -> String {
     input.chars().skip(start).take(end - start).collect()
 }
 
-fn regexp_value(pattern: Value, env: &mut HashMap<String, Value>) -> Result<Value, RuntimeError> {
+fn regexp_value(pattern: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
     if regexp::regexp_is_regexp(&pattern) {
         return Ok(pattern);
     }
-    let constructor = env.get("RegExp").cloned().ok_or_else(|| RuntimeError {
+    let constructor = env.get("RegExp").ok_or_else(|| RuntimeError {
         thrown: None,
         message: "RegExp constructor is not available".to_owned(),
     })?;
@@ -580,9 +576,9 @@ fn regexp_value(pattern: Value, env: &mut HashMap<String, Value>) -> Result<Valu
 fn regexp_value_with_flags(
     pattern: Value,
     flags: &str,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let constructor = env.get("RegExp").cloned().ok_or_else(|| RuntimeError {
+    let constructor = env.get("RegExp").ok_or_else(|| RuntimeError {
         thrown: None,
         message: "RegExp constructor is not available".to_owned(),
     })?;
@@ -597,7 +593,7 @@ fn regexp_value_with_flags(
 fn invoke_symbol_match_all(
     regexp: Value,
     input: String,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let Some(match_all_symbol) = symbol::match_all_symbol(env) else {
         return Err(RuntimeError {
@@ -618,7 +614,7 @@ fn invoke_symbol_match_all(
 fn reject_regexp_search_value(
     value: Value,
     method: &str,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
     if regexp::regexp_is_regexp_with_env(value, env)? {
         return Err(RuntimeError {

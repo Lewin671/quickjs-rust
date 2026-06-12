@@ -22,6 +22,10 @@ pub(super) struct Compiler {
     next_temp: usize,
     pub(super) strict: bool,
     pub(super) global_scope: bool,
+    /// Names of `var`/function declarations hoisted at global script scope.
+    /// They live in the realm (and on `globalThis`), not in frame slots, so
+    /// deferred closures, direct eval, and promise jobs observe one binding.
+    global_hoisted: std::collections::HashSet<String>,
     annex_b_blocked_function_names: Vec<Vec<String>>,
 }
 
@@ -56,6 +60,7 @@ impl Default for Compiler {
             next_temp: 0,
             strict: false,
             global_scope: true,
+            global_hoisted: std::collections::HashSet::new(),
             annex_b_blocked_function_names: Vec::new(),
         }
     }
@@ -132,7 +137,12 @@ impl Compiler {
             Ok(())
         })?;
         self.code.push(Op::Return);
-        Ok(Bytecode::new(self.constants, self.locals, self.code))
+        Ok(Bytecode::with_scope(
+            self.constants,
+            self.locals,
+            self.code,
+            true,
+        ))
     }
 
     fn compile_function(
@@ -343,6 +353,9 @@ impl Compiler {
     }
 
     pub(super) fn local_slot(&mut self, name: &str, hoisted: bool) -> usize {
+        if hoisted && self.global_scope {
+            self.global_hoisted.insert(name.to_owned());
+        }
         if let Some(slot) = self.local_slots.get(name) {
             if hoisted {
                 self.locals[*slot].hoisted = true;
@@ -376,46 +389,26 @@ impl Compiler {
         slot
     }
 
-    pub(super) fn declare_var_kind_slot(&mut self, name: &str, kind: VarKind) -> usize {
-        match kind {
-            VarKind::Var => self.local_slot(name, true),
-            VarKind::Let => self.declare_lexical_slot(name, true),
-            VarKind::Const => self.declare_lexical_slot(name, false),
-        }
-    }
-
-    fn var_initializer_slot(&self, name: &str, declared_slot: usize, kind: VarKind) -> usize {
-        if kind != VarKind::Var {
-            return declared_slot;
-        }
-        self.resolve_local_slot(name).unwrap_or(declared_slot)
-    }
-
-    pub(super) fn emit_store_var_initializer(&mut self, slot: usize, name: &str, kind: VarKind) {
-        let store_slot = self.var_initializer_slot(name, slot, kind);
-        if store_slot != slot && kind == VarKind::Var {
-            self.emit(Op::StoreLocal(store_slot));
-        } else {
-            self.emit_store_var_binding(store_slot, name, kind);
-        }
-    }
-
-    pub(super) fn emit_store_var_binding(&mut self, slot: usize, name: &str, kind: VarKind) {
-        if self.global_scope && kind == VarKind::Var {
-            self.emit(Op::Dup);
-            self.emit(Op::StoreLocal(slot));
-            self.emit(Op::DefineGlobalVar(name.to_owned()));
-        } else {
-            self.emit(Op::StoreLocal(slot));
-        }
-    }
-
     pub(super) fn resolve_local_slot(&self, name: &str) -> Option<usize> {
-        self.lexical_scopes
+        let lexical = self
+            .lexical_scopes
             .iter()
             .rev()
-            .find_map(|scope| scope.get(name).copied())
-            .or_else(|| self.local_slots.get(name).copied())
+            .find_map(|scope| scope.get(name).copied());
+        if lexical.is_some() {
+            return lexical;
+        }
+        // Global-scope `var`/function bindings live in the realm, not in
+        // frame slots: every identifier reference compiles to a global op so
+        // eval'd code and deferred jobs share the same binding.
+        if self.global_scope && self.global_hoisted.contains(name) {
+            return None;
+        }
+        self.local_slots.get(name).copied()
+    }
+
+    pub(super) fn is_global_hoisted(&self, name: &str) -> bool {
+        self.global_scope && self.global_hoisted.contains(name)
     }
 
     pub(super) fn assignment_slot(&mut self, name: &str) -> usize {

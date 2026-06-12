@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-
+use crate::CallEnv;
 use crate::{Property, RuntimeError, Value, call_function, error};
 
 mod array;
@@ -26,17 +25,13 @@ pub(crate) use prototype::{
     object_prototype, string_prototype, value_prototype, value_prototype_slot,
 };
 
-pub(crate) fn has_property(
-    value: Value,
-    env: &HashMap<String, Value>,
-    key: &str,
-) -> Result<bool, RuntimeError> {
+pub(crate) fn has_property(value: Value, env: &CallEnv, key: &str) -> Result<bool, RuntimeError> {
     has_property_key(value, env, &PropertyKey::String(key.to_owned()))
 }
 
 pub(crate) fn has_property_key(
     value: Value,
-    env: &HashMap<String, Value>,
+    env: &CallEnv,
     key: &PropertyKey,
 ) -> Result<bool, RuntimeError> {
     let PropertyKey::String(key) = key else {
@@ -69,7 +64,7 @@ pub(crate) fn has_property_key(
 
 fn has_symbol_property(
     value: Value,
-    env: &HashMap<String, Value>,
+    env: &CallEnv,
     key: &PropertyKey,
 ) -> Result<bool, RuntimeError> {
     let PropertyKey::Symbol(symbol) = key else {
@@ -104,7 +99,7 @@ fn has_symbol_property(
 pub(crate) fn property_value(
     receiver: Value,
     key: &str,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     property_value_key(receiver, &PropertyKey::String(key.to_owned()), env)
 }
@@ -112,7 +107,7 @@ pub(crate) fn property_value(
 pub(crate) fn property_value_key(
     receiver: Value,
     key: &PropertyKey,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     property_value_key_with_receiver(receiver.clone(), key, receiver, env)
 }
@@ -121,7 +116,7 @@ pub(crate) fn property_value_key_with_receiver(
     target: Value,
     key: &PropertyKey,
     receiver: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let PropertyKey::String(key) = key else {
         return symbol_property_value_with_receiver(target, key, receiver, env);
@@ -193,7 +188,7 @@ fn symbol_property_value_with_receiver(
     target: Value,
     key: &PropertyKey,
     receiver: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let PropertyKey::Symbol(symbol) = key else {
         unreachable!("symbol property helper should only receive symbol keys");
@@ -248,7 +243,7 @@ fn symbol_property_value_with_receiver(
 
 fn native_error_constructor_parent_descriptor(
     function: &crate::Function,
-    env: &HashMap<String, Value>,
+    env: &CallEnv,
     key: &str,
 ) -> Option<Property> {
     match error::native_error_constructor_parent(function, env) {
@@ -261,7 +256,7 @@ fn native_error_constructor_parent_descriptor(
 fn property_descriptor_value(
     property: Option<Property>,
     receiver: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let Some(property) = property else {
         return Ok(Value::Undefined);

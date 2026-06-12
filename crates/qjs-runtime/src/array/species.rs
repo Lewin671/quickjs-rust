@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-
+use crate::CallEnv;
 use crate::{
     ArrayRef, Property, PropertyKey, RuntimeError, Value, construct_function, ensure_constructor,
     property_value, property_value_key, symbol,
@@ -9,7 +8,7 @@ pub(super) fn array_species_create(
     receiver: Value,
     length: usize,
     method: &str,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if !is_array_species_receiver(&receiver)? {
         return Ok(Value::Array(ArrayRef::new(vec![Value::Undefined; length])));
@@ -45,7 +44,7 @@ pub(super) fn array_species_create(
 pub(super) fn validate_array_species_constructor(
     receiver: Value,
     method: &str,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
     if !matches!(receiver, Value::Array(_)) {
         return Ok(());
@@ -66,11 +65,13 @@ pub(super) fn create_data_property_or_throw(
     target: Value,
     key: String,
     value: Value,
+    env: &mut crate::CallEnv,
 ) -> Result<(), RuntimeError> {
     if crate::object::define_property_on_value_key(
         target,
         PropertyKey::String(key),
         Property::data(value, true, true, true),
+        env,
     )? {
         return Ok(());
     }
@@ -80,11 +81,16 @@ pub(super) fn create_data_property_or_throw(
     })
 }
 
-pub(super) fn set_array_like_length(target: Value, length: usize) -> Result<(), RuntimeError> {
+pub(super) fn set_array_like_length(
+    target: Value,
+    length: usize,
+    env: &mut crate::CallEnv,
+) -> Result<(), RuntimeError> {
     if crate::object::define_property_on_value_key(
         target,
         PropertyKey::String("length".to_owned()),
         Property::data(Value::Number(length as f64), false, true, false),
+        env,
     )? {
         return Ok(());
     }
@@ -113,7 +119,7 @@ fn is_object_like(value: &Value) -> bool {
 
 fn is_cross_realm_array_constructor(
     constructor: Value,
-    env: &mut HashMap<String, Value>,
+    env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     if !is_object_like(&constructor) {
         return Ok(false);

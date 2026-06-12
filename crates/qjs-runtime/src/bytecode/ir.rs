@@ -348,17 +348,32 @@ pub struct Bytecode {
     local_slots: HashMap<String, usize>,
     global_names: Vec<String>,
     sloppy_global_assignment_names: Vec<String>,
+    /// Whether this bytecode is global script code (top-level scripts and
+    /// eval bodies). Global `var`/function bindings live in the realm, and
+    /// `this` resolves to the realm global; function bodies resolve `this`
+    /// from their own frame.
+    pub(super) global_scope: bool,
     pub(super) code: Vec<Op>,
 }
 
 impl Bytecode {
     pub(super) fn new(constants: Vec<Value>, locals: Vec<Local>, code: Vec<Op>) -> Self {
+        Self::with_scope(constants, locals, code, false)
+    }
+
+    pub(super) fn with_scope(
+        constants: Vec<Value>,
+        locals: Vec<Local>,
+        code: Vec<Op>,
+        global_scope: bool,
+    ) -> Self {
         Self {
             constants,
             local_slots: collect_local_slots(&locals),
             locals,
             global_names: collect_global_names(&code),
             sloppy_global_assignment_names: collect_sloppy_global_assignment_names(&code),
+            global_scope,
             code,
         }
     }
