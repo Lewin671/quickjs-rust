@@ -30,6 +30,7 @@ latest `docs/conformance/burndown.jsonl` entry before starting new work.
 | `T008-destructuring-completion-campaign.md` | destructuring | 2,580 | engine failures |
 | `T009-typedarray-buffers-campaign.md` | TypedArray/buffers | 2,480 | engine failures |
 | `T010-generators-iteration-campaign.md` | generators/iteration | 1,960 | engine failures |
+| `T012-modules-campaign.md` | ES modules | 1,621 | not-run (module filter) + fails |
 
 Campaign working rules:
 
