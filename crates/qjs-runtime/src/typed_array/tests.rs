@@ -44,6 +44,20 @@ fn construct_from_length_and_no_args() {
 }
 
 #[test]
+fn instances_inherit_length_accessor_and_allow_own_length() {
+    assert_eq!(
+        eval("let a = new Uint8Array([7]); a.length + ':' + a.hasOwnProperty('length');"),
+        Ok(Value::String("1:false".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([7]); Object.defineProperty(a, 'length', { value: 3 }); a[Symbol.isConcatSpreadable] = true; let out = [].concat(a); out.length + ':' + out[0] + ':' + out.hasOwnProperty('1') + ':' + out.hasOwnProperty('2');"
+        ),
+        Ok(Value::String("3:7:false:false".to_owned()))
+    );
+}
+
+#[test]
 fn construct_from_array_like_and_iterable() {
     assert_eq!(
         eval("let a = new Uint8Array([1, 258]); a.length + ':' + a[0] + ':' + a[1];"),
