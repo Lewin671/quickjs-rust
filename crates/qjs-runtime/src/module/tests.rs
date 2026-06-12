@@ -304,3 +304,71 @@ fn dynamic_import_in_script_resolves_namespace() {
     .expect("graph evaluates");
     assert_eq!(export_log(&namespace, "log"), "99");
 }
+
+// --- top-level await (T012 S5) --------------------------------------------
+
+#[test]
+fn top_level_await_exports_awaited_value() {
+    // A module body that awaits a resolved promise binds the fulfillment value;
+    // the export is observable after the graph settles.
+    let namespace = run(
+        "export let value = await Promise.resolve(41).then(v => v + 1);",
+        &[],
+    )
+    .expect("graph evaluates");
+    assert_eq!(export(&namespace, "value"), Value::Number(42.0));
+}
+
+#[test]
+fn top_level_await_of_plain_value() {
+    // `await <non-promise>` resolves to the value itself.
+    let namespace = run("export var x = await 7;", &[]).expect("graph evaluates");
+    assert_eq!(export(&namespace, "x"), Value::Number(7.0));
+}
+
+#[test]
+fn dependent_sees_settled_tla_binding() {
+    // An acyclic dependency uses top-level await; its importer must observe the
+    // settled exported binding (the dependency fully settles before the
+    // dependent body runs).
+    let namespace = run(
+        "import { ready } from \"dep\";\n\
+         export const seen = ready;",
+        &[("dep", "export const ready = await Promise.resolve('done');")],
+    )
+    .expect("graph evaluates");
+    assert_eq!(export(&namespace, "seen"), Value::String("done".to_owned()));
+}
+
+#[test]
+fn top_level_await_rejection_propagates() {
+    // A rejected top-level await fails module evaluation, surfacing a runtime
+    // error rather than silently completing.
+    let error = run(
+        "export const v = await Promise.reject(new Error('boom'));",
+        &[],
+    )
+    .expect_err("rejected top-level await fails evaluation");
+    assert_eq!(error.kind, EvalErrorKind::Runtime);
+}
+
+#[test]
+fn top_level_await_in_script_is_parse_error() {
+    // `await` stays an identifier under the Script goal: a top-level `await x`
+    // does not parse as an AwaitExpression. Used as a binding it is fine in
+    // sloppy script code, so `var await = 1` evaluates without error.
+    let value = crate::eval("var await = 1; await;").expect("await is an identifier in a script");
+    assert_eq!(value, Value::Number(1.0));
+}
+
+#[test]
+fn await_as_binding_is_a_module_error() {
+    // Under the Module goal `await` is reserved: a `let await` binding is a
+    // SyntaxError (reported at the parse/early stage).
+    let error = run("let await = 1;\nexport const v = await;", &[])
+        .expect_err("await binding rejected in a module");
+    assert!(matches!(
+        error.kind,
+        EvalErrorKind::Parse | EvalErrorKind::Early
+    ));
+}

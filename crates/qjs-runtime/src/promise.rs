@@ -892,6 +892,17 @@ fn reaction_is_fulfill(reaction: &ObjectRef) -> bool {
     )
 }
 
+/// The settled outcome of `promise`, for the module top-level-await driver: a
+/// rejection reason once the promise is rejected, the fulfillment value once it
+/// is fulfilled, or `None` while it is still pending (or not a promise).
+pub(crate) fn settled_outcome(promise: &ObjectRef) -> Option<Result<Value, Value>> {
+    match promise_state(promise)?.as_str() {
+        PROMISE_FULFILLED => Some(Ok(promise_result(promise).unwrap_or(Value::Undefined))),
+        PROMISE_REJECTED => Some(Err(promise_result(promise).unwrap_or(Value::Undefined))),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 pub(crate) fn promise_debug_state_result(value: &Value) -> Option<(String, Value)> {
     let Value::Object(object) = value else {

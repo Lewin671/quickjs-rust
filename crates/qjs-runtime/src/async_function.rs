@@ -92,6 +92,23 @@ pub(crate) fn call_async_function(
     Value::Object(result_promise)
 }
 
+/// Drives a module body with top-level `await` as an async evaluation: the
+/// caller has staged the body in a `SuspendedStart` async context, and this
+/// runs it to its first `await` or completion, returning the promise that
+/// settles with the module's completion (16.2.1.5.3 AsyncModuleExecution). A
+/// later `await` resumes through the job queue exactly as an async function
+/// body does, so the caller drains the job queue to settle the module.
+pub(crate) fn drive_async_module(context: &ObjectRef, env: &mut CallEnv) -> ObjectRef {
+    let result_promise = promise::new_pending_promise(env);
+    drive(
+        context,
+        &result_promise,
+        Resume::Next(Value::Undefined),
+        env,
+    );
+    result_promise
+}
+
 /// Resumes the suspended async body with `resume`, then settles or re-suspends:
 /// a `Return` resolves the result promise, a thrown completion rejects it, and a
 /// suspension (`await`) schedules reactions that re-enter this driver later.

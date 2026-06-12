@@ -333,3 +333,52 @@ fn rejects_spread_import_argument() {
 fn rejects_three_argument_import_call() {
     assert!(parse_script("import('./mod.js', {}, '');").is_err());
 }
+
+// --- top-level await (T012 S5) --------------------------------------------
+
+#[test]
+fn parses_top_level_await_expression() {
+    // Under the Module goal `await expr` is an AwaitExpression at the top level.
+    let script = parse_module("await 1;").expect("top-level await parses in a module");
+    assert!(matches!(
+        script.body.as_slice(),
+        [Stmt::Expr(qjs_ast::Expr::Await { .. })]
+    ));
+}
+
+#[test]
+fn parses_top_level_await_in_block_and_export() {
+    // `await` is the keyword form inside module-level blocks and an exported
+    // declaration's initializer.
+    assert!(parse_module("{ await 1; }").is_ok());
+    assert!(parse_module("export const v = await 1;").is_ok());
+    assert!(parse_module("if (true) await 1;").is_ok());
+}
+
+#[test]
+fn await_is_not_a_keyword_in_a_module_nested_function() {
+    // An ordinary (non-async) function body resets the await context, so
+    // `await` is an ordinary identifier there: it is a legal binding/parameter
+    // name inside the nested function even though it is reserved at module top
+    // level.
+    assert!(parse_module("function f(await) { return await; }").is_ok());
+    assert!(parse_module("function f() { var await = 1; return await; }").is_ok());
+}
+
+#[test]
+fn rejects_await_as_binding_in_a_module() {
+    // `await` is a reserved word in module code; using it as a binding name is a
+    // SyntaxError.
+    assert!(parse_module("let await = 1;").is_err());
+    assert!(parse_module("var await = 1;").is_err());
+    assert!(parse_module("function await() {}").is_err());
+}
+
+#[test]
+fn await_remains_an_identifier_in_a_script() {
+    // The Script goal is unchanged: `await` is an ordinary identifier, so a
+    // top-level `await x` is `await(x)`-style member/identifier usage, not an
+    // AwaitExpression, and `var await` is allowed in sloppy script code.
+    assert!(parse_script("var await = 1; await;").is_ok());
+    assert!(parse_script("let await = 1;").is_ok());
+}

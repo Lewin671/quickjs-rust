@@ -83,11 +83,38 @@ pass/fail signal.
       `import.source`/`import.defer` source-phase/defer proposals are parse
       SyntaxErrors; `new.target` as a specifier and exact URIError propagation
       from a rejected module body are pre-existing engine limitations.
-- [ ] S5 Parser + runtime: top-level `await`. Permit `await` at module top
+- [x] S5 Parser + runtime: top-level `await`. Permit `await` at module top
       level (Module goal only), reusing the async suspend/resume machinery
       from T007 so a module with top-level await becomes an async evaluation
       whose completion gates dependents. Probe
       `test/language/module-code/top-level-await`.
+      Implemented: `parse_module` enters the `[+Await]` context (sets the
+      shared `in_async` flag), so `await expr` is an AwaitExpression at module
+      top level and inside module-level blocks/control flow, while ordinary
+      non-async nested functions reset it (`await` an identifier there) and the
+      Script goal is unchanged; `await` as a binding name in module code is a
+      SyntaxError. Runtime: a module body that contains a top-level `Op::Await`
+      evaluates like an async function body — staged as a `SuspendedStart`
+      async context and driven through the existing await suspend/resume +
+      promise machinery (`drive_async_module`), draining the job queue so each
+      `await` resumes and the module settles before its dependents run
+      (16.2.1.5.3 AsyncModuleExecution, acyclic common path). A rejected
+      top-level await fails `eval_module`/the import promise. Lexical (`let`/
+      `const`) exports settle through the shared `captured_env` cell; `var`/
+      `function` exports live in the realm. Probe
+      `test/language/module-code/top-level-await` rose from 7/100 to 69/100.
+      KNOWN GAPs (residue): a top-level `await` of a *dynamic* `import()` is not
+      drained inside the body (the module graph is borrowed during static
+      evaluation, so a nested import job would re-borrow it) and defers to the
+      outer queue loop; full async-graph ordering for cycles containing TLA and
+      strict cross-module fulfillment/rejection ordering are not modeled — these
+      flow through the normal gap queue.
+
+The ES modules campaign core is complete (S1–S5): parser goal symbol, module
+records + linking + namespace objects, the Test262 module channel, dynamic
+`import()`, and top-level `await`. Remaining module gaps (primitive live-binding
+indirection, TLA-in-cycles ordering, import assertions/source-phase proposals)
+flow through the normal gap queue.
 
 ## Scope
 

@@ -462,6 +462,14 @@ impl Bytecode {
             .any(|op| matches!(op, Op::NewFunction { .. } | Op::NewClass { .. }))
     }
 
+    /// Whether this body contains a top-level `await` (`Op::Await`). Nested
+    /// function/closure bodies compile to their own [`Bytecode`] constants, so a
+    /// scan of this code detects only awaits at this body's own level — exactly
+    /// the top-level-await marker the module driver needs.
+    pub(crate) fn contains_top_level_await(&self) -> bool {
+        self.code.iter().any(|op| matches!(op, Op::Await))
+    }
+
     pub(crate) fn requires_scope_call_bindings(&self) -> bool {
         self.code.iter().any(|op| {
             matches!(

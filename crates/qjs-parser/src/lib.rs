@@ -47,6 +47,12 @@ pub fn parse_module(source: &str) -> Result<Script, ParseError> {
     let mut parser = Parser::new(tokens, source.to_owned());
     parser.goal = Goal::Module;
     parser.strict = true;
+    // Under the Module goal the top level is an `[+Await]` context: `await expr`
+    // is an AwaitExpression and `await` may not be used as an identifier or
+    // binding. Ordinary (non-async) nested functions reset this context, so
+    // `await` is an identifier again inside them. Reuse the async-await context
+    // flag the rest of the parser already keys off.
+    parser.in_async = true;
     parser.parse_script()
 }
 
