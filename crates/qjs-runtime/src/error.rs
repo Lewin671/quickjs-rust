@@ -89,6 +89,7 @@ pub(crate) fn native_error(
         (true, Value::Object(object)) => object,
         _ => ObjectRef::with_prototype(HashMap::new(), function_prototype(function)),
     };
+    ensure_default_error_prototype(&object, function);
     define_error_data(&object);
     if let Some(message) = argument_values.first() {
         if !matches!(message, Value::Undefined) {
@@ -117,12 +118,8 @@ pub(crate) fn native_aggregate_error(
         (true, Value::Object(object)) => object,
         _ => ObjectRef::with_prototype(HashMap::new(), function_prototype(function)),
     };
+    ensure_default_error_prototype(&object, function);
     define_error_data(&object);
-    let errors = aggregate_error_errors(argument_values.first().cloned(), env)?;
-    object.define_property(
-        "errors".to_owned(),
-        Property::data(errors, false, true, true),
-    );
     if let Some(message) = argument_values.get(1) {
         if !matches!(message, Value::Undefined) {
             object.define_property(
@@ -136,8 +133,19 @@ pub(crate) fn native_aggregate_error(
             );
         }
     }
+    let errors = aggregate_error_errors(argument_values.first().cloned(), env)?;
+    object.define_property(
+        "errors".to_owned(),
+        Property::data(errors, false, true, true),
+    );
     install_error_cause(&object, argument_values.get(2).cloned(), env)?;
     Ok(Value::Object(object))
+}
+
+fn ensure_default_error_prototype(object: &ObjectRef, function: &Function) {
+    if object.prototype_slot().is_none() {
+        let _ = object.set_prototype(function_prototype(function));
+    }
 }
 
 fn aggregate_error_errors(errors: Option<Value>, env: &mut CallEnv) -> Result<Value, RuntimeError> {

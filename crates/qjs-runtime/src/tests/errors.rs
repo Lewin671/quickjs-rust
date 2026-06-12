@@ -235,6 +235,59 @@ fn evaluates_aggregate_error_builtin() {
 }
 
 #[test]
+fn aggregate_error_uses_new_target_prototype() {
+    assert_eq!(
+        eval(
+            "let custom = { x: 42 }; \
+             let newTarget = new Proxy(function() {}, { \
+               get: function(target, key) { \
+                 if (key === 'prototype') { return custom; } \
+                 return target[key]; \
+               } \
+             }); \
+             let error = Reflect.construct(AggregateError, [[]], newTarget); \
+             Object.getPrototypeOf(error) === custom && error.x;"
+        ),
+        Ok(Value::Number(42.0))
+    );
+    assert_eq!(
+        eval(
+            "let values = [undefined, null, 42, false, true, Symbol(), 'string']; \
+             let NewTarget = new Function(); \
+             values.every(function(value) { \
+               let NewTargetProxy = new Proxy(NewTarget, { \
+                 get: function(target, key) { \
+                   if (key === 'prototype') { return value; } \
+                   return target[key]; \
+                 } \
+               }); \
+               let error = Reflect.construct(AggregateError, [[]], NewTargetProxy); \
+               return Object.getPrototypeOf(error) === AggregateError.prototype; \
+             });"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn aggregate_error_evaluates_message_before_errors() {
+    assert_eq!(
+        eval(
+            "let sequence = []; \
+             let message = { toString: function() { sequence.push(1); return ''; } }; \
+             let errors = {}; \
+             errors[Symbol.iterator] = function() { \
+               sequence.push(2); \
+               return { next: function() { sequence.push(3); return { done: true }; } }; \
+             }; \
+             new AggregateError(errors, message); \
+             sequence.join(',');"
+        ),
+        Ok(Value::String("1,2,3".to_owned()))
+    );
+}
+
+#[test]
 fn method_call_on_null_or_undefined_is_catchable_type_error() {
     assert_eq!(
         eval("try { null.foo(); } catch (e) { e instanceof TypeError; }").expect("eval"),
