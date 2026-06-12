@@ -1,0 +1,116 @@
+//! Lookahead and lookbehind assertion matching.
+//!
+//! Both forms are zero-width: on success the match index is left unchanged.
+//! Positive assertions keep any captures their body established; negative
+//! assertions capture nothing and succeed exactly when the body fails.
+
+use std::collections::HashMap;
+
+use super::groups::group_alternatives;
+use super::{MatchOptions, MatchState, PropertyCache, match_pattern};
+
+/// Match a lookahead (`behind = false`) or lookbehind (`behind = true`)
+/// assertion. The assertion is zero-width: on success the index is unchanged.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn match_lookaround(
+    pattern: &[char],
+    text: &[char],
+    body_start: usize,
+    body_end: usize,
+    state: MatchState,
+    group_indices: &HashMap<usize, usize>,
+    properties: &PropertyCache,
+    options: MatchOptions,
+    negative: bool,
+    behind: bool,
+) -> Vec<(usize, MatchState)> {
+    let close_pc = body_end + 1;
+    let inner = if behind {
+        match_lookbehind_body(
+            pattern,
+            text,
+            body_start,
+            body_end,
+            state.clone(),
+            group_indices,
+            properties,
+            options,
+        )
+    } else {
+        let mut results = Vec::new();
+        for (start, end) in group_alternatives(pattern, body_start, body_end) {
+            results.extend(match_pattern(
+                pattern,
+                text,
+                start,
+                end,
+                state.clone(),
+                group_indices,
+                properties,
+                options,
+            ));
+        }
+        results
+    };
+
+    if negative {
+        // Negative assertions succeed when the body fails to match, and they
+        // never capture (captures inside are reset to None on success).
+        if inner.is_empty() {
+            vec![(close_pc, state)]
+        } else {
+            Vec::new()
+        }
+    } else {
+        // Positive assertions keep the captures established by the body but
+        // restore the index to its position before the assertion.
+        inner
+            .into_iter()
+            .map(|mut matched| {
+                matched.index = state.index;
+                (close_pc, matched)
+            })
+            .collect()
+    }
+}
+
+/// Match the body of a lookbehind ending at `state.index`. We try every body
+/// start position from 0..=state.index and keep those whose match ends exactly
+/// at `state.index`.
+#[allow(clippy::too_many_arguments)]
+fn match_lookbehind_body(
+    pattern: &[char],
+    text: &[char],
+    body_start: usize,
+    body_end: usize,
+    state: MatchState,
+    group_indices: &HashMap<usize, usize>,
+    properties: &PropertyCache,
+    options: MatchOptions,
+) -> Vec<MatchState> {
+    let target = state.index;
+    let mut results = Vec::new();
+    for begin in 0..=target {
+        for (start, end) in group_alternatives(pattern, body_start, body_end) {
+            let probe = MatchState {
+                index: begin,
+                captures: state.captures.clone(),
+            };
+            for matched in match_pattern(
+                pattern,
+                text,
+                start,
+                end,
+                probe,
+                group_indices,
+                properties,
+                options,
+            ) {
+                if matched.index == target {
+                    results.push(matched);
+                }
+            }
+        }
+    }
+    results
+}

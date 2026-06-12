@@ -30,6 +30,42 @@ fn captures_greedy_quantified_group_range() {
 }
 
 #[test]
+fn greedy_simple_atom_backtracks_against_trailing_atom() {
+    // The linear-scan fast path for `\d+` must still backtrack so the trailing
+    // `5` can match: the greedy run gives back its last digit.
+    let matched = regexp_match_range(r"\d+5", "12345", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 5));
+
+    // Anchored class repetition over the whole input, then `$`.
+    let matched = regexp_match_range(r"^[a-z]+$", "abcdef", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 6));
+    assert!(regexp_match_range(r"^[a-z]+$", "abc1", 0, false, false, false).is_none());
+}
+
+#[test]
+fn lazy_simple_atom_takes_shortest_run() {
+    let matched = regexp_match_range(r"a.*?c", "axxcxxc", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 4));
+}
+
+#[test]
+fn counted_simple_atom_respects_bounds() {
+    let matched = regexp_match_range(r"a{2,3}", "aaaa", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 3));
+    assert!(regexp_match_range(r"a{2,3}", "a", 0, false, false, false).is_none());
+}
+
+#[test]
+fn property_escape_repetition_matches_full_run() {
+    let text = "z".repeat(5000);
+    let matched = regexp_match_range(r"^\p{L}+$", &text, 0, false, true, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 5000));
+    let mut mixed = text.clone();
+    mixed.push('1');
+    assert!(regexp_match_range(r"^\p{L}+$", &mixed, 0, false, true, false).is_none());
+}
+
+#[test]
 fn captures_nested_group_ranges() {
     let matched = regexp_match_range(r"((x))", "foo-x-bar", 0, false, false, false).unwrap();
     assert_eq!((matched.start, matched.end), (4, 5));
