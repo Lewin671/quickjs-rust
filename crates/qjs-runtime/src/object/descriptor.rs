@@ -1,6 +1,7 @@
 use crate::{
-    ObjectRef, Property, PropertyKey, RuntimeError, Value, function_own_property_descriptor,
-    function_own_symbol_property_descriptor, to_property_key_value,
+    NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function,
+    function_own_property_descriptor, function_own_symbol_property_descriptor,
+    to_property_key_value,
 };
 
 use super::{
@@ -146,11 +147,19 @@ pub(crate) fn define_property_descriptor_on_value_key(
         Value::Object(object) => {
             let existing = object.own_property(&key);
             let defines_new_property = existing.is_none();
+            let mapped_argument = mapped_argument_accessors(existing.as_ref());
+            let original_descriptor = descriptor.clone();
+            let descriptor = mapped_argument_descriptor(descriptor, mapped_argument.as_ref(), env)?;
             let Some(property) = resolve_property_definition(existing, descriptor) else {
                 return Ok(false);
             };
             if defines_new_property && !object.is_extensible() {
                 return Ok(false);
+            }
+            if let Some(mapped_argument) = mapped_argument
+                && let Some(value) = original_descriptor.value
+            {
+                set_mapped_argument_value(&mapped_argument, value, env)?;
             }
             object.define_property(key, property);
             Ok(true)
@@ -244,6 +253,10 @@ fn define_array_length_property(
     descriptor: PropertyDescriptor,
     env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
+    if descriptor.configurable_field() == Some(true) || descriptor.enumerable_field() == Some(true)
+    {
+        return Ok(false);
+    }
     if descriptor.value.is_none() {
         let Some(property) =
             resolve_property_definition(Some(array_length_property(elements)), descriptor)
@@ -284,6 +297,83 @@ fn define_array_length_property(
         elements.set_length_writable(writable);
     }
     Ok(true)
+}
+
+struct MappedArgumentAccessors {
+    get: Value,
+    set: Value,
+}
+
+fn mapped_argument_accessors(property: Option<&Property>) -> Option<MappedArgumentAccessors> {
+    let property = property?;
+    if !property.is_accessor() {
+        return None;
+    }
+    let get = property.get.as_ref()?;
+    let set = property.set.as_ref()?;
+    if is_mapped_argument_accessor(get, NativeFunction::MappedArgumentGet)
+        && is_mapped_argument_accessor(set, NativeFunction::MappedArgumentSet)
+    {
+        Some(MappedArgumentAccessors {
+            get: get.clone(),
+            set: set.clone(),
+        })
+    } else {
+        None
+    }
+}
+
+fn is_mapped_argument_accessor(value: &Value, native: NativeFunction) -> bool {
+    let Value::Function(function) = value else {
+        return false;
+    };
+    let Some(bound) = function.bound.as_ref() else {
+        return false;
+    };
+    matches!(&bound.target, Value::Function(target) if target.native == Some(native))
+}
+
+fn mapped_argument_descriptor(
+    mut descriptor: PropertyDescriptor,
+    mapped_argument: Option<&MappedArgumentAccessors>,
+    env: &mut CallEnv,
+) -> Result<PropertyDescriptor, RuntimeError> {
+    if let Some(mapped_argument) = mapped_argument
+        && descriptor.value.is_none()
+        && descriptor.writable == Some(false)
+        && !descriptor.is_accessor_descriptor()
+    {
+        descriptor.value = Some(get_mapped_argument_value(mapped_argument, env)?);
+    }
+    Ok(descriptor)
+}
+
+fn get_mapped_argument_value(
+    mapped_argument: &MappedArgumentAccessors,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    call_function(
+        mapped_argument.get.clone(),
+        Value::Undefined,
+        Vec::new(),
+        env,
+        false,
+    )
+}
+
+fn set_mapped_argument_value(
+    mapped_argument: &MappedArgumentAccessors,
+    value: Value,
+    env: &mut CallEnv,
+) -> Result<(), RuntimeError> {
+    call_function(
+        mapped_argument.set.clone(),
+        Value::Undefined,
+        vec![value],
+        env,
+        false,
+    )?;
+    Ok(())
 }
 
 pub(crate) fn define_array_length_value(
