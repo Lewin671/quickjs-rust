@@ -243,6 +243,144 @@ fn array_from_async_thenable_writes_remain_visible_after_async_await() {
 }
 
 #[test]
+fn array_from_async_awaits_async_iterable_mapped_thenables() {
+    assert_eq!(
+        promise::promise_debug_state_result(
+            &eval(
+                "let count = 0; \
+                 async function* input() { yield* [0, 1, 2]; } \
+                 Array.fromAsync(input(), function(value) { \
+                   return { then(resolve) { count += 1; resolve(value); } }; \
+                 }).then(function(array) { return count + ':' + array.join(','); });"
+            )
+            .unwrap()
+        ),
+        Some(("fulfilled".to_owned(), Value::String("3:0,1,2".to_owned())))
+    );
+}
+
+#[test]
+fn array_from_async_closes_iterators_when_async_mapping_rejects() {
+    assert_eq!(
+        promise::promise_debug_state_result(
+            &eval(
+                "let closed = false; \
+                 let iterator = { \
+                   next() { return Promise.resolve({ value: 1, done: false }); }, \
+                   return() { closed = true; return Promise.resolve({ done: true }); }, \
+                   [Symbol.asyncIterator]() { return this; } \
+                 }; \
+                 Array.fromAsync(iterator, async function() { throw new Error('boom'); }) \
+                   .then(function() { return 'fulfilled'; }, function(error) { return closed + ':' + (error instanceof Error); });"
+            )
+            .unwrap()
+        ),
+        Some((
+            "fulfilled".to_owned(),
+            Value::String("true:true".to_owned())
+        ))
+    );
+
+    assert_eq!(
+        promise::promise_debug_state_result(
+            &eval(
+                "let closed = false; \
+                 let iterator = { \
+                   next() { return { value: 1, done: false }; }, \
+                   return() { closed = true; return { done: true }; }, \
+                   [Symbol.iterator]() { return this; } \
+                 }; \
+                 Array.fromAsync(iterator, async function() { throw new Error('boom'); }) \
+                   .then(function() { return 'fulfilled'; }, function(error) { return closed + ':' + (error instanceof Error); });"
+            )
+            .unwrap()
+        ),
+        Some((
+            "fulfilled".to_owned(),
+            Value::String("true:true".to_owned())
+        ))
+    );
+}
+
+#[test]
+fn array_from_async_closes_sync_iterators_when_awaited_value_rejects() {
+    assert_eq!(
+        promise::promise_debug_state_result(
+            &eval(
+                "let closed = false; \
+                 let thenable = { then(resolve, reject) { reject('boom'); } }; \
+                 let iterator = { \
+                   next() { return { value: thenable, done: false }; }, \
+                   return() { closed = true; return { done: true }; }, \
+                   [Symbol.iterator]() { return this; } \
+                 }; \
+                 Array.fromAsync(iterator) \
+                   .then(function() { return 'fulfilled'; }, function() { return closed; });"
+            )
+            .unwrap()
+        ),
+        Some(("fulfilled".to_owned(), Value::Boolean(true)))
+    );
+}
+
+#[test]
+fn array_from_async_boxes_sloppy_primitive_this_arg() {
+    assert_eq!(
+        promise::promise_debug_state_result(
+            &eval(
+                "Array.fromAsync([1], async function() { \
+                   return typeof this + ':' + (this !== 42n) + ':' + (this.valueOf() === 42n); \
+                 }, 42n).then(function(array) { return array[0]; });"
+            )
+            .unwrap()
+        ),
+        Some((
+            "fulfilled".to_owned(),
+            Value::String("object:true:true".to_owned())
+        ))
+    );
+
+    assert_eq!(
+        promise::promise_debug_state_result(
+            &eval(
+                "let symbol = Symbol('id'); \
+                 Array.fromAsync([1], async function() { \
+                   return typeof this + ':' + (this !== symbol) + ':' + (this.valueOf() === symbol); \
+                 }, symbol).then(function(array) { return array[0]; });"
+            )
+            .unwrap()
+        ),
+        Some((
+            "fulfilled".to_owned(),
+            Value::String("object:true:true".to_owned())
+        ))
+    );
+}
+
+#[test]
+fn array_from_async_custom_constructor_sets_proxy_length_after_elements() {
+    assert_eq!(
+        promise::promise_debug_state_result(
+            &eval(
+                "let calls = []; \
+                 function MyArray() { \
+                   return new Proxy(Object.create(null), { \
+                     set(target, key, value) { calls.push('set ' + String(key)); return Reflect.set(target, key, value); }, \
+                     defineProperty(target, key, descriptor) { calls.push('define ' + String(key)); return Reflect.defineProperty(target, key, descriptor); } \
+                   }); \
+                 } \
+                 Array.fromAsync.call(MyArray, [1, 2]).then(function() { return calls.join('|'); });"
+            )
+            .unwrap()
+        ),
+        Some((
+            "fulfilled".to_owned(),
+            Value::String("define 0|define 1|set length".to_owned())
+        ))
+    );
+}
+
+#[test]
 fn array_from_async_rejects_early_errors() {
     assert_eq!(
         promise::promise_debug_state_result(

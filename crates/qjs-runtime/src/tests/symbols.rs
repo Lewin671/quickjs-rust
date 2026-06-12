@@ -120,7 +120,7 @@ fn evaluates_symbol_primitive_property_assignment() {
     );
     assert_eq!(
         eval(
-            "let receiver; Object.defineProperty(Symbol.prototype, 'a', { set: function(value) { receiver = this; } }); let symbol = Symbol('id'); symbol.a = 1; receiver === symbol && symbol.a === undefined;"
+            "let receiver; Object.defineProperty(Symbol.prototype, 'a', { set: function(value) { receiver = this; } }); let symbol = Symbol('id'); symbol.a = 1; receiver !== symbol && typeof receiver === 'object' && receiver.valueOf() === symbol && symbol.a === undefined;"
         ),
         Ok(Value::Boolean(true))
     );

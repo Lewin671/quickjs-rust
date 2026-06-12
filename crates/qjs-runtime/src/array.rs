@@ -23,7 +23,7 @@ pub(crate) use constructor::{
     native_array, native_array_from, native_array_from_async,
     native_array_from_async_array_like_mapped_fulfilled,
     native_array_from_async_array_like_value_fulfilled,
-    native_array_from_async_iterator_mapped_fulfilled,
+    native_array_from_async_iterator_mapped_fulfilled, native_array_from_async_iterator_rejected,
     native_array_from_async_iterator_step_fulfilled, native_array_from_async_rejected,
     native_array_is_array, native_array_of,
 };

@@ -33,6 +33,10 @@ pub(crate) fn ordinary_set(
     receiver: Value,
     env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
+    if let Value::Proxy(proxy) = &target {
+        return crate::proxy::proxy_set(proxy.clone(), key, value, receiver, env);
+    }
+
     if let Some(property) = own_property_descriptor_key(&target, key) {
         return ordinary_set_with_descriptor(property, key, value, receiver, env);
     }

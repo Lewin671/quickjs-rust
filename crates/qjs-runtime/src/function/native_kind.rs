@@ -6,6 +6,7 @@ pub(crate) enum NativeFunction {
     ArrayFromAsyncArrayLikeMappedFulfilled,
     ArrayFromAsyncArrayLikeValueFulfilled,
     ArrayFromAsyncIteratorMappedFulfilled,
+    ArrayFromAsyncIteratorRejected,
     ArrayFromAsyncIteratorStepFulfilled,
     ArrayFromAsyncRejected,
     ArrayIsArray,

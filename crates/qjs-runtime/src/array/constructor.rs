@@ -431,7 +431,8 @@ fn array_from_async_continue_iterator(state: &ObjectRef, env: &mut CallEnv) {
     };
     let on_fulfilled =
         array_from_async_reaction(NativeFunction::ArrayFromAsyncIteratorStepFulfilled, state);
-    let on_rejected = array_from_async_reaction(NativeFunction::ArrayFromAsyncRejected, state);
+    let on_rejected =
+        array_from_async_reaction(NativeFunction::ArrayFromAsyncIteratorRejected, state);
     crate::promise::perform_await(step, on_fulfilled, on_rejected, env);
 }
 
@@ -469,8 +470,10 @@ pub(crate) fn native_array_from_async_iterator_step_fulfilled(
                     NativeFunction::ArrayFromAsyncIteratorMappedFulfilled,
                     &state,
                 );
-                let on_rejected =
-                    array_from_async_reaction(NativeFunction::ArrayFromAsyncRejected, &state);
+                let on_rejected = array_from_async_reaction(
+                    NativeFunction::ArrayFromAsyncIteratorRejected,
+                    &state,
+                );
                 crate::promise::perform_await(mapped, on_fulfilled, on_rejected, env);
             }
             Err(error) => array_from_async_close_and_reject_error(&state, error, env),
@@ -489,6 +492,18 @@ pub(crate) fn native_array_from_async_iterator_mapped_fulfilled(
     let state = array_from_async_state(function)?;
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     array_from_async_store_and_continue_iterator(&state, value, env);
+    Ok(Value::Undefined)
+}
+
+pub(crate) fn native_array_from_async_iterator_rejected(
+    function: &Function,
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let state = array_from_async_state(function)?;
+    let reason = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    array_from_async_close_iterator(&state, env);
+    array_from_async_reject_value(&state, reason, env);
     Ok(Value::Undefined)
 }
 

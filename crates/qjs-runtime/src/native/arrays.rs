@@ -37,6 +37,9 @@ pub(super) fn call_array_native(
                 env,
             )?
         }
+        NativeFunction::ArrayFromAsyncIteratorRejected => {
+            array::native_array_from_async_iterator_rejected(function, argument_values, env)?
+        }
         NativeFunction::ArrayFromAsyncIteratorStepFulfilled => {
             array::native_array_from_async_iterator_step_fulfilled(function, argument_values, env)?
         }

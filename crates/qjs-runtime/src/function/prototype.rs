@@ -206,7 +206,12 @@ pub(crate) fn function_call_this(this_arg: Option<Value>, env: &CallEnv, is_stri
         Value::Null | Value::Undefined if !is_strict => {
             env.get(GLOBAL_THIS_BINDING).unwrap_or(Value::Undefined)
         }
-        Value::String(_) | Value::Number(_) | Value::Boolean(_) if !is_strict => {
+        Value::String(_) | Value::Number(_) | Value::Boolean(_) | Value::BigInt(_)
+            if !is_strict =>
+        {
+            boxed_primitive(this_value, env).expect("primitive value should box")
+        }
+        Value::Object(ref object) if !is_strict && crate::symbol::is_symbol_primitive(object) => {
             boxed_primitive(this_value, env).expect("primitive value should box")
         }
         value => value,

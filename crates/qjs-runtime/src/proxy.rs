@@ -183,6 +183,28 @@ pub(crate) fn proxy_has(
     Ok(is_truthy(&result))
 }
 
+pub(crate) fn proxy_set(
+    proxy: ProxyRef,
+    key: &PropertyKey,
+    value: Value,
+    receiver: Value,
+    env: &mut CallEnv,
+) -> Result<bool, RuntimeError> {
+    let target = proxy.target_result()?;
+    let handler = proxy.handler_result()?;
+    let Some(trap) = proxy_trap(handler.clone(), "set", env)? else {
+        return crate::reflect::ordinary_set(target, key, value, receiver, env);
+    };
+    let result = call_function(
+        trap,
+        handler,
+        vec![target, property_key_to_value(key), value, receiver],
+        env,
+        false,
+    )?;
+    Ok(is_truthy(&result))
+}
+
 pub(crate) fn proxy_delete_property(
     proxy: ProxyRef,
     key: &PropertyKey,
