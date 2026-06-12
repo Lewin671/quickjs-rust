@@ -2,7 +2,7 @@ use crate::{
     ArrayRef, Function, Property, PropertyKey, RuntimeError, Value, array_prototype, call_function,
     construct_function, is_truthy,
     object::{
-        PropertyDescriptor, array_length_from_descriptor_value,
+        PropertyDescriptor, array_length_from_descriptor_value, define_array_length_value,
         define_property_descriptor_on_value_key,
     },
     property_value, property_value_key,
@@ -141,12 +141,7 @@ fn array_from_array_like_result(
     for (index, value) in elements.values.into_iter().enumerate() {
         create_data_property_or_throw(target.clone(), index.to_string(), value, env)?;
     }
-    create_data_property_or_throw(
-        target.clone(),
-        "length".to_owned(),
-        Value::Number(length as f64),
-        env,
-    )?;
+    set_array_from_length(target.clone(), length, env)?;
     Ok(target)
 }
 
@@ -281,6 +276,16 @@ fn set_array_from_length(
     length: usize,
     env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
+    if let Value::Array(elements) = &target {
+        if define_array_length_value(elements, Value::Number(length as f64), env)? {
+            return Ok(());
+        }
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Array.from cannot set result length".to_owned(),
+        });
+    }
+
     let key = PropertyKey::String("length".to_owned());
     let value = Value::Number(length as f64);
     if ordinary_set(target.clone(), &key, value, target, env)? {
