@@ -21,8 +21,7 @@ case "$timeout_seconds" in
 esac
 
 if command -v timeout >/dev/null 2>&1; then
-  timeout "$timeout_seconds" "$@"
-  exit $?
+  exec timeout "$timeout_seconds" "$@"
 fi
 
 perl -MPOSIX=':sys_wait_h' -e '
