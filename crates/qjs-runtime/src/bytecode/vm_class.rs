@@ -126,9 +126,14 @@ impl Vm<'_> {
         // immediately, and stash field definitions (with their resolved keys)
         // and static blocks in source order for pass 2.
         let mut pending = Vec::new();
+        let mut queued_private_brands = Vec::new();
         for element in elements {
             if let ClassElementDef::Private(private) = element {
-                self.queue_instance_private_method_brand(private, &constructor_function);
+                self.queue_instance_private_method_brand(
+                    private,
+                    &constructor_function,
+                    &mut queued_private_brands,
+                );
             }
         }
         for element in elements {

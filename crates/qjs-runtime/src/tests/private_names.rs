@@ -48,6 +48,40 @@ fn writes_private_instance_field() {
 }
 
 #[test]
+fn duplicate_private_method_or_accessor_brand_is_type_error() {
+    let method = eval(
+        "class Base { constructor(o) { return o; } } \
+         class C extends Base { #m() {} } \
+         let obj = {}; new C(obj); new C(obj);",
+    );
+    assert!(
+        matches!(method, Err(ref error) if error.message.contains("TypeError")),
+        "expected duplicate private method brand TypeError, got {method:?}"
+    );
+
+    let accessor = eval(
+        "class Base { constructor(o) { return o; } } \
+         class C extends Base { get #p() { return 1; } set #p(v) {} } \
+         let obj = {}; new C(obj); new C(obj);",
+    );
+    assert!(
+        matches!(accessor, Err(ref error) if error.message.contains("TypeError")),
+        "expected duplicate private accessor brand TypeError, got {accessor:?}"
+    );
+}
+
+#[test]
+fn private_getter_setter_pair_brands_once_per_instance() {
+    assert_eq!(
+        eval(
+            "class C { get #p() { return 1; } set #p(v) {} read() { return this.#p; } } \
+             new C().read();"
+        ),
+        Ok(Value::Number(1.0))
+    );
+}
+
+#[test]
 fn instance_public_and_private_fields_initialize_in_source_order() {
     assert_eq!(
         eval("class C { #x; y = this.#x; } new C().y;"),

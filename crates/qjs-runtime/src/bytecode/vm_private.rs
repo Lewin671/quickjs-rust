@@ -270,8 +270,9 @@ impl Vm<'_> {
         &self,
         element: &ClassPrivateElementDef,
         constructor_function: &Function,
+        queued_names: &mut Vec<String>,
     ) {
-        match element {
+        let name = match element {
             ClassPrivateElementDef::Method {
                 name: method_name,
                 is_static: false,
@@ -286,14 +287,17 @@ impl Vm<'_> {
                 name: method_name,
                 is_static: false,
                 ..
-            } => {
-                constructor_function.push_instance_private_element(InstancePrivateElement {
-                    name: method_name.clone(),
-                    field_initializer: None,
-                });
-            }
-            _ => {}
+            } => method_name,
+            _ => return,
+        };
+        if queued_names.iter().any(|queued| queued == name) {
+            return;
         }
+        queued_names.push(name.clone());
+        constructor_function.push_instance_private_element(InstancePrivateElement {
+            name: name.clone(),
+            field_initializer: None,
+        });
     }
 
     fn run_private_field_initializer(
@@ -465,7 +469,17 @@ pub(crate) fn apply_instance_private_element(
                 });
             }
         }
-        None => storage.add_brand(binding.id),
+        None => {
+            if !storage.add_brand(binding.id.clone()) {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: format!(
+                        "TypeError: private member #{} is already present on the object",
+                        binding.id.description()
+                    ),
+                });
+            }
+        }
     }
     Ok(())
 }

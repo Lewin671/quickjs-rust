@@ -258,13 +258,15 @@ impl PrivateStorage {
     }
 
     /// Brands the object with a method/accessor private name (no stored value).
-    pub(crate) fn add_brand(&self, id: PrivateName) {
+    /// Returns `false` when that private name is already present.
+    pub(crate) fn add_brand(&self, id: PrivateName) -> bool {
         if self.has(&id) {
-            return;
+            return false;
         }
         self.slots
             .borrow_mut()
             .push(PrivateSlot { id, value: None });
+        true
     }
 
     /// Installs an instance/static private field value. Returns `false` when a
