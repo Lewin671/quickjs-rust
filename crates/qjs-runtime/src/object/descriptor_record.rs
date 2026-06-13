@@ -217,6 +217,25 @@ impl PropertyDescriptor {
         }
     }
 
+    pub(crate) fn from_complete_property(property: Property) -> Self {
+        if property.is_accessor() {
+            return Self {
+                value: None,
+                writable: None,
+                get: Some(property.get),
+                set: Some(property.set),
+                enumerable: Some(property.enumerable),
+                configurable: Some(property.configurable),
+            };
+        }
+        Self::data(
+            property.value,
+            property.writable,
+            property.enumerable,
+            property.configurable,
+        )
+    }
+
     pub(super) fn data_value(value: Value) -> Self {
         Self {
             value: Some(value),

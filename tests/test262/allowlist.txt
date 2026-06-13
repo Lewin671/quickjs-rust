@@ -2628,6 +2628,17 @@ cases/array-splice-negative-start.js
 cases/array-splice-object-generic.js
 cases/array-splice-omitted-delete-count.js
 cases/array-splice-result-length-range.js
+test/built-ins/Array/prototype/splice/create-proto-from-ctor-realm-non-array.js
+test/built-ins/Array/prototype/splice/create-proxy.js
+test/built-ins/Array/prototype/splice/create-species-abrupt.js
+test/built-ins/Array/prototype/splice/create-species-length-exceeding-integer-limit.js
+test/built-ins/Array/prototype/splice/create-species-neg-zero.js
+test/built-ins/Array/prototype/splice/create-species-non-ctor.js
+test/built-ins/Array/prototype/splice/create-species-poisoned.js
+test/built-ins/Array/prototype/splice/create-species.js
+test/built-ins/Array/prototype/splice/property-traps-order-with-species.js
+test/built-ins/Array/prototype/splice/target-array-non-extensible.js
+test/built-ins/Array/prototype/splice/target-array-with-non-configurable-property.js
 cases/array-to-string-basic.js
 cases/array-to-string-boolean-primitive.js
 cases/array-to-string-length.js

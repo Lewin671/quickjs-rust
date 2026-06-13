@@ -536,7 +536,7 @@ pub(crate) fn define_property_on_value_key(
     let key = match key {
         PropertyKey::String(key) => key,
         PropertyKey::Symbol(symbol) => {
-            return define_symbol_property_on_value(target, symbol, descriptor);
+            return define_symbol_property_on_value(target, symbol, descriptor, env);
         }
     };
     match &target {
@@ -610,12 +610,20 @@ pub(crate) fn define_property_on_value_key(
             }
             Ok(true)
         }
-        Value::Proxy(proxy) => define_property_on_value_key(
-            proxy.target_result()?,
-            PropertyKey::String(key),
-            descriptor,
-            env,
-        ),
+        Value::Proxy(proxy) => {
+            let proxy_key = PropertyKey::String(key);
+            let proxy_descriptor = PropertyDescriptor::from_complete_property(descriptor.clone());
+            let forward_key = proxy_key.clone();
+            crate::proxy::proxy_define_property(
+                proxy.clone(),
+                &proxy_key,
+                &proxy_descriptor,
+                env,
+                move |target, env| {
+                    define_property_on_value_key(target, forward_key, descriptor, env)
+                },
+            )
+        }
         _ => {
             ensure_define_property_target(&target)?;
             unreachable!("define property target validation should reject unsupported values")
@@ -627,6 +635,7 @@ fn define_symbol_property_on_value(
     target: Value,
     symbol: ObjectRef,
     descriptor: Property,
+    env: &mut CallEnv,
 ) -> Result<bool, RuntimeError> {
     match &target {
         Value::Object(object) => {
@@ -697,7 +706,15 @@ fn define_symbol_property_on_value(
             Ok(true)
         }
         Value::Proxy(proxy) => {
-            define_symbol_property_on_value(proxy.target_result()?, symbol, descriptor)
+            let proxy_key = PropertyKey::Symbol(symbol.clone());
+            let proxy_descriptor = PropertyDescriptor::from_complete_property(descriptor.clone());
+            crate::proxy::proxy_define_property(
+                proxy.clone(),
+                &proxy_key,
+                &proxy_descriptor,
+                env,
+                move |target, env| define_symbol_property_on_value(target, symbol, descriptor, env),
+            )
         }
         _ => {
             ensure_define_property_target(&target)?;

@@ -94,4 +94,36 @@ fn evaluates_array_splice_species_constructor_validation() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "let target; function C(length) { this.lengthValue = length; target = this; } let array = [1, 2, 3, 4]; array.constructor = {}; array.constructor[Symbol.species] = C; let removed = array.splice(1, 2); removed === target && removed.lengthValue === 2 && removed[0] === 2 && removed[1] === 3 && removed.length === 2 && array.join() === '1,4';"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let calls = 0; function C(length) { calls = calls + 1; this.lengthValue = length; } let array = [1]; array.constructor = {}; array.constructor[Symbol.species] = C; let removed = array.splice(0, 0); calls + ':' + removed.lengthValue + ':' + removed.length;"
+        ),
+        Ok(Value::String("1:0:0".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let target = {}; Object.preventExtensions(target); function C() { return target; } let array = [1]; array.constructor = {}; array.constructor[Symbol.species] = C; let caught = false; try { array.splice(0); } catch (error) { caught = error.constructor === TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let target = {}; Object.defineProperty(target, '0', { value: 1, configurable: false }); function C() { return target; } let array = [2]; array.constructor = {}; array.constructor[Symbol.species] = C; let caught = false; try { array.splice(0); } catch (error) { caught = error.constructor === TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let log = []; let array = [0, 1]; array.constructor = {}; array.constructor[Symbol.species] = function(length) { return new Proxy(new Array(length), new Proxy({}, { get: function(target, key) { log.push(key); } })); }; array.splice(0); log.join('|');"
+        ),
+        Ok(Value::String(
+            "defineProperty|defineProperty|set|getOwnPropertyDescriptor|defineProperty".to_owned()
+        ))
+    );
 }

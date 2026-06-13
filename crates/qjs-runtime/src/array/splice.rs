@@ -1,15 +1,13 @@
-use crate::{ArrayRef, RuntimeError, Value, has_property, property_value, to_number_with_env};
+use crate::{RuntimeError, Value, has_property, property_value, to_number_with_env};
 
 use super::{
     array_like::array_like_length,
     mutation::{delete_array_like_property, set_array_like_property},
-    species::validate_array_species_constructor,
+    species::{array_species_create, create_data_property_or_throw},
 };
 use crate::CallEnv;
 
 const MAX_SAFE_INTEGER_LENGTH: usize = 9_007_199_254_740_991;
-const MAX_ARRAY_LENGTH: usize = u32::MAX as usize;
-
 pub(crate) fn native_array_prototype_splice(
     this_value: Value,
     argument_values: &[Value],
@@ -28,7 +26,6 @@ pub(crate) fn native_array_prototype_splice(
         env,
     )?;
     let delete_count = splice_delete_count(length, start, argument_values, env)?;
-    validate_array_species_constructor(receiver.clone(), "splice", env)?;
     let items = if argument_values.len() > 2 {
         &argument_values[2..]
     } else {
@@ -39,13 +36,6 @@ pub(crate) fn native_array_prototype_splice(
         .and_then(|length| length.checked_add(items.len()))
         .filter(|length| *length <= MAX_SAFE_INTEGER_LENGTH)
         .ok_or_else(splice_length_error)?;
-    if delete_count > MAX_ARRAY_LENGTH {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "RangeError: invalid array length".to_owned(),
-        });
-    }
-
     let removed = splice_removed_elements(receiver.clone(), start, delete_count, env)?;
     move_splice_tail(
         receiver.clone(),
@@ -64,7 +54,7 @@ pub(crate) fn native_array_prototype_splice(
         Value::Number(new_length as f64),
         env,
     )?;
-    Ok(Value::Array(ArrayRef::new(removed)))
+    Ok(removed)
 }
 
 pub(super) fn splice_start_with_env(
@@ -119,16 +109,25 @@ fn splice_removed_elements(
     start: usize,
     delete_count: usize,
     env: &mut CallEnv,
-) -> Result<Vec<Value>, RuntimeError> {
-    let mut removed = Vec::with_capacity(delete_count);
+) -> Result<Value, RuntimeError> {
+    let removed = array_species_create(receiver.clone(), delete_count, "splice", env)?;
     for offset in 0..delete_count {
         let key = (start + offset).to_string();
         if has_property(receiver.clone(), env, &key)? {
-            removed.push(property_value(receiver.clone(), &key, env)?);
-        } else {
-            removed.push(Value::Undefined);
+            create_data_property_or_throw(
+                removed.clone(),
+                offset.to_string(),
+                property_value(receiver.clone(), &key, env)?,
+                env,
+            )?;
         }
     }
+    set_array_like_property(
+        removed.clone(),
+        "length".to_owned(),
+        Value::Number(delete_count as f64),
+        env,
+    )?;
     Ok(removed)
 }
 

@@ -4,6 +4,8 @@ use crate::{
     property_value, property_value_key, symbol,
 };
 
+const MAX_ARRAY_LENGTH: usize = u32::MAX as usize;
+
 pub(super) fn array_species_create(
     receiver: Value,
     length: usize,
@@ -11,7 +13,7 @@ pub(super) fn array_species_create(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if !is_array_species_receiver(&receiver)? {
-        return Ok(Value::Array(ArrayRef::new_with_length(length)));
+        return default_array_species_create(length);
     }
 
     let mut constructor = property_value(receiver, "constructor", env)?;
@@ -27,7 +29,7 @@ pub(super) fn array_species_create(
         }
     }
     if matches!(constructor, Value::Undefined) {
-        return Ok(Value::Array(ArrayRef::new_with_length(length)));
+        return default_array_species_create(length);
     }
     ensure_constructor(&constructor).map_err(|_| RuntimeError {
         thrown: None,
@@ -39,6 +41,16 @@ pub(super) fn array_species_create(
         vec![Value::Number(length as f64)],
         env,
     )
+}
+
+fn default_array_species_create(length: usize) -> Result<Value, RuntimeError> {
+    if length > MAX_ARRAY_LENGTH {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "RangeError: invalid array length".to_owned(),
+        });
+    }
+    Ok(Value::Array(ArrayRef::new_with_length(length)))
 }
 
 pub(super) fn validate_array_species_constructor(
