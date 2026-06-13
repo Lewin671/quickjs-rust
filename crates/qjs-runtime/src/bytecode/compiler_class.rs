@@ -25,7 +25,8 @@ impl Compiler {
         };
 
         self.with_lexical_scope(|compiler| {
-            let slot = compiler.declare_lexical_slot(name, false);
+            let storage_name = format!("\0class_expr_inner:{}:{}", name, compiler.locals.len());
+            let slot = compiler.declare_lexical_slot_with_storage_name(name, &storage_name, false);
             compiler.emit(Op::ClearLocal(slot));
             compiler.compile_class(Some(name), body)?;
             compiler.emit(Op::Dup);

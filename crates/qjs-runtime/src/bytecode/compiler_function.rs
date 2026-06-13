@@ -3,6 +3,7 @@ use qjs_ast::{FunctionParams, Stmt};
 use crate::RuntimeError;
 
 use super::compiler::{Compiler, compile_function_body_with_strict_generator};
+use super::compiler_lexical::LexicalCapture;
 use super::ir::Bytecode;
 
 fn compile_with_captured_lexicals(
@@ -11,13 +12,20 @@ fn compile_with_captured_lexicals(
     is_strict: bool,
     is_generator: bool,
     is_async: bool,
-    captured_lexicals: &[(String, bool)],
+    captured_lexicals: &[(&str, &str, bool)],
 ) -> Result<Bytecode, RuntimeError> {
     let mut compiler = Compiler::function_compiler(is_strict, is_generator && is_async);
-    for (name, mutable) in captured_lexicals {
-        compiler.declare_captured_lexical_slot(name, *mutable);
+    for (name, storage_name, mutable) in captured_lexicals {
+        compiler.declare_captured_lexical_slot_with_storage_name(name, storage_name, *mutable);
     }
     compiler.compile_function(params, body)
+}
+
+fn runtime_lexical_captures(captures: Vec<LexicalCapture>) -> Vec<(String, usize)> {
+    captures
+        .into_iter()
+        .map(|capture| (capture.storage_name, capture.slot))
+        .collect()
 }
 
 impl Compiler {
@@ -41,7 +49,13 @@ impl Compiler {
         if !lexical_captures.is_empty() {
             let captured_lexicals = lexical_captures
                 .iter()
-                .map(|(name, slot)| (name.clone(), self.locals[*slot].mutable))
+                .map(|capture| {
+                    (
+                        capture.name.as_str(),
+                        capture.storage_name.as_str(),
+                        self.locals[capture.slot].mutable,
+                    )
+                })
                 .collect::<Vec<_>>();
             bytecode = compile_with_captured_lexicals(
                 params,
@@ -53,6 +67,6 @@ impl Compiler {
             )?;
             lexical_captures = self.active_lexical_captures(&bytecode, local_names);
         }
-        Ok((bytecode, lexical_captures))
+        Ok((bytecode, runtime_lexical_captures(lexical_captures)))
     }
 }

@@ -8,9 +8,8 @@ use crate::{
 };
 
 use super::compiler_lexical::{
-    catch_param_annex_b_blocked_names, current_scope_lexical_declared_bindings,
-    function_body_annex_b_blocked_names, function_param_names, lexical_declared_names,
-    nested_block_annex_b_blocked_names, switch_lexical_declared_names,
+    catch_param_annex_b_blocked_names, function_body_annex_b_blocked_names, function_param_names,
+    lexical_declared_names, nested_block_annex_b_blocked_names, switch_lexical_declared_names,
 };
 use super::ir::{Bytecode, Local, Op};
 use super::util::{stmt_accepts_pending_label, stmt_updates_statement_list_completion};
@@ -19,7 +18,7 @@ pub(super) struct Compiler {
     pub(super) constants: Vec<Value>,
     pub(super) locals: Vec<Local>,
     pub(super) local_slots: HashMap<String, usize>,
-    lexical_scopes: Vec<HashMap<String, usize>>,
+    pub(super) lexical_scopes: Vec<HashMap<String, usize>>,
     pub(super) code: Vec<Op>,
     loop_stack: Vec<LoopContext>,
     pending_labels: Vec<String>,
@@ -29,7 +28,7 @@ pub(super) struct Compiler {
     /// Names of `var`/function declarations hoisted at global script scope.
     /// They live in the realm (and on `globalThis`), not in frame slots, so
     /// deferred closures, direct eval, and promise jobs observe one binding.
-    global_hoisted: std::collections::HashSet<String>,
+    pub(super) global_hoisted: std::collections::HashSet<String>,
     annex_b_blocked_function_names: Vec<Vec<String>>,
     /// Count of `with` scopes currently open around the code being compiled.
     /// Break/continue/return that leave one or more of them emit `Op::ExitWith`
@@ -402,147 +401,6 @@ impl Compiler {
         slot
     }
 
-    pub(super) fn declare_lexical_slot(&mut self, name: &str, mutable: bool) -> usize {
-        if let Some(slot) = self.current_lexical_scope().get(name) {
-            return *slot;
-        }
-        let slot = self.locals.len();
-        self.locals.push(Local {
-            name: name.to_owned(),
-            hoisted: false,
-            parameter: false,
-            mutable,
-            from_env: false,
-            sloppy_global_fallback: false,
-        });
-        self.current_lexical_scope_mut()
-            .insert(name.to_owned(), slot);
-        slot
-    }
-
-    pub(super) fn declare_captured_lexical_slot(&mut self, name: &str, mutable: bool) -> usize {
-        if let Some(slot) = self.current_lexical_scope().get(name) {
-            return *slot;
-        }
-        let slot = self.locals.len();
-        self.locals.push(Local {
-            name: name.to_owned(),
-            hoisted: false,
-            parameter: false,
-            mutable,
-            from_env: true,
-            sloppy_global_fallback: false,
-        });
-        self.current_lexical_scope_mut()
-            .insert(name.to_owned(), slot);
-        slot
-    }
-
-    pub(super) fn resolve_local_slot(&self, name: &str) -> Option<usize> {
-        let lexical = self
-            .lexical_scopes
-            .iter()
-            .rev()
-            .find_map(|scope| scope.get(name).copied());
-        if lexical.is_some() {
-            return lexical;
-        }
-        // Global-scope `var`/function bindings live in the realm, not in
-        // frame slots: every identifier reference compiles to a global op so
-        // eval'd code and deferred jobs share the same binding.
-        if self.global_scope && self.global_hoisted.contains(name) {
-            return None;
-        }
-        self.local_slots
-            .get(name)
-            .copied()
-            .filter(|slot| !self.locals[*slot].sloppy_global_fallback)
-    }
-
-    pub(super) fn is_global_hoisted(&self, name: &str) -> bool {
-        self.global_scope && self.global_hoisted.contains(name)
-    }
-
-    pub(super) fn assignment_slot(&mut self, name: &str) -> usize {
-        if let Some(slot) = self.resolve_local_slot(name) {
-            return slot;
-        }
-        if let Some(slot) = self.local_slots.get(name) {
-            return *slot;
-        }
-        let slot = self.locals.len();
-        self.locals.push(Local {
-            name: name.to_owned(),
-            hoisted: false,
-            parameter: false,
-            mutable: true,
-            from_env: false,
-            sloppy_global_fallback: true,
-        });
-        self.local_slots.insert(name.to_owned(), slot);
-        slot
-    }
-
-    pub(super) fn with_lexical_scope<T>(
-        &mut self,
-        compile: impl FnOnce(&mut Self) -> Result<T, RuntimeError>,
-    ) -> Result<T, RuntimeError> {
-        self.lexical_scopes.push(HashMap::new());
-        let result = compile(self);
-        self.lexical_scopes
-            .pop()
-            .expect("lexical scope stack should be balanced");
-        result
-    }
-
-    pub(super) fn current_lexical_slots_for_names(&self, names: &[String]) -> Vec<usize> {
-        let Some(scope) = self.lexical_scopes.last() else {
-            return Vec::new();
-        };
-        let mut slots = Vec::new();
-        for name in names {
-            if let Some(slot) = scope.get(name)
-                && !slots.contains(slot)
-            {
-                slots.push(*slot);
-            }
-        }
-        slots
-    }
-
-    pub(super) fn active_lexical_captures(
-        &self,
-        function_bytecode: &Bytecode,
-        function_local_names: &[String],
-    ) -> Vec<(String, usize)> {
-        let mut captures = Vec::new();
-        for name in function_bytecode
-            .global_names()
-            .iter()
-            .map(String::as_str)
-            .chain(function_bytecode.local_names())
-        {
-            if function_local_names
-                .binary_search_by(|local| local.as_str().cmp(name))
-                .is_ok()
-            {
-                continue;
-            }
-            if let Some(slot) = self.resolve_active_lexical_slot(name)
-                && !captures.iter().any(|(_, existing)| *existing == slot)
-            {
-                captures.push((name.to_owned(), slot));
-            }
-        }
-        captures
-    }
-
-    pub(super) fn predeclare_current_scope_lexicals(&mut self, body: &[Stmt]) {
-        for (name, mutable) in current_scope_lexical_declared_bindings(body) {
-            self.declare_lexical_slot(&name, mutable);
-        }
-    }
-
     pub(super) fn with_annex_b_blocked_function_names<T>(
         &mut self,
         names: &[String],
@@ -568,25 +426,6 @@ impl Compiler {
 
     pub(super) fn annex_b_arguments_function_name_blocked(&self, name: &str) -> bool {
         name == "arguments" && self.annex_b_function_name_blocked(name)
-    }
-
-    fn current_lexical_scope(&self) -> &HashMap<String, usize> {
-        self.lexical_scopes
-            .last()
-            .expect("compiler should always have a lexical scope")
-    }
-
-    fn current_lexical_scope_mut(&mut self) -> &mut HashMap<String, usize> {
-        self.lexical_scopes
-            .last_mut()
-            .expect("compiler should always have a lexical scope")
-    }
-
-    fn resolve_active_lexical_slot(&self, name: &str) -> Option<usize> {
-        self.lexical_scopes
-            .iter()
-            .rev()
-            .find_map(|scope| scope.get(name).copied())
     }
 
     pub(super) fn const_slot(&mut self, value: Value) -> usize {
@@ -929,7 +768,17 @@ impl Compiler {
                 // Class declarations create a lexical (`let`-like) binding.
                 let slot = self.declare_lexical_slot(name, true);
                 self.emit(Op::ClearLocal(slot));
-                self.compile_class(Some(name), body)?;
+                self.with_lexical_scope(|compiler| {
+                    let storage_name =
+                        format!("\0class_decl_inner:{}:{}", name, compiler.locals.len());
+                    let inner_slot =
+                        compiler.declare_lexical_slot_with_storage_name(name, &storage_name, false);
+                    compiler.emit(Op::ClearLocal(inner_slot));
+                    compiler.compile_class(Some(name), body)?;
+                    compiler.emit(Op::Dup);
+                    compiler.emit(Op::StoreLocal(inner_slot));
+                    Ok(())
+                })?;
                 self.emit(Op::StoreLocal(slot));
                 self.emit_load_undefined();
                 Ok(())

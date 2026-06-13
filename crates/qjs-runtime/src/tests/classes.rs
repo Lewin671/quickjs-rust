@@ -733,6 +733,36 @@ fn named_class_expression_heritage_uses_inner_tdz_binding() {
 }
 
 #[test]
+fn class_declaration_heritage_uses_inner_tdz_binding() {
+    let result = eval("class C extends C {}");
+    assert!(
+        matches!(&result, Err(error) if error.message.contains("ReferenceError")),
+        "expected ReferenceError, got {result:?}"
+    );
+}
+
+#[test]
+fn class_declaration_heritage_closures_capture_inner_name_binding() {
+    assert_eq!(
+        eval(
+            "var setBefore = function() { C = null; }; \
+             var probeBefore = function() { return C; }; \
+             var probeHeritage, setHeritage; \
+             class C extends ( \
+               probeHeritage = function() { return C; }, \
+               setHeritage = function() { C = null; } \
+             ) {} \
+             var cls = probeBefore(); \
+             setBefore(); \
+             var threw = false; \
+             try { setHeritage(); } catch (error) { threw = error instanceof TypeError; } \
+             [probeBefore() === null, probeHeritage() === cls, threw].join(':');"
+        ),
+        Ok(Value::String("true:true:true".to_owned()))
+    );
+}
+
+#[test]
 fn named_class_expression_inner_binding_is_visible_to_methods() {
     assert_eq!(
         eval("let C = class Inner { static self() { return Inner; } }; C.self() === C;"),
