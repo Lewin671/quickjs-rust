@@ -28,6 +28,7 @@ const HELPER_REMAINING: &str = "\0iterator_helper_remaining";
 const HELPER_COUNTER: &str = "\0iterator_helper_counter";
 const HELPER_DONE: &str = "\0iterator_helper_done";
 const HELPER_INNER: &str = "\0iterator_helper_inner_alive";
+const HELPER_EXECUTING: &str = "\0iterator_helper_executing";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum HelperKind {
@@ -69,14 +70,19 @@ fn iterator_direct(
     method: &str,
     env: &mut CallEnv,
 ) -> Result<(Value, Value), RuntimeError> {
+    let iterator = iterator_receiver(this_value, method)?;
+    let next = property_value(iterator.clone(), "next", env)?;
+    Ok((iterator, next))
+}
+
+fn iterator_receiver(this_value: &Value, method: &str) -> Result<Value, RuntimeError> {
     if !matches!(this_value, Value::Object(_)) {
         return Err(RuntimeError {
             thrown: None,
             message: format!("TypeError: Iterator.prototype.{method} called on a non-object"),
         });
     }
-    let next = property_value(this_value.clone(), "next", env)?;
-    Ok((this_value.clone(), next))
+    Ok(this_value.clone())
 }
 
 /// Dispatches the lazy helper constructors.
@@ -95,13 +101,39 @@ pub(super) fn native_lazy_helper(
         _ => unreachable!("native_lazy_helper received a non-helper native"),
     };
 
-    let (iterator, next) = iterator_direct(&this_value, method, env)?;
+    let mut checked_limit = None;
+    let (iterator, next) = match kind {
+        HelperKind::Map | HelperKind::Filter | HelperKind::FlatMap => {
+            iterator_direct(&this_value, method, env)?
+        }
+        HelperKind::Take | HelperKind::Drop => {
+            let iterator = iterator_receiver(&this_value, method)?;
+            let raw = argument_values.first().cloned().unwrap_or(Value::Undefined);
+            let limit = match number_to_integer_or_infinity(raw, env) {
+                Ok(value) => value,
+                Err(err) => return Err(iterator_close_on_throw(&iterator, err, env)),
+            };
+            if limit.is_nan() || limit < 0.0 {
+                let err = RuntimeError {
+                    thrown: None,
+                    message: format!(
+                        "RangeError: Iterator.prototype.{method} argument must not be negative or NaN"
+                    ),
+                };
+                return Err(iterator_close_on_throw(&iterator, err, env));
+            }
+            let next = property_value(iterator.clone(), "next", env)?;
+            checked_limit = Some(limit);
+            (iterator, next)
+        }
+    };
 
     let helper = ObjectRef::with_prototype(HashMap::new(), super::iterator_helper_prototype(env));
     helper.define_non_enumerable(HELPER_KIND.to_owned(), Value::String(kind.tag().to_owned()));
     helper.define_non_enumerable(HELPER_UNDERLYING.to_owned(), iterator.clone());
     helper.define_non_enumerable(HELPER_NEXT.to_owned(), next);
     helper.define_non_enumerable(HELPER_DONE.to_owned(), Value::Boolean(false));
+    helper.define_non_enumerable(HELPER_EXECUTING.to_owned(), Value::Boolean(false));
     helper.define_non_enumerable(HELPER_COUNTER.to_owned(), Value::Number(0.0));
 
     match kind {
@@ -121,20 +153,7 @@ pub(super) fn native_lazy_helper(
             helper.define_non_enumerable(HELPER_CALLBACK.to_owned(), callback);
         }
         HelperKind::Take | HelperKind::Drop => {
-            let raw = argument_values.first().cloned().unwrap_or(Value::Undefined);
-            let limit = match number_to_integer_or_infinity(raw, env) {
-                Ok(value) => value,
-                Err(err) => return Err(iterator_close_on_throw(&iterator, err, env)),
-            };
-            if limit.is_nan() || limit < 0.0 {
-                let err = RuntimeError {
-                    thrown: None,
-                    message: format!(
-                        "RangeError: Iterator.prototype.{method} argument must not be negative or NaN"
-                    ),
-                };
-                return Err(iterator_close_on_throw(&iterator, err, env));
-            }
+            let limit = checked_limit.expect("take/drop limit was checked before helper creation");
             helper.define_non_enumerable(HELPER_REMAINING.to_owned(), Value::Number(limit));
         }
     }
@@ -173,6 +192,17 @@ fn helper_done(helper: &ObjectRef) -> bool {
     )
 }
 
+fn helper_executing(helper: &ObjectRef) -> bool {
+    matches!(
+        helper.own_property(HELPER_EXECUTING).map(|p| p.value),
+        Some(Value::Boolean(true))
+    )
+}
+
+fn set_executing(helper: &ObjectRef, executing: bool) {
+    helper.define_non_enumerable(HELPER_EXECUTING.to_owned(), Value::Boolean(executing));
+}
+
 fn set_done(helper: &ObjectRef) {
     helper.define_non_enumerable(HELPER_DONE.to_owned(), Value::Boolean(true));
 }
@@ -201,6 +231,12 @@ pub(super) fn native_helper_next(
     if helper_done(&helper) {
         return Ok(iterator_result(Value::Undefined, true));
     }
+    if helper_executing(&helper) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: iterator helper is already executing".to_owned(),
+        });
+    }
     let Some(iterator) = helper_slot(&helper, HELPER_UNDERLYING) else {
         return Err(not_a_helper());
     };
@@ -208,7 +244,11 @@ pub(super) fn native_helper_next(
         return Err(not_a_helper());
     };
 
-    match advance(kind, &helper, &iterator, &next, env) {
+    set_executing(&helper, true);
+    let advanced = advance(kind, &helper, &iterator, &next, env);
+    set_executing(&helper, false);
+
+    match advanced {
         Ok(Some(value)) => Ok(iterator_result(value, false)),
         Ok(None) => {
             set_done(&helper);

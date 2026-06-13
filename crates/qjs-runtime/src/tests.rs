@@ -17,6 +17,7 @@ mod expressions;
 mod functions;
 mod generators;
 mod global;
+mod iterator_helpers;
 mod json;
 mod maps;
 mod math;
