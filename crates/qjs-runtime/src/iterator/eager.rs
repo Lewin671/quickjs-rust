@@ -1,8 +1,8 @@
 //! Eager iterator helpers: `reduce`, `toArray`, `forEach`, `some`, `every`, and
-//! `find`. Each validates the receiver as an object, reads its `next` method,
-//! drives the iterator protocol, and closes the iterator (via IteratorClose
-//! with a throw completion) when the callback or a derived step completes
-//! abruptly.
+//! `find`. Callback-taking helpers validate the receiver, validate the callback,
+//! then read the receiver's `next` method, matching the Iterator Helpers
+//! algorithms' observable order. They close the iterator (via IteratorClose with
+//! a throw completion) when validation or callback execution completes abruptly.
 
 use crate::{
     ArrayRef, NativeFunction, RuntimeError, Value, call_function, is_truthy, property_value,
@@ -11,20 +11,25 @@ use crate::{
 use super::protocol::{iterator_close_on_throw, iterator_step, iterator_value};
 use crate::CallEnv;
 
-/// Validates the receiver and reads its `next` method (GetIteratorDirect).
-fn iterator_direct(
-    this_value: &Value,
-    method: &str,
-    env: &mut CallEnv,
-) -> Result<(Value, Value), RuntimeError> {
+fn iterator_receiver(this_value: &Value, method: &str) -> Result<Value, RuntimeError> {
     if !matches!(this_value, Value::Object(_)) {
         return Err(RuntimeError {
             thrown: None,
             message: format!("TypeError: Iterator.prototype.{method} called on a non-object"),
         });
     }
-    let next = property_value(this_value.clone(), "next", env)?;
-    Ok((this_value.clone(), next))
+    Ok(this_value.clone())
+}
+
+/// Validates the receiver and reads its `next` method (GetIteratorDirect).
+fn iterator_direct(
+    this_value: &Value,
+    method: &str,
+    env: &mut CallEnv,
+) -> Result<(Value, Value), RuntimeError> {
+    let iterator = iterator_receiver(this_value, method)?;
+    let next = property_value(iterator.clone(), "next", env)?;
+    Ok((iterator, next))
 }
 
 fn require_callback(
@@ -85,8 +90,9 @@ fn reduce(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let (iterator, next) = iterator_direct(&this_value, "reduce", env)?;
+    let iterator = iterator_receiver(&this_value, "reduce")?;
     let reducer = require_callback(argument_values, &iterator, "reduce", env)?;
+    let next = property_value(iterator.clone(), "next", env)?;
 
     let mut counter = 0.0_f64;
     let (mut accumulator, has_initial) = match argument_values.get(1) {
@@ -142,8 +148,9 @@ fn for_each(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let (iterator, next) = iterator_direct(&this_value, "forEach", env)?;
+    let iterator = iterator_receiver(&this_value, "forEach")?;
     let callback = require_callback(argument_values, &iterator, "forEach", env)?;
+    let next = property_value(iterator.clone(), "next", env)?;
     let mut counter = 0.0_f64;
     while let Some(result) = iterator_step(&iterator, &next, env)? {
         let value = iterator_value(result, env)?;
@@ -175,8 +182,9 @@ fn predicate(
     method: &str,
     kind: PredicateKind,
 ) -> Result<Value, RuntimeError> {
-    let (iterator, next) = iterator_direct(&this_value, method, env)?;
+    let iterator = iterator_receiver(&this_value, method)?;
     let callback = require_callback(argument_values, &iterator, method, env)?;
+    let next = property_value(iterator.clone(), "next", env)?;
     let mut counter = 0.0_f64;
     while let Some(result) = iterator_step(&iterator, &next, env)? {
         let value = iterator_value(result, env)?;

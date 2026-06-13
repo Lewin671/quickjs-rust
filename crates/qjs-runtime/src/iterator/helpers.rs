@@ -13,8 +13,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    NativeFunction, ObjectRef, Property, RuntimeError, Value, call_function, is_truthy,
-    property_value, to_number_with_env,
+    NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function,
+    is_truthy, property_value, property_value_key, symbol, to_number_with_env,
 };
 
 use super::protocol::{iterator_close_on_throw, iterator_step, iterator_value};
@@ -62,19 +62,6 @@ impl HelperKind {
     }
 }
 
-/// Validates the receiver as an object and reads its `next` method, mirroring
-/// GetIteratorDirect(obj). The methods do not require `next` to be callable up
-/// front (it is invoked lazily), matching the proposal's record creation.
-fn iterator_direct(
-    this_value: &Value,
-    method: &str,
-    env: &mut CallEnv,
-) -> Result<(Value, Value), RuntimeError> {
-    let iterator = iterator_receiver(this_value, method)?;
-    let next = property_value(iterator.clone(), "next", env)?;
-    Ok((iterator, next))
-}
-
 fn iterator_receiver(this_value: &Value, method: &str) -> Result<Value, RuntimeError> {
     if !matches!(this_value, Value::Object(_)) {
         return Err(RuntimeError {
@@ -102,9 +89,23 @@ pub(super) fn native_lazy_helper(
     };
 
     let mut checked_limit = None;
+    let mut checked_callback = None;
     let (iterator, next) = match kind {
         HelperKind::Map | HelperKind::Filter | HelperKind::FlatMap => {
-            iterator_direct(&this_value, method, env)?
+            let iterator = iterator_receiver(&this_value, method)?;
+            let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);
+            if !matches!(callback, Value::Function(_)) {
+                let err = RuntimeError {
+                    thrown: None,
+                    message: format!(
+                        "TypeError: Iterator.prototype.{method} callback is not a function"
+                    ),
+                };
+                return Err(iterator_close_on_throw(&iterator, err, env));
+            }
+            let next = property_value(iterator.clone(), "next", env)?;
+            checked_callback = Some(callback);
+            (iterator, next)
         }
         HelperKind::Take | HelperKind::Drop => {
             let iterator = iterator_receiver(&this_value, method)?;
@@ -138,18 +139,8 @@ pub(super) fn native_lazy_helper(
 
     match kind {
         HelperKind::Map | HelperKind::Filter | HelperKind::FlatMap => {
-            let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);
-            if !matches!(callback, Value::Function(_)) {
-                // The receiver is closed before the TypeError is raised
-                // (IfAbruptCloseIterator on a non-callable mapper/filterer).
-                let err = RuntimeError {
-                    thrown: None,
-                    message: format!(
-                        "TypeError: Iterator.prototype.{method} callback is not a function"
-                    ),
-                };
-                return Err(iterator_close_on_throw(&iterator, err, env));
-            }
+            let callback = checked_callback
+                .expect("callback helpers validate callback before helper creation");
             helper.define_non_enumerable(HELPER_CALLBACK.to_owned(), callback);
         }
         HelperKind::Take | HelperKind::Drop => {
@@ -464,7 +455,33 @@ fn get_iterator_flattenable(value: Value, env: &mut CallEnv) -> Result<Value, Ru
             message: "TypeError: flatMap callback must return an object".to_owned(),
         });
     }
-    let iterator = crate::bytecode::sync_iterator_for_value(value, env)?;
+    let Some(iterator_symbol) = symbol::iterator_symbol(env) else {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "iterator symbol is unavailable".to_owned(),
+        });
+    };
+    let method = property_value_key(value.clone(), &PropertyKey::Symbol(iterator_symbol), env)?;
+    let iterator = if matches!(method, Value::Undefined | Value::Null) {
+        value
+    } else if matches!(method, Value::Function(_)) {
+        let iterator = call_function(method, value, Vec::new(), env, false)?;
+        if !matches!(
+            iterator,
+            Value::Object(_) | Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_)
+        ) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: iterator method must return an object".to_owned(),
+            });
+        }
+        iterator
+    } else {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: flatMap mapper result is not iterable".to_owned(),
+        });
+    };
     let next = property_value(iterator.clone(), "next", env)?;
     let record = ObjectRef::new(HashMap::new());
     record.define_non_enumerable(HELPER_UNDERLYING.to_owned(), iterator);
