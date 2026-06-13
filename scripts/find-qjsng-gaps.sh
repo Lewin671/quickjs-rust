@@ -422,6 +422,9 @@ write_recommendations() {
       if (path ~ /(resizable-buffer|growable-buffer)/ && weight < 5) {
         weight = 5
       }
+      if (path ~ /(large-typed-array|RegExp-(leading|trailing)-escape-BMP)/ && weight < 3) {
+        weight = 3
+      }
       if (path ~ /(^|\/)(for-await-of)(\/|$)/ && weight < 4) {
         weight = 4
       }

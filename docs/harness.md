@@ -157,12 +157,14 @@ case is hard-hinted remain visible, but they rank below mixed quick wins. It
 also computes `hard hints` from Test262 feature metadata, paths, and skip metadata
 that usually imply larger missing features, such as async, destructuring, class,
 yield, proxy/realm/species behavior, resizable or growable buffers, or Annex B
-global-code semantics. The ranking weights those hints by expected breadth, so
-resizable or growable buffers, async, and Annex B global-code work rank below
-narrower realm/proxy/species failures when the engine-gap count is otherwise
-similar. Those hints do not hide gaps; they only lower an area's default ranking
-so an agent can find reviewable parity wins before getting stuck on known broad
-features. Use
+global-code semantics. It also hard-hints known stress-shaped timeout cases,
+such as large typed-array concat and full BMP regexp escape sweeps, as
+performance work. The ranking weights those hints by expected breadth, so
+resizable or growable buffers, async, stress timeouts, and Annex B global-code
+work rank below narrower realm/proxy/species failures when the engine-gap count
+is otherwise similar. Those hints do not hide gaps; they only lower an area's
+default ranking so an agent can find reviewable parity wins before getting
+stuck on known broad features. Use
 `--strategy fast` for the older small-batch-first behavior,
 `--strategy largest` to restore largest-gap-first recommendation, or
 `--recommend-batch-cap N` to tune how large a default batch may be. Use
