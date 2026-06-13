@@ -51,8 +51,6 @@ pub(crate) fn native_array_prototype_slice(
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    validate_array_species_constructor(array_like.receiver.clone(), "slice", env)?;
-
     let count = end.saturating_sub(start);
     if count > MAX_ARRAY_LENGTH {
         return Err(RuntimeError {
@@ -60,24 +58,17 @@ pub(crate) fn native_array_prototype_slice(
             message: "RangeError: invalid array length".to_owned(),
         });
     }
-    if count == 0 {
-        return Ok(Value::Array(ArrayRef::new(Vec::new())));
-    }
-    let mut result = Vec::with_capacity(count);
-    let mut holes = Vec::new();
-    for index in start..end {
-        if has_property(array_like.receiver.clone(), env, &index.to_string())? {
-            result.push(property_value(
-                array_like.receiver.clone(),
-                &index.to_string(),
-                env,
-            )?);
-        } else {
-            holes.push(result.len());
-            result.push(Value::Undefined);
+    validate_array_species_constructor(array_like.receiver.clone(), "slice", env)?;
+
+    let result = array_species_create(array_like.receiver.clone(), count, "slice", env)?;
+    for (target_index, source_index) in (start..end).enumerate() {
+        let source_key = source_index.to_string();
+        if has_property(array_like.receiver.clone(), env, &source_key)? {
+            let value = property_value(array_like.receiver.clone(), &source_key, env)?;
+            create_data_property_or_throw(result.clone(), target_index.to_string(), value, env)?;
         }
     }
-    Ok(Value::Array(ArrayRef::new_sparse(result, holes)))
+    Ok(result)
 }
 
 pub(crate) fn native_array_prototype_to_reversed(

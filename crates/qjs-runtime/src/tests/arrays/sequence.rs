@@ -90,6 +90,30 @@ fn evaluates_array_sequence_builtins() {
         Ok(Value::Boolean(true))
     );
     assert_eq!(
+        eval(
+            "let target; function C(length) { this.lengthValue = length; target = this; } let a = [1, 2, 3]; a.constructor = {}; a.constructor[Symbol.species] = C; let out = a.slice(1, 3); out === target && out.lengthValue === 2 && out[0] === 2 && out[1] === 3 && !Object.prototype.hasOwnProperty.call(out, 'length');"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let calls = 0; function C(length) { calls = calls + 1; this.lengthValue = length; } let a = [1]; a.constructor = {}; a.constructor[Symbol.species] = C; let out = a.slice(1); calls + ':' + out.lengthValue;"
+        ),
+        Ok(Value::String("1:0".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let target = {}; Object.preventExtensions(target); function C() { return target; } let a = [1]; a.constructor = {}; a.constructor[Symbol.species] = C; let caught = false; try { a.slice(); } catch (error) { caught = error.constructor === TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let target = {}; Object.defineProperty(target, '0', { value: 1, configurable: false }); function C() { return target; } let a = [2]; a.constructor = {}; a.constructor[Symbol.species] = C; let caught = false; try { a.slice(); } catch (error) { caught = error.constructor === TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("[0].concat([1, 2], 3, [4]).join();"),
         Ok(Value::String("0,1,2,3,4".to_owned()))
     );

@@ -2284,6 +2284,13 @@ test/built-ins/Array/prototype/slice/create-ctor-non-object.js
 test/built-ins/Array/prototype/slice/create-ctor-poisoned.js
 test/built-ins/Array/prototype/slice/create-non-array-invalid-len.js
 test/built-ins/Array/prototype/slice/create-non-array.js
+test/built-ins/Array/prototype/slice/create-proto-from-ctor-realm-non-array.js
+test/built-ins/Array/prototype/slice/create-proxy.js
+test/built-ins/Array/prototype/slice/create-species-abrupt.js
+test/built-ins/Array/prototype/slice/create-species-neg-zero.js
+test/built-ins/Array/prototype/slice/create-species-non-ctor.js
+test/built-ins/Array/prototype/slice/create-species-poisoned.js
+test/built-ins/Array/prototype/slice/create-species.js
 test/built-ins/Array/prototype/slice/length.js
 test/built-ins/Array/prototype/slice/name.js
 test/built-ins/Array/prototype/slice/not-a-constructor.js
@@ -2329,6 +2336,8 @@ test/built-ins/Array/prototype/slice/S15.4.4.10_A3_T1.js
 test/built-ins/Array/prototype/slice/S15.4.4.10_A3_T2.js
 test/built-ins/Array/prototype/slice/S15.4.4.10_A3_T3.js
 test/built-ins/Array/prototype/slice/S15.4.4.10_A4_T1.js
+test/built-ins/Array/prototype/slice/target-array-non-extensible.js
+test/built-ins/Array/prototype/slice/target-array-with-non-configurable-property.js
 cases/array-some-basic.js
 cases/array-some-callback-arguments.js
 cases/array-some-this-arg.js
