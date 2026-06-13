@@ -342,6 +342,12 @@ impl<'a> Vm<'a> {
                     let (home_object, super_constructor) = if lexical_this {
                         let home_object = self.env.get(HOME_OBJECT_BINDING);
                         let super_constructor = self.env.get(SUPER_CONSTRUCTOR_BINDING);
+                        if self.load_global("this").is_err() {
+                            env.insert(
+                                "this".to_owned(),
+                                Value::Function(Function::uninitialized_lexical_marker()),
+                            );
+                        }
                         if let Some(new_target) = self.env.get(NEW_TARGET_BINDING) {
                             env.insert(NEW_TARGET_BINDING.to_owned(), new_target);
                         }

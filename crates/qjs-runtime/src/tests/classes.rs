@@ -125,6 +125,31 @@ fn default_derived_constructor_forwards_arguments_without_spread_iteration() {
 }
 
 #[test]
+fn null_extending_class_uses_function_prototype_as_constructor_parent() {
+    assert_eq!(
+        eval(
+            "var reached = 0, after = 0, superError, returnError; \
+             class C extends null { \
+               constructor(mode) { \
+                 if (mode === 'super') { \
+                   reached += 1; \
+                   try { super(); } catch (error) { superError = error.name; } \
+                   after += 1; \
+                   return {}; \
+                 } \
+               } \
+             } \
+             try { new C('return'); } catch (error) { returnError = error.name; } \
+             new C('super'); \
+             [Object.getPrototypeOf(C) === Function.prototype, superError, returnError, reached, after].join(':');"
+        ),
+        Ok(Value::String(
+            "true:TypeError:ReferenceError:1:1".to_owned()
+        ))
+    );
+}
+
+#[test]
 fn class_method_computed_object_binding_key_propagates_errors() {
     assert!(
         eval(

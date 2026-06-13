@@ -496,18 +496,26 @@ fn function_env(
     // it. Every other function gets its `this` here.
     if function.is_derived_constructor && is_construct {
         local_env.remove("this");
+    } else if function.lexical_this {
+        let inherited_this = lexical_this.or_else(|| env.get_local("this")).or_else(|| {
+            (!env.locals().contains_key(crate::SUPER_CONSTRUCTOR_BINDING))
+                .then(|| env.get("this"))
+                .flatten()
+        });
+        if let Some(this_value) = inherited_this {
+            if matches!(
+                &this_value,
+                Value::Function(function) if function.is_uninitialized_lexical_marker()
+            ) {
+                local_env.remove("this");
+            } else {
+                local_env.insert("this".to_owned(), this_value);
+            }
+        }
     } else {
         local_env.insert(
             "this".to_owned(),
-            if function.lexical_this {
-                // A top-level arrow has no captured `this`; fall back to the
-                // realm's global `this`.
-                lexical_this
-                    .or_else(|| env.get("this"))
-                    .unwrap_or(Value::Undefined)
-            } else {
-                function_call_this(Some(this_value), env, function.is_strict)
-            },
+            function_call_this(Some(this_value), env, function.is_strict),
         );
     }
     for (index, element) in function.params.positional.iter().enumerate() {

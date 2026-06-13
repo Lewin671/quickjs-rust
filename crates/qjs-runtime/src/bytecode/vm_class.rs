@@ -3,7 +3,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use crate::{
     Function, ObjectRef, Property, PropertyKey, RuntimeError, Value, array_as_object_prototype,
     function::{CompiledUserFunction, InstanceFieldInitializer},
-    object, object_prototype, property_value,
+    function_prototype, object, object_prototype, property_value,
     symbol::symbol_function_name_description,
     to_property_key_value,
 };
@@ -64,6 +64,7 @@ impl Vm<'_> {
         let constructor_captured = Rc::new(RefCell::new(constructor_env.clone()));
         let super_constructor = match &heritage {
             Some(ClassHeritage::Parent(parent)) => Some(parent.constructor.clone()),
+            Some(ClassHeritage::Null) => function_prototype_value(&self.env),
             _ => None,
         };
         let constructor_function = Function::new_user_compiled(CompiledUserFunction {
@@ -95,15 +96,22 @@ impl Vm<'_> {
         // `Object.getPrototypeOf(Sub) === Super` reference identity and lets
         // inherited static methods and static `super.x` resolve live (rather
         // than against a definition-time snapshot).
-        if let Some(ClassHeritage::Parent(heritage_parent)) = &heritage {
-            let parent_slot = match &heritage_parent.constructor {
+        let constructor_parent_slot = match &heritage {
+            Some(ClassHeritage::Parent(heritage_parent)) => match &heritage_parent.constructor {
                 Value::Function(parent) => Some(crate::Prototype::Function(parent.clone())),
                 Value::Object(parent) => Some(crate::Prototype::Object(parent.clone())),
                 _ => None,
-            };
-            if let Some(parent_slot) = parent_slot {
-                let _ = constructor_function.set_internal_prototype_slot(Some(parent_slot));
+            },
+            Some(ClassHeritage::Null) => {
+                function_prototype_value(&self.env).and_then(|value| match value {
+                    Value::Object(parent) => Some(crate::Prototype::Object(parent)),
+                    _ => None,
+                })
             }
+            None => None,
+        };
+        if let Some(parent_slot) = constructor_parent_slot {
+            let _ = constructor_function.set_internal_prototype_slot(Some(parent_slot));
         }
 
         let prototype = ObjectRef::with_prototype_slot(HashMap::new(), prototype_parent);
@@ -728,6 +736,13 @@ enum ClassHeritage {
 struct ClassHeritageParent {
     constructor: Value,
     prototype: Option<crate::Prototype>,
+}
+
+fn function_prototype_value(env: &CallEnv) -> Option<Value> {
+    let Some(Value::Function(function_constructor)) = env.get("Function") else {
+        return None;
+    };
+    function_prototype(&function_constructor).map(Value::Object)
 }
 
 impl ClassHeritage {
