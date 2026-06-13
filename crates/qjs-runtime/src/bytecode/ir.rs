@@ -172,8 +172,9 @@ pub(super) enum Op {
         /// are not ordinary properties; they install into per-object private
         /// storage keyed by fresh per-evaluation private-name identities.
         private_elements: Vec<ClassPrivateElementDef>,
-        /// Computed member key expressions in source order. They run after the
-        /// class private environment is created, so private names are visible.
+        /// Computed member keys in source order. Most are pre-evaluated by the
+        /// surrounding bytecode and left on the stack; keys that need the class
+        /// private environment are deferred until `NewClass` runs.
         computed_keys: Vec<ClassComputedKeyDef>,
         /// Whether the class has an `extends` heritage clause. When set, the
         /// heritage value was pushed onto the stack before this op.
@@ -365,9 +366,12 @@ pub(super) enum ClassPrivateElementDef {
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct ClassComputedKeyDef {
-    pub(super) local_names: Vec<String>,
-    pub(super) bytecode: Rc<Bytecode>,
+pub(super) enum ClassComputedKeyDef {
+    Precomputed,
+    Deferred {
+        local_names: Vec<String>,
+        bytecode: Rc<Bytecode>,
+    },
 }
 
 /// Compiled definition of a class method or accessor.
@@ -644,7 +648,9 @@ fn collect_global_names_from_ops(code: &[Op], names: &mut BTreeSet<String>) {
             } => {
                 names.extend(constructor.bytecode.global_names().iter().cloned());
                 for key in computed_keys {
-                    names.extend(key.bytecode.global_names().iter().cloned());
+                    if let ClassComputedKeyDef::Deferred { bytecode, .. } = key {
+                        names.extend(bytecode.global_names().iter().cloned());
+                    }
                 }
                 for element in elements {
                     match element {

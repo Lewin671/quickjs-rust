@@ -31,8 +31,10 @@ impl Vm<'_> {
     /// Builds a class constructor function object, wires its `prototype` and
     /// `constructor` properties, and installs prototype and static members.
     ///
-    /// Computed member keys are evaluated, in member order, after the class
-    /// private environment is created and before element installation.
+    /// Computed member keys are evaluated by the surrounding bytecode unless
+    /// they need the class private environment, so generator `yield` and abrupt
+    /// completions suspend or unwind at the class definition point while
+    /// private names remain visible where required.
     pub(super) fn new_class(
         &mut self,
         name: Option<&str>,
@@ -42,6 +44,7 @@ impl Vm<'_> {
         computed_key_defs: &[ClassComputedKeyDef],
         has_heritage: bool,
     ) -> Result<Value, RuntimeError> {
+        let precomputed_keys = self.pop_precomputed_class_keys(computed_key_defs)?;
         // Resolve the parent
         // constructor and the prototype the new class prototype inherits from.
         let heritage = if has_heritage {
@@ -122,8 +125,12 @@ impl Vm<'_> {
         *constructor_function.home_object.borrow_mut() = Some(Value::Object(prototype.clone()));
 
         self.create_private_environment(private_elements, &prototype, &constructor_function);
-        let computed_keys =
-            self.evaluate_computed_keys(computed_key_defs, &constructor_function, name)?;
+        let computed_keys = self.resolve_computed_class_keys(
+            computed_key_defs,
+            precomputed_keys,
+            &constructor_function,
+            name,
+        )?;
         let mut computed_keys = computed_keys.into_iter();
 
         // A class binding is visible to its own methods and constructor under
@@ -270,44 +277,80 @@ impl Vm<'_> {
         }
     }
 
-    fn evaluate_computed_keys(
+    fn pop_precomputed_class_keys(
         &mut self,
         computed_key_defs: &[ClassComputedKeyDef],
-        constructor_function: &Function,
-        name: Option<&str>,
     ) -> Result<Vec<PropertyKey>, RuntimeError> {
-        let mut keys = Vec::with_capacity(computed_key_defs.len());
-        for key_def in computed_key_defs {
-            let mut key_env = self.function_capture_env(&key_def.bytecode, &key_def.local_names);
-            bind_class_inner_name(&mut key_env, name, constructor_function);
-            let thunk = Function::new_user_compiled(CompiledUserFunction {
-                name: None,
-                has_name_binding: false,
-                params: qjs_ast::FunctionParams::positional(Vec::new()),
-                env: key_env.clone(),
-                bytecode: key_def.bytecode.clone(),
-                local_names: key_def.local_names.clone(),
-                constructable: false,
-                is_strict: true,
-                lexical_this: false,
-                lexical_arguments: false,
-                is_generator: false,
-                is_async: false,
-                is_class_constructor: false,
-                is_derived_constructor: false,
-                is_field_initializer: false,
-                home_object: Some(Value::Function(constructor_function.clone())),
-                super_constructor: None,
-                captured_env: Rc::new(RefCell::new(key_env)),
-                capture_writeback: self
-                    .class_member_capture_writeback(&key_def.bytecode, &key_def.local_names),
-            });
-            let this_value = self.env.get("this").unwrap_or(Value::Undefined);
-            let value = self.run_field_initializer(&thunk, this_value)?;
+        let computed_key_count = computed_key_defs
+            .iter()
+            .filter(|key| matches!(key, ClassComputedKeyDef::Precomputed))
+            .count();
+        let mut keys = Vec::with_capacity(computed_key_count);
+        for _ in 0..computed_key_count {
+            let value = self.pop()?;
             let mut env = self.current_env();
             let key = to_property_key_value(value, &mut env)?;
             self.apply_env(env);
             keys.push(key);
+        }
+        keys.reverse();
+        Ok(keys)
+    }
+
+    fn resolve_computed_class_keys(
+        &mut self,
+        computed_key_defs: &[ClassComputedKeyDef],
+        precomputed_keys: Vec<PropertyKey>,
+        constructor_function: &Function,
+        name: Option<&str>,
+    ) -> Result<Vec<PropertyKey>, RuntimeError> {
+        let mut precomputed_keys = precomputed_keys.into_iter();
+        let mut keys = Vec::with_capacity(computed_key_defs.len());
+        for key_def in computed_key_defs {
+            match key_def {
+                ClassComputedKeyDef::Precomputed => {
+                    keys.push(
+                        precomputed_keys
+                            .next()
+                            .expect("precomputed key count matches descriptors"),
+                    );
+                }
+                ClassComputedKeyDef::Deferred {
+                    local_names,
+                    bytecode,
+                } => {
+                    let mut key_env = self.function_capture_env(bytecode, local_names);
+                    bind_class_inner_name(&mut key_env, name, constructor_function);
+                    let thunk = Function::new_user_compiled(CompiledUserFunction {
+                        name: None,
+                        has_name_binding: false,
+                        params: qjs_ast::FunctionParams::positional(Vec::new()),
+                        env: key_env.clone(),
+                        bytecode: bytecode.clone(),
+                        local_names: local_names.clone(),
+                        constructable: false,
+                        is_strict: true,
+                        lexical_this: false,
+                        lexical_arguments: false,
+                        is_generator: false,
+                        is_async: false,
+                        is_class_constructor: false,
+                        is_derived_constructor: false,
+                        is_field_initializer: false,
+                        home_object: Some(Value::Function(constructor_function.clone())),
+                        super_constructor: None,
+                        captured_env: Rc::new(RefCell::new(key_env)),
+                        capture_writeback: self
+                            .class_member_capture_writeback(bytecode, local_names),
+                    });
+                    let this_value = self.env.get("this").unwrap_or(Value::Undefined);
+                    let value = self.run_field_initializer(&thunk, this_value)?;
+                    let mut env = self.current_env();
+                    let key = to_property_key_value(value, &mut env)?;
+                    self.apply_env(env);
+                    keys.push(key);
+                }
+            }
         }
         Ok(keys)
     }

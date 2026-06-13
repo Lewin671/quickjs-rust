@@ -1,8 +1,9 @@
 use std::rc::Rc;
 
 use qjs_ast::{
-    BindingPattern, ClassBody, ClassElement, ClassMemberKey, Expr, FunctionParams, MethodKind,
-    Span, Stmt,
+    ArrayElement, AssignmentTarget, AssignmentTargetPropertyKey, BindingPattern, CallArgument,
+    ClassBody, ClassElement, ClassMemberKey, Expr, FunctionParams, MemberProperty, MethodKind,
+    ObjectPropertyKey, Span, Stmt,
 };
 
 use crate::{
@@ -78,7 +79,13 @@ impl Compiler {
                 ClassElement::StaticBlock(_) => continue,
             };
             if let ClassMemberKey::Computed(expr) = key {
-                computed_keys.push(compile_computed_key(name, expr)?);
+                if expr_contains_private_name(expr) {
+                    computed_keys.push(compile_computed_key(name, expr)?);
+                } else {
+                    self.compile_expr(expr)?;
+                    self.emit(Op::ToPropertyKey);
+                    computed_keys.push(ClassComputedKeyDef::Precomputed);
+                }
             }
         }
 
@@ -237,7 +244,7 @@ fn compile_computed_key(
     let local_names = collect_function_local_names(None, &params, &body, true);
     let bytecode =
         compile_class_function_body(class_name, &params, &body, &local_names, false, false)?;
-    Ok(ClassComputedKeyDef {
+    Ok(ClassComputedKeyDef::Deferred {
         local_names,
         bytecode: Rc::new(bytecode),
     })
@@ -253,6 +260,133 @@ fn compile_member_key(key: &ClassMemberKey) -> (ClassMemberKeyDef, Option<String
         // ever reached.
         ClassMemberKey::Private(name) => {
             unreachable!("private key #{name} must not reach the ordinary key path")
+        }
+    }
+}
+
+fn expr_contains_private_name(expr: &Expr) -> bool {
+    match expr {
+        Expr::Array { elements, .. } => elements.iter().any(|element| match element {
+            ArrayElement::Elision => false,
+            ArrayElement::Expr(expr) | ArrayElement::Spread(expr) => {
+                expr_contains_private_name(expr)
+            }
+        }),
+        Expr::Object { properties, .. } => properties.iter().any(|property| {
+            matches!(&property.key, ObjectPropertyKey::Computed(key) if expr_contains_private_name(key))
+                || expr_contains_private_name(&property.value)
+        }),
+        Expr::Sequence { expressions, .. } | Expr::Template { expressions, .. } => {
+            expressions.iter().any(expr_contains_private_name)
+        }
+        Expr::Unary { argument, .. }
+        | Expr::Await { argument, .. }
+        | Expr::Yield {
+            argument: Some(argument),
+            ..
+        } => expr_contains_private_name(argument),
+        Expr::Binary { left, right, .. } => {
+            expr_contains_private_name(left) || expr_contains_private_name(right)
+        }
+        Expr::TaggedTemplate {
+            tag, expressions, ..
+        } => expr_contains_private_name(tag) || expressions.iter().any(expr_contains_private_name),
+        Expr::Conditional {
+            test,
+            consequent,
+            alternate,
+            ..
+        } => {
+            expr_contains_private_name(test)
+                || expr_contains_private_name(consequent)
+                || expr_contains_private_name(alternate)
+        }
+        Expr::Assignment { target, value, .. } => {
+            assignment_target_contains_private_name(target) || expr_contains_private_name(value)
+        }
+        Expr::Update { target, .. } => assignment_target_contains_private_name(target),
+        Expr::Call {
+            callee, arguments, ..
+        }
+        | Expr::New {
+            callee, arguments, ..
+        } => {
+            expr_contains_private_name(callee)
+                || arguments.iter().any(call_argument_contains_private_name)
+        }
+        Expr::Function { .. } | Expr::Class { .. } => false,
+        Expr::Member {
+            object, property, ..
+        }
+        | Expr::OptionalMember {
+            object, property, ..
+        } => {
+            matches!(property, MemberProperty::Private(_))
+                || expr_contains_private_name(object)
+                || matches!(property, MemberProperty::Computed(key) if expr_contains_private_name(key))
+        }
+        Expr::PrivateIn { .. } => true,
+        Expr::Literal(_)
+        | Expr::Yield { argument: None, .. }
+        | Expr::This { .. }
+        | Expr::Super { .. }
+        | Expr::Identifier { .. }
+        | Expr::NewTarget { .. }
+        | Expr::ImportMeta { .. } => false,
+        Expr::ImportCall {
+            specifier, options, ..
+        } => {
+            expr_contains_private_name(specifier)
+                || options
+                    .as_deref()
+                    .is_some_and(expr_contains_private_name)
+        }
+    }
+}
+
+fn call_argument_contains_private_name(argument: &CallArgument) -> bool {
+    match argument {
+        CallArgument::Expr(expr) | CallArgument::Spread(expr) => expr_contains_private_name(expr),
+    }
+}
+
+fn assignment_target_contains_private_name(target: &AssignmentTarget) -> bool {
+    match target {
+        AssignmentTarget::Identifier { .. } => false,
+        AssignmentTarget::Member {
+            object, property, ..
+        } => {
+            matches!(property, MemberProperty::Private(_))
+                || expr_contains_private_name(object)
+                || matches!(property, MemberProperty::Computed(key) if expr_contains_private_name(key))
+        }
+        AssignmentTarget::ArrayPattern { elements, rest, .. } => {
+            elements.iter().flatten().any(|element| {
+                assignment_target_contains_private_name(&element.target)
+                    || element
+                        .default
+                        .as_ref()
+                        .is_some_and(expr_contains_private_name)
+            }) || rest
+                .as_deref()
+                .is_some_and(assignment_target_contains_private_name)
+        }
+        AssignmentTarget::ObjectPattern {
+            properties, rest, ..
+        } => {
+            properties.iter().any(|property| {
+                matches!(
+                    &property.key,
+                    AssignmentTargetPropertyKey::Computed(key)
+                        if expr_contains_private_name(key)
+                ) || assignment_target_contains_private_name(&property.target)
+                    || property
+                        .default
+                        .as_ref()
+                        .is_some_and(expr_contains_private_name)
+            }) || rest
+                .as_deref()
+                .is_some_and(assignment_target_contains_private_name)
         }
     }
 }

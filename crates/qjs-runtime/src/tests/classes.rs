@@ -565,6 +565,27 @@ fn computed_keys_evaluate_in_source_order() {
 }
 
 #[test]
+fn computed_class_keys_yield_in_enclosing_generator() {
+    assert_eq!(
+        eval(
+            "function* g() { \
+               class C { \
+                 [yield 'method']() { return 'method'; } \
+                 static [yield 'static']() { return 'static'; } \
+               } \
+               return C; \
+             } \
+             let iter = g(); \
+             let first = iter.next(); \
+             let second = iter.next('m'); \
+             let third = iter.next('s'); \
+             [first.value, second.value, third.value.prototype.m(), third.value.s()].join(':');"
+        ),
+        Ok(Value::String("method:static:method:static".to_owned()))
+    );
+}
+
+#[test]
 fn symbol_computed_method_name() {
     assert_eq!(
         eval("let s = Symbol('s'); class C { [s]() { return 42; } } new C()[s]();"),
