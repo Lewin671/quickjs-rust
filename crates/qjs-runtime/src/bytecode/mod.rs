@@ -92,6 +92,14 @@ pub(crate) fn compile_function_body(
     compiler::compile_function_body(params, body)
 }
 
+pub(crate) fn compile_generator_function_body(
+    params: &FunctionParams,
+    body: &[qjs_ast::Stmt],
+    parent_strict: bool,
+) -> Result<Bytecode, RuntimeError> {
+    compiler::compile_function_body_with_strict_generator(params, body, parent_strict, true, false)
+}
+
 pub(crate) fn eval_function_bytecode(
     bytecode: &Bytecode,
     env: crate::CallEnv,

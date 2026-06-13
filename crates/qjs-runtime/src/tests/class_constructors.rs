@@ -76,6 +76,13 @@ fn native_super_constructors_use_derived_new_target_prototype() {
             "true:true:true:7",
         ),
         (
+            "var GeneratorFunction = Object.getPrototypeOf(function* () {}).constructor; \
+             class SubGeneratorFunction extends GeneratorFunction {} \
+             var value = new SubGeneratorFunction('yield 7;'); \
+             [value instanceof SubGeneratorFunction, value instanceof GeneratorFunction, Object.getPrototypeOf(value) === SubGeneratorFunction.prototype, value().next().value].join(':');",
+            "true:true:true:7",
+        ),
+        (
             "class SubSharedArrayBuffer extends SharedArrayBuffer {} \
              var value = new SubSharedArrayBuffer(); \
              [value instanceof SubSharedArrayBuffer, value instanceof SharedArrayBuffer, Object.getPrototypeOf(value) === SubSharedArrayBuffer.prototype, value.byteLength].join(':');",

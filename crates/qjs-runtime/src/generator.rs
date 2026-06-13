@@ -153,6 +153,24 @@ pub(crate) fn generator_prototype_intrinsic(env: &CallEnv) -> Option<ObjectRef> 
     generator_prototype(env)
 }
 
+/// Wires a freshly created generator function into the generator intrinsic
+/// chain: its [[Prototype]] becomes `%GeneratorFunction.prototype%`, and its
+/// own `prototype` property's [[Prototype]] becomes `%GeneratorPrototype%`.
+pub(crate) fn wire_generator_function_intrinsics(function: &Function, env: &CallEnv) {
+    if let Some(generator_function_prototype) = generator_function_prototype(env) {
+        let _ = function.set_internal_prototype_slot(Some(crate::Prototype::Object(
+            generator_function_prototype,
+        )));
+    }
+    if let Some(generator_prototype) = generator_prototype_intrinsic(env) {
+        let prototype = ObjectRef::with_prototype(HashMap::new(), Some(generator_prototype));
+        function.define_property(
+            "prototype".to_owned(),
+            Property::data(Value::Object(prototype), false, true, false),
+        );
+    }
+}
+
 /// Builds the generator object returned by calling a `function*`: an ordinary
 /// object whose [[Prototype]] is the function's own `prototype` (when an
 /// object) or `%GeneratorPrototype%`. The parameter prologue runs synchronously

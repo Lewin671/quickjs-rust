@@ -1,7 +1,10 @@
+use std::{cell::RefCell, rc::Rc};
+
 use qjs_ast::Stmt;
 use qjs_parser::parse_script;
 
 use crate::CallEnv;
+use crate::function::CompiledUserFunction;
 use crate::{
     Function, GLOBAL_THIS_BINDING, RuntimeError, Value, array::array_like_values_with_env,
     object::boxed_primitive, property_value, to_js_string_with_env, to_length_with_env,
@@ -40,6 +43,73 @@ pub(crate) fn native_function(
         .map_err(|_| RuntimeError {
             thrown: None,
             message: "TypeError: dynamic function prototype could not be set".to_owned(),
+        })?;
+    Ok(Value::Function(created))
+}
+
+pub(crate) fn native_generator_function(
+    constructor: &Function,
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let (params, body) = function_source_parts(argument_values, env)?;
+    let source = format!("function* anonymous({params}\n) {{\n{body}\n}}");
+    let script = parse_script(&source).map_err(|error| RuntimeError {
+        thrown: None,
+        message: format!(
+            "SyntaxError: invalid GeneratorFunction constructor source: {}",
+            error.message
+        ),
+    })?;
+
+    let Some(Stmt::FunctionDecl {
+        name,
+        params,
+        body,
+        is_generator: true,
+        is_async: false,
+        ..
+    }) = script.body.into_iter().next()
+    else {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "GeneratorFunction constructor did not produce a generator declaration"
+                .to_owned(),
+        });
+    };
+
+    let is_strict = crate::function::is_strict_function_body(&body);
+    let local_names =
+        crate::function::collect_function_local_names(Some(&name), &params, &body, true);
+    let bytecode = crate::bytecode::compile_generator_function_body(&params, &body, is_strict)?;
+    let env_snapshot = env.to_flat_map();
+    let created = Function::new_user_compiled(CompiledUserFunction {
+        name: Some(name),
+        has_name_binding: true,
+        params,
+        env: env_snapshot.clone(),
+        bytecode: Rc::new(bytecode),
+        local_names,
+        constructable: false,
+        is_strict,
+        lexical_this: false,
+        lexical_arguments: false,
+        is_generator: true,
+        is_async: false,
+        is_class_constructor: false,
+        is_derived_constructor: false,
+        is_field_initializer: false,
+        home_object: None,
+        super_constructor: None,
+        captured_env: Rc::new(RefCell::new(env_snapshot)),
+        capture_writeback: None,
+    });
+    crate::generator::wire_generator_function_intrinsics(&created, env);
+    created
+        .set_internal_prototype_slot(crate::native_construct_prototype_slot(constructor, env)?)
+        .map_err(|_| RuntimeError {
+            thrown: None,
+            message: "TypeError: dynamic generator function prototype could not be set".to_owned(),
         })?;
     Ok(Value::Function(created))
 }

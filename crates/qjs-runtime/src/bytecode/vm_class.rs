@@ -741,27 +741,7 @@ impl Vm<'_> {
     /// own `prototype` property's [[Prototype]] becomes `%GeneratorPrototype%`
     /// so generator instances inherit `next`/`return`/`throw`.
     pub(super) fn wire_generator_function_intrinsics(&self, function: &Function) {
-        if let Some(generator_function_prototype) =
-            crate::generator::generator_function_prototype(&self.env)
-        {
-            let _ = function.set_internal_prototype_slot(Some(crate::Prototype::Object(
-                generator_function_prototype,
-            )));
-        }
-        // A generator function carries its own `prototype` (the object generator
-        // instances inherit from), distinct from %GeneratorPrototype% but with
-        // it as [[Prototype]]. Generator functions are non-constructable, so the
-        // default `prototype` wiring did not install one; do it here. The
-        // property is writable, non-enumerable, non-configurable.
-        if let Some(generator_prototype) =
-            crate::generator::generator_prototype_intrinsic(&self.env)
-        {
-            let prototype = ObjectRef::with_prototype(HashMap::new(), Some(generator_prototype));
-            function.define_property(
-                "prototype".to_owned(),
-                Property::data(Value::Object(prototype), false, true, false),
-            );
-        }
+        crate::generator::wire_generator_function_intrinsics(function, &self.env);
     }
 
     /// Wires a freshly created async function into the async intrinsic chain:

@@ -624,3 +624,29 @@ fn generator_function_prototype_chain() {
     // A generator instance still inherits the iterator protocol methods.
     assert_eq!(string("typeof (function* () {})().next;"), "function");
 }
+
+#[test]
+fn generator_function_constructor_creates_dynamic_generators() {
+    assert_eq!(
+        number(
+            "let GeneratorFunction = Object.getPrototypeOf(function* () {}).constructor; \
+             let g = new GeneratorFunction('a', 'yield a; yield a * 2;'); \
+             let it = g(21); it.next().value + it.next().value;"
+        ),
+        63.0
+    );
+    assert_eq!(
+        string(
+            "let GeneratorFunction = Object.getPrototypeOf(function* () {}).constructor; \
+             let g = new GeneratorFunction('a', 'b', 'return a + b;'); \
+             let length = Object.getOwnPropertyDescriptor(g, 'length'); \
+             let name = Object.getOwnPropertyDescriptor(g, 'name'); \
+             let prototype = Object.getOwnPropertyDescriptor(g, 'prototype'); \
+             [g.length, g.name, length.writable, length.enumerable, length.configurable, \
+              name.writable, name.enumerable, name.configurable, \
+              Object.keys(g.prototype).length, g.prototype.hasOwnProperty('constructor'), \
+              prototype.writable, prototype.enumerable, prototype.configurable].join(':');"
+        ),
+        "2:anonymous:false:false:true:false:false:true:0:false:true:false:false"
+    );
+}
