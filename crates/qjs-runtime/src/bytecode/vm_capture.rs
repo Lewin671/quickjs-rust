@@ -49,9 +49,31 @@ impl Vm<'_> {
     }
 
     fn insert_referenced_binding(&self, env: &mut HashMap<String, Value>, name: &str) {
+        if self.in_parameter_prologue()
+            && self
+                .bytecode
+                .local_slot(name)
+                .is_some_and(|slot| self.bytecode.local_is_body_hoist_only(slot))
+        {
+            return;
+        }
         if let Some(value) = self.current_local_binding(name) {
             env.insert(name.to_owned(), value.clone());
         }
+    }
+
+    pub(super) fn in_parameter_prologue(&self) -> bool {
+        if self.bytecode.global_scope {
+            return false;
+        }
+        if !self.bytecode.locals.iter().any(|local| {
+            local.name.starts_with("\0\0param_argument_") || local.name == "\0\0rest_argument"
+        }) {
+            return false;
+        }
+        !self.bytecode.code[..self.ip]
+            .iter()
+            .any(|op| matches!(op, super::ir::Op::FunctionPrologueEnd))
     }
 
     pub(super) fn insert_lexical_captures(

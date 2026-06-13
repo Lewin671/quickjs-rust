@@ -350,6 +350,11 @@ impl<'a> Vm<'a> {
                         (None, None)
                     };
                     self.refresh_captured_env(&env);
+                    let captured_env = if self.in_parameter_prologue() {
+                        Rc::new(RefCell::new(env.clone()))
+                    } else {
+                        self.captured_env.clone()
+                    };
                     let function = Function::new_user_compiled(CompiledUserFunction {
                         name,
                         params,
@@ -367,7 +372,7 @@ impl<'a> Vm<'a> {
                         is_field_initializer: false,
                         home_object,
                         super_constructor,
-                        captured_env: self.captured_env.clone(),
+                        captured_env,
                         capture_writeback: self.capture_writeback.clone(),
                     });
                     self.capture_private_environment(&function);

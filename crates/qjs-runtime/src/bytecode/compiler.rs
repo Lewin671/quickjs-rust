@@ -217,11 +217,11 @@ impl Compiler {
         self.strict = self.strict || is_strict_function_body(body);
         for (index, element) in params.positional.iter().enumerate() {
             let binding_name = parameter_binding_name(&element.binding, index);
-            self.local_slot(&binding_name, true);
+            self.parameter_slot(&binding_name);
         }
         if let Some(rest) = &params.rest {
             let binding_name = rest_parameter_binding_name(rest);
-            self.local_slot(&binding_name, true);
+            self.parameter_slot(&binding_name);
         }
         let non_simple_params = !params.is_simple();
         if non_simple_params {
@@ -387,11 +387,18 @@ impl Compiler {
         self.locals.push(Local {
             name: name.to_owned(),
             hoisted,
+            parameter: false,
             mutable: true,
             from_env: true,
             sloppy_global_fallback: false,
         });
         self.local_slots.insert(name.to_owned(), slot);
+        slot
+    }
+
+    pub(super) fn parameter_slot(&mut self, name: &str) -> usize {
+        let slot = self.local_slot(name, true);
+        self.locals[slot].parameter = true;
         slot
     }
 
@@ -403,6 +410,7 @@ impl Compiler {
         self.locals.push(Local {
             name: name.to_owned(),
             hoisted: false,
+            parameter: false,
             mutable,
             from_env: false,
             sloppy_global_fallback: false,
@@ -420,6 +428,7 @@ impl Compiler {
         self.locals.push(Local {
             name: name.to_owned(),
             hoisted: false,
+            parameter: false,
             mutable,
             from_env: true,
             sloppy_global_fallback: false,
@@ -465,6 +474,7 @@ impl Compiler {
         self.locals.push(Local {
             name: name.to_owned(),
             hoisted: false,
+            parameter: false,
             mutable: true,
             from_env: false,
             sloppy_global_fallback: true,

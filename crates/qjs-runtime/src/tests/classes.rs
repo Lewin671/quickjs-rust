@@ -693,6 +693,24 @@ fn class_method_default_parameters_use_parameter_tdz() {
 }
 
 #[test]
+fn class_method_default_parameter_closure_does_not_capture_body_var_environment() {
+    assert_eq!(
+        eval(
+            "var x = 'outside'; var probeParams, probeBody; \
+             class C { \
+               m(_ = probeParams = function() { return x; }) { \
+                 var x = 'inside'; \
+                 probeBody = function() { return x; }; \
+               } \
+             } \
+             C.prototype.m(); \
+             probeParams() + ':' + probeBody();"
+        ),
+        Ok(Value::String("outside:inside".to_owned()))
+    );
+}
+
+#[test]
 fn named_class_expression_heritage_uses_inner_tdz_binding() {
     let result = eval("var x = (class x extends x {});");
     assert!(

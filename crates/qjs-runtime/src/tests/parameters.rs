@@ -25,3 +25,19 @@ fn default_parameter_initializers_use_parameter_tdz() {
         Ok(Value::Number(3.0))
     );
 }
+
+#[test]
+fn default_parameter_closures_do_not_capture_body_var_environment() {
+    assert_eq!(
+        eval(
+            "var x = 'outside'; var probeParams, probeBody; \
+             function f(_ = probeParams = function() { return x; }) { \
+               var x = 'inside'; \
+               probeBody = function() { return x; }; \
+             } \
+             f(); \
+             probeParams() + ':' + probeBody();"
+        ),
+        Ok(Value::String("outside:inside".to_owned()))
+    );
+}

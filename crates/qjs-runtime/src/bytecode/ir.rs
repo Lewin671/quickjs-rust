@@ -430,6 +430,7 @@ pub(super) enum CatchScope {
 pub(super) struct Local {
     pub(super) name: String,
     pub(super) hoisted: bool,
+    pub(super) parameter: bool,
     pub(super) mutable: bool,
     pub(super) from_env: bool,
     pub(super) sloppy_global_fallback: bool,
@@ -514,6 +515,12 @@ impl Bytecode {
 
     pub(crate) fn local_is_mutable(&self, slot: usize) -> bool {
         self.locals.get(slot).is_some_and(|local| local.mutable)
+    }
+
+    pub(crate) fn local_is_body_hoist_only(&self, slot: usize) -> bool {
+        self.locals
+            .get(slot)
+            .is_some_and(|local| local.hoisted && !local.parameter)
     }
 
     /// Whether the body can create a nested closure, class, generator, or async
