@@ -107,6 +107,37 @@ fn private_getter_and_setter() {
 }
 
 #[test]
+fn private_elements_on_proxy_receiver_bypass_get_trap() {
+    assert_eq!(
+        eval(
+            "let hits = []; \
+             class Base { constructor() { return new Proxy(this, { get(obj, prop) { hits.push(prop); return obj[prop]; } }); } } \
+             class C extends Base { #f = 3; method() { return this.#f; } } \
+             let c = new C(); c.method() + ':' + hits.join('|');"
+        ),
+        Ok(Value::String("3:method".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let hits = []; \
+             class Base { constructor() { return new Proxy(this, { get(obj, prop) { hits.push(prop); return obj[prop]; } }); } } \
+             class C extends Base { get #f() { return 3; } method() { return this.#f; } } \
+             let c = new C(); c.method() + ':' + hits.join('|');"
+        ),
+        Ok(Value::String("3:method".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let hits = []; \
+             class Base { constructor() { return new Proxy(this, { get(obj, prop) { hits.push(prop); return obj[prop]; } }); } } \
+             class C extends Base { #m() { return 3; } method() { return this.#m(); } } \
+             let c = new C(); c.method() + ':' + hits.join('|');"
+        ),
+        Ok(Value::String("3:method".to_owned()))
+    );
+}
+
+#[test]
 fn foreign_object_access_throws_type_error() {
     let result = eval("class C { #x = 1; read(o) { return o.#x; } } new C().read({});");
     assert!(

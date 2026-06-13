@@ -426,6 +426,7 @@ fn instance_private_storage(value: &Value) -> Option<PrivateStorage> {
     match value {
         Value::Object(object) => Some(object.private_storage()),
         Value::Function(function) => Some(function.private_storage()),
+        Value::Proxy(proxy) => private_storage_of(&proxy.target()),
         _ => None,
     }
 }
