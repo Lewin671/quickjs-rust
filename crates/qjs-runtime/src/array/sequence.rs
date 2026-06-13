@@ -1,6 +1,6 @@
 use crate::{
     ArrayRef, PropertyKey, RuntimeError, Value, has_property, is_truthy, property_value,
-    property_value_key, symbol, to_length_with_env,
+    property_value_key, symbol, to_length_with_env, typed_array,
 };
 
 use super::indexing::{array_at_index, array_slice_end, array_slice_start};
@@ -246,6 +246,11 @@ fn concat_spread_array(
     if new_length > MAX_SAFE_LENGTH {
         return Err(concat_length_error());
     }
+    if let Some(next_index) =
+        concat_spread_typed_array_fast_path(result.clone(), next_index, &value, length)?
+    {
+        return Ok(next_index);
+    }
     for index in 0..length {
         let key = index.to_string();
         if has_property(value.clone(), env, &key)? {
@@ -258,6 +263,38 @@ fn concat_spread_array(
         }
     }
     Ok(new_length)
+}
+
+fn concat_spread_typed_array_fast_path(
+    result: Value,
+    next_index: usize,
+    value: &Value,
+    length: usize,
+) -> Result<Option<usize>, RuntimeError> {
+    let Value::Array(array) = &result else {
+        return Ok(None);
+    };
+    let Value::Object(object) = value else {
+        return Ok(None);
+    };
+    if !typed_array::is_typed_array_object(object) {
+        return Ok(None);
+    }
+
+    let actual_length = typed_array::typed_array_length(object);
+    let present_length = length.min(actual_length);
+    for offset in 0..present_length {
+        if !array.dense_data_property_eligible(next_index + offset) {
+            return Ok(None);
+        }
+    }
+    for (offset, value) in typed_array::read_view_elements(object, 0, present_length)
+        .into_iter()
+        .enumerate()
+    {
+        array.set(next_index + offset, value);
+    }
+    Ok(Some(next_index + length))
 }
 
 fn concat_length_error() -> RuntimeError {

@@ -210,6 +210,12 @@ fn evaluates_array_sequence_builtins() {
     );
     assert_eq!(
         eval(
+            "let item = new Uint16Array(4000); for (let i = 0; i < item.length; i++) item[i] = i; item[Symbol.isConcatSpreadable] = true; let out = [].concat(item); out.length + ':' + out[0] + ':' + out[3999];"
+        ),
+        Ok(Value::String("4000:0:3999".to_owned()))
+    );
+    assert_eq!(
+        eval(
             "let proto = { 2: 'p' }; let item = Object.create(proto); item.length = 4; item[Symbol.isConcatSpreadable] = true; let out = [].concat(item); out.length + ':' + out.hasOwnProperty('2') + ':' + out[2];"
         ),
         Ok(Value::String("4:true:p".to_owned()))

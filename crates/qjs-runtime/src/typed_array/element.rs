@@ -274,7 +274,7 @@ pub(crate) fn set_indexed_element(
         return Ok(IndexedWrite::Handled);
     };
 
-    set_view_elements(object, index, std::iter::once(coerced));
+    set_view_element(object, index, coerced);
     Ok(IndexedWrite::Handled)
 }
 
@@ -427,4 +427,23 @@ where
             }
         }
     }
+}
+
+fn set_view_element(object: &ObjectRef, index: usize, value: Value) {
+    let native = typed_array_kind(object);
+    let element = bytes_per_element(native);
+    let byte_index = typed_array_byte_offset(object) + index * element;
+    let length = typed_array_length(object);
+    if index >= length {
+        return;
+    }
+
+    let buffer =
+        super::typed_array_buffer(object).filter(|buffer| !array_buffer::is_detached(buffer));
+    if let Some(buffer) = buffer {
+        let _ = array_buffer::mutate_array_buffer_bytes(&buffer, |bytes| {
+            write_element(native, bytes, byte_index, &value);
+        });
+    }
+    object.define_property(index.to_string(), Property::data(value, true, true, false));
 }

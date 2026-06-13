@@ -12,7 +12,9 @@ mod iteration;
 mod ordering;
 
 pub(crate) use construct::{native_typed_array, native_typed_array_from, native_typed_array_of};
-pub(crate) use element::{IndexedRead, IndexedWrite, indexed_element_value, set_indexed_element};
+pub(crate) use element::{
+    IndexedRead, IndexedWrite, indexed_element_value, read_view_elements, set_indexed_element,
+};
 pub(crate) use iteration::*;
 pub(crate) use ordering::*;
 

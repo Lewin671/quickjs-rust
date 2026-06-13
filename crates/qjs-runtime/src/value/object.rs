@@ -172,6 +172,10 @@ pub struct ObjectRef {
     /// prototype objects, the private environment their members resolve `#x`
     /// references through. Lazily populated.
     private_state: Rc<RefCell<crate::private::PrivateState>>,
+    /// Opaque byte storage for ArrayBuffer objects. The public ArrayBuffer brand
+    /// remains a hidden property; bytes live here so typed-array element access
+    /// does not have to encode and decode a string on every read or write.
+    internal_bytes: Rc<RefCell<Option<Vec<u8>>>>,
 }
 
 impl fmt::Debug for ObjectRef {
@@ -233,6 +237,7 @@ impl ObjectRef {
             generator_state: Rc::new(RefCell::new(None)),
             async_generator_state: Rc::new(RefCell::new(None)),
             private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
+            internal_bytes: Rc::new(RefCell::new(None)),
         }
     }
 
@@ -268,6 +273,25 @@ impl ObjectRef {
     /// Returns the private environment carried by this object, if any.
     pub(crate) fn private_environment(&self) -> Option<PrivateEnvironment> {
         self.private_state.borrow().environment.clone()
+    }
+
+    pub(crate) fn internal_bytes(&self) -> Option<Vec<u8>> {
+        self.internal_bytes.borrow().clone()
+    }
+
+    pub(crate) fn set_internal_bytes(&self, bytes: Vec<u8>) {
+        *self.internal_bytes.borrow_mut() = Some(bytes);
+    }
+
+    pub(crate) fn clear_internal_bytes(&self) {
+        *self.internal_bytes.borrow_mut() = None;
+    }
+
+    pub(crate) fn with_internal_bytes_mut<T>(
+        &self,
+        f: impl FnOnce(&mut Vec<u8>) -> T,
+    ) -> Option<T> {
+        self.internal_bytes.borrow_mut().as_mut().map(f)
     }
 
     pub(crate) fn ptr_eq(&self, other: &Self) -> bool {

@@ -302,9 +302,10 @@ fn is_object_value(value: &Value) -> bool {
 }
 
 fn define_array_buffer_data(object: &ObjectRef, bytes: Vec<u8>) {
+    object.set_internal_bytes(bytes);
     object.define_property(
         ARRAY_BUFFER_DATA_PROPERTY.to_owned(),
-        Property::non_enumerable(Value::String(bytes_to_string(bytes))),
+        Property::non_enumerable(Value::String(String::new())),
     );
     object.set_to_string_tag("ArrayBuffer");
 }
@@ -353,6 +354,9 @@ pub(crate) fn array_buffer_max_byte_length(object: &ObjectRef) -> Option<usize> 
 
 /// The backing bytes of a (non-detached) `ArrayBuffer`.
 pub(crate) fn array_buffer_bytes(object: &ObjectRef) -> Vec<u8> {
+    if let Some(bytes) = object.internal_bytes() {
+        return bytes;
+    }
     match object.own_property(ARRAY_BUFFER_DATA_PROPERTY) {
         Some(Property {
             value: Value::String(data),
@@ -364,10 +368,18 @@ pub(crate) fn array_buffer_bytes(object: &ObjectRef) -> Vec<u8> {
 
 /// Replaces the backing bytes of an `ArrayBuffer` (used by typed-array writes).
 pub(crate) fn set_array_buffer_bytes(object: &ObjectRef, bytes: Vec<u8>) {
+    object.set_internal_bytes(bytes);
     object.define_property(
         ARRAY_BUFFER_DATA_PROPERTY.to_owned(),
-        Property::non_enumerable(Value::String(bytes_to_string(bytes))),
+        Property::non_enumerable(Value::String(String::new())),
     );
+}
+
+pub(crate) fn mutate_array_buffer_bytes<T>(
+    object: &ObjectRef,
+    f: impl FnOnce(&mut Vec<u8>) -> T,
+) -> Option<T> {
+    object.with_internal_bytes_mut(f)
 }
 
 /// Builds a fresh, zero-initialized `ArrayBuffer` inheriting from
@@ -384,6 +396,7 @@ pub(crate) fn new_array_buffer(env: &CallEnv, length: usize) -> ObjectRef {
 /// Idempotent; a non-ArrayBuffer argument is ignored. Used by the Test262 host
 /// `$262.detachArrayBuffer` hook.
 pub(crate) fn detach(object: &ObjectRef) {
+    object.clear_internal_bytes();
     object.delete_own_property(ARRAY_BUFFER_DATA_PROPERTY);
     object.define_property(
         ARRAY_BUFFER_DETACHED_PROPERTY.to_owned(),
@@ -445,10 +458,6 @@ fn slice_index(
     } else {
         Ok(integer.min(length as f64) as usize)
     }
-}
-
-fn bytes_to_string(bytes: Vec<u8>) -> String {
-    bytes.into_iter().map(char::from).collect()
 }
 
 fn string_to_bytes(value: &str) -> Vec<u8> {

@@ -197,6 +197,25 @@ impl ArrayRef {
         properties.is_empty() || !properties.contains_key(&index.to_string())
     }
 
+    /// Whether `CreateDataProperty` for `index` can be represented as a dense
+    /// element write. This is stricter than ordinary array assignment: it only
+    /// accepts mutable, extensible arrays without own special descriptors at
+    /// the target index, so callers can fall back to the generic descriptor
+    /// path whenever a failure or descriptor-preserving overwrite is possible.
+    pub(crate) fn dense_data_property_eligible(&self, index: usize) -> bool {
+        if index > MAX_ARRAY_INDEX
+            || index >= MAX_DENSE_STORAGE_LENGTH
+            || self.frozen.get()
+            || self.sealed.get()
+            || !self.extensible.get()
+            || !self.length_writable.get()
+        {
+            return false;
+        }
+        let properties = self.properties.borrow();
+        properties.is_empty() || !properties.contains_key(&index.to_string())
+    }
+
     pub(crate) fn set(&self, index: usize, value: Value) {
         if index > MAX_ARRAY_INDEX {
             self.set_property(index.to_string(), value);
