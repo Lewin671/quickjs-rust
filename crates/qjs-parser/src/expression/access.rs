@@ -32,6 +32,11 @@ impl Parser {
                 continue;
             }
 
+            if self.match_kind(&TokenKind::QuestionDot) {
+                expr = self.finish_optional_member(expr)?;
+                continue;
+            }
+
             if self.at_template_literal() {
                 expr = self.finish_tagged_template_literal(expr)?;
                 continue;
@@ -85,6 +90,11 @@ impl Parser {
                 continue;
             }
 
+            if self.match_kind(&TokenKind::QuestionDot) {
+                expr = self.finish_optional_member(expr)?;
+                continue;
+            }
+
             break;
         }
         Ok(expr)
@@ -132,6 +142,55 @@ impl Parser {
         };
         let span = Span::new(object.span().start, property_token.span.end);
         Ok(Expr::Member {
+            object: Box::new(object),
+            property: MemberProperty::Named(name),
+            span,
+        })
+    }
+
+    fn finish_optional_member(&mut self, object: Expr) -> Result<Expr, ParseError> {
+        if self.match_kind(&TokenKind::LeftBracket) {
+            let property = self.expression()?;
+            let end = self
+                .peek()
+                .expect("parser should always have eof token")
+                .span
+                .end;
+            self.expect(&TokenKind::RightBracket)?;
+            let span = Span::new(object.span().start, end);
+            return Ok(Expr::OptionalMember {
+                object: Box::new(object),
+                property: MemberProperty::Computed(Box::new(property)),
+                span,
+            });
+        }
+
+        let property_token = self.advance();
+        if let TokenKind::PrivateName(name) = &property_token.kind {
+            if matches!(&object, Expr::Super { .. }) {
+                return Err(ParseError {
+                    message: "private names are not valid on `super` property access".to_owned(),
+                    span: Span::new(object.span().start, property_token.span.end),
+                });
+            }
+            let name = name.clone();
+            self.note_private_reference(&name, property_token.span);
+            let span = Span::new(object.span().start, property_token.span.end);
+            return Ok(Expr::OptionalMember {
+                object: Box::new(object),
+                property: MemberProperty::Private(name),
+                span,
+            });
+        }
+
+        let Some(name) = property_name(property_token.kind) else {
+            return Err(ParseError {
+                message: "expected optional property name".to_owned(),
+                span: property_token.span,
+            });
+        };
+        let span = Span::new(object.span().start, property_token.span.end);
+        Ok(Expr::OptionalMember {
             object: Box::new(object),
             property: MemberProperty::Named(name),
             span,

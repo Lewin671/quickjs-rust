@@ -295,6 +295,16 @@ pub enum Expr {
         /// Source span.
         span: Span,
     },
+    /// An optional member access expression, as in `object?.name`,
+    /// `object?.[key]`, or `object?.#name`.
+    OptionalMember {
+        /// Object expression.
+        object: Box<Expr>,
+        /// Property expression or name.
+        property: MemberProperty,
+        /// Source span.
+        span: Span,
+    },
     /// A `#name in object` ergonomic brand check expression.
     PrivateIn {
         /// The private name without the leading `#`.
@@ -374,6 +384,7 @@ impl Expr {
             | Self::Yield { span, .. }
             | Self::Class { span, .. }
             | Self::Member { span, .. }
+            | Self::OptionalMember { span, .. }
             | Self::PrivateIn { span, .. }
             | Self::ImportCall { span, .. }
             | Self::ImportMeta { span }

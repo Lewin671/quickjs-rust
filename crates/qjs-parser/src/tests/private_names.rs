@@ -128,6 +128,25 @@ fn parses_private_member_access() {
 }
 
 #[test]
+fn parses_optional_private_member_access() {
+    let body = class_body("class C { #x; m(o) { return o?.#x; } }");
+    let ClassElement::Method(member) = &body.elements[1] else {
+        panic!("expected a method");
+    };
+    let Expr::Function { body, .. } = &member.value else {
+        panic!("method value should be a function");
+    };
+    let Stmt::Return {
+        argument: Some(Expr::OptionalMember { property, .. }),
+        ..
+    } = &body[0]
+    else {
+        panic!("expected an optional private member return");
+    };
+    assert_eq!(*property, MemberProperty::Private("x".to_owned()));
+}
+
+#[test]
 fn parses_private_brand_check() {
     let body = class_body("class C { #x; has(o) { return #x in o; } }");
     let ClassElement::Method(member) = &body.elements[1] else {

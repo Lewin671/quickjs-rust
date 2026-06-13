@@ -314,6 +314,9 @@ impl Compiler {
             Expr::Member {
                 object, property, ..
             } => {
+                if Self::member_chain_has_optional(expr) {
+                    return self.compile_optional_chain(expr);
+                }
                 if matches!(object.as_ref(), Expr::Super { .. }) {
                     return self.compile_super_member(property);
                 }
@@ -327,6 +330,7 @@ impl Compiler {
                 self.emit(Op::GetProp);
                 Ok(())
             }
+            Expr::OptionalMember { .. } => self.compile_optional_chain(expr),
             Expr::PrivateIn { name, object, .. } => {
                 self.compile_expr(object)?;
                 self.emit(Op::PrivateIn(name.clone()));
@@ -476,6 +480,75 @@ impl Compiler {
                     message: format!("SyntaxError: super.#{name} is not allowed"),
                 });
             }
+        }
+        Ok(())
+    }
+
+    fn compile_optional_chain(&mut self, expr: &Expr) -> Result<(), RuntimeError> {
+        let mut chain = Vec::new();
+        let base = Self::collect_member_chain(expr, &mut chain);
+        self.compile_expr(base)?;
+
+        let mut end_jumps = Vec::new();
+        for (property, optional) in chain {
+            if optional {
+                let access_jump = self.emit(Op::JumpIfNotNullish(usize::MAX));
+                self.emit(Op::Pop);
+                self.emit_load_undefined();
+                end_jumps.push(self.emit(Op::Jump(usize::MAX)));
+                let access_target = self.code.len();
+                self.patch_jump(access_jump, access_target);
+            }
+            self.compile_member_access_from_stack(property)?;
+        }
+
+        let end_target = self.code.len();
+        for jump in end_jumps {
+            self.patch_jump(jump, end_target);
+        }
+        Ok(())
+    }
+
+    fn member_chain_has_optional(expr: &Expr) -> bool {
+        match expr {
+            Expr::OptionalMember { .. } => true,
+            Expr::Member { object, .. } => Self::member_chain_has_optional(object),
+            _ => false,
+        }
+    }
+
+    fn collect_member_chain<'a>(
+        expr: &'a Expr,
+        chain: &mut Vec<(&'a qjs_ast::MemberProperty, bool)>,
+    ) -> &'a Expr {
+        match expr {
+            Expr::Member {
+                object, property, ..
+            } => {
+                let base = Self::collect_member_chain(object, chain);
+                chain.push((property, false));
+                base
+            }
+            Expr::OptionalMember {
+                object, property, ..
+            } => {
+                let base = Self::collect_member_chain(object, chain);
+                chain.push((property, true));
+                base
+            }
+            _ => expr,
+        }
+    }
+
+    fn compile_member_access_from_stack(
+        &mut self,
+        property: &qjs_ast::MemberProperty,
+    ) -> Result<(), RuntimeError> {
+        if let qjs_ast::MemberProperty::Private(name) = property {
+            self.emit(Op::GetPrivate(name.clone()));
+        } else {
+            self.compile_member_key(property)?;
+            self.emit(Op::GetProp);
         }
         Ok(())
     }

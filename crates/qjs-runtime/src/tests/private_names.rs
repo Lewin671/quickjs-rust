@@ -30,6 +30,52 @@ fn reads_private_instance_field() {
 }
 
 #[test]
+fn optional_private_member_access_short_circuits_nullish_base() {
+    assert_eq!(
+        eval(
+            "class C {
+               #x = 'ok';
+               static access(value) { return value?.#x; }
+             }
+             let c = new C();
+             C.access(c) + ':' + C.access(null) + ':' + C.access(undefined);"
+        ),
+        Ok(Value::String("ok:undefined:undefined".to_owned()))
+    );
+}
+
+#[test]
+fn optional_chain_can_feed_private_member_access() {
+    assert_eq!(
+        eval(
+            "class C {
+               #x = 'ok';
+               access(value) { return value?.holder.#x; }
+             }
+             let c = new C();
+             c.access({holder: c}) + ':' + c.access(null) + ':' + c.access(undefined);"
+        ),
+        Ok(Value::String("ok:undefined:undefined".to_owned()))
+    );
+}
+
+#[test]
+fn optional_private_member_access_checks_non_nullish_brand() {
+    assert_eq!(
+        eval(
+            "class C {
+               #x = 1;
+               static access(value) { return value?.#x; }
+             }
+             let caught = false;
+             try { C.access({}); } catch (error) { caught = error instanceof TypeError; }
+             caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn private_field_without_initializer_is_undefined() {
     assert_eq!(
         eval("class C { #x; getX() { return this.#x; } } new C().getX();"),
