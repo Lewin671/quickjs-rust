@@ -121,7 +121,11 @@ pub(super) fn unsupported_module_item() -> RuntimeError {
 pub(super) fn stmt_updates_statement_list_completion(stmt: &Stmt) -> bool {
     !matches!(
         stmt,
-        Stmt::Debugger { .. } | Stmt::Empty | Stmt::FunctionDecl { .. } | Stmt::VarDecl { .. }
+        Stmt::Debugger { .. }
+            | Stmt::Empty
+            | Stmt::FunctionDecl { .. }
+            | Stmt::ClassDecl { .. }
+            | Stmt::VarDecl { .. }
     )
 }
 

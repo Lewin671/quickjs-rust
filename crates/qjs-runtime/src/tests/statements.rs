@@ -107,6 +107,15 @@ fn evaluates_variable_declarations() {
 }
 
 #[test]
+fn script_completion_ignores_empty_declarations() {
+    assert_eq!(eval("eval('class C {}');"), Ok(Value::Undefined));
+    assert_eq!(eval("eval('1; class C {}');"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("eval('1; function f() {}');"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("eval('1; var x;');"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("eval('1; ;');"), Ok(Value::Number(1.0)));
+}
+
+#[test]
 fn evaluates_variable_declaration_destructuring() {
     assert_eq!(
         eval("let [first = 1, , third] = [undefined, 2, 3]; first + third;"),

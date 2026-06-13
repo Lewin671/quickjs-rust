@@ -167,9 +167,7 @@ impl Compiler {
         let global_lexical_names = blocked.clone();
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
             compiler.compile_hoisted_function_decls(&script.body)?;
-            for stmt in &script.body {
-                compiler.compile_stmt(stmt)?;
-            }
+            compiler.compile_script_statement_list(&script.body)?;
             Ok(())
         })?;
         self.code.push(Op::Return);
@@ -189,9 +187,7 @@ impl Compiler {
         let blocked = lexical_declared_names(&script.body);
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
             compiler.compile_hoisted_function_decls(&script.body)?;
-            for stmt in &script.body {
-                compiler.compile_stmt(stmt)?;
-            }
+            compiler.compile_script_statement_list(&script.body)?;
             Ok(())
         })?;
         self.code.push(Op::Return);
@@ -902,6 +898,22 @@ impl Compiler {
             }
             Stmt::ModuleDecl(_) => Err(super::util::unsupported_module_item()),
         }
+    }
+
+    fn compile_script_statement_list(&mut self, body: &[Stmt]) -> Result<(), RuntimeError> {
+        let result_slot = self.temp_local("script_result");
+        self.emit_load_undefined();
+        self.emit(Op::StoreLocal(result_slot));
+        for stmt in body {
+            self.compile_stmt(stmt)?;
+            if stmt_updates_statement_list_completion(stmt) {
+                self.emit(Op::StoreLocal(result_slot));
+            } else {
+                self.emit(Op::Pop);
+            }
+        }
+        self.emit(Op::LoadLocal(result_slot));
+        Ok(())
     }
 
     fn store_or_pop_statement_list_completion(&mut self, stmt: &Stmt) {
