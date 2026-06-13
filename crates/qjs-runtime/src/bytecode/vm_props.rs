@@ -6,8 +6,8 @@ use crate::{
     function_delete_own_symbol_property, function_own_property_descriptor,
     function_own_property_keys, function_prototype_chain_descriptor,
     inherited_primitive_prototype_descriptor, inherited_string_prototype_property, number,
-    object::define_array_length_value, property_value, property_value_key, string, to_int32_number,
-    to_uint32_number, value_prototype,
+    object::define_array_length_value, property_value, property_value_key, string, symbol,
+    to_int32_number, to_uint32_number, value_prototype,
 };
 
 use super::vm::Vm;
@@ -26,6 +26,28 @@ impl Vm<'_> {
         self.array_prototype_cache
             .as_ref()
             .map(ObjectRef::has_own_index_property)
+    }
+
+    pub(super) fn symbol_primitive_set_fails(
+        &self,
+        object: &Value,
+        key: &crate::PropertyKey,
+    ) -> bool {
+        if !matches!(object, Value::Object(object) if symbol::is_symbol_primitive(object)) {
+            return false;
+        }
+        let env = self.current_env();
+        !property_set_uses_setter(object, key, &env)
+    }
+
+    pub(super) fn is_global_object(&self, value: &Value) -> bool {
+        let Value::Object(object) = value else {
+            return false;
+        };
+        matches!(
+            self.realm.borrow().get(GLOBAL_THIS_BINDING),
+            Some(Value::Object(global_object)) if object.ptr_eq(global_object)
+        )
     }
 
     /// Drops the cached Array.prototype when the `Array` global binding itself is

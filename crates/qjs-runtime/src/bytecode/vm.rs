@@ -6,7 +6,7 @@ use crate::{
     array::array_like_values_with_env,
     call_function, construct_function,
     function::{CallEnv, CompiledUserFunction, Realm},
-    initialize_builtins, is_truthy, symbol, to_js_string_with_env, to_property_key_value,
+    initialize_builtins, is_truthy, to_js_string_with_env, to_property_key_value,
 };
 
 use super::ir::{Bytecode, Op};
@@ -14,9 +14,7 @@ use super::util::{stack_underflow, typeof_value};
 use super::vm_call::{insert_scope_call_bindings, user_bytecode_function};
 use super::vm_generator::CaptureWriteback;
 use super::vm_iter::DelegateStep;
-use super::vm_props::{
-    array_index_from_number, get_property_key, property_set_uses_setter, set_property_key,
-};
+use super::vm_props::{array_index_from_number, get_property_key, set_property_key};
 use super::vm_result::{Completion, FunctionBytecodeResult, ResumeMode};
 use super::vm_try::TryFrame;
 
@@ -414,6 +412,21 @@ impl<'a> Vm<'a> {
                         self.stack.push(value);
                     }
                 }
+                Op::SuperSet { key, is_strict } => {
+                    let result = self.super_set(&PropertyKey::String(key), is_strict);
+                    if let Some(value) = self.handle_runtime_result(result)? {
+                        self.stack.push(value);
+                    }
+                }
+                Op::SuperSetComputed { is_strict } => {
+                    let value = self.pop()?;
+                    let key_value = self.pop()?;
+                    let key = self.coerce_property_key(key_value)?;
+                    let result = self.super_set_value(key, value, is_strict);
+                    if let Some(value) = self.handle_runtime_result(result)? {
+                        self.stack.push(value);
+                    }
+                }
                 Op::SuperMethod { key } => {
                     let result = self.super_method(PropertyKey::String(key));
                     self.handle_runtime_result(result)?;
@@ -630,24 +643,6 @@ impl<'a> Vm<'a> {
         }
         self.stack.push(value);
         Ok(())
-    }
-
-    fn symbol_primitive_set_fails(&self, object: &Value, key: &crate::PropertyKey) -> bool {
-        if !matches!(object, Value::Object(object) if symbol::is_symbol_primitive(object)) {
-            return false;
-        }
-        let env = self.current_env();
-        !property_set_uses_setter(object, key, &env)
-    }
-
-    fn is_global_object(&self, value: &Value) -> bool {
-        let Value::Object(object) = value else {
-            return false;
-        };
-        matches!(
-            self.realm.borrow().get(GLOBAL_THIS_BINDING),
-            Some(Value::Object(global_object)) if object.ptr_eq(global_object)
-        )
     }
 
     fn call(&mut self, argc: usize) -> Result<(), RuntimeError> {

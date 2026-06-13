@@ -171,6 +171,18 @@ pub(super) enum Op {
     /// Reads `super[expr]`: pops the key from the stack, then behaves like
     /// `SuperGet`.
     SuperGetComputed,
+    /// Writes `super.<key> = value`: pops the value, resolves the current
+    /// home object's prototype as the target, and uses current `this` as the
+    /// receiver. Pushes the assigned value.
+    SuperSet {
+        key: String,
+        is_strict: bool,
+    },
+    /// Writes `super[expr] = value`: pops value then key, then behaves like
+    /// `SuperSet`.
+    SuperSetComputed {
+        is_strict: bool,
+    },
     /// Loads `super.<key>` as a method, pushing the current `this` (receiver)
     /// then the resolved callee, so a following `CallResolved` invokes it with
     /// the right receiver.

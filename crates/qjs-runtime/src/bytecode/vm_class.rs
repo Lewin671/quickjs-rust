@@ -538,6 +538,38 @@ impl Vm<'_> {
         Ok(value)
     }
 
+    /// Resolves `super.<key> = value`: the write targets the current method's
+    /// home object [[Prototype]] and uses current `this` as the receiver.
+    pub(super) fn super_set(
+        &mut self,
+        key: &PropertyKey,
+        is_strict: bool,
+    ) -> Result<Value, RuntimeError> {
+        let value = self.pop()?;
+        self.super_set_value(key.clone(), value, is_strict)
+    }
+
+    pub(super) fn super_set_value(
+        &mut self,
+        key: PropertyKey,
+        value: Value,
+        is_strict: bool,
+    ) -> Result<Value, RuntimeError> {
+        let receiver = self.current_this()?;
+        let lookup_base = self.super_lookup_base()?;
+        let mut env = self.current_env();
+        let wrote =
+            crate::reflect::ordinary_set(lookup_base, &key, value.clone(), receiver, &mut env)?;
+        self.apply_env(env);
+        if !wrote && is_strict {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: cannot set property".to_owned(),
+            });
+        }
+        Ok(value)
+    }
+
     /// Resolves `super.<key>` as a method call target, pushing `[this, callee]`
     /// for a following `CallResolved`.
     pub(super) fn super_method(&mut self, key: PropertyKey) -> Result<(), RuntimeError> {

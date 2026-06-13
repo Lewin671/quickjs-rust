@@ -957,6 +957,23 @@ fn super_property_in_field_initializer() {
 }
 
 #[test]
+fn super_property_assignment_in_field_initializer_arrow() {
+    assert_eq!(
+        eval(
+            "class C {
+               func = () => { super.prop = 'test262'; };
+               static staticFunc = () => { super.staticProp = 'static test262'; };
+             }
+             let c = new C();
+             c.func();
+             C.staticFunc();
+             c.prop + ':' + C.staticProp;"
+        ),
+        Ok(Value::String("test262:static test262".to_owned()))
+    );
+}
+
+#[test]
 fn instance_fields_are_writable_and_configurable() {
     assert_eq!(
         eval(

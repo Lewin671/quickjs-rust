@@ -61,6 +61,30 @@ impl Compiler {
             }
             AssignmentTarget::Member {
                 object, property, ..
+            } if matches!(object.as_ref(), Expr::Super { .. }) => match property {
+                qjs_ast::MemberProperty::Named(name) => {
+                    self.compile_expr(value)?;
+                    self.emit(Op::SuperSet {
+                        key: name.clone(),
+                        is_strict: self.strict,
+                    });
+                    Ok(())
+                }
+                qjs_ast::MemberProperty::Computed(expr) => {
+                    self.compile_expr(expr)?;
+                    self.compile_expr(value)?;
+                    self.emit(Op::SuperSetComputed {
+                        is_strict: self.strict,
+                    });
+                    Ok(())
+                }
+                qjs_ast::MemberProperty::Private(name) => Err(RuntimeError {
+                    thrown: None,
+                    message: format!("SyntaxError: super.#{name} is not allowed"),
+                }),
+            },
+            AssignmentTarget::Member {
+                object, property, ..
             } => {
                 self.compile_expr(object)?;
                 self.compile_member_key(property)?;
