@@ -258,6 +258,23 @@ fn reads_static_private_field() {
 }
 
 #[test]
+fn static_private_field_is_not_visible_through_default_proxy() {
+    assert_eq!(
+        eval(
+            "class C {
+               static #x = 1;
+               static x() { return this.#x; }
+             }
+             let P = new Proxy(C, {});
+             let caught = false;
+             try { P.x(); } catch (error) { caught = error instanceof TypeError; }
+             C.x() + ':' + caught;"
+        ),
+        Ok(Value::String("1:true".to_owned()))
+    );
+}
+
+#[test]
 fn calls_private_method() {
     assert_eq!(
         eval(

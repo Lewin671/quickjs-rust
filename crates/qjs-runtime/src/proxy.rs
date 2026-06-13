@@ -3,7 +3,9 @@ use std::{cell::RefCell, collections::HashMap, fmt, rc::Rc};
 use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function,
-    has_property_key, is_truthy, property_value, property_value_key_with_receiver,
+    has_property_key, is_truthy,
+    private::{PrivateState, PrivateStorage},
+    property_value, property_value_key_with_receiver,
 };
 
 #[derive(Clone)]
@@ -13,6 +15,7 @@ pub struct ProxyRef {
 
 struct ProxyData {
     state: RefCell<Option<ProxyState>>,
+    private_state: RefCell<PrivateState>,
 }
 
 struct ProxyState {
@@ -31,6 +34,7 @@ impl ProxyRef {
         Self {
             inner: Rc::new(ProxyData {
                 state: RefCell::new(Some(ProxyState { target, handler })),
+                private_state: RefCell::new(PrivateState::default()),
             }),
         }
     }
@@ -63,6 +67,18 @@ impl ProxyRef {
 
     pub(crate) fn revoke(&self) {
         *self.inner.state.borrow_mut() = None;
+    }
+
+    /// Returns this Proxy exotic object's private-name storage, creating it on
+    /// first use. Private fields are stored on the Proxy receiver itself, not
+    /// on its target through the handler.
+    pub(crate) fn private_storage(&self) -> PrivateStorage {
+        self.inner
+            .private_state
+            .borrow_mut()
+            .storage
+            .get_or_insert_with(PrivateStorage::new)
+            .clone()
     }
 }
 
