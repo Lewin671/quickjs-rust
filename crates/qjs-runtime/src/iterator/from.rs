@@ -10,7 +10,8 @@ use std::collections::HashMap;
 
 use crate::CallEnv;
 use crate::{
-    NativeFunction, ObjectRef, Property, RuntimeError, Value, call_function, property_value,
+    NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function,
+    object_prototype, property_value, property_value_key, symbol,
 };
 
 const WRAP_ITERATOR: &str = "\0wrap_for_valid_iterator";
@@ -25,9 +26,8 @@ pub(super) fn native_iterator_from(
 
     // GetIteratorFlattenable(O, iterate-string-primitives): a string is iterated
     // through its own `Symbol.iterator`; a primitive other than a string is
-    // rejected; an object is resolved through `Symbol.iterator` or, when absent,
-    // treated as the iterator itself (handled by sync_iterator_for_value's
-    // method lookup, which falls back appropriately for objects).
+    // rejected; an object is resolved through `Symbol.iterator` or, when the
+    // method is null/undefined, treated as the iterator object itself.
     let iterator = iterator_flattenable(object, env)?;
 
     // If the iterator already inherits %Iterator.prototype%, return it as-is.
@@ -47,17 +47,60 @@ pub(super) fn native_iterator_from(
 /// any other primitive is a TypeError; objects go through GetIterator(sync).
 fn iterator_flattenable(value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
     match &value {
-        Value::String(_)
-        | Value::Object(_)
+        Value::String(_) => crate::bytecode::sync_iterator_for_value(value, env),
+        Value::Object(object) if symbol::is_symbol_primitive(object) => Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Iterator.from called on a non-iterable primitive".to_owned(),
+        }),
+        Value::Object(_)
         | Value::Array(_)
         | Value::Function(_)
         | Value::Map(_)
-        | Value::Set(_) => crate::bytecode::sync_iterator_for_value(value, env),
+        | Value::Set(_)
+        | Value::Proxy(_) => {
+            let Some(iterator_symbol) = symbol::iterator_symbol(env) else {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: "iterator symbol is unavailable".to_owned(),
+                });
+            };
+            let method =
+                property_value_key(value.clone(), &PropertyKey::Symbol(iterator_symbol), env)?;
+            if matches!(method, Value::Undefined | Value::Null) {
+                return Ok(value);
+            }
+            if !matches!(method, Value::Function(_)) {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: "TypeError: value is not iterable".to_owned(),
+                });
+            }
+            let iterator = call_function(method, value, Vec::new(), env, false)?;
+            if !is_object_value(&iterator) {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: "TypeError: iterator method must return an object".to_owned(),
+                });
+            }
+            Ok(iterator)
+        }
         _ => Err(RuntimeError {
             thrown: None,
             message: "TypeError: Iterator.from called on a non-iterable primitive".to_owned(),
         }),
     }
+}
+
+fn is_object_value(value: &Value) -> bool {
+    matches!(
+        value,
+        Value::Object(_)
+            | Value::Array(_)
+            | Value::Function(_)
+            | Value::Map(_)
+            | Value::Set(_)
+            | Value::Proxy(_)
+    )
 }
 
 /// `OrdinaryHasInstance(%Iterator%, iterator)`: walks the iterator's prototype
@@ -145,13 +188,19 @@ pub(super) fn native_wrap_return(
     };
     let return_method = property_value(iterator.clone(), "return", env)?;
     if matches!(return_method, Value::Null | Value::Undefined) {
-        return Ok(done_result());
+        return Ok(done_result(env));
+    }
+    if !matches!(return_method, Value::Function(_)) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: iterator return is not a function".to_owned(),
+        });
     }
     call_function(return_method, iterator, Vec::new(), env, false)
 }
 
-fn done_result() -> Value {
-    let object = ObjectRef::new(HashMap::new());
+fn done_result(env: &CallEnv) -> Value {
+    let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
     object.define_property("value".to_owned(), Property::enumerable(Value::Undefined));
     object.define_property(
         "done".to_owned(),

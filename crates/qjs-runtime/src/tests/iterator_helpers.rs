@@ -167,6 +167,92 @@ fn iterator_flat_map_iterator_symbol_fallback() {
 }
 
 #[test]
+fn iterator_from_accepts_direct_iterators_and_symbol_fallback() {
+    assert_eq!(
+        string(
+            "function* g() { yield 0; yield 1; yield 2; } \
+             let results = []; \
+             let n = g(); \
+             results.push(Array.from(Iterator.from({ next() { return n.next(); } })).join(',')); \
+             n = g(); \
+             results.push(Array.from(Iterator.from({ [Symbol.iterator]: null, next() { return n.next(); } })).join(',')); \
+             n = g(); \
+             results.push(Array.from(Iterator.from({ [Symbol.iterator]: undefined, next() { return n.next(); } })).join(',')); \
+             let threw = false; \
+             try { Iterator.from({ [Symbol.iterator]: 0, next() { return { done: true }; } }); } catch (e) { threw = e instanceof TypeError; } \
+             results.push(threw); \
+             threw = false; \
+             try { Iterator.from(Symbol()); } catch (e) { threw = e instanceof TypeError; } \
+             results.push(threw); \
+             results.join(':');"
+        ),
+        "0,1,2:0,1,2:0,1,2:true:true"
+    );
+}
+
+#[test]
+fn iterator_from_gets_direct_next_once() {
+    assert_eq!(
+        string(
+            "let nextGets = 0; \
+             let nextCalls = 0; \
+             let source = { \
+               get next() { \
+                 nextGets++; \
+                 let value = 0; \
+                 return function () { nextCalls++; return value++ < 2 ? { value, done: false } : { done: true }; }; \
+               } \
+             }; \
+             let iter = Iterator.from(source); \
+             let afterFrom = nextGets + ':' + nextCalls; \
+             Array.from(iter); \
+             afterFrom + ':' + nextGets + ':' + nextCalls;"
+        ),
+        "1:0:1:3"
+    );
+}
+
+#[test]
+fn iterator_from_wrapper_return_forwards_or_creates_done_result() {
+    assert_eq!(
+        string(
+            "let log = []; \
+             let expected = { value: 5, done: true }; \
+             let source = { \
+               get return() { log.push('get return'); return function () { log.push('call return'); return expected; }; } \
+             }; \
+             let wrapper = Iterator.from(source); \
+             let result = wrapper.return(); \
+             let emptyReturn = Iterator.from({}).return(); \
+             (result === expected) + ':' + log.join('|') + ':' + \
+             emptyReturn.hasOwnProperty('value') + ':' + (emptyReturn.value === undefined) + ':' + emptyReturn.done;"
+        ),
+        "true:get return|call return:true:true:true"
+    );
+}
+
+#[test]
+fn iterator_from_observes_proxy_iterator_methods_in_order() {
+    assert_eq!(
+        string(
+            "let log = []; \
+             let expected = { value: 5, done: true }; \
+             let source = new Proxy({ return() { log.push('call return'); return expected; } }, { \
+               get(target, key, receiver) { \
+                 log.push(key === Symbol.iterator ? 'get @@iterator' : 'get ' + String(key)); \
+                 return Reflect.get(target, key, receiver); \
+               } \
+             }); \
+             let wrapper = Iterator.from(source); \
+             let before = log.join('|'); \
+             let result = wrapper.return(); \
+             (result === expected) + ':' + before + ':' + log.join('|');"
+        ),
+        "true:get @@iterator|get next:get @@iterator|get next|get return|call return"
+    );
+}
+
+#[test]
 fn iterator_flat_map_return_closes_inner_iterator_once() {
     assert_eq!(
         string(
