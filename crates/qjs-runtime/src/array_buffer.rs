@@ -2,8 +2,9 @@ use crate::CallEnv;
 use std::collections::HashMap;
 
 use crate::{
-    Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, function_prototype,
-    property_value, symbol, to_number_with_env,
+    Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value,
+    construct_function, ensure_constructor, property_value, property_value_key, symbol,
+    to_number_with_env,
 };
 
 /// Internal slot holding the backing bytes of an `ArrayBuffer`, encoded as a
@@ -133,7 +134,10 @@ pub(crate) fn native_array_buffer(
     }
     let object = match this_value {
         Value::Object(object) => object,
-        _ => ObjectRef::with_prototype(HashMap::new(), function_prototype(function)),
+        _ => ObjectRef::with_prototype_slot(
+            HashMap::new(),
+            crate::native_construct_prototype_slot(function, env)?,
+        ),
     };
     define_array_buffer_data(&object, vec![0; length]);
     if let Some(max) = max_byte_length {
@@ -239,13 +243,14 @@ pub(crate) fn native_array_buffer_prototype_slice(
         env,
     )?;
     let new_length = end.saturating_sub(start);
-    // SpeciesConstructor(O, %ArrayBuffer%): a non-undefined, non-object
-    // `constructor` throws; the species slot itself is left at the default so
-    // the result is always a plain ArrayBuffer for now.
-    validate_species_constructor(this_value.clone(), env)?;
-    let constructor = env.get("ArrayBuffer").unwrap_or(Value::Undefined);
-    let prototype = crate::constructor_prototype(&constructor, env);
-    let result = ObjectRef::with_prototype(HashMap::new(), prototype);
+    let constructor = species_constructor(this_value.clone(), env)?;
+    let result_value = construct_function(
+        constructor.clone(),
+        constructor,
+        vec![Value::Number(new_length as f64)],
+        env,
+    )?;
+    let result = array_buffer_object(&result_value)?;
     // Re-read the source after the user-observable index coercion above, which
     // could have detached it.
     if is_detached(&object) {
@@ -280,15 +285,31 @@ fn resizable_max_byte_length(
     Ok(Some(to_index(max, env)?))
 }
 
-fn validate_species_constructor(value: Value, env: &mut CallEnv) -> Result<(), RuntimeError> {
+fn species_constructor(value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+    let default = env.get("ArrayBuffer").unwrap_or(Value::Undefined);
     let constructor = property_value(value, "constructor", env)?;
-    if matches!(constructor, Value::Undefined) || is_object_value(&constructor) {
-        return Ok(());
+    if matches!(constructor, Value::Undefined) {
+        return Ok(default);
     }
-    Err(RuntimeError {
+    if !is_object_value(&constructor) {
+        return Err(array_buffer_species_constructor_error());
+    }
+    let species = match symbol::species_symbol(env) {
+        Some(symbol) => property_value_key(constructor, &PropertyKey::Symbol(symbol), env)?,
+        None => return Ok(default),
+    };
+    if matches!(species, Value::Undefined | Value::Null) {
+        return Ok(default);
+    }
+    ensure_constructor(&species).map_err(|_| array_buffer_species_constructor_error())?;
+    Ok(species)
+}
+
+fn array_buffer_species_constructor_error() -> RuntimeError {
+    RuntimeError {
         thrown: None,
         message: "TypeError: ArrayBuffer species constructor must be an object".to_owned(),
-    })
+    }
 }
 
 fn is_object_value(value: &Value) -> bool {
@@ -297,7 +318,7 @@ fn is_object_value(value: &Value) -> bool {
         Value::Object(object) if !symbol::is_symbol_primitive(object)
     ) || matches!(
         value,
-        Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_)
+        Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) | Value::Proxy(_)
     )
 }
 

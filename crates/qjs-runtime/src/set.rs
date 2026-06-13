@@ -141,7 +141,7 @@ pub(crate) fn native_set(
             message: "TypeError: Constructor Set requires 'new'".to_owned(),
         });
     }
-    let set = SetRef::new(crate::function_prototype(function));
+    let set = SetRef::with_prototype_slot(crate::native_construct_prototype_slot(function, env)?);
     let set_value = Value::Set(set);
     if let Some(iterable) = argument_values.first().cloned()
         && !matches!(iterable, Value::Undefined | Value::Null)

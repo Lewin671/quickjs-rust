@@ -394,6 +394,7 @@ fn prototype_value_to_slot(value: Value, env: &CallEnv) -> Option<crate::Prototy
         Value::Array(array) => Some(crate::Prototype::Object(crate::array_as_object_prototype(
             &array, env,
         ))),
+        Value::Proxy(prototype) => Some(crate::Prototype::Proxy(prototype)),
         _ => None,
     }
 }

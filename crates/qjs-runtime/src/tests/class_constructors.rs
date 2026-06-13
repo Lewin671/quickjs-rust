@@ -36,6 +36,45 @@ fn default_derived_constructor_forwards_arguments_without_spread_iteration() {
 }
 
 #[test]
+fn native_super_constructors_use_derived_new_target_prototype() {
+    for (source, expected) in [
+        (
+            "class SubMap extends Map {} \
+             var value = new SubMap(); \
+             [value instanceof SubMap, value instanceof Map, Object.getPrototypeOf(value) === SubMap.prototype].join(':');",
+            "true:true:true",
+        ),
+        (
+            "class SubSet extends Set {} \
+             var value = new SubSet(); \
+             [value instanceof SubSet, value instanceof Set, Object.getPrototypeOf(value) === SubSet.prototype].join(':');",
+            "true:true:true",
+        ),
+        (
+            "class SubWeakMap extends WeakMap {} \
+             var value = new SubWeakMap(); \
+             [value instanceof SubWeakMap, value instanceof WeakMap, Object.getPrototypeOf(value) === SubWeakMap.prototype].join(':');",
+            "true:true:true",
+        ),
+        (
+            "class SubWeakSet extends WeakSet {} \
+             var value = new SubWeakSet(); \
+             [value instanceof SubWeakSet, value instanceof WeakSet, Object.getPrototypeOf(value) === SubWeakSet.prototype].join(':');",
+            "true:true:true",
+        ),
+        (
+            "class SubArrayBuffer extends ArrayBuffer {} \
+             var value = new SubArrayBuffer(4); \
+             var slice = value.slice(0, 1); \
+             [value instanceof SubArrayBuffer, value instanceof ArrayBuffer, Object.getPrototypeOf(value) === SubArrayBuffer.prototype, value.byteLength, slice instanceof SubArrayBuffer, slice instanceof ArrayBuffer, slice.byteLength].join(':');",
+            "true:true:true:4:true:true:1",
+        ),
+    ] {
+        assert_eq!(eval(source), Ok(Value::String(expected.to_owned())));
+    }
+}
+
+#[test]
 fn null_extending_class_uses_function_prototype_as_constructor_parent() {
     assert_eq!(
         eval(

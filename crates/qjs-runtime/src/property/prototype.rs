@@ -1,13 +1,29 @@
 use std::collections::HashMap;
 
-use crate::CallEnv;
 use crate::{
     ArrayRef, Function, ObjectRef, Property, Value, array_own_property_descriptor,
     array_own_property_names, symbol,
 };
+use crate::{CallEnv, NEW_TARGET_BINDING, RuntimeError};
 
 pub(crate) fn constructor_prototype(callee: &Value, env: &CallEnv) -> Option<ObjectRef> {
     constructor_prototype_slot(callee, env).and_then(|prototype| prototype.as_object())
+}
+
+pub(crate) fn native_construct_prototype_slot(
+    function: &Function,
+    env: &mut CallEnv,
+) -> Result<Option<crate::Prototype>, RuntimeError> {
+    let fallback = function_prototype(function).map(crate::Prototype::Object);
+    let Some(new_target) = env.get(NEW_TARGET_BINDING) else {
+        return Ok(fallback);
+    };
+    let prototype = if matches!(new_target, Value::Proxy(_)) {
+        prototype_value_to_slot(crate::property_value(new_target, "prototype", env)?, env)
+    } else {
+        constructor_prototype_slot(&new_target, env)
+    };
+    Ok(prototype.or(fallback))
 }
 
 /// The [[Prototype]] a `new`-created instance receives from a constructor's
@@ -39,6 +55,20 @@ pub(crate) fn constructor_prototype_slot(
         }) => Some(crate::Prototype::Object(array_as_object_prototype(
             array, env,
         ))),
+        _ => None,
+    }
+}
+
+fn prototype_value_to_slot(value: Value, env: &CallEnv) -> Option<crate::Prototype> {
+    match value {
+        Value::Object(prototype) if !symbol::is_symbol_primitive(&prototype) => {
+            Some(crate::Prototype::Object(prototype))
+        }
+        Value::Function(prototype) => Some(crate::Prototype::Function(prototype)),
+        Value::Array(array) => Some(crate::Prototype::Object(array_as_object_prototype(
+            &array, env,
+        ))),
+        Value::Proxy(prototype) => Some(crate::Prototype::Proxy(prototype)),
         _ => None,
     }
 }

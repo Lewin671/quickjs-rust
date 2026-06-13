@@ -65,7 +65,10 @@ pub(crate) fn native_weak_set(
         });
     }
 
-    let object = ObjectRef::with_prototype(HashMap::new(), crate::function_prototype(function));
+    let object = ObjectRef::with_prototype_slot(
+        HashMap::new(),
+        crate::native_construct_prototype_slot(function, env)?,
+    );
     object.set_to_string_tag("WeakSet");
     object.define_non_enumerable(WEAK_SET_BRAND.to_owned(), Value::Boolean(true));
     object.define_non_enumerable(

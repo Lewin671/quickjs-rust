@@ -22,7 +22,8 @@ pub(crate) use prototype::{
     function_prototype_chain_descriptor, function_prototype_property,
     inherited_object_prototype_property, inherited_primitive_prototype_descriptor,
     inherited_primitive_prototype_symbol_descriptor, inherited_string_prototype_property,
-    object_prototype, string_prototype, value_prototype, value_prototype_slot,
+    native_construct_prototype_slot, object_prototype, string_prototype, value_prototype,
+    value_prototype_slot,
 };
 
 pub(crate) fn has_property(value: Value, env: &CallEnv, key: &str) -> Result<bool, RuntimeError> {

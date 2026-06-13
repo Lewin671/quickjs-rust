@@ -111,7 +111,7 @@ pub(crate) fn native_map(
             message: "TypeError: Constructor Map requires 'new'".to_owned(),
         });
     }
-    let map = MapRef::new(crate::function_prototype(function));
+    let map = MapRef::with_prototype_slot(crate::native_construct_prototype_slot(function, env)?);
     let map_value = Value::Map(map);
     if let Some(iterable) = argument_values.first().cloned()
         && !matches!(iterable, Value::Undefined | Value::Null)

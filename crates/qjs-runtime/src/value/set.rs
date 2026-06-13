@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::HashMap, fmt, rc::Rc};
 
-use super::{ObjectRef, Value};
+use super::{ObjectRef, Prototype, Value};
 
 /// Set storage reference.
 #[derive(Clone)]
@@ -11,7 +11,11 @@ pub struct SetRef {
 
 impl SetRef {
     pub(crate) fn new(prototype: Option<ObjectRef>) -> Self {
-        let object = ObjectRef::with_prototype(HashMap::new(), prototype);
+        Self::with_prototype_slot(prototype.map(Prototype::Object))
+    }
+
+    pub(crate) fn with_prototype_slot(prototype: Option<Prototype>) -> Self {
+        let object = ObjectRef::with_prototype_slot(HashMap::new(), prototype);
         object.set_to_string_tag("Set");
         Self {
             entries: Rc::new(RefCell::new(Vec::new())),
