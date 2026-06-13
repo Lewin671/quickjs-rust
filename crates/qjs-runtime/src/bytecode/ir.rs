@@ -512,6 +512,10 @@ impl Bytecode {
         self.local_slots.get(name).copied()
     }
 
+    pub(crate) fn local_is_mutable(&self, slot: usize) -> bool {
+        self.locals.get(slot).is_some_and(|local| local.mutable)
+    }
+
     /// Whether the body can create a nested closure, class, generator, or async
     /// function whose activation snapshot reads the per-call captured-env Rc. When
     /// false, the activation captured env is never read, so the caller can skip

@@ -450,7 +450,7 @@ fn function_env(
     let mut local_env = HashMap::with_capacity(
         captured_env.len() + function.params.binding_count() + argument_values.len() + 3,
     );
-    let function_capture_names = insert_function_captures(
+    let (function_capture_names, protected_capture_names) = insert_function_captures(
         &mut local_env,
         bytecode,
         &function.local_names,
@@ -464,12 +464,14 @@ fn function_env(
         bytecode,
         &function.local_names,
         env,
+        &protected_capture_names,
     );
     insert_caller_scope_bindings(
         &mut local_env,
         &mut caller_binding_names,
         &function.local_names,
         env,
+        &protected_capture_names,
     );
     if let Some(name) = &function.name {
         local_env.insert(name.clone(), callee.clone());
@@ -769,25 +771,42 @@ fn insert_function_captures(
     bytecode: &Bytecode,
     function_local_names: &[String],
     function_env: &HashMap<String, Value>,
-) -> Vec<String> {
-    let mut names = Vec::new();
+) -> (Vec<String>, Vec<String>) {
+    let mut writeback_names = Vec::new();
+    let mut protected_names = Vec::new();
     for name in bytecode.global_names() {
-        insert_function_capture(local_env, &mut names, function_env, name);
+        insert_function_capture(
+            local_env,
+            &mut writeback_names,
+            &mut protected_names,
+            bytecode,
+            function_env,
+            name,
+        );
     }
     for name in bytecode.local_names() {
         if function_local_names
             .binary_search_by(|local| local.as_str().cmp(name))
             .is_err()
         {
-            insert_function_capture(local_env, &mut names, function_env, name);
+            insert_function_capture(
+                local_env,
+                &mut writeback_names,
+                &mut protected_names,
+                bytecode,
+                function_env,
+                name,
+            );
         }
     }
-    names
+    (writeback_names, protected_names)
 }
 
 fn insert_function_capture(
     local_env: &mut HashMap<String, Value>,
-    names: &mut Vec<String>,
+    writeback_names: &mut Vec<String>,
+    protected_names: &mut Vec<String>,
+    bytecode: &Bytecode,
     function_env: &HashMap<String, Value>,
     name: &str,
 ) {
@@ -796,6 +815,14 @@ fn insert_function_capture(
     }
     if let Some(value) = function_env.get(name) {
         local_env.insert(name.to_owned(), value.clone());
+        let is_immutable_capture = bytecode
+            .local_slot(name)
+            .is_some_and(|slot| !bytecode.local_is_mutable(slot));
+        let names = if is_immutable_capture {
+            protected_names
+        } else {
+            writeback_names
+        };
         if !names.iter().any(|existing| existing == name) {
             names.push(name.to_owned());
         }
@@ -808,16 +835,29 @@ fn insert_caller_bytecode_bindings(
     bytecode: &Bytecode,
     function_local_names: &[String],
     env: &CallEnv,
+    protected_capture_names: &[String],
 ) {
     for name in bytecode.global_names() {
-        insert_caller_binding(local_env, caller_binding_names, env, name);
+        insert_caller_binding(
+            local_env,
+            caller_binding_names,
+            env,
+            name,
+            protected_capture_names,
+        );
     }
     for name in bytecode.local_names() {
         if function_local_names
             .binary_search_by(|local| local.as_str().cmp(name))
             .is_err()
         {
-            insert_caller_binding(local_env, caller_binding_names, env, name);
+            insert_caller_binding(
+                local_env,
+                caller_binding_names,
+                env,
+                name,
+                protected_capture_names,
+            );
         }
     }
 }
@@ -827,8 +867,16 @@ fn insert_caller_binding(
     caller_binding_names: &mut Vec<String>,
     env: &CallEnv,
     name: &str,
+    protected_capture_names: &[String],
 ) {
     if is_internal_binding_name(name) {
+        return;
+    }
+    if local_env.contains_key(name)
+        && protected_capture_names
+            .iter()
+            .any(|existing| existing == name)
+    {
         return;
     }
     // Only the caller's *frame locals* need to ride into the callee frame;
@@ -851,6 +899,7 @@ fn insert_caller_scope_bindings(
     caller_binding_names: &mut Vec<String>,
     function_local_names: &[String],
     env: &CallEnv,
+    protected_capture_names: &[String],
 ) {
     // Iterate only the caller's frame locals; realm bindings are shared and need
     // no per-frame copy. The O(50)-per-key intrinsic scan is gone.
@@ -863,7 +912,13 @@ fn insert_caller_scope_bindings(
         {
             continue;
         }
-        insert_caller_binding(local_env, caller_binding_names, env, &name);
+        insert_caller_binding(
+            local_env,
+            caller_binding_names,
+            env,
+            &name,
+            protected_capture_names,
+        );
     }
 }
 
