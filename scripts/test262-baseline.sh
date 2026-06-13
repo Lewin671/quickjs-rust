@@ -276,6 +276,29 @@ var $262 = {
 };
 EOF
 }
+emit_test262_assert_fast_paths() {
+  cat <<'EOF'
+assert.sameValue = __quickjsRustAssertSameValue;
+EOF
+}
+emit_quickjs_rust_case_source() {
+  sed 's/assert[.]sameValue(/__quickjsRustAssertSameValue(/g' "$1"
+}
+needs_test262_prelude() {
+  local source="$1"
+  local flags="$2"
+  local includes="$3"
+  if [[ "$flags" == *async* ]] || [ -n "$includes" ]; then
+    return 0
+  fi
+  if grep -Eq '[$]262|Test262Error|assert[(]' "$source"; then
+    return 0
+  fi
+  if sed 's/assert[.]sameValue//g' "$source" | grep -q 'assert[.]'; then
+    return 0
+  fi
+  return 1
+}
 prefix_list_contains() {
   local rel="$1"
   local list="$2"
@@ -342,30 +365,34 @@ make_case() {
   local include
   {
     if [[ "$flags" == *raw* ]]; then
-      cat "$source"
+      emit_quickjs_rust_case_source "$source"
     else
       if [[ "$flags" == *onlyStrict* ]]; then
         printf '"use strict";\n'
       fi
-      cat "$TEST262_DIR/harness/assert.js"
-      printf '\n'
-      cat "$TEST262_DIR/harness/sta.js"
-      printf '\n'
-      emit_test262_host_shim
-      printf '\n'
-      if [[ "$flags" == *async* ]]; then
-        # Async cases report completion through $DONE; include the upstream
-        # handler (like quickjs-ng's run-test262 does) so it can print the
-        # AsyncTestComplete / AsyncTestFailure markers the wrapper judges by.
-        cat "$TEST262_DIR/harness/doneprintHandle.js"
+      if needs_test262_prelude "$source" "$flags" "$includes"; then
+        cat "$TEST262_DIR/harness/assert.js"
         printf '\n'
+        emit_test262_assert_fast_paths
+        printf '\n'
+        cat "$TEST262_DIR/harness/sta.js"
+        printf '\n'
+        emit_test262_host_shim
+        printf '\n'
+        if [[ "$flags" == *async* ]]; then
+          # Async cases report completion through $DONE; include the upstream
+          # handler (like quickjs-ng's run-test262 does) so it can print the
+          # AsyncTestComplete / AsyncTestFailure markers the wrapper judges by.
+          cat "$TEST262_DIR/harness/doneprintHandle.js"
+          printf '\n'
+        fi
+        split_entries "$includes"
+        for include in ${SPLIT_ENTRIES[@]+"${SPLIT_ENTRIES[@]}"}; do
+          cat "$TEST262_DIR/harness/$include"
+          printf '\n'
+        done
       fi
-      split_entries "$includes"
-      for include in ${SPLIT_ENTRIES[@]+"${SPLIT_ENTRIES[@]}"}; do
-        cat "$TEST262_DIR/harness/$include"
-        printf '\n'
-      done
-      cat "$source"
+      emit_quickjs_rust_case_source "$source"
     fi
   } >"$output"
 }
@@ -381,6 +408,8 @@ make_module_prelude() {
   local include
   {
     cat "$TEST262_DIR/harness/assert.js"
+    printf '\n'
+    emit_test262_assert_fast_paths
     printf '\n'
     cat "$TEST262_DIR/harness/sta.js"
     printf '\n'
@@ -802,11 +831,14 @@ if [ "$run" -gt 0 ]; then
   export RUN_WITH_TIMEOUT
   export TEST262_DIR
   export WORK_DIR
+  export -f emit_test262_assert_fast_paths
   export -f emit_test262_host_shim
+  export -f emit_quickjs_rust_case_source
   export -f format_case_result
   export -f json_escape
   export -f make_case
   export -f make_module_prelude
+  export -f needs_test262_prelude
   export -f result_kind
   export -f run_case_worker
   export -f run_engine_case

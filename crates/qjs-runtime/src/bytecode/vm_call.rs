@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{CallEnv, Function, Value};
+use crate::{CallEnv, Function, NativeFunction, RuntimeError, Value};
 
 use super::ir::Bytecode;
 use super::vm::Slot;
@@ -73,6 +73,75 @@ pub(super) fn call_forwarding_native_env(
     Some((env, locals, binding_names))
 }
 
+pub(super) fn try_fast_global_native_call(
+    callee: &Value,
+    this_value: &Value,
+    arguments: &[Value],
+    realm_env: &CallEnv,
+) -> Option<Result<Value, RuntimeError>> {
+    let Value::Function(function) = callee else {
+        return None;
+    };
+    let native = function.native?;
+    let result = match native {
+        NativeFunction::DecodeUri | NativeFunction::DecodeUriComponent => {
+            let source = match arguments.first().cloned().unwrap_or(Value::Undefined) {
+                Value::String(source) => source,
+                Value::Undefined => "undefined".to_owned(),
+                _ => return None,
+            };
+            let result = match native {
+                NativeFunction::DecodeUri => crate::global::decode_uri_string(&source),
+                NativeFunction::DecodeUriComponent => {
+                    crate::global::decode_uri_component_string(&source)
+                }
+                _ => unreachable!("URI native matched above"),
+            };
+            result.map(Value::String)
+        }
+        NativeFunction::StringFromCharCode => {
+            if !arguments
+                .iter()
+                .all(|value| matches!(value, Value::Number(_)))
+            {
+                return None;
+            }
+            Ok(Value::String(fast_string_from_char_code_numbers(arguments)))
+        }
+        NativeFunction::Eval => {
+            let Some(Value::String(source)) = arguments.first() else {
+                return None;
+            };
+            match crate::global::try_eval_regexp_literal_source(source, realm_env) {
+                Ok(Some(value)) => Ok(value),
+                Ok(None) => return None,
+                Err(error) => Err(error),
+            }
+        }
+        NativeFunction::NumberPrototypeToString => {
+            let Value::Number(number) = this_value else {
+                return None;
+            };
+            let radix = match arguments.first() {
+                None | Some(Value::Undefined) => 10,
+                Some(Value::Number(radix)) if radix.fract() == 0.0 => {
+                    if !(2.0..=36.0).contains(radix) {
+                        return None;
+                    }
+                    *radix as u32
+                }
+                _ => return None,
+            };
+            crate::number::number_to_radix_string(*number, radix).map(Value::String)
+        }
+        NativeFunction::Test262AssertSameValue => {
+            crate::global::native_test262_assert_same_value(arguments)
+        }
+        _ => return None,
+    };
+    Some(result)
+}
+
 fn is_call_forwarding_native(callee: &Value) -> bool {
     let Value::Function(function) = callee else {
         return false;
@@ -85,6 +154,20 @@ fn is_call_forwarding_native(callee: &Value) -> bool {
                 | crate::NativeFunction::ReflectApply
         )
     )
+}
+
+fn fast_string_from_char_code_numbers(arguments: &[Value]) -> String {
+    let code_units: Vec<u16> = arguments
+        .iter()
+        .map(|value| match value {
+            Value::Number(number) if number.is_finite() && *number != 0.0 => {
+                number.trunc().rem_euclid(65_536.0) as u16
+            }
+            Value::Number(_) => 0,
+            _ => unreachable!("fast path only accepts numeric arguments"),
+        })
+        .collect();
+    crate::string::string_from_code_units(&code_units)
 }
 
 fn insert_binding(

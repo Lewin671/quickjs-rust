@@ -107,6 +107,15 @@ fn exposes_print_host_global() {
 }
 
 #[test]
+fn evaluates_test262_same_value_host_helper() {
+    assert_eq!(
+        eval("__quickjsRustAssertSameValue(NaN, NaN);"),
+        Ok(Value::Undefined)
+    );
+    assert!(eval("__quickjsRustAssertSameValue(+0, -0, 'zero');").is_err());
+}
+
+#[test]
 fn evaluates_global_eval_builtin() {
     assert_eq!(
         eval("typeof eval;"),
@@ -166,6 +175,23 @@ fn evaluates_global_eval_builtin() {
         ),
         Ok(Value::String("true:undefined".to_owned()))
     );
+}
+
+#[test]
+fn evaluates_global_eval_pure_regexp_literals() {
+    assert_eq!(
+        eval(
+            "let RegExp = function() { throw new Error('shadowed'); }; eval('/\\\\u0041/i').source + ':' + eval('/a/i').ignoreCase;"
+        ),
+        Ok(Value::String("\\u0041:true".to_owned()))
+    );
+    assert_eq!(
+        eval("eval('/[\\\\/]/').test('/');"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(eval("eval('  /a/g;  ').global;"), Ok(Value::Boolean(true)));
+    assert_eq!(eval("eval('/a/; 1');"), Ok(Value::Number(1.0)));
+    assert_eq!(eval("eval('// comment');"), Ok(Value::Undefined));
 }
 
 #[test]

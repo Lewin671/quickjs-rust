@@ -402,7 +402,7 @@ fn normalize_exponent(exponent: &str) -> String {
     }
 }
 
-fn number_to_radix_string(number: f64, radix: u32) -> Result<String, RuntimeError> {
+pub(crate) fn number_to_radix_string(number: f64, radix: u32) -> Result<String, RuntimeError> {
     if radix == 10 || !number.is_finite() {
         return Ok(number_to_js_string(number));
     }

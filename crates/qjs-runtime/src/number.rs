@@ -7,6 +7,7 @@ mod statics;
 pub(crate) use formatting::number_to_js_string;
 pub(super) use install::{inherited_number_prototype_property, install_number, is_number_object};
 pub(super) use parsing::{native_parse_float, native_parse_int};
+pub(crate) use prototype::number_to_radix_string;
 pub(super) use prototype::{
     native_number, native_number_prototype_to_exponential, native_number_prototype_to_fixed,
     native_number_prototype_to_precision, native_number_prototype_to_string,

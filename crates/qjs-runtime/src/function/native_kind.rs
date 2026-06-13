@@ -298,6 +298,7 @@ pub(crate) enum NativeFunction {
     AsyncFromSyncIteratorThrow,
     GlobalIsFinite,
     GlobalIsNaN,
+    Test262AssertSameValue,
     Print,
     Function,
     FunctionPrototypeApply,

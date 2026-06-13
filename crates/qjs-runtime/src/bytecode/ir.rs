@@ -530,6 +530,33 @@ impl Bytecode {
         self.code.iter().any(|op| matches!(op, Op::Await))
     }
 
+    pub(crate) fn needs_arguments_object(&self) -> bool {
+        if self.global_names.iter().any(|name| name == "arguments") {
+            return true;
+        }
+        if self
+            .code
+            .iter()
+            .any(|op| matches!(op, Op::CallDirectEval(_) | Op::CallDirectEvalSpread))
+        {
+            return true;
+        }
+        let Some(arguments_slot) = self.local_slot("arguments") else {
+            return false;
+        };
+        self.creates_closures()
+            || self.code.iter().any(|op| match op {
+                Op::LoadLocal(slot) | Op::LoadLocalOrUndefined(slot) => *slot == arguments_slot,
+                Op::LoadIdentWith {
+                    slot: Some(slot), ..
+                }
+                | Op::TypeofIdentWith {
+                    slot: Some(slot), ..
+                } => *slot == arguments_slot,
+                _ => false,
+            })
+    }
+
     pub(crate) fn requires_scope_call_bindings(&self) -> bool {
         self.code.iter().any(|op| {
             matches!(

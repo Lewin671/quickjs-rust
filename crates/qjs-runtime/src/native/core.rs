@@ -29,6 +29,9 @@ pub(super) fn call_core_native(
         }
         NativeFunction::GlobalIsFinite => global::native_global_is_finite(argument_values, env),
         NativeFunction::GlobalIsNaN => global::native_global_is_nan(argument_values, env),
+        NativeFunction::Test262AssertSameValue => {
+            global::native_test262_assert_same_value(argument_values)
+        }
         NativeFunction::Print => global::native_global_print(argument_values, env),
         NativeFunction::IsHtmlDda => Ok(crate::html_dda::native_is_html_dda()),
         NativeFunction::BigInt => bigint::native_bigint(argument_values, is_construct, env),

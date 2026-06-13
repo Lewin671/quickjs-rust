@@ -7,8 +7,8 @@ use super::vm_props::{array_index_from_number, get_property_key, set_property_ke
 use super::vm_result::{Completion, FunctionBytecodeResult, ResumeMode};
 use super::vm_try::TryFrame;
 use crate::{
-    Function, GLOBAL_THIS_BINDING, HOME_OBJECT_BINDING, NEW_TARGET_BINDING, NativeFunction,
-    ObjectRef, PropertyKey, RuntimeError, SUPER_CONSTRUCTOR_BINDING, Value,
+    Function, GLOBAL_THIS_BINDING, HOME_OBJECT_BINDING, NEW_TARGET_BINDING, ObjectRef, PropertyKey,
+    RuntimeError, SUPER_CONSTRUCTOR_BINDING, Value,
     array::array_like_values_with_env,
     call_function, construct_function,
     function::{CallEnv, CompiledUserFunction, Realm},
@@ -687,8 +687,13 @@ impl<'a> Vm<'a> {
         arguments: Vec<Value>,
         direct_eval: bool,
     ) -> Result<(), RuntimeError> {
-        if let Some(result) = self.try_fast_global_native_call(&callee, &arguments)? {
-            if let Some(value) = result {
+        if let Some(result) = super::vm_call::try_fast_global_native_call(
+            &callee,
+            &this_value,
+            &arguments,
+            &self.realm_env(),
+        ) {
+            if let Some(value) = self.handle_runtime_result(result)? {
                 self.stack.push(value);
             }
             return Ok(());
@@ -717,47 +722,6 @@ impl<'a> Vm<'a> {
         let arguments = self.pop_argument_array("direct eval spread")?;
         let callee = self.pop()?;
         self.call_callee_with_direct_eval(callee, Value::Undefined, arguments)
-    }
-
-    fn try_fast_global_native_call(
-        &mut self,
-        callee: &Value,
-        arguments: &[Value],
-    ) -> Result<Option<Option<Value>>, RuntimeError> {
-        let Value::Function(function) = callee else {
-            return Ok(None);
-        };
-        let Some(native) = function.native else {
-            return Ok(None);
-        };
-        let result = match native {
-            NativeFunction::DecodeUri | NativeFunction::DecodeUriComponent => {
-                let source = match arguments.first().cloned().unwrap_or(Value::Undefined) {
-                    Value::String(source) => source,
-                    Value::Undefined => "undefined".to_owned(),
-                    _ => return Ok(None),
-                };
-                let result = match native {
-                    NativeFunction::DecodeUri => crate::global::decode_uri_string(&source),
-                    NativeFunction::DecodeUriComponent => {
-                        crate::global::decode_uri_component_string(&source)
-                    }
-                    _ => unreachable!("URI native matched above"),
-                };
-                result.map(Value::String)
-            }
-            NativeFunction::StringFromCharCode => {
-                if !arguments
-                    .iter()
-                    .all(|value| matches!(value, Value::Number(_)))
-                {
-                    return Ok(None);
-                }
-                Ok(Value::String(fast_string_from_char_code_numbers(arguments)))
-            }
-            _ => return Ok(None),
-        };
-        Ok(Some(self.handle_runtime_result(result)?))
     }
 
     fn call_method(&mut self, argc: usize) -> Result<(), RuntimeError> {
@@ -954,6 +918,9 @@ impl<'a> Vm<'a> {
             return;
         }
         let captured = self.captured_env.borrow();
+        if captured.is_empty() {
+            return;
+        }
         for (name, value) in captured.iter() {
             if let Some(index) = self.bytecode.local_slot(name)
                 && let Some(slot) = self.locals.get_mut(index)
@@ -977,20 +944,6 @@ impl<'a> Vm<'a> {
             self.sloppy_global_names.push(name.to_owned());
         }
     }
-}
-
-fn fast_string_from_char_code_numbers(arguments: &[Value]) -> String {
-    let code_units: Vec<u16> = arguments
-        .iter()
-        .map(|value| match value {
-            Value::Number(number) if number.is_finite() && *number != 0.0 => {
-                number.trunc().rem_euclid(65_536.0) as u16
-            }
-            Value::Number(_) => 0,
-            _ => unreachable!("fast path only accepts numeric arguments"),
-        })
-        .collect();
-    crate::string::string_from_code_units(&code_units)
 }
 
 fn insert_missing_binding_name(binding_names: &mut Vec<String>, name: &str) {

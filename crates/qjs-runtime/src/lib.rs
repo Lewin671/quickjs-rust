@@ -110,6 +110,7 @@ pub(crate) const RUNTIME_INTRINSIC_NAMES: &[&str] = &[
     "\0SetIteratorPrototype",
     "Iterator",
     "globalThis",
+    "__quickjsRustAssertSameValue",
     "__quickjsRustIsHTMLDDA",
     "__quickjsRustDetachArrayBuffer",
     "undefined",

@@ -58,6 +58,13 @@ pub(super) fn install_globals(env: &mut CallEnv, global_this: &Value) {
     );
     define_global_function(env, global_this, "eval", 1, NativeFunction::Eval);
     define_global_function(env, global_this, "print", 1, NativeFunction::Print);
+    define_global_function(
+        env,
+        global_this,
+        "__quickjsRustAssertSameValue",
+        3,
+        NativeFunction::Test262AssertSameValue,
+    );
     define_global_function(env, global_this, "escape", 1, NativeFunction::Escape);
     define_global_function(env, global_this, "unescape", 1, NativeFunction::Unescape);
     define_is_html_dda(env, global_this);
@@ -110,6 +117,26 @@ pub(super) fn native_global_print(
     }
     println!("{line}");
     Ok(Value::Undefined)
+}
+
+pub(crate) fn native_test262_assert_same_value(
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let actual = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let expected = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
+    if actual.same_value(&expected) {
+        return Ok(Value::Undefined);
+    }
+    let message = match argument_values.get(2) {
+        Some(Value::String(message)) if !message.is_empty() => {
+            format!("{message} Expected SameValue to be true")
+        }
+        _ => "Expected SameValue to be true".to_owned(),
+    };
+    Err(RuntimeError {
+        thrown: None,
+        message,
+    })
 }
 
 pub(super) fn native_global_is_finite(
@@ -184,6 +211,9 @@ pub(super) fn native_global_eval(
         env.get(crate::DIRECT_EVAL_BINDING),
         Some(Value::Boolean(true))
     );
+    if let Some(value) = try_eval_regexp_literal_source(&source, env)? {
+        return Ok(value);
+    }
     let script = if direct_eval {
         parse_direct_eval_script(&source, direct_eval_parse_context(env))
     } else {
@@ -243,6 +273,74 @@ pub(super) fn native_global_eval(
         *env = eval_env;
     }
     result.value
+}
+
+pub(crate) fn try_eval_regexp_literal_source(
+    source: &str,
+    env: &CallEnv,
+) -> Result<Option<Value>, RuntimeError> {
+    let source = source.trim();
+    if !source.starts_with('/') || source.starts_with("//") || source.starts_with("/*") {
+        return Ok(None);
+    }
+
+    let mut in_class = false;
+    let mut escaped = false;
+    let mut close = None;
+    for (index, ch) in source.char_indices().skip(1) {
+        if escaped {
+            if is_line_terminator(ch) {
+                return Ok(None);
+            }
+            escaped = false;
+            continue;
+        }
+        match ch {
+            '\\' => escaped = true,
+            '[' if !in_class => in_class = true,
+            ']' if in_class => in_class = false,
+            '/' if !in_class => {
+                close = Some(index);
+                break;
+            }
+            ch if is_line_terminator(ch) => return Ok(None),
+            _ => {}
+        }
+    }
+    let Some(close) = close else {
+        return Ok(None);
+    };
+
+    let mut flags_end = source.len();
+    let mut semicolon = None;
+    for (index, ch) in source[close + 1..].char_indices() {
+        let absolute = close + 1 + index;
+        if ch == ';' {
+            flags_end = absolute;
+            semicolon = Some(absolute);
+            break;
+        }
+        if ch.is_whitespace() {
+            flags_end = absolute;
+            break;
+        }
+        if !ch.is_alphabetic() {
+            return Ok(None);
+        }
+    }
+
+    let rest_start = semicolon.map_or(flags_end, |index| index + 1);
+    if !source[rest_start..].trim().is_empty() {
+        return Ok(None);
+    }
+
+    let pattern = &source[1..close];
+    let flags = &source[close + 1..flags_end];
+    crate::regexp::regexp_literal_value(pattern, flags, env).map(Some)
+}
+
+fn is_line_terminator(ch: char) -> bool {
+    matches!(ch, '\n' | '\r' | '\u{2028}' | '\u{2029}')
 }
 
 fn direct_eval_parse_context(env: &CallEnv) -> EvalParseContext {

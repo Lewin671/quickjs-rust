@@ -32,6 +32,7 @@ pub(crate) use validation::validate_regexp_init as validate_regexp_literal;
 
 const REGEXP_SOURCE_PROPERTY: &str = "\0RegExpSource";
 const REGEXP_FLAGS_PROPERTY: &str = "\0RegExpFlags";
+const REGEXP_PROTOTYPE_BINDING: &str = "\0RegExpPrototype";
 
 pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
     let regexp_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
@@ -50,6 +51,10 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
     regexp_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(regexp_function.clone()),
+    );
+    env.insert_realm(
+        REGEXP_PROTOTYPE_BINDING.to_owned(),
+        Value::Object(regexp_prototype.clone()),
     );
     regexp_prototype.define_non_enumerable(
         "toString".to_owned(),
@@ -210,6 +215,21 @@ pub(crate) fn native_regexp(
         });
     };
     define_regexp_data(&object, &source, &flags);
+    Ok(Value::Object(object))
+}
+
+pub(crate) fn regexp_literal_value(
+    source: &str,
+    flags: &str,
+    env: &CallEnv,
+) -> Result<Value, RuntimeError> {
+    validate_regexp_init(source, flags)?;
+    let prototype = match env.get(REGEXP_PROTOTYPE_BINDING) {
+        Some(Value::Object(prototype)) => Some(prototype),
+        _ => None,
+    };
+    let object = ObjectRef::with_prototype(HashMap::new(), prototype);
+    define_regexp_data(&object, source, flags);
     Ok(Value::Object(object))
 }
 

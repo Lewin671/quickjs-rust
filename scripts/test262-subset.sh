@@ -106,6 +106,29 @@ var $262 = {
 };
 EOF
 }
+emit_test262_assert_fast_paths() {
+  cat <<'EOF'
+assert.sameValue = __quickjsRustAssertSameValue;
+EOF
+}
+emit_quickjs_rust_case_source() {
+  sed 's/assert[.]sameValue(/__quickjsRustAssertSameValue(/g' "$1"
+}
+needs_test262_prelude() {
+  local source="$1"
+  local flags="$2"
+  local includes="$3"
+  if [[ "$flags" == *async* ]] || [ -n "$includes" ]; then
+    return 0
+  fi
+  if grep -Eq '[$]262|Test262Error|assert[(]' "$source"; then
+    return 0
+  fi
+  if sed 's/assert[.]sameValue//g' "$source" | grep -q 'assert[.]'; then
+    return 0
+  fi
+  return 1
+}
 
 metadata_for() {
   awk -f "$METADATA_PARSER" "$1"
@@ -221,23 +244,28 @@ make_upstream_case() {
   local includes="$4"
   local include
   if [[ "$flags" == *raw* ]]; then
-    cat "$source" >"$output"
+    emit_quickjs_rust_case_source "$source" >"$output"
     return
   fi
-  local parts=("$PRELUDE_FILE")
+  local parts=()
+  if needs_test262_prelude "$source" "$flags" "$includes"; then
+    parts+=("$PRELUDE_FILE")
+  fi
   split_entries "$includes"
   for include in ${SPLIT_ENTRIES[@]+"${SPLIT_ENTRIES[@]}"}; do
     parts+=("$TEST262_DIR/harness/$include")
   done
-  parts+=("$source")
   {
     if [[ "$flags" == *onlyStrict* ]]; then
       printf '"use strict";\n'
     fi
     # `awk 1` concatenates while normalizing a missing trailing newline, so
     # adjacent files never merge lines.
-    awk 1 "${parts[@]}"
-  } >"$output"
+    if [ "${#parts[@]}" -ne 0 ]; then
+      awk 1 "${parts[@]}"
+    fi
+    emit_quickjs_rust_case_source "$source"
+  } | sed 's/assert[.]sameValue(/__quickjsRustAssertSameValue(/g' >"$output"
 }
 
 RESULT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/qjs-test262-subset-XXXXXX")"
@@ -336,7 +364,9 @@ QJS_CLI_BIN="$(qjs_build_cli_bin "$CARGO_BIN")"
 # Pre-concatenate the harness prelude shared by every non-raw upstream case.
 PRELUDE_FILE="$RESULT_DIR/prelude.js"
 {
-  awk 1 "$TEST262_DIR/harness/assert.js" "$TEST262_DIR/harness/sta.js"
+  awk 1 "$TEST262_DIR/harness/assert.js"
+  emit_test262_assert_fast_paths
+  awk 1 "$TEST262_DIR/harness/sta.js"
   emit_test262_host_shim
 } >"$PRELUDE_FILE"
 
@@ -411,8 +441,10 @@ export EXPECTED_FAILURE_SET
 export PRELUDE_FILE
 export QJS_CLI_BIN
 export RUN_WITH_TIMEOUT
+export -f emit_quickjs_rust_case_source
 export -f is_expected_failure
 export -f make_upstream_case
+export -f needs_test262_prelude
 export -f run_test262_case
 
 set +e

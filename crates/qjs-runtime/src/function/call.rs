@@ -516,7 +516,7 @@ fn function_env(
             .unwrap_or(Value::Undefined);
         local_env.insert(parameter_binding_name(&element.binding, index), value);
     }
-    if !function.lexical_arguments {
+    if !function.lexical_arguments && bytecode.needs_arguments_object() {
         local_env.insert(
             "arguments".to_owned(),
             arguments_object(function, argument_values, env),
