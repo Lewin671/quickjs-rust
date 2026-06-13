@@ -146,7 +146,11 @@ fn object_prototype_descriptor(env: &CallEnv, key: &str) -> Option<Property> {
 pub(crate) fn inherited_object_prototype_property(env: &CallEnv, key: &str) -> Option<Value> {
     if matches!(
         key,
-        "hasOwnProperty" | "isPrototypeOf" | "propertyIsEnumerable"
+        "hasOwnProperty"
+            | "isPrototypeOf"
+            | "propertyIsEnumerable"
+            | "__lookupGetter__"
+            | "__lookupSetter__"
     ) {
         object_prototype_property(env, key)
     } else {
@@ -157,7 +161,11 @@ pub(crate) fn inherited_object_prototype_property(env: &CallEnv, key: &str) -> O
 pub(crate) fn inherited_object_prototype_descriptor(env: &CallEnv, key: &str) -> Option<Property> {
     if matches!(
         key,
-        "hasOwnProperty" | "isPrototypeOf" | "propertyIsEnumerable"
+        "hasOwnProperty"
+            | "isPrototypeOf"
+            | "propertyIsEnumerable"
+            | "__lookupGetter__"
+            | "__lookupSetter__"
     ) {
         object_prototype_descriptor(env, key)
     } else {

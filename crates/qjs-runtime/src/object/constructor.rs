@@ -161,6 +161,10 @@ pub(crate) fn native_object_create(
             HashMap::new(),
             Some(crate::Prototype::Function(prototype.clone())),
         )),
+        Some(Value::Proxy(prototype)) => Value::Object(ObjectRef::with_prototype_slot(
+            HashMap::new(),
+            Some(crate::Prototype::Proxy(prototype.clone())),
+        )),
         Some(Value::Null) => Value::Object(ObjectRef::new(HashMap::new())),
         _ => {
             return Err(RuntimeError {

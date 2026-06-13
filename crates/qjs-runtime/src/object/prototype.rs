@@ -7,6 +7,7 @@ use crate::{
 
 use super::descriptor::own_property_descriptor_key;
 use crate::CallEnv;
+use crate::Property;
 
 pub(crate) fn native_object_get_prototype_of(
     argument_values: &[Value],
@@ -292,6 +293,89 @@ pub(crate) fn native_object_prototype_property_is_enumerable(
         value => Ok(Value::Boolean(
             own_property_descriptor_key(value, &key)?.is_some_and(|property| property.enumerable),
         )),
+    }
+}
+
+pub(crate) fn native_object_prototype_lookup_getter(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    object_prototype_lookup_accessor(this_value, argument_values, env, AccessorHalf::Getter)
+}
+
+pub(crate) fn native_object_prototype_lookup_setter(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    object_prototype_lookup_accessor(this_value, argument_values, env, AccessorHalf::Setter)
+}
+
+#[derive(Clone, Copy)]
+enum AccessorHalf {
+    Getter,
+    Setter,
+}
+
+fn object_prototype_lookup_accessor(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut CallEnv,
+    half: AccessorHalf,
+) -> Result<Value, RuntimeError> {
+    if matches!(this_value, Value::Null | Value::Undefined) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "Object.prototype lookup accessor called on null or undefined".to_owned(),
+        });
+    }
+    let key = to_property_key_value(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
+    let mut value = super::boxed_primitive(this_value.clone(), env).unwrap_or(this_value);
+    loop {
+        if let Some(property) = lookup_own_property_descriptor(value.clone(), &key, env)? {
+            return Ok(lookup_accessor_half(property, half).unwrap_or(Value::Undefined));
+        }
+        match lookup_prototype_value(value, env)? {
+            Value::Null => return Ok(Value::Undefined),
+            prototype => value = prototype,
+        }
+    }
+}
+
+fn lookup_own_property_descriptor(
+    value: Value,
+    key: &PropertyKey,
+    env: &mut CallEnv,
+) -> Result<Option<Property>, RuntimeError> {
+    if let Value::Proxy(proxy) = &value {
+        crate::proxy::proxy_get_own_property_descriptor(proxy.clone(), key, env, |target, _env| {
+            own_property_descriptor_key(target, key)
+        })
+    } else {
+        own_property_descriptor_key(value, key)
+    }
+}
+
+fn lookup_prototype_value(value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+    if let Value::Proxy(proxy) = value {
+        return crate::proxy::proxy_get_prototype_of(proxy, env);
+    }
+    Ok(value_prototype_slot(value, env)
+        .map(|prototype| prototype.to_value())
+        .unwrap_or(Value::Null))
+}
+
+fn lookup_accessor_half(property: Property, half: AccessorHalf) -> Option<Value> {
+    if !property.accessor {
+        return None;
+    }
+    match half {
+        AccessorHalf::Getter => property.get,
+        AccessorHalf::Setter => property.set,
     }
 }
 

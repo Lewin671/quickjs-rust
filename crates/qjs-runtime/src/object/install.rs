@@ -46,6 +46,18 @@ pub(crate) fn install_object(env: &mut CallEnv, global_this: &Value) -> ObjectRe
         0,
         NativeFunction::ObjectPrototypeValueOf,
     );
+    define_object_prototype_function(
+        &object_prototype,
+        "__lookupGetter__",
+        1,
+        NativeFunction::ObjectPrototypeLookupGetter,
+    );
+    define_object_prototype_function(
+        &object_prototype,
+        "__lookupSetter__",
+        1,
+        NativeFunction::ObjectPrototypeLookupSetter,
+    );
     object_prototype.define_property(
         "__proto__".to_owned(),
         Property::accessor(
