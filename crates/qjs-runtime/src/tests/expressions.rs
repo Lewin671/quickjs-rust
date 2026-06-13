@@ -471,6 +471,17 @@ fn evaluates_destructuring_assignment_expressions() {
         ),
         Ok(Value::String("true:42".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "var rest; var calls = []; var s = Symbol('foo');
+             var o = { get z() { calls.push('z'); }, get a() { calls.push('a'); } };
+             Object.defineProperty(o, 1, { get: function() { calls.push(1); }, enumerable: true });
+             Object.defineProperty(o, s, { get: function() { calls.push('Symbol(foo)'); }, enumerable: true });
+             var result = ({...rest} = o);
+             calls.join('|') + ':' + Object.keys(rest).join('|') + ':' + (Object.getOwnPropertySymbols(rest)[0] === s) + ':' + (result === o);"
+        ),
+        Ok(Value::String("1|z|a|Symbol(foo):1|z|a:true:true".to_owned()))
+    );
 }
 
 #[test]
