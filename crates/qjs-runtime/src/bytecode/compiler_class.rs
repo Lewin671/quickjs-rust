@@ -1,15 +1,18 @@
 use std::rc::Rc;
 
 use qjs_ast::{
-    BindingPattern, CallArgument, ClassBody, ClassElement, ClassMemberKey, Expr, FunctionParams,
-    MethodKind, Span, Stmt,
+    BindingPattern, ClassBody, ClassElement, ClassMemberKey, Expr, FunctionParams, MethodKind,
+    Span, Stmt,
 };
 
-use crate::{RuntimeError, function::collect_function_local_names};
+use crate::{
+    RuntimeError,
+    function::{collect_function_local_names, rest_parameter_binding_name},
+};
 
 use super::compiler::{Compiler, compile_function_body_with_strict};
 use super::ir::{
-    ClassComputedKeyDef, ClassConstructorDef, ClassElementDef, ClassFieldDef,
+    Bytecode, ClassComputedKeyDef, ClassConstructorDef, ClassElementDef, ClassFieldDef,
     ClassFieldInitializerDef, ClassMemberKeyDef, ClassMethodDef, ClassMethodKind,
     ClassPrivateElementDef, ClassStaticBlockDef, Op,
 };
@@ -366,9 +369,9 @@ fn default_constructor(name: Option<&str>, has_heritage: bool) -> ClassConstruct
         };
     }
 
-    // Derived default constructor: `constructor(...args) { super(...args); }`.
-    // Use an internal rest binding so the synthetic name cannot shadow a user
-    // binding visible to the parent constructor.
+    // Derived default constructor: `constructor(...args) { super(...args); }`,
+    // but the spec forwards the rest parameter list directly. It must not
+    // evaluate spread syntax or consult `Array.prototype[Symbol.iterator]`.
     let zero = Span::new(0, 0);
     let args_binding = "\u{0}\u{0}class_default_constructor_args".to_owned();
     let params = FunctionParams::new(
@@ -378,21 +381,43 @@ fn default_constructor(name: Option<&str>, has_heritage: bool) -> ClassConstruct
             span: zero,
         }),
     );
-    let body = vec![Stmt::Expr(Expr::Call {
-        callee: Box::new(Expr::Super { span: zero }),
-        arguments: vec![CallArgument::Spread(Expr::Identifier {
-            name: args_binding,
-            span: zero,
-        })],
-        span: zero,
-    })];
-    let bytecode =
-        compile_function_body_with_strict(&params, &body, true).expect("derived ctor compiles");
-    let local_names = collect_function_local_names(None, &params, &body, true);
+    let bytecode = compile_default_derived_constructor_bytecode(&params, &args_binding)
+        .expect("derived ctor compiles");
+    let local_names = collect_function_local_names(None, &params, &[], true);
     ClassConstructorDef {
         name: name.map(str::to_owned),
         params,
         local_names,
         bytecode: Rc::new(bytecode),
     }
+}
+
+fn compile_default_derived_constructor_bytecode(
+    params: &FunctionParams,
+    args_binding: &str,
+) -> Result<Bytecode, RuntimeError> {
+    let mut compiler = Compiler::strict_function_compiler();
+    for (index, element) in params.positional.iter().enumerate() {
+        let binding_name = crate::function::parameter_binding_name(&element.binding, index);
+        compiler.parameter_slot(&binding_name);
+    }
+    if let Some(rest) = &params.rest {
+        let binding_name = rest_parameter_binding_name(rest);
+        compiler.parameter_slot(&binding_name);
+    }
+    compiler.compile_parameter_bindings(params, false)?;
+    compiler.emit(Op::FunctionPrologueEnd);
+    let args_slot = compiler
+        .resolve_local_slot(args_binding)
+        .expect("default constructor rest parameter should have a slot");
+    compiler.emit(Op::LoadLocal(args_slot));
+    compiler.emit(Op::SuperCallSpread);
+    compiler.emit(Op::Pop);
+    compiler.emit_load_undefined();
+    compiler.emit(Op::Return);
+    Ok(Bytecode::new(
+        compiler.constants,
+        compiler.locals,
+        compiler.code,
+    ))
 }

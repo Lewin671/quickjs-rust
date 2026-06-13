@@ -112,6 +112,19 @@ fn default_derived_constructor_arguments_do_not_shadow_outer_bindings() {
 }
 
 #[test]
+fn default_derived_constructor_forwards_arguments_without_spread_iteration() {
+    assert_eq!(
+        eval(
+            "Array.prototype[Symbol.iterator] = function() { throw new Error('iterated'); }; \
+             class Base { constructor(value) { this.value = value; } } \
+             class Derived extends Base {} \
+             new Derived(5).value;"
+        ),
+        Ok(Value::Number(5.0))
+    );
+}
+
+#[test]
 fn class_method_computed_object_binding_key_propagates_errors() {
     assert!(
         eval(
