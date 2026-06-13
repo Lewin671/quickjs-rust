@@ -15,6 +15,14 @@ fn evaluates_string_constructor_and_statics() {
         Ok(Value::String("ABC".to_owned()))
     );
     assert_eq!(
+        eval("String.fromCharCode(0x00a0, 0x2028, 0xffff).length;"),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval("String.fromCharCode(0x00a0, 0x2028, 0xffff).charCodeAt(2);"),
+        Ok(Value::Number(65535.0))
+    );
+    assert_eq!(
         eval("String.fromCharCode(0xd800, 0xdc00).charCodeAt(0);"),
         Ok(Value::Number(55296.0))
     );

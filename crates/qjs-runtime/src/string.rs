@@ -113,6 +113,8 @@ pub(crate) fn string_from_code_unit(code_unit: u16) -> String {
             .unwrap_or(char::REPLACEMENT_CHARACTER)
             .to_string()
     } else {
-        String::from_utf16(&[code_unit]).unwrap_or_else(|_| char::REPLACEMENT_CHARACTER.to_string())
+        char::from_u32(u32::from(code_unit))
+            .unwrap_or(char::REPLACEMENT_CHARACTER)
+            .to_string()
     }
 }
