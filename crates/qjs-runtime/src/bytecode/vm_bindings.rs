@@ -514,10 +514,18 @@ impl Vm<'_> {
                 // locals layer (e.g. an outer `let` riding through nested
                 // calls): keep it current so it propagates further out.
                 self.env.insert(name.clone(), value);
+            } else if name == "this"
+                && self
+                    .env
+                    .locals()
+                    .contains_key(crate::SUPER_CONSTRUCTOR_BINDING)
+            {
+                self.env.insert(name.clone(), value);
             }
             // Realm bindings need no write-back: the callee mutated the shared
             // cell directly.
         }
+        self.refresh_derived_constructor_this_from_captured();
     }
 
     pub(super) fn apply_env(&mut self, env: CallEnv) {
@@ -541,6 +549,28 @@ impl Vm<'_> {
                 self.env.insert(name, value);
             }
         }
+        self.refresh_derived_constructor_this_from_captured();
+    }
+
+    fn refresh_derived_constructor_this_from_captured(&mut self) {
+        if self.env.locals().contains_key("this")
+            || !self
+                .env
+                .locals()
+                .contains_key(crate::SUPER_CONSTRUCTOR_BINDING)
+        {
+            return;
+        }
+        let Some(value) = self.captured_env.borrow().get("this").cloned() else {
+            return;
+        };
+        if matches!(
+            &value,
+            Value::Function(function) if function.is_uninitialized_lexical_marker()
+        ) {
+            return;
+        }
+        self.env.insert("this".to_owned(), value);
     }
 
     pub(super) fn drain_promise_jobs(&mut self) -> Result<(), RuntimeError> {

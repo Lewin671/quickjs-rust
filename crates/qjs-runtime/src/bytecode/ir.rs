@@ -545,6 +545,12 @@ impl Bytecode {
         self.code.iter().any(|op| matches!(op, Op::Await))
     }
 
+    pub(crate) fn contains_super_call(&self) -> bool {
+        self.code
+            .iter()
+            .any(|op| matches!(op, Op::SuperCall(_) | Op::SuperCallSpread))
+    }
+
     pub(crate) fn needs_arguments_object(&self) -> bool {
         if self.global_names.iter().any(|name| name == "arguments") {
             return true;

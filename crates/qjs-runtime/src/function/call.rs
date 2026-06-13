@@ -185,6 +185,7 @@ pub(crate) fn call_function(
             activation_writeback,
         );
         propagate_function_captures(&function, &function_env.function_capture_names, &result);
+        propagate_lexical_super_this(&function, bytecode, &result);
         propagate_caller_bindings(env, &function_env.caller_binding_names, &result);
         // A derived constructor implicitly returns its (super-bound) `this`
         // when the body does not return an object, and it is a ReferenceError
@@ -799,6 +800,35 @@ fn propagate_function_captures(
     write_function_capture_values(&function.captured_env, function_capture_names, result);
     if let Some(writeback) = &function.capture_writeback {
         write_function_capture_values(&writeback.target, &writeback.names, result);
+    }
+}
+
+fn propagate_lexical_super_this(
+    function: &Function,
+    bytecode: &Bytecode,
+    result: &crate::bytecode::FunctionBytecodeResult<'_>,
+) {
+    if !function.lexical_this || !bytecode.contains_super_call() {
+        return;
+    }
+    let Some(this_value) = result.frame_binding("this") else {
+        return;
+    };
+    if matches!(
+        &this_value,
+        Value::Function(function) if function.is_uninitialized_lexical_marker()
+    ) {
+        return;
+    }
+    function
+        .captured_env
+        .borrow_mut()
+        .insert("this".to_owned(), this_value.clone());
+    if let Some(writeback) = &function.capture_writeback {
+        writeback
+            .target
+            .borrow_mut()
+            .insert("this".to_owned(), this_value);
     }
 }
 

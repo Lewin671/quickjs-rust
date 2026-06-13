@@ -845,6 +845,9 @@ impl<'a> Vm<'a> {
                     bytecode,
                     &function.local_names,
                 );
+                if function.lexical_this && bytecode.contains_super_call() {
+                    self.insert_lexical_super_call_this(&mut locals, &mut binding_names);
+                }
                 if bytecode.requires_scope_call_bindings() {
                     insert_scope_call_bindings(
                         &mut locals,
@@ -918,6 +921,20 @@ impl<'a> Vm<'a> {
                 binding_names.push(name.to_owned());
             }
         }
+    }
+
+    fn insert_lexical_super_call_this(
+        &self,
+        locals: &mut HashMap<String, Value>,
+        binding_names: &mut Vec<String>,
+    ) {
+        let value = self
+            .current_local_binding("this")
+            .cloned()
+            .or_else(|| self.env.locals().get("this").cloned())
+            .unwrap_or_else(|| Value::Function(Function::uninitialized_lexical_marker()));
+        locals.insert("this".to_owned(), value);
+        insert_missing_binding_name(binding_names, "this");
     }
 
     fn apply_call_env(&mut self, env: VmCallEnv) {

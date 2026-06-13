@@ -4,6 +4,7 @@ mod async_generators;
 mod bigint;
 mod bytecode;
 mod class_closures;
+mod class_constructors;
 mod class_eval;
 mod class_fields;
 mod class_super;
