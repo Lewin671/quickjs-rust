@@ -3,7 +3,7 @@ use qjs_ast::{
     ObjectPropertyKey, ObjectPropertyKind, Stmt,
 };
 
-use crate::parse_script;
+use crate::{EvalParseContext, parse_direct_eval_script, parse_script};
 
 fn positional_names(params: &FunctionParams) -> Vec<String> {
     params
@@ -286,6 +286,26 @@ fn parses_new_target_meta_property() {
     else {
         panic!("expected return new.target statement");
     };
+}
+
+#[test]
+fn rejects_new_target_outside_function_context() {
+    assert!(parse_script("new.target;").is_err());
+    assert!(parse_script("() => new.target;").is_err());
+}
+
+#[test]
+fn parses_direct_eval_with_caller_context() {
+    let context = EvalParseContext {
+        in_function: true,
+        in_method: true,
+        in_derived_constructor: false,
+        in_field_initializer: true,
+    };
+    parse_direct_eval_script("new.target; () => super.x;", context)
+        .expect("direct eval inherits function and method contexts");
+    assert!(parse_direct_eval_script("arguments;", context).is_err());
+    assert!(parse_direct_eval_script("super();", context).is_err());
 }
 
 #[test]

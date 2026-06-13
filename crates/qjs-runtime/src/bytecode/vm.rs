@@ -1,7 +1,8 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
-    Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, PropertyKey, RuntimeError, Value,
+    Function, GLOBAL_THIS_BINDING, HOME_OBJECT_BINDING, NEW_TARGET_BINDING, NativeFunction,
+    ObjectRef, PropertyKey, RuntimeError, SUPER_CONSTRUCTOR_BINDING, Value,
     array::array_like_values_with_env,
     call_function, construct_function,
     function::{CallEnv, CompiledUserFunction, Realm},
@@ -56,14 +57,10 @@ pub(super) struct Vm<'a> {
     pub(super) ip: usize,
     pub(super) stack: Vec<Value>,
     pub(super) locals: Vec<Slot>,
-    /// The frame environment: the shared realm cell plus this frame's own
-    /// internal/caller-scope bindings (`this`, `arguments`, `new.target`,
-    /// `super`/home, and caller-scope names the body references). Slot-based
-    /// locals live in `locals`; everything previously kept in the per-frame
-    /// `globals` map that is *not* a slot now lives in `env.locals()`.
+    /// Shared realm plus this frame's internal/caller-scope bindings.
     pub(super) env: CallEnv,
     pub(super) realm: Realm,
-    /// Realm dynamic-import host copied into every `CallEnv` this VM creates.
+    /// Dynamic-import host copied into every `CallEnv` this VM creates.
     pub(super) module_host: Option<crate::module::ModuleHostRef>,
     pub(super) captured_env: Rc<RefCell<HashMap<String, Value>>>,
     pub(super) capture_writeback: Option<CaptureWriteback>,
@@ -73,19 +70,11 @@ pub(super) struct Vm<'a> {
     pub(super) pending_return: Option<Value>,
     /// Staged resume for a generator body suspended inside `yield*`.
     pub(super) resume_mode: Option<ResumeMode>,
-    /// Cached realm Array.prototype, used to keep the `a[i] = x` fast path from
-    /// re-resolving the `Array` binding on every store. Invalidated whenever the
-    /// `Array` global binding is written so a reassigned constructor takes
-    /// effect.
+    /// Cached realm Array.prototype for the `a[i] = x` fast path.
     pub(super) array_prototype_cache: Option<ObjectRef>,
-    /// When set, `Op::FunctionPrologueEnd` suspends the body so a generator or
-    /// async generator can run its parameter prologue synchronously at the call
-    /// and pause at the start of the body. Cleared for ordinary runs and once
-    /// the prologue boundary is passed.
+    /// Makes generators run parameter prologues before first suspension.
     pub(super) stop_at_prologue: bool,
-    /// Object-environment records introduced by enclosing `with` statements,
-    /// innermost last. Identifier resolution inside a `with` body consults these
-    /// (honoring `Symbol.unscopables`) before frame and global scopes.
+    /// Enclosing `with` object-environment records, innermost last.
     pub(super) with_stack: Vec<Value>,
 }
 
@@ -148,9 +137,7 @@ impl<'a> Vm<'a> {
         }
     }
 
-    /// Builds a `CallEnv` over the shared realm whose `locals` are this frame's
-    /// live slot bindings. Used to thread the environment into runtime builtins
-    /// and to capture the frame state on return.
+    /// Builds a `CallEnv` over the shared realm with this frame's live slots.
     pub(super) fn frame_call_env(&self) -> CallEnv {
         let mut locals = self.env.snapshot_locals();
         for (index, slot) in self.locals.iter().enumerate() {
@@ -166,9 +153,7 @@ impl<'a> Vm<'a> {
         Rc::clone(&self.realm)
     }
 
-    /// A `CallEnv` over the shared realm with *empty* frame locals. Cheap (no
-    /// slot clone): use it for the prototype-resolution helpers that only read
-    /// realm intrinsics by name and never touch frame locals.
+    /// A shared-realm `CallEnv` with empty frame locals.
     pub(super) fn realm_env(&self) -> CallEnv {
         self.attach_host(CallEnv::new(self.realm_rc()))
     }
@@ -349,6 +334,16 @@ impl<'a> Vm<'a> {
                 } => {
                     let mut env = self.function_capture_env(&bytecode, &local_names);
                     self.insert_lexical_captures(&mut env, &lexical_captures);
+                    let (home_object, super_constructor) = if lexical_this {
+                        let home_object = self.env.get(HOME_OBJECT_BINDING);
+                        let super_constructor = self.env.get(SUPER_CONSTRUCTOR_BINDING);
+                        if let Some(new_target) = self.env.get(NEW_TARGET_BINDING) {
+                            env.insert(NEW_TARGET_BINDING.to_owned(), new_target);
+                        }
+                        (home_object, super_constructor)
+                    } else {
+                        (None, None)
+                    };
                     self.refresh_captured_env(&env);
                     let function = Function::new_user_compiled(CompiledUserFunction {
                         name,
@@ -364,8 +359,9 @@ impl<'a> Vm<'a> {
                         is_async,
                         is_class_constructor: false,
                         is_derived_constructor: false,
-                        home_object: None,
-                        super_constructor: None,
+                        is_field_initializer: false,
+                        home_object,
+                        super_constructor,
                         captured_env: self.captured_env.clone(),
                         capture_writeback: self.capture_writeback.clone(),
                     });

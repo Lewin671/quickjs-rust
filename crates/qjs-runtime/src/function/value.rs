@@ -78,6 +78,10 @@ pub struct Function {
     /// Whether this is a derived (extends) class constructor, whose `this` is
     /// uninitialized until `super(...)` runs.
     pub(crate) is_derived_constructor: bool,
+    /// Whether this function is the implicit thunk for a class field
+    /// initializer. Direct eval inside such a thunk gets initializer-specific
+    /// early errors.
+    pub(crate) is_field_initializer: bool,
     /// The method/constructor [[HomeObject]] used to resolve `super.x`. For an
     /// instance method this is the class prototype; for a static method it is
     /// the constructor; for a derived constructor it is the prototype.
@@ -131,6 +135,7 @@ pub(crate) struct CompiledUserFunction {
     pub(crate) is_async: bool,
     pub(crate) is_class_constructor: bool,
     pub(crate) is_derived_constructor: bool,
+    pub(crate) is_field_initializer: bool,
     pub(crate) home_object: Option<Value>,
     pub(crate) super_constructor: Option<Value>,
     pub(crate) captured_env: Rc<RefCell<HashMap<String, Value>>>,
@@ -245,6 +250,7 @@ impl Function {
             is_async: false,
             is_class_constructor: false,
             is_derived_constructor: false,
+            is_field_initializer: false,
             home_object: Rc::new(RefCell::new(None)),
             super_constructor: Rc::new(RefCell::new(None)),
             instance_fields: Rc::new(RefCell::new(Vec::new())),
@@ -286,6 +292,7 @@ impl Function {
             is_async,
             is_class_constructor,
             is_derived_constructor,
+            is_field_initializer,
             home_object,
             super_constructor,
             captured_env,
@@ -312,6 +319,7 @@ impl Function {
             is_async,
             is_class_constructor,
             is_derived_constructor,
+            is_field_initializer,
             home_object: Rc::new(RefCell::new(home_object)),
             super_constructor: Rc::new(RefCell::new(super_constructor)),
             instance_fields: Rc::new(RefCell::new(Vec::new())),
@@ -400,6 +408,7 @@ impl Function {
             is_async: false,
             is_class_constructor: false,
             is_derived_constructor: false,
+            is_field_initializer: false,
             home_object: Rc::new(RefCell::new(None)),
             super_constructor: Rc::new(RefCell::new(None)),
             instance_fields: Rc::new(RefCell::new(Vec::new())),
@@ -448,6 +457,7 @@ impl Function {
             is_async: false,
             is_class_constructor: false,
             is_derived_constructor: false,
+            is_field_initializer: false,
             home_object: Rc::new(RefCell::new(None)),
             super_constructor: Rc::new(RefCell::new(None)),
             instance_fields: Rc::new(RefCell::new(Vec::new())),

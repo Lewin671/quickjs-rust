@@ -1,4 +1,4 @@
-use qjs_parser::parse_script;
+use qjs_parser::{EvalParseContext, parse_direct_eval_script, parse_script};
 use std::collections::HashSet;
 
 use crate::CallEnv;
@@ -180,14 +180,19 @@ pub(super) fn native_global_eval(
     let Value::String(source) = value else {
         return Ok(value);
     };
-    let script = parse_script(&source).map_err(|error| RuntimeError {
-        thrown: None,
-        message: error.message,
-    })?;
     let direct_eval = matches!(
         env.get(crate::DIRECT_EVAL_BINDING),
         Some(Value::Boolean(true))
     );
+    let script = if direct_eval {
+        parse_direct_eval_script(&source, direct_eval_parse_context(env))
+    } else {
+        parse_script(&source)
+    }
+    .map_err(|error| RuntimeError {
+        thrown: None,
+        message: format!("SyntaxError: {}", error.message),
+    })?;
     let mut eval_env = if direct_eval {
         env.clone()
     } else {
@@ -238,6 +243,18 @@ pub(super) fn native_global_eval(
         *env = eval_env;
     }
     result.value
+}
+
+fn direct_eval_parse_context(env: &CallEnv) -> EvalParseContext {
+    EvalParseContext {
+        in_function: env.get_local("this").is_some(),
+        in_method: env.get(crate::HOME_OBJECT_BINDING).is_some(),
+        in_derived_constructor: env.get(crate::SUPER_CONSTRUCTOR_BINDING).is_some(),
+        in_field_initializer: matches!(
+            env.get(crate::FIELD_INITIALIZER_EVAL_BINDING),
+            Some(Value::Boolean(true))
+        ),
+    }
 }
 
 fn validate_eval_global_lexical_bindings(

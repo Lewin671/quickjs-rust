@@ -80,6 +80,9 @@ pub use bytecode::{
 
 pub(crate) const GLOBAL_THIS_BINDING: &str = "\0global_this";
 pub(crate) const DIRECT_EVAL_BINDING: &str = "\0\0direct_eval";
+/// Per-frame marker used by direct eval to apply class-field-initializer early
+/// errors.
+pub(crate) const FIELD_INITIALIZER_EVAL_BINDING: &str = "\0field_initializer_eval";
 /// Per-frame `[[HomeObject]]` for resolving `super.x`. Single-null prefixed so
 /// it never collides with user identifiers but is not treated as an internal
 /// destructuring binding (which use a double-null prefix).
@@ -95,6 +98,7 @@ pub(crate) const SUPER_CONSTRUCTOR_BINDING: &str = "\0super_constructor";
 pub(crate) const ACTIVE_CONSTRUCTOR_BINDING: &str = "\0active_constructor";
 pub(crate) const RUNTIME_INTRINSIC_NAMES: &[&str] = &[
     GLOBAL_THIS_BINDING,
+    FIELD_INITIALIZER_EVAL_BINDING,
     symbol::SYMBOL_REGISTRY_BINDING,
     generator::GENERATOR_PROTOTYPE_BINDING,
     iterator::ITERATOR_PROTOTYPE_BINDING,

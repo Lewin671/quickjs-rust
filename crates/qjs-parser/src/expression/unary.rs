@@ -148,6 +148,12 @@ impl Parser {
                     span: property.span,
                 });
             }
+            if !self.in_function {
+                return Err(ParseError {
+                    message: "`new.target` is only allowed inside functions".to_owned(),
+                    span: Span::new(start, property.span.end),
+                });
+            }
             return Ok(Expr::NewTarget {
                 span: Span::new(start, property.span.end),
             });

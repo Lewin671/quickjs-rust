@@ -3,9 +3,11 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use qjs_ast::BindingPattern;
 
 use crate::{
-    ArrayRef, Bytecode, Function, GLOBAL_THIS_BINDING, NEW_TARGET_BINDING, NativeFunction,
-    ObjectRef, Property, RuntimeError, Value, bytecode::eval_function_bytecode, function_prototype,
-    native::call_native_function, object_prototype, private::PrivateEnvironment, symbol,
+    ACTIVE_CONSTRUCTOR_BINDING, ArrayRef, Bytecode, FIELD_INITIALIZER_EVAL_BINDING, Function,
+    GLOBAL_THIS_BINDING, HOME_OBJECT_BINDING, NEW_TARGET_BINDING, NativeFunction, ObjectRef,
+    Property, RuntimeError, SUPER_CONSTRUCTOR_BINDING, Value, bytecode::eval_function_bytecode,
+    function_prototype, native::call_native_function, object_prototype,
+    private::PrivateEnvironment, symbol,
 };
 
 use super::{
@@ -404,6 +406,7 @@ fn function_env(
 ) -> FunctionCallEnv {
     let captured_env = function.captured_env.borrow();
     let lexical_this = captured_env.get("this").cloned();
+    let lexical_field_initializer = captured_env.get(FIELD_INITIALIZER_EVAL_BINDING).cloned();
     let mut local_env = HashMap::with_capacity(
         captured_env.len() + function.params.binding_count() + argument_values.len() + 3,
     );
@@ -435,6 +438,16 @@ fn function_env(
     // that `super(...)` can initialize the instance fields once `this` exists.
     if function.is_class_constructor && function.is_derived_constructor && is_construct {
         local_env.insert(crate::ACTIVE_CONSTRUCTOR_BINDING.to_owned(), callee.clone());
+    }
+    if function.is_field_initializer {
+        local_env.insert(
+            FIELD_INITIALIZER_EVAL_BINDING.to_owned(),
+            Value::Boolean(true),
+        );
+    } else if function.lexical_this
+        && let Some(field_initializer) = lexical_field_initializer
+    {
+        local_env.insert(FIELD_INITIALIZER_EVAL_BINDING.to_owned(), field_initializer);
     }
     insert_super_bindings(&mut local_env, function, env, is_construct);
     // A derived-class constructor leaves `this` uninitialized (a TDZ): reading
@@ -524,6 +537,14 @@ fn insert_super_bindings(
     // calls see `new.target` undefined.
     if (is_construct || function.lexical_this)
         && let Some(new_target) = caller_env.get(NEW_TARGET_BINDING)
+    {
+        local_env.insert(NEW_TARGET_BINDING.to_owned(), new_target);
+    } else if function.lexical_this
+        && let Some(new_target) = function
+            .captured_env
+            .borrow()
+            .get(NEW_TARGET_BINDING)
+            .cloned()
     {
         local_env.insert(NEW_TARGET_BINDING.to_owned(), new_target);
     }
@@ -861,5 +882,15 @@ fn write_function_capture_values(
 }
 
 fn is_call_frame_binding(name: &str) -> bool {
-    matches!(name, GLOBAL_THIS_BINDING | "this" | "arguments")
+    matches!(
+        name,
+        GLOBAL_THIS_BINDING
+            | FIELD_INITIALIZER_EVAL_BINDING
+            | HOME_OBJECT_BINDING
+            | NEW_TARGET_BINDING
+            | SUPER_CONSTRUCTOR_BINDING
+            | ACTIVE_CONSTRUCTOR_BINDING
+            | "this"
+            | "arguments"
+    )
 }

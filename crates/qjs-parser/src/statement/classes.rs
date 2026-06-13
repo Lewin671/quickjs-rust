@@ -334,9 +334,12 @@ impl Parser {
         // by the derived-constructor context and is intentionally not enabled
         // for ordinary methods.
         let previous_method = self.in_method;
+        let previous_function = self.in_function;
         self.in_method = true;
+        self.in_function = true;
         let params = self.function_parameters_with_context(true, is_async);
         self.in_method = previous_method;
+        self.in_function = previous_function;
         let params = params?;
         reject_duplicate_method_parameters(&params)?;
         let body_start = self
@@ -353,17 +356,20 @@ impl Parser {
         let previous_generator = self.in_generator;
         let previous_async = self.in_async;
         let previous_static_block = self.in_static_block;
+        let previous_function = self.in_function;
         self.in_method = true;
         self.in_derived_constructor = is_constructor && has_heritage;
         self.in_generator = is_generator;
         self.in_async = is_async;
         self.in_static_block = false;
+        self.in_function = true;
         let body = self.block_body();
         self.in_method = previous_method;
         self.in_derived_constructor = previous_derived;
         self.in_generator = previous_generator;
         self.in_async = previous_async;
         self.in_static_block = previous_static_block;
+        self.in_function = previous_function;
         let body = body?;
         self.reject_invalid_function_parameters(&params, &body, body_start)?;
         let end = self.previous_end();
@@ -434,17 +440,20 @@ impl Parser {
         let previous_generator = self.in_generator;
         let previous_async = self.in_async;
         let previous_static_block = self.in_static_block;
+        let previous_function = self.in_function;
         self.in_method = true;
         self.in_derived_constructor = false;
         self.in_generator = false;
         self.in_async = false;
         self.in_static_block = true;
+        self.in_function = true;
         let body = self.block_body();
         self.in_method = previous_method;
         self.in_derived_constructor = previous_derived;
         self.in_generator = previous_generator;
         self.in_async = previous_async;
         self.in_static_block = previous_static_block;
+        self.in_function = previous_function;
         let body = body?;
         validate_static_block_statement_list(&body)?;
         let end = self.previous_end();
@@ -480,11 +489,14 @@ impl Parser {
             // form their own implicit method-like scope.
             let previous_method = self.in_method;
             let previous_field_initializer = self.in_field_initializer;
+            let previous_function = self.in_function;
             self.in_method = true;
             self.in_field_initializer = true;
+            self.in_function = true;
             let expr = self.assignment();
             self.in_method = previous_method;
             self.in_field_initializer = previous_field_initializer;
+            self.in_function = previous_function;
             Some(expr?)
         } else {
             None

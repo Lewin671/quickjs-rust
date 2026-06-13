@@ -30,6 +30,41 @@ pub fn parse_script(source: &str) -> Result<Script, ParseError> {
     Parser::new(tokens, source.to_owned()).parse_script()
 }
 
+/// Additional parser context for direct eval code.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct EvalParseContext {
+    /// Whether eval runs inside a function-like context, allowing
+    /// `new.target`.
+    pub in_function: bool,
+    /// Whether eval runs inside a method-like context, allowing `super.x`.
+    pub in_method: bool,
+    /// Whether eval runs inside a derived constructor, allowing `super()`.
+    pub in_derived_constructor: bool,
+    /// Whether eval runs inside a class field initializer, where `arguments`
+    /// is an early error.
+    pub in_field_initializer: bool,
+}
+
+/// Parses direct-eval source text using the syntactic context of the eval call.
+///
+/// Indirect eval should continue to use [`parse_script`], because it parses as
+/// global script code with no caller lexical context.
+pub fn parse_direct_eval_script(
+    source: &str,
+    context: EvalParseContext,
+) -> Result<Script, ParseError> {
+    let tokens = lex(source).map_err(|error| ParseError {
+        message: error.message,
+        span: error.span,
+    })?;
+    let mut parser = Parser::new(tokens, source.to_owned());
+    parser.in_function = context.in_function;
+    parser.in_method = context.in_method;
+    parser.in_derived_constructor = context.in_derived_constructor;
+    parser.in_field_initializer = context.in_field_initializer;
+    parser.parse_script()
+}
+
 /// Parses source text as a module (the Module goal symbol).
 ///
 /// Module source permits top-level `import` and `export` declarations and is
@@ -84,6 +119,10 @@ struct Parser {
     /// Whether the parser is inside a class field initializer expression, where
     /// `arguments` is a syntax error.
     in_field_initializer: bool,
+    /// Whether `new.target` is currently allowed. Function, method, static
+    /// block, and field-initializer bodies are function-like contexts for this
+    /// early error; arrow functions inherit the enclosing setting.
+    in_function: bool,
     /// Whether the parser is inside a class static block statement list. Static
     /// blocks have dedicated early errors for `return`, `await`, `yield`, and
     /// `arguments`; ordinary nested functions and methods reset this context.

@@ -172,13 +172,16 @@ impl Parser {
         let previous_generator = self.in_generator;
         let previous_async = self.in_async;
         let previous_static_block = self.in_static_block;
+        let previous_function = self.in_function;
         self.in_generator = is_generator;
         self.in_async = is_async;
         self.in_static_block = false;
+        self.in_function = true;
         let body = self.without_super_context(Self::block_body);
         self.in_generator = previous_generator;
         self.in_async = previous_async;
         self.in_static_block = previous_static_block;
+        self.in_function = previous_function;
         body
     }
 
@@ -200,6 +203,7 @@ impl Parser {
         let previous_async = self.in_async;
         let previous_async_params = self.in_async_params;
         let previous_static_block = self.in_static_block;
+        let previous_function = self.in_function;
         // Inside a generator/async parameter list `yield`/`await` is in the
         // keyword context (so it is recognized) but the corresponding
         // expression is an early error.
@@ -208,12 +212,14 @@ impl Parser {
         self.in_async = is_async;
         self.in_async_params = is_async;
         self.in_static_block = false;
+        self.in_function = true;
         let params = self.parse_function_parameters();
         self.in_generator = previous_generator;
         self.in_generator_params = previous_generator_params;
         self.in_async = previous_async;
         self.in_async_params = previous_async_params;
         self.in_static_block = previous_static_block;
+        self.in_function = previous_function;
         params
     }
 
