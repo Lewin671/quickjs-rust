@@ -108,10 +108,9 @@ impl Parser {
         // `await` may not be used as a binding identifier inside an async
         // function (parameters or local bindings). Ordinary nested functions
         // reset the async context, so `await` is a legal binding name there.
-        if self.in_async && name == "await" {
+        if (self.in_async || self.in_static_block) && name == "await" {
             return Err(ParseError {
-                message: "`await` is not allowed as a binding identifier in an async function"
-                    .to_owned(),
+                message: "`await` is not allowed as a binding identifier here".to_owned(),
                 span: token.span,
             });
         }

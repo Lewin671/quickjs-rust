@@ -26,6 +26,13 @@ impl Parser {
         let token = self.advance();
         match token.kind {
             TokenKind::Identifier(name) => {
+                if self.in_static_block && matches!(name.as_str(), "arguments" | "await" | "yield")
+                {
+                    return Err(ParseError {
+                        message: format!("`{name}` is not allowed in a class static block"),
+                        span: token.span,
+                    });
+                }
                 if self.in_field_initializer && name == "arguments" {
                     return Err(ParseError {
                         message: "'arguments' is not allowed in a class field initializer"

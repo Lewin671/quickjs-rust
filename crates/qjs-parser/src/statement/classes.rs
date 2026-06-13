@@ -60,7 +60,7 @@ impl Parser {
                 span,
             });
         }
-        if self.in_async && name == "await" {
+        if (self.in_async || self.in_static_block) && name == "await" {
             return Err(ParseError {
                 message: "`await` is not allowed as a class binding name here".to_owned(),
                 span,
@@ -329,15 +329,18 @@ impl Parser {
         let previous_derived = self.in_derived_constructor;
         let previous_generator = self.in_generator;
         let previous_async = self.in_async;
+        let previous_static_block = self.in_static_block;
         self.in_method = true;
         self.in_derived_constructor = is_constructor && has_heritage;
         self.in_generator = is_generator;
         self.in_async = is_async;
+        self.in_static_block = false;
         let body = self.block_body();
         self.in_method = previous_method;
         self.in_derived_constructor = previous_derived;
         self.in_generator = previous_generator;
         self.in_async = previous_async;
+        self.in_static_block = previous_static_block;
         let body = body?;
         self.reject_invalid_function_parameters(&params, &body, body_start)?;
         let end = self.previous_end();
@@ -407,15 +410,18 @@ impl Parser {
         let previous_derived = self.in_derived_constructor;
         let previous_generator = self.in_generator;
         let previous_async = self.in_async;
+        let previous_static_block = self.in_static_block;
         self.in_method = true;
         self.in_derived_constructor = false;
         self.in_generator = false;
         self.in_async = false;
+        self.in_static_block = true;
         let body = self.block_body();
         self.in_method = previous_method;
         self.in_derived_constructor = previous_derived;
         self.in_generator = previous_generator;
         self.in_async = previous_async;
+        self.in_static_block = previous_static_block;
         let body = body?;
         let end = self.previous_end();
         Ok(ClassElement::StaticBlock(qjs_ast::StaticBlock {

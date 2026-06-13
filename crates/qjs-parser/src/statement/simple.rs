@@ -10,6 +10,12 @@ impl Parser {
             .expect("parser should always have eof token")
             .span
             .start;
+        if self.in_static_block {
+            return Err(ParseError {
+                message: "`return` is not allowed in a class static block".to_owned(),
+                span: Span::new(start, start + "return".len()),
+            });
+        }
         self.expect(&TokenKind::Return)?;
         let argument = if self.at(&TokenKind::Semicolon) || self.at(&TokenKind::RightBrace) {
             None

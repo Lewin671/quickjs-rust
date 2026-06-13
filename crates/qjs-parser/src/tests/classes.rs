@@ -464,6 +464,31 @@ fn rejects_reserved_class_binding_names() {
 }
 
 #[test]
+fn rejects_static_block_early_error_contexts() {
+    for source in [
+        "class C { static { return; } }",
+        "class C { static { arguments; } }",
+        "class C { static { await; } }",
+        "class C { static { yield; } }",
+        "class C { static { class await {} } }",
+        "class C { static { let await; } }",
+    ] {
+        parse_script(source).expect_err("static block early error should fail");
+    }
+}
+
+#[test]
+fn static_block_context_does_not_cross_function_boundaries() {
+    parse_script("class C { static { function f() { return arguments; } } }")
+        .expect("ordinary function should reset static block early-error context");
+
+    parse_script(
+        "class C { static { class Nested { method({x = arguments}) { return arguments; } } } }",
+    )
+    .expect("class method parameters and body should reset static block context");
+}
+
+#[test]
 fn allows_super_property_in_field_initializer() {
     parse_script("class C extends D { x = super.y; }")
         .expect("super.x is allowed in a field initializer");

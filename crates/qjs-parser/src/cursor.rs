@@ -14,6 +14,7 @@ impl Parser {
             in_method: false,
             in_derived_constructor: false,
             in_field_initializer: false,
+            in_static_block: false,
             in_generator: false,
             in_generator_params: false,
             in_async: false,

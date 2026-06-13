@@ -84,6 +84,10 @@ struct Parser {
     /// Whether the parser is inside a class field initializer expression, where
     /// `arguments` is a syntax error.
     in_field_initializer: bool,
+    /// Whether the parser is inside a class static block statement list. Static
+    /// blocks have dedicated early errors for `return`, `await`, `yield`, and
+    /// `arguments`; ordinary nested functions and methods reset this context.
+    in_static_block: bool,
     /// Whether the parser is inside a generator function body (or an arrow
     /// nested in one), where `yield` is a keyword introducing a yield
     /// expression. Ordinary nested functions reset this; arrow functions

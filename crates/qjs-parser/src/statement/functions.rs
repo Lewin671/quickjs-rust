@@ -171,11 +171,14 @@ impl Parser {
     ) -> Result<Vec<Stmt>, ParseError> {
         let previous_generator = self.in_generator;
         let previous_async = self.in_async;
+        let previous_static_block = self.in_static_block;
         self.in_generator = is_generator;
         self.in_async = is_async;
+        self.in_static_block = false;
         let body = self.without_super_context(Self::block_body);
         self.in_generator = previous_generator;
         self.in_async = previous_async;
+        self.in_static_block = previous_static_block;
         body
     }
 
@@ -196,6 +199,7 @@ impl Parser {
         let previous_generator_params = self.in_generator_params;
         let previous_async = self.in_async;
         let previous_async_params = self.in_async_params;
+        let previous_static_block = self.in_static_block;
         // Inside a generator/async parameter list `yield`/`await` is in the
         // keyword context (so it is recognized) but the corresponding
         // expression is an early error.
@@ -203,11 +207,13 @@ impl Parser {
         self.in_generator_params = is_generator;
         self.in_async = is_async;
         self.in_async_params = is_async;
+        self.in_static_block = false;
         let params = self.parse_function_parameters();
         self.in_generator = previous_generator;
         self.in_generator_params = previous_generator_params;
         self.in_async = previous_async;
         self.in_async_params = previous_async_params;
+        self.in_static_block = previous_static_block;
         params
     }
 
@@ -294,10 +300,9 @@ impl Parser {
                 span,
             });
         }
-        if self.in_async && name == "await" {
+        if (self.in_async || self.in_static_block) && name == "await" {
             return Err(ParseError {
-                message: "`await` may not be used as a binding name in an async function"
-                    .to_owned(),
+                message: "`await` may not be used as a binding name here".to_owned(),
                 span,
             });
         }
