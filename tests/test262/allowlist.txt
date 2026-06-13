@@ -13,6 +13,9 @@ cases/symbol-to-primitive-coercion-basic.js
 cases/symbol-well-known-static-properties.js
 cases/array-constructor-basic.js
 cases/array-constructor-multiple-arguments.js
+test/built-ins/Array/proto-from-ctor-realm-one.js
+test/built-ins/Array/proto-from-ctor-realm-two.js
+test/built-ins/Array/proto-from-ctor-realm-zero.js
 cases/array-at-array-like.js
 cases/array-at-basic.js
 cases/array-at-length.js

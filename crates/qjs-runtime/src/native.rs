@@ -31,9 +31,14 @@ pub(crate) fn call_native_function(
     is_construct: bool,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    if let Some(value) =
-        arrays::call_array_native(function, native, this_value.clone(), &argument_values, env)?
-    {
+    if let Some(value) = arrays::call_array_native(
+        function,
+        native,
+        this_value.clone(),
+        &argument_values,
+        is_construct,
+        env,
+    )? {
         return Ok(value);
     }
 

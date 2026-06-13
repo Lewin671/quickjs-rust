@@ -1,8 +1,10 @@
 mod array_like;
 mod constructor;
+mod constructor_realm;
 mod flatten;
 mod indexing;
 mod install;
+mod is_array;
 mod iteration;
 mod iterator;
 mod join;
@@ -25,10 +27,11 @@ pub(crate) use constructor::{
     native_array_from_async_array_like_value_fulfilled,
     native_array_from_async_iterator_mapped_fulfilled, native_array_from_async_iterator_rejected,
     native_array_from_async_iterator_step_fulfilled, native_array_from_async_rejected,
-    native_array_is_array, native_array_of,
+    native_array_of,
 };
 pub(crate) use flatten::{native_array_prototype_flat, native_array_prototype_flat_map};
 pub(crate) use install::install_array;
+pub(crate) use is_array::native_array_is_array;
 pub(crate) use iteration::{
     native_array_prototype_every, native_array_prototype_filter, native_array_prototype_find,
     native_array_prototype_find_index, native_array_prototype_find_last,

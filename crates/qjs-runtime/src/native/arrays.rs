@@ -8,10 +8,11 @@ pub(super) fn call_array_native(
     native: NativeFunction,
     this_value: Value,
     argument_values: &[Value],
+    is_construct: bool,
     env: &mut CallEnv,
 ) -> NativeCallResult {
     let value = match native {
-        NativeFunction::Array => array::native_array(argument_values, env)?,
+        NativeFunction::Array => array::native_array(function, argument_values, is_construct, env)?,
         NativeFunction::ArrayFrom => array::native_array_from(this_value, argument_values, env)?,
         NativeFunction::ArrayFromAsync => {
             array::native_array_from_async(this_value, argument_values, env)?

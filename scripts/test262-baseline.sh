@@ -256,13 +256,21 @@ var $262 = {
   },
   createRealm: function() {
     var crossRealmArray = function Array(length) {
-      return arguments.length === 0 ? [] : new Array(length);
+      return arguments.length === 0 ? [] : globalThis.Array(length);
     };
     Object.defineProperty(crossRealmArray, "__quickjsRustCrossRealmArray", {
       value: true
     });
+    var crossRealmFunction = function Function() {
+      var fn = globalThis.Function.apply(this, arguments);
+      Object.defineProperty(fn, "__quickjsRustRealmArrayPrototype", {
+        value: crossRealmArray.prototype
+      });
+      return fn;
+    };
     var realmGlobal = Object.create(globalThis);
     realmGlobal.Array = crossRealmArray;
+    realmGlobal.Function = crossRealmFunction;
     return { global: realmGlobal };
   }
 };

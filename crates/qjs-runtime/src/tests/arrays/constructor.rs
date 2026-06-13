@@ -23,6 +23,22 @@ fn evaluates_array_constructor_length_argument() {
 }
 
 #[test]
+fn array_constructor_uses_new_target_array_prototype() {
+    assert_eq!(
+        eval(
+            "let proto = { tag: 'custom' }; function C() {} C.prototype = proto; Object.getPrototypeOf(Reflect.construct(Array, [], C)) === proto;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let realmArrayPrototype = { realm: 'other' }; function C() {} Object.defineProperty(C, '__quickjsRustRealmArrayPrototype', { value: realmArrayPrototype }); C.prototype = undefined; let a0 = Reflect.construct(Array, [], C); C.prototype = null; let a1 = Reflect.construct(Array, [1], C); C.prototype = 0; let a2 = Reflect.construct(Array, ['x', 'y'], C); Object.getPrototypeOf(a0) === realmArrayPrototype && Object.getPrototypeOf(a1) === realmArrayPrototype && Object.getPrototypeOf(a2) === realmArrayPrototype && a0.length === 0 && a1.length === 1 && a2[1] === 'y';"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn evaluates_array_of_static_constructor() {
     assert_eq!(eval("Array.of.length;"), Ok(Value::Number(0.0)));
     assert_eq!(

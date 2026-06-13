@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     ArrayRef, Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value,
-    array_prototype, call_function, construct_function, is_truthy,
+    call_function, construct_function, is_truthy,
     object::{
         PropertyDescriptor, array_length_from_descriptor_value, define_array_length_value,
         define_property_descriptor_on_value_key,
@@ -13,6 +13,7 @@ use crate::{
 };
 
 use super::array_like::{array_like_length, array_like_values_with_env};
+use super::constructor_realm::{array_constructor_prototype_slot, array_with_prototype};
 use crate::CallEnv;
 
 const ARRAY_FROM_ASYNC_CAPABILITY: &str = "\0ArrayFromAsyncCapability";
@@ -27,36 +28,24 @@ const ARRAY_FROM_ASYNC_TARGET: &str = "\0ArrayFromAsyncTarget";
 const ARRAY_FROM_ASYNC_THIS_ARG: &str = "\0ArrayFromAsyncThisArg";
 
 pub(crate) fn native_array(
+    function: &Function,
     argument_values: &[Value],
+    is_construct: bool,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
+    let prototype = array_constructor_prototype_slot(function, is_construct, env)?;
     if let [Value::Number(length)] = argument_values {
         let length = array_length_from_descriptor_value(Value::Number(*length), env)?;
-        return Ok(Value::Array(ArrayRef::new_sparse(
-            vec![Value::Undefined; length],
-            (0..length).collect(),
+        return Ok(Value::Array(array_with_prototype(
+            ArrayRef::new_sparse(vec![Value::Undefined; length], (0..length).collect()),
+            prototype,
         )));
     }
 
-    Ok(Value::Array(ArrayRef::new(argument_values.to_vec())))
-}
-
-pub(crate) fn native_array_is_array(
-    argument_values: &[Value],
-    env: &CallEnv,
-) -> Result<Value, RuntimeError> {
-    Ok(Value::Boolean(is_array(argument_values.first(), env)?))
-}
-
-fn is_array(value: Option<&Value>, env: &CallEnv) -> Result<bool, RuntimeError> {
-    match value {
-        Some(Value::Array(_)) => Ok(true),
-        Some(Value::Object(object)) => Ok(array_prototype(env)
-            .as_ref()
-            .is_some_and(|prototype| object.ptr_eq(prototype))),
-        Some(Value::Proxy(proxy)) => crate::proxy::proxy_target_is_array_result(proxy),
-        _ => Ok(false),
-    }
+    Ok(Value::Array(array_with_prototype(
+        ArrayRef::new(argument_values.to_vec()),
+        prototype,
+    )))
 }
 
 pub(crate) fn native_array_from(
