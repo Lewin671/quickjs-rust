@@ -224,21 +224,29 @@ impl Compiler {
     }
 
     /// Ends the protected region. A normal completion closes an unfinished
-    /// iterator and lets close errors propagate; an abrupt completion closes
-    /// it while swallowing close errors, then rethrows the original error.
+    /// iterator and lets close errors propagate; a thrown completion closes it
+    /// while swallowing close errors, then rethrows the original error. A
+    /// generator `return()` completion is routed through the try-finally stack,
+    /// so it closes the iterator and lets close errors override the return.
     pub(super) fn end_array_destructuring(&mut self, destructuring: &ArrayDestructuring) {
         self.emit(Op::ExitTry);
         self.emit_close_unless_done(destructuring.iterator_slot, destructuring.done_slot, false);
         let over_catch = self.emit(Op::Jump(usize::MAX));
 
         let catch_target = self.code.len();
+        self.emit(Op::ExitTry);
         self.emit_close_unless_done(destructuring.iterator_slot, destructuring.done_slot, true);
         self.emit(Op::Throw);
 
+        let finally_target = self.code.len();
+        self.emit_close_unless_done(destructuring.iterator_slot, destructuring.done_slot, false);
+        self.emit(Op::EndFinally);
+
         let after = self.code.len();
         self.patch_jump(over_catch, after);
-        if let Op::EnterTry { catch, .. } = &mut self.code[destructuring.enter] {
+        if let Op::EnterTry { catch, finally, .. } = &mut self.code[destructuring.enter] {
             *catch = Some(catch_target);
+            *finally = Some(finally_target);
         }
     }
 

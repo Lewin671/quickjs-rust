@@ -572,4 +572,59 @@ fn destructuring_assignment_closes_iterators() {
         ),
         Ok(Value::String("true:0:1".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "var returnCount = 0; var unreachable = 0; var iterator = {
+               next: function() { return { done: false, value: undefined }; },
+               return: function() { returnCount += 1; return {}; }
+             };
+             var iterable = {};
+             iterable[Symbol.iterator] = function() { return iterator; };
+             function* g() {
+               var target;
+               var vals = iterable;
+               0, [target = yield] = vals;
+               unreachable += 1;
+             }
+             var iter = g();
+             iter.next();
+             var result = iter.return(777);
+             returnCount + ':' + unreachable + ':' + result.value + ':' + result.done;"
+        ),
+        Ok(Value::String("1:0:777:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var returnCount = 0; var iterator = {
+               next: function() { return { done: false, value: undefined }; },
+               return: function() { returnCount += 1; throw new Error('close'); }
+             };
+             var iterable = {};
+             iterable[Symbol.iterator] = function() { return iterator; };
+             function* g() { var target; 0, [target = yield] = iterable; }
+             var iter = g();
+             iter.next();
+             var caught = '';
+             try { iter.return(777); } catch (error) { caught = error.message; }
+             caught + ':' + returnCount;"
+        ),
+        Ok(Value::String("close:1".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var returnCount = 0; var iterator = {
+               next: function() { return { done: false, value: undefined }; },
+               return: function() { returnCount += 1; return null; }
+             };
+             var iterable = {};
+             iterable[Symbol.iterator] = function() { return iterator; };
+             function* g() { var target; 0, [target = yield] = iterable; }
+             var iter = g();
+             iter.next();
+             var caught = '';
+             try { iter.return(777); } catch (error) { caught = error instanceof TypeError ? 'type' : error.name; }
+             caught + ':' + returnCount;"
+        ),
+        Ok(Value::String("type:1".to_owned()))
+    );
 }
