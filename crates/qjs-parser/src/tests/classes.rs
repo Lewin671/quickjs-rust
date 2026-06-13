@@ -391,6 +391,8 @@ fn parses_super_member_and_call_in_methods() {
         .expect("super property access inside a method parses");
     parse_script("class C extends D { static s() { return super.t; } }")
         .expect("super property access inside a static method parses");
+    parse_script("class C extends D { async m(x = super.n()) {} }")
+        .expect("super property access inside method parameters parses");
 }
 
 #[test]

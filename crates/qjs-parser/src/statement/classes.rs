@@ -315,7 +315,15 @@ impl Parser {
             });
         }
 
-        let params = self.function_parameters_with_context(is_generator, is_async)?;
+        // Class method parameter initializers run in the method's home-object
+        // context too, so `super.x` is valid there. `super(...)` remains gated
+        // by the derived-constructor context and is intentionally not enabled
+        // for ordinary methods.
+        let previous_method = self.in_method;
+        self.in_method = true;
+        let params = self.function_parameters_with_context(is_generator, is_async);
+        self.in_method = previous_method;
+        let params = params?;
         reject_duplicate_method_parameters(&params)?;
         let body_start = self
             .peek()
@@ -327,7 +335,6 @@ impl Parser {
         // constructor body may use `super(...)`. Methods reset whatever
         // surrounding context existed (e.g. a class nested in a method). The
         // yield/await context follows the generator/async markers.
-        let previous_method = self.in_method;
         let previous_derived = self.in_derived_constructor;
         let previous_generator = self.in_generator;
         let previous_async = self.in_async;

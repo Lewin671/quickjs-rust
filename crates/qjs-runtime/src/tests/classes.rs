@@ -558,6 +558,30 @@ fn super_in_static_method_calls_parent_static() {
 }
 
 #[test]
+fn super_property_in_async_method_default_parameter() {
+    let value = eval(
+        "let log = []; \
+         class A { async method() { return 'sup'; } } \
+         class B extends A { \
+           async method(x = super.method()) { log.push(await x); } \
+         } \
+         new B().method().then(() => log.push('done')); \
+         log;",
+    )
+    .expect("async class method should evaluate");
+    let Value::Array(array) = value else {
+        panic!("expected log array");
+    };
+    assert_eq!(
+        array.to_vec(),
+        vec![
+            Value::String("sup".to_owned()),
+            Value::String("done".to_owned())
+        ]
+    );
+}
+
+#[test]
 fn subclass_inherits_static_method() {
     assert_eq!(
         eval("class A { static who() { return 'A'; } } class B extends A {} B.who();"),
