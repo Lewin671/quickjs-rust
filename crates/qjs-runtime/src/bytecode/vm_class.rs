@@ -445,15 +445,6 @@ impl Vm<'_> {
     }
 
     fn super_call_inner(&mut self, arguments: Vec<Value>) -> Result<Value, RuntimeError> {
-        // A derived constructor's `this` is a frame-local TDZ until `super(...)`
-        // binds it; the shared realm always carries the *global* `this`, so the
-        // "already bound" check must consult the frame locals layer only.
-        if self.env.locals().contains_key("this") {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "ReferenceError: super constructor may only be called once".to_owned(),
-            });
-        }
         let Some(super_constructor) = self.env.get(crate::SUPER_CONSTRUCTOR_BINDING) else {
             return Err(RuntimeError {
                 thrown: None,
@@ -468,11 +459,20 @@ impl Vm<'_> {
         let mut env = self.current_env();
         let result = construct_function(super_constructor, new_target, arguments, &mut env);
         self.apply_env(env);
-        result
+        let value = result?;
+        // A repeated `super(...)` still performs the parent construction after
+        // argument evaluation, then fails while trying to initialize `this`.
+        if self.env.locals().contains_key("this") {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "ReferenceError: super constructor may only be called once".to_owned(),
+            });
+        }
+        Ok(value)
     }
 
     fn current_this(&mut self) -> Result<Value, RuntimeError> {
-        match self.env.get("this") {
+        match self.env.get_local("this") {
             Some(value) => Ok(value),
             None => Err(RuntimeError {
                 thrown: None,

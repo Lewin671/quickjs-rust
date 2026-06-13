@@ -241,6 +241,14 @@ fn yield_is_identifier_in_sloppy_non_generator_code() {
 }
 
 #[test]
+fn yield_is_reserved_in_strict_nested_function_inside_class_generator_method() {
+    assert!(
+        parse_script("class C { *m() { function inner() { yield = 1; } } }").is_err(),
+        "class method strictness makes yield a reserved identifier in nested functions"
+    );
+}
+
+#[test]
 fn yield_in_arrow_inside_generator_is_yield_expression() {
     // Arrows inherit the enclosing generator's yield context.
     let (_, body) = sole_function_decl("function* g() { var f = () => yield 1; }");

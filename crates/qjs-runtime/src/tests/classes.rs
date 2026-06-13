@@ -112,6 +112,45 @@ fn default_derived_constructor_arguments_do_not_shadow_outer_bindings() {
 }
 
 #[test]
+fn explicit_derived_constructor_must_call_super_before_returning() {
+    assert!(
+        eval("class B {} class C extends B { constructor() {} } new C();").is_err(),
+        "derived constructor without super() must throw"
+    );
+}
+
+#[test]
+fn derived_super_property_requires_initialized_this() {
+    assert!(
+        eval(
+            "class B {} \
+             class C extends B { constructor() { super.m(); } } \
+             new C();"
+        )
+        .is_err(),
+        "super property access before super() must throw"
+    );
+}
+
+#[test]
+fn repeated_super_call_runs_parent_before_reference_error() {
+    assert_eq!(
+        eval(
+            "var calls = 0; \
+             class B { constructor() { calls += 1; } } \
+             class C extends B { \
+               constructor() { \
+                 super(); \
+                 try { super(); } catch (e) {} \
+               } \
+             } \
+             new C(); calls;"
+        ),
+        Ok(Value::Number(2.0))
+    );
+}
+
+#[test]
 fn instance_is_instanceof_class() {
     assert_eq!(
         eval("class C {} (new C()) instanceof C;"),

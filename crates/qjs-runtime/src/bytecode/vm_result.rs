@@ -64,6 +64,15 @@ pub(super) enum ResumeMode {
 }
 
 impl FunctionBytecodeResult<'_> {
+    pub(crate) fn frame_binding(&self, name: &str) -> Option<Value> {
+        self.bytecode
+            .local_slot(name)
+            .and_then(|index| self.locals.get(index))
+            .and_then(Option::as_ref)
+            .cloned()
+            .or_else(|| self.env.get_local(name))
+    }
+
     pub(crate) fn binding(&self, name: &str) -> Option<Value> {
         self.bytecode
             .local_slot(name)

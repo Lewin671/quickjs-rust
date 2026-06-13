@@ -32,10 +32,9 @@ impl Parser {
                         span: token.span,
                     });
                 }
-                if self.in_generator && name == "yield" {
+                if (self.strict || self.in_generator) && name == "yield" {
                     return Err(ParseError {
-                        message: "`yield` may not be used as an identifier in a generator"
-                            .to_owned(),
+                        message: "`yield` may not be used as an identifier here".to_owned(),
                         span: token.span,
                     });
                 }

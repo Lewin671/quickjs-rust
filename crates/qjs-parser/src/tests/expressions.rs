@@ -360,6 +360,13 @@ fn rejects_strict_assignment_to_eval_or_arguments() {
 }
 
 #[test]
+fn rejects_strict_yield_identifier_references() {
+    assert!(parse_script("'use strict'; yield;").is_err());
+    assert!(parse_script("'use strict'; yield = 1;").is_err());
+    assert!(parse_script("yield = 1;").is_ok());
+}
+
+#[test]
 fn rejects_strict_destructuring_target_eval_or_arguments() {
     // `eval`/`arguments` are not valid simple targets inside a destructuring
     // assignment under strict mode.

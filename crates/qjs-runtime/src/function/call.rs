@@ -234,7 +234,7 @@ pub(crate) fn initialize_instance_fields(
 fn finish_derived_construct(
     result: crate::bytecode::FunctionBytecodeResult<'_>,
 ) -> Result<Value, RuntimeError> {
-    let bound_this = result.binding("this");
+    let bound_this = result.frame_binding("this");
     let value = result.value?;
     match value {
         // A Symbol (or BigInt) primitive is represented as an object reference
