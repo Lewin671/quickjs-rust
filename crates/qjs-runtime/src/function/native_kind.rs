@@ -432,6 +432,8 @@ pub(crate) enum NativeFunction {
     ObjectPrototypeValueOf,
     ObjectPrototypeGetProto,
     ObjectPrototypeSetProto,
+    ObjectPrototypeDefineGetter,
+    ObjectPrototypeDefineSetter,
     ObjectPrototypeLookupGetter,
     ObjectPrototypeLookupSetter,
     ReflectApply,

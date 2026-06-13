@@ -88,6 +88,12 @@ pub(super) fn call_object_native(
         NativeFunction::ObjectPrototypeSetProto => {
             object::native_object_prototype_set_proto(this_value, argument_values, env)?
         }
+        NativeFunction::ObjectPrototypeDefineGetter => {
+            object::native_object_prototype_define_getter(this_value, argument_values, env)?
+        }
+        NativeFunction::ObjectPrototypeDefineSetter => {
+            object::native_object_prototype_define_setter(this_value, argument_values, env)?
+        }
         NativeFunction::ObjectPrototypeLookupGetter => {
             object::native_object_prototype_lookup_getter(this_value, argument_values, env)?
         }

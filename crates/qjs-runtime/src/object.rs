@@ -38,7 +38,8 @@ pub(crate) use integrity::{
     ordinary_prevent_extensions, ordinary_value_is_extensible, value_is_extensible,
 };
 pub(crate) use prototype::{
-    native_object_get_prototype_of, native_object_prototype_get_proto,
+    native_object_get_prototype_of, native_object_prototype_define_getter,
+    native_object_prototype_define_setter, native_object_prototype_get_proto,
     native_object_prototype_has_own_property, native_object_prototype_is_prototype_of,
     native_object_prototype_lookup_getter, native_object_prototype_lookup_setter,
     native_object_prototype_property_is_enumerable, native_object_prototype_set_proto,

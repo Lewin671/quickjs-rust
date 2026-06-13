@@ -49,6 +49,18 @@ pub(crate) fn install_object(env: &mut CallEnv, global_this: &Value) -> ObjectRe
     );
     define_object_prototype_function(
         &object_prototype,
+        "__defineGetter__",
+        2,
+        NativeFunction::ObjectPrototypeDefineGetter,
+    );
+    define_object_prototype_function(
+        &object_prototype,
+        "__defineSetter__",
+        2,
+        NativeFunction::ObjectPrototypeDefineSetter,
+    );
+    define_object_prototype_function(
+        &object_prototype,
         "__lookupGetter__",
         1,
         NativeFunction::ObjectPrototypeLookupGetter,

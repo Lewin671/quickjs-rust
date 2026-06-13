@@ -61,6 +61,82 @@ fn evaluates_object_prototype_property_checks() {
         Ok(Value::Number(1.0))
     );
     assert_eq!(
+        eval("Object.prototype.__defineGetter__.length;"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval("Object.prototype.__defineSetter__.length;"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval("Object.prototype.__defineGetter__.name;"),
+        Ok(Value::String("__defineGetter__".to_owned()))
+    );
+    assert_eq!(
+        eval("Object.prototype.__defineSetter__.name;"),
+        Ok(Value::String("__defineSetter__".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; \
+             function getter() { return 7; } \
+             let result = object.__defineGetter__('value', getter); \
+             let desc = Object.getOwnPropertyDescriptor(object, 'value'); \
+             [result, object.value, desc.get.name, desc.set, desc.enumerable, desc.configurable].join('|');"
+        ),
+        Ok(Value::String("|7|getter||true|true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; \
+             function setter(value) { this.stored = value; } \
+             let result = object.__defineSetter__('value', setter); \
+             object.value = 9; \
+             let desc = Object.getOwnPropertyDescriptor(object, 'value'); \
+             [result, object.stored, desc.get, desc.set.name, desc.enumerable, desc.configurable].join('|');"
+        ),
+        Ok(Value::String("|9||setter|true|true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; \
+             function originalGet() { return 1; } \
+             function originalSet(value) {} \
+             function newGet() { return 2; } \
+             Object.defineProperty(object, 'value', { get: originalGet, set: originalSet, enumerable: false, configurable: true }); \
+             object.__defineGetter__('value', newGet); \
+             let desc = Object.getOwnPropertyDescriptor(object, 'value'); \
+             [object.value, desc.set.name, desc.enumerable, desc.configurable].join('|');"
+        ),
+        Ok(Value::String("2|originalSet|true|true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; \
+             function originalGet() { return 1; } \
+             function originalSet(value) {} \
+             function newSet(value) { this.stored = value; } \
+             Object.defineProperty(object, 'value', { get: originalGet, set: originalSet, enumerable: false, configurable: true }); \
+             object.__defineSetter__('value', newSet); \
+             object.value = 3; \
+             let desc = Object.getOwnPropertyDescriptor(object, 'value'); \
+             [object.value, object.stored, desc.get.name, desc.enumerable, desc.configurable].join('|');"
+        ),
+        Ok(Value::String("1|3|originalGet|true|true".to_owned()))
+    );
+    assert!(eval("({}).__defineGetter__('value', 1);").is_err());
+    assert!(eval("({}).__defineSetter__('value', 1);").is_err());
+    assert!(
+        eval("let key = { toString() { throw new Error('key'); } }; ({}).__defineGetter__(key, function() {});").is_err()
+    );
+    assert!(eval("Object.prototype.__defineGetter__.call(null, 'value', function() {});").is_err());
+    assert!(
+        eval("let object = {}; Object.preventExtensions(object); object.__defineGetter__('value', function() {});").is_err()
+    );
+    assert!(
+        eval("let object = {}; Object.defineProperty(object, 'value', { value: 1, configurable: false }); object.__defineSetter__('value', function() {});").is_err()
+    );
+    assert_eq!(
         eval(
             "let object = {}; Object.defineProperty(object, 'value', { get: function getter() { return 1; }, configurable: true }); object.__lookupGetter__('value').name;"
         ),

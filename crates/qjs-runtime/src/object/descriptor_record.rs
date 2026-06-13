@@ -217,6 +217,28 @@ impl PropertyDescriptor {
         }
     }
 
+    pub(crate) fn accessor_get(get: Value, enumerable: bool, configurable: bool) -> Self {
+        Self {
+            value: None,
+            writable: None,
+            get: Some(Some(get)),
+            set: None,
+            enumerable: Some(enumerable),
+            configurable: Some(configurable),
+        }
+    }
+
+    pub(crate) fn accessor_set(set: Value, enumerable: bool, configurable: bool) -> Self {
+        Self {
+            value: None,
+            writable: None,
+            get: None,
+            set: Some(Some(set)),
+            enumerable: Some(enumerable),
+            configurable: Some(configurable),
+        }
+    }
+
     pub(crate) fn from_complete_property(property: Property) -> Self {
         if property.is_accessor() {
             return Self {

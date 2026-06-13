@@ -1,13 +1,14 @@
 use crate::{
     PropertyKey, RuntimeError, Value, array_as_object_prototype, array_has_own_property,
     array_prototype, bigint, boolean, call_function, date, error, function_intrinsic_prototype,
-    function_own_property_descriptor, function_prototype, number, property_value,
+    function_own_property_descriptor, function_prototype, number, object, property_value,
     property_value_key, regexp, string, symbol, to_property_key_value, value_prototype_slot,
 };
 
 use super::descriptor::own_property_descriptor_key;
 use crate::CallEnv;
 use crate::Property;
+use crate::object::PropertyDescriptor;
 
 pub(crate) fn native_object_get_prototype_of(
     argument_values: &[Value],
@@ -312,10 +313,71 @@ pub(crate) fn native_object_prototype_lookup_setter(
     object_prototype_lookup_accessor(this_value, argument_values, env, AccessorHalf::Setter)
 }
 
+pub(crate) fn native_object_prototype_define_getter(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    object_prototype_define_accessor(this_value, argument_values, env, AccessorHalf::Getter)
+}
+
+pub(crate) fn native_object_prototype_define_setter(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    object_prototype_define_accessor(this_value, argument_values, env, AccessorHalf::Setter)
+}
+
 #[derive(Clone, Copy)]
 enum AccessorHalf {
     Getter,
     Setter,
+}
+
+fn object_prototype_define_accessor(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut CallEnv,
+    half: AccessorHalf,
+) -> Result<Value, RuntimeError> {
+    if matches!(this_value, Value::Null | Value::Undefined) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "Object.prototype define accessor called on null or undefined".to_owned(),
+        });
+    }
+    let function = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
+    if !is_callable_accessor(&function) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Object.prototype define accessor requires a callable".to_owned(),
+        });
+    }
+    let key = to_property_key_value(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
+    let target = super::boxed_primitive(this_value.clone(), env).unwrap_or(this_value);
+    let descriptor = match half {
+        AccessorHalf::Getter => PropertyDescriptor::accessor_get(function, true, true),
+        AccessorHalf::Setter => PropertyDescriptor::accessor_set(function, true, true),
+    };
+    if !object::define_property_descriptor_on_value_key(target, key, descriptor, env)? {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "Object.prototype define accessor failed".to_owned(),
+        });
+    }
+    Ok(Value::Undefined)
+}
+
+fn is_callable_accessor(value: &Value) -> bool {
+    match value {
+        Value::Function(_) => true,
+        Value::Proxy(proxy) => crate::proxy::proxy_is_callable(proxy),
+        _ => false,
+    }
 }
 
 fn object_prototype_lookup_accessor(
