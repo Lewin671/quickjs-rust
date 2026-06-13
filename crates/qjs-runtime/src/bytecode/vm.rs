@@ -202,16 +202,13 @@ impl<'a> Vm<'a> {
     }
 
     pub(super) fn run(&mut self) -> Result<Value, RuntimeError> {
-        match self.run_completion()? {
-            Completion::Return(value) => Ok(value),
-            Completion::Yield(_)
-            | Completion::YieldDelegate(_)
-            | Completion::Await(_)
-            | Completion::PrologueEnd => Err(RuntimeError {
-                thrown: None,
-                message: "yield evaluated outside a generator body".to_owned(),
-            }),
+        if let Completion::Return(value) = self.run_completion()? {
+            return Ok(value);
         }
+        Err(RuntimeError {
+            thrown: None,
+            message: "yield evaluated outside a generator body".to_owned(),
+        })
     }
 
     /// Runs the bytecode loop until it returns or yields. Generator bodies
@@ -536,12 +533,9 @@ impl<'a> Vm<'a> {
                     next_slot,
                     async_delegate,
                 } => match self.yield_delegate(iterator_slot, next_slot, async_delegate)? {
-                    DelegateStep::Suspend(value) => {
-                        return Ok(Completion::YieldDelegate(value));
-                    }
-                    DelegateStep::Return(value) => {
-                        return Ok(Completion::Return(value));
-                    }
+                    DelegateStep::Suspend(value) => return Ok(Completion::YieldDelegate(value)),
+                    DelegateStep::Await(value) => return Ok(Completion::YieldDelegateAwait(value)),
+                    DelegateStep::Return(value) => return Ok(Completion::Return(value)),
                     DelegateStep::Continue => {}
                 },
                 Op::ImportCall { has_options } => self.import_call(has_options)?,

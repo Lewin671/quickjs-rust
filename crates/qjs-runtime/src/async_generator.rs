@@ -37,6 +37,7 @@ pub(crate) const ASYNC_GENERATOR_PROTOTYPE_BINDING: &str = "\0AsyncGeneratorProt
 const ASYNC_GEN: &str = "\0AsyncGenObject";
 /// The sync iterator wrapped by a CreateAsyncFromSyncIterator object.
 const SYNC_ITERATOR: &str = "\0SyncIterator";
+const SYNC_ITERATOR_NEXT: &str = "\0SyncIteratorNext";
 /// The wrapper promise capability and the `done` flag for an async-from-sync
 /// value await reaction.
 const WRAP_PROMISE: &str = "\0WrapPromise";
@@ -567,12 +568,16 @@ pub(crate) fn get_async_iterator(value: Value, env: &mut CallEnv) -> Result<Valu
     }
     // No async iterator: get the sync iterator and wrap it.
     let sync_iterator = crate::bytecode::sync_iterator_for_value(value, env)?;
-    Ok(create_async_from_sync_iterator(sync_iterator, env))
+    create_async_from_sync_iterator(sync_iterator, env)
 }
 
 /// CreateAsyncFromSyncIterator: builds a wrapper object whose `next`/`return`/
 /// `throw` forward to the sync iterator and await each result value.
-pub(crate) fn create_async_from_sync_iterator(sync_iterator: Value, env: &CallEnv) -> Value {
+pub(crate) fn create_async_from_sync_iterator(
+    sync_iterator: Value,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let next = property_value(sync_iterator.clone(), "next", env)?;
     let wrapper = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
     for (name, native) in [
         ("next", NativeFunction::AsyncFromSyncIteratorNext),
@@ -583,9 +588,14 @@ pub(crate) fn create_async_from_sync_iterator(sync_iterator: Value, env: &CallEn
         method
             .env
             .insert(SYNC_ITERATOR.to_owned(), sync_iterator.clone());
+        if matches!(native, NativeFunction::AsyncFromSyncIteratorNext) {
+            method
+                .env
+                .insert(SYNC_ITERATOR_NEXT.to_owned(), next.clone());
+        }
         wrapper.define_non_enumerable(name.to_owned(), Value::Function(method));
     }
-    Value::Object(wrapper)
+    Ok(Value::Object(wrapper))
 }
 
 /// The `next`/`return`/`throw` of a CreateAsyncFromSyncIterator wrapper: invokes
@@ -611,15 +621,23 @@ fn async_from_sync_method(
         _ => "next",
     };
 
-    let method = match property_value(sync_iterator.clone(), method_name, env) {
-        Ok(method) => method,
-        Err(error) => {
-            promise::reject_promise_capability(
-                &capability,
-                error.thrown.map_or(Value::Undefined, |value| *value),
-                env,
-            );
-            return Value::Object(capability);
+    let method = if matches!(native, NativeFunction::AsyncFromSyncIteratorNext) {
+        function
+            .env
+            .get(SYNC_ITERATOR_NEXT)
+            .cloned()
+            .unwrap_or(Value::Undefined)
+    } else {
+        match property_value(sync_iterator.clone(), method_name, env) {
+            Ok(method) => method,
+            Err(error) => {
+                promise::reject_promise_capability(
+                    &capability,
+                    error.thrown.map_or(Value::Undefined, |value| *value),
+                    env,
+                );
+                return Value::Object(capability);
+            }
         }
     };
 

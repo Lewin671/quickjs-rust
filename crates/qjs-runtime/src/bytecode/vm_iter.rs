@@ -23,6 +23,9 @@ pub(super) enum DelegateStep {
     /// `return` reported done): the outer body's enclosing `finally` blocks
     /// have already run and this value is the body's return value.
     Return(Value),
+    /// Async delegation must await the inner iterator method result before it
+    /// can inspect `done`/`value`.
+    Await(Value),
     /// The delegation finished normally: the `yield*` expression value is on
     /// the stack and execution continues past the op.
     Continue,
@@ -165,8 +168,8 @@ impl Vm<'_> {
     /// [`DelegateStep::Continue`] with the result value on the stack), the
     /// delegation becomes a return completion ([`DelegateStep::Return`]), an
     /// error is routed into the body's try/finally (returns `Continue` after the
-    /// ip is redirected), or the inner iterator yields again
-    /// ([`DelegateStep::Suspend`]).
+    /// ip is redirected), async delegation awaits an inner method result, or
+    /// the inner iterator yields again ([`DelegateStep::Suspend`]).
     pub(super) fn yield_delegate(
         &mut self,
         iterator_slot: usize,
@@ -203,6 +206,9 @@ impl Vm<'_> {
             ResumeMode::Next(value) => {
                 let next = self.load_local(next_slot)?;
                 let outcome = self.call_inner(&next, &iterator, value);
+                if async_delegate {
+                    return self.await_inner(outcome);
+                }
                 match self.classify_inner(outcome)? {
                     Some(InnerStep::Suspend(result)) => Ok(self.suspend_delegate(result)),
                     Some(InnerStep::Done(value)) => {
@@ -213,7 +219,30 @@ impl Vm<'_> {
                     None => Ok(DelegateStep::Continue),
                 }
             }
+            ResumeMode::Awaited(value) => match self.classify_inner(Ok(value))? {
+                Some(InnerStep::Suspend(result)) => Ok(self.suspend_delegate(result)),
+                Some(InnerStep::Done(value)) => {
+                    self.stack.push(value);
+                    Ok(DelegateStep::Continue)
+                }
+                None => Ok(DelegateStep::Continue),
+            },
+            ResumeMode::AwaitRejected(value) => {
+                self.throw_value(value)?;
+                Ok(DelegateStep::Continue)
+            }
         }
+    }
+
+    fn await_inner(
+        &mut self,
+        outcome: Result<Value, RuntimeError>,
+    ) -> Result<DelegateStep, RuntimeError> {
+        let Some(value) = self.handle_runtime_result(outcome)? else {
+            return Ok(DelegateStep::Continue);
+        };
+        self.ip -= 1;
+        Ok(DelegateStep::Await(value))
     }
 
     /// Forwards an outer `throw(v)` into the inner iterator's `throw` method, or

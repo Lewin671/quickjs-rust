@@ -27,6 +27,12 @@ pub(super) enum Completion {
     /// throw is forwarded to the inner iterator rather than delivered at the
     /// `yield*` site.
     YieldDelegate(Value),
+    /// Async `yield*` suspended while awaiting an inner iterator method result
+    /// before it can inspect the iterator-result object. The suspension is not
+    /// consumer-facing; the async-generator driver resumes it through the
+    /// promise job queue, then the same `Op::YieldDelegate` classifies the
+    /// awaited result.
+    YieldDelegateAwait(Value),
     /// The body reached `Op::FunctionPrologueEnd`, the boundary after parameter
     /// instantiation. Used only when starting a generator/async-generator: the
     /// spec performs `FunctionDeclarationInstantiation` synchronously at the
@@ -43,6 +49,8 @@ pub(super) enum ResumeMode {
     Next(Value),
     Return(Value),
     Throw(Value),
+    Awaited(Value),
+    AwaitRejected(Value),
 }
 
 impl FunctionBytecodeResult<'_> {

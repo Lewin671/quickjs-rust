@@ -304,9 +304,7 @@ fn array_from_async_iterator(
         Value::Undefined | Value::Null => Ok(None),
         Value::Function(_) => {
             let sync_iterator = call_function(iterator_method, items, Vec::new(), env, false)?;
-            Ok(Some(
-                crate::async_generator::create_async_from_sync_iterator(sync_iterator, env),
-            ))
+            crate::async_generator::create_async_from_sync_iterator(sync_iterator, env).map(Some)
         }
         _ => Err(RuntimeError {
             thrown: None,

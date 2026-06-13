@@ -61,10 +61,13 @@ pub(crate) struct GeneratorSnapshot {
     capture_writeback: Option<CaptureWriteback>,
     sloppy_global_names: Vec<String>,
     try_stack: Vec<TryFrame>,
-    /// Whether the suspension is inside a `yield*` delegation. When set, a
-    /// resume is forwarded to the inner iterator via `Vm::resume_mode` instead
-    /// of being delivered at the bytecode `yield` point.
-    delegating: bool,
+    suspension: SuspensionKind,
+}
+
+enum SuspensionKind {
+    Ordinary,
+    DelegateYield,
+    DelegateAwait,
 }
 
 /// How a suspended generator is resumed.
@@ -201,7 +204,7 @@ impl Vm<'_> {
     fn into_snapshot(
         self,
         bytecode: Rc<Bytecode>,
-        delegating: bool,
+        suspension: SuspensionKind,
         refresh_captured_slots_on_resume: bool,
         capture_writeback: Option<CaptureWriteback>,
     ) -> GeneratorSnapshot {
@@ -216,7 +219,7 @@ impl Vm<'_> {
             capture_writeback,
             sloppy_global_names: self.sloppy_global_names,
             try_stack: self.try_stack,
-            delegating,
+            suspension,
         }
     }
 }
@@ -250,7 +253,7 @@ pub(crate) fn start_suspended_at_body(
         Ok(Completion::PrologueEnd) => {
             Ok(GeneratorState::SuspendedYield(Box::new(vm.into_snapshot(
                 bytecode.clone(),
-                false,
+                SuspensionKind::Ordinary,
                 refresh_captured_slots_on_resume,
                 capture_writeback,
             ))))
@@ -318,21 +321,40 @@ fn run_from_yield(
     // the re-entered `Op::YieldDelegate` reads `resume_mode` and decides how to
     // drive (next/return/throw) the inner iterator and whether the outer body
     // continues, suspends again, or completes.
-    if snapshot.delegating {
-        vm.resume_mode = Some(match resume {
-            Resume::Next(value) => super::vm_result::ResumeMode::Next(value),
-            Resume::Return(value) => super::vm_result::ResumeMode::Return(value),
-            Resume::Throw(value) => super::vm_result::ResumeMode::Throw(value),
-        });
-        let result = vm.run_completion();
-        return drive(
-            result,
-            vm,
-            &bytecode,
-            caller_env,
-            refresh_captured_slots_on_resume,
-            capture_writeback,
-        );
+    match snapshot.suspension {
+        SuspensionKind::DelegateYield => {
+            vm.resume_mode = Some(match resume {
+                Resume::Next(value) => super::vm_result::ResumeMode::Next(value),
+                Resume::Return(value) => super::vm_result::ResumeMode::Return(value),
+                Resume::Throw(value) => super::vm_result::ResumeMode::Throw(value),
+            });
+            let result = vm.run_completion();
+            return drive(
+                result,
+                vm,
+                &bytecode,
+                caller_env,
+                refresh_captured_slots_on_resume,
+                capture_writeback,
+            );
+        }
+        SuspensionKind::DelegateAwait => {
+            vm.resume_mode = Some(match resume {
+                Resume::Next(value) => super::vm_result::ResumeMode::Awaited(value),
+                Resume::Throw(value) => super::vm_result::ResumeMode::AwaitRejected(value),
+                Resume::Return(value) => super::vm_result::ResumeMode::Return(value),
+            });
+            let result = vm.run_completion();
+            return drive(
+                result,
+                vm,
+                &bytecode,
+                caller_env,
+                refresh_captured_slots_on_resume,
+                capture_writeback,
+            );
+        }
+        SuspensionKind::Ordinary => {}
     }
 
     let started = match resume {
@@ -394,7 +416,7 @@ fn drive(
         Ok(Completion::Yield(value)) => {
             let snapshot = vm.into_snapshot(
                 bytecode.clone(),
-                false,
+                SuspensionKind::Ordinary,
                 refresh_captured_slots_on_resume,
                 capture_writeback,
             );
@@ -410,7 +432,7 @@ fn drive(
             // suspension to a promise reaction instead of to a consumer.
             let snapshot = vm.into_snapshot(
                 bytecode.clone(),
-                false,
+                SuspensionKind::Ordinary,
                 refresh_captured_slots_on_resume,
                 capture_writeback,
             );
@@ -424,13 +446,25 @@ fn drive(
             // iterator's result object, returned to the outer caller unwrapped.
             let snapshot = vm.into_snapshot(
                 bytecode.clone(),
-                true,
+                SuspensionKind::DelegateYield,
                 refresh_captured_slots_on_resume,
                 capture_writeback,
             );
             Ok((
                 GeneratorState::SuspendedYield(Box::new(snapshot)),
                 GeneratorOutcome::YieldDelegate(value),
+            ))
+        }
+        Ok(Completion::YieldDelegateAwait(value)) => {
+            let snapshot = vm.into_snapshot(
+                bytecode.clone(),
+                SuspensionKind::DelegateAwait,
+                refresh_captured_slots_on_resume,
+                capture_writeback,
+            );
+            Ok((
+                GeneratorState::SuspendedYield(Box::new(snapshot)),
+                GeneratorOutcome::Await(value),
             ))
         }
         Ok(Completion::Return(value)) => {

@@ -255,6 +255,60 @@ fn yield_star_uses_async_iterator_protocol() {
 }
 
 #[test]
+fn yield_star_awaits_async_iterator_next_result() {
+    assert_eq!(
+        eval_log(
+            "var o = []; \
+             var obj = { \
+               [Symbol.asyncIterator]() { \
+                 return { next() { return { get then() { throw 'reason'; } }; } }; \
+               } \
+             }; \
+             async function* g() { yield* obj; o.push('after'); } \
+             var it = g(); \
+             it.next().then(() => o.push('fulfilled'), e => o.push(e)); \
+             it.next().then(r => { o.push(r.value); o.push(r.done); }); \
+             o;"
+        ),
+        "reason,undefined,true"
+    );
+}
+
+#[test]
+fn yield_star_sync_fallback_caches_next_method() {
+    assert_eq!(
+        eval_log(
+            "var o = []; \
+             var count = 0; \
+             var obj = { \
+               get [Symbol.asyncIterator]() { o.push('get async'); return null; }, \
+               [Symbol.iterator]() { \
+                 o.push('call sync'); \
+                 return { \
+                   get next() { \
+                     o.push('get next'); \
+                     return function() { \
+                       o.push('call next'); \
+                       count += 1; \
+                       return { value: count, done: count > 1 }; \
+                     }; \
+                   } \
+                 }; \
+               } \
+             }; \
+             async function* g() { var v = yield* obj; o.push('return ' + v); } \
+             var it = g(); \
+             it.next().then(r => { \
+               o.push(r.value); \
+               return it.next('resume'); \
+             }).then(r => { o.push(r.value); o.push(r.done); }); \
+             o;"
+        ),
+        "get async,call sync,get next,call next,1,call next,return 2,undefined,true"
+    );
+}
+
+#[test]
 fn async_generator_method_in_object_literal() {
     assert_eq!(
         eval_log(
