@@ -20,6 +20,18 @@ fn evaluates_array_constructor_length_argument() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "let value = new Array(4294967295); value.length === 4294967295 && !(0 in value) && !(4294967294 in value);"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { new Array(4294967296); } catch (error) { caught = error instanceof RangeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]

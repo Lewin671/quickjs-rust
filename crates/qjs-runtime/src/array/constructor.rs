@@ -37,7 +37,7 @@ pub(crate) fn native_array(
     if let [Value::Number(length)] = argument_values {
         let length = array_length_from_descriptor_value(Value::Number(*length), env)?;
         return Ok(Value::Array(array_with_prototype(
-            ArrayRef::new_sparse(vec![Value::Undefined; length], (0..length).collect()),
+            ArrayRef::new_with_length(length),
             prototype,
         )));
     }
