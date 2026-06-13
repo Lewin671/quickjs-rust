@@ -13,6 +13,7 @@ use crate::{
 
 use super::ir::{ClassMethodDef, ClassMethodKind, ClassPrivateElementDef};
 use super::vm::Vm;
+use super::vm_class::class_method_function_name_with_base;
 
 impl Vm<'_> {
     /// Installs the private elements of a class. Methods and accessors become
@@ -157,7 +158,7 @@ impl Vm<'_> {
             Value::Object(prototype.clone())
         };
         let function = Function::new_user_compiled(CompiledUserFunction {
-            name: def.name.clone(),
+            name: class_method_function_name_with_base(def.method_kind, def.name.clone()),
             params: def.params.clone(),
             env: method_env.clone(),
             bytecode: def.bytecode.clone(),

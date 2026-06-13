@@ -9,6 +9,12 @@ cases/builtin-to-string-tag-symbol-properties.js
 cases/block-lexical-native-call-isolation.js
 cases/class-binding-reserved-names.js
 cases/class-static-block-early-errors.js
+test/language/statements/class/definition/fn-name-accessor-get.js
+test/language/statements/class/definition/fn-name-accessor-set.js
+test/language/statements/class/definition/fn-name-gen-method.js
+test/language/statements/class/definition/fn-name-method.js
+test/language/statements/class/definition/fn-name-static-precedence-order.js
+test/language/statements/class/definition/fn-name-static-precedence.js
 test/language/statements/class/ident-name-method-def-break-escaped.js
 test/language/statements/class/ident-name-method-def-continue-escaped.js
 test/language/statements/class/ident-name-method-def-extends.js

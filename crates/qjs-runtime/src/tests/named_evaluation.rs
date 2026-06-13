@@ -156,6 +156,47 @@ fn computed_field_key_value_is_unnamed() {
     );
 }
 
+#[test]
+fn class_method_names_use_property_keys_and_accessor_prefixes() {
+    assert_eq!(
+        name_of(
+            "let anon = Symbol(); \
+             let named = Symbol('test262'); \
+             class C { \
+               id() {} \
+               *gen() {} \
+               [anon]() {} \
+               [named]() {} \
+               get x() {} \
+               set x(v) {} \
+               static id() {} \
+               static *gen() {} \
+               static [anon]() {} \
+               static [named]() {} \
+               static get y() {} \
+               static set y(v) {} \
+             } \
+             let px = Object.getOwnPropertyDescriptor(C.prototype, 'x'); \
+             let cy = Object.getOwnPropertyDescriptor(C, 'y'); \
+             [ \
+               C.prototype.id.name, \
+               C.prototype.gen.name, \
+               C.prototype[anon].name, \
+               C.prototype[named].name, \
+               px.get.name, \
+               px.set.name, \
+               C.id.name, \
+               C.gen.name, \
+               C[anon].name, \
+               C[named].name, \
+               cy.get.name, \
+               cy.set.name \
+             ].join('|')"
+        ),
+        "id|gen||[test262]|get x|set x|id|gen||[test262]|get y|set y"
+    );
+}
+
 // --- Logical assignment ----------------------------------------------------
 
 #[test]

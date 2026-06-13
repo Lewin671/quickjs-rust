@@ -3,7 +3,9 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use crate::{
     Function, ObjectRef, Property, PropertyKey, RuntimeError, Value, array_as_object_prototype,
     function::{CompiledUserFunction, InstanceFieldInitializer},
-    object, object_prototype, property_value, to_property_key_value,
+    object, object_prototype, property_value,
+    symbol::symbol_function_name_description,
+    to_property_key_value,
 };
 use crate::{
     call_function, construct_function, property_value_key_with_receiver, value_prototype_slot,
@@ -221,7 +223,7 @@ impl Vm<'_> {
             Value::Object(prototype.clone())
         };
         let method_function = Function::new_user_compiled(CompiledUserFunction {
-            name: method.name.clone(),
+            name: class_method_function_name(method, &key),
             params: method.params.clone(),
             env: method_env.clone(),
             bytecode: method.bytecode.clone(),
@@ -603,6 +605,40 @@ fn resolve_element_key(
         ClassMemberKeyDef::Computed => computed_keys
             .next()
             .expect("computed key count matches elements"),
+    }
+}
+
+pub(super) fn class_method_function_name(
+    method: &ClassMethodDef,
+    key: &PropertyKey,
+) -> Option<String> {
+    let base_name = method
+        .name
+        .clone()
+        .or_else(|| function_name_from_property_key(key));
+    class_method_function_name_with_base(method.method_kind, base_name)
+}
+
+pub(super) fn class_method_function_name_with_base(
+    kind: ClassMethodKind,
+    base_name: Option<String>,
+) -> Option<String> {
+    match kind {
+        ClassMethodKind::Method => base_name,
+        ClassMethodKind::Getter => Some(format!("get {}", base_name.unwrap_or_default())),
+        ClassMethodKind::Setter => Some(format!("set {}", base_name.unwrap_or_default())),
+    }
+}
+
+fn function_name_from_property_key(key: &PropertyKey) -> Option<String> {
+    match key {
+        PropertyKey::String(name) => Some(name.clone()),
+        PropertyKey::Symbol(symbol) => {
+            let name = symbol_function_name_description(symbol)
+                .map(|description| format!("[{description}]"))
+                .unwrap_or_default();
+            Some(name)
+        }
     }
 }
 

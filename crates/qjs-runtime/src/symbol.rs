@@ -238,6 +238,13 @@ pub(crate) fn symbol_descriptive_string(object: &ObjectRef) -> String {
     symbol_description_string(symbol_description(object))
 }
 
+pub(crate) fn symbol_function_name_description(object: &ObjectRef) -> Option<String> {
+    match symbol_description(object) {
+        Value::String(description) => Some(description),
+        _ => None,
+    }
+}
+
 pub(crate) fn to_string_tag_symbol(env: &CallEnv) -> Option<ObjectRef> {
     well_known_symbol(env, "toStringTag")
 }
