@@ -5,6 +5,7 @@ use crate::{Function, NativeFunction, ObjectRef, Property, Value};
 
 pub(crate) fn install_object(env: &mut CallEnv, global_this: &Value) -> ObjectRef {
     let object_prototype = ObjectRef::new(HashMap::new());
+    object_prototype.mark_immutable_prototype_exotic();
     let object_function = Function::new_native(Some("Object"), 1, NativeFunction::Object, true);
     object_prototype.define_non_enumerable(
         "constructor".to_owned(),

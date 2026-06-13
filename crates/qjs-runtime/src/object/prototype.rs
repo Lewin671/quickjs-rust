@@ -382,26 +382,46 @@ fn lookup_accessor_half(property: Property, half: AccessorHalf) -> Option<Value>
 pub(crate) fn native_object_prototype_is_prototype_of(
     this_value: Value,
     argument_values: &[Value],
-    env: &CallEnv,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    let Some(target_prototype) = value_prototype_slot(target, env) else {
+    let mut target = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    if !is_prototype_object(&target) {
         return Ok(Value::Boolean(false));
-    };
-    match this_value {
-        Value::Null | Value::Undefined => Err(RuntimeError {
+    }
+    if matches!(this_value, Value::Null | Value::Undefined) {
+        return Err(RuntimeError {
             thrown: None,
             message: "isPrototypeOf called on non-object".to_owned(),
-        }),
-        // `this` may be any object (including a function, an array, ...); a
-        // primitive `this` can never appear in a prototype chain.
-        Value::String(_) | Value::Number(_) | Value::BigInt(_) | Value::Boolean(_) => {
-            Ok(Value::Boolean(false))
-        }
-        this_value => Ok(Value::Boolean(
-            target_prototype.chain_contains_value(&this_value),
-        )),
+        });
     }
+    loop {
+        target = immediate_prototype_value(target, env)?;
+        if matches!(target, Value::Null) {
+            return Ok(Value::Boolean(false));
+        }
+        if target.same_value(&this_value) {
+            return Ok(Value::Boolean(true));
+        }
+    }
+}
+
+fn is_prototype_object(value: &Value) -> bool {
+    match value {
+        Value::Object(object) => !symbol::is_symbol_primitive(object),
+        Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) | Value::Proxy(_) => {
+            true
+        }
+        _ => false,
+    }
+}
+
+fn immediate_prototype_value(value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+    if let Value::Proxy(proxy) = value {
+        return crate::proxy::proxy_get_prototype_of(proxy, env);
+    }
+    Ok(value_prototype_slot(value, env)
+        .map(|prototype| prototype.to_value())
+        .unwrap_or(Value::Null))
 }
 
 pub(crate) fn native_object_prototype_to_string(

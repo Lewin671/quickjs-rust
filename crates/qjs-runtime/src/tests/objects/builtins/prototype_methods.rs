@@ -88,3 +88,67 @@ fn evaluates_object_prototype_methods() {
         Ok(Value::Boolean(true))
     );
 }
+
+#[test]
+fn object_prototype_has_immutable_prototype() {
+    assert_eq!(
+        eval("Reflect.setPrototypeOf(Object.prototype, Object.create(null));"),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval("Reflect.setPrototypeOf(Object.prototype, null);"),
+        Ok(Value::Boolean(true))
+    );
+    assert!(
+        eval("Object.setPrototypeOf(Object.prototype, Object.create(null));")
+            .expect_err("Object.setPrototypeOf must reject Object.prototype prototype changes")
+            .message
+            .contains("Object.setPrototypeOf failed")
+    );
+    assert_eq!(
+        eval(
+            "let proto = {}; let object = {}; Object.setPrototypeOf(object, proto) === object && Object.getPrototypeOf(object) === proto;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let root = {}; \
+             let intermediary = new Proxy(Object.create(root), {}); \
+             let leaf = Object.create(intermediary); \
+             root.__proto__ = leaf; \
+             Object.getPrototypeOf(root) === leaf;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn object_prototype_is_prototype_of_order_and_proxy() {
+    assert_eq!(
+        eval(
+            "Object.prototype.isPrototypeOf.call(null, undefined) === false && \
+             Object.prototype.isPrototypeOf.call(null, null) === false && \
+             Object.prototype.isPrototypeOf.call(null, 10) === false && \
+             Object.prototype.isPrototypeOf.call(undefined, true) === false && \
+             Object.prototype.isPrototypeOf.call(undefined, 'str') === false && \
+             Object.prototype.isPrototypeOf.call(undefined, Symbol('desc')) === false;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert!(
+        eval("Object.prototype.isPrototypeOf.call(null, {});")
+            .expect_err("object argument should require the null receiver to be object-coercible")
+            .message
+            .contains("isPrototypeOf")
+    );
+    assert_eq!(
+        eval(
+            "let proxyProto = []; \
+             let log = ''; \
+             let proxy = new Proxy({}, { getPrototypeOf: function() { log += 'g'; return proxyProto; } }); \
+             proxyProto.isPrototypeOf(proxy) + ':' + log;"
+        ),
+        Ok(Value::String("true:g".to_owned()))
+    );
+}

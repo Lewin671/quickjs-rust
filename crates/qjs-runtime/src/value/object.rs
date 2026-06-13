@@ -114,15 +114,14 @@ impl Prototype {
     /// reject prototype cycles.
     fn would_cycle(&self, target: &ObjectRef) -> bool {
         match self {
-            Self::Object(object) => object.ptr_eq(target) || object.has_prototype(target),
+            Self::Object(object) => {
+                object.ptr_eq(target)
+                    || object
+                        .prototype_slot()
+                        .is_some_and(|prototype| prototype.would_cycle(target))
+            }
             Self::Function(_) => false,
-            Self::Proxy(proxy) => match proxy.target_result() {
-                Ok(Value::Object(object)) => object.ptr_eq(target) || object.has_prototype(target),
-                Ok(proxy_target) => {
-                    crate::property::value_has_prototype_object(proxy_target, target)
-                }
-                Err(_) => false,
-            },
+            Self::Proxy(_) => false,
         }
     }
 
@@ -161,6 +160,7 @@ pub struct ObjectRef {
     to_string_tag: Rc<RefCell<Option<String>>>,
     raw_json: Rc<Cell<bool>>,
     array_prototype_exotic: Rc<Cell<bool>>,
+    immutable_prototype_exotic: Rc<Cell<bool>>,
     /// Generator [[GeneratorState]] for generator objects; `None` for ordinary
     /// objects. Lazily allocated so non-generator objects pay only one `Rc`.
     generator_state: Rc<RefCell<Option<crate::bytecode::GeneratorState>>>,
@@ -184,6 +184,10 @@ impl fmt::Debug for ObjectRef {
             .field("to_string_tag", &self.to_string_tag.borrow())
             .field("raw_json", &self.raw_json.get())
             .field("array_prototype_exotic", &self.array_prototype_exotic.get())
+            .field(
+                "immutable_prototype_exotic",
+                &self.immutable_prototype_exotic.get(),
+            )
             .finish()
     }
 }
@@ -225,6 +229,7 @@ impl ObjectRef {
             to_string_tag: Rc::new(RefCell::new(None)),
             raw_json: Rc::new(Cell::new(false)),
             array_prototype_exotic: Rc::new(Cell::new(false)),
+            immutable_prototype_exotic: Rc::new(Cell::new(false)),
             generator_state: Rc::new(RefCell::new(None)),
             async_generator_state: Rc::new(RefCell::new(None)),
             private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
@@ -285,6 +290,10 @@ impl ObjectRef {
         self.array_prototype_exotic.get()
     }
 
+    pub(crate) fn mark_immutable_prototype_exotic(&self) {
+        self.immutable_prototype_exotic.set(true);
+    }
+
     pub(crate) fn get(&self, key: &str) -> Option<Value> {
         self.properties
             .borrow()
@@ -333,6 +342,9 @@ impl ObjectRef {
     pub(crate) fn set_prototype_slot(&self, prototype: Option<Prototype>) -> Result<(), ()> {
         if same_prototype_slot(self.prototype.borrow().as_ref(), prototype.as_ref()) {
             return Ok(());
+        }
+        if self.immutable_prototype_exotic.get() {
+            return Err(());
         }
         if !self.extensible.get() {
             return Err(());
