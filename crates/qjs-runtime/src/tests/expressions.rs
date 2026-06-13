@@ -485,6 +485,62 @@ fn evaluates_destructuring_assignment_expressions() {
 }
 
 #[test]
+fn assignment_in_with_uses_initial_reference() {
+    assert_eq!(
+        eval(
+            "function testFunction() {
+               var x = 0;
+               var scope = {x: 1};
+               with (scope) {
+                 x = (delete scope.x, 2);
+               }
+               return scope.x + ':' + x;
+             }
+             testFunction();"
+        ),
+        Ok(Value::String("2:0".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var x = 0;
+             var scope = {x: 1};
+             with (scope) {
+               x = (delete scope.x, 2);
+             }
+             scope.x + ':' + x;"
+        ),
+        Ok(Value::String("2:0".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var outerScope = {x: 0};
+             var innerScope = {x: 1};
+             with (outerScope) {
+               with (innerScope) {
+                 x = (delete innerScope.x, 2);
+               }
+             }
+             innerScope.x + ':' + outerScope.x;"
+        ),
+        Ok(Value::String("2:0".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "function testAssignment() {
+               var x = 0;
+               var scope = {};
+               with (scope) {
+                 x = (scope.x = 2, 1);
+               }
+               return scope.x + ':' + x;
+             }
+             testAssignment();"
+        ),
+        Ok(Value::String("2:1".to_owned()))
+    );
+}
+
+#[test]
 fn assignments_respect_lexical_tdz() {
     assert_eq!(
         eval(

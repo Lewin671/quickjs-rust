@@ -70,7 +70,6 @@ pub(super) struct Vm<'a> {
     /// Enclosing `with` object-environment records, innermost last.
     pub(super) with_stack: Vec<Value>,
 }
-
 impl<'a> Vm<'a> {
     pub(super) fn new(bytecode: &'a Bytecode) -> Result<Self, RuntimeError> {
         let mut globals = HashMap::new();
@@ -258,7 +257,9 @@ impl<'a> Vm<'a> {
                 op @ (Op::EnterWith
                 | Op::ExitWith
                 | Op::LoadIdentWith { .. }
+                | Op::ResolveIdentWith { .. }
                 | Op::StoreIdentWith { .. }
+                | Op::StoreResolvedIdentWith { .. }
                 | Op::TypeofIdentWith { .. }) => {
                     self.run_with_op(op)?;
                 }

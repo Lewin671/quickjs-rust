@@ -31,6 +31,12 @@ impl Vm<'_> {
                     self.stack.push(value);
                 }
             }
+            Op::ResolveIdentWith {
+                name, object_slot, ..
+            } => {
+                let result = self.resolve_ident_with(&name, object_slot);
+                self.handle_runtime_result(result)?;
+            }
             Op::StoreIdentWith {
                 name,
                 slot,
@@ -38,6 +44,17 @@ impl Vm<'_> {
             } => {
                 let value = self.pop()?;
                 let result = self.store_ident_with(&name, slot, is_strict, value);
+                self.handle_runtime_result(result)?;
+            }
+            Op::StoreResolvedIdentWith {
+                name,
+                slot,
+                object_slot,
+                is_strict,
+            } => {
+                let value = self.pop()?;
+                let result =
+                    self.store_resolved_ident_with(&name, slot, object_slot, is_strict, value);
                 self.handle_runtime_result(result)?;
             }
             Op::TypeofIdentWith { name, slot } => {
@@ -257,6 +274,47 @@ impl Vm<'_> {
             None => {
                 self.store_global_sloppy(name.to_owned(), value)?;
                 self.record_sloppy_global_name(name);
+                Ok(())
+            }
+        }
+    }
+
+    pub(super) fn resolve_ident_with(
+        &mut self,
+        name: &str,
+        object_slot: usize,
+    ) -> Result<(), RuntimeError> {
+        let value = self.with_binding_object(name)?.unwrap_or(Value::Undefined);
+        self.store_local(object_slot, value)
+    }
+
+    pub(super) fn store_resolved_ident_with(
+        &mut self,
+        name: &str,
+        slot: Option<usize>,
+        object_slot: usize,
+        is_strict: bool,
+        value: Value,
+    ) -> Result<(), RuntimeError> {
+        match self.load_local(object_slot)? {
+            Value::Undefined => match slot {
+                Some(slot) => self.assign_local(slot, value),
+                None if is_strict => self.store_global_strict(name.to_owned(), value),
+                None => {
+                    self.store_global_sloppy(name.to_owned(), value)?;
+                    self.record_sloppy_global_name(name);
+                    Ok(())
+                }
+            },
+            object => {
+                let mut env = self.current_env();
+                set_property_key(
+                    object,
+                    PropertyKey::String(name.to_owned()),
+                    value,
+                    &mut env,
+                )?;
+                self.apply_env(env);
                 Ok(())
             }
         }

@@ -19,11 +19,18 @@ impl Compiler {
                 // name. Member targets (`obj.x = <anon>`) never do.
                 let slot = self.resolve_local_slot(name);
                 if self.inside_with() {
-                    self.compile_named_expr(value, name)?;
-                    self.emit(Op::Dup);
-                    self.emit(Op::StoreIdentWith {
+                    let object_slot = self.temp_local("with_assignment_object");
+                    self.emit(Op::ResolveIdentWith {
                         name: name.clone(),
                         slot,
+                        object_slot,
+                    });
+                    self.compile_named_expr(value, name)?;
+                    self.emit(Op::Dup);
+                    self.emit(Op::StoreResolvedIdentWith {
+                        name: name.clone(),
+                        slot,
+                        object_slot,
                         is_strict: self.strict,
                     });
                     return Ok(());

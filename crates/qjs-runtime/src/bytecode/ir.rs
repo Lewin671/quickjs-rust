@@ -37,12 +37,27 @@ pub(super) enum Op {
         name: String,
         slot: Option<usize>,
     },
+    /// Resolves an identifier assignment target inside a `with` body before
+    /// the RHS runs. Stores the selected with-object, or undefined when the
+    /// assignment should fall back to the ordinary lexical/global target.
+    ResolveIdentWith {
+        name: String,
+        slot: Option<usize>,
+        object_slot: usize,
+    },
     /// Stores to an identifier from inside a `with` body, mirroring
     /// `LoadIdentWith` resolution. `is_strict` selects strict vs sloppy global
     /// store semantics for the fallback.
     StoreIdentWith {
         name: String,
         slot: Option<usize>,
+        is_strict: bool,
+    },
+    /// Stores to the target previously captured by `ResolveIdentWith`.
+    StoreResolvedIdentWith {
+        name: String,
+        slot: Option<usize>,
+        object_slot: usize,
         is_strict: bool,
     },
     /// `typeof name` from inside a `with` body, never throwing for an unresolved
@@ -567,7 +582,13 @@ fn collect_global_names_from_ops(code: &[Op], names: &mut BTreeSet<String>) {
                 names.insert(name.clone());
             }
             Op::LoadIdentWith { name, slot: None }
+            | Op::ResolveIdentWith {
+                name, slot: None, ..
+            }
             | Op::StoreIdentWith {
+                name, slot: None, ..
+            }
+            | Op::StoreResolvedIdentWith {
                 name, slot: None, ..
             }
             | Op::TypeofIdentWith { name, slot: None } => {
