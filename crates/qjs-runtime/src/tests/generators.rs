@@ -650,3 +650,34 @@ fn generator_function_constructor_creates_dynamic_generators() {
         "2:anonymous:false:false:true:false:false:true:0:false:true:false:false"
     );
 }
+
+#[test]
+fn generator_function_constructor_realm_surface() {
+    assert_eq!(
+        string(
+            "let GeneratorFunction = Object.getPrototypeOf(function* () {}).constructor; \
+             let descriptor = Object.getOwnPropertyDescriptor(GeneratorFunction, 'prototype'); \
+             [descriptor.writable, descriptor.enumerable, descriptor.configurable].join(':');"
+        ),
+        "false:false:false"
+    );
+    assert!(boolean(
+        "let GeneratorFunction = Object.getPrototypeOf(function* () {}).constructor; \
+         let realmPrototype = {}; \
+         function C() {} \
+         Object.defineProperty(C, '__quickjsRustRealmGeneratorFunctionPrototype', { value: realmPrototype }); \
+         C.prototype = null; \
+         Object.getPrototypeOf(Reflect.construct(GeneratorFunction, [], C)) === realmPrototype;"
+    ));
+    assert_eq!(
+        number(
+            "let GeneratorFunction = Object.getPrototypeOf(function* () {}).constructor; \
+             let realm = { calls: 0 }; \
+             __quickjsRustDynamicFunctionRealm = realm; \
+             let g = GeneratorFunction('calls += 1;'); \
+             __quickjsRustDynamicFunctionRealm = undefined; \
+             g().next(); realm.calls;"
+        ),
+        1.0
+    );
+}

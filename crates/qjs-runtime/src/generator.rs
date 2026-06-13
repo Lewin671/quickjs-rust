@@ -88,7 +88,7 @@ pub(crate) fn install_generator(
             Value::Object(generator_function_prototype.clone()),
             false,
             false,
-            true,
+            false,
         ),
     );
     generator_function_prototype.define_property(

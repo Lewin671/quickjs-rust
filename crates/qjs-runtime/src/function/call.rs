@@ -12,6 +12,8 @@ use super::{
     is_internal_binding_name, parameter_binding_name, rest_parameter_binding_name,
 };
 
+const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
+
 pub(crate) fn call_function(
     callee: Value,
     this_value: Value,
@@ -841,12 +843,24 @@ fn write_function_capture_values(
     if names.is_empty() {
         return;
     }
+    let realm_global = target
+        .borrow()
+        .get(DYNAMIC_FUNCTION_REALM_GLOBAL)
+        .and_then(|value| match value {
+            Value::Object(object) => Some(object.clone()),
+            _ => None,
+        });
     let mut captured_env = target.borrow_mut();
     for name in names {
         if !is_call_frame_binding(name)
             && let Some(final_value) = result.binding(name)
         {
-            captured_env.insert(name.clone(), final_value);
+            captured_env.insert(name.clone(), final_value.clone());
+            if let Some(global) = &realm_global
+                && global.has_own_property(name)
+            {
+                global.define_property(name.clone(), crate::Property::enumerable(final_value));
+            }
         }
     }
 }

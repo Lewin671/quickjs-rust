@@ -19,6 +19,8 @@ use super::vm_result::Completion;
 use super::vm_try::TryFrame;
 use crate::CallEnv;
 
+const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
+
 /// The lifecycle state of a generator object (ES2023 27.5.3 [[GeneratorState]]).
 pub(crate) enum GeneratorState {
     /// Created but never resumed: the first `next` runs the body from the top.
@@ -195,6 +197,14 @@ impl Vm<'_> {
         let Some(writeback) = writeback else {
             return;
         };
+        let realm_global = writeback
+            .target
+            .borrow()
+            .get(DYNAMIC_FUNCTION_REALM_GLOBAL)
+            .and_then(|value| match value {
+                Value::Object(object) => Some(object.clone()),
+                _ => None,
+            });
         let mut target = writeback.target.borrow_mut();
         for name in &writeback.names {
             if crate::function::is_internal_binding_name(name)
@@ -206,7 +216,12 @@ impl Vm<'_> {
                 continue;
             }
             if let Some(value) = self.binding_value(name) {
-                target.insert(name.clone(), value);
+                target.insert(name.clone(), value.clone());
+                if let Some(global) = &realm_global
+                    && global.has_own_property(name)
+                {
+                    global.define_property(name.clone(), crate::Property::enumerable(value));
+                }
             }
         }
     }

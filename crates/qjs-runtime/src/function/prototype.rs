@@ -6,9 +6,13 @@ use qjs_parser::parse_script;
 use crate::CallEnv;
 use crate::function::CompiledUserFunction;
 use crate::{
-    Function, GLOBAL_THIS_BINDING, RuntimeError, Value, array::array_like_values_with_env,
-    object::boxed_primitive, property_value, to_js_string_with_env, to_length_with_env,
+    Function, GLOBAL_THIS_BINDING, Prototype, RuntimeError, Value,
+    array::array_like_values_with_env, object::boxed_primitive, property_value,
+    to_js_string_with_env, to_length_with_env,
 };
+
+const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
+const GENERATOR_FUNCTION_REALM_PROTOTYPE: &str = "__quickjsRustRealmGeneratorFunctionPrototype";
 
 pub(crate) fn native_function(
     constructor: &Function,
@@ -37,7 +41,12 @@ pub(crate) fn native_function(
         });
     };
 
-    let created = Function::new_user(Some(name), params, body, env.to_flat_map())?;
+    let created = Function::new_user(
+        Some(name),
+        params,
+        body,
+        dynamic_function_scope_snapshot(env),
+    )?;
     created
         .set_internal_prototype_slot(crate::native_construct_prototype_slot(constructor, env)?)
         .map_err(|_| RuntimeError {
@@ -82,7 +91,7 @@ pub(crate) fn native_generator_function(
     let local_names =
         crate::function::collect_function_local_names(Some(&name), &params, &body, true);
     let bytecode = crate::bytecode::compile_generator_function_body(&params, &body, is_strict)?;
-    let env_snapshot = env.to_flat_map();
+    let env_snapshot = dynamic_function_scope_snapshot(env);
     let created = Function::new_user_compiled(CompiledUserFunction {
         name: Some(name),
         has_name_binding: true,
@@ -106,12 +115,44 @@ pub(crate) fn native_generator_function(
     });
     crate::generator::wire_generator_function_intrinsics(&created, env);
     created
-        .set_internal_prototype_slot(crate::native_construct_prototype_slot(constructor, env)?)
+        .set_internal_prototype_slot(generator_construct_prototype_slot(constructor, env)?)
         .map_err(|_| RuntimeError {
             thrown: None,
             message: "TypeError: dynamic generator function prototype could not be set".to_owned(),
         })?;
     Ok(Value::Function(created))
+}
+
+fn generator_construct_prototype_slot(
+    constructor: &Function,
+    env: &mut CallEnv,
+) -> Result<Option<Prototype>, RuntimeError> {
+    if let Some(Value::Function(new_target)) = env.get(crate::NEW_TARGET_BINDING)
+        && let Some(Value::Object(realm_prototype)) = new_target
+            .own_property(GENERATOR_FUNCTION_REALM_PROTOTYPE)
+            .map(|property| property.value)
+    {
+        let prototype = property_value(Value::Function(new_target), "prototype", env)?;
+        if !matches!(
+            prototype,
+            Value::Object(_) | Value::Function(_) | Value::Array(_) | Value::Proxy(_)
+        ) {
+            return Ok(Some(Prototype::Object(realm_prototype)));
+        }
+    }
+    crate::native_construct_prototype_slot(constructor, env)
+}
+
+fn dynamic_function_scope_snapshot(env: &CallEnv) -> std::collections::HashMap<String, Value> {
+    let mut snapshot = env.to_flat_map();
+    if let Some(Value::Object(global)) = env.get(DYNAMIC_FUNCTION_REALM_GLOBAL) {
+        for name in global.own_property_names() {
+            if let Some(property) = global.own_property(&name) {
+                snapshot.insert(name, property.value);
+            }
+        }
+    }
+    snapshot
 }
 
 fn function_source_parts(

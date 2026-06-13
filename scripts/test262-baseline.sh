@@ -248,6 +248,7 @@ split_entries() {
 }
 emit_test262_host_shim() {
   cat <<'EOF'
+var __quickjsRustDynamicFunctionRealm;
 var $262 = {
   IsHTMLDDA: __quickjsRustIsHTMLDDA,
   detachArrayBuffer: __quickjsRustDetachArrayBuffer,
@@ -261,16 +262,61 @@ var $262 = {
     Object.defineProperty(crossRealmArray, "__quickjsRustCrossRealmArray", {
       value: true
     });
+    var intrinsicGeneratorFunction = Object.getPrototypeOf(function* () {}).constructor;
+    var realmGeneratorPrototype = Object.create(
+      Object.getPrototypeOf((function* () {}).prototype)
+    );
+    var crossRealmGeneratorFunction = function GeneratorFunction() {
+      var previousRealm = __quickjsRustDynamicFunctionRealm;
+      __quickjsRustDynamicFunctionRealm = realmGlobal;
+      try {
+        var newTarget = new.target || crossRealmGeneratorFunction;
+        var fn = intrinsicGeneratorFunction.apply(null, arguments);
+        Object.setPrototypeOf(fn.prototype, realmGeneratorPrototype);
+        var prototype = newTarget.prototype;
+        if (prototype !== null && (typeof prototype === "object" || typeof prototype === "function")) {
+          Object.setPrototypeOf(fn, prototype);
+        } else {
+          var fallback = newTarget.__quickjsRustRealmGeneratorFunctionPrototype;
+          if (fallback !== undefined) {
+            Object.setPrototypeOf(fn, fallback);
+          }
+        }
+        return fn;
+      } finally {
+        __quickjsRustDynamicFunctionRealm = previousRealm;
+      }
+    };
+    crossRealmGeneratorFunction.prototype = Object.create(
+      Object.getPrototypeOf(function* () {})
+    );
+    Object.defineProperty(crossRealmGeneratorFunction.prototype, "constructor", {
+      value: crossRealmGeneratorFunction,
+      writable: false,
+      enumerable: false,
+      configurable: true
+    });
     var crossRealmFunction = function Function() {
       var fn = globalThis.Function.apply(this, arguments);
       Object.defineProperty(fn, "__quickjsRustRealmArrayPrototype", {
         value: crossRealmArray.prototype
+      });
+      Object.defineProperty(fn, "__quickjsRustRealmGeneratorFunctionPrototype", {
+        value: crossRealmGeneratorFunction.prototype
       });
       return fn;
     };
     var realmGlobal = Object.create(globalThis);
     realmGlobal.Array = crossRealmArray;
     realmGlobal.Function = crossRealmFunction;
+    realmGlobal.eval = function(source) {
+      var value = (0, eval)(source);
+      if (typeof value === "function" && value.constructor === intrinsicGeneratorFunction) {
+        Object.setPrototypeOf(value, crossRealmGeneratorFunction.prototype);
+        Object.setPrototypeOf(value.prototype, realmGeneratorPrototype);
+      }
+      return value;
+    };
     return { global: realmGlobal };
   }
 };
