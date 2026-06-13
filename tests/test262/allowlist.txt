@@ -9,6 +9,7 @@ cases/builtin-to-string-tag-symbol-properties.js
 cases/block-lexical-native-call-isolation.js
 cases/class-binding-reserved-names.js
 cases/class-static-block-early-errors.js
+test/language/statements/class/static-init-await-binding-valid.js
 cases/date-symbol-to-primitive-basic.js
 cases/function-symbol-has-instance-basic.js
 cases/symbol-to-primitive-coercion-basic.js

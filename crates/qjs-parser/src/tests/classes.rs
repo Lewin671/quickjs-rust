@@ -489,6 +489,12 @@ fn static_block_context_does_not_cross_function_boundaries() {
 }
 
 #[test]
+fn static_block_context_does_not_cross_arrow_body_boundary() {
+    parse_script("class C { static { (() => { class await {} }); } }")
+        .expect("arrow body should reset static block early-error context");
+}
+
+#[test]
 fn allows_super_property_in_field_initializer() {
     parse_script("class C extends D { x = super.y; }")
         .expect("super.x is allowed in a field initializer");

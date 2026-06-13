@@ -197,16 +197,21 @@ impl Parser {
             .expect("parser should always have eof token")
             .span
             .start;
+        let previous_static_block = self.in_static_block;
+        self.in_static_block = false;
         let body = if self.at(&TokenKind::LeftBrace) {
-            self.block_body()?
+            self.block_body()
         } else {
-            let expr = self.assignment()?;
-            let span = expr.span();
-            vec![Stmt::Return {
-                argument: Some(expr),
-                span,
-            }]
+            self.assignment().map(|expr| {
+                let span = expr.span();
+                vec![Stmt::Return {
+                    argument: Some(expr),
+                    span,
+                }]
+            })
         };
+        self.in_static_block = previous_static_block;
+        let body = body?;
         if !params.is_simple() && body_has_strict_directive(&body) {
             return Err(ParseError {
                 message: "strict directive not allowed with non-simple parameters".to_owned(),
