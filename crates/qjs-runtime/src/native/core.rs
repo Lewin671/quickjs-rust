@@ -73,6 +73,14 @@ pub(super) fn call_core_native(
             is_construct,
             env,
         ),
+        NativeFunction::GeneratorFunction => Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: GeneratorFunction constructor is not implemented".to_owned(),
+        }),
+        NativeFunction::AsyncFunction => Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: AsyncFunction constructor is not implemented".to_owned(),
+        }),
         NativeFunction::AsyncGeneratorFunction => Err(RuntimeError {
             thrown: None,
             message: "TypeError: AsyncGeneratorFunction constructor is not implemented".to_owned(),

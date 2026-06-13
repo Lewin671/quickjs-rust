@@ -457,13 +457,13 @@ fn builtin_to_string_tag(value: Value) -> Result<String, RuntimeError> {
         }
         Value::String(_) => "String".to_owned(),
         Value::Number(_) => "Number".to_owned(),
-        Value::BigInt(_) => "BigInt".to_owned(),
+        Value::BigInt(_) => "Object".to_owned(),
         Value::Boolean(_) => "Boolean".to_owned(),
         Value::Object(object) => {
             if boolean::is_boolean_object(&object) {
                 "Boolean".to_owned()
             } else if bigint::is_bigint_object(&object) {
-                "BigInt".to_owned()
+                "Object".to_owned()
             } else if number::is_number_object(&object) {
                 "Number".to_owned()
             } else if string::is_string_object(&object) {

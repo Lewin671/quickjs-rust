@@ -243,9 +243,15 @@ pub(crate) enum NativeFunction {
     MathTan,
     MathTanh,
     MathTrunc,
+    /// `%GeneratorFunction%`: reachable through generator function
+    /// `.constructor`, but not exposed as a global binding.
+    GeneratorFunction,
     GeneratorPrototypeNext,
     GeneratorPrototypeReturn,
     GeneratorPrototypeThrow,
+    /// `%AsyncFunction%`: reachable through async function `.constructor`, but
+    /// not exposed as a global binding.
+    AsyncFunction,
     /// `%AsyncGeneratorFunction%`: reachable through async generator function
     /// `.constructor`, but not exposed as a global binding.
     AsyncGeneratorFunction,

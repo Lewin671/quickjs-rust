@@ -68,12 +68,28 @@ pub(crate) fn install_generator(
     // `%GeneratorFunction.prototype%` is the [[Prototype]] every generator
     // function points at. Its own [[Prototype]] is `%Function.prototype%`, it
     // exposes `%GeneratorPrototype%` as its `prototype`, and carries the
-    // "GeneratorFunction" toStringTag. The callable `%GeneratorFunction%`
-    // constructor itself is not yet installed (follow-up), so `constructor` and
-    // a global `GeneratorFunction` binding are absent for now.
+    // "GeneratorFunction" toStringTag.
     let generator_function_prototype = ObjectRef::with_prototype(
         HashMap::new(),
         function_intrinsic_prototype(env).or(Some(object_prototype)),
+    );
+    let generator_function = Function::new_native(
+        Some("GeneratorFunction"),
+        1,
+        NativeFunction::GeneratorFunction,
+        true,
+    );
+    let _ = generator_function.set_internal_prototype_slot(
+        function_intrinsic_prototype(env).map(crate::Prototype::Object),
+    );
+    generator_function.properties.borrow_mut().insert(
+        "prototype".to_owned(),
+        Property::data(
+            Value::Object(generator_function_prototype.clone()),
+            false,
+            false,
+            true,
+        ),
     );
     generator_function_prototype.define_property(
         "prototype".to_owned(),
@@ -90,15 +106,19 @@ pub(crate) fn install_generator(
         &generator_function_prototype,
         "GeneratorFunction",
     );
-    // %GeneratorPrototype%.constructor is %GeneratorFunction.prototype%.
-    generator_prototype.define_property(
+    generator_function_prototype.define_property(
         "constructor".to_owned(),
         Property::data(
-            Value::Object(generator_function_prototype.clone()),
+            Value::Function(generator_function.clone()),
             false,
             false,
             true,
         ),
+    );
+    // %GeneratorPrototype%.constructor is %GeneratorFunction%.
+    generator_prototype.define_property(
+        "constructor".to_owned(),
+        Property::data(Value::Function(generator_function), false, false, true),
     );
 
     env.insert_realm(

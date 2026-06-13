@@ -17,7 +17,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::CallEnv;
 use crate::{
-    Function, NativeFunction, ObjectRef, RuntimeError, Value,
+    Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
     bytecode::{
         CaptureWriteback, GeneratorOutcome, GeneratorStart, GeneratorState, Resume,
         resume_generator,
@@ -35,8 +35,8 @@ const ASYNC_RESULT_PROMISE: &str = "\0AsyncResultPromise";
 
 /// Installs `%AsyncFunction.prototype%`: an ordinary object whose `[[Prototype]]`
 /// is `%Function.prototype%`, carrying the "AsyncFunction" `Symbol.toStringTag`.
-/// The callable `%AsyncFunction%` constructor itself is not installed (no global
-/// `AsyncFunction` binding); it is a follow-up.
+/// The callable `%AsyncFunction%` constructor is reachable through async
+/// function `.constructor`, but is not exposed as a global binding.
 pub(crate) fn install_async_function(
     env: &mut CallEnv,
     _global_this: &Value,
@@ -46,8 +46,30 @@ pub(crate) fn install_async_function(
         HashMap::new(),
         function_intrinsic_prototype(env).or(Some(object_prototype)),
     );
+    let async_function = Function::new_native(
+        Some("AsyncFunction"),
+        1,
+        NativeFunction::AsyncFunction,
+        true,
+    );
+    let _ = async_function.set_internal_prototype_slot(
+        function_intrinsic_prototype(env).map(crate::Prototype::Object),
+    );
+    async_function.properties.borrow_mut().insert(
+        "prototype".to_owned(),
+        Property::data(
+            Value::Object(async_function_prototype.clone()),
+            false,
+            false,
+            true,
+        ),
+    );
     async_function_prototype.set_to_string_tag("AsyncFunction");
     symbol::define_well_known_to_string_tag(env, &async_function_prototype, "AsyncFunction");
+    async_function_prototype.define_property(
+        "constructor".to_owned(),
+        Property::data(Value::Function(async_function), false, false, true),
+    );
     env.insert_realm(
         ASYNC_FUNCTION_PROTOTYPE_BINDING.to_owned(),
         Value::Object(async_function_prototype),

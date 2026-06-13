@@ -34,6 +34,49 @@ fn evaluates_object_prototype_methods() {
         eval("let object = {}; Object.defineProperty(object, Symbol.toStringTag, { get: function() { throw new Error('tag'); } }); Object.prototype.toString.call(object);").is_err()
     );
     assert_eq!(
+        eval(
+            "let bigint = BigInt(0); \
+             let boxed = Object(bigint); \
+             Object.defineProperty(BigInt.prototype, Symbol.toStringTag, { value: undefined, configurable: true }); \
+             Object.prototype.toString.call(bigint) + ':' + Object.prototype.toString.call(boxed);"
+        ),
+        Ok(Value::String("[object Object]:[object Object]".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let toString = Object.prototype.toString; \
+             let set = new Set(); \
+             delete Set.prototype[Symbol.toStringTag]; \
+             let iterator = set[Symbol.iterator](); \
+             let prototype = Object.getPrototypeOf(iterator); \
+             let initial = toString.call(iterator); \
+             Object.defineProperty(prototype, Symbol.toStringTag, { configurable: true, get: function() { return new String('boxed'); } }); \
+             let boxed = toString.call(iterator); \
+             delete prototype[Symbol.toStringTag]; \
+             initial + ':' + boxed + ':' + toString.call(iterator);"
+        ),
+        Ok(Value::String(
+            "[object Set Iterator]:[object Object]:[object Iterator]".to_owned()
+        ))
+    );
+    assert_eq!(
+        eval(
+            "let generatorProxy = new Proxy(function* () {}, {}); \
+             let generatorProxyProxy = new Proxy(generatorProxy, {}); \
+             delete generatorProxy.constructor.prototype[Symbol.toStringTag]; \
+             let asyncProxy = new Proxy(async function() {}, {}); \
+             let asyncProxyProxy = new Proxy(asyncProxy, {}); \
+             Object.defineProperty(asyncProxy.constructor.prototype, Symbol.toStringTag, { value: undefined, configurable: true }); \
+             Object.prototype.toString.call(generatorProxy) + ':' + \
+               Object.prototype.toString.call(generatorProxyProxy) + ':' + \
+               Object.prototype.toString.call(asyncProxy) + ':' + \
+               Object.prototype.toString.call(asyncProxyProxy);"
+        ),
+        Ok(Value::String(
+            "[object Function]:[object Function]:[object Function]:[object Function]".to_owned()
+        ))
+    );
+    assert_eq!(
         eval("Object.prototype.toLocaleString.length;"),
         Ok(Value::Number(0.0))
     );
