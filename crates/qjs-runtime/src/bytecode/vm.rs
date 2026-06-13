@@ -357,6 +357,7 @@ impl<'a> Vm<'a> {
                     };
                     let function = Function::new_user_compiled(CompiledUserFunction {
                         name,
+                        has_name_binding: true,
                         params,
                         env,
                         bytecode,

@@ -470,7 +470,9 @@ fn function_env(
         env,
         &protected_capture_names,
     );
-    if let Some(name) = &function.name {
+    if function.has_name_binding
+        && let Some(name) = &function.name
+    {
         local_env.insert(name.clone(), callee.clone());
     }
     // A derived class constructor needs its own constructor value at hand so

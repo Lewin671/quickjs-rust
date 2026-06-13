@@ -880,3 +880,23 @@ fn derived_methods_are_not_constructable() {
     let result = eval("class A {} class B extends A { m() {} } new (new B().m)();");
     assert!(result.is_err(), "class methods must not be constructable");
 }
+
+#[test]
+fn class_method_name_does_not_create_inner_binding() {
+    assert_eq!(
+        eval(
+            "var method = 0; class C { method() { method = 1; return method; } } let result = new C().method(); method + ':' + result + ':' + new C().method.name;"
+        ),
+        Ok(Value::String("1:1:method".to_owned()))
+    );
+}
+
+#[test]
+fn private_class_method_name_does_not_create_inner_binding() {
+    assert_eq!(
+        eval(
+            "var method = 0; class C { #method() { method = 1; return method; } call() { return this.#method(); } } let result = new C().call(); method + ':' + result;"
+        ),
+        Ok(Value::String("1:1".to_owned()))
+    );
+}

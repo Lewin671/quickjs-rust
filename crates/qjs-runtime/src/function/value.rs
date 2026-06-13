@@ -61,6 +61,9 @@ pub(crate) struct PrivateFieldInit {
 pub struct Function {
     /// Optional internal function name.
     pub name: Option<String>,
+    /// Whether `name` also creates the function body's internal name binding.
+    /// Method definitions have a name property but no inner binding.
+    pub(crate) has_name_binding: bool,
     /// Parameter names.
     pub params: FunctionParams,
     /// Environment captured when the function was created.
@@ -131,6 +134,7 @@ pub(crate) struct BoundFunction {
 
 pub(crate) struct CompiledUserFunction {
     pub(crate) name: Option<String>,
+    pub(crate) has_name_binding: bool,
     pub(crate) params: FunctionParams,
     pub(crate) env: HashMap<String, Value>,
     pub(crate) bytecode: Rc<Bytecode>,
@@ -242,6 +246,7 @@ impl Function {
         };
         let captured_env = Rc::new(RefCell::new(env.clone()));
         let function = Self {
+            has_name_binding: name.is_some(),
             name,
             params,
             env,
@@ -288,6 +293,7 @@ impl Function {
     pub(crate) fn new_user_compiled(compiled: CompiledUserFunction) -> Self {
         let CompiledUserFunction {
             name,
+            has_name_binding,
             params,
             env,
             bytecode,
@@ -311,6 +317,7 @@ impl Function {
             object_prototype(&crate::CallEnv::from_map(env.clone())),
         );
         let function = Self {
+            has_name_binding,
             name,
             params,
             env,
@@ -414,6 +421,7 @@ impl Function {
         let name = bound_function_name(&target);
         let function = Self {
             name: Some(name),
+            has_name_binding: false,
             params: FunctionParams::positional(vec![String::new(); length]),
             env: HashMap::new(),
             captured_env: Rc::new(RefCell::new(HashMap::new())),
@@ -462,6 +470,7 @@ impl Function {
         let prototype = ObjectRef::new(HashMap::new());
         let captured_env = Rc::new(RefCell::new(env.clone()));
         let function = Self {
+            has_name_binding: false,
             name,
             params: FunctionParams::positional(params),
             env,

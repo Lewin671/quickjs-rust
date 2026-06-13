@@ -68,6 +68,7 @@ impl Vm<'_> {
         };
         let constructor_function = Function::new_user_compiled(CompiledUserFunction {
             name: constructor.name.clone(),
+            has_name_binding: false,
             params: constructor.params.clone(),
             env: constructor_env,
             bytecode: constructor.bytecode.clone(),
@@ -273,6 +274,7 @@ impl Vm<'_> {
             bind_class_inner_name(&mut key_env, name, constructor_function);
             let thunk = Function::new_user_compiled(CompiledUserFunction {
                 name: None,
+                has_name_binding: false,
                 params: qjs_ast::FunctionParams::positional(Vec::new()),
                 env: key_env.clone(),
                 bytecode: key_def.bytecode.clone(),
@@ -323,6 +325,7 @@ impl Vm<'_> {
         };
         let method_function = Function::new_user_compiled(CompiledUserFunction {
             name: class_method_function_name(method, &key),
+            has_name_binding: false,
             params: method.params.clone(),
             env: method_env.clone(),
             bytecode: method.bytecode.clone(),
@@ -411,6 +414,7 @@ impl Vm<'_> {
         };
         Some(Function::new_user_compiled(CompiledUserFunction {
             name: None,
+            has_name_binding: false,
             params: qjs_ast::FunctionParams::positional(Vec::new()),
             env: field_env.clone(),
             bytecode: bytecode.clone(),
@@ -483,6 +487,7 @@ impl Vm<'_> {
         bind_class_inner_name(&mut block_env, name, constructor_function);
         let thunk = Function::new_user_compiled(CompiledUserFunction {
             name: None,
+            has_name_binding: false,
             params: qjs_ast::FunctionParams::positional(Vec::new()),
             env: block_env.clone(),
             bytecode: bytecode.clone(),
