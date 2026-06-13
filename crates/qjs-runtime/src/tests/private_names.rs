@@ -206,6 +206,39 @@ fn nested_class_resolves_outer_private_name() {
 }
 
 #[test]
+fn nested_function_resolves_enclosing_private_field() {
+    assert_eq!(
+        eval(
+            "class C { #f = 'ok'; read() { let self = this; \
+             function inner() { return self.#f; } return inner(); } } new C().read();"
+        ),
+        Ok(Value::String("ok".to_owned()))
+    );
+}
+
+#[test]
+fn nested_arrow_resolves_enclosing_private_method() {
+    assert_eq!(
+        eval(
+            "class C { #m() { return 11; } read() { const inner = () => this.#m(); \
+             return inner(); } } new C().read();"
+        ),
+        Ok(Value::Number(11.0))
+    );
+}
+
+#[test]
+fn nested_function_resolves_static_private_method() {
+    assert_eq!(
+        eval(
+            "class C { static #m() { return 23; } static read() { \
+             function inner() { return C.#m(); } return inner(); } } C.read();"
+        ),
+        Ok(Value::Number(23.0))
+    );
+}
+
+#[test]
 fn derived_class_instance_private_field() {
     assert_eq!(
         eval("class A {} class B extends A { #x = 3; getX() { return this.#x; } } new B().getX();"),

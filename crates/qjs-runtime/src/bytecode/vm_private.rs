@@ -340,10 +340,19 @@ impl Vm<'_> {
 
     /// Returns the private environment carried by the current home object.
     pub(super) fn current_private_environment(&self) -> Option<PrivateEnvironment> {
+        if let Some(environment) = self.env.private_environment() {
+            return Some(environment);
+        }
         match self.env.get(crate::HOME_OBJECT_BINDING) {
             Some(Value::Object(object)) => object.private_environment(),
             Some(Value::Function(function)) => function.private_environment(),
             _ => None,
+        }
+    }
+
+    pub(super) fn capture_private_environment(&self, function: &Function) {
+        if let Some(environment) = self.current_private_environment() {
+            function.set_private_environment(environment);
         }
     }
 }

@@ -23,7 +23,7 @@
 
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::Value;
+use crate::{Value, private::PrivateEnvironment};
 
 /// The shared realm binding table: intrinsics plus the script's true globals.
 pub(crate) type Realm = Rc<RefCell<HashMap<String, Value>>>;
@@ -37,6 +37,11 @@ pub(crate) type Realm = Rc<RefCell<HashMap<String, Value>>>;
 pub(crate) struct CallEnv {
     realm: Realm,
     locals: HashMap<String, Value>,
+    /// The lexical private-name environment active for this frame. This is
+    /// separate from `\0home_object`: ordinary nested functions do not inherit
+    /// `super`, but they do retain access to private names declared by enclosing
+    /// classes.
+    private_environment: Option<PrivateEnvironment>,
     /// The realm's dynamic-import host (module graph + resolver + active
     /// referrer), shared by `Rc::clone` into every frame and the job queue so a
     /// dynamic `import()` reached at any depth can load and cache modules. `None`
@@ -64,6 +69,7 @@ impl CallEnv {
         Self {
             realm,
             locals: HashMap::new(),
+            private_environment: None,
             module_host: None,
         }
     }
@@ -86,6 +92,7 @@ impl CallEnv {
         Self {
             realm: Rc::new(RefCell::new(HashMap::new())),
             locals: HashMap::new(),
+            private_environment: None,
             module_host: None,
         }
     }
@@ -97,6 +104,7 @@ impl CallEnv {
         Self {
             realm: Rc::new(RefCell::new(map)),
             locals: HashMap::new(),
+            private_environment: None,
             module_host: None,
         }
     }
@@ -106,6 +114,7 @@ impl CallEnv {
         Self {
             realm,
             locals,
+            private_environment: None,
             module_host: None,
         }
     }
@@ -123,6 +132,16 @@ impl CallEnv {
     /// This frame's own locals layer.
     pub(crate) fn locals(&self) -> &HashMap<String, Value> {
         &self.locals
+    }
+
+    /// Returns the lexical private-name environment for this frame, if any.
+    pub(crate) fn private_environment(&self) -> Option<PrivateEnvironment> {
+        self.private_environment.clone()
+    }
+
+    /// Installs the lexical private-name environment for this frame.
+    pub(crate) fn set_private_environment(&mut self, environment: Option<PrivateEnvironment>) {
+        self.private_environment = environment;
     }
 
     /// This frame's own locals layer, mutably.
@@ -210,6 +229,7 @@ impl CallEnv {
         Self {
             realm: Rc::clone(&self.realm),
             locals,
+            private_environment: self.private_environment.clone(),
             module_host: self.module_host.clone(),
         }
     }

@@ -378,6 +378,7 @@ impl<'a> Vm<'a> {
                         captured_env: self.captured_env.clone(),
                         capture_writeback: self.capture_writeback.clone(),
                     });
+                    self.capture_private_environment(&function);
                     if is_generator && is_async {
                         crate::async_generator::wire_async_generator_function_intrinsics(
                             &function,

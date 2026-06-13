@@ -5,7 +5,7 @@ use qjs_ast::BindingPattern;
 use crate::{
     ArrayRef, Bytecode, Function, GLOBAL_THIS_BINDING, NEW_TARGET_BINDING, NativeFunction,
     ObjectRef, Property, RuntimeError, Value, bytecode::eval_function_bytecode, function_prototype,
-    native::call_native_function, object_prototype, symbol,
+    native::call_native_function, object_prototype, private::PrivateEnvironment, symbol,
 };
 
 use super::{
@@ -480,8 +480,10 @@ fn function_env(
             Value::Array(ArrayRef::new(values)),
         );
     }
+    let mut frame_env = env.with_frame_locals(local_env);
+    frame_env.set_private_environment(function_private_environment(function));
     FunctionCallEnv {
-        env: env.with_frame_locals(local_env),
+        env: frame_env,
         function_capture_names,
         caller_binding_names,
     }
@@ -524,6 +526,17 @@ fn insert_super_bindings(
         && let Some(new_target) = caller_env.get(NEW_TARGET_BINDING)
     {
         local_env.insert(NEW_TARGET_BINDING.to_owned(), new_target);
+    }
+}
+
+fn function_private_environment(function: &Function) -> Option<PrivateEnvironment> {
+    if let Some(environment) = function.private_environment() {
+        return Some(environment);
+    }
+    match function.home_object.borrow().clone() {
+        Some(Value::Object(object)) => object.private_environment(),
+        Some(Value::Function(function)) => function.private_environment(),
+        _ => None,
     }
 }
 
