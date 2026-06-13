@@ -602,6 +602,23 @@ fn class_method_default_parameters_use_parameter_tdz() {
 }
 
 #[test]
+fn named_class_expression_heritage_uses_inner_tdz_binding() {
+    let result = eval("var x = (class x extends x {});");
+    assert!(
+        matches!(&result, Err(error) if error.message.contains("ReferenceError")),
+        "expected ReferenceError, got {result:?}"
+    );
+}
+
+#[test]
+fn named_class_expression_inner_binding_is_visible_to_methods() {
+    assert_eq!(
+        eval("let C = class Inner { static self() { return Inner; } }; C.self() === C;"),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn subclass_inherits_static_method() {
     assert_eq!(
         eval("class A { static who() { return 'A'; } } class B extends A {} B.who();"),

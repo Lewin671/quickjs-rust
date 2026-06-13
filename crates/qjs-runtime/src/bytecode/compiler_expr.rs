@@ -309,7 +309,7 @@ impl Compiler {
                 });
                 Ok(())
             }
-            Expr::Class { name, body, .. } => self.compile_class(name.as_deref(), body),
+            Expr::Class { name, body, .. } => self.compile_class_expression(name.as_deref(), body),
             Expr::Member {
                 object, property, ..
             } => {

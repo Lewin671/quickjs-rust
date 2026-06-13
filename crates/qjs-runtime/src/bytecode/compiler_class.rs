@@ -15,6 +15,25 @@ use super::ir::{
 };
 
 impl Compiler {
+    pub(super) fn compile_class_expression(
+        &mut self,
+        name: Option<&str>,
+        body: &ClassBody,
+    ) -> Result<(), RuntimeError> {
+        let Some(name) = name else {
+            return self.compile_class(None, body);
+        };
+
+        self.with_lexical_scope(|compiler| {
+            let slot = compiler.declare_lexical_slot(name, false);
+            compiler.emit(Op::ClearLocal(slot));
+            compiler.compile_class(Some(name), body)?;
+            compiler.emit(Op::Dup);
+            compiler.emit(Op::StoreLocal(slot));
+            Ok(())
+        })
+    }
+
     /// Compiles a class declaration or expression into a `NewClass` op that
     /// builds the constructor function object at runtime. The class name (when
     /// present) is used for the constructor `name` property and the bindable
