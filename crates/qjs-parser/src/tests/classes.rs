@@ -384,6 +384,17 @@ fn parses_extends_clause_with_member_and_call_heritage() {
 }
 
 #[test]
+fn class_heritage_is_strict_code() {
+    for source in [
+        "class C extends (function B() { with ({}); return B; }()) {}",
+        "(class extends (function B() { with ({}); return B; }()) {})",
+    ] {
+        let error = parse_script(source).expect_err("class heritage should parse as strict code");
+        assert!(error.message.contains("with"));
+    }
+}
+
+#[test]
 fn parses_super_member_and_call_in_methods() {
     parse_script("class C extends D { constructor() { super(); super.x; super.m(); } }")
         .expect("super inside derived constructor parses");

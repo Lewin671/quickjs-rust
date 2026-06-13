@@ -17,40 +17,52 @@ impl Parser {
             .span
             .start;
         self.expect(&TokenKind::Class)?;
-        let name_token = self.advance();
-        let TokenKind::Identifier(name) = name_token.kind else {
-            return Err(ParseError {
-                message: "expected class name".to_owned(),
-                span: name_token.span,
-            });
-        };
-        self.validate_class_binding_name(&name, name_token.span)?;
-        let heritage = self.class_heritage()?;
-        let body = self.class_body(heritage)?;
-        let span = Span::new(start, body.span.end);
-        Ok(Stmt::ClassDecl { name, body, span })
+        let previous_strict = self.strict;
+        self.strict = true;
+        let result = (|| {
+            let name_token = self.advance();
+            let TokenKind::Identifier(name) = name_token.kind else {
+                return Err(ParseError {
+                    message: "expected class name".to_owned(),
+                    span: name_token.span,
+                });
+            };
+            self.validate_class_binding_name(&name, name_token.span)?;
+            let heritage = self.class_heritage()?;
+            let body = self.class_body(heritage)?;
+            let span = Span::new(start, body.span.end);
+            Ok(Stmt::ClassDecl { name, body, span })
+        })();
+        self.strict = previous_strict;
+        result
     }
 
     /// Parses a `class` or `class Name` expression.
     pub(crate) fn class_expression(&mut self, start: usize) -> Result<Expr, ParseError> {
-        let name = if let Some(Token {
-            kind: TokenKind::Identifier(_),
-            ..
-        }) = self.peek()
-        {
-            let token = self.advance();
-            let TokenKind::Identifier(name) = token.kind else {
-                unreachable!("peek checked identifier");
+        let previous_strict = self.strict;
+        self.strict = true;
+        let result = (|| {
+            let name = if let Some(Token {
+                kind: TokenKind::Identifier(_),
+                ..
+            }) = self.peek()
+            {
+                let token = self.advance();
+                let TokenKind::Identifier(name) = token.kind else {
+                    unreachable!("peek checked identifier");
+                };
+                self.validate_class_binding_name(&name, token.span)?;
+                Some(name)
+            } else {
+                None
             };
-            self.validate_class_binding_name(&name, token.span)?;
-            Some(name)
-        } else {
-            None
-        };
-        let heritage = self.class_heritage()?;
-        let body = self.class_body(heritage)?;
-        let span = Span::new(start, body.span.end);
-        Ok(Expr::Class { name, body, span })
+            let heritage = self.class_heritage()?;
+            let body = self.class_body(heritage)?;
+            let span = Span::new(start, body.span.end);
+            Ok(Expr::Class { name, body, span })
+        })();
+        self.strict = previous_strict;
+        result
     }
 
     fn validate_class_binding_name(&self, name: &str, span: Span) -> Result<(), ParseError> {
@@ -87,7 +99,9 @@ impl Parser {
             .span;
         self.expect(&TokenKind::LeftBrace)?;
 
-        // Class bodies are always strict-mode code.
+        // Class definitions are strict-mode code. The surrounding class parser
+        // sets this before the optional heritage; keep the body strict for
+        // callers that may enter here directly in tests or future parser paths.
         let previous_strict = self.strict;
         self.strict = true;
         self.private_scopes.push(PrivateScope::default());
