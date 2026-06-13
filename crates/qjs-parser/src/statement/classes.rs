@@ -5,6 +5,7 @@ use qjs_ast::{
 use qjs_lexer::{Token, TokenKind};
 
 use crate::statement::duplicate_parameter_span;
+use crate::statement::functions::is_strict_reserved_word;
 use crate::{ParseError, Parser, PrivateDeclKind, PrivateDeclaration, PrivateScope};
 
 impl Parser {
@@ -23,6 +24,7 @@ impl Parser {
                 span: name_token.span,
             });
         };
+        self.validate_class_binding_name(&name, name_token.span)?;
         let heritage = self.class_heritage()?;
         let body = self.class_body(heritage)?;
         let span = Span::new(start, body.span.end);
@@ -40,6 +42,7 @@ impl Parser {
             let TokenKind::Identifier(name) = token.kind else {
                 unreachable!("peek checked identifier");
             };
+            self.validate_class_binding_name(&name, token.span)?;
             Some(name)
         } else {
             None
@@ -48,6 +51,22 @@ impl Parser {
         let body = self.class_body(heritage)?;
         let span = Span::new(start, body.span.end);
         Ok(Expr::Class { name, body, span })
+    }
+
+    fn validate_class_binding_name(&self, name: &str, span: Span) -> Result<(), ParseError> {
+        if matches!(name, "let" | "static" | "yield") || is_strict_reserved_word(name) {
+            return Err(ParseError {
+                message: format!("`{name}` is not allowed as a class binding name"),
+                span,
+            });
+        }
+        if self.in_async && name == "await" {
+            return Err(ParseError {
+                message: "`await` is not allowed as a class binding name here".to_owned(),
+                span,
+            });
+        }
+        Ok(())
     }
 
     /// Parses an optional `extends LeftHandSideExpression` heritage clause.

@@ -2,7 +2,7 @@ use qjs_ast::{
     ClassBody, ClassElement, ClassField, ClassMember, ClassMemberKey, Expr, MethodKind, Stmt,
 };
 
-use crate::parse_script;
+use crate::{parse_module, parse_script};
 
 /// Collects the method/accessor/constructor members of a class body, ignoring
 /// fields.
@@ -442,6 +442,25 @@ fn allows_field_named_static_or_get() {
     assert_eq!(fields[0].key, ClassMemberKey::Literal("static".to_owned()));
     assert!(!fields[0].is_static);
     assert_eq!(fields[1].key, ClassMemberKey::Literal("get".to_owned()));
+}
+
+#[test]
+fn rejects_reserved_class_binding_names() {
+    for source in [
+        "class static {}",
+        "class st\\u0061tic {}",
+        "class l\\u0065t {}",
+        "class yield {}",
+        "(class static {})",
+    ] {
+        let error = parse_script(source).expect_err("reserved class binding name should fail");
+        assert!(error.message.contains("class binding name"));
+    }
+
+    for source in ["class await {}", "class aw\\u0061it {}"] {
+        let error = parse_module(source).expect_err("await class binding name should fail");
+        assert!(error.message.contains("class binding name"));
+    }
 }
 
 #[test]
