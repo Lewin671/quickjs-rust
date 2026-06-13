@@ -245,6 +245,24 @@ fn evaluates_array_iteration_builtins() {
         Ok(Value::Boolean(true))
     );
     assert_eq!(
+        eval(
+            "let target; function C(length) { this.lengthValue = length; target = this; } let xs = [1, 2, 3]; xs.constructor = {}; xs.constructor[Symbol.species] = C; let result = xs.filter(function(value) { return value > 1; }); result === target && result.lengthValue === 0 && result[0] === 2 && result[1] === 3 && !Object.prototype.hasOwnProperty.call(result, 'length');"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let target = {}; Object.preventExtensions(target); function C() { return target; } let xs = [1]; xs.constructor = {}; xs.constructor[Symbol.species] = C; let caught = false; try { xs.filter(function() { return true; }); } catch (error) { caught = error.constructor === TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let target = {}; Object.defineProperty(target, '0', { value: 1, configurable: false }); function C() { return target; } let xs = [2]; xs.constructor = {}; xs.constructor[Symbol.species] = C; let caught = false; try { xs.filter(function() { return true; }); } catch (error) { caught = error.constructor === TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("[1, 2, 3, 4].find(function(value) { return value > 2; });"),
         Ok(Value::Number(3.0))
     );

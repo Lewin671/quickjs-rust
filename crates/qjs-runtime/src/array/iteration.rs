@@ -6,8 +6,7 @@ use super::{
 };
 use crate::CallEnv;
 use crate::{
-    ArrayRef, RuntimeError, Value, array_prototype, call_function, has_property, is_truthy,
-    property_value,
+    RuntimeError, Value, array_prototype, call_function, has_property, is_truthy, property_value,
 };
 
 const MAX_ARRAY_LENGTH: usize = u32::MAX as usize;
@@ -187,19 +186,26 @@ pub(crate) fn native_array_prototype_filter(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_array_iteration("filter", this_value, argument_values, env)?;
-    let mut filtered = Vec::new();
+    let result = array_species_create(iteration.receiver.clone(), 0, "filter", env)?;
+    let mut target_index = 0;
     for index in dynamic_iteration_indices(&iteration, env) {
         let key = index.to_string();
         if has_property(iteration.receiver.clone(), env, &key)? {
             let value = property_value(iteration.receiver.clone(), &key, env)?;
             let selected = call_iteration_callback(&iteration, value.clone(), index, env)?;
             if is_truthy(&selected) {
-                filtered.push(value);
+                create_data_property_or_throw(
+                    result.clone(),
+                    target_index.to_string(),
+                    value,
+                    env,
+                )?;
+                target_index += 1;
             }
         }
     }
 
-    Ok(Value::Array(ArrayRef::new(filtered)))
+    Ok(result)
 }
 
 pub(crate) fn native_array_prototype_find(
