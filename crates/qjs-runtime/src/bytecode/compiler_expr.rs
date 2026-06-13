@@ -289,6 +289,7 @@ impl Compiler {
                     body,
                     is_strict,
                     *is_generator,
+                    *is_async,
                 )?;
                 let local_names =
                     collect_function_local_names(name.as_ref(), params, body, !lexical_arguments);
@@ -349,6 +350,7 @@ impl Compiler {
                     self.emit(Op::YieldDelegate {
                         iterator_slot,
                         next_slot,
+                        async_delegate: self.async_generator_body,
                     });
                     return Ok(());
                 }
@@ -428,6 +430,7 @@ impl Compiler {
                     body,
                     is_strict,
                     *is_generator,
+                    *is_async,
                 )?;
                 let local_names =
                     collect_function_local_names(None, params, body, !lexical_arguments);

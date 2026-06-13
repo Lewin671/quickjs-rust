@@ -171,6 +171,7 @@ impl Vm<'_> {
         &mut self,
         iterator_slot: usize,
         next_slot: usize,
+        async_delegate: bool,
     ) -> Result<DelegateStep, RuntimeError> {
         // Resolve the inner iterator on first entry; on a resume the iterator
         // and its `next` method are restored from the slots and `resume_mode`
@@ -180,7 +181,7 @@ impl Vm<'_> {
             None => {
                 let iterable = self.pop()?;
                 let mut env = self.current_env();
-                let resolved = resolve_delegate_iterator(iterable, &mut env);
+                let resolved = resolve_delegate_iterator(iterable, async_delegate, &mut env);
                 self.apply_env(env);
                 let Some((iterator, next)) = self.handle_runtime_result(resolved)? else {
                     // The GetIterator failure was routed into a try/finally.
@@ -379,9 +380,14 @@ enum InnerStep {
 /// 14.4.14 performs once up front.
 fn resolve_delegate_iterator(
     value: Value,
+    async_delegate: bool,
     env: &mut CallEnv,
 ) -> Result<(Value, Value), RuntimeError> {
-    let iterator = iterator_for_value(value, env)?;
+    let iterator = if async_delegate {
+        crate::async_generator::get_async_iterator(value, env)?
+    } else {
+        iterator_for_value(value, env)?
+    };
     let next = property_value(iterator.clone(), "next", env)?;
     Ok((iterator, next))
 }

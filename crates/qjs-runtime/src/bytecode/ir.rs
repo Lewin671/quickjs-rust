@@ -239,6 +239,7 @@ pub(super) enum Op {
     YieldDelegate {
         iterator_slot: usize,
         next_slot: usize,
+        async_delegate: bool,
     },
     /// Dynamic `import(specifier)`. The specifier value is on top of the stack
     /// (and the options argument below it when `has_options` is set). Coerces

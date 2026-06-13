@@ -342,6 +342,7 @@ impl Compiler {
             body,
             is_strict,
             *is_generator,
+            *is_async,
         )?;
         let local_names = collect_function_local_names(Some(name), params, body, true);
         let lexical_captures = self.active_lexical_captures(&bytecode, &local_names);

@@ -534,7 +534,8 @@ impl<'a> Vm<'a> {
                 Op::YieldDelegate {
                     iterator_slot,
                     next_slot,
-                } => match self.yield_delegate(iterator_slot, next_slot)? {
+                    async_delegate,
+                } => match self.yield_delegate(iterator_slot, next_slot, async_delegate)? {
                     DelegateStep::Suspend(value) => {
                         return Ok(Completion::YieldDelegate(value));
                     }
@@ -992,7 +993,6 @@ fn fast_string_from_char_code_numbers(arguments: &[Value]) -> String {
         .collect();
     crate::string::string_from_code_units(&code_units)
 }
-
 fn insert_missing_binding_name(binding_names: &mut Vec<String>, name: &str) {
     if !binding_names.iter().any(|existing| existing == name) {
         binding_names.push(name.to_owned());

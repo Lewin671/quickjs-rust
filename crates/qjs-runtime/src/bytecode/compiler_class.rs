@@ -96,7 +96,14 @@ impl Compiler {
                     // constructor compile with strict semantics regardless of
                     // context.
                     let local_names = collect_function_local_names(None, params, body, true);
-                    let bytecode = compile_class_function_body(name, params, body, &local_names)?;
+                    let bytecode = compile_class_function_body(
+                        name,
+                        params,
+                        body,
+                        &local_names,
+                        is_generator,
+                        is_async,
+                    )?;
 
                     if member.kind == MethodKind::Constructor {
                         constructor = Some(ClassConstructorDef {
@@ -257,7 +264,8 @@ fn compile_static_block(
 ) -> Result<ClassStaticBlockDef, RuntimeError> {
     let params = FunctionParams::positional(Vec::new());
     let local_names = collect_function_local_names(None, &params, &block.body, true);
-    let bytecode = compile_class_function_body(class_name, &params, &block.body, &local_names)?;
+    let bytecode =
+        compile_class_function_body(class_name, &params, &block.body, &local_names, false, false)?;
     Ok(ClassStaticBlockDef {
         local_names,
         bytecode: Rc::new(bytecode),
@@ -269,8 +277,11 @@ fn compile_class_function_body(
     params: &FunctionParams,
     body: &[Stmt],
     local_names: &[String],
+    is_generator: bool,
+    is_async: bool,
 ) -> Result<super::ir::Bytecode, RuntimeError> {
     let mut compiler = Compiler::strict_function_compiler();
+    compiler.async_generator_body = is_generator && is_async;
     if let Some(name) = class_name
         && local_names
             .binary_search_by(|local| local.as_str().cmp(name))

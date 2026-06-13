@@ -38,6 +38,9 @@ pub(super) struct Compiler {
     /// Set when an invalid `/.../` regexp literal aborted compilation; such
     /// literals are parse-phase errors, not generic early errors.
     pub(super) regexp_literal_error: bool,
+    /// Whether the current function body is an async generator. `yield*` uses
+    /// the async iterator protocol only in this context.
+    pub(super) async_generator_body: bool,
 }
 
 #[derive(Default)]
@@ -78,6 +81,7 @@ impl Default for Compiler {
             annex_b_blocked_function_names: Vec::new(),
             with_depth: 0,
             regexp_literal_error: false,
+            async_generator_body: false,
         }
     }
 }
@@ -135,9 +139,15 @@ pub(super) fn compile_function_body_with_strict_generator(
     params: &FunctionParams,
     body: &[Stmt],
     parent_strict: bool,
-    _is_generator: bool,
+    is_generator: bool,
+    is_async: bool,
 ) -> Result<Bytecode, RuntimeError> {
-    compile_function_body_with_strict(params, body, parent_strict)
+    Compiler {
+        strict: parent_strict,
+        async_generator_body: is_generator && is_async,
+        ..Compiler::default()
+    }
+    .compile_function(params, body)
 }
 
 impl Compiler {

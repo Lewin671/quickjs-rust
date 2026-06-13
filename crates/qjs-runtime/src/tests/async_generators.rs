@@ -219,6 +219,42 @@ fn async_generator_method_in_class() {
 }
 
 #[test]
+fn yield_star_uses_async_iterator_protocol() {
+    assert_eq!(
+        eval_log(
+            "var o = []; \
+             var obj = { \
+               get [Symbol.iterator]() { o.push('sync'); throw 'sync'; }, \
+               [Symbol.asyncIterator]() { \
+                 o.push('async'); \
+                 return { next() { throw 'reason'; } }; \
+               } \
+             }; \
+             async function* g() { yield* obj; } \
+             g().next().then(() => o.push('fulfilled'), e => o.push(e)); \
+             o;"
+        ),
+        "async,reason"
+    );
+    assert_eq!(
+        eval_log(
+            "var o = []; \
+             var obj = { \
+               get [Symbol.iterator]() { o.push('sync'); throw 'sync'; }, \
+               [Symbol.asyncIterator]() { \
+                 o.push('async'); \
+                 return { next() { throw 'reason'; } }; \
+               } \
+             }; \
+             class C { static async *g() { yield* obj; } } \
+             C.g().next().then(() => o.push('fulfilled'), e => o.push(e)); \
+             o;"
+        ),
+        "async,reason"
+    );
+}
+
+#[test]
 fn async_generator_method_in_object_literal() {
     assert_eq!(
         eval_log(
