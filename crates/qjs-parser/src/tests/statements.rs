@@ -1,4 +1,6 @@
-use qjs_ast::{BinaryOp, BindingPattern, Expr, ForInLeft, ForInit, Stmt, VarKind};
+use qjs_ast::{
+    BinaryOp, BindingPattern, Expr, ForInLeft, ForInit, ObjectBindingPropertyKey, Stmt, VarKind,
+};
 
 use crate::parse_script;
 
@@ -45,6 +47,24 @@ fn parses_variable_declaration_binding_patterns() {
         declarations[1].binding,
         BindingPattern::Object { .. }
     ));
+}
+
+#[test]
+fn parses_computed_object_binding_property_names() {
+    let script = parse_script("let { [key()]: value, plain } = obj;").expect("source should parse");
+    let [Stmt::VarDecl { declarations, .. }] = script.body.as_slice() else {
+        panic!("expected one variable declaration");
+    };
+    let BindingPattern::Object { properties, .. } = &declarations[0].binding else {
+        panic!("expected object binding pattern");
+    };
+
+    assert!(matches!(
+        &properties[0].key,
+        ObjectBindingPropertyKey::Computed(Expr::Call { .. })
+    ));
+    assert_eq!(properties[1].key.as_literal(), Some("plain"));
+    assert_eq!(declarations[0].binding.names(), vec!["value", "plain"]);
 }
 
 #[test]
@@ -326,7 +346,7 @@ fn parses_try_catch_finally_statement() {
     assert_eq!(
         properties
             .iter()
-            .map(|property| property.key.as_str())
+            .map(|property| property.key.as_literal().expect("literal key"))
             .collect::<Vec<_>>(),
         ["error", "value"]
     );

@@ -5,13 +5,16 @@
 //! follows the spec evaluation order: member references are evaluated
 //! before the corresponding value is read from the source.
 
-use qjs_ast::{AssignmentTarget, AssignmentTargetElement, AssignmentTargetProperty};
+use qjs_ast::{
+    AssignmentTarget, AssignmentTargetElement, AssignmentTargetProperty,
+    AssignmentTargetPropertyKey,
+};
 
 use crate::{RuntimeError, Value};
 
 use super::compiler::Compiler;
 use super::compiler_binding::ArrayDestructuring;
-use super::ir::Op;
+use super::ir::{ObjectRestExclusion, Op};
 
 /// A member-target reference evaluated ahead of the value read.
 struct MemberReference {
@@ -55,18 +58,15 @@ impl Compiler {
                 self.emit(Op::RequireObjectCoercible);
                 let source_slot = self.temp_local("object_pattern_source");
                 self.emit(Op::StoreLocal(source_slot));
+                let mut excluded = Vec::with_capacity(properties.len());
                 for property in properties {
-                    self.compile_assignment_property(source_slot, property)?;
+                    let exclusion = self.compile_assignment_property(source_slot, property)?;
+                    excluded.push(exclusion);
                 }
                 if let Some(rest) = rest {
                     let reference = self.prepare_member_reference(rest)?;
                     self.emit(Op::LoadLocal(source_slot));
-                    self.emit(Op::ObjectRestExcluding {
-                        excluded: properties
-                            .iter()
-                            .map(|property| property.key.clone())
-                            .collect(),
-                    });
+                    self.emit(Op::ObjectRestExcluding { excluded });
                     self.store_pattern_value(rest, reference.as_ref())?;
                 }
                 Ok(())
@@ -92,17 +92,55 @@ impl Compiler {
         &mut self,
         source_slot: usize,
         property: &AssignmentTargetProperty,
-    ) -> Result<(), RuntimeError> {
+    ) -> Result<ObjectRestExclusion, RuntimeError> {
+        let exclusion = self.compile_assignment_property_key(&property.key)?;
         let reference = self.prepare_member_reference(&property.target)?;
         self.emit(Op::LoadLocal(source_slot));
-        let key = self.const_slot(Value::String(property.key.clone()));
-        self.emit(Op::LoadConst(key));
+        self.load_assignment_property_key(&property.key, &exclusion);
         self.emit(Op::GetProp);
         self.compile_binding_default(
             property.default.as_ref(),
             assignment_target_inferred_name(&property.target),
         )?;
-        self.store_pattern_value(&property.target, reference.as_ref())
+        self.store_pattern_value(&property.target, reference.as_ref())?;
+        Ok(exclusion)
+    }
+
+    fn compile_assignment_property_key(
+        &mut self,
+        key: &AssignmentTargetPropertyKey,
+    ) -> Result<ObjectRestExclusion, RuntimeError> {
+        match key {
+            AssignmentTargetPropertyKey::Literal(key) => {
+                Ok(ObjectRestExclusion::Literal(key.clone()))
+            }
+            AssignmentTargetPropertyKey::Computed(expr) => {
+                self.compile_expr(expr)?;
+                self.emit(Op::ToPropertyKey);
+                let slot = self.temp_local("object_pattern_key");
+                self.emit(Op::StoreLocal(slot));
+                Ok(ObjectRestExclusion::Local(slot))
+            }
+        }
+    }
+
+    fn load_assignment_property_key(
+        &mut self,
+        key: &AssignmentTargetPropertyKey,
+        exclusion: &ObjectRestExclusion,
+    ) {
+        match key {
+            AssignmentTargetPropertyKey::Literal(key) => {
+                let key = self.const_slot(Value::String(key.clone()));
+                self.emit(Op::LoadConst(key));
+            }
+            AssignmentTargetPropertyKey::Computed(_) => {
+                let ObjectRestExclusion::Local(slot) = exclusion else {
+                    unreachable!("computed assignment key should record a local exclusion");
+                };
+                self.emit(Op::LoadLocal(*slot));
+            }
+        }
     }
 
     /// Evaluates a member target's object and key ahead of the value read,

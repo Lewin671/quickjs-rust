@@ -489,6 +489,25 @@ fn destructuring_assignment_evaluates_member_targets_before_value_reads() {
 }
 
 #[test]
+fn destructuring_assignment_evaluates_computed_keys_before_member_targets() {
+    assert_eq!(
+        eval(
+            "var order = [];
+             var key = { toString: function() { order.push('key'); return 'a'; } };
+             var target = function() {
+               order.push('target');
+               return { set x(value) { order.push('set:' + value); } };
+             };
+             var source = {};
+             Object.defineProperty(source, 'a', { get: function() { order.push('get'); return 7; } });
+             ({[key]: target().x} = source);
+             order.join(',');"
+        ),
+        Ok(Value::String("key,target,get,set:7".to_owned()))
+    );
+}
+
+#[test]
 fn destructuring_assignment_closes_iterators() {
     assert_eq!(
         eval(

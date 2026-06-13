@@ -2,7 +2,8 @@
 //! cover grammar reparsed as assignment targets.
 
 use qjs_ast::{
-    AssignmentOp, AssignmentTarget, AssignmentTargetElement, AssignmentTargetProperty, Expr, Span,
+    AssignmentOp, AssignmentTarget, AssignmentTargetElement, AssignmentTargetProperty,
+    AssignmentTargetPropertyKey, Expr, Span,
 };
 use qjs_lexer::TokenKind;
 
@@ -149,9 +150,17 @@ impl Parser {
             let key_span = key_token.span;
             let shorthand = matches!(key_token.kind, TokenKind::Identifier(_));
             let key = match key_token.kind {
-                TokenKind::Identifier(key) | TokenKind::String(key) | TokenKind::Number(key) => key,
+                TokenKind::LeftBracket => {
+                    let expr = self.assignment()?;
+                    self.expect(&TokenKind::RightBracket)?;
+                    AssignmentTargetPropertyKey::Computed(expr)
+                }
+                TokenKind::Identifier(key) | TokenKind::String(key) | TokenKind::Number(key) => {
+                    AssignmentTargetPropertyKey::Literal(key)
+                }
                 kind => keyword_property_name(&kind)
                     .map(str::to_owned)
+                    .map(AssignmentTargetPropertyKey::Literal)
                     .ok_or(ParseError {
                         message: "expected assignment property name".to_owned(),
                         span: key_span,
@@ -162,7 +171,10 @@ impl Parser {
                 self.assignment_pattern()?
             } else if shorthand {
                 AssignmentTarget::Identifier {
-                    name: key.clone(),
+                    name: key
+                        .as_literal()
+                        .expect("shorthand keys are always literal")
+                        .to_owned(),
                     span: key_span,
                 }
             } else {

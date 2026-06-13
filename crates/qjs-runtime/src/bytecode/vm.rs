@@ -447,6 +447,11 @@ impl<'a> Vm<'a> {
                     self.apply_env(env);
                     self.stack.push(Value::String(result?));
                 }
+                Op::ToPropertyKey => {
+                    let value = self.pop()?;
+                    let key = self.coerce_property_key(value)?;
+                    self.stack.push(key.into_value());
+                }
                 Op::ToNumeric => {
                     let result = self.eval_to_numeric();
                     if let Some(value) = self.handle_runtime_result(result)? {
@@ -943,11 +948,6 @@ impl<'a> Vm<'a> {
         } else {
             self.apply_env(env.env);
         }
-        // A callee (possibly several frames deep) may have written a script
-        // `let`/`const` binding, reaching it only through the shared
-        // `captured_env` Rc. Pull those updates back into the script slots.
-        // (Function frames keep the direct caller-binding write-back, which
-        // preserves per-call parameter/local isolation.)
         if !self.bytecode.global_scope {
             return;
         }
@@ -990,6 +990,7 @@ fn fast_string_from_char_code_numbers(arguments: &[Value]) -> String {
         .collect();
     crate::string::string_from_code_units(&code_units)
 }
+
 fn insert_missing_binding_name(binding_names: &mut Vec<String>, name: &str) {
     if !binding_names.iter().any(|existing| existing == name) {
         binding_names.push(name.to_owned());

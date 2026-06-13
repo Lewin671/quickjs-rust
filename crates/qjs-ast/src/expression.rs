@@ -10,6 +10,7 @@ mod operator;
 
 pub use assignment::{
     AssignmentOp, AssignmentTarget, AssignmentTargetElement, AssignmentTargetProperty,
+    AssignmentTargetPropertyKey,
 };
 pub use literal::Literal;
 pub use member::MemberProperty;

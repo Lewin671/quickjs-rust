@@ -112,6 +112,44 @@ fn default_derived_constructor_arguments_do_not_shadow_outer_bindings() {
 }
 
 #[test]
+fn class_method_computed_object_binding_key_propagates_errors() {
+    assert!(
+        eval(
+            "function thrower() { throw new Error('key'); } \
+             class C { method({ [thrower()]: x }) {} } \
+             new C().method({});"
+        )
+        .is_err(),
+        "computed binding property key errors must propagate from parameter binding"
+    );
+}
+
+#[test]
+fn class_method_computed_object_binding_key_is_evaluated_once() {
+    assert_eq!(
+        eval(
+            "var calls = 0; \
+             var key = { toString() { calls += 1; return 'x'; } }; \
+             class C { method({ [key]: value }) { return value + ':' + calls; } } \
+             new C().method({ x: 7 });"
+        ),
+        Ok(Value::String("7:1".to_owned()))
+    );
+}
+
+#[test]
+fn class_method_computed_object_binding_key_is_excluded_from_rest() {
+    assert_eq!(
+        eval(
+            "var key = 'x'; \
+             class C { method({ [key]: value, ...rest }) { return value + ':' + rest.x + ':' + rest.y; } } \
+             new C().method({ x: 1, y: 2 });"
+        ),
+        Ok(Value::String("1:undefined:2".to_owned()))
+    );
+}
+
+#[test]
 fn explicit_derived_constructor_must_call_super_before_returning() {
     assert!(
         eval("class B {} class C extends B { constructor() {} } new C();").is_err(),

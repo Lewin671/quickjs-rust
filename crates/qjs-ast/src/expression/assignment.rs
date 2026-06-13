@@ -49,14 +49,34 @@ pub struct AssignmentTargetElement {
 /// An object assignment pattern property.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AssignmentTargetProperty {
-    /// Literal property key.
-    pub key: String,
+    /// Property key.
+    pub key: AssignmentTargetPropertyKey,
     /// Nested assignment target.
     pub target: AssignmentTarget,
     /// Optional default initializer.
     pub default: Option<Expr>,
     /// Source span.
     pub span: Span,
+}
+
+/// An object assignment pattern property key.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum AssignmentTargetPropertyKey {
+    /// A literal property key.
+    Literal(String),
+    /// A computed property key expression.
+    Computed(Expr),
+}
+
+impl AssignmentTargetPropertyKey {
+    /// Returns the literal key name, if this key is not computed.
+    #[must_use]
+    pub fn as_literal(&self) -> Option<&str> {
+        match self {
+            Self::Literal(key) => Some(key),
+            Self::Computed(_) => None,
+        }
+    }
 }
 
 impl AssignmentTarget {

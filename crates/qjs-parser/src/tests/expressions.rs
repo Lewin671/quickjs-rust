@@ -1,4 +1,7 @@
-use qjs_ast::{AssignmentOp, AssignmentTarget, BinaryOp, Expr, Stmt, UnaryOp, UpdateOp};
+use qjs_ast::{
+    AssignmentOp, AssignmentTarget, AssignmentTargetPropertyKey, BinaryOp, Expr, Stmt, UnaryOp,
+    UpdateOp,
+};
 
 use crate::parse_script;
 
@@ -324,6 +327,23 @@ fn parses_destructuring_assignment_patterns() {
         AssignmentTarget::ObjectPattern { .. }
     ));
     assert!(rest.is_some(), "expected object rest target");
+}
+
+#[test]
+fn parses_computed_object_assignment_property_names() {
+    let script = parse_script("({ [key()]: value, plain } = obj);").expect("source should parse");
+    let [Stmt::Expr(Expr::Assignment { target, .. })] = script.body.as_slice() else {
+        panic!("expected assignment expression");
+    };
+    let AssignmentTarget::ObjectPattern { properties, .. } = target else {
+        panic!("expected object assignment pattern");
+    };
+
+    assert!(matches!(
+        &properties[0].key,
+        AssignmentTargetPropertyKey::Computed(Expr::Call { .. })
+    ));
+    assert_eq!(properties[1].key.as_literal(), Some("plain"));
 }
 
 #[test]

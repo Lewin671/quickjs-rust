@@ -51,14 +51,34 @@ pub struct BindingElement {
 /// An object binding property.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ObjectBindingProperty {
-    /// Literal property key.
-    pub key: String,
+    /// Property key.
+    pub key: ObjectBindingPropertyKey,
     /// Nested binding pattern.
     pub binding: BindingPattern,
     /// Optional default initializer.
     pub default: Option<Expr>,
     /// Source span.
     pub span: Span,
+}
+
+/// An object binding property key.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ObjectBindingPropertyKey {
+    /// A literal property key.
+    Literal(String),
+    /// A computed property key expression.
+    Computed(Expr),
+}
+
+impl ObjectBindingPropertyKey {
+    /// Returns the literal key name, if this key is not computed.
+    #[must_use]
+    pub fn as_literal(&self) -> Option<&str> {
+        match self {
+            Self::Literal(key) => Some(key),
+            Self::Computed(_) => None,
+        }
+    }
 }
 
 impl BindingElement {

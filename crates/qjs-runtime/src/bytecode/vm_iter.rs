@@ -7,6 +7,7 @@ use crate::{
     object, object_prototype, property_value, property_value_key, symbol,
 };
 
+use super::ir::ObjectRestExclusion;
 use super::util::is_object_value;
 use super::vm::Vm;
 use super::vm_result::ResumeMode;
@@ -141,9 +142,21 @@ impl Vm<'_> {
 
     pub(super) fn object_rest_excluding(
         &mut self,
-        excluded: &[String],
+        excluded: &[ObjectRestExclusion],
     ) -> Result<(), RuntimeError> {
         let value = self.pop()?;
+        let mut excluded_keys = Vec::with_capacity(excluded.len());
+        for exclusion in excluded {
+            match exclusion {
+                ObjectRestExclusion::Literal(key) => {
+                    excluded_keys.push(PropertyKey::String(key.clone()));
+                }
+                ObjectRestExclusion::Local(slot) => {
+                    let value = self.load_local(*slot)?;
+                    excluded_keys.push(self.coerce_property_key(value)?);
+                }
+            }
+        }
         let mut env = self.current_env();
         let result = object::enumerable_property_entries(value, &mut env);
         self.apply_env(env);
@@ -152,7 +165,10 @@ impl Vm<'_> {
         };
         let rest = ObjectRef::with_prototype(HashMap::new(), object_prototype(&self.env));
         for (key, value) in entries {
-            if !excluded.iter().any(|name| name == &key) {
+            if !excluded_keys
+                .iter()
+                .any(|excluded| matches!(excluded, PropertyKey::String(name) if name == &key))
+            {
                 rest.set(key, value);
             }
         }

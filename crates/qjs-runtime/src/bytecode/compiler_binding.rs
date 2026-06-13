@@ -1,12 +1,12 @@
 //! Binding-pattern destructuring compilation shared by declarations,
 //! function parameters, loop heads, and catch parameters.
 
-use qjs_ast::{BinaryOp, BindingPattern, VarKind};
+use qjs_ast::{BinaryOp, BindingPattern, ObjectBindingPropertyKey, VarKind};
 
 use crate::{RuntimeError, Value};
 
 use super::compiler::Compiler;
-use super::ir::Op;
+use super::ir::{ObjectRestExclusion, Op};
 
 /// Compiler state for one protected array-destructuring region driven by a
 /// lazily stepped iterator.
@@ -70,10 +70,12 @@ impl Compiler {
                 self.emit(Op::RequireObjectCoercible);
                 let source_slot = self.temp_local("object_binding_source");
                 self.emit(Op::StoreLocal(source_slot));
+                let mut excluded = Vec::with_capacity(properties.len());
                 for property in properties {
+                    let exclusion = self.compile_object_binding_key(&property.key)?;
+                    excluded.push(exclusion);
                     self.emit(Op::LoadLocal(source_slot));
-                    let key = self.const_slot(Value::String(property.key.clone()));
-                    self.emit(Op::LoadConst(key));
+                    self.load_object_binding_key(&property.key, &excluded);
                     self.emit(Op::GetProp);
                     self.compile_binding_default(
                         property.default.as_ref(),
@@ -83,17 +85,47 @@ impl Compiler {
                 }
                 if let Some(rest) = rest {
                     self.emit(Op::LoadLocal(source_slot));
-                    self.emit(Op::ObjectRestExcluding {
-                        excluded: properties
-                            .iter()
-                            .map(|property| property.key.clone())
-                            .collect(),
-                    });
+                    self.emit(Op::ObjectRestExcluding { excluded });
                     self.compile_binding_initializer(rest, kind)?;
                 }
             }
         }
         Ok(())
+    }
+
+    fn compile_object_binding_key(
+        &mut self,
+        key: &ObjectBindingPropertyKey,
+    ) -> Result<ObjectRestExclusion, RuntimeError> {
+        match key {
+            ObjectBindingPropertyKey::Literal(key) => Ok(ObjectRestExclusion::Literal(key.clone())),
+            ObjectBindingPropertyKey::Computed(expr) => {
+                self.compile_expr(expr)?;
+                self.emit(Op::ToPropertyKey);
+                let slot = self.temp_local("object_binding_key");
+                self.emit(Op::StoreLocal(slot));
+                Ok(ObjectRestExclusion::Local(slot))
+            }
+        }
+    }
+
+    fn load_object_binding_key(
+        &mut self,
+        key: &ObjectBindingPropertyKey,
+        excluded: &[ObjectRestExclusion],
+    ) {
+        match key {
+            ObjectBindingPropertyKey::Literal(key) => {
+                let key = self.const_slot(Value::String(key.clone()));
+                self.emit(Op::LoadConst(key));
+            }
+            ObjectBindingPropertyKey::Computed(_) => {
+                let Some(ObjectRestExclusion::Local(slot)) = excluded.last() else {
+                    unreachable!("computed binding key should record a local exclusion");
+                };
+                self.emit(Op::LoadLocal(*slot));
+            }
+        }
     }
 
     pub(super) fn compile_binding_uninitialized(

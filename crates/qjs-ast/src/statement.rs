@@ -9,7 +9,8 @@ mod script;
 
 pub use control::{CatchClause, ForInLeft, ForInit, SwitchCase};
 pub use declaration::{
-    BindingElement, BindingPattern, ObjectBindingProperty, VarDeclarator, VarKind,
+    BindingElement, BindingPattern, ObjectBindingProperty, ObjectBindingPropertyKey, VarDeclarator,
+    VarKind,
 };
 pub use module::{
     DefaultExport, ExportDecl, ExportSpecifier, ImportDecl, ImportSpecifier, ModuleDecl,

@@ -92,7 +92,7 @@ pub(super) enum Op {
     /// Replaces a value on the stack with an object holding its remaining
     /// own enumerable string-keyed properties, excluding the listed keys.
     ObjectRestExcluding {
-        excluded: Vec<String>,
+        excluded: Vec<ObjectRestExclusion>,
     },
     /// Throws a TypeError when the top of the stack is undefined or null.
     RequireObjectCoercible,
@@ -193,6 +193,7 @@ pub(super) enum Op {
     SuperCallSpread,
     Typeof,
     ToString,
+    ToPropertyKey,
     ToNumeric,
     Unary(UnaryOp),
     Update(UpdateOp),
@@ -593,6 +594,15 @@ fn collect_global_names_from_ops(code: &[Op], names: &mut BTreeSet<String>) {
             _ => {}
         }
     }
+}
+
+/// A property key excluded from an object rest pattern.
+#[derive(Clone, Debug)]
+pub(super) enum ObjectRestExclusion {
+    /// A statically known string key.
+    Literal(String),
+    /// A local slot holding an already evaluated ToPropertyKey result.
+    Local(usize),
 }
 
 fn collect_sloppy_global_assignment_names(code: &[Op]) -> Vec<String> {

@@ -9,6 +9,15 @@ pub(crate) enum PropertyKey {
     Symbol(ObjectRef),
 }
 
+impl PropertyKey {
+    pub(crate) fn into_value(self) -> Value {
+        match self {
+            Self::String(key) => Value::String(key),
+            Self::Symbol(symbol) => Value::Object(symbol),
+        }
+    }
+}
+
 pub(crate) fn to_property_key_value(
     value: Value,
     env: &mut CallEnv,

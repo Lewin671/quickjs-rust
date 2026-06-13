@@ -1,6 +1,6 @@
 use qjs_ast::{
-    BindingElement, BindingPattern, ForInit, ObjectBindingProperty, Span, Stmt, VarDeclarator,
-    VarKind,
+    BindingElement, BindingPattern, ForInit, ObjectBindingProperty, ObjectBindingPropertyKey, Span,
+    Stmt, VarDeclarator, VarKind,
 };
 use qjs_lexer::TokenKind;
 
@@ -215,16 +215,24 @@ impl Parser {
                 break;
             }
             let key_token = self.advance();
+            let key_span = key_token.span;
             let shorthand = matches!(key_token.kind, TokenKind::Identifier(_));
             let key = match key_token.kind {
-                TokenKind::Identifier(key) | TokenKind::String(key) | TokenKind::Number(key) => key,
+                TokenKind::LeftBracket => {
+                    let expr = self.assignment()?;
+                    self.expect(&TokenKind::RightBracket)?;
+                    ObjectBindingPropertyKey::Computed(expr)
+                }
+                TokenKind::Identifier(key) | TokenKind::String(key) | TokenKind::Number(key) => {
+                    ObjectBindingPropertyKey::Literal(key)
+                }
                 kind => {
                     if let Some(key) = crate::expression::keyword_property_name(&kind) {
-                        key.to_owned()
+                        ObjectBindingPropertyKey::Literal(key.to_owned())
                     } else {
                         return Err(ParseError {
                             message: "expected binding property name".to_owned(),
-                            span: key_token.span,
+                            span: key_span,
                         });
                     }
                 }
@@ -234,13 +242,16 @@ impl Parser {
                 self.binding_pattern()?
             } else if shorthand {
                 BindingPattern::Identifier {
-                    name: key.clone(),
-                    span: key_token.span,
+                    name: key
+                        .as_literal()
+                        .expect("shorthand keys are always literal")
+                        .to_owned(),
+                    span: key_span,
                 }
             } else {
                 return Err(ParseError {
                     message: "expected `:` after binding property name".to_owned(),
-                    span: key_token.span,
+                    span: key_span,
                 });
             };
             let default = if self.match_kind(&TokenKind::Equal) {
@@ -255,7 +266,7 @@ impl Parser {
                 key,
                 binding,
                 default,
-                span: Span::new(key_token.span.start, end),
+                span: Span::new(key_span.start, end),
             });
 
             if !self.match_kind(&TokenKind::Comma) {
