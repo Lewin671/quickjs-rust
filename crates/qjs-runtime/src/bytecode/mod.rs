@@ -8,6 +8,7 @@ mod compiler_binding;
 mod compiler_class;
 mod compiler_control;
 mod compiler_expr;
+mod compiler_function;
 mod compiler_lexical;
 mod compiler_params;
 mod compiler_pattern;

@@ -1,14 +1,3 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
-
-use crate::{
-    Function, GLOBAL_THIS_BINDING, HOME_OBJECT_BINDING, NEW_TARGET_BINDING, NativeFunction,
-    ObjectRef, PropertyKey, RuntimeError, SUPER_CONSTRUCTOR_BINDING, Value,
-    array::array_like_values_with_env,
-    call_function, construct_function,
-    function::{CallEnv, CompiledUserFunction, Realm},
-    initialize_builtins, is_truthy, to_js_string_with_env, to_property_key_value,
-};
-
 use super::ir::{Bytecode, Op};
 use super::util::{stack_underflow, typeof_value};
 use super::vm_call::{insert_scope_call_bindings, user_bytecode_function};
@@ -17,7 +6,15 @@ use super::vm_iter::DelegateStep;
 use super::vm_props::{array_index_from_number, get_property_key, set_property_key};
 use super::vm_result::{Completion, FunctionBytecodeResult, ResumeMode};
 use super::vm_try::TryFrame;
-
+use crate::{
+    Function, GLOBAL_THIS_BINDING, HOME_OBJECT_BINDING, NEW_TARGET_BINDING, NativeFunction,
+    ObjectRef, PropertyKey, RuntimeError, SUPER_CONSTRUCTOR_BINDING, Value,
+    array::array_like_values_with_env,
+    call_function, construct_function,
+    function::{CallEnv, CompiledUserFunction, Realm},
+    initialize_builtins, is_truthy, to_js_string_with_env, to_property_key_value,
+};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 pub(super) type Slot = Option<Value>;
 struct VmCallEnv {
     env: CallEnv,
@@ -25,7 +22,6 @@ struct VmCallEnv {
     /// Injected caller bindings; only changed values write back.
     injected: HashMap<String, Value>,
 }
-
 pub(super) fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> {
     let mut vm = Vm::new(bytecode)?;
     let value = vm.run()?;
@@ -49,7 +45,6 @@ pub(super) fn eval_function_bytecode(
         sloppy_global_names: vm.sloppy_global_names,
     }
 }
-
 pub(super) struct Vm<'a> {
     pub(super) bytecode: &'a Bytecode,
     pub(super) ip: usize,
@@ -215,7 +210,11 @@ impl<'a> Vm<'a> {
                             }
                         })?)
                 }
-                Op::LoadLocal(slot) => self.stack.push(self.load_local(slot)?),
+                Op::LoadLocal(slot) => {
+                    if let Some(value) = self.handle_runtime_result(self.load_local(slot))? {
+                        self.stack.push(value);
+                    }
+                }
                 Op::LoadLocalOrUndefined(slot) => {
                     self.stack.push(self.load_local_or_undefined(slot)?)
                 }
@@ -223,6 +222,11 @@ impl<'a> Vm<'a> {
                 Op::StoreLocal(slot) => {
                     let value = self.pop()?;
                     let result = self.store_local(slot, value);
+                    self.handle_runtime_result(result)?;
+                }
+                Op::AssignLocal(slot) => {
+                    let value = self.pop()?;
+                    let result = self.assign_local(slot, value);
                     self.handle_runtime_result(result)?;
                 }
                 Op::ClearLocal(slot) => self.clear_local(slot)?,

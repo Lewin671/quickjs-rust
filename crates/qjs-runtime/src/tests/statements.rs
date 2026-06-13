@@ -28,6 +28,20 @@ fn with_statement_resolves_object_bindings() {
 }
 
 #[test]
+fn for_in_assignment_targets_respect_lexical_tdz() {
+    assert_eq!(
+        eval(
+            "var result = '';
+             try { for (x in { a: 1 }) {} result = 'no throw'; }
+             catch (error) { result = error instanceof ReferenceError ? 'reference' : error.name; }
+             let x;
+             result;"
+        ),
+        Ok(Value::String("reference".to_owned()))
+    );
+}
+
+#[test]
 fn with_statement_honors_symbol_unscopables() {
     // A truthy `Symbol.unscopables` entry hides the property, so the free name
     // resolves to the outer binding instead.

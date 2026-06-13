@@ -388,6 +388,19 @@ impl Function {
         )
     }
 
+    pub(crate) fn uninitialized_lexical_marker() -> Self {
+        Self::new_native(
+            Some("\u{0}\u{0}uninitialized_lexical"),
+            0,
+            NativeFunction::UninitializedLexical,
+            false,
+        )
+    }
+
+    pub(crate) fn is_uninitialized_lexical_marker(&self) -> bool {
+        matches!(self.native, Some(NativeFunction::UninitializedLexical))
+    }
+
     pub(crate) fn new_bound(
         target: Value,
         this_value: Value,

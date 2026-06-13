@@ -1,5 +1,8 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum NativeFunction {
+    /// Internal marker used in closure capture maps for lexical bindings that
+    /// exist but are still in the temporal dead zone.
+    UninitializedLexical,
     Array,
     ArrayFrom,
     ArrayFromAsync,

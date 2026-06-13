@@ -418,8 +418,9 @@ impl Compiler {
             }
             ForInLeft::Target(AssignmentTarget::Identifier { name, .. }) => {
                 self.emit(Op::LoadLocal(key_slot));
-                if let Some(slot) = self.resolve_local_slot(name) {
-                    self.emit(Op::StoreLocal(slot));
+                let slot = self.resolve_local_slot(name);
+                if slot.is_some() || self.inside_with() {
+                    self.emit_store_identifier(name, slot);
                 } else if self.strict || self.is_global_hoisted(name) {
                     self.emit(Op::StoreGlobalStrict(name.clone()));
                 } else {

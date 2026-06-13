@@ -107,6 +107,10 @@ impl Vm<'_> {
                     None
                 } else if local.from_env
                     && let Some(value) = env.get_local(&local.name)
+                    && !matches!(
+                        &value,
+                        Value::Function(function) if function.is_uninitialized_lexical_marker()
+                    )
                 {
                     // Only a binding the caller passed in the frame's locals
                     // layer seeds a from_env slot; realm globals stay in the
@@ -248,7 +252,7 @@ impl Vm<'_> {
             return Ok(());
         }
         match slot {
-            Some(slot) => self.store_local(slot, value),
+            Some(slot) => self.assign_local(slot, value),
             None if is_strict => self.store_global_strict(name.to_owned(), value),
             None => {
                 self.store_global_sloppy(name.to_owned(), value)?;
@@ -337,6 +341,23 @@ impl Vm<'_> {
             global_this.set(local_meta.name, value);
         }
         Ok(())
+    }
+
+    pub(super) fn assign_local(&mut self, slot: usize, value: Value) -> Result<(), RuntimeError> {
+        match self.locals.get(slot) {
+            Some(Some(_)) => self.store_local(slot, value),
+            Some(None) => Err(RuntimeError {
+                thrown: None,
+                message: format!(
+                    "ReferenceError: undefined identifier `{}`",
+                    self.bytecode.locals[slot].name
+                ),
+            }),
+            None => Err(RuntimeError {
+                thrown: None,
+                message: "bytecode local index out of bounds".to_owned(),
+            }),
+        }
     }
 
     pub(super) fn store_local_or_global_sloppy(

@@ -9,7 +9,7 @@
 
 use std::collections::HashMap;
 
-use crate::{CallEnv, Value};
+use crate::{CallEnv, Function, Value};
 
 use super::ir::Bytecode;
 use super::vm::Vm;
@@ -68,7 +68,7 @@ impl Vm<'_> {
                 .get(*slot)
                 .and_then(Option::as_ref)
                 .cloned()
-                .unwrap_or(Value::Undefined);
+                .unwrap_or_else(|| Value::Function(Function::uninitialized_lexical_marker()));
             env.insert(name.clone(), value);
         }
     }

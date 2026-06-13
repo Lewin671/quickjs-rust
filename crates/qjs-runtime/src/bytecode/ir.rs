@@ -14,6 +14,7 @@ pub(super) enum Op {
     LoadLocalOrUndefined(usize),
     LoadNewTarget,
     StoreLocal(usize),
+    AssignLocal(usize),
     ClearLocal(usize),
     DefineGlobalVar(String),
     LoadGlobal(String),
@@ -416,6 +417,7 @@ pub(super) struct Local {
     pub(super) hoisted: bool,
     pub(super) mutable: bool,
     pub(super) from_env: bool,
+    pub(super) sloppy_global_fallback: bool,
 }
 
 /// Compiled bytecode for a script.
@@ -536,7 +538,7 @@ impl Bytecode {
                     | Op::StoreGlobalStrict(_)
                     | Op::StoreLocalOrGlobalSloppy { .. }
             )
-            || matches!(op, Op::StoreLocal(slot) if self.locals.get(*slot).is_some_and(|local| local.from_env))
+            || matches!(op, Op::StoreLocal(slot) | Op::AssignLocal(slot) if self.locals.get(*slot).is_some_and(|local| local.from_env))
         })
     }
 }

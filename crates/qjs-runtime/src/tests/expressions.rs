@@ -474,6 +474,41 @@ fn evaluates_destructuring_assignment_expressions() {
 }
 
 #[test]
+fn assignments_respect_lexical_tdz() {
+    assert_eq!(
+        eval(
+            "var result = '';
+             try { x = 1; result = 'no throw'; }
+             catch (error) { result = error instanceof ReferenceError ? 'reference' : error.name; }
+             let x;
+             result;"
+        ),
+        Ok(Value::String("reference".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var result = '';
+             try { 0, [x] = []; result = 'no throw'; }
+             catch (error) { result = error instanceof ReferenceError ? 'reference' : error.name; }
+             let x;
+             result;"
+        ),
+        Ok(Value::String("reference".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var result = '';
+             var x;
+             try { 0, [x = y] = []; result = 'no throw'; }
+             catch (error) { result = error instanceof ReferenceError ? 'reference' : error.name; }
+             let y;
+             result;"
+        ),
+        Ok(Value::String("reference".to_owned()))
+    );
+}
+
+#[test]
 fn destructuring_assignment_evaluates_member_targets_before_value_reads() {
     assert_eq!(
         eval(

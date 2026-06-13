@@ -337,15 +337,15 @@ impl Compiler {
             return Ok(());
         }
         let is_strict = self.strict || is_strict_function_body(body);
-        let bytecode = super::compiler::compile_function_body_with_strict_generator(
+        let local_names = collect_function_local_names(Some(name), params, body, true);
+        let (bytecode, lexical_captures) = self.compile_nested_function_body(
             params,
             body,
             is_strict,
             *is_generator,
             *is_async,
+            &local_names,
         )?;
-        let local_names = collect_function_local_names(Some(name), params, body, true);
-        let lexical_captures = self.active_lexical_captures(&bytecode, &local_names);
         self.emit(Op::NewFunction {
             name: Some(name.clone()),
             params: params.clone(),

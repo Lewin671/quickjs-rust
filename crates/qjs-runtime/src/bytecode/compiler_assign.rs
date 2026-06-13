@@ -44,7 +44,7 @@ impl Compiler {
                 };
                 self.compile_named_expr(value, name)?;
                 self.emit(Op::Dup);
-                self.emit(Op::StoreLocal(slot));
+                self.emit(Op::AssignLocal(slot));
                 Ok(())
             }
             AssignmentTarget::Member {
@@ -199,7 +199,7 @@ impl Compiler {
         }
     }
 
-    fn emit_store_identifier(&mut self, name: &str, slot: Option<usize>) {
+    pub(super) fn emit_store_identifier(&mut self, name: &str, slot: Option<usize>) {
         if self.inside_with() {
             self.emit(Op::StoreIdentWith {
                 name: name.to_owned(),
@@ -207,7 +207,7 @@ impl Compiler {
                 is_strict: self.strict,
             });
         } else if let Some(slot) = slot {
-            self.emit(Op::StoreLocal(slot));
+            self.emit(Op::AssignLocal(slot));
         } else {
             self.emit(Op::StoreGlobalStrict(name.to_owned()));
         }

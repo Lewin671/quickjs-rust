@@ -205,8 +205,9 @@ impl Compiler {
     /// Stores the value on top of the stack into an identifier reference,
     /// consuming it.
     fn emit_pattern_identifier_store(&mut self, name: &str) {
-        if let Some(slot) = self.resolve_local_slot(name) {
-            self.emit(Op::StoreLocal(slot));
+        let slot = self.resolve_local_slot(name);
+        if slot.is_some() || self.inside_with() {
+            self.emit_store_identifier(name, slot);
         } else if self.strict || self.is_global_hoisted(name) {
             self.emit(Op::StoreGlobalStrict(name.to_owned()));
         } else {

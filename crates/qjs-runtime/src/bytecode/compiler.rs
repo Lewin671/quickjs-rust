@@ -159,6 +159,14 @@ impl Compiler {
         }
     }
 
+    pub(super) fn function_compiler(strict: bool, async_generator_body: bool) -> Self {
+        Self {
+            strict,
+            async_generator_body,
+            ..Self::default()
+        }
+    }
+
     fn compile_into(&mut self, script: &Script) -> Result<Bytecode, RuntimeError> {
         self.strict = self.strict || is_strict_function_body(&script.body);
         self.collect_hoisted_locals(&script.body);
@@ -381,6 +389,7 @@ impl Compiler {
             hoisted,
             mutable: true,
             from_env: true,
+            sloppy_global_fallback: false,
         });
         self.local_slots.insert(name.to_owned(), slot);
         slot
@@ -396,6 +405,7 @@ impl Compiler {
             hoisted: false,
             mutable,
             from_env: false,
+            sloppy_global_fallback: false,
         });
         self.current_lexical_scope_mut()
             .insert(name.to_owned(), slot);
@@ -412,6 +422,7 @@ impl Compiler {
             hoisted: false,
             mutable,
             from_env: true,
+            sloppy_global_fallback: false,
         });
         self.current_lexical_scope_mut()
             .insert(name.to_owned(), slot);
@@ -433,7 +444,10 @@ impl Compiler {
         if self.global_scope && self.global_hoisted.contains(name) {
             return None;
         }
-        self.local_slots.get(name).copied()
+        self.local_slots
+            .get(name)
+            .copied()
+            .filter(|slot| !self.locals[*slot].sloppy_global_fallback)
     }
 
     pub(super) fn is_global_hoisted(&self, name: &str) -> bool {
@@ -441,8 +455,22 @@ impl Compiler {
     }
 
     pub(super) fn assignment_slot(&mut self, name: &str) -> usize {
-        self.resolve_local_slot(name)
-            .unwrap_or_else(|| self.local_slot(name, false))
+        if let Some(slot) = self.resolve_local_slot(name) {
+            return slot;
+        }
+        if let Some(slot) = self.local_slots.get(name) {
+            return *slot;
+        }
+        let slot = self.locals.len();
+        self.locals.push(Local {
+            name: name.to_owned(),
+            hoisted: false,
+            mutable: true,
+            from_env: false,
+            sloppy_global_fallback: true,
+        });
+        self.local_slots.insert(name.to_owned(), slot);
+        slot
     }
 
     pub(super) fn with_lexical_scope<T>(

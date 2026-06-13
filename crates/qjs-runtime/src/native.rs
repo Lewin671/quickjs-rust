@@ -31,6 +31,13 @@ pub(crate) fn call_native_function(
     is_construct: bool,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
+    if matches!(native, NativeFunction::UninitializedLexical) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "ReferenceError: uninitialized lexical binding".to_owned(),
+        });
+    }
+
     if let Some(value) = arrays::call_array_native(
         function,
         native,
