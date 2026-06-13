@@ -59,7 +59,9 @@ pub(super) enum Op {
         cooked: Vec<String>,
         raw: Vec<String>,
     },
-    NewObject(Vec<ObjectPropertyMeta>),
+    NewObjectLiteral,
+    DefineObjectProperty(ObjectPropertyMeta),
+    CopyObjectSpread,
     EnumerateKeys,
     /// Replaces an iterable on the stack with its iterator object.
     GetIterator,
@@ -373,8 +375,7 @@ pub(super) enum ArrayElementKind {
     Spread,
 }
 
-/// Per-property metadata for an object literal, paired with each
-/// key/value pair on the operand stack consumed by `Op::NewObject`.
+/// Per-property metadata for an object literal definition.
 #[derive(Clone, Copy, Debug)]
 pub(super) struct ObjectPropertyMeta {
     pub(super) kind: ObjectPropertyKind,

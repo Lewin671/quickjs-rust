@@ -61,6 +61,40 @@ fn evaluates_object_literals_and_member_access() {
 }
 
 #[test]
+fn evaluates_object_spread_properties() {
+    assert_eq!(
+        eval(
+            "let source = { x: 1, y: 2 }; let object = { ...source, y: 3 }; object.x + ':' + object.y + ':' + Object.keys(object).join(',');"
+        ),
+        Ok(Value::String("1:3:x,y".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let object = { a: 1, ...null, ...undefined, b: 2 }; Object.keys(object).join(',') + ':' + object.a + ':' + object.b;"
+        ),
+        Ok(Value::String("a,b:1:2".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let source = { x: 1 }; let object = { ...source, y: (source.x = 9) }; object.x + ':' + object.y + ':' + source.x;"
+        ),
+        Ok(Value::String("1:9:9".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let calls = 0; let source = { get x() { calls = calls + 1; return 7; } }; let object = { ...source }; object.x + ':' + calls;"
+        ),
+        Ok(Value::String("7:1".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let key = Symbol('k'); let source = {}; source[key] = 5; let object = { ...source }; object[key];"
+        ),
+        Ok(Value::Number(5.0))
+    );
+}
+
+#[test]
 fn proto_literal_special_form_sets_prototype() {
     // `{ __proto__: expr }` with a literal key and colon data form sets
     // [[Prototype]] rather than creating an own property.

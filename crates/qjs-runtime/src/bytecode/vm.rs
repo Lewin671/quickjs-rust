@@ -20,7 +20,6 @@ use super::vm_result::{Completion, FunctionBytecodeResult, ResumeMode};
 use super::vm_try::TryFrame;
 
 pub(super) type Slot = Option<Value>;
-
 struct VmCallEnv {
     env: CallEnv,
     binding_names: Option<Vec<String>>,
@@ -36,7 +35,6 @@ pub(super) fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> 
     vm.drain_promise_jobs()?;
     Ok(value)
 }
-
 pub(super) fn eval_function_bytecode(
     bytecode: &Bytecode,
     env: CallEnv,
@@ -293,7 +291,9 @@ impl<'a> Vm<'a> {
                 }
                 Op::NewArray { elements } => self.new_array(&elements)?,
                 Op::NewTemplateObject { cooked, raw } => self.new_template_object(&cooked, &raw),
-                Op::NewObject(kinds) => self.new_object(&kinds)?,
+                Op::NewObjectLiteral => self.new_object_literal(),
+                Op::DefineObjectProperty(meta) => self.define_object_property(meta)?,
+                Op::CopyObjectSpread => self.copy_object_spread()?,
                 Op::EnumerateKeys => self.enumerate_keys()?,
                 Op::GetIterator => self.get_iterator()?,
                 Op::GetAsyncIterator => self.get_async_iterator()?,

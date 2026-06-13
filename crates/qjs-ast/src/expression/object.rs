@@ -28,6 +28,8 @@ pub enum ObjectPropertyKind {
     Getter,
     /// Setter accessor.
     Setter,
+    /// Object spread property, as in `{ ...source }`.
+    Spread,
 }
 
 /// Object literal property key.

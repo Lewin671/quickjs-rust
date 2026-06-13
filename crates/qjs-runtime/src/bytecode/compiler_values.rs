@@ -58,7 +58,13 @@ impl Compiler {
         &mut self,
         properties: &[ObjectProperty],
     ) -> Result<(), RuntimeError> {
+        self.emit(Op::NewObjectLiteral);
         for property in properties {
+            if matches!(property.kind, ObjectPropertyKind::Spread) {
+                self.compile_expr(&property.value)?;
+                self.emit(Op::CopyObjectSpread);
+                continue;
+            }
             match &property.key {
                 ObjectPropertyKey::Literal(key) => {
                     let slot = self.const_slot(Value::String(key.clone()));
@@ -72,22 +78,21 @@ impl Compiler {
                         && !property.is_proto_setter
                     {
                         self.compile_named_expr(&property.value, key)?;
+                        self.emit(Op::DefineObjectProperty(ObjectPropertyMeta {
+                            kind: property.kind,
+                            is_proto_setter: property.is_proto_setter,
+                        }));
                         continue;
                     }
                 }
                 ObjectPropertyKey::Computed(expr) => self.compile_expr(expr)?,
             }
             self.compile_expr(&property.value)?;
+            self.emit(Op::DefineObjectProperty(ObjectPropertyMeta {
+                kind: property.kind,
+                is_proto_setter: property.is_proto_setter,
+            }));
         }
-        self.emit(Op::NewObject(
-            properties
-                .iter()
-                .map(|property| ObjectPropertyMeta {
-                    kind: property.kind,
-                    is_proto_setter: property.is_proto_setter,
-                })
-                .collect(),
-        ));
         Ok(())
     }
 

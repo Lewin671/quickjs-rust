@@ -499,6 +499,17 @@ fn parses_object_literal_and_member_assignment() {
         ObjectPropertyKey::Computed(Expr::Identifier { ref name, .. }) if name == "key"
     ));
 
+    let script = parse_script("let source = {}; ({ ...source, after: 1 });")
+        .expect("object spread should parse");
+    let [_, Stmt::Expr(Expr::Object { properties, .. })] = script.body.as_slice() else {
+        panic!("expected object expression with spread property");
+    };
+    assert_eq!(properties[0].kind, ObjectPropertyKind::Spread);
+    assert!(matches!(
+        properties[0].value,
+        Expr::Identifier { ref name, .. } if name == "source"
+    ));
+
     let script =
         parse_script("({ method(a, b) { return a + b; } });").expect("source should parse");
     let [Stmt::Expr(Expr::Object { properties, .. })] = script.body.as_slice() else {

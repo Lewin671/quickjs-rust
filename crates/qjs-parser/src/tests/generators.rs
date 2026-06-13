@@ -158,6 +158,22 @@ fn yield_is_assignment_expression() {
 }
 
 #[test]
+fn yield_is_valid_in_object_spread_expression() {
+    let (_, body) = sole_function_decl("function* g() { return { ...yield }; }");
+    let [
+        Stmt::Return {
+            argument: Some(Expr::Object { properties, .. }),
+            ..
+        },
+    ] = body.as_slice()
+    else {
+        panic!("expected return of object literal");
+    };
+    assert_eq!(properties[0].kind, ObjectPropertyKind::Spread);
+    assert!(matches!(properties[0].value, Expr::Yield { .. }));
+}
+
+#[test]
 fn yield_nests_right_associatively() {
     // `yield yield 1` parses as `yield (yield 1)`.
     let (_, body) = sole_function_decl("function* g() { yield yield 1; }");

@@ -134,7 +134,7 @@ pub(crate) fn enumerable_property_entries(
     Ok(entries)
 }
 
-pub(super) fn enumerable_property_entries_with_symbols(
+pub(crate) fn enumerable_property_entries_with_symbols(
     value: Value,
     env: &mut CallEnv,
 ) -> Result<Vec<(PropertyKey, Value)>, RuntimeError> {

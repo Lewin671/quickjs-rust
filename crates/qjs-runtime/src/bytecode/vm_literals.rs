@@ -9,8 +9,8 @@ use std::collections::HashMap;
 use qjs_ast::ObjectPropertyKind;
 
 use crate::{
-    ArrayRef, ObjectRef, Property, Prototype, RuntimeError, Value, array::iterable_values_with_env,
-    object, object_prototype, to_property_key_value,
+    ArrayRef, ObjectRef, Property, PropertyKey, Prototype, RuntimeError, Value,
+    array::iterable_values_with_env, object, object_prototype, to_property_key_value,
 };
 
 use super::ir::{ArrayElementKind, ObjectPropertyMeta};
@@ -73,80 +73,130 @@ impl Vm<'_> {
         self.stack.push(Value::Array(cooked_array));
     }
 
-    pub(super) fn new_object(&mut self, kinds: &[ObjectPropertyMeta]) -> Result<(), RuntimeError> {
-        let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(&self.env));
-        // Proto-setter entries (`{ __proto__: expr }`) set [[Prototype]] in
-        // source order rather than defining an own property; collect them
-        // separately so ordinary properties keep their stack-popping order.
-        let mut entries = Vec::with_capacity(kinds.len());
-        let mut proto_assignments = Vec::new();
-        for meta in kinds.iter().rev() {
-            let value = self.pop()?;
-            let key_value = self.pop()?;
-            if meta.is_proto_setter {
-                proto_assignments.push(value);
-                continue;
-            }
-            let mut key_env = self.current_env();
-            let key = to_property_key_value(key_value, &mut key_env)?;
-            self.apply_env(key_env);
-            let descriptor = match meta.kind {
-                ObjectPropertyKind::Data => Property::enumerable(value),
-                ObjectPropertyKind::Getter => Property::accessor(Some(value), None, true, true),
-                ObjectPropertyKind::Setter => Property::accessor(None, Some(value), true, true),
-            };
-            entries.push((key, descriptor));
+    pub(super) fn new_object_literal(&mut self) {
+        self.stack.push(Value::Object(ObjectRef::with_prototype(
+            HashMap::new(),
+            object_prototype(&self.env),
+        )));
+    }
+
+    pub(super) fn define_object_property(
+        &mut self,
+        meta: ObjectPropertyMeta,
+    ) -> Result<(), RuntimeError> {
+        let value = self.pop()?;
+        let key_value = self.pop()?;
+        let object = self.object_literal_target()?;
+        if meta.is_proto_setter {
+            apply_object_literal_proto(&object, value, &self.env)?;
+            return Ok(());
         }
-        // Apply prototype assignments in source order (reverse of pop order).
-        for proto in proto_assignments.into_iter().rev() {
-            let prototype = match proto {
-                Value::Null => Some(None),
-                Value::Object(object) if crate::symbol::is_symbol_primitive(&object) => None,
-                Value::Object(object) => Some(Some(Prototype::Object(object))),
-                Value::Function(function) => Some(Some(Prototype::Function(function))),
-                Value::Array(array) => Some(Some(Prototype::Object(
-                    crate::array_as_object_prototype(&array, &self.env),
-                ))),
-                Value::Map(map) => Some(Some(Prototype::Object(map.object()))),
-                Value::Set(set) => Some(Some(Prototype::Object(set.object()))),
-                // Proxy and primitive proto values are ignored by the special form.
-                _ => None,
-            };
-            if let Some(prototype) = prototype {
-                object
-                    .set_prototype_slot(prototype)
-                    .map_err(|()| RuntimeError {
-                        thrown: None,
-                        message: "object literal __proto__ assignment failed".to_owned(),
-                    })?;
-            }
+        let mut key_env = self.current_env();
+        let key = to_property_key_value(key_value, &mut key_env)?;
+        self.apply_env(key_env);
+        let descriptor = object_property_descriptor(meta.kind, value)?;
+        define_object_literal_property(&object, key, descriptor, &mut self.realm_env())
+    }
+
+    pub(super) fn copy_object_spread(&mut self) -> Result<(), RuntimeError> {
+        let source = self.pop()?;
+        if matches!(source, Value::Null | Value::Undefined) {
+            self.object_literal_target()?;
+            return Ok(());
         }
-        for (key, mut descriptor) in entries.into_iter().rev() {
-            if descriptor.is_accessor()
-                && let Some(existing) = match &key {
-                    crate::PropertyKey::String(key) => object.own_property(key),
-                    crate::PropertyKey::Symbol(symbol) => object.own_symbol_property(symbol),
-                }
-                && existing.is_accessor()
-            {
-                descriptor.get = descriptor.get.or(existing.get);
-                descriptor.set = descriptor.set.or(existing.set);
-            }
-            let mut prop_env = self.realm_env();
-            let success = object::define_property_on_value_key(
-                Value::Object(object.clone()),
+        let object = self.object_literal_target()?;
+        let mut env = self.current_env();
+        let entries = object::enumerable_property_entries_with_symbols(source, &mut env)?;
+        self.apply_env(env);
+        for (key, value) in entries {
+            define_object_literal_property(
+                &object,
                 key,
-                descriptor,
-                &mut prop_env,
+                Property::enumerable(value),
+                &mut self.realm_env(),
             )?;
-            if !success {
-                return Err(RuntimeError {
-                    thrown: None,
-                    message: "object literal property definition failed".to_owned(),
-                });
-            }
         }
-        self.stack.push(Value::Object(object));
         Ok(())
     }
+
+    fn object_literal_target(&self) -> Result<ObjectRef, RuntimeError> {
+        match self.stack.last() {
+            Some(Value::Object(object)) => Ok(object.clone()),
+            _ => Err(RuntimeError {
+                thrown: None,
+                message: "object literal target missing".to_owned(),
+            }),
+        }
+    }
+}
+
+fn object_property_descriptor(
+    kind: ObjectPropertyKind,
+    value: Value,
+) -> Result<Property, RuntimeError> {
+    match kind {
+        ObjectPropertyKind::Data => Ok(Property::enumerable(value)),
+        ObjectPropertyKind::Getter => Ok(Property::accessor(Some(value), None, true, true)),
+        ObjectPropertyKind::Setter => Ok(Property::accessor(None, Some(value), true, true)),
+        ObjectPropertyKind::Spread => Err(RuntimeError {
+            thrown: None,
+            message: "object spread is not a keyed property".to_owned(),
+        }),
+    }
+}
+
+fn apply_object_literal_proto(
+    object: &ObjectRef,
+    proto: Value,
+    env: &crate::CallEnv,
+) -> Result<(), RuntimeError> {
+    let prototype = match proto {
+        Value::Null => Some(None),
+        Value::Object(object) if crate::symbol::is_symbol_primitive(&object) => None,
+        Value::Object(object) => Some(Some(Prototype::Object(object))),
+        Value::Function(function) => Some(Some(Prototype::Function(function))),
+        Value::Array(array) => Some(Some(Prototype::Object(crate::array_as_object_prototype(
+            &array, env,
+        )))),
+        Value::Map(map) => Some(Some(Prototype::Object(map.object()))),
+        Value::Set(set) => Some(Some(Prototype::Object(set.object()))),
+        // Proxy and primitive proto values are ignored by the special form.
+        _ => None,
+    };
+    if let Some(prototype) = prototype {
+        object
+            .set_prototype_slot(prototype)
+            .map_err(|()| RuntimeError {
+                thrown: None,
+                message: "object literal __proto__ assignment failed".to_owned(),
+            })?;
+    }
+    Ok(())
+}
+
+fn define_object_literal_property(
+    object: &ObjectRef,
+    key: PropertyKey,
+    mut descriptor: Property,
+    env: &mut crate::CallEnv,
+) -> Result<(), RuntimeError> {
+    if descriptor.is_accessor()
+        && let Some(existing) = match &key {
+            PropertyKey::String(key) => object.own_property(key),
+            PropertyKey::Symbol(symbol) => object.own_symbol_property(symbol),
+        }
+        && existing.is_accessor()
+    {
+        descriptor.get = descriptor.get.or(existing.get);
+        descriptor.set = descriptor.set.or(existing.set);
+    }
+    let success =
+        object::define_property_on_value_key(Value::Object(object.clone()), key, descriptor, env)?;
+    if !success {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "object literal property definition failed".to_owned(),
+        });
+    }
+    Ok(())
 }

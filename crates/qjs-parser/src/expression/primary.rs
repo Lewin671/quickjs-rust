@@ -386,6 +386,24 @@ impl Parser {
         let mut properties = Vec::new();
         if !self.at(&TokenKind::RightBrace) {
             loop {
+                if self.at(&TokenKind::DotDotDot) {
+                    let spread_token = self.advance();
+                    let argument = self.assignment()?;
+                    properties.push(ObjectProperty {
+                        key: ObjectPropertyKey::Literal(String::new()),
+                        kind: ObjectPropertyKind::Spread,
+                        is_proto_setter: false,
+                        span: Span::new(spread_token.span.start, argument.span().end),
+                        value: argument,
+                    });
+                    if !self.match_kind(&TokenKind::Comma) {
+                        break;
+                    }
+                    if self.at(&TokenKind::RightBrace) {
+                        break;
+                    }
+                    continue;
+                }
                 if self.at(&TokenKind::Star) {
                     let property = self.object_generator_method(false, None)?;
                     properties.push(property);
