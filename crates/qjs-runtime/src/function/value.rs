@@ -27,13 +27,21 @@ pub(crate) struct InstanceFieldInitializer {
     pub(crate) initializer: Option<Function>,
 }
 
+/// A class element applied to each instance at construction time.
+#[derive(Clone)]
+pub(crate) enum InstanceElementInitializer {
+    PublicField(InstanceFieldInitializer),
+    PrivateElement(InstancePrivateElement),
+}
+
 /// A private element applied to each instance at construction time. Methods and
 /// accessors only brand the instance (the function is shared); a field both
 /// brands and installs a per-instance value.
 #[derive(Clone)]
 pub(crate) struct InstancePrivateElement {
-    /// The private-name identity to brand/install on the instance.
-    pub(crate) id: crate::private::PrivateName,
+    /// The private-name source text, resolved through the constructor's class
+    /// private environment when the instance is initialized.
+    pub(crate) name: String,
     /// `Some` for a private field: the initializer thunk (or `None` for an
     /// initializer-less field, which installs `undefined`). `None` for a
     /// private method or accessor, which only brands the instance.
@@ -91,7 +99,7 @@ pub struct Function {
     /// For a class constructor, the instance-field initializers run when a new
     /// instance is constructed (base class: at construction start; derived
     /// class: immediately after `super()` returns).
-    pub(crate) instance_fields: Rc<RefCell<Vec<InstanceFieldInitializer>>>,
+    pub(crate) instance_elements: Rc<RefCell<Vec<InstanceElementInitializer>>>,
     pub(crate) bound: Option<Box<BoundFunction>>,
     /// Function object properties.
     pub(crate) properties: Rc<RefCell<HashMap<String, Property>>>,
@@ -253,7 +261,7 @@ impl Function {
             is_field_initializer: false,
             home_object: Rc::new(RefCell::new(None)),
             super_constructor: Rc::new(RefCell::new(None)),
-            instance_fields: Rc::new(RefCell::new(Vec::new())),
+            instance_elements: Rc::new(RefCell::new(Vec::new())),
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
             property_order: Rc::new(RefCell::new(Vec::new())),
@@ -322,7 +330,7 @@ impl Function {
             is_field_initializer,
             home_object: Rc::new(RefCell::new(home_object)),
             super_constructor: Rc::new(RefCell::new(super_constructor)),
-            instance_fields: Rc::new(RefCell::new(Vec::new())),
+            instance_elements: Rc::new(RefCell::new(Vec::new())),
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
             property_order: Rc::new(RefCell::new(Vec::new())),
@@ -411,7 +419,7 @@ impl Function {
             is_field_initializer: false,
             home_object: Rc::new(RefCell::new(None)),
             super_constructor: Rc::new(RefCell::new(None)),
-            instance_fields: Rc::new(RefCell::new(Vec::new())),
+            instance_elements: Rc::new(RefCell::new(Vec::new())),
             bound: Some(Box::new(BoundFunction {
                 target,
                 this_value,
@@ -460,7 +468,7 @@ impl Function {
             is_field_initializer: false,
             home_object: Rc::new(RefCell::new(None)),
             super_constructor: Rc::new(RefCell::new(None)),
-            instance_fields: Rc::new(RefCell::new(Vec::new())),
+            instance_elements: Rc::new(RefCell::new(Vec::new())),
             bound: None,
             properties: Rc::new(RefCell::new(HashMap::new())),
             property_order: Rc::new(RefCell::new(Vec::new())),
@@ -836,15 +844,21 @@ impl Function {
     /// Records an instance private element (a field initializer or a
     /// method/accessor brand) applied to each instance at construction time.
     pub(crate) fn push_instance_private_element(&self, element: InstancePrivateElement) {
-        self.private_state
+        self.instance_elements
             .borrow_mut()
-            .instance_elements
-            .push(element);
+            .push(InstanceElementInitializer::PrivateElement(element));
     }
 
-    /// Returns a snapshot of this constructor's instance private elements.
-    pub(crate) fn instance_private_elements(&self) -> Vec<InstancePrivateElement> {
-        self.private_state.borrow().instance_elements.clone()
+    /// Records a public instance field applied at construction time.
+    pub(crate) fn push_instance_public_field(&self, field: InstanceFieldInitializer) {
+        self.instance_elements
+            .borrow_mut()
+            .push(InstanceElementInitializer::PublicField(field));
+    }
+
+    /// Returns a snapshot of this constructor's instance elements.
+    pub(crate) fn instance_elements(&self) -> Vec<InstanceElementInitializer> {
+        self.instance_elements.borrow().clone()
     }
 
     /// The explicit [[Prototype]] override as an object slot. A function-valued

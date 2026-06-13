@@ -48,6 +48,44 @@ fn writes_private_instance_field() {
 }
 
 #[test]
+fn instance_public_and_private_fields_initialize_in_source_order() {
+    assert_eq!(
+        eval("class C { #x; y = this.#x; } new C().y;"),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval(
+            "class C { #x; y = (this.#x = 1); getX() { return this.#x; } } let c = new C(); c.y + c.getX();"
+        ),
+        Ok(Value::Number(2.0))
+    );
+
+    let read_before_declaration = eval("class C { y = this.#x; #x; } new C();");
+    assert!(
+        matches!(read_before_declaration, Err(ref error) if error.message.contains("TypeError")),
+        "expected TypeError for reading #x before its field is initialized, got {read_before_declaration:?}"
+    );
+
+    let write_before_declaration = eval("class C { y = (this.#x = 1); #x; } new C();");
+    assert!(
+        matches!(write_before_declaration, Err(ref error) if error.message.contains("TypeError")),
+        "expected TypeError for writing #x before its field is initialized, got {write_before_declaration:?}"
+    );
+}
+
+#[test]
+fn instance_private_methods_brand_in_source_order() {
+    assert_eq!(
+        eval("class C { #m() { return 2; } y = this.#m(); } new C().y;"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval("class C { y = this.#m(); #m() { return 2; } } new C().y;"),
+        Ok(Value::Number(2.0))
+    );
+}
+
+#[test]
 fn escaped_private_names_resolve_to_decoded_identity() {
     assert_eq!(
         eval(

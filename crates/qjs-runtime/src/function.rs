@@ -27,6 +27,6 @@ pub(crate) use prototype::{
 };
 pub(crate) use strict::is_strict_function_body;
 pub(crate) use value::{
-    CompiledUserFunction, Function, InstanceFieldInitializer, InstancePrivateElement,
-    PrivateFieldInit,
+    CompiledUserFunction, Function, InstanceElementInitializer, InstanceFieldInitializer,
+    InstancePrivateElement, PrivateFieldInit,
 };

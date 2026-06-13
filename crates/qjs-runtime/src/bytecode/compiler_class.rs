@@ -132,7 +132,7 @@ impl Compiler {
                             is_generator,
                             is_async,
                         };
-                        private_elements.push(match member.kind {
+                        let private_element = match member.kind {
                             MethodKind::Getter => ClassPrivateElementDef::Getter {
                                 name: private_name.clone(),
                                 is_static: member.is_static,
@@ -148,7 +148,9 @@ impl Compiler {
                                 is_static: member.is_static,
                                 def,
                             },
-                        });
+                        };
+                        elements.push(ClassElementDef::Private(private_element.clone()));
+                        private_elements.push(private_element);
                         continue;
                     }
 
@@ -169,11 +171,13 @@ impl Compiler {
                     let initializer =
                         compile_field_initializer(name, field.initializer.as_ref(), &field.key)?;
                     if let ClassMemberKey::Private(private_name) = &field.key {
-                        private_elements.push(ClassPrivateElementDef::Field {
+                        let private_element = ClassPrivateElementDef::Field {
                             name: private_name.clone(),
                             is_static: field.is_static,
                             initializer,
-                        });
+                        };
+                        elements.push(ClassElementDef::Private(private_element.clone()));
+                        private_elements.push(private_element);
                         continue;
                     }
                     let (key, _) = compile_member_key(&field.key);

@@ -45,7 +45,7 @@ pub(crate) use vm_generator::{
     start_suspended_at_body,
 };
 pub(crate) use vm_iter::sync_iterator_for_value;
-pub(crate) use vm_private::apply_instance_private_elements;
+pub(crate) use vm_private::apply_instance_private_element;
 pub(crate) use vm_props::set_property as set_object_property;
 pub(crate) use vm_result::FunctionBytecodeResult;
 

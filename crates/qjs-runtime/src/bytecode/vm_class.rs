@@ -127,6 +127,11 @@ impl Vm<'_> {
         // and static blocks in source order for pass 2.
         let mut pending = Vec::new();
         for element in elements {
+            if let ClassElementDef::Private(private) = element {
+                self.queue_instance_private_method_brand(private, &constructor_function);
+            }
+        }
+        for element in elements {
             match element {
                 ClassElementDef::Method(method) => {
                     let key = resolve_element_key(&method.key, &mut computed_keys);
@@ -134,7 +139,28 @@ impl Vm<'_> {
                 }
                 ClassElementDef::Field(field) => {
                     let key = resolve_element_key(&field.key, &mut computed_keys);
-                    pending.push(PendingStaticItem::Field(field, key));
+                    if field.is_static {
+                        pending.push(PendingStaticItem::Field(field, key));
+                    } else {
+                        let initializer = self.build_field_initializer(
+                            field,
+                            &prototype,
+                            &constructor_function,
+                            name,
+                        );
+                        constructor_function.push_instance_public_field(InstanceFieldInitializer {
+                            key,
+                            initializer,
+                        });
+                    }
+                }
+                ClassElementDef::Private(private) => {
+                    self.queue_instance_private_element(
+                        private,
+                        &prototype,
+                        &constructor_function,
+                        name,
+                    );
                 }
                 ClassElementDef::StaticBlock(block) => {
                     pending.push(PendingStaticItem::Block(block));
@@ -149,10 +175,8 @@ impl Vm<'_> {
         // initializers can reference private methods.
         self.install_private_elements(private_elements, &prototype, &constructor_function, name)?;
 
-        // Pass 2: instance fields become constructor initializers (run at
-        // construction time); static fields and static blocks are evaluated now,
-        // after all method definitions, in source order, with `this` = the
-        // constructor.
+        // Pass 2: static fields and static blocks are evaluated now, after all
+        // method definitions, in source order, with `this` = the constructor.
         for item in pending {
             match item {
                 PendingStaticItem::Field(field, key) => {
@@ -162,27 +186,20 @@ impl Vm<'_> {
                         &constructor_function,
                         name,
                     );
-                    if field.is_static {
-                        let value = match &initializer {
-                            Some(thunk) => self.run_field_initializer(
-                                thunk,
-                                Value::Function(constructor_function.clone()),
-                            )?,
-                            None => Value::Undefined,
-                        };
-                        install_field_value(
-                            &Value::Function(constructor_function.clone()),
-                            key,
-                            value,
-                            &mut self.realm_env(),
-                        )?;
-                        self.refresh_instance_field_captures(&constructor_function);
-                    } else {
-                        constructor_function
-                            .instance_fields
-                            .borrow_mut()
-                            .push(InstanceFieldInitializer { key, initializer });
-                    }
+                    let value = match &initializer {
+                        Some(thunk) => self.run_field_initializer(
+                            thunk,
+                            Value::Function(constructor_function.clone()),
+                        )?,
+                        None => Value::Undefined,
+                    };
+                    install_field_value(
+                        &Value::Function(constructor_function.clone()),
+                        key,
+                        value,
+                        &mut self.realm_env(),
+                    )?;
+                    self.refresh_instance_field_captures(&constructor_function);
                 }
                 PendingStaticItem::Block(block) => {
                     self.run_static_block(block, &constructor_function, name)?;
@@ -202,9 +219,20 @@ impl Vm<'_> {
     }
 
     fn refresh_instance_field_captures(&self, constructor_function: &Function) {
-        for field in constructor_function.instance_fields.borrow().iter() {
-            if let Some(initializer) = &field.initializer {
-                self.refresh_function_captures(initializer);
+        for element in constructor_function.instance_elements().iter() {
+            match element {
+                crate::function::InstanceElementInitializer::PublicField(field) => {
+                    if let Some(initializer) = &field.initializer {
+                        self.refresh_function_captures(initializer);
+                    }
+                }
+                crate::function::InstanceElementInitializer::PrivateElement(private) => {
+                    if let Some(field) = &private.field_initializer {
+                        if let Some(initializer) = &field.initializer {
+                            self.refresh_function_captures(initializer);
+                        }
+                    }
+                }
             }
         }
     }

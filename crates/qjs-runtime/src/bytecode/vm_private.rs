@@ -8,7 +8,7 @@ use crate::CallEnv;
 use crate::{
     Function, ObjectRef, RuntimeError, Value, call_function,
     function::{CompiledUserFunction, InstancePrivateElement, PrivateFieldInit},
-    private::{PrivateBinding, PrivateEnvironment, PrivateKind, PrivateName, PrivateStorage},
+    private::{PrivateBinding, PrivateEnvironment, PrivateKind, PrivateStorage},
 };
 
 use super::ir::{ClassMethodDef, ClassMethodKind, ClassPrivateElementDef};
@@ -42,16 +42,16 @@ impl Vm<'_> {
                     initializer,
                 } => {
                     let id = environment.declare_field(field_name);
-                    let thunk = initializer.as_ref().map(|definition| {
-                        self.build_private_field_thunk(
-                            definition,
-                            *is_static,
-                            prototype,
-                            constructor_function,
-                            name,
-                        )
-                    });
                     if *is_static {
+                        let thunk = initializer.as_ref().map(|definition| {
+                            self.build_private_field_thunk(
+                                definition,
+                                true,
+                                prototype,
+                                constructor_function,
+                                name,
+                            )
+                        });
                         let value = match &thunk {
                             Some(thunk) => self.run_private_field_initializer(
                                 thunk,
@@ -60,13 +60,6 @@ impl Vm<'_> {
                             None => Value::Undefined,
                         };
                         constructor_function.private_storage().add_field(id, value);
-                    } else {
-                        constructor_function.push_instance_private_element(
-                            InstancePrivateElement {
-                                id,
-                                field_initializer: Some(PrivateFieldInit { initializer: thunk }),
-                            },
-                        );
                     }
                 }
                 ClassPrivateElementDef::Method {
@@ -82,7 +75,9 @@ impl Vm<'_> {
                         name,
                     );
                     let id = environment.declare_method(method_name, function);
-                    self.brand_private_member(id, *is_static, constructor_function);
+                    if *is_static {
+                        constructor_function.private_storage().add_brand(id);
+                    }
                 }
                 ClassPrivateElementDef::Getter {
                     name: accessor_name,
@@ -106,7 +101,9 @@ impl Vm<'_> {
                         _ => (None, Some(function)),
                     };
                     let id = environment.declare_accessor(accessor_name, get, set);
-                    self.brand_private_member(id, *is_static, constructor_function);
+                    if *is_static {
+                        constructor_function.private_storage().add_brand(id);
+                    }
                 }
             }
         }
@@ -137,24 +134,6 @@ impl Vm<'_> {
                     environment.declare_placeholder(name);
                 }
             }
-        }
-    }
-
-    /// Brands a private method/accessor onto the constructor (static) or
-    /// registers it as an instance brand applied at construction.
-    fn brand_private_member(
-        &self,
-        id: PrivateName,
-        is_static: bool,
-        constructor_function: &Function,
-    ) {
-        if is_static {
-            constructor_function.private_storage().add_brand(id);
-        } else {
-            constructor_function.push_instance_private_element(InstancePrivateElement {
-                id,
-                field_initializer: None,
-            });
         }
     }
 
@@ -208,7 +187,7 @@ impl Vm<'_> {
 
     /// Builds the initializer thunk for a private field, mirroring public-field
     /// thunks: parameterless, strict, with the right home object.
-    fn build_private_field_thunk(
+    pub(super) fn build_private_field_thunk(
         &self,
         definition: &super::ir::ClassFieldInitializerDef,
         is_static: bool,
@@ -245,6 +224,76 @@ impl Vm<'_> {
             capture_writeback: self
                 .class_member_capture_writeback(&definition.bytecode, &definition.local_names),
         })
+    }
+
+    pub(super) fn queue_instance_private_element(
+        &self,
+        element: &ClassPrivateElementDef,
+        prototype: &ObjectRef,
+        constructor_function: &Function,
+        name: Option<&str>,
+    ) {
+        match element {
+            ClassPrivateElementDef::Field {
+                name: field_name,
+                is_static: false,
+                initializer,
+            } => {
+                let thunk = initializer.as_ref().map(|definition| {
+                    self.build_private_field_thunk(
+                        definition,
+                        false,
+                        prototype,
+                        constructor_function,
+                        name,
+                    )
+                });
+                constructor_function.push_instance_private_element(InstancePrivateElement {
+                    name: field_name.clone(),
+                    field_initializer: Some(PrivateFieldInit { initializer: thunk }),
+                });
+            }
+            ClassPrivateElementDef::Method {
+                is_static: false, ..
+            }
+            | ClassPrivateElementDef::Getter {
+                is_static: false, ..
+            }
+            | ClassPrivateElementDef::Setter {
+                is_static: false, ..
+            } => {}
+            _ => {}
+        }
+    }
+
+    pub(super) fn queue_instance_private_method_brand(
+        &self,
+        element: &ClassPrivateElementDef,
+        constructor_function: &Function,
+    ) {
+        match element {
+            ClassPrivateElementDef::Method {
+                name: method_name,
+                is_static: false,
+                ..
+            }
+            | ClassPrivateElementDef::Getter {
+                name: method_name,
+                is_static: false,
+                ..
+            }
+            | ClassPrivateElementDef::Setter {
+                name: method_name,
+                is_static: false,
+                ..
+            } => {
+                constructor_function.push_instance_private_element(InstancePrivateElement {
+                    name: method_name.clone(),
+                    field_initializer: None,
+                });
+            }
+            _ => {}
+        }
     }
 
     fn run_private_field_initializer(
@@ -381,48 +430,60 @@ impl Vm<'_> {
     }
 }
 
-/// Applies a constructor's instance private elements to a freshly created
-/// instance: branding it with each private name and installing field values.
-pub(crate) fn apply_instance_private_elements(
+/// Applies one constructor instance private element to a freshly created
+/// instance: branding it with a private name or installing a field value.
+pub(crate) fn apply_instance_private_element(
     constructor: &Function,
     this_value: &Value,
+    element: &InstancePrivateElement,
     env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
-    let elements = constructor.instance_private_elements();
-    if elements.is_empty() {
-        return Ok(());
-    }
     let storage = match instance_private_storage(this_value) {
         Some(storage) => storage,
         None => return Ok(()),
     };
-    for element in elements {
-        match &element.field_initializer {
-            Some(field) => {
-                let value = match &field.initializer {
-                    Some(thunk) => call_function(
-                        Value::Function(thunk.clone()),
-                        this_value.clone(),
-                        Vec::new(),
-                        env,
-                        false,
-                    )?,
-                    None => Value::Undefined,
-                };
-                if !storage.add_field(element.id.clone(), value) {
-                    return Err(RuntimeError {
-                        thrown: None,
-                        message: format!(
-                            "TypeError: private field #{} is already present on the object",
-                            element.id.description()
-                        ),
-                    });
-                }
+    let binding = resolve_constructor_private_binding(constructor, &element.name)?;
+    match &element.field_initializer {
+        Some(field) => {
+            let value = match &field.initializer {
+                Some(thunk) => call_function(
+                    Value::Function(thunk.clone()),
+                    this_value.clone(),
+                    Vec::new(),
+                    env,
+                    false,
+                )?,
+                None => Value::Undefined,
+            };
+            if !storage.add_field(binding.id.clone(), value) {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: format!(
+                        "TypeError: private field #{} is already present on the object",
+                        binding.id.description()
+                    ),
+                });
             }
-            None => storage.add_brand(element.id.clone()),
         }
+        None => storage.add_brand(binding.id),
     }
     Ok(())
+}
+
+fn resolve_constructor_private_binding(
+    constructor: &Function,
+    name: &str,
+) -> Result<PrivateBinding, RuntimeError> {
+    let environment = constructor
+        .private_environment()
+        .ok_or_else(|| RuntimeError {
+            thrown: None,
+            message: format!("SyntaxError: private name #{name} used outside a class body"),
+        })?;
+    environment.resolve(name).ok_or_else(|| RuntimeError {
+        thrown: None,
+        message: format!("SyntaxError: private name #{name} is not declared in scope"),
+    })
 }
 
 fn instance_private_storage(value: &Value) -> Option<PrivateStorage> {

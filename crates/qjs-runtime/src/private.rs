@@ -222,15 +222,13 @@ impl PrivateEnvironment {
 }
 
 /// The private-name state carried by a class constructor or prototype: the
-/// per-object brand/field storage, the private environment its members resolve
-/// `#x` references through, and (for a constructor) the instance private
-/// elements applied at construction. Combined behind one allocation so adding
+/// per-object brand/field storage, and the private environment its members
+/// resolve `#x` references through. Combined behind one allocation so adding
 /// private-name support keeps the inline `Function`/`ObjectRef` size unchanged.
 #[derive(Default)]
 pub(crate) struct PrivateState {
     pub(crate) storage: Option<PrivateStorage>,
     pub(crate) environment: Option<PrivateEnvironment>,
-    pub(crate) instance_elements: Vec<crate::function::InstancePrivateElement>,
 }
 
 /// Per-object private storage: the names branded onto the object, each with its

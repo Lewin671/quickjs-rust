@@ -287,6 +287,9 @@ pub(super) enum ClassMethodKind {
 pub(super) enum ClassElementDef {
     Method(ClassMethodDef),
     Field(ClassFieldDef),
+    /// A private field/method/accessor placeholder kept in source order so
+    /// instance initialization can interleave private and public elements.
+    Private(ClassPrivateElementDef),
     /// A `static { ... }` initialization block, run at class definition with
     /// `this` = the constructor, in source order with static fields.
     StaticBlock(ClassStaticBlockDef),
@@ -580,6 +583,20 @@ fn collect_global_names_from_ops(code: &[Op], names: &mut BTreeSet<String>) {
                                 names.extend(initializer.bytecode.global_names().iter().cloned());
                             }
                         }
+                        ClassElementDef::Private(element) => match element {
+                            ClassPrivateElementDef::Field { initializer, .. } => {
+                                if let Some(initializer) = initializer {
+                                    names.extend(
+                                        initializer.bytecode.global_names().iter().cloned(),
+                                    );
+                                }
+                            }
+                            ClassPrivateElementDef::Method { def, .. }
+                            | ClassPrivateElementDef::Getter { def, .. }
+                            | ClassPrivateElementDef::Setter { def, .. } => {
+                                names.extend(def.bytecode.global_names().iter().cloned());
+                            }
+                        },
                         ClassElementDef::StaticBlock(block) => {
                             names.extend(block.bytecode.global_names().iter().cloned());
                         }

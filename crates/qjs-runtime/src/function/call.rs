@@ -11,7 +11,7 @@ use crate::{
 };
 
 use super::{
-    CallEnv, InstanceFieldInitializer, function_call_this, is_internal_binding_name,
+    CallEnv, InstanceElementInitializer, function_call_this, is_internal_binding_name,
     parameter_binding_name, rest_parameter_binding_name,
 };
 
@@ -213,39 +213,57 @@ pub(crate) fn initialize_instance_fields(
     this_value: &Value,
     env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
-    // Private brands and private field values install alongside public fields,
-    // before the constructor body runs, so the body may use `this.#x`.
-    crate::bytecode::apply_instance_private_elements(function, this_value, env)?;
-    let fields = function.instance_fields.borrow().clone();
-    for (index, field) in fields.iter().enumerate() {
-        let value = match &field.initializer {
-            Some(thunk) => {
-                let value = call_function(
-                    Value::Function(thunk.clone()),
-                    this_value.clone(),
-                    Vec::new(),
-                    env,
-                    false,
-                )?;
-                refresh_later_field_initializer_captures(&fields[index + 1..], thunk);
-                value
+    let elements = function.instance_elements();
+    for (index, element) in elements.iter().enumerate() {
+        match element {
+            InstanceElementInitializer::PublicField(field) => {
+                let value = match &field.initializer {
+                    Some(thunk) => {
+                        let value = call_function(
+                            Value::Function(thunk.clone()),
+                            this_value.clone(),
+                            Vec::new(),
+                            env,
+                            false,
+                        )?;
+                        refresh_later_field_initializer_captures(&elements[index + 1..], thunk);
+                        value
+                    }
+                    None => Value::Undefined,
+                };
+                crate::bytecode::install_field_value(this_value, field.key.clone(), value, env)?;
             }
-            None => Value::Undefined,
-        };
-        crate::bytecode::install_field_value(this_value, field.key.clone(), value, env)?;
+            InstanceElementInitializer::PrivateElement(private) => {
+                let initializer = private
+                    .field_initializer
+                    .as_ref()
+                    .and_then(|field| field.initializer.as_ref());
+                crate::bytecode::apply_instance_private_element(
+                    function, this_value, private, env,
+                )?;
+                if let Some(thunk) = initializer {
+                    refresh_later_field_initializer_captures(&elements[index + 1..], thunk);
+                }
+            }
+        }
     }
     Ok(())
 }
 
 fn refresh_later_field_initializer_captures(
-    fields: &[InstanceFieldInitializer],
+    elements: &[InstanceElementInitializer],
     source: &Function,
 ) {
     let source_env = source.captured_env.borrow();
-    for field in fields {
-        let Some(target) = &field.initializer else {
-            continue;
+    for element in elements {
+        let target = match element {
+            InstanceElementInitializer::PublicField(field) => field.initializer.as_ref(),
+            InstanceElementInitializer::PrivateElement(private) => private
+                .field_initializer
+                .as_ref()
+                .and_then(|field| field.initializer.as_ref()),
         };
+        let Some(target) = target else { continue };
         let mut target_env = target.captured_env.borrow_mut();
         for (name, value) in source_env.iter() {
             if target_env.contains_key(name) {
