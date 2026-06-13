@@ -722,6 +722,20 @@ fn subclass_constructor_prototype_is_superclass() {
 }
 
 #[test]
+fn subclass_constructor_restricted_function_properties_throw_on_write() {
+    assert_eq!(
+        eval(
+            "class A {} class B extends A {} \
+             let caller = false; let args = false; \
+             try { B.caller = 1; } catch (error) { caller = error instanceof TypeError; } \
+             try { B.arguments = 1; } catch (error) { args = error instanceof TypeError; } \
+             [B.hasOwnProperty('caller'), B.hasOwnProperty('arguments'), caller, args].join(':');"
+        ),
+        Ok(Value::String("false:false:true:true".to_owned()))
+    );
+}
+
+#[test]
 fn subclass_static_inheritance_is_live() {
     // A static member added to the parent after subclassing is visible, proving
     // the link is by reference rather than a definition-time copy.

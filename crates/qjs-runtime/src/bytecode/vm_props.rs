@@ -621,10 +621,8 @@ fn function_property_for_set(
     env: &CallEnv,
     key: &str,
 ) -> Option<Property> {
-    function.properties.borrow().get(key).cloned().or_else(|| {
-        value_prototype(Value::Function(function.clone()), env)
-            .and_then(|prototype| prototype.property(key))
-    })
+    function_own_property_descriptor(function, key)
+        .or_else(|| function_prototype_chain_descriptor(function, env, key))
 }
 
 fn symbol_property_for_set(object: &Value, key: &PropertyKey, env: &CallEnv) -> Option<Property> {
