@@ -19,6 +19,7 @@ mod modules;
 mod named_evaluation;
 mod numbers;
 mod objects;
+mod parameters;
 mod private_names;
 mod promise_race;
 mod promises;

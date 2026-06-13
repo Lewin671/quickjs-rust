@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 
-use qjs_ast::{
-    BinaryOp, BindingPattern, ForInLeft, ForInit, FunctionParams, Script, Stmt, VarKind,
-};
+use qjs_ast::{ForInLeft, ForInit, FunctionParams, Script, Stmt, VarKind};
 
 use crate::{
     RuntimeError, Value,
@@ -211,7 +209,11 @@ impl Compiler {
             let binding_name = rest_parameter_binding_name(rest);
             self.local_slot(&binding_name, true);
         }
-        self.compile_parameter_bindings(params)?;
+        let non_simple_params = !params.is_simple();
+        if non_simple_params {
+            self.snapshot_non_simple_parameter_arguments(params)?;
+        }
+        self.compile_parameter_bindings(params, non_simple_params)?;
         // Mark the end of parameter instantiation. Generators/async generators
         // run their prologue synchronously at the call and suspend here; other
         // functions skip past it.
@@ -233,54 +235,6 @@ impl Compiler {
         self.emit_load_undefined();
         self.code.push(Op::Return);
         Ok(Bytecode::new(self.constants, self.locals, self.code))
-    }
-
-    fn compile_parameter_bindings(&mut self, params: &FunctionParams) -> Result<(), RuntimeError> {
-        for (index, element) in params.positional.iter().enumerate() {
-            if let BindingPattern::Identifier { name, .. } = &element.binding {
-                let Some(default) = &element.default else {
-                    continue;
-                };
-                let slot = self
-                    .resolve_local_slot(name)
-                    .expect("parameter slot should be declared before defaults");
-                self.emit(Op::LoadLocal(slot));
-                self.emit_load_undefined();
-                self.emit(Op::Binary(BinaryOp::StrictEq));
-                let skip_default = self.emit(Op::JumpIfFalse(usize::MAX));
-                self.emit(Op::Pop);
-                self.compile_named_expr(default, name)?;
-                self.emit(Op::StoreLocal(slot));
-                let done = self.emit(Op::Jump(usize::MAX));
-                let skip_target = self.code.len();
-                self.patch_jump(skip_default, skip_target);
-                self.emit(Op::Pop);
-                let done_target = self.code.len();
-                self.patch_jump(done, done_target);
-            } else {
-                let binding_name = parameter_binding_name(&element.binding, index);
-                let slot = self
-                    .resolve_local_slot(&binding_name)
-                    .expect("parameter pattern slot should be declared before bindings");
-                self.emit(Op::LoadLocal(slot));
-                self.compile_binding_default(
-                    element.default.as_ref(),
-                    super::compiler_binding::binding_inferred_name(&element.binding),
-                )?;
-                self.compile_binding_initializer(&element.binding, VarKind::Var)?;
-            }
-        }
-        if let Some(rest) = &params.rest
-            && !matches!(rest.as_ref(), BindingPattern::Identifier { .. })
-        {
-            let binding_name = rest_parameter_binding_name(rest);
-            let slot = self
-                .resolve_local_slot(&binding_name)
-                .expect("rest parameter pattern slot should be declared before bindings");
-            self.emit(Op::LoadLocal(slot));
-            self.compile_binding_initializer(rest, VarKind::Var)?;
-        }
-        Ok(())
     }
 
     fn collect_hoisted_locals(&mut self, body: &[Stmt]) {

@@ -26,6 +26,12 @@ pub(crate) fn parameter_binding_name(binding: &BindingPattern, index: usize) -> 
     }
 }
 
+/// Returns the internal call-frame binding that snapshots one positional
+/// argument while a non-simple parameter list initializes its real bindings.
+pub(crate) fn parameter_argument_binding_name(index: usize) -> String {
+    format!("\u{0}\u{0}param_argument_{index}")
+}
+
 /// Returns the call-frame binding name for the rest parameter.
 pub(crate) fn rest_parameter_binding_name(binding: &BindingPattern) -> String {
     match binding {
@@ -34,6 +40,12 @@ pub(crate) fn rest_parameter_binding_name(binding: &BindingPattern) -> String {
             "\u{0}\u{0}rest_pattern".to_owned()
         }
     }
+}
+
+/// Returns the internal call-frame binding that snapshots the rest array while
+/// a non-simple parameter list initializes its real rest binding.
+pub(crate) fn rest_parameter_argument_binding_name() -> String {
+    "\u{0}\u{0}rest_argument".to_owned()
 }
 
 pub(crate) fn collect_function_local_names(

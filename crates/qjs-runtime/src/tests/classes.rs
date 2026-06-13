@@ -582,6 +582,26 @@ fn super_property_in_async_method_default_parameter() {
 }
 
 #[test]
+fn class_method_default_parameters_use_parameter_tdz() {
+    assert_eq!(
+        eval(
+            "let calls = 0; class C { method(x = x) { calls = calls + 1; } } \
+             let name; try { C.prototype.method(); } catch (error) { name = error.name; } \
+             name + ':' + calls;"
+        ),
+        Ok(Value::String("ReferenceError:0".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let calls = 0; class C { method(x = y, y) { calls = calls + 1; } } \
+             let name; try { C.prototype.method(); } catch (error) { name = error.name; } \
+             name + ':' + calls;"
+        ),
+        Ok(Value::String("ReferenceError:0".to_owned()))
+    );
+}
+
+#[test]
 fn subclass_inherits_static_method() {
     assert_eq!(
         eval("class A { static who() { return 'A'; } } class B extends A {} B.who();"),
