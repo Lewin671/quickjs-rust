@@ -5,7 +5,7 @@ use crate::{LexError, TemplateSegment, Token, TokenKind};
 use super::{
     Lexer, TemplateState,
     char_class::{is_identifier_continue, is_identifier_start},
-    keywords::{identifier_or_keyword, is_always_reserved_word},
+    keywords::identifier_or_keyword,
 };
 
 const SURROGATE_ESCAPE_SENTINEL_BASE: u32 = 0xF0000;
@@ -59,17 +59,7 @@ impl Lexer<'_> {
         }
 
         let kind = match decoded {
-            Some(value) => {
-                if is_always_reserved_word(&value) {
-                    return Err(LexError {
-                        message: format!(
-                            "the reserved word `{value}` may not be written with a Unicode escape"
-                        ),
-                        span: Span::new(start, self.cursor),
-                    });
-                }
-                TokenKind::Identifier(value)
-            }
+            Some(value) => TokenKind::Identifier(value),
             None => identifier_or_keyword(&self.source[start..self.cursor]),
         };
         self.tokens.push(Token {

@@ -212,8 +212,8 @@ impl Parser {
         // `static { ... }` is a static initialization block. `static` here is
         // not the modifier-then-member form, so detect the block before the
         // `static`-as-modifier check below.
-        let is_static_keyword =
-            matches!(&start_token.kind, TokenKind::Identifier(name) if name == "static");
+        let is_static_keyword = !start_token.had_escape
+            && matches!(&start_token.kind, TokenKind::Identifier(name) if name == "static");
         if is_static_keyword
             && matches!(
                 self.peek_nth(1).map(|t| &t.kind),
@@ -254,7 +254,9 @@ impl Parser {
             None
         } else {
             match &accessor_token.kind {
-                TokenKind::Identifier(name) if name == "get" || name == "set" => {
+                TokenKind::Identifier(name)
+                    if !accessor_token.had_escape && (name == "get" || name == "set") =>
+                {
                     if self.token_starts_member_after_modifier(1) {
                         self.advance();
                         Some(if name == "get" {

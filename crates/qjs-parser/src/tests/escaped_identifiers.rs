@@ -50,11 +50,12 @@ fn escaped_reserved_word_binding_is_allowed_in_sloppy_mode() {
 }
 
 #[test]
-fn escaped_always_reserved_word_is_rejected_at_lex_time() {
+fn escaped_always_reserved_word_is_rejected_as_identifier() {
     // `\u{62}reak` decodes to `break`, an unconditionally reserved word, which
-    // the lexer rejects regardless of mode.
+    // may be an IdentifierName but not a binding or identifier reference.
     assert!(parse_script("var \\u{62}reak = 1;").is_err());
     assert!(parse_script("\\u0069f (true) {}").is_err());
+    assert!(parse_script("cl\\u0061ss;").is_err());
 }
 
 #[test]

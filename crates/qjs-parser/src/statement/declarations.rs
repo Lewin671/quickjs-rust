@@ -105,6 +105,12 @@ impl Parser {
                 span: token.span,
             });
         };
+        if crate::helpers::is_reserved_identifier_name(&name) {
+            return Err(ParseError {
+                message: format!("`{name}` is a reserved word"),
+                span: token.span,
+            });
+        }
         // `await` may not be used as a binding identifier inside an async
         // function (parameters or local bindings). Ordinary nested functions
         // reset the async context, so `await` is a legal binding name there.

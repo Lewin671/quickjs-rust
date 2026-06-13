@@ -288,6 +288,12 @@ impl Parser {
         name: &str,
         span: Span,
     ) -> Result<(), ParseError> {
+        if crate::helpers::is_reserved_identifier_name(name) {
+            return Err(ParseError {
+                message: format!("`{name}` is a reserved word"),
+                span,
+            });
+        }
         if self.strict && matches!(name, "eval" | "arguments") {
             return Err(ParseError {
                 message: format!("`{name}` may not be used as a binding name in strict mode"),

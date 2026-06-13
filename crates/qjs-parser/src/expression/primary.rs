@@ -26,6 +26,12 @@ impl Parser {
         let token = self.advance();
         match token.kind {
             TokenKind::Identifier(name) => {
+                if crate::helpers::is_reserved_identifier_name(&name) {
+                    return Err(ParseError {
+                        message: format!("`{name}` is a reserved word"),
+                        span: token.span,
+                    });
+                }
                 if self.in_static_block && matches!(name.as_str(), "arguments" | "await" | "yield")
                 {
                     return Err(ParseError {

@@ -40,6 +40,48 @@ pub(crate) fn property_name(kind: TokenKind) -> Option<String> {
     }
 }
 
+/// Reports whether a decoded IdentifierName is forbidden as an Identifier in
+/// ordinary script contexts. Escaped spellings reach the parser as Identifier
+/// tokens so property-name grammar can still accept them.
+pub(crate) fn is_reserved_identifier_name(name: &str) -> bool {
+    matches!(
+        name,
+        "true"
+            | "false"
+            | "null"
+            | "this"
+            | "var"
+            | "const"
+            | "if"
+            | "else"
+            | "while"
+            | "do"
+            | "for"
+            | "switch"
+            | "case"
+            | "default"
+            | "try"
+            | "catch"
+            | "finally"
+            | "break"
+            | "continue"
+            | "function"
+            | "class"
+            | "extends"
+            | "super"
+            | "return"
+            | "throw"
+            | "debugger"
+            | "typeof"
+            | "void"
+            | "in"
+            | "with"
+            | "delete"
+            | "new"
+            | "instanceof"
+    )
+}
+
 /// Computes the `PropName` of a numeric-literal property key.
 ///
 /// The spec defines the property name of a `NumericLiteral` member as

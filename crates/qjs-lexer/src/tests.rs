@@ -49,12 +49,22 @@ fn plain_identifier_has_no_escape_flag() {
 }
 
 #[test]
-fn escaped_spelling_of_reserved_word_is_an_identifier_token_then_rejected() {
-    // A bare escaped keyword (`\u{62}reak` -> `break`) is rejected at lex time
-    // because a reserved word may not be written with escapes.
-    assert!(lex("\\u{62}reak").is_err());
-    assert!(lex("\\u0069f").is_err()); // `if`
-    assert!(lex("cl\\u0061ss").is_err()); // `class`
+fn escaped_spelling_of_reserved_word_is_an_identifier_token() {
+    // Escaped reserved words remain IdentifierName tokens so property-name
+    // grammar can accept them; parser identifier contexts reject them.
+    let tokens = lex("\\u{62}reak \\u0069f cl\\u0061ss").expect("source should lex");
+    assert_eq!(
+        tokens.iter().map(|token| &token.kind).collect::<Vec<_>>(),
+        vec![
+            &TokenKind::Identifier("break".to_owned()),
+            &TokenKind::Identifier("if".to_owned()),
+            &TokenKind::Identifier("class".to_owned()),
+            &TokenKind::Eof,
+        ]
+    );
+    assert!(tokens[0].had_escape);
+    assert!(tokens[1].had_escape);
+    assert!(tokens[2].had_escape);
 }
 
 #[test]

@@ -176,6 +176,24 @@ fn allows_keyword_named_methods() {
 }
 
 #[test]
+fn allows_escaped_reserved_words_as_method_names() {
+    let script = parse_script("class C { bre\\u0061k() {} \\u0063ontinue() {} }")
+        .expect("escaped reserved words are valid IdentifierName property keys");
+    let [Stmt::ClassDecl { body, .. }] = script.body.as_slice() else {
+        panic!("expected class declaration");
+    };
+    assert_eq!(members(body).len(), 2);
+    assert_eq!(
+        members(body)[0].key,
+        ClassMemberKey::Literal("break".to_owned())
+    );
+    assert_eq!(
+        members(body)[1].key,
+        ClassMemberKey::Literal("continue".to_owned())
+    );
+}
+
+#[test]
 fn rejects_duplicate_constructor() {
     let error = parse_script("class C { constructor() {} constructor() {} }")
         .expect_err("two constructors should be rejected");
