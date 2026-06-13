@@ -528,6 +528,18 @@ fn static_block_context_does_not_cross_arrow_body_boundary() {
 }
 
 #[test]
+fn class_method_parameters_reject_yield() {
+    for source in [
+        "class C { m(x = yield) {} }",
+        "class C { static m(x = yield) {} }",
+        "class C { m(yield) {} }",
+        "class C { static m(yi\\u0065ld) {} }",
+    ] {
+        parse_script(source).expect_err("class method parameters are in yield context");
+    }
+}
+
+#[test]
 fn allows_super_property_in_field_initializer() {
     parse_script("class C extends D { x = super.y; }")
         .expect("super.x is allowed in a field initializer");

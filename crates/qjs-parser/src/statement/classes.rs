@@ -321,7 +321,7 @@ impl Parser {
         // for ordinary methods.
         let previous_method = self.in_method;
         self.in_method = true;
-        let params = self.function_parameters_with_context(is_generator, is_async);
+        let params = self.function_parameters_with_context(true, is_async);
         self.in_method = previous_method;
         let params = params?;
         reject_duplicate_method_parameters(&params)?;
