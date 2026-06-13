@@ -557,6 +557,13 @@ impl Vm<'_> {
     ) -> Result<Value, RuntimeError> {
         let receiver = self.current_this()?;
         let lookup_base = self.super_lookup_base()?;
+        if matches!(lookup_base, Value::Null | Value::Undefined) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: cannot set property on null or undefined super base"
+                    .to_owned(),
+            });
+        }
         let mut env = self.current_env();
         let wrote =
             crate::reflect::ordinary_set(lookup_base, &key, value.clone(), receiver, &mut env)?;

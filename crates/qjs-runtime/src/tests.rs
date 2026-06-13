@@ -5,6 +5,7 @@ mod bigint;
 mod bytecode;
 mod class_closures;
 mod class_eval;
+mod class_super;
 mod classes;
 mod date;
 mod date_format;
