@@ -109,6 +109,12 @@ impl Parser {
     fn finish_named_member(&mut self, object: Expr) -> Result<Expr, ParseError> {
         let property_token = self.advance();
         if let TokenKind::PrivateName(name) = &property_token.kind {
+            if matches!(&object, Expr::Super { .. }) {
+                return Err(ParseError {
+                    message: "private names are not valid on `super` property access".to_owned(),
+                    span: Span::new(object.span().start, property_token.span.end),
+                });
+            }
             let name = name.clone();
             self.note_private_reference(&name, property_token.span);
             let span = Span::new(object.span().start, property_token.span.end);

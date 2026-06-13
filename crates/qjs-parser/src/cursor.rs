@@ -21,6 +21,7 @@ impl Parser {
             in_async: false,
             in_async_params: false,
             private_scopes: Vec::new(),
+            next_private_scope_id: 0,
             pending_private_refs: Vec::new(),
         }
     }

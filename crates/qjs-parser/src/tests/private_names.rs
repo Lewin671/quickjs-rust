@@ -186,6 +186,27 @@ fn rejects_undeclared_private_name() {
 }
 
 #[test]
+fn nested_class_private_declaration_does_not_resolve_outer_reference() {
+    parse_script(
+        "class C {
+            f() {
+                this.#x;
+                class D extends C { #x; }
+            }
+        }",
+    )
+    .expect_err("a nested class declaration cannot resolve an outer private reference");
+}
+
+#[test]
+fn class_private_names_are_not_visible_in_own_heritage() {
+    parse_script("class C extends class { x = this.#foo; } { #foo; }")
+        .expect_err("a class private declaration is not visible while parsing its heritage");
+    parse_script("class C extends class extends class { x = this.#foo; } {} { #foo; }")
+        .expect_err("outer private declarations are not visible through class heritage");
+}
+
+#[test]
 fn forward_reference_within_class_resolves() {
     parse_script("class C { use() { return this.#later; } #later = 1; }")
         .expect("a forward reference to a later-declared private name is legal");
@@ -203,6 +224,14 @@ fn nested_class_sees_outer_private_name() {
 fn rejects_delete_of_private_member() {
     parse_script("class C { #x; m() { delete this.#x; } }")
         .expect_err("deleting a private member is a syntax error");
+}
+
+#[test]
+fn rejects_private_member_access_on_super() {
+    parse_script("class C extends B { #x() {} m() { super.#x(); } }")
+        .expect_err("super private member access is a syntax error");
+    parse_script("class C { #x; field = class extends C { m() { super.#x; } }; }")
+        .expect_err("super private field access is a syntax error");
 }
 
 #[test]

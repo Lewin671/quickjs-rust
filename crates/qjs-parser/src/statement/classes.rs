@@ -104,7 +104,7 @@ impl Parser {
         // callers that may enter here directly in tests or future parser paths.
         let previous_strict = self.strict;
         self.strict = true;
-        self.private_scopes.push(PrivateScope::default());
+        self.push_private_scope();
         let result = self.class_members(open.start, heritage);
         // Resolve private references seen inside this class body now that all
         // of its declarations are known; forward references within the same
@@ -120,8 +120,21 @@ impl Parser {
     /// stay pending for an enclosing class (or the top-level final check).
     fn resolve_pending_private_refs(&mut self) {
         let scopes = &self.private_scopes;
-        self.pending_private_refs
-            .retain(|reference| !scopes.iter().any(|scope| scope.declares(&reference.name)));
+        self.pending_private_refs.retain(|reference| {
+            !scopes
+                .iter()
+                .filter(|scope| reference.visible_scope_ids.contains(&scope.id))
+                .any(|scope| scope.declares(&reference.name))
+        });
+    }
+
+    fn push_private_scope(&mut self) {
+        let id = self.next_private_scope_id;
+        self.next_private_scope_id += 1;
+        self.private_scopes.push(PrivateScope {
+            id,
+            declarations: Vec::new(),
+        });
     }
 
     /// Records a private-name reference (member access or `#x in obj`). If it
@@ -134,6 +147,7 @@ impl Parser {
         self.pending_private_refs.push(crate::PendingPrivateRef {
             name: name.to_owned(),
             span,
+            visible_scope_ids: self.private_scopes.iter().map(|scope| scope.id).collect(),
         });
     }
 

@@ -66,7 +66,10 @@ pub fn parse_direct_eval_script(
     parser.in_derived_constructor = context.in_derived_constructor;
     parser.in_field_initializer = context.in_field_initializer;
     if !context.private_names.is_empty() {
+        let id = parser.next_private_scope_id;
+        parser.next_private_scope_id += 1;
         parser.private_scopes.push(PrivateScope {
+            id,
             declarations: context
                 .private_names
                 .into_iter()
@@ -163,6 +166,10 @@ struct Parser {
     /// by one class body currently being parsed; the innermost class is last.
     /// A private reference resolves against any scope in the stack.
     private_scopes: Vec<PrivateScope>,
+    /// Monotonic identity for private scopes so pending references only resolve
+    /// against scopes that were visible when the reference was parsed, even if
+    /// later classes reuse the same stack depth.
+    next_private_scope_id: usize,
     /// Private-name references seen but not yet resolved to a declaring class.
     /// Each is retried as classes close; any left when the outermost class
     /// closes (or at top level) is a syntax error.
@@ -173,6 +180,7 @@ struct Parser {
 /// so a getter/setter pair for the same name is not flagged as a duplicate.
 #[derive(Default)]
 struct PrivateScope {
+    id: usize,
     /// Declared private names and the kind of declaration, for duplicate
     /// detection.
     declarations: Vec<PrivateDeclaration>,
@@ -203,6 +211,7 @@ enum PrivateDeclKind {
 struct PendingPrivateRef {
     name: String,
     span: qjs_ast::Span,
+    visible_scope_ids: Vec<usize>,
 }
 
 #[cfg(test)]
