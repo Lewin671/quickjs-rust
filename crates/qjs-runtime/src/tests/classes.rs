@@ -88,6 +88,20 @@ fn default_constructor_creates_instance() {
 }
 
 #[test]
+fn default_derived_constructor_arguments_do_not_shadow_outer_bindings() {
+    assert_eq!(
+        eval(
+            "var args, that; \
+             class Base { constructor() { that = this; args = arguments; } } \
+             class Derived extends Base {} \
+             new Derived(0, 1, 2); \
+             args.length + ':' + (that instanceof Derived);"
+        ),
+        Ok(Value::String("3:true".to_owned()))
+    );
+}
+
+#[test]
 fn instance_is_instanceof_class() {
     assert_eq!(
         eval("class C {} (new C()) instanceof C;"),

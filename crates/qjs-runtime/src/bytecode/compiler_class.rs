@@ -259,18 +259,21 @@ fn default_constructor(name: Option<&str>, has_heritage: bool) -> ClassConstruct
     }
 
     // Derived default constructor: `constructor(...args) { super(...args); }`.
+    // Use an internal rest binding so the synthetic name cannot shadow a user
+    // binding visible to the parent constructor.
     let zero = Span::new(0, 0);
+    let args_binding = "\u{0}\u{0}class_default_constructor_args".to_owned();
     let params = FunctionParams::new(
         Vec::new(),
         Some(BindingPattern::Identifier {
-            name: "args".to_owned(),
+            name: args_binding.clone(),
             span: zero,
         }),
     );
     let body = vec![Stmt::Expr(Expr::Call {
         callee: Box::new(Expr::Super { span: zero }),
         arguments: vec![CallArgument::Spread(Expr::Identifier {
-            name: "args".to_owned(),
+            name: args_binding,
             span: zero,
         })],
         span: zero,
