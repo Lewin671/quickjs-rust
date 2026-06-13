@@ -145,6 +145,17 @@ pub(crate) fn install_iterator(
             ))),
         );
     }
+    if let Some(dispose_symbol) = symbol::dispose_symbol(env) {
+        iterator_prototype.define_symbol_property(
+            dispose_symbol,
+            Property::non_enumerable(Value::Function(Function::new_native(
+                Some("[Symbol.dispose]"),
+                0,
+                NativeFunction::IteratorPrototypeDispose,
+                false,
+            ))),
+        );
+    }
 
     // `%Iterator.prototype%[Symbol.toStringTag]` is a validating accessor pair,
     // and `constructor` is likewise an accessor (27.1.4.1/27.1.4.2). Both reject
@@ -321,6 +332,7 @@ pub(crate) fn call_iterator_native(
             argument_values,
             env,
         )?,
+        NativeFunction::IteratorPrototypeDispose => native_iterator_dispose(this_value, env)?,
         NativeFunction::IteratorPrototypeMap
         | NativeFunction::IteratorPrototypeFilter
         | NativeFunction::IteratorPrototypeTake
@@ -351,6 +363,20 @@ pub(crate) fn call_iterator_native(
         _ => return Ok(None),
     };
     Ok(Some(result))
+}
+
+fn native_iterator_dispose(this_value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+    let return_method = crate::property_value(this_value.clone(), "return", env)?;
+    if !matches!(return_method, Value::Undefined | Value::Null) {
+        if !matches!(return_method, Value::Function(_)) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: iterator return is not a function".to_owned(),
+            });
+        }
+        crate::call_function(return_method, this_value, Vec::new(), env, false)?;
+    }
+    Ok(Value::Undefined)
 }
 
 /// The `Iterator` constructor (27.1.1.1): throws a TypeError when called

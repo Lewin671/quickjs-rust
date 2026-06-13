@@ -230,3 +230,34 @@ fn iterator_eager_helpers_close_on_callback_validation_failure() {
         "some:true:true|reduce:true:true|forEach:true:true|find:true:true|every:true:true"
     );
 }
+
+#[test]
+fn iterator_prototype_symbol_dispose_surface() {
+    assert_eq!(
+        string(
+            "let IteratorPrototype = Object.getPrototypeOf(Object.getPrototypeOf([][Symbol.iterator]())); \
+             let method = IteratorPrototype[Symbol.dispose]; \
+             let desc = Object.getOwnPropertyDescriptor(IteratorPrototype, Symbol.dispose); \
+             let length = Object.getOwnPropertyDescriptor(method, 'length'); \
+             let name = Object.getOwnPropertyDescriptor(method, 'name'); \
+             [typeof method, method.length, method.name, desc.writable, desc.enumerable, desc.configurable, \
+              length.writable, length.enumerable, length.configurable, name.writable, name.enumerable, name.configurable].join(':');"
+        ),
+        "function:0:[Symbol.dispose]:true:false:true:false:false:true:false:false:true"
+    );
+}
+
+#[test]
+fn iterator_prototype_symbol_dispose_invokes_return_and_returns_undefined() {
+    assert_eq!(
+        string(
+            "let IteratorPrototype = Object.getPrototypeOf(Object.getPrototypeOf([][Symbol.iterator]())); \
+             let iter = Object.create(IteratorPrototype); \
+             let returnCalled = false; \
+             iter.return = function () { returnCalled = true; return { done: true }; }; \
+             let result = iter[Symbol.dispose](); \
+             returnCalled + ':' + (result === undefined) + ':' + (IteratorPrototype[Symbol.dispose]() === undefined);"
+        ),
+        "true:true:true"
+    );
+}

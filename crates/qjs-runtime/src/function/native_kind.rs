@@ -161,6 +161,7 @@ pub(crate) enum NativeFunction {
     IteratorPrototypeSome,
     IteratorPrototypeEvery,
     IteratorPrototypeFind,
+    IteratorPrototypeDispose,
     IteratorHelperPrototypeNext,
     IteratorHelperPrototypeReturn,
     WrapForValidIteratorPrototypeNext,

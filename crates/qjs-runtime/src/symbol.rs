@@ -257,6 +257,10 @@ pub(crate) fn async_iterator_symbol(env: &CallEnv) -> Option<ObjectRef> {
     well_known_symbol(env, "asyncIterator")
 }
 
+pub(crate) fn dispose_symbol(env: &CallEnv) -> Option<ObjectRef> {
+    well_known_symbol(env, "dispose")
+}
+
 pub(crate) fn to_primitive_symbol(env: &CallEnv) -> Option<ObjectRef> {
     well_known_symbol(env, "toPrimitive")
 }
