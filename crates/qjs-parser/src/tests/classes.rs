@@ -536,6 +536,31 @@ fn rejects_static_block_statement_list_early_errors() {
 }
 
 #[test]
+fn rejects_duplicate_class_declarations_in_statement_lists() {
+    for source in ["class A {} class A {}", "{ class A {} class A {} }"] {
+        let error = parse_script(source).expect_err("duplicate class declarations should fail");
+        assert!(error.message.contains("duplicate lexical declaration"));
+    }
+}
+
+#[test]
+fn rejects_var_scoped_declarations_conflicting_with_lexical_names() {
+    for source in [
+        "let value; var value;",
+        "class C {} function C() {}",
+        "{ const value = 1; function value() {} }",
+    ] {
+        let error =
+            parse_script(source).expect_err("var-scoped declaration should conflict with lexical");
+        assert!(
+            error
+                .message
+                .contains("conflicts with a lexical declaration")
+        );
+    }
+}
+
+#[test]
 fn static_block_context_does_not_cross_function_boundaries() {
     parse_script("class C { static { function f() { return arguments; } } }")
         .expect("ordinary function should reset static block early-error context");

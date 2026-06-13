@@ -7,7 +7,7 @@ mod module;
 pub(crate) use functions::duplicate_parameter_span;
 mod simple;
 
-use qjs_ast::{Script, Span, Stmt};
+use qjs_ast::{Script, Span, Stmt, VarKind};
 use qjs_lexer::TokenKind;
 
 use crate::{Goal, ParseError, Parser};
@@ -23,6 +23,7 @@ impl Parser {
                 body.push(self.statement()?);
             }
         }
+        validate_statement_list_declarations(&body)?;
         // Any private-name reference that never resolved to an enclosing class
         // is a syntax error.
         if let Some(reference) = self.pending_private_refs.first() {
@@ -169,6 +170,7 @@ impl Parser {
         while !self.at(&TokenKind::RightBrace) && !self.at(&TokenKind::Eof) {
             body.push(self.statement()?);
         }
+        validate_statement_list_declarations(&body)?;
         let end = self
             .peek()
             .expect("parser should always have eof token")
@@ -190,6 +192,7 @@ impl Parser {
             while !parser.at(&TokenKind::RightBrace) && !parser.at(&TokenKind::Eof) {
                 body.push(parser.statement()?);
             }
+            validate_statement_list_declarations(&body)?;
             parser.expect(&TokenKind::RightBrace).map(|()| body)
         })(self);
         self.strict = previous_strict;
@@ -214,4 +217,60 @@ impl Parser {
         }
         false
     }
+}
+
+fn validate_statement_list_declarations(body: &[Stmt]) -> Result<(), ParseError> {
+    let mut lexical_names: Vec<(String, Span)> = Vec::new();
+    let mut var_names: Vec<(String, Span)> = Vec::new();
+    for stmt in body {
+        match stmt {
+            Stmt::VarDecl {
+                kind: VarKind::Let | VarKind::Const,
+                declarations,
+                ..
+            } => {
+                for declarator in declarations {
+                    lexical_names.extend(declarator.binding.named_spans());
+                }
+            }
+            Stmt::VarDecl {
+                kind: VarKind::Var,
+                declarations,
+                ..
+            } => {
+                for declarator in declarations {
+                    var_names.extend(declarator.binding.named_spans());
+                }
+            }
+            Stmt::ClassDecl { name, span, .. } => lexical_names.push((name.clone(), *span)),
+            Stmt::FunctionDecl { name, span, .. } => var_names.push((name.clone(), *span)),
+            _ => {}
+        }
+    }
+
+    for (index, (name, _)) in lexical_names.iter().enumerate() {
+        for (candidate, span) in &lexical_names[index + 1..] {
+            if candidate == name {
+                return Err(ParseError {
+                    message: format!("duplicate lexical declaration `{name}`"),
+                    span: *span,
+                });
+            }
+        }
+    }
+
+    for (lexical_name, _) in &lexical_names {
+        for (var_name, span) in &var_names {
+            if var_name == lexical_name {
+                return Err(ParseError {
+                    message: format!(
+                        "var declaration `{var_name}` conflicts with a lexical declaration"
+                    ),
+                    span: *span,
+                });
+            }
+        }
+    }
+
+    Ok(())
 }
