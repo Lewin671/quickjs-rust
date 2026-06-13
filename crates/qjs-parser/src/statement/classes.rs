@@ -1,6 +1,6 @@
 use qjs_ast::{
-    ClassBody, ClassElement, ClassField, ClassMember, ClassMemberKey, Expr, FunctionParams,
-    MethodKind, Span, Stmt,
+    ClassBody, ClassElement, ClassField, ClassMember, ClassMemberKey, Expr, ForInit,
+    FunctionParams, MethodKind, Span, Stmt, VarKind,
 };
 use qjs_lexer::{Token, TokenKind};
 
@@ -432,6 +432,7 @@ impl Parser {
         self.in_async = previous_async;
         self.in_static_block = previous_static_block;
         let body = body?;
+        validate_static_block_statement_list(&body)?;
         let end = self.previous_end();
         Ok(ClassElement::StaticBlock(qjs_ast::StaticBlock {
             body,
@@ -650,6 +651,272 @@ fn class_member_name(kind: &TokenKind) -> Option<String> {
         TokenKind::String(name) | TokenKind::Number(name) => Some(name.clone()),
         _ => crate::expression::keyword_property_name(kind).map(str::to_owned),
     }
+}
+
+fn validate_static_block_statement_list(body: &[Stmt]) -> Result<(), ParseError> {
+    validate_static_block_declarations(body)?;
+    let mut context = StaticBlockLabelContext::default();
+    for stmt in body {
+        validate_static_block_labels(stmt, &mut context)?;
+    }
+    Ok(())
+}
+
+fn validate_static_block_declarations(body: &[Stmt]) -> Result<(), ParseError> {
+    let mut lexical_names: Vec<(String, Span)> = Vec::new();
+    let mut var_names: Vec<(String, Span)> = Vec::new();
+    for stmt in body {
+        match stmt {
+            Stmt::VarDecl {
+                kind: VarKind::Let | VarKind::Const,
+                declarations,
+                ..
+            } => {
+                for declarator in declarations {
+                    lexical_names.extend(declarator.binding.named_spans());
+                }
+            }
+            Stmt::VarDecl {
+                kind: VarKind::Var,
+                declarations,
+                ..
+            } => {
+                for declarator in declarations {
+                    var_names.extend(declarator.binding.named_spans());
+                }
+            }
+            Stmt::ClassDecl { name, span, .. } => lexical_names.push((name.clone(), *span)),
+            Stmt::FunctionDecl { name, span, .. } => var_names.push((name.clone(), *span)),
+            _ => {}
+        }
+    }
+
+    for (index, (name, _)) in lexical_names.iter().enumerate() {
+        for (candidate, span) in &lexical_names[index + 1..] {
+            if candidate == name {
+                return Err(ParseError {
+                    message: format!(
+                        "duplicate lexical declaration `{name}` in class static block"
+                    ),
+                    span: *span,
+                });
+            }
+        }
+    }
+
+    for (lexical_name, _) in &lexical_names {
+        for (var_name, span) in &var_names {
+            if var_name == lexical_name {
+                return Err(ParseError {
+                    message: format!(
+                        "var declaration `{var_name}` conflicts with a lexical declaration in class static block"
+                    ),
+                    span: *span,
+                });
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[derive(Default)]
+struct StaticBlockLabelContext {
+    labels: Vec<StaticBlockLabel>,
+    breakable_depth: usize,
+    continuable_depth: usize,
+}
+
+struct StaticBlockLabel {
+    name: String,
+    is_continuable_target: bool,
+}
+
+impl StaticBlockLabelContext {
+    fn label_visible(&self, label: &str) -> bool {
+        self.labels.iter().any(|candidate| candidate.name == label)
+    }
+
+    fn label_is_continuable_target(&self, label: &str) -> bool {
+        self.labels
+            .iter()
+            .any(|candidate| candidate.name == label && candidate.is_continuable_target)
+    }
+}
+
+fn validate_static_block_labels(
+    stmt: &Stmt,
+    context: &mut StaticBlockLabelContext,
+) -> Result<(), ParseError> {
+    match stmt {
+        Stmt::FunctionDecl { .. } | Stmt::ClassDecl { .. } => Ok(()),
+        Stmt::Block { body, .. } => {
+            for stmt in body {
+                validate_static_block_labels(stmt, context)?;
+            }
+            Ok(())
+        }
+        Stmt::If {
+            consequent,
+            alternate,
+            ..
+        } => {
+            validate_static_block_labels(consequent, context)?;
+            if let Some(alternate) = alternate {
+                validate_static_block_labels(alternate, context)?;
+            }
+            Ok(())
+        }
+        Stmt::While { body, .. } | Stmt::DoWhile { body, .. } => {
+            context.breakable_depth += 1;
+            context.continuable_depth += 1;
+            let result = validate_static_block_labels(body, context);
+            context.continuable_depth -= 1;
+            context.breakable_depth -= 1;
+            result
+        }
+        Stmt::For { init, body, .. } => {
+            validate_static_block_for_init(init)?;
+            context.breakable_depth += 1;
+            context.continuable_depth += 1;
+            let result = validate_static_block_labels(body, context);
+            context.continuable_depth -= 1;
+            context.breakable_depth -= 1;
+            result
+        }
+        Stmt::ForIn { body, .. } | Stmt::ForOf { body, .. } => {
+            context.breakable_depth += 1;
+            context.continuable_depth += 1;
+            let result = validate_static_block_labels(body, context);
+            context.continuable_depth -= 1;
+            context.breakable_depth -= 1;
+            result
+        }
+        Stmt::Switch { cases, .. } => {
+            context.breakable_depth += 1;
+            let result = (|| {
+                for case in cases {
+                    for stmt in &case.consequent {
+                        validate_static_block_labels(stmt, context)?;
+                    }
+                }
+                Ok(())
+            })();
+            context.breakable_depth -= 1;
+            result
+        }
+        Stmt::Try {
+            block,
+            handler,
+            finalizer,
+            ..
+        } => {
+            for stmt in block {
+                validate_static_block_labels(stmt, context)?;
+            }
+            if let Some(handler) = handler {
+                for stmt in &handler.body {
+                    validate_static_block_labels(stmt, context)?;
+                }
+            }
+            if let Some(finalizer) = finalizer {
+                for stmt in finalizer {
+                    validate_static_block_labels(stmt, context)?;
+                }
+            }
+            Ok(())
+        }
+        Stmt::Labelled { label, body, span } => {
+            if context.label_visible(label) {
+                return Err(ParseError {
+                    message: format!("duplicate label `{label}` in class static block"),
+                    span: *span,
+                });
+            }
+            let is_continuable_target = stmt_is_iteration(body);
+            context.labels.push(StaticBlockLabel {
+                name: label.clone(),
+                is_continuable_target,
+            });
+            let result = validate_static_block_labels(body, context);
+            context.labels.pop();
+            result
+        }
+        Stmt::Break { label, span } => {
+            if let Some(label) = label {
+                if !context.label_visible(label) {
+                    return Err(ParseError {
+                        message: format!("undefined break label `{label}` in class static block"),
+                        span: *span,
+                    });
+                }
+            } else if context.breakable_depth == 0 {
+                return Err(ParseError {
+                    message: "`break` has no target in class static block".to_owned(),
+                    span: *span,
+                });
+            }
+            Ok(())
+        }
+        Stmt::Continue { label, span } => {
+            if let Some(label) = label {
+                if !context.label_is_continuable_target(label) {
+                    return Err(ParseError {
+                        message: format!(
+                            "undefined continue label `{label}` in class static block"
+                        ),
+                        span: *span,
+                    });
+                }
+            } else if context.continuable_depth == 0 {
+                return Err(ParseError {
+                    message: "`continue` has no target in class static block".to_owned(),
+                    span: *span,
+                });
+            }
+            Ok(())
+        }
+        Stmt::With { body, .. } => validate_static_block_labels(body, context),
+        _ => Ok(()),
+    }
+}
+
+fn validate_static_block_for_init(init: &Option<ForInit>) -> Result<(), ParseError> {
+    if let Some(ForInit::VarDecl {
+        kind: VarKind::Let | VarKind::Const,
+        declarations,
+        ..
+    }) = init
+    {
+        let mut names = Vec::new();
+        for declarator in declarations {
+            names.extend(declarator.binding.named_spans());
+        }
+        for (index, (name, _)) in names.iter().enumerate() {
+            for (candidate, span) in &names[index + 1..] {
+                if candidate == name {
+                    return Err(ParseError {
+                        message: format!(
+                            "duplicate lexical declaration `{name}` in class static block"
+                        ),
+                        span: *span,
+                    });
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn stmt_is_iteration(stmt: &Stmt) -> bool {
+    matches!(
+        stmt,
+        Stmt::While { .. }
+            | Stmt::DoWhile { .. }
+            | Stmt::For { .. }
+            | Stmt::ForIn { .. }
+            | Stmt::ForOf { .. }
+    )
 }
 
 fn reject_duplicate_method_parameters(params: &FunctionParams) -> Result<(), ParseError> {

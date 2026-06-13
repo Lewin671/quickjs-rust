@@ -511,6 +511,20 @@ fn rejects_static_block_early_error_contexts() {
 }
 
 #[test]
+fn rejects_static_block_statement_list_early_errors() {
+    for source in [
+        "class C { static { x: x: 0; } }",
+        "class C { static { let x; let x; } }",
+        "class C { static { let x; var x; } }",
+        "class C { static { x: while (false) { break y; } } }",
+        "class C { static { x: while (false) { continue y; } } }",
+        "class C { static { x: { continue x; } } }",
+    ] {
+        parse_script(source).expect_err("static block statement-list early error should fail");
+    }
+}
+
+#[test]
 fn static_block_context_does_not_cross_function_boundaries() {
     parse_script("class C { static { function f() { return arguments; } } }")
         .expect("ordinary function should reset static block early-error context");
