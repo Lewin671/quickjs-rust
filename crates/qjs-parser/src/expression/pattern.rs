@@ -170,11 +170,13 @@ impl Parser {
             let target = if self.match_kind(&TokenKind::Colon) {
                 self.assignment_pattern()?
             } else if shorthand {
+                let name = key
+                    .as_literal()
+                    .expect("shorthand keys are always literal")
+                    .to_owned();
+                self.validate_shorthand_assignment_target(&name, key_span)?;
                 AssignmentTarget::Identifier {
-                    name: key
-                        .as_literal()
-                        .expect("shorthand keys are always literal")
-                        .to_owned(),
+                    name,
                     span: key_span,
                 }
             } else {
@@ -209,4 +211,45 @@ impl Parser {
             span: Span::new(start, end),
         })
     }
+
+    fn validate_shorthand_assignment_target(
+        &self,
+        name: &str,
+        span: Span,
+    ) -> Result<(), ParseError> {
+        if crate::helpers::is_reserved_identifier_name(name)
+            || matches!(name, "enum" | "export" | "import")
+        {
+            return Err(ParseError {
+                message: format!("`{name}` is a reserved word"),
+                span,
+            });
+        }
+        if (self.strict || self.in_generator) && name == "yield" {
+            return Err(ParseError {
+                message: "`yield` may not be used as an identifier here".to_owned(),
+                span,
+            });
+        }
+        if self.strict && matches!(name, "eval" | "arguments") {
+            return Err(ParseError {
+                message: format!("`{name}` may not be a destructuring target in strict mode"),
+                span,
+            });
+        }
+        if self.strict && (name == "let" || is_strict_assignment_reserved_word(name)) {
+            return Err(ParseError {
+                message: format!("`{name}` is a reserved word in strict mode"),
+                span,
+            });
+        }
+        Ok(())
+    }
+}
+
+fn is_strict_assignment_reserved_word(name: &str) -> bool {
+    matches!(
+        name,
+        "implements" | "interface" | "package" | "private" | "protected" | "public" | "static"
+    )
 }

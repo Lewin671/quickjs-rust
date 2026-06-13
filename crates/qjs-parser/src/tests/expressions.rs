@@ -393,6 +393,27 @@ fn rejects_strict_destructuring_target_eval_or_arguments() {
     assert!(parse_script("'use strict'; [arguments] = [];").is_err());
     assert!(parse_script("'use strict'; [eval] = [];").is_err());
     assert!(parse_script("'use strict'; ({ a: arguments } = {});").is_err());
+    assert!(parse_script("'use strict'; ({ arguments } = {});").is_err());
+    assert!(parse_script("'use strict'; ({ eval = 1 } = {});").is_err());
     // Sloppy mode permits them.
     assert!(parse_script("[arguments] = [];").is_ok());
+    assert!(parse_script("({ eval } = {});").is_ok());
+}
+
+#[test]
+fn rejects_reserved_object_assignment_shorthand_targets() {
+    assert!(parse_script("function* g() { 0, { yield } = {}; }").is_err());
+    assert!(parse_script("'use strict'; 0, { yield } = {};").is_err());
+    assert!(parse_script("var x = { bre\\u0061k } = { break: 42 };").is_err());
+    assert!(parse_script("var x = { cl\\u0061ss = 1 } = { class: 42 };").is_err());
+    assert!(parse_script("var x = { \\u0069mport } = { import: 42 };").is_err());
+    assert!(parse_script("var x = { enum } = { enum: 42 };").is_err());
+    assert!(parse_script("'use strict'; var x = { l\\u0065t } = { let: 42 };").is_err());
+    assert!(
+        parse_script("'use strict'; var x = { \\u0069mplements } = { implements: 42 };").is_err()
+    );
+    parse_script("var x = { l\\u0065t } = { let: 42 };")
+        .expect("escaped let remains an identifier target in sloppy mode");
+    parse_script("var target; ({ break: target } = { break: 42 });")
+        .expect("reserved words remain valid explicit property names");
 }
