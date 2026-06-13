@@ -160,11 +160,12 @@ fn allows_semicolons_between_members() {
 
 #[test]
 fn allows_keyword_named_methods() {
-    let script = parse_script("class C { if() {} return() {} }").expect("source should parse");
+    let script = parse_script("class C { if() {} return() {} class() {} extends() {} super() {} }")
+        .expect("source should parse");
     let [Stmt::ClassDecl { body, .. }] = script.body.as_slice() else {
         panic!("expected class declaration");
     };
-    assert_eq!(members(body).len(), 2);
+    assert_eq!(members(body).len(), 5);
     assert_eq!(
         members(body)[0].key,
         ClassMemberKey::Literal("if".to_owned())
@@ -172,6 +173,18 @@ fn allows_keyword_named_methods() {
     assert_eq!(
         members(body)[1].key,
         ClassMemberKey::Literal("return".to_owned())
+    );
+    assert_eq!(
+        members(body)[2].key,
+        ClassMemberKey::Literal("class".to_owned())
+    );
+    assert_eq!(
+        members(body)[3].key,
+        ClassMemberKey::Literal("extends".to_owned())
+    );
+    assert_eq!(
+        members(body)[4].key,
+        ClassMemberKey::Literal("super".to_owned())
     );
 }
 

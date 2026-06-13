@@ -27,6 +27,9 @@ pub(crate) fn property_name(kind: TokenKind) -> Option<String> {
         TokenKind::Break => Some("break".to_owned()),
         TokenKind::Continue => Some("continue".to_owned()),
         TokenKind::Function => Some("function".to_owned()),
+        TokenKind::Class => Some("class".to_owned()),
+        TokenKind::Extends => Some("extends".to_owned()),
+        TokenKind::Super => Some("super".to_owned()),
         TokenKind::Return => Some("return".to_owned()),
         TokenKind::Throw => Some("throw".to_owned()),
         TokenKind::Debugger => Some("debugger".to_owned()),
@@ -35,6 +38,7 @@ pub(crate) fn property_name(kind: TokenKind) -> Option<String> {
         TokenKind::In => Some("in".to_owned()),
         TokenKind::With => Some("with".to_owned()),
         TokenKind::Delete => Some("delete".to_owned()),
+        TokenKind::New => Some("new".to_owned()),
         TokenKind::Instanceof => Some("instanceof".to_owned()),
         _ => None,
     }

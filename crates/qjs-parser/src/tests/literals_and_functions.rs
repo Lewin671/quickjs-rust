@@ -448,7 +448,8 @@ fn parses_object_literal_and_member_assignment() {
     );
 
     let script =
-        parse_script("({ return() { return 1; }, default: 2 });").expect("source should parse");
+        parse_script("({ return() { return 1; }, default: 2, class: 3, extends: 4, super: 5 });")
+            .expect("source should parse");
     let [Stmt::Expr(Expr::Object { properties, .. })] = script.body.as_slice() else {
         panic!("expected object expression with keyword property names");
     };
@@ -459,6 +460,18 @@ fn parses_object_literal_and_member_assignment() {
     assert_eq!(
         properties[1].key,
         ObjectPropertyKey::Literal("default".to_owned())
+    );
+    assert_eq!(
+        properties[2].key,
+        ObjectPropertyKey::Literal("class".to_owned())
+    );
+    assert_eq!(
+        properties[3].key,
+        ObjectPropertyKey::Literal("extends".to_owned())
+    );
+    assert_eq!(
+        properties[4].key,
+        ObjectPropertyKey::Literal("super".to_owned())
     );
     assert!(matches!(properties[0].value, Expr::Function { .. }));
 
@@ -797,16 +810,40 @@ fn parses_date_format_regexp_literal_smoke() {
 
 #[test]
 fn parses_member_access() {
-    let script = parse_script("items[0].length;").expect("source should parse");
+    let script = parse_script("items[0].length; item.class; item.extends; item.super; item.new;")
+        .expect("source should parse");
     let [
         Stmt::Expr(Expr::Member {
             object, property, ..
         }),
+        Stmt::Expr(Expr::Member {
+            property: class_property,
+            ..
+        }),
+        Stmt::Expr(Expr::Member {
+            property: extends_property,
+            ..
+        }),
+        Stmt::Expr(Expr::Member {
+            property: super_property,
+            ..
+        }),
+        Stmt::Expr(Expr::Member {
+            property: new_property,
+            ..
+        }),
     ] = script.body.as_slice()
     else {
-        panic!("expected member expression");
+        panic!("expected member expressions");
     };
     assert_eq!(property, &MemberProperty::Named("length".to_owned()));
+    assert_eq!(class_property, &MemberProperty::Named("class".to_owned()));
+    assert_eq!(
+        extends_property,
+        &MemberProperty::Named("extends".to_owned())
+    );
+    assert_eq!(super_property, &MemberProperty::Named("super".to_owned()));
+    assert_eq!(new_property, &MemberProperty::Named("new".to_owned()));
     assert!(matches!(object.as_ref(), Expr::Member { .. }));
 }
 
