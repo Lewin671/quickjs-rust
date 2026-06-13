@@ -32,6 +32,13 @@ impl Parser {
                         span: token.span,
                     });
                 }
+                if self.in_generator && name == "yield" {
+                    return Err(ParseError {
+                        message: "`yield` may not be used as an identifier in a generator"
+                            .to_owned(),
+                        span: token.span,
+                    });
+                }
                 if self.in_static_block && matches!(name.as_str(), "arguments" | "await" | "yield")
                 {
                     return Err(ParseError {

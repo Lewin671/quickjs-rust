@@ -261,6 +261,14 @@ fn yield_in_generator_parameter_default_is_error() {
 }
 
 #[test]
+fn yield_identifier_reference_in_generator_is_error() {
+    assert!(parse_script("function* g() { void yield; }").is_err());
+    assert!(parse_script("function* g() { void yi\\u0065ld; }").is_err());
+    assert!(parse_script("class C { *#g() { void yield; } }").is_err());
+    assert!(parse_script("class C { static *#g() { void yi\\u0065ld; } }").is_err());
+}
+
+#[test]
 fn strict_generator_named_yield_is_error() {
     assert!(parse_script("\"use strict\"; function* yield() {}").is_err());
     assert!(parse_script("\"use strict\"; (function* yield() {});").is_err());
