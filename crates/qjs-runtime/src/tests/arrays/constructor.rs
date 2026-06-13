@@ -331,6 +331,42 @@ fn array_from_async_closes_iterators_when_async_mapping_rejects() {
 }
 
 #[test]
+fn array_from_async_iterator_close_visible_after_throws_async_await() {
+    assert_eq!(
+        promise::promise_debug_state_result(
+            &eval(
+                "async function throwsAsync(func) { \
+                   let res = func(); \
+                   let onResFulfilled, onResRejected; \
+                   let resSettlementP = new Promise(function(resolve, reject) { \
+                     onResFulfilled = resolve; onResRejected = reject; \
+                   }); \
+                   res.then(onResFulfilled, onResRejected); \
+                   await resSettlementP.then(function() { throw new Error('missing'); }, function() {}); \
+                 } \
+                 let closed = false; \
+                 let iterator = { \
+                   next() { return Promise.resolve({ value: 1, done: false }); }, \
+                   return() { closed = true; return Promise.resolve({ done: true }); }, \
+                   [Symbol.asyncIterator]() { return this; } \
+                 }; \
+                 (async function() { \
+                   await throwsAsync(function() { \
+                     return Array.fromAsync(iterator, async function(value) { \
+                       if (value !== 1) { throw new TypeError('bad value'); } \
+                       throw new Error('boom'); \
+                     }); \
+                   }); \
+                   return closed; \
+                 })();"
+            )
+            .unwrap()
+        ),
+        Some(("fulfilled".to_owned(), Value::Boolean(true)))
+    );
+}
+
+#[test]
 fn array_from_async_closes_sync_iterators_when_awaited_value_rejects() {
     assert_eq!(
         promise::promise_debug_state_result(

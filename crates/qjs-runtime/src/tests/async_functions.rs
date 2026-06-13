@@ -137,6 +137,24 @@ fn nested_thenable_method_writes_back_transitive_captured_locals() {
 }
 
 #[test]
+fn await_resume_observes_sibling_closure_capture_writes() {
+    assert_eq!(
+        eval_log(
+            "var o = []; \
+             async function outer() { \
+               let closed = false; \
+               function close() { closed = true; } \
+               Promise.resolve().then(close); \
+               await 0; \
+               o.push(String(closed)); \
+             } \
+             outer(); o;"
+        ),
+        "true"
+    );
+}
+
+#[test]
 fn await_of_rejected_promise_in_try_catch() {
     assert_eq!(
         eval_log(

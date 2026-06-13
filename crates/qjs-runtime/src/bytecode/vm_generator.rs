@@ -168,6 +168,24 @@ impl Vm<'_> {
         }
     }
 
+    /// Refreshes shared bindings captured from an enclosing function. Async
+    /// functions may suspend while sibling closures mutate those bindings; the
+    /// writeback target is the shared cell those sibling closures update.
+    fn refresh_from_capture_writeback(&mut self, writeback: Option<&CaptureWriteback>) {
+        let Some(writeback) = writeback else {
+            return;
+        };
+        let target = writeback.target.borrow();
+        for name in &writeback.names {
+            if let Some(value) = target.get(name)
+                && let Some(slot) = self.bytecode.local_slot(name)
+                && let Some(local) = self.locals.get_mut(slot)
+            {
+                *local = Some(value.clone());
+            }
+        }
+    }
+
     /// Writes this activation's current captured binding values back into the
     /// closure environment it was called from. Ordinary functions do this at
     /// return in `function::call`; async functions complete later through the
@@ -317,6 +335,7 @@ fn run_from_yield(
     let capture_writeback = snapshot.capture_writeback;
     if snapshot.refresh_captured_slots_on_resume {
         vm.refresh_from_captured_env();
+        vm.refresh_from_capture_writeback(capture_writeback.as_ref());
     }
     vm.refresh_from_caller(caller_env);
     let refresh_captured_slots_on_resume = snapshot.refresh_captured_slots_on_resume;
