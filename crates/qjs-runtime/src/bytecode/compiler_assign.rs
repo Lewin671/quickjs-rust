@@ -94,6 +94,7 @@ impl Compiler {
                     Ok(())
                 }
                 qjs_ast::MemberProperty::Computed(expr) => {
+                    self.emit(Op::RequireSuperThis);
                     self.compile_expr(expr)?;
                     self.compile_expr(value)?;
                     self.emit(Op::SuperSetComputed {

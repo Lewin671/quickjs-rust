@@ -185,6 +185,9 @@ pub(super) enum Op {
     SuperGet {
         key: String,
     },
+    /// Checks the current `this` binding for `super[expr]` evaluation before
+    /// evaluating the computed key expression.
+    RequireSuperThis,
     /// Reads `super[expr]`: pops the key from the stack, then behaves like
     /// `SuperGet`.
     SuperGetComputed,

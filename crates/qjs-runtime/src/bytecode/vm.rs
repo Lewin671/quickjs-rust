@@ -421,6 +421,10 @@ impl<'a> Vm<'a> {
                         self.stack.push(value);
                     }
                 }
+                Op::RequireSuperThis => {
+                    let result = self.require_super_this();
+                    self.handle_runtime_result(result)?;
+                }
                 Op::SuperGetComputed => {
                     let key_value = self.pop()?;
                     let key = self.coerce_property_key(key_value)?;

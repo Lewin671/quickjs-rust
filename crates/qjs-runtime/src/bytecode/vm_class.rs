@@ -717,6 +717,10 @@ impl Vm<'_> {
         }
     }
 
+    pub(super) fn require_super_this(&mut self) -> Result<(), RuntimeError> {
+        self.current_this().map(|_| ())
+    }
+
     /// Returns the lookup base for `super` property access: the [[Prototype]]
     /// of the current method's home object.
     fn super_lookup_base(&self) -> Result<Value, RuntimeError> {
