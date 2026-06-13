@@ -885,6 +885,15 @@ impl<'a> Vm<'a> {
                 binding_names: Some(binding_names),
             };
         }
+        if let Some((env, injected, binding_names)) =
+            super::vm_call::call_forwarding_native_env(callee, self.current_env())
+        {
+            return VmCallEnv {
+                injected,
+                env,
+                binding_names: Some(binding_names),
+            };
+        }
         VmCallEnv {
             env: self.current_env(),
             binding_names: None,
@@ -914,7 +923,6 @@ impl<'a> Vm<'a> {
             }
         }
     }
-
     fn insert_call_binding(
         &self,
         locals: &mut HashMap<String, Value>,
@@ -924,10 +932,6 @@ impl<'a> Vm<'a> {
         if crate::function::is_internal_binding_name(name) {
             return;
         }
-        // Only a caller *local* binding needs to ride into the callee's frame
-        // locals; realm bindings are already visible through the shared cell. A
-        // caller binding may be a bytecode slot or a frame-local (caller-scope)
-        // binding carried in this frame's `env.locals()`.
         let value = self
             .current_local_binding(name)
             .cloned()

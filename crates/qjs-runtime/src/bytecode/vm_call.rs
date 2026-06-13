@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{Function, Value};
+use crate::{CallEnv, Function, Value};
 
 use super::ir::Bytecode;
 use super::vm::Slot;
@@ -59,6 +59,32 @@ pub(super) fn insert_scope_call_bindings(
             insert_binding(env, binding_names, &local.name, value);
         }
     }
+}
+
+pub(super) fn call_forwarding_native_env(
+    callee: &Value,
+    env: CallEnv,
+) -> Option<(CallEnv, HashMap<String, Value>, Vec<String>)> {
+    if !is_call_forwarding_native(callee) {
+        return None;
+    }
+    let locals = env.locals().clone();
+    let binding_names = locals.keys().cloned().collect();
+    Some((env, locals, binding_names))
+}
+
+fn is_call_forwarding_native(callee: &Value) -> bool {
+    let Value::Function(function) = callee else {
+        return false;
+    };
+    matches!(
+        function.native,
+        Some(
+            crate::NativeFunction::FunctionPrototypeApply
+                | crate::NativeFunction::FunctionPrototypeCall
+                | crate::NativeFunction::ReflectApply
+        )
+    )
 }
 
 fn insert_binding(

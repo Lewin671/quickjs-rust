@@ -9,7 +9,7 @@
 
 use std::collections::HashMap;
 
-use crate::Value;
+use crate::{CallEnv, Value};
 
 use super::ir::Bytecode;
 use super::vm::Vm;
@@ -77,6 +77,26 @@ impl Vm<'_> {
         let mut captured_env = self.captured_env.borrow_mut();
         for (name, value) in env {
             captured_env.insert(name.clone(), value.clone());
+        }
+    }
+
+    pub(super) fn refresh_locals_from_captured_env(&mut self) {
+        let captured_env = self.captured_env.borrow();
+        for (name, value) in captured_env.iter() {
+            if let Some(index) = self.bytecode.local_slot(name)
+                && let Some(local) = self.locals.get_mut(index)
+            {
+                *local = Some(value.clone());
+            }
+        }
+    }
+
+    pub(super) fn refresh_call_env_from_captured_env(&self, env: &mut CallEnv) {
+        let captured_env = self.captured_env.borrow();
+        for (name, value) in captured_env.iter() {
+            if let Some(binding) = env.get_local_mut(name) {
+                *binding = value.clone();
+            }
         }
     }
 

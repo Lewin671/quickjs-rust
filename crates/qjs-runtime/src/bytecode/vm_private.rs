@@ -194,7 +194,7 @@ impl Vm<'_> {
             home_object: Some(home_object),
             super_constructor: None,
             captured_env: Rc::new(RefCell::new(method_env)),
-            capture_writeback: self.capture_writeback.clone(),
+            capture_writeback: self.class_member_capture_writeback(&def.bytecode, &def.local_names),
         });
         if def.is_generator && def.is_async {
             crate::async_generator::wire_async_generator_function_intrinsics(&function, &self.env);
@@ -242,7 +242,8 @@ impl Vm<'_> {
             home_object: Some(home_object),
             super_constructor: None,
             captured_env: Rc::new(RefCell::new(field_env)),
-            capture_writeback: self.capture_writeback.clone(),
+            capture_writeback: self
+                .class_member_capture_writeback(&definition.bytecode, &definition.local_names),
         })
     }
 
@@ -259,7 +260,9 @@ impl Vm<'_> {
             &mut env,
             false,
         );
+        self.refresh_call_env_from_captured_env(&mut env);
         self.apply_env(env);
+        self.refresh_locals_from_captured_env();
         result
     }
 

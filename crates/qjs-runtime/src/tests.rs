@@ -3,6 +3,7 @@ mod async_functions;
 mod async_generators;
 mod bigint;
 mod bytecode;
+mod class_closures;
 mod class_eval;
 mod classes;
 mod date;
