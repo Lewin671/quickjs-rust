@@ -159,6 +159,21 @@ fn instance_public_and_private_fields_initialize_in_source_order() {
 }
 
 #[test]
+fn computed_public_field_does_not_clobber_private_field() {
+    assert_eq!(
+        eval(
+            "class C {
+               #m = 44;
+               ['#m'] = this.#m / 11;
+               check() { return this.#m + this['#m']; }
+             }
+             new C().check();"
+        ),
+        Ok(Value::Number(48.0))
+    );
+}
+
+#[test]
 fn instance_private_methods_brand_in_source_order() {
     assert_eq!(
         eval("class C { #m() { return 2; } y = this.#m(); } new C().y;"),

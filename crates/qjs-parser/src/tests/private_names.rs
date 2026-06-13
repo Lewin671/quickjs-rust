@@ -147,6 +147,12 @@ fn parses_private_brand_check() {
 }
 
 #[test]
+fn parses_division_after_private_member_access() {
+    parse_script("class C { #x = 44; y = this.#x / 11; }")
+        .expect("slash after a private member access is division");
+}
+
+#[test]
 fn allows_getter_setter_private_pair() {
     parse_script("class C { get #g() {} set #g(v) {} }").expect("a get/set pair is allowed");
     parse_script("class C { static get #g() {} static set #g(v) {} }")

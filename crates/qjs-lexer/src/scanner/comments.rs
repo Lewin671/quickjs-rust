@@ -76,6 +76,7 @@ impl Lexer<'_> {
         !matches!(
             previous.kind,
             TokenKind::Identifier(_)
+                | TokenKind::PrivateName(_)
                 | TokenKind::Number(_)
                 | TokenKind::BigInt(_)
                 | TokenKind::String(_)

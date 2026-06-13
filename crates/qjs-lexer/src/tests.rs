@@ -223,6 +223,23 @@ fn lexes_division_after_bigint_literals() {
 }
 
 #[test]
+fn lexes_division_after_private_names() {
+    let tokens = lex("this.#x / 2").expect("source should lex");
+    let kinds: Vec<TokenKind> = tokens.into_iter().map(|token| token.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::This,
+            TokenKind::Dot,
+            TokenKind::PrivateName("x".to_owned()),
+            TokenKind::Slash,
+            TokenKind::Number("2".to_owned()),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
 fn rejects_invalid_prefixed_numeric_literals() {
     assert!(lex("0xG").is_err());
     assert!(lex("0b2").is_err());
