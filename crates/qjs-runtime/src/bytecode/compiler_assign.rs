@@ -289,7 +289,12 @@ impl Compiler {
         Ok(())
     }
 
-    fn emit_private_member_store(&mut self, object_slot: usize, name: &str, value_slot: usize) {
+    pub(super) fn emit_private_member_store(
+        &mut self,
+        object_slot: usize,
+        name: &str,
+        value_slot: usize,
+    ) {
         self.emit(Op::LoadLocal(object_slot));
         self.emit(Op::LoadLocal(value_slot));
         self.emit(Op::SetPrivate(name.to_owned()));

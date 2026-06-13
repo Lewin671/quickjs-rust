@@ -434,11 +434,19 @@ impl Compiler {
                 object, property, ..
             }) => {
                 self.compile_expr(object)?;
-                self.compile_member_key(property)?;
-                self.emit(Op::LoadLocal(key_slot));
-                self.emit(Op::SetProp {
-                    is_strict: self.strict,
-                });
+                match property {
+                    qjs_ast::MemberProperty::Private(name) => {
+                        self.emit(Op::LoadLocal(key_slot));
+                        self.emit(Op::SetPrivate(name.clone()));
+                    }
+                    _ => {
+                        self.compile_member_key(property)?;
+                        self.emit(Op::LoadLocal(key_slot));
+                        self.emit(Op::SetProp {
+                            is_strict: self.strict,
+                        });
+                    }
+                }
                 self.emit(Op::Pop);
             }
             ForInLeft::Target(

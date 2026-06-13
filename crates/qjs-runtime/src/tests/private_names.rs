@@ -48,6 +48,57 @@ fn writes_private_instance_field() {
 }
 
 #[test]
+fn destructuring_assignment_writes_private_field_targets() {
+    assert_eq!(
+        eval(
+            "class C {
+               #x = 0;
+               objectSet(source) { ({a: this.#x} = source); return this.#x; }
+               arraySet(source) { [this.#x] = source; return this.#x; }
+             }
+             let c = new C();
+             c.objectSet({a: 4}) + c.arraySet([5]);"
+        ),
+        Ok(Value::Number(9.0))
+    );
+}
+
+#[test]
+fn for_in_and_for_of_write_private_field_targets() {
+    assert_eq!(
+        eval(
+            "class C {
+               #x = '';
+               forOf() { for (this.#x of [2]) {} return this.#x; }
+               forIn() { for (this.#x in {a: 0}) {} return this.#x; }
+             }
+             let c = new C();
+             c.forOf() + ':' + c.forIn();"
+        ),
+        Ok(Value::String("2:a".to_owned()))
+    );
+}
+
+#[test]
+fn private_field_destructuring_target_evaluates_before_source_get() {
+    let result = eval(
+        "class C extends class {} {
+           #field;
+           constructor() {
+             let init = () => super();
+             let object = { get a() { init(); } };
+             ({a: this.#field} = object);
+           }
+         }
+         new C();",
+    );
+    assert!(
+        matches!(result, Err(ref error) if error.message.contains("ReferenceError")),
+        "expected ReferenceError before source getter, got {result:?}"
+    );
+}
+
+#[test]
 fn duplicate_private_method_or_accessor_brand_is_type_error() {
     let method = eval(
         "class Base { constructor(o) { return o; } } \

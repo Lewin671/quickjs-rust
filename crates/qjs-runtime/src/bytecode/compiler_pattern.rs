@@ -7,7 +7,7 @@
 
 use qjs_ast::{
     AssignmentTarget, AssignmentTargetElement, AssignmentTargetProperty,
-    AssignmentTargetPropertyKey,
+    AssignmentTargetPropertyKey, MemberProperty,
 };
 
 use crate::{RuntimeError, Value};
@@ -17,9 +17,9 @@ use super::compiler_binding::ArrayDestructuring;
 use super::ir::{ObjectRestExclusion, Op};
 
 /// A member-target reference evaluated ahead of the value read.
-struct MemberReference {
-    object_slot: usize,
-    key_slot: usize,
+enum MemberReference {
+    Ordinary { object_slot: usize, key_slot: usize },
+    Private { object_slot: usize, name: String },
 }
 
 impl Compiler {
@@ -156,15 +156,23 @@ impl Compiler {
             return Ok(None);
         };
         let object_slot = self.temp_local("pattern_target_object");
-        let key_slot = self.temp_local("pattern_target_key");
         self.compile_expr(object)?;
         self.emit(Op::StoreLocal(object_slot));
-        self.compile_member_key(property)?;
-        self.emit(Op::StoreLocal(key_slot));
-        Ok(Some(MemberReference {
-            object_slot,
-            key_slot,
-        }))
+        match property {
+            MemberProperty::Private(name) => Ok(Some(MemberReference::Private {
+                object_slot,
+                name: name.clone(),
+            })),
+            _ => {
+                let key_slot = self.temp_local("pattern_target_key");
+                self.compile_member_key(property)?;
+                self.emit(Op::StoreLocal(key_slot));
+                Ok(Some(MemberReference::Ordinary {
+                    object_slot,
+                    key_slot,
+                }))
+            }
+        }
     }
 
     /// Stores the value on top of the stack into the target, consuming it.
@@ -182,7 +190,7 @@ impl Compiler {
                 let reference = reference.expect("member reference should be prepared");
                 let value_slot = self.temp_local("pattern_target_value");
                 self.emit(Op::StoreLocal(value_slot));
-                self.emit_member_store(reference.object_slot, reference.key_slot, value_slot);
+                self.emit_pattern_member_store(reference, value_slot);
                 self.emit(Op::Pop);
                 Ok(())
             }
@@ -207,6 +215,18 @@ impl Compiler {
                 slot,
                 name: name.to_owned(),
             });
+        }
+    }
+
+    fn emit_pattern_member_store(&mut self, reference: &MemberReference, value_slot: usize) {
+        match reference {
+            MemberReference::Ordinary {
+                object_slot,
+                key_slot,
+            } => self.emit_member_store(*object_slot, *key_slot, value_slot),
+            MemberReference::Private { object_slot, name } => {
+                self.emit_private_member_store(*object_slot, name, value_slot);
+            }
         }
     }
 }
