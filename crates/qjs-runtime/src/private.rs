@@ -98,6 +98,9 @@ impl PrivateEnvironment {
     /// Declares a fresh private-name identity for `name`, returning it. A field,
     /// method, or the first half of an accessor pair creates a new binding.
     pub(crate) fn declare_field(&self, name: &str) -> PrivateName {
+        if let Some(id) = self.local_id(name) {
+            return id;
+        }
         let id = PrivateName::new(name);
         self.bindings.borrow_mut().push((
             name.to_owned(),
@@ -109,8 +112,19 @@ impl PrivateEnvironment {
         id
     }
 
+    /// Predeclares a private name before class element evaluation has built the
+    /// final field/method/accessor metadata.
+    pub(crate) fn declare_placeholder(&self, name: &str) -> PrivateName {
+        self.declare_field(name)
+    }
+
     /// Declares a shared method binding, returning its identity.
     pub(crate) fn declare_method(&self, name: &str, function: Value) -> PrivateName {
+        if let Some(id) =
+            self.replace_local_kind(name, PrivateKind::Method(Box::new(function.clone())))
+        {
+            return id;
+        }
         let id = PrivateName::new(name);
         self.bindings.borrow_mut().push((
             name.to_owned(),
@@ -133,15 +147,22 @@ impl PrivateEnvironment {
     ) -> PrivateName {
         let mut bindings = self.bindings.borrow_mut();
         if let Some((_, binding)) = bindings.iter_mut().find(|(existing, binding)| {
-            existing == name && matches!(binding.kind, PrivateKind::Accessor(_))
+            existing == name
+                && matches!(binding.kind, PrivateKind::Accessor(_) | PrivateKind::Field)
         }) {
-            if let PrivateKind::Accessor(accessor) = &mut binding.kind {
-                if get.is_some() {
-                    accessor.get = get;
+            match &mut binding.kind {
+                PrivateKind::Accessor(accessor) => {
+                    if get.is_some() {
+                        accessor.get = get;
+                    }
+                    if set.is_some() {
+                        accessor.set = set;
+                    }
                 }
-                if set.is_some() {
-                    accessor.set = set;
+                PrivateKind::Field => {
+                    binding.kind = PrivateKind::Accessor(Box::new(PrivateAccessor { get, set }));
                 }
+                PrivateKind::Method(_) => unreachable!("parser rejects private duplicate names"),
             }
             return binding.id.clone();
         }
@@ -154,6 +175,21 @@ impl PrivateEnvironment {
             },
         ));
         id
+    }
+
+    fn local_id(&self, name: &str) -> Option<PrivateName> {
+        self.bindings
+            .borrow()
+            .iter()
+            .find(|(existing, _)| existing == name)
+            .map(|(_, binding)| binding.id.clone())
+    }
+
+    fn replace_local_kind(&self, name: &str, kind: PrivateKind) -> Option<PrivateName> {
+        let mut bindings = self.bindings.borrow_mut();
+        let (_, binding) = bindings.iter_mut().find(|(existing, _)| existing == name)?;
+        binding.kind = kind;
+        Some(binding.id.clone())
     }
 
     /// Resolves a private-name reference by source text to its binding, walking
@@ -169,6 +205,19 @@ impl PrivateEnvironment {
             return Some(binding);
         }
         self.outer.as_ref().and_then(|outer| outer.resolve(name))
+    }
+
+    pub(crate) fn visible_names(&self) -> Vec<String> {
+        let mut names = self
+            .outer
+            .as_ref()
+            .map_or_else(Vec::new, |outer| outer.visible_names());
+        for (name, _) in self.bindings.borrow().iter() {
+            if !names.iter().any(|existing| existing == name) {
+                names.push(name.clone());
+            }
+        }
+        names
     }
 }
 

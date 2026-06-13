@@ -156,11 +156,11 @@ pub(super) enum Op {
         /// are not ordinary properties; they install into per-object private
         /// storage keyed by fresh per-evaluation private-name identities.
         private_elements: Vec<ClassPrivateElementDef>,
-        /// Number of computed-key values pushed onto the stack before this op,
-        /// in member order.
-        computed_key_count: usize,
+        /// Computed member key expressions in source order. They run after the
+        /// class private environment is created, so private names are visible.
+        computed_keys: Vec<ClassComputedKeyDef>,
         /// Whether the class has an `extends` heritage clause. When set, the
-        /// heritage value was pushed onto the stack before the computed keys.
+        /// heritage value was pushed onto the stack before this op.
         has_heritage: bool,
     },
     /// Reads `super.<key>`: looks the property up on the current method's home
@@ -264,13 +264,12 @@ pub(super) struct ClassConstructorDef {
     pub(super) bytecode: Rc<Bytecode>,
 }
 
-/// Whether a class member key is a literal name or a computed expression
-/// whose value is taken from the stack at class-evaluation time.
+/// Whether a class member key is a literal name or a computed expression.
 #[derive(Clone, Debug)]
 pub(super) enum ClassMemberKeyDef {
     /// A statically known string key.
     Literal(String),
-    /// A computed key: the value was pushed onto the stack before `NewClass`.
+    /// A computed key evaluated by `NewClass` in class-element order.
     Computed,
 }
 
@@ -283,7 +282,7 @@ pub(super) enum ClassMethodKind {
 }
 
 /// A class element in source order: a method/accessor or a field. Both kinds
-/// may carry a computed key whose value was pushed before `NewClass`.
+/// may carry a computed key evaluated by `NewClass`.
 #[derive(Clone, Debug)]
 pub(super) enum ClassElementDef {
     Method(ClassMethodDef),
@@ -332,6 +331,12 @@ pub(super) enum ClassPrivateElementDef {
         is_static: bool,
         def: ClassMethodDef,
     },
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct ClassComputedKeyDef {
+    pub(super) local_names: Vec<String>,
+    pub(super) bytecode: Rc<Bytecode>,
 }
 
 /// Compiled definition of a class method or accessor.
@@ -558,9 +563,13 @@ fn collect_global_names_from_ops(code: &[Op], names: &mut BTreeSet<String>) {
                 constructor,
                 elements,
                 private_elements,
+                computed_keys,
                 ..
             } => {
                 names.extend(constructor.bytecode.global_names().iter().cloned());
+                for key in computed_keys {
+                    names.extend(key.bytecode.global_names().iter().cloned());
+                }
                 for element in elements {
                     match element {
                         ClassElementDef::Method(method) => {

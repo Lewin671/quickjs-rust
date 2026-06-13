@@ -31,7 +31,7 @@ pub fn parse_script(source: &str) -> Result<Script, ParseError> {
 }
 
 /// Additional parser context for direct eval code.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct EvalParseContext {
     /// Whether eval runs inside a function-like context, allowing
     /// `new.target`.
@@ -43,6 +43,9 @@ pub struct EvalParseContext {
     /// Whether eval runs inside a class field initializer, where `arguments`
     /// is an early error.
     pub in_field_initializer: bool,
+    /// Private names visible through the caller's active private environment,
+    /// without the leading `#`.
+    pub private_names: Vec<String>,
 }
 
 /// Parses direct-eval source text using the syntactic context of the eval call.
@@ -62,6 +65,19 @@ pub fn parse_direct_eval_script(
     parser.in_method = context.in_method;
     parser.in_derived_constructor = context.in_derived_constructor;
     parser.in_field_initializer = context.in_field_initializer;
+    if !context.private_names.is_empty() {
+        parser.private_scopes.push(PrivateScope {
+            declarations: context
+                .private_names
+                .into_iter()
+                .map(|name| PrivateDeclaration {
+                    name,
+                    kind: PrivateDeclKind::Field,
+                    is_static: false,
+                })
+                .collect(),
+        });
+    }
     parser.parse_script()
 }
 

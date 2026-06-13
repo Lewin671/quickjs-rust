@@ -301,10 +301,11 @@ fn parses_direct_eval_with_caller_context() {
         in_method: true,
         in_derived_constructor: false,
         in_field_initializer: true,
+        ..EvalParseContext::default()
     };
-    parse_direct_eval_script("new.target; () => super.x;", context)
+    parse_direct_eval_script("new.target; () => super.x;", context.clone())
         .expect("direct eval inherits function and method contexts");
-    assert!(parse_direct_eval_script("arguments;", context).is_err());
+    assert!(parse_direct_eval_script("arguments;", context.clone()).is_err());
     assert!(parse_direct_eval_script("super();", context).is_err());
 }
 

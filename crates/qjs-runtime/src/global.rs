@@ -254,6 +254,9 @@ fn direct_eval_parse_context(env: &CallEnv) -> EvalParseContext {
             env.get(crate::FIELD_INITIALIZER_EVAL_BINDING),
             Some(Value::Boolean(true))
         ),
+        private_names: env
+            .private_environment()
+            .map_or_else(Vec::new, |environment| environment.visible_names()),
     }
 }
 

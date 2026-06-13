@@ -145,7 +145,9 @@ impl<'a> Vm<'a> {
                 locals.insert(self.bytecode.locals[index].name.clone(), value.clone());
             }
         }
-        self.attach_host(CallEnv::with_locals(self.realm_rc(), locals))
+        let mut env = self.attach_host(CallEnv::with_locals(self.realm_rc(), locals));
+        env.set_private_environment(self.current_private_environment());
+        env
     }
 
     /// A clone of the shared realm `Rc`.
@@ -383,7 +385,7 @@ impl<'a> Vm<'a> {
                     constructor,
                     elements,
                     private_elements,
-                    computed_key_count,
+                    computed_keys,
                     has_heritage,
                 } => {
                     let result = self.new_class(
@@ -391,7 +393,7 @@ impl<'a> Vm<'a> {
                         &constructor,
                         &elements,
                         &private_elements,
-                        computed_key_count,
+                        &computed_keys,
                         has_heritage,
                     );
                     if let Some(value) = self.handle_runtime_result(result)? {

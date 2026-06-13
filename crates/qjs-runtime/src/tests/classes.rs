@@ -899,6 +899,19 @@ fn computed_field_key_installs_field() {
 }
 
 #[test]
+fn computed_static_and_instance_fields_preserve_evaluation_order() {
+    assert_eq!(
+        eval(
+            "let i = 0; \
+             class C { [i++] = i++; static [i++] = i++; [i++] = i++; } \
+             let c = new C(); \
+             [i, c[0], c[2], C[1], c.hasOwnProperty('1'), C.hasOwnProperty('0'), C.hasOwnProperty('2')].join(',');"
+        ),
+        Ok(Value::String("6,4,5,3,false,false,false".to_owned()))
+    );
+}
+
+#[test]
 fn derived_instance_fields_run_after_super() {
     // The field initializer sees state established by the base constructor.
     assert_eq!(

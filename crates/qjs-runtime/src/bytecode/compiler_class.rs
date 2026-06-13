@@ -9,9 +9,9 @@ use crate::{RuntimeError, function::collect_function_local_names};
 
 use super::compiler::{Compiler, compile_function_body_with_strict};
 use super::ir::{
-    ClassConstructorDef, ClassElementDef, ClassFieldDef, ClassFieldInitializerDef,
-    ClassMemberKeyDef, ClassMethodDef, ClassMethodKind, ClassPrivateElementDef,
-    ClassStaticBlockDef, Op,
+    ClassComputedKeyDef, ClassConstructorDef, ClassElementDef, ClassFieldDef,
+    ClassFieldInitializerDef, ClassMemberKeyDef, ClassMethodDef, ClassMethodKind,
+    ClassPrivateElementDef, ClassStaticBlockDef, Op,
 };
 
 impl Compiler {
@@ -39,8 +39,8 @@ impl Compiler {
     /// present) is used for the constructor `name` property and the bindable
     /// inner name.
     ///
-    /// Computed member keys are evaluated, in class-definition order, before
-    /// the `NewClass` op and left on the stack; the op consumes them.
+    /// Computed member keys are compiled into thunks and evaluated, in
+    /// class-definition order, by `NewClass` after private names are bound.
     pub(super) fn compile_class(
         &mut self,
         name: Option<&str>,
@@ -53,10 +53,7 @@ impl Compiler {
             self.compile_expr(heritage)?;
         }
 
-        // Evaluate computed keys (methods and fields) in source order so their
-        // side effects run in class-definition order, ahead of building the
-        // constructor.
-        let mut computed_key_count = 0usize;
+        let mut computed_keys = Vec::new();
         for element in &body.elements {
             let key = match element {
                 ClassElement::Method(member) => &member.key,
@@ -65,8 +62,7 @@ impl Compiler {
                 ClassElement::StaticBlock(_) => continue,
             };
             if let ClassMemberKey::Computed(expr) = key {
-                self.compile_expr(expr)?;
-                computed_key_count += 1;
+                computed_keys.push(compile_computed_key(name, expr)?);
             }
         }
 
@@ -202,11 +198,29 @@ impl Compiler {
             constructor,
             elements,
             private_elements,
-            computed_key_count,
+            computed_keys,
             has_heritage,
         });
         Ok(())
     }
+}
+
+fn compile_computed_key(
+    class_name: Option<&str>,
+    expr: &Expr,
+) -> Result<ClassComputedKeyDef, RuntimeError> {
+    let params = FunctionParams::positional(Vec::new());
+    let body = vec![Stmt::Return {
+        argument: Some(expr.clone()),
+        span: expr.span(),
+    }];
+    let local_names = collect_function_local_names(None, &params, &body, true);
+    let bytecode =
+        compile_class_function_body(class_name, &params, &body, &local_names, false, false)?;
+    Ok(ClassComputedKeyDef {
+        local_names,
+        bytecode: Rc::new(bytecode),
+    })
 }
 
 fn compile_member_key(key: &ClassMemberKey) -> (ClassMemberKeyDef, Option<String>) {

@@ -11,9 +11,11 @@ use crate::{
     call_function, construct_function, property_value_key_with_receiver, value_prototype_slot,
 };
 
+use super::CaptureWriteback;
 use super::ir::{
-    ClassConstructorDef, ClassElementDef, ClassFieldDef, ClassFieldInitializerDef,
-    ClassMemberKeyDef, ClassMethodDef, ClassMethodKind, ClassStaticBlockDef,
+    Bytecode, ClassComputedKeyDef, ClassConstructorDef, ClassElementDef, ClassFieldDef,
+    ClassFieldInitializerDef, ClassMemberKeyDef, ClassMethodDef, ClassMethodKind,
+    ClassStaticBlockDef,
 };
 use super::vm::Vm;
 use crate::CallEnv;
@@ -29,31 +31,18 @@ impl Vm<'_> {
     /// Builds a class constructor function object, wires its `prototype` and
     /// `constructor` properties, and installs prototype and static members.
     ///
-    /// Computed member keys were evaluated, in member order, before the
-    /// `NewClass` op; they sit on the stack and are consumed here.
+    /// Computed member keys are evaluated, in member order, after the class
+    /// private environment is created and before element installation.
     pub(super) fn new_class(
         &mut self,
         name: Option<&str>,
         constructor: &ClassConstructorDef,
         elements: &[ClassElementDef],
         private_elements: &[super::ir::ClassPrivateElementDef],
-        computed_key_count: usize,
+        computed_key_defs: &[ClassComputedKeyDef],
         has_heritage: bool,
     ) -> Result<Value, RuntimeError> {
-        // Computed keys were pushed in member order; pop them and convert to
-        // property keys, preserving member order.
-        let mut computed_keys = Vec::with_capacity(computed_key_count);
-        for _ in 0..computed_key_count {
-            let value = self.pop()?;
-            let mut key_env = self.current_env();
-            let key = to_property_key_value(value, &mut key_env)?;
-            self.apply_env(key_env);
-            computed_keys.push(key);
-        }
-        computed_keys.reverse();
-        let mut computed_keys = computed_keys.into_iter();
-
-        // The heritage value sits below the computed keys. Resolve the parent
+        // Resolve the parent
         // constructor and the prototype the new class prototype inherits from.
         let heritage = if has_heritage {
             let mut heritage_env = self.current_env();
@@ -122,6 +111,11 @@ impl Vm<'_> {
         // resolves through it.
         *constructor_function.home_object.borrow_mut() = Some(Value::Object(prototype.clone()));
 
+        self.create_private_environment(private_elements, &prototype, &constructor_function);
+        let computed_keys =
+            self.evaluate_computed_keys(computed_key_defs, &constructor_function, name)?;
+        let mut computed_keys = computed_keys.into_iter();
+
         // A class binding is visible to its own methods and constructor under
         // the class name, so methods can reference the class recursively. The
         // binding is immutable, so each function gets its own captured env
@@ -181,6 +175,7 @@ impl Vm<'_> {
                             value,
                             &mut self.realm_env(),
                         )?;
+                        self.refresh_instance_field_captures(&constructor_function);
                     } else {
                         constructor_function
                             .instance_fields
@@ -190,6 +185,7 @@ impl Vm<'_> {
                 }
                 PendingStaticItem::Block(block) => {
                     self.run_static_block(block, &constructor_function, name)?;
+                    self.refresh_instance_field_captures(&constructor_function);
                 }
             }
         }
@@ -202,6 +198,73 @@ impl Vm<'_> {
         );
 
         Ok(Value::Function(constructor_function))
+    }
+
+    fn refresh_instance_field_captures(&self, constructor_function: &Function) {
+        for field in constructor_function.instance_fields.borrow().iter() {
+            if let Some(initializer) = &field.initializer {
+                self.refresh_function_captures(initializer);
+            }
+        }
+    }
+
+    fn refresh_function_captures(&self, function: &Function) {
+        let names = function
+            .captured_env
+            .borrow()
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
+        let mut captured = function.captured_env.borrow_mut();
+        for name in names {
+            if let Some(value) = self
+                .current_local_binding(&name)
+                .cloned()
+                .or_else(|| self.env.locals().get(&name).cloned())
+            {
+                captured.insert(name, value);
+            }
+        }
+    }
+
+    fn evaluate_computed_keys(
+        &mut self,
+        computed_key_defs: &[ClassComputedKeyDef],
+        constructor_function: &Function,
+        name: Option<&str>,
+    ) -> Result<Vec<PropertyKey>, RuntimeError> {
+        let mut keys = Vec::with_capacity(computed_key_defs.len());
+        for key_def in computed_key_defs {
+            let mut key_env = self.function_capture_env(&key_def.bytecode, &key_def.local_names);
+            bind_class_inner_name(&mut key_env, name, constructor_function);
+            let thunk = Function::new_user_compiled(CompiledUserFunction {
+                name: None,
+                params: qjs_ast::FunctionParams::positional(Vec::new()),
+                env: key_env.clone(),
+                bytecode: key_def.bytecode.clone(),
+                local_names: key_def.local_names.clone(),
+                constructable: false,
+                is_strict: true,
+                lexical_this: false,
+                lexical_arguments: false,
+                is_generator: false,
+                is_async: false,
+                is_class_constructor: false,
+                is_derived_constructor: false,
+                is_field_initializer: false,
+                home_object: Some(Value::Function(constructor_function.clone())),
+                super_constructor: None,
+                captured_env: Rc::new(RefCell::new(key_env)),
+                capture_writeback: self.capture_writeback.clone(),
+            });
+            let this_value = self.env.get("this").unwrap_or(Value::Undefined);
+            let value = self.run_field_initializer(&thunk, this_value)?;
+            let mut env = self.current_env();
+            let key = to_property_key_value(value, &mut env)?;
+            self.apply_env(env);
+            keys.push(key);
+        }
+        Ok(keys)
     }
 
     /// Builds and installs a single method/accessor on the prototype (instance)
@@ -328,8 +391,43 @@ impl Vm<'_> {
             home_object: Some(home_object),
             super_constructor: None,
             captured_env: Rc::new(RefCell::new(field_env)),
-            capture_writeback: self.capture_writeback.clone(),
+            capture_writeback: self.class_member_capture_writeback(bytecode, local_names),
         }))
+    }
+
+    fn class_member_capture_writeback(
+        &self,
+        bytecode: &Bytecode,
+        local_names: &[String],
+    ) -> Option<CaptureWriteback> {
+        let mut names = Vec::new();
+        for name in bytecode.global_names() {
+            self.push_member_capture_name(&mut names, name);
+        }
+        for name in bytecode.local_names() {
+            if local_names
+                .binary_search_by(|local| local.as_str().cmp(name))
+                .is_err()
+            {
+                self.push_member_capture_name(&mut names, name);
+            }
+        }
+        (!names.is_empty()).then(|| CaptureWriteback {
+            target: self.captured_env.clone(),
+            names,
+        })
+    }
+
+    fn push_member_capture_name(&self, names: &mut Vec<String>, name: &str) {
+        if crate::function::is_internal_binding_name(name) {
+            return;
+        }
+        if self.current_local_binding(name).is_none() && !self.env.locals().contains_key(name) {
+            return;
+        }
+        if !names.iter().any(|existing| existing == name) {
+            names.push(name.to_owned());
+        }
     }
 
     /// Runs a `static { ... }` block at class definition: builds a parameterless

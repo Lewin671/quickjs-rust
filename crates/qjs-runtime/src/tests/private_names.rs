@@ -206,6 +206,27 @@ fn nested_class_resolves_outer_private_name() {
 }
 
 #[test]
+fn private_name_is_visible_to_computed_class_key() {
+    let result = eval(
+        "const self = this; \
+         class C { [self.#f] = 'Test262'; #f = 'foo'; }",
+    );
+    assert!(
+        matches!(&result, Err(error) if error.message.contains("TypeError")
+            && error.message.contains("#f")),
+        "expected a TypeError for visible private name on unbranded object, got {result:?}"
+    );
+}
+
+#[test]
+fn direct_eval_in_field_initializer_resolves_private_field() {
+    assert_eq!(
+        eval("class C { #m = 44; v = eval('this.#m'); } new C().v;"),
+        Ok(Value::Number(44.0))
+    );
+}
+
+#[test]
 fn nested_function_resolves_enclosing_private_field() {
     assert_eq!(
         eval(

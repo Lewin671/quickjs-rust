@@ -11,8 +11,8 @@ use crate::{
 };
 
 use super::{
-    CallEnv, function_call_this, is_internal_binding_name, parameter_binding_name,
-    rest_parameter_binding_name,
+    CallEnv, InstanceFieldInitializer, function_call_this, is_internal_binding_name,
+    parameter_binding_name, rest_parameter_binding_name,
 };
 
 pub(crate) fn call_function(
@@ -217,20 +217,42 @@ pub(crate) fn initialize_instance_fields(
     // before the constructor body runs, so the body may use `this.#x`.
     crate::bytecode::apply_instance_private_elements(function, this_value, env)?;
     let fields = function.instance_fields.borrow().clone();
-    for field in fields {
+    for (index, field) in fields.iter().enumerate() {
         let value = match &field.initializer {
-            Some(thunk) => call_function(
-                Value::Function(thunk.clone()),
-                this_value.clone(),
-                Vec::new(),
-                env,
-                false,
-            )?,
+            Some(thunk) => {
+                let value = call_function(
+                    Value::Function(thunk.clone()),
+                    this_value.clone(),
+                    Vec::new(),
+                    env,
+                    false,
+                )?;
+                refresh_later_field_initializer_captures(&fields[index + 1..], thunk);
+                value
+            }
             None => Value::Undefined,
         };
         crate::bytecode::install_field_value(this_value, field.key.clone(), value, env)?;
     }
     Ok(())
+}
+
+fn refresh_later_field_initializer_captures(
+    fields: &[InstanceFieldInitializer],
+    source: &Function,
+) {
+    let source_env = source.captured_env.borrow();
+    for field in fields {
+        let Some(target) = &field.initializer else {
+            continue;
+        };
+        let mut target_env = target.captured_env.borrow_mut();
+        for (name, value) in source_env.iter() {
+            if target_env.contains_key(name) {
+                target_env.insert(name.clone(), value.clone());
+            }
+        }
+    }
 }
 
 fn finish_derived_construct(

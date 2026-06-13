@@ -30,17 +30,9 @@ impl Vm<'_> {
         constructor_function: &Function,
         name: Option<&str>,
     ) -> Result<(), RuntimeError> {
-        // A class needs its own private environment when it declares private
-        // names or when it is lexically nested inside another class (so its
-        // member bodies can reference the enclosing class's private names). The
-        // environment links outward to the enclosing one.
-        let enclosing = self.current_private_environment();
-        if private_elements.is_empty() && enclosing.is_none() {
+        let Some(environment) = prototype.private_environment() else {
             return Ok(());
-        }
-        let environment = PrivateEnvironment::with_outer(enclosing);
-        prototype.set_private_environment(environment.clone());
-        constructor_function.set_private_environment(environment.clone());
+        };
 
         for element in private_elements {
             match element {
@@ -119,6 +111,33 @@ impl Vm<'_> {
             }
         }
         Ok(())
+    }
+
+    /// Creates and attaches a class private environment before computed keys are
+    /// evaluated, then predeclares every private name in the class body.
+    pub(super) fn create_private_environment(
+        &mut self,
+        private_elements: &[ClassPrivateElementDef],
+        prototype: &ObjectRef,
+        constructor_function: &Function,
+    ) {
+        let enclosing = self.current_private_environment();
+        if private_elements.is_empty() && enclosing.is_none() {
+            return;
+        }
+        let environment = PrivateEnvironment::with_outer(enclosing);
+        prototype.set_private_environment(environment.clone());
+        constructor_function.set_private_environment(environment.clone());
+        for element in private_elements {
+            match element {
+                ClassPrivateElementDef::Field { name, .. }
+                | ClassPrivateElementDef::Method { name, .. }
+                | ClassPrivateElementDef::Getter { name, .. }
+                | ClassPrivateElementDef::Setter { name, .. } => {
+                    environment.declare_placeholder(name);
+                }
+            }
+        }
     }
 
     /// Brands a private method/accessor onto the constructor (static) or
