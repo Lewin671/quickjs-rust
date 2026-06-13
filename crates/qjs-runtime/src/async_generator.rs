@@ -29,6 +29,9 @@ use crate::{
 /// sits between an async generator function and `%Function.prototype%`.
 pub(crate) const ASYNC_GENERATOR_FUNCTION_PROTOTYPE_BINDING: &str =
     "\0AsyncGeneratorFunctionPrototype";
+/// Intrinsic binding for `%AsyncIteratorPrototype%`, the parent shared by async
+/// iterator instance prototypes.
+pub(crate) const ASYNC_ITERATOR_PROTOTYPE_BINDING: &str = "\0AsyncIteratorPrototype";
 /// Intrinsic binding for `%AsyncGeneratorPrototype%`, the object async generator
 /// instances inherit from.
 pub(crate) const ASYNC_GENERATOR_PROTOTYPE_BINDING: &str = "\0AsyncGeneratorPrototype";
@@ -67,16 +70,29 @@ pub(crate) struct AsyncGeneratorInternal {
 /// Installs `%AsyncGeneratorPrototype%` (with `next`/`return`/`throw`,
 /// `Symbol.asyncIterator`, and the "AsyncGenerator" toStringTag) and
 /// `%AsyncGeneratorFunction.prototype%`, recording both under intrinsic
-/// bindings. The callable `%AsyncGeneratorFunction%` constructor itself is not
-/// installed (matching the skipped `%GeneratorFunction%` / `%AsyncFunction%`
-/// constructors); no global binding exists for it.
+/// bindings. `%AsyncGeneratorFunction%` is created only for prototype-chain
+/// consistency and is not exposed as a global binding.
 pub(crate) fn install_async_generator(
     env: &mut CallEnv,
     _global_this: &Value,
     object_prototype: ObjectRef,
 ) {
-    let async_generator_prototype =
+    let async_iterator_prototype =
         ObjectRef::with_prototype(HashMap::new(), Some(object_prototype.clone()));
+    if let Some(async_iterator) = symbol::async_iterator_symbol(env) {
+        async_iterator_prototype.define_symbol_property(
+            async_iterator,
+            Property::non_enumerable(Value::Function(Function::new_native(
+                Some("[Symbol.asyncIterator]"),
+                0,
+                NativeFunction::AsyncGeneratorPrototypeAsyncIterator,
+                false,
+            ))),
+        );
+    }
+
+    let async_generator_prototype =
+        ObjectRef::with_prototype(HashMap::new(), Some(async_iterator_prototype.clone()));
     for (name, native) in [
         ("next", NativeFunction::AsyncGeneratorPrototypeNext),
         ("return", NativeFunction::AsyncGeneratorPrototypeReturn),
@@ -105,6 +121,24 @@ pub(crate) fn install_async_generator(
         HashMap::new(),
         function_intrinsic_prototype(env).or(Some(object_prototype)),
     );
+    let async_generator_function = Function::new_native(
+        Some("AsyncGeneratorFunction"),
+        1,
+        NativeFunction::AsyncGeneratorFunction,
+        true,
+    );
+    let _ = async_generator_function.set_internal_prototype_slot(
+        function_intrinsic_prototype(env).map(crate::Prototype::Object),
+    );
+    async_generator_function.properties.borrow_mut().insert(
+        "prototype".to_owned(),
+        Property::data(
+            Value::Object(async_generator_function_prototype.clone()),
+            false,
+            false,
+            true,
+        ),
+    );
     async_generator_function_prototype.define_property(
         "prototype".to_owned(),
         Property::data(
@@ -120,16 +154,29 @@ pub(crate) fn install_async_generator(
         &async_generator_function_prototype,
         "AsyncGeneratorFunction",
     );
+    async_generator_function_prototype.define_property(
+        "constructor".to_owned(),
+        Property::data(
+            Value::Function(async_generator_function.clone()),
+            false,
+            false,
+            true,
+        ),
+    );
     async_generator_prototype.define_property(
         "constructor".to_owned(),
         Property::data(
-            Value::Object(async_generator_function_prototype.clone()),
+            Value::Function(async_generator_function),
             false,
             false,
             true,
         ),
     );
 
+    env.insert_realm(
+        ASYNC_ITERATOR_PROTOTYPE_BINDING.to_owned(),
+        Value::Object(async_iterator_prototype),
+    );
     env.insert_realm(
         ASYNC_GENERATOR_PROTOTYPE_BINDING.to_owned(),
         Value::Object(async_generator_prototype),

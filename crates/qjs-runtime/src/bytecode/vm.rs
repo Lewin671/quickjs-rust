@@ -23,9 +23,7 @@ pub(super) type Slot = Option<Value>;
 struct VmCallEnv {
     env: CallEnv,
     binding_names: Option<Vec<String>>,
-    /// Injected caller-binding values at call time; a binding writes back only
-    /// when the callee actually changed it, so an unmodified injected copy
-    /// cannot clobber a newer value that arrived through another path.
+    /// Injected caller bindings; only changed values write back.
     injected: HashMap<String, Value>,
 }
 
@@ -65,9 +63,7 @@ pub(super) struct Vm<'a> {
     /// `globals` map that is *not* a slot now lives in `env.locals()`.
     pub(super) env: CallEnv,
     pub(super) realm: Realm,
-    /// The realm's dynamic-import host, carried so every `CallEnv` this VM
-    /// produces (frame envs, nested call envs, the job-draining env) keeps the
-    /// host reachable for a dynamic `import()` at any depth.
+    /// Realm dynamic-import host copied into every `CallEnv` this VM creates.
     pub(super) module_host: Option<crate::module::ModuleHostRef>,
     pub(super) captured_env: Rc<RefCell<HashMap<String, Value>>>,
     pub(super) capture_writeback: Option<CaptureWriteback>,
@@ -75,9 +71,7 @@ pub(super) struct Vm<'a> {
     pub(super) try_stack: Vec<TryFrame>,
     pub(super) pending_throw: Option<Value>,
     pub(super) pending_return: Option<Value>,
-    /// Set just before re-entering a generator body suspended inside a
-    /// `yield*`, so the resumed `Op::YieldDelegate` forwards the resume to the
-    /// inner iterator. `None` for ordinary runs and plain-`yield` resumes.
+    /// Staged resume for a generator body suspended inside `yield*`.
     pub(super) resume_mode: Option<ResumeMode>,
     /// Cached realm Array.prototype, used to keep the `a[i] = x` fast path from
     /// re-resolving the `Array` binding on every store. Invalidated whenever the
@@ -533,8 +527,17 @@ impl<'a> Vm<'a> {
                     next_slot,
                     async_delegate,
                 } => match self.yield_delegate(iterator_slot, next_slot, async_delegate)? {
+                    DelegateStep::Suspend(value) if async_delegate => {
+                        return Ok(Completion::YieldDelegateAsync(value));
+                    }
                     DelegateStep::Suspend(value) => return Ok(Completion::YieldDelegate(value)),
                     DelegateStep::Await(value) => return Ok(Completion::YieldDelegateAwait(value)),
+                    DelegateStep::AwaitReturn(value) => {
+                        return Ok(Completion::YieldDelegateAwaitReturn(value));
+                    }
+                    DelegateStep::AwaitReturnValue(value) => {
+                        return Ok(Completion::YieldDelegateAwaitReturnValue(value));
+                    }
                     DelegateStep::Return(value) => return Ok(Completion::Return(value)),
                     DelegateStep::Continue => {}
                 },

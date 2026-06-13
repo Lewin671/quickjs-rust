@@ -246,6 +246,9 @@ pub(crate) enum NativeFunction {
     GeneratorPrototypeNext,
     GeneratorPrototypeReturn,
     GeneratorPrototypeThrow,
+    /// `%AsyncGeneratorFunction%`: reachable through async generator function
+    /// `.constructor`, but not exposed as a global binding.
+    AsyncGeneratorFunction,
     /// Resumes a suspended async function with the fulfilled value of the
     /// awaited promise (`await` onFulfilled reaction).
     AsyncFunctionAwaitFulfilled,

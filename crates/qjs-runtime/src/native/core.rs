@@ -73,6 +73,10 @@ pub(super) fn call_core_native(
             is_construct,
             env,
         ),
+        NativeFunction::AsyncGeneratorFunction => Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: AsyncGeneratorFunction constructor is not implemented".to_owned(),
+        }),
         NativeFunction::FunctionPrototypeApply => {
             crate::function::native_function_prototype_apply(this_value, argument_values, env)
         }

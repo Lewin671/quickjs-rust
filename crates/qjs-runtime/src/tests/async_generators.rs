@@ -371,10 +371,106 @@ fn prototype_chain_tags() {
     assert_eq!(
         eval(
             "async function* g() {} \
+             Object.getPrototypeOf(Object.getPrototypeOf(g.prototype)) !== Object.prototype;"
+        )
+        .expect("eval"),
+        Value::Boolean(true)
+    );
+    assert_eq!(
+        eval(
+            "async function* g() {} \
              Object.getPrototypeOf(g()) === g.prototype;"
         )
         .expect("eval"),
         Value::Boolean(true)
+    );
+    assert_eq!(
+        eval(
+            "async function* g() {} \
+             g.constructor.prototype.prototype === Object.getPrototypeOf(g.prototype);"
+        )
+        .expect("eval"),
+        Value::Boolean(true)
+    );
+    assert_eq!(
+        eval("typeof AsyncGeneratorFunction;").expect("eval"),
+        Value::String("undefined".to_owned())
+    );
+}
+
+#[test]
+fn yield_star_async_from_sync_does_not_expose_wrapper_intrinsics() {
+    assert_eq!(
+        eval_log(
+            "var o = []; \
+             var AsyncIteratorPrototype = \
+               Object.getPrototypeOf(async function*(){}.constructor.prototype.prototype); \
+             Object.defineProperty(AsyncIteratorPrototype, Symbol.iterator, { \
+               get: function() { throw new Error('@@iterator accessed'); } }); \
+             Object.defineProperty(AsyncIteratorPrototype, Symbol.asyncIterator, { \
+               get: function() { throw new Error('@@asyncIterator accessed'); } }); \
+             async function* g() { yield* []; } \
+             g().next().then(function() { o.push('done'); }, function(error) { o.push(error.message); }); \
+             o;"
+        ),
+        "done"
+    );
+}
+
+#[test]
+fn yield_star_async_delegate_reads_not_done_value_inside_body() {
+    assert_eq!(
+        eval_log(
+            "var o = []; \
+             var iter = { \
+               [Symbol.asyncIterator]: function() { return this; }, \
+               next: function() { return { done: false, get value() { throw 'marker'; } }; } \
+             }; \
+             async function* g() { try { yield* iter; } catch (error) { return error; } } \
+             g().next().then(function(result) { o.push(result.value); o.push(result.done); }); \
+             o;"
+        ),
+        "marker,true"
+    );
+}
+
+#[test]
+fn yield_star_return_awaits_missing_inner_return_value() {
+    assert_eq!(
+        eval_log(
+            "var o = []; \
+             var iter = { \
+               [Symbol.asyncIterator]: function() { return this; }, \
+               next: function() { return { done: false, value: 1 }; } \
+             }; \
+             async function* g() { yield* iter; } \
+             var it = g(); \
+             it.next().then(function() { \
+               return it.return(Promise.resolve(3)); \
+             }).then(function(result) { o.push(result.value); o.push(result.done); }); \
+             o;"
+        ),
+        "3,true"
+    );
+}
+
+#[test]
+fn yield_star_return_awaits_outer_return_before_inner_return_lookup() {
+    assert_eq!(
+        eval_log(
+            "var o = []; \
+             var iter = { \
+               [Symbol.asyncIterator]: function() { return this; }, \
+               next: function() { o.push('next'); return { done: false, value: 1 }; }, \
+               get return() { o.push('get return'); return function() { return { done: true, value: 2 }; }; } \
+             }; \
+             var value = { get then() { o.push('get then'); } }; \
+             async function* g() { yield* iter; } \
+             var it = g(); \
+             it.next().then(function() { o.push('returned'); it.return(value); }); \
+             o;"
+        ),
+        "next,returned,get then,get return"
     );
 }
 

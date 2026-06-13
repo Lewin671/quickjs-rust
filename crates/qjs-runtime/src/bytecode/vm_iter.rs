@@ -3,8 +3,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    ArrayRef, ObjectRef, PropertyKey, RuntimeError, Value, call_function, is_truthy, object,
-    object_prototype, property_value, property_value_key, symbol,
+    ArrayRef, ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function, is_truthy,
+    object, object_prototype, property_value, property_value_key, symbol,
 };
 
 use super::util::is_object_value;
@@ -26,6 +26,8 @@ pub(super) enum DelegateStep {
     /// Async delegation must await the inner iterator method result before it
     /// can inspect `done`/`value`.
     Await(Value),
+    AwaitReturn(Value),
+    AwaitReturnValue(Value),
     /// The delegation finished normally: the `yield*` expression value is on
     /// the stack and execution continues past the op.
     Continue,
@@ -201,15 +203,15 @@ impl Vm<'_> {
         // return have their own close/complete handling; `next` validates the
         // result and either continues, suspends, or routes an error.
         match mode {
-            ResumeMode::Throw(value) => self.delegate_throw(&iterator, value),
-            ResumeMode::Return(value) => self.delegate_return(&iterator, value),
+            ResumeMode::Throw(value) => self.delegate_throw(&iterator, value, async_delegate),
+            ResumeMode::Return(value) => self.delegate_return(&iterator, value, async_delegate),
             ResumeMode::Next(value) => {
                 let next = self.load_local(next_slot)?;
                 let outcome = self.call_inner(&next, &iterator, value);
                 if async_delegate {
                     return self.await_inner(outcome);
                 }
-                match self.classify_inner(outcome)? {
+                match self.classify_inner(outcome, false)? {
                     Some(InnerStep::Suspend(result)) => Ok(self.suspend_delegate(result)),
                     Some(InnerStep::Done(value)) => {
                         self.stack.push(value);
@@ -219,7 +221,7 @@ impl Vm<'_> {
                     None => Ok(DelegateStep::Continue),
                 }
             }
-            ResumeMode::Awaited(value) => match self.classify_inner(Ok(value))? {
+            ResumeMode::Awaited(value) => match self.classify_inner(Ok(value), async_delegate)? {
                 Some(InnerStep::Suspend(result)) => Ok(self.suspend_delegate(result)),
                 Some(InnerStep::Done(value)) => {
                     self.stack.push(value);
@@ -228,6 +230,22 @@ impl Vm<'_> {
                 None => Ok(DelegateStep::Continue),
             },
             ResumeMode::AwaitRejected(value) => {
+                self.throw_value(value)?;
+                Ok(DelegateStep::Continue)
+            }
+            ResumeMode::AwaitedReturn(value) => {
+                match self.classify_inner(Ok(value), async_delegate)? {
+                    Some(InnerStep::Suspend(result)) => Ok(self.suspend_delegate(result)),
+                    Some(InnerStep::Done(value)) => self.complete_delegate_return(value),
+                    None => Ok(DelegateStep::Continue),
+                }
+            }
+            ResumeMode::AwaitReturnRejected(value) => {
+                self.throw_value(value)?;
+                Ok(DelegateStep::Continue)
+            }
+            ResumeMode::AwaitedReturnValue(value) => self.complete_delegate_return(value),
+            ResumeMode::AwaitReturnValueRejected(value) => {
                 self.throw_value(value)?;
                 Ok(DelegateStep::Continue)
             }
@@ -251,6 +269,7 @@ impl Vm<'_> {
         &mut self,
         iterator: &Value,
         value: Value,
+        async_delegate: bool,
     ) -> Result<DelegateStep, RuntimeError> {
         let mut env = self.current_env();
         let method = get_iterator_method(iterator, "throw", &mut env);
@@ -272,7 +291,10 @@ impl Vm<'_> {
             return Ok(DelegateStep::Continue);
         }
         let outcome = self.call_inner(&method, iterator, value);
-        match self.classify_inner(outcome)? {
+        if async_delegate {
+            return self.await_inner(outcome);
+        }
+        match self.classify_inner(outcome, false)? {
             Some(InnerStep::Suspend(result)) => Ok(self.suspend_delegate(result)),
             Some(InnerStep::Done(value)) => {
                 self.stack.push(value);
@@ -289,6 +311,7 @@ impl Vm<'_> {
         &mut self,
         iterator: &Value,
         value: Value,
+        async_delegate: bool,
     ) -> Result<DelegateStep, RuntimeError> {
         let mut env = self.current_env();
         let method = get_iterator_method(iterator, "return", &mut env);
@@ -298,10 +321,21 @@ impl Vm<'_> {
         };
         if matches!(method, Value::Undefined | Value::Null) {
             // No inner `return`: the `yield*` is itself a return completion.
+            if async_delegate {
+                self.ip -= 1;
+                return Ok(DelegateStep::AwaitReturnValue(value));
+            }
             return self.complete_delegate_return(value);
         }
         let outcome = self.call_inner(&method, iterator, value);
-        match self.classify_inner(outcome)? {
+        if async_delegate {
+            let Some(value) = self.handle_runtime_result(outcome)? else {
+                return Ok(DelegateStep::Continue);
+            };
+            self.ip -= 1;
+            return Ok(DelegateStep::AwaitReturn(value));
+        }
+        match self.classify_inner(outcome, false)? {
             Some(InnerStep::Suspend(result)) => Ok(self.suspend_delegate(result)),
             // A done inner `return` makes the `yield*` a return completion
             // carrying the inner result's value.
@@ -344,6 +378,7 @@ impl Vm<'_> {
     fn classify_inner(
         &mut self,
         outcome: Result<Value, RuntimeError>,
+        async_delegate: bool,
     ) -> Result<Option<InnerStep>, RuntimeError> {
         let validated = outcome.and_then(|result| {
             if is_object_value(&result) {
@@ -364,13 +399,19 @@ impl Vm<'_> {
         let Some(done) = self.handle_runtime_result(done)? else {
             return Ok(None);
         };
-        if done {
+        if done || async_delegate {
             let mut env = self.current_env();
-            let value = property_value(result, "value", &mut env);
+            let value = property_value(result.clone(), "value", &mut env);
             self.apply_env(env);
             let Some(value) = self.handle_runtime_result(value)? else {
                 return Ok(None);
             };
+            if !done {
+                let env = self.current_env();
+                return Ok(Some(InnerStep::Suspend(iterator_result(
+                    value, false, &env,
+                ))));
+            }
             Ok(Some(InnerStep::Done(value)))
         } else {
             Ok(Some(InnerStep::Suspend(result)))
@@ -394,6 +435,16 @@ impl Vm<'_> {
         }
         Ok(())
     }
+}
+
+fn iterator_result(value: Value, done: bool, env: &CallEnv) -> Value {
+    let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
+    object.define_property("value".to_owned(), Property::enumerable(value));
+    object.define_property(
+        "done".to_owned(),
+        Property::enumerable(Value::Boolean(done)),
+    );
+    Value::Object(object)
 }
 
 /// One inner-iterator step, classified by its `done` flag.
