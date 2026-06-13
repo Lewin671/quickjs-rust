@@ -711,6 +711,19 @@ fn class_method_default_parameter_closure_does_not_capture_body_var_environment(
 }
 
 #[test]
+fn class_heritage_expression_functions_are_strict() {
+    assert_eq!(
+        eval(
+            "var D = class extends function() { arguments.callee; } {}; \
+             let name; \
+             try { new D(); } catch (error) { name = error.name; } \
+             name;"
+        ),
+        Ok(Value::String("TypeError".to_owned()))
+    );
+}
+
+#[test]
 fn named_class_expression_heritage_uses_inner_tdz_binding() {
     let result = eval("var x = (class x extends x {});");
     assert!(

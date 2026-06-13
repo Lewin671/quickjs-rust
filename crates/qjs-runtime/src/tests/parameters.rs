@@ -41,3 +41,16 @@ fn default_parameter_closures_do_not_capture_body_var_environment() {
         Ok(Value::String("outside:inside".to_owned()))
     );
 }
+
+#[test]
+fn unmapped_arguments_callee_is_restricted() {
+    assert_eq!(
+        eval(
+            "function strictArgs() { 'use strict'; try { arguments.callee; } catch (error) { return error instanceof TypeError; } return false; } \
+             function nonSimple(x = 1) { try { arguments.callee; } catch (error) { return error instanceof TypeError; } return false; } \
+             function sloppySimple() { return arguments.callee === undefined; } \
+             [strictArgs(), nonSimple(), sloppySimple()].join(':');"
+        ),
+        Ok(Value::String("true:true:true".to_owned()))
+    );
+}

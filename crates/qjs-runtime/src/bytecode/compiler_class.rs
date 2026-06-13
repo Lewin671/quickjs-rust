@@ -46,6 +46,18 @@ impl Compiler {
         name: Option<&str>,
         body: &ClassBody,
     ) -> Result<(), RuntimeError> {
+        let previous_strict = self.strict;
+        self.strict = true;
+        let result = self.compile_class_strict(name, body);
+        self.strict = previous_strict;
+        result
+    }
+
+    fn compile_class_strict(
+        &mut self,
+        name: Option<&str>,
+        body: &ClassBody,
+    ) -> Result<(), RuntimeError> {
         // Evaluate the heritage expression first so the parent constructor is
         // beneath the computed keys when `NewClass` runs.
         let has_heritage = body.heritage.is_some();
