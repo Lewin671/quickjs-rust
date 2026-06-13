@@ -20,6 +20,10 @@ impl Parser {
         }
 
         let expr = self.conditional()?;
+        let lhs_parenthesized = self
+            .tokens
+            .get(self.cursor.saturating_sub(1))
+            .is_some_and(|token| token.kind == TokenKind::RightParen);
         let op = if self.match_kind(&TokenKind::Equal) {
             AssignmentOp::Assign
         } else if self.match_kind(&TokenKind::PlusEqual) {
@@ -56,12 +60,12 @@ impl Parser {
             return Ok(expr);
         };
 
-        let target = assignment_target(expr)?;
+        let target = assignment_target(expr, lhs_parenthesized)?;
 
         // Strict mode: assigning to the identifiers `eval` or `arguments`
         // (simple or compound) is an early SyntaxError.
         if self.strict
-            && let qjs_ast::AssignmentTarget::Identifier { name, span } = &target
+            && let qjs_ast::AssignmentTarget::Identifier { name, span, .. } = &target
             && matches!(name.as_str(), "eval" | "arguments")
         {
             return Err(ParseError {

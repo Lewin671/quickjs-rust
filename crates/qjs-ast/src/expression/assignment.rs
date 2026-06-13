@@ -5,7 +5,14 @@ use crate::span::Span;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AssignmentTarget {
     /// Identifier assignment.
-    Identifier { name: String, span: Span },
+    Identifier {
+        name: String,
+        span: Span,
+        /// Whether the identifier was enclosed in parentheses as the
+        /// assignment target. Parenthesized identifiers are assignable, but are
+        /// not IdentifierRef for NamedEvaluation.
+        parenthesized: bool,
+    },
     /// Member assignment.
     Member {
         /// Object expression.

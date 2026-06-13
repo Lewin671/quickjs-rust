@@ -162,6 +162,27 @@ fn parses_assignment_as_right_associative() {
 }
 
 #[test]
+fn marks_parenthesized_identifier_assignment_targets() {
+    let script = parse_script("(fn) = function() {};").expect("source should parse");
+    let [
+        Stmt::Expr(Expr::Assignment {
+            target:
+                AssignmentTarget::Identifier {
+                    name,
+                    parenthesized,
+                    ..
+                },
+            ..
+        }),
+    ] = script.body.as_slice()
+    else {
+        panic!("expected parenthesized identifier assignment target");
+    };
+    assert_eq!(name, "fn");
+    assert!(*parenthesized);
+}
+
+#[test]
 fn parses_update_and_compound_assignment() {
     let script = parse_script(
             "++i; i++; i += 2; obj.count--; a <<= b; c >>= d; e >>>= f; g &= h; i ^= j; k |= l; m &&= n; o ||= p; q ??= r;",

@@ -71,11 +71,15 @@ impl Parser {
 
     fn simple_assignment_target(&mut self) -> Result<AssignmentTarget, ParseError> {
         let expr = self.call()?;
-        let target = assignment_target(expr)?;
+        let parenthesized = self
+            .tokens
+            .get(self.cursor.saturating_sub(1))
+            .is_some_and(|token| token.kind == TokenKind::RightParen);
+        let target = assignment_target(expr, parenthesized)?;
         // Strict mode: `eval` and `arguments` are not valid simple assignment
         // targets, including inside a destructuring pattern.
         if self.strict
-            && let AssignmentTarget::Identifier { name, span } = &target
+            && let AssignmentTarget::Identifier { name, span, .. } = &target
             && matches!(name.as_str(), "eval" | "arguments")
         {
             return Err(ParseError {
@@ -178,6 +182,7 @@ impl Parser {
                 AssignmentTarget::Identifier {
                     name,
                     span: key_span,
+                    parenthesized: false,
                 }
             } else {
                 return Err(ParseError {

@@ -13,7 +13,11 @@ impl Compiler {
         value: &Expr,
     ) -> Result<(), RuntimeError> {
         match target {
-            AssignmentTarget::Identifier { name, .. } => {
+            AssignmentTarget::Identifier {
+                name,
+                parenthesized,
+                ..
+            } => {
                 // `f = <anon>` applies NamedEvaluation: an anonymous function or
                 // class assigned to a plain identifier takes that identifier's
                 // name. Member targets (`obj.x = <anon>`) never do.
@@ -25,7 +29,11 @@ impl Compiler {
                         slot,
                         object_slot,
                     });
-                    self.compile_named_expr(value, name)?;
+                    if *parenthesized {
+                        self.compile_expr(value)?;
+                    } else {
+                        self.compile_named_expr(value, name)?;
+                    }
                     self.emit(Op::Dup);
                     self.emit(Op::StoreResolvedIdentWith {
                         name: name.clone(),
@@ -36,7 +44,11 @@ impl Compiler {
                     return Ok(());
                 }
                 let Some(slot) = slot else {
-                    self.compile_named_expr(value, name)?;
+                    if *parenthesized {
+                        self.compile_expr(value)?;
+                    } else {
+                        self.compile_named_expr(value, name)?;
+                    }
                     self.emit(Op::Dup);
                     if self.strict || self.is_global_hoisted(name) {
                         self.emit(Op::StoreGlobalStrict(name.clone()));
@@ -49,7 +61,11 @@ impl Compiler {
                     }
                     return Ok(());
                 };
-                self.compile_named_expr(value, name)?;
+                if *parenthesized {
+                    self.compile_expr(value)?;
+                } else {
+                    self.compile_named_expr(value, name)?;
+                }
                 self.emit(Op::Dup);
                 self.emit(Op::AssignLocal(slot));
                 Ok(())
@@ -120,7 +136,12 @@ impl Compiler {
         op: AssignmentOp,
         value: &Expr,
     ) -> Result<(), RuntimeError> {
-        let AssignmentTarget::Identifier { name, .. } = target else {
+        let AssignmentTarget::Identifier {
+            name,
+            parenthesized,
+            ..
+        } = target
+        else {
             return self.compile_member_compound_assign(target, op, value);
         };
         let slot = self.resolve_local_slot(name);
@@ -131,7 +152,11 @@ impl Compiler {
                 self.emit(Op::Pop);
                 // `f &&= <anon>` names the anonymous value after the target
                 // identifier (ES2023 §13.15.2); arithmetic compounds do not.
-                self.compile_named_expr(value, name)?;
+                if *parenthesized {
+                    self.compile_expr(value)?;
+                } else {
+                    self.compile_named_expr(value, name)?;
+                }
                 self.emit(Op::Dup);
                 self.emit_store_identifier(name, slot);
                 let end = self.code.len();
@@ -141,7 +166,11 @@ impl Compiler {
                 self.emit_load_identifier(name, slot);
                 let end_jump = self.emit(Op::JumpIfTrue(usize::MAX));
                 self.emit(Op::Pop);
-                self.compile_named_expr(value, name)?;
+                if *parenthesized {
+                    self.compile_expr(value)?;
+                } else {
+                    self.compile_named_expr(value, name)?;
+                }
                 self.emit(Op::Dup);
                 self.emit_store_identifier(name, slot);
                 let end = self.code.len();
@@ -151,7 +180,11 @@ impl Compiler {
                 self.emit_load_identifier(name, slot);
                 let end_jump = self.emit(Op::JumpIfNotNullish(usize::MAX));
                 self.emit(Op::Pop);
-                self.compile_named_expr(value, name)?;
+                if *parenthesized {
+                    self.compile_expr(value)?;
+                } else {
+                    self.compile_named_expr(value, name)?;
+                }
                 self.emit(Op::Dup);
                 self.emit_store_identifier(name, slot);
                 let end = self.code.len();

@@ -175,9 +175,16 @@ pub(crate) fn var_kind(kind: &TokenKind) -> Option<VarKind> {
     }
 }
 
-pub(crate) fn assignment_target(expr: Expr) -> Result<AssignmentTarget, ParseError> {
+pub(crate) fn assignment_target(
+    expr: Expr,
+    parenthesized: bool,
+) -> Result<AssignmentTarget, ParseError> {
     match expr {
-        Expr::Identifier { name, span } => Ok(AssignmentTarget::Identifier { name, span }),
+        Expr::Identifier { name, span } => Ok(AssignmentTarget::Identifier {
+            name,
+            span,
+            parenthesized,
+        }),
         Expr::Member {
             object,
             property,

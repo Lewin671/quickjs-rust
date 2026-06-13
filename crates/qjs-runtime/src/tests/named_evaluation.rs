@@ -63,6 +63,11 @@ fn assignment_to_member_does_not_name() {
     assert_eq!(name_of("let o = {}; o.x = class {}; o.x.name"), "");
 }
 
+#[test]
+fn parenthesized_assignment_target_does_not_name() {
+    assert_eq!(name_of("let f; (f) = function () {}; f.name"), "");
+}
+
 // --- Object literal properties ---------------------------------------------
 
 #[test]

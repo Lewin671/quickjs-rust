@@ -22,7 +22,7 @@ impl Parser {
         }
         if token.kind == TokenKind::PlusPlus || token.kind == TokenKind::MinusMinus {
             self.advance();
-            let target = assignment_target(self.unary()?)?;
+            let target = assignment_target(self.unary()?, false)?;
             let span = Span::new(token.span.start, target.span().end);
             return Ok(Expr::Update {
                 target,
@@ -103,7 +103,7 @@ impl Parser {
         };
         self.advance();
         let start = expr.span().start;
-        let target = assignment_target(expr)?;
+        let target = assignment_target(expr, false)?;
         Ok(Expr::Update {
             target,
             op,

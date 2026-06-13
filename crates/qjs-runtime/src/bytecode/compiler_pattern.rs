@@ -237,7 +237,15 @@ impl Compiler {
 /// which never name their default value.
 fn assignment_target_inferred_name(target: &AssignmentTarget) -> Option<&str> {
     match target {
-        AssignmentTarget::Identifier { name, .. } => Some(name),
+        AssignmentTarget::Identifier {
+            name,
+            parenthesized: false,
+            ..
+        } => Some(name),
+        AssignmentTarget::Identifier {
+            parenthesized: true,
+            ..
+        } => None,
         AssignmentTarget::Member { .. }
         | AssignmentTarget::ArrayPattern { .. }
         | AssignmentTarget::ObjectPattern { .. } => None,
