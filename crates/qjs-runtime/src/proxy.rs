@@ -84,6 +84,7 @@ impl ProxyRef {
 
 pub(crate) fn install_proxy(env: &mut CallEnv, global_this: &Value, _object_prototype: ObjectRef) {
     let proxy_function = Function::new_native(Some("Proxy"), 2, NativeFunction::Proxy, true);
+    proxy_function.delete_own_property("prototype");
     proxy_function.define_property(
         "revocable".to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(

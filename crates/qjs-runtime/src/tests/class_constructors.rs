@@ -69,9 +69,28 @@ fn native_super_constructors_use_derived_new_target_prototype() {
              [value instanceof SubArrayBuffer, value instanceof ArrayBuffer, Object.getPrototypeOf(value) === SubArrayBuffer.prototype, value.byteLength, slice instanceof SubArrayBuffer, slice instanceof ArrayBuffer, slice.byteLength].join(':');",
             "true:true:true:4:true:true:1",
         ),
+        (
+            "class SubFunction extends Function {} \
+             var value = new SubFunction('return 7;'); \
+             [value instanceof SubFunction, value instanceof Function, Object.getPrototypeOf(value) === SubFunction.prototype, value()].join(':');",
+            "true:true:true:7",
+        ),
     ] {
         assert_eq!(eval(source), Ok(Value::String(expected.to_owned())));
     }
+}
+
+#[test]
+fn proxy_constructor_has_no_class_heritage_prototype() {
+    assert_eq!(
+        eval(
+            "var result; \
+             try { class P extends Proxy {} result = 'ok'; } \
+             catch (error) { result = error.name; } \
+             [Proxy.hasOwnProperty('prototype'), result].join(':');"
+        ),
+        Ok(Value::String("false:TypeError".to_owned()))
+    );
 }
 
 #[test]

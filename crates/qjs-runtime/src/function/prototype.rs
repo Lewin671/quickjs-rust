@@ -8,7 +8,7 @@ use crate::{
 };
 
 pub(crate) fn native_function(
-    _function: &Function,
+    constructor: &Function,
     _this_value: Value,
     argument_values: &[Value],
     _is_construct: bool,
@@ -34,12 +34,14 @@ pub(crate) fn native_function(
         });
     };
 
-    Ok(Value::Function(Function::new_user(
-        Some(name),
-        params,
-        body,
-        env.to_flat_map(),
-    )?))
+    let created = Function::new_user(Some(name), params, body, env.to_flat_map())?;
+    created
+        .set_internal_prototype_slot(crate::native_construct_prototype_slot(constructor, env)?)
+        .map_err(|_| RuntimeError {
+            thrown: None,
+            message: "TypeError: dynamic function prototype could not be set".to_owned(),
+        })?;
+    Ok(Value::Function(created))
 }
 
 fn function_source_parts(
