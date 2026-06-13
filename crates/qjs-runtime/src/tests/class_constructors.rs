@@ -75,6 +75,19 @@ fn native_super_constructors_use_derived_new_target_prototype() {
              [value instanceof SubFunction, value instanceof Function, Object.getPrototypeOf(value) === SubFunction.prototype, value()].join(':');",
             "true:true:true:7",
         ),
+        (
+            "class SubSharedArrayBuffer extends SharedArrayBuffer {} \
+             var value = new SubSharedArrayBuffer(); \
+             [value instanceof SubSharedArrayBuffer, value instanceof SharedArrayBuffer, Object.getPrototypeOf(value) === SubSharedArrayBuffer.prototype, value.byteLength].join(':');",
+            "true:true:true:0",
+        ),
+        (
+            "class SubWeakRef extends WeakRef {} \
+             var target = {}; \
+             var value = new SubWeakRef(target); \
+             [value instanceof SubWeakRef, value instanceof WeakRef, Object.getPrototypeOf(value) === SubWeakRef.prototype, value.deref() === target].join(':');",
+            "true:true:true:true",
+        ),
     ] {
         assert_eq!(eval(source), Ok(Value::String(expected.to_owned())));
     }

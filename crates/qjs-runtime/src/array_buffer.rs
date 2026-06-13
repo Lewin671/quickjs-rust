@@ -16,6 +16,7 @@ pub(crate) const ARRAY_BUFFER_DATA_PROPERTY: &str = "\0ArrayBufferData";
 pub(crate) const ARRAY_BUFFER_DETACHED_PROPERTY: &str = "\0ArrayBufferDetached";
 /// Internal slot holding the maximum byte length for resizable ArrayBuffers.
 pub(crate) const ARRAY_BUFFER_MAX_BYTE_LENGTH_PROPERTY: &str = "\0ArrayBufferMaxByteLength";
+const SHARED_ARRAY_BUFFER_DATA_PROPERTY: &str = "\0SharedArrayBufferData";
 const MAX_ARRAY_BUFFER_LENGTH: usize = 1_000_000;
 
 pub(crate) fn install_array_buffer(
@@ -108,6 +109,46 @@ pub(crate) fn install_array_buffer(
     }
 }
 
+pub(crate) fn install_shared_array_buffer(
+    env: &mut CallEnv,
+    global_this: &Value,
+    object_prototype: ObjectRef,
+) {
+    let prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    prototype.set_to_string_tag("SharedArrayBuffer");
+    symbol::define_well_known_to_string_tag(env, &prototype, "SharedArrayBuffer");
+    let function = Function::new_native(
+        Some("SharedArrayBuffer"),
+        1,
+        NativeFunction::SharedArrayBuffer,
+        true,
+    );
+    prototype.define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
+    prototype.define_property(
+        "byteLength".to_owned(),
+        Property::accessor(
+            Some(Value::Function(Function::new_native(
+                Some("get byteLength"),
+                0,
+                NativeFunction::SharedArrayBufferPrototypeByteLength,
+                false,
+            ))),
+            None,
+            false,
+            true,
+        ),
+    );
+    function.properties.borrow_mut().insert(
+        "prototype".to_owned(),
+        Property::fixed_non_enumerable(Value::Object(prototype)),
+    );
+    let value = Value::Function(function);
+    env.insert_realm("SharedArrayBuffer".to_owned(), value.clone());
+    if let Value::Object(global_object) = global_this {
+        global_object.define_non_enumerable("SharedArrayBuffer".to_owned(), value);
+    }
+}
+
 pub(crate) fn native_array_buffer(
     function: &Function,
     this_value: Value,
@@ -144,6 +185,39 @@ pub(crate) fn native_array_buffer(
         define_array_buffer_max_byte_length(&object, max);
     }
     Ok(Value::Object(object))
+}
+
+pub(crate) fn native_shared_array_buffer(
+    function: &Function,
+    argument_values: &[Value],
+    is_construct: bool,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    if !is_construct {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Constructor SharedArrayBuffer requires 'new'".to_owned(),
+        });
+    }
+    let length = to_index(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
+    let object = ObjectRef::with_prototype_slot(
+        HashMap::new(),
+        crate::native_construct_prototype_slot(function, env)?,
+    );
+    define_shared_array_buffer_data(&object, vec![0; length]);
+    Ok(Value::Object(object))
+}
+
+pub(crate) fn native_shared_array_buffer_prototype_byte_length(
+    this_value: Value,
+) -> Result<Value, RuntimeError> {
+    let object = shared_array_buffer_object(&this_value)?;
+    Ok(Value::Number(
+        shared_array_buffer_bytes(&object).len() as f64
+    ))
 }
 
 pub(crate) fn native_array_buffer_is_view(
@@ -338,6 +412,15 @@ fn define_array_buffer_max_byte_length(object: &ObjectRef, max_byte_length: usiz
     );
 }
 
+fn define_shared_array_buffer_data(object: &ObjectRef, bytes: Vec<u8>) {
+    object.set_internal_bytes(bytes);
+    object.define_property(
+        SHARED_ARRAY_BUFFER_DATA_PROPERTY.to_owned(),
+        Property::non_enumerable(Value::String(String::new())),
+    );
+    object.set_to_string_tag("SharedArrayBuffer");
+}
+
 /// Whether `object` carries the `ArrayBuffer` brand (data slot or detached
 /// marker), used for brand checks and `ArrayBuffer.isView` consumers.
 pub(crate) fn is_array_buffer_object(object: &ObjectRef) -> bool {
@@ -350,6 +433,19 @@ pub(crate) fn array_buffer_object(value: &Value) -> Result<ObjectRef, RuntimeErr
     match value {
         Value::Object(object) if is_array_buffer_object(object) => Ok(object.clone()),
         _ => Err(array_buffer_receiver_error()),
+    }
+}
+
+fn shared_array_buffer_object(value: &Value) -> Result<ObjectRef, RuntimeError> {
+    match value {
+        Value::Object(object) if object.has_own_property(SHARED_ARRAY_BUFFER_DATA_PROPERTY) => {
+            Ok(object.clone())
+        }
+        _ => Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: SharedArrayBuffer method called on incompatible receiver"
+                .to_owned(),
+        }),
     }
 }
 
@@ -385,6 +481,10 @@ pub(crate) fn array_buffer_bytes(object: &ObjectRef) -> Vec<u8> {
         }) => string_to_bytes(&data),
         _ => Vec::new(),
     }
+}
+
+fn shared_array_buffer_bytes(object: &ObjectRef) -> Vec<u8> {
+    object.internal_bytes().unwrap_or_default()
 }
 
 /// Replaces the backing bytes of an `ArrayBuffer` (used by typed-array writes).

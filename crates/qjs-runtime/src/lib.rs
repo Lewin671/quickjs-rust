@@ -38,6 +38,7 @@ mod symbol;
 mod typed_array;
 mod value;
 mod weak_map;
+mod weak_ref;
 mod weak_set;
 
 mod module;
@@ -119,6 +120,7 @@ pub(crate) const RUNTIME_INTRINSIC_NAMES: &[&str] = &[
     "Function",
     "Array",
     "ArrayBuffer",
+    "SharedArrayBuffer",
     "Uint8Array",
     "Uint16Array",
     "Uint32Array",
@@ -144,6 +146,7 @@ pub(crate) const RUNTIME_INTRINSIC_NAMES: &[&str] = &[
     "Proxy",
     "Map",
     "WeakMap",
+    "WeakRef",
     "WeakSet",
     "Set",
     "Math",

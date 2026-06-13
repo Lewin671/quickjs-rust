@@ -16,6 +16,7 @@ mod sets;
 mod strings;
 mod typed_arrays;
 mod weak_maps;
+mod weak_refs;
 mod weak_sets;
 
 use crate::CallEnv;
@@ -135,6 +136,17 @@ pub(crate) fn call_native_function(
     }
 
     if let Some(value) = weak_maps::call_weak_map_native(
+        function,
+        native,
+        this_value.clone(),
+        &argument_values,
+        is_construct,
+        env,
+    )? {
+        return Ok(value);
+    }
+
+    if let Some(value) = weak_refs::call_weak_ref_native(
         function,
         native,
         this_value.clone(),

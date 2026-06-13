@@ -60,6 +60,8 @@ pub(crate) enum NativeFunction {
     ArrayBufferPrototypeResizable,
     ArrayBufferPrototypeResize,
     ArrayBufferPrototypeSlice,
+    SharedArrayBuffer,
+    SharedArrayBufferPrototypeByteLength,
     TypedArray,
     // %TypedArray% static methods.
     TypedArrayFrom,
@@ -335,6 +337,8 @@ pub(crate) enum NativeFunction {
     WeakMapPrototypeGetOrInsertComputed,
     WeakMapPrototypeHas,
     WeakMapPrototypeSet,
+    WeakRef,
+    WeakRefPrototypeDeref,
     WeakSet,
     WeakSetPrototypeAdd,
     WeakSetPrototypeDelete,

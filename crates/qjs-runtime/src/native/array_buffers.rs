@@ -37,6 +37,12 @@ pub(super) fn call_array_buffer_native(
         NativeFunction::ArrayBufferPrototypeSlice => {
             array_buffer::native_array_buffer_prototype_slice(this_value, argument_values, env)?
         }
+        NativeFunction::SharedArrayBuffer => {
+            array_buffer::native_shared_array_buffer(function, argument_values, is_construct, env)?
+        }
+        NativeFunction::SharedArrayBufferPrototypeByteLength => {
+            array_buffer::native_shared_array_buffer_prototype_byte_length(this_value)?
+        }
         NativeFunction::DetachArrayBuffer => {
             array_buffer::native_detach_array_buffer(argument_values)?
         }
