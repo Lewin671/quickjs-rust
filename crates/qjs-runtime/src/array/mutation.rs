@@ -1,7 +1,7 @@
 use crate::{
     Property, RuntimeError, Value, array_own_property_descriptor, array_prototype, call_function,
     function_delete_own_property, function_own_property_descriptor, has_property, property_value,
-    to_length_with_env,
+    to_length_with_env, value_prototype_slot,
 };
 
 use super::{
@@ -100,7 +100,9 @@ pub(super) fn set_array_like_property(
                     return Ok(());
                 }
             }
-            validate_copy_within_set(object.property(&key), receiver, value.clone(), env)?;
+            if validate_copy_within_set(object.property(&key), receiver, value.clone(), env)? {
+                return Ok(());
+            }
             object.set(key, value);
             Ok(())
         }
@@ -114,12 +116,12 @@ pub(super) fn set_array_like_property(
             Ok(())
         }
         Value::Array(elements) => {
-            validate_copy_within_set(
-                array_own_property_descriptor(&elements, &key).or_else(|| elements.property(&key)),
-                receiver,
-                value.clone(),
-                env,
-            )?;
+            let property = array_own_property_descriptor(&elements, &key)
+                .or_else(|| elements.property(&key))
+                .or_else(|| inherited_array_property(receiver.clone(), env, &key));
+            if validate_copy_within_set(property, receiver, value.clone(), env)? {
+                return Ok(());
+            }
             match key.parse::<usize>() {
                 Ok(index) => elements.set(index, value),
                 Err(_) => elements.set_property(key, value),
@@ -127,12 +129,14 @@ pub(super) fn set_array_like_property(
             Ok(())
         }
         Value::Function(function) => {
-            validate_copy_within_set(
+            if validate_copy_within_set(
                 function_own_property_descriptor(&function, &key),
                 receiver,
                 value.clone(),
                 env,
-            )?;
+            )? {
+                return Ok(());
+            }
             function.set_property(key, value);
             Ok(())
         }
@@ -159,18 +163,29 @@ fn validate_copy_within_set(
     receiver: Value,
     value: Value,
     env: &mut CallEnv,
-) -> Result<(), RuntimeError> {
+) -> Result<bool, RuntimeError> {
     let Some(property) = property else {
-        return Ok(());
+        return Ok(false);
     };
     if let Some(setter) = property.set {
         call_function(setter, receiver, vec![value], env, false)?;
-        return Ok(());
+        return Ok(true);
     }
     if property.is_accessor() || !property.writable {
         return Err(copy_within_set_error());
     }
-    Ok(())
+    Ok(false)
+}
+
+fn inherited_array_property(receiver: Value, env: &CallEnv, key: &str) -> Option<Property> {
+    value_prototype_slot(receiver, env).and_then(|prototype| match prototype {
+        crate::Prototype::Object(object) => object.property(key),
+        crate::Prototype::Function(function) => function.chain_property(key),
+        crate::Prototype::Proxy(proxy) => proxy
+            .target_result()
+            .ok()
+            .and_then(|target| crate::property::own_or_inherited_descriptor(target, key)),
+    })
 }
 
 pub(super) fn delete_array_like_property(

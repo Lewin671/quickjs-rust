@@ -14,6 +14,12 @@ fn evaluates_array_sort_default_order() {
         ),
         Ok(Value::String("3:a|b|:true".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "let xs = ['a', , undefined]; xs.sort(); xs.length + ':' + xs.hasOwnProperty('0') + ':' + xs.hasOwnProperty('1') + ':' + xs.hasOwnProperty('2') + ':' + xs[0] + ':' + (xs[1] === undefined) + ':' + (xs[2] === undefined);"
+        ),
+        Ok(Value::String("3:true:true:false:a:true:true".to_owned()))
+    );
 }
 
 #[test]
@@ -31,6 +37,34 @@ fn evaluates_array_sort_with_compare_function() {
             "let seen = ''; [2, 1].sort(function(left, right) { seen = seen + left + ':' + right; return left - right; }); seen;"
         ),
         Ok(Value::String("1:2".to_owned()))
+    );
+}
+
+#[test]
+fn evaluates_array_sort_generic_receivers() {
+    assert_eq!(
+        eval(
+            "let object = { 0: undefined, 1: 2, 2: 1, 3: 'X', 4: -1, 5: 'a', 6: true, 7: { toString: function() { return -2; } }, 8: NaN, 9: Infinity, length: 10 }; let result = Array.prototype.sort.call(object); result === object && object[0] === -1 && object[2] === 1 && object[9] === undefined;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let result = Array.prototype.sort.call(false); result instanceof Boolean && result.length === undefined;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn array_sort_preserves_receiver_when_compare_throws() {
+    assert_eq!(
+        eval(
+            "let logs = []; Object.defineProperty(Object.prototype, '2', { get: function() { logs.push('get'); return 4; }, set: function(v) { logs.push('set ' + v); }, configurable: true }); let array = [undefined, 3, , 2, undefined, , 1]; let count = 0; try { array.sort(function(a, b) { if (++count === 3) { throw new Error('stop'); } return b - a; }); } catch (error) { logs.push(error.message); } let result = logs.join('|') + ':' + (array[0] === undefined) + ':' + array[1] + ':' + ('2' in array) + ':' + array.hasOwnProperty('2') + ':' + array[3] + ':' + (array[4] === undefined) + ':' + ('5' in array) + ':' + array[6]; delete Object.prototype[2]; result;"
+        ),
+        Ok(Value::String(
+            "get|stop:true:3:true:false:2:true:false:1".to_owned()
+        ))
     );
 }
 

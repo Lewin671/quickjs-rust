@@ -1,11 +1,14 @@
 use std::cmp::Ordering;
 
 use crate::{
-    ArrayRef, Function, RuntimeError, Value, call_function, property_value, to_js_string_with_env,
-    to_number_with_env,
+    ArrayRef, Function, RuntimeError, Value, call_function, has_property, property_value,
+    to_js_string_with_env, to_number_with_env,
 };
 
-use super::array_like::array_like_length;
+use super::{
+    array_like::array_like_length,
+    mutation::{delete_array_like_property, set_array_like_property},
+};
 use crate::CallEnv;
 
 const MAX_ARRAY_LENGTH: usize = u32::MAX as usize;
@@ -15,17 +18,16 @@ pub(crate) fn native_array_prototype_sort(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let Value::Array(array) = this_value.clone() else {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "Array.prototype.sort called on non-array".to_owned(),
-        });
-    };
-
     let comparator = array_sort_comparator(argument_values, "Array.prototype.sort")?;
-    let sorted = sorted_array_values(array.to_vec(), comparator.as_ref(), env)?;
-    array.replace_with(sorted);
-    Ok(this_value)
+    let source = array_like_length(this_value, "Array.prototype.sort", env)?;
+    let sorted = sorted_present_array_like_values(
+        source.receiver.clone(),
+        source.length,
+        comparator.as_ref(),
+        env,
+    )?;
+    write_sorted_array_like_values(source.receiver.clone(), source.length, sorted, env)?;
+    Ok(source.receiver)
 }
 
 pub(crate) fn native_array_prototype_to_sorted(
@@ -82,6 +84,38 @@ fn sorted_array_values(
     insertion_sort(&mut defined, comparator, env)?;
     defined.extend(std::iter::repeat_n(Value::Undefined, undefined_count));
     Ok(defined)
+}
+
+fn sorted_present_array_like_values(
+    receiver: Value,
+    length: usize,
+    comparator: Option<&Function>,
+    env: &mut CallEnv,
+) -> Result<Vec<Value>, RuntimeError> {
+    let mut values = Vec::new();
+    for index in 0..length {
+        let key = index.to_string();
+        if has_property(receiver.clone(), env, &key)? {
+            values.push(property_value(receiver.clone(), &key, env)?);
+        }
+    }
+    sorted_array_values(values, comparator, env)
+}
+
+fn write_sorted_array_like_values(
+    receiver: Value,
+    length: usize,
+    values: Vec<Value>,
+    env: &mut CallEnv,
+) -> Result<(), RuntimeError> {
+    let item_count = values.len();
+    for (index, value) in values.into_iter().enumerate() {
+        set_array_like_property(receiver.clone(), index.to_string(), value, env)?;
+    }
+    for index in item_count..length {
+        delete_array_like_property(receiver.clone(), &index.to_string(), env)?;
+    }
+    Ok(())
 }
 
 fn array_sort_comparator(
