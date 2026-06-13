@@ -581,6 +581,30 @@ fn lexes_private_names() {
 }
 
 #[test]
+fn lexes_escaped_private_names() {
+    let tokens = lex(r"#\u{6F} #\u2118 #ZW_\u200C_NJ #ZW_\u200D_J").expect("source should lex");
+    let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::PrivateName("o".to_owned()),
+            TokenKind::PrivateName("\u{2118}".to_owned()),
+            TokenKind::PrivateName("ZW_\u{200C}_NJ".to_owned()),
+            TokenKind::PrivateName("ZW_\u{200D}_J".to_owned()),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn escaped_private_name_carries_had_escape_flag_and_span() {
+    let tokens = lex(r"a.#\u{6F}").expect("source should lex");
+    assert_eq!(tokens[2].kind, TokenKind::PrivateName("o".to_owned()));
+    assert_eq!(tokens[2].span, Span::new(2, 9));
+    assert!(tokens[2].had_escape);
+}
+
+#[test]
 fn private_name_carries_span() {
     let tokens = lex("a.#x").expect("source should lex");
     assert_eq!(tokens[2].kind, TokenKind::PrivateName("x".to_owned()));

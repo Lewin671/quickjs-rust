@@ -48,6 +48,24 @@ fn writes_private_instance_field() {
 }
 
 #[test]
+fn escaped_private_names_resolve_to_decoded_identity() {
+    assert_eq!(
+        eval(
+            r"class C {
+                #\u{6F} = 1;
+                #\u2118() { return this.#\u{6F}; }
+                set(value) { this.#\u{6F} = value; }
+                get() { return this.#\u2118(); }
+              }
+              let c = new C();
+              c.set(7);
+              c.get();"
+        ),
+        Ok(Value::Number(7.0))
+    );
+}
+
+#[test]
 fn reads_static_private_field() {
     assert_eq!(
         eval("class C { static #s = 42; static getS() { return C.#s; } } C.getS();"),

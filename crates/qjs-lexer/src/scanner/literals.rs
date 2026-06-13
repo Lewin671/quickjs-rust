@@ -13,10 +13,26 @@ const SURROGATE_ESCAPE_SENTINEL_BASE: u32 = 0xF0000;
 impl Lexer<'_> {
     pub(super) fn identifier(&mut self) -> Result<(), LexError> {
         let start = self.cursor;
+        let (name, had_escape) = self.identifier_name_from(start)?;
+
+        let kind = match name {
+            Some(value) => TokenKind::Identifier(value),
+            None => identifier_or_keyword(&self.source[start..self.cursor]),
+        };
+        self.tokens.push(Token {
+            kind,
+            span: Span::new(start, self.cursor),
+            had_escape,
+        });
+        Ok(())
+    }
+
+    /// Scans an `IdentifierName` from `start`, returning a decoded value only
+    /// if the source used Unicode escapes. When no escapes are present, callers
+    /// can borrow `source[start..cursor]` to preserve the fast path and keyword
+    /// classification.
+    fn identifier_name_from(&mut self, start: usize) -> Result<(Option<String>, bool), LexError> {
         let mut had_escape = false;
-        // Decoded `IdentifierName` value (escapes resolved to their code
-        // points). Built lazily: only materialized once an escape is seen so
-        // the common escape-free path stays a borrow of the source.
         let mut decoded: Option<String> = None;
         let mut first = true;
 
@@ -58,16 +74,7 @@ impl Lexer<'_> {
             first = false;
         }
 
-        let kind = match decoded {
-            Some(value) => TokenKind::Identifier(value),
-            None => identifier_or_keyword(&self.source[start..self.cursor]),
-        };
-        self.tokens.push(Token {
-            kind,
-            span: Span::new(start, self.cursor),
-            had_escape,
-        });
-        Ok(())
+        Ok((decoded, had_escape))
     }
 
     /// Decodes the `UnicodeEscapeSequence` body of an identifier escape. The
@@ -115,20 +122,20 @@ impl Lexer<'_> {
         // Consume the leading `#`.
         self.advance();
         let name_start = self.cursor;
-        if !matches!(self.peek(), Some(ch) if is_identifier_start(ch)) {
+        let starts_private_name = matches!(self.peek(), Some(ch) if is_identifier_start(ch))
+            || (self.peek() == Some('\\') && self.peek_nth(1) == Some('u'));
+        if !starts_private_name {
             return Err(LexError {
                 message: "`#` must be followed by a private name identifier".to_owned(),
                 span: Span::new(start, self.cursor),
             });
         }
-        while matches!(self.peek(), Some(ch) if is_identifier_continue(ch)) {
-            self.advance();
-        }
-        let name = self.source[name_start..self.cursor].to_owned();
+        let (decoded, had_escape) = self.identifier_name_from(name_start)?;
+        let name = decoded.unwrap_or_else(|| self.source[name_start..self.cursor].to_owned());
         self.tokens.push(Token {
             kind: TokenKind::PrivateName(name),
             span: Span::new(start, self.cursor),
-            had_escape: false,
+            had_escape,
         });
         Ok(())
     }

@@ -34,6 +34,34 @@ fn parses_private_instance_and_static_fields() {
 }
 
 #[test]
+fn parses_escaped_private_names() {
+    let body = class_body(r"class C { #\u{6F}; #\u2118() {} get() { return this.#\u{6F}; } }");
+    assert!(matches!(
+        &body.elements[0],
+        ClassElement::Field(field) if field.key == ClassMemberKey::Private("o".to_owned())
+    ));
+    assert!(matches!(
+        &body.elements[1],
+        ClassElement::Method(member)
+            if member.key == ClassMemberKey::Private("\u{2118}".to_owned())
+    ));
+    let ClassElement::Method(member) = &body.elements[2] else {
+        panic!("expected public method");
+    };
+    let Expr::Function { body, .. } = &member.value else {
+        panic!("method value should be a function");
+    };
+    let Stmt::Return {
+        argument: Some(Expr::Member { property, .. }),
+        ..
+    } = &body[0]
+    else {
+        panic!("expected private member return");
+    };
+    assert_eq!(*property, MemberProperty::Private("o".to_owned()));
+}
+
+#[test]
 fn parses_private_methods_and_accessors() {
     let body = class_body(
         "class C { #m() {} static #sm() {} get #g() {} set #g(v) {} #ref() { return this.#m(); } }",
