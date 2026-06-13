@@ -374,7 +374,13 @@ pub(crate) fn set_property(
             let receiver = Value::Set(set.clone());
             ordinary_set_object(&set.object(), receiver, key, value, env)
         }
-        Value::Proxy(proxy) => set_property(proxy.target(), key, value, env),
+        Value::Proxy(proxy) => crate::reflect::ordinary_set(
+            Value::Proxy(proxy.clone()),
+            &PropertyKey::String(key),
+            value,
+            Value::Proxy(proxy),
+            env,
+        ),
         _ => Err(RuntimeError {
             thrown: None,
             message: "member assignment target is not an object".to_owned(),
@@ -410,6 +416,13 @@ fn set_symbol_property(
         Value::Set(set) => {
             set_object_symbol_property(set.object(), Value::Set(set), symbol, value, env)
         }
+        Value::Proxy(proxy) => crate::reflect::ordinary_set(
+            Value::Proxy(proxy.clone()),
+            &PropertyKey::Symbol(symbol),
+            value,
+            Value::Proxy(proxy),
+            env,
+        ),
         Value::Function(function) => set_function_symbol_property(
             function.clone(),
             Value::Function(function),

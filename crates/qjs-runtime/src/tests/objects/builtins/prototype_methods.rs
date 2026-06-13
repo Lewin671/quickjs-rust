@@ -124,6 +124,23 @@ fn object_prototype_has_immutable_prototype() {
 }
 
 #[test]
+fn object_prototype_proto_setter_uses_proxy_set_prototype_trap() {
+    assert_eq!(
+        eval(
+            "function Sentinel() {} \
+             let subject = new Proxy({}, { \
+               setPrototypeOf: function() { throw new Sentinel(); } \
+             }); \
+             let caught = false; \
+             try { subject.__proto__ = {}; } \
+             catch (error) { caught = error instanceof Sentinel; } \
+             caught + ':' + (Object.getPrototypeOf(subject) === Object.prototype);"
+        ),
+        Ok(Value::String("true:true".to_owned()))
+    );
+}
+
+#[test]
 fn object_prototype_is_prototype_of_order_and_proxy() {
     assert_eq!(
         eval(
