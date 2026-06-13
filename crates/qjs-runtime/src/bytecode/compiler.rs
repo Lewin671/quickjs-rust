@@ -129,28 +129,6 @@ pub(super) fn compile_function_body_with_strict(
     .compile_function(params, body)
 }
 
-/// Compiles a parameterless strict-mode field-initializer thunk that returns
-/// `init`, applying NamedEvaluation so an anonymous function or class field
-/// value (`class C { f = function(){} }`) takes the field name. Used for fields
-/// with a statically known string key; computed-key fields keep the empty name.
-pub(super) fn compile_named_field_initializer(
-    init: &qjs_ast::Expr,
-    name: &str,
-) -> Result<Bytecode, RuntimeError> {
-    let mut compiler = Compiler {
-        strict: true,
-        global_scope: false,
-        ..Compiler::default()
-    };
-    compiler.compile_named_expr(init, name)?;
-    compiler.emit(Op::Return);
-    Ok(Bytecode::new(
-        compiler.constants,
-        compiler.locals,
-        compiler.code,
-    ))
-}
-
 /// Compiles a function body. Generator bodies compile through the same path:
 /// `yield` is already gated by the parser and lowers to `Op::Yield`, while the
 /// generator-ness is carried on the resulting function value, not the bytecode.
@@ -165,6 +143,14 @@ pub(super) fn compile_function_body_with_strict_generator(
 }
 
 impl Compiler {
+    pub(super) fn strict_function_compiler() -> Self {
+        Self {
+            strict: true,
+            global_scope: false,
+            ..Self::default()
+        }
+    }
+
     fn compile_into(&mut self, script: &Script) -> Result<Bytecode, RuntimeError> {
         self.strict = self.strict || is_strict_function_body(&script.body);
         self.collect_hoisted_locals(&script.body);
@@ -210,7 +196,7 @@ impl Compiler {
         ))
     }
 
-    fn compile_function(
+    pub(super) fn compile_function(
         mut self,
         params: &FunctionParams,
         body: &[Stmt],
@@ -450,6 +436,22 @@ impl Compiler {
             hoisted: false,
             mutable,
             from_env: false,
+        });
+        self.current_lexical_scope_mut()
+            .insert(name.to_owned(), slot);
+        slot
+    }
+
+    pub(super) fn declare_captured_lexical_slot(&mut self, name: &str, mutable: bool) -> usize {
+        if let Some(slot) = self.current_lexical_scope().get(name) {
+            return *slot;
+        }
+        let slot = self.locals.len();
+        self.locals.push(Local {
+            name: name.to_owned(),
+            hoisted: false,
+            mutable,
+            from_env: true,
         });
         self.current_lexical_scope_mut()
             .insert(name.to_owned(), slot);

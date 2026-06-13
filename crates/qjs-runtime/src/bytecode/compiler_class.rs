@@ -76,8 +76,8 @@ impl Compiler {
                     // Class bodies are strict mode code, so every method and the
                     // constructor compile with strict semantics regardless of
                     // context.
-                    let bytecode = compile_function_body_with_strict(params, body, true)?;
                     let local_names = collect_function_local_names(None, params, body, true);
+                    let bytecode = compile_class_function_body(name, params, body, &local_names)?;
 
                     if member.kind == MethodKind::Constructor {
                         constructor = Some(ClassConstructorDef {
@@ -145,7 +145,7 @@ impl Compiler {
                 }
                 ClassElement::Field(field) => {
                     let initializer =
-                        compile_field_initializer(field.initializer.as_ref(), &field.key)?;
+                        compile_field_initializer(name, field.initializer.as_ref(), &field.key)?;
                     if let ClassMemberKey::Private(private_name) = &field.key {
                         private_elements.push(ClassPrivateElementDef::Field {
                             name: private_name.clone(),
@@ -162,7 +162,9 @@ impl Compiler {
                     }));
                 }
                 ClassElement::StaticBlock(block) => {
-                    elements.push(ClassElementDef::StaticBlock(compile_static_block(block)?));
+                    elements.push(ClassElementDef::StaticBlock(compile_static_block(
+                        name, block,
+                    )?));
                 }
             }
         }
@@ -202,6 +204,7 @@ fn compile_member_key(key: &ClassMemberKey) -> (ClassMemberKeyDef, Option<String
 /// takes that name via NamedEvaluation; computed-key fields keep the empty
 /// name.
 fn compile_field_initializer(
+    class_name: Option<&str>,
     initializer: Option<&Expr>,
     key: &ClassMemberKey,
 ) -> Result<Option<ClassFieldInitializerDef>, RuntimeError> {
@@ -218,11 +221,9 @@ fn compile_field_initializer(
         argument: Some(expr.clone()),
         span: expr.span(),
     }];
-    let bytecode = match inferred_name {
-        Some(name) => super::compiler::compile_named_field_initializer(expr, &name)?,
-        None => compile_function_body_with_strict(&params, &body, true)?,
-    };
     let local_names = collect_function_local_names(None, &params, &body, true);
+    let bytecode =
+        compile_class_field_initializer(class_name, expr, inferred_name.as_deref(), &local_names)?;
     Ok(Some(ClassFieldInitializerDef {
         local_names,
         bytecode: Rc::new(bytecode),
@@ -231,14 +232,60 @@ fn compile_field_initializer(
 
 /// Compiles a `static { ... }` block into a parameterless strict thunk run at
 /// class definition with `this` = the constructor.
-fn compile_static_block(block: &qjs_ast::StaticBlock) -> Result<ClassStaticBlockDef, RuntimeError> {
+fn compile_static_block(
+    class_name: Option<&str>,
+    block: &qjs_ast::StaticBlock,
+) -> Result<ClassStaticBlockDef, RuntimeError> {
     let params = FunctionParams::positional(Vec::new());
-    let bytecode = compile_function_body_with_strict(&params, &block.body, true)?;
     let local_names = collect_function_local_names(None, &params, &block.body, true);
+    let bytecode = compile_class_function_body(class_name, &params, &block.body, &local_names)?;
     Ok(ClassStaticBlockDef {
         local_names,
         bytecode: Rc::new(bytecode),
     })
+}
+
+fn compile_class_function_body(
+    class_name: Option<&str>,
+    params: &FunctionParams,
+    body: &[Stmt],
+    local_names: &[String],
+) -> Result<super::ir::Bytecode, RuntimeError> {
+    let mut compiler = Compiler::strict_function_compiler();
+    if let Some(name) = class_name
+        && local_names
+            .binary_search_by(|local| local.as_str().cmp(name))
+            .is_err()
+    {
+        compiler.declare_captured_lexical_slot(name, false);
+    }
+    compiler.compile_function(params, body)
+}
+
+fn compile_class_field_initializer(
+    class_name: Option<&str>,
+    init: &Expr,
+    inferred_name: Option<&str>,
+    local_names: &[String],
+) -> Result<super::ir::Bytecode, RuntimeError> {
+    let mut compiler = Compiler::strict_function_compiler();
+    if let Some(name) = class_name
+        && local_names
+            .binary_search_by(|local| local.as_str().cmp(name))
+            .is_err()
+    {
+        compiler.declare_captured_lexical_slot(name, false);
+    }
+    match inferred_name {
+        Some(name) => compiler.compile_named_expr(init, name)?,
+        None => compiler.compile_expr(init)?,
+    }
+    compiler.emit(Op::Return);
+    Ok(super::ir::Bytecode::new(
+        compiler.constants,
+        compiler.locals,
+        compiler.code,
+    ))
 }
 
 /// Builds the implicit default constructor. A base class gets an empty body;

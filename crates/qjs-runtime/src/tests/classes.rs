@@ -250,6 +250,35 @@ fn named_class_expression_name_is_visible_inside_methods() {
 }
 
 #[test]
+fn class_inner_name_binding_is_immutable_inside_members() {
+    assert_eq!(
+        eval(
+            "let checks = [
+                () => { class C { constructor() { C = 42; } }; new C(); },
+                () => { class C { m() { C = 42; } }; new C().m(); },
+                () => { class C { get x() { C = 42; } }; new C().x; },
+                () => { class C { set x(v) { C = 42; } }; new C().x = 1; },
+                () => { class C { x = (C = 42); }; new C(); },
+                () => { class C { static { C = 42; } }; }
+             ];
+             checks.every((fn) => {
+                try { fn(); return false; }
+                catch (e) { return e instanceof TypeError; }
+             });",
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn class_inner_name_binding_can_be_shadowed_by_parameters() {
+    assert_eq!(
+        eval("class C { m(C) { C = 42; return C; } } new C().m(1);"),
+        Ok(Value::Number(42.0))
+    );
+}
+
+#[test]
 fn class_declaration_is_block_scoped() {
     assert_eq!(
         eval("{ class C {} } typeof C;"),
