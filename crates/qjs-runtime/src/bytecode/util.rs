@@ -27,14 +27,24 @@ pub(super) fn assignment_binary_op(op: AssignmentOp) -> Result<BinaryOp, Runtime
 }
 
 pub(super) fn parse_number_literal(raw: &str) -> Result<f64, RuntimeError> {
-    if let Some(digits) = raw.strip_prefix("0x").or_else(|| raw.strip_prefix("0X")) {
+    let cleaned = raw.replace('_', "");
+    if let Some(digits) = cleaned
+        .strip_prefix("0x")
+        .or_else(|| cleaned.strip_prefix("0X"))
+    {
         Ok(parse_radix_number(digits, 16))
-    } else if let Some(digits) = raw.strip_prefix("0b").or_else(|| raw.strip_prefix("0B")) {
+    } else if let Some(digits) = cleaned
+        .strip_prefix("0b")
+        .or_else(|| cleaned.strip_prefix("0B"))
+    {
         Ok(parse_radix_number(digits, 2))
-    } else if let Some(digits) = raw.strip_prefix("0o").or_else(|| raw.strip_prefix("0O")) {
+    } else if let Some(digits) = cleaned
+        .strip_prefix("0o")
+        .or_else(|| cleaned.strip_prefix("0O"))
+    {
         Ok(parse_radix_number(digits, 8))
     } else {
-        raw.parse::<f64>().map_err(|_| RuntimeError {
+        cleaned.parse::<f64>().map_err(|_| RuntimeError {
             thrown: None,
             message: format!("invalid number literal `{raw}`"),
         })

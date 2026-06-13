@@ -57,6 +57,16 @@ fn numeric_literal_member_keys_use_their_canonical_name() {
         eval("class C { 0x10() { return 5; } } new C()['16']();"),
         Ok(Value::Number(5.0))
     );
+    assert_eq!(
+        eval(
+            "class C { \
+               [1_2_3]() { return 1_2_3; } \
+               static [0x1_0]() { return 0x1_0; } \
+             } \
+             let c = new C(); c[123]() + C[16]();"
+        ),
+        Ok(Value::Number(139.0))
+    );
 }
 
 #[test]

@@ -161,7 +161,8 @@ fn lexes_expression() {
 
 #[test]
 fn lexes_prefixed_numeric_literals() {
-    let tokens = lex("0x10 0Xf 0b101 0B11 0o77 0O10").expect("source should lex");
+    let tokens =
+        lex("0x10 0Xf 0b101 0B11 0o77 0O10 0x1_0 0b10_1 0o7_7").expect("source should lex");
     let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
     assert_eq!(
         kinds,
@@ -172,6 +173,9 @@ fn lexes_prefixed_numeric_literals() {
             TokenKind::Number("0B11".to_owned()),
             TokenKind::Number("0o77".to_owned()),
             TokenKind::Number("0O10".to_owned()),
+            TokenKind::Number("0x1_0".to_owned()),
+            TokenKind::Number("0b10_1".to_owned()),
+            TokenKind::Number("0o7_7".to_owned()),
             TokenKind::Eof,
         ]
     );
@@ -224,11 +228,15 @@ fn rejects_invalid_prefixed_numeric_literals() {
     assert!(lex("0b2").is_err());
     assert!(lex("0o8").is_err());
     assert!(lex("0x").is_err());
+    assert!(lex("0x_1").is_err());
+    assert!(lex("0b1_").is_err());
+    assert!(lex("0o1__7").is_err());
 }
 
 #[test]
 fn lexes_decimal_exponent_numeric_literals() {
-    let tokens = lex("1e3 1E+3 1e-3 1.25e2 .5e1 1.").expect("source should lex");
+    let tokens = lex("1e3 1E+3 1e-3 1.25e2 .5e1 1. 1_000 1_2.3_4 1e1_0 .1_5e1_0")
+        .expect("source should lex");
     let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
     assert_eq!(
         kinds,
@@ -239,6 +247,10 @@ fn lexes_decimal_exponent_numeric_literals() {
             TokenKind::Number("1.25e2".to_owned()),
             TokenKind::Number(".5e1".to_owned()),
             TokenKind::Number("1.".to_owned()),
+            TokenKind::Number("1_000".to_owned()),
+            TokenKind::Number("1_2.3_4".to_owned()),
+            TokenKind::Number("1e1_0".to_owned()),
+            TokenKind::Number(".1_5e1_0".to_owned()),
             TokenKind::Eof,
         ]
     );
@@ -251,6 +263,16 @@ fn rejects_invalid_decimal_exponent_numeric_literals() {
     assert!(lex("1e-").is_err());
     assert!(lex("1e1x").is_err());
     assert!(lex("1abc").is_err());
+    assert!(lex("1__0").is_err());
+    assert!(lex("1_").is_err());
+    assert!(lex("0_1").is_err());
+    assert!(lex("00_1").is_err());
+    assert!(lex("08_1").is_err());
+    assert!(lex("1_.0").is_err());
+    assert!(lex("1._0").is_err());
+    assert!(lex("1e_1").is_err());
+    assert!(lex("1e1_").is_err());
+    assert!(lex("1\\u005F0").is_err());
 }
 
 #[test]

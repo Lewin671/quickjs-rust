@@ -161,11 +161,6 @@ impl Lexer<'_> {
                     });
                     return Ok(());
                 }
-                if digits.contains('_') {
-                    return Err(invalid_numeric_separator(
-                        start + 2 + digits.find('_').unwrap_or(0),
-                    ));
-                }
                 if matches!(self.peek(), Some(ch) if is_identifier_continue(ch)) {
                     return Err(LexError {
                         message: "invalid digit in numeric literal".to_owned(),
@@ -195,15 +190,16 @@ impl Lexer<'_> {
             });
             return Ok(());
         }
-        if self.source[start..self.cursor].contains('_') {
-            return Err(invalid_numeric_separator(
-                start + self.source[start..self.cursor].find('_').unwrap_or(0),
-            ));
-        }
+        validate_decimal_number_integer_part(&self.source[start..self.cursor], start)?;
         if self.peek() == Some('.') {
             self.advance();
-            while matches!(self.peek(), Some(ch) if ch.is_ascii_digit()) {
+            let fraction_start = self.cursor;
+            while matches!(self.peek(), Some(ch) if ch.is_ascii_digit() || ch == '_') {
                 self.advance();
+            }
+            let fraction = &self.source[fraction_start..self.cursor];
+            if !fraction.is_empty() {
+                validate_numeric_separators(fraction, fraction_start, 10)?;
             }
         }
         self.exponent_part(start)?;
@@ -219,9 +215,11 @@ impl Lexer<'_> {
     pub(super) fn number_starting_with_dot(&mut self) -> Result<(), LexError> {
         let start = self.cursor;
         self.advance();
-        while matches!(self.peek(), Some(ch) if ch.is_ascii_digit()) {
+        let digits_start = self.cursor;
+        while matches!(self.peek(), Some(ch) if ch.is_ascii_digit() || ch == '_') {
             self.advance();
         }
+        validate_numeric_separators(&self.source[digits_start..self.cursor], digits_start, 10)?;
         self.exponent_part(start)?;
         self.reject_identifier_continue_after_number(start)?;
         self.tokens.push(Token {
@@ -250,7 +248,7 @@ impl Lexer<'_> {
             self.advance();
         }
         let digits_start = self.cursor;
-        while matches!(self.peek(), Some(ch) if ch.is_ascii_digit()) {
+        while matches!(self.peek(), Some(ch) if ch.is_ascii_digit() || ch == '_') {
             self.advance();
         }
         if self.cursor == digits_start {
@@ -259,11 +257,14 @@ impl Lexer<'_> {
                 span: Span::new(start, self.cursor),
             });
         }
+        validate_numeric_separators(&self.source[digits_start..self.cursor], digits_start, 10)?;
         Ok(())
     }
 
     fn reject_identifier_continue_after_number(&self, start: usize) -> Result<(), LexError> {
-        if matches!(self.peek(), Some(ch) if is_identifier_continue(ch)) {
+        if matches!(self.peek(), Some(ch) if is_identifier_continue(ch))
+            || (self.peek() == Some('\\') && self.peek_nth(1) == Some('u'))
+        {
             return Err(LexError {
                 message: "invalid identifier after numeric literal".to_owned(),
                 span: Span::new(start, self.cursor + self.peek().map_or(0, char::len_utf8)),
@@ -593,6 +594,17 @@ fn validate_decimal_bigint_literal(digits: &str, start: usize) -> Result<(), Lex
             message: "invalid BigInt literal with leading zero".to_owned(),
             span: Span::new(start, start + digits.len()),
         });
+    }
+    Ok(())
+}
+
+fn validate_decimal_number_integer_part(digits: &str, start: usize) -> Result<(), LexError> {
+    validate_numeric_separators(digits, start, 10)?;
+    if digits.len() > 1
+        && digits.starts_with('0')
+        && let Some(offset) = digits.find('_')
+    {
+        return Err(invalid_numeric_separator(start + offset));
     }
     Ok(())
 }
