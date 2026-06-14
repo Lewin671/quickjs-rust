@@ -43,6 +43,11 @@ pub(super) fn parse_number_literal(raw: &str) -> Result<f64, RuntimeError> {
         .or_else(|| cleaned.strip_prefix("0O"))
     {
         Ok(parse_radix_number(digits, 8))
+    } else if cleaned.len() > 1
+        && cleaned.starts_with('0')
+        && cleaned.bytes().all(|byte| matches!(byte, b'0'..=b'7'))
+    {
+        Ok(parse_radix_number(&cleaned[1..], 8))
     } else {
         cleaned.parse::<f64>().map_err(|_| RuntimeError {
             thrown: None,

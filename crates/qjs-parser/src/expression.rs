@@ -6,12 +6,15 @@ use crate::{ParseError, Parser};
 mod access;
 mod assignment;
 mod binary;
+mod helpers;
 mod import;
 mod pattern;
 mod primary;
 mod unary;
 
-pub(crate) use primary::keyword_property_name;
+pub(crate) use helpers::{
+    has_legacy_octal_escape, is_legacy_octal_or_non_octal_decimal_literal, keyword_property_name,
+};
 
 impl Parser {
     pub(crate) fn expression(&mut self) -> Result<Expr, ParseError> {

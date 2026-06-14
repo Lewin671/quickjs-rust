@@ -8,19 +8,17 @@ use super::vm_result::{Completion, FunctionBytecodeResult, ResumeMode};
 use super::vm_try::TryFrame;
 use crate::{
     Function, GLOBAL_THIS_BINDING, HOME_OBJECT_BINDING, NEW_TARGET_BINDING, ObjectRef, PropertyKey,
-    RuntimeError, SUPER_CONSTRUCTOR_BINDING, Value,
-    array::array_like_values_with_env,
-    call_function, construct_function,
+    RuntimeError, SUPER_CONSTRUCTOR_BINDING, Value, construct_function,
     function::{CallEnv, CompiledUserFunction, Realm},
     initialize_builtins, is_truthy, to_js_string_with_env, to_property_key_value,
 };
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 pub(super) type Slot = Option<Value>;
-struct VmCallEnv {
-    env: CallEnv,
-    binding_names: Option<Vec<String>>,
+pub(super) struct VmCallEnv {
+    pub(super) env: CallEnv,
+    pub(super) binding_names: Option<Vec<String>>,
     /// Injected caller bindings; only changed values write back.
-    injected: HashMap<String, Value>,
+    pub(super) injected: HashMap<String, Value>,
 }
 pub(super) fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> {
     let mut vm = Vm::new(bytecode)?;
@@ -327,10 +325,12 @@ impl<'a> Vm<'a> {
                     self.stack.push(Value::Boolean(result));
                 }
                 Op::Call(argc) => self.call(argc)?,
-                Op::CallDirectEval(argc) => self.call_direct_eval(argc)?,
+                Op::CallDirectEval { argc, is_strict } => self.call_direct_eval(argc, is_strict)?,
                 Op::CallMethod(argc) => self.call_method(argc)?,
                 Op::CallSpread => self.call_spread()?,
-                Op::CallDirectEvalSpread => self.call_direct_eval_spread()?,
+                Op::CallDirectEvalSpread { is_strict } => {
+                    self.call_direct_eval_spread(is_strict)?
+                }
                 Op::CallMethodSpread => self.call_method_spread()?,
                 Op::IteratorClose { swallow } => self.iterator_close(swallow)?,
                 Op::New(argc) => self.construct(argc)?,
@@ -688,131 +688,6 @@ impl<'a> Vm<'a> {
         Ok(())
     }
 
-    fn call(&mut self, argc: usize) -> Result<(), RuntimeError> {
-        let arguments = self.pop_arguments(argc)?;
-        let callee = self.pop()?;
-        self.call_callee(callee, Value::Undefined, arguments)
-    }
-
-    fn call_direct_eval(&mut self, argc: usize) -> Result<(), RuntimeError> {
-        let arguments = self.pop_arguments(argc)?;
-        let callee = self.pop()?;
-        self.call_callee_with_direct_eval(callee, Value::Undefined, arguments)
-    }
-
-    fn call_callee(
-        &mut self,
-        callee: Value,
-        this_value: Value,
-        arguments: Vec<Value>,
-    ) -> Result<(), RuntimeError> {
-        self.call_callee_with_marker(callee, this_value, arguments, false)
-    }
-
-    fn call_callee_with_direct_eval(
-        &mut self,
-        callee: Value,
-        this_value: Value,
-        arguments: Vec<Value>,
-    ) -> Result<(), RuntimeError> {
-        self.call_callee_with_marker(callee, this_value, arguments, true)
-    }
-
-    fn call_callee_with_marker(
-        &mut self,
-        callee: Value,
-        this_value: Value,
-        arguments: Vec<Value>,
-        direct_eval: bool,
-    ) -> Result<(), RuntimeError> {
-        if let Some(result) = super::vm_call::try_fast_global_native_call(
-            &callee,
-            &this_value,
-            &arguments,
-            &self.realm_env(),
-        ) {
-            if let Some(value) = self.handle_runtime_result(result)? {
-                self.stack.push(value);
-            }
-            return Ok(());
-        }
-        let mut env = self.call_env(&callee);
-        if direct_eval {
-            env.env
-                .insert(crate::DIRECT_EVAL_BINDING.to_owned(), Value::Boolean(true));
-        }
-        let result = call_function(callee, this_value, arguments, &mut env.env, false);
-        env.env.remove(crate::DIRECT_EVAL_BINDING);
-        self.apply_call_env(env);
-        if let Some(result) = self.handle_call_result(result)? {
-            self.stack.push(result);
-        }
-        Ok(())
-    }
-
-    fn call_spread(&mut self) -> Result<(), RuntimeError> {
-        let arguments = self.pop_argument_array("function call spread")?;
-        let callee = self.pop()?;
-        self.call_callee(callee, Value::Undefined, arguments)
-    }
-
-    fn call_direct_eval_spread(&mut self) -> Result<(), RuntimeError> {
-        let arguments = self.pop_argument_array("direct eval spread")?;
-        let callee = self.pop()?;
-        self.call_callee_with_direct_eval(callee, Value::Undefined, arguments)
-    }
-
-    fn call_method(&mut self, argc: usize) -> Result<(), RuntimeError> {
-        let arguments = self.pop_arguments(argc)?;
-        // Method resolution errors (e.g. reading a property of undefined) are
-        // catchable runtime errors, not VM faults.
-        let resolved = self.pop_method_callee();
-        let Some((callee, this_value)) = self.handle_runtime_result(resolved)? else {
-            return Ok(());
-        };
-        self.call_callee(callee, this_value, arguments)
-    }
-
-    fn call_method_spread(&mut self) -> Result<(), RuntimeError> {
-        let arguments = self.pop_argument_array("method call spread")?;
-        let resolved = self.pop_method_callee();
-        let Some((callee, this_value)) = self.handle_runtime_result(resolved)? else {
-            return Ok(());
-        };
-        self.call_callee(callee, this_value, arguments)
-    }
-
-    /// Calls a pre-resolved callee whose receiver and callee are already on the
-    /// stack as `[receiver, callee, args...]`.
-    fn call_resolved(&mut self, argc: usize) -> Result<(), RuntimeError> {
-        let arguments = self.pop_arguments(argc)?;
-        let callee = self.pop()?;
-        let this_value = self.pop()?;
-        self.call_callee(callee, this_value, arguments)
-    }
-
-    fn call_resolved_spread(&mut self) -> Result<(), RuntimeError> {
-        let arguments = self.pop_argument_array("super method call spread")?;
-        let callee = self.pop()?;
-        let this_value = self.pop()?;
-        self.call_callee(callee, this_value, arguments)
-    }
-
-    fn pop_method_callee(&mut self) -> Result<(Value, Value), RuntimeError> {
-        let key_value = self.pop()?;
-        let key = self.coerce_property_key(key_value)?;
-        let this_value = self.pop()?;
-        let callee = if let Some(callee) = self.try_direct_get(&this_value, &key) {
-            callee
-        } else {
-            let mut getter_env = self.current_env();
-            let callee = get_property_key(this_value.clone(), &key, &mut getter_env)?;
-            self.apply_env(getter_env);
-            callee
-        };
-        Ok((callee, this_value))
-    }
-
     fn construct(&mut self, argc: usize) -> Result<(), RuntimeError> {
         let arguments = self.pop_arguments(argc)?;
         let callee = self.pop()?;
@@ -839,7 +714,7 @@ impl<'a> Vm<'a> {
         Ok(())
     }
 
-    fn pop_arguments(&mut self, argc: usize) -> Result<Vec<Value>, RuntimeError> {
+    pub(super) fn pop_arguments(&mut self, argc: usize) -> Result<Vec<Value>, RuntimeError> {
         let mut arguments = Vec::with_capacity(argc);
         for _ in 0..argc {
             arguments.push(self.pop()?);
@@ -848,10 +723,10 @@ impl<'a> Vm<'a> {
         Ok(arguments)
     }
 
-    fn pop_argument_array(&mut self, context: &str) -> Result<Vec<Value>, RuntimeError> {
+    pub(super) fn pop_argument_array(&mut self, context: &str) -> Result<Vec<Value>, RuntimeError> {
         let value = self.pop()?;
         let mut env = self.current_env();
-        let arguments = array_like_values_with_env(value, context, &mut env)?;
+        let arguments = crate::array::array_like_values_with_env(value, context, &mut env)?;
         self.apply_env(env);
         Ok(arguments)
     }
@@ -860,7 +735,7 @@ impl<'a> Vm<'a> {
         self.frame_call_env()
     }
 
-    fn call_env(&self, callee: &Value) -> VmCallEnv {
+    pub(super) fn call_env(&self, callee: &Value) -> VmCallEnv {
         if let Some(function) = user_bytecode_function(callee) {
             let mut locals = HashMap::new();
             let mut binding_names = Vec::new();
@@ -963,7 +838,7 @@ impl<'a> Vm<'a> {
         insert_missing_binding_name(binding_names, "this");
     }
 
-    fn apply_call_env(&mut self, env: VmCallEnv) {
+    pub(super) fn apply_call_env(&mut self, env: VmCallEnv) {
         if let Some(binding_names) = env.binding_names {
             self.apply_selected_env(env.env, &binding_names, &env.injected);
         } else {

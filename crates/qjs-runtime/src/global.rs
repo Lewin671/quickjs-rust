@@ -358,6 +358,10 @@ fn is_line_terminator(ch: char) -> bool {
 
 fn direct_eval_parse_context(env: &CallEnv) -> EvalParseContext {
     EvalParseContext {
+        strict: matches!(
+            env.get(crate::DIRECT_EVAL_STRICT_BINDING),
+            Some(Value::Boolean(true))
+        ),
         in_function: env.get_local("this").is_some(),
         in_method: env.get(crate::HOME_OBJECT_BINDING).is_some(),
         in_derived_constructor: env.get(crate::SUPER_CONSTRUCTOR_BINDING).is_some(),

@@ -159,7 +159,11 @@ impl Parser {
                     self.expect(&TokenKind::RightBracket)?;
                     AssignmentTargetPropertyKey::Computed(expr)
                 }
-                TokenKind::Identifier(key) | TokenKind::String(key) | TokenKind::Number(key) => {
+                TokenKind::Identifier(key) | TokenKind::String(key) => {
+                    AssignmentTargetPropertyKey::Literal(key)
+                }
+                TokenKind::Number(key) => {
+                    self.reject_strict_legacy_numeric_literal(&key, key_span)?;
                     AssignmentTargetPropertyKey::Literal(key)
                 }
                 kind => keyword_property_name(&kind)

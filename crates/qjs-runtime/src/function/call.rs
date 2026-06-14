@@ -1,11 +1,11 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
-    ACTIVE_CONSTRUCTOR_BINDING, ArrayRef, Bytecode, FIELD_INITIALIZER_EVAL_BINDING, Function,
-    GLOBAL_THIS_BINDING, HOME_OBJECT_BINDING, NEW_TARGET_BINDING, NativeFunction, ObjectRef,
-    RuntimeError, SUPER_CONSTRUCTOR_BINDING, Value, bytecode::eval_function_bytecode,
-    function_prototype, native::call_native_function, object_prototype,
-    private::PrivateEnvironment, symbol,
+    ACTIVE_CONSTRUCTOR_BINDING, ArrayRef, Bytecode, DIRECT_EVAL_STRICT_BINDING,
+    FIELD_INITIALIZER_EVAL_BINDING, Function, GLOBAL_THIS_BINDING, HOME_OBJECT_BINDING,
+    NEW_TARGET_BINDING, NativeFunction, ObjectRef, RuntimeError, SUPER_CONSTRUCTOR_BINDING, Value,
+    bytecode::eval_function_bytecode, function_prototype, native::call_native_function,
+    object_prototype, private::PrivateEnvironment, symbol,
 };
 
 use super::{
@@ -928,6 +928,7 @@ fn is_call_frame_binding(name: &str) -> bool {
     matches!(
         name,
         GLOBAL_THIS_BINDING
+            | DIRECT_EVAL_STRICT_BINDING
             | FIELD_INITIALIZER_EVAL_BINDING
             | HOME_OBJECT_BINDING
             | NEW_TARGET_BINDING

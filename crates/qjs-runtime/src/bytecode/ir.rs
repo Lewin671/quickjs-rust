@@ -144,10 +144,15 @@ pub(super) enum Op {
         slot: Option<usize>,
     },
     Call(usize),
-    CallDirectEval(usize),
+    CallDirectEval {
+        argc: usize,
+        is_strict: bool,
+    },
     CallMethod(usize),
     CallSpread,
-    CallDirectEvalSpread,
+    CallDirectEvalSpread {
+        is_strict: bool,
+    },
     CallMethodSpread,
     /// Pops an iterator and calls its `return` method when present. With
     /// `swallow` set, errors from the close are ignored (the close happens
@@ -592,11 +597,12 @@ impl Bytecode {
         if self.global_names.iter().any(|name| name == "arguments") {
             return true;
         }
-        if self
-            .code
-            .iter()
-            .any(|op| matches!(op, Op::CallDirectEval(_) | Op::CallDirectEvalSpread))
-        {
+        if self.code.iter().any(|op| {
+            matches!(
+                op,
+                Op::CallDirectEval { .. } | Op::CallDirectEvalSpread { .. }
+            )
+        }) {
             return true;
         }
         let Some(arguments_slot) = self.local_slot("arguments") else {
@@ -620,10 +626,10 @@ impl Bytecode {
             matches!(
                 op,
                 Op::Call(_)
-                    | Op::CallDirectEval(_)
+                    | Op::CallDirectEval { .. }
                     | Op::CallMethod(_)
                     | Op::CallSpread
-                    | Op::CallDirectEvalSpread
+                    | Op::CallDirectEvalSpread { .. }
                     | Op::CallMethodSpread
                     | Op::New(_)
                     | Op::NewSpread

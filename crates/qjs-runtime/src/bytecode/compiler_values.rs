@@ -291,7 +291,9 @@ impl Compiler {
         if has_spread {
             self.compile_argument_array(arguments)?;
             if direct_eval {
-                self.emit(Op::CallDirectEvalSpread);
+                self.emit(Op::CallDirectEvalSpread {
+                    is_strict: self.strict,
+                });
             } else {
                 self.emit(Op::CallSpread);
             }
@@ -304,7 +306,10 @@ impl Compiler {
             self.compile_expr(argument)?;
         }
         if direct_eval {
-            self.emit(Op::CallDirectEval(arguments.len()));
+            self.emit(Op::CallDirectEval {
+                argc: arguments.len(),
+                is_strict: self.strict,
+            });
         } else {
             self.emit(Op::Call(arguments.len()));
         }

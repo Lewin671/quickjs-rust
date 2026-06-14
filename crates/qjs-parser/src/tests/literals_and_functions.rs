@@ -410,6 +410,22 @@ fn rejects_legacy_octal_escapes_in_strict_strings_and_templates() {
 }
 
 #[test]
+fn rejects_annex_b_numeric_literals_in_strict_mode() {
+    assert!(parse_script("\"use strict\"; 00;").is_err());
+    assert!(parse_script("\"use strict\"; 010;").is_err());
+    assert!(parse_script("\"use strict\"; 08;").is_err());
+    assert!(parse_script("\"use strict\"; ({ 01: 1 });").is_err());
+    assert!(parse_script("\"use strict\"; ({ 08: target } = value);").is_err());
+    parse_script("00; 010; 08;").expect("Annex B numeric literals parse outside strict mode");
+
+    let context = EvalParseContext {
+        strict: true,
+        ..EvalParseContext::default()
+    };
+    assert!(parse_direct_eval_script("010;", context).is_err());
+}
+
+#[test]
 fn parses_tagged_template_literal() {
     let script = parse_script("tag`a ${value} b`;").expect("script should parse");
     let [

@@ -33,6 +33,9 @@ pub fn parse_script(source: &str) -> Result<Script, ParseError> {
 /// Additional parser context for direct eval code.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct EvalParseContext {
+    /// Whether eval source is parsed as strict mode code because the direct
+    /// eval call occurs in strict code.
+    pub strict: bool,
     /// Whether eval runs inside a function-like context, allowing
     /// `new.target`.
     pub in_function: bool,
@@ -61,6 +64,7 @@ pub fn parse_direct_eval_script(
         span: error.span,
     })?;
     let mut parser = Parser::new(tokens, source.to_owned());
+    parser.strict = context.strict;
     parser.in_function = context.in_function;
     parser.in_method = context.in_method;
     parser.in_derived_constructor = context.in_derived_constructor;

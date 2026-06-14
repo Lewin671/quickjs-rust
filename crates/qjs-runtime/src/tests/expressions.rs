@@ -137,6 +137,19 @@ fn evaluates_legacy_octal_escapes_inside_template_expressions() {
 }
 
 #[test]
+fn evaluates_annex_b_numeric_literals() {
+    assert_eq!(eval("00 + 01 + 07 + 010 + 077;"), Ok(Value::Number(79.0)));
+    assert_eq!(eval("08 + 09;"), Ok(Value::Number(17.0)));
+    assert!(eval("\"use strict\"; 010;").is_err());
+    assert!(eval("\"use strict\"; 08;").is_err());
+    assert!(eval("function f() { 'use strict'; return eval('010;'); } f();").is_err());
+    assert_eq!(
+        eval("function f() { 'use strict'; let indirect = eval; return indirect('010;'); } f();"),
+        Ok(Value::Number(8.0))
+    );
+}
+
+#[test]
 fn template_literal_substitutions_to_string_before_next_expression() {
     assert_eq!(
         eval(

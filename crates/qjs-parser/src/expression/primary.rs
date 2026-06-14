@@ -4,6 +4,9 @@ use qjs_ast::{
 };
 use qjs_lexer::{TemplateSegment, TokenKind};
 
+use crate::expression::{
+    has_legacy_octal_escape, is_legacy_octal_or_non_octal_decimal_literal, keyword_property_name,
+};
 use crate::{ParseError, Parser};
 
 impl Parser {
@@ -64,10 +67,13 @@ impl Parser {
                 name: "let".to_owned(),
                 span: token.span,
             }),
-            TokenKind::Number(raw) => Ok(Expr::Literal(Literal::Number {
-                raw,
-                span: token.span,
-            })),
+            TokenKind::Number(raw) => {
+                self.reject_strict_legacy_numeric_literal(&raw, token.span)?;
+                Ok(Expr::Literal(Literal::Number {
+                    raw,
+                    span: token.span,
+                }))
+            }
             TokenKind::BigInt(raw) => Ok(Expr::Literal(Literal::BigInt {
                 raw,
                 span: token.span,
@@ -337,6 +343,20 @@ impl Parser {
         })
     }
 
+    pub(crate) fn reject_strict_legacy_numeric_literal(
+        &self,
+        raw: &str,
+        span: Span,
+    ) -> Result<(), ParseError> {
+        if !self.strict || !is_legacy_octal_or_non_octal_decimal_literal(raw) {
+            return Ok(());
+        }
+        Err(ParseError {
+            message: "legacy numeric literal is not allowed in strict mode".to_owned(),
+            span,
+        })
+    }
+
     fn regexp_flags(&mut self) -> Option<RegexpFlags> {
         let token = self.peek()?;
         let TokenKind::Identifier(value) = &token.kind else {
@@ -511,10 +531,13 @@ impl Parser {
                 Ok((ObjectPropertyKey::Literal(name), Some(value)))
             }
             TokenKind::String(name) => Ok((ObjectPropertyKey::Literal(name), None)),
-            TokenKind::Number(raw) => Ok((
-                ObjectPropertyKey::Literal(crate::helpers::numeric_property_key(&raw)),
-                None,
-            )),
+            TokenKind::Number(raw) => {
+                self.reject_strict_legacy_numeric_literal(&raw, key_token.span)?;
+                Ok((
+                    ObjectPropertyKey::Literal(crate::helpers::numeric_property_key(&raw)),
+                    None,
+                ))
+            }
             TokenKind::True => Ok((ObjectPropertyKey::Literal("true".to_owned()), None)),
             TokenKind::False => Ok((ObjectPropertyKey::Literal("false".to_owned()), None)),
             TokenKind::Null => Ok((ObjectPropertyKey::Literal("null".to_owned()), None)),
@@ -865,28 +888,6 @@ pub(crate) fn token_starts_async_method_name(kind: &TokenKind) -> bool {
     }
 }
 
-fn has_legacy_octal_escape(raw: &str) -> bool {
-    let mut chars = raw.chars().peekable();
-    while let Some(ch) = chars.next() {
-        if ch != '\\' {
-            continue;
-        }
-        let Some(escaped) = chars.next() else {
-            return false;
-        };
-        match escaped {
-            '0' => {
-                if matches!(chars.peek(), Some('0'..='9')) {
-                    return true;
-                }
-            }
-            '1'..='7' => return true,
-            _ => {}
-        }
-    }
-    false
-}
-
 fn reject_duplicate_method_parameters(params: &qjs_ast::FunctionParams) -> Result<(), ParseError> {
     if let Some(span) = crate::statement::duplicate_parameter_span(params) {
         return Err(ParseError {
@@ -895,43 +896,6 @@ fn reject_duplicate_method_parameters(params: &qjs_ast::FunctionParams) -> Resul
         });
     }
     Ok(())
-}
-
-pub(crate) fn keyword_property_name(kind: &TokenKind) -> Option<&'static str> {
-    match kind {
-        TokenKind::This => Some("this"),
-        TokenKind::Var => Some("var"),
-        TokenKind::Let => Some("let"),
-        TokenKind::Const => Some("const"),
-        TokenKind::If => Some("if"),
-        TokenKind::Else => Some("else"),
-        TokenKind::While => Some("while"),
-        TokenKind::Do => Some("do"),
-        TokenKind::For => Some("for"),
-        TokenKind::Switch => Some("switch"),
-        TokenKind::Case => Some("case"),
-        TokenKind::Default => Some("default"),
-        TokenKind::Try => Some("try"),
-        TokenKind::Catch => Some("catch"),
-        TokenKind::Finally => Some("finally"),
-        TokenKind::Break => Some("break"),
-        TokenKind::Continue => Some("continue"),
-        TokenKind::Function => Some("function"),
-        TokenKind::Class => Some("class"),
-        TokenKind::Extends => Some("extends"),
-        TokenKind::Super => Some("super"),
-        TokenKind::Return => Some("return"),
-        TokenKind::Throw => Some("throw"),
-        TokenKind::Debugger => Some("debugger"),
-        TokenKind::Typeof => Some("typeof"),
-        TokenKind::Void => Some("void"),
-        TokenKind::In => Some("in"),
-        TokenKind::With => Some("with"),
-        TokenKind::Delete => Some("delete"),
-        TokenKind::New => Some("new"),
-        TokenKind::Instanceof => Some("instanceof"),
-        _ => None,
-    }
 }
 
 fn regexp_constructor_expr(span: Span, pattern: String, flags: String) -> Expr {
