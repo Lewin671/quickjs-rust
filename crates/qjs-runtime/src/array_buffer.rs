@@ -598,6 +598,9 @@ pub(crate) fn is_array_buffer_or_shared_array_buffer_object(object: &ObjectRef) 
 
 /// Whether `object` is a detached `ArrayBuffer`.
 pub(crate) fn is_detached(object: &ObjectRef) -> bool {
+    if is_shared_array_buffer_object(object) {
+        return false;
+    }
     object.has_own_property(ARRAY_BUFFER_DETACHED_PROPERTY)
         || !object.has_own_property(ARRAY_BUFFER_DATA_PROPERTY)
 }

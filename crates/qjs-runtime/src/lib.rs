@@ -6,6 +6,7 @@ mod array;
 mod array_buffer;
 mod async_function;
 mod async_generator;
+mod atomics;
 mod bigint;
 mod boolean;
 mod builtins;
@@ -120,6 +121,7 @@ pub(crate) const RUNTIME_INTRINSIC_NAMES: &[&str] = &[
     "Array",
     "ArrayBuffer",
     "SharedArrayBuffer",
+    "Atomics",
     "Uint8Array",
     "Uint16Array",
     "Uint32Array",

@@ -50,7 +50,9 @@ pub(crate) fn native_typed_array(
         Some(Value::Object(source)) if is_typed_array_object(&source) => {
             initialize_from_typed_array(&object, native, &source, env)
         }
-        Some(Value::Object(source)) if array_buffer::is_array_buffer_object(&source) => {
+        Some(Value::Object(source))
+            if array_buffer::is_array_buffer_or_shared_array_buffer_object(&source) =>
+        {
             initialize_from_buffer(&object, native, source, argument_values, env)
         }
         Some(
@@ -148,7 +150,7 @@ fn initialize_from_buffer(
     if array_buffer::is_detached(&buffer) {
         return Err(array_buffer::detached_error());
     }
-    let buffer_byte_length = array_buffer::array_buffer_bytes(&buffer).len();
+    let buffer_byte_length = array_buffer::buffer_bytes(&buffer).len();
 
     let length_tracking = explicit_length.is_none() && array_buffer::is_resizable(&buffer);
     let (length, byte_length) = match explicit_length {
@@ -177,7 +179,7 @@ fn initialize_from_buffer(
         }
     };
 
-    let bytes = array_buffer::array_buffer_bytes(&buffer);
+    let bytes = array_buffer::buffer_bytes(&buffer);
     let values = read_elements(native, &bytes, offset, length);
     let _ = byte_length;
     install_view(

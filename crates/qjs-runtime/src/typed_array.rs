@@ -13,7 +13,8 @@ mod ordering;
 
 pub(crate) use construct::{native_typed_array, native_typed_array_from, native_typed_array_of};
 pub(crate) use element::{
-    IndexedRead, IndexedWrite, indexed_element_value, read_view_elements, set_indexed_element,
+    IndexedRead, IndexedWrite, get_view_element, indexed_element_value, read_view_elements,
+    set_indexed_element, set_view_elements,
 };
 pub(crate) use iteration::*;
 pub(crate) use ordering::*;
@@ -473,7 +474,7 @@ pub(crate) fn typed_array_length(object: &ObjectRef) -> usize {
     if array_buffer::is_detached(&buffer) {
         return 0;
     }
-    let buffer_byte_length = array_buffer::array_buffer_bytes(&buffer).len();
+    let buffer_byte_length = array_buffer::buffer_bytes(&buffer).len();
     let offset = typed_array_byte_offset(object);
     let element = bytes_per_element(typed_array_kind(object));
     if typed_array_is_length_tracking(object) {
@@ -513,7 +514,7 @@ pub(crate) fn typed_array_is_out_of_bounds(object: &ObjectRef) -> bool {
         return false;
     }
     if typed_array_is_length_tracking(object) {
-        typed_array_byte_offset(object) > array_buffer::array_buffer_bytes(&buffer).len()
+        typed_array_byte_offset(object) > array_buffer::buffer_bytes(&buffer).len()
     } else {
         let fixed_length = match object.own_property(TYPED_ARRAY_LENGTH_PROPERTY) {
             Some(Property {
@@ -527,7 +528,7 @@ pub(crate) fn typed_array_is_out_of_bounds(object: &ObjectRef) -> bool {
         byte_length.is_none_or(|byte_length| {
             typed_array_byte_offset(object)
                 .checked_add(byte_length)
-                .is_none_or(|end| end > array_buffer::array_buffer_bytes(&buffer).len())
+                .is_none_or(|end| end > array_buffer::buffer_bytes(&buffer).len())
         })
     }
 }

@@ -302,7 +302,7 @@ pub(crate) fn get_view_element(object: &ObjectRef, index: usize) -> Value {
     if index >= typed_array_length(object) {
         return zero_value(native);
     }
-    let bytes = array_buffer::array_buffer_bytes(&buffer);
+    let bytes = array_buffer::buffer_bytes(&buffer);
     let element = bytes_per_element(native);
     let byte_index = typed_array_byte_offset(object) + index * element;
     read_element(native, &bytes, byte_index)
@@ -330,7 +330,7 @@ impl ViewSnapshot {
             super::typed_array_buffer(object).filter(|buffer| !array_buffer::is_detached(buffer));
         let bytes = buffer
             .as_ref()
-            .map(array_buffer::array_buffer_bytes)
+            .map(array_buffer::buffer_bytes)
             .unwrap_or_default();
         ViewSnapshot {
             native,
@@ -366,7 +366,7 @@ pub(crate) fn read_view_elements(object: &ObjectRef, start: usize, count: usize)
         return std::iter::repeat_n(zero_value(native), count).collect();
     };
     let length = typed_array_length(object);
-    let bytes = array_buffer::array_buffer_bytes(&buffer);
+    let bytes = array_buffer::buffer_bytes(&buffer);
     let element = bytes_per_element(native);
     let base = typed_array_byte_offset(object);
     (0..count)
@@ -404,7 +404,7 @@ where
 
     match buffer {
         Some(buffer) => {
-            let mut bytes = array_buffer::array_buffer_bytes(&buffer);
+            let mut bytes = array_buffer::buffer_bytes(&buffer);
             for (offset, value) in values.into_iter().enumerate() {
                 let index = start + offset;
                 if index >= length {
@@ -413,7 +413,7 @@ where
                 write_element(native, &mut bytes, base + index * element, &value);
                 object.define_property(index.to_string(), Property::data(value, true, true, false));
             }
-            array_buffer::set_array_buffer_bytes(&buffer, bytes);
+            array_buffer::set_buffer_bytes(&buffer, bytes);
         }
         None => {
             // Detached or buffer-less: keep the materialized properties in sync

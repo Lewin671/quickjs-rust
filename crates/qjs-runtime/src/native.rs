@@ -1,5 +1,6 @@
 mod array_buffers;
 mod arrays;
+mod atomics;
 mod core;
 mod data_views;
 mod date;
@@ -80,6 +81,10 @@ pub(crate) fn call_native_function(
         is_construct,
         env,
     )? {
+        return Ok(value);
+    }
+
+    if let Some(value) = atomics::call_atomics_native(native, &argument_values, env)? {
         return Ok(value);
     }
 

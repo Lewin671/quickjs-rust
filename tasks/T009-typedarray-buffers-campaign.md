@@ -84,6 +84,10 @@ gaps: `TypedArray` 2,027, `ArrayBuffer` 263, `DataView` 188 — concentrated in
       SharedArrayBuffer has been re-clustered through growable construction,
       `byteLength`/`maxByteLength`/`growable`, `grow`, and `slice`;
       `test/built-ins/SharedArrayBuffer --all` now reports 0 actionable gaps.
+      Atomics now has the non-blocking object surface plus `load`/`store`,
+      read-modify-write operations, `compareExchange`, `isLockFree`, `pause`,
+      and no-waiter `notify`; `test/built-ins/Atomics --all` moved from 289
+      to 80 actionable gaps, leaving wait queue/agent behavior.
 
 ## Scope
 

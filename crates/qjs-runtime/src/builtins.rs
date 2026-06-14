@@ -1,5 +1,5 @@
 use crate::{
-    CallEnv, Value, array, array_buffer, async_function, async_generator, bigint, boolean,
+    CallEnv, Value, array, array_buffer, async_function, async_generator, atomics, bigint, boolean,
     data_view, date, error, generator, global, iterator, json, map, math, number, object, promise,
     proxy, reflect, regexp, set, string, symbol, typed_array, weak_map, weak_ref, weak_set,
 };
@@ -26,6 +26,7 @@ pub(crate) fn initialize_builtins(env: &mut CallEnv, global_this: &Value) {
     array_buffer::install_shared_array_buffer(env, global_this, object_prototype.clone());
     typed_array::install_typed_arrays(env, global_this, object_prototype.clone());
     data_view::install_data_view(env, global_this, object_prototype.clone());
+    atomics::install_atomics(env, global_this, object_prototype.clone());
     bigint::install_bigint_well_known_symbols(env);
     string::install_string_well_known_symbols(env);
     boolean::install_boolean(env, global_this, object_prototype.clone());
