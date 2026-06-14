@@ -138,14 +138,15 @@ if ! xargs -P 1 -n 1 true </dev/null >/dev/null 2>&1; then
   exit 1
 fi
 qjs_require_run_with_timeout
-find "$TEST262_DIR/test" -name '.qjs-baseline-case-*.js' -type f -delete
 
 # Scratch space for the parallel case runners: the work queue plus per-case
 # result, JSONL, and message files keyed by queue index.
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/qjs-test262-baseline-work-XXXXXX")"
+BASELINE_RUN_ID="$(basename "$WORK_DIR")"
 QUEUE_FILE="$WORK_DIR/queue"
 : >"$QUEUE_FILE"
 cleanup() {
+  find "$TEST262_DIR/test" -name ".qjs-baseline-case-$BASELINE_RUN_ID-*" -type f -delete
   rm -rf "$WORK_DIR"
   if [ -n "${QUICKJS_NG_CONF:-}" ]; then
     rm -f "$QUICKJS_NG_CONF" "$QUICKJS_NG_FEATURES" "$QUICKJS_NG_SKIP_FEATURES" "$QUICKJS_NG_EXCLUDES"
@@ -637,7 +638,7 @@ run_case_worker() {
   local case_dir
   if [ -z "$is_module" ]; then
     case_dir="$(dirname "$file")"
-    temp="$case_dir/.qjs-baseline-case-$$-$RANDOM.js"
+    temp="$(mktemp "$case_dir/.qjs-baseline-case-$BASELINE_RUN_ID-XXXXXX")"
   else
     temp="$temp_dir/case.js"
   fi
