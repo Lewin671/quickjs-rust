@@ -106,7 +106,7 @@ fn validate_switch_lexical_names(cases: &[SwitchCase], strict: bool) -> Result<(
                 lexical.insert(name, span);
             }
             for (name, span) in var_names_of(stmt) {
-                if lexical.contains_key(&name) {
+                if lexical.contains_key(&name) || sloppy_fns.contains_key(&name) {
                     return Err(ParseError {
                         message: format!("variable '{name}' conflicts with lexical declaration"),
                         span,
@@ -116,7 +116,7 @@ fn validate_switch_lexical_names(cases: &[SwitchCase], strict: bool) -> Result<(
             }
             if !strict {
                 for (name, span) in sloppy_function_names_of(stmt) {
-                    if lexical.contains_key(&name) {
+                    if lexical.contains_key(&name) || var_names.contains_key(&name) {
                         return Err(ParseError {
                             message: format!(
                                 "function '{name}' conflicts with lexical declaration"
