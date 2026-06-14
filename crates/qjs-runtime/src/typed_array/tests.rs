@@ -197,6 +197,52 @@ fn typed_array_of_constructs_and_coerces() {
         eval("Uint8Array.of === Int8Array.of;"),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "let a = BigInt64Array.of(1n, 2n); \
+             typeof a[0] + ':' + a[1] + ':' + (BigInt64Array.of === Uint8Array.of) + ':' \
+             + BigInt64Array.hasOwnProperty('of');"
+        ),
+        Ok(Value::String("bigint:2:true:false".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let custom = new BigInt64Array(3); \
+             let result = BigInt64Array.of.call(function() { return custom; }, 1n, 2n); \
+             (result === custom) + ':' + custom[0] + ':' + custom[1] + ':' + custom[2];"
+        ),
+        Ok(Value::String("true:1:2:0".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let threw = false; \
+             try { BigInt64Array.of.call(function() { return {}; }, 1n); } \
+             catch (e) { threw = e instanceof TypeError; } \
+             threw;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let threw = false; \
+             try { BigInt64Array.of.call(function() { return new BigInt64Array(1); }, 1n, 2n); } \
+             catch (e) { threw = e instanceof TypeError; } \
+             threw;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let marker = {}; let last = ''; \
+             let first = { valueOf() { last = 'first'; return 1n; } }; \
+             let second = { valueOf() { last = 'second'; throw marker; } }; \
+             let caught = false; \
+             try { BigInt64Array.of(first, second, first); } \
+             catch (e) { caught = e === marker; } \
+             caught + ':' + last;"
+        ),
+        Ok(Value::String("true:second".to_owned()))
+    );
 }
 
 #[test]

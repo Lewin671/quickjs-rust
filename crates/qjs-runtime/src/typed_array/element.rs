@@ -46,10 +46,17 @@ fn coerce_big_int_element(
     value: Value,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let big = bigint::to_bigint(value, env).map_err(|_| RuntimeError {
-        thrown: None,
-        message: "TypeError: cannot convert value to a BigInt typed array element".to_owned(),
-    })?;
+    let big = match bigint::to_bigint(value, env) {
+        Ok(value) => value,
+        Err(error) if error.thrown.is_some() => return Err(error),
+        Err(_) => {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: cannot convert value to a BigInt typed array element"
+                    .to_owned(),
+            });
+        }
+    };
     Ok(Value::BigInt(wrap_big_int(native, big)))
 }
 

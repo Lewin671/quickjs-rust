@@ -729,10 +729,14 @@ impl Function {
     /// string-keyed property. Used when a function sits inside another value's
     /// prototype chain.
     pub(crate) fn chain_property(&self, key: &str) -> Option<Property> {
+        self.chain_property_with_env(key, &crate::CallEnv::from_map(self.env.clone()))
+    }
+
+    pub(crate) fn chain_property_with_env(&self, key: &str, env: &CallEnv) -> Option<Property> {
         self.own_property(key)
-            .or_else(|| match self.effective_internal_prototype() {
+            .or_else(|| match self.effective_internal_prototype_with_env(env) {
                 Some(Prototype::Object(prototype)) => prototype.property(key),
-                Some(Prototype::Function(parent)) => parent.chain_property(key),
+                Some(Prototype::Function(parent)) => parent.chain_property_with_env(key, env),
                 Some(Prototype::Proxy(proxy)) => proxy
                     .target_result()
                     .ok()

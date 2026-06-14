@@ -209,7 +209,7 @@ pub(crate) fn function_prototype_chain_descriptor(
 ) -> Option<Property> {
     match function.internal_prototype_slot() {
         Some(Some(crate::Prototype::Object(prototype))) => prototype.property(key),
-        Some(Some(crate::Prototype::Function(parent))) => parent.chain_property(key),
+        Some(Some(crate::Prototype::Function(parent))) => parent.chain_property_with_env(key, env),
         Some(Some(crate::Prototype::Proxy(proxy))) => proxy
             .target_result()
             .ok()

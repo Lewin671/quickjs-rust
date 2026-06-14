@@ -515,6 +515,15 @@ impl Vm<'_> {
             // write back: a newer value may have arrived through the shared
             // captured_env while this call was in flight.
             if injected.get(name) == Some(&value) {
+                if let Some(captured) = self.captured_env.borrow().get(name).cloned()
+                    && Some(&captured) != injected.get(name)
+                {
+                    if let Some(index) = self.bytecode.local_slot(name) {
+                        self.locals[index] = Some(captured);
+                    } else if self.env.locals().contains_key(name) {
+                        self.env.insert(name.clone(), captured);
+                    }
+                }
                 continue;
             }
             if let Some(index) = self.bytecode.local_slot(name) {

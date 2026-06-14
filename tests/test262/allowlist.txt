@@ -227,6 +227,11 @@ test/built-ins/DataView/return-abrupt-tonumber-byteoffset-symbol-sab.js
 test/built-ins/DataView/return-instance-sab.js
 test/built-ins/DataView/toindex-bytelength-sab.js
 test/built-ins/DataView/toindex-byteoffset-sab.js
+test/built-ins/TypedArrayConstructors/of/BigInt/argument-number-value-throws.js
+test/built-ins/TypedArrayConstructors/of/BigInt/custom-ctor-does-not-instantiate-ta-throws.js
+test/built-ins/TypedArrayConstructors/of/BigInt/custom-ctor-returns-smaller-instance-throws.js
+test/built-ins/TypedArrayConstructors/of/BigInt/custom-ctor.js
+test/built-ins/TypedArrayConstructors/of/BigInt/inherited.js
 cases/array-at-array-like.js
 cases/array-at-basic.js
 cases/array-at-length.js
