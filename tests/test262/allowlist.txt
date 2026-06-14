@@ -121,8 +121,12 @@ test/built-ins/DataView/proto-from-ctor-realm-sab.js
 test/built-ins/DataView/prototype/buffer/return-buffer-sab.js
 test/built-ins/DataView/prototype/buffer/this-has-no-dataview-internal-sab.js
 test/built-ins/DataView/prototype/byteLength/return-bytelength-sab.js
+test/built-ins/DataView/prototype/byteLength/resizable-array-buffer-auto.js
+test/built-ins/DataView/prototype/byteLength/resizable-array-buffer-fixed.js
 test/built-ins/DataView/prototype/byteLength/this-has-no-dataview-internal-sab.js
 test/built-ins/DataView/prototype/byteOffset/return-byteoffset-sab.js
+test/built-ins/DataView/prototype/byteOffset/resizable-array-buffer-auto.js
+test/built-ins/DataView/prototype/byteOffset/resizable-array-buffer-fixed.js
 test/built-ins/DataView/prototype/byteOffset/this-has-no-dataview-internal-sab.js
 test/built-ins/DataView/prototype/getInt32/index-is-out-of-range-sab.js
 test/built-ins/DataView/prototype/getInt32/negative-byteoffset-throws-sab.js

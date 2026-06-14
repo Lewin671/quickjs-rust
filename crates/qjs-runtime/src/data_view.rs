@@ -13,6 +13,8 @@ use crate::{
 pub(crate) const DATA_VIEW_BUFFER_PROPERTY: &str = "\0DataViewBuffer";
 /// Internal slot holding the byte length of the view.
 pub(crate) const DATA_VIEW_BYTE_LENGTH_PROPERTY: &str = "\0DataViewByteLength";
+/// Internal slot tracking whether the view byte length follows a resizable buffer.
+pub(crate) const DATA_VIEW_BYTE_LENGTH_TRACKING_PROPERTY: &str = "\0DataViewByteLengthTracking";
 /// Internal slot holding the byte offset of the view into its buffer.
 pub(crate) const DATA_VIEW_BYTE_OFFSET_PROPERTY: &str = "\0DataViewByteOffset";
 
@@ -188,6 +190,8 @@ pub(crate) fn native_data_view(
 
     // Steps 9-12: resolve the view byte length.
     let length_arg = argument_values.get(2).cloned().unwrap_or(Value::Undefined);
+    let byte_length_tracking =
+        matches!(length_arg, Value::Undefined) && array_buffer::is_resizable(&buffer);
     let view_byte_length = if matches!(length_arg, Value::Undefined) {
         buffer_byte_length - offset
     } else {
@@ -222,6 +226,10 @@ pub(crate) fn native_data_view(
         Property::non_enumerable(Value::Number(view_byte_length as f64)),
     );
     object.define_property(
+        DATA_VIEW_BYTE_LENGTH_TRACKING_PROPERTY.to_owned(),
+        Property::non_enumerable(Value::Boolean(byte_length_tracking)),
+    );
+    object.define_property(
         DATA_VIEW_BYTE_OFFSET_PROPERTY.to_owned(),
         Property::non_enumerable(Value::Number(offset as f64)),
     );
@@ -248,7 +256,13 @@ pub(crate) fn native_data_view_prototype_byte_length(
     if data_view_buffer_detached(&object) {
         return Err(array_buffer::detached_error());
     }
-    Ok(Value::Number(data_view_byte_length(&object) as f64))
+    let Some(buffer) = data_view_buffer(&object) else {
+        return Err(array_buffer::detached_error());
+    };
+    if data_view_out_of_bounds(&object, &buffer) {
+        return Err(type_error("DataView is out of bounds"));
+    }
+    Ok(Value::Number(data_view_byte_length(&object, &buffer) as f64))
 }
 
 /// `get DataView.prototype.byteOffset`.
@@ -258,6 +272,12 @@ pub(crate) fn native_data_view_prototype_byte_offset(
     let object = data_view_receiver(&this_value)?;
     if data_view_buffer_detached(&object) {
         return Err(array_buffer::detached_error());
+    }
+    let Some(buffer) = data_view_buffer(&object) else {
+        return Err(array_buffer::detached_error());
+    };
+    if data_view_out_of_bounds(&object, &buffer) {
+        return Err(type_error("DataView is out of bounds"));
     }
     Ok(Value::Number(data_view_byte_offset(&object) as f64))
 }
@@ -322,7 +342,7 @@ fn get_view_value(
         return Err(type_error("DataView is out of bounds"));
     }
     let view_offset = data_view_byte_offset(&object);
-    let view_size = data_view_byte_length(&object);
+    let view_size = data_view_byte_length(&object, &buffer);
     let element_size = element.size();
     // Step 11: bounds check.
     if get_index + element_size > view_size {
@@ -375,7 +395,7 @@ fn set_view_value(
         return Err(type_error("DataView is out of bounds"));
     }
     let view_offset = data_view_byte_offset(&object);
-    let view_size = data_view_byte_length(&object);
+    let view_size = data_view_byte_length(&object, &buffer);
     let element_size = element.size();
     // Step 14: bounds check.
     if get_index + element_size > view_size {
@@ -565,12 +585,23 @@ fn data_block_detached(buffer: &ObjectRef) -> bool {
 }
 
 fn data_view_out_of_bounds(object: &ObjectRef, buffer: &ObjectRef) -> bool {
+    if data_view_is_byte_length_tracking(object) {
+        return data_view_byte_offset(object) > array_buffer::buffer_byte_length(buffer);
+    }
     data_view_byte_offset(object)
-        .checked_add(data_view_byte_length(object))
+        .checked_add(data_view_fixed_byte_length(object))
         .is_none_or(|end| end > array_buffer::buffer_byte_length(buffer))
 }
 
-fn data_view_byte_length(object: &ObjectRef) -> usize {
+fn data_view_byte_length(object: &ObjectRef, buffer: &ObjectRef) -> usize {
+    if data_view_is_byte_length_tracking(object) {
+        return array_buffer::buffer_byte_length(buffer)
+            .saturating_sub(data_view_byte_offset(object));
+    }
+    data_view_fixed_byte_length(object)
+}
+
+fn data_view_fixed_byte_length(object: &ObjectRef) -> usize {
     match object.own_property(DATA_VIEW_BYTE_LENGTH_PROPERTY) {
         Some(Property {
             value: Value::Number(length),
@@ -578,6 +609,16 @@ fn data_view_byte_length(object: &ObjectRef) -> usize {
         }) => length as usize,
         _ => 0,
     }
+}
+
+fn data_view_is_byte_length_tracking(object: &ObjectRef) -> bool {
+    matches!(
+        object.own_property(DATA_VIEW_BYTE_LENGTH_TRACKING_PROPERTY),
+        Some(Property {
+            value: Value::Boolean(true),
+            ..
+        })
+    )
 }
 
 fn data_view_byte_offset(object: &ObjectRef) -> usize {
