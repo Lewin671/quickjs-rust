@@ -546,14 +546,14 @@ impl Parser {
             .span
             .start;
         self.expect(&TokenKind::Try)?;
-        let block = self.block_body()?;
+        let block = self.block_statements()?;
         let handler = if self.at(&TokenKind::Catch) {
             Some(self.catch_clause()?)
         } else {
             None
         };
         let finalizer = if self.match_kind(&TokenKind::Finally) {
-            Some(self.block_body()?)
+            Some(self.block_statements()?)
         } else {
             None
         };
@@ -594,7 +594,7 @@ impl Parser {
         } else {
             None
         };
-        let body = self.block_body()?;
+        let body = self.block_statements()?;
         let end = body.last().map_or(start + "catch".len(), stmt_end);
         Ok(CatchClause {
             param,

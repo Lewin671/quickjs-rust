@@ -248,6 +248,19 @@ impl Parser {
         result
     }
 
+    /// Parses a braced block without validating labels. Used for try/catch/finally
+    /// blocks where labels from enclosing scopes remain visible.
+    pub(crate) fn block_statements(&mut self) -> Result<Vec<Stmt>, ParseError> {
+        self.expect(&TokenKind::LeftBrace)?;
+        let mut body = Vec::new();
+        while !self.at(&TokenKind::RightBrace) && !self.at(&TokenKind::Eof) {
+            body.push(self.statement()?);
+        }
+        validate_statement_list_declarations(&body)?;
+        self.expect(&TokenKind::RightBrace)?;
+        Ok(body)
+    }
+
     fn directive_prologue_is_strict(&self, mut cursor: usize) -> bool {
         while let Some(token) = self.tokens.get(cursor) {
             let TokenKind::String(value) = &token.kind else {
