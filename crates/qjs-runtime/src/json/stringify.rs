@@ -7,24 +7,71 @@ pub(crate) fn native_json_stringify(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    match stringify_value(
-        argument_values.first().cloned().unwrap_or(Value::Undefined),
-        "",
-        false,
-        env,
-    )? {
+    let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let replacer = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
+    let property_list = build_property_list(&replacer, env)?;
+    let replacer_fn = if matches!(&replacer, Value::Function(_)) {
+        Some(replacer)
+    } else {
+        None
+    };
+    let ctx = StringifyContext {
+        property_list,
+        replacer_fn,
+    };
+    match stringify_value_ctx(value, "", false, &ctx, env)? {
         Some(json) => Ok(Value::String(json)),
         None => Ok(Value::Undefined),
     }
 }
 
-fn stringify_value(
+struct StringifyContext {
+    property_list: Option<Vec<String>>,
+    replacer_fn: Option<Value>,
+}
+
+fn build_property_list(
+    replacer: &Value,
+    _env: &mut CallEnv,
+) -> Result<Option<Vec<String>>, RuntimeError> {
+    let Value::Array(elements) = replacer else {
+        return Ok(None);
+    };
+    let mut list = Vec::new();
+    for i in 0..elements.len() {
+        let item = elements.get(i).unwrap_or(Value::Undefined);
+        let key = match item {
+            Value::String(s) => s,
+            Value::Number(n) => crate::number::number_to_js_string(n),
+            _ => continue,
+        };
+        if !list.contains(&key) {
+            list.push(key);
+        }
+    }
+    Ok(Some(list))
+}
+
+fn stringify_value_ctx(
     value: Value,
     key: &str,
     in_array: bool,
+    ctx: &StringifyContext,
     env: &mut CallEnv,
 ) -> Result<Option<String>, RuntimeError> {
     let value = apply_to_json(value, key, env)?;
+    let value = if let Some(ref replacer) = ctx.replacer_fn {
+        let holder = Value::Object(ObjectRef::new(std::collections::HashMap::new()));
+        call_function(
+            replacer.clone(),
+            holder,
+            vec![Value::String(key.to_owned()), value],
+            env,
+            false,
+        )?
+    } else {
+        value
+    };
     match &value {
         Value::String(value) => Ok(Some(quote_json_string(value))),
         Value::Number(number) if number.is_finite() => {
@@ -37,40 +84,53 @@ fn stringify_value(
         }),
         Value::Boolean(true) => Ok(Some("true".to_owned())),
         Value::Boolean(false) => Ok(Some("false".to_owned())),
-        Value::Array(array) => stringify_array(array, env).map(Some),
+        Value::Array(array) => stringify_array_ctx(array, ctx, env).map(Some),
         Value::Object(object) => {
             if let Some(raw_json) = raw_json_value(object) {
                 Ok(Some(raw_json))
             } else {
-                stringify_object(object, env).map(Some)
+                stringify_object_ctx(object, ctx, env).map(Some)
             }
         }
-        Value::Map(map) => stringify_object(&map.object(), env).map(Some),
-        Value::Set(set) => stringify_object(&set.object(), env).map(Some),
-        Value::Proxy(proxy) => stringify_value(proxy.target(), key, in_array, env),
+        Value::Map(map) => stringify_object_ctx(&map.object(), ctx, env).map(Some),
+        Value::Set(set) => stringify_object_ctx(&set.object(), ctx, env).map(Some),
+        Value::Proxy(proxy) => stringify_value_ctx(proxy.target(), key, in_array, ctx, env),
         Value::Undefined | Value::Function(_) if in_array => Ok(Some("null".to_owned())),
         Value::Undefined | Value::Function(_) => Ok(None),
     }
 }
 
-fn stringify_array(array: &ArrayRef, env: &mut CallEnv) -> Result<String, RuntimeError> {
+fn stringify_array_ctx(
+    array: &ArrayRef,
+    ctx: &StringifyContext,
+    env: &mut CallEnv,
+) -> Result<String, RuntimeError> {
     let mut parts = Vec::new();
     for (index, element) in array.to_vec().into_iter().enumerate() {
         parts.push(
-            stringify_value(element, &index.to_string(), true, env)?
+            stringify_value_ctx(element, &index.to_string(), true, ctx, env)?
                 .unwrap_or_else(|| "null".to_owned()),
         );
     }
     Ok(format!("[{}]", parts.join(",")))
 }
 
-fn stringify_object(object: &ObjectRef, env: &mut CallEnv) -> Result<String, RuntimeError> {
+fn stringify_object_ctx(
+    object: &ObjectRef,
+    ctx: &StringifyContext,
+    env: &mut CallEnv,
+) -> Result<String, RuntimeError> {
+    let keys: Vec<String> = if let Some(ref list) = ctx.property_list {
+        list.clone()
+    } else {
+        object.own_property_keys()
+    };
     let mut parts = Vec::new();
-    for key in object.own_property_keys() {
+    for key in keys {
         let Some(value) = object.own_property(&key).map(|property| property.value) else {
             continue;
         };
-        let Some(json) = stringify_value(value, &key, false, env)? else {
+        let Some(json) = stringify_value_ctx(value, &key, false, ctx, env)? else {
             continue;
         };
         parts.push(format!("{}:{json}", quote_json_string(&key)));
