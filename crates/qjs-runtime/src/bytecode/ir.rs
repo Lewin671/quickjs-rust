@@ -133,6 +133,16 @@ pub(super) enum Op {
     DeleteProp {
         is_strict: bool,
     },
+    /// `delete identifier` in non-strict mode: attempts to delete the binding
+    /// from the global object. Returns false for non-configurable or
+    /// undeletable bindings (var declarations), true if successfully deleted.
+    DeleteIdent(String),
+    /// `delete identifier` inside a `with` body in non-strict mode: consults
+    /// the with-object stack first, then falls back to global deletion.
+    DeleteIdentWith {
+        name: String,
+        slot: Option<usize>,
+    },
     Call(usize),
     CallDirectEval(usize),
     CallMethod(usize),

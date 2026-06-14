@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 use crate::{
     GLOBAL_THIS_BINDING, Property, PropertyKey, RuntimeError, Value, function::CallEnv, is_truthy,
-    property::has_property, property_value_key, symbol::unscopables_symbol,
+    object::boxed_primitive, property::has_property, property_value_key,
+    symbol::unscopables_symbol,
 };
 
 use super::util::typeof_value;
@@ -19,8 +20,22 @@ impl Vm<'_> {
     pub(super) fn run_with_op(&mut self, op: Op) -> Result<(), RuntimeError> {
         match op {
             Op::EnterWith => {
-                let object = self.pop()?;
-                self.with_stack.push(object);
+                let value = self.pop()?;
+                let result: Result<Value, RuntimeError> = match value {
+                    Value::Null | Value::Undefined => Err(RuntimeError {
+                        thrown: None,
+                        message: "TypeError: cannot convert null or undefined to object".to_owned(),
+                    }),
+                    Value::String(_) | Value::Number(_) | Value::BigInt(_) | Value::Boolean(_) => {
+                        let env = self.realm_env();
+                        Ok(boxed_primitive(value, &env)
+                            .expect("primitive value should box to object"))
+                    }
+                    other => Ok(other),
+                };
+                if let Some(object) = self.handle_runtime_result(result)? {
+                    self.with_stack.push(object);
+                }
             }
             Op::ExitWith => {
                 self.with_stack.pop();
@@ -62,6 +77,9 @@ impl Vm<'_> {
                 if let Some(value) = self.handle_runtime_result(result)? {
                     self.stack.push(value);
                 }
+            }
+            Op::DeleteIdentWith { name, slot } => {
+                self.delete_ident_with(&name, slot)?;
             }
             _ => unreachable!("run_with_op received a non-with opcode"),
         }
@@ -591,6 +609,92 @@ impl Vm<'_> {
             return;
         }
         self.env.insert("this".to_owned(), value);
+    }
+
+    /// `delete identifier` in non-strict mode (sloppy): attempts to delete the
+    /// binding. Declared variables (var/let/const/function in any scope) cannot
+    /// be deleted (returns false). Global properties on `globalThis` that are
+    /// configurable can be deleted (returns true). A non-existent binding also
+    /// returns true.
+    pub(super) fn delete_ident(&mut self, name: &str) -> bool {
+        let is_sloppy_global = self
+            .bytecode
+            .sloppy_global_assignment_names()
+            .contains(&name.to_owned());
+        // Local scope bindings (var/let/const/param) are never deletable,
+        // but sloppy global assignments that happen to occupy a local slot
+        // are configurable properties on globalThis and CAN be deleted.
+        if !is_sloppy_global {
+            if let Some(slot) = self.bytecode.local_slot(name) {
+                if self.locals[slot].is_some() {
+                    return false;
+                }
+            }
+            // Non-global frame locals (e.g. captured from outer function scope)
+            // are also undeletable.
+            if self.env.get_local(name).is_some() {
+                return false;
+            }
+        }
+        // For globals, check the globalThis property descriptor. Only
+        // configurable properties (bare assignments like `x = 1`) can be
+        // deleted. `var` declarations are non-configurable.
+        let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned() {
+            Some(Value::Object(obj)) => obj,
+            _ => return true,
+        };
+        if !global_this.has_own_property(name) {
+            // Name exists in realm but not on globalThis — it's a lexical
+            // binding from a script-level `let`/`const`; undeletable.
+            if self.realm.borrow().contains_key(name) {
+                return false;
+            }
+            return true;
+        }
+        let deleted = global_this.delete_own_property(name);
+        if deleted {
+            self.realm.borrow_mut().remove(name);
+            // Clear the cached local slot if the sloppy global was mirrored there.
+            if let Some(slot) = self.bytecode.local_slot(name) {
+                if let Some(local) = self.locals.get_mut(slot) {
+                    *local = None;
+                }
+            }
+        }
+        deleted
+    }
+
+    /// `delete identifier` inside a `with` body in non-strict mode: checks the
+    /// with-object stack first (deletes from the first binding object), then
+    /// falls back to `delete_ident` for local/global scope.
+    pub(super) fn delete_ident_with(
+        &mut self,
+        name: &str,
+        slot: Option<usize>,
+    ) -> Result<(), RuntimeError> {
+        if let Some(object) = self.with_binding_object(name)? {
+            let mut env = self.current_env();
+            let result = super::vm_props::delete_property_key(
+                object,
+                &PropertyKey::String(name.to_owned()),
+                &mut env,
+            )?;
+            self.apply_env(env);
+            self.stack.push(result);
+        } else {
+            // Fall back to ordinary identifier deletion.
+            let result = if let Some(s) = slot {
+                if self.locals[s].is_some() {
+                    false
+                } else {
+                    self.delete_ident(name)
+                }
+            } else {
+                self.delete_ident(name)
+            };
+            self.stack.push(Value::Boolean(result));
+        }
+        Ok(())
     }
 
     pub(super) fn drain_promise_jobs(&mut self) -> Result<(), RuntimeError> {

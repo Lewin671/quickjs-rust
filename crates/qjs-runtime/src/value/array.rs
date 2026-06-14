@@ -354,6 +354,9 @@ impl ArrayRef {
     }
 
     pub(crate) fn delete_property(&self, key: &str) -> bool {
+        if key == "length" {
+            return false;
+        }
         let mut properties = self.properties.borrow_mut();
         if properties
             .get(key)

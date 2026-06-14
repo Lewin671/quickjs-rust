@@ -49,20 +49,27 @@ impl Parser {
         };
         self.advance();
         let argument = self.unary()?;
-        // `delete obj.#x` (a private member reference) is a syntax error.
-        if op == UnaryOp::Delete
-            && matches!(
+        if op == UnaryOp::Delete {
+            // `delete obj.#x` (a private member reference) is a syntax error.
+            if matches!(
                 &argument,
                 Expr::Member {
                     property: qjs_ast::MemberProperty::Private(_),
                     ..
                 }
-            )
-        {
-            return Err(ParseError {
-                message: "cannot delete a private member".to_owned(),
-                span: Span::new(token.span.start, argument.span().end),
-            });
+            ) {
+                return Err(ParseError {
+                    message: "cannot delete a private member".to_owned(),
+                    span: Span::new(token.span.start, argument.span().end),
+                });
+            }
+            // In strict mode, `delete identifier` is a SyntaxError.
+            if self.strict && matches!(&argument, Expr::Identifier { .. }) {
+                return Err(ParseError {
+                    message: "cannot delete an unqualified identifier in strict mode".to_owned(),
+                    span: Span::new(token.span.start, argument.span().end),
+                });
+            }
         }
         let span = Span::new(token.span.start, argument.span().end);
         Ok(Expr::Unary {

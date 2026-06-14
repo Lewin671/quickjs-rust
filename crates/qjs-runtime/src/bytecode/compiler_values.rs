@@ -149,21 +149,42 @@ impl Compiler {
     }
 
     pub(super) fn compile_delete(&mut self, argument: &Expr) -> Result<(), RuntimeError> {
-        let Expr::Member {
-            object, property, ..
-        } = argument
-        else {
-            let slot = self.const_slot(Value::Boolean(true));
-            self.emit(Op::LoadConst(slot));
-            return Ok(());
-        };
-        // `delete obj.#x` is a parser early error, so private members never
-        // reach here.
-        self.compile_expr(object)?;
-        self.compile_member_key(property)?;
-        self.emit(Op::DeleteProp {
-            is_strict: self.strict,
-        });
+        match argument {
+            Expr::Member {
+                object, property, ..
+            } => {
+                self.compile_expr(object)?;
+                self.compile_member_key(property)?;
+                self.emit(Op::DeleteProp {
+                    is_strict: self.strict,
+                });
+            }
+            Expr::Identifier { name, .. } => {
+                if self.strict {
+                    return Err(RuntimeError {
+                        thrown: None,
+                        message: format!(
+                            "SyntaxError: cannot delete identifier `{name}` in strict mode"
+                        ),
+                    });
+                }
+                if self.inside_with() {
+                    let slot = self.resolve_local_slot(name);
+                    self.emit(Op::DeleteIdentWith {
+                        name: name.clone(),
+                        slot,
+                    });
+                } else {
+                    self.emit(Op::DeleteIdent(name.clone()));
+                }
+            }
+            _ => {
+                self.compile_expr(argument)?;
+                self.emit(Op::Pop);
+                let slot = self.const_slot(Value::Boolean(true));
+                self.emit(Op::LoadConst(slot));
+            }
+        }
         Ok(())
     }
 

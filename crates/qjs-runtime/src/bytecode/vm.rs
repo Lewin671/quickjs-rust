@@ -261,7 +261,8 @@ impl<'a> Vm<'a> {
                 | Op::ResolveIdentWith { .. }
                 | Op::StoreIdentWith { .. }
                 | Op::StoreResolvedIdentWith { .. }
-                | Op::TypeofIdentWith { .. }) => {
+                | Op::TypeofIdentWith { .. }
+                | Op::DeleteIdentWith { .. }) => {
                     self.run_with_op(op)?;
                 }
                 Op::Pop => {
@@ -315,6 +316,10 @@ impl<'a> Vm<'a> {
                 Op::DeleteProp { is_strict } => {
                     let result = self.delete_prop(is_strict);
                     self.handle_runtime_result(result)?;
+                }
+                Op::DeleteIdent(name) => {
+                    let result = self.delete_ident(&name);
+                    self.stack.push(Value::Boolean(result));
                 }
                 Op::Call(argc) => self.call(argc)?,
                 Op::CallDirectEval(argc) => self.call_direct_eval(argc)?,

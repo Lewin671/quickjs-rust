@@ -723,10 +723,19 @@ fn delete_property(object: Value, key: &str, env: &mut CallEnv) -> Result<Value,
         Value::Function(function) => {
             Ok(Value::Boolean(function_delete_own_property(&function, key)))
         }
-        _ => Err(RuntimeError {
+        Value::String(s) => {
+            // String objects have non-configurable indexed character properties.
+            if let Ok(index) = key.parse::<usize>() {
+                Ok(Value::Boolean(index >= s.len()))
+            } else {
+                Ok(Value::Boolean(true))
+            }
+        }
+        Value::Null | Value::Undefined => Err(RuntimeError {
             thrown: None,
-            message: "delete target is not an object".to_owned(),
+            message: "TypeError: cannot delete property of null or undefined".to_owned(),
         }),
+        _ => Ok(Value::Boolean(true)),
     }
 }
 
@@ -752,10 +761,11 @@ fn delete_symbol_property(
             &function, symbol,
         ))),
         Value::Array(elements) => Ok(Value::Boolean(elements.delete_own_symbol_property(symbol))),
-        _ => Err(RuntimeError {
+        Value::Null | Value::Undefined => Err(RuntimeError {
             thrown: None,
-            message: "delete target is not an object".to_owned(),
+            message: "TypeError: cannot delete property of null or undefined".to_owned(),
         }),
+        _ => Ok(Value::Boolean(true)),
     }
 }
 
