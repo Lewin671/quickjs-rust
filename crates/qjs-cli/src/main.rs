@@ -223,10 +223,16 @@ fn with_script_args(source: &str, script_args: &[String]) -> String {
     if let Some(rest) = source.strip_prefix("\"use strict\";") {
         return format!("\"use strict\";\n{declaration}{rest}");
     }
+    if let Some(rest) = source.strip_prefix("\"use strict\"\n") {
+        return format!("\"use strict\";\n{declaration}{rest}");
+    }
     if let Some(rest) = source.strip_prefix("'use strict';\n") {
         return format!("'use strict';\n{declaration}{rest}");
     }
     if let Some(rest) = source.strip_prefix("'use strict';") {
+        return format!("'use strict';\n{declaration}{rest}");
+    }
+    if let Some(rest) = source.strip_prefix("'use strict'\n") {
         return format!("'use strict';\n{declaration}{rest}");
     }
     format!("{declaration}{source}")
