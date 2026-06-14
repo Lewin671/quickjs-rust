@@ -245,9 +245,7 @@ pub(super) fn native_math_round(
     }
     let floored = number.floor();
     let frac = number - floored;
-    let rounded = if frac > 0.5 {
-        floored + 1.0
-    } else if frac == 0.5 {
+    let rounded = if frac >= 0.5 {
         floored + 1.0
     } else {
         floored
