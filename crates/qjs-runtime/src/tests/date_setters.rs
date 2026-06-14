@@ -85,3 +85,55 @@ fn evaluates_date_utc_time_setters() {
         Ok(Value::Boolean(true))
     );
 }
+
+#[test]
+fn date_setters_coerce_arguments_before_invalid_date_return() {
+    assert_eq!(
+        eval(
+            "var d = new Date(NaN); var calls = 0; \
+             var value = { valueOf() { calls++; d.setTime(0); return 1; } }; \
+             var result = d.setDate(value); \
+             calls + ':' + Number.isNaN(result) + ':' + d.getTime();"
+        ),
+        Ok(Value::String("1:true:0".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var d = new Date(NaN); var effects = []; \
+             var month = { valueOf() { effects.push('month'); return 0; } }; \
+             var date = { valueOf() { effects.push('date'); d.setTime(0); return 1; } }; \
+             var result = d.setMonth(month, date); \
+             effects.join(',') + ':' + Number.isNaN(result) + ':' + d.getTime();"
+        ),
+        Ok(Value::String("month,date:true:0".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var d = new Date(NaN); var calls = 0; \
+             var value = { valueOf() { calls++; d.setTime(0); return 1; } }; \
+             var result = d.setUTCHours(value); \
+             calls + ':' + Number.isNaN(result) + ':' + d.getTime();"
+        ),
+        Ok(Value::String("1:true:0".to_owned()))
+    );
+}
+
+#[test]
+fn date_setters_coerce_optional_arguments_with_environment() {
+    assert_eq!(
+        eval(
+            "var d = new Date('2016-07-07T11:36:23.002Z'); var calls = 0; \
+             var month = { valueOf() { calls++; return 2; } }; \
+             d.setFullYear(2016, month); calls + ':' + d.toISOString();"
+        ),
+        Ok(Value::String("1:2016-03-07T11:36:23.002Z".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var d = new Date('2016-07-07T11:36:23.002Z'); var calls = 0; \
+             var day = { valueOf() { calls++; return 2; } }; \
+             d.setUTCMonth(6, day); calls + ':' + d.toISOString();"
+        ),
+        Ok(Value::String("1:2016-07-02T11:36:23.002Z".to_owned()))
+    );
+}

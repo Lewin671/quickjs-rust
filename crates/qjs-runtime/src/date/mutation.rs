@@ -4,7 +4,7 @@ use crate::{
     date::{
         iso::utc_date_time,
         value::{
-            date_object, date_value_from_object, define_date_value, optional_number, time_clip,
+            date_object, date_value_from_object, define_date_value, time_clip,
             time_from_components, time_within_day, utc_time_from_components,
         },
     },
@@ -73,8 +73,8 @@ pub(crate) fn native_date_prototype_set_utc_full_year(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    let month = optional_number(argument_values, 1, f64::from(components.month))?;
-    let date = optional_number(argument_values, 2, f64::from(components.date))?;
+    let month = optional_number(argument_values, 1, f64::from(components.month), env)?;
+    let date = optional_number(argument_values, 2, f64::from(components.date), env)?;
     let updated = time_clip(utc_time_from_components(
         year,
         month,
@@ -101,16 +101,15 @@ pub(crate) fn native_date_prototype_set_utc_date(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    let updated = if millis.is_finite() {
-        time_clip(utc_time_from_components(
-            f64::from(components.year),
-            f64::from(components.month),
-            date,
-            time_within_day(millis),
-        ))
-    } else {
-        f64::NAN
-    };
+    if !millis.is_finite() {
+        return Ok(Value::Number(f64::NAN));
+    }
+    let updated = time_clip(utc_time_from_components(
+        f64::from(components.year),
+        f64::from(components.month),
+        date,
+        time_within_day(millis),
+    ));
     define_date_value(&object, updated);
     Ok(Value::Number(updated))
 }
@@ -155,17 +154,16 @@ pub(crate) fn native_date_prototype_set_utc_month(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    let date = optional_number(argument_values, 1, f64::from(components.date))?;
-    let updated = if millis.is_finite() {
-        time_clip(utc_time_from_components(
-            f64::from(components.year),
-            month,
-            date,
-            time_within_day(millis),
-        ))
-    } else {
-        f64::NAN
-    };
+    let date = optional_number(argument_values, 1, f64::from(components.date), env)?;
+    if !millis.is_finite() {
+        return Ok(Value::Number(f64::NAN));
+    }
+    let updated = time_clip(utc_time_from_components(
+        f64::from(components.year),
+        month,
+        date,
+        time_within_day(millis),
+    ));
     define_date_value(&object, updated);
     Ok(Value::Number(updated))
 }
@@ -200,21 +198,36 @@ fn set_utc_time_fields(
     for (offset, argument) in argument_values.iter().take(4 - first_field).enumerate() {
         time_fields[first_field + offset] = to_number_with_env(argument.clone(), env)?.trunc();
     }
-    let updated = if argument_values.is_empty() {
-        f64::NAN
-    } else if millis.is_finite() {
-        time_clip(
-            millis - time_within_day(millis)
-                + time_from_components(
-                    time_fields[0],
-                    time_fields[1],
-                    time_fields[2],
-                    time_fields[3],
-                ),
-        )
-    } else {
-        f64::NAN
-    };
+    if argument_values.is_empty() {
+        define_date_value(&object, f64::NAN);
+        return Ok(Value::Number(f64::NAN));
+    }
+    if !millis.is_finite() {
+        return Ok(Value::Number(f64::NAN));
+    }
+    let updated = time_clip(
+        millis - time_within_day(millis)
+            + time_from_components(
+                time_fields[0],
+                time_fields[1],
+                time_fields[2],
+                time_fields[3],
+            ),
+    );
     define_date_value(&object, updated);
     Ok(Value::Number(updated))
+}
+
+fn optional_number(
+    argument_values: &[Value],
+    index: usize,
+    default: f64,
+    env: &mut CallEnv,
+) -> Result<f64, RuntimeError> {
+    argument_values
+        .get(index)
+        .cloned()
+        .map(|value| to_number_with_env(value, env))
+        .transpose()
+        .map(|value| value.unwrap_or(default))
 }
