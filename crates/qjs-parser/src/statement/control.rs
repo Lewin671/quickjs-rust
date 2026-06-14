@@ -55,8 +55,16 @@ fn disallowed_if_body(stmt: &Stmt, strict: bool) -> Option<(&'static str, Span)>
             span,
             ..
         } if strict => Some(("function declarations in strict mode", *span)),
-        Stmt::Labelled { body, .. } => disallowed_if_body(body, strict),
+        Stmt::Labelled { body, .. } => is_labelled_function(body),
         _ => None,
+    }
+}
+
+fn is_labelled_function(stmt: &Stmt) -> Option<(&'static str, Span)> {
+    match stmt {
+        Stmt::FunctionDecl { span, .. } => Some(("labelled function declarations", *span)),
+        Stmt::Labelled { body, .. } => is_labelled_function(body),
+        _ => disallowed_declaration(stmt),
     }
 }
 
