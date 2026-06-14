@@ -984,19 +984,9 @@ impl<'a> Vm<'a> {
     pub(super) fn pop(&mut self) -> Result<Value, RuntimeError> {
         self.stack.pop().ok_or_else(stack_underflow)
     }
-
-    pub(super) fn record_sloppy_global_name(&mut self, name: &str) {
-        if !self
-            .sloppy_global_names
-            .iter()
-            .any(|existing| existing == name)
-        {
-            self.sloppy_global_names.push(name.to_owned());
-        }
-    }
 }
 
-fn insert_missing_binding_name(binding_names: &mut Vec<String>, name: &str) {
+pub(super) fn insert_missing_binding_name(binding_names: &mut Vec<String>, name: &str) {
     if !binding_names.iter().any(|existing| existing == name) {
         binding_names.push(name.to_owned());
     }

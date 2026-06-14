@@ -16,7 +16,8 @@ if ! CARGO_BIN="$(qjs_resolve_cargo)"; then
   exit 0
 fi
 
-echo "pre-commit: fmt + clippy + test..."
+echo "pre-commit: fmt + clippy + test + file-size..."
 "$CARGO_BIN" fmt --all -- --check
 "$CARGO_BIN" clippy --workspace --all-targets -- -D warnings
 "$CARGO_BIN" test --workspace -q
+"$ROOT_DIR/scripts/check-file-size.sh"

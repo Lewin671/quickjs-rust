@@ -697,6 +697,16 @@ impl Vm<'_> {
         Ok(())
     }
 
+    pub(super) fn record_sloppy_global_name(&mut self, name: &str) {
+        if !self
+            .sloppy_global_names
+            .iter()
+            .any(|existing| existing == name)
+        {
+            self.sloppy_global_names.push(name.to_owned());
+        }
+    }
+
     pub(super) fn drain_promise_jobs(&mut self) -> Result<(), RuntimeError> {
         let mut env = self.current_env();
         crate::promise::drain_promise_jobs(&mut env)?;
