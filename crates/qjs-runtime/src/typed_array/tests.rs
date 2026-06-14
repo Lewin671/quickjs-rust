@@ -449,6 +449,10 @@ fn join_and_to_string() {
         eval("new Uint8Array([1, 2, 3]).toString();"),
         Ok(Value::String("1,2,3".to_owned()))
     );
+    assert_eq!(
+        eval("Object.getPrototypeOf(Uint8Array.prototype).toString === Array.prototype.toString;"),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]

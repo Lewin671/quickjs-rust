@@ -95,6 +95,7 @@ test/built-ins/ArrayBuffer/prototype/resize/this-is-not-object.js
 test/built-ins/ArrayBuffer/prototype/resize/this-is-not-resizable-arraybuffer-object.js
 test/built-ins/ArrayBuffer/prototype/resize/this-is-sharedarraybuffer.js
 test/built-ins/ArrayBuffer/prototype/slice/species-returns-larger-arraybuffer.js
+test/built-ins/ArrayBuffer/prototype/slice/species-returns-immutable-arraybuffer.js
 test/built-ins/ArrayBuffer/prototype/slice/species-returns-same-arraybuffer.js
 test/built-ins/ArrayBuffer/prototype/slice/species-returns-smaller-arraybuffer.js
 test/built-ins/ArrayBuffer/prototype/sliceToImmutable/modify-source-after-return.js
@@ -243,6 +244,7 @@ test/built-ins/TypedArrayConstructors/of/BigInt/custom-ctor-does-not-instantiate
 test/built-ins/TypedArrayConstructors/of/BigInt/custom-ctor-returns-smaller-instance-throws.js
 test/built-ins/TypedArrayConstructors/of/BigInt/custom-ctor.js
 test/built-ins/TypedArrayConstructors/of/BigInt/inherited.js
+test/built-ins/TypedArray/prototype/toString.js
 cases/array-at-array-like.js
 cases/array-at-basic.js
 cases/array-at-length.js

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, Prototype, RuntimeError, Value, array_buffer,
-    symbol, to_length_with_env,
+    property_value, symbol, to_length_with_env,
 };
 
 mod construct;
@@ -88,6 +88,42 @@ pub(crate) fn install_typed_arrays(
             native,
         );
     }
+}
+
+/// ES specifies `%TypedArray%.prototype.toString` as the same function object
+/// as `%Array.prototype.toString%`. Array is installed after TypedArray in this
+/// runtime, so the alias is patched once both prototypes exist.
+pub(crate) fn alias_array_prototype_to_string(env: &mut CallEnv) {
+    let array_constructor = match env.get("Array") {
+        Some(Value::Function(function)) => function,
+        _ => return,
+    };
+    let array_prototype = match property_value(Value::Function(array_constructor), "prototype", env)
+    {
+        Ok(Value::Object(object)) => object,
+        _ => return,
+    };
+    let array_to_string = match array_prototype.own_property("toString") {
+        Some(property) => property.value,
+        None => return,
+    };
+
+    let typed_array_constructor = match env.get("Uint8Array") {
+        Some(Value::Function(function)) => function,
+        _ => return,
+    };
+    let typed_array_intrinsic = match typed_array_constructor.internal_prototype_slot() {
+        Some(Some(Prototype::Function(function))) => function,
+        _ => return,
+    };
+    let typed_array_prototype = match typed_array_intrinsic.properties.borrow().get("prototype") {
+        Some(Property {
+            value: Value::Object(object),
+            ..
+        }) => object.clone(),
+        _ => return,
+    };
+    typed_array_prototype.define_non_enumerable("toString".to_owned(), array_to_string);
 }
 
 /// Installs the `%TypedArray%.from` and `%TypedArray%.of` static methods on the
