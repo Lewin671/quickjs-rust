@@ -607,6 +607,26 @@ fn evaluates_destructuring_loop_heads() {
 }
 
 #[test]
+fn for_of_lexical_heads_capture_fresh_binding_per_iteration() {
+    assert_eq!(
+        eval(
+            "let f = [];
+             for (let x of [1, 2, 3]) { f[x - 1] = function() { return x; }; }
+             f[0]() + ':' + f[1]() + ':' + f[2]();"
+        ),
+        Ok(Value::String("1:2:3".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let f = [];
+             for (const x of [1, 2, 3]) { f[x - 1] = function() { return x; }; }
+             f[0]() + ':' + f[1]() + ':' + f[2]();"
+        ),
+        Ok(Value::String("1:2:3".to_owned()))
+    );
+}
+
+#[test]
 fn for_of_closes_iterator_on_abrupt_exits() {
     let source_prefix = "
         function makeIterable(log) {
