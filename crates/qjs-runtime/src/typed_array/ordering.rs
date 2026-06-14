@@ -9,10 +9,11 @@
 //! notes).
 
 use std::cmp::Ordering;
+use std::collections::HashMap;
 
 use crate::{
-    Function, NativeFunction, ObjectRef, RuntimeError, Value, array, array_buffer, call_function,
-    to_number_with_env,
+    Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, array, array_buffer,
+    call_function, object_prototype, to_number_with_env,
 };
 
 use super::element::{read_view_elements, set_view_elements};
@@ -362,6 +363,97 @@ pub(crate) fn native_typed_array_prototype_with(
     Ok(Value::Object(super::create_typed_array_of_kind(
         native, values, env,
     )))
+}
+
+// --- Uint8Array.prototype.setFromHex ----------------------------------------
+
+pub(crate) fn native_uint8_array_prototype_set_from_hex(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let (object, length) = validate_typed_array_write(&this_value)?;
+    if typed_array_kind(&object) != NativeFunction::Uint8Array {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Uint8Array.prototype.setFromHex requires a Uint8Array receiver"
+                .to_owned(),
+        });
+    }
+    let source = match argument_values.first() {
+        Some(Value::String(source)) => source,
+        _ => {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: Uint8Array.prototype.setFromHex requires a string".to_owned(),
+            });
+        }
+    };
+
+    let chars: Vec<char> = source.chars().collect();
+    if chars.len() % 2 != 0 {
+        return Err(syntax_error(
+            "hex string must contain an even number of digits",
+        ));
+    }
+
+    let mut values = Vec::new();
+    let mut read = 0usize;
+    while values.len() < length && read < chars.len() {
+        let high = match hex_value(chars[read]) {
+            Some(value) => value,
+            None => {
+                set_view_elements(&object, 0, values.into_iter().map(number_byte));
+                return Err(syntax_error("invalid hex digit"));
+            }
+        };
+        let low = match hex_value(chars[read + 1]) {
+            Some(value) => value,
+            None => {
+                set_view_elements(&object, 0, values.into_iter().map(number_byte));
+                return Err(syntax_error("invalid hex digit"));
+            }
+        };
+        values.push((high << 4) | low);
+        read += 2;
+    }
+
+    let written = values.len();
+    set_view_elements(&object, 0, values.into_iter().map(number_byte));
+    Ok(set_from_hex_result(read, written, env))
+}
+
+fn hex_value(ch: char) -> Option<u8> {
+    match ch {
+        '0'..='9' => Some(ch as u8 - b'0'),
+        'a'..='f' => Some(ch as u8 - b'a' + 10),
+        'A'..='F' => Some(ch as u8 - b'A' + 10),
+        _ => None,
+    }
+}
+
+fn number_byte(value: u8) -> Value {
+    Value::Number(value as f64)
+}
+
+fn set_from_hex_result(read: usize, written: usize, env: &CallEnv) -> Value {
+    let result = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
+    result.define_property(
+        "read".to_owned(),
+        Property::enumerable(Value::Number(read as f64)),
+    );
+    result.define_property(
+        "written".to_owned(),
+        Property::enumerable(Value::Number(written as f64)),
+    );
+    Value::Object(result)
+}
+
+fn syntax_error(message: &str) -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: format!("SyntaxError: {message}"),
+    }
 }
 
 // --- shared helpers ---------------------------------------------------------

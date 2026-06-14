@@ -281,6 +281,9 @@ fn install_typed_array_constructor(
     // Each concrete prototype inherits from %TypedArray.prototype%.
     let prototype = ObjectRef::with_prototype(HashMap::new(), Some(typed_array_prototype));
     let bytes = bytes_per_element(native) as f64;
+    if native == NativeFunction::Uint8Array {
+        install_uint8_array_prototype_methods(&prototype);
+    }
 
     let constructor = Function::new_native(Some(name), 3, native, true);
     // Concrete constructors inherit from %TypedArray% (a function prototype).
@@ -308,6 +311,15 @@ fn install_typed_array_constructor(
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable(name.to_owned(), value);
     }
+}
+
+fn install_uint8_array_prototype_methods(prototype: &ObjectRef) {
+    define_prototype_method(
+        prototype,
+        "setFromHex",
+        1,
+        NativeFunction::Uint8ArrayPrototypeSetFromHex,
+    );
 }
 
 // --- Prototype accessors ----------------------------------------------------

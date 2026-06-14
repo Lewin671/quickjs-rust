@@ -247,6 +247,26 @@ pub(crate) fn create_with_values(
     object
 }
 
+/// Creates a new typed-array view over an existing backing buffer.
+pub(crate) fn create_view(
+    native: NativeFunction,
+    buffer: ObjectRef,
+    byte_offset: usize,
+    length: usize,
+    env: &CallEnv,
+) -> ObjectRef {
+    let prototype = concrete_prototype(native, env);
+    let object = ObjectRef::with_prototype(HashMap::new(), prototype);
+    let values = read_elements(
+        native,
+        &array_buffer::buffer_bytes(&buffer),
+        byte_offset,
+        length,
+    );
+    install_view(&object, native, buffer, byte_offset, length, false, values);
+    object
+}
+
 /// The `%TA.prototype%` object for `native`, looked up through the global
 /// constructor.
 fn concrete_prototype(native: NativeFunction, env: &CallEnv) -> Option<ObjectRef> {

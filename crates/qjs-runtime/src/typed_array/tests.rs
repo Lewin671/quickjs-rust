@@ -571,10 +571,15 @@ fn reduce_and_reduce_right() {
 }
 
 #[test]
-fn subarray_copies_range() {
+fn subarray_creates_shared_buffer_view() {
     assert_eq!(
-        eval("new Uint8Array([1, 2, 3, 4]).subarray(1, 3).join(',');"),
-        Ok(Value::String("2,3".to_owned()))
+        eval(
+            "let base = new Uint8Array([1, 2, 3, 4]); \
+             let view = base.subarray(1, 3); \
+             view[0] = 20; \
+             view.join(',') + '|' + base.join(',');"
+        ),
+        Ok(Value::String("20,3|1,20,3,4".to_owned()))
     );
     assert_eq!(
         eval(
@@ -776,6 +781,69 @@ fn fill_rejects_immutable_buffer_before_argument_coercion() {
              try { a.fill(value, start, 1); } catch (e) { calls + ':' + (e instanceof TypeError); }"
         ),
         Ok(Value::String(":true".to_owned()))
+    );
+}
+
+#[test]
+fn uint8_array_set_from_hex_decodes_and_reports_progress() {
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([0, 0, 0, 0]); \
+             let r = a.setFromHex('0aFf10'); \
+             a.join(',') + '|' + r.read + ':' + r.written;"
+        ),
+        Ok(Value::String("10,255,16,0|6:3".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let base = new Uint8Array([1, 2, 3, 4]); \
+             let a = base.subarray(1, 3); \
+             let r = a.setFromHex('aabbcc'); \
+             a.join(',') + '|' + base.join(',') + '|' + r.read + ':' + r.written;"
+        ),
+        Ok(Value::String("170,187|1,170,187,4|4:2".to_owned()))
+    );
+}
+
+#[test]
+fn uint8_array_set_from_hex_surface_and_receiver_checks() {
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(Uint8Array.prototype, 'setFromHex'); \
+             d.writable + ':' + d.enumerable + ':' + d.configurable + ':' \
+             + Uint8Array.prototype.setFromHex.name + ':' \
+             + Uint8Array.prototype.setFromHex.length;"
+        ),
+        Ok(Value::String("true:false:true:setFromHex:1".to_owned()))
+    );
+    assert!(eval("new Uint8Array.prototype.setFromHex();").is_err());
+    assert!(eval("Uint8Array.prototype.setFromHex.call(new Int8Array(1), '00');").is_err());
+    assert!(eval("Uint8Array.prototype.setFromHex.call({}, '00');").is_err());
+}
+
+#[test]
+fn uint8_array_set_from_hex_errors_preserve_specified_writes() {
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([1, 2]); \
+             try { a.setFromHex('aaa'); } catch (e) { (e instanceof SyntaxError) + ':' + a.join(','); }"
+        ),
+        Ok(Value::String("true:1,2".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([1, 2]); \
+             try { a.setFromHex('aaa '); } catch (e) { (e instanceof SyntaxError) + ':' + a.join(','); }"
+        ),
+        Ok(Value::String("true:170,2".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([1]); \
+             let arg = { toString() { a[0] = 99; return '00'; } }; \
+             try { a.setFromHex(arg); } catch (e) { (e instanceof TypeError) + ':' + a[0]; }"
+        ),
+        Ok(Value::String("true:1".to_owned()))
     );
 }
 

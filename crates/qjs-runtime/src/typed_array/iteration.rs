@@ -586,7 +586,7 @@ fn validate_subarray_range(
     let Some(buffer) = typed_array_buffer(object) else {
         return Ok(());
     };
-    let buffer_byte_length = array_buffer::array_buffer_bytes(&buffer).len();
+    let buffer_byte_length = array_buffer::buffer_bytes(&buffer).len();
     let element = bytes_per_element(typed_array_kind(object));
     let byte_start = typed_array_byte_offset(object)
         .checked_add(
@@ -620,10 +620,6 @@ pub(crate) fn native_typed_array_prototype_subarray(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    // subarray shares the backing buffer; without a shared-buffer view model we
-    // produce an independent copy of the range, which keeps element values and
-    // length correct (the data aliasing is a known simplification, noted in the
-    // task file). A future shared-view slot would replace this copy.
     let (object, length) = validate_typed_array_length(&this_value)?;
     let native = typed_array_kind(&object);
     let start = relative_index(
@@ -638,14 +634,23 @@ pub(crate) fn native_typed_array_prototype_subarray(
         length as i64,
         env,
     )?;
-    let values = if start < end {
+    let count = if start < end {
         validate_subarray_range(&object, start, end - start)?;
-        read_view_elements(&object, start, end - start)
+        end - start
     } else {
         validate_subarray_range(&object, start, 0)?;
-        Vec::new()
+        0
     };
-    Ok(Value::Object(super::create_typed_array_of_kind(
-        native, values, env,
+    let byte_offset = typed_array_byte_offset(&object) + start * bytes_per_element(native);
+    let buffer = typed_array_buffer(&object).ok_or_else(|| RuntimeError {
+        thrown: None,
+        message: "TypeError: TypedArray has no backing buffer".to_owned(),
+    })?;
+    Ok(Value::Object(super::construct::create_view(
+        native,
+        buffer,
+        byte_offset,
+        count,
+        env,
     )))
 }

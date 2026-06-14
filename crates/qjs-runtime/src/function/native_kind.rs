@@ -126,6 +126,7 @@ pub(crate) enum NativeFunction {
     TypedArrayPrototypeToReversed,
     TypedArrayPrototypeToSorted,
     TypedArrayPrototypeWith,
+    Uint8ArrayPrototypeSetFromHex,
     DataView,
     DataViewPrototypeBuffer,
     DataViewPrototypeByteLength,
