@@ -63,6 +63,9 @@ pub(crate) struct GeneratorSnapshot {
     capture_writeback: Option<CaptureWriteback>,
     sloppy_global_names: Vec<String>,
     try_stack: Vec<TryFrame>,
+    pending_throw: Option<Value>,
+    pending_return: Option<Value>,
+    pending_jump: Option<usize>,
     suspension: SuspensionKind,
 }
 
@@ -256,6 +259,9 @@ impl Vm<'_> {
             capture_writeback,
             sloppy_global_names: self.sloppy_global_names,
             try_stack: self.try_stack,
+            pending_throw: self.pending_throw,
+            pending_return: self.pending_return,
+            pending_jump: self.pending_jump,
             suspension,
         }
     }
@@ -346,6 +352,9 @@ fn run_from_yield(
     vm.stack = snapshot.stack;
     vm.locals = snapshot.locals;
     vm.sloppy_global_names = snapshot.sloppy_global_names;
+    vm.pending_throw = snapshot.pending_throw;
+    vm.pending_return = snapshot.pending_return;
+    vm.pending_jump = snapshot.pending_jump;
     vm.try_stack = snapshot.try_stack;
     let capture_writeback = snapshot.capture_writeback;
     if snapshot.refresh_captured_slots_on_resume {
