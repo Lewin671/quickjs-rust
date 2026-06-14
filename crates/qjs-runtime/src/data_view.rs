@@ -523,7 +523,7 @@ fn element_type_for(native: NativeFunction) -> ElementType {
 }
 
 /// Whether `object` carries the `DataView` brand.
-fn is_data_view_object(object: &ObjectRef) -> bool {
+pub(crate) fn is_data_view_object(object: &ObjectRef) -> bool {
     object.has_own_property(DATA_VIEW_BUFFER_PROPERTY)
 }
 

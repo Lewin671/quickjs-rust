@@ -16,6 +16,8 @@ pub(crate) const ARRAY_BUFFER_DATA_PROPERTY: &str = "\0ArrayBufferData";
 pub(crate) const ARRAY_BUFFER_DETACHED_PROPERTY: &str = "\0ArrayBufferDetached";
 /// Internal slot holding the maximum byte length for resizable ArrayBuffers.
 pub(crate) const ARRAY_BUFFER_MAX_BYTE_LENGTH_PROPERTY: &str = "\0ArrayBufferMaxByteLength";
+/// Internal marker set on immutable ArrayBuffers.
+pub(crate) const ARRAY_BUFFER_IMMUTABLE_PROPERTY: &str = "\0ArrayBufferImmutable";
 const SHARED_ARRAY_BUFFER_DATA_PROPERTY: &str = "\0SharedArrayBufferData";
 const MAX_ARRAY_BUFFER_LENGTH: usize = 1_000_000;
 
@@ -53,6 +55,8 @@ pub(crate) fn install_array_buffer(
             NativeFunction::ArrayBufferPrototypeMaxByteLength,
         ),
         ("resizable", NativeFunction::ArrayBufferPrototypeResizable),
+        ("detached", NativeFunction::ArrayBufferPrototypeDetached),
+        ("immutable", NativeFunction::ArrayBufferPrototypeImmutable),
     ] {
         array_buffer_prototype.define_property(
             name.to_owned(),
@@ -84,6 +88,15 @@ pub(crate) fn install_array_buffer(
             Some("slice"),
             2,
             NativeFunction::ArrayBufferPrototypeSlice,
+            false,
+        )),
+    );
+    array_buffer_prototype.define_non_enumerable(
+        "transferToImmutable".to_owned(),
+        Value::Function(Function::new_native(
+            Some("transferToImmutable"),
+            0,
+            NativeFunction::ArrayBufferPrototypeTransferToImmutable,
             false,
         )),
     );
@@ -225,7 +238,9 @@ pub(crate) fn native_array_buffer_is_view(
 ) -> Result<Value, RuntimeError> {
     let is_view = matches!(
         argument_values.first(),
-        Some(Value::Object(object)) if crate::typed_array::is_typed_array_object(object)
+        Some(Value::Object(object))
+            if crate::typed_array::is_typed_array_object(object)
+                || crate::data_view::is_data_view_object(object)
     );
     Ok(Value::Boolean(is_view))
 }
@@ -263,6 +278,20 @@ pub(crate) fn native_array_buffer_prototype_resizable(
     ))
 }
 
+pub(crate) fn native_array_buffer_prototype_detached(
+    this_value: Value,
+) -> Result<Value, RuntimeError> {
+    let object = array_buffer_object(&this_value)?;
+    Ok(Value::Boolean(is_detached(&object)))
+}
+
+pub(crate) fn native_array_buffer_prototype_immutable(
+    this_value: Value,
+) -> Result<Value, RuntimeError> {
+    let object = array_buffer_object(&this_value)?;
+    Ok(Value::Boolean(is_immutable(&object)))
+}
+
 pub(crate) fn native_array_buffer_prototype_resize(
     this_value: Value,
     argument_values: &[Value],
@@ -271,6 +300,12 @@ pub(crate) fn native_array_buffer_prototype_resize(
     let object = array_buffer_object(&this_value)?;
     if is_detached(&object) {
         return Err(detached_error());
+    }
+    if is_immutable(&object) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: ArrayBuffer is immutable".to_owned(),
+        });
     }
     let Some(max_byte_length) = array_buffer_max_byte_length(&object) else {
         return Err(RuntimeError {
@@ -336,6 +371,39 @@ pub(crate) fn native_array_buffer_prototype_slice(
         .map(<[u8]>::to_vec)
         .unwrap_or_default();
     define_array_buffer_data(&result, slice);
+    Ok(Value::Object(result))
+}
+
+pub(crate) fn native_array_buffer_prototype_transfer_to_immutable(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let object = array_buffer_object(&this_value)?;
+    let new_length = match argument_values.first() {
+        Some(Value::Undefined) | None => array_buffer_bytes(&object).len(),
+        Some(value) => to_index(value.clone(), env)?,
+    };
+    if is_detached(&object) {
+        return Err(detached_error());
+    }
+    if is_immutable(&object) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: ArrayBuffer is immutable".to_owned(),
+        });
+    }
+    let source = array_buffer_bytes(&object);
+    let copy_length = new_length.min(source.len());
+    let mut bytes = vec![0; new_length];
+    bytes[..copy_length].copy_from_slice(&source[..copy_length]);
+
+    let constructor = env.get("ArrayBuffer").unwrap_or(Value::Undefined);
+    let prototype = crate::constructor_prototype(&constructor, env);
+    let result = ObjectRef::with_prototype(HashMap::new(), prototype);
+    define_array_buffer_data(&result, bytes);
+    define_array_buffer_immutable(&result);
+    detach(&object);
     Ok(Value::Object(result))
 }
 
@@ -412,6 +480,13 @@ fn define_array_buffer_max_byte_length(object: &ObjectRef, max_byte_length: usiz
     );
 }
 
+fn define_array_buffer_immutable(object: &ObjectRef) {
+    object.define_property(
+        ARRAY_BUFFER_IMMUTABLE_PROPERTY.to_owned(),
+        Property::non_enumerable(Value::Boolean(true)),
+    );
+}
+
 fn define_shared_array_buffer_data(object: &ObjectRef, bytes: Vec<u8>) {
     object.set_internal_bytes(bytes);
     object.define_property(
@@ -457,6 +532,10 @@ pub(crate) fn is_detached(object: &ObjectRef) -> bool {
 
 pub(crate) fn is_resizable(object: &ObjectRef) -> bool {
     object.has_own_property(ARRAY_BUFFER_MAX_BYTE_LENGTH_PROPERTY)
+}
+
+pub(crate) fn is_immutable(object: &ObjectRef) -> bool {
+    object.has_own_property(ARRAY_BUFFER_IMMUTABLE_PROPERTY)
 }
 
 pub(crate) fn array_buffer_max_byte_length(object: &ObjectRef) -> Option<usize> {
@@ -632,6 +711,10 @@ mod tests {
             Ok(Value::Boolean(true))
         );
         assert_eq!(
+            eval("ArrayBuffer.isView(new DataView(new ArrayBuffer(4)));"),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
             eval("ArrayBuffer.isView(new ArrayBuffer(4));"),
             Ok(Value::Boolean(false))
         );
@@ -674,6 +757,53 @@ mod tests {
             eval("new ArrayBuffer(8, undefined).byteLength;"),
             Ok(Value::Number(8.0))
         );
+    }
+
+    #[test]
+    fn array_buffer_immutable_accessor_and_transfer() {
+        assert_eq!(
+            eval(
+                "let b = new ArrayBuffer(4); \
+                 let a = new Uint8Array(b); a[0] = 7; a[1] = 8; \
+                 let c = b.transferToImmutable(6); \
+                 [b.byteLength, b.detached, c.byteLength, c.immutable, new Uint8Array(c)[0], new Uint8Array(c)[1], new Uint8Array(c)[5]].join(':');"
+            ),
+            Ok(Value::String("0:true:6:true:7:8:0".to_owned()))
+        );
+        assert_eq!(
+            eval("let b = new ArrayBuffer(4); b.immutable;"),
+            Ok(Value::Boolean(false))
+        );
+        assert_eq!(
+            eval("let b = new ArrayBuffer(4); b.transferToImmutable(2).byteLength;"),
+            Ok(Value::Number(2.0))
+        );
+        assert_eq!(
+            eval(
+                "new ArrayBuffer(4).transferToImmutable('\\t\\u000b\\u000c\\uFEFF\\u3000\\n\\r\\u2028\\u20291\\t\\u000b\\u000c\\uFEFF\\u3000\\n\\r\\u2028\\u2029').byteLength;"
+            ),
+            Ok(Value::Number(1.0))
+        );
+    }
+
+    #[test]
+    fn array_buffer_immutable_rejects_invalid_receivers_and_retransfer() {
+        assert!(
+            eval(
+                "Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, 'immutable').get.call({});"
+            )
+            .is_err()
+        );
+        assert!(
+            eval("ArrayBuffer.prototype.transferToImmutable.call(new SharedArrayBuffer(4));")
+                .is_err()
+        );
+        assert!(
+            eval("let b = new ArrayBuffer(4); let c = b.transferToImmutable(); c.resize(1);")
+                .is_err()
+        );
+        assert!(eval("let b = new ArrayBuffer(4); let c = b.transferToImmutable(); c.transferToImmutable();")
+            .is_err());
     }
 
     #[test]
