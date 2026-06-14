@@ -70,14 +70,46 @@ impl Compiler {
                     let slot = self.const_slot(Value::String(key.clone()));
                     self.emit(Op::LoadConst(slot));
                     // `{ f: <anon> }` names a plain property value after the
-                    // key via NamedEvaluation. Getters/setters and shorthand
-                    // methods already carry their own name from the parser, and
-                    // the `__proto__:` prototype special form evaluates its
-                    // value without NamedEvaluation.
+                    // key via NamedEvaluation. Object method syntax also gets
+                    // that display name, but without a function-body name
+                    // binding.
                     if matches!(property.kind, ObjectPropertyKind::Data)
                         && !property.is_proto_setter
                     {
+                        if let qjs_ast::Expr::Function {
+                            name: Some(function_name),
+                            constructable: false,
+                            ..
+                        } = &property.value
+                            && function_name == key
+                        {
+                            self.compile_function_without_name_binding(&property.value, key)?;
+                            self.emit(Op::DefineObjectProperty(ObjectPropertyMeta {
+                                kind: property.kind,
+                                is_proto_setter: property.is_proto_setter,
+                            }));
+                            continue;
+                        }
                         self.compile_named_expr(&property.value, key)?;
+                        self.emit(Op::DefineObjectProperty(ObjectPropertyMeta {
+                            kind: property.kind,
+                            is_proto_setter: property.is_proto_setter,
+                        }));
+                        continue;
+                    }
+                    if matches!(
+                        property.kind,
+                        ObjectPropertyKind::Getter | ObjectPropertyKind::Setter
+                    ) {
+                        let prefix = match property.kind {
+                            ObjectPropertyKind::Getter => "get ",
+                            ObjectPropertyKind::Setter => "set ",
+                            _ => unreachable!("accessor kind checked above"),
+                        };
+                        self.compile_function_without_name_binding(
+                            &property.value,
+                            &format!("{prefix}{key}"),
+                        )?;
                         self.emit(Op::DefineObjectProperty(ObjectPropertyMeta {
                             kind: property.kind,
                             is_proto_setter: property.is_proto_setter,
@@ -349,6 +381,7 @@ impl Compiler {
         )?;
         self.emit(Op::NewFunction {
             name: Some(name.clone()),
+            has_name_binding: true,
             params: params.clone(),
             local_names,
             lexical_captures,

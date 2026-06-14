@@ -326,6 +326,7 @@ impl<'a> Vm<'a> {
                 Op::NewSpread => self.construct_spread()?,
                 Op::NewFunction {
                     name,
+                    has_name_binding,
                     params,
                     local_names,
                     lexical_captures,
@@ -363,7 +364,7 @@ impl<'a> Vm<'a> {
                     };
                     let function = Function::new_user_compiled(CompiledUserFunction {
                         name,
-                        has_name_binding: true,
+                        has_name_binding,
                         params,
                         env,
                         bytecode,

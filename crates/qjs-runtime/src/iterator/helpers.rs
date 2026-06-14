@@ -14,7 +14,7 @@ use std::collections::HashMap;
 
 use crate::{
     NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function,
-    is_truthy, property_value, property_value_key, symbol, to_number_with_env,
+    is_truthy, object_prototype, property_value, property_value_key, symbol, to_number_with_env,
 };
 
 use super::protocol::{iterator_close_on_throw, iterator_step, iterator_value};
@@ -29,6 +29,7 @@ const HELPER_COUNTER: &str = "\0iterator_helper_counter";
 const HELPER_DONE: &str = "\0iterator_helper_done";
 const HELPER_INNER: &str = "\0iterator_helper_inner_alive";
 const HELPER_EXECUTING: &str = "\0iterator_helper_executing";
+const HELPER_STARTED: &str = "\0iterator_helper_started";
 const CONCAT_COUNT: &str = "\0iterator_concat_count";
 const CONCAT_INDEX: &str = "\0iterator_concat_index";
 const CONCAT_ITERABLE_PREFIX: &str = "\0iterator_concat_iterable_";
@@ -40,6 +41,7 @@ const CONCAT_ACTIVE_NEXT: &str = "\0iterator_concat_active_next";
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum HelperKind {
     Concat,
+    Zip,
     Map,
     Filter,
     Take,
@@ -51,6 +53,7 @@ impl HelperKind {
     fn tag(self) -> &'static str {
         match self {
             Self::Concat => "concat",
+            Self::Zip => "zip",
             Self::Map => "map",
             Self::Filter => "filter",
             Self::Take => "take",
@@ -62,6 +65,7 @@ impl HelperKind {
     fn from_tag(tag: &str) -> Option<Self> {
         Some(match tag {
             "concat" => Self::Concat,
+            "zip" => Self::Zip,
             "map" => Self::Map,
             "filter" => Self::Filter,
             "take" => Self::Take,
@@ -84,6 +88,7 @@ pub(super) fn native_iterator_concat(
     );
     helper.define_non_enumerable(HELPER_DONE.to_owned(), Value::Boolean(false));
     helper.define_non_enumerable(HELPER_EXECUTING.to_owned(), Value::Boolean(false));
+    helper.define_non_enumerable(HELPER_STARTED.to_owned(), Value::Boolean(false));
     helper.define_non_enumerable(CONCAT_COUNT.to_owned(), Value::Number(0.0));
     helper.define_non_enumerable(CONCAT_INDEX.to_owned(), Value::Number(0.0));
     helper.define_non_enumerable(CONCAT_ACTIVE.to_owned(), Value::Boolean(false));
@@ -124,6 +129,8 @@ pub(super) fn native_iterator_concat(
     Ok(Value::Object(helper))
 }
 
+pub(super) use super::zip::native_iterator_zip;
+
 fn iterator_receiver(this_value: &Value, method: &str) -> Result<Value, RuntimeError> {
     if !matches!(this_value, Value::Object(_)) {
         return Err(RuntimeError {
@@ -153,7 +160,9 @@ pub(super) fn native_lazy_helper(
     let mut checked_limit = None;
     let mut checked_callback = None;
     let (iterator, next) = match kind {
-        HelperKind::Concat => unreachable!("concat is constructed by native_iterator_concat"),
+        HelperKind::Concat | HelperKind::Zip => {
+            unreachable!("static helpers are constructed by their own natives")
+        }
         HelperKind::Map | HelperKind::Filter | HelperKind::FlatMap => {
             let iterator = iterator_receiver(&this_value, method)?;
             let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);
@@ -198,10 +207,13 @@ pub(super) fn native_lazy_helper(
     helper.define_non_enumerable(HELPER_NEXT.to_owned(), next);
     helper.define_non_enumerable(HELPER_DONE.to_owned(), Value::Boolean(false));
     helper.define_non_enumerable(HELPER_EXECUTING.to_owned(), Value::Boolean(false));
+    helper.define_non_enumerable(HELPER_STARTED.to_owned(), Value::Boolean(false));
     helper.define_non_enumerable(HELPER_COUNTER.to_owned(), Value::Number(0.0));
 
     match kind {
-        HelperKind::Concat => unreachable!("concat is constructed by native_iterator_concat"),
+        HelperKind::Concat | HelperKind::Zip => {
+            unreachable!("static helpers are constructed by their own natives")
+        }
         HelperKind::Map | HelperKind::Filter | HelperKind::FlatMap => {
             let callback = checked_callback
                 .expect("callback helpers validate callback before helper creation");
@@ -254,16 +266,27 @@ fn helper_executing(helper: &ObjectRef) -> bool {
     )
 }
 
+fn helper_started(helper: &ObjectRef) -> bool {
+    matches!(
+        helper.own_property(HELPER_STARTED).map(|p| p.value),
+        Some(Value::Boolean(true))
+    )
+}
+
 fn set_executing(helper: &ObjectRef, executing: bool) {
     helper.define_non_enumerable(HELPER_EXECUTING.to_owned(), Value::Boolean(executing));
+}
+
+fn set_started(helper: &ObjectRef) {
+    helper.define_non_enumerable(HELPER_STARTED.to_owned(), Value::Boolean(true));
 }
 
 fn set_done(helper: &ObjectRef) {
     helper.define_non_enumerable(HELPER_DONE.to_owned(), Value::Boolean(true));
 }
 
-fn iterator_result(value: Value, done: bool) -> Value {
-    let object = ObjectRef::new(HashMap::new());
+fn iterator_result(value: Value, done: bool, env: &CallEnv) -> Value {
+    let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
     object.define_property("value".to_owned(), Property::enumerable(value));
     object.define_property(
         "done".to_owned(),
@@ -284,7 +307,7 @@ pub(super) fn native_helper_next(
         return Err(not_a_helper());
     };
     if helper_done(&helper) {
-        return Ok(iterator_result(Value::Undefined, true));
+        return Ok(iterator_result(Value::Undefined, true, env));
     }
     if helper_executing(&helper) {
         return Err(RuntimeError {
@@ -293,8 +316,9 @@ pub(super) fn native_helper_next(
         });
     }
     set_executing(&helper, true);
-    let advanced = if kind == HelperKind::Concat {
-        advance_concat(&helper, env)
+    set_started(&helper);
+    let advanced = if matches!(kind, HelperKind::Concat | HelperKind::Zip) {
+        advance_static_helper(kind, &helper, env)
     } else {
         let Some(iterator) = helper_slot(&helper, HELPER_UNDERLYING) else {
             set_executing(&helper, false);
@@ -309,10 +333,10 @@ pub(super) fn native_helper_next(
     set_executing(&helper, false);
 
     match advanced {
-        Ok(Some(value)) => Ok(iterator_result(value, false)),
+        Ok(Some(value)) => Ok(iterator_result(value, false, env)),
         Ok(None) => {
             set_done(&helper);
-            Ok(iterator_result(Value::Undefined, true))
+            Ok(iterator_result(Value::Undefined, true, env))
         }
         Err(error) => {
             set_done(&helper);
@@ -331,7 +355,7 @@ fn advance(
     env: &mut CallEnv,
 ) -> Result<Option<Value>, RuntimeError> {
     match kind {
-        HelperKind::Concat => advance_concat(helper, env),
+        HelperKind::Concat | HelperKind::Zip => advance_static_helper(kind, helper, env),
         HelperKind::Map => advance_map(helper, iterator, next, env),
         HelperKind::Filter => advance_filter(helper, iterator, next, env),
         HelperKind::Take => advance_take(helper, iterator, next, env),
@@ -341,15 +365,13 @@ fn advance(
 }
 
 fn is_object_value(value: &Value) -> bool {
-    matches!(
-        value,
-        Value::Object(_)
-            | Value::Array(_)
-            | Value::Function(_)
-            | Value::Map(_)
-            | Value::Set(_)
-            | Value::Proxy(_)
-    )
+    match value {
+        Value::Object(object) => !symbol::is_symbol_primitive(object),
+        Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) | Value::Proxy(_) => {
+            true
+        }
+        _ => false,
+    }
 }
 
 fn is_callable_value(value: &Value) -> bool {
@@ -406,6 +428,18 @@ fn open_concat_iterator(
     helper.define_non_enumerable(CONCAT_ACTIVE_ITERATOR.to_owned(), iterator);
     helper.define_non_enumerable(CONCAT_ACTIVE_NEXT.to_owned(), next);
     Ok(())
+}
+
+fn advance_static_helper(
+    kind: HelperKind,
+    helper: &ObjectRef,
+    env: &mut CallEnv,
+) -> Result<Option<Value>, RuntimeError> {
+    match kind {
+        HelperKind::Concat => advance_concat(helper, env),
+        HelperKind::Zip => super::zip::advance_zip(helper, env),
+        _ => unreachable!("advance_static_helper only accepts static helpers"),
+    }
 }
 
 fn advance_concat(helper: &ObjectRef, env: &mut CallEnv) -> Result<Option<Value>, RuntimeError> {
@@ -670,13 +704,20 @@ pub(super) fn native_helper_return(
         });
     }
     if !helper_done(&helper) {
-        set_done(&helper);
-        set_executing(&helper, true);
+        let started = helper_started(&helper);
+        if started {
+            set_executing(&helper, true);
+        } else {
+            set_done(&helper);
+        }
         let closed = close_helper_iterators(kind, &helper, env);
-        set_executing(&helper, false);
+        if started {
+            set_executing(&helper, false);
+            set_done(&helper);
+        }
         closed?;
     }
-    Ok(iterator_result(Value::Undefined, true))
+    Ok(iterator_result(Value::Undefined, true, env))
 }
 
 fn close_helper_iterators(
@@ -694,6 +735,9 @@ fn close_helper_iterators(
     {
         super::protocol::iterator_close(&iterator, env)?;
         clear_active_concat_iterator(helper);
+    }
+    if kind == HelperKind::Zip {
+        super::zip::close_open_zip_iterators(helper, None, env)?;
     }
     if let Some(iterator) = helper_slot(helper, HELPER_UNDERLYING) {
         super::protocol::iterator_close(&iterator, env)?;

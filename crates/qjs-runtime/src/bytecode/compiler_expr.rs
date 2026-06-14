@@ -296,6 +296,7 @@ impl Compiler {
                 )?;
                 self.emit(Op::NewFunction {
                     name: name.clone(),
+                    has_name_binding: name.is_some(),
                     params: params.clone(),
                     local_names,
                     lexical_captures,
@@ -441,6 +442,7 @@ impl Compiler {
                 )?;
                 self.emit(Op::NewFunction {
                     name: Some(name.to_owned()),
+                    has_name_binding: false,
                     params: params.clone(),
                     local_names,
                     lexical_captures,
@@ -459,6 +461,51 @@ impl Compiler {
             } => self.compile_class(Some(name), body),
             _ => self.compile_expr(expr),
         }
+    }
+
+    pub(super) fn compile_function_without_name_binding(
+        &mut self,
+        expr: &Expr,
+        display_name: &str,
+    ) -> Result<(), RuntimeError> {
+        let Expr::Function {
+            params,
+            body,
+            constructable,
+            lexical_this,
+            lexical_arguments,
+            is_generator,
+            is_async,
+            ..
+        } = expr
+        else {
+            return self.compile_expr(expr);
+        };
+        let is_strict = self.strict || is_strict_function_body(body);
+        let local_names = collect_function_local_names(None, params, body, !lexical_arguments);
+        let (bytecode, lexical_captures) = self.compile_nested_function_body(
+            params,
+            body,
+            is_strict,
+            *is_generator,
+            *is_async,
+            &local_names,
+        )?;
+        self.emit(Op::NewFunction {
+            name: Some(display_name.to_owned()),
+            has_name_binding: false,
+            params: params.clone(),
+            local_names,
+            lexical_captures,
+            bytecode: Rc::new(bytecode),
+            constructable: *constructable && !*is_generator && !*is_async,
+            is_strict,
+            lexical_this: *lexical_this,
+            lexical_arguments: *lexical_arguments,
+            is_generator: *is_generator,
+            is_async: *is_async,
+        });
+        Ok(())
     }
 
     /// Compiles `super.x` / `super[expr]` property reads.

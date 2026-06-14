@@ -90,6 +90,60 @@ fn iterator_helper_next_rejects_reentry() {
 }
 
 #[test]
+fn iterator_zip_basic_modes_and_argument_validation() {
+    assert_eq!(
+        string(
+            "let shortest = Iterator.zip([[1, 2], ['a']]).next().value.join(','); \
+             let longest = Iterator.zip([[1], ['a', 'b']], { mode: 'longest', padding: ['x', 'y'] }); \
+             let first = longest.next().value.join(','); \
+             let second = longest.next().value.join(','); \
+             let strict = Iterator.zip([[1], ['a']], { mode: 'strict' }).next().value.join(','); \
+             let errors = []; \
+             for (let value of [undefined, '', Symbol()]) { \
+               try { Iterator.zip(value); } catch (e) { errors.push(e instanceof TypeError); } \
+             } \
+             try { Iterator.zip([], Symbol()); } catch (e) { errors.push(e instanceof TypeError); } \
+             shortest + '|' + first + '|' + second + '|' + strict + '|' + errors.join(',');"
+        ),
+        "1,a|1,a|x,b|1,a|true,true,true,true"
+    );
+}
+
+#[test]
+fn iterator_zip_closes_open_iterators_in_reverse_order() {
+    assert_eq!(
+        string(
+            "let log = []; \
+             let first = { next() { log.push('first next'); return { done: false }; }, return() { log.push('first return'); return {}; } }; \
+             let second = { next() { log.push('second next'); return { done: true }; }, return() { log.push('second return'); return {}; } }; \
+             let third = { next() { log.push('third next'); return { done: false }; }, return() { log.push('third return'); throw new Error('ignored'); } }; \
+             let it = Iterator.zip([first, second, third], { mode: 'strict' }); \
+             try { it.next(); } catch (e) { log.push(e instanceof TypeError); } \
+             log.join('|');"
+        ),
+        "first next|second next|third return|first return|true"
+    );
+}
+
+#[test]
+fn iterator_zip_return_state_matches_suspended_state() {
+    assert_eq!(
+        string(
+            "let log = []; \
+             let startUnderlying = { next() { log.push('unexpected next'); }, return() { log.push('start return'); let r = start.return(); log.push(r.done); return {}; } }; \
+             let start = Iterator.zip([startUnderlying]); \
+             start.return(); \
+             let yieldUnderlying = { next() { return { value: 1, done: false }; }, return() { log.push('yield return'); try { yielded.next(); } catch (e) { log.push(e instanceof TypeError); } return {}; } }; \
+             let yielded = Iterator.zip([yieldUnderlying]); \
+             yielded.next(); \
+             yielded.return(); \
+             log.join('|');"
+        ),
+        "start return|true|yield return|true"
+    );
+}
+
+#[test]
 fn iterator_flat_map_argument_effect_order() {
     assert_eq!(
         string(
