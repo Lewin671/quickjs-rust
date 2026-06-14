@@ -74,6 +74,26 @@ fn escaped_async_method_modifier_is_rejected() {
 }
 
 #[test]
+fn enum_is_rejected_as_identifier() {
+    // `enum` is an unconditionally reserved word per ECMA-262.
+    assert!(parse_script("enum = 1;").is_err());
+    assert!(parse_script("var enum;").is_err());
+    assert!(parse_script("var enum = 1;").is_err());
+    assert!(parse_script("let enum;").is_err());
+}
+
+#[test]
+fn escaped_reserved_word_label_is_rejected() {
+    // Escaped spellings of reserved words cannot serve as labels because the
+    // StringValue still matches the reserved word (ECMA-262 12.1).
+    assert!(parse_script("f\\u0061lse: ;").is_err());
+    assert!(parse_script("n\\u0075ll: ;").is_err());
+    assert!(parse_script("tr\\u0075e: ;").is_err());
+    // `enum` is an unconditionally reserved word and may not be a label.
+    assert!(parse_script("enum: ;").is_err());
+}
+
+#[test]
 fn unescaped_get_set_async_are_still_keywords_or_names() {
     // The unescaped accessor/method forms keep working.
     assert!(parse_script("({ get m() { return 1; } });").is_ok());

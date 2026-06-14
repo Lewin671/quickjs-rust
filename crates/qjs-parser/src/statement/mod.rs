@@ -139,6 +139,16 @@ impl Parser {
         let TokenKind::Identifier(label) = label_token.kind else {
             unreachable!("caller should check label token")
         };
+        // An escaped spelling of a reserved word (e.g. `false`) reaches
+        // here as Identifier("false") with had_escape set. Per ECMA-262 12.1,
+        // the StringValue of such a token still matches a reserved word, so it
+        // cannot serve as a LabelIdentifier.
+        if crate::helpers::is_reserved_identifier_name(&label) {
+            return Err(ParseError {
+                message: format!("`{label}` is a reserved word"),
+                span: label_token.span,
+            });
+        }
         // `await` is reserved as a LabelIdentifier inside an async function and
         // `yield` inside a generator (or in strict mode), so they may not be
         // used as labels there.
@@ -267,7 +277,19 @@ fn validate_statement_list_declarations(body: &[Stmt]) -> Result<(), ParseError>
                 }
             }
             Stmt::ClassDecl { name, span, .. } => lexical_names.push((name.clone(), *span)),
-            Stmt::FunctionDecl { name, span, .. } => var_names.push((name.clone(), *span)),
+            Stmt::FunctionDecl {
+                name,
+                is_generator,
+                is_async,
+                span,
+                ..
+            } => {
+                if *is_generator || *is_async {
+                    lexical_names.push((name.clone(), *span));
+                } else {
+                    var_names.push((name.clone(), *span));
+                }
+            }
             _ => {}
         }
     }
@@ -288,7 +310,7 @@ fn validate_statement_list_declarations(body: &[Stmt]) -> Result<(), ParseError>
             if var_name == lexical_name {
                 return Err(ParseError {
                     message: format!(
-                        "var declaration `{var_name}` conflicts with a lexical declaration"
+                        "declaration `{var_name}` conflicts with a lexical declaration"
                     ),
                     span: *span,
                 });

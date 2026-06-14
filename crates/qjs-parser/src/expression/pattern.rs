@@ -222,8 +222,7 @@ impl Parser {
         name: &str,
         span: Span,
     ) -> Result<(), ParseError> {
-        if crate::helpers::is_reserved_identifier_name(name)
-            || matches!(name, "enum" | "export" | "import")
+        if crate::helpers::is_reserved_identifier_name(name) || matches!(name, "export" | "import")
         {
             return Err(ParseError {
                 message: format!("`{name}` is a reserved word"),

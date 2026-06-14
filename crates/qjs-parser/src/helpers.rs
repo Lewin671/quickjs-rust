@@ -83,6 +83,7 @@ pub(crate) fn is_reserved_identifier_name(name: &str) -> bool {
             | "delete"
             | "new"
             | "instanceof"
+            | "enum"
     )
 }
 

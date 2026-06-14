@@ -234,8 +234,12 @@ fn rejects_reserved_arrow_parameter_names() {
 
     parse_script("let arrow = package => package;")
         .expect("strict-only future reserved words should parse outside strict mode");
-    parse_script("function ordinary(enum, package) { return package; }")
-        .expect("ordinary function parameter validation is outside arrow parsing");
+    // `enum` is an unconditionally reserved word, so it is rejected even in
+    // ordinary function parameters.
+    assert!(parse_script("function ordinary(enum, package) { return package; }").is_err());
+    // `package` is only reserved in strict mode, so it parses here.
+    parse_script("function ordinary(package) { return package; }")
+        .expect("strict-only future reserved words should parse outside strict mode");
 }
 
 #[test]
