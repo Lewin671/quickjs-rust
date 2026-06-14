@@ -250,6 +250,11 @@ pub(super) enum Op {
     /// target, and transfers control to the finally block. EndFinally then
     /// resumes the jump.
     AbruptJump(usize),
+    /// Creates a fresh captured-environment cell for per-iteration bindings in
+    /// `for (let/const ...)` loops. Closures created after this point capture
+    /// independent copies of the listed slots, so each iteration has its own
+    /// binding.
+    FreshIterationScope(Vec<usize>),
     EnterTry {
         catch: Option<usize>,
         finally: Option<usize>,
@@ -538,6 +543,10 @@ impl Bytecode {
 
     pub(crate) fn local_slot(&self, name: &str) -> Option<usize> {
         self.local_slots.get(name).copied()
+    }
+
+    pub(crate) fn local_name_at(&self, slot: usize) -> Option<&str> {
+        self.locals.get(slot).map(|local| local.name.as_str())
     }
 
     pub(crate) fn local_is_mutable(&self, slot: usize) -> bool {

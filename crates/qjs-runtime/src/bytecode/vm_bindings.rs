@@ -1,4 +1,6 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use crate::{
     GLOBAL_THIS_BINDING, Property, PropertyKey, RuntimeError, Value, function::CallEnv, is_truthy,
@@ -705,6 +707,24 @@ impl Vm<'_> {
         {
             self.sloppy_global_names.push(name.to_owned());
         }
+    }
+
+    /// Creates a fresh captured-environment cell for per-iteration loop
+    /// bindings. The new cell is seeded from the current local slot values,
+    /// making it an independent snapshot. Closures created after this point
+    /// capture from the new cell; closures from previous iterations retain
+    /// their old cell. Write-through from the loop body still targets the
+    /// new cell, which is fine since it belongs to THIS iteration's closures.
+    pub(super) fn fresh_iteration_scope(&mut self, slots: &[usize]) {
+        let mut new_env = self.captured_env.borrow().clone();
+        for &slot in slots {
+            if let Some(Some(value)) = self.locals.get(slot) {
+                if let Some(name) = self.bytecode.local_name_at(slot) {
+                    new_env.insert(name.to_owned(), value.clone());
+                }
+            }
+        }
+        self.captured_env = Rc::new(RefCell::new(new_env));
     }
 
     pub(super) fn drain_promise_jobs(&mut self) -> Result<(), RuntimeError> {

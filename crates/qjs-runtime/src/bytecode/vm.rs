@@ -522,6 +522,9 @@ impl<'a> Vm<'a> {
                 Op::AbruptJump(target) => {
                     self.abrupt_jump(target)?;
                 }
+                Op::FreshIterationScope(ref slots) => {
+                    self.fresh_iteration_scope(slots);
+                }
                 Op::JumpIfFalse(target) => {
                     if !is_truthy(self.stack.last().ok_or_else(stack_underflow)?) {
                         self.ip = target;

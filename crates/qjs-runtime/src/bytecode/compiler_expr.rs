@@ -150,6 +150,20 @@ impl Compiler {
             None
         };
         let blocked = init.map_or_else(Vec::new, for_init_lexical_names);
+        let iteration_slots: Vec<usize> = if matches!(
+            init,
+            Some(ForInit::VarDecl {
+                kind: VarKind::Let | VarKind::Const,
+                ..
+            })
+        ) {
+            blocked
+                .iter()
+                .filter_map(|name| self.resolve_local_slot(name))
+                .collect()
+        } else {
+            Vec::new()
+        };
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
             compiler.push_loop(result_slot);
             compiler.compile_stmt(body)?;
@@ -158,6 +172,9 @@ impl Compiler {
         })?;
         let context = self.pop_loop();
         let update_start = self.code.len();
+        if !iteration_slots.is_empty() {
+            self.emit(Op::FreshIterationScope(iteration_slots));
+        }
         if let Some(update) = update {
             self.compile_expr(update)?;
             self.emit(Op::Pop);
