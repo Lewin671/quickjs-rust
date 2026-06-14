@@ -43,6 +43,28 @@ pub(crate) fn call_function(
         });
     };
     if let Some(bound) = &function.bound {
+        if !is_construct
+            && matches!(
+                &bound.target,
+                Value::Function(target)
+                    if target.native == Some(NativeFunction::FunctionPrototypeCall)
+            )
+        {
+            let mut combined_arguments = bound.arguments.clone();
+            combined_arguments.extend(argument_values);
+            let call_this = combined_arguments
+                .first()
+                .cloned()
+                .unwrap_or(Value::Undefined);
+            let call_arguments = combined_arguments.into_iter().skip(1).collect();
+            return call_function(
+                bound.this_value.clone(),
+                call_this,
+                call_arguments,
+                env,
+                false,
+            );
+        }
         let mut bound_arguments = bound.arguments.clone();
         bound_arguments.extend(argument_values);
         let bound_this = if is_construct {

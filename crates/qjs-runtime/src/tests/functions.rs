@@ -428,6 +428,16 @@ fn evaluates_function_declarations_and_calls() {
         Ok(Value::Boolean(true))
     );
     assert_eq!(
+        eval(
+            "function collect(a, b, c) { return this.tag + ':' + a + ':' + b + ':' + c; } \
+             let uncurried = Function.prototype.call.bind(collect); \
+             let prebound = Function.prototype.call.bind(collect, { tag: 'pre' }, 'a'); \
+             let hasOwn = Function.prototype.call.bind(Object.prototype.hasOwnProperty); \
+             uncurried({ tag: 'ctx' }, 1, 2, 3) + '|' + prebound('b', 'c') + '|' + hasOwn({ x: 1 }, 'x');"
+        ),
+        Ok(Value::String("ctx:1:2:3|pre:a:b:c|true".to_owned()))
+    );
+    assert_eq!(
         eval("'use strict'; let getThis = function() { return this; }; getThis() === undefined;"),
         Ok(Value::Boolean(true))
     );
