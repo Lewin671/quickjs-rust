@@ -315,6 +315,12 @@ fn get_view_value(
     if data_view_buffer_detached(&object) {
         return Err(array_buffer::detached_error());
     }
+    let Some(buffer) = data_view_buffer(&object) else {
+        return Err(array_buffer::detached_error());
+    };
+    if data_view_out_of_bounds(&object, &buffer) {
+        return Err(type_error("DataView is out of bounds"));
+    }
     let view_offset = data_view_byte_offset(&object);
     let view_size = data_view_byte_length(&object);
     let element_size = element.size();
@@ -323,9 +329,6 @@ fn get_view_value(
         return Err(range_error("offset is outside the bounds of the DataView"));
     }
     let buffer_index = get_index + view_offset;
-    let Some(buffer) = data_view_buffer(&object) else {
-        return Err(array_buffer::detached_error());
-    };
     let bytes = array_buffer::buffer_bytes(&buffer);
     let slice = match bytes.get(buffer_index..buffer_index + element_size) {
         Some(slice) => slice,
@@ -345,9 +348,15 @@ fn set_view_value(
 ) -> Result<Value, RuntimeError> {
     // Step 1-2: RequireInternalSlot.
     let object = data_view_receiver(&this_value)?;
-    // Step 3: getIndex = ToIndex(requestIndex).
+    let Some(buffer) = data_view_buffer(&object) else {
+        return Err(array_buffer::detached_error());
+    };
+    if array_buffer::is_immutable(&buffer) {
+        return Err(type_error("DataView buffer is immutable"));
+    }
+    // Step 4: getIndex = ToIndex(requestIndex).
     let get_index = to_index(request_index, env)?;
-    // Step 4-6: coerce the value BEFORE the detach / bounds checks (per spec the
+    // Step 5-6: coerce the value BEFORE the detach / bounds checks (per spec the
     // numeric conversion observably runs first).
     let encoded = if element.is_big_int() {
         let big = crate::bigint::to_bigint(value, env)?;
@@ -362,6 +371,9 @@ fn set_view_value(
     if data_view_buffer_detached(&object) {
         return Err(array_buffer::detached_error());
     }
+    if data_view_out_of_bounds(&object, &buffer) {
+        return Err(type_error("DataView is out of bounds"));
+    }
     let view_offset = data_view_byte_offset(&object);
     let view_size = data_view_byte_length(&object);
     let element_size = element.size();
@@ -370,9 +382,6 @@ fn set_view_value(
         return Err(range_error("offset is outside the bounds of the DataView"));
     }
     let buffer_index = get_index + view_offset;
-    let Some(buffer) = data_view_buffer(&object) else {
-        return Err(array_buffer::detached_error());
-    };
     let mut bytes = array_buffer::buffer_bytes(&buffer);
     if buffer_index + element_size > bytes.len() {
         return Err(range_error("offset is outside the bounds of the DataView"));
@@ -553,6 +562,12 @@ fn data_view_buffer_detached(object: &ObjectRef) -> bool {
 
 fn data_block_detached(buffer: &ObjectRef) -> bool {
     array_buffer::is_array_buffer_object(buffer) && array_buffer::is_detached(buffer)
+}
+
+fn data_view_out_of_bounds(object: &ObjectRef, buffer: &ObjectRef) -> bool {
+    data_view_byte_offset(object)
+        .checked_add(data_view_byte_length(object))
+        .is_none_or(|end| end > array_buffer::buffer_byte_length(buffer))
 }
 
 fn data_view_byte_length(object: &ObjectRef) -> usize {
