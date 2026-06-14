@@ -406,6 +406,45 @@ fn evaluates_branch_and_loop_bytecode_subset() {
 }
 
 #[test]
+fn try_catch_finally_completion_value_update_empty() {
+    // Break from catch with no prior value: UpdateEmpty produces undefined
+    assert_eq!(
+        eval_bytecode_source(
+            "eval(\"for (var i = 0; i < 2; ++i) { if (i) { try { throw null; } catch (e) { break; } } 'bad completion'; }\")"
+        ),
+        Ok(Value::Undefined)
+    );
+    // Break from finally with preceding value 42: completion is 42
+    assert_eq!(
+        eval_bytecode_source(
+            "eval('99; do { -99; try { 39 } catch (e) { -1 } finally { 42; break; -2 }; } while (false);')"
+        ),
+        Ok(Value::Number(42.0))
+    );
+    // Break from finally with no preceding value: completion is undefined
+    assert_eq!(
+        eval_bytecode_source(
+            "eval('99; do { -99; try { 39 } catch (e) { -1 } finally { break; -2 }; } while (false);')"
+        ),
+        Ok(Value::Undefined)
+    );
+    // Break from finally discards pending throw (throw inside try, break inside finally)
+    assert_eq!(
+        eval_bytecode_source(
+            "eval('do { try { throw 1; } finally { break; } } while (false); try { 42; } finally { 99; }')"
+        ),
+        Ok(Value::Number(42.0))
+    );
+    // Catch body resets completion: try body value does not leak through catch break
+    assert_eq!(
+        eval_bytecode_source(
+            "eval(\"for (var i = 0; i < 2; ++i) { if (i) { try { 'try_val'; throw null; } catch (e) { break; } } 'iter_val'; }\")"
+        ),
+        Ok(Value::Undefined)
+    );
+}
+
+#[test]
 fn evaluates_objects_arrays_members_and_calls_with_bytecode() {
     assert_bytecode_evaluates("let o = { count: 1 }; o.count;");
     assert_bytecode_evaluates("let o = { count: 1 }; o.count = 3; o.count;");

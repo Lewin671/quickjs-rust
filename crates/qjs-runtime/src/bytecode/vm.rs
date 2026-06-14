@@ -536,6 +536,10 @@ impl<'a> Vm<'a> {
                         return Ok(Completion::Return(value));
                     }
                 }
+                Op::DiscardPendingAbrupt => {
+                    self.pending_throw = None;
+                    self.pending_return = None;
+                }
                 Op::Return => {
                     let value = self.stack.pop().unwrap_or(Value::Undefined);
                     if let Some(value) = self.return_value(value)? {

@@ -61,6 +61,76 @@ fn evaluates_global_undefined_binding() {
 }
 
 #[test]
+fn global_nan_is_non_writable() {
+    // Sloppy mode: assignment silently fails, NaN remains a number.
+    assert_eq!(
+        eval("NaN = true; typeof NaN;"),
+        Ok(Value::String("number".to_owned()))
+    );
+    assert_eq!(eval("NaN = true; NaN !== NaN;"), Ok(Value::Boolean(true)));
+    // Descriptor check.
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(this, 'NaN'); d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("false:false:false".to_owned()))
+    );
+    // Strict mode: TypeError on assignment to non-writable NaN.
+    assert!(eval("'use strict'; NaN = 1;").is_err());
+    assert_eq!(
+        eval(
+            "let caught = false; try { (function() { 'use strict'; NaN = 1; })(); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn global_infinity_is_non_writable() {
+    // Sloppy mode: assignment silently fails, Infinity remains a number.
+    assert_eq!(
+        eval("Infinity = true; typeof Infinity;"),
+        Ok(Value::String("number".to_owned()))
+    );
+    assert_eq!(
+        eval("Infinity = true; Infinity === 1/0;"),
+        Ok(Value::Boolean(true))
+    );
+    // Descriptor check.
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(this, 'Infinity'); d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("false:false:false".to_owned()))
+    );
+    // Strict mode: TypeError on assignment to non-writable Infinity.
+    assert!(eval("'use strict'; Infinity = 1;").is_err());
+    assert_eq!(
+        eval(
+            "let caught = false; try { (function() { 'use strict'; Infinity = 1; })(); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn global_undefined_is_non_writable() {
+    // Sloppy mode: assignment silently fails, undefined stays undefined.
+    assert_eq!(
+        eval("undefined = true; typeof undefined;"),
+        Ok(Value::String("undefined".to_owned()))
+    );
+    // Strict mode: TypeError on assignment to non-writable undefined.
+    assert!(eval("'use strict'; undefined = 1;").is_err());
+    assert_eq!(
+        eval(
+            "let caught = false; try { (function() { 'use strict'; undefined = 1; })(); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn evaluates_global_this_binding() {
     assert_eq!(eval("globalThis === this;"), Ok(Value::Boolean(true)));
     assert_eq!(

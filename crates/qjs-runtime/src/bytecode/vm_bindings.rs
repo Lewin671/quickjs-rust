@@ -197,6 +197,16 @@ impl Vm<'_> {
             .map(|property| property.value)
     }
 
+    /// Returns the full own-property descriptor of a `globalThis` property so
+    /// callers can inspect attribute flags such as `writable`.
+    pub(super) fn global_this_own_property(&self, name: &str) -> Option<Property> {
+        let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
+            Some(Value::Object(global_this)) => Some(global_this.clone()),
+            _ => None,
+        }?;
+        global_this.own_property(name)
+    }
+
     /// Resolves an identifier inside a `with` body to the innermost with-object
     /// that binds `name` (an own-or-inherited property not filtered out by the
     /// object's `Symbol.unscopables`). Returns `None` when no with-object binds

@@ -242,6 +242,10 @@ pub(super) enum Op {
     },
     ExitTry,
     EndFinally,
+    /// Clears any pending throw or return when an abrupt completion (break,
+    /// continue, or return) exits a finally block. Without this the stale
+    /// pending state would be picked up by the next `EndFinally`.
+    DiscardPendingAbrupt,
     Return,
     Throw,
     /// Marks the boundary between parameter instantiation and the function body.

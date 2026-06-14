@@ -214,6 +214,17 @@ impl Vm<'_> {
             self.write_through_captured(&name, value);
             return Ok(());
         }
+        // Reject writes to non-writable global properties (e.g. NaN, Infinity,
+        // undefined) before any env/realm write. In strict mode this is a
+        // TypeError per the spec.
+        if let Some(property) = self.global_this_own_property(&name) {
+            if !property.writable {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: format!("TypeError: Cannot assign to read only property '{name}'"),
+                });
+            }
+        }
         if self.env.locals().contains_key(&name) {
             self.env.insert(name.clone(), value.clone());
             self.write_through_captured(&name, value);
@@ -252,6 +263,13 @@ impl Vm<'_> {
             self.env.insert(name.clone(), value.clone());
             self.write_through_captured(&name, value);
             return Ok(());
+        }
+        // Silently reject writes to non-writable global properties (e.g. NaN,
+        // Infinity, undefined) in sloppy mode.
+        if let Some(property) = self.global_this_own_property(&name) {
+            if !property.writable {
+                return Ok(());
+            }
         }
         if self.env.locals().contains_key(&name) {
             self.env.insert(name.clone(), value.clone());

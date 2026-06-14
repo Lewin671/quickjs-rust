@@ -40,11 +40,25 @@ pub(super) struct Compiler {
     /// Whether the current function body is an async generator. `yield*` uses
     /// the async iterator protocol only in this context.
     pub(super) async_generator_body: bool,
-    /// Stack of (result_slot, loop_stack_depth) for try/catch/finally blocks
-    /// currently being compiled. When a `break` or `continue` crosses a try
-    /// boundary, the innermost try result slot must be propagated to the target
-    /// loop's result slot so UpdateEmpty semantics are preserved.
-    pub(super) try_result_slots: Vec<(usize, usize)>,
+    /// Stack of try/catch/finally result slot contexts. When a `break` or
+    /// `continue` crosses a try boundary, the innermost try result slot must
+    /// be propagated to the target loop's result slot so UpdateEmpty semantics
+    /// are preserved.
+    pub(super) try_result_slots: Vec<TryResultEntry>,
+}
+
+/// Tracks a try/catch/finally result slot for completion value propagation.
+pub(super) struct TryResultEntry {
+    /// The local slot tracking this block's accumulated completion value.
+    pub(super) result_slot: usize,
+    /// The loop stack depth when the try/finally block was entered. A
+    /// break/continue whose target loop index is below this depth must
+    /// propagate this result slot.
+    pub(super) loop_depth: usize,
+    /// Whether this entry is for a `finally` block. Break/continue inside
+    /// finally must emit `DiscardPendingAbrupt` to clear stale pending
+    /// throw/return state.
+    pub(super) is_finally: bool,
 }
 
 #[derive(Default)]
@@ -597,8 +611,17 @@ impl Compiler {
 
     /// Pushes a try/finally result slot onto the tracking stack with the
     /// current loop nesting depth. Must be balanced with `pop_try_result_slot`.
-    pub(super) fn push_try_result_slot(&mut self, result_slot: usize, loop_depth: usize) {
-        self.try_result_slots.push((result_slot, loop_depth));
+    pub(super) fn push_try_result_slot(
+        &mut self,
+        result_slot: usize,
+        loop_depth: usize,
+        is_finally: bool,
+    ) {
+        self.try_result_slots.push(TryResultEntry {
+            result_slot,
+            loop_depth,
+            is_finally,
+        });
     }
 
     /// Pops the most recent try/finally result slot from the tracking stack.
@@ -612,20 +635,27 @@ impl Compiler {
     /// propagate the innermost try result slot to the target loop's result
     /// slot. This implements the UpdateEmpty semantics for try statements:
     /// the try's accumulated completion value becomes the break's value.
+    /// Also emits `DiscardPendingAbrupt` when crossing a finally boundary
+    /// to clear any stale pending throw/return.
     fn propagate_try_result_to_loop(&mut self, target_loop_index: usize) {
-        // Find the innermost try_result_slot whose loop_stack_depth is
-        // strictly greater than target_loop_index, meaning it was entered
-        // inside (or deeper than) the target loop and the break/continue
-        // will cross its boundary.
-        if let Some(&(try_slot, _)) = self
+        // Find the innermost try_result_slot whose loop_depth is strictly
+        // greater than target_loop_index, meaning it was entered inside (or
+        // deeper than) the target loop and the break/continue will cross its
+        // boundary.
+        if let Some(entry) = self
             .try_result_slots
             .iter()
             .rev()
-            .find(|(_, depth)| *depth > target_loop_index)
+            .find(|e| e.loop_depth > target_loop_index)
         {
+            let try_slot = entry.result_slot;
+            let is_finally = entry.is_finally;
             let target_slot = self.loop_stack[target_loop_index].result_slot;
             self.emit(Op::LoadLocal(try_slot));
             self.emit(Op::StoreLocal(target_slot));
+            if is_finally {
+                self.emit(Op::DiscardPendingAbrupt);
+            }
         }
     }
 

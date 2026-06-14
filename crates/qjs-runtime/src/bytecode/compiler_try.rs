@@ -18,7 +18,7 @@ impl Compiler {
         self.emit(Op::StoreLocal(result_slot));
 
         let loop_depth = self.loop_stack_depth();
-        self.push_try_result_slot(result_slot, loop_depth);
+        self.push_try_result_slot(result_slot, loop_depth, false);
 
         let enter = self.emit(Op::EnterTry {
             catch: None,
@@ -119,7 +119,7 @@ impl Compiler {
         let finally_result_slot = self.temp_local("finally_result");
 
         let loop_depth = self.loop_stack_depth();
-        self.push_try_result_slot(finally_result_slot, loop_depth);
+        self.push_try_result_slot(finally_result_slot, loop_depth, true);
 
         let target = self.code.len();
         // Initialize the finally result slot at the start of the finally block

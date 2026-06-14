@@ -12,8 +12,21 @@ use crate::{
 pub(super) fn install_globals(env: &mut CallEnv, global_this: &Value) {
     env.insert_realm("NaN".to_owned(), Value::Number(f64::NAN));
     env.insert_realm("Infinity".to_owned(), Value::Number(f64::INFINITY));
+    env.insert_realm("undefined".to_owned(), Value::Undefined);
     env.insert_realm("globalThis".to_owned(), global_this.clone());
     if let Value::Object(global_object) = global_this {
+        global_object.define_property(
+            "NaN".to_owned(),
+            Property::data(Value::Number(f64::NAN), false, false, false),
+        );
+        global_object.define_property(
+            "Infinity".to_owned(),
+            Property::data(Value::Number(f64::INFINITY), false, false, false),
+        );
+        global_object.define_property(
+            "undefined".to_owned(),
+            Property::data(Value::Undefined, false, false, false),
+        );
         global_object.define_property(
             "globalThis".to_owned(),
             Property::data(global_this.clone(), false, true, true),
