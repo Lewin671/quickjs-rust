@@ -37,6 +37,7 @@ pub(super) fn eval_function_bytecode(
     let mut vm = Vm::new_with_globals_and_captures(bytecode, env, captured_env);
     vm.capture_writeback = capture_writeback;
     let value = vm.run();
+    vm.refresh_live_locals_from_captured_env();
     FunctionBytecodeResult {
         value,
         bytecode,

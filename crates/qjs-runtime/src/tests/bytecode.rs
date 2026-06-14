@@ -512,6 +512,14 @@ fn seeds_bytecode_function_env_from_referenced_caller_bindings() {
         ),
         Ok(Value::String("1:2:3".to_owned()))
     );
+    assert_eq!(
+        eval_bytecode_source(
+            "function throws(expected, fn) { try { fn(); } catch (error) { if (error.constructor !== expected) { throw error; } return; } throw new Error('missing'); } \
+             { const rab = new ArrayBuffer(64, { maxByteLength: 1024 }); let called = false; throws(TypeError, () => rab.resize({ valueOf() { __quickjsRustDetachArrayBuffer(rab); called = true; } })); if (!called) { throw new Error('first'); } } \
+             { const rab = new ArrayBuffer(64, { maxByteLength: 1024 }); __quickjsRustDetachArrayBuffer(rab); let called = false; throws(TypeError, () => rab.resize({ valueOf() { called = true; } })); called; }",
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]

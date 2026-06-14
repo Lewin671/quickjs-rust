@@ -211,6 +211,7 @@ impl Compiler {
             .skip(1)
             .any(|scope| scope.contains_key(name))
             || self.local_slots.contains_key(name)
+            || self.locals.iter().any(|local| local.name == name)
         {
             format!("\0lexical:{}:{}", name, self.locals.len())
         } else {

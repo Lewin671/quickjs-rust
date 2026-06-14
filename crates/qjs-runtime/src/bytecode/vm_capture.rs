@@ -113,6 +113,20 @@ impl Vm<'_> {
         }
     }
 
+    pub(super) fn refresh_live_locals_from_captured_env(&mut self) {
+        let captured_env = self.captured_env.borrow();
+        for (name, value) in captured_env.iter() {
+            if let Some(index) = self.bytecode.local_slot(name)
+                && let Some(local @ Some(_)) = self.locals.get_mut(index)
+            {
+                *local = Some(value.clone());
+            }
+            if let Some(binding) = self.env.get_local_mut(name) {
+                *binding = value.clone();
+            }
+        }
+    }
+
     pub(super) fn refresh_call_env_from_captured_env(&self, env: &mut CallEnv) {
         let captured_env = self.captured_env.borrow();
         for (name, value) in captured_env.iter() {
