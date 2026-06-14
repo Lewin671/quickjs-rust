@@ -58,7 +58,7 @@ jobs:
 
       - name: Upload cached QuickJS-NG baseline
         if: steps.quickjs-ng-baseline-cache.outputs.cache-hit == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test262-qjsng-baseline-full
           path: coverage-baseline
@@ -130,7 +130,7 @@ jobs:
           key: test262-qjsng-baseline-${{ runner.os }}-${{ steps.baseline-key.outputs.quickjs_ng_sha }}-${{ steps.baseline-key.outputs.test262_sha }}-${{ hashFiles('scripts/test262-baseline.sh', 'scripts/test262-baseline-metadata.awk', 'scripts/run-with-timeout.sh') }}-${{ matrix.shard }}
 
       - name: Upload QuickJS-NG baseline shard
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test262-qjsng-baseline-${{ matrix.shard }}
           path: coverage-baseline/shard-${{ matrix.shard }}
@@ -147,7 +147,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download QuickJS-NG baseline shards
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: test262-qjsng-baseline-*
           path: coverage-baseline
@@ -182,7 +182,7 @@ jobs:
         id: qjs-cli-artifact
         if: github.event_name == 'workflow_run' || github.event.inputs.ci_run_id != ''
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: qjs-cli-release-linux
           path: prebuilt-qjs
@@ -235,7 +235,7 @@ jobs:
           exit "$status"
 
       - name: Upload shard summary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test262-coverage-${{ matrix.group }}
           path: coverage
@@ -264,14 +264,14 @@ jobs:
           submodules: false
 
       - name: Download QuickJS-NG baseline
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: test262-qjsng-baseline-*
           path: qjsng-baseline
           merge-multiple: true
 
       - name: Download rust shard summaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: test262-coverage-*
           path: rust-coverage
@@ -289,7 +289,7 @@ jobs:
             --burndown-out burndown.json
 
       - name: Upload burndown entry
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test262-burndown
           path: burndown.json
