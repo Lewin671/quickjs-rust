@@ -17,7 +17,8 @@ pub(super) struct LexicalCapture {
 
 impl Compiler {
     pub(super) fn declare_lexical_slot(&mut self, name: &str, mutable: bool) -> usize {
-        self.declare_lexical_slot_with_storage_name(name, name, mutable)
+        let storage_name = self.lexical_storage_name(name);
+        self.declare_lexical_slot_with_storage_name(name, &storage_name, mutable)
     }
 
     pub(super) fn declare_lexical_slot_with_storage_name(
@@ -200,6 +201,21 @@ impl Compiler {
             .iter()
             .rev()
             .find_map(|scope| scope.get(name).copied())
+    }
+
+    fn lexical_storage_name(&self, name: &str) -> String {
+        if self
+            .lexical_scopes
+            .iter()
+            .rev()
+            .skip(1)
+            .any(|scope| scope.contains_key(name))
+            || self.local_slots.contains_key(name)
+        {
+            format!("\0lexical:{}:{}", name, self.locals.len())
+        } else {
+            name.to_owned()
+        }
     }
 }
 

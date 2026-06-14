@@ -24,6 +24,7 @@ impl Parser {
             }
         }
         validate_statement_list_declarations(&body)?;
+        validate_statement_list_labels(&body)?;
         // Any private-name reference that never resolved to an enclosing class
         // is a syntax error.
         if let Some(reference) = self.pending_private_refs.first() {
@@ -197,6 +198,7 @@ impl Parser {
                 body.push(parser.statement()?);
             }
             validate_statement_list_declarations(&body)?;
+            validate_statement_list_labels(&body)?;
             parser.expect(&TokenKind::RightBrace).map(|()| body)
         })(self);
         self.strict = previous_strict;
@@ -277,4 +279,144 @@ fn validate_statement_list_declarations(body: &[Stmt]) -> Result<(), ParseError>
     }
 
     Ok(())
+}
+
+fn validate_statement_list_labels(body: &[Stmt]) -> Result<(), ParseError> {
+    let mut context = LabelContext::default();
+    for stmt in body {
+        validate_statement_labels(stmt, &mut context)?;
+    }
+    Ok(())
+}
+
+#[derive(Default)]
+struct LabelContext {
+    break_labels: Vec<String>,
+    continue_labels: Vec<String>,
+    loop_depth: usize,
+}
+
+fn validate_statement_labels(stmt: &Stmt, context: &mut LabelContext) -> Result<(), ParseError> {
+    match stmt {
+        Stmt::Block { body, .. } => {
+            for stmt in body {
+                validate_statement_labels(stmt, context)?;
+            }
+        }
+        Stmt::If {
+            consequent,
+            alternate,
+            ..
+        } => {
+            validate_statement_labels(consequent, context)?;
+            if let Some(alternate) = alternate {
+                validate_statement_labels(alternate, context)?;
+            }
+        }
+        Stmt::While { body, .. }
+        | Stmt::DoWhile { body, .. }
+        | Stmt::For { body, .. }
+        | Stmt::ForIn { body, .. }
+        | Stmt::ForOf { body, .. } => {
+            context.loop_depth += 1;
+            let result = validate_statement_labels(body, context);
+            context.loop_depth -= 1;
+            result?;
+        }
+        Stmt::Switch { cases, .. } => {
+            for case in cases {
+                for stmt in &case.consequent {
+                    validate_statement_labels(stmt, context)?;
+                }
+            }
+        }
+        Stmt::Try {
+            block,
+            handler,
+            finalizer,
+            ..
+        } => {
+            for stmt in block {
+                validate_statement_labels(stmt, context)?;
+            }
+            if let Some(handler) = handler {
+                for stmt in &handler.body {
+                    validate_statement_labels(stmt, context)?;
+                }
+            }
+            if let Some(finalizer) = finalizer {
+                for stmt in finalizer {
+                    validate_statement_labels(stmt, context)?;
+                }
+            }
+        }
+        Stmt::With { body, .. } => validate_statement_labels(body, context)?,
+        Stmt::Labelled { label, body, .. } => {
+            context.break_labels.push(label.clone());
+            let is_continue_target = statement_is_iteration_target(body);
+            if is_continue_target {
+                context.continue_labels.push(label.clone());
+            }
+            let result = validate_statement_labels(body, context);
+            if is_continue_target {
+                context.continue_labels.pop();
+            }
+            context.break_labels.pop();
+            result?;
+        }
+        Stmt::Break {
+            label: Some(label),
+            span,
+        } if !context
+            .break_labels
+            .iter()
+            .any(|candidate| candidate == label) =>
+        {
+            return Err(ParseError {
+                message: format!("undefined break label `{label}`"),
+                span: *span,
+            });
+        }
+        Stmt::Continue { label, span } => match label {
+            Some(label)
+                if !context
+                    .continue_labels
+                    .iter()
+                    .any(|candidate| candidate == label) =>
+            {
+                return Err(ParseError {
+                    message: format!("undefined continue label `{label}`"),
+                    span: *span,
+                });
+            }
+            None if context.loop_depth == 0 => {
+                return Err(ParseError {
+                    message: "`continue` has no target".to_owned(),
+                    span: *span,
+                });
+            }
+            _ => {}
+        },
+        Stmt::FunctionDecl { .. } | Stmt::ClassDecl { .. } | Stmt::ModuleDecl(_) => {}
+        Stmt::Expr(_)
+        | Stmt::Return { .. }
+        | Stmt::Throw { .. }
+        | Stmt::Debugger { .. }
+        | Stmt::Break { .. }
+        | Stmt::VarDecl { .. }
+        | Stmt::Empty => {}
+    }
+    Ok(())
+}
+
+fn statement_is_iteration_target(stmt: &Stmt) -> bool {
+    match stmt {
+        Stmt::While { .. }
+        | Stmt::DoWhile { .. }
+        | Stmt::For { .. }
+        | Stmt::ForIn { .. }
+        | Stmt::ForOf { .. } => true,
+        Stmt::Labelled { body, .. } => statement_is_iteration_target(body),
+        _ => false,
+    }
 }

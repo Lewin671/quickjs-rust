@@ -275,6 +275,11 @@ fn parses_break_and_continue_statements() {
 }
 
 #[test]
+fn rejects_continue_to_non_iteration_label() {
+    assert!(parse_script("label: { for (;;) { continue label; } }").is_err());
+}
+
+#[test]
 fn parses_throw_statement_with_argument() {
     let script = parse_script("if (false) { throw 'fail'; }").expect("source should parse");
     let [Stmt::If { consequent, .. }] = script.body.as_slice() else {

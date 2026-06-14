@@ -16,6 +16,20 @@ fn evaluates_core_expressions_with_bytecode() {
 }
 
 #[test]
+fn block_scoped_lexicals_are_captured_independently() {
+    assert_eq!(
+        eval_bytecode_source(
+            "let x = 'outside'; \
+             var before = function() { return x; }; \
+             var inside; \
+             { let x = 'inside'; inside = function() { return x; }; } \
+             before() + ':' + inside() + ':' + x;"
+        ),
+        Ok(Value::String("outside:inside:outside".to_owned()))
+    );
+}
+
+#[test]
 fn evaluates_number_binary_fast_paths_with_bytecode() {
     assert_eq!(
         eval_bytecode_source("(8 << 2) + (32 >> 1) + (-1 >>> 31);"),
@@ -467,7 +481,7 @@ fn reports_unsupported_bytecode_surface() {
     assert_eq!(error.message, "break outside loop");
 
     let error = eval_bytecode_source("continue;").expect_err("top-level continue must not compile");
-    assert_eq!(error.message, "continue outside loop");
+    assert_eq!(error.message, "`continue` has no target");
 }
 
 #[test]
