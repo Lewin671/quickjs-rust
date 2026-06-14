@@ -106,6 +106,13 @@ test/built-ins/ArrayBuffer/prototype/transferToImmutable/to-same-or-smaller.js
 test/built-ins/DataView/buffer-does-not-have-arraybuffer-data-throws-sab.js
 test/built-ins/DataView/buffer-reference-sab.js
 test/built-ins/DataView/byteoffset-is-negative-throws-sab.js
+test/built-ins/DataView/custom-proto-access-detaches-buffer.js
+test/built-ins/DataView/custom-proto-access-resizes-buffer-invalid-by-length.js
+test/built-ins/DataView/custom-proto-access-resizes-buffer-invalid-by-offset.js
+test/built-ins/DataView/custom-proto-access-resizes-buffer-valid-by-length.js
+test/built-ins/DataView/custom-proto-access-resizes-buffer-valid-by-offset.js
+test/built-ins/DataView/custom-proto-access-throws-sab.js
+test/built-ins/DataView/custom-proto-access-throws.js
 test/built-ins/DataView/custom-proto-if-not-object-fallbacks-to-default-prototype-sab.js
 test/built-ins/DataView/custom-proto-if-object-is-used-sab.js
 test/built-ins/DataView/defined-bytelength-and-byteoffset-sab.js

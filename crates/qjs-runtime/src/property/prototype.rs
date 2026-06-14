@@ -18,11 +18,8 @@ pub(crate) fn native_construct_prototype_slot(
     let Some(new_target) = env.get(NEW_TARGET_BINDING) else {
         return Ok(fallback);
     };
-    let prototype = if matches!(new_target, Value::Proxy(_)) {
-        prototype_value_to_slot(crate::property_value(new_target, "prototype", env)?, env)
-    } else {
-        constructor_prototype_slot(&new_target, env)
-    };
+    let prototype =
+        prototype_value_to_slot(crate::property_value(new_target, "prototype", env)?, env);
     Ok(prototype.or(fallback))
 }
 

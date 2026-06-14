@@ -75,6 +75,81 @@ fn data_view_rejects_out_of_bounds_offset_and_length() {
 }
 
 #[test]
+fn data_view_constructor_reads_custom_new_target_prototype_after_offset() {
+    assert_eq!(
+        eval(
+            "let buffer = new ArrayBuffer(8); \
+             let calls = []; \
+             let offset = { valueOf() { calls.push('offset'); return 1; } }; \
+             let newTarget = (function() {}).bind(null); \
+             Object.defineProperty(newTarget, 'prototype', { \
+               get() { calls.push('prototype'); return DataView.prototype; } \
+             }); \
+             Reflect.construct(DataView, [buffer, offset], newTarget); \
+             calls.join(':');"
+        ),
+        Ok(Value::String("offset:prototype".to_owned()))
+    );
+}
+
+#[test]
+fn data_view_constructor_propagates_custom_new_target_prototype_throw() {
+    assert_eq!(
+        eval(
+            "let buffer = new ArrayBuffer(8); \
+             let marker = {}; \
+             let newTarget = (function() {}).bind(null); \
+             Object.defineProperty(newTarget, 'prototype', { get() { throw marker; } }); \
+             let caught = false; \
+             try { Reflect.construct(DataView, [buffer, 0], newTarget); } catch (e) { caught = e === marker; } \
+             caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn data_view_constructor_rechecks_detached_buffer_after_custom_prototype_access() {
+    assert_eq!(
+        eval(
+            "let buffer = new ArrayBuffer(8); \
+             let newTarget = (function() {}).bind(null); \
+             Object.defineProperty(newTarget, 'prototype', { \
+               get() { __quickjsRustDetachArrayBuffer(buffer); return DataView.prototype; } \
+             }); \
+             let threw = false; \
+             try { Reflect.construct(DataView, [buffer, 0], newTarget); } catch (e) { threw = e instanceof TypeError; } \
+             threw;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn data_view_constructor_rechecks_resized_buffer_after_custom_prototype_access() {
+    assert_eq!(
+        eval(
+            "let validBuffer = new ArrayBuffer(3, { maxByteLength: 3 }); \
+             let validTarget = (function() {}).bind(null); \
+             Object.defineProperty(validTarget, 'prototype', { \
+               get() { validBuffer.resize(2); return DataView.prototype; } \
+             }); \
+             let valid = Reflect.construct(DataView, [validBuffer, 2], validTarget); \
+             let invalidBuffer = new ArrayBuffer(3, { maxByteLength: 3 }); \
+             let invalidTarget = (function() {}).bind(null); \
+             Object.defineProperty(invalidTarget, 'prototype', { \
+               get() { invalidBuffer.resize(2); return DataView.prototype; } \
+             }); \
+             let invalidThrows = false; \
+             try { Reflect.construct(DataView, [invalidBuffer, 1, 2], invalidTarget); } \
+             catch (e) { invalidThrows = e instanceof RangeError; } \
+             [valid.byteLength, invalidThrows].join(':');"
+        ),
+        Ok(Value::String("0:true".to_owned()))
+    );
+}
+
+#[test]
 fn data_view_constructor_length_and_name() {
     assert_eq!(eval("DataView.length;"), Ok(Value::Number(1.0)));
     assert_eq!(
