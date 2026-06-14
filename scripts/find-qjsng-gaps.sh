@@ -575,6 +575,10 @@ if [ "$BASELINE_RUN_LIMIT" = "all" ]; then
   baseline_args+=(--all)
 else
   baseline_args+=(--limit "$BASELINE_RUN_LIMIT")
+  if [ -z "$REPORT_CASES_SOURCE" ]; then
+    # Gap discovery bounded runs are probes, not coverage accounting.
+    baseline_args+=(--stop-after-limit)
+  fi
 fi
 if [ -n "$FILTER_PREFIX" ]; then
   baseline_args+=(--filter "$FILTER_PREFIX")
