@@ -409,6 +409,18 @@ pub(crate) fn validate_typed_array(value: &Value) -> Result<(ObjectRef, usize), 
     Ok((object.clone(), typed_array_length(&object)))
 }
 
+/// Brand-checks `value` as an attached typed array, but preserves the current
+/// length computation for out-of-bounds resizable-buffer views.
+pub(crate) fn validate_typed_array_length(
+    value: &Value,
+) -> Result<(ObjectRef, usize), RuntimeError> {
+    let object = typed_array_receiver(value)?;
+    if typed_array_buffer_detached(&object) {
+        return Err(array_buffer::detached_error());
+    }
+    Ok((object.clone(), typed_array_length(&object)))
+}
+
 /// Builds a fresh typed array of `native`'s kind backed by a new buffer, with
 /// the given already-coerced element values, materializing index reads. Used by
 /// the methods that return a new typed array (`map`, `filter`, `slice`, …).

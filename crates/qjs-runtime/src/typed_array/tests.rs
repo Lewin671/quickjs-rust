@@ -572,6 +572,43 @@ fn subarray_copies_range() {
         eval("new Uint8Array([1, 2, 3, 4]).subarray(1, 3).join(',');"),
         Ok(Value::String("2,3".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let fixed = new Uint8Array(b, 0, 4); fixed.set([0, 2, 4, 6]); \
+             b.resize(2); \
+             let begin = { valueOf() { b.resize(4); return 0; } }; \
+             let result = fixed.subarray(begin, 1); \
+             result.length + ':' + result.join(',');"
+        ),
+        Ok(Value::String("0:".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let fixed = new Uint8Array(b, 0, 4); fixed.set([0, 2, 4, 6]); \
+             let begin = { valueOf() { b.resize(2); return 0; } }; \
+             let smaller = fixed.subarray(begin, 1).join(','); \
+             b = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             fixed = new Uint8Array(b, 0, 4); fixed.set([0, 2, 4, 6]); \
+             let threw = false; \
+             try { fixed.subarray(0, { valueOf() { b.resize(2); return 3; } }); } \
+             catch (e) { threw = e instanceof RangeError; } \
+             smaller + ':' + threw;"
+        ),
+        Ok(Value::String("0:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let offset = new Uint8Array(b, 2, 2); \
+             b.resize(1); \
+             let threw = false; \
+             try { offset.subarray(0); } catch (e) { threw = e instanceof RangeError; } \
+             String(threw);"
+        ),
+        Ok(Value::String("true".to_owned()))
+    );
 }
 
 // --- Prototype methods: write / order family (batch 2) -----------------------

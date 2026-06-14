@@ -5,12 +5,15 @@
 //! so values stay correct even if index properties drift.
 
 use crate::{
-    ObjectRef, RuntimeError, Value, call_function, is_truthy, to_js_string_with_env,
+    ObjectRef, RuntimeError, Value, array_buffer, call_function, is_truthy, to_js_string_with_env,
     to_number_with_env,
 };
 
 use super::element::{ViewSnapshot, get_view_element, read_view_elements};
-use super::{typed_array_kind, validate_typed_array};
+use super::{
+    bytes_per_element, typed_array_buffer, typed_array_byte_offset, typed_array_kind,
+    validate_typed_array, validate_typed_array_length,
+};
 use crate::CallEnv;
 
 // --- shared iteration scaffolding -------------------------------------------
@@ -576,6 +579,43 @@ pub(crate) fn native_typed_array_prototype_slice(
     )))
 }
 
+fn validate_subarray_range(
+    object: &ObjectRef,
+    start: usize,
+    count: usize,
+) -> Result<(), RuntimeError> {
+    let Some(buffer) = typed_array_buffer(object) else {
+        return Ok(());
+    };
+    let buffer_byte_length = array_buffer::array_buffer_bytes(&buffer).len();
+    let element = bytes_per_element(typed_array_kind(object));
+    let byte_start = typed_array_byte_offset(object)
+        .checked_add(
+            start
+                .checked_mul(element)
+                .ok_or_else(invalid_subarray_range_error)?,
+        )
+        .ok_or_else(invalid_subarray_range_error)?;
+    let byte_length = count
+        .checked_mul(element)
+        .ok_or_else(invalid_subarray_range_error)?;
+    if byte_start > buffer_byte_length
+        || byte_start
+            .checked_add(byte_length)
+            .is_none_or(|end| end > buffer_byte_length)
+    {
+        return Err(invalid_subarray_range_error());
+    }
+    Ok(())
+}
+
+fn invalid_subarray_range_error() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "RangeError: invalid typed array subarray range".to_owned(),
+    }
+}
+
 pub(crate) fn native_typed_array_prototype_subarray(
     this_value: Value,
     argument_values: &[Value],
@@ -585,7 +625,7 @@ pub(crate) fn native_typed_array_prototype_subarray(
     // produce an independent copy of the range, which keeps element values and
     // length correct (the data aliasing is a known simplification, noted in the
     // task file). A future shared-view slot would replace this copy.
-    let (object, length) = validate_typed_array(&this_value)?;
+    let (object, length) = validate_typed_array_length(&this_value)?;
     let native = typed_array_kind(&object);
     let start = relative_index(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -600,8 +640,10 @@ pub(crate) fn native_typed_array_prototype_subarray(
         env,
     )?;
     let values = if start < end {
+        validate_subarray_range(&object, start, end - start)?;
         read_view_elements(&object, start, end - start)
     } else {
+        validate_subarray_range(&object, start, 0)?;
         Vec::new()
     };
     Ok(Value::Object(super::create_typed_array_of_kind(
