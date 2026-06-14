@@ -292,6 +292,64 @@ fn array_buffer_immutable_accessor_and_transfer() {
 }
 
 #[test]
+fn array_buffer_transfer_copies_detaches_and_preserves_resizability() {
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let a = new Uint8Array(b); a[0] = 7; a[1] = 8; \
+             let c = b.transfer(6); \
+             [b.byteLength, b.detached, c.byteLength, c.resizable, c.maxByteLength, new Uint8Array(c)[0], new Uint8Array(c)[1], new Uint8Array(c)[5]].join(':');"
+        ),
+        Ok(Value::String("0:true:6:true:8:7:8:0".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4); \
+             let a = new Uint8Array(b); a[0] = 3; a[1] = 4; \
+             let c = b.transfer(2); \
+             [b.byteLength, c.byteLength, c.resizable, c.maxByteLength, new Uint8Array(c)[0], new Uint8Array(c)[1]].join(':');"
+        ),
+        Ok(Value::String("0:2:false:2:3:4".to_owned()))
+    );
+}
+
+#[test]
+fn array_buffer_transfer_to_fixed_length_drops_resizability() {
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let a = new Uint8Array(b); a[0] = 1; a[1] = 2; \
+             let c = b.transferToFixedLength(5); \
+             [b.byteLength, b.detached, c.byteLength, c.resizable, c.maxByteLength, new Uint8Array(c)[0], new Uint8Array(c)[1], new Uint8Array(c)[4]].join(':');"
+        ),
+        Ok(Value::String("0:true:5:false:5:1:2:0".to_owned()))
+    );
+}
+
+#[test]
+fn array_buffer_transfer_coerces_length_before_detached_and_immutable_checks() {
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4); \
+             __quickjsRustDetachArrayBuffer(b); \
+             let calls = 0; \
+             try { b.transfer({ valueOf() { calls++; return 1; } }); } catch (_) {} \
+             calls;"
+        ),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4).transferToImmutable(); \
+             let calls = 0; \
+             try { b.transferToFixedLength({ valueOf() { calls++; return 1; } }); } catch (_) {} \
+             calls;"
+        ),
+        Ok(Value::Number(1.0))
+    );
+}
+
+#[test]
 fn array_buffer_immutable_rejects_invalid_receivers_and_retransfer() {
     assert!(
         eval("Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, 'immutable').get.call({});")
