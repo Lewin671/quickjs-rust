@@ -71,6 +71,36 @@ fn array_buffer_slice_validates_species_result_size() {
 }
 
 #[test]
+fn array_buffer_slice_rejects_immutable_species_result() {
+    assert_eq!(
+        eval(
+            "let calls = []; \
+             let species = {}; \
+             species[Symbol.species] = function(length) { calls.push('species:' + length); return new ArrayBuffer(8).transferToImmutable(); }; \
+             let buffer = new ArrayBuffer(8); \
+             buffer.constructor = species; \
+             try { buffer.slice(); } catch (_) {} \
+             calls.join('|');"
+        ),
+        Ok(Value::String("species:8".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let calls = []; \
+             let species = {}; \
+             species[Symbol.species] = function(length) { calls.push('species:' + length); return new ArrayBuffer(8).transferToImmutable(); }; \
+             let buffer = new ArrayBuffer(8); \
+             buffer.constructor = species; \
+             let start = { valueOf() { calls.push('start'); return 1; } }; \
+             let end = { valueOf() { calls.push('end'); return 2; } }; \
+             try { buffer.slice(start, end); } catch (_) {} \
+             calls.join('|');"
+        ),
+        Ok(Value::String("start|end|species:1".to_owned()))
+    );
+}
+
+#[test]
 fn array_buffer_slice_to_immutable_copies_and_marks_result() {
     assert_eq!(
         eval(

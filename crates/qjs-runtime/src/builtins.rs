@@ -43,6 +43,7 @@ pub(crate) fn initialize_builtins(env: &mut CallEnv, global_this: &Value) {
     math::install_math(env, global_this, object_prototype.clone());
     reflect::install_reflect(env, global_this, object_prototype.clone());
     array::install_array(env, global_this, object_prototype.clone());
+    typed_array::alias_array_prototype_to_string(env);
     async_function::install_async_function(env, global_this, object_prototype.clone());
     async_generator::install_async_generator(env, global_this, object_prototype.clone());
     generator::install_generator(env, global_this, object_prototype);

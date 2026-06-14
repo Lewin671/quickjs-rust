@@ -379,6 +379,12 @@ pub(crate) fn native_array_buffer_prototype_slice(
             message: "TypeError: ArrayBuffer species result is too small".to_owned(),
         });
     }
+    if is_immutable(&result) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: ArrayBuffer species result is immutable".to_owned(),
+        });
+    }
     // Re-read the source after the user-observable index coercion above, which
     // could have detached it.
     if is_detached(&object) {
