@@ -204,10 +204,11 @@ pub(crate) fn native_set_prototype_union(
 ) -> Result<Value, RuntimeError> {
     let set = this_set(this_value)?;
     let other = SetRecord::from_arguments(argument_values, env)?;
-    let result = new_set_like(&set);
-    for value in set.values() {
+    let result = new_composition_result_set(env);
+    for_each_live_set_value(&set, |value| {
         result.add(value);
-    }
+        Ok(true)
+    })?;
     for value in other.keys(env)? {
         result.add(value);
     }
@@ -221,13 +222,14 @@ pub(crate) fn native_set_prototype_intersection(
 ) -> Result<Value, RuntimeError> {
     let set = this_set(this_value)?;
     let other = SetRecord::from_arguments(argument_values, env)?;
-    let result = new_set_like(&set);
+    let result = new_composition_result_set(env);
     if (set.len() as f64) <= other.size() {
-        for value in set.values() {
+        for_each_live_set_value(&set, |value| {
             if other.has(&value, env)? {
                 result.add(value);
             }
-        }
+            Ok(true)
+        })?;
     } else {
         for value in other.keys(env)? {
             if set.has(&value) {
@@ -245,17 +247,19 @@ pub(crate) fn native_set_prototype_difference(
 ) -> Result<Value, RuntimeError> {
     let set = this_set(this_value)?;
     let other = SetRecord::from_arguments(argument_values, env)?;
-    let result = new_set_like(&set);
+    let result = new_composition_result_set(env);
     if (set.len() as f64) <= other.size() {
-        for value in set.values() {
+        for_each_live_set_value(&set, |value| {
             if !other.has(&value, env)? {
                 result.add(value);
             }
-        }
+            Ok(true)
+        })?;
     } else {
-        for value in set.values() {
+        for_each_live_set_value(&set, |value| {
             result.add(value);
-        }
+            Ok(true)
+        })?;
         for value in other.keys(env)? {
             result.delete(&value);
         }
@@ -270,10 +274,11 @@ pub(crate) fn native_set_prototype_symmetric_difference(
 ) -> Result<Value, RuntimeError> {
     let set = this_set(this_value)?;
     let other = SetRecord::from_arguments(argument_values, env)?;
-    let result = new_set_like(&set);
-    for value in set.values() {
+    let result = new_composition_result_set(env);
+    for_each_live_set_value(&set, |value| {
         result.add(value);
-    }
+        Ok(true)
+    })?;
     for value in other.keys(env)? {
         if set.has(&value) {
             result.delete(&value);
@@ -294,12 +299,13 @@ pub(crate) fn native_set_prototype_is_subset_of(
     if (set.len() as f64) > other.size() {
         return Ok(Value::Boolean(false));
     }
-    for value in set.values() {
+    let all_present = for_each_live_set_value(&set, |value| {
         if !other.has(&value, env)? {
-            return Ok(Value::Boolean(false));
+            return Ok(false);
         }
-    }
-    Ok(Value::Boolean(true))
+        Ok(true)
+    })?;
+    Ok(Value::Boolean(all_present))
 }
 
 pub(crate) fn native_set_prototype_is_superset_of(
@@ -323,10 +329,14 @@ pub(crate) fn native_set_prototype_is_disjoint_from(
     let set = this_set(this_value)?;
     let other = SetRecord::from_arguments(argument_values, env)?;
     if (set.len() as f64) <= other.size() {
-        for value in set.values() {
+        let disjoint = for_each_live_set_value(&set, |value| {
             if other.has(&value, env)? {
-                return Ok(Value::Boolean(false));
+                return Ok(false);
             }
+            Ok(true)
+        })?;
+        if !disjoint {
+            return Ok(Value::Boolean(false));
         }
     } else {
         if other.has_any_in_set(&set, env)? {
@@ -452,8 +462,45 @@ fn this_set(this_value: Value) -> Result<SetRef, RuntimeError> {
     }
 }
 
-fn new_set_like(set: &SetRef) -> SetRef {
-    SetRef::new(set.object().prototype())
+fn new_composition_result_set(env: &CallEnv) -> SetRef {
+    SetRef::new(set_prototype(env))
+}
+
+fn set_prototype(env: &CallEnv) -> Option<ObjectRef> {
+    let Some(Value::Function(set_function)) = env.get("Set") else {
+        return None;
+    };
+    crate::function_prototype(&set_function)
+}
+
+fn for_each_live_set_value<F>(set: &SetRef, mut visit: F) -> Result<bool, RuntimeError>
+where
+    F: FnMut(Value) -> Result<bool, RuntimeError>,
+{
+    let mut index = 0;
+    loop {
+        let values = set.values();
+        let Some(value) = values.get(index).cloned() else {
+            return Ok(true);
+        };
+        let tail_values = values.iter().skip(index + 1).cloned().collect::<Vec<_>>();
+        if !visit(value.clone())? {
+            return Ok(false);
+        }
+        let values = set.values();
+        if let Some(next_index) = tail_values.iter().find_map(|tail_value| {
+            values
+                .iter()
+                .position(|entry| entry.same_value_zero(tail_value))
+        }) {
+            index = next_index;
+        } else if values
+            .get(index)
+            .is_some_and(|entry| entry.same_value_zero(&value))
+        {
+            index += 1;
+        }
+    }
 }
 
 fn set_iterator(this_value: Value, env: &CallEnv, kind: &str) -> Result<Value, RuntimeError> {
