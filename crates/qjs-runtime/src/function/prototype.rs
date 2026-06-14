@@ -111,6 +111,7 @@ pub(crate) fn native_generator_function(
         home_object: None,
         super_constructor: None,
         captured_env: Rc::new(RefCell::new(env_snapshot)),
+        with_stack: Vec::new(),
         capture_writeback: None,
     });
     crate::generator::wire_generator_function_intrinsics(&created, env);

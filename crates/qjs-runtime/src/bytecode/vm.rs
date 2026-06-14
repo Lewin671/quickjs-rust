@@ -30,9 +30,11 @@ pub(super) fn eval_function_bytecode(
     bytecode: &Bytecode,
     env: CallEnv,
     captured_env: Rc<RefCell<HashMap<String, Value>>>,
+    with_stack: Vec<Value>,
     capture_writeback: Option<CaptureWriteback>,
 ) -> FunctionBytecodeResult<'_> {
-    let mut vm = Vm::new_with_globals_and_captures(bytecode, env, captured_env);
+    let mut vm =
+        Vm::new_with_globals_captures_and_with_stack(bytecode, env, captured_env, with_stack);
     vm.capture_writeback = capture_writeback;
     let value = vm.run();
     vm.refresh_live_locals_from_captured_env();
@@ -107,6 +109,15 @@ impl<'a> Vm<'a> {
         env: CallEnv,
         captured_env: Rc<RefCell<HashMap<String, Value>>>,
     ) -> Self {
+        Self::new_with_globals_captures_and_with_stack(bytecode, env, captured_env, Vec::new())
+    }
+
+    pub(super) fn new_with_globals_captures_and_with_stack(
+        bytecode: &'a Bytecode,
+        env: CallEnv,
+        captured_env: Rc<RefCell<HashMap<String, Value>>>,
+        with_stack: Vec<Value>,
+    ) -> Self {
         let realm = env.realm_rc();
         let module_host = env.module_host();
         let locals = Self::initial_slots(bytecode, &env);
@@ -129,7 +140,7 @@ impl<'a> Vm<'a> {
             resume_mode: None,
             stop_at_prologue: false,
             array_prototype_cache: None,
-            with_stack: Vec::new(),
+            with_stack,
         }
     }
 
@@ -392,6 +403,7 @@ impl<'a> Vm<'a> {
                         home_object,
                         super_constructor,
                         captured_env,
+                        with_stack: self.with_stack.clone(),
                         capture_writeback: self.capture_writeback.clone(),
                     });
                     self.capture_private_environment(&function);

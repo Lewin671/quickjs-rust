@@ -146,6 +146,7 @@ impl Compiler {
             return self.compile_member_compound_assign(target, op, value);
         };
         let slot = self.resolve_local_slot(name);
+        let resolved_with_object_slot = self.resolve_with_identifier_target(name, slot);
         match op {
             AssignmentOp::LogicalAndAssign => {
                 self.emit_load_identifier(name, slot);
@@ -159,7 +160,7 @@ impl Compiler {
                     self.compile_named_expr(value, name)?;
                 }
                 self.emit(Op::Dup);
-                self.emit_store_identifier(name, slot);
+                self.emit_store_identifier(name, slot, resolved_with_object_slot);
                 let end = self.code.len();
                 self.patch_jump(end_jump, end);
             }
@@ -173,7 +174,7 @@ impl Compiler {
                     self.compile_named_expr(value, name)?;
                 }
                 self.emit(Op::Dup);
-                self.emit_store_identifier(name, slot);
+                self.emit_store_identifier(name, slot, resolved_with_object_slot);
                 let end = self.code.len();
                 self.patch_jump(end_jump, end);
             }
@@ -187,7 +188,7 @@ impl Compiler {
                     self.compile_named_expr(value, name)?;
                 }
                 self.emit(Op::Dup);
-                self.emit_store_identifier(name, slot);
+                self.emit_store_identifier(name, slot, resolved_with_object_slot);
                 let end = self.code.len();
                 self.patch_jump(end_jump, end);
             }
@@ -196,7 +197,7 @@ impl Compiler {
                 self.compile_expr(value)?;
                 self.emit(Op::Binary(assignment_binary_op(op)?));
                 self.emit(Op::Dup);
-                self.emit_store_identifier(name, slot);
+                self.emit_store_identifier(name, slot, resolved_with_object_slot);
             }
         }
         Ok(())
@@ -212,6 +213,7 @@ impl Compiler {
             return self.compile_member_update(target, op, prefix);
         };
         let slot = self.resolve_local_slot(name);
+        let resolved_with_object_slot = self.resolve_with_identifier_target(name, slot);
         self.emit_load_identifier(name, slot);
         self.emit(Op::ToNumeric);
         if !prefix {
@@ -220,9 +222,9 @@ impl Compiler {
         self.emit(Op::Update(op));
         if prefix {
             self.emit(Op::Dup);
-            self.emit_store_identifier(name, slot);
+            self.emit_store_identifier(name, slot, resolved_with_object_slot);
         } else {
-            self.emit_store_identifier(name, slot);
+            self.emit_store_identifier(name, slot, resolved_with_object_slot);
         }
         Ok(())
     }
@@ -240,8 +242,33 @@ impl Compiler {
         }
     }
 
-    pub(super) fn emit_store_identifier(&mut self, name: &str, slot: Option<usize>) {
-        if self.inside_with() {
+    fn resolve_with_identifier_target(&mut self, name: &str, slot: Option<usize>) -> Option<usize> {
+        if !self.inside_with() {
+            return None;
+        }
+        let object_slot = self.temp_local("with_assignment_object");
+        self.emit(Op::ResolveIdentWith {
+            name: name.to_owned(),
+            slot,
+            object_slot,
+        });
+        Some(object_slot)
+    }
+
+    pub(super) fn emit_store_identifier(
+        &mut self,
+        name: &str,
+        slot: Option<usize>,
+        resolved_with_object_slot: Option<usize>,
+    ) {
+        if let Some(object_slot) = resolved_with_object_slot {
+            self.emit(Op::StoreResolvedIdentWith {
+                name: name.to_owned(),
+                slot,
+                object_slot,
+                is_strict: self.strict,
+            });
+        } else if self.inside_with() {
             self.emit(Op::StoreIdentWith {
                 name: name.to_owned(),
                 slot,
@@ -249,8 +276,14 @@ impl Compiler {
             });
         } else if let Some(slot) = slot {
             self.emit(Op::AssignLocal(slot));
-        } else {
+        } else if self.strict || self.is_global_hoisted(name) {
             self.emit(Op::StoreGlobalStrict(name.to_owned()));
+        } else {
+            let slot = self.assignment_slot(name);
+            self.emit(Op::StoreLocalOrGlobalSloppy {
+                slot,
+                name: name.to_owned(),
+            });
         }
     }
 

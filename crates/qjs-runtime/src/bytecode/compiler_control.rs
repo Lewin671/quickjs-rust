@@ -462,7 +462,7 @@ impl Compiler {
                 self.emit(Op::LoadLocal(key_slot));
                 let slot = self.resolve_local_slot(name);
                 if slot.is_some() || self.inside_with() {
-                    self.emit_store_identifier(name, slot);
+                    self.emit_store_identifier(name, slot, None);
                 } else if self.strict || self.is_global_hoisted(name) {
                     self.emit(Op::StoreGlobalStrict(name.clone()));
                 } else {

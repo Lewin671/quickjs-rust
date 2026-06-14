@@ -217,6 +217,50 @@ impl Vm<'_> {
             .map(|property| property.value)
     }
 
+    fn has_realm_or_global_this_binding(&self, name: &str) -> bool {
+        self.realm.borrow().contains_key(name) || self.global_this_property(name).is_some()
+    }
+
+    fn store_realm_or_global_this_sloppy(
+        &mut self,
+        name: String,
+        value: Value,
+    ) -> Result<(), RuntimeError> {
+        if let Some(property) = self.global_this_own_property(&name)
+            && !property.writable
+        {
+            return Ok(());
+        }
+        if self.env.locals().contains_key(&name) {
+            self.env.insert(name.clone(), value.clone());
+            self.write_through_captured(&name, value);
+            return Ok(());
+        }
+        self.invalidate_array_prototype_cache(&name);
+        if self.realm.borrow().contains_key(&name) {
+            self.realm.borrow_mut().insert(name.clone(), value.clone());
+            let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
+                Some(Value::Object(global_this)) => Some(global_this.clone()),
+                _ => None,
+            };
+            if let Some(global_this) = global_this
+                && global_this.has_own_property(&name)
+            {
+                global_this.set(name, value);
+            }
+            return Ok(());
+        }
+        let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
+            Some(Value::Object(global_this)) => Some(global_this.clone()),
+            _ => None,
+        };
+        if let Some(global_this) = global_this {
+            global_this.set(name.clone(), value.clone());
+        }
+        self.realm.borrow_mut().insert(name, value);
+        Ok(())
+    }
+
     /// Returns the full own-property descriptor of a `globalThis` property so
     /// callers can inspect attribute flags such as `writable`.
     pub(super) fn global_this_own_property(&self, name: &str) -> Option<Property> {
@@ -338,6 +382,12 @@ impl Vm<'_> {
             },
             object => {
                 let mut env = self.current_env();
+                if is_strict && !has_property(object.clone(), &env, name)? {
+                    return Err(RuntimeError {
+                        thrown: None,
+                        message: format!("ReferenceError: undefined identifier `{name}`"),
+                    });
+                }
                 set_property_key(
                     object,
                     PropertyKey::String(name.to_owned()),
@@ -457,21 +507,24 @@ impl Vm<'_> {
     ) -> Result<(), RuntimeError> {
         match self.locals.get(slot) {
             Some(Some(_)) => {
-                self.store_local(slot, value.clone())?;
-                if self.env.contains_key(&name) {
-                    self.store_global_sloppy(name, value)?;
+                if self.has_realm_or_global_this_binding(&name) {
+                    self.store_realm_or_global_this_sloppy(name.clone(), value)?;
+                    let value = self.load_global(&name)?;
+                    self.store_local(slot, value)?;
+                } else {
+                    self.store_local(slot, value)?;
                 }
                 Ok(())
             }
             Some(None) => {
                 self.store_global_sloppy(name.clone(), value)?;
                 self.record_sloppy_global_name(&name);
-                let global_value = self.env.get(&name);
+                let global_value = self.load_global(&name)?;
                 let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
                     thrown: None,
                     message: "bytecode local index out of bounds".to_owned(),
                 })?;
-                *local = global_value;
+                *local = Some(global_value);
                 Ok(())
             }
             None => Err(RuntimeError {

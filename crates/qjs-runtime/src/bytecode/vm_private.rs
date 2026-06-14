@@ -174,6 +174,7 @@ impl Vm<'_> {
             home_object: Some(home_object),
             super_constructor: None,
             captured_env: Rc::new(RefCell::new(method_env)),
+            with_stack: self.with_stack.clone(),
             capture_writeback: self.class_member_capture_writeback(&def.bytecode, &def.local_names),
         });
         if def.is_generator && def.is_async {
@@ -223,6 +224,7 @@ impl Vm<'_> {
             home_object: Some(home_object),
             super_constructor: None,
             captured_env: Rc::new(RefCell::new(field_env)),
+            with_stack: self.with_stack.clone(),
             capture_writeback: self
                 .class_member_capture_writeback(&definition.bytecode, &definition.local_names),
         })

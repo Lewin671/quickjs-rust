@@ -104,9 +104,10 @@ pub(crate) fn eval_function_bytecode(
     bytecode: &Bytecode,
     env: crate::CallEnv,
     captured_env: Rc<RefCell<HashMap<String, Value>>>,
+    with_stack: Vec<Value>,
     capture_writeback: Option<CaptureWriteback>,
 ) -> FunctionBytecodeResult<'_> {
-    vm::eval_function_bytecode(bytecode, env, captured_env, capture_writeback)
+    vm::eval_function_bytecode(bytecode, env, captured_env, with_stack, capture_writeback)
 }
 
 /// Compiles and evaluates source text through the bytecode VM.
@@ -244,5 +245,5 @@ pub(crate) fn eval_bytecode_with_env(
     env: crate::CallEnv,
 ) -> FunctionBytecodeResult<'_> {
     let captured_env = Rc::new(RefCell::new(env.snapshot_locals()));
-    vm::eval_function_bytecode(bytecode, env, captured_env, None)
+    vm::eval_function_bytecode(bytecode, env, captured_env, Vec::new(), None)
 }

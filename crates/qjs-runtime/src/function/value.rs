@@ -69,6 +69,7 @@ pub struct Function {
     /// Environment captured when the function was created.
     pub env: HashMap<String, Value>,
     pub(crate) captured_env: Rc<RefCell<HashMap<String, Value>>>,
+    pub(crate) with_stack: Vec<Value>,
     pub(crate) capture_writeback: Option<CaptureWriteback>,
     pub(crate) local_names: Vec<String>,
     pub(crate) bytecode: Option<Rc<Bytecode>>,
@@ -151,6 +152,7 @@ pub(crate) struct CompiledUserFunction {
     pub(crate) home_object: Option<Value>,
     pub(crate) super_constructor: Option<Value>,
     pub(crate) captured_env: Rc<RefCell<HashMap<String, Value>>>,
+    pub(crate) with_stack: Vec<Value>,
     pub(crate) capture_writeback: Option<CaptureWriteback>,
 }
 
@@ -251,6 +253,7 @@ impl Function {
             params,
             env,
             captured_env,
+            with_stack: Vec::new(),
             capture_writeback: None,
             local_names,
             bytecode: Some(bytecode),
@@ -310,6 +313,7 @@ impl Function {
             home_object,
             super_constructor,
             captured_env,
+            with_stack,
             capture_writeback,
         } = compiled;
         let prototype = ObjectRef::with_prototype(
@@ -322,6 +326,7 @@ impl Function {
             params,
             env,
             captured_env,
+            with_stack,
             capture_writeback,
             local_names,
             bytecode: Some(bytecode),
@@ -429,6 +434,7 @@ impl Function {
             params: FunctionParams::positional(vec![String::new(); length]),
             env: HashMap::new(),
             captured_env: Rc::new(RefCell::new(HashMap::new())),
+            with_stack: Vec::new(),
             capture_writeback: None,
             local_names: Vec::new(),
             bytecode: None,
@@ -479,6 +485,7 @@ impl Function {
             params: FunctionParams::positional(params),
             env,
             captured_env,
+            with_stack: Vec::new(),
             capture_writeback: None,
             local_names: Vec::new(),
             bytecode: None,

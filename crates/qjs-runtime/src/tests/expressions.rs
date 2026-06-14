@@ -554,6 +554,25 @@ fn assignment_in_with_uses_initial_reference() {
 }
 
 #[test]
+fn strict_compound_assignment_rechecks_resolved_object_environment_binding() {
+    assert_eq!(
+        eval(
+            "var count = 0;
+             var scope = { get x() { delete this.x; return 2; } };
+             with (scope) {
+               (function() {
+                 'use strict';
+                 try { count++; x += 1; count++; }
+                 catch (error) { count += error instanceof ReferenceError ? 1 : 100; }
+               })();
+             }
+             count + ':' + ('x' in scope);"
+        ),
+        Ok(Value::String("2:false".to_owned()))
+    );
+}
+
+#[test]
 fn assignments_respect_lexical_tdz() {
     assert_eq!(
         eval(

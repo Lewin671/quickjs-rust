@@ -145,6 +145,7 @@ pub(crate) fn call_function(
                     bytecode: bytecode.clone(),
                     env: function_env.env,
                     captured_env: activation_captured_env,
+                    with_stack: function.with_stack.clone(),
                     refresh_captured_slots_on_resume: true,
                     capture_writeback,
                 },
@@ -207,6 +208,7 @@ pub(crate) fn call_function(
             bytecode,
             function_env.env,
             activation_captured_env,
+            function.with_stack.clone(),
             activation_writeback,
         );
         propagate_function_captures(&function, &function_env.function_capture_names, &result);

@@ -813,6 +813,7 @@ pub(crate) fn call_async_generator_function(
             bytecode,
             env: function_env,
             captured_env: captured,
+            with_stack: function.with_stack.clone(),
             refresh_captured_slots_on_resume: true,
             capture_writeback: None,
         },

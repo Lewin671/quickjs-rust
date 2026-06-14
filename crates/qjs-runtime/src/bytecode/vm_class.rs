@@ -89,6 +89,7 @@ impl Vm<'_> {
             home_object: None,
             super_constructor: super_constructor.clone(),
             captured_env: constructor_captured,
+            with_stack: self.with_stack.clone(),
             capture_writeback: self
                 .class_member_capture_writeback(&constructor.bytecode, &constructor.local_names),
         });
@@ -340,6 +341,7 @@ impl Vm<'_> {
                         home_object: Some(Value::Function(constructor_function.clone())),
                         super_constructor: None,
                         captured_env: Rc::new(RefCell::new(key_env)),
+                        with_stack: self.with_stack.clone(),
                         capture_writeback: self
                             .class_member_capture_writeback(bytecode, local_names),
                     });
@@ -393,6 +395,7 @@ impl Vm<'_> {
             home_object: Some(home_object.clone()),
             super_constructor: None,
             captured_env: Rc::new(RefCell::new(method_env)),
+            with_stack: self.with_stack.clone(),
             capture_writeback: self
                 .class_member_capture_writeback(&method.bytecode, &method.local_names),
         });
@@ -482,6 +485,7 @@ impl Vm<'_> {
             home_object: Some(home_object),
             super_constructor: None,
             captured_env: Rc::new(RefCell::new(field_env)),
+            with_stack: self.with_stack.clone(),
             capture_writeback: self.class_member_capture_writeback(bytecode, local_names),
         }))
     }
@@ -555,6 +559,7 @@ impl Vm<'_> {
             home_object: Some(Value::Function(constructor_function.clone())),
             super_constructor: None,
             captured_env: Rc::new(RefCell::new(block_env)),
+            with_stack: self.with_stack.clone(),
             capture_writeback: self.class_member_capture_writeback(bytecode, local_names),
         });
         self.run_field_initializer(&thunk, Value::Function(constructor_function.clone()))?;

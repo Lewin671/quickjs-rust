@@ -39,6 +39,7 @@ pub(crate) struct GeneratorStart {
     pub(crate) bytecode: Rc<Bytecode>,
     pub(crate) env: CallEnv,
     pub(crate) captured_env: Rc<RefCell<HashMap<String, Value>>>,
+    pub(crate) with_stack: Vec<Value>,
     pub(crate) refresh_captured_slots_on_resume: bool,
     pub(crate) capture_writeback: Option<CaptureWriteback>,
 }
@@ -59,6 +60,7 @@ pub(crate) struct GeneratorSnapshot {
     locals: Vec<Slot>,
     env: CallEnv,
     captured_env: Rc<RefCell<HashMap<String, Value>>>,
+    with_stack: Vec<Value>,
     refresh_captured_slots_on_resume: bool,
     capture_writeback: Option<CaptureWriteback>,
     sloppy_global_names: Vec<String>,
@@ -255,6 +257,7 @@ impl Vm<'_> {
             locals: self.locals,
             env: self.env,
             captured_env: self.captured_env,
+            with_stack: self.with_stack,
             refresh_captured_slots_on_resume,
             capture_writeback,
             sloppy_global_names: self.sloppy_global_names,
@@ -280,10 +283,12 @@ pub(crate) fn start_suspended_at_body(
         bytecode,
         env,
         captured_env,
+        with_stack,
         refresh_captured_slots_on_resume,
         capture_writeback,
     } = start;
-    let mut vm = Vm::new_with_globals_and_captures(&bytecode, env, captured_env);
+    let mut vm =
+        Vm::new_with_globals_captures_and_with_stack(&bytecode, env, captured_env, with_stack);
     vm.capture_writeback = capture_writeback.clone();
     vm.stop_at_prologue = true;
     vm.refresh_from_caller(caller_env);
@@ -322,10 +327,12 @@ fn run_from_start(
         bytecode,
         env,
         captured_env,
+        with_stack,
         refresh_captured_slots_on_resume,
         capture_writeback,
     } = start;
-    let mut vm = Vm::new_with_globals_and_captures(&bytecode, env, captured_env);
+    let mut vm =
+        Vm::new_with_globals_captures_and_with_stack(&bytecode, env, captured_env, with_stack);
     vm.capture_writeback = capture_writeback.clone();
     vm.refresh_from_caller(caller_env);
     let result = vm.run_completion();
@@ -346,7 +353,12 @@ fn run_from_yield(
     caller_env: &mut CallEnv,
 ) -> Result<(GeneratorState, GeneratorOutcome), RuntimeError> {
     let bytecode = snapshot.bytecode.clone();
-    let mut vm = Vm::new_with_globals_and_captures(&bytecode, snapshot.env, snapshot.captured_env);
+    let mut vm = Vm::new_with_globals_captures_and_with_stack(
+        &bytecode,
+        snapshot.env,
+        snapshot.captured_env,
+        snapshot.with_stack,
+    );
     vm.capture_writeback = snapshot.capture_writeback.clone();
     vm.ip = snapshot.ip;
     vm.stack = snapshot.stack;

@@ -34,6 +34,10 @@ pub(super) struct Compiler {
     /// Break/continue/return that leave one or more of them emit `Op::ExitWith`
     /// for each scope crossed, keeping the VM's with-object stack balanced.
     pub(super) with_depth: usize,
+    /// `with` scopes captured from an enclosing function-creation environment.
+    /// They are present when the frame starts, so returns must not emit
+    /// `ExitWith` for these baseline entries.
+    pub(super) with_base_depth: usize,
     /// Set when an invalid `/.../` regexp literal aborted compilation; such
     /// literals are parse-phase errors, not generic early errors.
     pub(super) regexp_literal_error: bool,
@@ -99,6 +103,7 @@ impl Default for Compiler {
             global_hoisted: std::collections::HashSet::new(),
             annex_b_blocked_function_names: Vec::new(),
             with_depth: 0,
+            with_base_depth: 0,
             regexp_literal_error: false,
             async_generator_body: false,
             try_result_slots: Vec::new(),
@@ -162,12 +167,8 @@ pub(super) fn compile_function_body_with_strict_generator(
     is_generator: bool,
     is_async: bool,
 ) -> Result<Bytecode, RuntimeError> {
-    Compiler {
-        strict: parent_strict,
-        async_generator_body: is_generator && is_async,
-        ..Compiler::default()
-    }
-    .compile_function(params, body)
+    Compiler::function_compiler(parent_strict, is_generator && is_async)
+        .compile_function(params, body)
 }
 
 impl Compiler {
@@ -183,6 +184,20 @@ impl Compiler {
         Self {
             strict,
             async_generator_body,
+            ..Self::default()
+        }
+    }
+
+    pub(super) fn function_compiler_with_base_with_depth(
+        strict: bool,
+        async_generator_body: bool,
+        with_base_depth: usize,
+    ) -> Self {
+        Self {
+            strict,
+            async_generator_body,
+            with_depth: with_base_depth,
+            with_base_depth,
             ..Self::default()
         }
     }
@@ -833,7 +848,7 @@ impl Compiler {
                     self.emit_load_undefined();
                 }
                 self.emit_loop_iterator_closes_for_return();
-                self.emit_with_exits_above(0);
+                self.emit_with_exits_above(self.with_base_depth);
                 self.emit(Op::Return);
                 Ok(())
             }
