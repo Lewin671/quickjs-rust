@@ -440,3 +440,59 @@ fn parses_with_statement() {
     // `with` is a SyntaxError in strict-mode code.
     assert!(parse_script("'use strict'; with (obj) {}").is_err());
 }
+
+#[test]
+fn rejects_disallowed_declarations_in_statement_body() {
+    let contexts = [
+        ("if (true) CLASS", "if"),
+        ("if (true) ; else CLASS", "else"),
+        ("while (false) CLASS", "while"),
+        ("do CLASS while (false);", "do-while"),
+        ("for (;;) CLASS", "for"),
+        ("for (var x in {}) CLASS", "for-in"),
+        ("for (var x of []) CLASS", "for-of"),
+    ];
+    let decls = [
+        "class C {}",
+        "let x = 1;",
+        "const x = 1;",
+        "function* g() {}",
+        "async function f() {}",
+        "async function* g() {}",
+    ];
+    for (template, ctx) in &contexts {
+        for decl in &decls {
+            let code = template.replace("CLASS", decl);
+            assert!(parse_script(&code).is_err(), "should reject {ctx}: {code}");
+        }
+        let fn_code = template.replace("CLASS", "function f() {}");
+        assert!(
+            parse_script(&fn_code).is_ok(),
+            "should allow sloppy function in {ctx}: {fn_code}"
+        );
+    }
+}
+
+#[test]
+fn rejects_disallowed_declarations_in_labelled_body() {
+    assert!(parse_script("label: class C {}").is_err());
+    assert!(parse_script("label: let x = 1;").is_err());
+    assert!(parse_script("label: function* g() {}").is_err());
+    assert!(parse_script("label: async function f() {}").is_err());
+    assert!(parse_script("label: function f() {}").is_ok());
+    assert!(parse_script("\"use strict\"; label: function f() {}").is_err());
+}
+
+#[test]
+fn rejects_duplicate_lexical_declarations_in_switch() {
+    assert!(parse_script("switch(0){case 1: class f {} default: class f{}}").is_err());
+    assert!(parse_script("switch(0){case 1: let f; default: let f;}").is_err());
+    assert!(parse_script("switch(0){case 1: const f=1; default: const f=2;}").is_err());
+    assert!(parse_script("switch(0){case 1: function* f(){} default: function* f(){}}").is_err());
+    assert!(parse_script("switch(0){case 1: var f; default: var f;}").is_ok());
+    assert!(parse_script("switch(0){case 1: function f(){} default: function f(){}}").is_ok());
+    assert!(
+        parse_script("\"use strict\"; switch(0){case 1: function f(){} default: function f(){}}")
+            .is_err()
+    );
+}

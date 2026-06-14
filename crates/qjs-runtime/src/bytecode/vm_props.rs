@@ -4,7 +4,7 @@ use crate::{
     GLOBAL_THIS_BINDING, ObjectRef, Property, PropertyKey, RuntimeError, Value, array_prototype,
     bigint, boolean, call_function, function_delete_own_property,
     function_delete_own_symbol_property, function_own_property_descriptor,
-    function_own_property_keys, function_prototype_chain_descriptor,
+    function_own_property_keys, function_own_property_names, function_prototype_chain_descriptor,
     inherited_primitive_prototype_descriptor, inherited_string_prototype_property, number,
     object::define_array_length_value, property_value, property_value_key, string, symbol,
     to_int32_number, to_uint32_number, value_prototype,
@@ -742,20 +742,36 @@ fn delete_symbol_property(
 }
 
 pub(super) fn enumerable_keys(value: Value, env: &CallEnv) -> Result<Vec<Value>, RuntimeError> {
-    let mut keys = match value.clone() {
-        Value::Object(object) => object.own_property_keys(),
+    let (mut keys, mut seen) = match value.clone() {
+        Value::Object(object) => {
+            let enumerable = object.own_property_keys();
+            let all = object.own_property_names();
+            (enumerable, all)
+        }
         Value::Array(elements) => {
             let mut keys: Vec<_> = (0..elements.len())
                 .filter(|index| elements.has_index(*index))
                 .map(|index| index.to_string())
                 .collect();
             keys.extend(elements.property_keys());
-            keys
+            (keys.clone(), keys)
         }
-        Value::Function(function) => function_own_property_keys(&function),
-        Value::Map(map) => map.object().own_property_keys(),
-        Value::Set(set) => set.object().own_property_keys(),
-        Value::Null | Value::Undefined => Vec::new(),
+        Value::Function(function) => {
+            let enumerable = function_own_property_keys(&function);
+            let all = function_own_property_names(&function);
+            (enumerable, all)
+        }
+        Value::Map(map) => {
+            let enumerable = map.object().own_property_keys();
+            let all = map.object().own_property_names();
+            (enumerable, all)
+        }
+        Value::Set(set) => {
+            let enumerable = set.object().own_property_keys();
+            let all = set.object().own_property_names();
+            (enumerable, all)
+        }
+        Value::Null | Value::Undefined => (Vec::new(), Vec::new()),
         _ => {
             return Err(RuntimeError {
                 thrown: None,
@@ -763,15 +779,24 @@ pub(super) fn enumerable_keys(value: Value, env: &CallEnv) -> Result<Vec<Value>,
             });
         }
     };
-    append_prototype_enumerable_keys(&mut keys, value_prototype(value, env));
+    append_prototype_enumerable_keys(&mut keys, &mut seen, value_prototype(value, env));
     Ok(keys.into_iter().map(Value::String).collect())
 }
 
-fn append_prototype_enumerable_keys(keys: &mut Vec<String>, mut prototype: Option<ObjectRef>) {
+fn append_prototype_enumerable_keys(
+    keys: &mut Vec<String>,
+    seen: &mut Vec<String>,
+    mut prototype: Option<ObjectRef>,
+) {
     while let Some(object) = prototype {
         for key in object.own_property_keys() {
-            if !keys.iter().any(|existing| existing == &key) {
-                keys.push(key);
+            if !seen.iter().any(|existing| existing == &key) {
+                keys.push(key.clone());
+            }
+        }
+        for key in object.own_property_names() {
+            if !seen.iter().any(|existing| existing == &key) {
+                seen.push(key);
             }
         }
         prototype = object.prototype();

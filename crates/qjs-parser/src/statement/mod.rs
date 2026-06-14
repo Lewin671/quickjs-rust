@@ -156,6 +156,14 @@ impl Parser {
         }
         self.expect(&TokenKind::Colon)?;
         let body = self.statement()?;
+        if let Some((description, span)) = control::disallowed_labelled_body(&body, self.strict) {
+            return Err(ParseError {
+                message: format!(
+                    "{description} are not allowed as the body of a labelled statement"
+                ),
+                span,
+            });
+        }
         let end = crate::helpers::stmt_end(&body);
         Ok(Stmt::Labelled {
             label,

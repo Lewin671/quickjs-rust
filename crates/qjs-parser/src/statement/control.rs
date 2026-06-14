@@ -4,6 +4,127 @@ use qjs_lexer::TokenKind;
 use crate::helpers::{stmt_end, var_kind};
 use crate::{ParseError, Parser};
 
+fn disallowed_statement_body(stmt: &Stmt, strict: bool) -> Option<(&'static str, Span)> {
+    match stmt {
+        Stmt::ClassDecl { span, .. } => Some(("class declarations", *span)),
+        Stmt::VarDecl {
+            kind: VarKind::Let | VarKind::Const,
+            span,
+            ..
+        } => Some(("lexical declarations", *span)),
+        Stmt::FunctionDecl {
+            is_generator: true,
+            is_async: true,
+            span,
+            ..
+        } => Some(("async generator declarations", *span)),
+        Stmt::FunctionDecl {
+            is_async: true,
+            span,
+            ..
+        } => Some(("async function declarations", *span)),
+        Stmt::FunctionDecl {
+            is_generator: true,
+            span,
+            ..
+        } => Some(("generator declarations", *span)),
+        Stmt::FunctionDecl {
+            is_generator: false,
+            is_async: false,
+            span,
+            ..
+        } if strict => Some(("function declarations in strict mode", *span)),
+        Stmt::Labelled { body, .. } => disallowed_statement_body(body, strict),
+        _ => None,
+    }
+}
+
+pub(super) fn disallowed_labelled_body(stmt: &Stmt, strict: bool) -> Option<(&'static str, Span)> {
+    match stmt {
+        Stmt::ClassDecl { span, .. } => Some(("class declarations", *span)),
+        Stmt::VarDecl {
+            kind: VarKind::Let | VarKind::Const,
+            span,
+            ..
+        } => Some(("lexical declarations", *span)),
+        Stmt::FunctionDecl {
+            is_generator: true,
+            is_async: true,
+            span,
+            ..
+        } => Some(("async generator declarations", *span)),
+        Stmt::FunctionDecl {
+            is_async: true,
+            span,
+            ..
+        } => Some(("async function declarations", *span)),
+        Stmt::FunctionDecl {
+            is_generator: true,
+            span,
+            ..
+        } => Some(("generator declarations", *span)),
+        Stmt::FunctionDecl {
+            is_generator: false,
+            is_async: false,
+            span,
+            ..
+        } if strict => Some(("function declarations in strict mode", *span)),
+        _ => None,
+    }
+}
+
+fn check_statement_body(stmt: &Stmt, strict: bool, context: &str) -> Result<(), ParseError> {
+    if let Some((description, span)) = disallowed_statement_body(stmt, strict) {
+        return Err(ParseError {
+            message: format!("{description} are not allowed as the body of {context}"),
+            span,
+        });
+    }
+    Ok(())
+}
+
+fn validate_switch_lexical_names(cases: &[SwitchCase], strict: bool) -> Result<(), ParseError> {
+    use std::collections::HashMap;
+    let mut seen: HashMap<String, Span> = HashMap::new();
+    for case in cases {
+        for stmt in &case.consequent {
+            for (name, span) in lexical_names_of(stmt, strict) {
+                if seen.contains_key(&name) {
+                    return Err(ParseError {
+                        message: format!("duplicate lexical declaration '{name}'"),
+                        span,
+                    });
+                }
+                seen.insert(name, span);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn lexical_names_of(stmt: &Stmt, strict: bool) -> Vec<(String, Span)> {
+    match stmt {
+        Stmt::ClassDecl { name, span, .. } => vec![(name.clone(), *span)],
+        Stmt::VarDecl {
+            kind: VarKind::Let | VarKind::Const,
+            declarations,
+            span,
+            ..
+        } => declarations
+            .iter()
+            .flat_map(|d| d.binding.names().into_iter().map(|n| (n.to_owned(), *span)))
+            .collect(),
+        Stmt::FunctionDecl {
+            name,
+            is_generator,
+            is_async,
+            span,
+            ..
+        } if *is_generator || *is_async || strict => vec![(name.clone(), *span)],
+        _ => vec![],
+    }
+}
+
 impl Parser {
     pub(super) fn if_statement(&mut self) -> Result<Stmt, ParseError> {
         let start = self
@@ -16,8 +137,11 @@ impl Parser {
         let test = self.expression()?;
         self.expect(&TokenKind::RightParen)?;
         let consequent = self.statement()?;
+        check_statement_body(&consequent, self.strict, "an if statement")?;
         let alternate = if self.match_kind(&TokenKind::Else) {
-            Some(Box::new(self.statement()?))
+            let alt = self.statement()?;
+            check_statement_body(&alt, self.strict, "an else clause")?;
+            Some(Box::new(alt))
         } else {
             None
         };
@@ -43,6 +167,7 @@ impl Parser {
         let test = self.expression()?;
         self.expect(&TokenKind::RightParen)?;
         let body = self.statement()?;
+        check_statement_body(&body, self.strict, "a while loop")?;
         let end = stmt_end(&body);
         Ok(Stmt::While {
             test,
@@ -59,6 +184,7 @@ impl Parser {
             .start;
         self.expect(&TokenKind::Do)?;
         let body = self.statement()?;
+        check_statement_body(&body, self.strict, "a do-while loop")?;
         self.expect(&TokenKind::While)?;
         self.expect(&TokenKind::LeftParen)?;
         let test = self.expression()?;
@@ -199,6 +325,7 @@ impl Parser {
         };
         self.expect(&TokenKind::RightParen)?;
         let body = self.statement()?;
+        check_statement_body(&body, self.strict, "a for loop")?;
         let end = stmt_end(&body);
         Ok(Stmt::For {
             init,
@@ -227,6 +354,7 @@ impl Parser {
         let object = self.expression()?;
         self.expect(&TokenKind::RightParen)?;
         let body = self.statement()?;
+        check_statement_body(&body, self.strict, "a with statement")?;
         let end = stmt_end(&body);
         Ok(Stmt::With {
             object,
@@ -301,6 +429,7 @@ impl Parser {
             .span
             .end;
         self.expect(&TokenKind::RightBrace)?;
+        validate_switch_lexical_names(&cases, self.strict)?;
         Ok(Stmt::Switch {
             discriminant,
             cases,
@@ -419,6 +548,11 @@ impl Parser {
         };
         self.expect(&TokenKind::RightParen)?;
         let body = self.statement()?;
+        let loop_kind = match kind {
+            ForKind::In => "a for-in loop",
+            ForKind::Of => "a for-of loop",
+        };
+        check_statement_body(&body, self.strict, loop_kind)?;
         let end = stmt_end(&body);
         let span = Span::new(start, end);
         let body = Box::new(body);
