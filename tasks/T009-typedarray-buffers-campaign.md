@@ -81,6 +81,9 @@ gaps: `TypedArray` 2,027, `ArrayBuffer` 263, `DataView` 188 — concentrated in
 - [ ] S5 Re-cluster remaining gaps; resizable/growable buffers,
       SharedArrayBuffer, and Atomics stay out of scope until this point and
       get their own slices only if the burndown trend justifies them.
+      SharedArrayBuffer has been re-clustered through growable construction,
+      `byteLength`/`maxByteLength`/`growable`, `grow`, and `slice`;
+      `test/built-ins/SharedArrayBuffer --all` now reports 0 actionable gaps.
 
 ## Scope
 

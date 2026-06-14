@@ -68,6 +68,9 @@ pub(crate) enum NativeFunction {
     ArrayBufferPrototypeTransferToImmutable,
     SharedArrayBuffer,
     SharedArrayBufferPrototypeByteLength,
+    SharedArrayBufferPrototypeMaxByteLength,
+    SharedArrayBufferPrototypeGrowable,
+    SharedArrayBufferPrototypeGrow,
     SharedArrayBufferPrototypeSlice,
     TypedArray,
     // %TypedArray% static methods.

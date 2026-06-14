@@ -272,6 +272,57 @@ fn shared_array_buffer_slice_validates_species_result() {
 }
 
 #[test]
+fn shared_array_buffer_growable_constructor_and_accessors() {
+    assert_eq!(
+        eval(
+            "let b = new SharedArrayBuffer(4, { maxByteLength: 8 }); \
+             [b.byteLength, b.maxByteLength, b.growable].join(':');"
+        ),
+        Ok(Value::String("4:8:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let b = new SharedArrayBuffer(4); \
+             [b.byteLength, b.maxByteLength, b.growable].join(':');"
+        ),
+        Ok(Value::String("4:4:false".to_owned()))
+    );
+    assert_eq!(
+        eval("new SharedArrayBuffer(0, null).growable;"),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval("new SharedArrayBuffer(0, { maxByteLength: undefined }).growable;"),
+        Ok(Value::Boolean(false))
+    );
+    assert!(eval("new SharedArrayBuffer(4, { maxByteLength: 3 });").is_err());
+    assert!(eval("new SharedArrayBuffer(0, { maxByteLength: 1000001 });").is_err());
+}
+
+#[test]
+fn shared_array_buffer_grow_resizes_within_max_length() {
+    assert_eq!(
+        eval(
+            "let b = new SharedArrayBuffer(4, { maxByteLength: 6 }); \
+             let result = b.grow(6); \
+             [result, b.byteLength, b.maxByteLength, b.growable].join(':');"
+        ),
+        Ok(Value::String(":6:6:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let b = new SharedArrayBuffer(4, { maxByteLength: 6 }); \
+             b.grow(4); b.byteLength;"
+        ),
+        Ok(Value::Number(4.0))
+    );
+    assert!(eval("let b = new SharedArrayBuffer(4); b.grow(4);").is_err());
+    assert!(eval("let b = new SharedArrayBuffer(4, { maxByteLength: 6 }); b.grow(3);").is_err());
+    assert!(eval("let b = new SharedArrayBuffer(4, { maxByteLength: 6 }); b.grow(7);").is_err());
+    assert!(eval("SharedArrayBuffer.prototype.grow.call(new ArrayBuffer(0));").is_err());
+}
+
+#[test]
 fn array_buffer_species_is_self() {
     assert_eq!(
         eval("ArrayBuffer[Symbol.species] === ArrayBuffer;"),
