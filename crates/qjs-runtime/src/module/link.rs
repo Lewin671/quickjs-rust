@@ -471,9 +471,10 @@ impl ModuleGraph {
 
     fn dependency_keys(&self, key: &str) -> Vec<String> {
         self.modules[key]
-            .resolved_requests
-            .values()
-            .cloned()
+            .record
+            .requested_modules
+            .iter()
+            .map(|specifier| self.resolved(key, specifier))
             .collect()
     }
 

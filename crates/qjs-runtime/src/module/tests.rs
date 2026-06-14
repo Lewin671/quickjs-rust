@@ -207,6 +207,26 @@ fn module_body_is_strict_mode() {
     assert_eq!(error.kind, EvalErrorKind::Runtime);
 }
 
+#[test]
+fn dependencies_evaluate_in_requested_module_order() {
+    let error = run(
+        "import \"first\";\n\
+         import \"second\";\n\
+         throw new Error('main');",
+        &[
+            ("first", "throw new TypeError('first');"),
+            ("second", "throw new RangeError('second');"),
+        ],
+    )
+    .expect_err("first requested module should fail first");
+    assert_eq!(error.kind, EvalErrorKind::Runtime);
+    assert!(
+        error.message.contains("TypeError") && error.message.contains("first"),
+        "{}",
+        error.message
+    );
+}
+
 // --- dynamic import (T012 S4) ---------------------------------------------
 
 /// Reads the elements of an exported array value as a comma-joined string. The
