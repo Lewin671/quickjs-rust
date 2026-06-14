@@ -101,6 +101,30 @@ fn derived_instance_fields_run_after_super() {
 }
 
 #[test]
+fn derived_instance_field_sees_this_bound_for_pre_super_arrow() {
+    assert_eq!(
+        eval(
+            "let probe, before, duringBase, fieldThis, probeThis, ctorThis; \
+             class Base { constructor() { try { probe(); } catch (e) { duringBase = e.name; } } } \
+             class C extends Base { \
+               field = (fieldThis = this, probeThis = probe()); \
+               constructor() { \
+                 probe = () => this; \
+                 try { probe(); } catch (e) { before = e.name; } \
+                 super(); \
+                 ctorThis = this; \
+               } \
+             } \
+             let c = new C(); \
+             [fieldThis === c, probeThis === c, ctorThis === c, before, duringBase].join(':');"
+        ),
+        Ok(Value::String(
+            "true:true:true:ReferenceError:ReferenceError".to_owned()
+        ))
+    );
+}
+
+#[test]
 fn default_derived_constructor_runs_field_init() {
     assert_eq!(
         eval(

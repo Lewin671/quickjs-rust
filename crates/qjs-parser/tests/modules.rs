@@ -3,7 +3,9 @@
 //! These exercise the public `parse_module` entry against the `import`/`export`
 //! declaration forms and confirm that script-mode parsing is unaffected.
 
-use qjs_ast::{DefaultExport, ExportDecl, ImportSpecifier, ModuleDecl, ModuleExportName, Stmt};
+use qjs_ast::{
+    DefaultExport, ExportDecl, Expr, ImportSpecifier, ModuleDecl, ModuleExportName, Stmt,
+};
 use qjs_parser::{parse_module, parse_script};
 
 fn sole_module_decl(source: &str) -> ModuleDecl {
@@ -171,10 +173,23 @@ fn parses_export_default_class() {
     let ExportDecl::Default { declaration, .. } = sole_export("export default class C {}") else {
         panic!("expected a default export");
     };
-    let DefaultExport::Declaration(stmt) = declaration else {
-        panic!("expected a class declaration default");
+    let DefaultExport::Expression(Expr::Class {
+        name: Some(name), ..
+    }) = declaration
+    else {
+        panic!("expected a named class expression default");
     };
-    assert!(matches!(*stmt, Stmt::ClassDecl { .. }));
+    assert_eq!(name, "C");
+}
+
+#[test]
+fn parses_anonymous_export_default_class() {
+    let ExportDecl::Default { declaration, .. } = sole_export("export default class {}") else {
+        panic!("expected a default export");
+    };
+    let DefaultExport::Expression(Expr::Class { name: None, .. }) = declaration else {
+        panic!("expected an anonymous class expression default");
+    };
 }
 
 #[test]

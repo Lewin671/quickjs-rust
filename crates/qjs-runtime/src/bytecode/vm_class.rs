@@ -651,6 +651,7 @@ impl Vm<'_> {
         let result = self.super_call_inner(arguments);
         if let Some(this_value) = self.handle_runtime_result(result)? {
             self.env.insert("this".to_owned(), this_value.clone());
+            self.write_through_captured("this", this_value.clone());
             // The instance fields of the derived class initialize immediately
             // after `super(...)` binds `this`, before the rest of the body.
             let field_result = self.initialize_derived_instance_fields(&this_value);

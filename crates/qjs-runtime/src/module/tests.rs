@@ -37,6 +37,21 @@ fn default_and_named_roundtrip() {
 }
 
 #[test]
+fn anonymous_default_class_gets_default_name_in_static_initializer() {
+    let namespace = run(
+        "var className;\n\
+         export default class { static f = (className = this.name); }\n\
+         export const observed = className;",
+        &[],
+    )
+    .expect("module evaluates");
+    assert_eq!(
+        export(&namespace, "observed"),
+        Value::String("default".to_owned())
+    );
+}
+
+#[test]
 fn live_binding_through_exported_function() {
     // The importer calls an exported function that reads the exporter's own
     // live top-level binding, observing the post-mutation value.

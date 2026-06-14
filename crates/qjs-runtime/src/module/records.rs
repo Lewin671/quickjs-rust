@@ -186,7 +186,7 @@ fn default_export_stmt(declaration: DefaultExport, span: qjs_ast::Span) -> Stmt 
         // own name in module scope; for S2 we bind only `*default*` to the
         // value, which covers anonymous and named default exports uniformly.
         DefaultExport::Declaration(stmt) => stmt_to_expr(*stmt, span),
-        DefaultExport::Expression(expr) => expr,
+        DefaultExport::Expression(expr) => default_export_expr(expr),
     };
     Stmt::VarDecl {
         kind: VarKind::Const,
@@ -199,6 +199,45 @@ fn default_export_stmt(declaration: DefaultExport, span: qjs_ast::Span) -> Stmt 
             span,
         }],
         span,
+    }
+}
+
+/// Applies default-export name inference to anonymous function/class
+/// expressions before lowering through the synthetic local binding.
+fn default_export_expr(expr: qjs_ast::Expr) -> qjs_ast::Expr {
+    use qjs_ast::Expr;
+    match expr {
+        Expr::Function {
+            name: None,
+            params,
+            body,
+            constructable,
+            lexical_this,
+            lexical_arguments,
+            is_generator,
+            is_async,
+            span,
+        } => Expr::Function {
+            name: Some("default".to_owned()),
+            params,
+            body,
+            constructable,
+            lexical_this,
+            lexical_arguments,
+            is_generator,
+            is_async,
+            span,
+        },
+        Expr::Class {
+            name: None,
+            body,
+            span,
+        } => Expr::Class {
+            name: Some("default".to_owned()),
+            body,
+            span,
+        },
+        other => other,
     }
 }
 

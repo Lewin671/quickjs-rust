@@ -224,8 +224,9 @@ impl Parser {
             return Ok(DefaultExport::Declaration(Box::new(stmt)));
         }
         if self.at(&TokenKind::Class) {
-            let stmt = self.statement()?;
-            return Ok(DefaultExport::Declaration(Box::new(stmt)));
+            let expr = self.assignment()?;
+            self.match_kind(&TokenKind::Semicolon);
+            return Ok(DefaultExport::Expression(expr));
         }
         let expr = self.assignment()?;
         self.match_kind(&TokenKind::Semicolon);
