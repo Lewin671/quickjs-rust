@@ -121,6 +121,14 @@ fn evaluates_set_composition_methods_with_sets() {
         Value::String("2:13".to_owned()),
     );
     assert_eval(
+        "var count = 0; class MySet extends Set { static get [Symbol.species]() { count = count + 1; return Set; } size() { throw 'receiver size'; } has() { throw 'receiver has'; } keys() { throw 'receiver keys'; } } var result = new MySet([1, 2]).union(new Set([2, 3])); [...result].join('|') + ':' + (result instanceof Set) + ':' + (result instanceof MySet) + ':' + count;",
+        Value::String("1|2|3:true:false:0".to_owned()),
+    );
+    assert_eval(
+        "class MySet extends Set {} var a = new MySet([1, 2]); var b = new Set([2, 3]); [a.intersection(b), a.difference(b), a.symmetricDifference(b)].map(function(result) { return (result instanceof Set) + ':' + (result instanceof MySet) + ':' + [...result].join('|'); }).join(';');",
+        Value::String("true:false:2;true:false:1;true:false:1|3".to_owned()),
+    );
+    assert_eval(
         "new Set([1]).isSubsetOf(new Set([1, 2])) + ':' + new Set([1, 3]).isSubsetOf(new Set([1, 2]));",
         Value::String("true:false".to_owned()),
     );
@@ -166,6 +174,14 @@ fn evaluates_set_composition_methods_with_set_like_objects() {
     assert_eval(
         "var other = { size: 2, has: function(value) { return value === 2; }, keys: function() { return [2, 3].values(); } }; new Set([1, 2]).isSubsetOf(other) + ':' + new Set([1, 2, 3]).isSupersetOf(other) + ':' + new Set([1]).isDisjointFrom(other);",
         Value::String("false:true:true".to_owned()),
+    );
+    assert_eval(
+        "var base = new Set(['a', 'b', 'c']); var other = { size: 3, has: function(value) { if (value === 'a') { base.delete('c'); } return ['x', 'a', 'b'].includes(value); }, keys: function() { throw 'keys should not be called'; } }; base.isSubsetOf(other) + ':' + [...base].join('|');",
+        Value::String("true:a|b".to_owned()),
+    );
+    assert_eval(
+        "var base = new Set(['a', 'b', 'c']); var other = { size: 3, has: function(value) { if (value === 'a') { base.delete('b'); base.delete('c'); base.add('b'); return false; } if (value === 'b') { return false; } throw 'deleted values should not be visited'; }, keys: function() { throw 'keys should not be called'; } }; base.isDisjointFrom(other) + ':' + [...base].join('|');",
+        Value::String("true:a|b".to_owned()),
     );
     assert_eval(
         "var other = { size: 1, has: function() { throw 'has should not be called'; }, keys: function() { return [-0].values(); } }; var result = new Set([1, 2]).symmetricDifference(other); Object.is([...result][2], 0) + ':' + result.size + ':' + [...result].join('|');",
