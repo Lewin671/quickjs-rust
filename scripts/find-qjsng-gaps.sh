@@ -399,6 +399,9 @@ write_recommendations() {
           if (line ~ /(async|for-await-of)/ && weight < 4) {
             weight = 4
           }
+          if (line ~ /(atomicsHelper[.]js|CanBlock|[$]262[.]agent)/ && weight < 5) {
+            weight = 5
+          }
           if (line ~ /(class|destructur|dstr|yield)/ && weight < 3) {
             weight = 3
           }
@@ -427,6 +430,9 @@ write_recommendations() {
       }
       if (path ~ /(^|\/)(for-await-of)(\/|$)/ && weight < 4) {
         weight = 4
+      }
+      if (path ~ /(^|\/)Atomics\/(wait|notify)(\/|$)/ && weight < 5) {
+        weight = 5
       }
       if (path ~ /(^|\/)(class|dstr|yield)(\/|$)/ && weight < 3) {
         weight = 3
