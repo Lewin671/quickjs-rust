@@ -120,6 +120,9 @@ impl Parser {
             TokenKind::MinusMinus => UpdateOp::Decrement,
             _ => return Ok(expr),
         };
+        if self.has_line_terminator_between(expr.span().end, token.span.start) {
+            return Ok(expr);
+        }
         self.advance();
         let start = expr.span().start;
         let target = assignment_target(expr, false)?;
