@@ -69,6 +69,7 @@ pub(super) struct LoopContext {
     breaks: Vec<usize>,
     continues: Vec<usize>,
     iterator: Option<LoopIterator>,
+    pub(super) captured_env_scope: bool,
     /// The compiler's `with_depth` when this loop was entered. A break or
     /// continue targeting it must close every `with` scope opened since.
     with_depth: usize,
@@ -519,6 +520,12 @@ impl Compiler {
             .expect("loop context should be balanced")
     }
 
+    pub(super) fn mark_loop_captured_env_scope(&mut self) {
+        if let Some(context) = self.loop_stack.last_mut() {
+            context.captured_env_scope = true;
+        }
+    }
+
     pub(super) fn compile_break(&mut self, label: Option<&str>) -> Result<(), RuntimeError> {
         let Some(index) = self.break_context_index(label) else {
             return Err(RuntimeError {
@@ -581,6 +588,13 @@ impl Compiler {
             self.emit(Op::ExitTry);
             self.emit_close_unless_done(iterator.iterator_slot, iterator.done_slot, false);
         }
+        let env_scope_count = self.loop_stack[target_index + 1..]
+            .iter()
+            .filter(|context| context.captured_env_scope)
+            .count();
+        for _ in 0..env_scope_count {
+            self.emit(Op::PopCapturedEnv);
+        }
     }
 
     /// Closes every live for-of iterator before a `return` leaves the
@@ -594,6 +608,14 @@ impl Compiler {
         for iterator in iterators.into_iter().rev() {
             self.emit(Op::ExitTry);
             self.emit_close_unless_done(iterator.iterator_slot, iterator.done_slot, false);
+        }
+        let env_scope_count = self
+            .loop_stack
+            .iter()
+            .filter(|context| context.captured_env_scope)
+            .count();
+        for _ in 0..env_scope_count {
+            self.emit(Op::PopCapturedEnv);
         }
     }
 
@@ -706,6 +728,9 @@ impl Compiler {
         context: &LoopContext,
     ) -> usize {
         if cleanup_slots.is_empty() {
+            if context.captured_env_scope {
+                self.emit(Op::PopCapturedEnv);
+            }
             self.emit(Op::LoadLocal(result_slot));
             let done = self.code.len();
             self.patch_loop_breaks(context, done);
@@ -715,12 +740,18 @@ impl Compiler {
         for slot in cleanup_slots {
             self.emit(Op::ClearLocal(*slot));
         }
+        if context.captured_env_scope {
+            self.emit(Op::PopCapturedEnv);
+        }
         self.emit(Op::LoadLocal(result_slot));
         let normal_done = self.emit(Op::Jump(usize::MAX));
 
         let break_cleanup = self.code.len();
         for slot in cleanup_slots {
             self.emit(Op::ClearLocal(*slot));
+        }
+        if context.captured_env_scope {
+            self.emit(Op::PopCapturedEnv);
         }
         let break_done = self.emit(Op::Jump(usize::MAX));
 

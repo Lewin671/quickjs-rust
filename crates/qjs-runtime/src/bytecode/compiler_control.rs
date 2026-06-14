@@ -102,6 +102,10 @@ impl Compiler {
         let false_slot = self.const_slot(Value::Boolean(false));
         self.emit(Op::LoadConst(false_slot));
         self.emit(Op::StoreLocal(done_slot));
+        let has_iteration_scope = is_lexical_for_in_left(left);
+        if has_iteration_scope {
+            self.emit(Op::PushCapturedEnv);
+        }
         let enter = self.emit(Op::EnterTry {
             catch: None,
             finally: None,
@@ -119,28 +123,24 @@ impl Compiler {
         let exit_jump = self.emit(Op::JumpIfTrue(usize::MAX));
         self.emit(Op::Pop);
         self.emit(Op::StoreLocal(value_slot));
-        self.compile_for_in_left(left, value_slot)?;
 
         let blocked = for_in_left_lexical_names(left);
-        let iteration_slots: Vec<usize> = if is_lexical_for_in_left(left) {
-            blocked
-                .iter()
-                .filter_map(|name| self.resolve_local_slot(name))
-                .collect()
-        } else {
-            Vec::new()
-        };
+        let iteration_slots = self.for_in_left_iteration_slots(left);
+        if !iteration_slots.is_empty() {
+            self.emit(Op::FreshIterationScope(iteration_slots.clone()));
+        }
+        self.compile_for_in_left(left, value_slot)?;
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
             compiler.push_loop_with_iterator(result_slot, iterator);
+            if has_iteration_scope {
+                compiler.mark_loop_captured_env_scope();
+            }
             compiler.compile_stmt(body)?;
             compiler.emit(Op::StoreLocal(result_slot));
             Ok(())
         })?;
         let context = self.pop_loop();
 
-        if !iteration_slots.is_empty() {
-            self.emit(Op::FreshIterationScope(iteration_slots));
-        }
         self.emit(Op::Jump(loop_start));
 
         let exit = self.code.len();
@@ -174,14 +174,11 @@ impl Compiler {
         self.emit_number(0.0);
         self.emit(Op::StoreLocal(index_slot));
         let blocked = for_in_left_lexical_names(left);
-        let iteration_slots: Vec<usize> = if is_lexical_for_in_left(left) {
-            blocked
-                .iter()
-                .filter_map(|name| self.resolve_local_slot(name))
-                .collect()
-        } else {
-            Vec::new()
-        };
+        let has_iteration_scope = is_lexical_for_in_left(left);
+        if has_iteration_scope {
+            self.emit(Op::PushCapturedEnv);
+        }
+        let iteration_slots = self.for_in_left_iteration_slots(left);
 
         let loop_start = self.code.len();
         self.emit(Op::LoadLocal(index_slot));
@@ -196,10 +193,16 @@ impl Compiler {
         self.emit(Op::LoadLocal(index_slot));
         self.emit(Op::GetProp);
         self.emit(Op::StoreLocal(key_slot));
+        if !iteration_slots.is_empty() {
+            self.emit(Op::FreshIterationScope(iteration_slots.clone()));
+        }
         self.compile_for_in_left(left, key_slot)?;
 
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
             compiler.push_loop(result_slot);
+            if has_iteration_scope {
+                compiler.mark_loop_captured_env_scope();
+            }
             compiler.compile_stmt(body)?;
             compiler.emit(Op::StoreLocal(result_slot));
             Ok(())
@@ -207,9 +210,6 @@ impl Compiler {
         let context = self.pop_loop();
 
         let update_start = self.code.len();
-        if !iteration_slots.is_empty() {
-            self.emit(Op::FreshIterationScope(iteration_slots));
-        }
         self.emit(Op::LoadLocal(index_slot));
         self.emit_number(1.0);
         self.emit(Op::Binary(BinaryOp::Add));
@@ -253,6 +253,10 @@ impl Compiler {
         let false_slot = self.const_slot(Value::Boolean(false));
         self.emit(Op::LoadConst(false_slot));
         self.emit(Op::StoreLocal(done_slot));
+        let has_iteration_scope = is_lexical_for_in_left(left);
+        if has_iteration_scope {
+            self.emit(Op::PushCapturedEnv);
+        }
         let enter = self.emit(Op::EnterTry {
             catch: None,
             finally: None,
@@ -267,28 +271,24 @@ impl Compiler {
         let exit_jump = self.emit(Op::JumpIfTrue(usize::MAX));
         self.emit(Op::Pop);
         self.emit(Op::StoreLocal(value_slot));
-        self.compile_for_in_left(left, value_slot)?;
 
         let blocked = for_in_left_lexical_names(left);
-        let iteration_slots: Vec<usize> = if is_lexical_for_in_left(left) {
-            blocked
-                .iter()
-                .filter_map(|name| self.resolve_local_slot(name))
-                .collect()
-        } else {
-            Vec::new()
-        };
+        let iteration_slots = self.for_in_left_iteration_slots(left);
+        if !iteration_slots.is_empty() {
+            self.emit(Op::FreshIterationScope(iteration_slots.clone()));
+        }
+        self.compile_for_in_left(left, value_slot)?;
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
             compiler.push_loop_with_iterator(result_slot, iterator);
+            if has_iteration_scope {
+                compiler.mark_loop_captured_env_scope();
+            }
             compiler.compile_stmt(body)?;
             compiler.emit(Op::StoreLocal(result_slot));
             Ok(())
         })?;
         let context = self.pop_loop();
 
-        if !iteration_slots.is_empty() {
-            self.emit(Op::FreshIterationScope(iteration_slots));
-        }
         self.emit(Op::Jump(loop_start));
 
         let exit = self.code.len();
@@ -317,6 +317,9 @@ impl Compiler {
         for slot in cleanup_slots {
             self.emit(Op::ClearLocal(*slot));
         }
+        if context.captured_env_scope {
+            self.emit(Op::PopCapturedEnv);
+        }
         self.emit(Op::LoadLocal(result_slot));
         let normal_done = self.emit(Op::Jump(usize::MAX));
 
@@ -326,10 +329,16 @@ impl Compiler {
         for slot in cleanup_slots {
             self.emit(Op::ClearLocal(*slot));
         }
+        if context.captured_env_scope {
+            self.emit(Op::PopCapturedEnv);
+        }
         let break_done = self.emit(Op::Jump(usize::MAX));
 
         let catch_target = self.code.len();
         self.emit_close_unless_done(iterator.iterator_slot, iterator.done_slot, true);
+        if context.captured_env_scope {
+            self.emit(Op::PopCapturedEnv);
+        }
         self.emit(Op::Throw);
 
         let done = self.code.len();
@@ -492,6 +501,22 @@ impl Compiler {
             }
         }
         Ok(())
+    }
+
+    fn for_in_left_iteration_slots(&mut self, left: &ForInLeft) -> Vec<usize> {
+        let ForInLeft::VarDecl {
+            binding,
+            kind: kind @ (VarKind::Let | VarKind::Const),
+            ..
+        } = left
+        else {
+            return Vec::new();
+        };
+        binding
+            .names()
+            .into_iter()
+            .map(|name| self.declare_var_kind_slot(&name, *kind))
+            .collect()
     }
 
     fn compile_for_in_initializer(&mut self, left: &ForInLeft) -> Result<(), RuntimeError> {

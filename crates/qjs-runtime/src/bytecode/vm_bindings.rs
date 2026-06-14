@@ -727,6 +727,16 @@ impl Vm<'_> {
         self.captured_env = Rc::new(RefCell::new(new_env));
     }
 
+    pub(super) fn push_captured_env(&mut self) {
+        self.captured_env_stack.push(Rc::clone(&self.captured_env));
+    }
+
+    pub(super) fn pop_captured_env(&mut self) {
+        if let Some(env) = self.captured_env_stack.pop() {
+            self.captured_env = env;
+        }
+    }
+
     pub(super) fn drain_promise_jobs(&mut self) -> Result<(), RuntimeError> {
         let mut env = self.current_env();
         crate::promise::drain_promise_jobs(&mut env)?;

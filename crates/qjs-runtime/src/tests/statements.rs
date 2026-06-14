@@ -627,6 +627,26 @@ fn for_of_lexical_heads_capture_fresh_binding_per_iteration() {
 }
 
 #[test]
+fn for_of_lexical_head_capture_scope_does_not_leak_after_loop() {
+    assert_eq!(
+        eval(
+            "(function() {
+               return eval('var out = []; function readLater() { f; } \
+                 for (let f of [0]) {{ function f() {} }} \
+                 try { readLater(); out.push(\"captured\"); } \
+                 catch (error) { out.push(error.name); } \
+                 try { (function() { f; })(); out.push(\"post-loop\"); } \
+                 catch (error) { out.push(error.name); } \
+                 out.push(typeof f); out.join(\":\");');
+             }());"
+        ),
+        Ok(Value::String(
+            "ReferenceError:ReferenceError:undefined".to_owned()
+        ))
+    );
+}
+
+#[test]
 fn for_of_closes_iterator_on_abrupt_exits() {
     let source_prefix = "
         function makeIterable(log) {

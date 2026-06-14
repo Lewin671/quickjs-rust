@@ -57,6 +57,7 @@ pub(super) struct Vm<'a> {
     /// Dynamic-import host copied into every `CallEnv` this VM creates.
     pub(super) module_host: Option<crate::module::ModuleHostRef>,
     pub(super) captured_env: Rc<RefCell<HashMap<String, Value>>>,
+    pub(super) captured_env_stack: Vec<Rc<RefCell<HashMap<String, Value>>>>,
     pub(super) capture_writeback: Option<CaptureWriteback>,
     pub(super) sloppy_global_names: Vec<String>,
     pub(super) try_stack: Vec<TryFrame>,
@@ -120,6 +121,7 @@ impl<'a> Vm<'a> {
             realm,
             module_host,
             captured_env,
+            captured_env_stack: Vec::new(),
             capture_writeback: None,
             sloppy_global_names: Vec::new(),
             try_stack: Vec::new(),
@@ -522,9 +524,9 @@ impl<'a> Vm<'a> {
                 Op::AbruptJump(target) => {
                     self.abrupt_jump(target)?;
                 }
-                Op::FreshIterationScope(ref slots) => {
-                    self.fresh_iteration_scope(slots);
-                }
+                Op::FreshIterationScope(ref slots) => self.fresh_iteration_scope(slots),
+                Op::PushCapturedEnv => self.push_captured_env(),
+                Op::PopCapturedEnv => self.pop_captured_env(),
                 Op::JumpIfFalse(target) => {
                     if !is_truthy(self.stack.last().ok_or_else(stack_underflow)?) {
                         self.ip = target;
