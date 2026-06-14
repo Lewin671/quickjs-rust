@@ -8,13 +8,13 @@ pub(crate) fn function_own_property_descriptor(function: &Function, key: &str) -
     if let Some(prop) = function.own_property(key) {
         return Some(prop);
     }
-    // Non-strict plain functions expose `caller` and `arguments` as own data
-    // properties (value null) so they shadow the throwing accessors on
-    // Function.prototype. Strict functions, arrow functions, generators,
-    // async functions, and bound functions inherit the prototype accessors.
+    // Only sloppy-mode constructable functions (traditional `function` declarations
+    // and expressions) expose `caller` and `arguments` as own data properties.
+    // Strict functions, arrows, generators, async functions, concise methods,
+    // and bound functions inherit the throwing prototype accessors.
     if !function.is_strict
+        && function.constructable
         && function.bound.is_none()
-        && !function.lexical_this
         && !function.is_generator
         && !function.is_async
         && (key == "caller" || key == "arguments")
