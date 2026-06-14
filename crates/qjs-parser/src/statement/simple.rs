@@ -52,7 +52,19 @@ impl Parser {
             .expect("parser should always have eof token")
             .span
             .start;
+        let throw_end = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .end;
         self.expect(&TokenKind::Throw)?;
+        let next_start = self.peek().map(|t| t.span.start).unwrap_or(throw_end);
+        if self.has_line_terminator_between(throw_end, next_start) {
+            return Err(ParseError {
+                message: "no line terminator allowed after `throw`".to_owned(),
+                span: Span::new(start, throw_end),
+            });
+        }
         let argument = if self.at(&TokenKind::Semicolon)
             || self.at(&TokenKind::RightBrace)
             || self.at(&TokenKind::Eof)
