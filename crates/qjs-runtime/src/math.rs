@@ -135,18 +135,24 @@ pub(super) fn native_math_hypot(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let mut sum = 0.0;
-    let mut has_nan = false;
+    let mut coerced = Vec::with_capacity(argument_values.len());
     for value in argument_values.iter().cloned() {
-        let number = to_number_with_env(value, env)?;
+        coerced.push(to_number_with_env(value, env)?);
+    }
+    let mut sum = 0.0;
+    let mut has_infinity = false;
+    let mut has_nan = false;
+    for number in coerced {
         if number.is_infinite() {
-            return Ok(Value::Number(f64::INFINITY));
-        }
-        if number.is_nan() {
+            has_infinity = true;
+        } else if number.is_nan() {
             has_nan = true;
         } else {
             sum += number * number;
         }
+    }
+    if has_infinity {
+        return Ok(Value::Number(f64::INFINITY));
     }
     if has_nan {
         return Ok(Value::Number(f64::NAN));
@@ -162,9 +168,13 @@ pub(super) fn native_math_max(
         return Ok(Value::Number(f64::NEG_INFINITY));
     }
 
-    let mut maximum = f64::NEG_INFINITY;
+    let mut coerced = Vec::with_capacity(argument_values.len());
     for value in argument_values.iter().cloned() {
-        let number = to_number_with_env(value, env)?;
+        coerced.push(to_number_with_env(value, env)?);
+    }
+
+    let mut maximum = f64::NEG_INFINITY;
+    for number in coerced {
         if number.is_nan() {
             return Ok(Value::Number(f64::NAN));
         }
@@ -183,9 +193,13 @@ pub(super) fn native_math_min(
         return Ok(Value::Number(f64::INFINITY));
     }
 
-    let mut minimum = f64::INFINITY;
+    let mut coerced = Vec::with_capacity(argument_values.len());
     for value in argument_values.iter().cloned() {
-        let number = to_number_with_env(value, env)?;
+        coerced.push(to_number_with_env(value, env)?);
+    }
+
+    let mut minimum = f64::INFINITY;
+    for number in coerced {
         if number.is_nan() {
             return Ok(Value::Number(f64::NAN));
         }
