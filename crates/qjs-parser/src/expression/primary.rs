@@ -557,7 +557,13 @@ impl Parser {
                 .expect("parser should always have eof token")
                 .span
                 .start;
-            let body = self.function_body(false)?;
+            let previous_method = self.in_method;
+            let previous_function = self.in_function;
+            self.in_method = true;
+            self.in_function = true;
+            let body = self.block_body()?;
+            self.in_method = previous_method;
+            self.in_function = previous_function;
             self.reject_invalid_function_parameters(&params, &body, body_start)?;
             let end = self
                 .tokens
@@ -612,7 +618,13 @@ impl Parser {
                 span: key_span,
             });
         }
-        let body = self.function_body(false)?;
+        let previous_method = self.in_method;
+        let previous_function = self.in_function;
+        self.in_method = true;
+        self.in_function = true;
+        let body = self.block_body()?;
+        self.in_method = previous_method;
+        self.in_function = previous_function;
         let end = self
             .tokens
             .get(self.cursor.saturating_sub(1))
@@ -655,7 +667,13 @@ impl Parser {
             });
         }
         reject_duplicate_method_parameters(&params)?;
-        let body = self.function_body(false)?;
+        let previous_method = self.in_method;
+        let previous_function = self.in_function;
+        self.in_method = true;
+        self.in_function = true;
+        let body = self.block_body()?;
+        self.in_method = previous_method;
+        self.in_function = previous_function;
         let end = self
             .tokens
             .get(self.cursor.saturating_sub(1))
@@ -706,7 +724,19 @@ impl Parser {
             .expect("parser should always have eof token")
             .span
             .start;
-        let body = self.function_body_with_context(true, is_async)?;
+        let previous_method = self.in_method;
+        let previous_generator = self.in_generator;
+        let previous_async = self.in_async;
+        let previous_function = self.in_function;
+        self.in_method = true;
+        self.in_generator = true;
+        self.in_async = is_async;
+        self.in_function = true;
+        let body = self.block_body()?;
+        self.in_method = previous_method;
+        self.in_generator = previous_generator;
+        self.in_async = previous_async;
+        self.in_function = previous_function;
         self.reject_invalid_function_parameters(&params, &body, body_start)?;
         let end = self
             .tokens
@@ -757,7 +787,16 @@ impl Parser {
             .expect("parser should always have eof token")
             .span
             .start;
-        let body = self.function_body_with_context(false, true)?;
+        let previous_method = self.in_method;
+        let previous_async = self.in_async;
+        let previous_function = self.in_function;
+        self.in_method = true;
+        self.in_async = true;
+        self.in_function = true;
+        let body = self.block_body()?;
+        self.in_method = previous_method;
+        self.in_async = previous_async;
+        self.in_function = previous_function;
         self.reject_invalid_function_parameters(&params, &body, body_start)?;
         let end = self
             .tokens

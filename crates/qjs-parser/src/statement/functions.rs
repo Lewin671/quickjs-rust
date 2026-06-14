@@ -177,14 +177,6 @@ impl Parser {
         })
     }
 
-    /// Parses a function body block, setting the generator yield context for
-    /// the duration of the body. Regular function and generator boundaries
-    /// reset the surrounding `super`/yield context; arrows reuse this through
-    /// the inherited context instead.
-    pub(crate) fn function_body(&mut self, is_generator: bool) -> Result<Vec<Stmt>, ParseError> {
-        self.function_body_with_context(is_generator, false)
-    }
-
     /// Parses a function body block, setting both the generator yield context
     /// and the async await context for the duration of the body. Regular
     /// function boundaries reset the surrounding generator/async context;
