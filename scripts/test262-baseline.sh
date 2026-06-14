@@ -131,6 +131,7 @@ if ! xargs -P 1 -n 1 true </dev/null >/dev/null 2>&1; then
   exit 1
 fi
 qjs_require_run_with_timeout
+find "$TEST262_DIR/test" -name '.qjs-baseline-case-*.js' -type f -delete
 
 # Scratch space for the parallel case runners: the work queue plus per-case
 # result, JSONL, and message files keyed by queue index.
@@ -365,11 +366,11 @@ list_test262_cases() {
       return
     fi
     if [ -d "$TEST262_DIR/$FILTER_PREFIX" ]; then
-      find "$TEST262_DIR/$FILTER_PREFIX" -type f -name '*.js' | sort
+      find "$TEST262_DIR/$FILTER_PREFIX" -type f -name '*.js' ! -name '.qjs-baseline-case-*.js' | sort
       return
     fi
   fi
-  find "$TEST262_DIR/test" -type f -name '*.js' | sort
+  find "$TEST262_DIR/test" -type f -name '*.js' ! -name '.qjs-baseline-case-*.js' | sort
 }
 
 line_set_contains() {
