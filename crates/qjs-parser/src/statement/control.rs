@@ -87,6 +87,7 @@ fn validate_switch_lexical_names(cases: &[SwitchCase], strict: bool) -> Result<(
     use std::collections::HashMap;
     let mut lexical: HashMap<String, Span> = HashMap::new();
     let mut var_names: HashMap<String, Span> = HashMap::new();
+    let mut sloppy_fns: HashMap<String, Span> = HashMap::new();
     for case in cases {
         for stmt in &case.consequent {
             for (name, span) in lexical_names_of(stmt, strict) {
@@ -96,9 +97,9 @@ fn validate_switch_lexical_names(cases: &[SwitchCase], strict: bool) -> Result<(
                         span,
                     });
                 }
-                if var_names.contains_key(&name) {
+                if var_names.contains_key(&name) || sloppy_fns.contains_key(&name) {
                     return Err(ParseError {
-                        message: format!("variable '{name}' conflicts with lexical declaration"),
+                        message: format!("'{name}' conflicts with lexical declaration"),
                         span,
                     });
                 }
@@ -123,6 +124,7 @@ fn validate_switch_lexical_names(cases: &[SwitchCase], strict: bool) -> Result<(
                             span,
                         });
                     }
+                    sloppy_fns.insert(name, span);
                 }
             }
         }
