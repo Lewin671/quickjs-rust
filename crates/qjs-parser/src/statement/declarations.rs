@@ -130,6 +130,12 @@ impl Parser {
                 span: token.span,
             });
         }
+        if self.strict && matches!(name.as_str(), "eval" | "arguments") {
+            return Err(ParseError {
+                message: format!("`{name}` cannot be used as a binding name in strict mode"),
+                span: token.span,
+            });
+        }
         Ok(BindingPattern::Identifier {
             name,
             span: token.span,
