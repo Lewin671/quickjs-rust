@@ -17,6 +17,9 @@ impl Compiler {
         self.emit_load_undefined();
         self.emit(Op::StoreLocal(result_slot));
 
+        let loop_depth = self.loop_stack_depth();
+        self.push_try_result_slot(result_slot, loop_depth);
+
         let enter = self.emit(Op::EnterTry {
             catch: None,
             finally: None,
@@ -32,6 +35,9 @@ impl Compiler {
         } else {
             (None, None)
         };
+
+        self.pop_try_result_slot();
+
         let finally_target = if let Some(finalizer) = finalizer {
             Some(self.compile_finally(finalizer)?)
         } else {
@@ -68,6 +74,13 @@ impl Compiler {
         result_slot: usize,
     ) -> Result<(usize, Option<CatchScope>), RuntimeError> {
         let target = self.code.len();
+        // Reset the try result slot at catch entry: the catch clause starts a
+        // fresh completion sequence, so values from the try body before the
+        // throw must not leak through an abrupt exit (break/continue) from the
+        // catch block. Per spec, UpdateEmpty on the catch clause's break with
+        // empty value produces undefined, matching this reset.
+        self.emit_load_undefined();
+        self.emit(Op::StoreLocal(result_slot));
         if let Some(param) = &handler.param {
             let slots = self.with_lexical_scope(|compiler| {
                 let slots = compiler.compile_catch_param(param)?;
@@ -100,14 +113,30 @@ impl Compiler {
     }
 
     fn compile_finally(&mut self, finalizer: &[Stmt]) -> Result<usize, RuntimeError> {
+        // The finally block needs its own result slot to track the statement
+        // list completion value. When a break/continue exits from a finally
+        // block, this slot provides the UpdateEmpty'd completion value.
+        let finally_result_slot = self.temp_local("finally_result");
+
+        let loop_depth = self.loop_stack_depth();
+        self.push_try_result_slot(finally_result_slot, loop_depth);
+
         let target = self.code.len();
+        // Initialize the finally result slot at the start of the finally block
+        // (inside the target) so it's reset regardless of how finally is entered
+        // (normal flow, exception, or abrupt completion from try/catch).
+        self.emit_load_undefined();
+        self.emit(Op::StoreLocal(finally_result_slot));
         self.with_lexical_scope(|compiler| {
             for stmt in finalizer {
                 compiler.compile_stmt(stmt)?;
-                compiler.emit(Op::Pop);
+                compiler.emit(Op::StoreLocal(finally_result_slot));
             }
             Ok(())
         })?;
+
+        self.pop_try_result_slot();
+
         self.emit(Op::EndFinally);
         Ok(target)
     }
