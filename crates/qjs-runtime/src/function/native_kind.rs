@@ -146,6 +146,7 @@ pub(crate) enum NativeFunction {
     // %Iterator% intrinsic (ES2025 Iterator Helpers).
     Iterator,
     IteratorFrom,
+    IteratorConcat,
     IteratorPrototypeToStringTagGet,
     IteratorPrototypeToStringTagSet,
     IteratorPrototypeConstructorGet,

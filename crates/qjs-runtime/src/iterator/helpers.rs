@@ -29,9 +29,17 @@ const HELPER_COUNTER: &str = "\0iterator_helper_counter";
 const HELPER_DONE: &str = "\0iterator_helper_done";
 const HELPER_INNER: &str = "\0iterator_helper_inner_alive";
 const HELPER_EXECUTING: &str = "\0iterator_helper_executing";
+const CONCAT_COUNT: &str = "\0iterator_concat_count";
+const CONCAT_INDEX: &str = "\0iterator_concat_index";
+const CONCAT_ITERABLE_PREFIX: &str = "\0iterator_concat_iterable_";
+const CONCAT_METHOD_PREFIX: &str = "\0iterator_concat_method_";
+const CONCAT_ACTIVE: &str = "\0iterator_concat_active";
+const CONCAT_ACTIVE_ITERATOR: &str = "\0iterator_concat_active_iterator";
+const CONCAT_ACTIVE_NEXT: &str = "\0iterator_concat_active_next";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum HelperKind {
+    Concat,
     Map,
     Filter,
     Take,
@@ -42,6 +50,7 @@ enum HelperKind {
 impl HelperKind {
     fn tag(self) -> &'static str {
         match self {
+            Self::Concat => "concat",
             Self::Map => "map",
             Self::Filter => "filter",
             Self::Take => "take",
@@ -52,6 +61,7 @@ impl HelperKind {
 
     fn from_tag(tag: &str) -> Option<Self> {
         Some(match tag {
+            "concat" => Self::Concat,
             "map" => Self::Map,
             "filter" => Self::Filter,
             "take" => Self::Take,
@@ -60,6 +70,58 @@ impl HelperKind {
             _ => return None,
         })
     }
+}
+
+/// `Iterator.concat(...items)`.
+pub(super) fn native_iterator_concat(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let helper = ObjectRef::with_prototype(HashMap::new(), super::iterator_helper_prototype(env));
+    helper.define_non_enumerable(
+        HELPER_KIND.to_owned(),
+        Value::String(HelperKind::Concat.tag().to_owned()),
+    );
+    helper.define_non_enumerable(HELPER_DONE.to_owned(), Value::Boolean(false));
+    helper.define_non_enumerable(HELPER_EXECUTING.to_owned(), Value::Boolean(false));
+    helper.define_non_enumerable(CONCAT_COUNT.to_owned(), Value::Number(0.0));
+    helper.define_non_enumerable(CONCAT_INDEX.to_owned(), Value::Number(0.0));
+    helper.define_non_enumerable(CONCAT_ACTIVE.to_owned(), Value::Boolean(false));
+
+    let Some(iterator_symbol) = symbol::iterator_symbol(env) else {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "iterator symbol is unavailable".to_owned(),
+        });
+    };
+
+    for (index, item) in argument_values.iter().cloned().enumerate() {
+        if !is_object_value(&item) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: Iterator.concat item is not an object".to_owned(),
+            });
+        }
+        let method = property_value_key(
+            item.clone(),
+            &PropertyKey::Symbol(iterator_symbol.clone()),
+            env,
+        )?;
+        if matches!(method, Value::Undefined | Value::Null) || !is_callable_value(&method) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: Iterator.concat item is not iterable".to_owned(),
+            });
+        }
+        helper.define_non_enumerable(format!("{CONCAT_ITERABLE_PREFIX}{index}"), item);
+        helper.define_non_enumerable(format!("{CONCAT_METHOD_PREFIX}{index}"), method);
+    }
+    helper.define_non_enumerable(
+        CONCAT_COUNT.to_owned(),
+        Value::Number(argument_values.len() as f64),
+    );
+
+    Ok(Value::Object(helper))
 }
 
 fn iterator_receiver(this_value: &Value, method: &str) -> Result<Value, RuntimeError> {
@@ -91,6 +153,7 @@ pub(super) fn native_lazy_helper(
     let mut checked_limit = None;
     let mut checked_callback = None;
     let (iterator, next) = match kind {
+        HelperKind::Concat => unreachable!("concat is constructed by native_iterator_concat"),
         HelperKind::Map | HelperKind::Filter | HelperKind::FlatMap => {
             let iterator = iterator_receiver(&this_value, method)?;
             let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);
@@ -138,6 +201,7 @@ pub(super) fn native_lazy_helper(
     helper.define_non_enumerable(HELPER_COUNTER.to_owned(), Value::Number(0.0));
 
     match kind {
+        HelperKind::Concat => unreachable!("concat is constructed by native_iterator_concat"),
         HelperKind::Map | HelperKind::Filter | HelperKind::FlatMap => {
             let callback = checked_callback
                 .expect("callback helpers validate callback before helper creation");
@@ -228,15 +292,20 @@ pub(super) fn native_helper_next(
             message: "TypeError: iterator helper is already executing".to_owned(),
         });
     }
-    let Some(iterator) = helper_slot(&helper, HELPER_UNDERLYING) else {
-        return Err(not_a_helper());
-    };
-    let Some(next) = helper_slot(&helper, HELPER_NEXT) else {
-        return Err(not_a_helper());
-    };
-
     set_executing(&helper, true);
-    let advanced = advance(kind, &helper, &iterator, &next, env);
+    let advanced = if kind == HelperKind::Concat {
+        advance_concat(&helper, env)
+    } else {
+        let Some(iterator) = helper_slot(&helper, HELPER_UNDERLYING) else {
+            set_executing(&helper, false);
+            return Err(not_a_helper());
+        };
+        let Some(next) = helper_slot(&helper, HELPER_NEXT) else {
+            set_executing(&helper, false);
+            return Err(not_a_helper());
+        };
+        advance(kind, &helper, &iterator, &next, env)
+    };
     set_executing(&helper, false);
 
     match advanced {
@@ -262,11 +331,104 @@ fn advance(
     env: &mut CallEnv,
 ) -> Result<Option<Value>, RuntimeError> {
     match kind {
+        HelperKind::Concat => advance_concat(helper, env),
         HelperKind::Map => advance_map(helper, iterator, next, env),
         HelperKind::Filter => advance_filter(helper, iterator, next, env),
         HelperKind::Take => advance_take(helper, iterator, next, env),
         HelperKind::Drop => advance_drop(helper, iterator, next, env),
         HelperKind::FlatMap => advance_flat_map(helper, iterator, next, env),
+    }
+}
+
+fn is_object_value(value: &Value) -> bool {
+    matches!(
+        value,
+        Value::Object(_)
+            | Value::Array(_)
+            | Value::Function(_)
+            | Value::Map(_)
+            | Value::Set(_)
+            | Value::Proxy(_)
+    )
+}
+
+fn is_callable_value(value: &Value) -> bool {
+    match value {
+        Value::Function(_) => true,
+        Value::Proxy(proxy) => crate::proxy::proxy_is_callable(proxy),
+        _ => false,
+    }
+}
+
+fn number_slot(helper: &ObjectRef, key: &str) -> usize {
+    match helper_slot(helper, key) {
+        Some(Value::Number(n)) if n.is_finite() && n >= 0.0 => n as usize,
+        _ => 0,
+    }
+}
+
+fn active_concat_iterator(helper: &ObjectRef) -> Option<(Value, Value)> {
+    if !matches!(
+        helper_slot(helper, CONCAT_ACTIVE),
+        Some(Value::Boolean(true))
+    ) {
+        return None;
+    }
+    let iterator = helper_slot(helper, CONCAT_ACTIVE_ITERATOR)?;
+    let next = helper_slot(helper, CONCAT_ACTIVE_NEXT)?;
+    Some((iterator, next))
+}
+
+fn clear_active_concat_iterator(helper: &ObjectRef) {
+    helper.define_non_enumerable(CONCAT_ACTIVE.to_owned(), Value::Boolean(false));
+    helper.define_non_enumerable(CONCAT_ACTIVE_ITERATOR.to_owned(), Value::Undefined);
+    helper.define_non_enumerable(CONCAT_ACTIVE_NEXT.to_owned(), Value::Undefined);
+}
+
+fn open_concat_iterator(
+    helper: &ObjectRef,
+    index: usize,
+    env: &mut CallEnv,
+) -> Result<(), RuntimeError> {
+    let iterable = helper_slot(helper, &format!("{CONCAT_ITERABLE_PREFIX}{index}"))
+        .unwrap_or(Value::Undefined);
+    let method =
+        helper_slot(helper, &format!("{CONCAT_METHOD_PREFIX}{index}")).unwrap_or(Value::Undefined);
+    let iterator = call_function(method, iterable, Vec::new(), env, false)?;
+    if !is_object_value(&iterator) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Iterator.concat iterator is not an object".to_owned(),
+        });
+    }
+    let next = property_value(iterator.clone(), "next", env)?;
+    helper.define_non_enumerable(CONCAT_ACTIVE.to_owned(), Value::Boolean(true));
+    helper.define_non_enumerable(CONCAT_ACTIVE_ITERATOR.to_owned(), iterator);
+    helper.define_non_enumerable(CONCAT_ACTIVE_NEXT.to_owned(), next);
+    Ok(())
+}
+
+fn advance_concat(helper: &ObjectRef, env: &mut CallEnv) -> Result<Option<Value>, RuntimeError> {
+    loop {
+        if let Some((iterator, next)) = active_concat_iterator(helper) {
+            match iterator_step(&iterator, &next, env)? {
+                Some(result) => return Ok(Some(iterator_value(result, env)?)),
+                None => {
+                    clear_active_concat_iterator(helper);
+                    let index = number_slot(helper, CONCAT_INDEX);
+                    helper.define_non_enumerable(
+                        CONCAT_INDEX.to_owned(),
+                        Value::Number((index + 1) as f64),
+                    );
+                }
+            }
+        } else {
+            let index = number_slot(helper, CONCAT_INDEX);
+            if index >= number_slot(helper, CONCAT_COUNT) {
+                return Ok(None);
+            }
+            open_concat_iterator(helper, index, env)?;
+        }
     }
 }
 
@@ -498,21 +660,45 @@ pub(super) fn native_helper_return(
     let Value::Object(helper) = this_value else {
         return Err(not_a_helper());
     };
-    if helper_kind(&helper).is_none() {
+    let Some(kind) = helper_kind(&helper) else {
         return Err(not_a_helper());
+    };
+    if helper_executing(&helper) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: iterator helper is already executing".to_owned(),
+        });
     }
     if !helper_done(&helper) {
         set_done(&helper);
-        if let Some(Value::Object(inner_state)) = helper_slot(&helper, HELPER_INNER)
-            && let Some(inner) = helper_slot(&inner_state, HELPER_UNDERLYING)
-        {
-            super::protocol::iterator_close(&inner, env)?;
-        }
-        if let Some(iterator) = helper_slot(&helper, HELPER_UNDERLYING) {
-            super::protocol::iterator_close(&iterator, env)?;
-        }
+        set_executing(&helper, true);
+        let closed = close_helper_iterators(kind, &helper, env);
+        set_executing(&helper, false);
+        closed?;
     }
     Ok(iterator_result(Value::Undefined, true))
+}
+
+fn close_helper_iterators(
+    kind: HelperKind,
+    helper: &ObjectRef,
+    env: &mut CallEnv,
+) -> Result<(), RuntimeError> {
+    if let Some(Value::Object(inner_state)) = helper_slot(helper, HELPER_INNER)
+        && let Some(inner) = helper_slot(&inner_state, HELPER_UNDERLYING)
+    {
+        super::protocol::iterator_close(&inner, env)?;
+    }
+    if kind == HelperKind::Concat
+        && let Some((iterator, _)) = active_concat_iterator(helper)
+    {
+        super::protocol::iterator_close(&iterator, env)?;
+        clear_active_concat_iterator(helper);
+    }
+    if let Some(iterator) = helper_slot(helper, HELPER_UNDERLYING) {
+        super::protocol::iterator_close(&iterator, env)?;
+    }
+    Ok(())
 }
 
 fn not_a_helper() -> RuntimeError {

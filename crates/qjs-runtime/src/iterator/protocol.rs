@@ -9,7 +9,12 @@ use crate::{RuntimeError, Value, call_function, is_truthy, property_value};
 fn is_object_value(value: &Value) -> bool {
     matches!(
         value,
-        Value::Object(_) | Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_)
+        Value::Object(_)
+            | Value::Array(_)
+            | Value::Function(_)
+            | Value::Map(_)
+            | Value::Set(_)
+            | Value::Proxy(_)
     )
 }
 

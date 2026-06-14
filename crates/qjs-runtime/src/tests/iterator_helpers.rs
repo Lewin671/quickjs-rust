@@ -253,6 +253,106 @@ fn iterator_from_observes_proxy_iterator_methods_in_order() {
 }
 
 #[test]
+fn iterator_concat_static_surface_and_basic_iteration() {
+    assert_eq!(
+        string(
+            "let desc = Object.getOwnPropertyDescriptor(Iterator, 'concat'); \
+             let length = Object.getOwnPropertyDescriptor(Iterator.concat, 'length'); \
+             let name = Object.getOwnPropertyDescriptor(Iterator.concat, 'name'); \
+             let iter = Iterator.concat([1, 2], new Set([3])); \
+             [typeof Iterator.concat, Iterator.concat.length, Iterator.concat.name, \
+              desc.writable, desc.enumerable, desc.configurable, \
+              length.writable, length.enumerable, length.configurable, \
+              name.writable, name.enumerable, name.configurable, \
+              iter instanceof Iterator, Array.from(iter).join(',')].join(':');"
+        ),
+        "function:0:concat:true:false:true:false:false:true:false:false:true:true:1,2,3"
+    );
+}
+
+#[test]
+fn iterator_concat_reads_methods_once_and_opens_iterators_lazily() {
+    assert_eq!(
+        string(
+            "let log = []; \
+             let first = { \
+               get [Symbol.iterator]() { log.push('get first'); return function () { log.push('open first'); return [1][Symbol.iterator](); }; } \
+             }; \
+             let second = { \
+               get [Symbol.iterator]() { log.push('get second'); return function () { log.push('open second'); return [2][Symbol.iterator](); }; } \
+             }; \
+             let iter = Iterator.concat(first, second); \
+             let afterCreate = log.join('|'); \
+             let a = iter.next(); \
+             let afterFirst = log.join('|'); \
+             let b = iter.next(); \
+             let c = iter.next(); \
+             [afterCreate, afterFirst, log.join('|'), a.value, b.value, c.done].join(':');"
+        ),
+        "get first|get second:get first|get second|open first:get first|get second|open first|open second:1:2:true"
+    );
+}
+
+#[test]
+fn iterator_concat_return_closes_only_started_inner_iterator() {
+    assert_eq!(
+        string(
+            "let returns = 0; \
+             let opened = 0; \
+             let active = { \
+               next() { return { done: false, value: 1 }; }, \
+               return() { returns++; return {}; } \
+             }; \
+             let iter = Iterator.concat({ [Symbol.iterator]() { opened++; return active; } }); \
+             iter.return(); \
+             let beforeStart = opened + ':' + returns; \
+             iter = Iterator.concat({ [Symbol.iterator]() { opened++; return active; } }); \
+             iter.next(); \
+             iter.return(); \
+             iter.return(); \
+             beforeStart + ':' + opened + ':' + returns;"
+        ),
+        "0:0:1:1"
+    );
+}
+
+#[test]
+fn iterator_concat_return_rejects_reentry() {
+    assert_eq!(
+        string(
+            "let enterCount = 0; \
+             let source = { \
+               next() { return { done: false }; }, \
+               return() { enterCount++; iter.return(); return {}; } \
+             }; \
+             let iter = Iterator.concat({ [Symbol.iterator]() { return source; } }); \
+             iter.next(); \
+             let threw = false; \
+             try { iter.return(); } catch (e) { threw = e instanceof TypeError; } \
+             threw + ':' + enterCount;"
+        ),
+        "true:1"
+    );
+}
+
+#[test]
+fn iterator_concat_does_not_read_done_value() {
+    assert_eq!(
+        string(
+            "let valueGets = 0; \
+             let source = { \
+               [Symbol.iterator]() { \
+                 return { next() { return { get value() { valueGets++; }, done: true }; } }; \
+               } \
+             }; \
+             let result = Iterator.concat(source, source).next(); \
+             result.done + ':' + (result.value === undefined) + ':' + valueGets;"
+        ),
+        "true:true:0"
+    );
+}
+
+#[test]
 fn iterator_flat_map_return_closes_inner_iterator_once() {
     assert_eq!(
         string(

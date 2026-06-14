@@ -252,6 +252,15 @@ pub(crate) fn install_iterator(
             false,
         ))),
     );
+    iterator_function.properties.borrow_mut().insert(
+        "concat".to_owned(),
+        Property::non_enumerable(Value::Function(Function::new_native(
+            Some("concat"),
+            0,
+            NativeFunction::IteratorConcat,
+            false,
+        ))),
+    );
 
     let wrap_prototype = from::build_wrap_prototype(env, &iterator_prototype);
 
@@ -315,6 +324,7 @@ pub(crate) fn call_iterator_native(
     let result = match native {
         NativeFunction::Iterator => native_iterator_constructor(is_construct, env)?,
         NativeFunction::IteratorFrom => from::native_iterator_from(argument_values, env)?,
+        NativeFunction::IteratorConcat => helpers::native_iterator_concat(argument_values, env)?,
         NativeFunction::IteratorPrototypeToStringTagGet => {
             return Ok(Some(Value::String("Iterator".to_owned())));
         }
