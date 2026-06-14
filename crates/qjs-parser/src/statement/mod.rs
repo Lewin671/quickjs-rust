@@ -120,13 +120,38 @@ impl Parser {
             return self.labelled_statement();
         }
 
-        if self.at(&TokenKind::Var) || self.at(&TokenKind::Let) || self.at(&TokenKind::Const) {
+        if self.at(&TokenKind::Var) || self.at(&TokenKind::Const) {
+            return self.variable_declaration();
+        }
+        if self.at(&TokenKind::Let) && self.let_is_declaration_start() {
             return self.variable_declaration();
         }
 
         let expr = self.expression()?;
         self.match_kind(&TokenKind::Semicolon);
         Ok(Stmt::Expr(expr))
+    }
+
+    fn let_is_declaration_start(&self) -> bool {
+        if self.strict {
+            return true;
+        }
+        let Some(next) = self.peek_nth(1) else {
+            return false;
+        };
+        match &next.kind {
+            TokenKind::LeftBracket | TokenKind::LeftBrace => {
+                let let_end = self.tokens[self.cursor].span.end;
+                let next_start = next.span.start;
+                let between = &self.source[let_end..next_start];
+                !between.contains('\n')
+                    && !between.contains('\r')
+                    && !between.contains('\u{2028}')
+                    && !between.contains('\u{2029}')
+            }
+            TokenKind::Identifier(_) => true,
+            _ => false,
+        }
     }
 
     fn starts_labelled_statement(&self) -> bool {
