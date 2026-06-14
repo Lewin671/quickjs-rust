@@ -9,6 +9,7 @@ QUICKJS_NG_RUNNER="$QUICKJS_NG_DIR/build/run-test262"
 RUN_WITH_TIMEOUT="$ROOT_DIR/scripts/run-with-timeout.sh"
 METADATA_PARSER="$ROOT_DIR/scripts/test262-baseline-metadata.awk"
 CASE_TIMEOUT_SECONDS="${TEST262_CASE_TIMEOUT_SECONDS:-10}"
+TIMEOUT_RETRIES="${TEST262_TIMEOUT_RETRIES:-0}"
 RUN_LIMIT="${TEST262_BASELINE_LIMIT:-50}"
 FILTER_PREFIX=""
 ENGINE="quickjs-rust"
@@ -102,6 +103,12 @@ case "$ENGINE" in
   quickjs-rust|quickjs-ng|both) ;;
   *)
     echo "error: --engine must be quickjs-rust, quickjs-ng, or both: $ENGINE" >&2
+    exit 2
+    ;;
+esac
+case "$TIMEOUT_RETRIES" in
+  ''|*[!0-9]*)
+    echo "error: TEST262_TIMEOUT_RETRIES must be a non-negative integer: $TIMEOUT_RETRIES" >&2
     exit 2
     ;;
 esac
@@ -512,24 +519,31 @@ run_engine_case() {
   local engine="$1" temp="$2" source="$3"
   local negative_phase="${4:-}" negative_type="${5:-}" is_async="${6:-}"
   local module_prelude="${7:-}"
-  local output status first_line
+  local output status first_line attempt
 
-  set +e
-  case "$engine" in
-    quickjs-rust)
-      if [ -n "$module_prelude" ]; then
-        # Module-flagged case: run the test file under the Module goal with the
-        # harness includes installed as a script prelude. The engine reads the
-        # original test file so relative imports resolve against its directory.
-        output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$QJS_CLI_BIN" --error-format=test262 --module --prelude "$module_prelude" "$source" 2>&1)"
-      else
-        output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$QJS_CLI_BIN" --error-format=test262 "$temp" 2>&1)"
-      fi
-      ;;
-    quickjs-ng) output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$QUICKJS_NG_RUNNER" -c "$QUICKJS_NG_CONF" -t 1 -f "$source" 2>&1)" ;;
-  esac
-  status=$?
-  set -e
+  attempt=0
+  while :; do
+    set +e
+    case "$engine" in
+      quickjs-rust)
+        if [ -n "$module_prelude" ]; then
+          # Module-flagged case: run the test file under the Module goal with the
+          # harness includes installed as a script prelude. The engine reads the
+          # original test file so relative imports resolve against its directory.
+          output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$QJS_CLI_BIN" --error-format=test262 --module --prelude "$module_prelude" "$source" 2>&1)"
+        else
+          output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$QJS_CLI_BIN" --error-format=test262 "$temp" 2>&1)"
+        fi
+        ;;
+      quickjs-ng) output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$QUICKJS_NG_RUNNER" -c "$QUICKJS_NG_CONF" -t 1 -f "$source" 2>&1)" ;;
+    esac
+    status=$?
+    set -e
+    if [ "$status" -ne 124 ] || [ "$attempt" -ge "$TIMEOUT_RETRIES" ]; then
+      break
+    fi
+    attempt=$((attempt + 1))
+  done
 
   if [ "$status" -eq 0 ]; then
     if [ "$engine" = "quickjs-rust" ] && [ -n "$negative_phase" ]; then
@@ -877,6 +891,7 @@ if [ "$run" -gt 0 ]; then
   export QUICKJS_NG_RUNNER
   export RUN_WITH_TIMEOUT
   export TEST262_DIR
+  export TIMEOUT_RETRIES
   export WORK_DIR
   export -f emit_test262_assert_fast_paths
   export -f emit_test262_host_shim

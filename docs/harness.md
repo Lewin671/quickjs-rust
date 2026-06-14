@@ -247,7 +247,10 @@ case execution runs through a parallel worker pool sized by
 `TEST262_BASELINE_JOBS` (default: one worker per online CPU); summary counts,
 JSONL artifacts, and diagnostic ordering are unchanged, while per-case
 progress lines on stdout interleave in completion order. Lower
-`TEST262_BASELINE_JOBS` when several baseline instances share one machine.
+`TEST262_BASELINE_JOBS` when several baseline instances share one machine. Set
+`TEST262_TIMEOUT_RETRIES` to rerun only cases that hit the timeout wrapper; the
+default is `0`, and each retry uses the same per-case timeout so stable
+performance gaps remain reported as timeouts.
 The
 `Test262 Coverage` GitHub Actions workflow starts for each successful `CI`
 commit, but a newer push to the same branch cancels a superseded in-flight
@@ -262,7 +265,9 @@ credibility and runtime-performance gaps. The
 quickjs-rust scan uses 16 coverage groups; each group runs its two Test262
 shards sequentially, and each shard saturates the runner's cores through the
 baseline script's internal worker pool while keeping the full 32-shard scan
-complete. The
+complete. The quickjs-rust coverage shards retry timeout cases once with the
+same 10-second case timeout to reduce shared-runner flake without hiding stable
+slow cases. The
 workflow reuses a full QuickJS-NG baseline cache when available;
 when that cache is missing, it falls back to sharded baseline jobs and saves a
 full cache for later commits.

@@ -25,7 +25,9 @@ each script is for.
   structural not-run cases, failures, and timeouts; `--engine both` compares
   against QuickJS-NG under its own test262 config. Set `QJS_CLI_BIN` to reuse
   a prebuilt binary across shards, or `QJS_CLI_PROFILE=release` to build an
-  optimized quickjs-rust runner for timeout-sensitive scans.
+  optimized quickjs-rust runner for timeout-sensitive scans. Set
+  `TEST262_TIMEOUT_RETRIES` to retry only timeout results with the same
+  per-case timeout.
 - `test262-aggregate.py`: Aggregates QuickJS-NG and quickjs-rust case-result
   JSONL sets into the CI coverage summary and the schema-1 burndown entry.
   Used by the Test262 Coverage workflow; also runs locally on artifacts

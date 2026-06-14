@@ -206,6 +206,8 @@ jobs:
         run: cargo build -q --release -p qjs-cli
 
       - name: Run full Test262 coverage shard
+        env:
+          TEST262_TIMEOUT_RETRIES: 1
         run: |
           mkdir -p coverage
           status=0
