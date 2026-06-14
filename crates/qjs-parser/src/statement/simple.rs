@@ -16,8 +16,22 @@ impl Parser {
                 span: Span::new(start, start + "return".len()),
             });
         }
+        let return_token_end = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .end;
         self.expect(&TokenKind::Return)?;
-        let argument = if self.at(&TokenKind::Semicolon) || self.at(&TokenKind::RightBrace) {
+        let next_start = self
+            .peek()
+            .map(|t| t.span.start)
+            .unwrap_or(return_token_end);
+        let has_newline = self.has_line_terminator_between(return_token_end, next_start);
+        let argument = if has_newline
+            || self.at(&TokenKind::Semicolon)
+            || self.at(&TokenKind::RightBrace)
+            || self.at(&TokenKind::Eof)
+        {
             None
         } else {
             Some(self.expression()?)
