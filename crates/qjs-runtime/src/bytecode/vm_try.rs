@@ -86,11 +86,31 @@ impl Vm<'_> {
         Ok(Some(value))
     }
 
+    /// Routes a break/continue jump through finally blocks. Pops the current
+    /// try frame and, if it has a finally clause, defers the jump until after
+    /// the finally block executes. Otherwise jumps directly.
+    /// Unlike throw/return, the operand stack is not truncated because the
+    /// break/continue target expects its completion value on top.
+    pub(super) fn abrupt_jump(&mut self, target: usize) -> Result<(), RuntimeError> {
+        if let Some(frame) = self.try_stack.pop() {
+            self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
+            if let Some(finally) = frame.finally {
+                self.pending_jump = Some(target);
+                self.ip = finally;
+                return Ok(());
+            }
+        }
+        self.ip = target;
+        Ok(())
+    }
+
     pub(super) fn end_finally(&mut self) -> Result<Option<Value>, RuntimeError> {
         if let Some(value) = self.pending_throw.take() {
             self.throw_value(value)?;
         } else if let Some(value) = self.pending_return.take() {
             return self.return_value(value);
+        } else if let Some(target) = self.pending_jump.take() {
+            self.ip = target;
         }
         Ok(None)
     }

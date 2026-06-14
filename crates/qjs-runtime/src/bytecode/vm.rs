@@ -62,6 +62,8 @@ pub(super) struct Vm<'a> {
     pub(super) try_stack: Vec<TryFrame>,
     pub(super) pending_throw: Option<Value>,
     pub(super) pending_return: Option<Value>,
+    /// Target IP for a break/continue routed through a finally block.
+    pub(super) pending_jump: Option<usize>,
     /// Staged resume for a generator body suspended inside `yield*`.
     pub(super) resume_mode: Option<ResumeMode>,
     /// Cached realm Array.prototype for the `a[i] = x` fast path.
@@ -123,6 +125,7 @@ impl<'a> Vm<'a> {
             try_stack: Vec::new(),
             pending_throw: None,
             pending_return: None,
+            pending_jump: None,
             resume_mode: None,
             stop_at_prologue: false,
             array_prototype_cache: None,
@@ -516,6 +519,9 @@ impl<'a> Vm<'a> {
                     }
                 }
                 Op::Jump(target) => self.ip = target,
+                Op::AbruptJump(target) => {
+                    self.abrupt_jump(target)?;
+                }
                 Op::JumpIfFalse(target) => {
                     if !is_truthy(self.stack.last().ok_or_else(stack_underflow)?) {
                         self.ip = target;

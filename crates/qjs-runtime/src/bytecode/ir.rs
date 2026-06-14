@@ -245,6 +245,11 @@ pub(super) enum Op {
     JumpIfFalse(usize),
     JumpIfTrue(usize),
     JumpIfNotNullish(usize),
+    /// A break/continue that must route through a finally block before
+    /// reaching its target. The VM pops the try frame, sets a pending jump
+    /// target, and transfers control to the finally block. EndFinally then
+    /// resumes the jump.
+    AbruptJump(usize),
     EnterTry {
         catch: Option<usize>,
         finally: Option<usize>,
