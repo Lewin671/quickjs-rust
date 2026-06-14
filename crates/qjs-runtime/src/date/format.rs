@@ -51,22 +51,28 @@ pub(crate) fn native_date_prototype_to_time_string(
 
 pub(crate) fn native_date_prototype_to_json(
     this_value: Value,
-    key: Value,
+    _key: Value,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    if !date_value(this_value.clone())?.is_finite() {
-        return Ok(Value::Null);
+    let tv = crate::to_primitive_with_hint(
+        this_value.clone(),
+        crate::conversion::PreferredType::Number,
+        env,
+    )?;
+    if let Value::Number(n) = &tv {
+        if n.is_nan() || n.is_infinite() {
+            return Ok(Value::Null);
+        }
     }
 
-    let to_iso_string = match &this_value {
-        Value::Object(object) => object.get("toISOString"),
-        _ => None,
+    let to_iso_string = crate::property_value(this_value.clone(), "toISOString", env)?;
+    match to_iso_string {
+        Value::Function(_) => call_function(to_iso_string, this_value, vec![], env, false),
+        _ => Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: toJSON receiver does not have a toISOString method".to_owned(),
+        }),
     }
-    .ok_or_else(|| RuntimeError {
-        thrown: None,
-        message: "Date toJSON receiver does not have a toISOString method".to_owned(),
-    })?;
-    call_function(to_iso_string, this_value, vec![key], env, false)
 }
 
 pub(crate) fn native_date_prototype_to_primitive(
