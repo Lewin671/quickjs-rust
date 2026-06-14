@@ -196,6 +196,66 @@ fn data_view_float_round_trips() {
 }
 
 #[test]
+fn data_view_float16_round_trips_and_uses_expected_bytes() {
+    assert_eq!(
+        eval(
+            "let v = new DataView(new ArrayBuffer(8)); \
+             v.setFloat16(0, 1.5); \
+             v.setFloat16(2, 42, true); \
+             [v.getFloat16(0), v.getUint8(0), v.getUint8(1), \
+              v.getFloat16(2, true), v.getUint8(2), v.getUint8(3)].join(':');"
+        ),
+        Ok(Value::String("1.5:62:0:42:64:81".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let v = new DataView(new ArrayBuffer(8)); \
+             v.setFloat16(0, 0.333251953125); \
+             v.getFloat16(0);"
+        ),
+        Ok(Value::Number(0.333251953125))
+    );
+}
+
+#[test]
+fn data_view_float16_handles_special_values() {
+    assert_eq!(
+        eval(
+            "let v = new DataView(new ArrayBuffer(12)); \
+             v.setUint8(0, 0x7c); v.setUint8(1, 0x00); \
+             v.setUint8(2, 0xfc); v.setUint8(3, 0x00); \
+             v.setUint8(4, 0x80); v.setUint8(5, 0x00); \
+             v.setUint8(6, 0x00); v.setUint8(7, 0x01); \
+             v.setFloat16(8, NaN); \
+             [v.getFloat16(0), v.getFloat16(2), Object.is(v.getFloat16(4), -0), \
+              v.getFloat16(6), Number.isNaN(v.getFloat16(8))].join(':');"
+        ),
+        Ok(Value::String(
+            "Infinity:-Infinity:true:5.960464477539063e-8:true".to_owned()
+        ))
+    );
+}
+
+#[test]
+fn data_view_float16_accessors_follow_resizable_buffer() {
+    assert_eq!(
+        eval(
+            "let buffer = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let view = new DataView(buffer); \
+             let values = [view.setFloat16(0, 10), view.getFloat16(0)]; \
+             buffer.resize(1); \
+             let getThrows = false; \
+             let setThrows = false; \
+             try { view.getFloat16(0); } catch (e) { getThrows = e instanceof RangeError; } \
+             try { view.setFloat16(0, 20); } catch (e) { setThrows = e instanceof RangeError; } \
+             values.push(getThrows, setThrows); \
+             values.join(':');"
+        ),
+        Ok(Value::String(":10:true:true".to_owned()))
+    );
+}
+
+#[test]
 fn data_view_bigint_round_trips() {
     assert_eq!(
         eval("let v = new DataView(new ArrayBuffer(8)); v.setBigInt64(0, -1n); v.getBigInt64(0);"),

@@ -27,6 +27,7 @@ enum ElementType {
     Uint16,
     Int32,
     Uint32,
+    Float16,
     Float32,
     Float64,
     BigInt64,
@@ -37,7 +38,7 @@ impl ElementType {
     fn size(self) -> usize {
         match self {
             ElementType::Int8 | ElementType::Uint8 => 1,
-            ElementType::Int16 | ElementType::Uint16 => 2,
+            ElementType::Int16 | ElementType::Uint16 | ElementType::Float16 => 2,
             ElementType::Int32 | ElementType::Uint32 | ElementType::Float32 => 4,
             ElementType::Float64 | ElementType::BigInt64 | ElementType::BigUint64 => 8,
         }
@@ -92,6 +93,7 @@ pub(crate) fn install_data_view(
         ("getUint16", 1, NativeFunction::DataViewPrototypeGetUint16),
         ("getInt32", 1, NativeFunction::DataViewPrototypeGetInt32),
         ("getUint32", 1, NativeFunction::DataViewPrototypeGetUint32),
+        ("getFloat16", 1, NativeFunction::DataViewPrototypeGetFloat16),
         ("getFloat32", 1, NativeFunction::DataViewPrototypeGetFloat32),
         ("getFloat64", 1, NativeFunction::DataViewPrototypeGetFloat64),
         (
@@ -110,6 +112,7 @@ pub(crate) fn install_data_view(
         ("setUint16", 2, NativeFunction::DataViewPrototypeSetUint16),
         ("setInt32", 2, NativeFunction::DataViewPrototypeSetInt32),
         ("setUint32", 2, NativeFunction::DataViewPrototypeSetUint32),
+        ("setFloat16", 2, NativeFunction::DataViewPrototypeSetFloat16),
         ("setFloat32", 2, NativeFunction::DataViewPrototypeSetFloat32),
         ("setFloat64", 2, NativeFunction::DataViewPrototypeSetFloat64),
         (
@@ -424,6 +427,7 @@ fn encode_number(element: ElementType, number: f64) -> Vec<u8> {
         ElementType::Uint16 => (to_uint(number, 16) as u16).to_be_bytes().to_vec(),
         ElementType::Int32 => (to_int(number, 32) as i32).to_be_bytes().to_vec(),
         ElementType::Uint32 => (to_uint(number, 32) as u32).to_be_bytes().to_vec(),
+        ElementType::Float16 => f64_to_f16_bits(number).to_be_bytes().to_vec(),
         ElementType::Float32 => (number as f32).to_be_bytes().to_vec(),
         ElementType::Float64 => number.to_be_bytes().to_vec(),
         ElementType::BigInt64 | ElementType::BigUint64 => unreachable!("bigint handled separately"),
@@ -460,6 +464,9 @@ fn decode(element: ElementType, slice: &[u8], little_endian: bool) -> Value {
         ElementType::Uint32 => Value::Number(f64::from(u32::from_be_bytes([
             ordered[0], ordered[1], ordered[2], ordered[3],
         ]))),
+        ElementType::Float16 => Value::Number(f16_bits_to_f64(u16::from_be_bytes([
+            ordered[0], ordered[1],
+        ]))),
         ElementType::Float32 => Value::Number(f64::from(f32::from_be_bytes([
             ordered[0], ordered[1], ordered[2], ordered[3],
         ]))),
@@ -488,6 +495,87 @@ fn order_bytes(mut bytes: Vec<u8>, little_endian: bool) -> Vec<u8> {
         bytes.reverse();
     }
     bytes
+}
+
+fn f16_bits_to_f64(bits: u16) -> f64 {
+    let sign = if bits & 0x8000 == 0 { 1.0 } else { -1.0 };
+    let exponent = (bits >> 10) & 0x1f;
+    let fraction = bits & 0x03ff;
+    match exponent {
+        0 => {
+            if fraction == 0 {
+                sign * 0.0
+            } else {
+                sign * f64::from(fraction) * 2f64.powi(-24)
+            }
+        }
+        0x1f => {
+            if fraction == 0 {
+                sign * f64::INFINITY
+            } else {
+                f64::NAN
+            }
+        }
+        _ => sign * (1.0 + f64::from(fraction) / 1024.0) * 2f64.powi(i32::from(exponent) - 15),
+    }
+}
+
+fn f64_to_f16_bits(number: f64) -> u16 {
+    let sign = if number.is_sign_negative() { 0x8000 } else { 0 };
+    let magnitude = number.abs();
+    if magnitude.is_nan() {
+        return sign | 0x7e00;
+    }
+    if magnitude.is_infinite() {
+        return sign | 0x7c00;
+    }
+    if magnitude == 0.0 {
+        return sign;
+    }
+
+    // Largest finite f16 value is 65504. The next representable value is
+    // infinity, so ties at 65520 round to infinity under roundTiesToEven.
+    if magnitude >= 65520.0 {
+        return sign | 0x7c00;
+    }
+
+    if magnitude < 2f64.powi(-14) {
+        let significand = round_ties_to_even(magnitude * 2f64.powi(24));
+        if significand == 0 {
+            return sign;
+        }
+        if significand == 1024 {
+            return sign | 0x0400;
+        }
+        return sign | significand as u16;
+    }
+
+    let exponent = magnitude.log2().floor() as i32;
+    let scaled = magnitude / 2f64.powi(exponent - 10);
+    let mut significand = round_ties_to_even(scaled);
+    let mut biased_exponent = exponent + 15;
+    if significand == 2048 {
+        significand = 1024;
+        biased_exponent += 1;
+    }
+    if biased_exponent >= 31 {
+        return sign | 0x7c00;
+    }
+
+    sign | ((biased_exponent as u16) << 10) | ((significand as u16) & 0x03ff)
+}
+
+fn round_ties_to_even(value: f64) -> u64 {
+    let floor = value.floor();
+    let fraction = value - floor;
+    let rounded = if fraction > 0.5 {
+        floor + 1.0
+    } else if fraction < 0.5 || (floor as u64) & 1 == 0 {
+        floor
+    } else {
+        floor + 1.0
+    };
+    rounded as u64
 }
 
 /// Truncates `number` (already ToNumber'd) to a signed integer of `bits` width
@@ -540,6 +628,8 @@ fn element_type_for(native: NativeFunction) -> ElementType {
         NativeFunction::DataViewPrototypeGetUint32 | NativeFunction::DataViewPrototypeSetUint32 => {
             ElementType::Uint32
         }
+        NativeFunction::DataViewPrototypeGetFloat16
+        | NativeFunction::DataViewPrototypeSetFloat16 => ElementType::Float16,
         NativeFunction::DataViewPrototypeGetFloat32
         | NativeFunction::DataViewPrototypeSetFloat32 => ElementType::Float32,
         NativeFunction::DataViewPrototypeGetFloat64
