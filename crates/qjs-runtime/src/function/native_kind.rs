@@ -101,7 +101,6 @@ pub(crate) enum NativeFunction {
     TypedArrayPrototypeSubarray,
     TypedArrayPrototypeToString,
     TypedArrayPrototypeToLocaleString,
-    TypedArrayIteratorPrototypeNext,
     // Batch 2: write / order family.
     TypedArrayPrototypeSet,
     TypedArrayPrototypeFill,

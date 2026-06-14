@@ -44,6 +44,18 @@ pub(crate) fn native_array_prototype_values(
     )
 }
 
+pub(crate) fn array_key_iterator(receiver: Value, env: &mut CallEnv) -> Value {
+    array_iterator_from_receiver(receiver, env, ITERATOR_KIND_KEY)
+}
+
+pub(crate) fn array_value_iterator(receiver: Value, env: &mut CallEnv) -> Value {
+    array_iterator_from_receiver(receiver, env, ITERATOR_KIND_VALUE)
+}
+
+pub(crate) fn array_key_value_iterator(receiver: Value, env: &mut CallEnv) -> Value {
+    array_iterator_from_receiver(receiver, env, ITERATOR_KIND_KEY_VALUE)
+}
+
 fn array_iterator(
     this_value: Value,
     env: &mut CallEnv,
@@ -59,6 +71,10 @@ fn array_iterator(
         }
         value => array_like_receiver(value, env),
     };
+    Ok(array_iterator_from_receiver(receiver, env, kind))
+}
+
+fn array_iterator_from_receiver(receiver: Value, env: &mut CallEnv, kind: &str) -> Value {
     // `%ArrayIteratorPrototype%` inherits `%Iterator.prototype%`, so the
     // instance gets `next`, `Symbol.iterator`, and the iterator helpers through
     // the chain rather than per-instance own properties.
@@ -71,7 +87,7 @@ fn array_iterator(
     iterator.define_non_enumerable(ITERATOR_NEXT_INDEX.to_owned(), Value::Number(0.0));
     iterator.define_non_enumerable(ITERATOR_DONE.to_owned(), Value::Boolean(false));
     iterator.define_non_enumerable(ITERATOR_KIND.to_owned(), Value::String(kind.to_owned()));
-    Ok(Value::Object(iterator))
+    Value::Object(iterator)
 }
 
 pub(crate) fn native_array_iterator_next(

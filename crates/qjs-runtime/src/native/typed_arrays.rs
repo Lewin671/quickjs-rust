@@ -80,9 +80,6 @@ pub(super) fn call_typed_array_native(
         NativeFunction::TypedArrayPrototypeEntries => {
             typed_array::native_typed_array_prototype_entries(this_value, env)?
         }
-        NativeFunction::TypedArrayIteratorPrototypeNext => {
-            typed_array::native_typed_array_iterator_next(this_value)?
-        }
         NativeFunction::TypedArrayPrototypeForEach => {
             typed_array::native_typed_array_prototype_for_each(this_value, argument_values, env)?
         }

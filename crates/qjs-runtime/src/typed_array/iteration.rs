@@ -4,17 +4,13 @@
 //! attached, then reads elements straight from the buffer (the source of truth)
 //! so values stay correct even if index properties drift.
 
-use std::collections::HashMap;
-
 use crate::{
-    ArrayRef, Function, NativeFunction, ObjectRef, RuntimeError, Value, call_function, is_truthy,
-    to_js_string_with_env, to_number_with_env,
+    ObjectRef, RuntimeError, Value, call_function, is_truthy, to_js_string_with_env,
+    to_number_with_env,
 };
 
 use super::element::{ViewSnapshot, get_view_element, read_view_elements};
-use super::{
-    typed_array_buffer_detached, typed_array_kind, typed_array_length, validate_typed_array,
-};
+use super::{typed_array_kind, validate_typed_array};
 use crate::CallEnv;
 
 // --- shared iteration scaffolding -------------------------------------------
@@ -277,96 +273,34 @@ fn call_to_locale_string(value: Value, env: &mut CallEnv) -> Result<String, Runt
 
 // --- keys / values / entries / Symbol.iterator ------------------------------
 
-const ITERATED_OBJECT: &str = "\0typed_array_iterator_object";
-const ITERATOR_NEXT_INDEX: &str = "\0typed_array_iterator_next_index";
-const ITERATOR_KIND: &str = "\0typed_array_iterator_kind";
-const ITERATOR_KIND_KEY: &str = "key";
-const ITERATOR_KIND_VALUE: &str = "value";
-const ITERATOR_KIND_KEY_VALUE: &str = "key+value";
-
 pub(crate) fn native_typed_array_prototype_keys(
     this_value: Value,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    make_iterator(this_value, ITERATOR_KIND_KEY, env)
+    let (object, _) = validate_typed_array(&this_value)?;
+    Ok(crate::array::array_key_iterator(Value::Object(object), env))
 }
 
 pub(crate) fn native_typed_array_prototype_values(
     this_value: Value,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    make_iterator(this_value, ITERATOR_KIND_VALUE, env)
+    let (object, _) = validate_typed_array(&this_value)?;
+    Ok(crate::array::array_value_iterator(
+        Value::Object(object),
+        env,
+    ))
 }
 
 pub(crate) fn native_typed_array_prototype_entries(
     this_value: Value,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    make_iterator(this_value, ITERATOR_KIND_KEY_VALUE, env)
-}
-
-fn make_iterator(this_value: Value, kind: &str, env: &mut CallEnv) -> Result<Value, RuntimeError> {
-    let (object, _length) = validate_typed_array(&this_value)?;
-    let iterator = ObjectRef::new(HashMap::new());
-    iterator.define_non_enumerable(ITERATED_OBJECT.to_owned(), Value::Object(object));
-    iterator.define_non_enumerable(ITERATOR_NEXT_INDEX.to_owned(), Value::Number(0.0));
-    iterator.define_non_enumerable(ITERATOR_KIND.to_owned(), Value::String(kind.to_owned()));
-    iterator.define_non_enumerable(
-        "next".to_owned(),
-        Value::Function(Function::new_native(
-            Some("next"),
-            0,
-            NativeFunction::TypedArrayIteratorPrototypeNext,
-            false,
-        )),
-    );
-    crate::symbol::define_iterator_identity(env, &iterator);
-    Ok(Value::Object(iterator))
-}
-
-pub(crate) fn native_typed_array_iterator_next(this_value: Value) -> Result<Value, RuntimeError> {
-    let Value::Object(iterator) = this_value else {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "TypeError: TypedArray iterator next called on non-object".to_owned(),
-        });
-    };
-    let target = match iterator.own_property(ITERATED_OBJECT).map(|p| p.value) {
-        Some(Value::Object(object)) => object,
-        _ => return Ok(iterator_result(Value::Undefined, true)),
-    };
-    let index = match iterator.own_property(ITERATOR_NEXT_INDEX).map(|p| p.value) {
-        Some(Value::Number(index)) if index >= 0.0 => index as usize,
-        _ => 0,
-    };
-    if typed_array_buffer_detached(&target) || index >= typed_array_length(&target) {
-        return Ok(iterator_result(Value::Undefined, true));
-    }
-    iterator.define_non_enumerable(
-        ITERATOR_NEXT_INDEX.to_owned(),
-        Value::Number((index + 1) as f64),
-    );
-    let kind = match iterator.own_property(ITERATOR_KIND).map(|p| p.value) {
-        Some(Value::String(kind)) => kind,
-        _ => ITERATOR_KIND_VALUE.to_owned(),
-    };
-    let key = Value::Number(index as f64);
-    let value = match kind.as_str() {
-        ITERATOR_KIND_KEY => key,
-        ITERATOR_KIND_VALUE => get_view_element(&target, index),
-        ITERATOR_KIND_KEY_VALUE => {
-            Value::Array(ArrayRef::new(vec![key, get_view_element(&target, index)]))
-        }
-        _ => Value::Undefined,
-    };
-    Ok(iterator_result(value, false))
-}
-
-fn iterator_result(value: Value, done: bool) -> Value {
-    let mut properties = HashMap::new();
-    properties.insert("value".to_owned(), value);
-    properties.insert("done".to_owned(), Value::Boolean(done));
-    Value::Object(ObjectRef::new(properties))
+    let (object, _) = validate_typed_array(&this_value)?;
+    Ok(crate::array::array_key_value_iterator(
+        Value::Object(object),
+        env,
+    ))
 }
 
 // --- forEach / some / every / find* -----------------------------------------

@@ -400,6 +400,12 @@ pub(crate) fn validate_typed_array(value: &Value) -> Result<(ObjectRef, usize), 
     if typed_array_buffer_detached(&object) {
         return Err(array_buffer::detached_error());
     }
+    if typed_array_is_out_of_bounds(&object) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: TypedArray is out of bounds".to_owned(),
+        });
+    }
     Ok((object.clone(), typed_array_length(&object)))
 }
 
