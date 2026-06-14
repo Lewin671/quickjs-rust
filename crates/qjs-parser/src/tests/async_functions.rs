@@ -67,6 +67,11 @@ fn parses_async_function_expression() {
 }
 
 #[test]
+fn escaped_async_function_prefix_is_error() {
+    assert!(parse_script("void \\u0061sync function f(){}").is_err());
+}
+
+#[test]
 fn parses_async_arrow_single_identifier() {
     let Expr::Function {
         is_async,

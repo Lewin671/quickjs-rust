@@ -60,7 +60,9 @@ impl Parser {
         let Some(async_token) = self.peek() else {
             return false;
         };
-        if !matches!(&async_token.kind, TokenKind::Identifier(name) if name == "async") {
+        if async_token.had_escape
+            || !matches!(&async_token.kind, TokenKind::Identifier(name) if name == "async")
+        {
             return false;
         }
         let Some(function_token) = self.peek_nth(1) else {
@@ -68,6 +70,25 @@ impl Parser {
         };
         function_token.kind == TokenKind::Function
             && !self.has_line_terminator_between(async_token.span.end, function_token.span.start)
+    }
+
+    pub(crate) fn escaped_async_function_keyword_error(&self) -> Option<ParseError> {
+        let async_token = self.peek()?;
+        if !async_token.had_escape
+            || !matches!(&async_token.kind, TokenKind::Identifier(name) if name == "async")
+        {
+            return None;
+        }
+        let function_token = self.peek_nth(1)?;
+        if function_token.kind == TokenKind::Function
+            && !self.has_line_terminator_between(async_token.span.end, function_token.span.start)
+        {
+            return Some(ParseError {
+                message: "`async` function keyword must not contain escape sequences".to_owned(),
+                span: async_token.span,
+            });
+        }
+        None
     }
 
     pub(super) fn function_declaration(&mut self) -> Result<Stmt, ParseError> {

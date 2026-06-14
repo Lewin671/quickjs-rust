@@ -205,8 +205,18 @@ impl Vm<'_> {
         // A caller-scope binding carried in this frame's locals layer is written
         // there (and propagated back to the caller on return); only a true realm
         // global goes to the shared cell.
+        if let Some(slot) = self.bytecode.local_slot(&name)
+            && let Some(local) = self.locals.get_mut(slot)
+            && local.is_some()
+        {
+            *local = Some(value.clone());
+            self.env.insert(name.clone(), value.clone());
+            self.write_through_captured(&name, value);
+            return Ok(());
+        }
         if self.env.locals().contains_key(&name) {
-            self.env.insert(name, value);
+            self.env.insert(name.clone(), value.clone());
+            self.write_through_captured(&name, value);
             return Ok(());
         }
         if !self.realm.borrow().contains_key(&name) && self.global_this_property(&name).is_none() {
@@ -234,11 +244,34 @@ impl Vm<'_> {
         name: String,
         value: Value,
     ) -> Result<(), RuntimeError> {
+        if let Some(slot) = self.bytecode.local_slot(&name)
+            && let Some(local) = self.locals.get_mut(slot)
+            && local.is_some()
+        {
+            *local = Some(value.clone());
+            self.env.insert(name.clone(), value.clone());
+            self.write_through_captured(&name, value);
+            return Ok(());
+        }
         if self.env.locals().contains_key(&name) {
-            self.env.insert(name, value);
+            self.env.insert(name.clone(), value.clone());
+            self.write_through_captured(&name, value);
             return Ok(());
         }
         self.invalidate_array_prototype_cache(&name);
+        if self.realm.borrow().contains_key(&name) {
+            self.realm.borrow_mut().insert(name.clone(), value.clone());
+            let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
+                Some(Value::Object(global_this)) => Some(global_this.clone()),
+                _ => None,
+            };
+            if let Some(global_this) = global_this
+                && global_this.has_own_property(&name)
+            {
+                global_this.set(name, value);
+            }
+            return Ok(());
+        }
         let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
             Some(Value::Object(global_this)) => Some(global_this.clone()),
             _ => None,

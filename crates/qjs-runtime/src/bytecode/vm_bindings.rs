@@ -395,6 +395,7 @@ impl Vm<'_> {
             && !local_meta.hoisted
             && let Some(Value::Object(global_this)) =
                 self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned()
+            && global_this.has_own_property(&local_meta.name)
         {
             global_this.set(local_meta.name, value);
         }

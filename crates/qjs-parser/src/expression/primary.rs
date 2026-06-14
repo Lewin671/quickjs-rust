@@ -12,6 +12,9 @@ impl Parser {
         // contextual; with no `function` immediately after it is a plain
         // identifier (and `async ... =>` arrow forms are handled earlier in the
         // assignment parser).
+        if let Some(error) = self.escaped_async_function_keyword_error() {
+            return Err(error);
+        }
         if self.at_async_function_keyword() {
             let async_token = self.advance();
             self.expect(&TokenKind::Function)?;

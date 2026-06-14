@@ -79,6 +79,10 @@ impl Parser {
             return self.function_declaration();
         }
 
+        if let Some(error) = self.escaped_async_function_keyword_error() {
+            return Err(error);
+        }
+
         // `async function` (with no line terminator between) is an async
         // function declaration. `async` followed by anything else is a plain
         // identifier expression statement.

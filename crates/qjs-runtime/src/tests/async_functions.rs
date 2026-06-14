@@ -155,6 +155,37 @@ fn await_resume_observes_sibling_closure_capture_writes() {
 }
 
 #[test]
+fn async_function_with_global_this_unscopables_updates_outer_lexical() {
+    assert_eq!(
+        eval(
+            "let count = 0; \
+             var v = 1; \
+             globalThis[Symbol.unscopables] = { v: true }; \
+             let callCount = 0; \
+             let ref = async function(x) { \
+               count++; \
+               with (globalThis) { \
+                 count++; \
+                 if (v !== undefined) throw new Error('expected local var before initialization'); \
+               } \
+               count++; \
+               var v = x; \
+               with (globalThis) { \
+                 count++; \
+                 if (v !== 10) throw new Error('expected local var after initialization'); \
+                 v = 20; \
+               } \
+               if (v !== 20 || globalThis.v !== 1) throw new Error('unexpected v write target'); \
+               callCount++; \
+             }; \
+             ref(10); \
+             [count, callCount, globalThis.hasOwnProperty('count')].join(':');"
+        ),
+        Ok(Value::String("4:1:false".to_owned()))
+    );
+}
+
+#[test]
 fn await_of_rejected_promise_in_try_catch() {
     assert_eq!(
         eval_log(
