@@ -6,7 +6,7 @@ use crate::{
 };
 
 use crate::CallEnv;
-use crate::array::array_like_values;
+use crate::array::iterable_values_with_env;
 
 pub(crate) fn native_object_from_entries(
     argument_values: &[Value],
@@ -15,7 +15,7 @@ pub(crate) fn native_object_from_entries(
     let iterable = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let result = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
 
-    for entry in array_like_values(iterable, "Object.fromEntries")? {
+    for entry in iterable_values_with_env(iterable, "Object.fromEntries", env)? {
         let key = to_property_key_value(entry_component(entry.clone(), 0, env)?, env)?;
         let value = entry_component(entry, 1, env)?;
         match key {

@@ -35,11 +35,6 @@ pub(crate) fn array_like_length(
     Ok(ArrayLikeLength { receiver, length })
 }
 
-pub(crate) fn array_like_values(value: Value, context: &str) -> Result<Vec<Value>, RuntimeError> {
-    let mut env = crate::CallEnv::detached();
-    array_like_values_with_env(value, context, &mut env)
-}
-
 pub(crate) fn array_like_values_with_env(
     value: Value,
     context: &str,

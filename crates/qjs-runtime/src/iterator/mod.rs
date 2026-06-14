@@ -271,6 +271,15 @@ pub(crate) fn install_iterator(
             false,
         ))),
     );
+    iterator_function.properties.borrow_mut().insert(
+        "zipKeyed".to_owned(),
+        Property::non_enumerable(Value::Function(Function::new_native(
+            Some("zipKeyed"),
+            1,
+            NativeFunction::IteratorZipKeyed,
+            false,
+        ))),
+    );
 
     let wrap_prototype = from::build_wrap_prototype(env, &iterator_prototype);
 
@@ -336,6 +345,9 @@ pub(crate) fn call_iterator_native(
         NativeFunction::IteratorFrom => from::native_iterator_from(argument_values, env)?,
         NativeFunction::IteratorConcat => helpers::native_iterator_concat(argument_values, env)?,
         NativeFunction::IteratorZip => helpers::native_iterator_zip(argument_values, env)?,
+        NativeFunction::IteratorZipKeyed => {
+            helpers::native_iterator_zip_keyed(argument_values, env)?
+        }
         NativeFunction::IteratorPrototypeToStringTagGet => {
             return Ok(Some(Value::String("Iterator".to_owned())));
         }

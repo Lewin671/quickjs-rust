@@ -980,4 +980,18 @@ fn nested_closures_capture_live_outer_bindings() {
         ),
         Ok(Value::String("0:1:2".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "function keyed(callback) {
+                 combo(function (value) { callback(value); });
+             }
+             function combo(callback) {
+                 callback(1);
+             }
+             var count = 0;
+             keyed(function () { count += 1; });
+             count;"
+        ),
+        Ok(Value::Number(1.0))
+    );
 }

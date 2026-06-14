@@ -18,8 +18,7 @@ mod splice;
 mod unshift;
 
 pub(crate) use array_like::{
-    array_like_values, array_like_values_from_receiver, array_like_values_with_env,
-    iterable_values_with_env,
+    array_like_values_from_receiver, array_like_values_with_env, iterable_values_with_env,
 };
 pub(crate) use constructor::{
     native_array, native_array_from, native_array_from_async,

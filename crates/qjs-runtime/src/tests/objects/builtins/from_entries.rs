@@ -31,6 +31,10 @@ fn evaluates_object_from_entries() {
         eval("let key = Symbol(); let result = Object.fromEntries([[key, 'value']]); result[key];"),
         Ok(Value::String("value".to_owned()))
     );
+    assert_eq!(
+        eval("let result = Object.fromEntries([[['nested'], 'value']].values()); result.nested;"),
+        Ok(Value::String("value".to_owned()))
+    );
     assert!(eval("Object.fromEntries();").is_err());
     assert!(eval("Object.fromEntries(['ab']);").is_err());
 }

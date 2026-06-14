@@ -148,6 +148,7 @@ pub(crate) enum NativeFunction {
     IteratorFrom,
     IteratorConcat,
     IteratorZip,
+    IteratorZipKeyed,
     IteratorPrototypeToStringTagGet,
     IteratorPrototypeToStringTagSet,
     IteratorPrototypeConstructorGet,

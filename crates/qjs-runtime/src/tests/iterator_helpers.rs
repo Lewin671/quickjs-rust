@@ -144,6 +144,68 @@ fn iterator_zip_return_state_matches_suspended_state() {
 }
 
 #[test]
+fn iterator_zip_keyed_returns_null_prototype_property_objects() {
+    assert_eq!(
+        string(
+            "let s = Symbol('s'); \
+             let it = Iterator.zipKeyed({ [s]: ['S'], b: ['B'] }); \
+             let value = it.next().value; \
+             let keys = Reflect.ownKeys(value); \
+             [Object.getPrototypeOf(value) === null, keys[0], keys[1] === s, value.b, value[s], it.next().done].join('|');"
+        ),
+        "true|b|true|B|S|true"
+    );
+}
+
+#[test]
+fn iterator_zip_keyed_skips_undefined_and_observes_enumerability_at_key_time() {
+    assert_eq!(
+        string(
+            "let iterables = {}; \
+             Object.defineProperty(iterables, 'a', { enumerable: true, get() { delete iterables.b; return ['A']; } }); \
+             Object.defineProperty(iterables, 'b', { enumerable: true, value: ['B'], configurable: true }); \
+             Object.defineProperty(iterables, 'd', { enumerable: true, get() { Object.defineProperty(iterables, 'c', { enumerable: true }); return undefined; } }); \
+             Object.defineProperty(iterables, 'c', { enumerable: false, value: ['C'], configurable: true }); \
+             let value = Iterator.zipKeyed(iterables).next().value; \
+             Reflect.ownKeys(value).join(',') + '|' + value.a + '|' + ('b' in value) + '|' + ('c' in value) + '|' + ('d' in value);"
+        ),
+        "a,c|A|false|true|false"
+    );
+}
+
+#[test]
+fn iterator_zip_keyed_longest_reads_padding_by_key_and_closes_on_abrupt_get() {
+    assert_eq!(
+        string(
+            "let log = []; \
+             let first = { next() { log.push('unexpected first next'); }, return() { log.push('first return'); return {}; } }; \
+             let second = { next() { log.push('unexpected second next'); }, return() { log.push('second return'); return {}; } }; \
+             let padding = { get first() { log.push('padding first'); }, get second() { log.push('padding second'); throw new Error('padding'); } }; \
+             try { Iterator.zipKeyed({ first, second }, { mode: 'longest', padding }); } catch (e) { log.push(e.message); } \
+             log.join('|');"
+        ),
+        "padding first|padding second|second return|first return|padding"
+    );
+}
+
+#[test]
+fn iterator_zip_keyed_modes_match_zip_iteration() {
+    assert_eq!(
+        string(
+            "let shortest = Iterator.zipKeyed({ a: [1, 2], b: ['x'] }); \
+             let longest = Iterator.zipKeyed({ a: [1], b: ['x', 'y'] }, { mode: 'longest', padding: { a: 'pad-a' } }); \
+             let strict = Iterator.zipKeyed({ a: [1], b: ['x'] }, { mode: 'strict' }); \
+             let s0 = shortest.next().value; \
+             let l0 = longest.next().value; \
+             let l1 = longest.next().value; \
+             let q0 = strict.next().value; \
+             [s0.a, s0.b, shortest.next().done, l0.a, l0.b, l1.a, l1.b, q0.a, q0.b].join('|');"
+        ),
+        "1|x|true|1|x|pad-a|y|1|x"
+    );
+}
+
+#[test]
 fn iterator_flat_map_argument_effect_order() {
     assert_eq!(
         string(

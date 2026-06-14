@@ -3,8 +3,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    ArrayRef, CallEnv, ObjectRef, PropertyKey, RuntimeError, Value, call_function, property_value,
-    property_value_key, symbol,
+    ArrayRef, CallEnv, ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function,
+    property_value, property_value_key, symbol,
 };
 
 use super::protocol::{iterator_close, iterator_close_on_throw, iterator_step, iterator_value};
@@ -15,10 +15,12 @@ const HELPER_KIND: &str = "\0iterator_helper_kind";
 const HELPER_STARTED: &str = "\0iterator_helper_started";
 const ZIP_COUNT: &str = "\0iterator_zip_count";
 const ZIP_MODE: &str = "\0iterator_zip_mode";
+const ZIP_RESULT_KIND: &str = "\0iterator_zip_result_kind";
 const ZIP_ITERATOR_PREFIX: &str = "\0iterator_zip_iterator_";
 const ZIP_NEXT_PREFIX: &str = "\0iterator_zip_next_";
 const ZIP_OPEN_PREFIX: &str = "\0iterator_zip_open_";
 const ZIP_PADDING_PREFIX: &str = "\0iterator_zip_padding_";
+const ZIP_KEY_PREFIX: &str = "\0iterator_zip_key_";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ZipMode {
@@ -41,6 +43,29 @@ impl ZipMode {
             "shortest" => Self::Shortest,
             "longest" => Self::Longest,
             "strict" => Self::Strict,
+            _ => return None,
+        })
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ZipResultKind {
+    Array,
+    Keyed,
+}
+
+impl ZipResultKind {
+    fn tag(self) -> &'static str {
+        match self {
+            Self::Array => "array",
+            Self::Keyed => "keyed",
+        }
+    }
+
+    fn from_tag(tag: &str) -> Option<Self> {
+        Some(match tag {
+            "array" => Self::Array,
+            "keyed" => Self::Keyed,
             _ => return None,
         })
     }
@@ -102,22 +127,74 @@ pub(super) fn native_iterator_zip(
         Vec::new()
     };
 
-    let helper = ObjectRef::with_prototype(HashMap::new(), super::iterator_helper_prototype(env));
-    helper.define_non_enumerable(HELPER_KIND.to_owned(), Value::String("zip".to_owned()));
-    helper.define_non_enumerable(HELPER_DONE.to_owned(), Value::Boolean(false));
-    helper.define_non_enumerable(HELPER_EXECUTING.to_owned(), Value::Boolean(false));
-    helper.define_non_enumerable(HELPER_STARTED.to_owned(), Value::Boolean(false));
-    helper.define_non_enumerable(ZIP_COUNT.to_owned(), Value::Number(records.len() as f64));
-    helper.define_non_enumerable(ZIP_MODE.to_owned(), Value::String(mode.tag().to_owned()));
-    for (index, record) in records.into_iter().enumerate() {
-        helper.define_non_enumerable(format!("{ZIP_ITERATOR_PREFIX}{index}"), record.iterator);
-        helper.define_non_enumerable(format!("{ZIP_NEXT_PREFIX}{index}"), record.next);
-        helper.define_non_enumerable(format!("{ZIP_OPEN_PREFIX}{index}"), Value::Boolean(true));
+    Ok(Value::Object(zip_helper(
+        records,
+        Vec::new(),
+        padding,
+        mode,
+        ZipResultKind::Array,
+        env,
+    )))
+}
+
+/// `Iterator.zipKeyed(iterables, options)`.
+pub(super) fn native_iterator_zip_keyed(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let iterables = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    if !is_object_value(&iterables) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Iterator.zipKeyed iterables must be an object".to_owned(),
+        });
     }
-    for (index, value) in padding.into_iter().enumerate() {
-        helper.define_non_enumerable(format!("{ZIP_PADDING_PREFIX}{index}"), value);
+    let options = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
+    let (mode, padding_option) = zip_options(options, env)?;
+
+    let all_keys = own_property_keys(iterables.clone(), env)?;
+    let mut keys = Vec::new();
+    let mut records = Vec::new();
+    for key in all_keys {
+        let descriptor = match own_property_descriptor_key_trap(iterables.clone(), &key, env) {
+            Ok(descriptor) => descriptor,
+            Err(error) => return Err(close_iterators(records.iter(), error, env)),
+        };
+        if !descriptor.is_some_and(|descriptor| descriptor.enumerable) {
+            continue;
+        }
+        let value = match property_value_key(iterables.clone(), &key, env) {
+            Ok(value) => value,
+            Err(error) => return Err(close_iterators(records.iter(), error, env)),
+        };
+        if matches!(value, Value::Undefined) {
+            continue;
+        }
+        let record = match get_iterator_flattenable_record(value, env) {
+            Ok(record) => record,
+            Err(error) => return Err(close_iterators(records.iter(), error, env)),
+        };
+        keys.push(key);
+        records.push(record);
     }
-    Ok(Value::Object(helper))
+
+    let padding = if mode == ZipMode::Longest {
+        match keyed_zip_padding(padding_option, &keys, env) {
+            Ok(padding) => padding,
+            Err(error) => return Err(close_iterators(records.iter(), error, env)),
+        }
+    } else {
+        Vec::new()
+    };
+
+    Ok(Value::Object(zip_helper(
+        records,
+        keys,
+        padding,
+        mode,
+        ZipResultKind::Keyed,
+        env,
+    )))
 }
 
 fn zip_options(options: Value, env: &mut CallEnv) -> Result<(ZipMode, Value), RuntimeError> {
@@ -287,6 +364,52 @@ fn zip_padding(
     Ok(padding)
 }
 
+fn keyed_zip_padding(
+    padding_option: Value,
+    keys: &[PropertyKey],
+    env: &mut CallEnv,
+) -> Result<Vec<Value>, RuntimeError> {
+    if matches!(padding_option, Value::Undefined) {
+        return Ok(vec![Value::Undefined; keys.len()]);
+    }
+    keys.iter()
+        .map(|key| property_value_key(padding_option.clone(), key, env))
+        .collect()
+}
+
+fn zip_helper(
+    records: Vec<IteratorRecord>,
+    keys: Vec<PropertyKey>,
+    padding: Vec<Value>,
+    mode: ZipMode,
+    result_kind: ZipResultKind,
+    env: &CallEnv,
+) -> ObjectRef {
+    let helper = ObjectRef::with_prototype(HashMap::new(), super::iterator_helper_prototype(env));
+    helper.define_non_enumerable(HELPER_KIND.to_owned(), Value::String("zip".to_owned()));
+    helper.define_non_enumerable(HELPER_DONE.to_owned(), Value::Boolean(false));
+    helper.define_non_enumerable(HELPER_EXECUTING.to_owned(), Value::Boolean(false));
+    helper.define_non_enumerable(HELPER_STARTED.to_owned(), Value::Boolean(false));
+    helper.define_non_enumerable(ZIP_COUNT.to_owned(), Value::Number(records.len() as f64));
+    helper.define_non_enumerable(ZIP_MODE.to_owned(), Value::String(mode.tag().to_owned()));
+    helper.define_non_enumerable(
+        ZIP_RESULT_KIND.to_owned(),
+        Value::String(result_kind.tag().to_owned()),
+    );
+    for (index, key) in keys.into_iter().enumerate() {
+        helper.define_non_enumerable(format!("{ZIP_KEY_PREFIX}{index}"), key.into_value());
+    }
+    for (index, record) in records.into_iter().enumerate() {
+        helper.define_non_enumerable(format!("{ZIP_ITERATOR_PREFIX}{index}"), record.iterator);
+        helper.define_non_enumerable(format!("{ZIP_NEXT_PREFIX}{index}"), record.next);
+        helper.define_non_enumerable(format!("{ZIP_OPEN_PREFIX}{index}"), Value::Boolean(true));
+    }
+    for (index, value) in padding.into_iter().enumerate() {
+        helper.define_non_enumerable(format!("{ZIP_PADDING_PREFIX}{index}"), value);
+    }
+    helper
+}
+
 fn helper_slot(helper: &ObjectRef, key: &str) -> Option<Value> {
     helper.own_property(key).map(|property| property.value)
 }
@@ -302,6 +425,13 @@ fn zip_mode(helper: &ObjectRef) -> ZipMode {
     match helper_slot(helper, ZIP_MODE) {
         Some(Value::String(tag)) => ZipMode::from_tag(&tag).unwrap_or(ZipMode::Shortest),
         _ => ZipMode::Shortest,
+    }
+}
+
+fn zip_result_kind(helper: &ObjectRef) -> ZipResultKind {
+    match helper_slot(helper, ZIP_RESULT_KIND) {
+        Some(Value::String(tag)) => ZipResultKind::from_tag(&tag).unwrap_or(ZipResultKind::Array),
+        _ => ZipResultKind::Array,
     }
 }
 
@@ -324,6 +454,16 @@ fn zip_set_open(helper: &ObjectRef, index: usize, open: bool) {
 
 fn zip_padding_value(helper: &ObjectRef, index: usize) -> Value {
     helper_slot(helper, &format!("{ZIP_PADDING_PREFIX}{index}")).unwrap_or(Value::Undefined)
+}
+
+fn zip_key(helper: &ObjectRef, index: usize) -> Option<PropertyKey> {
+    match helper_slot(helper, &format!("{ZIP_KEY_PREFIX}{index}"))? {
+        Value::String(key) => Some(PropertyKey::String(key)),
+        Value::Object(symbol) if symbol::is_symbol_primitive(&symbol) => {
+            Some(PropertyKey::Symbol(symbol))
+        }
+        _ => None,
+    }
 }
 
 pub(super) fn close_open_zip_iterators(
@@ -474,7 +614,73 @@ pub(super) fn advance_zip(
     if mode == ZipMode::Longest && !produced_value {
         return Ok(None);
     }
-    Ok(Some(Value::Array(ArrayRef::new(values))))
+    Ok(Some(zip_result(helper, values)))
+}
+
+fn zip_result(helper: &ObjectRef, values: Vec<Value>) -> Value {
+    if zip_result_kind(helper) == ZipResultKind::Array {
+        return Value::Array(ArrayRef::new(values));
+    }
+
+    let result = ObjectRef::with_prototype(HashMap::new(), None);
+    for (index, value) in values.into_iter().enumerate() {
+        let Some(key) = zip_key(helper, index) else {
+            continue;
+        };
+        match key {
+            PropertyKey::String(key) => result.define_property(key, Property::enumerable(value)),
+            PropertyKey::Symbol(symbol) => {
+                result.define_symbol_property(symbol, Property::enumerable(value));
+            }
+        }
+    }
+    Value::Object(result)
+}
+
+fn own_property_keys(value: Value, env: &mut CallEnv) -> Result<Vec<PropertyKey>, RuntimeError> {
+    if let Value::Proxy(proxy) = value.clone() {
+        return crate::proxy::proxy_own_keys(proxy, env);
+    }
+    let names = match value.clone() {
+        Value::Object(object) => object.own_property_names(),
+        Value::Map(map) => map.object().own_property_names(),
+        Value::Set(set) => set.object().own_property_names(),
+        Value::Array(elements) => crate::array_own_property_names(&elements),
+        Value::Function(function) => crate::function_own_property_names(&function),
+        _ => {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: Iterator.zipKeyed iterables must be an object".to_owned(),
+            });
+        }
+    };
+    let symbols = match value {
+        Value::Object(object) => object.own_property_symbols(),
+        Value::Map(map) => map.object().own_property_symbols(),
+        Value::Set(set) => set.object().own_property_symbols(),
+        Value::Array(elements) => elements.own_property_symbols(),
+        Value::Function(function) => crate::function_own_property_symbols(&function),
+        _ => Vec::new(),
+    };
+    Ok(names
+        .into_iter()
+        .map(PropertyKey::String)
+        .chain(symbols.into_iter().map(PropertyKey::Symbol))
+        .collect())
+}
+
+fn own_property_descriptor_key_trap(
+    value: Value,
+    key: &PropertyKey,
+    env: &mut CallEnv,
+) -> Result<Option<Property>, RuntimeError> {
+    if let Value::Proxy(proxy) = value.clone() {
+        crate::proxy::proxy_get_own_property_descriptor(proxy, key, env, |target, _env| {
+            crate::object::own_property_descriptor_key(target, key)
+        })
+    } else {
+        crate::object::own_property_descriptor_key(value, key)
+    }
 }
 
 fn is_object_value(value: &Value) -> bool {

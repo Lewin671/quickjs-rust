@@ -466,6 +466,7 @@ fn function_env(
         &function.local_names,
         env,
         &protected_capture_names,
+        &callee,
     );
     insert_caller_scope_bindings(
         &mut local_env,
@@ -473,6 +474,7 @@ fn function_env(
         &function.local_names,
         env,
         &protected_capture_names,
+        &callee,
     );
     if function.has_name_binding
         && let Some(name) = &function.name
@@ -684,6 +686,7 @@ fn insert_caller_bytecode_bindings(
     function_local_names: &[String],
     env: &CallEnv,
     protected_capture_names: &[String],
+    callee: &Value,
 ) {
     for name in bytecode.global_names() {
         insert_caller_binding(
@@ -692,6 +695,7 @@ fn insert_caller_bytecode_bindings(
             env,
             name,
             protected_capture_names,
+            callee,
         );
     }
     for name in bytecode.local_names() {
@@ -705,6 +709,7 @@ fn insert_caller_bytecode_bindings(
                 env,
                 name,
                 protected_capture_names,
+                callee,
             );
         }
     }
@@ -716,14 +721,16 @@ fn insert_caller_binding(
     env: &CallEnv,
     name: &str,
     protected_capture_names: &[String],
+    callee: &Value,
 ) {
     if is_internal_binding_name(name) {
         return;
     }
     if local_env.contains_key(name)
-        && protected_capture_names
+        && (protected_capture_names
             .iter()
             .any(|existing| existing == name)
+            || caller_binding_is_callee(env, name, callee))
     {
         return;
     }
@@ -748,6 +755,7 @@ fn insert_caller_scope_bindings(
     function_local_names: &[String],
     env: &CallEnv,
     protected_capture_names: &[String],
+    callee: &Value,
 ) {
     // Iterate only the caller's frame locals; realm bindings are shared and need
     // no per-frame copy. The O(50)-per-key intrinsic scan is gone.
@@ -766,8 +774,19 @@ fn insert_caller_scope_bindings(
             env,
             &name,
             protected_capture_names,
+            callee,
         );
     }
+}
+
+fn caller_binding_is_callee(env: &CallEnv, name: &str, callee: &Value) -> bool {
+    let Some(Value::Function(binding)) = env.locals().get(name) else {
+        return false;
+    };
+    let Value::Function(callee) = callee else {
+        return false;
+    };
+    binding.ptr_eq(callee)
 }
 
 fn propagate_caller_bindings(

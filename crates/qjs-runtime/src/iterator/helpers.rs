@@ -129,7 +129,7 @@ pub(super) fn native_iterator_concat(
     Ok(Value::Object(helper))
 }
 
-pub(super) use super::zip::native_iterator_zip;
+pub(super) use super::zip::{native_iterator_zip, native_iterator_zip_keyed};
 
 fn iterator_receiver(this_value: &Value, method: &str) -> Result<Value, RuntimeError> {
     if !matches!(this_value, Value::Object(_)) {
