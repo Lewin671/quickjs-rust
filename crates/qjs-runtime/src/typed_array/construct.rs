@@ -314,14 +314,8 @@ pub(crate) fn native_typed_array_of(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    crate::ensure_constructor(&this_value)?;
     let length = argument_values.len();
-    let result = crate::construct_function(
-        this_value.clone(),
-        this_value,
-        vec![Value::Number(length as f64)],
-        env,
-    )?;
+    let result = typed_array_create(this_value, length, env)?;
     for (index, value) in argument_values.iter().enumerate() {
         set_result_element(&result, index, value.clone(), env)?;
     }
@@ -367,12 +361,7 @@ pub(crate) fn native_typed_array_from(
     };
 
     let length = raw_values.len();
-    let result = crate::construct_function(
-        this_value.clone(),
-        this_value,
-        vec![Value::Number(length as f64)],
-        env,
-    )?;
+    let result = typed_array_create(this_value, length, env)?;
     for (index, value) in raw_values.into_iter().enumerate() {
         let value = if mapping {
             crate::call_function(
@@ -386,6 +375,28 @@ pub(crate) fn native_typed_array_from(
             value
         };
         set_result_element(&result, index, value, env)?;
+    }
+    Ok(result)
+}
+
+fn typed_array_create(
+    constructor: Value,
+    length: usize,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    crate::ensure_constructor(&constructor)?;
+    let result = crate::construct_function(
+        constructor.clone(),
+        constructor,
+        vec![Value::Number(length as f64)],
+        env,
+    )?;
+    let (_, actual_length) = super::validate_typed_array(&result)?;
+    if actual_length < length {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: typed array constructor returned too few elements".to_owned(),
+        });
     }
     Ok(result)
 }
