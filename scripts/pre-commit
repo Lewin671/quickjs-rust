@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Resolve symlinks so the hook works whether run directly or via .git/hooks/.
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+while [ -L "$SCRIPT_PATH" ]; do
+  SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+  SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
+  [[ "$SCRIPT_PATH" != /* ]] && SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_PATH"
+done
+ROOT_DIR="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
+. "$ROOT_DIR/scripts/lib.sh"
+
+if ! CARGO_BIN="$(qjs_resolve_cargo)"; then
+  echo "pre-commit: cargo not found, skipping checks" >&2
+  exit 0
+fi
+
+echo "pre-commit: fmt + clippy + test..."
+"$CARGO_BIN" fmt --all -- --check
+"$CARGO_BIN" clippy --workspace --all-targets -- -D warnings
+"$CARGO_BIN" test --workspace -q
