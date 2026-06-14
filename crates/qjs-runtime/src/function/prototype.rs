@@ -178,12 +178,12 @@ pub(crate) fn native_function_prototype_apply(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let Value::Function(_) = this_value else {
+    if !matches!(this_value, Value::Function(_) | Value::Proxy(_)) {
         return Err(RuntimeError {
             thrown: None,
             message: "Function.prototype.apply target is not callable".to_owned(),
         });
-    };
+    }
 
     let call_this = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let apply_arguments = apply_argument_list(
@@ -244,12 +244,12 @@ pub(crate) fn native_function_prototype_call(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let Value::Function(_) = this_value else {
+    if !matches!(this_value, Value::Function(_) | Value::Proxy(_)) {
         return Err(RuntimeError {
             thrown: None,
             message: "Function.prototype.call target is not callable".to_owned(),
         });
-    };
+    }
 
     let call_this = argument_values.first().cloned().unwrap_or(Value::Undefined);
     crate::call_function(
