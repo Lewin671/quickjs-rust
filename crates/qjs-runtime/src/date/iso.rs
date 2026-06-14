@@ -14,7 +14,7 @@ pub(super) struct UtcDateTime {
 pub(super) fn parse_iso_string(source: &str) -> Option<f64> {
     let bytes = source.as_bytes();
     let (year, cursor) = parse_iso_year(source)?;
-    if bytes.len() < cursor + 12
+    if bytes.len() < cursor + 5
         || bytes.get(cursor) != Some(&b'-')
         || bytes.get(cursor + 3) != Some(&b'-')
     {
@@ -22,7 +22,16 @@ pub(super) fn parse_iso_string(source: &str) -> Option<f64> {
     }
     let month = parse_i32(&source[cursor + 1..cursor + 3])?;
     let day = parse_i32(&source[cursor + 4..cursor + 6])?;
+    // Date-only form: YYYY-MM-DD (interpreted as UTC per spec)
+    if cursor + 6 == bytes.len() {
+        let base_ms = days_from_civil(year, month, day) as f64 * super::MS_PER_DAY;
+        return Some(base_ms);
+    }
+    // Date + time requires 'T' separator
     if bytes.get(cursor + 6) != Some(&b'T') {
+        return None;
+    }
+    if bytes.len() < cursor + 12 {
         return None;
     }
     let hours = parse_i32(&source[cursor + 7..cursor + 9])?;
