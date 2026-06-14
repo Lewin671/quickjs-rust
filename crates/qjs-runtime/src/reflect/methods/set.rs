@@ -39,6 +39,18 @@ pub(crate) fn ordinary_set(
         return crate::proxy::proxy_set(proxy.clone(), key, value, receiver, env);
     }
 
+    if let (Value::Object(object), PropertyKey::String(key), Value::Object(receiver_object)) =
+        (&target, key, &receiver)
+    {
+        if object.ptr_eq(receiver_object) && crate::typed_array::is_typed_array_object(object) {
+            if let crate::typed_array::IndexedWrite::Handled =
+                crate::typed_array::set_indexed_element(object, key, value.clone(), env)?
+            {
+                return Ok(true);
+            }
+        }
+    }
+
     if let Some(property) = own_property_descriptor_key(&target, key) {
         return ordinary_set_with_descriptor(property, key, value, receiver, env);
     }

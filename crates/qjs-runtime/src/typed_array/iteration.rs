@@ -314,9 +314,8 @@ pub(crate) fn native_typed_array_prototype_for_each(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("forEach", this_value, argument_values)?;
-    let snapshot = ViewSnapshot::capture(&iteration.object);
     for index in 0..iteration.length {
-        let value = snapshot.get(index);
+        let value = get_view_element(&iteration.object, index);
         call_callback(&iteration, value, index, env)?;
     }
     Ok(Value::Undefined)

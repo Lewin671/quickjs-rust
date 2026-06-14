@@ -359,6 +359,10 @@ fn indexed_write_routes_through_per_kind_conversion() {
         eval("let b = new BigInt64Array(1); b[0] = 5n; typeof b[0] + ':' + b[0];"),
         Ok(Value::String("bigint:5".to_owned()))
     );
+    assert_eq!(
+        eval("let a = new Uint8Array([1]); Reflect.set(a, 0, 257) + ':' + a[0];"),
+        Ok(Value::String("true:1".to_owned()))
+    );
 }
 
 #[test]
@@ -842,5 +846,22 @@ fn callback_iteration_reads_each_element_from_the_buffer() {
              a.forEach((v, i) => parts.push(i + '=' + v)); parts.join(',');"
         ),
         Ok(Value::String("0=10,1=20,2=30".to_owned()))
+    );
+    // Callback-driven reads must observe writes made by earlier callbacks.
+    assert_eq!(
+        eval(
+            "let a = new Int8Array([42, 43, 44]); let seen = []; \
+             a.forEach((v, i) => { seen.push(v); if (i < a.length - 1) a[i + 1] = 42; }); \
+             seen.join(',');"
+        ),
+        Ok(Value::String("42,42,42".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let a = new BigInt64Array([42n, 43n, 44n]); let seen = []; \
+             a.forEach((v, i) => { seen.push(String(v)); if (i < a.length - 1) a[i + 1] = 42n; }); \
+             seen.join(',');"
+        ),
+        Ok(Value::String("42,42,42".to_owned()))
     );
 }
