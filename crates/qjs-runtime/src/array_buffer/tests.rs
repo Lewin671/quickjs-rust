@@ -300,6 +300,25 @@ fn shared_array_buffer_growable_constructor_and_accessors() {
 }
 
 #[test]
+fn shared_array_buffer_allocation_checks_after_object_creation() {
+    assert_eq!(
+        eval(
+            "function DummyError() {} \
+             let newTarget = Object.defineProperty(function(){}.bind(null), 'prototype', { \
+               get() { throw new DummyError(); } \
+             }); \
+             try { \
+               Reflect.construct(SharedArrayBuffer, [7 * 1125899906842624], newTarget); \
+               false; \
+             } catch (error) { \
+               error instanceof DummyError; \
+             }"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn shared_array_buffer_grow_resizes_within_max_length() {
     assert_eq!(
         eval(

@@ -7,7 +7,7 @@ use crate::{
 
 use super::{
     ensure_array_buffer_allocation_length, resizable_max_byte_length, slice_index,
-    species_constructor, to_index,
+    species_constructor, to_index, to_index_unbounded,
 };
 
 const SHARED_ARRAY_BUFFER_DATA_PROPERTY: &str = "\0SharedArrayBufferData";
@@ -99,7 +99,7 @@ pub(crate) fn native_shared_array_buffer(
             message: "TypeError: Constructor SharedArrayBuffer requires 'new'".to_owned(),
         });
     }
-    let length = to_index(
+    let length = to_index_unbounded(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
@@ -111,13 +111,14 @@ pub(crate) fn native_shared_array_buffer(
                 .to_owned(),
         });
     }
-    if let Some(max) = max_byte_length {
-        ensure_array_buffer_allocation_length(max)?;
-    }
     let object = ObjectRef::with_prototype_slot(
         HashMap::new(),
         crate::native_construct_prototype_slot(function, env)?,
     );
+    ensure_array_buffer_allocation_length(length)?;
+    if let Some(max) = max_byte_length {
+        ensure_array_buffer_allocation_length(max)?;
+    }
     define_data(&object, vec![0; length]);
     if let Some(max) = max_byte_length {
         define_max_byte_length(&object, max);

@@ -728,7 +728,7 @@ pub(super) fn to_index(value: Value, env: &mut CallEnv) -> Result<usize, Runtime
     Ok(index)
 }
 
-fn to_index_unbounded(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
+pub(super) fn to_index_unbounded(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
     let number = to_number_with_env(value, env)?;
     let integer = if number.is_nan() { 0.0 } else { number.trunc() };
     if integer < 0.0 || !integer.is_finite() || integer > MAX_SAFE_INTEGER_LENGTH as f64 {
