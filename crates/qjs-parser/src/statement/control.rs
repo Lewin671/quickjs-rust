@@ -4,7 +4,7 @@ use qjs_lexer::TokenKind;
 use crate::helpers::{stmt_end, var_kind};
 use crate::{ParseError, Parser};
 
-fn disallowed_statement_body(stmt: &Stmt, strict: bool) -> Option<(&'static str, Span)> {
+fn disallowed_declaration(stmt: &Stmt) -> Option<(&'static str, Span)> {
     match stmt {
         Stmt::ClassDecl { span, .. } => Some(("class declarations", *span)),
         Stmt::VarDecl {
@@ -28,13 +28,34 @@ fn disallowed_statement_body(stmt: &Stmt, strict: bool) -> Option<(&'static str,
             span,
             ..
         } => Some(("generator declarations", *span)),
+        Stmt::Labelled { body, .. } => disallowed_declaration(body),
+        _ => None,
+    }
+}
+
+fn disallowed_iteration_body(stmt: &Stmt) -> Option<(&'static str, Span)> {
+    if let Some(r) = disallowed_declaration(stmt) {
+        return Some(r);
+    }
+    match stmt {
+        Stmt::FunctionDecl { span, .. } => Some(("function declarations", *span)),
+        Stmt::Labelled { body, .. } => disallowed_iteration_body(body),
+        _ => None,
+    }
+}
+
+fn disallowed_if_body(stmt: &Stmt, strict: bool) -> Option<(&'static str, Span)> {
+    if let Some(r) = disallowed_declaration(stmt) {
+        return Some(r);
+    }
+    match stmt {
         Stmt::FunctionDecl {
             is_generator: false,
             is_async: false,
             span,
             ..
         } if strict => Some(("function declarations in strict mode", *span)),
-        Stmt::Labelled { body, .. } => disallowed_statement_body(body, strict),
+        Stmt::Labelled { body, .. } => disallowed_if_body(body, strict),
         _ => None,
     }
 }
@@ -73,8 +94,8 @@ pub(super) fn disallowed_labelled_body(stmt: &Stmt, strict: bool) -> Option<(&'s
     }
 }
 
-fn check_statement_body(stmt: &Stmt, strict: bool, context: &str) -> Result<(), ParseError> {
-    if let Some((description, span)) = disallowed_statement_body(stmt, strict) {
+fn check_iteration_body(stmt: &Stmt, context: &str) -> Result<(), ParseError> {
+    if let Some((description, span)) = disallowed_iteration_body(stmt) {
         return Err(ParseError {
             message: format!("{description} are not allowed as the body of {context}"),
             span,
@@ -195,10 +216,20 @@ impl Parser {
         let test = self.expression()?;
         self.expect(&TokenKind::RightParen)?;
         let consequent = self.statement()?;
-        check_statement_body(&consequent, self.strict, "an if statement")?;
+        if let Some((desc, span)) = disallowed_if_body(&consequent, self.strict) {
+            return Err(ParseError {
+                message: format!("{desc} are not allowed as the body of an if statement"),
+                span,
+            });
+        }
         let alternate = if self.match_kind(&TokenKind::Else) {
             let alt = self.statement()?;
-            check_statement_body(&alt, self.strict, "an else clause")?;
+            if let Some((desc, span)) = disallowed_if_body(&alt, self.strict) {
+                return Err(ParseError {
+                    message: format!("{desc} are not allowed as the body of an else clause"),
+                    span,
+                });
+            }
             Some(Box::new(alt))
         } else {
             None
@@ -225,7 +256,7 @@ impl Parser {
         let test = self.expression()?;
         self.expect(&TokenKind::RightParen)?;
         let body = self.statement()?;
-        check_statement_body(&body, self.strict, "a while loop")?;
+        check_iteration_body(&body, "a while loop")?;
         let end = stmt_end(&body);
         Ok(Stmt::While {
             test,
@@ -242,7 +273,7 @@ impl Parser {
             .start;
         self.expect(&TokenKind::Do)?;
         let body = self.statement()?;
-        check_statement_body(&body, self.strict, "a do-while loop")?;
+        check_iteration_body(&body, "a do-while loop")?;
         self.expect(&TokenKind::While)?;
         self.expect(&TokenKind::LeftParen)?;
         let test = self.expression()?;
@@ -383,7 +414,7 @@ impl Parser {
         };
         self.expect(&TokenKind::RightParen)?;
         let body = self.statement()?;
-        check_statement_body(&body, self.strict, "a for loop")?;
+        check_iteration_body(&body, "a for loop")?;
         let end = stmt_end(&body);
         Ok(Stmt::For {
             init,
@@ -412,7 +443,12 @@ impl Parser {
         let object = self.expression()?;
         self.expect(&TokenKind::RightParen)?;
         let body = self.statement()?;
-        check_statement_body(&body, self.strict, "a with statement")?;
+        if let Some((desc, span)) = disallowed_if_body(&body, self.strict) {
+            return Err(ParseError {
+                message: format!("{desc} are not allowed as the body of a with statement"),
+                span,
+            });
+        }
         let end = stmt_end(&body);
         Ok(Stmt::With {
             object,
@@ -610,7 +646,7 @@ impl Parser {
             ForKind::In => "a for-in loop",
             ForKind::Of => "a for-of loop",
         };
-        check_statement_body(&body, self.strict, loop_kind)?;
+        check_iteration_body(&body, loop_kind)?;
         let end = stmt_end(&body);
         let span = Span::new(start, end);
         let body = Box::new(body);

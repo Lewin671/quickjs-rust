@@ -443,15 +443,6 @@ fn parses_with_statement() {
 
 #[test]
 fn rejects_disallowed_declarations_in_statement_body() {
-    let contexts = [
-        ("if (true) CLASS", "if"),
-        ("if (true) ; else CLASS", "else"),
-        ("while (false) CLASS", "while"),
-        ("do CLASS while (false);", "do-while"),
-        ("for (;;) CLASS", "for"),
-        ("for (var x in {}) CLASS", "for-in"),
-        ("for (var x of []) CLASS", "for-of"),
-    ];
     let decls = [
         "class C {}",
         "let x = 1;",
@@ -460,7 +451,33 @@ fn rejects_disallowed_declarations_in_statement_body() {
         "async function f() {}",
         "async function* g() {}",
     ];
-    for (template, ctx) in &contexts {
+
+    // Iteration statements reject ALL declarations including plain functions
+    let iteration_contexts = [
+        ("while (false) CLASS", "while"),
+        ("do CLASS while (false);", "do-while"),
+        ("for (;;) CLASS", "for"),
+        ("for (var x in {}) CLASS", "for-in"),
+        ("for (var x of []) CLASS", "for-of"),
+    ];
+    for (template, ctx) in &iteration_contexts {
+        for decl in &decls {
+            let code = template.replace("CLASS", decl);
+            assert!(parse_script(&code).is_err(), "should reject {ctx}: {code}");
+        }
+        let fn_code = template.replace("CLASS", "function f() {}");
+        assert!(
+            parse_script(&fn_code).is_err(),
+            "should reject sloppy function in iteration {ctx}: {fn_code}"
+        );
+    }
+
+    // If/else allows sloppy-mode plain function declarations (Annex B)
+    let if_contexts = [
+        ("if (true) CLASS", "if"),
+        ("if (true) ; else CLASS", "else"),
+    ];
+    for (template, ctx) in &if_contexts {
         for decl in &decls {
             let code = template.replace("CLASS", decl);
             assert!(parse_script(&code).is_err(), "should reject {ctx}: {code}");
