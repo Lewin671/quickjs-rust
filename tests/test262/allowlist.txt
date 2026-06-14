@@ -94,6 +94,9 @@ test/built-ins/ArrayBuffer/prototype/resize/this-is-not-arraybuffer-object.js
 test/built-ins/ArrayBuffer/prototype/resize/this-is-not-object.js
 test/built-ins/ArrayBuffer/prototype/resize/this-is-not-resizable-arraybuffer-object.js
 test/built-ins/ArrayBuffer/prototype/resize/this-is-sharedarraybuffer.js
+test/built-ins/ArrayBuffer/prototype/slice/species-returns-larger-arraybuffer.js
+test/built-ins/ArrayBuffer/prototype/slice/species-returns-same-arraybuffer.js
+test/built-ins/ArrayBuffer/prototype/slice/species-returns-smaller-arraybuffer.js
 test/built-ins/ArrayBuffer/prototype/transferToImmutable/new-length-coercion.js
 test/built-ins/ArrayBuffer/prototype/transferToImmutable/not-a-constructor.js
 test/built-ins/ArrayBuffer/prototype/transferToImmutable/prop-desc.js

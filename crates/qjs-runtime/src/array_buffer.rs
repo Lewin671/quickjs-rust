@@ -357,7 +357,19 @@ pub(crate) fn native_array_buffer_prototype_slice(
         vec![Value::Number(new_length as f64)],
         env,
     )?;
+    if result_value.same_value(&this_value) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: ArrayBuffer species returned the receiver".to_owned(),
+        });
+    }
     let result = array_buffer_object(&result_value)?;
+    if array_buffer_bytes(&result).len() < new_length {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: ArrayBuffer species result is too small".to_owned(),
+        });
+    }
     // Re-read the source after the user-observable index coercion above, which
     // could have detached it.
     if is_detached(&object) {
@@ -368,7 +380,9 @@ pub(crate) fn native_array_buffer_prototype_slice(
         .get(start..start + new_length)
         .map(<[u8]>::to_vec)
         .unwrap_or_default();
-    define_array_buffer_data(&result, slice);
+    let mut result_bytes = array_buffer_bytes(&result);
+    result_bytes[..new_length].copy_from_slice(&slice);
+    set_array_buffer_bytes(&result, result_bytes);
     Ok(Value::Object(result))
 }
 
@@ -735,6 +749,40 @@ mod tests {
         assert!(
             eval("let buffer = new ArrayBuffer(8); buffer.constructor = true; buffer.slice();")
                 .is_err()
+        );
+    }
+
+    #[test]
+    fn array_buffer_slice_validates_species_result_size() {
+        assert_eq!(
+            eval(
+                "let species = {}; \
+                 species[Symbol.species] = function() { return new ArrayBuffer(10); }; \
+                 let buffer = new ArrayBuffer(8); \
+                 buffer.constructor = species; \
+                 buffer.slice().byteLength;"
+            ),
+            Ok(Value::Number(10.0))
+        );
+        assert!(
+            eval(
+                "let species = {}; \
+                 let buffer = new ArrayBuffer(8); \
+                 species[Symbol.species] = function() { return buffer; }; \
+                 buffer.constructor = species; \
+                 buffer.slice();"
+            )
+            .is_err()
+        );
+        assert!(
+            eval(
+                "let species = {}; \
+                 species[Symbol.species] = function() { return new ArrayBuffer(4); }; \
+                 let buffer = new ArrayBuffer(8); \
+                 buffer.constructor = species; \
+                 buffer.slice();"
+            )
+            .is_err()
         );
     }
 
