@@ -91,6 +91,13 @@ impl Vm<'_> {
             apply_object_literal_proto(&object, value, &self.env)?;
             return Ok(());
         }
+        // Methods defined on object literals need their home object set so
+        // that `super.x` resolves the prototype chain correctly.
+        if let Value::Function(ref function) = value {
+            if !function.constructable {
+                *function.home_object.borrow_mut() = Some(Value::Object(object.clone()));
+            }
+        }
         let mut key_env = self.current_env();
         let key = to_property_key_value(key_value, &mut key_env)?;
         self.apply_env(key_env);
