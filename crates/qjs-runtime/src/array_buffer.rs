@@ -101,6 +101,24 @@ pub(crate) fn install_array_buffer(
         )),
     );
     array_buffer_prototype.define_non_enumerable(
+        "transfer".to_owned(),
+        Value::Function(Function::new_native(
+            Some("transfer"),
+            0,
+            NativeFunction::ArrayBufferPrototypeTransfer,
+            false,
+        )),
+    );
+    array_buffer_prototype.define_non_enumerable(
+        "transferToFixedLength".to_owned(),
+        Value::Function(Function::new_native(
+            Some("transferToFixedLength"),
+            0,
+            NativeFunction::ArrayBufferPrototypeTransferToFixedLength,
+            false,
+        )),
+    );
+    array_buffer_prototype.define_non_enumerable(
         "transferToImmutable".to_owned(),
         Value::Function(Function::new_native(
             Some("transferToImmutable"),
@@ -447,10 +465,46 @@ pub(crate) fn native_array_buffer_prototype_slice_to_immutable(
     Ok(Value::Object(result))
 }
 
+pub(crate) fn native_array_buffer_prototype_transfer(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    array_buffer_copy_and_detach(
+        this_value,
+        argument_values,
+        env,
+        TransferKind::PreserveResizable,
+    )
+}
+
+pub(crate) fn native_array_buffer_prototype_transfer_to_fixed_length(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    array_buffer_copy_and_detach(this_value, argument_values, env, TransferKind::FixedLength)
+}
+
 pub(crate) fn native_array_buffer_prototype_transfer_to_immutable(
     this_value: Value,
     argument_values: &[Value],
     env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    array_buffer_copy_and_detach(this_value, argument_values, env, TransferKind::Immutable)
+}
+
+enum TransferKind {
+    PreserveResizable,
+    FixedLength,
+    Immutable,
+}
+
+fn array_buffer_copy_and_detach(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut CallEnv,
+    kind: TransferKind,
 ) -> Result<Value, RuntimeError> {
     let object = array_buffer_object(&this_value)?;
     let new_length = match argument_values.first() {
@@ -475,7 +529,22 @@ pub(crate) fn native_array_buffer_prototype_transfer_to_immutable(
     let prototype = crate::constructor_prototype(&constructor, env);
     let result = ObjectRef::with_prototype(HashMap::new(), prototype);
     define_array_buffer_data(&result, bytes);
-    define_array_buffer_immutable(&result);
+    match kind {
+        TransferKind::PreserveResizable => {
+            if let Some(max_byte_length) = array_buffer_max_byte_length(&object) {
+                if new_length > max_byte_length {
+                    return Err(RuntimeError {
+                        thrown: None,
+                        message: "RangeError: ArrayBuffer transfer length exceeds maxByteLength"
+                            .to_owned(),
+                    });
+                }
+                define_array_buffer_max_byte_length(&result, max_byte_length);
+            }
+        }
+        TransferKind::FixedLength => {}
+        TransferKind::Immutable => define_array_buffer_immutable(&result),
+    }
     detach(&object);
     Ok(Value::Object(result))
 }

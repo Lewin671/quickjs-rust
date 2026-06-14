@@ -50,6 +50,16 @@ pub(super) fn call_array_buffer_native(
                 env,
             )?
         }
+        NativeFunction::ArrayBufferPrototypeTransfer => {
+            array_buffer::native_array_buffer_prototype_transfer(this_value, argument_values, env)?
+        }
+        NativeFunction::ArrayBufferPrototypeTransferToFixedLength => {
+            array_buffer::native_array_buffer_prototype_transfer_to_fixed_length(
+                this_value,
+                argument_values,
+                env,
+            )?
+        }
         NativeFunction::ArrayBufferPrototypeTransferToImmutable => {
             array_buffer::native_array_buffer_prototype_transfer_to_immutable(
                 this_value,
