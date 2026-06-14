@@ -136,15 +136,20 @@ pub(super) fn native_math_hypot(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let mut sum = 0.0;
+    let mut has_nan = false;
     for value in argument_values.iter().cloned() {
         let number = to_number_with_env(value, env)?;
-        if number.is_nan() {
-            return Ok(Value::Number(f64::NAN));
-        }
         if number.is_infinite() {
             return Ok(Value::Number(f64::INFINITY));
         }
-        sum += number * number;
+        if number.is_nan() {
+            has_nan = true;
+        } else {
+            sum += number * number;
+        }
+    }
+    if has_nan {
+        return Ok(Value::Number(f64::NAN));
     }
     Ok(Value::Number(sum.sqrt()))
 }
@@ -203,6 +208,9 @@ pub(super) fn native_math_pow(
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
+    if base.abs() == 1.0 && exponent.is_infinite() {
+        return Ok(Value::Number(f64::NAN));
+    }
     Ok(Value::Number(base.powf(exponent)))
 }
 
@@ -221,8 +229,15 @@ pub(super) fn native_math_round(
     if number.is_nan() || number.is_infinite() || number == 0.0 {
         return Ok(Value::Number(number));
     }
-
-    let rounded = (number + 0.5).floor();
+    let floored = number.floor();
+    let frac = number - floored;
+    let rounded = if frac > 0.5 {
+        floored + 1.0
+    } else if frac == 0.5 {
+        floored + 1.0
+    } else {
+        floored
+    };
     if rounded == 0.0 && number < 0.0 {
         Ok(Value::Number(-0.0))
     } else {
