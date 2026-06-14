@@ -30,6 +30,7 @@ pub(super) fn call_data_view_native(
         | NativeFunction::DataViewPrototypeGetUint16
         | NativeFunction::DataViewPrototypeGetInt32
         | NativeFunction::DataViewPrototypeGetUint32
+        | NativeFunction::DataViewPrototypeGetFloat16
         | NativeFunction::DataViewPrototypeGetFloat32
         | NativeFunction::DataViewPrototypeGetFloat64
         | NativeFunction::DataViewPrototypeGetBigInt64
@@ -42,6 +43,7 @@ pub(super) fn call_data_view_native(
         | NativeFunction::DataViewPrototypeSetUint16
         | NativeFunction::DataViewPrototypeSetInt32
         | NativeFunction::DataViewPrototypeSetUint32
+        | NativeFunction::DataViewPrototypeSetFloat16
         | NativeFunction::DataViewPrototypeSetFloat32
         | NativeFunction::DataViewPrototypeSetFloat64
         | NativeFunction::DataViewPrototypeSetBigInt64
