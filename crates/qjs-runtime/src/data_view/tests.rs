@@ -28,6 +28,31 @@ fn data_view_buffer_accessor_returns_backing_buffer() {
         eval("let b = new ArrayBuffer(8); new DataView(b).buffer === b;"),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval("let b = new SharedArrayBuffer(8); new DataView(b).buffer === b;"),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn data_view_accepts_shared_array_buffer() {
+    assert_eq!(
+        eval(
+            "let b = new SharedArrayBuffer(8); \
+             let v = new DataView(b, 2, 4); \
+             [v.byteLength, v.byteOffset, v.buffer === b].join(':');"
+        ),
+        Ok(Value::String("4:2:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let b = new SharedArrayBuffer(8); \
+             let v = new DataView(b); \
+             v.setUint16(0, 0x1234); \
+             v.getUint8(0) * 256 + v.getUint8(1);"
+        ),
+        Ok(Value::Number(4660.0))
+    );
 }
 
 #[test]

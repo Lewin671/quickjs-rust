@@ -155,10 +155,11 @@ pub(crate) fn native_data_view(
         return Err(type_error("Constructor DataView requires 'new'"));
     }
 
-    // Step 2: buffer must be an ArrayBuffer (brand check). SharedArrayBuffer is
-    // not implemented, so the ArrayBuffer brand is the only acceptable input.
+    // Step 2: buffer must be an ArrayBuffer or SharedArrayBuffer (brand check).
     let buffer = match argument_values.first() {
-        Some(Value::Object(object)) if array_buffer::is_array_buffer_object(object) => {
+        Some(Value::Object(object))
+            if array_buffer::is_array_buffer_or_shared_array_buffer_object(object) =>
+        {
             object.clone()
         }
         _ => return Err(type_error("DataView buffer must be an ArrayBuffer")),
@@ -171,12 +172,12 @@ pub(crate) fn native_data_view(
     )?;
 
     // Step 6: re-check detach after the (user-observable) ToIndex coercion.
-    if array_buffer::is_detached(&buffer) {
+    if data_block_detached(&buffer) {
         return Err(array_buffer::detached_error());
     }
 
     // Step 7: bufferByteLength = ArrayBufferByteLength.
-    let buffer_byte_length = array_buffer::array_buffer_bytes(&buffer).len();
+    let buffer_byte_length = array_buffer::buffer_byte_length(&buffer);
 
     // Step 8: a present offset beyond the buffer is a RangeError.
     if offset > buffer_byte_length {
@@ -192,12 +193,12 @@ pub(crate) fn native_data_view(
     } else {
         let length = to_index(length_arg, env)?;
         // ToIndex of byteLength can run user code; re-check detach (step 13).
-        if array_buffer::is_detached(&buffer) {
+        if data_block_detached(&buffer) {
             return Err(array_buffer::detached_error());
         }
         if offset
             .checked_add(length)
-            .is_none_or(|end| end > array_buffer::array_buffer_bytes(&buffer).len())
+            .is_none_or(|end| end > array_buffer::buffer_byte_length(&buffer))
         {
             return Err(range_error("byteOffset + byteLength exceeds the buffer"));
         }
@@ -325,7 +326,7 @@ fn get_view_value(
     let Some(buffer) = data_view_buffer(&object) else {
         return Err(array_buffer::detached_error());
     };
-    let bytes = array_buffer::array_buffer_bytes(&buffer);
+    let bytes = array_buffer::buffer_bytes(&buffer);
     let slice = match bytes.get(buffer_index..buffer_index + element_size) {
         Some(slice) => slice,
         None => return Err(range_error("offset is outside the bounds of the DataView")),
@@ -372,13 +373,13 @@ fn set_view_value(
     let Some(buffer) = data_view_buffer(&object) else {
         return Err(array_buffer::detached_error());
     };
-    let mut bytes = array_buffer::array_buffer_bytes(&buffer);
+    let mut bytes = array_buffer::buffer_bytes(&buffer);
     if buffer_index + element_size > bytes.len() {
         return Err(range_error("offset is outside the bounds of the DataView"));
     }
     let ordered = order_bytes(encoded, little_endian);
     bytes[buffer_index..buffer_index + element_size].copy_from_slice(&ordered);
-    array_buffer::set_array_buffer_bytes(&buffer, bytes);
+    array_buffer::set_buffer_bytes(&buffer, bytes);
     Ok(Value::Undefined)
 }
 
@@ -547,7 +548,11 @@ fn data_view_buffer(object: &ObjectRef) -> Option<ObjectRef> {
 }
 
 fn data_view_buffer_detached(object: &ObjectRef) -> bool {
-    data_view_buffer(object).is_some_and(|buffer| array_buffer::is_detached(&buffer))
+    data_view_buffer(object).is_some_and(|buffer| data_block_detached(&buffer))
+}
+
+fn data_block_detached(buffer: &ObjectRef) -> bool {
+    array_buffer::is_array_buffer_object(buffer) && array_buffer::is_detached(buffer)
 }
 
 fn data_view_byte_length(object: &ObjectRef) -> usize {

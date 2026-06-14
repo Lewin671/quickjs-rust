@@ -522,6 +522,14 @@ fn shared_array_buffer_object(value: &Value) -> Result<ObjectRef, RuntimeError> 
     }
 }
 
+pub(crate) fn is_shared_array_buffer_object(object: &ObjectRef) -> bool {
+    object.has_own_property(SHARED_ARRAY_BUFFER_DATA_PROPERTY)
+}
+
+pub(crate) fn is_array_buffer_or_shared_array_buffer_object(object: &ObjectRef) -> bool {
+    is_array_buffer_object(object) || is_shared_array_buffer_object(object)
+}
+
 /// Whether `object` is a detached `ArrayBuffer`.
 pub(crate) fn is_detached(object: &ObjectRef) -> bool {
     object.has_own_property(ARRAY_BUFFER_DETACHED_PROPERTY)
@@ -564,6 +572,22 @@ fn shared_array_buffer_bytes(object: &ObjectRef) -> Vec<u8> {
     object.internal_bytes().unwrap_or_default()
 }
 
+pub(crate) fn buffer_byte_length(object: &ObjectRef) -> usize {
+    if is_shared_array_buffer_object(object) {
+        shared_array_buffer_bytes(object).len()
+    } else {
+        array_buffer_bytes(object).len()
+    }
+}
+
+pub(crate) fn buffer_bytes(object: &ObjectRef) -> Vec<u8> {
+    if is_shared_array_buffer_object(object) {
+        shared_array_buffer_bytes(object)
+    } else {
+        array_buffer_bytes(object)
+    }
+}
+
 /// Replaces the backing bytes of an `ArrayBuffer` (used by typed-array writes).
 pub(crate) fn set_array_buffer_bytes(object: &ObjectRef, bytes: Vec<u8>) {
     object.set_internal_bytes(bytes);
@@ -571,6 +595,18 @@ pub(crate) fn set_array_buffer_bytes(object: &ObjectRef, bytes: Vec<u8>) {
         ARRAY_BUFFER_DATA_PROPERTY.to_owned(),
         Property::non_enumerable(Value::String(String::new())),
     );
+}
+
+pub(crate) fn set_buffer_bytes(object: &ObjectRef, bytes: Vec<u8>) {
+    if is_shared_array_buffer_object(object) {
+        object.set_internal_bytes(bytes);
+        object.define_property(
+            SHARED_ARRAY_BUFFER_DATA_PROPERTY.to_owned(),
+            Property::non_enumerable(Value::String(String::new())),
+        );
+    } else {
+        set_array_buffer_bytes(object, bytes);
+    }
 }
 
 pub(crate) fn mutate_array_buffer_bytes<T>(
