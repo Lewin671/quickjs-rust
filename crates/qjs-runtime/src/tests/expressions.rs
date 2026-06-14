@@ -570,6 +570,58 @@ fn strict_compound_assignment_rechecks_resolved_object_environment_binding() {
         ),
         Ok(Value::String("2:false".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "var count = 0;
+             Object.defineProperty(this, 'x', {
+               configurable: true,
+               get: function() { delete this.x; return 2; }
+             });
+             (function() {
+               'use strict';
+               try { count++; x ^= 3; count++; }
+               catch (error) { count += error instanceof ReferenceError ? 1 : 100; }
+             })();
+             count + ':' + ('x' in this);"
+        ),
+        Ok(Value::String("2:false".to_owned()))
+    );
+}
+
+#[test]
+fn member_compound_assignment_evaluates_reference_before_rhs() {
+    assert_eq!(
+        eval(
+            "var hits = '';
+             var prop = function() { hits += 'prop'; throw 'key'; };
+             var rhs = function() { hits += ':rhs'; return 1; };
+             try { var base = null; base[prop()] *= rhs(); }
+             catch (error) { hits += ':' + error; }
+             hits;"
+        ),
+        Ok(Value::String("prop:key".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var hits = '';
+             var prop = { toString: function() { hits += ':toString'; return 'x'; } };
+             var rhs = function() { hits += ':rhs'; return 1; };
+             try { var base = null; base[prop] *= rhs(); }
+             catch (error) { hits += error instanceof TypeError ? ':type' : ':other'; }
+             hits;"
+        ),
+        Ok(Value::String(":type".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var hits = 0;
+             var base = {};
+             var prop = { toString: function() { hits++; return 'x'; } };
+             base[prop] *= 2;
+             hits;"
+        ),
+        Ok(Value::Number(1.0))
+    );
 }
 
 #[test]

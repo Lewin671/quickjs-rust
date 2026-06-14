@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use crate::{
     GLOBAL_THIS_BINDING, Property, PropertyKey, RuntimeError, Value, function::CallEnv, is_truthy,
-    object::boxed_primitive, property::has_property, property_value_key,
+    object::boxed_primitive, property::has_property, property_value, property_value_key,
     symbol::unscopables_symbol,
 };
 
@@ -171,7 +171,7 @@ impl Vm<'_> {
         }
     }
 
-    pub(super) fn load_global(&self, name: &str) -> Result<Value, RuntimeError> {
+    pub(super) fn load_global(&mut self, name: &str) -> Result<Value, RuntimeError> {
         // `this` belongs to the frame: function frames bind it in their locals
         // layer (arrows inherit it through capture). Falling through to the
         // realm's global `this` would leak it into the derived-constructor
@@ -191,7 +191,16 @@ impl Vm<'_> {
         if let Some(value) = self.env.get(name) {
             return Ok(value);
         }
-        if let Some(value) = self.global_this_property(name) {
+        let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
+            Some(Value::Object(global_this)) => Some(global_this.clone()),
+            _ => None,
+        };
+        if let Some(global_this) = global_this
+            && global_this.has_own_property(name)
+        {
+            let mut env = self.current_env();
+            let value = property_value(Value::Object(global_this), name, &mut env)?;
+            self.apply_env(env);
             return Ok(value);
         }
         Err(RuntimeError {

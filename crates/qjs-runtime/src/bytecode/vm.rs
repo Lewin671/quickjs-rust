@@ -625,8 +625,30 @@ impl<'a> Vm<'a> {
 
     fn get_prop(&mut self) -> Result<(), RuntimeError> {
         let key_value = self.pop()?;
-        let key = self.coerce_property_key(key_value)?;
         let object = self.pop()?;
+        if matches!(object, Value::Null | Value::Undefined) {
+            let object_name = if matches!(object, Value::Null) {
+                "null"
+            } else {
+                "undefined"
+            };
+            let key_name = match &key_value {
+                Value::String(key) => Some(key.clone()),
+                Value::Number(number) => Some(number.to_string()),
+                _ => None,
+            };
+            let message = match key_name {
+                Some(key) => {
+                    format!("TypeError: Cannot read properties of {object_name} (reading '{key}')")
+                }
+                None => format!("TypeError: cannot convert {object_name} to object"),
+            };
+            return Err(RuntimeError {
+                thrown: None,
+                message,
+            });
+        }
+        let key = self.coerce_property_key(key_value)?;
         let value = if let Some(value) = self.try_direct_get(&object, &key) {
             value
         } else {

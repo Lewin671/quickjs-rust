@@ -110,12 +110,13 @@ impl Compiler {
             AssignmentTarget::Member {
                 object, property, ..
             } => {
-                self.compile_expr(object)?;
-                self.compile_member_key(property)?;
+                let object_slot = self.temp_local("assign_object");
+                let key_slot = self.temp_local("assign_key");
+                self.compile_member_reference(object, property, object_slot, key_slot)?;
                 self.compile_expr(value)?;
-                self.emit(Op::SetProp {
-                    is_strict: self.strict,
-                });
+                let value_slot = self.temp_local("assign_value");
+                self.emit(Op::StoreLocal(value_slot));
+                self.emit_member_store(object_slot, key_slot, value_slot);
                 Ok(())
             }
             AssignmentTarget::ArrayPattern { .. } | AssignmentTarget::ObjectPattern { .. } => {
@@ -310,10 +311,7 @@ impl Compiler {
         let object_slot = self.temp_local("assign_object");
         let key_slot = self.temp_local("assign_key");
         let value_slot = self.temp_local("assign_value");
-        self.compile_expr(object)?;
-        self.emit(Op::StoreLocal(object_slot));
-        self.compile_member_key(property)?;
-        self.emit(Op::StoreLocal(key_slot));
+        self.compile_member_reference(object, property, object_slot, key_slot)?;
         self.emit(Op::LoadLocal(object_slot));
         self.emit(Op::LoadLocal(key_slot));
         self.emit(Op::GetProp);
@@ -449,10 +447,7 @@ impl Compiler {
         let key_slot = self.temp_local("update_key");
         let old_slot = self.temp_local("update_old");
         let new_slot = self.temp_local("update_new");
-        self.compile_expr(object)?;
-        self.emit(Op::StoreLocal(object_slot));
-        self.compile_member_key(property)?;
-        self.emit(Op::StoreLocal(key_slot));
+        self.compile_member_reference(object, property, object_slot, key_slot)?;
         self.emit(Op::LoadLocal(object_slot));
         self.emit(Op::LoadLocal(key_slot));
         self.emit(Op::GetProp);
@@ -479,6 +474,24 @@ impl Compiler {
         self.emit(Op::SetProp {
             is_strict: self.strict,
         });
+    }
+
+    fn compile_member_reference(
+        &mut self,
+        object: &Expr,
+        property: &qjs_ast::MemberProperty,
+        object_slot: usize,
+        key_slot: usize,
+    ) -> Result<(), RuntimeError> {
+        self.compile_expr(object)?;
+        self.emit(Op::StoreLocal(object_slot));
+        self.compile_member_key(property)?;
+        self.emit(Op::LoadLocal(object_slot));
+        self.emit(Op::RequireObjectCoercible);
+        self.emit(Op::Pop);
+        self.emit(Op::ToPropertyKey);
+        self.emit(Op::StoreLocal(key_slot));
+        Ok(())
     }
 
     pub(super) fn compile_typeof(&mut self, argument: &Expr) -> Result<(), RuntimeError> {
