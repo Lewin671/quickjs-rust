@@ -62,6 +62,7 @@ pub(crate) enum NativeFunction {
     ArrayBufferPrototypeImmutable,
     ArrayBufferPrototypeResize,
     ArrayBufferPrototypeSlice,
+    ArrayBufferPrototypeSliceToImmutable,
     ArrayBufferPrototypeTransferToImmutable,
     SharedArrayBuffer,
     SharedArrayBufferPrototypeByteLength,

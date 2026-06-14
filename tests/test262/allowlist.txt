@@ -97,6 +97,14 @@ test/built-ins/ArrayBuffer/prototype/resize/this-is-sharedarraybuffer.js
 test/built-ins/ArrayBuffer/prototype/slice/species-returns-larger-arraybuffer.js
 test/built-ins/ArrayBuffer/prototype/slice/species-returns-same-arraybuffer.js
 test/built-ins/ArrayBuffer/prototype/slice/species-returns-smaller-arraybuffer.js
+test/built-ins/ArrayBuffer/prototype/sliceToImmutable/modify-source-after-return.js
+test/built-ins/ArrayBuffer/prototype/sliceToImmutable/not-a-constructor.js
+test/built-ins/ArrayBuffer/prototype/sliceToImmutable/prop-desc.js
+test/built-ins/ArrayBuffer/prototype/sliceToImmutable/this-becomes-detached.js
+test/built-ins/ArrayBuffer/prototype/sliceToImmutable/this-grows.js
+test/built-ins/ArrayBuffer/prototype/sliceToImmutable/this-has-no-arraybufferdata-internal.js
+test/built-ins/ArrayBuffer/prototype/sliceToImmutable/this-is-not-object.js
+test/built-ins/ArrayBuffer/prototype/sliceToImmutable/this-is-sharedarraybuffer.js
 test/built-ins/ArrayBuffer/prototype/transferToImmutable/new-length-coercion.js
 test/built-ins/ArrayBuffer/prototype/transferToImmutable/not-a-constructor.js
 test/built-ins/ArrayBuffer/prototype/transferToImmutable/prop-desc.js

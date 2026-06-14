@@ -92,6 +92,15 @@ pub(crate) fn install_array_buffer(
         )),
     );
     array_buffer_prototype.define_non_enumerable(
+        "sliceToImmutable".to_owned(),
+        Value::Function(Function::new_native(
+            Some("sliceToImmutable"),
+            2,
+            NativeFunction::ArrayBufferPrototypeSliceToImmutable,
+            false,
+        )),
+    );
+    array_buffer_prototype.define_non_enumerable(
         "transferToImmutable".to_owned(),
         Value::Function(Function::new_native(
             Some("transferToImmutable"),
@@ -383,6 +392,52 @@ pub(crate) fn native_array_buffer_prototype_slice(
     let mut result_bytes = array_buffer_bytes(&result);
     result_bytes[..new_length].copy_from_slice(&slice);
     set_array_buffer_bytes(&result, result_bytes);
+    Ok(Value::Object(result))
+}
+
+pub(crate) fn native_array_buffer_prototype_slice_to_immutable(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let object = array_buffer_object(&this_value)?;
+    if is_detached(&object) {
+        return Err(detached_error());
+    }
+    let length = array_buffer_bytes(&object).len();
+    let start = slice_index(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        length,
+        0,
+        env,
+    )?;
+    let end = slice_index(
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        length,
+        length,
+        env,
+    )?;
+    let new_length = end.saturating_sub(start);
+    if is_detached(&object) {
+        return Err(detached_error());
+    }
+    let source = array_buffer_bytes(&object);
+    if source.len() < end {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "RangeError: ArrayBuffer slice bounds exceed current length".to_owned(),
+        });
+    }
+    let slice = source
+        .get(start..start + new_length)
+        .map(<[u8]>::to_vec)
+        .unwrap_or_default();
+
+    let constructor = env.get("ArrayBuffer").unwrap_or(Value::Undefined);
+    let prototype = crate::constructor_prototype(&constructor, env);
+    let result = ObjectRef::with_prototype(HashMap::new(), prototype);
+    define_array_buffer_data(&result, slice);
+    define_array_buffer_immutable(&result);
     Ok(Value::Object(result))
 }
 
@@ -713,237 +768,4 @@ fn string_to_bytes(value: &str) -> Vec<u8> {
 }
 
 #[cfg(test)]
-mod tests {
-    use crate::{Value, eval};
-
-    #[test]
-    fn array_buffer_constructor_and_byte_length() {
-        assert_eq!(
-            eval("let buffer = new ArrayBuffer(8); buffer.byteLength;"),
-            Ok(Value::Number(8.0))
-        );
-        assert_eq!(
-            eval("Object.prototype.toString.call(new ArrayBuffer(0));"),
-            Ok(Value::String("[object ArrayBuffer]".to_owned()))
-        );
-    }
-
-    #[test]
-    fn array_buffer_slice_resolves_bounds() {
-        assert_eq!(
-            eval("new ArrayBuffer(8).slice(2, 6).byteLength;"),
-            Ok(Value::Number(4.0))
-        );
-        assert_eq!(
-            eval("new ArrayBuffer(8).slice(-5, -1).byteLength;"),
-            Ok(Value::Number(4.0))
-        );
-        assert_eq!(
-            eval("new ArrayBuffer(8).slice(9, 1).byteLength;"),
-            Ok(Value::Number(0.0))
-        );
-    }
-
-    #[test]
-    fn array_buffer_slice_rejects_non_object_constructor() {
-        assert!(
-            eval("let buffer = new ArrayBuffer(8); buffer.constructor = true; buffer.slice();")
-                .is_err()
-        );
-    }
-
-    #[test]
-    fn array_buffer_slice_validates_species_result_size() {
-        assert_eq!(
-            eval(
-                "let species = {}; \
-                 species[Symbol.species] = function() { return new ArrayBuffer(10); }; \
-                 let buffer = new ArrayBuffer(8); \
-                 buffer.constructor = species; \
-                 buffer.slice().byteLength;"
-            ),
-            Ok(Value::Number(10.0))
-        );
-        assert!(
-            eval(
-                "let species = {}; \
-                 let buffer = new ArrayBuffer(8); \
-                 species[Symbol.species] = function() { return buffer; }; \
-                 buffer.constructor = species; \
-                 buffer.slice();"
-            )
-            .is_err()
-        );
-        assert!(
-            eval(
-                "let species = {}; \
-                 species[Symbol.species] = function() { return new ArrayBuffer(4); }; \
-                 let buffer = new ArrayBuffer(8); \
-                 buffer.constructor = species; \
-                 buffer.slice();"
-            )
-            .is_err()
-        );
-    }
-
-    #[test]
-    fn array_buffer_is_view_reports_typed_arrays() {
-        assert_eq!(
-            eval("ArrayBuffer.isView(new Uint8Array(4));"),
-            Ok(Value::Boolean(true))
-        );
-        assert_eq!(
-            eval("ArrayBuffer.isView(new DataView(new ArrayBuffer(4)));"),
-            Ok(Value::Boolean(true))
-        );
-        assert_eq!(
-            eval("ArrayBuffer.isView(new ArrayBuffer(4));"),
-            Ok(Value::Boolean(false))
-        );
-        assert_eq!(eval("ArrayBuffer.isView({});"), Ok(Value::Boolean(false)));
-        assert_eq!(eval("ArrayBuffer.isView();"), Ok(Value::Boolean(false)));
-    }
-
-    #[test]
-    fn array_buffer_species_is_self() {
-        assert_eq!(
-            eval("ArrayBuffer[Symbol.species] === ArrayBuffer;"),
-            Ok(Value::Boolean(true))
-        );
-    }
-
-    #[test]
-    fn array_buffer_resize_and_resizable_accessors() {
-        assert_eq!(
-            eval(
-                "let b = new ArrayBuffer(8, { maxByteLength: 16 }); \
-                 b.resizable + ':' + b.byteLength + ':' + b.maxByteLength;"
-            ),
-            Ok(Value::String("true:8:16".to_owned()))
-        );
-        assert_eq!(
-            eval(
-                "let b = new ArrayBuffer(8, { maxByteLength: 16 }); \
-                 b.resize(12); b.byteLength + ':' + new Uint8Array(b)[10];"
-            ),
-            Ok(Value::String("12:0".to_owned()))
-        );
-        assert!(eval("new ArrayBuffer(8, { maxByteLength: 4 });").is_err());
-        assert!(eval("let b = new ArrayBuffer(8); b.resize(4);").is_err());
-        // A plain or undefined options argument must still succeed.
-        assert_eq!(
-            eval("let b = new ArrayBuffer(8, {}); b.resizable + ':' + b.maxByteLength;"),
-            Ok(Value::String("false:8".to_owned()))
-        );
-        assert_eq!(
-            eval("new ArrayBuffer(8, undefined).byteLength;"),
-            Ok(Value::Number(8.0))
-        );
-        assert_eq!(
-            eval(
-                "let b = new ArrayBuffer(8, { maxByteLength: 16 }); \
-                 __quickjsRustDetachArrayBuffer(b); b.resizable;"
-            ),
-            Ok(Value::Boolean(true))
-        );
-    }
-
-    #[test]
-    fn array_buffer_resize_coerces_length_before_detached_check() {
-        assert_eq!(
-            eval(
-                "let b = new ArrayBuffer(8, { maxByteLength: 16 }); \
-                 let called = false; \
-                 try { b.resize({ valueOf() { called = true; __quickjsRustDetachArrayBuffer(b); return 4; } }); } catch (_) {} \
-                 called;"
-            ),
-            Ok(Value::Boolean(true))
-        );
-        assert_eq!(
-            eval(
-                "let b = new ArrayBuffer(8, { maxByteLength: 16 }); \
-                 __quickjsRustDetachArrayBuffer(b); \
-                 let called = false; \
-                 try { b.resize({ valueOf() { called = true; return 4; } }); } catch (_) {} \
-                 called;"
-            ),
-            Ok(Value::Boolean(true))
-        );
-    }
-
-    #[test]
-    fn array_buffer_immutable_accessor_and_transfer() {
-        assert_eq!(
-            eval(
-                "let b = new ArrayBuffer(4); \
-                 let a = new Uint8Array(b); a[0] = 7; a[1] = 8; \
-                 let c = b.transferToImmutable(6); \
-                 [b.byteLength, b.detached, c.byteLength, c.immutable, new Uint8Array(c)[0], new Uint8Array(c)[1], new Uint8Array(c)[5]].join(':');"
-            ),
-            Ok(Value::String("0:true:6:true:7:8:0".to_owned()))
-        );
-        assert_eq!(
-            eval("let b = new ArrayBuffer(4); b.immutable;"),
-            Ok(Value::Boolean(false))
-        );
-        assert_eq!(
-            eval("let b = new ArrayBuffer(4); b.transferToImmutable(2).byteLength;"),
-            Ok(Value::Number(2.0))
-        );
-        assert_eq!(
-            eval(
-                "new ArrayBuffer(4).transferToImmutable('\\t\\u000b\\u000c\\uFEFF\\u3000\\n\\r\\u2028\\u20291\\t\\u000b\\u000c\\uFEFF\\u3000\\n\\r\\u2028\\u2029').byteLength;"
-            ),
-            Ok(Value::Number(1.0))
-        );
-    }
-
-    #[test]
-    fn array_buffer_immutable_rejects_invalid_receivers_and_retransfer() {
-        assert!(
-            eval(
-                "Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, 'immutable').get.call({});"
-            )
-            .is_err()
-        );
-        assert!(
-            eval("ArrayBuffer.prototype.transferToImmutable.call(new SharedArrayBuffer(4));")
-                .is_err()
-        );
-        assert!(
-            eval("let b = new ArrayBuffer(4); let c = b.transferToImmutable(); c.resize(1);")
-                .is_err()
-        );
-        assert!(eval("let b = new ArrayBuffer(4); let c = b.transferToImmutable(); c.transferToImmutable();")
-            .is_err());
-    }
-
-    #[test]
-    fn detach_array_buffer_host_hook_marks_detached() {
-        // The Test262 host hook detaches the buffer: byteLength reads 0 and the
-        // typed-array view observes a detached buffer (methods throw).
-        assert_eq!(
-            eval("let b = new ArrayBuffer(8); __quickjsRustDetachArrayBuffer(b); b.byteLength;"),
-            Ok(Value::Number(0.0))
-        );
-        assert!(
-            eval(
-                "let b = new ArrayBuffer(8); let a = new Uint8Array(b); \
-                 __quickjsRustDetachArrayBuffer(b); a.fill(1);"
-            )
-            .is_err()
-        );
-        // A non-ArrayBuffer argument is ignored and the hook returns null.
-        assert_eq!(eval("__quickjsRustDetachArrayBuffer({});"), Ok(Value::Null));
-    }
-
-    #[test]
-    fn array_buffer_byte_length_brand_check() {
-        assert!(
-            eval(
-                "Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, 'byteLength').get.call({});"
-            )
-            .is_err()
-        );
-    }
-}
+mod tests;
