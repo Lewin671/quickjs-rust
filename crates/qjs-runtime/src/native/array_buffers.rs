@@ -31,11 +31,24 @@ pub(super) fn call_array_buffer_native(
         NativeFunction::ArrayBufferPrototypeResizable => {
             array_buffer::native_array_buffer_prototype_resizable(this_value)?
         }
+        NativeFunction::ArrayBufferPrototypeDetached => {
+            array_buffer::native_array_buffer_prototype_detached(this_value)?
+        }
+        NativeFunction::ArrayBufferPrototypeImmutable => {
+            array_buffer::native_array_buffer_prototype_immutable(this_value)?
+        }
         NativeFunction::ArrayBufferPrototypeResize => {
             array_buffer::native_array_buffer_prototype_resize(this_value, argument_values, env)?
         }
         NativeFunction::ArrayBufferPrototypeSlice => {
             array_buffer::native_array_buffer_prototype_slice(this_value, argument_values, env)?
+        }
+        NativeFunction::ArrayBufferPrototypeTransferToImmutable => {
+            array_buffer::native_array_buffer_prototype_transfer_to_immutable(
+                this_value,
+                argument_values,
+                env,
+            )?
         }
         NativeFunction::SharedArrayBuffer => {
             array_buffer::native_shared_array_buffer(function, argument_values, is_construct, env)?

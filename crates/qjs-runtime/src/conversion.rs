@@ -118,7 +118,7 @@ pub(crate) fn to_primitive_with_env(
 }
 
 fn string_to_number(value: &str) -> Result<f64, RuntimeError> {
-    let trimmed = value.trim();
+    let trimmed = value.trim_matches(is_ecmascript_trim_code_point);
     if trimmed.is_empty() {
         return Ok(0.0);
     }
@@ -154,6 +154,28 @@ fn string_to_number(value: &str) -> Result<f64, RuntimeError> {
         return Ok(parse_radix_string_number(octal, 8));
     }
     Ok(trimmed.parse::<f64>().unwrap_or(f64::NAN))
+}
+
+fn is_ecmascript_trim_code_point(ch: char) -> bool {
+    matches!(
+        ch,
+        '\u{0009}'
+            | '\u{000A}'
+            | '\u{000B}'
+            | '\u{000C}'
+            | '\u{000D}'
+            | '\u{0020}'
+            | '\u{00A0}'
+            | '\u{1680}'
+            | '\u{2000}'
+            ..='\u{200A}'
+                | '\u{2028}'
+                | '\u{2029}'
+                | '\u{202F}'
+                | '\u{205F}'
+                | '\u{3000}'
+                | '\u{FEFF}'
+    )
 }
 
 fn parse_radix_string_number(digits: &str, radix: u32) -> f64 {
