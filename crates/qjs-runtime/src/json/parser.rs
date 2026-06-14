@@ -11,7 +11,55 @@ pub(crate) fn native_json_parse(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    parse_json_text(&source, env)
+    let value = parse_json_text(&source, env)?;
+    let reviver = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
+    if matches!(reviver, Value::Function(_)) {
+        let root = Value::Object(crate::ObjectRef::new(std::collections::HashMap::new()));
+        if let Value::Object(ref obj) = root {
+            obj.define_property(String::new(), crate::Property::enumerable(value));
+        }
+        internalize_json_property(&root, "", &reviver, env)
+    } else {
+        Ok(value)
+    }
+}
+
+fn internalize_json_property(
+    holder: &Value,
+    name: &str,
+    reviver: &Value,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let value = crate::property_value(holder.clone(), name, env)?;
+    if let Value::Object(ref obj) = value {
+        let keys: Vec<String> = obj.own_property_keys();
+        for key in keys {
+            let new_element = internalize_json_property(&value, &key, reviver, env)?;
+            if matches!(new_element, Value::Undefined) {
+                obj.delete_own_property(&key);
+            } else {
+                obj.set(key, new_element);
+            }
+        }
+    } else if let Value::Array(ref elements) = value {
+        let len = elements.len();
+        for i in 0..len {
+            let key = i.to_string();
+            let new_element = internalize_json_property(&value, &key, reviver, env)?;
+            if matches!(new_element, Value::Undefined) {
+                elements.delete_index(i);
+            } else {
+                elements.set(i, new_element);
+            }
+        }
+    }
+    crate::call_function(
+        reviver.clone(),
+        holder.clone(),
+        vec![Value::String(name.to_owned()), value],
+        env,
+        false,
+    )
 }
 
 pub(crate) fn parse_json_text(source: &str, env: &CallEnv) -> Result<Value, RuntimeError> {
