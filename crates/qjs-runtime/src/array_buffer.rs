@@ -179,10 +179,20 @@ pub(crate) fn install_shared_array_buffer(
             true,
         ),
     );
+    prototype.define_non_enumerable(
+        "slice".to_owned(),
+        Value::Function(Function::new_native(
+            Some("slice"),
+            2,
+            NativeFunction::SharedArrayBufferPrototypeSlice,
+            false,
+        )),
+    );
     function.properties.borrow_mut().insert(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(prototype)),
     );
+    symbol::define_species_accessor(env, &function);
     let value = Value::Function(function);
     env.insert_realm("SharedArrayBuffer".to_owned(), value.clone());
     if let Value::Object(global_object) = global_this {
@@ -263,6 +273,61 @@ pub(crate) fn native_shared_array_buffer_prototype_byte_length(
     Ok(Value::Number(
         shared_array_buffer_bytes(&object).len() as f64
     ))
+}
+
+pub(crate) fn native_shared_array_buffer_prototype_slice(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let object = shared_array_buffer_object(&this_value)?;
+    let length = shared_array_buffer_bytes(&object).len();
+    let start = slice_index(
+        argument_values.first().cloned().unwrap_or(Value::Undefined),
+        length,
+        0,
+        env,
+    )?;
+    let end = slice_index(
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        length,
+        length,
+        env,
+    )?;
+    let new_length = end.saturating_sub(start);
+    let constructor = species_constructor(
+        this_value.clone(),
+        env.get("SharedArrayBuffer").unwrap_or(Value::Undefined),
+        env,
+    )?;
+    let result_value = construct_function(
+        constructor.clone(),
+        constructor,
+        vec![Value::Number(new_length as f64)],
+        env,
+    )?;
+    if result_value.same_value(&this_value) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: SharedArrayBuffer species returned the receiver".to_owned(),
+        });
+    }
+    let result = shared_array_buffer_object(&result_value)?;
+    if shared_array_buffer_bytes(&result).len() < new_length {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: SharedArrayBuffer species result is too small".to_owned(),
+        });
+    }
+    let bytes = shared_array_buffer_bytes(&object);
+    let slice = bytes
+        .get(start..start + new_length)
+        .map(<[u8]>::to_vec)
+        .unwrap_or_default();
+    let mut result_bytes = shared_array_buffer_bytes(&result);
+    result_bytes[..new_length].copy_from_slice(&slice);
+    set_shared_array_buffer_bytes(&result, result_bytes);
+    Ok(Value::Object(result))
 }
 
 pub(crate) fn native_array_buffer_is_view(
@@ -382,7 +447,11 @@ pub(crate) fn native_array_buffer_prototype_slice(
         env,
     )?;
     let new_length = end.saturating_sub(start);
-    let constructor = species_constructor(this_value.clone(), env)?;
+    let constructor = species_constructor(
+        this_value.clone(),
+        env.get("ArrayBuffer").unwrap_or(Value::Undefined),
+        env,
+    )?;
     let result_value = construct_function(
         constructor.clone(),
         constructor,
@@ -574,8 +643,11 @@ fn resizable_max_byte_length(
     Ok(Some(to_index_unbounded(max, env)?))
 }
 
-fn species_constructor(value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
-    let default = env.get("ArrayBuffer").unwrap_or(Value::Undefined);
+fn species_constructor(
+    value: Value,
+    default: Value,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
     let constructor = property_value(value, "constructor", env)?;
     if matches!(constructor, Value::Undefined) {
         return Ok(default);
@@ -641,6 +713,14 @@ fn define_shared_array_buffer_data(object: &ObjectRef, bytes: Vec<u8>) {
         Property::non_enumerable(Value::String(String::new())),
     );
     object.set_to_string_tag("SharedArrayBuffer");
+}
+
+fn set_shared_array_buffer_bytes(object: &ObjectRef, bytes: Vec<u8>) {
+    object.set_internal_bytes(bytes);
+    object.define_property(
+        SHARED_ARRAY_BUFFER_DATA_PROPERTY.to_owned(),
+        Property::non_enumerable(Value::String(String::new())),
+    );
 }
 
 /// Whether `object` carries the `ArrayBuffer` brand (data slot or detached
@@ -748,11 +828,7 @@ pub(crate) fn set_array_buffer_bytes(object: &ObjectRef, bytes: Vec<u8>) {
 
 pub(crate) fn set_buffer_bytes(object: &ObjectRef, bytes: Vec<u8>) {
     if is_shared_array_buffer_object(object) {
-        object.set_internal_bytes(bytes);
-        object.define_property(
-            SHARED_ARRAY_BUFFER_DATA_PROPERTY.to_owned(),
-            Property::non_enumerable(Value::String(String::new())),
-        );
+        set_shared_array_buffer_bytes(object, bytes);
     } else {
         set_array_buffer_bytes(object, bytes);
     }

@@ -198,6 +198,80 @@ fn array_buffer_is_view_reports_typed_arrays() {
 }
 
 #[test]
+fn shared_array_buffer_slice_copies_bounds() {
+    assert_eq!(
+        eval(
+            "let b = new SharedArrayBuffer(8); \
+             let c = b.slice(2, 6); \
+             [c instanceof SharedArrayBuffer, c.byteLength].join(':');"
+        ),
+        Ok(Value::String("true:4".to_owned()))
+    );
+    assert_eq!(
+        eval("new SharedArrayBuffer(8).slice(-5, -1).byteLength;"),
+        Ok(Value::Number(4.0))
+    );
+    assert_eq!(
+        eval("new SharedArrayBuffer(8).slice(9, 1).byteLength;"),
+        Ok(Value::Number(0.0))
+    );
+}
+
+#[test]
+fn shared_array_buffer_slice_uses_species_constructor() {
+    assert_eq!(
+        eval("SharedArrayBuffer[Symbol.species] === SharedArrayBuffer;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let result; \
+             let species = {}; \
+             species[Symbol.species] = function(length) { result = new SharedArrayBuffer(length + 2); return result; }; \
+             let b = new SharedArrayBuffer(8); \
+             b.constructor = species; \
+             b.slice(1, 5) === result && result.byteLength === 6;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn shared_array_buffer_slice_validates_species_result() {
+    assert!(
+        eval(
+            "let species = {}; \
+             species[Symbol.species] = function() { return {}; }; \
+             let b = new SharedArrayBuffer(8); \
+             b.constructor = species; \
+             b.slice();"
+        )
+        .is_err()
+    );
+    assert!(
+        eval(
+            "let species = {}; \
+             species[Symbol.species] = function() { return new SharedArrayBuffer(4); }; \
+             let b = new SharedArrayBuffer(8); \
+             b.constructor = species; \
+             b.slice();"
+        )
+        .is_err()
+    );
+    assert!(
+        eval(
+            "let species = {}; \
+             let b = new SharedArrayBuffer(8); \
+             species[Symbol.species] = function() { return b; }; \
+             b.constructor = species; \
+             b.slice();"
+        )
+        .is_err()
+    );
+    assert!(eval("SharedArrayBuffer.prototype.slice.call(new ArrayBuffer(8));").is_err());
+}
+
+#[test]
 fn array_buffer_species_is_self() {
     assert_eq!(
         eval("ArrayBuffer[Symbol.species] === ArrayBuffer;"),
