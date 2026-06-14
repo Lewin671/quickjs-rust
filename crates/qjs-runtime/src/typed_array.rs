@@ -409,6 +409,21 @@ pub(crate) fn validate_typed_array(value: &Value) -> Result<(ObjectRef, usize), 
     Ok((object.clone(), typed_array_length(&object)))
 }
 
+/// Brand-checks `value` as a writable typed array, rejecting immutable backing
+/// buffers before argument coercion can run.
+pub(crate) fn validate_typed_array_write(
+    value: &Value,
+) -> Result<(ObjectRef, usize), RuntimeError> {
+    let (object, length) = validate_typed_array(value)?;
+    if typed_array_buffer(&object).is_some_and(|buffer| array_buffer::is_immutable(&buffer)) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: ArrayBuffer is immutable".to_owned(),
+        });
+    }
+    Ok((object, length))
+}
+
 /// Brand-checks `value` as an attached typed array, but preserves the current
 /// length computation for out-of-bounds resizable-buffer views.
 pub(crate) fn validate_typed_array_length(

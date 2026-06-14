@@ -717,6 +717,62 @@ fn bigint_fill_rejects_number() {
         eval("new BigInt64Array(2).fill(5n).join(',');"),
         Ok(Value::String("5,5".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "try { new BigInt64Array(1).fill('nonsense'); false; } \
+             catch (e) { e instanceof SyntaxError; }"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn fill_rechecks_buffer_after_argument_coercion() {
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4); let a = new Uint8Array(b); \
+             let value = { valueOf() { __quickjsRustDetachArrayBuffer(b); return 7; } }; \
+             try { a.fill(value, 0, 1); false; } catch (e) { e instanceof TypeError; }"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4); let a = new Uint8Array(b); \
+             let start = { valueOf() { __quickjsRustDetachArrayBuffer(b); return 0; } }; \
+             try { a.fill(7, start, 1); false; } catch (e) { e instanceof TypeError; }"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4); let a = new Uint8Array(b); \
+             let end = { valueOf() { __quickjsRustDetachArrayBuffer(b); return 1; } }; \
+             try { a.fill(7, 0, end); false; } catch (e) { e instanceof TypeError; }"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 8 }); let a = new Uint8Array(b, 0, 4); \
+             let value = { valueOf() { b.resize(2); return 7; } }; \
+             try { a.fill(value, 0, 1); false; } catch (e) { e instanceof TypeError; }"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn fill_rejects_immutable_buffer_before_argument_coercion() {
+    assert_eq!(
+        eval(
+            "let calls = ''; let a = new Uint8Array(new ArrayBuffer(4).transferToImmutable()); \
+             let value = { valueOf() { calls += 'value'; return 8; } }; \
+             let start = { valueOf() { calls += 'start'; return 0; } }; \
+             try { a.fill(value, start, 1); } catch (e) { calls + ':' + (e instanceof TypeError); }"
+        ),
+        Ok(Value::String(":true".to_owned()))
+    );
 }
 
 // --- Batched element materialization (perf slice) ----------------------------

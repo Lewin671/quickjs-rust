@@ -18,7 +18,7 @@ use crate::{
 use super::element::{read_view_elements, set_view_elements};
 use super::{
     coerce_element, is_big_int_kind, is_typed_array_object, typed_array_kind, typed_array_length,
-    validate_typed_array,
+    validate_typed_array, validate_typed_array_write,
 };
 use crate::CallEnv;
 
@@ -111,7 +111,7 @@ pub(crate) fn native_typed_array_prototype_fill(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let (object, length) = validate_typed_array(&this_value)?;
+    let (object, length) = validate_typed_array_write(&this_value)?;
     let native = typed_array_kind(&object);
     let value = coerce_element(
         native,
@@ -130,6 +130,7 @@ pub(crate) fn native_typed_array_prototype_fill(
         length as i64,
         env,
     )?;
+    validate_typed_array(&this_value)?;
     if start < end {
         set_view_elements(&object, start, std::iter::repeat_n(value, end - start));
     }

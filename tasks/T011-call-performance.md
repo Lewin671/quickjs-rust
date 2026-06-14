@@ -517,8 +517,11 @@ subtle semantic regressions, and the `nested_closures_capture_live_outer_binding
 
 ## Notes
 
-- The 19 `TypedArray/prototype/fill` failures in the baseline scan are
-  correctness gaps (resizable buffers etc.), not performance; out of scope here.
+- `TypedArray/prototype/fill` moved from timeout/performance suspicion to a
+  correctness slice and was cleared on 2026-06-14: the focused
+  `find-qjsng-gaps.sh --filter test/built-ins/TypedArray/prototype/fill --all`
+  scan reports 0 QuickJS-NG-pass / quickjs-rust non-pass cases after the
+  write-mode validation and post-coercion buffer recheck fix.
 - Profiling was done with temporary `std::time::Instant` accumulators and
   `eprintln` counters in `call.rs`/`vm.rs`/`lib.rs`, all removed before
   committing. `cargo flamegraph` is not installed and new deps are forbidden.
