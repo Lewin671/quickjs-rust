@@ -20,6 +20,7 @@ pub(crate) const ARRAY_BUFFER_MAX_BYTE_LENGTH_PROPERTY: &str = "\0ArrayBufferMax
 pub(crate) const ARRAY_BUFFER_IMMUTABLE_PROPERTY: &str = "\0ArrayBufferImmutable";
 const SHARED_ARRAY_BUFFER_DATA_PROPERTY: &str = "\0SharedArrayBufferData";
 const MAX_ARRAY_BUFFER_LENGTH: usize = 1_000_000;
+const MAX_SAFE_INTEGER_LENGTH: usize = 9_007_199_254_740_991;
 
 pub(crate) fn install_array_buffer(
     env: &mut CallEnv,
@@ -202,7 +203,7 @@ pub(crate) fn native_array_buffer(
             message: "TypeError: Constructor ArrayBuffer requires 'new'".to_owned(),
         });
     }
-    let length = to_index(
+    let length = to_index_unbounded(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
@@ -220,6 +221,10 @@ pub(crate) fn native_array_buffer(
             crate::native_construct_prototype_slot(function, env)?,
         ),
     };
+    ensure_array_buffer_allocation_length(length)?;
+    if let Some(max) = max_byte_length {
+        ensure_array_buffer_allocation_length(max)?;
+    }
     define_array_buffer_data(&object, vec![0; length]);
     if let Some(max) = max_byte_length {
         define_array_buffer_max_byte_length(&object, max);
@@ -566,7 +571,7 @@ fn resizable_max_byte_length(
     if matches!(max, Value::Undefined) {
         return Ok(None);
     }
-    Ok(Some(to_index(max, env)?))
+    Ok(Some(to_index_unbounded(max, env)?))
 }
 
 fn species_constructor(value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
@@ -809,15 +814,31 @@ fn array_buffer_receiver_error() -> RuntimeError {
 }
 
 fn to_index(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
+    let index = to_index_unbounded(value, env)?;
+    ensure_array_buffer_allocation_length(index)?;
+    Ok(index)
+}
+
+fn to_index_unbounded(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
     let number = to_number_with_env(value, env)?;
     let integer = if number.is_nan() { 0.0 } else { number.trunc() };
-    if integer < 0.0 || !integer.is_finite() || integer > MAX_ARRAY_BUFFER_LENGTH as f64 {
+    if integer < 0.0 || !integer.is_finite() || integer > MAX_SAFE_INTEGER_LENGTH as f64 {
         return Err(RuntimeError {
             thrown: None,
             message: "RangeError: invalid ArrayBuffer length".to_owned(),
         });
     }
     Ok(integer as usize)
+}
+
+fn ensure_array_buffer_allocation_length(length: usize) -> Result<(), RuntimeError> {
+    if length > MAX_ARRAY_BUFFER_LENGTH {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "RangeError: invalid ArrayBuffer length".to_owned(),
+        });
+    }
+    Ok(())
 }
 
 fn slice_index(

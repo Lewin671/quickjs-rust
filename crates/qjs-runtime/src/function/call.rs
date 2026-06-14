@@ -377,7 +377,15 @@ pub(crate) fn construct_function(
 fn native_constructs_receiver_lazily(target: &Value) -> bool {
     matches!(
         target,
-        Value::Function(function) if function.native == Some(NativeFunction::DataView)
+        Value::Function(function)
+            if matches!(
+                function.native,
+                Some(
+                    NativeFunction::ArrayBuffer
+                        | NativeFunction::DataView
+                        | NativeFunction::SharedArrayBuffer
+                )
+            )
     )
 }
 

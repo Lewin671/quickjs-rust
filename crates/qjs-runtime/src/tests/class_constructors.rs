@@ -101,6 +101,54 @@ fn native_super_constructors_use_derived_new_target_prototype() {
 }
 
 #[test]
+fn array_buffer_constructors_read_bound_new_target_prototype_lazily() {
+    assert_eq!(
+        eval(
+            "let proto = { marker: 'array-buffer' }; \
+             let newTarget = (function() {}).bind(null); \
+             Object.defineProperty(newTarget, 'prototype', { get() { return proto; } }); \
+             Object.getPrototypeOf(Reflect.construct(ArrayBuffer, [8], newTarget)) === proto;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let proto = { marker: 'shared-array-buffer' }; \
+             let newTarget = (function() {}).bind(null); \
+             Object.defineProperty(newTarget, 'prototype', { get() { return proto; } }); \
+             Object.getPrototypeOf(Reflect.construct(SharedArrayBuffer, [8], newTarget)) === proto;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn array_buffer_constructor_reads_new_target_prototype_before_large_allocation() {
+    assert_eq!(
+        eval(
+            "let marker = {}; \
+             let newTarget = (function() {}).bind(null); \
+             Object.defineProperty(newTarget, 'prototype', { get() { throw marker; } }); \
+             let caught = false; \
+             try { Reflect.construct(ArrayBuffer, [7 * 1125899906842624], newTarget); } catch (e) { caught = e === marker; } \
+             caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let marker = {}; \
+             let newTarget = (function() {}).bind(null); \
+             Object.defineProperty(newTarget, 'prototype', { get() { throw marker; } }); \
+             let caught = false; \
+             try { Reflect.construct(ArrayBuffer, [0, { maxByteLength: 7 * 1125899906842624 }], newTarget); } catch (e) { caught = e === marker; } \
+             caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn proxy_constructor_has_no_class_heritage_prototype() {
     assert_eq!(
         eval(
