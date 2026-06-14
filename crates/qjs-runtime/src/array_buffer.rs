@@ -273,9 +273,7 @@ pub(crate) fn native_array_buffer_prototype_resizable(
     this_value: Value,
 ) -> Result<Value, RuntimeError> {
     let object = array_buffer_object(&this_value)?;
-    Ok(Value::Boolean(
-        !is_detached(&object) && is_resizable(&object),
-    ))
+    Ok(Value::Boolean(is_resizable(&object)))
 }
 
 pub(crate) fn native_array_buffer_prototype_detached(
@@ -298,9 +296,6 @@ pub(crate) fn native_array_buffer_prototype_resize(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let object = array_buffer_object(&this_value)?;
-    if is_detached(&object) {
-        return Err(detached_error());
-    }
     if is_immutable(&object) {
         return Err(RuntimeError {
             thrown: None,
@@ -317,6 +312,9 @@ pub(crate) fn native_array_buffer_prototype_resize(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
+    if is_detached(&object) {
+        return Err(detached_error());
+    }
     if new_length > max_byte_length {
         return Err(RuntimeError {
             thrown: None,
@@ -756,6 +754,36 @@ mod tests {
         assert_eq!(
             eval("new ArrayBuffer(8, undefined).byteLength;"),
             Ok(Value::Number(8.0))
+        );
+        assert_eq!(
+            eval(
+                "let b = new ArrayBuffer(8, { maxByteLength: 16 }); \
+                 __quickjsRustDetachArrayBuffer(b); b.resizable;"
+            ),
+            Ok(Value::Boolean(true))
+        );
+    }
+
+    #[test]
+    fn array_buffer_resize_coerces_length_before_detached_check() {
+        assert_eq!(
+            eval(
+                "let b = new ArrayBuffer(8, { maxByteLength: 16 }); \
+                 let called = false; \
+                 try { b.resize({ valueOf() { called = true; __quickjsRustDetachArrayBuffer(b); return 4; } }); } catch (_) {} \
+                 called;"
+            ),
+            Ok(Value::Boolean(true))
+        );
+        assert_eq!(
+            eval(
+                "let b = new ArrayBuffer(8, { maxByteLength: 16 }); \
+                 __quickjsRustDetachArrayBuffer(b); \
+                 let called = false; \
+                 try { b.resize({ valueOf() { called = true; return 4; } }); } catch (_) {} \
+                 called;"
+            ),
+            Ok(Value::Boolean(true))
         );
     }
 
