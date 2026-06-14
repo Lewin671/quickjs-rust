@@ -95,6 +95,16 @@ impl Parser {
                 let TokenKind::Identifier(name) = token.kind.clone() else {
                     return None;
                 };
+                let prev_end = self.tokens[self.cursor - 1].span.end;
+                let next_start = token.span.start;
+                let between = &self.source[prev_end..next_start];
+                if between.contains('\n')
+                    || between.contains('\r')
+                    || between.contains('\u{2028}')
+                    || between.contains('\u{2029}')
+                {
+                    return None;
+                }
                 self.cursor += 1;
                 Some(name)
             }
