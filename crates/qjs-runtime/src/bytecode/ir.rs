@@ -255,6 +255,11 @@ pub(super) enum Op {
     /// independent copies of the listed slots, so each iteration has its own
     /// binding.
     FreshIterationScope(Vec<usize>),
+    /// Saves the current closure capture cell before a loop starts installing
+    /// per-iteration capture cells.
+    PushCapturedEnv,
+    /// Restores the capture cell saved by `PushCapturedEnv`.
+    PopCapturedEnv,
     EnterTry {
         catch: Option<usize>,
         finally: Option<usize>,
