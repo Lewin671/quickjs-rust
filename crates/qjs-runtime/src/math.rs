@@ -245,11 +245,7 @@ pub(super) fn native_math_round(
     }
     let floored = number.floor();
     let frac = number - floored;
-    let rounded = if frac >= 0.5 {
-        floored + 1.0
-    } else {
-        floored
-    };
+    let rounded = if frac >= 0.5 { floored + 1.0 } else { floored };
     if rounded == 0.0 && number < 0.0 {
         Ok(Value::Number(-0.0))
     } else {
