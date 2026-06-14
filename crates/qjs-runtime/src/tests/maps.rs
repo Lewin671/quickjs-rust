@@ -88,9 +88,12 @@ fn evaluates_map_group_by_arrays() {
     );
     assert_eq!(
         eval(
-            "let seen = ''; let groups = Map.groupBy({ 0: 'a', 1: 'b', length: 2 }, function(value, index) { seen = seen + value + index; return index; }); groups.size + ':' + groups.get(0)[0] + ':' + groups.get(1)[0] + ':' + seen;"
+            "let seen = ''; let groups = Map.groupBy(['a', 'b'], function(value, index) { seen = seen + value + index; return index; }); groups.size + ':' + groups.get(0)[0] + ':' + groups.get(1)[0] + ':' + seen;"
         ),
         Ok(Value::String("2:a:b:a0b1".to_owned()))
+    );
+    assert!(
+        eval("Map.groupBy({ 0: 'a', 1: 'b', length: 2 }, function() { return 'x'; });").is_err()
     );
     assert_eq!(
         eval(

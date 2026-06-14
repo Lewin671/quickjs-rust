@@ -11,9 +11,12 @@ fn evaluates_object_group_by_arrays() {
     );
     assert_eq!(
         eval(
-            "let seen = ''; let groups = Object.groupBy({ 0: 'a', 1: 'b', length: 2 }, function(value, index) { seen = seen + value + index; return index; }); Object.keys(groups).join('|') + ':' + groups[0][0] + ':' + groups[1][0] + ':' + seen;"
+            "let seen = ''; let groups = Object.groupBy(['a', 'b'], function(value, index) { seen = seen + value + index; return index; }); Object.keys(groups).join('|') + ':' + groups[0][0] + ':' + groups[1][0] + ':' + seen;"
         ),
         Ok(Value::String("0|1:a:b:a0b1".to_owned()))
+    );
+    assert!(
+        eval("Object.groupBy({ 0: 'a', 1: 'b', length: 2 }, function() { return 'x'; });").is_err()
     );
     assert_eq!(
         eval("Object.getPrototypeOf(Object.groupBy([], function() { return 'x'; })) === null;"),

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::CallEnv;
 use crate::{
     ArrayRef, ObjectRef, Property, PropertyKey, RuntimeError, Value,
-    array::array_like_values_with_env, to_property_key_value,
+    array::iterable_values_with_env, to_property_key_value,
 };
 
 pub(crate) fn native_object_group_by(
@@ -20,7 +20,7 @@ pub(crate) fn native_object_group_by(
     }
 
     let result = ObjectRef::with_prototype(HashMap::new(), None);
-    for (index, value) in array_like_values_with_env(items, "Object.groupBy", env)?
+    for (index, value) in iterable_values_with_env(items, "Object.groupBy", env)?
         .into_iter()
         .enumerate()
     {

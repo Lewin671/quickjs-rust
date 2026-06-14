@@ -12,7 +12,7 @@ if (objectGroups.odd.join('|') !== '1|3' || objectGroups.even.join('|') !== '2|4
 }
 
 var seen = '';
-var mapGroups = Map.groupBy({ 0: 'a', 1: 'b', length: 2 }, function(value, index) {
+var mapGroups = Map.groupBy(['a', 'b'], function(value, index) {
   seen += value + index;
   return index;
 });

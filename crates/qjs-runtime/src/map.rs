@@ -3,8 +3,7 @@ use std::collections::HashMap;
 use crate::CallEnv;
 use crate::{
     ArrayRef, Function, MapRef, NativeFunction, ObjectRef, Property, RuntimeError, Value,
-    array::{array_like_values_with_env, iterable_values_with_env},
-    call_function, property_value, symbol,
+    array::iterable_values_with_env, call_function, property_value, symbol,
 };
 
 const MAP_ITERATOR: &str = "\0map_iterator";
@@ -151,7 +150,7 @@ pub(crate) fn native_map_group_by(
     }
 
     let map = MapRef::new(map_prototype(env));
-    for (index, value) in array_like_values_with_env(items, "Map.groupBy", env)?
+    for (index, value) in iterable_values_with_env(items, "Map.groupBy", env)?
         .into_iter()
         .enumerate()
     {
