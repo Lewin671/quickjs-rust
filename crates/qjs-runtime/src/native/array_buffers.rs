@@ -43,6 +43,13 @@ pub(super) fn call_array_buffer_native(
         NativeFunction::ArrayBufferPrototypeSlice => {
             array_buffer::native_array_buffer_prototype_slice(this_value, argument_values, env)?
         }
+        NativeFunction::ArrayBufferPrototypeSliceToImmutable => {
+            array_buffer::native_array_buffer_prototype_slice_to_immutable(
+                this_value,
+                argument_values,
+                env,
+            )?
+        }
         NativeFunction::ArrayBufferPrototypeTransferToImmutable => {
             array_buffer::native_array_buffer_prototype_transfer_to_immutable(
                 this_value,
