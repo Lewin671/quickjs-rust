@@ -205,7 +205,7 @@ pub(crate) fn native_typed_array_prototype_sort(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let (object, length) = validate_typed_array(&this_value)?;
+    let (object, length) = validate_typed_array_write(&this_value)?;
     let comparator = sort_comparator(argument_values, "sort")?;
     let mut values: Vec<Value> = read_view_elements(&object, 0, length);
     sort_values(&mut values, comparator.as_ref(), env)?;

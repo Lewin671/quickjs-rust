@@ -775,6 +775,28 @@ fn fill_rejects_immutable_buffer_before_argument_coercion() {
     );
 }
 
+#[test]
+fn sort_rejects_immutable_buffer_before_comparing() {
+    assert_eq!(
+        eval(
+            "let calls = ''; \
+             let a = new Uint8Array(new ArrayBuffer(4).transferToImmutable()); \
+             try { a.sort(() => { calls += 'compare'; return 0; }); } \
+             catch (e) { calls + ':' + (e instanceof TypeError) + ':' + a.length; }"
+        ),
+        Ok(Value::String(":true:4".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let calls = ''; \
+             let a = new Uint8Array(new ArrayBuffer(0).transferToImmutable()); \
+             try { a.sort(() => { calls += 'compare'; return 0; }); } \
+             catch (e) { calls + ':' + (e instanceof TypeError) + ':' + a.length; }"
+        ),
+        Ok(Value::String(":true:0".to_owned()))
+    );
+}
+
 // --- Batched element materialization (perf slice) ----------------------------
 
 #[test]
