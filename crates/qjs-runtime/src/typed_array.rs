@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, Prototype, RuntimeError, Value, array_buffer,
-    property_value, symbol, to_length_with_env,
+    property_value, symbol, to_number_with_env,
 };
 
 mod construct;
@@ -636,7 +636,15 @@ pub(crate) fn to_typed_array_length(
     value: Value,
     env: &mut CallEnv,
 ) -> Result<usize, RuntimeError> {
-    let length = to_length_with_env(value, env)?;
+    let number = to_number_with_env(value, env)?;
+    let integer = if number.is_nan() { 0.0 } else { number.trunc() };
+    if integer < 0.0 || !integer.is_finite() {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "RangeError: invalid typed array length".to_owned(),
+        });
+    }
+    let length = integer as usize;
     if length > MAX_TYPED_ARRAY_LENGTH {
         return Err(RuntimeError {
             thrown: None,

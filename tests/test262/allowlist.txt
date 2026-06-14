@@ -304,6 +304,9 @@ test/built-ins/TypedArrayConstructors/of/BigInt/custom-ctor-does-not-instantiate
 test/built-ins/TypedArrayConstructors/of/BigInt/custom-ctor-returns-smaller-instance-throws.js
 test/built-ins/TypedArrayConstructors/of/BigInt/custom-ctor.js
 test/built-ins/TypedArrayConstructors/of/BigInt/inherited.js
+test/built-ins/TypedArrayConstructors/ctors/length-arg/custom-proto-access-throws.js
+test/built-ins/TypedArrayConstructors/ctors/length-arg/is-negative-integer-throws-rangeerror.js
+test/built-ins/TypedArrayConstructors/ctors/length-arg/is-symbol-throws.js
 test/built-ins/TypedArray/prototype/toString.js
 cases/array-at-array-like.js
 cases/array-at-basic.js

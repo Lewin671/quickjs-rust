@@ -44,6 +44,40 @@ fn construct_from_length_and_no_args() {
 }
 
 #[test]
+fn construct_from_length_uses_to_index_and_new_target_prototype() {
+    assert_eq!(
+        eval(
+            "let negative = false; \
+             try { new Uint8Array(-1); } catch (e) { negative = e instanceof RangeError; } \
+             let symbol = false; \
+             try { new Uint8Array(Symbol('1')); } catch (e) { symbol = e instanceof TypeError; } \
+             negative + ':' + symbol;"
+        ),
+        Ok(Value::String("true:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let marker = {}; \
+             let newTarget = function() {}.bind(null); \
+             Object.defineProperty(newTarget, 'prototype', { get() { throw marker; } }); \
+             let caught = false; \
+             try { Reflect.construct(Uint8Array, [1], newTarget); } catch (e) { caught = e === marker; } \
+             caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let proto = { tag: 'typed' }; \
+             function NewTarget() {} \
+             NewTarget.prototype = proto; \
+             Object.getPrototypeOf(Reflect.construct(Int16Array, [1], NewTarget)) === proto;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn instances_inherit_length_accessor_and_allow_own_length() {
     assert_eq!(
         eval("let a = new Uint8Array([7]); a.length + ':' + a.hasOwnProperty('length');"),

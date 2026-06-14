@@ -408,6 +408,17 @@ fn native_constructs_receiver_lazily(target: &Value) -> bool {
                     NativeFunction::ArrayBuffer
                         | NativeFunction::DataView
                         | NativeFunction::SharedArrayBuffer
+                        | NativeFunction::Uint8Array
+                        | NativeFunction::Int8Array
+                        | NativeFunction::Uint8ClampedArray
+                        | NativeFunction::Uint16Array
+                        | NativeFunction::Int16Array
+                        | NativeFunction::Uint32Array
+                        | NativeFunction::Int32Array
+                        | NativeFunction::Float32Array
+                        | NativeFunction::Float64Array
+                        | NativeFunction::BigInt64Array
+                        | NativeFunction::BigUint64Array
                 )
             )
     )

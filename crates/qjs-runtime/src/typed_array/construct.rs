@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, array, array_buffer,
-    function_prototype, property_value, to_number_with_env,
+    property_value, symbol, to_number_with_env,
 };
 
 use super::element::{read_elements, write_element};
@@ -40,20 +40,29 @@ pub(crate) fn native_typed_array(
         });
     }
 
-    let object = match this_value {
-        Value::Object(object) => object,
-        _ => ObjectRef::with_prototype(HashMap::new(), function_prototype(function)),
-    };
-
     match argument_values.first().cloned() {
-        None | Some(Value::Undefined) => initialize_from_length(&object, native, 0, env),
+        None | Some(Value::Undefined) => {
+            let object = typed_array_allocation_object(function, this_value, env)?;
+            initialize_from_length(&object, native, 0, env)?;
+            Ok(Value::Object(object))
+        }
+        Some(Value::Object(source)) if symbol::is_symbol_primitive(&source) => {
+            let length = to_typed_array_length(Value::Object(source), env)?;
+            let object = typed_array_allocation_object(function, this_value, env)?;
+            initialize_from_length(&object, native, length, env)?;
+            Ok(Value::Object(object))
+        }
         Some(Value::Object(source)) if is_typed_array_object(&source) => {
-            initialize_from_typed_array(&object, native, &source, env)
+            let object = typed_array_allocation_object(function, this_value, env)?;
+            initialize_from_typed_array(&object, native, &source, env)?;
+            Ok(Value::Object(object))
         }
         Some(Value::Object(source))
             if array_buffer::is_array_buffer_or_shared_array_buffer_object(&source) =>
         {
-            initialize_from_buffer(&object, native, source, argument_values, env)
+            let object = typed_array_allocation_object(function, this_value, env)?;
+            initialize_from_buffer(&object, native, source, argument_values, env)?;
+            Ok(Value::Object(object))
         }
         Some(
             source @ (Value::Object(_)
@@ -62,14 +71,32 @@ pub(crate) fn native_typed_array(
             | Value::Map(_)
             | Value::Set(_)
             | Value::Proxy(_)),
-        ) => initialize_from_object(&object, native, source, env),
+        ) => {
+            let object = typed_array_allocation_object(function, this_value, env)?;
+            initialize_from_object(&object, native, source, env)?;
+            Ok(Value::Object(object))
+        }
         Some(other) => {
             let length = to_typed_array_length(other, env)?;
-            initialize_from_length(&object, native, length, env)
+            let object = typed_array_allocation_object(function, this_value, env)?;
+            initialize_from_length(&object, native, length, env)?;
+            Ok(Value::Object(object))
         }
-    }?;
+    }
+}
 
-    Ok(Value::Object(object))
+fn typed_array_allocation_object(
+    function: &Function,
+    this_value: Value,
+    env: &mut CallEnv,
+) -> Result<ObjectRef, RuntimeError> {
+    match this_value {
+        Value::Object(object) => Ok(object),
+        _ => Ok(ObjectRef::with_prototype_slot(
+            HashMap::new(),
+            crate::native_construct_prototype_slot(function, env)?,
+        )),
+    }
 }
 
 /// `new TA(length)` and `new TA()`: a fresh zero-filled buffer.
