@@ -4798,6 +4798,8 @@ test/language/statements/for-of/dstr/let-ary-ptrn-elem-id-init-undef.js
 test/language/statements/for-of/dstr/var-ary-ptrn-rest-obj-prop-id.js
 test/language/statements/for-of/dstr/var-obj-ptrn-rest-val-obj.js
 test/language/statements/for-of/dstr/obj-rest-descriptors.js
+test/language/statements/for-of/head-const-fresh-binding-per-iteration.js
+test/language/statements/for-of/head-let-fresh-binding-per-iteration.js
 test/language/statements/class/arguments/default-constructor.js
 test/language/statements/class/static-init-sequence.js
 test/language/statements/class/static-init-expr-this.js

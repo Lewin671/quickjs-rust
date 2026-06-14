@@ -252,6 +252,16 @@ pub(super) fn for_in_left_lexical_names(left: &ForInLeft) -> Vec<String> {
     }
 }
 
+pub(super) fn is_lexical_for_in_left(left: &ForInLeft) -> bool {
+    matches!(
+        left,
+        ForInLeft::VarDecl {
+            kind: VarKind::Let | VarKind::Const,
+            ..
+        }
+    )
+}
+
 pub(super) fn switch_lexical_declared_names(cases: &[SwitchCase]) -> Vec<String> {
     let mut names = Vec::new();
     for case in cases {

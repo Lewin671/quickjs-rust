@@ -6,7 +6,7 @@ use crate::{RuntimeError, Value};
 
 use super::compiler::{Compiler, LoopIterator};
 use super::compiler_lexical::{
-    current_scope_lexical_declared_bindings, for_in_left_lexical_names,
+    current_scope_lexical_declared_bindings, for_in_left_lexical_names, is_lexical_for_in_left,
     switch_lexical_declared_names,
 };
 use super::ir::Op;
@@ -122,6 +122,14 @@ impl Compiler {
         self.compile_for_in_left(left, value_slot)?;
 
         let blocked = for_in_left_lexical_names(left);
+        let iteration_slots: Vec<usize> = if is_lexical_for_in_left(left) {
+            blocked
+                .iter()
+                .filter_map(|name| self.resolve_local_slot(name))
+                .collect()
+        } else {
+            Vec::new()
+        };
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
             compiler.push_loop_with_iterator(result_slot, iterator);
             compiler.compile_stmt(body)?;
@@ -130,6 +138,9 @@ impl Compiler {
         })?;
         let context = self.pop_loop();
 
+        if !iteration_slots.is_empty() {
+            self.emit(Op::FreshIterationScope(iteration_slots));
+        }
         self.emit(Op::Jump(loop_start));
 
         let exit = self.code.len();
@@ -163,6 +174,14 @@ impl Compiler {
         self.emit_number(0.0);
         self.emit(Op::StoreLocal(index_slot));
         let blocked = for_in_left_lexical_names(left);
+        let iteration_slots: Vec<usize> = if is_lexical_for_in_left(left) {
+            blocked
+                .iter()
+                .filter_map(|name| self.resolve_local_slot(name))
+                .collect()
+        } else {
+            Vec::new()
+        };
 
         let loop_start = self.code.len();
         self.emit(Op::LoadLocal(index_slot));
@@ -188,6 +207,9 @@ impl Compiler {
         let context = self.pop_loop();
 
         let update_start = self.code.len();
+        if !iteration_slots.is_empty() {
+            self.emit(Op::FreshIterationScope(iteration_slots));
+        }
         self.emit(Op::LoadLocal(index_slot));
         self.emit_number(1.0);
         self.emit(Op::Binary(BinaryOp::Add));
@@ -248,6 +270,14 @@ impl Compiler {
         self.compile_for_in_left(left, value_slot)?;
 
         let blocked = for_in_left_lexical_names(left);
+        let iteration_slots: Vec<usize> = if is_lexical_for_in_left(left) {
+            blocked
+                .iter()
+                .filter_map(|name| self.resolve_local_slot(name))
+                .collect()
+        } else {
+            Vec::new()
+        };
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
             compiler.push_loop_with_iterator(result_slot, iterator);
             compiler.compile_stmt(body)?;
@@ -256,6 +286,9 @@ impl Compiler {
         })?;
         let context = self.pop_loop();
 
+        if !iteration_slots.is_empty() {
+            self.emit(Op::FreshIterationScope(iteration_slots));
+        }
         self.emit(Op::Jump(loop_start));
 
         let exit = self.code.len();

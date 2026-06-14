@@ -104,6 +104,22 @@ fn for_await_of_over_plain_array() {
 }
 
 #[test]
+fn for_await_of_lexical_head_captures_fresh_binding_per_iteration() {
+    assert_eq!(
+        eval_log(
+            "var o = []; \
+             async function run() { \
+               var f = []; \
+               for await (let x of [1, 2, 3]) { f[x - 1] = function() { return x; }; } \
+               o.push(f[0]()); o.push(f[1]()); o.push(f[2]()); \
+             } \
+             run(); o;"
+        ),
+        "1,2,3"
+    );
+}
+
+#[test]
 fn await_inside_async_generator_between_yields() {
     assert_eq!(
         eval_log(
