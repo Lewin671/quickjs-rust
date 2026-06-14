@@ -270,6 +270,47 @@ fn data_view_methods_reject_resized_out_of_bounds_view() {
 }
 
 #[test]
+fn data_view_length_tracking_accessors_follow_resizable_buffer() {
+    assert_eq!(
+        eval(
+            "let buffer = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let view = new DataView(buffer, 1); \
+             let values = [view.byteLength, view.byteOffset]; \
+             buffer.resize(6); \
+             values.push(view.byteLength, view.byteOffset); \
+             buffer.resize(1); \
+             values.push(view.byteLength, view.byteOffset); \
+             values.join(':');"
+        ),
+        Ok(Value::String("3:1:5:1:0:1".to_owned()))
+    );
+}
+
+#[test]
+fn data_view_accessors_reject_resized_out_of_bounds_view() {
+    assert_eq!(
+        eval(
+            "let fixedBuffer = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let fixed = new DataView(fixedBuffer, 1, 2); \
+             fixedBuffer.resize(2); \
+             let fixedLengthThrows = false; \
+             let fixedOffsetThrows = false; \
+             try { fixed.byteLength; } catch (e) { fixedLengthThrows = e instanceof TypeError; } \
+             try { fixed.byteOffset; } catch (e) { fixedOffsetThrows = e instanceof TypeError; } \
+             let trackingBuffer = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let tracking = new DataView(trackingBuffer, 1); \
+             trackingBuffer.resize(0); \
+             let trackingLengthThrows = false; \
+             let trackingOffsetThrows = false; \
+             try { tracking.byteLength; } catch (e) { trackingLengthThrows = e instanceof TypeError; } \
+             try { tracking.byteOffset; } catch (e) { trackingOffsetThrows = e instanceof TypeError; } \
+             [fixedLengthThrows, fixedOffsetThrows, trackingLengthThrows, trackingOffsetThrows].join(':');"
+        ),
+        Ok(Value::String("true:true:true:true".to_owned()))
+    );
+}
+
+#[test]
 fn data_view_negative_index_throws() {
     assert!(eval("new DataView(new ArrayBuffer(8)).getInt8(-1);").is_err());
 }
