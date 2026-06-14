@@ -35,6 +35,7 @@ impl Parser {
             .start;
         let body = self.function_body_with_context(is_generator, is_async)?;
         self.reject_invalid_function_parameters(&params, &body, body_start)?;
+        reject_strict_function_name(&name, &body, body_start)?;
         let end = self
             .tokens
             .get(self.cursor.saturating_sub(1))
@@ -154,6 +155,9 @@ impl Parser {
             .start;
         let body = self.function_body_with_context(is_generator, is_async)?;
         self.reject_invalid_function_parameters(&params, &body, body_start)?;
+        if let Some(ref fn_name) = name {
+            reject_strict_function_name(fn_name, &body, body_start)?;
+        }
         let end = self
             .tokens
             .get(self.cursor.saturating_sub(1))
@@ -395,6 +399,23 @@ impl Parser {
         }
         Ok(())
     }
+}
+
+/// Rejects `eval` or `arguments` as a function name when the function body
+/// contains a strict directive prologue. This is an early error that cannot
+/// be caught before parsing the body.
+fn reject_strict_function_name(
+    name: &str,
+    body: &[Stmt],
+    span_start: usize,
+) -> Result<(), crate::ParseError> {
+    if matches!(name, "eval" | "arguments") && body_has_strict_directive(body) {
+        return Err(crate::ParseError {
+            message: format!("`{name}` may not be used as a function name in strict mode"),
+            span: qjs_ast::Span::new(span_start, span_start),
+        });
+    }
+    Ok(())
 }
 
 /// Collects the names lexically declared at the top level of a function body:
