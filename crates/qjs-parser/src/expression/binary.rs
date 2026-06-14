@@ -120,9 +120,38 @@ impl Parser {
     }
 
     fn exponentiation(&mut self) -> Result<Expr, ParseError> {
+        let start = self.cursor;
         let left = self.unary()?;
         if !self.match_kind(&TokenKind::StarStar) {
             return Ok(left);
+        }
+
+        // A direct unary expression (not wrapped in parentheses) as the left
+        // operand of ** is a SyntaxError. We detect this by checking both the
+        // AST node type AND that the expression starts at the same position as
+        // our cursor entry — a parenthesized unary would have started with `(`
+        // at a different token position within the primary expression path.
+        if matches!(&left, Expr::Unary { .. }) {
+            let first_token = self.tokens.get(start);
+            let is_direct_unary = first_token.is_some_and(|token| {
+                matches!(
+                    token.kind,
+                    TokenKind::Plus
+                        | TokenKind::Minus
+                        | TokenKind::Bang
+                        | TokenKind::Tilde
+                        | TokenKind::Typeof
+                        | TokenKind::Void
+                        | TokenKind::Delete
+                )
+            });
+            if is_direct_unary {
+                return Err(crate::ParseError {
+                    message: "unary expression cannot be the left operand of `**`; use parentheses"
+                        .to_owned(),
+                    span: left.span(),
+                });
+            }
         }
 
         let right = self.exponentiation()?;
