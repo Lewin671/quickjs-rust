@@ -478,6 +478,30 @@ fn iterators_keys_values_entries() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "Object.getPrototypeOf(new Uint8Array([1]).values()) === Object.getPrototypeOf([][Symbol.iterator]());"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "Object.getPrototypeOf(new BigInt64Array([1n]).values()) === Object.getPrototypeOf([][Symbol.iterator]());"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let b = BigInt64Array.BYTES_PER_ELEMENT; \
+             let ab = new ArrayBuffer(b * 4, { maxByteLength: b * 5 }); \
+             let view = new BigInt64Array(ab, b, 2); \
+             ab.resize(b * 3 - 1); \
+             let caught = false; \
+             try { view.values(); } catch (e) { caught = e instanceof TypeError; } \
+             caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]

@@ -39,8 +39,8 @@ pub(crate) use iteration::{
     native_array_prototype_some,
 };
 pub(crate) use iterator::{
-    native_array_iterator_next, native_array_prototype_entries, native_array_prototype_keys,
-    native_array_prototype_values,
+    array_key_iterator, array_key_value_iterator, array_value_iterator, native_array_iterator_next,
+    native_array_prototype_entries, native_array_prototype_keys, native_array_prototype_values,
 };
 pub(crate) use join::{
     array_join, native_array_prototype_join, native_array_prototype_to_locale_string,
