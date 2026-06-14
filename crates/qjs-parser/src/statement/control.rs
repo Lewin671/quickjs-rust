@@ -85,17 +85,45 @@ fn check_statement_body(stmt: &Stmt, strict: bool, context: &str) -> Result<(), 
 
 fn validate_switch_lexical_names(cases: &[SwitchCase], strict: bool) -> Result<(), ParseError> {
     use std::collections::HashMap;
-    let mut seen: HashMap<String, Span> = HashMap::new();
+    let mut lexical: HashMap<String, Span> = HashMap::new();
+    let mut var_names: HashMap<String, Span> = HashMap::new();
     for case in cases {
         for stmt in &case.consequent {
             for (name, span) in lexical_names_of(stmt, strict) {
-                if seen.contains_key(&name) {
+                if lexical.contains_key(&name) {
                     return Err(ParseError {
                         message: format!("duplicate lexical declaration '{name}'"),
                         span,
                     });
                 }
-                seen.insert(name, span);
+                if var_names.contains_key(&name) {
+                    return Err(ParseError {
+                        message: format!("variable '{name}' conflicts with lexical declaration"),
+                        span,
+                    });
+                }
+                lexical.insert(name, span);
+            }
+            for (name, span) in var_names_of(stmt) {
+                if lexical.contains_key(&name) {
+                    return Err(ParseError {
+                        message: format!("variable '{name}' conflicts with lexical declaration"),
+                        span,
+                    });
+                }
+                var_names.insert(name, span);
+            }
+            if !strict {
+                for (name, span) in sloppy_function_names_of(stmt) {
+                    if lexical.contains_key(&name) {
+                        return Err(ParseError {
+                            message: format!(
+                                "function '{name}' conflicts with lexical declaration"
+                            ),
+                            span,
+                        });
+                    }
+                }
             }
         }
     }
@@ -121,6 +149,34 @@ fn lexical_names_of(stmt: &Stmt, strict: bool) -> Vec<(String, Span)> {
             span,
             ..
         } if *is_generator || *is_async || strict => vec![(name.clone(), *span)],
+        _ => vec![],
+    }
+}
+
+fn var_names_of(stmt: &Stmt) -> Vec<(String, Span)> {
+    match stmt {
+        Stmt::VarDecl {
+            kind: VarKind::Var,
+            declarations,
+            span,
+            ..
+        } => declarations
+            .iter()
+            .flat_map(|d| d.binding.names().into_iter().map(|n| (n.to_owned(), *span)))
+            .collect(),
+        _ => vec![],
+    }
+}
+
+fn sloppy_function_names_of(stmt: &Stmt) -> Vec<(String, Span)> {
+    match stmt {
+        Stmt::FunctionDecl {
+            name,
+            is_generator: false,
+            is_async: false,
+            span,
+            ..
+        } => vec![(name.clone(), *span)],
         _ => vec![],
     }
 }
