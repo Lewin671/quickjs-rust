@@ -222,11 +222,21 @@ impl Parser {
                 return true;
             }
             cursor += 1;
-            if matches!(
-                self.tokens.get(cursor).map(|token| &token.kind),
-                Some(TokenKind::Semicolon)
-            ) {
-                cursor += 1;
+            match self.tokens.get(cursor).map(|t| &t.kind) {
+                Some(TokenKind::Semicolon) => cursor += 1,
+                Some(_) => {
+                    let string_end = token.span.end;
+                    let next_start = self.tokens[cursor].span.start;
+                    let between = &self.source[string_end..next_start];
+                    if !between.contains('\n')
+                        && !between.contains('\r')
+                        && !between.contains('\u{2028}')
+                        && !between.contains('\u{2029}')
+                    {
+                        return false;
+                    }
+                }
+                None => {}
             }
         }
         false

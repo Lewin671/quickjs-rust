@@ -36,14 +36,32 @@ pub(super) fn is_identifier_continue(ch: char) -> bool {
 pub(super) fn is_js_whitespace_or_line_terminator(ch: char) -> bool {
     matches!(
         ch,
-        '\u{0009}'
-            | '\u{000A}'
-            | '\u{000B}'
-            | '\u{000C}'
-            | '\u{000D}'
-            | '\u{0020}'
-            | '\u{00A0}'
-            | '\u{2028}'
-            | '\u{2029}'
+        // WhiteSpace
+        '\u{0009}'  // TAB
+            | '\u{000B}'  // VT
+            | '\u{000C}'  // FF
+            | '\u{0020}'  // SPACE
+            | '\u{00A0}'  // NBSP
+            | '\u{FEFF}'  // ZWNBSP (BOM)
+            | '\u{1680}'  // OGHAM SPACE MARK
+            | '\u{2000}'  // EN QUAD
+            | '\u{2001}'  // EM QUAD
+            | '\u{2002}'  // EN SPACE
+            | '\u{2003}'  // EM SPACE
+            | '\u{2004}'  // THREE-PER-EM SPACE
+            | '\u{2005}'  // FOUR-PER-EM SPACE
+            | '\u{2006}'  // SIX-PER-EM SPACE
+            | '\u{2007}'  // FIGURE SPACE
+            | '\u{2008}'  // PUNCTUATION SPACE
+            | '\u{2009}'  // THIN SPACE
+            | '\u{200A}'  // HAIR SPACE
+            | '\u{202F}'  // NARROW NO-BREAK SPACE
+            | '\u{205F}'  // MEDIUM MATHEMATICAL SPACE
+            | '\u{3000}'  // IDEOGRAPHIC SPACE
+            // LineTerminator
+            | '\u{000A}'  // LF
+            | '\u{000D}'  // CR
+            | '\u{2028}'  // LS
+            | '\u{2029}' // PS
     )
 }
