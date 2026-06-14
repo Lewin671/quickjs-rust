@@ -237,6 +237,39 @@ fn data_view_set_out_of_bounds_throws_range_error() {
 }
 
 #[test]
+fn data_view_set_rejects_immutable_buffer_before_argument_coercion() {
+    assert_eq!(
+        eval(
+            "let buffer = new ArrayBuffer(8).transferToImmutable(); \
+             let view = new DataView(buffer); \
+             let calls = []; \
+             let offset = { valueOf() { calls.push('offset'); return 0; } }; \
+             let value = { valueOf() { calls.push('value'); return 1; } }; \
+             try { view.setUint8(offset, value); } catch (e) { calls.push(e instanceof TypeError); } \
+             calls.join(':');"
+        ),
+        Ok(Value::String("true".to_owned()))
+    );
+}
+
+#[test]
+fn data_view_methods_reject_resized_out_of_bounds_view() {
+    assert_eq!(
+        eval(
+            "let buffer = new ArrayBuffer(24, { maxByteLength: 32 }); \
+             let view = new DataView(buffer, 0, 16); \
+             buffer.resize(8); \
+             let setThrows = false; \
+             let getThrows = false; \
+             try { view.setUint8(0, 1); } catch (e) { setThrows = e instanceof TypeError; } \
+             try { view.getUint8(0); } catch (e) { getThrows = e instanceof TypeError; } \
+             setThrows + ':' + getThrows;"
+        ),
+        Ok(Value::String("true:true".to_owned()))
+    );
+}
+
+#[test]
 fn data_view_negative_index_throws() {
     assert!(eval("new DataView(new ArrayBuffer(8)).getInt8(-1);").is_err());
 }
