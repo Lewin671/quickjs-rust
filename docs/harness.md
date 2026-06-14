@@ -209,7 +209,10 @@ must also be in the allowlist and must include a reason. Expected-failure cases
 may fail without failing the subset run; if one passes, the script fails and
 asks for the stale entry to be removed. GitHub CI gives individual subset cases
 a wider timeout than the local default to avoid false failures on shared
-runners. Allowlist validation and case execution both run in parallel;
+runners, and `scripts/check.sh` uses the same 30-second subset timeout unless
+`TEST262_CASE_TIMEOUT_SECONDS` is set explicitly. Direct `test262-subset.sh`
+runs keep the 10-second default for tighter interactive probes. Allowlist
+validation and case execution both run in parallel;
 `TEST262_JOBS` overrides the default of one worker per online CPU.
 
 `scripts/test262-baseline.sh` scans upstream Test262 coverage. It can run a

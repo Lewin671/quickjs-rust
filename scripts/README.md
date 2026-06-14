@@ -17,7 +17,9 @@ each script is for.
   tuning, and replay flags.
 - `test262-subset.sh`: Runs the curated Test262 allowlist
   (`tests/test262/allowlist.txt`); passing expected failures are reported as
-  stale entries.
+  stale entries. `scripts/check.sh` runs the same subset with a 30-second
+  per-case timeout by default to match CI; direct subset runs default to 10
+  seconds unless `TEST262_CASE_TIMEOUT_SECONDS` is set.
 
 ## Conformance Measurement
 
