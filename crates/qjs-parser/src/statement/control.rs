@@ -443,7 +443,7 @@ impl Parser {
         let object = self.expression()?;
         self.expect(&TokenKind::RightParen)?;
         let body = self.statement()?;
-        if let Some((desc, span)) = disallowed_if_body(&body, self.strict) {
+        if let Some((desc, span)) = disallowed_iteration_body(&body) {
             return Err(ParseError {
                 message: format!("{desc} are not allowed as the body of a with statement"),
                 span,
