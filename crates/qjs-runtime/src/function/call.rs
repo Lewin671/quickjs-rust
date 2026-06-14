@@ -2,9 +2,10 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
     ACTIVE_CONSTRUCTOR_BINDING, ArrayRef, Bytecode, FIELD_INITIALIZER_EVAL_BINDING, Function,
-    GLOBAL_THIS_BINDING, HOME_OBJECT_BINDING, NEW_TARGET_BINDING, ObjectRef, RuntimeError,
-    SUPER_CONSTRUCTOR_BINDING, Value, bytecode::eval_function_bytecode, function_prototype,
-    native::call_native_function, object_prototype, private::PrivateEnvironment, symbol,
+    GLOBAL_THIS_BINDING, HOME_OBJECT_BINDING, NEW_TARGET_BINDING, NativeFunction, ObjectRef,
+    RuntimeError, SUPER_CONSTRUCTOR_BINDING, Value, bytecode::eval_function_bytecode,
+    function_prototype, native::call_native_function, object_prototype,
+    private::PrivateEnvironment, symbol,
 };
 
 use super::{
@@ -334,11 +335,13 @@ pub(crate) fn construct_function(
     let previous_new_target = env.insert(NEW_TARGET_BINDING.to_owned(), new_target.clone());
 
     // A derived constructor must create its `this` through `super(...)`, so it
-    // receives no pre-built receiver. Every other constructor gets an ordinary
-    // object whose prototype comes from `new.target.prototype`.
+    // receives no pre-built receiver. Some native constructors also need to run
+    // argument validation before the user-observable `new.target.prototype`
+    // access that allocates the receiver.
     let is_derived =
         matches!(&target, Value::Function(function) if function.is_derived_constructor);
-    let this_value = if is_derived {
+    let constructs_receiver_lazily = native_constructs_receiver_lazily(&target);
+    let this_value = if is_derived || constructs_receiver_lazily {
         Value::Undefined
     } else {
         let prototype = construct_prototype_slot(&target, &new_target, env)?;
@@ -366,9 +369,16 @@ pub(crate) fn construct_function(
         | Value::Proxy(_) => Ok(result),
         // A derived constructor that returns no object must have called
         // `super(...)`, which bound `this` and is returned as the result.
-        _ if is_derived => Ok(result),
+        _ if is_derived || constructs_receiver_lazily => Ok(result),
         _ => Ok(this_value),
     }
+}
+
+fn native_constructs_receiver_lazily(target: &Value) -> bool {
+    matches!(
+        target,
+        Value::Function(function) if function.native == Some(NativeFunction::DataView)
+    )
 }
 
 fn construct_prototype_slot(

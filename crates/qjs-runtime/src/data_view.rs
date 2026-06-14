@@ -5,8 +5,8 @@ use num_traits::ToPrimitive;
 
 use crate::CallEnv;
 use crate::{
-    Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, array_buffer,
-    function_prototype, symbol, to_number_with_env,
+    Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, array_buffer, symbol,
+    to_number_with_env,
 };
 
 /// Internal slot referencing the viewed `ArrayBuffer` object.
@@ -191,12 +191,12 @@ pub(crate) fn native_data_view(
         ));
     }
 
-    // Steps 9-12: resolve the view byte length.
+    // Steps 9-12: resolve the view byte length before prototype access.
     let length_arg = argument_values.get(2).cloned().unwrap_or(Value::Undefined);
     let byte_length_tracking =
         matches!(length_arg, Value::Undefined) && array_buffer::is_resizable(&buffer);
-    let view_byte_length = if matches!(length_arg, Value::Undefined) {
-        buffer_byte_length - offset
+    let fixed_byte_length = if matches!(length_arg, Value::Undefined) {
+        None
     } else {
         let length = to_index(length_arg, env)?;
         // ToIndex of byteLength can run user code; re-check detach (step 13).
@@ -209,15 +209,41 @@ pub(crate) fn native_data_view(
         {
             return Err(range_error("byteOffset + byteLength exceeds the buffer"));
         }
-        length
+        Some(length)
     };
 
-    // OrdinaryCreateFromConstructor: the VM hands us the `new.target`-derived
-    // object as `this_value` for `new`; fall back to %DataView.prototype% if it
-    // is not an object (Reflect.construct edge cases are handled by the VM).
+    // OrdinaryCreateFromConstructor reads `new.target.prototype`, which can run
+    // user code that detaches or resizes the buffer. `DataView` therefore
+    // allocates its receiver here instead of using the VM's early allocation.
     let object = match this_value {
         Value::Object(object) => object,
-        _ => ObjectRef::with_prototype(HashMap::new(), function_prototype(function)),
+        _ => ObjectRef::with_prototype_slot(
+            HashMap::new(),
+            crate::native_construct_prototype_slot(function, env)?,
+        ),
+    };
+
+    // Steps 15-16: validate the buffer again after prototype access.
+    if data_block_detached(&buffer) {
+        return Err(array_buffer::detached_error());
+    }
+    let buffer_byte_length = array_buffer::buffer_byte_length(&buffer);
+    if offset > buffer_byte_length {
+        return Err(range_error(
+            "byteOffset is outside the bounds of the buffer",
+        ));
+    }
+    let view_byte_length = match fixed_byte_length {
+        Some(length) => {
+            if offset
+                .checked_add(length)
+                .is_none_or(|end| end > buffer_byte_length)
+            {
+                return Err(range_error("byteOffset + byteLength exceeds the buffer"));
+            }
+            length
+        }
+        None => buffer_byte_length - offset,
     };
 
     object.define_property(
