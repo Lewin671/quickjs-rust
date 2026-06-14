@@ -59,17 +59,16 @@ pub(crate) use function::{CallEnv, call_function, construct_function, ensure_con
 use function::{Function, NativeFunction};
 pub(crate) use property::{
     PropertyKey, array_as_object_prototype, array_has_own_property, array_own_property_descriptor,
-    array_own_property_keys, array_own_property_names, array_prototype, array_prototype_property,
-    constructor_prototype, constructor_prototype_slot, function_delete_own_property,
-    function_delete_own_symbol_property, function_intrinsic_prototype,
-    function_own_property_descriptor, function_own_property_keys, function_own_property_names,
-    function_own_property_symbols, function_own_symbol_property_descriptor, function_prototype,
-    function_prototype_chain_descriptor, function_prototype_property, has_property,
-    has_property_key, inherited_object_prototype_property,
-    inherited_primitive_prototype_descriptor, inherited_string_prototype_property,
-    native_construct_prototype_slot, object_prototype, property_value, property_value_key,
-    property_value_key_with_receiver, string_prototype, to_property_key_value, value_prototype,
-    value_prototype_slot,
+    array_own_property_keys, array_own_property_names, array_prototype, constructor_prototype,
+    constructor_prototype_slot, function_delete_own_property, function_delete_own_symbol_property,
+    function_intrinsic_prototype, function_own_property_descriptor, function_own_property_keys,
+    function_own_property_names, function_own_property_symbols,
+    function_own_symbol_property_descriptor, function_prototype,
+    function_prototype_chain_descriptor, has_property, has_property_key,
+    inherited_object_prototype_property, inherited_primitive_prototype_descriptor,
+    inherited_string_prototype_property, native_construct_prototype_slot, object_prototype,
+    property_value, property_value_key, property_value_key_with_receiver, string_prototype,
+    to_property_key_value, value_prototype, value_prototype_slot,
 };
 pub(crate) use string::string_object_value;
 pub use value::Value;

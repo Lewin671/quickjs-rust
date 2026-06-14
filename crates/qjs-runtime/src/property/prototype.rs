@@ -203,14 +203,6 @@ pub(crate) fn inherited_object_prototype_descriptor(env: &CallEnv, key: &str) ->
     }
 }
 
-pub(crate) fn function_prototype_property(
-    function: &Function,
-    env: &CallEnv,
-    key: &str,
-) -> Option<Value> {
-    function_prototype_chain_descriptor(function, env, key).map(|property| property.value)
-}
-
 /// Walks a function's [[Prototype]] chain (object or function) for the
 /// descriptor `key`, resolving the implicit default to %Function.prototype%.
 pub(crate) fn function_prototype_chain_descriptor(
@@ -228,17 +220,6 @@ pub(crate) fn function_prototype_chain_descriptor(
         Some(None) => None,
         None => function_intrinsic_prototype(env).and_then(|prototype| prototype.property(key)),
     }
-}
-
-pub(crate) fn array_prototype_property(
-    elements: &ArrayRef,
-    env: &CallEnv,
-    key: &str,
-) -> Option<Value> {
-    elements
-        .prototype_override()
-        .unwrap_or_else(|| array_prototype(env))
-        .and_then(|prototype| prototype.get(key))
 }
 
 fn constructor_named_prototype(env: &CallEnv, name: &str) -> Option<ObjectRef> {
