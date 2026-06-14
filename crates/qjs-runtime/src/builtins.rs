@@ -1,7 +1,8 @@
 use crate::{
     CallEnv, Value, array, array_buffer, async_function, async_generator, atomics, bigint, boolean,
-    data_view, date, error, generator, global, iterator, json, map, math, number, object, promise,
-    proxy, reflect, regexp, set, string, symbol, typed_array, weak_map, weak_ref, weak_set,
+    data_view, date, error, finalization_registry, generator, global, iterator, json, map, math,
+    number, object, promise, proxy, reflect, regexp, set, string, symbol, typed_array, weak_map,
+    weak_ref, weak_set,
 };
 
 pub(crate) fn initialize_builtins(env: &mut CallEnv, global_this: &Value) {
@@ -38,6 +39,11 @@ pub(crate) fn initialize_builtins(env: &mut CallEnv, global_this: &Value) {
     proxy::install_proxy(env, global_this, object_prototype.clone());
     map::install_map(env, global_this, object_prototype.clone());
     weak_map::install_weak_map(env, global_this, object_prototype.clone());
+    finalization_registry::install_finalization_registry(
+        env,
+        global_this,
+        object_prototype.clone(),
+    );
     weak_ref::install_weak_ref(env, global_this, object_prototype.clone());
     weak_set::install_weak_set(env, global_this, object_prototype.clone());
     set::install_set(env, global_this, object_prototype.clone());

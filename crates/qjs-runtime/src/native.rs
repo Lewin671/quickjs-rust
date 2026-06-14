@@ -5,6 +5,7 @@ mod core;
 mod data_views;
 mod date;
 mod errors;
+mod finalization_registries;
 mod json;
 mod maps;
 mod math;
@@ -141,6 +142,17 @@ pub(crate) fn call_native_function(
     }
 
     if let Some(value) = weak_maps::call_weak_map_native(
+        function,
+        native,
+        this_value.clone(),
+        &argument_values,
+        is_construct,
+        env,
+    )? {
+        return Ok(value);
+    }
+
+    if let Some(value) = finalization_registries::call_finalization_registry_native(
         function,
         native,
         this_value.clone(),

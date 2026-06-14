@@ -38,4 +38,5 @@ mod statements;
 mod strings;
 mod symbols;
 mod weak_maps;
+mod weak_refs;
 mod weak_sets;
