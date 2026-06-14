@@ -101,7 +101,13 @@ pub(crate) fn eval_binary(
         BinaryOp::Add => left + right,
         BinaryOp::Sub => left - right,
         BinaryOp::Mul => left * right,
-        BinaryOp::Pow => left.powf(right),
+        BinaryOp::Pow => {
+            if left.abs() == 1.0 && right.is_infinite() {
+                f64::NAN
+            } else {
+                left.powf(right)
+            }
+        }
         BinaryOp::Div => left / right,
         BinaryOp::Rem => left % right,
         BinaryOp::Shl => {
