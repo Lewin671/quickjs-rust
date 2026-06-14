@@ -12,6 +12,16 @@ use super::compiler_lexical::for_init_lexical_names;
 use super::ir::Op;
 use super::util::parse_number_literal;
 
+enum OptionalChainStep<'a> {
+    Member(&'a qjs_ast::MemberProperty),
+    Call(&'a [qjs_ast::CallArgument]),
+}
+
+struct OptionalChainEntry<'a> {
+    kind: OptionalChainStep<'a>,
+    optional: bool,
+}
+
 impl Compiler {
     pub(super) fn compile_if(
         &mut self,
@@ -331,7 +341,9 @@ impl Compiler {
                 self.emit(Op::GetProp);
                 Ok(())
             }
-            Expr::OptionalMember { .. } => self.compile_optional_chain(expr),
+            Expr::OptionalMember { .. } | Expr::OptionalCall { .. } => {
+                self.compile_optional_chain(expr)
+            }
             Expr::PrivateIn { name, object, .. } => {
                 self.compile_expr(object)?;
                 self.emit(Op::PrivateIn(name.clone()));
@@ -534,12 +546,12 @@ impl Compiler {
 
     fn compile_optional_chain(&mut self, expr: &Expr) -> Result<(), RuntimeError> {
         let mut chain = Vec::new();
-        let base = Self::collect_member_chain(expr, &mut chain);
+        let base = Self::collect_optional_chain(expr, &mut chain);
         self.compile_expr(base)?;
 
         let mut end_jumps = Vec::new();
-        for (property, optional) in chain {
-            if optional {
+        for step in &chain {
+            if step.optional {
                 let access_jump = self.emit(Op::JumpIfNotNullish(usize::MAX));
                 self.emit(Op::Pop);
                 self.emit_load_undefined();
@@ -547,7 +559,14 @@ impl Compiler {
                 let access_target = self.code.len();
                 self.patch_jump(access_jump, access_target);
             }
-            self.compile_member_access_from_stack(property)?;
+            match &step.kind {
+                OptionalChainStep::Member(property) => {
+                    self.compile_member_access_from_stack(property)?;
+                }
+                OptionalChainStep::Call(arguments) => {
+                    self.compile_optional_call_from_stack(arguments)?;
+                }
+            }
         }
 
         let end_target = self.code.len();
@@ -557,31 +576,70 @@ impl Compiler {
         Ok(())
     }
 
+    fn compile_optional_call_from_stack(
+        &mut self,
+        arguments: &[qjs_ast::CallArgument],
+    ) -> Result<(), RuntimeError> {
+        let has_spread = arguments
+            .iter()
+            .any(|a| matches!(a, qjs_ast::CallArgument::Spread(_)));
+        if has_spread {
+            self.compile_argument_array(arguments)?;
+            self.emit(Op::CallSpread);
+        } else {
+            for argument in arguments {
+                let qjs_ast::CallArgument::Expr(argument) = argument else {
+                    unreachable!("spread arguments are handled above");
+                };
+                self.compile_expr(argument)?;
+            }
+            self.emit(Op::Call(arguments.len()));
+        }
+        Ok(())
+    }
+
     fn member_chain_has_optional(expr: &Expr) -> bool {
         match expr {
-            Expr::OptionalMember { .. } => true,
+            Expr::OptionalMember { .. } | Expr::OptionalCall { .. } => true,
             Expr::Member { object, .. } => Self::member_chain_has_optional(object),
+            Expr::Call { callee, .. } => Self::member_chain_has_optional(callee),
             _ => false,
         }
     }
 
-    fn collect_member_chain<'a>(
+    fn collect_optional_chain<'a>(
         expr: &'a Expr,
-        chain: &mut Vec<(&'a qjs_ast::MemberProperty, bool)>,
+        chain: &mut Vec<OptionalChainEntry<'a>>,
     ) -> &'a Expr {
         match expr {
             Expr::Member {
                 object, property, ..
             } => {
-                let base = Self::collect_member_chain(object, chain);
-                chain.push((property, false));
+                let base = Self::collect_optional_chain(object, chain);
+                chain.push(OptionalChainEntry {
+                    kind: OptionalChainStep::Member(property),
+                    optional: false,
+                });
                 base
             }
             Expr::OptionalMember {
                 object, property, ..
             } => {
-                let base = Self::collect_member_chain(object, chain);
-                chain.push((property, true));
+                let base = Self::collect_optional_chain(object, chain);
+                chain.push(OptionalChainEntry {
+                    kind: OptionalChainStep::Member(property),
+                    optional: true,
+                });
+                base
+            }
+            Expr::OptionalCall {
+                callee, arguments, ..
+            } => {
+                let base = Self::collect_optional_chain(callee, chain);
+                chain.push(OptionalChainEntry {
+                    kind: OptionalChainStep::Call(arguments),
+                    optional: true,
+                });
                 base
             }
             _ => expr,

@@ -325,6 +325,16 @@ fn expr_contains_private_name(expr: &Expr) -> bool {
                 || expr_contains_private_name(object)
                 || matches!(property, MemberProperty::Computed(key) if expr_contains_private_name(key))
         }
+        Expr::OptionalCall {
+            callee, arguments, ..
+        } => {
+            expr_contains_private_name(callee)
+                || arguments.iter().any(|arg| match arg {
+                    qjs_ast::CallArgument::Expr(e) | qjs_ast::CallArgument::Spread(e) => {
+                        expr_contains_private_name(e)
+                    }
+                })
+        }
         Expr::PrivateIn { .. } => true,
         Expr::Literal(_)
         | Expr::Yield { argument: None, .. }

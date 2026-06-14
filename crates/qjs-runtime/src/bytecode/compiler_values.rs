@@ -362,7 +362,10 @@ impl Compiler {
         Ok(())
     }
 
-    fn compile_argument_array(&mut self, arguments: &[CallArgument]) -> Result<(), RuntimeError> {
+    pub(super) fn compile_argument_array(
+        &mut self,
+        arguments: &[CallArgument],
+    ) -> Result<(), RuntimeError> {
         let elements = arguments
             .iter()
             .map(|argument| match argument {

@@ -305,6 +305,15 @@ pub enum Expr {
         /// Source span.
         span: Span,
     },
+    /// An optional call expression, as in `fn?.()` or `obj.method?.()`.
+    OptionalCall {
+        /// Callee expression.
+        callee: Box<Expr>,
+        /// Call arguments.
+        arguments: Vec<CallArgument>,
+        /// Source span.
+        span: Span,
+    },
     /// A `#name in object` ergonomic brand check expression.
     PrivateIn {
         /// The private name without the leading `#`.
@@ -385,6 +394,7 @@ impl Expr {
             | Self::Class { span, .. }
             | Self::Member { span, .. }
             | Self::OptionalMember { span, .. }
+            | Self::OptionalCall { span, .. }
             | Self::PrivateIn { span, .. }
             | Self::ImportCall { span, .. }
             | Self::ImportMeta { span }

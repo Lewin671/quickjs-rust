@@ -165,6 +165,37 @@ impl Parser {
             });
         }
 
+        if self.match_kind(&TokenKind::LeftParen) {
+            let mut arguments = Vec::new();
+            if !self.at(&TokenKind::RightParen) {
+                loop {
+                    if self.match_kind(&TokenKind::DotDotDot) {
+                        arguments.push(CallArgument::Spread(self.assignment()?));
+                    } else {
+                        arguments.push(CallArgument::Expr(self.assignment()?));
+                    }
+                    if !self.match_kind(&TokenKind::Comma) {
+                        break;
+                    }
+                    if self.at(&TokenKind::RightParen) {
+                        break;
+                    }
+                }
+            }
+            let end = self
+                .peek()
+                .expect("parser should always have eof token")
+                .span
+                .end;
+            self.expect(&TokenKind::RightParen)?;
+            let span = Span::new(object.span().start, end);
+            return Ok(Expr::OptionalCall {
+                callee: Box::new(object),
+                arguments,
+                span,
+            });
+        }
+
         let property_token = self.advance();
         if let TokenKind::PrivateName(name) = &property_token.kind {
             if matches!(&object, Expr::Super { .. }) {
