@@ -288,6 +288,90 @@ fn aggregate_error_evaluates_message_before_errors() {
 }
 
 #[test]
+fn error_cause_property() {
+    // Basic cause on Error
+    assert_eq!(
+        eval("var e = new Error('msg', { cause: 'the cause' }); e.cause;"),
+        Ok(Value::String("the cause".to_owned()))
+    );
+    // cause property descriptor: non-enumerable, writable, configurable
+    assert_eq!(
+        eval(
+            "var e = new Error('msg', { cause: 42 }); \
+             var desc = Object.getOwnPropertyDescriptor(e, 'cause'); \
+             desc.value + ':' + desc.writable + ':' + desc.enumerable + ':' + desc.configurable;"
+        ),
+        Ok(Value::String("42:true:false:true".to_owned()))
+    );
+    // cause is undefined value but present when options has cause: undefined
+    assert_eq!(
+        eval("Object.hasOwn(new Error('msg', { cause: undefined }), 'cause');"),
+        Ok(Value::Boolean(true))
+    );
+    // no cause when no options
+    assert_eq!(
+        eval("Object.hasOwn(new Error('msg'), 'cause');"),
+        Ok(Value::Boolean(false))
+    );
+    // no cause when options is not an object
+    assert_eq!(
+        eval("Object.hasOwn(new Error('msg', 42), 'cause');"),
+        Ok(Value::Boolean(false))
+    );
+    // no cause when options object has no cause property
+    assert_eq!(
+        eval("Object.hasOwn(new Error('msg', {}), 'cause');"),
+        Ok(Value::Boolean(false))
+    );
+    // cause works on all native error types
+    for name in [
+        "EvalError",
+        "RangeError",
+        "ReferenceError",
+        "SyntaxError",
+        "TypeError",
+        "URIError",
+    ] {
+        assert_eq!(
+            eval(&format!("new {name}('msg', {{ cause: 'root' }}).cause;")),
+            Ok(Value::String("root".to_owned())),
+            "{name} should support cause"
+        );
+        assert_eq!(
+            eval(&format!(
+                "Object.hasOwn(new {name}('msg', {{ cause: undefined }}), 'cause');"
+            )),
+            Ok(Value::Boolean(true)),
+            "{name} should have cause when cause is undefined"
+        );
+        assert_eq!(
+            eval(&format!("Object.hasOwn(new {name}('msg'), 'cause');")),
+            Ok(Value::Boolean(false)),
+            "{name} should not have cause when no options"
+        );
+    }
+    // cause getter that throws should propagate the error
+    assert_eq!(
+        eval(
+            "var marker = {}; \
+             var caught = false; \
+             try { \
+               new Error('msg', { get cause() { throw marker; } }); \
+             } catch (e) { \
+               caught = e === marker; \
+             } \
+             caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    // Error() called as function also supports cause
+    assert_eq!(
+        eval("Error('msg', { cause: 'fn cause' }).cause;"),
+        Ok(Value::String("fn cause".to_owned()))
+    );
+}
+
+#[test]
 fn method_call_on_null_or_undefined_is_catchable_type_error() {
     assert_eq!(
         eval("try { null.foo(); } catch (e) { e instanceof TypeError; }").expect("eval"),

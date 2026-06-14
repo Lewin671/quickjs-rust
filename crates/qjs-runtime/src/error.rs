@@ -104,6 +104,7 @@ pub(crate) fn native_error(
             );
         }
     }
+    install_error_cause(&object, argument_values.get(1).cloned(), env)?;
     Ok(Value::Object(object))
 }
 
