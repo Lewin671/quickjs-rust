@@ -67,8 +67,10 @@ qjs_ensure_quickjs_ng() {
   fi
 }
 
-# Echoes the qjs-cli debug binary path, honoring a prebuilt $QJS_CLI_BIN and
-# otherwise building it with the given cargo binary.
+# Echoes the qjs-cli binary path, honoring a prebuilt $QJS_CLI_BIN and
+# otherwise building it with the given cargo binary. Set
+# QJS_CLI_PROFILE=release for optimized Test262 or gap-discovery runs; the
+# default stays debug so local check loops do not pay release build cost.
 qjs_build_cli_bin() {
   local cargo_bin="$1"
   if [ -n "${QJS_CLI_BIN:-}" ]; then
@@ -79,13 +81,25 @@ qjs_build_cli_bin() {
     printf '%s\n' "$QJS_CLI_BIN"
     return 0
   fi
-  "$cargo_bin" build -q -p qjs-cli >&2
+  local profile="${QJS_CLI_PROFILE:-debug}"
+  case "$profile" in
+    debug)
+      "$cargo_bin" build -q -p qjs-cli >&2
+      ;;
+    release)
+      "$cargo_bin" build -q --release -p qjs-cli >&2
+      ;;
+    *)
+      echo "error: QJS_CLI_PROFILE must be debug or release: $profile" >&2
+      return 1
+      ;;
+  esac
   local target_dir
   target_dir="$("$cargo_bin" metadata --format-version=1 --no-deps \
     | sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p' \
     | head -n 1)"
   target_dir="${target_dir:-$ROOT_DIR/target}"
-  local bin="$target_dir/debug/qjs"
+  local bin="$target_dir/$profile/qjs"
   if [ ! -x "$bin" ]; then
     echo "error: built qjs-cli binary is missing or not executable: $bin" >&2
     return 1

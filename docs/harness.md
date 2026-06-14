@@ -240,7 +240,9 @@ Raw Test262 cases run without injected harness files. `--stop-after-limit` is
 reserved for bounded probe callers such as `find-qjsng-gaps.sh`; do not use it
 for coverage accounting because it stops enumeration once the run limit is
 reached. Set `QJS_CLI_BIN` to reuse a prebuilt quickjs-rust binary across
-multiple shard runs. Case enumeration and skip classification stay serial, but
+multiple shard runs, or set `QJS_CLI_PROFILE=release` to have the harness build
+and run an optimized `qjs-cli` binary for timeout- or performance-sensitive
+gap scans. Case enumeration and skip classification stay serial, but
 case execution runs through a parallel worker pool sized by
 `TEST262_BASELINE_JOBS` (default: one worker per online CPU); summary counts,
 JSONL artifacts, and diagnostic ordering are unchanged, while per-case
@@ -253,11 +255,14 @@ run, so rapid push sequences settle on the latest commit's scan. It
 runs the sharded quickjs-rust scan and QuickJS-NG baseline in parallel,
 uploads shard summaries, and aggregates the result into the workflow summary
 without delaying the main CI workflow. CI uploads the checked commit's
-`qjs-cli` debug binary, and coverage jobs reuse that artifact instead of
-rebuilding the runner binary on every shard group. The quickjs-rust scan uses
-16 coverage groups; each group runs its two Test262 shards sequentially, and
-each shard saturates the runner's cores through the baseline script's internal
-worker pool while keeping the full 32-shard scan complete. The
+optimized `qjs-cli` binary, and coverage jobs reuse that release artifact
+instead of rebuilding the runner binary on every shard group; local
+release-profile scans use the same runner profile for diagnosing timeout
+credibility and runtime-performance gaps. The
+quickjs-rust scan uses 16 coverage groups; each group runs its two Test262
+shards sequentially, and each shard saturates the runner's cores through the
+baseline script's internal worker pool while keeping the full 32-shard scan
+complete. The
 workflow reuses a full QuickJS-NG baseline cache when available;
 when that cache is missing, it falls back to sharded baseline jobs and saves a
 full cache for later commits.

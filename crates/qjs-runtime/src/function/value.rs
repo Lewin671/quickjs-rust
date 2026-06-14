@@ -408,6 +408,10 @@ impl Function {
         matches!(self.native, Some(NativeFunction::UninitializedLexical))
     }
 
+    pub(crate) fn native_kind(&self) -> Option<NativeFunction> {
+        self.native
+    }
+
     pub(crate) fn new_bound(
         target: Value,
         this_value: Value,

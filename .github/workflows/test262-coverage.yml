@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       ci_run_id:
-        description: "Optional CI run id to reuse qjs-cli-debug-linux artifact"
+        description: "Optional CI run id to reuse qjs-cli-release-linux artifact"
         required: false
         type: string
 
@@ -184,7 +184,7 @@ jobs:
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
-          name: qjs-cli-debug-linux
+          name: qjs-cli-release-linux
           path: prebuilt-qjs
           github-token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.event.workflow_run.head_repository.full_name || github.repository }}
@@ -203,7 +203,7 @@ jobs:
 
       - name: Build quickjs-rust once
         if: steps.qjs-cli-artifact.outcome != 'success'
-        run: cargo build -q -p qjs-cli
+        run: cargo build -q --release -p qjs-cli
 
       - name: Run full Test262 coverage shard
         run: |
@@ -215,7 +215,7 @@ jobs:
             target_dir="$(cargo metadata --format-version=1 --no-deps \
               | sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p' \
               | head -n 1)"
-            export QJS_CLI_BIN="${target_dir:-$PWD/target}/debug/qjs"
+            export QJS_CLI_BIN="${target_dir:-$PWD/target}/release/qjs"
           fi
           # test262-baseline.sh parallelizes case execution internally, so the
           # group's two shards run sequentially instead of racing for cores.

@@ -31,14 +31,14 @@ jobs:
         # checks out no test262 submodule.
         run: QJS_CHECK_SKIP_TEST262=1 ./scripts/check.sh
 
-      - name: Build qjs-cli artifact binary
-        run: cargo build -q -p qjs-cli
+      - name: Build qjs-cli coverage artifact binary
+        run: cargo build -q --release -p qjs-cli
 
       - name: Upload qjs-cli artifact
         uses: actions/upload-artifact@v4
         with:
-          name: qjs-cli-debug-linux
-          path: target/debug/qjs
+          name: qjs-cli-release-linux
+          path: target/release/qjs
           retention-days: 7
 
   compare-qjs:

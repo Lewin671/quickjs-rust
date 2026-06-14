@@ -185,6 +185,32 @@ impl ArrayRef {
         Some(elements.clone())
     }
 
+    /// Reads one element directly when ordinary property lookup cannot observe a
+    /// different value. Callers should re-check this per access because arrays
+    /// can become sparse or gain intercepting descriptors while iteration is in
+    /// progress.
+    pub(crate) fn dense_index_value(&self, index: usize, env: &CallEnv) -> Option<Value> {
+        let elements = self.elements.borrow();
+        if self.length.get() != elements.len() || !self.holes.borrow().is_empty() {
+            return None;
+        }
+        if !self.properties.borrow().is_empty() {
+            return None;
+        }
+        match self.prototype.borrow().as_ref() {
+            Some(Some(_)) => return None,
+            Some(None) => {}
+            None => {
+                if crate::array_prototype(env)
+                    .is_some_and(|prototype| prototype.has_own_index_property())
+                {
+                    return None;
+                }
+            }
+        }
+        elements.get(index).cloned()
+    }
+
     pub(crate) fn dense_index_store_eligible(&self, index: usize) -> bool {
         if index >= MAX_DENSE_STORAGE_LENGTH || self.frozen.get() || !self.length_writable.get() {
             return false;

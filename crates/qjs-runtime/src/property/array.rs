@@ -31,21 +31,37 @@ pub(crate) fn array_own_property_descriptor(elements: &ArrayRef, key: &str) -> O
 }
 
 pub(crate) fn array_own_property_keys(elements: &ArrayRef) -> Vec<String> {
-    let mut keys: Vec<_> = (0..elements.len())
-        .filter(|index| elements.has_index(*index))
-        .map(|index| index.to_string())
+    let mut keys: Vec<_> = elements
+        .present_indices()
+        .into_iter()
+        .filter_map(|index| {
+            let key = index.to_string();
+            array_own_property_descriptor(elements, &key)
+                .is_some_and(|property| property.enumerable)
+                .then_some(key)
+        })
         .collect();
-    keys.extend(elements.property_keys());
+    keys.extend(
+        elements
+            .property_keys()
+            .into_iter()
+            .filter(|key| key.parse::<usize>().is_err()),
+    );
     keys
 }
 
 pub(crate) fn array_own_property_names(elements: &ArrayRef) -> Vec<String> {
-    let mut names: Vec<_> = (0..elements.len())
-        .filter(|index| elements.has_index(*index))
+    let mut names: Vec<_> = elements
+        .present_indices()
+        .into_iter()
         .map(|index| index.to_string())
         .collect();
     names.push("length".to_owned());
-    names.extend(elements.property_names());
-    names.dedup();
+    names.extend(
+        elements
+            .property_names()
+            .into_iter()
+            .filter(|key| key.parse::<usize>().is_err()),
+    );
     names
 }

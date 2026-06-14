@@ -17,6 +17,8 @@ mod helpers;
 mod protocol;
 mod zip;
 
+pub(crate) use zip::ZipState;
+
 use std::collections::HashMap;
 
 use crate::CallEnv;

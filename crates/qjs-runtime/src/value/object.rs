@@ -176,6 +176,10 @@ pub struct ObjectRef {
     /// remains a hidden property; bytes live here so typed-array element access
     /// does not have to encode and decode a string on every read or write.
     internal_bytes: Rc<RefCell<Option<Vec<u8>>>>,
+    /// Iterator.zip helper internal state. Ordinary objects hold `None`; zip
+    /// helpers store their records here so advancement does not round-trip
+    /// through observable-looking property storage.
+    iterator_zip_state: Rc<RefCell<Option<crate::iterator::ZipState>>>,
 }
 
 impl fmt::Debug for ObjectRef {
@@ -238,6 +242,7 @@ impl ObjectRef {
             async_generator_state: Rc::new(RefCell::new(None)),
             private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
             internal_bytes: Rc::new(RefCell::new(None)),
+            iterator_zip_state: Rc::new(RefCell::new(None)),
         }
     }
 
@@ -292,6 +297,17 @@ impl ObjectRef {
         f: impl FnOnce(&mut Vec<u8>) -> T,
     ) -> Option<T> {
         self.internal_bytes.borrow_mut().as_mut().map(f)
+    }
+
+    pub(crate) fn set_iterator_zip_state(&self, state: crate::iterator::ZipState) {
+        *self.iterator_zip_state.borrow_mut() = Some(state);
+    }
+
+    pub(crate) fn with_iterator_zip_state_mut<T>(
+        &self,
+        f: impl FnOnce(&mut crate::iterator::ZipState) -> T,
+    ) -> Option<T> {
+        self.iterator_zip_state.borrow_mut().as_mut().map(f)
     }
 
     pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
@@ -576,10 +592,24 @@ impl ObjectRef {
 
     fn ordered_property_names(&self, include: impl Fn(&Property) -> bool) -> Vec<String> {
         let properties = self.properties.borrow();
+        let order = self.property_order.borrow();
+        if self.index_property_count.get() == 0 {
+            return order
+                .iter()
+                .filter_map(|key| {
+                    if is_internal_property_key(key) {
+                        return None;
+                    }
+                    let property = properties.get(key.as_str())?;
+                    include(property).then(|| key.clone())
+                })
+                .collect();
+        }
+
         let mut indices = Vec::new();
         let mut strings = Vec::new();
 
-        for key in self.property_order.borrow().iter() {
+        for key in order.iter() {
             if is_internal_property_key(key) {
                 continue;
             }

@@ -126,6 +126,57 @@ fn iterator_zip_closes_open_iterators_in_reverse_order() {
 }
 
 #[test]
+fn iterator_zip_array_fast_path_preserves_array_iteration_observability() {
+    assert_eq!(
+        string(
+            "let input = [1]; \
+             let iter = Iterator.zip([input]); \
+             input.push(2); \
+             let first = iter.next().value[0]; \
+             let second = iter.next().value[0]; \
+             let done = iter.next().done; \
+             let inherited; \
+             Array.prototype[0] = 'proto'; \
+             try { inherited = Iterator.zip([[, 3]]).next().value[0]; } \
+             finally { delete Array.prototype[0]; } \
+             [first, second, done, inherited].join('|');"
+        ),
+        "1|2|true|proto"
+    );
+}
+
+#[test]
+fn iterator_zip_array_fast_path_observes_length_shrink() {
+    assert_eq!(
+        string(
+            "let input = [1, 2]; \
+             let iter = Iterator.zip([input]); \
+             let first = iter.next().value[0]; \
+             input.length = 1; \
+             [first, iter.next().done].join('|');"
+        ),
+        "1|true"
+    );
+}
+
+#[test]
+fn iterator_zip_array_fast_path_respects_custom_array_iterator() {
+    assert_eq!(
+        string(
+            "let inner = [1]; \
+             let result; \
+             inner[Symbol.iterator] = function() { \
+               let done = false; \
+               return { next() { if (done) return { done: true }; done = true; return { value: 'custom', done: false }; } }; \
+             }; \
+             result = Iterator.zip([inner]).next().value[0]; \
+             result;"
+        ),
+        "custom"
+    );
+}
+
+#[test]
 fn iterator_zip_return_state_matches_suspended_state() {
     assert_eq!(
         string(

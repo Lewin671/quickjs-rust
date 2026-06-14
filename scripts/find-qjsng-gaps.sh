@@ -525,9 +525,21 @@ if [ -z "$REPORT_CASES_SOURCE" ] && [ -z "${QJS_CLI_BIN:-}" ] && [ "$RUN_LIMIT" 
     echo "error: cargo not found; install Rust with rustup before running gap probes" >&2
     exit 127
   fi
+  profile="${QJS_CLI_PROFILE:-debug}"
+  case "$profile" in
+    debug|release) ;;
+    *)
+      echo "error: QJS_CLI_PROFILE must be debug or release: $profile" >&2
+      exit 2
+      ;;
+  esac
   build_output="$(mktemp "${TMPDIR:-/tmp}/qjs-gap-cargo-build-XXXXXX")"
   set +e
-  "$CARGO_BIN" build -q --message-format=json-render-diagnostics -p qjs-cli >"$build_output"
+  if [ "$profile" = "release" ]; then
+    "$CARGO_BIN" build -q --release --message-format=json-render-diagnostics -p qjs-cli >"$build_output"
+  else
+    "$CARGO_BIN" build -q --message-format=json-render-diagnostics -p qjs-cli >"$build_output"
+  fi
   build_status=$?
   set -e
   if [ "$build_status" -ne 0 ]; then
@@ -538,7 +550,7 @@ if [ -z "$REPORT_CASES_SOURCE" ] && [ -z "${QJS_CLI_BIN:-}" ] && [ "$RUN_LIMIT" 
   QJS_CLI_BIN="$(sed -n 's/.*"executable":"\([^"]*\)".*/\1/p' "$build_output" | tail -n 1)"
   rm -f "$build_output"
   if [ -z "$QJS_CLI_BIN" ]; then
-    QJS_CLI_BIN="$ROOT_DIR/target/debug/qjs"
+    QJS_CLI_BIN="$ROOT_DIR/target/$profile/qjs"
   fi
   export QJS_CLI_BIN
 fi
