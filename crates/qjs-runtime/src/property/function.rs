@@ -8,10 +8,17 @@ pub(crate) fn function_own_property_descriptor(function: &Function, key: &str) -
     if let Some(prop) = function.own_property(key) {
         return Some(prop);
     }
-    // Non-strict functions expose `caller` and `arguments` as own data
+    // Non-strict plain functions expose `caller` and `arguments` as own data
     // properties (value null) so they shadow the throwing accessors on
-    // Function.prototype. Strict functions inherit the prototype accessors.
-    if !function.is_strict && (key == "caller" || key == "arguments") {
+    // Function.prototype. Strict functions, arrow functions, generators,
+    // async functions, and bound functions inherit the prototype accessors.
+    if !function.is_strict
+        && function.bound.is_none()
+        && !function.lexical_this
+        && !function.is_generator
+        && !function.is_async
+        && (key == "caller" || key == "arguments")
+    {
         return Some(Property::data(Value::Null, false, false, true));
     }
     None
