@@ -165,7 +165,9 @@ agent coordination, async, stress timeouts, and Annex B global-code work rank
 below narrower realm/proxy/species failures when the engine-gap count is
 otherwise similar. Those hints do not hide gaps; they only lower an area's
 default ranking so an agent can find reviewable parity wins before getting
-stuck on known broad features. Use
+stuck on known broad features. Hard-hinted areas that still contain executable
+engine failures stay ahead of pure `$262.agent`/harness not-run areas, so the
+queue does not recommend host-only support before reachable semantic work. Use
 `--strategy fast` for the older small-batch-first behavior,
 `--strategy largest` to restore largest-gap-first recommendation, or
 `--recommend-batch-cap N` to tune how large a default batch may be. Use
@@ -220,7 +222,8 @@ bounded sample, a full scan with `--all`, a shard with `--shard I/N`, and a
 quickjs-rust/QuickJS-NG comparison with `--engine both`. In that mode QuickJS-NG
 config skips are applied as the shared baseline. The quickjs-rust side reports
 not-run cases only for structural harness limits such as unsupported harness
-includes, intl402, and fixtures; there is no source-syntax pre-filter anymore
+includes, `$262.agent`/`atomicsHelper.js` multi-agent coordination, intl402,
+and fixtures; there is no source-syntax pre-filter anymore
 (the former for-of destructuring and class filters were lifted once those
 features landed). Module-flagged cases are no longer structurally skipped: they
 run through the `qjs --module --prelude <file>` channel, where the test file is

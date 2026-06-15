@@ -227,9 +227,7 @@ skip_reason() {
     *_FIXTURE.js) echo "fixture"; return ;;
     test/intl402/*|test/staging/intl402/*) echo "intl402"; return ;;
   esac
-  # Module-flagged cases run through the qjs-cli module channel (see
-  # make_module_prelude / run_engine_case), so they are no longer skipped;
-  # only their unsupported harness includes still gate them.
+  if needs_agent_harness "$TEST262_DIR/$rel" "$flags" "$includes"; then echo "agent"; return; fi
   if [ -n "$includes" ] && ! rust_includes_supported "$includes"; then
     echo "includes"
   else
@@ -363,9 +361,10 @@ needs_sta_prelude() {
   needs_assert_prelude "$source" "$flags" "$includes" && return 0
   grep -Eq 'Test262Error|[$]DONOTEVALUATE' "$source" || harness_include_uses "$includes" 'Test262Error|[$]DONOTEVALUATE'
 }
-needs_host_prelude() {
-  local source="$1" includes="$2"
-  grep -q '[$]262' "$source" || harness_include_uses "$includes" '[$]262'
+needs_host_prelude() { local source="$1" includes="$2"; grep -q '[$]262' "$source" || harness_include_uses "$includes" '[$]262'; }
+needs_agent_harness() {
+  local source="$1" flags="$2" includes="$3"
+  [[ "$flags" == *CanBlockIsTrue* ]] || [[ " $includes " == *" atomicsHelper.js "* ]] || grep -q '[$]262[.]agent' "$source" || harness_include_uses "$includes" '[$]262[.]agent'
 }
 prefix_list_contains() {
   local rel="$1"
@@ -876,7 +875,7 @@ while IFS= read -r file; do
     case "$reason" in
       async) skip_async=$((skip_async + 1)) ;;
       fixture) skip_fixture=$((skip_fixture + 1)) ;;
-      includes) skip_includes=$((skip_includes + 1)) ;;
+      agent|includes) skip_includes=$((skip_includes + 1)) ;;
       intl402) skip_intl402=$((skip_intl402 + 1)) ;;
       module) skip_module=$((skip_module + 1)) ;;
       negative) skip_negative=$((skip_negative + 1)) ;;
@@ -922,6 +921,7 @@ if [ "$run" -gt 0 ]; then
   export -f make_case
   export -f make_module_prelude
   export -f needs_assert_prelude
+  export -f needs_agent_harness
   export -f needs_host_prelude
   export -f needs_sta_prelude
   export -f result_kind

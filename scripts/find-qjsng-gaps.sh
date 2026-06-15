@@ -476,6 +476,11 @@ write_recommendations() {
             score = 800000000 + (total[area] * 1000) - harness
           } else if (engine == 0 && hard_hints == 0) {
             score = 700000000 + (total[area] * 1000) - harness
+          } else if (engine > 0 && engine <= batch_cap) {
+            score = 750000000 - (hard_penalty * 1000000) - (harness * 100000) + (engine * 1000000) + total[area]
+          } else if (engine > 0) {
+            over = engine - batch_cap
+            score = 725000000 - (hard_penalty * 1000000) - (over * 1000000) - (harness * 100000) + (engine * 1000) + total[area]
           } else if (engine == 0 && total[area] <= batch_cap && hard_hints < total[area]) {
             score = 650000000 + (total[area] * 1000) - (hard_penalty * 10000) - harness
           } else if (engine == 0 && hard_hints < total[area]) {
@@ -486,11 +491,6 @@ write_recommendations() {
           } else if (engine == 0) {
             over = total[area] - batch_cap
             score = 300000000 - (over * 1000000) + total[area] - (hard_penalty * 10000) - harness
-          } else if (engine > 0 && engine <= batch_cap) {
-            score = 600000000 - (hard_penalty * 10000000) - (harness * 100000) + (engine * 1000000) + total[area]
-          } else if (engine > 0) {
-            over = engine - batch_cap
-            score = 500000000 - (hard_penalty * 10000000) - (over * 1000000) - (harness * 100000) + (engine * 1000) + total[area]
           } else {
             score = (total[area] * 1000) - (hard_penalty * 10000) - harness
           }
