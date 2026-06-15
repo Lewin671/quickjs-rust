@@ -24,10 +24,63 @@ fn set_from_array_like_and_typed_array() {
     );
     // Out-of-range source throws RangeError.
     assert!(eval("new Uint8Array(2).set([1, 2, 3]);").is_err());
+    assert_eq!(
+        eval(
+            "let caught = false; \
+             try { new Uint8Array(2).set(new Uint8Array(2), Infinity); } \
+             catch (e) { caught = e instanceof RangeError; } \
+             caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; \
+             try { new BigInt64Array(2).set(new BigInt64Array(2), Infinity); } \
+             catch (e) { caught = e instanceof RangeError; } \
+             caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
     // Negative offset throws RangeError.
     assert!(eval("new Uint8Array(4).set([1], -1);").is_err());
     // Mixing BigInt and Number typed arrays throws.
     assert!(eval("new BigInt64Array(2).set(new Uint8Array([1, 2]));").is_err());
+}
+
+#[test]
+fn set_from_resizable_typed_array_validates_source_bounds() {
+    assert_eq!(
+        eval(
+            "let buffer = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let fixed = new Uint8Array(buffer, 0, 4); \
+             let tracking = new Uint8Array(buffer); \
+             new Uint8Array(buffer).set([1, 2, 3, 4]); \
+             let target = new Uint8Array(6); \
+             buffer.resize(3); \
+             let fixedThrew = false; \
+             try { target.set(fixed); } catch (e) { fixedThrew = e instanceof TypeError; } \
+             target.set(tracking, 1); \
+             fixedThrew + ':' + target.join(',');"
+        ),
+        Ok(Value::String("true:0,1,2,3,0,0".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let buffer = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let fixedOffset = new Uint8Array(buffer, 2, 2); \
+             let trackingOffset = new Uint8Array(buffer, 2); \
+             let target = new Uint8Array(4); \
+             new Uint8Array(buffer).set([1, 2, 3, 4]); \
+             buffer.resize(1); \
+             let fixedThrew = false; \
+             let trackingThrew = false; \
+             try { target.set(fixedOffset); } catch (e) { fixedThrew = e instanceof TypeError; } \
+             try { target.set(trackingOffset); } catch (e) { trackingThrew = e instanceof TypeError; } \
+             fixedThrew + ':' + trackingThrew + ':' + target.join(',');"
+        ),
+        Ok(Value::String("true:true:0,0,0,0".to_owned()))
+    );
 }
 
 #[test]

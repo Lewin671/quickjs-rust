@@ -18,8 +18,8 @@ use crate::{
 
 use super::element::{read_view_elements, set_view_elements};
 use super::{
-    coerce_element, is_big_int_kind, is_typed_array_object, typed_array_kind, typed_array_length,
-    validate_typed_array, validate_typed_array_write,
+    coerce_element, is_big_int_kind, is_typed_array_object, typed_array_is_out_of_bounds,
+    typed_array_kind, typed_array_length, validate_typed_array, validate_typed_array_write,
 };
 use crate::CallEnv;
 
@@ -65,6 +65,12 @@ fn set_from_typed_array(
     if super::typed_array_buffer_detached(source) {
         return Err(array_buffer::detached_error());
     }
+    if typed_array_is_out_of_bounds(source) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: TypedArray is out of bounds".to_owned(),
+        });
+    }
     let source_native = typed_array_kind(source);
     if is_big_int_kind(native) != is_big_int_kind(source_native) {
         return Err(RuntimeError {
@@ -73,7 +79,10 @@ fn set_from_typed_array(
         });
     }
     let source_length = typed_array_length(source);
-    if offset + source_length > length {
+    if offset
+        .checked_add(source_length)
+        .is_none_or(|end| end > length)
+    {
         return Err(range_error("source is too large"));
     }
     // Snapshot the source first so overlapping buffers behave per spec.
