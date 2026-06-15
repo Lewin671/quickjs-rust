@@ -162,6 +162,40 @@ fn resizable_buffer_views_track_effective_length() {
 }
 
 #[test]
+fn construct_from_resizable_typed_array_uses_current_bounds() {
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let fixed = new Uint8Array(b, 0, 4); \
+             let fixedOffset = new Uint8Array(b, 2, 2); \
+             let tracking = new Uint8Array(b); \
+             let trackingOffset = new Uint8Array(b, 2); \
+             let full = new Uint8Array(b); full.set([1, 2, 3, 4]); \
+             b.resize(3); \
+             let fixedThrew = false; \
+             try { new Uint8Array(fixed); } catch (e) { fixedThrew = e instanceof TypeError; } \
+             [fixedThrew, Array.from(new Uint8Array(tracking)).join(','), \
+              Array.from(new Uint8Array(trackingOffset)).join(',')].join('|');"
+        ),
+        Ok(Value::String("true|1,2,3|3".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let fixedOffset = new Uint8Array(b, 2, 2); \
+             let trackingOffset = new Uint8Array(b, 2); \
+             b.resize(1); \
+             let fixedThrew = false; \
+             let trackingThrew = false; \
+             try { new Uint8Array(fixedOffset); } catch (e) { fixedThrew = e instanceof TypeError; } \
+             try { new Uint8Array(trackingOffset); } catch (e) { trackingThrew = e instanceof TypeError; } \
+             fixedThrew + ':' + trackingThrew;"
+        ),
+        Ok(Value::String("true:true".to_owned()))
+    );
+}
+
+#[test]
 fn array_copy_within_uses_resizable_typed_array_elements() {
     assert_eq!(
         eval(

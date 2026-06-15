@@ -10,7 +10,7 @@ use super::{
     TYPED_ARRAY_BUFFER_PROPERTY, TYPED_ARRAY_BYTE_OFFSET_PROPERTY, TYPED_ARRAY_KIND_PROPERTY,
     TYPED_ARRAY_LENGTH_PROPERTY, TYPED_ARRAY_LENGTH_TRACKING_PROPERTY, bytes_per_element,
     coerce_element, is_big_int_kind, is_typed_array_object, to_typed_array_length,
-    typed_array_kind, typed_array_length, typed_array_name,
+    typed_array_kind, typed_array_name,
 };
 use crate::CallEnv;
 
@@ -128,9 +128,7 @@ fn initialize_from_typed_array(
     source: &ObjectRef,
     env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
-    if super::typed_array_buffer_detached(source) {
-        return Err(array_buffer::detached_error());
-    }
+    let (_, length) = super::validate_typed_array(&Value::Object(source.clone()))?;
     let source_kind = typed_array_kind(source);
     // Cross-kind BigInt/Number conversion is forbidden by ToBigInt/ToNumber.
     if is_big_int_kind(native) != is_big_int_kind(source_kind) {
@@ -139,7 +137,6 @@ fn initialize_from_typed_array(
             message: "TypeError: cannot mix BigInt and Number typed arrays".to_owned(),
         });
     }
-    let length = typed_array_length(source);
     let mut values = Vec::with_capacity(length);
     for index in 0..length {
         let element = property_value(Value::Object(source.clone()), &index.to_string(), env)?;
