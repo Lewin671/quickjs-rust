@@ -662,7 +662,7 @@ run_case_worker() {
     # includes become a script prelude (see make_module_prelude). The combined
     # script `temp` is only used for the quickjs-ng leg.
     module_prelude="$temp_dir/prelude.js"
-    make_module_prelude "$module_prelude" "$source" "$flags" "$includes"
+    make_module_prelude "$module_prelude" "$file" "$flags" "$includes"
   fi
   make_case "$file" "$temp" "$flags" "$includes"
   if [ "$ENGINE" = "quickjs-rust" ] || [ "$ENGINE" = "both" ]; then
