@@ -30,10 +30,11 @@ pub(crate) fn native_typed_array_prototype_set(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let (object, length) = validate_typed_array(&this_value)?;
+    let (object, _) = validate_typed_array_write(&this_value)?;
     let native = typed_array_kind(&object);
     let source = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let offset = set_offset(argument_values.get(1).cloned(), env)?;
+    let (object, length) = validate_typed_array(&this_value)?;
 
     match source {
         Value::Object(ref source_object) if is_typed_array_object(source_object) => {

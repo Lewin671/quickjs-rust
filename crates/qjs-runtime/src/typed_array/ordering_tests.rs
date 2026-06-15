@@ -31,6 +31,40 @@ fn set_from_array_like_and_typed_array() {
 }
 
 #[test]
+fn set_rejects_immutable_buffer_before_arguments() {
+    assert_eq!(
+        eval(
+            "let calls = ''; \
+             let target = new Uint8Array(new ArrayBuffer(4).transferToImmutable()); \
+             let source = { get length() { calls += 'length'; return 1; }, get 0() { calls += 'value'; return 8; } }; \
+             let offset = { valueOf() { calls += 'offset'; return 1; } }; \
+             try { target.set(source, offset); } catch (e) { calls + ':' + (e instanceof TypeError) + ':' + target.join(','); }"
+        ),
+        Ok(Value::String(":true:0,0,0,0".to_owned()))
+    );
+}
+
+#[test]
+fn set_rechecks_target_after_offset_coercion() {
+    assert_eq!(
+        eval(
+            "let target = new Uint8Array(2); \
+             let offset = { valueOf() { __quickjsRustDetachArrayBuffer(target.buffer); return 0; } }; \
+             try { target.set([1], offset); false; } catch (e) { e instanceof TypeError; }"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let target = new Uint8Array(2); let source = new Uint8Array([1]); \
+             let offset = { valueOf() { __quickjsRustDetachArrayBuffer(target.buffer); return 0; } }; \
+             try { target.set(source, offset); false; } catch (e) { e instanceof TypeError; }"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn set_from_array_like_writes_each_element_before_next_get() {
     assert_eq!(
         eval(
