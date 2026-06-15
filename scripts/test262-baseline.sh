@@ -349,15 +349,13 @@ harness_include_uses() {
 }
 needs_assert_prelude() {
   local source="$1" flags="$2" includes="$3"
+  local assert_helper_pattern='(^|[^A-Za-z0-9_$])(compareArray|formatIdentityFreeValue|formatSimpleValue|isNegativeZero|isPrimitive)([^A-Za-z0-9_$]|$)'
   [[ "$flags" == *async* ]] && return 0
   grep -Eq 'assert[(]' "$source" && return 0
   sed 's/assert[.]sameValue//g' "$source" | grep -q 'assert[.]' && return 0
-  harness_include_uses "$includes" 'assert[.(]'
-}
-needs_sta_prelude() {
-  local source="$1" flags="$2" includes="$3"
-  [[ "$flags" == *async* ]] || needs_assert_prelude "$source" "$flags" "$includes" && return 0
-  grep -q 'Test262Error' "$source" || harness_include_uses "$includes" 'Test262Error'
+  grep -Eq "$assert_helper_pattern" "$source" && return 0
+  [[ " $includes " == *" compareArray.js "* ]] && return 0
+  harness_include_uses "$includes" "assert[.(]|$assert_helper_pattern"
 }
 needs_host_prelude() {
   local source="$1" includes="$2"
@@ -440,10 +438,8 @@ make_case() {
         emit_test262_assert_fast_paths
         printf '\n'
       fi
-      if needs_sta_prelude "$source" "$flags" "$includes"; then
-        cat "$TEST262_DIR/harness/sta.js"
-        printf '\n'
-      fi
+      cat "$TEST262_DIR/harness/sta.js"
+      printf '\n'
       if needs_host_prelude "$source" "$includes"; then
         emit_test262_host_shim
         printf '\n'
@@ -466,8 +462,9 @@ make_case() {
 }
 # Builds the module-scope prelude file for a module-flagged case: the same
 # harness includes make_case prepends to a script, but written to a standalone
-# file. The prelude is SCRIPT code (assert.js/sta.js/host shim/$DONE handler +
-# requested includes); the test file itself is evaluated under the Module goal.
+# file. The prelude is SCRIPT code (sta.js plus selective assert.js/host shim/
+# $DONE handler + requested includes); the test file itself is evaluated under
+# the Module goal.
 # Module bodies are always strict, so onlyStrict needs no directive here.
 make_module_prelude() {
   local output="$1"
@@ -482,10 +479,8 @@ make_module_prelude() {
       emit_test262_assert_fast_paths
       printf '\n'
     fi
-    if needs_sta_prelude "$source" "$flags" "$includes"; then
-      cat "$TEST262_DIR/harness/sta.js"
-      printf '\n'
-    fi
+    cat "$TEST262_DIR/harness/sta.js"
+    printf '\n'
     if needs_host_prelude "$source" "$includes"; then
       emit_test262_host_shim
       printf '\n'
@@ -924,7 +919,6 @@ if [ "$run" -gt 0 ]; then
   export -f make_module_prelude
   export -f needs_assert_prelude
   export -f needs_host_prelude
-  export -f needs_sta_prelude
   export -f result_kind
   export -f run_case_worker
   export -f run_engine_case
