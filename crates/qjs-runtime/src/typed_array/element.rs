@@ -220,6 +220,16 @@ pub(crate) enum IndexedWrite {
     NotIndexed,
 }
 
+/// Result of attempting a receiver-side typed-array indexed data definition.
+pub(crate) enum IndexedDefine {
+    /// `key` was a canonical numeric index and the define operation succeeded.
+    Defined,
+    /// `key` was a canonical numeric index but cannot be defined on this view.
+    Rejected,
+    /// `key` is not a canonical numeric index; use ordinary property definition.
+    NotIndexed,
+}
+
 /// Result of resolving a typed-array integer-indexed read/existence query.
 pub(crate) enum IndexedRead {
     /// `key` was a canonical numeric index and the element exists.
@@ -273,6 +283,29 @@ pub(crate) fn set_indexed_element(
 
     set_view_element(object, index, coerced);
     Ok(IndexedWrite::Handled)
+}
+
+/// Defines the value descriptor used by OrdinarySet when a typed array is the
+/// receiver rather than the original target. This follows the typed-array
+/// [[DefineOwnProperty]] path, so invalid indices reject without running value
+/// coercion.
+pub(crate) fn define_indexed_element_value(
+    object: &ObjectRef,
+    key: &str,
+    value: Value,
+    env: &mut CallEnv,
+) -> Result<IndexedDefine, RuntimeError> {
+    let Some(number) = canonical_numeric_index(key) else {
+        return Ok(IndexedDefine::NotIndexed);
+    };
+    let Some(index) = valid_integer_index(object, number) else {
+        return Ok(IndexedDefine::Rejected);
+    };
+
+    let native = typed_array_kind(object);
+    let coerced = coerce_element(native, value, env)?;
+    set_view_element(object, index, coerced);
+    Ok(IndexedDefine::Defined)
 }
 
 fn valid_integer_index(object: &ObjectRef, number: f64) -> Option<usize> {

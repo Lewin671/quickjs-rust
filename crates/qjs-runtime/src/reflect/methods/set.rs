@@ -137,6 +137,18 @@ fn set_receiver_data_property(
     };
     match receiver {
         Value::Object(object) => {
+            if crate::typed_array::is_typed_array_object(&object) {
+                match crate::typed_array::define_indexed_element_value(
+                    &object,
+                    key,
+                    value.clone(),
+                    env,
+                )? {
+                    crate::typed_array::IndexedDefine::Defined => return Ok(true),
+                    crate::typed_array::IndexedDefine::Rejected => return Ok(false),
+                    crate::typed_array::IndexedDefine::NotIndexed => {}
+                }
+            }
             let descriptor = match object.own_property(key) {
                 Some(existing) if !existing.writable => return Ok(false),
                 Some(existing) => Property::data(
