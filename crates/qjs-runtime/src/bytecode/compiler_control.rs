@@ -161,6 +161,7 @@ impl Compiler {
         body: &Stmt,
     ) -> Result<(), RuntimeError> {
         let result_slot = self.temp_local("for_in_result");
+        let target_slot = self.temp_local("for_in_target");
         let keys_slot = self.temp_local("for_in_keys");
         let index_slot = self.temp_local("for_in_index");
         let key_slot = self.temp_local("for_in_key");
@@ -169,6 +170,8 @@ impl Compiler {
         self.emit(Op::StoreLocal(result_slot));
         self.compile_for_in_initializer(left)?;
         self.compile_expr(right)?;
+        self.emit(Op::StoreLocal(target_slot));
+        self.emit(Op::LoadLocal(target_slot));
         self.emit(Op::EnumerateKeys);
         self.emit(Op::StoreLocal(keys_slot));
         self.emit_number(0.0);
@@ -193,6 +196,11 @@ impl Compiler {
         self.emit(Op::LoadLocal(index_slot));
         self.emit(Op::GetProp);
         self.emit(Op::StoreLocal(key_slot));
+        self.emit(Op::LoadLocal(target_slot));
+        self.emit(Op::LoadLocal(key_slot));
+        self.emit(Op::ForInKeyIsEnumerable);
+        let skip_key_jump = self.emit(Op::JumpIfFalse(usize::MAX));
+        self.emit(Op::Pop);
         if !iteration_slots.is_empty() {
             self.emit(Op::FreshIterationScope(iteration_slots.clone()));
         }
@@ -209,7 +217,12 @@ impl Compiler {
         })?;
         let context = self.pop_loop();
 
+        let body_done_jump = self.emit(Op::Jump(usize::MAX));
+        let skip_key = self.code.len();
+        self.emit(Op::Pop);
         let update_start = self.code.len();
+        self.patch_jump(body_done_jump, update_start);
+        self.patch_jump(skip_key_jump, skip_key);
         self.emit(Op::LoadLocal(index_slot));
         self.emit_number(1.0);
         self.emit(Op::Binary(BinaryOp::Add));

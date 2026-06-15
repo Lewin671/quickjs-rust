@@ -79,6 +79,7 @@ pub(super) enum Op {
     DefineObjectProperty(ObjectPropertyMeta),
     CopyObjectSpread,
     EnumerateKeys,
+    ForInKeyIsEnumerable,
     /// Replaces an iterable on the stack with its iterator object.
     GetIterator,
     /// Replaces an iterable on the stack with its async iterator object,

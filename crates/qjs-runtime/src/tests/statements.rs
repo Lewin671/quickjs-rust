@@ -343,7 +343,25 @@ fn evaluates_for_in_statements() {
     );
     assert_eq!(
         eval(
+            "let object = Object.create(null); object.aa = 1; object.ba = 2; object.ca = 3; \
+             let seen = ''; \
+             for (var key in object) { delete object.ba; seen = seen + key + object[key]; } \
+             seen;"
+        ),
+        Ok(Value::String("aa1ca3".to_owned()))
+    );
+    assert_eq!(
+        eval(
             "Object.defineProperty(Boolean.prototype, 'visible', { value: 1, enumerable: true, configurable: true }); let seen = false; for (var key in new Boolean()) { if (key === 'visible') seen = true; } delete Boolean.prototype.visible; seen;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "Object.defineProperty(Function.prototype, 'visible', { value: 1, enumerable: true, configurable: true }); \
+             let bound = (function() {}).bind({}); let seen = false; \
+             for (var key in bound) { if (key === 'visible') seen = true; } \
+             delete Function.prototype.visible; seen;"
         ),
         Ok(Value::Boolean(true))
     );

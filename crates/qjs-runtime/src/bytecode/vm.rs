@@ -292,6 +292,7 @@ impl<'a> Vm<'a> {
                 Op::DefineObjectProperty(meta) => self.define_object_property(meta)?,
                 Op::CopyObjectSpread => self.copy_object_spread()?,
                 Op::EnumerateKeys => self.enumerate_keys()?,
+                Op::ForInKeyIsEnumerable => self.for_in_key_is_enumerable()?,
                 Op::GetIterator => self.get_iterator()?,
                 Op::GetAsyncIterator => self.get_async_iterator()?,
                 Op::AsyncIteratorComplete { done_slot } => {

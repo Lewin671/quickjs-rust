@@ -115,6 +115,24 @@ impl Vm<'_> {
         self.stack.push(Value::Array(ArrayRef::new(keys)));
         Ok(())
     }
+
+    pub(super) fn for_in_key_is_enumerable(&mut self) -> Result<(), RuntimeError> {
+        let key = self.pop()?;
+        let target = self.pop()?;
+        let Value::String(key) = key else {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "for-in key must be a string".to_owned(),
+            });
+        };
+        let descriptor = match target {
+            Value::Function(function) => function.chain_property_with_env(&key, &self.env),
+            value => crate::property::own_or_inherited_descriptor(value, &key),
+        };
+        let enumerable = descriptor.is_some_and(|property| property.enumerable);
+        self.stack.push(Value::Boolean(enumerable));
+        Ok(())
+    }
 }
 
 fn fast_strict_eq(left: &Value, right: &Value) -> Option<bool> {
