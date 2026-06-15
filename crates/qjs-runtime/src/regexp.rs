@@ -434,6 +434,30 @@ pub(crate) fn native_regexp_prototype_flag(
     Ok(Value::Boolean(flags.contains(flag)))
 }
 
+pub(crate) fn default_regexp_source_accessor_value(
+    object: &ObjectRef,
+    key: &str,
+    env: &CallEnv,
+) -> Option<Value> {
+    if key != "source" || object.own_property(key).is_some() {
+        return None;
+    }
+    let source = regexp_string_data(object, REGEXP_SOURCE_PROPERTY)?;
+    let prototype = match env.get(REGEXP_PROTOTYPE_BINDING) {
+        Some(Value::Object(prototype)) => prototype,
+        _ => return None,
+    };
+    let descriptor = prototype.own_property("source")?;
+    match descriptor.get {
+        Some(Value::Function(getter))
+            if getter.native_kind() == Some(NativeFunction::RegExpPrototypeSource) =>
+        {
+            Some(Value::String(escape_regexp_source(&source)))
+        }
+        _ => None,
+    }
+}
+
 fn regexp_accessor_data(
     this_value: &Value,
     env: &CallEnv,

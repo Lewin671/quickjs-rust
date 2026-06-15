@@ -104,7 +104,14 @@ impl Vm<'_> {
                         crate::typed_array::IndexedRead::NotIndexed => {}
                     }
                 }
-                data_property_value(object.property(key))
+                let property = object.property(key);
+                data_property_value(property).or_else(|| {
+                    crate::regexp::default_regexp_source_accessor_value(
+                        object,
+                        key,
+                        &self.realm_env(),
+                    )
+                })
             }
             Value::Map(map) => data_property_value(map.object().property(key)),
             Value::Set(set) => data_property_value(set.object().property(key)),

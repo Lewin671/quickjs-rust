@@ -29,7 +29,8 @@ each script is for.
   a prebuilt binary across shards, or `QJS_CLI_PROFILE=release` to build an
   optimized quickjs-rust runner for timeout-sensitive scans. Set
   `TEST262_TIMEOUT_RETRIES` to retry only timeout results with the same
-  per-case timeout.
+  per-case timeout. The generated quickjs-rust case source injects Test262
+  harness files only when the case or its metadata includes require them.
 - `test262-aggregate.py`: Aggregates QuickJS-NG and quickjs-rust case-result
   JSONL sets into the CI coverage summary and the schema-1 burndown entry.
   Used by the Test262 Coverage workflow; also runs locally on artifacts

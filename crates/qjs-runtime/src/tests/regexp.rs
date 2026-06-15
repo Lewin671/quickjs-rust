@@ -329,6 +329,32 @@ fn evaluates_regexp_prototype_accessors() {
             "true:true:true:true:true:true:true".to_owned()
         ))
     );
+    assert_eq!(
+        eval(
+            "function Test262Error() {} \
+             Test262Error.prototype.toString = function() { return 'Test262Error'; }; \
+             /a\\n/.source;"
+        ),
+        Ok(Value::String("a\\n".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let re = /a/; \
+             Object.defineProperty(re, 'source', { get: function() { return 'own'; } }); \
+             re.source;"
+        ),
+        Ok(Value::String("own".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let original = Object.getOwnPropertyDescriptor(RegExp.prototype, 'source'); \
+             Object.defineProperty(RegExp.prototype, 'source', { get: function() { return 'prototype'; }, configurable: true }); \
+             let result = /a/.source; \
+             Object.defineProperty(RegExp.prototype, 'source', original); \
+             result;"
+        ),
+        Ok(Value::String("prototype".to_owned()))
+    );
 }
 
 #[test]

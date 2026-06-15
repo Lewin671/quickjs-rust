@@ -358,6 +358,11 @@ needs_assert_prelude() {
   [[ " $includes " == *" compareArray.js "* ]] && return 0
   harness_include_uses "$includes" "assert[.(]|$assert_helper_pattern"
 }
+needs_sta_prelude() {
+  local source="$1" flags="$2" includes="$3"
+  needs_assert_prelude "$source" "$flags" "$includes" && return 0
+  grep -Eq 'Test262Error|[$]DONOTEVALUATE' "$source" || harness_include_uses "$includes" 'Test262Error|[$]DONOTEVALUATE'
+}
 needs_host_prelude() {
   local source="$1" includes="$2"
   grep -q '[$]262' "$source" || harness_include_uses "$includes" '[$]262'
@@ -439,8 +444,7 @@ make_case() {
         emit_test262_assert_fast_paths
         printf '\n'
       fi
-      cat "$TEST262_DIR/harness/sta.js"
-      printf '\n'
+      needs_sta_prelude "$source" "$flags" "$includes" && { cat "$TEST262_DIR/harness/sta.js"; printf '\n'; }
       if needs_host_prelude "$source" "$includes"; then
         emit_test262_host_shim
         printf '\n'
@@ -480,8 +484,7 @@ make_module_prelude() {
       emit_test262_assert_fast_paths
       printf '\n'
     fi
-    cat "$TEST262_DIR/harness/sta.js"
-    printf '\n'
+    needs_sta_prelude "$source" "$flags" "$includes" && { cat "$TEST262_DIR/harness/sta.js"; printf '\n'; }
     if needs_host_prelude "$source" "$includes"; then
       emit_test262_host_shim
       printf '\n'
@@ -920,6 +923,7 @@ if [ "$run" -gt 0 ]; then
   export -f make_module_prelude
   export -f needs_assert_prelude
   export -f needs_host_prelude
+  export -f needs_sta_prelude
   export -f result_kind
   export -f run_case_worker
   export -f run_engine_case

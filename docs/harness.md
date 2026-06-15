@@ -255,13 +255,13 @@ progress lines on stdout interleave in completion order. Lower
 `TEST262_TIMEOUT_RETRIES` to rerun only cases that hit the timeout wrapper; the
 default is `0`, and each retry uses the same per-case timeout so stable
 performance gaps remain reported as timeouts.
-The quickjs-rust baseline case builder always injects `sta.js` for shared
-Test262 helpers and `Test262Error`, then injects only the heavier optional
-harness files a case actually references: `assert.js` for assert helpers, the
-`$262` host shim for `$262`, `doneprintHandle.js` for async completion, plus
-declared metadata includes. Include-only stress cases therefore do not pay for
-the full assertion and host prelude unless those helpers are used by the case
-or by an included harness file.
+The quickjs-rust baseline case builder injects Test262 harness files on demand:
+`assert.js` for assert helpers, `sta.js` when a case, required assertion helper,
+or included harness file needs `Test262Error`/`$DONOTEVALUATE`, the `$262` host
+shim for `$262`, `doneprintHandle.js` for async completion, plus declared
+metadata includes. Include-only stress cases therefore do not pay for the full
+assertion, `Test262Error`, and host prelude unless those helpers are used by the
+case or by an included harness file.
 The
 `Test262 Coverage` GitHub Actions workflow starts for each successful `CI`
 commit, but a newer push to the same branch cancels a superseded in-flight
