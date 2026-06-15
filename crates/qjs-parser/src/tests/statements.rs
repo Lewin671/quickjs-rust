@@ -190,6 +190,26 @@ fn parses_for_in_statement() {
 }
 
 #[test]
+fn validates_for_in_head_static_semantics() {
+    for source in [
+        "for (let [x, x] in {}) {}",
+        "for (const [x, x] in {}) {}",
+        "for (let x in {}) { var x; }",
+        "for (const x in {}) { var x; }",
+        "for (let x in {}) if (true) var x;",
+        "\"use strict\"; for (var eval in null) {}",
+        "\"use strict\"; for (var arguments in null) {}",
+        "\"use strict\"; function f() { for (var arguments in null) {} }",
+    ] {
+        parse_script(source).expect_err("for-in static semantics should reject source");
+    }
+
+    parse_script("for (var x in { attr: null }) { var x; }")
+        .expect("var for-in head may be redeclared by the body");
+    parse_script("for (let in {}) { }").expect("sloppy `let` is a valid for-in target");
+}
+
+#[test]
 fn parses_for_of_statement() {
     let script =
         parse_script("for (const value of values) { value; }").expect("source should parse");

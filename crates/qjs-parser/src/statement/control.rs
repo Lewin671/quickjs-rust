@@ -199,6 +199,95 @@ fn var_names_of(stmt: &Stmt) -> Vec<(String, Span)> {
     }
 }
 
+fn var_declared_names_of(stmt: &Stmt) -> Vec<(String, Span)> {
+    let mut names = Vec::new();
+    collect_var_declared_names(stmt, &mut names);
+    names
+}
+
+fn collect_var_declared_names(stmt: &Stmt, names: &mut Vec<(String, Span)>) {
+    match stmt {
+        Stmt::VarDecl {
+            kind: VarKind::Var,
+            declarations,
+            ..
+        } => {
+            for declarator in declarations {
+                names.extend(declarator.binding.named_spans());
+            }
+        }
+        Stmt::VarDecl {
+            kind: VarKind::Let | VarKind::Const,
+            ..
+        } => {}
+        Stmt::Block { body, .. }
+        | Stmt::Try {
+            block: body,
+            handler: None,
+            finalizer: None,
+            ..
+        } => {
+            for stmt in body {
+                collect_var_declared_names(stmt, names);
+            }
+        }
+        Stmt::If {
+            consequent,
+            alternate,
+            ..
+        } => {
+            collect_var_declared_names(consequent, names);
+            if let Some(alternate) = alternate {
+                collect_var_declared_names(alternate, names);
+            }
+        }
+        Stmt::While { body, .. }
+        | Stmt::DoWhile { body, .. }
+        | Stmt::For { body, .. }
+        | Stmt::ForIn { body, .. }
+        | Stmt::ForOf { body, .. }
+        | Stmt::Labelled { body, .. }
+        | Stmt::With { body, .. } => collect_var_declared_names(body, names),
+        Stmt::Switch { cases, .. } => {
+            for case in cases {
+                for stmt in &case.consequent {
+                    collect_var_declared_names(stmt, names);
+                }
+            }
+        }
+        Stmt::Try {
+            block,
+            handler,
+            finalizer,
+            ..
+        } => {
+            for stmt in block {
+                collect_var_declared_names(stmt, names);
+            }
+            if let Some(handler) = handler {
+                for stmt in &handler.body {
+                    collect_var_declared_names(stmt, names);
+                }
+            }
+            if let Some(finalizer) = finalizer {
+                for stmt in finalizer {
+                    collect_var_declared_names(stmt, names);
+                }
+            }
+        }
+        Stmt::FunctionDecl { .. }
+        | Stmt::ClassDecl { .. }
+        | Stmt::Expr(_)
+        | Stmt::Return { .. }
+        | Stmt::Throw { .. }
+        | Stmt::Debugger { .. }
+        | Stmt::Break { .. }
+        | Stmt::Continue { .. }
+        | Stmt::Empty
+        | Stmt::ModuleDecl(_) => {}
+    }
+}
+
 fn sloppy_function_names_of(stmt: &Stmt) -> Vec<(String, Span)> {
     match stmt {
         Stmt::FunctionDecl {
@@ -363,6 +452,28 @@ impl Parser {
                 }
             }
             self.cursor = var_head_start;
+            if kind_token.kind == TokenKind::Let && !self.at(&TokenKind::Semicolon) {
+                let cursor = self.cursor;
+                if let Ok(left) = self.assignment_pattern() {
+                    if self.match_kind(&TokenKind::In) {
+                        return self.finish_for_in_of(
+                            start,
+                            ForInLeft::Target(left),
+                            ForKind::In,
+                            is_await,
+                        );
+                    }
+                    if self.match_contextual_keyword("of") {
+                        return self.finish_for_in_of(
+                            start,
+                            ForInLeft::Target(left),
+                            ForKind::Of,
+                            is_await,
+                        );
+                    }
+                }
+                self.cursor = cursor;
+            }
         } else if !self.at(&TokenKind::Semicolon) {
             let cursor = self.cursor;
             if let Ok(left) = self.assignment_pattern() {
@@ -619,9 +730,12 @@ impl Parser {
         let token = self.peek()?;
         let name = match &token.kind {
             TokenKind::Identifier(name) => name.clone(),
-            TokenKind::Let if kind == VarKind::Var => "let".to_owned(),
+            TokenKind::Let if kind == VarKind::Var && !self.strict => "let".to_owned(),
             _ => return None,
         };
+        if self.strict && matches!(name.as_str(), "eval" | "arguments") {
+            return None;
+        }
         let span = token.span;
         self.advance();
         Some(BindingPattern::Identifier { name, span })
@@ -654,6 +768,7 @@ impl Parser {
             ForKind::In => "a for-in loop",
             ForKind::Of => "a for-of loop",
         };
+        validate_for_in_of_head(&left, &body)?;
         check_iteration_body(&body, loop_kind)?;
         let end = stmt_end(&body);
         let span = Span::new(start, end);
@@ -674,6 +789,44 @@ impl Parser {
             },
         })
     }
+}
+
+fn validate_for_in_of_head(left: &ForInLeft, body: &Stmt) -> Result<(), ParseError> {
+    let ForInLeft::VarDecl {
+        kind: VarKind::Let | VarKind::Const,
+        binding,
+        ..
+    } = left
+    else {
+        return Ok(());
+    };
+
+    let bound_names = binding.named_spans();
+    for (index, (name, _)) in bound_names.iter().enumerate() {
+        for (candidate, span) in &bound_names[index + 1..] {
+            if candidate == name {
+                return Err(ParseError {
+                    message: format!("duplicate for-in/of binding `{name}`"),
+                    span: *span,
+                });
+            }
+        }
+    }
+
+    for (name, _) in &bound_names {
+        for (var_name, span) in var_declared_names_of(body) {
+            if &var_name == name {
+                return Err(ParseError {
+                    message: format!(
+                        "for-in/of body declaration `{var_name}` conflicts with lexical head"
+                    ),
+                    span,
+                });
+            }
+        }
+    }
+
+    Ok(())
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
