@@ -708,7 +708,15 @@ pub(super) fn delete_property_key(
 
 fn delete_property(object: Value, key: &str, env: &mut CallEnv) -> Result<Value, RuntimeError> {
     match object {
-        Value::Object(object) => Ok(Value::Boolean(object.delete_own_property(key))),
+        Value::Object(object) => {
+            if crate::typed_array::is_typed_array_object(&object)
+                && let crate::typed_array::IndexedDelete::Handled(success) =
+                    crate::typed_array::delete_indexed_element(&object, key)
+            {
+                return Ok(Value::Boolean(success));
+            }
+            Ok(Value::Boolean(object.delete_own_property(key)))
+        }
         Value::Proxy(proxy) => Ok(Value::Boolean(crate::proxy::proxy_delete_property(
             proxy,
             &PropertyKey::String(key.to_owned()),

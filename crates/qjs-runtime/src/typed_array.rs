@@ -13,8 +13,9 @@ mod ordering;
 
 pub(crate) use construct::{native_typed_array, native_typed_array_from, native_typed_array_of};
 pub(crate) use element::{
-    IndexedDefine, IndexedRead, IndexedWrite, define_indexed_element_value, get_view_element,
-    indexed_element_value, read_view_elements, set_indexed_element, set_view_elements,
+    IndexedDefine, IndexedDelete, IndexedRead, IndexedWrite, define_indexed_element_value,
+    delete_indexed_element, get_view_element, indexed_element_value, read_view_elements,
+    set_indexed_element, set_view_elements,
 };
 pub(crate) use iteration::*;
 pub(crate) use ordering::*;

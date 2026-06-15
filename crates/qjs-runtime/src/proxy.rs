@@ -752,7 +752,15 @@ fn proxy_trap(
 
 fn ordinary_delete_property(target: Value, key: &PropertyKey) -> bool {
     match (target, key) {
-        (Value::Object(object), PropertyKey::String(key)) => object.delete_own_property(key),
+        (Value::Object(object), PropertyKey::String(key)) => {
+            if crate::typed_array::is_typed_array_object(&object)
+                && let crate::typed_array::IndexedDelete::Handled(success) =
+                    crate::typed_array::delete_indexed_element(&object, key)
+            {
+                return success;
+            }
+            object.delete_own_property(key)
+        }
         (Value::Object(object), PropertyKey::Symbol(symbol)) => {
             object.delete_own_symbol_property(symbol)
         }

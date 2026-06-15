@@ -63,7 +63,15 @@ pub(crate) fn native_reflect_delete_property(
 
 fn delete_object_property(object: crate::ObjectRef, key: &crate::PropertyKey) -> bool {
     match key {
-        crate::PropertyKey::String(key) => object.delete_own_property(key),
+        crate::PropertyKey::String(key) => {
+            if crate::typed_array::is_typed_array_object(&object)
+                && let crate::typed_array::IndexedDelete::Handled(success) =
+                    crate::typed_array::delete_indexed_element(&object, key)
+            {
+                return success;
+            }
+            object.delete_own_property(key)
+        }
         crate::PropertyKey::Symbol(symbol) => object.delete_own_symbol_property(symbol),
     }
 }

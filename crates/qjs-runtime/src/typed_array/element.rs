@@ -230,6 +230,15 @@ pub(crate) enum IndexedDefine {
     NotIndexed,
 }
 
+/// Result of attempting a typed-array integer-indexed delete operation.
+pub(crate) enum IndexedDelete {
+    /// `key` was a canonical numeric index and the delete result was handled.
+    Handled(bool),
+    /// `key` is not a canonical numeric index, or this view is not in the
+    /// detached state that needs typed-array-specific delete handling.
+    NotIndexed,
+}
+
 /// Result of resolving a typed-array integer-indexed read/existence query.
 pub(crate) enum IndexedRead {
     /// `key` was a canonical numeric index and the element exists.
@@ -306,6 +315,16 @@ pub(crate) fn define_indexed_element_value(
     let coerced = coerce_element(native, value, env)?;
     set_view_element(object, index, coerced);
     Ok(IndexedDefine::Defined)
+}
+
+/// Implements the detached-buffer branch of IntegerIndexedExoticObject
+/// [[Delete]]. Detached typed arrays report successful deletion for any
+/// canonical numeric index, even if a stale materialized index property exists.
+pub(crate) fn delete_indexed_element(object: &ObjectRef, key: &str) -> IndexedDelete {
+    if canonical_numeric_index(key).is_none() || !super::typed_array_buffer_detached(object) {
+        return IndexedDelete::NotIndexed;
+    }
+    IndexedDelete::Handled(true)
 }
 
 fn valid_integer_index(object: &ObjectRef, number: f64) -> Option<usize> {

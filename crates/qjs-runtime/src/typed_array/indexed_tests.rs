@@ -90,3 +90,28 @@ fn non_numeric_property_writes_still_work() {
         Ok(Value::String("bar".to_owned()))
     );
 }
+
+#[test]
+fn detached_typed_array_numeric_delete_succeeds() {
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([1]); a.buffer.transfer(); \
+             delete a[0] && delete a['-0'] && delete a['1.1'];"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let a = new BigInt64Array([1n]); a.buffer.transfer(); \
+             Reflect.deleteProperty(a, 0) + ':' + Reflect.deleteProperty(a, '-0');"
+        ),
+        Ok(Value::String("true:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let a = new BigInt64Array([1n]); a.extra = 1; a.buffer.transfer(); \
+             delete a.extra + ':' + a.hasOwnProperty('extra');"
+        ),
+        Ok(Value::String("true:false".to_owned()))
+    );
+}
