@@ -211,6 +211,21 @@ impl ArrayRef {
         elements.get(index).cloned()
     }
 
+    /// Reads a present dense element when ordinary `array[index]` lookup cannot
+    /// observe a different value. Unlike absent-element reads, a present own
+    /// dense element always wins over the prototype chain, so the caller does
+    /// not need to inspect Array.prototype's indexed properties.
+    pub(crate) fn direct_dense_index_value(&self, index: usize) -> Option<Value> {
+        let elements = self.elements.borrow();
+        if self.length.get() != elements.len() || !self.holes.borrow().is_empty() {
+            return None;
+        }
+        if !self.properties.borrow().is_empty() || !self.uses_default_prototype() {
+            return None;
+        }
+        elements.get(index).cloned()
+    }
+
     pub(crate) fn dense_index_store_eligible(&self, index: usize) -> bool {
         if index >= MAX_DENSE_STORAGE_LENGTH || self.frozen.get() || !self.length_writable.get() {
             return false;

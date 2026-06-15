@@ -41,7 +41,7 @@ pub(super) fn eval_function_bytecode(
     FunctionBytecodeResult {
         value,
         bytecode,
-        env: vm.frame_call_env(),
+        env: vm.env,
         locals: vm.locals,
         sloppy_global_names: vm.sloppy_global_names,
     }
@@ -652,6 +652,14 @@ impl<'a> Vm<'a> {
                 thrown: None,
                 message,
             });
+        }
+        if let Value::Number(number) = &key_value
+            && let Some(index) = array_index_from_number(*number)
+            && let Value::Array(elements) = &object
+            && let Some(value) = elements.direct_dense_index_value(index)
+        {
+            self.stack.push(value);
+            return Ok(());
         }
         let key = self.coerce_property_key(key_value)?;
         let value = if let Some(value) = self.try_direct_get(&object, &key) {

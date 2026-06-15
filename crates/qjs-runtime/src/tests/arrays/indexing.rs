@@ -43,6 +43,10 @@ fn evaluates_array_literals() {
 #[test]
 fn evaluates_array_member_access() {
     assert_eq!(eval("let xs = [1, 2 + 3]; xs[1];"), Ok(Value::Number(5.0)));
+    assert_eq!(
+        eval("let xs = [1, undefined, 3]; xs[0] + ':' + xs[1] + ':' + xs[2];"),
+        Ok(Value::String("1:undefined:3".to_owned()))
+    );
     assert_eq!(eval("[1, 2, 3].length;"), Ok(Value::Number(3.0)));
     assert_eq!(eval("[1, , 3].length;"), Ok(Value::Number(3.0)));
     assert_eq!(eval("[1, , 3][1];"), Ok(Value::Undefined));
@@ -62,6 +66,16 @@ fn evaluates_array_member_access() {
     assert_eq!(
         eval("Array.prototype[1] = 13; let xs = [, ,]; xs[1];"),
         Ok(Value::Number(13.0))
+    );
+    assert_eq!(
+        eval("Array.prototype[1] = 13; let xs = [11, 12]; xs[1];"),
+        Ok(Value::Number(12.0))
+    );
+    assert_eq!(
+        eval(
+            "let proto = { 0: 41 }; let xs = [7]; Object.setPrototypeOf(xs, proto); xs[0] + ':' + xs[1];"
+        ),
+        Ok(Value::String("7:undefined".to_owned()))
     );
     assert_eq!(
         eval(
