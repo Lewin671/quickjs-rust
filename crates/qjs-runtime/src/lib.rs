@@ -53,7 +53,7 @@ pub use module::{
 use builtins::initialize_builtins;
 pub(crate) use conversion::{
     PreferredType, error_value, is_truthy, ordinary_to_primitive, to_int32_number,
-    to_int32_with_env, to_js_string_with_env, to_length_with_env, to_number, to_number_with_env,
+    to_int32_with_env, to_js_string_with_env, to_length_with_env, to_number_with_env,
     to_primitive_with_env, to_primitive_with_hint, to_uint16_with_env, to_uint32_number,
     to_uint32_with_env,
 };

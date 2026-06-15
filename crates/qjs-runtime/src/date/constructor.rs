@@ -2,10 +2,9 @@ use crate::CallEnv;
 use crate::{
     Function, PreferredType, RuntimeError, Value,
     date::{
-        MS_PER_DAY, MS_PER_HOUR, MS_PER_MINUTE, MS_PER_SECOND,
-        iso::days_from_civil,
+        MS_PER_DAY,
         value::{
-            current_time_ms, define_date_value, optional_number, parse_date_string, time_clip,
+            current_time_ms, define_date_value, parse_date_string, time_clip, time_from_components,
         },
     },
     to_number_with_env, to_primitive_with_hint,
@@ -89,38 +88,59 @@ fn date_utc_from_arguments(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    let month = to_number_with_env(
-        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
-        env,
-    )?;
-    if !year.is_finite() || !month.is_finite() {
-        return Ok(f64::NAN);
-    }
-
-    let date = optional_number(argument_values, 2, 1.0)?;
-    let hours = optional_number(argument_values, 3, 0.0)?;
-    let minutes = optional_number(argument_values, 4, 0.0)?;
-    let seconds = optional_number(argument_values, 5, 0.0)?;
-    let millis = optional_number(argument_values, 6, 0.0)?;
-    if [date, hours, minutes, seconds, millis]
+    let month = optional_utc_number(argument_values, 1, 0.0, env)?;
+    let date = optional_utc_number(argument_values, 2, 1.0, env)?;
+    let hours = optional_utc_number(argument_values, 3, 0.0, env)?;
+    let minutes = optional_utc_number(argument_values, 4, 0.0, env)?;
+    let seconds = optional_utc_number(argument_values, 5, 0.0, env)?;
+    let millis = optional_utc_number(argument_values, 6, 0.0, env)?;
+    if [year, month, date, hours, minutes, seconds, millis]
         .into_iter()
         .any(|value| !value.is_finite())
     {
         return Ok(f64::NAN);
     }
 
-    let year = if (0.0..=99.0).contains(&year) {
-        year + 1900.0
+    let year_integer = year.trunc();
+    let year = if (0.0..=99.0).contains(&year_integer) {
+        year_integer + 1900.0
     } else {
         year
     };
-    let month_index = month.trunc() as i32;
-    let year = year.trunc() as i32 + month_index.div_euclid(12);
-    let month = month_index.rem_euclid(12) + 1;
-    let days = days_from_civil(year, month, date.trunc() as i32);
-    Ok(days as f64 * MS_PER_DAY
-        + hours.trunc() * MS_PER_HOUR
-        + minutes.trunc() * MS_PER_MINUTE
-        + seconds.trunc() * MS_PER_SECOND
-        + millis.trunc())
+    Ok(make_day(year, month, date) * MS_PER_DAY
+        + time_from_components(hours, minutes, seconds, millis))
+}
+
+fn optional_utc_number(
+    argument_values: &[Value],
+    index: usize,
+    default: f64,
+    env: &mut CallEnv,
+) -> Result<f64, RuntimeError> {
+    argument_values
+        .get(index)
+        .cloned()
+        .map(|value| to_number_with_env(value, env))
+        .transpose()
+        .map(|value| value.unwrap_or(default))
+}
+
+fn make_day(year: f64, month: f64, date: f64) -> f64 {
+    let month = month.trunc();
+    let month_years = (month / 12.0).floor();
+    let year = year.trunc() + month_years;
+    let month = month - month_years * 12.0;
+    days_from_civil_number(year, month + 1.0, 1.0) + date.trunc() - 1.0
+}
+
+fn days_from_civil_number(year: f64, month: f64, day: f64) -> f64 {
+    let year = year - if month <= 2.0 { 1.0 } else { 0.0 };
+    let era = (year / 400.0).floor();
+    let year_of_era = year - era * 400.0;
+    let month_for_year = month + if month > 2.0 { -3.0 } else { 9.0 };
+    let day_of_year = ((153.0 * month_for_year + 2.0) / 5.0).floor() + day - 1.0;
+    let day_of_era = year_of_era * 365.0 + (year_of_era / 4.0).floor()
+        - (year_of_era / 100.0).floor()
+        + day_of_year;
+    era * 146_097.0 + day_of_era - 719_468.0
 }

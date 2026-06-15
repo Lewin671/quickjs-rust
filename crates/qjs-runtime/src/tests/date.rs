@@ -157,6 +157,40 @@ fn evaluates_date_builtins() {
         eval("Date.UTC(1970, 0, 2, 3, 4, 5, 6);"),
         Ok(Value::Number(97_445_006.0))
     );
+    assert_eq!(eval("Date.UTC(1970);"), Ok(Value::Number(0.0)));
+    assert_eq!(
+        eval("Date.UTC(2016, 6, 5, 15, 34, 45, 876);"),
+        Ok(Value::Number(1_467_732_885_876.0))
+    );
+    assert_eq!(
+        eval("Date.UTC(-0.999999, 0);"),
+        Ok(Value::Number(-2_208_988_800_000.0))
+    );
+    assert_eq!(eval("Date.UTC(70.999999, 0);"), Ok(Value::Number(0.0)));
+    assert_eq!(
+        eval("Date.UTC(99.999999, 0);"),
+        Ok(Value::Number(915_148_800_000.0))
+    );
+    assert_eq!(
+        eval(
+            "var log = ''; function arg(name, value) { return { valueOf: function () { log += name; return value; } }; } Date.UTC(arg('y', 1970), arg('m', NaN), arg('d', 1), arg('h', 2), arg('i', 3), arg('s', 4), arg('x', 5)); log;"
+        ),
+        Ok(Value::String("ymdhisx".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var log = ''; function arg(name, value) { return { valueOf: function () { log += name; if (value === 'throw') { throw new TypeError(); } return value; } }; } try { Date.UTC(arg('y', 1970), arg('m', 'throw'), arg('d', 1)); } catch (error) {} log;"
+        ),
+        Ok(Value::String("ym".to_owned()))
+    );
+    assert_eq!(
+        eval("Date.UTC(1970, 0, 1, 80063993375, 29, 1, -288230376151711740);"),
+        Ok(Value::Number(29_312.0))
+    );
+    assert_eq!(
+        eval("Date.UTC(1970, 0, 213503982336, 0, 0, 0, -18446744073709552000);"),
+        Ok(Value::Number(34_447_360.0))
+    );
     assert_eq!(
         eval("Date.parse('1970-01-02T03:04:05.006Z');"),
         Ok(Value::Number(97_445_006.0))

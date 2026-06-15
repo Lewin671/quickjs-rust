@@ -6,7 +6,6 @@ use crate::{
         DATE_VALUE_PROPERTY, MS_PER_DAY, MS_PER_HOUR, MS_PER_MINUTE, MS_PER_SECOND,
         iso::{days_from_civil, parse_iso_string},
     },
-    to_number,
 };
 
 pub(super) fn define_date_value(object: &ObjectRef, value: f64) {
@@ -15,19 +14,6 @@ pub(super) fn define_date_value(object: &ObjectRef, value: f64) {
 
 pub(crate) fn is_date_object(object: &ObjectRef) -> bool {
     matches!(object.get(DATE_VALUE_PROPERTY), Some(Value::Number(_)))
-}
-
-pub(super) fn optional_number(
-    argument_values: &[Value],
-    index: usize,
-    default: f64,
-) -> Result<f64, RuntimeError> {
-    argument_values
-        .get(index)
-        .cloned()
-        .map(to_number)
-        .transpose()
-        .map(|value| value.unwrap_or(default))
 }
 
 pub(super) fn parse_date_string(source: &str) -> f64 {

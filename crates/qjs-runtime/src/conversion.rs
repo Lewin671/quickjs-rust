@@ -73,11 +73,6 @@ fn object_constructor_name(object: &crate::ObjectRef) -> Option<String> {
     function.name.filter(|name| !name.is_empty())
 }
 
-pub(crate) fn to_number(value: Value) -> Result<f64, RuntimeError> {
-    let mut env = crate::CallEnv::detached();
-    to_number_with_env(value, &mut env)
-}
-
 pub(crate) fn to_number_with_env(value: Value, env: &mut CallEnv) -> Result<f64, RuntimeError> {
     match value {
         Value::Number(number) => Ok(number),
