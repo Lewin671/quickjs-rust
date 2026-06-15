@@ -322,12 +322,25 @@ fn evaluates_number_builtins() {
     assert_eq!(eval("parseInt('10', 2);"), Ok(Value::Number(2.0)));
     assert_eq!(eval("parseInt('-10', 10);"), Ok(Value::Number(-10.0)));
     assert_eq!(eval("parseInt('z', 36);"), Ok(Value::Number(35.0)));
+    assert_eq!(eval("parseInt('1Z\\u0660', 36);"), Ok(Value::Number(71.0)));
+    assert_eq!(
+        eval(
+            "let hits = []; parseInt({ toString() { hits.push('string'); return '11'; } }, { valueOf() { hits.push('radix'); return 2; } }) + ':' + hits.join(',');"
+        ),
+        Ok(Value::String("3:string,radix".to_owned()))
+    );
     assert_eq!(
         eval("parseInt('10', 37) === NaN;"),
         Ok(Value::Boolean(false))
     );
     assert_eq!(eval("parseFloat('3.5px');"), Ok(Value::Number(3.5)));
     assert_eq!(eval("parseFloat('-1.25e2x');"), Ok(Value::Number(-125.0)));
+    assert_eq!(
+        eval(
+            "let hits = []; parseFloat({ toString() { hits.push('string'); return '1.5'; } }) + ':' + hits.join(',');"
+        ),
+        Ok(Value::String("1.5:string".to_owned()))
+    );
     assert_eq!(
         eval("parseFloat('Infinity');"),
         Ok(Value::Number(f64::INFINITY))

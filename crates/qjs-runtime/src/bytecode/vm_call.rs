@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use crate::{CallEnv, Function, NativeFunction, RuntimeError, Value, call_function};
+use crate::{
+    CallEnv, Function, NativeFunction, RuntimeError, Value, call_function, to_int32_number,
+};
 
 use super::ir::Bytecode;
 use super::vm::{Slot, Vm};
@@ -243,6 +245,29 @@ pub(super) fn try_fast_global_native_call(
                 return None;
             }
             Ok(Value::String(fast_string_from_char_code_numbers(arguments)))
+        }
+        NativeFunction::ParseInt => {
+            let source = match arguments.first().cloned().unwrap_or(Value::Undefined) {
+                Value::String(source) => source,
+                Value::Undefined => "undefined".to_owned(),
+                _ => return None,
+            };
+            let radix = match arguments.get(1).cloned().unwrap_or(Value::Undefined) {
+                Value::Undefined => 0,
+                Value::Number(number) => to_int32_number(number),
+                _ => return None,
+            };
+            Ok(Value::Number(crate::number::parse_int_string(
+                &source, radix,
+            )))
+        }
+        NativeFunction::ParseFloat => {
+            let source = match arguments.first().cloned().unwrap_or(Value::Undefined) {
+                Value::String(source) => source,
+                Value::Undefined => "undefined".to_owned(),
+                _ => return None,
+            };
+            Ok(Value::Number(crate::number::parse_float_string(&source)))
         }
         NativeFunction::Eval => {
             let Some(Value::String(source)) = arguments.first() else {

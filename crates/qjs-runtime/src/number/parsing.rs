@@ -11,7 +11,7 @@ pub(crate) fn native_parse_float(
     Ok(Value::Number(parse_float_string(&input)))
 }
 
-fn parse_float_string(input: &str) -> f64 {
+pub(crate) fn parse_float_string(input: &str) -> f64 {
     let input = input.trim_start();
     if input.starts_with("Infinity") {
         return f64::INFINITY;
@@ -85,7 +85,7 @@ pub(crate) fn native_parse_int(
     Ok(Value::Number(parse_int_string(&input, radix)))
 }
 
-fn parse_int_string(input: &str, radix: i32) -> f64 {
+pub(crate) fn parse_int_string(input: &str, radix: i32) -> f64 {
     let mut input = input.trim_start();
     let mut sign = 1.0;
     if let Some(rest) = input.strip_prefix('-') {
