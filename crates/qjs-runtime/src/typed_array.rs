@@ -729,4 +729,6 @@ fn native_for_name(name: &str) -> NativeFunction {
 }
 
 #[cfg(test)]
+mod ordering_tests;
+#[cfg(test)]
 mod tests;

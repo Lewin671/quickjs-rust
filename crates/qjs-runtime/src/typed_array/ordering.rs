@@ -13,7 +13,7 @@ use std::collections::HashMap;
 
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, array, array_buffer,
-    call_function, object_prototype, to_number_with_env,
+    call_function, object_prototype, property_value, to_number_with_env,
 };
 
 use super::element::{read_view_elements, set_view_elements};
@@ -93,15 +93,18 @@ fn set_from_array_like(
     offset: usize,
     env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
-    let values = array::array_like_values_with_env(source, "TypedArray.prototype.set", env)?;
-    if offset + values.len() > length {
+    let source = array::array_like_length(source, "TypedArray.prototype.set", env)?;
+    if offset
+        .checked_add(source.length)
+        .is_none_or(|end| end > length)
+    {
         return Err(range_error("source is too large"));
     }
-    let mut coerced = Vec::with_capacity(values.len());
-    for value in values {
-        coerced.push(coerce_element(native, value, env)?);
+    for index in 0..source.length {
+        let value = property_value(source.receiver.clone(), &index.to_string(), env)?;
+        let coerced = coerce_element(native, value, env)?;
+        set_view_elements(object, offset + index, [coerced]);
     }
-    set_view_elements(object, offset, coerced);
     Ok(())
 }
 
