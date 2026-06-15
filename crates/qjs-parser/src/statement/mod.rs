@@ -126,6 +126,15 @@ impl Parser {
         if self.at(&TokenKind::Let) && self.let_is_declaration_start() {
             return self.variable_declaration();
         }
+        if self.at(&TokenKind::Let)
+            && matches!(self.peek_nth(1), Some(token) if token.kind == TokenKind::LeftBracket)
+        {
+            let token = self.peek().expect("parser should always have eof token");
+            return Err(ParseError {
+                message: "expression statements may not start with `let [`".to_owned(),
+                span: token.span,
+            });
+        }
 
         let expr = self.expression()?;
         self.match_kind(&TokenKind::Semicolon);
@@ -149,7 +158,11 @@ impl Parser {
                     && !between.contains('\u{2028}')
                     && !between.contains('\u{2029}')
             }
-            TokenKind::Identifier(_) => true,
+            TokenKind::Identifier(_) => {
+                let let_end = self.tokens[self.cursor].span.end;
+                let next_start = next.span.start;
+                !self.has_line_terminator_between(let_end, next_start)
+            }
             _ => false,
         }
     }

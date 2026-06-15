@@ -54,7 +54,7 @@ impl Parser {
     ) -> Result<Vec<VarDeclarator>, ParseError> {
         let mut declarations = Vec::new();
         loop {
-            let binding = self.binding_pattern()?;
+            let binding = self.variable_declaration_binding_pattern(kind)?;
 
             let init = if self.match_kind(&TokenKind::Equal) {
                 Some(self.assignment()?)
@@ -88,6 +88,20 @@ impl Parser {
             }
         }
         Ok(declarations)
+    }
+
+    fn variable_declaration_binding_pattern(
+        &mut self,
+        kind: VarKind,
+    ) -> Result<BindingPattern, ParseError> {
+        if kind == VarKind::Var && !self.strict && self.at(&TokenKind::Let) {
+            let token = self.advance();
+            return Ok(BindingPattern::Identifier {
+                name: "let".to_owned(),
+                span: token.span,
+            });
+        }
+        self.binding_pattern()
     }
 
     pub(crate) fn binding_pattern(&mut self) -> Result<BindingPattern, ParseError> {

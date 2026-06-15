@@ -207,6 +207,14 @@ fn validates_for_in_head_static_semantics() {
     parse_script("for (var x in { attr: null }) { var x; }")
         .expect("var for-in head may be redeclared by the body");
     parse_script("for (let in {}) { }").expect("sloppy `let` is a valid for-in target");
+    parse_script("var let, value; for (let in { key: 1 }) ;")
+        .expect("sloppy `let` is a valid var binding and for-in target");
+    parse_script("for (var x in null) let\nx = 1;")
+        .expect("newline after sloppy `let` starts an expression statement body");
+
+    parse_script("for (var x in null) let\n[a] = 0;")
+        .expect_err("expression statements may not start with `let [`");
+    parse_script("let\n[a] = 0;").expect_err("expression statements may not start with `let [`");
 }
 
 #[test]
