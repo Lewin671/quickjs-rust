@@ -83,6 +83,7 @@ pub(crate) enum NativeFunction {
     AtomicsPause,
     AtomicsStore,
     AtomicsSub,
+    AtomicsWait,
     AtomicsXor,
     TypedArray,
     // %TypedArray% static methods.

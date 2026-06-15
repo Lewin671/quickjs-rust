@@ -35,6 +35,7 @@ pub(super) fn call_atomics_native(
         NativeFunction::AtomicsSub => {
             atomics::native_atomics_read_modify_write(argument_values, atomics::AtomicOp::Sub, env)?
         }
+        NativeFunction::AtomicsWait => atomics::native_atomics_wait(argument_values, env)?,
         NativeFunction::AtomicsXor => {
             atomics::native_atomics_read_modify_write(argument_values, atomics::AtomicOp::Xor, env)?
         }

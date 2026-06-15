@@ -34,6 +34,7 @@ pub(crate) fn install_atomics(env: &mut CallEnv, global_this: &Value, object_pro
         ("pause", 0, NativeFunction::AtomicsPause),
         ("store", 3, NativeFunction::AtomicsStore),
         ("sub", 3, NativeFunction::AtomicsSub),
+        ("wait", 4, NativeFunction::AtomicsWait),
         ("xor", 3, NativeFunction::AtomicsXor),
     ] {
         atomics.define_non_enumerable(
@@ -140,6 +141,64 @@ pub(crate) fn native_atomics_notify(
         return Ok(Value::Number(0.0));
     }
     Ok(Value::Number(0.0))
+}
+
+pub(crate) fn native_atomics_wait(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let (object, length) = typed_array::validate_typed_array(&target)?;
+    let kind = typed_array::typed_array_kind(&object);
+    if !is_waitable_kind(kind) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Atomics.wait requires an Int32Array or BigInt64Array".to_owned(),
+        });
+    }
+    let Some(buffer) = typed_array::typed_array_buffer(&object) else {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Atomics.wait requires a shared buffer".to_owned(),
+        });
+    };
+    if !crate::array_buffer::is_shared_array_buffer_object(&buffer) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Atomics.wait requires a shared buffer".to_owned(),
+        });
+    }
+    let index = to_atomic_index(
+        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
+    if index >= length {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "RangeError: Atomics index is out of range".to_owned(),
+        });
+    }
+    let value = coerce_atomic_value(
+        kind,
+        argument_values.get(2).cloned().unwrap_or(Value::Undefined),
+        env,
+    )?;
+    let timeout = match argument_values.get(3) {
+        None | Some(Value::Undefined) => f64::INFINITY,
+        Some(value) => {
+            let number = to_number_with_env(value.clone(), env)?;
+            if number.is_nan() {
+                f64::INFINITY
+            } else {
+                number.max(0.0)
+            }
+        }
+    };
+    let _ = (value, timeout);
+    Err(RuntimeError {
+        thrown: None,
+        message: "TypeError: Atomics.wait cannot suspend the current agent".to_owned(),
+    })
 }
 
 pub(crate) fn native_atomics_read_modify_write(

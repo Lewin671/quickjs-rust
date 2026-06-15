@@ -90,6 +90,48 @@ fn atomics_notify_validates_and_returns_zero_without_waiters() {
 }
 
 #[test]
+fn atomics_wait_validates_and_rejects_main_agent_suspend() {
+    assert_eq!(
+        eval(
+            "let i32 = new Int32Array(new SharedArrayBuffer(4)); \
+             let i64 = new BigInt64Array(new SharedArrayBuffer(8)); \
+             let calls = ''; \
+             let timeout = { valueOf() { calls += 'timeout'; return 0; } }; \
+             let i32Type = false; \
+             let i64Type = false; \
+             try { Atomics.wait(i32, 0, 0, timeout); } catch (e) { i32Type = e instanceof TypeError; } \
+             try { Atomics.wait(i64, 0, 0n, timeout); } catch (e) { i64Type = e instanceof TypeError; } \
+             [Atomics.wait.length, i32Type, i64Type, calls].join(':');"
+        ),
+        Ok(Value::String("4:true:true:timeouttimeout".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "try { Atomics.wait(new Int32Array(new ArrayBuffer(4)), 0, 0, 0); false; } \
+             catch (e) { e instanceof TypeError; }"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn atomics_wait_rejects_bad_indices_before_value_coercion() {
+    assert_eq!(
+        eval(
+            "let a = new BigInt64Array(new SharedArrayBuffer(32)); \
+             let value = { valueOf() { throw new Error('value'); } }; \
+             let timeout = { valueOf() { throw new Error('timeout'); } }; \
+             let checks = [Infinity, -Infinity, -1, 4, 99].map(function(index) { \
+               try { Atomics.wait(a, index, value, timeout); return false; } \
+               catch (e) { return e instanceof RangeError; } \
+             }); \
+             checks.join(',');"
+        ),
+        Ok(Value::String("true,true,true,true,true".to_owned()))
+    );
+}
+
+#[test]
 fn atomics_read_modify_write_bigint_views() {
     assert_eq!(
         eval(
