@@ -23,6 +23,9 @@ pub(crate) fn native_reflect_own_keys(
     }
 
     let names = match target.clone() {
+        Value::Object(object) if crate::typed_array::is_typed_array_object(&object) => {
+            crate::typed_array::typed_array_own_property_names(&object)
+        }
         Value::Object(object) => object.own_property_names(),
         Value::Map(map) => map.object().own_property_names(),
         Value::Set(set) => set.object().own_property_names(),

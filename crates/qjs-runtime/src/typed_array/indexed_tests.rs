@@ -115,3 +115,52 @@ fn detached_typed_array_numeric_delete_succeeds() {
         Ok(Value::String("true:false".to_owned()))
     );
 }
+
+#[test]
+fn own_keys_track_resizable_typed_array_length() {
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 6 }); \
+             let a = new Uint8Array(b, 1); \
+             Reflect.ownKeys(a).join(',') + '|'; \
+             b.resize(6); let grown = Reflect.ownKeys(a).join(','); \
+             b.resize(3); let shrunk = Reflect.ownKeys(a).join(','); \
+             b.resize(1); let boundary = Reflect.ownKeys(a).join(','); \
+             grown + '|' + shrunk + '|' + boundary;"
+        ),
+        Ok(Value::String("0,1,2,3,4|0,1|".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 6 }); \
+             let a = new Uint8Array(b, 1, 2); \
+             let initial = Reflect.ownKeys(a).join(','); \
+             b.resize(6); let grown = Reflect.ownKeys(a).join(','); \
+             b.resize(2); let out = Reflect.ownKeys(a).join(','); \
+             initial + '|' + grown + '|' + out;"
+        ),
+        Ok(Value::String("0,1|0,1|".to_owned()))
+    );
+}
+
+#[test]
+fn own_keys_keep_non_index_properties_after_dynamic_indices() {
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 6 }); \
+             let a = new Uint8Array(b); a.extra = 1; \
+             b.resize(2); \
+             Object.keys(a).join(',') + '|' + Object.getOwnPropertyNames(a).join(',');"
+        ),
+        Ok(Value::String("0,1,extra|0,1,extra".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(2, { maxByteLength: 4 }); \
+             let a = new Uint8Array(b); let s = Symbol('s'); a[s] = 1; \
+             b.resize(3); let keys = Reflect.ownKeys(a); \
+             keys.length + ':' + keys.slice(0, 3).join(',') + ':' + (keys[3] === s);"
+        ),
+        Ok(Value::String("4:0,1,2:true".to_owned()))
+    );
+}

@@ -570,6 +570,43 @@ pub(crate) fn typed_array_buffer_detached(object: &ObjectRef) -> bool {
     typed_array_buffer(object).is_some_and(|buffer| array_buffer::is_detached(&buffer))
 }
 
+/// Integer-indexed exotic `[[OwnPropertyKeys]]` string-keyed portion. The
+/// indexed keys are derived from the current effective view length so resizable
+/// buffers can grow or shrink after the view was created; ordinary non-index
+/// string properties keep the object's stored insertion order after those
+/// indices.
+pub(crate) fn typed_array_own_property_names(object: &ObjectRef) -> Vec<String> {
+    typed_array_own_property_strings(object, false)
+}
+
+/// Enumerable string-keyed portion used by `Object.keys`/entries/values.
+pub(crate) fn typed_array_own_property_keys(object: &ObjectRef) -> Vec<String> {
+    typed_array_own_property_strings(object, true)
+}
+
+fn typed_array_own_property_strings(object: &ObjectRef, enumerable_only: bool) -> Vec<String> {
+    let mut keys: Vec<String> = (0..typed_array_length(object))
+        .map(|index| index.to_string())
+        .collect();
+    let stored = if enumerable_only {
+        object.own_property_keys()
+    } else {
+        object.own_property_names()
+    };
+    keys.extend(
+        stored
+            .into_iter()
+            .filter(|key| array_index_property_key(key).is_none()),
+    );
+    keys
+}
+
+fn array_index_property_key(key: &str) -> Option<u32> {
+    key.parse::<u32>()
+        .ok()
+        .filter(|index| *index < u32::MAX && index.to_string() == key)
+}
+
 // --- Element coercion --------------------------------------------------------
 
 pub(crate) use element::coerce_element;

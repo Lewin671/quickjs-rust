@@ -159,6 +159,9 @@ pub(crate) fn enumerable_property_entries_with_symbols(
 
 pub(crate) fn own_property_keys(value: Value) -> Vec<String> {
     match value {
+        Value::Object(object) if crate::typed_array::is_typed_array_object(&object) => {
+            crate::typed_array::typed_array_own_property_keys(&object)
+        }
         Value::Object(object) => object.own_property_keys(),
         Value::Map(map) => map.object().own_property_keys(),
         Value::Set(set) => set.object().own_property_keys(),
@@ -176,6 +179,9 @@ pub(crate) fn own_property_keys(value: Value) -> Vec<String> {
 
 pub(crate) fn own_property_names(value: Value) -> Vec<String> {
     match value {
+        Value::Object(object) if crate::typed_array::is_typed_array_object(&object) => {
+            crate::typed_array::typed_array_own_property_names(&object)
+        }
         Value::Object(object) => object.own_property_names(),
         Value::Map(map) => map.object().own_property_names(),
         Value::Set(set) => set.object().own_property_names(),
