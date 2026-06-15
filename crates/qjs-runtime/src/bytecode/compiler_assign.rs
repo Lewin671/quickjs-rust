@@ -112,7 +112,7 @@ impl Compiler {
             } => {
                 let object_slot = self.temp_local("assign_object");
                 let key_slot = self.temp_local("assign_key");
-                self.compile_member_reference(object, property, object_slot, key_slot)?;
+                self.compile_member_reference(object, property, object_slot, key_slot, false)?;
                 self.compile_expr(value)?;
                 let value_slot = self.temp_local("assign_value");
                 self.emit(Op::StoreLocal(value_slot));
@@ -311,7 +311,7 @@ impl Compiler {
         let object_slot = self.temp_local("assign_object");
         let key_slot = self.temp_local("assign_key");
         let value_slot = self.temp_local("assign_value");
-        self.compile_member_reference(object, property, object_slot, key_slot)?;
+        self.compile_member_reference(object, property, object_slot, key_slot, true)?;
         self.emit(Op::LoadLocal(object_slot));
         self.emit(Op::LoadLocal(key_slot));
         self.emit(Op::GetProp);
@@ -447,7 +447,7 @@ impl Compiler {
         let key_slot = self.temp_local("update_key");
         let old_slot = self.temp_local("update_old");
         let new_slot = self.temp_local("update_new");
-        self.compile_member_reference(object, property, object_slot, key_slot)?;
+        self.compile_member_reference(object, property, object_slot, key_slot, true)?;
         self.emit(Op::LoadLocal(object_slot));
         self.emit(Op::LoadLocal(key_slot));
         self.emit(Op::GetProp);
@@ -482,14 +482,17 @@ impl Compiler {
         property: &qjs_ast::MemberProperty,
         object_slot: usize,
         key_slot: usize,
+        prepare_for_get: bool,
     ) -> Result<(), RuntimeError> {
         self.compile_expr(object)?;
         self.emit(Op::StoreLocal(object_slot));
         self.compile_member_key(property)?;
-        self.emit(Op::LoadLocal(object_slot));
-        self.emit(Op::RequireObjectCoercible);
-        self.emit(Op::Pop);
-        self.emit(Op::ToPropertyKey);
+        if prepare_for_get {
+            self.emit(Op::LoadLocal(object_slot));
+            self.emit(Op::RequireObjectCoercible);
+            self.emit(Op::Pop);
+            self.emit(Op::ToPropertyKey);
+        }
         self.emit(Op::StoreLocal(key_slot));
         Ok(())
     }

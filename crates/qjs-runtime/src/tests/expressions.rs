@@ -625,6 +625,50 @@ fn member_compound_assignment_evaluates_reference_before_rhs() {
 }
 
 #[test]
+fn member_assignment_delays_put_value_checks_until_after_rhs() {
+    assert_eq!(
+        eval(
+            "var hits = '';
+             var prop = function() { hits += 'prop'; throw 'key'; };
+             var rhs = function() { hits += ':rhs'; return 1; };
+             try { var base = null; base[prop()] = rhs(); }
+             catch (error) { hits += ':' + error; }
+             hits;"
+        ),
+        Ok(Value::String("prop:key".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var hits = '';
+             var prop = { toString: function() { hits += ':toString'; throw 'key'; } };
+             var rhs = function() { hits += ':rhs'; throw 'rhs'; };
+             try { var base = null; base[prop] = rhs(); }
+             catch (error) { hits += ':' + error; }
+             hits;"
+        ),
+        Ok(Value::String(":rhs:rhs".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var hits = 0;
+             try { var base = null; base.x = (hits += 1); }
+             catch (error) { hits += error instanceof TypeError ? 10 : 100; }
+             hits;"
+        ),
+        Ok(Value::Number(11.0))
+    );
+    assert_eq!(
+        eval(
+            "var hits = 0;
+             try { var base = undefined; base.x = (hits += 1); }
+             catch (error) { hits += error instanceof TypeError ? 10 : 100; }
+             hits;"
+        ),
+        Ok(Value::Number(11.0))
+    );
+}
+
+#[test]
 fn assignments_respect_lexical_tdz() {
     assert_eq!(
         eval(
