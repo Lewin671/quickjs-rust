@@ -42,6 +42,58 @@ fn for_in_assignment_targets_respect_lexical_tdz() {
 }
 
 #[test]
+fn for_in_lexical_heads_create_tdz_for_rhs() {
+    assert_eq!(
+        eval(
+            "let result = '';
+             try { let x = 1; for (let x in { x }) {} result = 'no throw'; }
+             catch (error) { result = error instanceof ReferenceError ? 'reference' : error.name; }
+             result;"
+        ),
+        Ok(Value::String("reference".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let result = '';
+             try { let x = 1; for (const x in { x }) {} result = 'no throw'; }
+             catch (error) { result = error instanceof ReferenceError ? 'reference' : error.name; }
+             result;"
+        ),
+        Ok(Value::String("reference".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let x = 'outside';
+             var probeExpr, probeDecl, probeBody;
+             for (let [x, _ = probeDecl = function() { return x; }]
+                  in { i: probeExpr = function() { typeof x; } })
+               probeBody = function() { return x; };
+             let exprResult;
+             try { probeExpr(); exprResult = 'no throw'; }
+             catch (error) { exprResult = error instanceof ReferenceError ? 'reference' : error.name; }
+             exprResult + ':' + probeDecl() + ':' + probeBody();"
+        ),
+        Ok(Value::String("reference:i:i".to_owned()))
+    );
+}
+
+#[test]
+fn var_declarations_without_initializers_do_not_reset_bindings() {
+    assert_eq!(eval("var x = 1; var x; x;"), Ok(Value::Number(1.0)));
+    assert_eq!(
+        eval(
+            "var iterCount = 0;
+             for (var x in { attr: null }) {
+               var x;
+               if (x === 'attr') iterCount += 1;
+             }
+             iterCount;"
+        ),
+        Ok(Value::Number(1.0))
+    );
+}
+
+#[test]
 fn with_statement_honors_symbol_unscopables() {
     // A truthy `Symbol.unscopables` entry hides the property, so the free name
     // resolves to the outer binding instead.

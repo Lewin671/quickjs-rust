@@ -704,6 +704,24 @@ fn assignments_respect_lexical_tdz() {
 }
 
 #[test]
+fn typeof_respects_lexical_tdz() {
+    assert_eq!(
+        eval(
+            "var result = '';
+             try { typeof x; result = 'no throw'; }
+             catch (error) { result = error instanceof ReferenceError ? 'reference' : error.name; }
+             let x;
+             result;"
+        ),
+        Ok(Value::String("reference".to_owned()))
+    );
+    assert_eq!(
+        eval("typeof definitelyUnresolvable;"),
+        Ok(Value::String("undefined".to_owned()))
+    );
+}
+
+#[test]
 fn destructuring_assignment_evaluates_member_targets_before_value_reads() {
     assert_eq!(
         eval(

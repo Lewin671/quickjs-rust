@@ -508,7 +508,7 @@ impl Compiler {
                     });
                     return Ok(());
                 } else if let Some(slot) = slot {
-                    self.emit(Op::LoadLocalOrUndefined(slot));
+                    self.emit(Op::LoadLocal(slot));
                 } else {
                     self.emit(Op::TypeofGlobal(name.clone()));
                     return Ok(());

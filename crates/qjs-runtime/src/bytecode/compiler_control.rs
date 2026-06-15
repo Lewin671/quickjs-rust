@@ -92,6 +92,7 @@ impl Compiler {
 
         self.emit_load_undefined();
         self.emit(Op::StoreLocal(result_slot));
+        self.declare_for_in_head_tdz(left);
         self.compile_expr(right)?;
         self.emit(Op::GetAsyncIterator);
         self.emit(Op::StoreLocal(iterator_slot));
@@ -169,6 +170,7 @@ impl Compiler {
         self.emit_load_undefined();
         self.emit(Op::StoreLocal(result_slot));
         self.compile_for_in_initializer(left)?;
+        self.declare_for_in_head_tdz(left);
         self.compile_expr(right)?;
         self.emit(Op::StoreLocal(target_slot));
         self.emit(Op::LoadLocal(target_slot));
@@ -256,6 +258,7 @@ impl Compiler {
 
         self.emit_load_undefined();
         self.emit(Op::StoreLocal(result_slot));
+        self.declare_for_in_head_tdz(left);
         self.compile_expr(right)?;
         self.emit(Op::GetIterator);
         self.emit(Op::StoreLocal(iterator_slot));
@@ -530,6 +533,20 @@ impl Compiler {
             .into_iter()
             .map(|name| self.declare_var_kind_slot(&name, *kind))
             .collect()
+    }
+
+    fn declare_for_in_head_tdz(&mut self, left: &ForInLeft) {
+        let ForInLeft::VarDecl {
+            binding,
+            kind: kind @ (VarKind::Let | VarKind::Const),
+            ..
+        } = left
+        else {
+            return;
+        };
+        for name in binding.names() {
+            self.declare_var_kind_slot(&name, *kind);
+        }
     }
 
     fn compile_for_in_initializer(&mut self, left: &ForInLeft) -> Result<(), RuntimeError> {

@@ -133,6 +133,9 @@ impl Compiler {
         pattern: &BindingPattern,
         kind: VarKind,
     ) -> Result<(), RuntimeError> {
+        if kind == VarKind::Var {
+            return Ok(());
+        }
         for name in pattern.names() {
             let slot = self.declare_var_kind_slot(&name, kind);
             self.emit_load_undefined();

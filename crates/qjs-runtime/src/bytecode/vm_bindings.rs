@@ -421,7 +421,7 @@ impl Vm<'_> {
             return Ok(Value::String(typeof_value(value)));
         }
         let value = match slot {
-            Some(slot) => self.load_local_or_undefined(slot)?,
+            Some(slot) => self.load_local(slot)?,
             None => self.env.get(name).unwrap_or(Value::Undefined),
         };
         Ok(Value::String(typeof_value(value)))
