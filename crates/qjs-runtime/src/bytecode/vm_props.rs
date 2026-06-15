@@ -780,8 +780,14 @@ fn delete_symbol_property(
 pub(super) fn enumerable_keys(value: Value, env: &CallEnv) -> Result<Vec<Value>, RuntimeError> {
     let (mut keys, mut seen) = match value.clone() {
         Value::Object(object) => {
-            let enumerable = object.own_property_keys();
-            let all = object.own_property_names();
+            let (enumerable, all) = if crate::typed_array::is_typed_array_object(&object) {
+                (
+                    crate::typed_array::typed_array_own_property_keys(&object),
+                    crate::typed_array::typed_array_own_property_names(&object),
+                )
+            } else {
+                (object.own_property_keys(), object.own_property_names())
+            };
             (enumerable, all)
         }
         Value::Array(elements) => {

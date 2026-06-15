@@ -584,6 +584,17 @@ pub(crate) fn typed_array_own_property_keys(object: &ObjectRef) -> Vec<String> {
     typed_array_own_property_strings(object, true)
 }
 
+pub(crate) fn typed_array_own_property_descriptor(
+    object: &ObjectRef,
+    key: &str,
+) -> Option<Property> {
+    match indexed_element_value(object, key) {
+        IndexedRead::Present(value) => Some(Property::data(*value, true, true, true)),
+        IndexedRead::Missing => None,
+        IndexedRead::NotIndexed => object.own_property(key),
+    }
+}
+
 fn typed_array_own_property_strings(object: &ObjectRef, enumerable_only: bool) -> Vec<String> {
     let mut keys: Vec<String> = (0..typed_array_length(object))
         .map(|index| index.to_string())

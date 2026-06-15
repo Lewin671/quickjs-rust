@@ -117,6 +117,45 @@ fn detached_typed_array_numeric_delete_succeeds() {
 }
 
 #[test]
+fn own_property_descriptor_uses_current_indexed_element_state() {
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(2, { maxByteLength: 4 }); \
+             let a = new Uint8Array(b); a[1] = 7; \
+             let before = Object.getOwnPropertyDescriptor(a, 1); \
+             b.resize(3); a[2] = 9; \
+             let grown = Object.getOwnPropertyDescriptor(a, 2); \
+             b.transfer(); \
+             let detached = Object.getOwnPropertyDescriptor(a, 1); \
+             before.value + ':' + before.enumerable + ':' + before.writable + ':' \
+             + before.configurable + '|' + grown.value + '|' + (detached === undefined);"
+        ),
+        Ok(Value::String("7:true:true:true|9|true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let a = new BigInt64Array([1n]); a.buffer.transfer(); \
+             Object.getOwnPropertyDescriptor(a, 0) === undefined;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn detached_typed_array_for_in_skips_stale_index_descriptors() {
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array(4); let before = 0; \
+             for (let key in a) { before += 1; } \
+             a.buffer.transfer(); let after = 0; \
+             for (let key in a) { after += 1; } \
+             before + ':' + after;"
+        ),
+        Ok(Value::String("4:0".to_owned()))
+    );
+}
+
+#[test]
 fn own_keys_track_resizable_typed_array_length() {
     assert_eq!(
         eval(

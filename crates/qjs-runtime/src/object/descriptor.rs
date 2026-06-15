@@ -87,6 +87,17 @@ pub(crate) fn own_property_descriptor_key(
     key: &PropertyKey,
 ) -> Result<Option<Property>, RuntimeError> {
     match value {
+        Value::Object(object)
+            if matches!(key, PropertyKey::String(_))
+                && crate::typed_array::is_typed_array_object(&object) =>
+        {
+            let PropertyKey::String(key) = key else {
+                unreachable!("typed-array descriptor guard accepts only string keys");
+            };
+            Ok(crate::typed_array::typed_array_own_property_descriptor(
+                &object, key,
+            ))
+        }
         Value::Object(object) => Ok(match key {
             PropertyKey::String(key) => object.own_property(key),
             PropertyKey::Symbol(symbol) => object.own_symbol_property(symbol),
