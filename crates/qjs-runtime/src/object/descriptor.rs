@@ -156,6 +156,18 @@ pub(crate) fn define_property_descriptor_on_value_key(
     };
     match &target {
         Value::Object(object) => {
+            if crate::typed_array::is_typed_array_object(object) {
+                match crate::typed_array::define_indexed_property_descriptor(
+                    object,
+                    &key,
+                    &descriptor,
+                    env,
+                )? {
+                    crate::typed_array::IndexedDefine::Defined => return Ok(true),
+                    crate::typed_array::IndexedDefine::Rejected => return Ok(false),
+                    crate::typed_array::IndexedDefine::NotIndexed => {}
+                }
+            }
             let existing = object.own_property(&key);
             let defines_new_property = existing.is_none();
             let mapped_argument = mapped_argument_accessors(existing.as_ref());
@@ -552,6 +564,20 @@ pub(crate) fn define_property_on_value_key(
     };
     match &target {
         Value::Object(object) => {
+            if crate::typed_array::is_typed_array_object(object) {
+                let typed_array_descriptor =
+                    PropertyDescriptor::from_complete_property(descriptor.clone());
+                match crate::typed_array::define_indexed_property_descriptor(
+                    object,
+                    &key,
+                    &typed_array_descriptor,
+                    env,
+                )? {
+                    crate::typed_array::IndexedDefine::Defined => return Ok(true),
+                    crate::typed_array::IndexedDefine::Rejected => return Ok(false),
+                    crate::typed_array::IndexedDefine::NotIndexed => {}
+                }
+            }
             if !object.has_own_property(&key) && !object.is_extensible() {
                 return Ok(false);
             }

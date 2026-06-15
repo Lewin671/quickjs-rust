@@ -295,6 +295,10 @@ impl PropertyDescriptor {
         self.writable
     }
 
+    pub(crate) fn value_field(&self) -> Option<&Value> {
+        self.value.as_ref()
+    }
+
     /// Whether this descriptor (as returned by a Proxy `defineProperty` request)
     /// is compatible with an existing target property under the
     /// IsCompatiblePropertyDescriptor rules, given the target's extensibility.

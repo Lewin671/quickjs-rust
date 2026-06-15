@@ -4,7 +4,7 @@ use num_bigint::BigInt;
 
 use crate::{
     NativeFunction, ObjectRef, Property, RuntimeError, Value, array_buffer, bigint,
-    to_number_with_env,
+    object::PropertyDescriptor, to_number_with_env,
 };
 
 use super::{
@@ -314,6 +314,34 @@ pub(crate) fn define_indexed_element_value(
     let native = typed_array_kind(object);
     let coerced = coerce_element(native, value, env)?;
     set_view_element(object, index, coerced);
+    Ok(IndexedDefine::Defined)
+}
+
+/// Implements the integer-indexed branch of TypedArray [[DefineOwnProperty]].
+pub(crate) fn define_indexed_property_descriptor(
+    object: &ObjectRef,
+    key: &str,
+    descriptor: &PropertyDescriptor,
+    env: &mut CallEnv,
+) -> Result<IndexedDefine, RuntimeError> {
+    let Some(number) = canonical_numeric_index(key) else {
+        return Ok(IndexedDefine::NotIndexed);
+    };
+    if valid_integer_index(object, number).is_none() {
+        return Ok(IndexedDefine::Rejected);
+    }
+    if descriptor.is_accessor_descriptor()
+        || descriptor.configurable_field() == Some(false)
+        || descriptor.enumerable_field() == Some(false)
+        || descriptor.writable_field() == Some(false)
+    {
+        return Ok(IndexedDefine::Rejected);
+    }
+    if let Some(value) = descriptor.value_field() {
+        let IndexedWrite::Handled = set_indexed_element(object, key, value.clone(), env)? else {
+            unreachable!("canonical numeric index must be handled by typed-array setter");
+        };
+    }
     Ok(IndexedDefine::Defined)
 }
 

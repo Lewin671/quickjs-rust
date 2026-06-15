@@ -142,6 +142,80 @@ fn own_property_descriptor_uses_current_indexed_element_state() {
 }
 
 #[test]
+fn define_own_property_uses_integer_indexed_semantics() {
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([1, 2]); \
+             let ok = Reflect.defineProperty(a, '0', { \
+               value: 257, configurable: true, enumerable: true, writable: true \
+             }); \
+             let rejectWritable = Reflect.defineProperty(a, '1', { \
+               value: 9, configurable: true, enumerable: true, writable: false \
+             }); \
+             let rejectOutOfRange = Reflect.defineProperty(a, '2', { \
+               value: 9, configurable: true, enumerable: true, writable: true \
+             }); \
+             let rejectFractional = Reflect.defineProperty(a, '0.5', { \
+               value: 9, configurable: true, enumerable: true, writable: true \
+             }); \
+             ok + ':' + a[0] + ':' + rejectWritable + ':' + a[1] + ':' \
+             + rejectOutOfRange + ':' + (a[2] === undefined) + ':' \
+             + rejectFractional + ':' + (a['0.5'] === undefined);"
+        ),
+        Ok(Value::String(
+            "true:1:false:2:false:true:false:true".to_owned()
+        ))
+    );
+    assert_eq!(
+        eval(
+            "let a = new BigInt64Array([1n]); \
+             Reflect.defineProperty(a, '0', { value: Object(2n) }) + ':' + a[0];"
+        ),
+        Ok(Value::String("true:2".to_owned()))
+    );
+}
+
+#[test]
+fn object_define_property_throws_for_rejected_typed_array_indices() {
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([1]); let descriptor = Object.getOwnPropertyDescriptor(a, '0'); \
+             let badIndex = false; let badAttrs = false; \
+             try { Object.defineProperty(a, '-0', descriptor); } \
+             catch (e) { badIndex = e instanceof TypeError; } \
+             try { Object.defineProperty(a, '0', { configurable: false }); } \
+             catch (e) { badAttrs = e instanceof TypeError; } \
+             badIndex + ':' + badAttrs + ':' + a[0];"
+        ),
+        Ok(Value::String("true:true:1".to_owned()))
+    );
+}
+
+#[test]
+fn typed_array_define_property_coercion_order_matches_integer_indexed_set() {
+    assert_eq!(
+        eval(
+            "let calls = 0; let a = new Uint8Array([1]); \
+             let value = { valueOf() { calls += 1; return 258; } }; \
+             let ok = Reflect.defineProperty(a, '0', { value }); \
+             let rejected = Reflect.defineProperty(a, '1', { value }); \
+             ok + ':' + rejected + ':' + calls + ':' + a[0] + ':' + (a[1] === undefined);"
+        ),
+        Ok(Value::String("true:false:1:2:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let a = new BigInt64Array([17n]); \
+             let ok = Reflect.defineProperty(a, '0', { \
+               value: { valueOf() { a.buffer.transfer(); return 42n; } } \
+             }); \
+             ok + ':' + (a[0] === undefined);"
+        ),
+        Ok(Value::String("true:true".to_owned()))
+    );
+}
+
+#[test]
 fn detached_typed_array_for_in_skips_stale_index_descriptors() {
     assert_eq!(
         eval(
