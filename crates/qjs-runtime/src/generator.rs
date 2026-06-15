@@ -115,10 +115,15 @@ pub(crate) fn install_generator(
             true,
         ),
     );
-    // %GeneratorPrototype%.constructor is %GeneratorFunction%.
+    // %GeneratorPrototype%.constructor is %GeneratorFunction.prototype%.
     generator_prototype.define_property(
         "constructor".to_owned(),
-        Property::data(Value::Function(generator_function), false, false, true),
+        Property::data(
+            Value::Object(generator_function_prototype.clone()),
+            false,
+            false,
+            true,
+        ),
     );
 
     env.insert_realm(

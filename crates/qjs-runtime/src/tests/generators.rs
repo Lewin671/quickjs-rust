@@ -621,6 +621,18 @@ fn generator_function_prototype_chain() {
     assert!(boolean(
         "function* g() {} let gp = Object.getPrototypeOf(g).prototype; gp.isPrototypeOf(g());"
     ));
+    // %GeneratorPrototype%.constructor points back to
+    // %GeneratorFunction.prototype%, with the spec descriptor attributes.
+    assert_eq!(
+        string(
+            "function* g() {} \
+             let Generator = Object.getPrototypeOf(g); \
+             let GeneratorPrototype = Generator.prototype; \
+             let descriptor = Object.getOwnPropertyDescriptor(GeneratorPrototype, 'constructor'); \
+             [GeneratorPrototype.constructor === Generator, descriptor.writable, descriptor.enumerable, descriptor.configurable].join(':');"
+        ),
+        "true:false:false:true"
+    );
     // A generator instance still inherits the iterator protocol methods.
     assert_eq!(string("typeof (function* () {})().next;"), "function");
 }
