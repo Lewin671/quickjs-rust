@@ -42,6 +42,15 @@ pub(crate) struct CallEnv {
     /// `super`, but they do retain access to private names declared by enclosing
     /// classes.
     private_environment: Option<PrivateEnvironment>,
+    /// The activation captured-env cell for the frame that produced this view.
+    /// User callbacks use it to distinguish same-activation closure write-back
+    /// from an unrelated caller's same-named local binding.
+    activation_captured_env: Option<Rc<RefCell<HashMap<String, Value>>>>,
+    /// The captured-env cell that supplied this frame's closure bindings.
+    /// Sibling closures called through an intermediate user frame compare
+    /// against this source so they can still write through shared outer
+    /// bindings.
+    captured_binding_source_env: Option<Rc<RefCell<HashMap<String, Value>>>>,
     /// The realm's dynamic-import host (module graph + resolver + active
     /// referrer), shared by `Rc::clone` into every frame and the job queue so a
     /// dynamic `import()` reached at any depth can load and cache modules. `None`
@@ -56,6 +65,14 @@ impl std::fmt::Debug for CallEnv {
             .field("realm", &self.realm)
             .field("locals", &self.locals)
             .field("module_host", &self.module_host.is_some())
+            .field(
+                "activation_captured_env",
+                &self.activation_captured_env.is_some(),
+            )
+            .field(
+                "captured_binding_source_env",
+                &self.captured_binding_source_env.is_some(),
+            )
             .finish()
     }
 }
@@ -70,6 +87,8 @@ impl CallEnv {
             realm,
             locals: HashMap::new(),
             private_environment: None,
+            activation_captured_env: None,
+            captured_binding_source_env: None,
             module_host: None,
         }
     }
@@ -93,6 +112,8 @@ impl CallEnv {
             realm: Rc::new(RefCell::new(HashMap::new())),
             locals: HashMap::new(),
             private_environment: None,
+            activation_captured_env: None,
+            captured_binding_source_env: None,
             module_host: None,
         }
     }
@@ -105,6 +126,8 @@ impl CallEnv {
             realm: Rc::new(RefCell::new(map)),
             locals: HashMap::new(),
             private_environment: None,
+            activation_captured_env: None,
+            captured_binding_source_env: None,
             module_host: None,
         }
     }
@@ -115,6 +138,8 @@ impl CallEnv {
             realm,
             locals,
             private_environment: None,
+            activation_captured_env: None,
+            captured_binding_source_env: None,
             module_host: None,
         }
     }
@@ -142,6 +167,33 @@ impl CallEnv {
     /// Installs the lexical private-name environment for this frame.
     pub(crate) fn set_private_environment(&mut self, environment: Option<PrivateEnvironment>) {
         self.private_environment = environment;
+    }
+
+    /// Installs the activation captured-env identity for this frame.
+    pub(crate) fn set_activation_captured_env(&mut self, env: Rc<RefCell<HashMap<String, Value>>>) {
+        self.activation_captured_env = Some(env);
+    }
+
+    /// Returns the activation captured-env identity for this frame, if known.
+    pub(crate) fn activation_captured_env(&self) -> Option<&Rc<RefCell<HashMap<String, Value>>>> {
+        self.activation_captured_env.as_ref()
+    }
+
+    /// Installs the captured-env cell that supplied this frame's closure
+    /// bindings.
+    pub(crate) fn set_captured_binding_source_env(
+        &mut self,
+        env: Rc<RefCell<HashMap<String, Value>>>,
+    ) {
+        self.captured_binding_source_env = Some(env);
+    }
+
+    /// Returns the captured-env cell that supplied this frame's closure
+    /// bindings, if known.
+    pub(crate) fn captured_binding_source_env(
+        &self,
+    ) -> Option<&Rc<RefCell<HashMap<String, Value>>>> {
+        self.captured_binding_source_env.as_ref()
     }
 
     /// This frame's own locals layer, mutably.
@@ -230,6 +282,8 @@ impl CallEnv {
             realm: Rc::clone(&self.realm),
             locals,
             private_environment: self.private_environment.clone(),
+            activation_captured_env: self.activation_captured_env.clone(),
+            captured_binding_source_env: self.captured_binding_source_env.clone(),
             module_host: self.module_host.clone(),
         }
     }

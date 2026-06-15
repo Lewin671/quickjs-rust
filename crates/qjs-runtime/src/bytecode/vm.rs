@@ -154,6 +154,10 @@ impl<'a> Vm<'a> {
         }
         let mut env = self.attach_host(CallEnv::with_locals(self.realm_rc(), locals));
         env.set_private_environment(self.current_private_environment());
+        env.set_activation_captured_env(Rc::clone(&self.captured_env));
+        if let Some(source) = self.env.captured_binding_source_env() {
+            env.set_captured_binding_source_env(Rc::clone(source));
+        }
         env
     }
 
@@ -794,9 +798,15 @@ impl<'a> Vm<'a> {
                     );
                 }
             }
+            let injected = locals.clone();
+            let mut env = self.attach_host(CallEnv::with_locals(self.realm_rc(), locals));
+            env.set_activation_captured_env(Rc::clone(&self.captured_env));
+            if let Some(source) = self.env.captured_binding_source_env() {
+                env.set_captured_binding_source_env(Rc::clone(source));
+            }
             return VmCallEnv {
-                injected: locals.clone(),
-                env: self.attach_host(CallEnv::with_locals(self.realm_rc(), locals)),
+                injected,
+                env,
                 binding_names: Some(binding_names),
             };
         }

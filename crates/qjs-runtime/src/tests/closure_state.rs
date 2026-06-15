@@ -71,4 +71,43 @@ fn nested_closures_capture_live_outer_bindings() {
         ),
         Ok(Value::String("updated".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "let src = [42, 43];
+             function make() {
+                 var src = [1, 2, 3, 4];
+                 return function () { return src[0]; };
+             }
+             let read = make();
+             read() + ':' + src.join(',');"
+        ),
+        Ok(Value::String("1:42,43".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let src = 1;
+             function make() {
+                 var src = 1;
+                 return function () { src = 2; return src; };
+             }
+             let write = make();
+             write() + ':' + src;"
+        ),
+        Ok(Value::String("2:1".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "function makeIterable(values) {
+                 var src = Array.from(values);
+                 var obj = {};
+                 obj[Symbol.iterator] = function () { return src[Symbol.iterator](); };
+                 return obj;
+             }
+             let src = [42, 43];
+             let sample = new Float64Array(makeIterable([1, 2, 3, 4]));
+             sample.set(src, 0);
+             src.join(',') + '|' + sample.join(',');"
+        ),
+        Ok(Value::String("42,43|42,43,3,4".to_owned()))
+    );
 }
