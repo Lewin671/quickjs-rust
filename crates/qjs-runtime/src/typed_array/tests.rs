@@ -374,6 +374,26 @@ fn bigint_arrays_wrap_and_reject_numbers() {
 }
 
 #[test]
+fn object_constructor_rejects_non_callable_iterator_method() {
+    assert!(
+        eval(
+            "let source = { length: 1, 0: 7 }; source[Symbol.iterator] = 1; new Uint8Array(source);"
+        )
+        .is_err()
+    );
+    assert!(
+        eval("let source = { length: 1, 0: 7n }; source[Symbol.iterator] = true; new BigInt64Array(source);")
+            .is_err()
+    );
+    assert_eq!(
+        eval(
+            "let source = { length: 1, 0: 7 }; source[Symbol.iterator] = null; new Uint8Array(source)[0];"
+        ),
+        Ok(Value::Number(7.0))
+    );
+}
+
+#[test]
 fn indexed_write_routes_through_per_kind_conversion() {
     // Direct `ta[i] = v` writes apply the per-kind numeric conversion and
     // persist through the backing buffer (IntegerIndexedElementSet).

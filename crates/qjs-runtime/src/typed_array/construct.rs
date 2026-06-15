@@ -235,10 +235,17 @@ fn initialize_from_object(
         None => Value::Undefined,
     };
 
-    let raw_values = if matches!(iterator_method, Value::Function(_)) {
-        array::iterable_values_with_env(source, "TypedArray", env)?
-    } else {
-        array::array_like_values_with_env(source, "TypedArray", env)?
+    let raw_values = match iterator_method {
+        Value::Undefined | Value::Null => {
+            array::array_like_values_with_env(source, "TypedArray", env)?
+        }
+        Value::Function(_) => array::iterable_values_with_env(source, "TypedArray", env)?,
+        _ => {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: TypedArray @@iterator method is not callable".to_owned(),
+            });
+        }
     };
 
     let mut values = Vec::with_capacity(raw_values.len());
