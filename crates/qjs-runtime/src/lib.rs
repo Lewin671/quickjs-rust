@@ -14,6 +14,7 @@ mod bytecode;
 mod conversion;
 mod data_view;
 mod date;
+mod disposable_stack;
 mod error;
 mod finalization_registry;
 mod function;
@@ -123,6 +124,7 @@ pub(crate) const RUNTIME_INTRINSIC_NAMES: &[&str] = &[
     "Array",
     "ArrayBuffer",
     "SharedArrayBuffer",
+    "DisposableStack",
     "Atomics",
     "Uint8Array",
     "Uint16Array",

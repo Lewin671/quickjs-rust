@@ -4,6 +4,7 @@ mod atomics;
 mod core;
 mod data_views;
 mod date;
+mod disposable_stacks;
 mod errors;
 mod finalization_registries;
 mod json;
@@ -79,6 +80,16 @@ pub(crate) fn call_native_function(
         native,
         this_value.clone(),
         &argument_values,
+        is_construct,
+        env,
+    )? {
+        return Ok(value);
+    }
+
+    if let Some(value) = disposable_stacks::call_disposable_stack_native(
+        function,
+        native,
+        this_value.clone(),
         is_construct,
         env,
     )? {

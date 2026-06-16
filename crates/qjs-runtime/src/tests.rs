@@ -13,6 +13,7 @@ mod closure_state;
 mod date;
 mod date_format;
 mod date_setters;
+mod disposable_stacks;
 mod errors;
 mod expressions;
 mod functions;
