@@ -93,6 +93,11 @@ gaps: `TypedArray` 2,027, `ArrayBuffer` 263, `DataView` 188 — concentrated in
       source elements live each step, and `Set` mapped/kept values through the
       result's element coercion: `filter` moved 40 -> 4 and `map` 32 -> 5
       actionable gaps, leaving only resizable/immutable-buffer variants.
+      `subarray` now allocates through `TypedArraySpeciesCreate(O, « buffer,
+      beginByteOffset, newLength »)` and only brand-checks O up front (a
+      detached/out-of-bounds view yields srcLength 0, still coerces start/end,
+      then construction throws): 24 -> 2 actionable gaps, leaving
+      resizable-buffer variants.
 
 ## Scope
 

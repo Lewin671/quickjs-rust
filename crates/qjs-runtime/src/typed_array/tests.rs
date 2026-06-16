@@ -808,6 +808,45 @@ fn subarray_creates_shared_buffer_view() {
 }
 
 #[test]
+fn subarray_uses_species_constructor() {
+    // subarray allocates through @@species with (buffer, beginByteOffset,
+    // newLength); a custom constructor is invoked once and used verbatim.
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([40, 41, 42]); \
+             let args = ''; \
+             a.constructor = {}; \
+             a.constructor[Symbol.species] = function(buffer, offset, length) { \
+                 args = (buffer instanceof ArrayBuffer) + ',' + offset + ',' + length; \
+                 return new Uint8Array(buffer, offset, length); \
+             }; \
+             let r = a.subarray(1); \
+             args + ':' + r.join(',');"
+        ),
+        Ok(Value::String("true,1,2:41,42".to_owned()))
+    );
+}
+
+#[test]
+fn subarray_on_detached_coerces_then_throws() {
+    // A detached buffer yields srcLength 0 but the relative-index arguments are
+    // still coerced (observable valueOf) before construction throws.
+    assert_eq!(
+        eval(
+            "let a = new Int8Array(2); \
+             let seen = ''; \
+             __quickjsRustDetachArrayBuffer(a.buffer); \
+             let begin = { valueOf() { seen += 'b'; return 0; } }; \
+             let end = { valueOf() { seen += 'e'; return 2; } }; \
+             let threw = false; \
+             try { a.subarray(begin, end); } catch (e) { threw = e instanceof TypeError; } \
+             seen + ':' + threw;"
+        ),
+        Ok(Value::String("be:true".to_owned()))
+    );
+}
+
+#[test]
 fn uint8_array_to_base64_encodes_with_options() {
     assert_eq!(
         eval(

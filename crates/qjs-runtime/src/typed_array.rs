@@ -484,18 +484,6 @@ pub(crate) fn validate_typed_array_write(
     Ok((object, length))
 }
 
-/// Brand-checks `value` as an attached typed array, but preserves the current
-/// length computation for out-of-bounds resizable-buffer views.
-pub(crate) fn validate_typed_array_length(
-    value: &Value,
-) -> Result<(ObjectRef, usize), RuntimeError> {
-    let object = typed_array_receiver(value)?;
-    if typed_array_buffer_detached(&object) {
-        return Err(array_buffer::detached_error());
-    }
-    Ok((object.clone(), typed_array_length(&object)))
-}
-
 /// Builds a fresh typed array of `native`'s kind backed by a new buffer, with
 /// the given already-coerced element values, materializing index reads. Used by
 /// the methods that return a new typed array (`map`, `filter`, `slice`, …).
@@ -508,10 +496,31 @@ pub(crate) fn create_typed_array_of_kind(
 }
 
 /// Implements TypedArraySpeciesCreate for prototype methods that allocate a
-/// result through the receiver's constructor / @@species hook.
+/// length-sized result through the receiver's constructor / @@species hook.
+/// The single-Number argument form additionally rejects an under-length
+/// result, matching TypedArrayCreate.
 pub(crate) fn typed_array_species_create(
     exemplar: &ObjectRef,
     length: usize,
+    env: &mut CallEnv,
+) -> Result<(Value, ObjectRef), RuntimeError> {
+    let (result, object) =
+        typed_array_species_create_with_args(exemplar, vec![Value::Number(length as f64)], env)?;
+    if typed_array_length(&object) < length {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: typed array species result is too short".to_owned(),
+        });
+    }
+    Ok((result, object))
+}
+
+/// TypedArraySpeciesCreate with an explicit argument list, used by `subarray`
+/// (`buffer`, `byteOffset`, `length`). No under-length check runs: that guard
+/// only applies to the single-Number form.
+pub(crate) fn typed_array_species_create_with_args(
+    exemplar: &ObjectRef,
+    args: Vec<Value>,
     env: &mut CallEnv,
 ) -> Result<(Value, ObjectRef), RuntimeError> {
     let default_constructor = env
@@ -522,19 +531,8 @@ pub(crate) fn typed_array_species_create(
         thrown: None,
         message: "TypeError: TypedArray species is not a constructor".to_owned(),
     })?;
-    let result = construct_function(
-        constructor.clone(),
-        constructor,
-        vec![Value::Number(length as f64)],
-        env,
-    )?;
-    let (object, actual_length) = validate_typed_array(&result)?;
-    if actual_length < length {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "TypeError: typed array species result is too short".to_owned(),
-        });
-    }
+    let result = construct_function(constructor.clone(), constructor, args, env)?;
+    let (object, _actual_length) = validate_typed_array(&result)?;
     Ok((result, object))
 }
 
