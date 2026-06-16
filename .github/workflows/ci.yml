@@ -14,6 +14,7 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -31,7 +32,7 @@ jobs:
         # checks out no test262 submodule. Split qjs-runtime's typed-array
         # tests into smaller processes on hosted runners to avoid resource
         # cancellation while preserving coverage.
-        run: RUST_TEST_THREADS=1 QJS_CHECK_SPLIT_RUNTIME_TESTS=1 QJS_CHECK_SKIP_TEST262=1 ./scripts/check.sh
+        run: ./scripts/check-ci.sh
 
       - name: Build qjs-cli coverage artifact binary
         run: cargo build -q --release -p qjs-cli

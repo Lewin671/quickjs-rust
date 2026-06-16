@@ -45,6 +45,19 @@ Remote CI is an additional signal, not a replacement for local verification.
 Do not merge or stack dependent work on a branch whose latest pushed CI run is
 red or still unexplained.
 
+For changes that can affect runtime scheduling, CI scripts, or hosted-runner
+resource usage, run the GitHub Actions check job locally through the parity
+wrapper:
+
+```sh
+./scripts/check-ci.sh
+```
+
+This uses serialized split runtime tests and skips the Test262 subset because
+CI runs that subset in a separate job. `scripts/check.sh` prints coarse stage
+timings in both normal and split modes so a canceled remote step leaves enough
+context to distinguish compile, lint, runtime, file-size, and subset failures.
+
 ## Parallel Task
 
 Use isolated worktrees only when ownership boundaries are clear:

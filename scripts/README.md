@@ -9,6 +9,9 @@ each script is for.
 
 - `check.sh`: Standard project gate: formatting, clippy, workspace tests, and
   file-size limits.
+- `check-ci.sh`: Local parity wrapper for the GitHub Actions `check` job. It
+  runs `check.sh` with serialized, split runtime tests and skips Test262
+  because the workflow owns that in a dedicated job.
 - `compare-qjs.sh`: Runs `tests/fixtures/compare-qjs/` fixtures against both
   quickjs-rust and the pinned QuickJS-NG reference.
 - `find-qjsng-gaps.sh`: First agent entrypoint for conformance work. Wraps
