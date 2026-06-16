@@ -221,20 +221,20 @@ pub(crate) fn native_error_prototype_to_string(
     this_value: Value,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let Value::Object(object) = this_value else {
+    if !is_error_to_string_receiver_object(&this_value) {
         return Err(RuntimeError {
             thrown: None,
             message: "Error.prototype.toString called on non-object".to_owned(),
         });
-    };
+    }
 
-    let name = match object.get("name") {
-        Some(Value::Undefined) | None => "Error".to_owned(),
-        Some(value) => to_js_string_with_env(value, env)?,
+    let name = match property_value(this_value.clone(), "name", env)? {
+        Value::Undefined => "Error".to_owned(),
+        value => to_js_string_with_env(value, env)?,
     };
-    let message = match object.get("message") {
-        Some(Value::Undefined) | None => String::new(),
-        Some(value) => to_js_string_with_env(value, env)?,
+    let message = match property_value(this_value, "message", env)? {
+        Value::Undefined => String::new(),
+        value => to_js_string_with_env(value, env)?,
     };
 
     Ok(Value::String(match (name.is_empty(), message.is_empty()) {
@@ -243,6 +243,16 @@ pub(crate) fn native_error_prototype_to_string(
         (false, true) => name,
         (false, false) => format!("{name}: {message}"),
     }))
+}
+
+fn is_error_to_string_receiver_object(value: &Value) -> bool {
+    match value {
+        Value::Object(object) => !symbol::is_symbol_primitive(object),
+        Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) | Value::Proxy(_) => {
+            true
+        }
+        _ => false,
+    }
 }
 
 pub(crate) fn native_error_is_error(argument_values: &[Value]) -> Value {

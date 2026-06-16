@@ -59,6 +59,48 @@ fn evaluates_error_builtins() {
         Ok(Value::String("Custom: boom".to_owned()))
     );
     assert_eq!(
+        eval(
+            "[
+                undefined,
+                null,
+                1,
+                true,
+                'string',
+                Symbol()
+             ].map(function (value) {
+                try {
+                    Error.prototype.toString.call(value);
+                    return 'ok';
+                } catch (error) {
+                    return error instanceof TypeError;
+                }
+             }).join('|');"
+        ),
+        Ok(Value::String("true|true|true|true|true|true".to_owned()))
+    );
+    assert!(
+        eval("Error.prototype.toString.call({ get name() { throw new Error('name'); } });")
+            .expect_err("name getter abrupt completion should be propagated")
+            .message
+            .contains("Error: name")
+    );
+    assert!(
+        eval("Error.prototype.toString.call({ get message() { throw new Error('message'); } });")
+            .expect_err("message getter abrupt completion should be propagated")
+            .message
+            .contains("Error: message")
+    );
+    assert_eq!(
+        eval("Error.prototype.toString.call(Object(Symbol('boxed')));"),
+        Ok(Value::String("Error".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let fn = function named() {}; fn.message = 'callable'; Error.prototype.toString.call(fn);"
+        ),
+        Ok(Value::String("named: callable".to_owned()))
+    );
+    assert_eq!(
         eval("Object.prototype.toString.call(new Error('boom'));"),
         Ok(Value::String("[object Error]".to_owned()))
     );
