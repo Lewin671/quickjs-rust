@@ -75,13 +75,6 @@ fn to_object_for_define_properties(value: Value, env: &CallEnv) -> Result<Value,
     }
 }
 
-pub(super) fn own_property_descriptor(
-    value: Value,
-    key: &str,
-) -> Result<Option<Property>, RuntimeError> {
-    own_property_descriptor_key(value, &PropertyKey::String(key.to_owned()))
-}
-
 pub(crate) fn own_property_descriptor_key(
     value: Value,
     key: &PropertyKey,

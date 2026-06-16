@@ -206,7 +206,7 @@ fn enumerable_property_keys(value: Value, env: &mut CallEnv) -> Result<Vec<Strin
     Ok(enumerable)
 }
 
-fn own_property_keys_for_enumeration(
+pub(crate) fn own_property_keys_for_enumeration(
     value: Value,
     include_symbols: bool,
     env: &mut CallEnv,
@@ -234,7 +234,7 @@ fn own_property_keys_for_enumeration(
         .collect())
 }
 
-fn observable_own_property_descriptor(
+pub(crate) fn observable_own_property_descriptor(
     value: Value,
     key: &PropertyKey,
     env: &mut CallEnv,

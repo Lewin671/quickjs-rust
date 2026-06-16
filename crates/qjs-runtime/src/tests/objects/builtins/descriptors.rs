@@ -104,6 +104,16 @@ fn evaluates_object_descriptor_queries() {
     );
     assert!(eval("Object.getOwnPropertyDescriptors(null);").is_err());
     assert!(eval("Object.getOwnPropertyDescriptors(undefined);").is_err());
+    // getOwnPropertyDescriptors drives a Proxy's ownKeys once, then its
+    // getOwnPropertyDescriptor per key, in [[OwnPropertyKeys]] order.
+    assert_eq!(
+        eval(
+            "let log = ''; let t = { a: 1, b: 2, c: 3 }; \
+             let p = new Proxy(t, { ownKeys(o) { log += 'K'; return Reflect.ownKeys(o); }, getOwnPropertyDescriptor(o, k) { log += k; return Reflect.getOwnPropertyDescriptor(o, k); } }); \
+             let d = Object.getOwnPropertyDescriptors(p); log + ':' + Object.keys(d).join(',') + ':' + d.b.value;"
+        ),
+        Ok(Value::String("Kabc:a,b,c:2".to_owned()))
+    );
 }
 
 #[test]

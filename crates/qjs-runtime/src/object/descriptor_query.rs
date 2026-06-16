@@ -5,7 +5,7 @@ use crate::{
 };
 
 use super::{
-    descriptor::{own_property_descriptor, own_property_descriptor_key},
+    descriptor::own_property_descriptor_key,
     descriptor_record::property_descriptor_object,
     enumeration::{own_property_names, own_property_symbols},
 };
@@ -50,7 +50,7 @@ pub(crate) fn native_object_get_own_property_descriptor(
 
 pub(crate) fn native_object_get_own_property_descriptors(
     argument_values: &[Value],
-    env: &CallEnv,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if matches!(target, Value::Null | Value::Undefined) {
@@ -61,28 +61,38 @@ pub(crate) fn native_object_get_own_property_descriptors(
         });
     }
     let prototype = object_prototype(env);
-    let mut descriptors = HashMap::new();
-    for key in own_property_names(target.clone()) {
-        if let Some(property) = own_property_descriptor(target.clone(), &key)? {
-            descriptors.insert(
-                key,
-                Value::Object(property_descriptor_object(property, prototype.clone())),
-            );
+    let result = ObjectRef::with_prototype(HashMap::new(), prototype.clone());
+    // Per spec: ownKeys = ? O.[[OwnPropertyKeys]](); then for each key in that
+    // order, ? O.[[GetOwnProperty]](key). Both run a Proxy's traps. This covers
+    // every own key (enumerable or not), unlike for-in enumeration.
+    let keys: Vec<PropertyKey> = if let Value::Proxy(proxy) = &target {
+        crate::proxy::proxy_own_keys(proxy.clone(), env)?
+    } else {
+        own_property_names(target.clone())
+            .into_iter()
+            .map(PropertyKey::String)
+            .chain(
+                own_property_symbols(target.clone())
+                    .into_iter()
+                    .map(PropertyKey::Symbol),
+            )
+            .collect()
+    };
+    for key in keys {
+        let Some(property) =
+            super::enumeration::observable_own_property_descriptor(target.clone(), &key, env)?
+        else {
+            continue;
+        };
+        let descriptor = Value::Object(property_descriptor_object(property, prototype.clone()));
+        match key {
+            PropertyKey::String(name) => {
+                result.define_property(name, Property::enumerable(descriptor));
+            }
+            PropertyKey::Symbol(symbol) => {
+                result.define_symbol_property(symbol, Property::enumerable(descriptor));
+            }
         }
     }
-    let result = ObjectRef::with_prototype(descriptors, prototype.clone());
-    for symbol in own_property_symbols(target.clone()) {
-        let key = PropertyKey::Symbol(symbol.clone());
-        if let Some(property) = own_property_descriptor_key(target.clone(), &key)? {
-            result.define_symbol_property(
-                symbol,
-                Property::enumerable(Value::Object(property_descriptor_object(
-                    property,
-                    prototype.clone(),
-                ))),
-            );
-        }
-    }
-
     Ok(Value::Object(result))
 }
