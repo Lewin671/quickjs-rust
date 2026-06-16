@@ -293,6 +293,9 @@ pub(crate) fn proxy_delete_property(
     let target = proxy.target_result()?;
     let handler = proxy.handler_result()?;
     let Some(trap) = proxy_trap(handler.clone(), "deleteProperty", env)? else {
+        if let Value::Proxy(inner) = target {
+            return proxy_delete_property(inner, key, env);
+        }
         return Ok(ordinary_delete_property(target, key));
     };
     let result = call_function(
@@ -500,11 +503,15 @@ pub(crate) fn proxy_is_extensible(
     let target = proxy.target_result()?;
     let handler = proxy.handler_result()?;
     let Some(trap) = proxy_trap(handler.clone(), "isExtensible", env)? else {
+        if let Value::Proxy(inner) = target {
+            return proxy_is_extensible(inner, env);
+        }
         return Ok(crate::object::ordinary_value_is_extensible(&target));
     };
     let result = call_function(trap, handler, vec![target.clone()], env, false)?;
     let trap_result = is_truthy(&result);
-    if trap_result != crate::object::ordinary_value_is_extensible(&target) {
+    // The invariant consults the target's own (proxy-aware) [[IsExtensible]].
+    if trap_result != crate::object::value_is_extensible(&target, env)? {
         return Err(invariant_error(
             "isExtensible trap result disagrees with the target",
         ));
@@ -521,6 +528,9 @@ pub(crate) fn proxy_prevent_extensions(
     let target = proxy.target_result()?;
     let handler = proxy.handler_result()?;
     let Some(trap) = proxy_trap(handler.clone(), "preventExtensions", env)? else {
+        if let Value::Proxy(inner) = target {
+            return proxy_prevent_extensions(inner, env);
+        }
         crate::object::ordinary_prevent_extensions(&target);
         return Ok(true);
     };
@@ -528,7 +538,8 @@ pub(crate) fn proxy_prevent_extensions(
     if !is_truthy(&result) {
         return Ok(false);
     }
-    if crate::object::ordinary_value_is_extensible(&target) {
+    // The invariant consults the target's own (proxy-aware) [[IsExtensible]].
+    if crate::object::value_is_extensible(&target, env)? {
         return Err(invariant_error(
             "preventExtensions trap reported success while the target is still extensible",
         ));

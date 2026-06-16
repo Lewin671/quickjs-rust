@@ -232,6 +232,33 @@ fn evaluates_proxy_extensibility_traps() {
         ),
         Ok(Value::Boolean(true))
     );
+    // Absent traps forward to a Proxy target's own internal methods.
+    assert_eq!(
+        eval(
+            "let calls = 0; \
+             let target = new Proxy({}, { isExtensible() { calls++; return false; }, preventExtensions(t) { Object.preventExtensions(t); return true; } }); \
+             Object.preventExtensions(target); \
+             let p = new Proxy(target, {}); \
+             Object.isExtensible(p) + ':' + (calls > 0);"
+        ),
+        Ok(Value::String("false:true".to_owned()))
+    );
+    // deleteProperty forwards through a Proxy target: a configurable property is
+    // dropped, a non-configurable one reports false.
+    assert_eq!(
+        eval(
+            "let t = {}; Object.defineProperty(t, 'a', { value: 1, configurable: true }); \
+             let p = new Proxy(new Proxy(t, {}), {}); (delete p.a) + ':' + ('a' in t);"
+        ),
+        Ok(Value::String("true:false".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let t = {}; Object.defineProperty(t, 'b', { value: 1, configurable: false }); \
+             let p = new Proxy(new Proxy(t, {}), {}); Reflect.deleteProperty(p, 'b') + ':' + ('b' in t);"
+        ),
+        Ok(Value::String("false:true".to_owned()))
+    );
 }
 
 #[test]
