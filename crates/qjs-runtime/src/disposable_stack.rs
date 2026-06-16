@@ -116,6 +116,46 @@ fn install_async_disposable_stack(
         true,
     );
     prototype.define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
+    prototype.define_property(
+        "disposed".to_owned(),
+        Property::accessor(
+            Some(Value::Function(Function::new_native(
+                Some("get disposed"),
+                0,
+                NativeFunction::AsyncDisposableStackPrototypeDisposed,
+                false,
+            ))),
+            None,
+            false,
+            true,
+        ),
+    );
+    define_prototype_method(
+        &prototype,
+        "defer",
+        1,
+        NativeFunction::AsyncDisposableStackPrototypeDefer,
+    );
+    let dispose_async = Function::new_native(
+        Some("disposeAsync"),
+        0,
+        NativeFunction::AsyncDisposableStackPrototypeDisposeAsync,
+        false,
+    );
+    let dispose_async_value = Value::Function(dispose_async);
+    prototype.define_non_enumerable("disposeAsync".to_owned(), dispose_async_value.clone());
+    if let Some(async_dispose_symbol) = symbol::async_dispose_symbol(env) {
+        prototype.define_symbol_property(
+            async_dispose_symbol,
+            Property::non_enumerable(dispose_async_value),
+        );
+    }
+    define_prototype_method(
+        &prototype,
+        "move",
+        0,
+        NativeFunction::AsyncDisposableStackPrototypeMove,
+    );
     function.properties.borrow_mut().insert(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(prototype)),
@@ -148,6 +188,10 @@ pub(crate) fn native_async_disposable_stack(
         ASYNC_DISPOSABLE_STACK_DISPOSED.to_owned(),
         Property::non_enumerable(Value::Boolean(false)),
     );
+    object.define_property(
+        DISPOSABLE_STACK_RESOURCES.to_owned(),
+        Property::non_enumerable(Value::Array(ArrayRef::new(Vec::new()))),
+    );
     Ok(Value::Object(object))
 }
 
@@ -176,6 +220,85 @@ pub(crate) fn native_disposable_stack(
         Property::non_enumerable(Value::Array(ArrayRef::new(Vec::new()))),
     );
     Ok(Value::Object(object))
+}
+
+pub(crate) fn native_async_disposable_stack_prototype_defer(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let object = async_disposable_stack_object(&this_value)?;
+    ensure_async_pending(&object)?;
+    let on_dispose = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    if !is_callable(&on_dispose) {
+        return Err(not_callable_error(
+            "AsyncDisposableStack.prototype.defer disposer",
+        ));
+    }
+    push_resource(
+        &object,
+        DisposableResourceKind::Defer,
+        Value::Undefined,
+        on_dispose,
+    )?;
+    Ok(Value::Undefined)
+}
+
+pub(crate) fn native_async_disposable_stack_prototype_disposed(
+    this_value: Value,
+) -> Result<Value, RuntimeError> {
+    let object = async_disposable_stack_object(&this_value)?;
+    Ok(object
+        .own_property(ASYNC_DISPOSABLE_STACK_DISPOSED)
+        .map(|property| property.value)
+        .unwrap_or(Value::Boolean(false)))
+}
+
+pub(crate) fn native_async_disposable_stack_prototype_dispose_async(
+    this_value: Value,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let object = async_disposable_stack_object(&this_value)?;
+    if !is_async_disposed(&object) {
+        object.define_property(
+            ASYNC_DISPOSABLE_STACK_DISPOSED.to_owned(),
+            Property::non_enumerable(Value::Boolean(true)),
+        );
+        let resources = disposable_stack_resources(&object)?;
+        while let Some(resource) = resources.pop() {
+            dispose_resource(resource, env)?;
+        }
+    }
+    fulfilled_promise(Value::Undefined, env)
+}
+
+pub(crate) fn native_async_disposable_stack_prototype_move(
+    this_value: Value,
+    env: &CallEnv,
+) -> Result<Value, RuntimeError> {
+    let object = async_disposable_stack_object(&this_value)?;
+    ensure_async_pending(&object)?;
+    let resources = disposable_stack_resources(&object)?;
+    let moved_resources = resources.to_vec();
+    resources.replace_with(Vec::new());
+    object.define_property(
+        ASYNC_DISPOSABLE_STACK_DISPOSED.to_owned(),
+        Property::non_enumerable(Value::Boolean(true)),
+    );
+
+    let prototype = env
+        .get("AsyncDisposableStack")
+        .and_then(|constructor| crate::constructor_prototype_slot(&constructor, env));
+    let new_stack = ObjectRef::with_prototype_slot(HashMap::new(), prototype);
+    new_stack.set_to_string_tag("AsyncDisposableStack");
+    new_stack.define_property(
+        ASYNC_DISPOSABLE_STACK_DISPOSED.to_owned(),
+        Property::non_enumerable(Value::Boolean(false)),
+    );
+    new_stack.define_property(
+        DISPOSABLE_STACK_RESOURCES.to_owned(),
+        Property::non_enumerable(Value::Array(ArrayRef::new(moved_resources))),
+    );
+    Ok(Value::Object(new_stack))
 }
 
 pub(crate) fn native_disposable_stack_prototype_adopt(
@@ -346,6 +469,19 @@ fn disposable_stack_object(value: &Value) -> Result<ObjectRef, RuntimeError> {
     }
 }
 
+fn async_disposable_stack_object(value: &Value) -> Result<ObjectRef, RuntimeError> {
+    let Value::Object(object) = value else {
+        return Err(incompatible_receiver());
+    };
+    if object.has_own_property(ASYNC_DISPOSABLE_STACK_DISPOSED)
+        && object.has_own_property(DISPOSABLE_STACK_RESOURCES)
+    {
+        Ok(object.clone())
+    } else {
+        Err(incompatible_receiver())
+    }
+}
+
 fn define_prototype_method(
     prototype: &ObjectRef,
     name: &str,
@@ -369,10 +505,30 @@ fn ensure_pending(object: &ObjectRef) -> Result<(), RuntimeError> {
     }
 }
 
+fn ensure_async_pending(object: &ObjectRef) -> Result<(), RuntimeError> {
+    if is_async_disposed(object) {
+        Err(RuntimeError {
+            thrown: None,
+            message: "ReferenceError: AsyncDisposableStack is already disposed".to_owned(),
+        })
+    } else {
+        Ok(())
+    }
+}
+
 fn is_disposed(object: &ObjectRef) -> bool {
     matches!(
         object
             .own_property(DISPOSABLE_STACK_DISPOSED)
+            .map(|property| property.value),
+        Some(Value::Boolean(true))
+    )
+}
+
+fn is_async_disposed(object: &ObjectRef) -> bool {
+    matches!(
+        object
+            .own_property(ASYNC_DISPOSABLE_STACK_DISPOSED)
             .map(|property| property.value),
         Some(Value::Boolean(true))
     )
@@ -439,6 +595,13 @@ fn dispose_resource(resource: Value, env: &mut CallEnv) -> Result<Value, Runtime
         }
         None => Ok(Value::Undefined),
     }
+}
+
+fn fulfilled_promise(value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+    let Some(constructor) = env.get("Promise") else {
+        return Ok(value);
+    };
+    crate::promise::promise_resolve(&constructor, value, env)
 }
 
 fn suppressed_error(

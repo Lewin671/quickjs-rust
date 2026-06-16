@@ -261,6 +261,10 @@ pub(crate) fn dispose_symbol(env: &CallEnv) -> Option<ObjectRef> {
     well_known_symbol(env, "dispose")
 }
 
+pub(crate) fn async_dispose_symbol(env: &CallEnv) -> Option<ObjectRef> {
+    well_known_symbol(env, "asyncDispose")
+}
+
 pub(crate) fn to_primitive_symbol(env: &CallEnv) -> Option<ObjectRef> {
     well_known_symbol(env, "toPrimitive")
 }

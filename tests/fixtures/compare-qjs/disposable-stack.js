@@ -20,6 +20,17 @@
   ].join(",");
   moved.dispose();
 
+  let asyncMovedSource = new AsyncDisposableStack();
+  asyncMovedSource.defer(() => order.push("async-moved:second"));
+  let asyncMoved = asyncMovedSource.move();
+  let asyncMoveState = [
+    asyncMovedSource.disposed,
+    asyncMoved.disposed,
+    asyncMoved !== asyncMovedSource,
+    asyncMoved instanceof AsyncDisposableStack
+  ].join(",");
+  asyncMoved.disposeAsync();
+
   let error1 = new Error("first");
   let error2 = new Error("second");
   let error3 = new Error("third");
@@ -32,6 +43,7 @@
   } catch (error) {
     return order.join(",") + ":" +
       moveState + ":" +
+      asyncMoveState + ":" +
       stack.disposed + ":" +
       (error instanceof SuppressedError) + ":" +
       (error.error === error1) + ":" +

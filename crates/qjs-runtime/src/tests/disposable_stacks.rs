@@ -188,3 +188,47 @@ fn disposable_stack_move_surface_and_subclassing() {
         Ok(Value::String("true:true:false".to_owned()))
     );
 }
+
+#[test]
+fn async_disposable_stack_move_transfers_resources_and_disposes_source() {
+    assert_eq!(
+        eval(
+            "let source = new AsyncDisposableStack(); \
+             let order = []; \
+             source.defer(() => order.push('first')); \
+             source.defer(() => order.push('second')); \
+             let moved = source.move(); \
+             let before = order.join(',') + ':' + source.disposed + ':' + moved.disposed; \
+             moved.disposeAsync(); \
+             before + ':' + order.join(',');"
+        ),
+        Ok(Value::String(":true:false:second,first".to_owned()))
+    );
+    assert!(
+        eval("let stack = new AsyncDisposableStack(); stack.disposeAsync(); stack.move();")
+            .is_err()
+    );
+    assert!(eval("AsyncDisposableStack.prototype.move.call({});").is_err());
+}
+
+#[test]
+fn async_disposable_stack_move_surface_and_subclassing() {
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(AsyncDisposableStack.prototype, 'move'); \
+             typeof d.value + ':' + d.value.name + ':' + d.value.length + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("function:move:0:true:false:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "class MyAsyncDisposableStack extends AsyncDisposableStack {} \
+             let source = new MyAsyncDisposableStack(); \
+             let moved = source.move(); \
+             (moved !== source) + ':' + \
+             (moved instanceof AsyncDisposableStack) + ':' + \
+             (moved instanceof MyAsyncDisposableStack);"
+        ),
+        Ok(Value::String("true:true:false".to_owned()))
+    );
+}
