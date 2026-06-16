@@ -80,7 +80,12 @@ pub(super) fn parse_iso_string(source: &str) -> Option<f64> {
         }
         millis = parse_millis(digits);
     }
-    if bytes.get(cursor) != Some(&b'Z') || cursor + 1 != bytes.len() {
+    let has_utc_marker = bytes.get(cursor) == Some(&b'Z');
+    if has_utc_marker {
+        if cursor + 1 != bytes.len() {
+            return None;
+        }
+    } else if cursor != bytes.len() {
         return None;
     }
     if !(1..=12).contains(&month)
@@ -166,6 +171,10 @@ pub(super) fn format_local_string(millis: f64) -> String {
     )
 }
 
+pub(super) fn parse_formatted_string(source: &str) -> Option<f64> {
+    parse_utc_string(source).or_else(|| parse_local_string(source))
+}
+
 pub(super) fn utc_date_time(millis: f64) -> UtcDateTime {
     let time = millis.trunc();
     let days = (time / MS_PER_DAY).floor() as i64;
@@ -217,6 +226,9 @@ fn parse_iso_year(source: &str) -> Option<(i32, usize)> {
             if bytes.len() < 7 || !bytes[1..7].iter().all(u8::is_ascii_digit) {
                 return None;
             }
+            if bytes[0] == b'-' && &bytes[1..7] == b"000000" {
+                return None;
+            }
             Some((parse_i32(&source[0..7])?, 7))
         }
         Some(_) => {
@@ -226,6 +238,84 @@ fn parse_iso_year(source: &str) -> Option<(i32, usize)> {
             Some((parse_i32(&source[0..4])?, 4))
         }
         None => None,
+    }
+}
+
+fn parse_utc_string(source: &str) -> Option<f64> {
+    let parts: Vec<&str> = source.split(' ').collect();
+    if parts.len() != 6 || !parts[0].ends_with(',') || parts[5] != "GMT" {
+        return None;
+    }
+    let day = parse_i32(parts[1])?;
+    let month = parse_month(parts[2])?;
+    let year = parse_i32(parts[3])?;
+    let (hours, minutes, seconds) = parse_time(parts[4])?;
+    parse_formatted_components(year, month, day, hours, minutes, seconds)
+}
+
+fn parse_local_string(source: &str) -> Option<f64> {
+    let parts: Vec<&str> = source.split(' ').collect();
+    if parts.len() != 6 || parts[5] != "GMT+0000" {
+        return None;
+    }
+    let month = parse_month(parts[1])?;
+    let day = parse_i32(parts[2])?;
+    let year = parse_i32(parts[3])?;
+    let (hours, minutes, seconds) = parse_time(parts[4])?;
+    parse_formatted_components(year, month, day, hours, minutes, seconds)
+}
+
+fn parse_formatted_components(
+    year: i32,
+    month: i32,
+    day: i32,
+    hours: i32,
+    minutes: i32,
+    seconds: i32,
+) -> Option<f64> {
+    if !(1..=12).contains(&month)
+        || !(1..=31).contains(&day)
+        || !(0..=23).contains(&hours)
+        || !(0..=59).contains(&minutes)
+        || !(0..=59).contains(&seconds)
+    {
+        return None;
+    }
+    Some(
+        days_from_civil(year, month, day) as f64 * MS_PER_DAY
+            + f64::from(hours) * MS_PER_HOUR
+            + f64::from(minutes) * MS_PER_MINUTE
+            + f64::from(seconds) * MS_PER_SECOND,
+    )
+}
+
+fn parse_time(source: &str) -> Option<(i32, i32, i32)> {
+    let parts: Vec<&str> = source.split(':').collect();
+    if parts.len() != 3 {
+        return None;
+    }
+    Some((
+        parse_i32(parts[0])?,
+        parse_i32(parts[1])?,
+        parse_i32(parts[2])?,
+    ))
+}
+
+fn parse_month(source: &str) -> Option<i32> {
+    match source {
+        "Jan" => Some(1),
+        "Feb" => Some(2),
+        "Mar" => Some(3),
+        "Apr" => Some(4),
+        "May" => Some(5),
+        "Jun" => Some(6),
+        "Jul" => Some(7),
+        "Aug" => Some(8),
+        "Sep" => Some(9),
+        "Oct" => Some(10),
+        "Nov" => Some(11),
+        "Dec" => Some(12),
+        _ => None,
     }
 }
 

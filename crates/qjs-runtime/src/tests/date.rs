@@ -196,6 +196,15 @@ fn evaluates_date_builtins() {
         Ok(Value::Number(97_445_006.0))
     );
     assert_eq!(
+        eval("Date.parse('1970-01-02T03:04:05.006');"),
+        Ok(Value::Number(97_445_006.0))
+    );
+    assert_eq!(eval("Date.parse('1970-01-01');"), Ok(Value::Number(0.0)));
+    assert_eq!(
+        eval("Number.isNaN(Date.parse('-000000-03-31T00:45Z'));"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("Date.parse('+275760-09-13T00:00:00.000Z');"),
         Ok(Value::Number(8_640_000_000_000_000.0))
     );
@@ -206,6 +215,13 @@ fn evaluates_date_builtins() {
     assert_eq!(
         eval("Number.isNaN(Date.parse('+275760-09-13T00:00:00.001Z'));"),
         Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let zero = new Date(0); \
+             [Date.parse(zero.toString()), Date.parse(zero.toUTCString()), Date.parse(zero.toISOString())].join('|');"
+        ),
+        Ok(Value::String("0|0|0".to_owned()))
     );
     assert_eq!(
         eval("new Date('1970-01-02T03:04:05.006Z').toISOString();"),

@@ -4,7 +4,7 @@ use crate::{
     ObjectRef, RuntimeError, Value,
     date::{
         DATE_VALUE_PROPERTY, MS_PER_DAY, MS_PER_HOUR, MS_PER_MINUTE, MS_PER_SECOND,
-        iso::{days_from_civil, parse_iso_string},
+        iso::{days_from_civil, parse_formatted_string, parse_iso_string},
     },
 };
 
@@ -17,7 +17,10 @@ pub(crate) fn is_date_object(object: &ObjectRef) -> bool {
 }
 
 pub(super) fn parse_date_string(source: &str) -> f64 {
-    parse_iso_string(source).map(time_clip).unwrap_or(f64::NAN)
+    parse_iso_string(source)
+        .or_else(|| parse_formatted_string(source))
+        .map(time_clip)
+        .unwrap_or(f64::NAN)
 }
 
 pub(super) fn date_value(this_value: Value) -> Result<f64, RuntimeError> {
