@@ -290,6 +290,9 @@ fn install_typed_array_constructor(
     }
 
     let constructor = Function::new_native(Some(name), 3, native, true);
+    if native == NativeFunction::Uint8Array {
+        install_uint8_array_static_methods(&constructor);
+    }
     // Concrete constructors inherit from %TypedArray% (a function prototype).
     let _ = constructor
         .set_internal_prototype_slot(Some(Prototype::Function(typed_array_intrinsic.clone())));
@@ -335,6 +338,18 @@ fn install_uint8_array_prototype_methods(prototype: &ObjectRef) {
         "setFromHex",
         1,
         NativeFunction::Uint8ArrayPrototypeSetFromHex,
+    );
+}
+
+fn install_uint8_array_static_methods(constructor: &Function) {
+    constructor.properties.borrow_mut().insert(
+        "fromBase64".to_owned(),
+        Property::non_enumerable(Value::Function(Function::new_native(
+            Some("fromBase64"),
+            1,
+            NativeFunction::Uint8ArrayFromBase64,
+            false,
+        ))),
     );
 }
 

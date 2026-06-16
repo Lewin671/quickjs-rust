@@ -7,9 +7,32 @@ use crate::{
 
 use super::element::{read_view_elements, set_view_elements};
 use super::{
-    typed_array_buffer, typed_array_is_out_of_bounds, typed_array_kind, typed_array_length,
-    typed_array_receiver,
+    MAX_TYPED_ARRAY_LENGTH, construct, typed_array_buffer, typed_array_is_out_of_bounds,
+    typed_array_kind, typed_array_length, typed_array_receiver,
 };
+
+pub(crate) fn native_uint8_array_from_base64(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let source = base64_source(argument_values.first(), "Uint8Array.fromBase64")?;
+    let options = from_base64_options(argument_values.get(1).cloned(), env)?;
+    let decoded = decode_base64(
+        &source,
+        options.alphabet,
+        options.last_chunk_handling,
+        MAX_TYPED_ARRAY_LENGTH,
+    );
+    if let Some(error) = decoded.error {
+        return Err(error);
+    }
+    let values = decoded.bytes.into_iter().map(number_byte).collect();
+    Ok(Value::Object(construct::create_with_values(
+        NativeFunction::Uint8Array,
+        values,
+        env,
+    )))
+}
 
 pub(crate) fn native_uint8_array_prototype_to_base64(
     this_value: Value,
@@ -57,16 +80,10 @@ pub(crate) fn native_uint8_array_prototype_set_from_base64(
             message: "TypeError: ArrayBuffer is immutable".to_owned(),
         });
     }
-    let source = match argument_values.first() {
-        Some(Value::String(source)) => source.clone(),
-        _ => {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "TypeError: Uint8Array.prototype.setFromBase64 requires a string"
-                    .to_owned(),
-            });
-        }
-    };
+    let source = base64_source(
+        argument_values.first(),
+        "Uint8Array.prototype.setFromBase64",
+    )?;
     let options = set_from_base64_options(argument_values.get(1).cloned(), env)?;
     if super::typed_array_buffer_detached(&object) {
         return Err(array_buffer::detached_error());
@@ -91,6 +108,16 @@ pub(crate) fn native_uint8_array_prototype_set_from_base64(
             decoded.bytes.len(),
             env,
         )),
+    }
+}
+
+fn base64_source(value: Option<&Value>, method: &str) -> Result<String, RuntimeError> {
+    match value {
+        Some(Value::String(source)) => Ok(source.clone()),
+        _ => Err(RuntimeError {
+            thrown: None,
+            message: format!("TypeError: {method} requires a string"),
+        }),
     }
 }
 
@@ -165,9 +192,24 @@ struct SetFromBase64Options {
     last_chunk_handling: LastChunkHandling,
 }
 
+fn from_base64_options(
+    value: Option<Value>,
+    env: &mut CallEnv,
+) -> Result<SetFromBase64Options, RuntimeError> {
+    base64_decode_options(value, env, "Uint8Array.fromBase64")
+}
+
 fn set_from_base64_options(
     value: Option<Value>,
     env: &mut CallEnv,
+) -> Result<SetFromBase64Options, RuntimeError> {
+    base64_decode_options(value, env, "Uint8Array.prototype.setFromBase64")
+}
+
+fn base64_decode_options(
+    value: Option<Value>,
+    env: &mut CallEnv,
+    method: &str,
 ) -> Result<SetFromBase64Options, RuntimeError> {
     let mut options = SetFromBase64Options {
         alphabet: Base64Alphabet::Base64,
@@ -211,8 +253,7 @@ fn set_from_base64_options(
         }
         _ => Err(RuntimeError {
             thrown: None,
-            message: "TypeError: Uint8Array.prototype.setFromBase64 options must be an object"
-                .to_owned(),
+            message: format!("TypeError: {method} options must be an object"),
         }),
     }
 }
@@ -304,14 +345,11 @@ fn decode_base64(
         let remaining = tokens.len() - index;
         if remaining < 4 {
             if last_chunk_handling == LastChunkHandling::StopBeforePartial {
-                if tokens[index..]
-                    .iter()
-                    .any(|token| token.ch != '=' && base64_value(token.ch, alphabet).is_none())
-                {
+                if let Err(error) = validate_stop_before_partial_tail(&tokens[index..], alphabet) {
                     return DecodedBase64 {
                         read,
                         bytes,
-                        error: Some(syntax_error("invalid base64 character")),
+                        error: Some(error),
                     };
                 }
                 return DecodedBase64 {
@@ -387,6 +425,26 @@ fn decode_base64(
         bytes,
         error: None,
     }
+}
+
+fn validate_stop_before_partial_tail(
+    tokens: &[Base64Token],
+    alphabet: Base64Alphabet,
+) -> Result<(), RuntimeError> {
+    if tokens
+        .iter()
+        .all(|token| token.ch != '=' && base64_value(token.ch, alphabet).is_some())
+    {
+        return Ok(());
+    }
+    if tokens.len() == 3
+        && base64_value(tokens[0].ch, alphabet).is_some()
+        && base64_value(tokens[1].ch, alphabet).is_some()
+        && tokens[2].ch == '='
+    {
+        return Ok(());
+    }
+    Err(syntax_error("invalid base64 final chunk"))
 }
 
 struct DecodedBase64Quad {

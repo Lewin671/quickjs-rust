@@ -1,6 +1,70 @@
 use crate::{Value, eval};
 
 #[test]
+fn uint8_array_from_base64_decodes_with_options() {
+    assert_eq!(
+        eval(
+            "let a = Uint8Array.fromBase64('Zm9vYmFy'); \
+             (Object.getPrototypeOf(a) === Uint8Array.prototype) + ':' + \
+             a.length + ':' + a.buffer.byteLength + ':' + a.join(',');"
+        ),
+        Ok(Value::String("true:6:6:102,111,111,98,97,114".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let a = Uint8Array.fromBase64('x-_y', { alphabet: 'base64url' }); \
+             a.join(',');"
+        ),
+        Ok(Value::String("199,239,242".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let loose = Uint8Array.fromBase64('ZXhhZg'); \
+             let stop = Uint8Array.fromBase64('ZXhhZg', { lastChunkHandling: 'stop-before-partial' }); \
+             loose.join(',') + '|' + stop.join(',');"
+        ),
+        Ok(Value::String("101,120,97,102|101,120,97".to_owned()))
+    );
+}
+
+#[test]
+fn uint8_array_from_base64_surface_and_errors() {
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(Uint8Array, 'fromBase64'); \
+             d.writable + ':' + d.enumerable + ':' + d.configurable + ':' \
+             + Uint8Array.fromBase64.name + ':' + Uint8Array.fromBase64.length;"
+        ),
+        Ok(Value::String("true:false:true:fromBase64:1".to_owned()))
+    );
+    assert!(eval("new Uint8Array.fromBase64('');").is_err());
+    assert_eq!(
+        eval(
+            "class Subclass extends Uint8Array { constructor() { throw 'bad'; } }; \
+             Object.getPrototypeOf(Subclass.fromBase64('Zg==')) === Uint8Array.prototype;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert!(eval("Uint8Array.fromBase64({ toString() { throw 'no'; } });").is_err());
+    assert!(eval("Uint8Array.fromBase64('AA==', { alphabet: Object('base64') });").is_err());
+    assert!(
+        eval("Uint8Array.fromBase64('AA==', { lastChunkHandling: Object('strict') });").is_err()
+    );
+    assert!(eval("Uint8Array.fromBase64('x-_y');").is_err());
+    assert_eq!(
+        eval(
+            "Uint8Array.fromBase64('AA=', { lastChunkHandling: 'stop-before-partial' }).length + ':' + \
+             Uint8Array.fromBase64('ABCDAA=', { lastChunkHandling: 'stop-before-partial' }).join(',');"
+        ),
+        Ok(Value::String("0:0,16,131".to_owned()))
+    );
+    assert!(
+        eval("Uint8Array.fromBase64('AAAA=', { lastChunkHandling: 'stop-before-partial' });")
+            .is_err()
+    );
+}
+
+#[test]
 fn uint8_array_set_from_base64_decodes_with_options() {
     assert_eq!(
         eval(
