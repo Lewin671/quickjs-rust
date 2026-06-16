@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
 use crate::CallEnv;
-use crate::{ArrayRef, ObjectRef, RuntimeError, Value, object_prototype, to_js_string_with_env};
+use crate::{
+    ArrayRef, ObjectRef, Property, PropertyKey, RuntimeError, Value, object_prototype,
+    to_js_string_with_env, to_length_with_env,
+};
 
 pub(crate) fn native_json_parse(
     argument_values: &[Value],
@@ -11,58 +14,283 @@ pub(crate) fn native_json_parse(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    let value = parse_json_text(&source, env)?;
+    let node = parse_json_node(&source, env)?;
+    let value = node.value.clone();
     let reviver = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
-    if matches!(reviver, Value::Function(_)) {
-        let root = Value::Object(crate::ObjectRef::new(std::collections::HashMap::new()));
+    if is_callable(&reviver) {
+        let root = Value::Object(crate::ObjectRef::with_prototype(
+            std::collections::HashMap::new(),
+            object_prototype(env),
+        ));
         if let Value::Object(ref obj) = root {
             obj.define_property(String::new(), crate::Property::enumerable(value));
         }
-        internalize_json_property(&root, "", &reviver, env)
+        internalize_json_property(&root, "", &node, &reviver, env)
     } else {
         Ok(value)
     }
 }
 
+#[derive(Clone)]
+struct JsonNode {
+    value: Value,
+    source: Option<String>,
+    children: JsonNodeChildren,
+}
+
+#[derive(Clone)]
+enum JsonNodeChildren {
+    None,
+    Array(Vec<JsonNode>),
+    Object(Vec<(String, JsonNode)>),
+}
+
 fn internalize_json_property(
     holder: &Value,
     name: &str,
+    node: &JsonNode,
     reviver: &Value,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = crate::property_value(holder.clone(), name, env)?;
-    if let Value::Object(ref obj) = value {
-        let keys: Vec<String> = obj.own_property_keys();
-        for key in keys {
-            let new_element = internalize_json_property(&value, &key, reviver, env)?;
-            if matches!(new_element, Value::Undefined) {
-                obj.delete_own_property(&key);
-            } else {
-                obj.set(key, new_element);
+    if is_object_like(&value) {
+        if is_array_object(&value)? {
+            let len =
+                to_length_with_env(crate::property_value(value.clone(), "length", env)?, env)?;
+            for i in 0..len {
+                let key = i.to_string();
+                let child = array_child_node(node, i, &value, &key, env)?;
+                let new_element = internalize_json_property(&value, &key, &child, reviver, env)?;
+                if matches!(new_element, Value::Undefined) {
+                    delete_property(value.clone(), PropertyKey::String(key), env)?;
+                } else {
+                    create_data_property(
+                        value.clone(),
+                        PropertyKey::String(key),
+                        new_element,
+                        env,
+                    )?;
+                }
             }
-        }
-    } else if let Value::Array(ref elements) = value {
-        let len = elements.len();
-        for i in 0..len {
-            let key = i.to_string();
-            let new_element = internalize_json_property(&value, &key, reviver, env)?;
-            if matches!(new_element, Value::Undefined) {
-                elements.delete_index(i);
-            } else {
-                elements.set(i, new_element);
+        } else {
+            let keys = enumerable_own_string_keys(value.clone(), env)?;
+            for key in keys {
+                let child = object_child_node(node, &key, &value, env)?;
+                let new_element = internalize_json_property(&value, &key, &child, reviver, env)?;
+                if matches!(new_element, Value::Undefined) {
+                    delete_property(value.clone(), PropertyKey::String(key), env)?;
+                } else {
+                    create_data_property(
+                        value.clone(),
+                        PropertyKey::String(key),
+                        new_element,
+                        env,
+                    )?;
+                }
             }
         }
     }
     crate::call_function(
         reviver.clone(),
         holder.clone(),
-        vec![Value::String(name.to_owned()), value],
+        vec![
+            Value::String(name.to_owned()),
+            value,
+            reviver_context(node, env),
+        ],
         env,
         false,
     )
 }
 
+fn is_callable(value: &Value) -> bool {
+    match value {
+        Value::Function(_) => true,
+        Value::Proxy(proxy) => crate::proxy::proxy_is_callable(proxy),
+        _ => false,
+    }
+}
+
+fn is_object_like(value: &Value) -> bool {
+    matches!(
+        value,
+        Value::Array(_)
+            | Value::Object(_)
+            | Value::Function(_)
+            | Value::Map(_)
+            | Value::Set(_)
+            | Value::Proxy(_)
+    )
+}
+
+fn is_array_object(value: &Value) -> Result<bool, RuntimeError> {
+    match value {
+        Value::Array(_) => Ok(true),
+        Value::Proxy(proxy) => crate::proxy::proxy_target_is_array_result(proxy),
+        _ => Ok(false),
+    }
+}
+
+fn array_child_node(
+    node: &JsonNode,
+    index: usize,
+    holder: &Value,
+    key: &str,
+    env: &mut CallEnv,
+) -> Result<JsonNode, RuntimeError> {
+    if let JsonNodeChildren::Array(children) = &node.children
+        && let Some(child) = children.get(index)
+    {
+        return child_for_current_value(child, holder, key, env);
+    }
+    Ok(empty_node(crate::property_value(holder.clone(), key, env)?))
+}
+
+fn object_child_node(
+    node: &JsonNode,
+    key: &str,
+    holder: &Value,
+    env: &mut CallEnv,
+) -> Result<JsonNode, RuntimeError> {
+    if let JsonNodeChildren::Object(children) = &node.children {
+        if let Some((_, child)) = children
+            .iter()
+            .rev()
+            .find(|(child_key, _)| child_key == key)
+        {
+            return child_for_current_value(child, holder, key, env);
+        }
+    }
+    Ok(empty_node(crate::property_value(holder.clone(), key, env)?))
+}
+
+fn child_for_current_value(
+    child: &JsonNode,
+    holder: &Value,
+    key: &str,
+    env: &mut CallEnv,
+) -> Result<JsonNode, RuntimeError> {
+    let current = crate::property_value(holder.clone(), key, env)?;
+    if current.same_value(&child.value) {
+        Ok(child.clone())
+    } else {
+        Ok(empty_node(current))
+    }
+}
+
+fn empty_node(value: Value) -> JsonNode {
+    JsonNode {
+        value,
+        source: None,
+        children: JsonNodeChildren::None,
+    }
+}
+
+fn reviver_context(node: &JsonNode, env: &CallEnv) -> Value {
+    let context = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
+    if let Some(source) = &node.source {
+        context.define_property(
+            "source".to_owned(),
+            Property::enumerable(Value::String(source.clone())),
+        );
+    }
+    Value::Object(context)
+}
+
+fn enumerable_own_string_keys(
+    value: Value,
+    env: &mut CallEnv,
+) -> Result<Vec<String>, RuntimeError> {
+    let keys = match value.clone() {
+        Value::Proxy(proxy) => crate::proxy::proxy_own_keys(proxy, env)?,
+        _ => crate::object::own_property_names(value.clone())
+            .into_iter()
+            .map(PropertyKey::String)
+            .collect(),
+    };
+    let mut enumerable = Vec::new();
+    for key in keys {
+        let PropertyKey::String(name) = key else {
+            continue;
+        };
+        let descriptor =
+            own_property_descriptor(value.clone(), &PropertyKey::String(name.clone()), env)?;
+        if descriptor.is_some_and(|property| property.enumerable) {
+            enumerable.push(name);
+        }
+    }
+    Ok(enumerable)
+}
+
+fn own_property_descriptor(
+    value: Value,
+    key: &PropertyKey,
+    env: &mut CallEnv,
+) -> Result<Option<Property>, RuntimeError> {
+    match value {
+        Value::Proxy(proxy) => {
+            let forward_key = key.clone();
+            crate::proxy::proxy_get_own_property_descriptor(proxy, key, env, move |target, _env| {
+                crate::object::own_property_descriptor_key(target, &forward_key)
+            })
+        }
+        value => crate::object::own_property_descriptor_key(value, key),
+    }
+}
+
+fn create_data_property(
+    target: Value,
+    key: PropertyKey,
+    value: Value,
+    env: &mut CallEnv,
+) -> Result<(), RuntimeError> {
+    crate::object::define_property_on_value_key(target, key, Property::enumerable(value), env)?;
+    Ok(())
+}
+
+fn delete_property(target: Value, key: PropertyKey, env: &mut CallEnv) -> Result<(), RuntimeError> {
+    match target {
+        Value::Object(object) => match key {
+            PropertyKey::String(key) => object.delete_own_property(&key),
+            PropertyKey::Symbol(symbol) => object.delete_own_symbol_property(&symbol),
+        },
+        Value::Array(elements) => match key {
+            PropertyKey::String(key) => match key.parse::<usize>() {
+                Ok(index) => elements.delete_index(index),
+                Err(_) => elements.delete_property(&key),
+            },
+            PropertyKey::Symbol(symbol) => elements.delete_own_symbol_property(&symbol),
+        },
+        Value::Function(function) => match key {
+            PropertyKey::String(key) => crate::function_delete_own_property(&function, &key),
+            PropertyKey::Symbol(symbol) => {
+                crate::function_delete_own_symbol_property(&function, &symbol)
+            }
+        },
+        Value::Map(map) => {
+            delete_property(Value::Object(map.object()), key, env)?;
+            true
+        }
+        Value::Set(set) => {
+            delete_property(Value::Object(set.object()), key, env)?;
+            true
+        }
+        Value::Proxy(proxy) => crate::proxy::proxy_delete_property(proxy, &key, env)?,
+        Value::String(_)
+        | Value::Number(_)
+        | Value::BigInt(_)
+        | Value::Boolean(_)
+        | Value::Null
+        | Value::Undefined => true,
+    };
+    Ok(())
+}
+
 pub(crate) fn parse_json_text(source: &str, env: &CallEnv) -> Result<Value, RuntimeError> {
+    parse_json_node(source, env).map(|node| node.value)
+}
+
+fn parse_json_node(source: &str, env: &CallEnv) -> Result<JsonNode, RuntimeError> {
     JsonParser::new(source, env).parse()
 }
 
@@ -81,7 +309,7 @@ impl<'a> JsonParser<'a> {
         }
     }
 
-    fn parse(mut self) -> Result<Value, RuntimeError> {
+    fn parse(mut self) -> Result<JsonNode, RuntimeError> {
         self.skip_whitespace();
         let value = self.value()?;
         self.skip_whitespace();
@@ -92,45 +320,60 @@ impl<'a> JsonParser<'a> {
         }
     }
 
-    fn value(&mut self) -> Result<Value, RuntimeError> {
+    fn value(&mut self) -> Result<JsonNode, RuntimeError> {
         self.skip_whitespace();
         match self.peek() {
-            Some('"') => self.string().map(Value::String),
+            Some('"') => self.string_node(),
             Some('[') => self.array(),
             Some('{') => self.object(),
             Some('t') => self.literal("true", Value::Boolean(true)),
             Some('f') => self.literal("false", Value::Boolean(false)),
             Some('n') => self.literal("null", Value::Null),
-            Some('-' | '0'..='9') => self.number().map(Value::Number),
+            Some('-' | '0'..='9') => self.number(),
             _ => Err(self.syntax_error()),
         }
     }
 
-    fn array(&mut self) -> Result<Value, RuntimeError> {
+    fn array(&mut self) -> Result<JsonNode, RuntimeError> {
         self.expect_char('[')?;
-        let mut elements = Vec::new();
+        let mut children = Vec::new();
         self.skip_whitespace();
         if self.consume_char(']') {
-            return Ok(Value::Array(ArrayRef::new(elements)));
+            return Ok(JsonNode {
+                value: Value::Array(ArrayRef::new(Vec::new())),
+                source: None,
+                children: JsonNodeChildren::Array(Vec::new()),
+            });
         }
 
         loop {
-            elements.push(self.value()?);
+            children.push(self.value()?);
             self.skip_whitespace();
             if self.consume_char(']') {
                 break;
             }
             self.expect_char(',')?;
         }
-        Ok(Value::Array(ArrayRef::new(elements)))
+        Ok(JsonNode {
+            value: Value::Array(ArrayRef::new(
+                children.iter().map(|child| child.value.clone()).collect(),
+            )),
+            source: None,
+            children: JsonNodeChildren::Array(children),
+        })
     }
 
-    fn object(&mut self) -> Result<Value, RuntimeError> {
+    fn object(&mut self) -> Result<JsonNode, RuntimeError> {
         self.expect_char('{')?;
         let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(self.env));
+        let mut children = Vec::new();
         self.skip_whitespace();
         if self.consume_char('}') {
-            return Ok(Value::Object(object));
+            return Ok(JsonNode {
+                value: Value::Object(object),
+                source: None,
+                children: JsonNodeChildren::Object(Vec::new()),
+            });
         }
 
         loop {
@@ -141,15 +384,30 @@ impl<'a> JsonParser<'a> {
             let key = self.string()?;
             self.skip_whitespace();
             self.expect_char(':')?;
-            let value = self.value()?;
-            object.set(key, value);
+            let child = self.value()?;
+            object.set(key.clone(), child.value.clone());
+            children.push((key, child));
             self.skip_whitespace();
             if self.consume_char('}') {
                 break;
             }
             self.expect_char(',')?;
         }
-        Ok(Value::Object(object))
+        Ok(JsonNode {
+            value: Value::Object(object),
+            source: None,
+            children: JsonNodeChildren::Object(children),
+        })
+    }
+
+    fn string_node(&mut self) -> Result<JsonNode, RuntimeError> {
+        let start = self.cursor;
+        let value = self.string()?;
+        Ok(JsonNode {
+            value: Value::String(value),
+            source: Some(self.source[start..self.cursor].to_owned()),
+            children: JsonNodeChildren::None,
+        })
     }
 
     fn string(&mut self) -> Result<String, RuntimeError> {
@@ -198,7 +456,7 @@ impl<'a> JsonParser<'a> {
         char::from_u32(value).ok_or_else(|| self.syntax_error())
     }
 
-    fn number(&mut self) -> Result<f64, RuntimeError> {
+    fn number(&mut self) -> Result<JsonNode, RuntimeError> {
         let start = self.cursor;
         self.consume_char('-');
         match self.peek() {
@@ -239,15 +497,23 @@ impl<'a> JsonParser<'a> {
             }
         }
 
-        self.source[start..self.cursor]
-            .parse::<f64>()
-            .map_err(|_| self.syntax_error())
+        let source = self.source[start..self.cursor].to_owned();
+        let value = source.parse::<f64>().map_err(|_| self.syntax_error())?;
+        Ok(JsonNode {
+            value: Value::Number(value),
+            source: Some(source),
+            children: JsonNodeChildren::None,
+        })
     }
 
-    fn literal(&mut self, literal: &str, value: Value) -> Result<Value, RuntimeError> {
+    fn literal(&mut self, literal: &str, value: Value) -> Result<JsonNode, RuntimeError> {
         if self.source[self.cursor..].starts_with(literal) {
             self.cursor += literal.len();
-            Ok(value)
+            Ok(JsonNode {
+                value,
+                source: Some(literal.to_owned()),
+                children: JsonNodeChildren::None,
+            })
         } else {
             Err(self.syntax_error())
         }

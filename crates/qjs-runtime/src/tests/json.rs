@@ -160,3 +160,61 @@ fn json_stringify_escapes_unpaired_surrogates() {
         Ok(Value::String("\"\\ud834\"".to_owned()))
     );
 }
+
+#[test]
+fn json_parse_reviver_observes_context_and_forward_modifications() {
+    assert_eq!(
+        eval(
+            "let log = []; JSON.parse('{\"a\":1,\"b\":[2]}', function(k, v, c) { log.push(k + ':' + String(c.source)); return v; }); log.join('|');"
+        ),
+        Ok(Value::String("a:1|0:2|b:undefined|:undefined".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let log = []; let out = JSON.parse('[1,2]', function(k, v, c) { log.push(k + ':' + String(v) + ':' + String(c.source)); if (k === '0') this[1] = 3; return this[k]; }); out.join(',') + '|' + log.join('|');"
+        ),
+        Ok(Value::String(
+            "1,3|0:1:1|1:3:undefined|:1,3:undefined".to_owned()
+        ))
+    );
+    assert_eq!(
+        eval(
+            "let wrapper; JSON.parse('2', function() { wrapper = this; }); Object.getPrototypeOf(wrapper) === Object.prototype && Object.getOwnPropertyNames(wrapper).join() === '' && Object.getOwnPropertyDescriptor(wrapper, '').value === 2;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn json_parse_reviver_uses_property_internal_methods() {
+    assert_eq!(
+        eval(
+            "let object = JSON.parse('{\"a\":1,\"b\":2}', function(k, v) { if (k === 'a') Object.defineProperty(this, 'b', { configurable: false }); if (k === 'b') return 22; return v; }); object.a + ':' + object.b;"
+        ),
+        Ok(Value::String("1:2".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let array = JSON.parse('[1,2]', function(k, v) { if (k === '0') Object.defineProperty(this, '1', { configurable: false }); if (k === '1') return; return v; }); array[0] + ':' + array.hasOwnProperty('1') + ':' + array[1];"
+        ),
+        Ok(Value::String("1:true:2".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let marker = {}; let bad = new Proxy([0], { deleteProperty() { throw marker; } }); let caught = false; try { JSON.parse('[0,0]', function(k, v) { if (k === '0') this[1] = bad; }); } catch (error) { caught = error === marker; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let marker = {}; let bad = new Proxy({}, { ownKeys() { throw marker; } }); let caught = false; try { JSON.parse('[0,0]', function(k, v) { if (k === '0') this[1] = bad; return v; }); } catch (error) { caught = error === marker; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let target = { a: 1 }; let proxy = new Proxy(target, { ownKeys() { return ['a']; }, getOwnPropertyDescriptor() { return { value: 1, enumerable: true, configurable: true }; }, get(t, k) { return t[k]; } }); let log = []; JSON.parse('[0,0]', function(k, v) { if (k === '0') this[1] = proxy; log.push(k); return v; }); log.join(',');"
+        ),
+        Ok(Value::String("0,a,1,".to_owned()))
+    );
+}
