@@ -4101,6 +4101,9 @@ test/built-ins/String/prototype/concat/S15.5.4.6_A9.js
 test/built-ins/String/prototype/concat/this-value-not-obj-coercible.js
 cases/string-prototype-concat-basic.js
 cases/string-prototype-concat-length.js
+test/built-ins/String/prototype/S15.5.4_A1.js
+test/built-ins/String/prototype/S15.5.4_A2.js
+test/built-ins/String/prototype/S15.5.4_A3.js
 test/built-ins/String/prototype/endsWith/coerced-values-of-position.js
 test/built-ins/String/prototype/endsWith/endsWith.js
 test/built-ins/String/prototype/endsWith/length.js

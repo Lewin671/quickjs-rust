@@ -10,5 +10,11 @@
     (value == "abc") + ":" +
     (value !== "abc") + ":" +
     Object.prototype.toString.call(value) + ":" +
-    value.charAt(2);
+    value.charAt(2) + ":" +
+    (String.prototype == "") + ":" +
+    String.prototype.valueOf() + ":" +
+    String.prototype.length + ":" +
+    Object.prototype.isPrototypeOf(String.prototype) + ":" +
+    (delete String.prototype.toString,
+      Object.prototype.toString.call(String.prototype));
 })()

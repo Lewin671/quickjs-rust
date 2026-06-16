@@ -129,7 +129,7 @@ fn require_object_coercible(value: Value, context: &str) -> Result<Value, Runtim
     }
 }
 
-fn define_string_data(object: &ObjectRef, value: &str) {
+pub(super) fn define_string_data(object: &ObjectRef, value: &str) {
     object.define_non_enumerable(
         STRING_DATA_PROPERTY.to_owned(),
         Value::String(value.to_owned()),

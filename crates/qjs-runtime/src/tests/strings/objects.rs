@@ -44,3 +44,20 @@ fn evaluates_string_objects() {
         Ok(Value::String("c".to_owned()))
     );
 }
+
+#[test]
+fn string_prototype_is_empty_string_object() {
+    assert_eq!(
+        eval(
+            "[
+                String.prototype == '',
+                String.prototype.valueOf(),
+                String.prototype.length,
+                Object.prototype.isPrototypeOf(String.prototype),
+                (delete String.prototype.toString,
+                 Object.prototype.toString.call(String.prototype))
+             ].join('|');"
+        ),
+        Ok(Value::String("true||0|true|[object String]".to_owned()))
+    );
+}
