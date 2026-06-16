@@ -188,3 +188,38 @@ fn evaluates_object_integrity_builtins() {
     assert_eq!(eval("Object.isFrozen(1);"), Ok(Value::Boolean(true)));
     assert_eq!(eval("Object.freeze(1);"), Ok(Value::Number(1.0)));
 }
+
+#[test]
+fn object_seal_and_freeze_route_through_proxy_traps() {
+    // SetIntegrityLevel on a Proxy throws when [[PreventExtensions]] reports
+    // false, and propagates an abrupt completion from the trap.
+    assert!(
+        eval("Object.seal(new Proxy({}, { preventExtensions() { return false; } }));").is_err()
+    );
+    assert!(
+        eval(
+            "Object.freeze(new Proxy({}, { preventExtensions() { throw new TypeError('x'); } }));"
+        )
+        .is_err()
+    );
+    // Freeze drives the defineProperty trap with the frozen-data descriptor.
+    assert_eq!(
+        eval(
+            "let seen = []; let t = { a: 1 }; \
+             let p = new Proxy(t, { \
+                 defineProperty(tt, k, d) { seen.push(k + ':' + d.writable + ':' + d.configurable); return Reflect.defineProperty(tt, k, d); } \
+             }); \
+             Object.freeze(p); \
+             seen.join('|') + '#' + Object.getOwnPropertyDescriptor(t, 'a').writable;"
+        ),
+        Ok(Value::String("a:false:false#false".to_owned()))
+    );
+    // Seal makes own keys non-configurable but leaves writability untouched.
+    assert_eq!(
+        eval(
+            "let t = { a: 1 }; Object.seal(new Proxy(t, {})); \
+             let d = Object.getOwnPropertyDescriptor(t, 'a'); d.configurable + ':' + d.writable;"
+        ),
+        Ok(Value::String("false:true".to_owned()))
+    );
+}

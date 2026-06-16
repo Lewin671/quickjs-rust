@@ -134,20 +134,27 @@ pub(crate) fn native_object_is_frozen(argument_values: &[Value]) -> Result<Value
     }))
 }
 
-pub(crate) fn native_object_seal(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+#[derive(Clone, Copy)]
+enum IntegrityLevel {
+    Sealed,
+    Frozen,
+}
+
+pub(crate) fn native_object_seal(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    if let Value::Proxy(proxy) = &target {
+        if !set_integrity_level_on_proxy(proxy.clone(), &target, IntegrityLevel::Sealed, env)? {
+            return Err(integrity_failed_error("Object.seal"));
+        }
+        return Ok(target);
+    }
     match &target {
         Value::Object(object) => object.seal(),
         Value::Map(map) => map.object().seal(),
         Value::Set(set) => set.object().seal(),
-        Value::Proxy(proxy) => match proxy.target() {
-            Value::Object(object) => object.seal(),
-            Value::Map(map) => map.object().seal(),
-            Value::Set(set) => set.object().seal(),
-            Value::Array(elements) => elements.seal(),
-            Value::Function(function) => function.seal(),
-            _ => {}
-        },
         Value::Array(elements) => elements.seal(),
         Value::Function(function) => function.seal(),
         _ => {}
@@ -155,23 +162,80 @@ pub(crate) fn native_object_seal(argument_values: &[Value]) -> Result<Value, Run
     Ok(target)
 }
 
-pub(crate) fn native_object_freeze(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+pub(crate) fn native_object_freeze(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    if let Value::Proxy(proxy) = &target {
+        if !set_integrity_level_on_proxy(proxy.clone(), &target, IntegrityLevel::Frozen, env)? {
+            return Err(integrity_failed_error("Object.freeze"));
+        }
+        return Ok(target);
+    }
     match &target {
         Value::Object(object) => object.freeze(),
         Value::Map(map) => map.object().freeze(),
         Value::Set(set) => set.object().freeze(),
-        Value::Proxy(proxy) => match proxy.target() {
-            Value::Object(object) => object.freeze(),
-            Value::Map(map) => map.object().freeze(),
-            Value::Set(set) => set.object().freeze(),
-            Value::Array(elements) => elements.freeze(),
-            Value::Function(function) => function.freeze(),
-            _ => {}
-        },
         Value::Array(elements) => elements.freeze(),
         Value::Function(function) => function.freeze(),
         _ => {}
     }
     Ok(target)
+}
+
+/// SetIntegrityLevel(O, level) for an exotic Proxy: it runs through the
+/// `preventExtensions`, `ownKeys`, `getOwnPropertyDescriptor`, and
+/// `defineProperty` traps instead of mutating the proxy target directly.
+fn set_integrity_level_on_proxy(
+    proxy: crate::proxy::ProxyRef,
+    proxy_value: &Value,
+    level: IntegrityLevel,
+    env: &mut CallEnv,
+) -> Result<bool, RuntimeError> {
+    use crate::object::{PropertyDescriptor, define_property_descriptor_on_value_key};
+
+    // 1. If ? O.[[PreventExtensions]]() is false, SetIntegrityLevel returns false.
+    if !crate::proxy::proxy_prevent_extensions(proxy.clone(), env)? {
+        return Ok(false);
+    }
+    // 2. keys = ? O.[[OwnPropertyKeys]]().
+    let keys = crate::proxy::proxy_own_keys(proxy.clone(), env)?;
+    // 3. For each key, DefinePropertyOrThrow with the integrity descriptor.
+    for key in keys {
+        let descriptor = match level {
+            IntegrityLevel::Sealed => PropertyDescriptor::integrity_non_configurable(),
+            IntegrityLevel::Frozen => {
+                let current = crate::proxy::proxy_get_own_property_descriptor(
+                    proxy.clone(),
+                    &key,
+                    env,
+                    |target, _env| crate::object::own_property_descriptor_key(target, &key),
+                )?;
+                let Some(property) = current else {
+                    continue;
+                };
+                if property.is_accessor() {
+                    PropertyDescriptor::integrity_non_configurable()
+                } else {
+                    PropertyDescriptor::integrity_frozen_data()
+                }
+            }
+        };
+        if !define_property_descriptor_on_value_key(proxy_value.clone(), key, descriptor, env)? {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: Cannot redefine property during integrity level change"
+                    .to_owned(),
+            });
+        }
+    }
+    Ok(true)
+}
+
+fn integrity_failed_error(method: &str) -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: format!("TypeError: {method} could not prevent extensions on the object"),
+    }
 }

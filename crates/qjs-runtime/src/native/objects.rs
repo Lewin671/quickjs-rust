@@ -42,7 +42,7 @@ pub(super) fn call_object_native(
             object::native_object_from_entries(argument_values, env)?
         }
         NativeFunction::ObjectGroupBy => object::native_object_group_by(argument_values, env)?,
-        NativeFunction::ObjectFreeze => object::native_object_freeze(argument_values)?,
+        NativeFunction::ObjectFreeze => object::native_object_freeze(argument_values, env)?,
         NativeFunction::ObjectHasOwn => object::native_object_has_own(argument_values, env)?,
         NativeFunction::ObjectIs => object::native_object_is(argument_values)?,
         NativeFunction::ObjectIsExtensible => {
@@ -53,7 +53,7 @@ pub(super) fn call_object_native(
         NativeFunction::ObjectPreventExtensions => {
             object::native_object_prevent_extensions(argument_values, env)?
         }
-        NativeFunction::ObjectSeal => object::native_object_seal(argument_values)?,
+        NativeFunction::ObjectSeal => object::native_object_seal(argument_values, env)?,
         NativeFunction::ObjectSetPrototypeOf => {
             object::native_object_set_prototype_of(argument_values, env)?
         }

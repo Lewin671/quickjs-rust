@@ -258,6 +258,32 @@ impl PropertyDescriptor {
         )
     }
 
+    /// The partial descriptor SetIntegrityLevel applies when sealing
+    /// (`{ [[Configurable]]: false }`), or when freezing an accessor property.
+    pub(crate) fn integrity_non_configurable() -> Self {
+        Self {
+            value: None,
+            writable: None,
+            get: None,
+            set: None,
+            enumerable: None,
+            configurable: Some(false),
+        }
+    }
+
+    /// The partial descriptor SetIntegrityLevel applies when freezing a data
+    /// property (`{ [[Configurable]]: false, [[Writable]]: false }`).
+    pub(crate) fn integrity_frozen_data() -> Self {
+        Self {
+            value: None,
+            writable: Some(false),
+            get: None,
+            set: None,
+            enumerable: None,
+            configurable: Some(false),
+        }
+    }
+
     pub(super) fn data_value(value: Value) -> Self {
         Self {
             value: Some(value),
