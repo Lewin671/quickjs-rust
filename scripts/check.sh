@@ -14,7 +14,7 @@ fi
 # Run qjs-runtime separately so CI can isolate long-running semantic tests from
 # the rest of the workspace while keeping the same coverage.
 HEX_PROGRESS_TEST="typed_array::tests::uint8_array_set_from_hex_errors_preserve_specified_writes"
-"$CARGO_BIN" test --workspace --exclude qjs-runtime
+"$CARGO_BIN" test -p qjs-ast -p qjs-lexer -p qjs-parser -p qjs-cli
 "$CARGO_BIN" test -p qjs-runtime "$HEX_PROGRESS_TEST" -- --exact
 "$CARGO_BIN" test -p qjs-runtime -- --skip "$HEX_PROGRESS_TEST"
 "$ROOT_DIR/scripts/check-file-size.sh"
