@@ -135,7 +135,9 @@ pub(crate) fn native_proxy_revocable(argument_values: &[Value]) -> Result<Value,
     }
 
     let proxy = ProxyRef::new(target, handler);
-    let revoke = Function::new_native(Some("revoke"), 0, NativeFunction::ProxyRevoke, false);
+    // The revocation function is anonymous: its `name` is the empty string
+    // (ECMA-262 28.2.2.1, CreateBuiltinFunction with name "").
+    let revoke = Function::new_native(Some(""), 0, NativeFunction::ProxyRevoke, false);
     revoke.define_property(
         "[[RevocableProxy]]".to_owned(),
         Property::non_enumerable(Value::Proxy(proxy.clone())),

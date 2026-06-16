@@ -532,6 +532,21 @@ fn instanceof_dispatches_proxy_get_prototype_of_trap() {
 }
 
 #[test]
+fn revocation_function_is_anonymous() {
+    assert_eq!(
+        eval("Proxy.revocable({}, {}).revoke.name;"),
+        Ok(Value::String(String::new()))
+    );
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(Proxy.revocable({}, {}).revoke, 'name'); \
+             d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("false:false:true".to_owned()))
+    );
+}
+
+#[test]
 fn object_create_accepts_an_array_prototype() {
     assert_eq!(
         eval("let o = Object.create([7, 8, 9]); o.length + ':' + o[1];"),
