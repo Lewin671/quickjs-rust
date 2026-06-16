@@ -16,7 +16,7 @@ use super::escapes::{
 use super::groups::{named_backreference, named_group_index};
 use super::{
     MatchOptions, MatchState, PropertyCache, Quantifier, class_end, class_match, code_unit_char,
-    is_line_terminator, regexp_code_point_at,
+    is_line_terminator, regexp_code_point_at, regexp_property_code_point_at,
 };
 use crate::string::advance_string_index;
 
@@ -143,8 +143,8 @@ impl SimpleAtom<'_> {
                 None
             }
             SimpleAtom::Property(escape) => {
-                let (value, next_index) = regexp_code_point_at(text, index, true)?;
-                (escape.set.contains(u32::from(value)) != escape.negated).then_some(next_index)
+                let (code_point, next_index) = regexp_property_code_point_at(text, index)?;
+                (escape.set.contains(code_point) != escape.negated).then_some(next_index)
             }
             SimpleAtom::Escape(escaped) => {
                 let value = *text.get(index)?;

@@ -259,6 +259,11 @@ fn unicode_property_escapes_match_code_points() {
     assert!(regexp_match_range(r"^\p{Script=Greek}$", "\u{03B1}", 0, false, true, false).is_some());
     // Astral code point matched as a single code point.
     assert!(regexp_match_range(r"^\p{Any}$", "\u{1F600}", 0, false, true, false).is_some());
+    let high = string_from_code_unit(0xD83D);
+    let low = string_from_code_unit(0xDE00);
+    let pair = format!("{high}{low}");
+    assert!(regexp_match_range(r"^\p{Surrogate}$", &low, 0, false, true, false).is_some());
+    assert!(regexp_match_range(r"^\p{Surrogate}$", &pair, 0, false, true, false).is_none());
     // Inside a character class, optionally combined with other atoms.
     assert!(regexp_match_range(r"^[\p{Nd}\p{Lu}]$", "5", 0, false, true, false).is_some());
     assert!(regexp_match_range(r"^[\p{Nd}A-F]$", "C", 0, false, true, false).is_some());

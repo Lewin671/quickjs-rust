@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use crate::string::{advance_string_index, string_code_units, string_from_code_unit};
+use crate::string::{
+    advance_string_index, string_code_units, string_from_code_unit, surrogate_escape_code_unit,
+};
 
 mod classes;
 mod escapes;
@@ -194,9 +196,15 @@ fn is_trailing_surrogate_position(text: &[char], index: usize) -> bool {
 }
 
 fn char_code_unit(value: char) -> Option<u16> {
-    crate::string::string_code_units(&value.to_string())
-        .first()
-        .copied()
+    if let Some(code_unit) = surrogate_escape_code_unit(value) {
+        return Some(code_unit);
+    }
+    let code_point = value as u32;
+    if code_point <= 0xFFFF {
+        return Some(code_point as u16);
+    }
+    let mut buffer = [0u16; 2];
+    value.encode_utf16(&mut buffer).first().copied()
 }
 
 fn capture_group_indices(pattern: &[char]) -> HashMap<usize, usize> {
@@ -561,10 +569,10 @@ fn match_property_escape(
     mut state: MatchState,
     escape: &escapes::ParsedPropertyEscape,
 ) -> Vec<(usize, MatchState)> {
-    let Some((value, next_index)) = regexp_code_point_at(text, state.index, true) else {
+    let Some((code_point, next_index)) = regexp_property_code_point_at(text, state.index) else {
         return Vec::new();
     };
-    let matched = escape.set.contains(u32::from(value));
+    let matched = escape.set.contains(code_point);
     if matched == escape.negated {
         return Vec::new();
     }
@@ -627,6 +635,26 @@ fn regexp_code_point_at(text: &[char], index: usize, unicode: bool) -> Option<(c
         }
     }
     Some((first, index + 1))
+}
+
+pub(super) fn regexp_property_code_point_at(text: &[char], index: usize) -> Option<(u32, usize)> {
+    let first = *text.get(index)?;
+    if let Some(first_unit) = surrogate_escape_code_unit(first) {
+        if (0xD800..=0xDBFF).contains(&first_unit)
+            && let Some(second_unit) = text
+                .get(index + 1)
+                .and_then(|value| surrogate_escape_code_unit(*value))
+            && (0xDC00..=0xDFFF).contains(&second_unit)
+        {
+            return Some((
+                0x10000 + ((u32::from(first_unit) - 0xD800) << 10) + u32::from(second_unit)
+                    - 0xDC00,
+                index + 2,
+            ));
+        }
+        return Some((u32::from(first_unit), index + 1));
+    }
+    Some((u32::from(first), index + 1))
 }
 
 fn quantifier(pattern: &[char], pc: usize) -> Quantifier {
