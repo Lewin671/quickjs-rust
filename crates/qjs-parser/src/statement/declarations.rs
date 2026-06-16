@@ -16,7 +16,7 @@ impl Parser {
         else {
             unreachable!("for variable declaration helper always returns VarDecl");
         };
-        self.match_kind(&TokenKind::Semicolon);
+        self.consume_statement_terminator(span.end)?;
         Ok(Stmt::VarDecl {
             kind,
             declarations,

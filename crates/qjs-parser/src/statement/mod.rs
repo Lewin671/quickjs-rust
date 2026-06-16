@@ -137,8 +137,32 @@ impl Parser {
         }
 
         let expr = self.expression()?;
-        self.match_kind(&TokenKind::Semicolon);
+        let end = expr.span().end;
+        self.consume_statement_terminator(end)?;
         Ok(Stmt::Expr(expr))
+    }
+
+    pub(crate) fn consume_statement_terminator(
+        &mut self,
+        statement_end: usize,
+    ) -> Result<(), ParseError> {
+        if self.match_kind(&TokenKind::Semicolon) {
+            return Ok(());
+        }
+        if self.at(&TokenKind::RightBrace) || self.at(&TokenKind::Eof) {
+            return Ok(());
+        }
+        let next = self
+            .peek()
+            .expect("parser should always have eof token")
+            .clone();
+        if self.has_line_terminator_between(statement_end, next.span.start) {
+            return Ok(());
+        }
+        Err(ParseError {
+            message: "expected `;` or newline after statement".to_owned(),
+            span: next.span,
+        })
     }
 
     fn let_is_declaration_start(&self) -> bool {

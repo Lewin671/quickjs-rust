@@ -82,6 +82,19 @@ fn rejects_destructuring_declaration_without_initializer() {
         "destructuring declarations require an initializer"
     );
 }
+
+#[test]
+fn requires_semicolon_or_asi_between_statements() {
+    let error = parse_script("var str = '''';").expect_err("adjacent strings need a separator");
+    assert_eq!(error.message, "expected `;` or newline after statement");
+
+    let error = parse_script("left right;").expect_err("adjacent expressions need a separator");
+    assert_eq!(error.message, "expected `;` or newline after statement");
+
+    parse_script("var str = ''\n'';").expect("newline should trigger ASI");
+    parse_script("left\nright;").expect("newline should trigger ASI");
+}
+
 #[test]
 fn parses_if_else_statement() {
     let script =
