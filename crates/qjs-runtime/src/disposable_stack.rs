@@ -1,14 +1,31 @@
 use std::collections::HashMap;
 
-use crate::{CallEnv, Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, symbol};
+use crate::{
+    ArrayRef, CallEnv, Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError,
+    Value, call_function, property_value_key, symbol,
+};
 
 const DISPOSABLE_STACK_DISPOSED: &str = "\0DisposableStackDisposed";
+const DISPOSABLE_STACK_RESOURCES: &str = "\0DisposableStackResources";
+const ASYNC_DISPOSABLE_STACK_DISPOSED: &str = "\0AsyncDisposableStackDisposed";
+const RESOURCE_KIND: &str = "\0DisposableResourceKind";
+const RESOURCE_VALUE: &str = "\0DisposableResourceValue";
+const RESOURCE_METHOD: &str = "\0DisposableResourceMethod";
+
+#[derive(Clone, Copy)]
+enum DisposableResourceKind {
+    Use,
+    Adopt,
+    Defer,
+}
 
 pub(crate) fn install_disposable_stack(
     env: &mut CallEnv,
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
+    install_async_disposable_stack(env, global_this, object_prototype.clone());
+
     let prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
     prototype.set_to_string_tag("DisposableStack");
     symbol::define_well_known_to_string_tag(env, &prototype, "DisposableStack");
@@ -35,6 +52,18 @@ pub(crate) fn install_disposable_stack(
         ),
     );
 
+    define_prototype_method(
+        &prototype,
+        "adopt",
+        2,
+        NativeFunction::DisposableStackPrototypeAdopt,
+    );
+    define_prototype_method(
+        &prototype,
+        "defer",
+        1,
+        NativeFunction::DisposableStackPrototypeDefer,
+    );
     let dispose = Function::new_native(
         Some("dispose"),
         0,
@@ -46,6 +75,12 @@ pub(crate) fn install_disposable_stack(
     if let Some(dispose_symbol) = symbol::dispose_symbol(env) {
         prototype.define_symbol_property(dispose_symbol, Property::non_enumerable(dispose_value));
     }
+    define_prototype_method(
+        &prototype,
+        "use",
+        1,
+        NativeFunction::DisposableStackPrototypeUse,
+    );
 
     function.properties.borrow_mut().insert(
         "prototype".to_owned(),
@@ -57,6 +92,57 @@ pub(crate) fn install_disposable_stack(
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable("DisposableStack".to_owned(), value);
     }
+}
+
+fn install_async_disposable_stack(
+    env: &mut CallEnv,
+    global_this: &Value,
+    object_prototype: ObjectRef,
+) {
+    let prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    prototype.set_to_string_tag("AsyncDisposableStack");
+    symbol::define_well_known_to_string_tag(env, &prototype, "AsyncDisposableStack");
+
+    let function = Function::new_native(
+        Some("AsyncDisposableStack"),
+        0,
+        NativeFunction::AsyncDisposableStack,
+        true,
+    );
+    prototype.define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
+    function.properties.borrow_mut().insert(
+        "prototype".to_owned(),
+        Property::fixed_non_enumerable(Value::Object(prototype)),
+    );
+
+    let value = Value::Function(function);
+    env.insert_realm("AsyncDisposableStack".to_owned(), value.clone());
+    if let Value::Object(global_object) = global_this {
+        global_object.define_non_enumerable("AsyncDisposableStack".to_owned(), value);
+    }
+}
+
+pub(crate) fn native_async_disposable_stack(
+    function: &Function,
+    is_construct: bool,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    if !is_construct {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Constructor AsyncDisposableStack requires 'new'".to_owned(),
+        });
+    }
+    let object = ObjectRef::with_prototype_slot(
+        HashMap::new(),
+        crate::native_construct_prototype_slot(function, env)?,
+    );
+    object.set_to_string_tag("AsyncDisposableStack");
+    object.define_property(
+        ASYNC_DISPOSABLE_STACK_DISPOSED.to_owned(),
+        Property::non_enumerable(Value::Boolean(false)),
+    );
+    Ok(Value::Object(object))
 }
 
 pub(crate) fn native_disposable_stack(
@@ -79,7 +165,54 @@ pub(crate) fn native_disposable_stack(
         DISPOSABLE_STACK_DISPOSED.to_owned(),
         Property::non_enumerable(Value::Boolean(false)),
     );
+    object.define_property(
+        DISPOSABLE_STACK_RESOURCES.to_owned(),
+        Property::non_enumerable(Value::Array(ArrayRef::new(Vec::new()))),
+    );
     Ok(Value::Object(object))
+}
+
+pub(crate) fn native_disposable_stack_prototype_adopt(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let object = disposable_stack_object(&this_value)?;
+    ensure_pending(&object)?;
+    let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let on_dispose = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
+    if !is_callable(&on_dispose) {
+        return Err(not_callable_error(
+            "DisposableStack.prototype.adopt disposer",
+        ));
+    }
+    push_resource(
+        &object,
+        DisposableResourceKind::Adopt,
+        value.clone(),
+        on_dispose,
+    )?;
+    Ok(value)
+}
+
+pub(crate) fn native_disposable_stack_prototype_defer(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let object = disposable_stack_object(&this_value)?;
+    ensure_pending(&object)?;
+    let on_dispose = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    if !is_callable(&on_dispose) {
+        return Err(not_callable_error(
+            "DisposableStack.prototype.defer disposer",
+        ));
+    }
+    push_resource(
+        &object,
+        DisposableResourceKind::Defer,
+        Value::Undefined,
+        on_dispose,
+    )?;
+    Ok(Value::Undefined)
 }
 
 pub(crate) fn native_disposable_stack_prototype_disposed(
@@ -94,23 +227,222 @@ pub(crate) fn native_disposable_stack_prototype_disposed(
 
 pub(crate) fn native_disposable_stack_prototype_dispose(
     this_value: Value,
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let object = disposable_stack_object(&this_value)?;
+    if is_disposed(&object) {
+        return Ok(Value::Undefined);
+    }
     object.define_property(
         DISPOSABLE_STACK_DISPOSED.to_owned(),
         Property::non_enumerable(Value::Boolean(true)),
     );
+    let resources = disposable_stack_resources(&object)?;
+    let mut completion: Option<RuntimeError> = None;
+    while let Some(resource) = resources.pop() {
+        let error = dispose_resource(resource, env).err();
+        if let Some(error) = error {
+            completion = Some(match completion {
+                Some(suppressed) => suppressed_error(error, suppressed, env)?,
+                None => error,
+            });
+        }
+    }
+    if let Some(error) = completion {
+        return Err(error);
+    }
     Ok(Value::Undefined)
+}
+
+pub(crate) fn native_disposable_stack_prototype_use(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let object = disposable_stack_object(&this_value)?;
+    ensure_pending(&object)?;
+    let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    if matches!(value, Value::Null | Value::Undefined) {
+        return Ok(value);
+    }
+    if !is_object_like(&value) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: DisposableStack.prototype.use value must be an object".to_owned(),
+        });
+    }
+    let Some(dispose_symbol) = symbol::dispose_symbol(env) else {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Symbol.dispose is not available".to_owned(),
+        });
+    };
+    let dispose_method =
+        property_value_key(value.clone(), &PropertyKey::Symbol(dispose_symbol), env)?;
+    if matches!(dispose_method, Value::Null | Value::Undefined) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: disposable value is missing Symbol.dispose".to_owned(),
+        });
+    }
+    if !is_callable(&dispose_method) {
+        return Err(not_callable_error("Symbol.dispose"));
+    }
+    push_resource(
+        &object,
+        DisposableResourceKind::Use,
+        value.clone(),
+        dispose_method,
+    )?;
+    Ok(value)
 }
 
 fn disposable_stack_object(value: &Value) -> Result<ObjectRef, RuntimeError> {
     let Value::Object(object) = value else {
         return Err(incompatible_receiver());
     };
-    if object.has_own_property(DISPOSABLE_STACK_DISPOSED) {
+    if object.has_own_property(DISPOSABLE_STACK_DISPOSED)
+        && object.has_own_property(DISPOSABLE_STACK_RESOURCES)
+    {
         Ok(object.clone())
     } else {
         Err(incompatible_receiver())
+    }
+}
+
+fn define_prototype_method(
+    prototype: &ObjectRef,
+    name: &str,
+    length: usize,
+    native: NativeFunction,
+) {
+    prototype.define_non_enumerable(
+        name.to_owned(),
+        Value::Function(Function::new_native(Some(name), length, native, false)),
+    );
+}
+
+fn ensure_pending(object: &ObjectRef) -> Result<(), RuntimeError> {
+    if is_disposed(object) {
+        Err(RuntimeError {
+            thrown: None,
+            message: "ReferenceError: DisposableStack is already disposed".to_owned(),
+        })
+    } else {
+        Ok(())
+    }
+}
+
+fn is_disposed(object: &ObjectRef) -> bool {
+    matches!(
+        object
+            .own_property(DISPOSABLE_STACK_DISPOSED)
+            .map(|property| property.value),
+        Some(Value::Boolean(true))
+    )
+}
+
+fn disposable_stack_resources(object: &ObjectRef) -> Result<ArrayRef, RuntimeError> {
+    match object
+        .own_property(DISPOSABLE_STACK_RESOURCES)
+        .map(|property| property.value)
+    {
+        Some(Value::Array(resources)) => Ok(resources),
+        _ => Err(incompatible_receiver()),
+    }
+}
+
+fn push_resource(
+    object: &ObjectRef,
+    kind: DisposableResourceKind,
+    value: Value,
+    method: Value,
+) -> Result<(), RuntimeError> {
+    let resources = disposable_stack_resources(object)?;
+    resources.set(resources.len(), resource_record(kind, value, method));
+    Ok(())
+}
+
+fn resource_record(kind: DisposableResourceKind, value: Value, method: Value) -> Value {
+    let record = ObjectRef::with_prototype(HashMap::new(), None);
+    record.define_property(
+        RESOURCE_KIND.to_owned(),
+        Property::non_enumerable(Value::String(kind.as_str().to_owned())),
+    );
+    record.define_property(RESOURCE_VALUE.to_owned(), Property::non_enumerable(value));
+    record.define_property(RESOURCE_METHOD.to_owned(), Property::non_enumerable(method));
+    Value::Object(record)
+}
+
+fn dispose_resource(resource: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+    let Value::Object(record) = resource else {
+        return Ok(Value::Undefined);
+    };
+    let kind = match record
+        .own_property(RESOURCE_KIND)
+        .map(|property| property.value)
+    {
+        Some(Value::String(kind)) => kind,
+        _ => return Ok(Value::Undefined),
+    };
+    let value = record
+        .own_property(RESOURCE_VALUE)
+        .map(|property| property.value)
+        .unwrap_or(Value::Undefined);
+    let method = record
+        .own_property(RESOURCE_METHOD)
+        .map(|property| property.value)
+        .unwrap_or(Value::Undefined);
+    match DisposableResourceKind::from_str(&kind) {
+        Some(DisposableResourceKind::Use) => call_function(method, value, Vec::new(), env, false),
+        Some(DisposableResourceKind::Adopt) => {
+            call_function(method, Value::Undefined, vec![value], env, false)
+        }
+        Some(DisposableResourceKind::Defer) => {
+            call_function(method, Value::Undefined, Vec::new(), env, false)
+        }
+        None => Ok(Value::Undefined),
+    }
+}
+
+fn suppressed_error(
+    error: RuntimeError,
+    suppressed: RuntimeError,
+    env: &mut CallEnv,
+) -> Result<RuntimeError, RuntimeError> {
+    let error_value = crate::error::runtime_error_to_value(error, env);
+    let suppressed_value = crate::error::runtime_error_to_value(suppressed, env);
+    let thrown = crate::error::create_suppressed_error(error_value, suppressed_value, env)?;
+    Ok(RuntimeError {
+        thrown: Some(Box::new(thrown)),
+        message: "throw statement executed: SuppressedError".to_owned(),
+    })
+}
+
+fn is_callable(value: &Value) -> bool {
+    match value {
+        Value::Function(_) => true,
+        Value::Proxy(proxy) => crate::proxy::proxy_is_callable(proxy),
+        _ => false,
+    }
+}
+
+fn is_object_like(value: &Value) -> bool {
+    matches!(
+        value,
+        Value::Object(_)
+            | Value::Array(_)
+            | Value::Function(_)
+            | Value::Map(_)
+            | Value::Set(_)
+            | Value::Proxy(_)
+    )
+}
+
+fn not_callable_error(label: &str) -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: format!("TypeError: {label} must be callable"),
     }
 }
 
@@ -118,5 +450,24 @@ fn incompatible_receiver() -> RuntimeError {
     RuntimeError {
         thrown: None,
         message: "TypeError: DisposableStack method called on incompatible receiver".to_owned(),
+    }
+}
+
+impl DisposableResourceKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Use => "use",
+            Self::Adopt => "adopt",
+            Self::Defer => "defer",
+        }
+    }
+
+    fn from_str(value: &str) -> Option<Self> {
+        match value {
+            "use" => Some(Self::Use),
+            "adopt" => Some(Self::Adopt),
+            "defer" => Some(Self::Defer),
+            _ => None,
+        }
     }
 }

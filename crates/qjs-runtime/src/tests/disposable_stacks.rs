@@ -75,4 +75,75 @@ fn disposable_stack_empty_dispose_marks_receiver() {
     );
     assert!(eval("let get = Object.getOwnPropertyDescriptor(DisposableStack.prototype, 'disposed').get; get.call([]);").is_err());
     assert!(eval("DisposableStack.prototype.dispose.call({});").is_err());
+    assert!(eval("DisposableStack.prototype.dispose.call(new AsyncDisposableStack());").is_err());
+}
+
+#[test]
+fn disposable_stack_disposes_resources_in_reverse_order() {
+    assert_eq!(
+        eval(
+            "let stack = new DisposableStack(); \
+             let order = []; \
+             let resource = { [Symbol.dispose]() { order.push('use'); } }; \
+             stack.use(resource); \
+             stack.adopt('value', value => order.push('adopt:' + value)); \
+             stack.defer(() => order.push('defer')); \
+             stack.dispose(); \
+             order.join(',') + ':' + stack.disposed;"
+        ),
+        Ok(Value::String("defer,adopt:value,use:true".to_owned()))
+    );
+}
+
+#[test]
+fn disposable_stack_dispose_is_not_reentrant_after_disposed() {
+    assert_eq!(
+        eval(
+            "let stack = new DisposableStack(); \
+             let count = 0; \
+             stack.defer(() => count++); \
+             stack.dispose(); \
+             stack.dispose(); \
+             count;"
+        ),
+        Ok(Value::Number(1.0))
+    );
+    assert!(
+        eval("let stack = new DisposableStack(); stack.dispose(); stack.defer(() => {});").is_err()
+    );
+}
+
+#[test]
+fn disposable_stack_dispose_error_completion_matches_sync_disposal() {
+    assert_eq!(
+        eval(
+            "class MyError extends Error {} \
+             let err = new MyError(); \
+             let stack = new DisposableStack(); \
+             stack.defer(() => { throw err; }); \
+             try { stack.dispose(); 'no throw'; } catch (e) { e === err; }"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "class MyError extends Error {} \
+             let error1 = new MyError(); \
+             let error2 = new MyError(); \
+             let error3 = new MyError(); \
+             let stack = new DisposableStack(); \
+             stack.defer(() => { throw error1; }); \
+             stack.defer(() => { throw error2; }); \
+             stack.defer(() => { throw error3; }); \
+             try { stack.dispose(); 'no throw'; } \
+             catch (e) { \
+               (e instanceof SuppressedError) + ':' + \
+               (e.error === error1) + ':' + \
+               (e.suppressed instanceof SuppressedError) + ':' + \
+               (e.suppressed.error === error2) + ':' + \
+               (e.suppressed.suppressed === error3); \
+             }"
+        ),
+        Ok(Value::String("true:true:true:true:true".to_owned()))
+    );
 }

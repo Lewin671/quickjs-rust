@@ -90,6 +90,7 @@ pub(crate) fn call_native_function(
         function,
         native,
         this_value.clone(),
+        &argument_values,
         is_construct,
         env,
     )? {

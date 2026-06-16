@@ -18,6 +18,13 @@ pub(super) fn call_error_native(
         NativeFunction::AggregateError => {
             error::native_aggregate_error(function, this_value, argument_values, is_construct, env)?
         }
+        NativeFunction::SuppressedError => error::native_suppressed_error(
+            function,
+            this_value,
+            argument_values,
+            is_construct,
+            env,
+        )?,
         NativeFunction::ErrorIsError => error::native_error_is_error(argument_values),
         NativeFunction::ErrorPrototypeToString => {
             error::native_error_prototype_to_string(this_value, env)?

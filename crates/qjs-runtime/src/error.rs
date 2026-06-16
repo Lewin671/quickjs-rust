@@ -76,6 +76,13 @@ pub(crate) fn install_error(env: &mut CallEnv, global_this: &Value, object_proto
         "AggregateError",
         NativeFunction::AggregateError,
     );
+    install_native_error(
+        env,
+        global_this,
+        &error_prototype,
+        "SuppressedError",
+        NativeFunction::SuppressedError,
+    );
 }
 
 pub(crate) fn native_error(
@@ -141,6 +148,70 @@ pub(crate) fn native_aggregate_error(
     );
     install_error_cause(&object, argument_values.get(2).cloned(), env)?;
     Ok(Value::Object(object))
+}
+
+pub(crate) fn native_suppressed_error(
+    function: &Function,
+    this_value: Value,
+    argument_values: &[Value],
+    is_construct: bool,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let object = match (is_construct, this_value) {
+        (true, Value::Object(object)) => object,
+        _ => ObjectRef::with_prototype(HashMap::new(), function_prototype(function)),
+    };
+    ensure_default_error_prototype(&object, function);
+    define_error_data(&object);
+    object.define_property(
+        "error".to_owned(),
+        Property::data(
+            argument_values.first().cloned().unwrap_or(Value::Undefined),
+            false,
+            true,
+            true,
+        ),
+    );
+    object.define_property(
+        "suppressed".to_owned(),
+        Property::data(
+            argument_values.get(1).cloned().unwrap_or(Value::Undefined),
+            false,
+            true,
+            true,
+        ),
+    );
+    if let Some(message) = argument_values.get(2) {
+        if !matches!(message, Value::Undefined) {
+            object.define_property(
+                "message".to_owned(),
+                Property::data(
+                    Value::String(to_js_string_with_env(message.clone(), env)?),
+                    false,
+                    true,
+                    true,
+                ),
+            );
+        }
+    }
+    Ok(Value::Object(object))
+}
+
+pub(crate) fn create_suppressed_error(
+    error: Value,
+    suppressed: Value,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let Some(Value::Function(function)) = env.get("SuppressedError") else {
+        return Ok(Value::String("SuppressedError".to_owned()));
+    };
+    native_suppressed_error(
+        &function,
+        Value::Undefined,
+        &[error, suppressed, Value::String(String::new())],
+        false,
+        env,
+    )
 }
 
 fn ensure_default_error_prototype(object: &ObjectRef, function: &Function) {
@@ -350,7 +421,11 @@ fn install_native_error(
     native: NativeFunction,
 ) {
     let prototype = ObjectRef::with_prototype(HashMap::new(), Some(error_prototype.clone()));
-    let length = if name == "AggregateError" { 2 } else { 1 };
+    let length = match name {
+        "AggregateError" => 2,
+        "SuppressedError" => 3,
+        _ => 1,
+    };
     let function = Function::new_native(Some(name), length, native, true);
     prototype.define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
     prototype.define_non_enumerable("name".to_owned(), Value::String(name.to_owned()));
@@ -377,6 +452,7 @@ fn native_error_name(native: NativeFunction) -> Option<&'static str> {
         NativeFunction::TypeError => Some("TypeError"),
         NativeFunction::UriError => Some("URIError"),
         NativeFunction::AggregateError => Some("AggregateError"),
+        NativeFunction::SuppressedError => Some("SuppressedError"),
         _ => None,
     }
 }
