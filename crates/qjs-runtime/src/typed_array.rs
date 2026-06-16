@@ -843,6 +843,8 @@ mod base64_tests;
 #[cfg(test)]
 mod hex_tests;
 #[cfg(test)]
+mod iteration_tests;
+#[cfg(test)]
 mod ordering_tests;
 #[cfg(test)]
 mod tests;

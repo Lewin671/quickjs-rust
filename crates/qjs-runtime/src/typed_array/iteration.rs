@@ -5,8 +5,8 @@
 //! so values stay correct even if index properties drift.
 
 use crate::{
-    ObjectRef, RuntimeError, Value, array_buffer, call_function, is_truthy, to_js_string_with_env,
-    to_number_with_env,
+    ObjectRef, RuntimeError, Value, array_buffer, call_function, is_truthy, property_value,
+    to_js_string_with_env, to_number_with_env,
 };
 
 use super::element::{ViewSnapshot, get_view_element, read_view_elements};
@@ -259,9 +259,9 @@ pub(crate) fn native_typed_array_prototype_to_locale_string(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
-    let elements = read_view_elements(&object, 0, length);
     let mut parts = Vec::with_capacity(length);
-    for element in elements {
+    for index in 0..length {
+        let element = get_view_element(&object, index);
         let part = call_to_locale_string(element, env)?;
         parts.push(part);
     }
@@ -269,10 +269,12 @@ pub(crate) fn native_typed_array_prototype_to_locale_string(
 }
 
 fn call_to_locale_string(value: Value, env: &mut CallEnv) -> Result<String, RuntimeError> {
-    // Per spec, invoke each element's `toLocaleString`. Numbers/BigInts have
-    // their own; we route through the generic string conversion which already
-    // mirrors `Number.prototype.toLocaleString` basics for these element types.
-    to_js_string_with_env(value, env)
+    // Per spec, Invoke the element's own `toLocaleString` (resolved through its
+    // prototype, so a user-overridden Number.prototype.toLocaleString is
+    // honored) and ToString the result. Element values are never null/undefined.
+    let method = property_value(value.clone(), "toLocaleString", env)?;
+    let localized = call_function(method, value, Vec::new(), env, false)?;
+    to_js_string_with_env(localized, env)
 }
 
 // --- keys / values / entries / Symbol.iterator ------------------------------
