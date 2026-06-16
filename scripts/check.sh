@@ -23,9 +23,13 @@ qjs_check_stage() {
   fi
 }
 
-qjs_check_split_runtime_tests() {
+qjs_check_runtime_core_tests() {
   local cargo_bin="$1"
-  "$cargo_bin" test -p qjs-runtime -- --skip "typed_array::"
+  "$cargo_bin" test -p qjs-runtime -- --skip "typed_array::" --skip "weak_sets::"
+}
+
+qjs_check_typed_array_tests() {
+  local cargo_bin="$1"
   "$cargo_bin" test -p qjs-runtime typed_array::ordering_tests
   "$cargo_bin" test -p qjs-runtime typed_array::tests::indexed_tests
   while IFS= read -r test_name; do
@@ -42,8 +46,12 @@ qjs_check_stage "clippy" "$CARGO_BIN" clippy --workspace --all-targets -- -D war
 if [ "${QJS_CHECK_SPLIT_RUNTIME_TESTS:-0}" = "1" ]; then
   qjs_check_stage "non-runtime crate tests" \
     "$CARGO_BIN" test -p qjs-ast -p qjs-lexer -p qjs-parser -p qjs-cli
-  qjs_check_stage "qjs-runtime split tests" \
-    qjs_check_split_runtime_tests "$CARGO_BIN"
+  qjs_check_stage "qjs-runtime core tests" \
+    qjs_check_runtime_core_tests "$CARGO_BIN"
+  qjs_check_stage "qjs-runtime weak set tests" \
+    "$CARGO_BIN" test -p qjs-runtime weak_sets::
+  qjs_check_stage "qjs-runtime typed array tests" \
+    qjs_check_typed_array_tests "$CARGO_BIN"
 else
   qjs_check_stage "workspace tests" "$CARGO_BIN" test --workspace
 fi
