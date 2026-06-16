@@ -232,3 +232,55 @@ fn async_disposable_stack_move_surface_and_subclassing() {
         Ok(Value::String("true:true:false".to_owned()))
     );
 }
+
+#[test]
+fn async_disposable_stack_adopt_and_use_register_resources() {
+    assert_eq!(
+        eval(
+            "let stack = new AsyncDisposableStack(); \
+             let order = []; \
+             let asyncResource = { [Symbol.asyncDispose]() { order.push('async-use'); } }; \
+             let syncResource = { [Symbol.dispose]() { order.push('sync-use'); } }; \
+             let adopted = {}; \
+             let adoptResult = stack.adopt(adopted, value => order.push(value === adopted ? 'adopt' : 'wrong')); \
+             let asyncResult = stack.use(asyncResource); \
+             let syncResult = stack.use(syncResource); \
+             let nullResult = stack.use(null); \
+             stack.disposeAsync(); \
+             (adoptResult === adopted) + ':' + \
+             (asyncResult === asyncResource) + ':' + \
+             (syncResult === syncResource) + ':' + \
+             (nullResult === null) + ':' + order.join(',');"
+        ),
+        Ok(Value::String(
+            "true:true:true:true:sync-use,async-use,adopt".to_owned()
+        ))
+    );
+}
+
+#[test]
+fn async_disposable_stack_adopt_and_use_surface_and_errors() {
+    assert_eq!(
+        eval(
+            "let adopt = Object.getOwnPropertyDescriptor(AsyncDisposableStack.prototype, 'adopt'); \
+             let use = Object.getOwnPropertyDescriptor(AsyncDisposableStack.prototype, 'use'); \
+             adopt.value.name + ':' + adopt.value.length + ':' + adopt.writable + ':' + adopt.enumerable + ':' + adopt.configurable + ';' + \
+             use.value.name + ':' + use.value.length + ':' + use.writable + ':' + use.enumerable + ':' + use.configurable;"
+        ),
+        Ok(Value::String(
+            "adopt:2:true:false:true;use:1:true:false:true".to_owned()
+        ))
+    );
+    assert!(
+        eval("let stack = new AsyncDisposableStack(); stack.disposeAsync(); stack.adopt(null, () => {});")
+            .is_err()
+    );
+    assert!(
+        eval("let stack = new AsyncDisposableStack(); stack.disposeAsync(); stack.use({ [Symbol.dispose]() {} });")
+            .is_err()
+    );
+    assert!(eval("AsyncDisposableStack.prototype.adopt.call({}, null, () => {});").is_err());
+    assert!(eval("AsyncDisposableStack.prototype.use.call({}, null);").is_err());
+    assert!(eval("new AsyncDisposableStack().adopt(null, null);").is_err());
+    assert!(eval("new AsyncDisposableStack().use({});").is_err());
+}

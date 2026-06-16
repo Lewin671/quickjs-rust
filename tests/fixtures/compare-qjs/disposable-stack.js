@@ -31,6 +31,18 @@
   ].join(",");
   asyncMoved.disposeAsync();
 
+  let asyncAdopt = new AsyncDisposableStack();
+  let asyncAdoptValue = {};
+  let asyncAdoptResult = asyncAdopt.adopt(asyncAdoptValue, value => {
+    order.push(value === asyncAdoptValue ? "async-adopt" : "async-adopt-mismatch");
+  });
+  asyncAdopt.disposeAsync();
+
+  let asyncUse = new AsyncDisposableStack();
+  let asyncUseResource = { [Symbol.dispose]() { order.push("async-use-sync"); } };
+  let asyncUseResult = asyncUse.use(asyncUseResource);
+  asyncUse.disposeAsync();
+
   let error1 = new Error("first");
   let error2 = new Error("second");
   let error3 = new Error("third");
@@ -44,6 +56,8 @@
     return order.join(",") + ":" +
       moveState + ":" +
       asyncMoveState + ":" +
+      (asyncAdoptResult === asyncAdoptValue) + ":" +
+      (asyncUseResult === asyncUseResource) + ":" +
       stack.disposed + ":" +
       (error instanceof SuppressedError) + ":" +
       (error.error === error1) + ":" +

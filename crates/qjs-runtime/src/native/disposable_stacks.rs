@@ -14,6 +14,12 @@ pub(super) fn call_disposable_stack_native(
         NativeFunction::AsyncDisposableStack => {
             disposable_stack::native_async_disposable_stack(function, is_construct, env)?
         }
+        NativeFunction::AsyncDisposableStackPrototypeAdopt => {
+            disposable_stack::native_async_disposable_stack_prototype_adopt(
+                this_value,
+                argument_values,
+            )?
+        }
         NativeFunction::AsyncDisposableStackPrototypeDefer => {
             disposable_stack::native_async_disposable_stack_prototype_defer(
                 this_value,
@@ -30,6 +36,13 @@ pub(super) fn call_disposable_stack_native(
         }
         NativeFunction::AsyncDisposableStackPrototypeMove => {
             disposable_stack::native_async_disposable_stack_prototype_move(this_value, env)?
+        }
+        NativeFunction::AsyncDisposableStackPrototypeUse => {
+            disposable_stack::native_async_disposable_stack_prototype_use(
+                this_value,
+                argument_values,
+                env,
+            )?
         }
         NativeFunction::DisposableStack => {
             disposable_stack::native_disposable_stack(function, is_construct, env)?

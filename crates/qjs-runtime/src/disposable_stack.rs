@@ -132,6 +132,12 @@ fn install_async_disposable_stack(
     );
     define_prototype_method(
         &prototype,
+        "adopt",
+        2,
+        NativeFunction::AsyncDisposableStackPrototypeAdopt,
+    );
+    define_prototype_method(
+        &prototype,
         "defer",
         1,
         NativeFunction::AsyncDisposableStackPrototypeDefer,
@@ -155,6 +161,12 @@ fn install_async_disposable_stack(
         "move",
         0,
         NativeFunction::AsyncDisposableStackPrototypeMove,
+    );
+    define_prototype_method(
+        &prototype,
+        "use",
+        1,
+        NativeFunction::AsyncDisposableStackPrototypeUse,
     );
     function.properties.borrow_mut().insert(
         "prototype".to_owned(),
@@ -220,6 +232,28 @@ pub(crate) fn native_disposable_stack(
         Property::non_enumerable(Value::Array(ArrayRef::new(Vec::new()))),
     );
     Ok(Value::Object(object))
+}
+
+pub(crate) fn native_async_disposable_stack_prototype_adopt(
+    this_value: Value,
+    argument_values: &[Value],
+) -> Result<Value, RuntimeError> {
+    let object = async_disposable_stack_object(&this_value)?;
+    ensure_async_pending(&object)?;
+    let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let on_dispose = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
+    if !is_callable(&on_dispose) {
+        return Err(not_callable_error(
+            "AsyncDisposableStack.prototype.adopt disposer",
+        ));
+    }
+    push_resource(
+        &object,
+        DisposableResourceKind::Adopt,
+        value.clone(),
+        on_dispose,
+    )?;
+    Ok(value)
 }
 
 pub(crate) fn native_async_disposable_stack_prototype_defer(
@@ -299,6 +333,67 @@ pub(crate) fn native_async_disposable_stack_prototype_move(
         Property::non_enumerable(Value::Array(ArrayRef::new(moved_resources))),
     );
     Ok(Value::Object(new_stack))
+}
+
+pub(crate) fn native_async_disposable_stack_prototype_use(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let object = async_disposable_stack_object(&this_value)?;
+    ensure_async_pending(&object)?;
+    let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    if matches!(value, Value::Null | Value::Undefined) {
+        return Ok(value);
+    }
+    if !is_object_like(&value) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: AsyncDisposableStack.prototype.use value must be an object"
+                .to_owned(),
+        });
+    }
+
+    let Some(async_dispose_symbol) = symbol::async_dispose_symbol(env) else {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Symbol.asyncDispose is not available".to_owned(),
+        });
+    };
+    let async_dispose_method = property_value_key(
+        value.clone(),
+        &PropertyKey::Symbol(async_dispose_symbol),
+        env,
+    )?;
+    let dispose_method = if matches!(async_dispose_method, Value::Null | Value::Undefined) {
+        let Some(dispose_symbol) = symbol::dispose_symbol(env) else {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: Symbol.dispose is not available".to_owned(),
+            });
+        };
+        property_value_key(value.clone(), &PropertyKey::Symbol(dispose_symbol), env)?
+    } else {
+        async_dispose_method
+    };
+    if matches!(dispose_method, Value::Null | Value::Undefined) {
+        return Err(RuntimeError {
+            thrown: None,
+            message:
+                "TypeError: async disposable value is missing Symbol.asyncDispose or Symbol.dispose"
+                    .to_owned(),
+        });
+    }
+    if !is_callable(&dispose_method) {
+        return Err(not_callable_error("Symbol.asyncDispose or Symbol.dispose"));
+    }
+    push_resource(
+        &object,
+        DisposableResourceKind::Use,
+        value.clone(),
+        dispose_method,
+    )?;
+    Ok(value)
 }
 
 pub(crate) fn native_disposable_stack_prototype_adopt(
