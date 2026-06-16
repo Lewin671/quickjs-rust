@@ -11,7 +11,12 @@ fi
 
 "$CARGO_BIN" fmt --all -- --check
 "$CARGO_BIN" clippy --workspace --all-targets -- -D warnings
-"$CARGO_BIN" test --workspace
+# Run qjs-runtime separately so CI can isolate long-running semantic tests from
+# the rest of the workspace while keeping the same coverage.
+HEX_PROGRESS_TEST="typed_array::tests::uint8_array_set_from_hex_errors_preserve_specified_writes"
+"$CARGO_BIN" test --workspace --exclude qjs-runtime
+"$CARGO_BIN" test -p qjs-runtime "$HEX_PROGRESS_TEST" -- --exact
+"$CARGO_BIN" test -p qjs-runtime -- --skip "$HEX_PROGRESS_TEST"
 "$ROOT_DIR/scripts/check-file-size.sh"
 # Run the allowlisted Test262 subset so local checks gate the same suite CI
 # runs; skip with QJS_CHECK_SKIP_TEST262=1 for doc-only or scripted loops.
