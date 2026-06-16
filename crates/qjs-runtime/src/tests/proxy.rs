@@ -478,6 +478,28 @@ fn in_operator_propagates_proxy_has_trap_throw() {
 }
 
 #[test]
+fn has_own_property_and_property_is_enumerable_dispatch_proxy_trap() {
+    // hasOwnProperty runs the proxy's getOwnPropertyDescriptor trap (its
+    // [[GetOwnProperty]]), including through a proxy whose target is a proxy.
+    assert_eq!(
+        eval(
+            "let inner = new Proxy({}, { getOwnPropertyDescriptor(t, k) { return k === 'foo' ? { value: 1, configurable: true } : undefined; } }); \
+             let p = new Proxy(inner, { getOwnPropertyDescriptor: null }); \
+             p.hasOwnProperty('foo') + ':' + p.hasOwnProperty('bar');"
+        ),
+        Ok(Value::String("true:false".to_owned()))
+    );
+    // propertyIsEnumerable reads the trap-reported enumerable flag.
+    assert_eq!(
+        eval(
+            "let p = new Proxy({}, { getOwnPropertyDescriptor(t, k) { return { value: 1, enumerable: true, configurable: true }; } }); \
+             p.propertyIsEnumerable('x');"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn object_create_accepts_an_array_prototype() {
     assert_eq!(
         eval("let o = Object.create([7, 8, 9]); o.length + ':' + o[1];"),

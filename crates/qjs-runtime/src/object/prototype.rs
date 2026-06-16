@@ -222,6 +222,23 @@ fn constructor_prototype_value(name: &str, env: &CallEnv) -> Value {
         .unwrap_or(Value::Null)
 }
 
+/// A value's own property descriptor (`[[GetOwnProperty]]`), dispatching a
+/// Proxy's `getOwnPropertyDescriptor` trap. Used by the predicates that follow
+/// the spec's "let desc be ? O.[[GetOwnProperty]](P)" step.
+fn value_own_property_descriptor(
+    value: Value,
+    key: &PropertyKey,
+    env: &mut CallEnv,
+) -> Result<Option<Property>, RuntimeError> {
+    if let Value::Proxy(proxy) = &value {
+        crate::proxy::proxy_get_own_property_descriptor(proxy.clone(), key, env, |target, _env| {
+            own_property_descriptor_key(target, key)
+        })
+    } else {
+        own_property_descriptor_key(value, key)
+    }
+}
+
 pub(crate) fn native_object_prototype_has_own_property(
     this_value: Value,
     argument_values: &[Value],
@@ -251,7 +268,7 @@ pub(crate) fn native_object_prototype_has_own_property(
             set.object().has_own_symbol_property(&symbol),
         )),
         (Value::Proxy(proxy), key) => Ok(Value::Boolean(
-            own_property_descriptor_key(proxy.target(), &key)?.is_some(),
+            value_own_property_descriptor(Value::Proxy(proxy), &key, env)?.is_some(),
         )),
         (Value::Function(function), crate::PropertyKey::String(key)) => Ok(Value::Boolean(
             function_own_property_descriptor(&function, &key).is_some(),
@@ -292,7 +309,8 @@ pub(crate) fn native_object_prototype_property_is_enumerable(
             message: "propertyIsEnumerable called on null or undefined".to_owned(),
         }),
         value => Ok(Value::Boolean(
-            own_property_descriptor_key(value, &key)?.is_some_and(|property| property.enumerable),
+            value_own_property_descriptor(value, &key, env)?
+                .is_some_and(|property| property.enumerable),
         )),
     }
 }
