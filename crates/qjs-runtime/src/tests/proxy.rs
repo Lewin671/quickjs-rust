@@ -311,3 +311,55 @@ fn evaluates_proxy_own_keys_trap() {
         Ok(Value::Boolean(true))
     );
 }
+
+#[test]
+fn proxy_traps_enforce_target_consistency_invariants() {
+    // get must return a non-configurable non-writable property's exact value.
+    assert!(
+        eval(
+            "let t = {}; Object.defineProperty(t, 'a', { value: 1, writable: false, configurable: false }); \
+             let p = new Proxy(t, { get() { return 2; } }); p.a;"
+        )
+        .is_err()
+    );
+    // get must return undefined for a non-configurable accessor with no getter.
+    assert!(
+        eval(
+            "let t = {}; Object.defineProperty(t, 'a', { set() {}, configurable: false }); \
+             let p = new Proxy(t, { get() { return 2; } }); p.a;"
+        )
+        .is_err()
+    );
+    // has(false) may not hide a property of a non-extensible target.
+    assert!(
+        eval(
+            "let t = { a: 1 }; Object.preventExtensions(t); \
+             let p = new Proxy(t, { has() { return false; } }); 'a' in p;"
+        )
+        .is_err()
+    );
+    // set(true) may not contradict a non-configurable non-writable property.
+    assert!(
+        eval(
+            "let t = {}; Object.defineProperty(t, 'a', { value: 1, writable: false, configurable: false }); \
+             let p = new Proxy(t, { set() { return true; } }); p.a = 2;"
+        )
+        .is_err()
+    );
+    // deleteProperty(true) may not report dropping a non-configurable property.
+    assert!(
+        eval(
+            "let t = {}; Object.defineProperty(t, 'a', { value: 1, configurable: false }); \
+             let p = new Proxy(t, { deleteProperty() { return true; } }); delete p.a;"
+        )
+        .is_err()
+    );
+    // The well-behaved cases still succeed.
+    assert_eq!(
+        eval(
+            "let t = { a: 1 }; let p = new Proxy(t, { get() { return 9; }, has() { return false; }, set() { return true; }, deleteProperty() { return true; } }); \
+             p.a + ':' + ('a' in p) + ':' + ((p.a = 5), true) + ':' + (delete p.a);"
+        ),
+        Ok(Value::String("9:false:true:true".to_owned()))
+    );
+}

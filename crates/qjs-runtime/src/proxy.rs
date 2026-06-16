@@ -171,13 +171,32 @@ pub(crate) fn proxy_get(
     let Some(trap) = proxy_trap(handler.clone(), "get", env)? else {
         return property_value_key_with_receiver(target, key, receiver, env);
     };
-    call_function(
+    let result = call_function(
         trap,
         handler,
-        vec![target, property_key_to_value(key), receiver],
+        vec![target.clone(), property_key_to_value(key), receiver],
         env,
         false,
-    )
+    )?;
+    // The trap result must agree with a non-configurable target property: a
+    // non-writable data property's exact value, or undefined for an accessor
+    // with no getter.
+    if let Some(target_descriptor) = crate::object::own_property_descriptor_key(target, key)?
+        && !target_descriptor.configurable
+    {
+        if target_descriptor.is_accessor() {
+            if target_descriptor.get.is_none() && !matches!(result, Value::Undefined) {
+                return Err(invariant_error(
+                    "get trap returned a value for a non-configurable accessor without a getter",
+                ));
+            }
+        } else if !target_descriptor.writable && !result.same_value(&target_descriptor.value) {
+            return Err(invariant_error(
+                "get trap returned a value differing from a non-configurable non-writable target property",
+            ));
+        }
+    }
+    Ok(result)
 }
 
 pub(crate) fn proxy_has(
@@ -193,10 +212,29 @@ pub(crate) fn proxy_has(
     let result = call_function(
         trap,
         handler,
-        vec![target, property_key_to_value(key)],
+        vec![target.clone(), property_key_to_value(key)],
         env,
         false,
     )?;
+    if !is_truthy(&result) {
+        // A false result may not hide a property the target cannot drop: a
+        // non-configurable own property, or any own property of a
+        // non-extensible target.
+        if let Some(target_descriptor) =
+            crate::object::own_property_descriptor_key(target.clone(), key)?
+        {
+            if !target_descriptor.configurable {
+                return Err(invariant_error(
+                    "has trap returned false for a non-configurable target property",
+                ));
+            }
+            if !crate::object::ordinary_value_is_extensible(&target) {
+                return Err(invariant_error(
+                    "has trap returned false for a property of a non-extensible target",
+                ));
+            }
+        }
+    }
     Ok(is_truthy(&result))
 }
 
@@ -215,10 +253,35 @@ pub(crate) fn proxy_set(
     let result = call_function(
         trap,
         handler,
-        vec![target, property_key_to_value(key), value, receiver],
+        vec![
+            target.clone(),
+            property_key_to_value(key),
+            value.clone(),
+            receiver,
+        ],
         env,
         false,
     )?;
+    if is_truthy(&result) {
+        // A successful set may not contradict a non-configurable target
+        // property: a non-writable data property keeps its value, and an
+        // accessor with no setter cannot be assigned.
+        if let Some(target_descriptor) = crate::object::own_property_descriptor_key(target, key)?
+            && !target_descriptor.configurable
+        {
+            if target_descriptor.is_accessor() {
+                if target_descriptor.set.is_none() {
+                    return Err(invariant_error(
+                        "set trap succeeded on a non-configurable accessor without a setter",
+                    ));
+                }
+            } else if !target_descriptor.writable && !value.same_value(&target_descriptor.value) {
+                return Err(invariant_error(
+                    "set trap changed a non-configurable non-writable target property",
+                ));
+            }
+        }
+    }
     Ok(is_truthy(&result))
 }
 
@@ -235,10 +298,27 @@ pub(crate) fn proxy_delete_property(
     let result = call_function(
         trap,
         handler,
-        vec![target, property_key_to_value(key)],
+        vec![target.clone(), property_key_to_value(key)],
         env,
         false,
     )?;
+    if is_truthy(&result)
+        && let Some(target_descriptor) =
+            crate::object::own_property_descriptor_key(target.clone(), key)?
+    {
+        // A reported deletion may not drop a property the target keeps: a
+        // non-configurable property, or any property of a non-extensible target.
+        if !target_descriptor.configurable {
+            return Err(invariant_error(
+                "deleteProperty trap reported deleting a non-configurable target property",
+            ));
+        }
+        if !crate::object::ordinary_value_is_extensible(&target) {
+            return Err(invariant_error(
+                "deleteProperty trap reported deleting a property of a non-extensible target",
+            ));
+        }
+    }
     Ok(is_truthy(&result))
 }
 
