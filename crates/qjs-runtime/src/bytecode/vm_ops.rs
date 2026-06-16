@@ -111,7 +111,7 @@ impl Vm<'_> {
 
     pub(super) fn enumerate_keys(&mut self) -> Result<(), RuntimeError> {
         let value = self.pop()?;
-        let keys = enumerable_keys(value, &self.env)?;
+        let keys = enumerable_keys(value, &mut self.env)?;
         self.stack.push(Value::Array(ArrayRef::new(keys)));
         Ok(())
     }
@@ -125,13 +125,49 @@ impl Vm<'_> {
                 message: "for-in key must be a string".to_owned(),
             });
         };
-        let descriptor = match target {
-            Value::Function(function) => function.chain_property_with_env(&key, &self.env),
-            value => crate::property::own_or_inherited_descriptor(value, &key),
+        let enumerable = match target {
+            // A Proxy re-checks enumerability through its own (and prototype
+            // chain's) traps; an absent own descriptor walks to the prototype.
+            Value::Proxy(_) => self.proxy_key_is_enumerable(target, &key)?,
+            Value::Function(function) => function
+                .chain_property_with_env(&key, &self.env)
+                .is_some_and(|property| property.enumerable),
+            value => crate::property::own_or_inherited_descriptor(value, &key)
+                .is_some_and(|property| property.enumerable),
         };
-        let enumerable = descriptor.is_some_and(|property| property.enumerable);
         self.stack.push(Value::Boolean(enumerable));
         Ok(())
+    }
+
+    /// Walks a Proxy's prototype chain looking for an own descriptor of `key`,
+    /// consulting each exotic Proxy's traps; reports the first match's
+    /// enumerability (a key that has vanished mid-iteration is not enumerable).
+    fn proxy_key_is_enumerable(&mut self, target: Value, key: &str) -> Result<bool, RuntimeError> {
+        let property_key = crate::PropertyKey::String(key.to_owned());
+        let mut current = target;
+        loop {
+            match &current {
+                Value::Proxy(proxy) => {
+                    let descriptor = crate::proxy::proxy_get_own_property_descriptor(
+                        proxy.clone(),
+                        &property_key,
+                        &mut self.env,
+                        |t, _env| crate::object::own_property_descriptor_key(t, &property_key),
+                    )?;
+                    if let Some(property) = descriptor {
+                        return Ok(property.enumerable);
+                    }
+                    current = crate::proxy::proxy_get_prototype_of(proxy.clone(), &mut self.env)?;
+                }
+                Value::Null | Value::Undefined => return Ok(false),
+                value => {
+                    return Ok(
+                        crate::property::own_or_inherited_descriptor(value.clone(), key)
+                            .is_some_and(|property| property.enumerable),
+                    );
+                }
+            }
+        }
     }
 }
 

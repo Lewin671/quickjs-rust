@@ -784,18 +784,68 @@ fn delete_symbol_property(
     }
 }
 
-pub(super) fn enumerable_keys(value: Value, env: &CallEnv) -> Result<Vec<Value>, RuntimeError> {
-    let (mut keys, mut seen) = match value.clone() {
+pub(super) fn enumerable_keys(value: Value, env: &mut CallEnv) -> Result<Vec<Value>, RuntimeError> {
+    // EnumerateObjectProperties walks the prototype chain, collecting each
+    // layer's enumerable own string keys (shadowing already-seen names). An
+    // exotic Proxy in the chain is consulted through its ownKeys /
+    // getOwnPropertyDescriptor / getPrototypeOf traps.
+    let mut keys: Vec<String> = Vec::new();
+    let mut seen: Vec<String> = Vec::new();
+    let mut current = value;
+    loop {
+        let prototype = match &current {
+            Value::Proxy(proxy) => {
+                proxy_enumerable_layer(proxy.clone(), &mut keys, &mut seen, env)?
+            }
+            Value::Object(_)
+            | Value::Array(_)
+            | Value::Function(_)
+            | Value::Map(_)
+            | Value::Set(_) => {
+                let (enumerable, all) = own_enumerable_and_all(&current);
+                for key in enumerable {
+                    if !seen.iter().any(|existing| existing == &key) {
+                        keys.push(key);
+                    }
+                }
+                for key in all {
+                    if !seen.iter().any(|existing| existing == &key) {
+                        seen.push(key);
+                    }
+                }
+                value_prototype(current.clone(), env)
+                    .map(Value::Object)
+                    .unwrap_or(Value::Null)
+            }
+            Value::Null | Value::Undefined => break,
+            _ => {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: "for-in target is not enumerable".to_owned(),
+                });
+            }
+        };
+        match prototype {
+            Value::Null | Value::Undefined => break,
+            next => current = next,
+        }
+    }
+    Ok(keys.into_iter().map(Value::String).collect())
+}
+
+/// The (enumerable-own, all-own) string key lists for an ordinary value, used
+/// per prototype-chain layer by [`enumerable_keys`].
+fn own_enumerable_and_all(value: &Value) -> (Vec<String>, Vec<String>) {
+    match value {
         Value::Object(object) => {
-            let (enumerable, all) = if crate::typed_array::is_typed_array_object(&object) {
+            if crate::typed_array::is_typed_array_object(object) {
                 (
-                    crate::typed_array::typed_array_own_property_keys(&object),
-                    crate::typed_array::typed_array_own_property_names(&object),
+                    crate::typed_array::typed_array_own_property_keys(object),
+                    crate::typed_array::typed_array_own_property_names(object),
                 )
             } else {
                 (object.own_property_keys(), object.own_property_names())
-            };
-            (enumerable, all)
+            }
         }
         Value::Array(elements) => {
             let mut keys: Vec<_> = (0..elements.len())
@@ -805,51 +855,52 @@ pub(super) fn enumerable_keys(value: Value, env: &CallEnv) -> Result<Vec<Value>,
             keys.extend(elements.property_keys());
             (keys.clone(), keys)
         }
-        Value::Function(function) => {
-            let enumerable = function_own_property_keys(&function);
-            let all = function_own_property_names(&function);
-            (enumerable, all)
-        }
-        Value::Map(map) => {
-            let enumerable = map.object().own_property_keys();
-            let all = map.object().own_property_names();
-            (enumerable, all)
-        }
-        Value::Set(set) => {
-            let enumerable = set.object().own_property_keys();
-            let all = set.object().own_property_names();
-            (enumerable, all)
-        }
-        Value::Null | Value::Undefined => (Vec::new(), Vec::new()),
-        _ => {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "for-in target is not enumerable".to_owned(),
-            });
-        }
-    };
-    append_prototype_enumerable_keys(&mut keys, &mut seen, value_prototype(value, env));
-    Ok(keys.into_iter().map(Value::String).collect())
+        Value::Function(function) => (
+            function_own_property_keys(function),
+            function_own_property_names(function),
+        ),
+        Value::Map(map) => (
+            map.object().own_property_keys(),
+            map.object().own_property_names(),
+        ),
+        Value::Set(set) => (
+            set.object().own_property_keys(),
+            set.object().own_property_names(),
+        ),
+        _ => (Vec::new(), Vec::new()),
+    }
 }
 
-fn append_prototype_enumerable_keys(
+/// Collects a Proxy layer's enumerable own string keys via its ownKeys and
+/// getOwnPropertyDescriptor traps, returning the proxy's [[GetPrototypeOf]] so
+/// the caller can continue up the chain.
+fn proxy_enumerable_layer(
+    proxy: crate::proxy::ProxyRef,
     keys: &mut Vec<String>,
     seen: &mut Vec<String>,
-    mut prototype: Option<ObjectRef>,
-) {
-    while let Some(object) = prototype {
-        for key in object.own_property_keys() {
-            if !seen.iter().any(|existing| existing == &key) {
-                keys.push(key.clone());
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    for key in crate::proxy::proxy_own_keys(proxy.clone(), env)? {
+        let PropertyKey::String(name) = key else {
+            continue; // for-in ignores symbol keys.
+        };
+        let property_key = PropertyKey::String(name.clone());
+        let descriptor = crate::proxy::proxy_get_own_property_descriptor(
+            proxy.clone(),
+            &property_key,
+            env,
+            |target, _env| crate::object::own_property_descriptor_key(target, &property_key),
+        )?;
+        if let Some(property) = descriptor {
+            if !seen.iter().any(|existing| existing == &name) {
+                if property.enumerable {
+                    keys.push(name.clone());
+                }
+                seen.push(name);
             }
         }
-        for key in object.own_property_names() {
-            if !seen.iter().any(|existing| existing == &key) {
-                seen.push(key);
-            }
-        }
-        prototype = object.prototype();
     }
+    crate::proxy::proxy_get_prototype_of(proxy, env)
 }
 
 pub(super) fn fast_number_binary(left: &Value, op: BinaryOp, right: &Value) -> Option<Value> {

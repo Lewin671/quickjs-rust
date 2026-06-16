@@ -421,6 +421,35 @@ fn evaluates_for_in_statements() {
         eval("var stored; for (var key = 0 in stored = key, { a: 1 }) {} stored + ':' + key;"),
         Ok(Value::String("0:a".to_owned()))
     );
+    // for-in over a Proxy enumerates through its ownKeys /
+    // getOwnPropertyDescriptor traps and filters non-enumerable keys.
+    assert_eq!(
+        eval(
+            "let o = { vis: 1 }; Object.defineProperty(o, 'hid', { value: 2, enumerable: false }); \
+             let seen = ''; for (var k in new Proxy(o, {})) { seen += k + ':'; } seen;"
+        ),
+        Ok(Value::String("vis:".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let p = new Proxy({}, { \
+                 ownKeys() { return ['x', 'y']; }, \
+                 getOwnPropertyDescriptor() { return { value: 1, enumerable: true, configurable: true }; } \
+             }); \
+             let seen = ''; for (var k in p) { seen += k; } seen;"
+        ),
+        Ok(Value::String("xy".to_owned()))
+    );
+    // A Proxy whose target is itself a Proxy forwards enumeration when traps
+    // are absent, and walks the prototype chain via getPrototypeOf.
+    assert_eq!(
+        eval(
+            "let base = { inh: 1 }; let o = Object.create(base); o.own = 2; \
+             let seen = []; for (var k in new Proxy(new Proxy(o, {}), {})) { seen.push(k); } \
+             seen.sort().join(',');"
+        ),
+        Ok(Value::String("inh,own".to_owned()))
+    );
 }
 
 #[test]
