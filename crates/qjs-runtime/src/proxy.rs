@@ -554,6 +554,9 @@ pub(crate) fn proxy_get_prototype_of(
     let target = proxy.target_result()?;
     let handler = proxy.handler_result()?;
     let Some(trap) = proxy_trap(handler.clone(), "getPrototypeOf", env)? else {
+        if let Value::Proxy(inner) = target {
+            return proxy_get_prototype_of(inner, env);
+        }
         return Ok(ordinary_prototype_value(&target, env));
     };
     let result = call_function(trap, handler, vec![target.clone()], env, false)?;
@@ -567,8 +570,10 @@ pub(crate) fn proxy_get_prototype_of(
             ));
         }
     }
-    if !crate::object::ordinary_value_is_extensible(&target) {
-        let target_prototype = ordinary_prototype_value(&target, env);
+    // The non-extensible invariant consults the target's own (proxy-aware)
+    // [[IsExtensible]]/[[GetPrototypeOf]] so a proxy target's traps run.
+    if !crate::object::value_is_extensible(&target, env)? {
+        let target_prototype = target_prototype_value(&target, env)?;
         if !result.same_value(&target_prototype) {
             return Err(invariant_error(
                 "getPrototypeOf trap result disagrees with a non-extensible target",
@@ -590,6 +595,9 @@ pub(crate) fn proxy_set_prototype_of(
     let target = proxy.target_result()?;
     let handler = proxy.handler_result()?;
     let Some(trap) = proxy_trap(handler.clone(), "setPrototypeOf", env)? else {
+        if let Value::Proxy(inner) = target {
+            return proxy_set_prototype_of(inner, prototype_value, env);
+        }
         return crate::object::ordinary_set_prototype_of(&target, prototype_value, env);
     };
     let result = call_function(
@@ -602,8 +610,10 @@ pub(crate) fn proxy_set_prototype_of(
     if !is_truthy(&result) {
         return Ok(false);
     }
-    if !crate::object::ordinary_value_is_extensible(&target) {
-        let target_prototype = ordinary_prototype_value(&target, env);
+    // The invariant consults the target's own [[IsExtensible]]/[[GetPrototypeOf]]
+    // (proxy-aware), so an abrupt completion from a proxy target propagates.
+    if !crate::object::value_is_extensible(&target, env)? {
+        let target_prototype = target_prototype_value(&target, env)?;
         if !prototype_value.same_value(&target_prototype) {
             return Err(invariant_error(
                 "setPrototypeOf trap changed the prototype of a non-extensible target",
@@ -611,6 +621,15 @@ pub(crate) fn proxy_set_prototype_of(
         }
     }
     Ok(true)
+}
+
+/// The target's [[GetPrototypeOf]] result: a Proxy target consults its trap so
+/// an abrupt completion or trap-driven value participates in invariant checks.
+fn target_prototype_value(target: &Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+    match target {
+        Value::Proxy(inner) => proxy_get_prototype_of(inner.clone(), env),
+        _ => Ok(ordinary_prototype_value(target, env)),
+    }
 }
 
 /// `[[OwnPropertyKeys]]` for an exotic Proxy: invoke the `ownKeys` trap and

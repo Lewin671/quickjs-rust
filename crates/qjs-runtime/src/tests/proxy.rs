@@ -271,6 +271,32 @@ fn evaluates_proxy_prototype_traps() {
         ),
         Ok(Value::Boolean(true))
     );
+    // An absent setPrototypeOf trap forwards to the target; a Proxy target runs
+    // its own trap.
+    assert_eq!(
+        eval(
+            "let seen; let target = new Proxy({}, { setPrototypeOf(t, v) { seen = v; return true; } }); \
+             let proto = {}; Object.setPrototypeOf(new Proxy(target, {}), proto); seen === proto;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    // The non-extensible invariant runs the target's own [[IsExtensible]]: a
+    // proxy target whose isExtensible trap throws propagates that completion.
+    assert!(
+        eval(
+            "let target = new Proxy({}, { isExtensible() { throw new TypeError('x'); } }); \
+             let p = new Proxy(target, { setPrototypeOf() { return true; } }); Object.setPrototypeOf(p, {});"
+        )
+        .is_err()
+    );
+    // getPrototypeOf with an absent trap forwards through a Proxy target's trap.
+    assert_eq!(
+        eval(
+            "let proto = { tag: 7 }; let target = new Proxy({}, { getPrototypeOf() { return proto; } }); \
+             Object.getPrototypeOf(new Proxy(target, {})) === proto;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]
