@@ -264,6 +264,11 @@ impl<'a> Vm<'a> {
                     let result = self.store_global_strict(name, value);
                     self.handle_runtime_result(result)?;
                 }
+                Op::StoreGlobalSloppy(name) => {
+                    let value = self.pop()?;
+                    let result = self.store_global_sloppy(name, value);
+                    self.handle_runtime_result(result)?;
+                }
                 Op::StoreLocalOrGlobalSloppy { slot, name } => {
                     let value = self.pop()?;
                     let result = self.store_local_or_global_sloppy(slot, name, value);

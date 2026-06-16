@@ -94,10 +94,6 @@ impl Compiler {
             .filter(|slot| !self.locals[*slot].sloppy_global_fallback)
     }
 
-    pub(super) fn is_global_hoisted(&self, name: &str) -> bool {
-        self.global_scope && self.global_hoisted.contains(name)
-    }
-
     pub(super) fn assignment_slot(&mut self, name: &str) -> usize {
         if let Some(slot) = self.resolve_local_slot(name) {
             return slot;

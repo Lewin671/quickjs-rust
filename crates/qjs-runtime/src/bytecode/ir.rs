@@ -19,6 +19,7 @@ pub(super) enum Op {
     DefineGlobalVar(String),
     LoadGlobal(String),
     StoreGlobalStrict(String),
+    StoreGlobalSloppy(String),
     StoreLocalOrGlobalSloppy {
         slot: usize,
         name: String,
@@ -643,6 +644,7 @@ impl Bytecode {
                     | Op::CallResolved(_)
                     | Op::CallResolvedSpread
                     | Op::StoreGlobalStrict(_)
+                    | Op::StoreGlobalSloppy(_)
                     | Op::StoreLocalOrGlobalSloppy { .. }
             )
             || matches!(op, Op::StoreLocal(slot) | Op::AssignLocal(slot) if self.locals.get(*slot).is_some_and(|local| local.from_env))
@@ -667,7 +669,10 @@ fn collect_global_names(code: &[Op]) -> Vec<String> {
 fn collect_global_names_from_ops(code: &[Op], names: &mut BTreeSet<String>) {
     for op in code {
         match op {
-            Op::LoadGlobal(name) | Op::StoreGlobalStrict(name) | Op::TypeofGlobal(name) => {
+            Op::LoadGlobal(name)
+            | Op::StoreGlobalStrict(name)
+            | Op::StoreGlobalSloppy(name)
+            | Op::TypeofGlobal(name) => {
                 names.insert(name.clone());
             }
             Op::StoreLocalOrGlobalSloppy { name, .. } => {

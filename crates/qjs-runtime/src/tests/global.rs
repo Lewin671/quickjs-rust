@@ -68,6 +68,10 @@ fn global_nan_is_non_writable() {
         Ok(Value::String("number".to_owned()))
     );
     assert_eq!(eval("NaN = true; NaN !== NaN;"), Ok(Value::Boolean(true)));
+    assert_eq!(
+        eval("var NaN = 1.0; NaN = 'asdf'; NaN = true; NaN !== NaN;"),
+        Ok(Value::Boolean(true))
+    );
     // Descriptor check.
     assert_eq!(
         eval(
@@ -94,6 +98,10 @@ fn global_infinity_is_non_writable() {
     );
     assert_eq!(
         eval("Infinity = true; Infinity === 1/0;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("var Infinity = 1.0; Infinity = 'asdf'; Infinity = true; Infinity === 1/0;"),
         Ok(Value::Boolean(true))
     );
     // Descriptor check.

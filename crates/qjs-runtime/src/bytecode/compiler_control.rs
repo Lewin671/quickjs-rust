@@ -479,14 +479,8 @@ impl Compiler {
                 let slot = self.resolve_local_slot(name);
                 if slot.is_some() || self.inside_with() {
                     self.emit_store_identifier(name, slot, None);
-                } else if self.strict || self.is_global_hoisted(name) {
-                    self.emit(Op::StoreGlobalStrict(name.clone()));
                 } else {
-                    let slot = self.assignment_slot(name);
-                    self.emit(Op::StoreLocalOrGlobalSloppy {
-                        slot,
-                        name: name.clone(),
-                    });
+                    self.emit_store_unresolved_identifier(name, None);
                 }
             }
             ForInLeft::Target(AssignmentTarget::Member {

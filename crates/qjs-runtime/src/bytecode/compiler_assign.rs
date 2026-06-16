@@ -50,15 +50,7 @@ impl Compiler {
                         self.compile_named_expr(value, name)?;
                     }
                     self.emit(Op::Dup);
-                    if self.strict || self.is_global_hoisted(name) {
-                        self.emit(Op::StoreGlobalStrict(name.clone()));
-                    } else {
-                        let slot = self.assignment_slot(name);
-                        self.emit(Op::StoreLocalOrGlobalSloppy {
-                            slot,
-                            name: name.clone(),
-                        });
-                    }
+                    self.emit_store_unresolved_identifier(name, None);
                     return Ok(());
                 };
                 if *parenthesized {
@@ -67,7 +59,7 @@ impl Compiler {
                     self.compile_named_expr(value, name)?;
                 }
                 self.emit(Op::Dup);
-                self.emit(Op::AssignLocal(slot));
+                self.emit_store_unresolved_identifier(name, Some(slot));
                 Ok(())
             }
             AssignmentTarget::Member {
@@ -275,10 +267,18 @@ impl Compiler {
                 slot,
                 is_strict: self.strict,
             });
-        } else if let Some(slot) = slot {
+        } else {
+            self.emit_store_unresolved_identifier(name, slot);
+        }
+    }
+
+    pub(super) fn emit_store_unresolved_identifier(&mut self, name: &str, slot: Option<usize>) {
+        if let Some(slot) = slot {
             self.emit(Op::AssignLocal(slot));
-        } else if self.strict || self.is_global_hoisted(name) {
+        } else if self.strict {
             self.emit(Op::StoreGlobalStrict(name.to_owned()));
+        } else if self.global_scope && self.global_hoisted.contains(name) {
+            self.emit(Op::StoreGlobalSloppy(name.to_owned()));
         } else {
             let slot = self.assignment_slot(name);
             self.emit(Op::StoreLocalOrGlobalSloppy {
