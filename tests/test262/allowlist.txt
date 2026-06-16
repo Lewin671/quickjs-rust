@@ -3247,6 +3247,7 @@ cases/math-min-name.js
 cases/math-pow-basic.js
 cases/math-pow-length.js
 cases/math-pow-name.js
+test/built-ins/Math/pow/applying-the-exp-operator_A1.js
 cases/math-random-length.js
 cases/math-random-name.js
 cases/math-random-prop-desc.js

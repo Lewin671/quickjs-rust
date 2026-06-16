@@ -87,6 +87,10 @@ fn evaluates_math_builtins() {
         eval("Math.pow(2, NaN) === Math.pow(2, NaN);"),
         Ok(Value::Boolean(false))
     );
+    assert_eq!(
+        eval("Math.pow(1, NaN) === Math.pow(1, NaN);"),
+        Ok(Value::Boolean(false))
+    );
     assert_eq!(eval("Math.sqrt(81);"), Ok(Value::Number(9.0)));
     assert_eq!(
         eval("Math.sqrt(-1) === Math.sqrt(-1);"),
