@@ -25,7 +25,10 @@ qjs_check_stage() {
 
 qjs_check_runtime_core_tests() {
   local cargo_bin="$1"
-  "$cargo_bin" test -p qjs-runtime -- --skip "typed_array::" --skip "weak_sets::"
+  "$cargo_bin" test -p qjs-runtime -- \
+    --skip "typed_array::" \
+    --skip "weak_refs::" \
+    --skip "weak_sets::"
 }
 
 qjs_check_typed_array_tests() {
@@ -48,6 +51,8 @@ if [ "${QJS_CHECK_SPLIT_RUNTIME_TESTS:-0}" = "1" ]; then
     "$CARGO_BIN" test -p qjs-ast -p qjs-lexer -p qjs-parser -p qjs-cli
   qjs_check_stage "qjs-runtime core tests" \
     qjs_check_runtime_core_tests "$CARGO_BIN"
+  qjs_check_stage "qjs-runtime weak ref tests" \
+    "$CARGO_BIN" test -p qjs-runtime weak_refs::
   qjs_check_stage "qjs-runtime weak set tests" \
     "$CARGO_BIN" test -p qjs-runtime weak_sets::
   qjs_check_stage "qjs-runtime typed array tests" \
