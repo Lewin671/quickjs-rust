@@ -25,11 +25,26 @@ qjs_check_stage() {
 
 qjs_check_runtime_core_tests() {
   local cargo_bin="$1"
-  "$cargo_bin" test -p qjs-runtime -- \
-    --skip "typed_array::" \
-    --skip "weak_maps::" \
-    --skip "weak_refs::" \
-    --skip "weak_sets::"
+  # Run the core tests in bounded, separate-process batches. A single
+  # ~840-test process accumulates enough peak memory on hosted runners to be
+  # killed mid-run (observed as a stall then "operation canceled" around the
+  # late `tests::symbols` group); batching resets the heap per process and
+  # keeps coverage identical. The heavy typed-array and weak-collection groups
+  # have their own stages and are excluded here.
+  local batch_size=120
+  local batch=()
+  while IFS= read -r test_name; do
+    batch+=("$test_name")
+    if [ "${#batch[@]}" -ge "$batch_size" ]; then
+      "$cargo_bin" test -p qjs-runtime -- --exact "${batch[@]}" || return "$?"
+      batch=()
+    fi
+  done < <("$cargo_bin" test -p qjs-runtime -- --list 2>/dev/null \
+    | sed -n 's/: test$//p' \
+    | grep -Ev '^(typed_array::|weak_maps::|weak_refs::|weak_sets::)')
+  if [ "${#batch[@]}" -gt 0 ]; then
+    "$cargo_bin" test -p qjs-runtime -- --exact "${batch[@]}" || return "$?"
+  fi
 }
 
 qjs_check_typed_array_tests() {
