@@ -35,9 +35,10 @@ each script is for.
   per-case timeout. The generated quickjs-rust case source injects Test262
   harness files only when the case or its metadata includes require them.
 - `test262-aggregate.py`: Aggregates QuickJS-NG and quickjs-rust case-result
-  JSONL sets into the CI coverage summary and the schema-1 burndown entry.
-  Used by the Test262 Coverage workflow; also runs locally on artifacts
-  downloaded with `gh run download`.
+  JSONL sets into the CI coverage summary, the schema-1 burndown entry, and an
+  optional merged per-case comparison JSONL for follow-up gap selection. Used by
+  the Test262 Coverage workflow; also runs locally on artifacts downloaded with
+  `gh run download`.
 - `test262-burndown.sh`: Appends a complete-scan entry to
   `docs/conformance/burndown.jsonl`; rejects partial or filtered scans.
 - `test262-baseline-metadata.awk`: Internal metadata parser shared by the

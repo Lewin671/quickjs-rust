@@ -138,6 +138,45 @@ def aggregate(qjsng_cases, rust_cases):
     return totals, skipped
 
 
+def comparison_kind(qkind, rkind):
+    if qkind == "skipped":
+        return "quickjs-ng-skipped"
+    if rkind == "pass" and qkind == "pass":
+        return "both-pass"
+    if rkind == "pass":
+        return "rust-pass-quickjs-ng-nonpass"
+    if qkind == "pass":
+        if rkind == "skipped":
+            return "quickjs-ng-pass-rust-not-run"
+        if rkind == "timeout":
+            return "quickjs-ng-pass-rust-timeout"
+        return "quickjs-ng-pass-rust-fail"
+    if rkind == "skipped":
+        return "both-nonpass-rust-not-run"
+    return "both-fail-or-timeout"
+
+
+def write_comparison_cases(path, qjsng_cases, rust_cases):
+    with open(path, "w", encoding="utf-8") as handle:
+        for case_path in sorted(qjsng_cases):
+            qjsng = qjsng_cases[case_path]
+            rust = rust_cases.get(case_path, {"rust": "skipped", "rust_skip": "missing"})
+            qkind = qjsng["quickjs_ng"]
+            rkind = rust["rust"]
+            row = {
+                "path": case_path,
+                "quickjs_ng": qkind,
+                "quickjs_ng_result": qjsng.get("quickjs_ng_result", qkind),
+                "quickjs_ng_skip": qjsng.get("quickjs_ng_skip", ""),
+                "rust": rkind,
+                "rust_result": rust.get("rust_result", rkind),
+                "rust_skip": rust.get("rust_skip", ""),
+                "comparison": comparison_kind(qkind, rkind),
+                "actionable_gap": qkind == "pass" and rkind in {"fail", "timeout"},
+            }
+            handle.write(json.dumps(row, separators=(",", ":")) + "\n")
+
+
 def pct(value, denominator):
     if denominator == 0:
         return "n/a"
@@ -240,6 +279,7 @@ def main():
     parser.add_argument("--commit", required=True, help="commit sha the scan measured")
     parser.add_argument("--summary-out", help="append the markdown summary to this file")
     parser.add_argument("--burndown-out", help="write the schema-1 burndown JSON line to this file")
+    parser.add_argument("--comparison-cases-out", help="write merged per-case comparison JSONL")
     parser.add_argument(
         "--recorded",
         default=datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d"),
@@ -250,6 +290,8 @@ def main():
     qjsng_cases, qjsng_paths = load_cases(args.ng_cases)
     rust_cases, rust_paths = load_cases(args.rust_cases)
     totals, skipped = aggregate(qjsng_cases, rust_cases)
+    if args.comparison_cases_out:
+        write_comparison_cases(args.comparison_cases_out, qjsng_cases, rust_cases)
 
     markdown = summary_markdown(totals, skipped, args.commit, rust_paths, qjsng_paths)
     if args.summary_out:

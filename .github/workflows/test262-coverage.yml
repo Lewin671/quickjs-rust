@@ -286,7 +286,8 @@ jobs:
             --rust-cases 'rust-coverage/cases-*.jsonl' \
             --commit "$COVERAGE_SHA" \
             --summary-out "$GITHUB_STEP_SUMMARY" \
-            --burndown-out burndown.json
+            --burndown-out burndown.json \
+            --comparison-cases-out comparison-cases.jsonl
 
       - name: Upload burndown entry
         uses: actions/upload-artifact@v6
@@ -294,3 +295,10 @@ jobs:
           name: test262-burndown
           path: burndown.json
           retention-days: 90
+
+      - name: Upload comparison cases
+        uses: actions/upload-artifact@v6
+        with:
+          name: test262-comparison-cases
+          path: comparison-cases.jsonl
+          retention-days: 14
