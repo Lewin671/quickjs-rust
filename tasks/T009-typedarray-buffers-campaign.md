@@ -88,6 +88,11 @@ gaps: `TypedArray` 2,027, `ArrayBuffer` 263, `DataView` 188 — concentrated in
       read-modify-write operations, `compareExchange`, `isLockFree`, `pause`,
       and no-waiter `notify`; `test/built-ins/Atomics --all` moved from 289
       to 80 actionable gaps, leaving wait queue/agent behavior.
+      `%TypedArray%.prototype.map`/`filter` now allocate their result through
+      `TypedArraySpeciesCreate` (the `@@species` constructor / default), read
+      source elements live each step, and `Set` mapped/kept values through the
+      result's element coercion: `filter` moved 40 -> 4 and `map` 32 -> 5
+      actionable gaps, leaving only resizable/immutable-buffer variants.
 
 ## Scope
 

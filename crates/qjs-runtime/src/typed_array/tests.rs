@@ -676,6 +676,75 @@ fn slice_rechecks_source_after_species_constructor() {
 }
 
 #[test]
+fn map_filter_use_species_constructor() {
+    // map allocates the result through @@species, called once with the source
+    // length, and sets the per-type-coerced mapped values on the returned array.
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([40, 41]); \
+             let observed = ''; \
+             a.constructor = {}; \
+             a.constructor[Symbol.species] = function(count) { observed = String(count); return new Int16Array(count); }; \
+             let r = a.map(x => x + 7); \
+             observed + ':' + (r instanceof Int16Array) + ':' + r.join(',');"
+        ),
+        Ok(Value::String("2:true:47,48".to_owned()))
+    );
+    // filter calls @@species after every callback, with the captured count, and
+    // a custom constructor result receives the kept values.
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([1, 2, 3, 4]); \
+             let observed = ''; \
+             a.constructor = {}; \
+             a.constructor[Symbol.species] = function(count) { observed = String(count); return new Int16Array(count); }; \
+             let r = a.filter(x => x % 2 === 0); \
+             observed + ':' + (r instanceof Int16Array) + ':' + r.join(',');"
+        ),
+        Ok(Value::String("2:true:2,4".to_owned()))
+    );
+    // A species constructor returning a different instance is used verbatim.
+    assert_eq!(
+        eval(
+            "let a = new Int8Array([40]); \
+             let other = new Int16Array([1, 0, 1]); \
+             a.constructor = {}; \
+             a.constructor[Symbol.species] = function() { return other; }; \
+             let r = a.map(x => x + 7); \
+             (r === other) + ':' + r.join(',');"
+        ),
+        Ok(Value::String("true:47,0,1".to_owned()))
+    );
+}
+
+#[test]
+fn map_filter_observe_species_ordering() {
+    // filter fires every callback before reading @@species.
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array(3); \
+             let calls = 0; \
+             let before = false; \
+             a.constructor = {}; \
+             Object.defineProperty(a.constructor, Symbol.species, { get() { before = calls === 3; return Uint8Array; } }); \
+             a.filter(() => { calls++; }); \
+             calls + ':' + before;"
+        ),
+        Ok(Value::String("3:true".to_owned()))
+    );
+    // map does not cache source values: a callback mutation is visible later.
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([42, 0, 0]); \
+             let seen = []; \
+             a.map(function(v, i) { if (i < 2) a[i + 1] = 42; seen.push(v); return v; }); \
+             seen.join(',');"
+        ),
+        Ok(Value::String("42,42,42".to_owned()))
+    );
+}
+
+#[test]
 fn reduce_and_reduce_right() {
     assert_eq!(
         eval("new Uint8Array([1, 2, 3]).reduce((a, x) => a + x, 100);"),

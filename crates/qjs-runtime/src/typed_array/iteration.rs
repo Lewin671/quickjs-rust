@@ -426,17 +426,20 @@ pub(crate) fn native_typed_array_prototype_map(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("map", this_value, argument_values)?;
-    let native = typed_array_kind(&iteration.object);
-    let snapshot = ViewSnapshot::capture(&iteration.object);
-    let mut mapped = Vec::with_capacity(iteration.length);
-    for index in 0..iteration.length {
-        let value = snapshot.get(index);
-        let result = call_callback(&iteration, value, index, env)?;
-        mapped.push(super::coerce_element(native, result, env)?);
+    let len = iteration.length;
+    // TypedArraySpeciesCreate(O, « len ») runs before the callback loop, so a
+    // throwing/observed @@species is reflected even when len is zero.
+    let (result, _result_object) = typed_array_species_create(&iteration.object, len, env)?;
+    for index in 0..len {
+        // Read live each step (values are not cached): a callback that mutates
+        // the source must be observed on the following iterations.
+        let value = get_view_element(&iteration.object, index);
+        let mapped = call_callback(&iteration, value, index, env)?;
+        // Set on the result routes through the typed array's element
+        // coercion, matching the spec's Set(A, Pk, mappedValue, true).
+        crate::bytecode::set_object_property(result.clone(), index.to_string(), mapped, env)?;
     }
-    Ok(Value::Object(super::create_typed_array_of_kind(
-        native, mapped, env,
-    )))
+    Ok(result)
 }
 
 pub(crate) fn native_typed_array_prototype_filter(
@@ -445,18 +448,21 @@ pub(crate) fn native_typed_array_prototype_filter(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("filter", this_value, argument_values)?;
-    let native = typed_array_kind(&iteration.object);
-    let snapshot = ViewSnapshot::capture(&iteration.object);
     let mut kept = Vec::new();
     for index in 0..iteration.length {
-        let value = snapshot.get(index);
+        // Live read so callbacks observe in-flight mutations, not a snapshot.
+        let value = get_view_element(&iteration.object, index);
         if is_truthy(&call_callback(&iteration, value.clone(), index, env)?) {
             kept.push(value);
         }
     }
-    Ok(Value::Object(super::create_typed_array_of_kind(
-        native, kept, env,
-    )))
+    // TypedArraySpeciesCreate runs after every callback has fired, with the
+    // captured count as its only argument.
+    let (result, _result_object) = typed_array_species_create(&iteration.object, kept.len(), env)?;
+    for (index, value) in kept.into_iter().enumerate() {
+        crate::bytecode::set_object_property(result.clone(), index.to_string(), value, env)?;
+    }
+    Ok(result)
 }
 
 pub(crate) fn native_typed_array_prototype_reduce(
