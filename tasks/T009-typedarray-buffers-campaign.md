@@ -103,8 +103,15 @@ gaps: `TypedArray` 2,027, `ArrayBuffer` 263, `DataView` 188 — concentrated in
       ToString-coerces the result, matching `Array.prototype.toLocaleString`:
       19 -> 5 actionable gaps. The remaining `calls-tostring`/`calls-valueof`
       variants fail on a separate closure-binding bug (a function that assigns a
-      free `var` desyncs a previously-captured closure's view of it), not the
-      typed-array surface; the last is a resizable-buffer variant.
+      free `var` desyncs a previously-captured closure's view of it, tracked in
+      T014), not the typed-array surface; the last is a resizable-buffer variant.
+      `some`/`every`/`find`/`findIndex`/`findLast`/`findLastIndex`/`reduce`/
+      `reduceRight` now read each element live via `get_view_element` instead of
+      a one-shot `ViewSnapshot`, so callbacks that mutate a not-yet-visited index
+      are observed (`values-are-not-cached`, `predicate-call-changes-value`):
+      -2 actionable gaps per method (16 total). `ViewSnapshot` is now unused and
+      removed. Remaining per-method gaps are resizable-buffer mid-iteration
+      variants.
 
 ## Scope
 

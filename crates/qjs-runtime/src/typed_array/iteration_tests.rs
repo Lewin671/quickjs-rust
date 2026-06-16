@@ -348,6 +348,53 @@ fn reduce_and_reduce_right() {
 }
 
 #[test]
+fn iteration_methods_read_values_live() {
+    // find/findIndex/some/every/reduce read each element at call time, so a
+    // callback that mutates a not-yet-visited index is observed, not a snapshot.
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([1, 2, 3]); \
+             let r = a.find(function(v, i) { if (i === 0) { a[2] = 7; } return v === 7; }); \
+             String(r);"
+        ),
+        Ok(Value::String("7".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([0, 0, 0]); \
+             let r = a.findIndex(function(v, i) { if (i === 0) { a[2] = 5; } return v === 5; }); \
+             String(r);"
+        ),
+        Ok(Value::String("2".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([1, 1, 1]); \
+             let r = a.some(function(v, i) { if (i === 0) { a[2] = 9; } return v === 9; }); \
+             String(r);"
+        ),
+        Ok(Value::String("true".to_owned()))
+    );
+    // findLast walks high-to-low; mutating a lower, not-yet-visited index is seen.
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([0, 0, 3]); \
+             let r = a.findLast(function(v, i) { if (i === 2) { a[0] = 8; } return v === 8; }); \
+             String(r);"
+        ),
+        Ok(Value::String("8".to_owned()))
+    );
+    // reduce sees a value written by an earlier callback step.
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([1, 0, 0]); \
+             a.reduce(function(acc, v, i) { if (i === 0) { a[2] = 5; } return acc + v; }, 0);"
+        ),
+        Ok(Value::Number(6.0))
+    );
+}
+
+#[test]
 fn subarray_creates_shared_buffer_view() {
     assert_eq!(
         eval(

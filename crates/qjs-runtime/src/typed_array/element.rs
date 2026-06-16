@@ -388,51 +388,6 @@ pub(crate) fn get_view_element(object: &ObjectRef, index: usize) -> Value {
     read_element(native, &bytes, byte_index)
 }
 
-/// A one-shot decoded view of a typed array's backing bytes, used to read many
-/// elements during a callback-driven iteration (forEach/map/reduce/...) without
-/// re-decoding the byte string on every access. The buffer handle is retained
-/// so each read can honor a detachment performed by a user callback: once the
-/// buffer is detached, reads return the neutral element, matching the
-/// element-at-a-time [`get_view_element`] behavior.
-pub(crate) struct ViewSnapshot {
-    native: NativeFunction,
-    buffer: Option<ObjectRef>,
-    bytes: Vec<u8>,
-    base: usize,
-    element: usize,
-}
-
-impl ViewSnapshot {
-    /// Decodes the current backing bytes of `object` once.
-    pub(crate) fn capture(object: &ObjectRef) -> Self {
-        let native = typed_array_kind(object);
-        let buffer =
-            super::typed_array_buffer(object).filter(|buffer| !array_buffer::is_detached(buffer));
-        let bytes = buffer
-            .as_ref()
-            .map(array_buffer::buffer_bytes)
-            .unwrap_or_default();
-        ViewSnapshot {
-            native,
-            buffer,
-            bytes,
-            base: typed_array_byte_offset(object),
-            element: bytes_per_element(native),
-        }
-    }
-
-    /// Reads element `index` from the captured bytes, or the neutral element if
-    /// the buffer has since been detached.
-    pub(crate) fn get(&self, index: usize) -> Value {
-        match &self.buffer {
-            Some(buffer) if !array_buffer::is_detached(buffer) => {
-                read_element(self.native, &self.bytes, self.base + index * self.element)
-            }
-            _ => zero_value(self.native),
-        }
-    }
-}
-
 /// Reads `count` elements of a branded typed-array view starting at `start`,
 /// decoding the backing-buffer bytes exactly once. Returns neutral elements for
 /// a detached or buffer-less view. This is the bulk counterpart to

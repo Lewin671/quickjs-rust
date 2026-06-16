@@ -9,7 +9,7 @@ use crate::{
     to_js_string_with_env, to_number_with_env,
 };
 
-use super::element::{ViewSnapshot, get_view_element, read_view_elements};
+use super::element::{get_view_element, read_view_elements};
 use super::{
     bytes_per_element, typed_array_buffer, typed_array_buffer_detached, typed_array_byte_offset,
     typed_array_is_out_of_bounds, typed_array_kind, typed_array_length, typed_array_receiver,
@@ -330,9 +330,8 @@ pub(crate) fn native_typed_array_prototype_some(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("some", this_value, argument_values)?;
-    let snapshot = ViewSnapshot::capture(&iteration.object);
     for index in 0..iteration.length {
-        let value = snapshot.get(index);
+        let value = get_view_element(&iteration.object, index);
         if is_truthy(&call_callback(&iteration, value, index, env)?) {
             return Ok(Value::Boolean(true));
         }
@@ -346,9 +345,8 @@ pub(crate) fn native_typed_array_prototype_every(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("every", this_value, argument_values)?;
-    let snapshot = ViewSnapshot::capture(&iteration.object);
     for index in 0..iteration.length {
-        let value = snapshot.get(index);
+        let value = get_view_element(&iteration.object, index);
         if !is_truthy(&call_callback(&iteration, value, index, env)?) {
             return Ok(Value::Boolean(false));
         }
@@ -362,9 +360,8 @@ pub(crate) fn native_typed_array_prototype_find(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("find", this_value, argument_values)?;
-    let snapshot = ViewSnapshot::capture(&iteration.object);
     for index in 0..iteration.length {
-        let value = snapshot.get(index);
+        let value = get_view_element(&iteration.object, index);
         if is_truthy(&call_callback(&iteration, value.clone(), index, env)?) {
             return Ok(value);
         }
@@ -378,9 +375,8 @@ pub(crate) fn native_typed_array_prototype_find_index(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("findIndex", this_value, argument_values)?;
-    let snapshot = ViewSnapshot::capture(&iteration.object);
     for index in 0..iteration.length {
-        let value = snapshot.get(index);
+        let value = get_view_element(&iteration.object, index);
         if is_truthy(&call_callback(&iteration, value, index, env)?) {
             return Ok(Value::Number(index as f64));
         }
@@ -394,9 +390,8 @@ pub(crate) fn native_typed_array_prototype_find_last(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("findLast", this_value, argument_values)?;
-    let snapshot = ViewSnapshot::capture(&iteration.object);
     for index in (0..iteration.length).rev() {
-        let value = snapshot.get(index);
+        let value = get_view_element(&iteration.object, index);
         if is_truthy(&call_callback(&iteration, value.clone(), index, env)?) {
             return Ok(value);
         }
@@ -410,9 +405,8 @@ pub(crate) fn native_typed_array_prototype_find_last_index(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("findLastIndex", this_value, argument_values)?;
-    let snapshot = ViewSnapshot::capture(&iteration.object);
     for index in (0..iteration.length).rev() {
-        let value = snapshot.get(index);
+        let value = get_view_element(&iteration.object, index);
         if is_truthy(&call_callback(&iteration, value, index, env)?) {
             return Ok(Value::Number(index as f64));
         }
@@ -474,17 +468,16 @@ pub(crate) fn native_typed_array_prototype_reduce(
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     let callback = require_callback("reduce", argument_values)?;
-    let snapshot = ViewSnapshot::capture(&object);
     let (mut accumulator, mut index) = if argument_values.len() >= 2 {
         (argument_values[1].clone(), 0)
     } else {
         if length == 0 {
             return Err(reduce_empty_error());
         }
-        (snapshot.get(0), 1)
+        (get_view_element(&object, 0), 1)
     };
     while index < length {
-        let value = snapshot.get(index);
+        let value = get_view_element(&object, index);
         accumulator = call_function(
             callback.clone(),
             Value::Undefined,
@@ -509,18 +502,17 @@ pub(crate) fn native_typed_array_prototype_reduce_right(
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     let callback = require_callback("reduceRight", argument_values)?;
-    let snapshot = ViewSnapshot::capture(&object);
     let (mut accumulator, mut next) = if argument_values.len() >= 2 {
         (argument_values[1].clone(), length)
     } else {
         if length == 0 {
             return Err(reduce_empty_error());
         }
-        (snapshot.get(length - 1), length - 1)
+        (get_view_element(&object, length - 1), length - 1)
     };
     while next > 0 {
         next -= 1;
-        let value = snapshot.get(next);
+        let value = get_view_element(&object, next);
         accumulator = call_function(
             callback.clone(),
             Value::Undefined,
