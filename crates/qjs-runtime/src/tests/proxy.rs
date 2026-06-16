@@ -532,6 +532,22 @@ fn instanceof_dispatches_proxy_get_prototype_of_trap() {
 }
 
 #[test]
+fn define_property_rejects_non_writable_redefinition_of_non_configurable_writable_target() {
+    // The trap makes the target property non-configurable + writable, then the
+    // requested descriptor sets writable:false. ECMA-262 10.5.6 forbids this.
+    assert_eq!(
+        eval(
+            "let calls = 0; \
+             let p = new Proxy({}, { defineProperty(t, prop, desc) { Object.defineProperty(t, prop, { configurable: false, writable: true }); calls++; return true; } }); \
+             let threw = false; \
+             try { Reflect.defineProperty(p, 'prop', { writable: false }); } catch (e) { threw = e instanceof TypeError; } \
+             threw + ':' + calls;"
+        ),
+        Ok(Value::String("true:1".to_owned()))
+    );
+}
+
+#[test]
 fn revocation_function_is_anonymous() {
     assert_eq!(
         eval("Proxy.revocable({}, {}).revoke.name;"),

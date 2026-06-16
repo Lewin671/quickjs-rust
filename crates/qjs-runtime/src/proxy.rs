@@ -401,6 +401,18 @@ pub(crate) fn proxy_define_property(
                     "defineProperty trap reported a non-configurable non-writable data property on a configurable target",
                 ));
             }
+            if !existing.configurable
+                && !existing.accessor
+                && existing.writable
+                && descriptor.writable_field() == Some(false)
+            {
+                // A non-configurable, writable data property on the target may
+                // not be redefined as non-writable through the trap
+                // (ECMA-262 10.5.6 [[DefineOwnProperty]]).
+                return Err(invariant_error(
+                    "defineProperty trap reported a non-writable redefinition of a non-configurable writable target property",
+                ));
+            }
         }
     }
     Ok(true)
