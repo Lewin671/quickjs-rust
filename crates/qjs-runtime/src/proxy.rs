@@ -331,6 +331,9 @@ pub(crate) fn proxy_get_own_property_descriptor(
     let target = proxy.target_result()?;
     let handler = proxy.handler_result()?;
     let Some(trap) = proxy_trap(handler.clone(), "getOwnPropertyDescriptor", env)? else {
+        if let Value::Proxy(inner) = target {
+            return proxy_get_own_property_descriptor(inner, key, env, forward);
+        }
         return forward(target, env);
     };
     let result = call_function(
@@ -540,6 +543,9 @@ pub(crate) fn proxy_own_keys(
     let target = proxy.target_result()?;
     let handler = proxy.handler_result()?;
     let Some(trap) = proxy_trap(handler.clone(), "ownKeys", env)? else {
+        if let Value::Proxy(inner) = target {
+            return proxy_own_keys(inner, env);
+        }
         return Ok(ordinary_own_keys(&target));
     };
     let result = call_function(trap, handler, vec![target.clone()], env, false)?;
