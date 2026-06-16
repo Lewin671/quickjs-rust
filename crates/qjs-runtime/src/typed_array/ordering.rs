@@ -18,8 +18,9 @@ use crate::{
 
 use super::element::{read_view_elements, set_view_elements};
 use super::{
-    coerce_element, is_big_int_kind, is_typed_array_object, typed_array_is_out_of_bounds,
-    typed_array_kind, typed_array_length, validate_typed_array, validate_typed_array_write,
+    MAX_TYPED_ARRAY_LENGTH, coerce_element, construct, is_big_int_kind, is_typed_array_object,
+    typed_array_is_out_of_bounds, typed_array_kind, typed_array_length, validate_typed_array,
+    validate_typed_array_write,
 };
 use crate::CallEnv;
 
@@ -380,6 +381,20 @@ pub(crate) fn native_typed_array_prototype_with(
 
 // --- Uint8Array.prototype.setFromHex ----------------------------------------
 
+pub(crate) fn native_uint8_array_from_hex(
+    argument_values: &[Value],
+    env: &CallEnv,
+) -> Result<Value, RuntimeError> {
+    let source = hex_source(argument_values.first(), "Uint8Array.fromHex")?;
+    let bytes = decode_hex_string(&source, MAX_TYPED_ARRAY_LENGTH)?;
+    let values = bytes.into_iter().map(number_byte).collect();
+    Ok(Value::Object(construct::create_with_values(
+        NativeFunction::Uint8Array,
+        values,
+        env,
+    )))
+}
+
 pub(crate) fn native_uint8_array_prototype_set_from_hex(
     this_value: Value,
     argument_values: &[Value],
@@ -393,15 +408,7 @@ pub(crate) fn native_uint8_array_prototype_set_from_hex(
                 .to_owned(),
         });
     }
-    let source = match argument_values.first() {
-        Some(Value::String(source)) => source,
-        _ => {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "TypeError: Uint8Array.prototype.setFromHex requires a string".to_owned(),
-            });
-        }
-    };
+    let source = hex_source(argument_values.first(), "Uint8Array.prototype.setFromHex")?;
 
     let chars: Vec<char> = source.chars().collect();
     if chars.len() % 2 != 0 {
@@ -434,6 +441,41 @@ pub(crate) fn native_uint8_array_prototype_set_from_hex(
     let written = values.len();
     set_view_elements(&object, 0, values.into_iter().map(number_byte));
     Ok(set_from_hex_result(read, written, env))
+}
+
+fn hex_source(value: Option<&Value>, method: &str) -> Result<String, RuntimeError> {
+    match value {
+        Some(Value::String(source)) => Ok(source.clone()),
+        _ => Err(RuntimeError {
+            thrown: None,
+            message: format!("TypeError: {method} requires a string"),
+        }),
+    }
+}
+
+fn decode_hex_string(source: &str, max_length: usize) -> Result<Vec<u8>, RuntimeError> {
+    let chars: Vec<char> = source.chars().collect();
+    if chars.len() % 2 != 0 {
+        return Err(syntax_error(
+            "hex string must contain an even number of digits",
+        ));
+    }
+    let byte_length = chars.len() / 2;
+    if byte_length > max_length {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "RangeError: invalid typed array length".to_owned(),
+        });
+    }
+    let mut values = Vec::with_capacity(byte_length);
+    let mut read = 0usize;
+    while read < chars.len() {
+        let high = hex_value(chars[read]).ok_or_else(|| syntax_error("invalid hex digit"))?;
+        let low = hex_value(chars[read + 1]).ok_or_else(|| syntax_error("invalid hex digit"))?;
+        values.push((high << 4) | low);
+        read += 2;
+    }
+    Ok(values)
 }
 
 fn hex_value(ch: char) -> Option<u8> {

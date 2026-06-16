@@ -40,6 +40,9 @@ pub(super) fn call_typed_array_native(
         NativeFunction::Uint8ArrayFromBase64 => {
             typed_array::native_uint8_array_from_base64(argument_values, env)?
         }
+        NativeFunction::Uint8ArrayFromHex => {
+            typed_array::native_uint8_array_from_hex(argument_values, env)?
+        }
         NativeFunction::TypedArrayPrototypeBuffer => {
             typed_array::native_typed_array_prototype_buffer(this_value)?
         }

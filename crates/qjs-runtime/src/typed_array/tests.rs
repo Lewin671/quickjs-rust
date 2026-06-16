@@ -760,6 +760,46 @@ fn uint8_array_set_from_hex_decodes_and_reports_progress() {
 }
 
 #[test]
+fn uint8_array_from_hex_decodes_and_checks_surface() {
+    assert_eq!(
+        eval(
+            "let a = Uint8Array.fromHex('666F6f626172'); \
+             (Object.getPrototypeOf(a) === Uint8Array.prototype) + ':' + \
+             a.length + ':' + a.buffer.byteLength + ':' + a.join(',');"
+        ),
+        Ok(Value::String("true:6:6:102,111,111,98,97,114".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(Uint8Array, 'fromHex'); \
+             d.writable + ':' + d.enumerable + ':' + d.configurable + ':' \
+             + Uint8Array.fromHex.name + ':' + Uint8Array.fromHex.length;"
+        ),
+        Ok(Value::String("true:false:true:fromHex:1".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "class Subclass extends Uint8Array { constructor() { throw 'bad'; } }; \
+             let fromSubclass = Subclass.fromHex('aa'); \
+             let fromBare = (0, Uint8Array.fromHex)('bb'); \
+             (Object.getPrototypeOf(fromSubclass) === Uint8Array.prototype) + ':' + \
+             fromSubclass[0] + ':' + fromBare[0];"
+        ),
+        Ok(Value::String("true:170:187".to_owned()))
+    );
+}
+
+#[test]
+fn uint8_array_from_hex_rejects_invalid_inputs() {
+    assert!(eval("new Uint8Array.fromHex('');").is_err());
+    assert!(eval("Uint8Array.fromHex('a');").is_err());
+    assert!(eval("Uint8Array.fromHex('a a');").is_err());
+    assert!(eval("Uint8Array.fromHex('a\\ta');").is_err());
+    assert!(eval("Uint8Array.fromHex('aa^');").is_err());
+    assert!(eval("Uint8Array.fromHex({ toString() { throw 'no'; } });").is_err());
+}
+
+#[test]
 fn uint8_array_to_base64_encodes_with_options() {
     assert_eq!(
         eval(

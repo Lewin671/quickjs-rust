@@ -342,12 +342,22 @@ fn install_uint8_array_prototype_methods(prototype: &ObjectRef) {
 }
 
 fn install_uint8_array_static_methods(constructor: &Function) {
-    constructor.properties.borrow_mut().insert(
+    let mut properties = constructor.properties.borrow_mut();
+    properties.insert(
         "fromBase64".to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
             Some("fromBase64"),
             1,
             NativeFunction::Uint8ArrayFromBase64,
+            false,
+        ))),
+    );
+    properties.insert(
+        "fromHex".to_owned(),
+        Property::non_enumerable(Value::Function(Function::new_native(
+            Some("fromHex"),
+            1,
+            NativeFunction::Uint8ArrayFromHex,
             false,
         ))),
     );
