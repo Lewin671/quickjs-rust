@@ -7,9 +7,14 @@ pub(crate) fn validate_regexp_init(source: &str, flags: &str) -> Result<(), Runt
 }
 
 fn validate_regexp_flags(flags: &str) -> Result<(), RuntimeError> {
+    // The `v` (unicodeSets) flag is not accepted yet: its stricter
+    // character-class syntax is unimplemented, and the `RegExp.prototype.
+    // unicodeSets` accessor still reports `false` for every constructable
+    // RegExp. Accepting `v` without that syntax would wrongly allow patterns
+    // (e.g. `/[(]/v`) the spec rejects at parse time.
     let mut seen = Vec::with_capacity(flags.len());
     for flag in flags.chars() {
-        if !"dgimsyu".contains(flag) || seen.contains(&flag) {
+        if !"dgimsuy".contains(flag) || seen.contains(&flag) {
             return Err(regexp_syntax_error("invalid regular expression flags"));
         }
         seen.push(flag);

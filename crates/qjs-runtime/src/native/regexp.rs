@@ -70,6 +70,9 @@ pub(super) fn call_regexp_native(
         NativeFunction::RegExpPrototypeUnicode => {
             regexp::native_regexp_prototype_flag(this_value, env, 'u')?
         }
+        NativeFunction::RegExpPrototypeUnicodeSets => {
+            regexp::native_regexp_prototype_flag(this_value, env, 'v')?
+        }
         NativeFunction::RegExpStringIteratorPrototypeNext => {
             regexp::native_regexp_string_iterator_next(this_value, env)?
         }

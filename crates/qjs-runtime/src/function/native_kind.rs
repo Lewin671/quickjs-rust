@@ -529,6 +529,7 @@ pub(crate) enum NativeFunction {
     RegExpPrototypeTest,
     RegExpPrototypeToString,
     RegExpPrototypeUnicode,
+    RegExpPrototypeUnicodeSets,
     RegExpStringIteratorPrototypeNext,
     String,
     StringFromCharCode,

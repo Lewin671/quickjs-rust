@@ -152,6 +152,11 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
         "hasIndices",
         NativeFunction::RegExpPrototypeHasIndices,
     );
+    define_regexp_accessor(
+        &regexp_prototype,
+        "unicodeSets",
+        NativeFunction::RegExpPrototypeUnicodeSets,
+    );
     regexp_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(regexp_prototype)),
@@ -414,6 +419,7 @@ pub(crate) fn native_regexp_prototype_flags(
         ("multiline", 'm'),
         ("dotAll", 's'),
         ("unicode", 'u'),
+        ("unicodeSets", 'v'),
         ("sticky", 'y'),
     ] {
         if is_truthy(&property_value(this_value.clone(), name, env)?) {
