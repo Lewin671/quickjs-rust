@@ -9,7 +9,7 @@ use super::{
     descriptor_record::{
         PropertyDescriptor, resolve_property_definition, to_property_descriptor_record,
     },
-    enumeration::enumerable_property_entries,
+    enumeration::enumerable_property_entries_with_symbols,
 };
 use crate::CallEnv;
 
@@ -45,9 +45,12 @@ pub(crate) fn native_object_define_properties(
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    for (key, descriptor_value) in enumerable_property_entries(descriptors, env)? {
+    // ObjectDefineProperties walks props.[[OwnPropertyKeys]] (string and symbol)
+    // in order, reading each enumerable descriptor through [[GetOwnProperty]];
+    // for a Proxy source that runs its ownKeys/getOwnPropertyDescriptor traps.
+    for (key, descriptor_value) in enumerable_property_entries_with_symbols(descriptors, env)? {
         let descriptor = to_property_descriptor_record(descriptor_value, env)?;
-        if !define_property_descriptor_on_value(target.clone(), key, descriptor, env)? {
+        if !define_property_descriptor_on_value_key(target.clone(), key, descriptor, env)? {
             return Err(RuntimeError {
                 thrown: None,
                 message: "Object.defineProperties failed".to_owned(),
@@ -124,15 +127,6 @@ pub(crate) fn own_property_descriptor_key(
         | Value::Null
         | Value::Undefined => Ok(None),
     }
-}
-
-fn define_property_descriptor_on_value(
-    target: Value,
-    key: String,
-    descriptor: PropertyDescriptor,
-    env: &mut CallEnv,
-) -> Result<bool, RuntimeError> {
-    define_property_descriptor_on_value_key(target, PropertyKey::String(key), descriptor, env)
 }
 
 pub(crate) fn define_property_descriptor_on_value_key(

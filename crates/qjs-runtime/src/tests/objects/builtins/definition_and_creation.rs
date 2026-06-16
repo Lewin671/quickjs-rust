@@ -196,6 +196,25 @@ fn evaluates_object_definition_and_creation_builtins() {
         ),
         Ok(Value::Number(1.0))
     );
+    // Symbol-keyed descriptors in the source are applied too.
+    assert_eq!(
+        eval(
+            "let s = Symbol(); let o = {}; \
+             Object.defineProperties(o, { a: { value: 1, enumerable: true }, [s]: { value: 2, enumerable: true } }); \
+             o.a + ':' + o[s];"
+        ),
+        Ok(Value::String("1:2".to_owned()))
+    );
+    // A Proxy descriptor source is read through ownKeys then per-key
+    // getOwnPropertyDescriptor, in [[OwnPropertyKeys]] order.
+    assert_eq!(
+        eval(
+            "let sym = Symbol(); let src = {}; src[sym] = 1; src.foo = 2; src[0] = 3; \
+             let seen = []; let p = new Proxy(src, { getOwnPropertyDescriptor(_t, k) { seen.push(typeof k === 'symbol' ? 'sym' : k); return undefined; } }); \
+             Object.defineProperties({}, p); seen.join(',');"
+        ),
+        Ok(Value::String("0,foo,sym".to_owned()))
+    );
     assert_eq!(
         eval(
             "function fn() {} Object.defineProperties(fn, { value: { value: 9, enumerable: true } }); fn.value;"
