@@ -582,6 +582,29 @@ fn evaluates_regexp_symbol_match_all() {
 }
 
 #[test]
+fn regexp_match_all_uses_species_constructor() {
+    // The matcher is built through SpeciesConstructor(R, %RegExp%), invoked once
+    // with (R, flags) before R's lastIndex is read.
+    assert_eq!(
+        eval(
+            "let re = /\\d/u; let args; \
+             re.constructor = { [Symbol.species]: function() { args = arguments; return /\\w/g; } }; \
+             let iter = re[Symbol.matchAll]('a*b'); \
+             args.length + ':' + (args[0] === re) + ':' + args[1] + ':' + Array.from(iter).map(m => m[0]).join(',');"
+        ),
+        Ok(Value::String("2:true:u:a".to_owned()))
+    );
+    // A non-object, non-undefined constructor (including a Symbol) is a TypeError.
+    assert!(eval("let re = /./; re.constructor = null; re[Symbol.matchAll]('');").is_err());
+    assert!(eval("let re = /./; re.constructor = Symbol(); re[Symbol.matchAll]('');").is_err());
+    // ToLength(lastIndex) runs and its coercion is observable.
+    assert!(
+        eval("let re = /./; re.lastIndex = { valueOf() { throw new TypeError('x'); } }; re[Symbol.matchAll]('');")
+            .is_err()
+    );
+}
+
+#[test]
 fn evaluates_regexp_symbol_match() {
     assert_eq!(
         eval(

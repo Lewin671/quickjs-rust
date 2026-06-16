@@ -4,7 +4,7 @@ use crate::reflect::ordinary_set;
 use crate::string::{string_code_units, string_from_code_units};
 use crate::{
     ArrayRef, Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value,
-    function_prototype, is_truthy, property_value, property_value_key, symbol,
+    ensure_constructor, function_prototype, is_truthy, property_value, property_value_key, symbol,
     to_js_string_with_env, to_length_with_env,
 };
 
@@ -649,6 +649,45 @@ pub(crate) fn native_regexp_global_match(
 
 fn regexp_flags_contains(object: &ObjectRef, flag: char) -> bool {
     regexp_string_data(object, REGEXP_FLAGS_PROPERTY).is_some_and(|flags| flags.contains(flag))
+}
+
+/// SpeciesConstructor(O, %RegExp%): resolves the constructor used by
+/// `@@split`/`@@matchAll` to clone `value` for iteration, honoring a
+/// `constructor[@@species]` override and falling back to the realm `%RegExp%`.
+pub(super) fn regexp_species_constructor(
+    value: Value,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let default_constructor = env.get("RegExp").ok_or_else(|| RuntimeError {
+        thrown: None,
+        message: "RegExp constructor is not available".to_owned(),
+    })?;
+    let constructor = property_value(value, "constructor", env)?;
+    if matches!(constructor, Value::Undefined) {
+        return Ok(default_constructor);
+    }
+    // A Symbol primitive is an Object value in this engine but is not an Object
+    // per the spec, so it must be rejected like other non-objects.
+    let is_object = match &constructor {
+        Value::Object(object) => !symbol::is_symbol_primitive(object),
+        Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) => true,
+        _ => false,
+    };
+    if !is_object {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: RegExp species constructor must be an object".to_owned(),
+        });
+    }
+    let Some(species_symbol) = symbol::species_symbol(env) else {
+        return Ok(default_constructor);
+    };
+    let species = property_value_key(constructor, &PropertyKey::Symbol(species_symbol), env)?;
+    if matches!(species, Value::Null | Value::Undefined) {
+        return Ok(default_constructor);
+    }
+    ensure_constructor(&species)?;
+    Ok(species)
 }
 
 fn regexp_last_index(value: &Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {

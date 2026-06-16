@@ -2,9 +2,8 @@ use crate::CallEnv;
 use crate::string::advance_string_index;
 use crate::{
     ArrayRef, Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value,
-    call_function, construct_function, ensure_constructor, property_value, property_value_key,
-    reflect, symbol, to_js_string_with_env, to_length_with_env, to_number_with_env,
-    to_uint32_number, to_uint32_with_env,
+    call_function, construct_function, property_value, reflect, symbol, to_js_string_with_env,
+    to_length_with_env, to_number_with_env, to_uint32_number, to_uint32_with_env,
 };
 
 pub(crate) fn install_regexp_prototype_split(env: &CallEnv, prototype: &ObjectRef) {
@@ -100,7 +99,7 @@ pub(crate) fn native_regexp_prototype_split(
 }
 
 fn split_regexp_clone(value: Value, env: &mut CallEnv) -> Result<(Value, bool), RuntimeError> {
-    let constructor = species_constructor(value.clone(), env)?;
+    let constructor = super::regexp_species_constructor(value.clone(), env)?;
     let _ = super::regexp_is_regexp_with_env(value.clone(), env)?;
     let flags = to_js_string_with_env(property_value(value.clone(), "flags", env)?, env)?;
     let unicode_matching = flags.contains('u');
@@ -115,37 +114,6 @@ fn split_regexp_clone(value: Value, env: &mut CallEnv) -> Result<(Value, bool), 
         env,
     )?;
     Ok((splitter, unicode_matching))
-}
-
-fn species_constructor(value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
-    let default_constructor = regexp_constructor(env)?;
-    let constructor = property_value(value, "constructor", env)?;
-    if matches!(constructor, Value::Undefined) {
-        return Ok(default_constructor);
-    }
-    if !is_object_value(&constructor) {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "TypeError: RegExp species constructor must be an object".to_owned(),
-        });
-    }
-
-    let Some(species_symbol) = symbol::species_symbol(env) else {
-        return Ok(default_constructor);
-    };
-    let species = property_value_key(constructor, &PropertyKey::Symbol(species_symbol), env)?;
-    if matches!(species, Value::Null | Value::Undefined) {
-        return Ok(default_constructor);
-    }
-    ensure_constructor(&species)?;
-    Ok(species)
-}
-
-fn regexp_constructor(env: &CallEnv) -> Result<Value, RuntimeError> {
-    env.get("RegExp").ok_or_else(|| RuntimeError {
-        thrown: None,
-        message: "RegExp constructor is not available".to_owned(),
-    })
 }
 
 fn regexp_exec(splitter: Value, input: &str, env: &mut CallEnv) -> Result<Value, RuntimeError> {

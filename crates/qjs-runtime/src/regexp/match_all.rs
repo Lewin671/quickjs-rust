@@ -42,12 +42,22 @@ pub(crate) fn native_regexp_prototype_match_all(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
+    // C = SpeciesConstructor(R, %RegExp%) is resolved before reading R's flags,
+    // matching the spec's observable order (@@species lookup, then Get(R, flags)).
+    let constructor = super::regexp_species_constructor(this_value.clone(), env)?;
     let flags = to_js_string_with_env(property_value(this_value.clone(), "flags", env)?, env)?;
     let global = flags.contains('g');
     let unicode = flags.contains('u');
-    let matcher = regexp_clone(this_value.clone(), &flags, env)?;
-    let last_index = property_value(this_value, "lastIndex", env)?;
-    set_last_index(matcher.clone(), last_index, env)?;
+    let matcher = construct_function(
+        constructor.clone(),
+        constructor,
+        vec![this_value.clone(), Value::String(flags)],
+        env,
+    )?;
+    // lastIndex = ToLength(? Get(R, "lastIndex")) — the coercion is observable
+    // (a throwing valueOf must propagate) and runs before the matcher copy is set.
+    let last_index = to_length_with_env(property_value(this_value, "lastIndex", env)?, env)?;
+    set_last_index(matcher.clone(), Value::Number(last_index as f64), env)?;
 
     let iterator = ObjectRef::new(HashMap::new());
     iterator.define_non_enumerable(REGEXP_STRING_ITERATOR_REGEXP.to_owned(), matcher);
@@ -122,19 +132,6 @@ pub(crate) fn native_regexp_string_iterator_next(
         set_last_index(regexp, Value::Number(next_index as f64), env)?;
     }
     Ok(iterator_result(match_result, false))
-}
-
-fn regexp_clone(regexp: Value, flags: &str, env: &mut CallEnv) -> Result<Value, RuntimeError> {
-    let constructor = env.get("RegExp").ok_or_else(|| RuntimeError {
-        thrown: None,
-        message: "RegExp constructor is not available".to_owned(),
-    })?;
-    construct_function(
-        constructor.clone(),
-        constructor,
-        vec![regexp, Value::String(flags.to_owned())],
-        env,
-    )
 }
 
 fn regexp_exec(regexp: Value, input: &str, env: &mut CallEnv) -> Result<Value, RuntimeError> {
