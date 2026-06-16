@@ -55,8 +55,11 @@ pub(crate) fn ordinary_set(
         return ordinary_set_with_descriptor(property, key, value, receiver, env);
     }
 
-    if let Some(prototype) = crate::value_prototype(target, env) {
-        return ordinary_set(Value::Object(prototype), key, value, receiver, env);
+    // OrdinarySet with no own descriptor: forward to the parent's [[Set]] via
+    // the [[Prototype]] slot so a Proxy in the chain dispatches its `set` trap
+    // with the original receiver, and a function prototype is walked too.
+    if let Some(prototype) = crate::value_prototype_slot(target, env) {
+        return ordinary_set(prototype.to_value(), key, value, receiver, env);
     }
 
     set_receiver_data_property(receiver, key, value, env)

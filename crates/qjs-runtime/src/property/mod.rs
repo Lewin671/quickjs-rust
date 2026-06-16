@@ -329,7 +329,21 @@ pub(crate) fn property_value_key_with_receiver(
                     crate::typed_array::IndexedRead::NotIndexed => {}
                 }
             }
-            property_descriptor_value(object.property(key), receiver, env)
+            // OrdinaryGet: resolve the own property, otherwise walk the
+            // [[Prototype]] chain one slot at a time so a Proxy anywhere in the
+            // chain dispatches its `get` trap with the original receiver.
+            if let Some(property) = object.own_property(key) {
+                return property_descriptor_value(Some(property), receiver, env);
+            }
+            match object.prototype_slot() {
+                Some(slot) => property_value_key_with_receiver(
+                    slot.to_value(),
+                    &PropertyKey::String(key.to_owned()),
+                    receiver,
+                    env,
+                ),
+                None => Ok(Value::Undefined),
+            }
         }
         Value::Map(map) => property_descriptor_value(map.object().property(key), receiver, env),
         Value::Set(set) => property_descriptor_value(set.object().property(key), receiver, env),
@@ -403,7 +417,17 @@ fn symbol_property_value_with_receiver(
     };
     match target {
         Value::Object(object) => {
-            property_descriptor_value(object.symbol_property(symbol), receiver, env)
+            // OrdinaryGet for a symbol key, walking the [[Prototype]] chain one
+            // slot at a time so a Proxy in the chain dispatches its `get` trap.
+            if let Some(property) = object.own_symbol_property(symbol) {
+                return property_descriptor_value(Some(property), receiver, env);
+            }
+            match object.prototype_slot() {
+                Some(slot) => {
+                    symbol_property_value_with_receiver(slot.to_value(), key, receiver, env)
+                }
+                None => Ok(Value::Undefined),
+            }
         }
         Value::Proxy(proxy) => crate::proxy::proxy_get(proxy, key, receiver, env),
         Value::Map(map) => {

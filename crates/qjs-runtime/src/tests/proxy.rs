@@ -416,3 +416,63 @@ fn proxy_traps_enforce_target_consistency_invariants() {
         Ok(Value::String("9:false:true:true".to_owned()))
     );
 }
+
+#[test]
+fn dispatches_proxy_traps_through_the_prototype_chain() {
+    // A `get` on an ordinary object whose prototype is a Proxy must invoke the
+    // proxy `get` trap with the original receiver.
+    assert_eq!(
+        eval(
+            "let p = new Proxy({}, { get(target, key, receiver) { return key === 'foo' ? 3 : undefined; } }); \
+             let o = Object.create(p); o.foo;"
+        ),
+        Ok(Value::Number(3.0))
+    );
+    // A `set` walking the prototype chain reaches the proxy `set` trap, which
+    // receives the target, key, value, and the original receiver.
+    assert_eq!(
+        eval(
+            "let log = ''; let target = {}; \
+             let handler = { set(t, prop, value, receiver) { log = (t === target) + ':' + prop + ':' + value + ':' + (receiver === o); return true; } }; \
+             let p = new Proxy(target, handler); var o = Object.create(p); o.prop = 'v'; log;"
+        ),
+        Ok(Value::String("true:prop:v:true".to_owned()))
+    );
+    // An absent trap forwards through a proxy target that is itself a proxy.
+    assert_eq!(
+        eval(
+            "let inner = new Proxy({}, { get(t, k) { return k === 'x' ? 42 : undefined; } }); \
+             let outer = new Proxy(inner, { get: null }); Object.create(outer).x;"
+        ),
+        Ok(Value::Number(42.0))
+    );
+}
+
+#[test]
+fn compares_proxy_values_by_identity() {
+    assert_eq!(
+        eval("let p = new Proxy({}, {}); p === p;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let p = new Proxy({}, {}); let o = Object.create(p); Object.getPrototypeOf(o) === p;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("new Proxy({}, {}) === new Proxy({}, {});"),
+        Ok(Value::Boolean(false))
+    );
+}
+
+#[test]
+fn in_operator_propagates_proxy_has_trap_throw() {
+    assert_eq!(
+        eval(
+            "let thrown = false; let p = new Proxy({}, { has() { throw new TypeError('boom'); } }); \
+             try { 'attr' in p; } catch (e) { thrown = e instanceof TypeError; } thrown;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}

@@ -12,7 +12,8 @@ use super::util::typeof_value;
 use super::{
     ir::{Bytecode, Op},
     vm::{Slot, Vm},
-    vm_props::{get_property, set_property_key},
+    vm_props::get_property,
+    vm_set::set_property_key,
 };
 
 impl Vm<'_> {

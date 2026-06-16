@@ -3,8 +3,9 @@ use super::util::{stack_underflow, typeof_value};
 use super::vm_call::{insert_scope_call_bindings, user_bytecode_function};
 use super::vm_generator::CaptureWriteback;
 use super::vm_iter::DelegateStep;
-use super::vm_props::{array_index_from_number, get_property_key, set_property_key};
+use super::vm_props::{array_index_from_number, get_property_key};
 use super::vm_result::{Completion, FunctionBytecodeResult, ResumeMode};
+use super::vm_set::set_property_key;
 use super::vm_try::TryFrame;
 use crate::{
     Function, GLOBAL_THIS_BINDING, HOME_OBJECT_BINDING, NEW_TARGET_BINDING, ObjectRef, PropertyKey,

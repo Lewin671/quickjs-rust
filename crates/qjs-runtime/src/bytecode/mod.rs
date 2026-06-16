@@ -32,6 +32,7 @@ mod vm_ops;
 mod vm_private;
 mod vm_props;
 mod vm_result;
+mod vm_set;
 mod vm_try;
 
 use qjs_ast::{FunctionParams, Script};
@@ -47,8 +48,8 @@ pub(crate) use vm_generator::{
 };
 pub(crate) use vm_iter::sync_iterator_for_value;
 pub(crate) use vm_private::apply_instance_private_element;
-pub(crate) use vm_props::set_property as set_object_property;
 pub(crate) use vm_result::FunctionBytecodeResult;
+pub(crate) use vm_set::set_property as set_object_property;
 
 /// Compiles an AST script into runtime bytecode.
 ///

@@ -2,15 +2,15 @@ use qjs_ast::{BinaryOp, UnaryOp};
 
 use crate::{
     GLOBAL_THIS_BINDING, ObjectRef, Property, PropertyKey, RuntimeError, Value, array_prototype,
-    bigint, boolean, call_function, function_delete_own_property,
-    function_delete_own_symbol_property, function_own_property_descriptor,
-    function_own_property_keys, function_own_property_names, function_prototype_chain_descriptor,
-    inherited_primitive_prototype_descriptor, inherited_string_prototype_property, number,
-    object::define_array_length_value, property_value, property_value_key, string, symbol,
-    to_int32_number, to_uint32_number, value_prototype,
+    bigint, boolean, function_delete_own_property, function_delete_own_symbol_property,
+    function_own_property_descriptor, function_own_property_keys, function_own_property_names,
+    function_prototype_chain_descriptor, inherited_primitive_prototype_descriptor,
+    inherited_string_prototype_property, number, property_value, property_value_key, string,
+    symbol, to_int32_number, to_uint32_number, value_prototype,
 };
 
 use super::vm::Vm;
+use super::vm_set::property_set_uses_setter;
 use crate::CallEnv;
 
 impl Vm<'_> {
@@ -104,17 +104,25 @@ impl Vm<'_> {
                         crate::typed_array::IndexedRead::NotIndexed => {}
                     }
                 }
-                let property = object.property(key);
-                data_property_value(property).or_else(|| {
-                    crate::regexp::default_regexp_source_accessor_value(
-                        object,
-                        key,
-                        &self.realm_env(),
-                    )
-                })
+                match ordinary_chain_property(object, key) {
+                    Err(ProxyInChain) => None,
+                    Ok(property) => data_property_value(property).or_else(|| {
+                        crate::regexp::default_regexp_source_accessor_value(
+                            object,
+                            key,
+                            &self.realm_env(),
+                        )
+                    }),
+                }
             }
-            Value::Map(map) => data_property_value(map.object().property(key)),
-            Value::Set(set) => data_property_value(set.object().property(key)),
+            Value::Map(map) => match ordinary_chain_property(&map.object(), key) {
+                Err(ProxyInChain) => None,
+                Ok(property) => data_property_value(property),
+            },
+            Value::Set(set) => match ordinary_chain_property(&set.object(), key) {
+                Err(ProxyInChain) => None,
+                Ok(property) => data_property_value(property),
+            },
             Value::Array(elements) => {
                 if key == "length" {
                     return Some(Value::Number(elements.len() as f64));
@@ -183,9 +191,18 @@ impl Vm<'_> {
 
     fn try_direct_get_symbol(&self, object: &Value, symbol: &ObjectRef) -> Option<Value> {
         match object {
-            Value::Object(object) => data_property_value(object.symbol_property(symbol)),
-            Value::Map(map) => data_property_value(map.object().symbol_property(symbol)),
-            Value::Set(set) => data_property_value(set.object().symbol_property(symbol)),
+            Value::Object(object) => match ordinary_chain_symbol_property(object, symbol) {
+                Err(ProxyInChain) => None,
+                Ok(property) => data_property_value(property),
+            },
+            Value::Map(map) => match ordinary_chain_symbol_property(&map.object(), symbol) {
+                Err(ProxyInChain) => None,
+                Ok(property) => data_property_value(property),
+            },
+            Value::Set(set) => match ordinary_chain_symbol_property(&set.object(), symbol) {
+                Err(ProxyInChain) => None,
+                Ok(property) => data_property_value(property),
+            },
             Value::Array(elements) => {
                 let descriptor = elements.symbol_property(symbol).or_else(|| {
                     elements
@@ -320,6 +337,72 @@ fn data_property_value(property: Option<Property>) -> Option<Value> {
     }
 }
 
+/// Signals that an inline [[Prototype]]-chain walk reached a Proxy. The VM fast
+/// paths cannot dispatch a Proxy's trap, so the caller defers to the slow path
+/// where the proxy-aware `get`/`set` semantics live.
+pub(super) struct ProxyInChain;
+
+/// Walks `object`'s own property then its [[Prototype]] chain for `key`,
+/// matching `ObjectRef::property` for an all-ordinary chain. Returns
+/// `Err(ProxyInChain)` when a Proxy is reached so the caller defers to the
+/// proxy-aware slow path.
+pub(super) fn ordinary_chain_property(
+    object: &ObjectRef,
+    key: &str,
+) -> Result<Option<Property>, ProxyInChain> {
+    let mut current = object.clone();
+    loop {
+        if let Some(property) = current.own_property(key) {
+            return Ok(Some(property));
+        }
+        match current.prototype_slot() {
+            Some(crate::Prototype::Object(next)) => current = next,
+            Some(crate::Prototype::Function(function)) => {
+                return Ok(function.chain_property(key));
+            }
+            Some(crate::Prototype::Proxy(_)) => return Err(ProxyInChain),
+            None => return Ok(None),
+        }
+    }
+}
+
+/// Whether any prototype reachable from `slot` is a Proxy, so that a set/get
+/// over an ordinary chain must defer to the proxy-aware slow path.
+pub(super) fn prototype_chain_has_proxy(slot: Option<crate::Prototype>) -> bool {
+    let mut current = slot;
+    loop {
+        match current {
+            Some(crate::Prototype::Proxy(_)) => return true,
+            Some(crate::Prototype::Object(object)) => current = object.prototype_slot(),
+            Some(crate::Prototype::Function(function)) => {
+                current = function.internal_prototype_slot().flatten();
+            }
+            None => return false,
+        }
+    }
+}
+
+/// Symbol-keyed counterpart to [`ordinary_chain_property`].
+pub(super) fn ordinary_chain_symbol_property(
+    object: &ObjectRef,
+    symbol: &ObjectRef,
+) -> Result<Option<Property>, ProxyInChain> {
+    let mut current = object.clone();
+    loop {
+        if let Some(property) = current.own_symbol_property(symbol) {
+            return Ok(Some(property));
+        }
+        match current.prototype_slot() {
+            Some(crate::Prototype::Object(next)) => current = next,
+            Some(crate::Prototype::Function(function)) => {
+                return Ok(function.chain_symbol_property(symbol));
+            }
+            Some(crate::Prototype::Proxy(_)) => return Err(ProxyInChain),
+            None => return Ok(None),
+        }
+    }
+}
+
 pub(super) fn get_property(
     object: Value,
     key: &str,
@@ -366,339 +449,6 @@ pub(super) fn get_property_key(
     match key {
         PropertyKey::String(key) => get_property(object, key, env),
         PropertyKey::Symbol(_) => property_value_key(object, key, env),
-    }
-}
-
-pub(crate) fn set_property(
-    object: Value,
-    key: String,
-    value: Value,
-    env: &mut CallEnv,
-) -> Result<bool, RuntimeError> {
-    match object {
-        Value::Object(object) => {
-            // Integer-indexed writes on a typed array route through the
-            // per-kind numeric conversion and the backing buffer
-            // (IntegerIndexedElementSet) before the ordinary property path.
-            if crate::typed_array::is_typed_array_object(&object) {
-                if let crate::typed_array::IndexedWrite::Handled =
-                    crate::typed_array::set_indexed_element(&object, &key, value.clone(), env)?
-                {
-                    return Ok(true);
-                }
-            }
-            let receiver = Value::Object(object.clone());
-            ordinary_set_object(&object, receiver, key, value, env)
-        }
-        Value::Function(function) => {
-            let receiver = Value::Function(function.clone());
-            let inherited = function_property_for_set(&function, env, &key);
-            match apply_set_step(inherited, receiver, value.clone(), env)? {
-                SetStep::Done(ok) => Ok(ok),
-                SetStep::WriteData => {
-                    function.set_property(key, value);
-                    Ok(true)
-                }
-            }
-        }
-        Value::Array(elements) => {
-            if key == "length" {
-                define_array_length_value(&elements, value, env)
-            } else {
-                let receiver = Value::Array(elements.clone());
-                let property = elements.property(&key).or_else(|| {
-                    elements
-                        .prototype_override()
-                        .unwrap_or_else(|| array_prototype(env))
-                        .and_then(|prototype| prototype.property(&key))
-                });
-                match apply_set_step(property, receiver, value.clone(), env)? {
-                    SetStep::Done(ok) => Ok(ok),
-                    SetStep::WriteData => {
-                        match key.parse::<usize>() {
-                            Ok(index) => elements.set(index, value),
-                            Err(_) => elements.set_property(key, value),
-                        };
-                        Ok(true)
-                    }
-                }
-            }
-        }
-        Value::Map(map) => {
-            let receiver = Value::Map(map.clone());
-            ordinary_set_object(&map.object(), receiver, key, value, env)
-        }
-        Value::Set(set) => {
-            let receiver = Value::Set(set.clone());
-            ordinary_set_object(&set.object(), receiver, key, value, env)
-        }
-        Value::Proxy(proxy) => crate::reflect::ordinary_set(
-            Value::Proxy(proxy.clone()),
-            &PropertyKey::String(key),
-            value,
-            Value::Proxy(proxy),
-            env,
-        ),
-        _ => Err(RuntimeError {
-            thrown: None,
-            message: "member assignment target is not an object".to_owned(),
-        }),
-    }
-}
-
-pub(super) fn set_property_key(
-    object: Value,
-    key: PropertyKey,
-    value: Value,
-    env: &mut CallEnv,
-) -> Result<bool, RuntimeError> {
-    match key {
-        PropertyKey::String(key) => set_property(object, key, value, env),
-        PropertyKey::Symbol(symbol) => set_symbol_property(object, symbol, value, env),
-    }
-}
-
-fn set_symbol_property(
-    object: Value,
-    symbol: ObjectRef,
-    value: Value,
-    env: &mut CallEnv,
-) -> Result<bool, RuntimeError> {
-    match object {
-        Value::Object(object) => {
-            set_object_symbol_property(object.clone(), Value::Object(object), symbol, value, env)
-        }
-        Value::Map(map) => {
-            set_object_symbol_property(map.object(), Value::Map(map), symbol, value, env)
-        }
-        Value::Set(set) => {
-            set_object_symbol_property(set.object(), Value::Set(set), symbol, value, env)
-        }
-        Value::Proxy(proxy) => crate::reflect::ordinary_set(
-            Value::Proxy(proxy.clone()),
-            &PropertyKey::Symbol(symbol),
-            value,
-            Value::Proxy(proxy),
-            env,
-        ),
-        Value::Function(function) => set_function_symbol_property(
-            function.clone(),
-            Value::Function(function),
-            symbol,
-            value,
-            env,
-        ),
-        Value::Array(elements) => {
-            set_array_symbol_property(elements.clone(), Value::Array(elements), symbol, value, env)
-        }
-        _ => Err(RuntimeError {
-            thrown: None,
-            message: "member assignment target is not an object".to_owned(),
-        }),
-    }
-}
-
-fn set_function_symbol_property(
-    function: crate::Function,
-    receiver: Value,
-    symbol: ObjectRef,
-    value: Value,
-    env: &mut CallEnv,
-) -> Result<bool, RuntimeError> {
-    let inherited = function.symbol_property(&symbol, env);
-    match apply_set_step(inherited, receiver, value.clone(), env)? {
-        SetStep::Done(ok) => return Ok(ok),
-        SetStep::WriteData => {}
-    }
-    let descriptor = match function.own_symbol_property(&symbol) {
-        Some(existing) => Property::data(
-            value,
-            existing.enumerable,
-            existing.writable,
-            existing.configurable,
-        ),
-        None if !function.is_extensible() => return Ok(false),
-        None => Property::enumerable(value),
-    };
-    function.define_symbol_property(symbol, descriptor);
-    Ok(true)
-}
-
-fn set_object_symbol_property(
-    object: ObjectRef,
-    receiver: Value,
-    symbol: ObjectRef,
-    value: Value,
-    env: &mut CallEnv,
-) -> Result<bool, RuntimeError> {
-    match apply_set_step(
-        object.symbol_property(&symbol),
-        receiver,
-        value.clone(),
-        env,
-    )? {
-        SetStep::Done(ok) => return Ok(ok),
-        SetStep::WriteData => {}
-    }
-    let descriptor = match object.own_symbol_property(&symbol) {
-        Some(existing) => Property::data(
-            value,
-            existing.enumerable,
-            existing.writable,
-            existing.configurable,
-        ),
-        None if !object.is_extensible() => return Ok(false),
-        None => Property::enumerable(value),
-    };
-    object.define_symbol_property(symbol, descriptor);
-    Ok(true)
-}
-
-fn set_array_symbol_property(
-    array: crate::ArrayRef,
-    receiver: Value,
-    symbol: ObjectRef,
-    value: Value,
-    env: &mut CallEnv,
-) -> Result<bool, RuntimeError> {
-    let inherited = array.symbol_property(&symbol).or_else(|| {
-        array
-            .prototype_override()
-            .unwrap_or_else(|| array_prototype(env))
-            .and_then(|prototype| prototype.symbol_property(&symbol))
-    });
-    match apply_set_step(inherited, receiver, value.clone(), env)? {
-        SetStep::Done(ok) => return Ok(ok),
-        SetStep::WriteData => {}
-    }
-    let descriptor = match array.own_symbol_property(&symbol) {
-        Some(existing) => Property::data(
-            value,
-            existing.enumerable,
-            existing.writable,
-            existing.configurable,
-        ),
-        None if !array.is_extensible() => return Ok(false),
-        None => Property::enumerable(value),
-    };
-    array.define_symbol_property(symbol, descriptor);
-    Ok(true)
-}
-
-/// Result of inspecting the resolved (own or inherited) property in the first
-/// part of OrdinarySet. `Done(ok)` means the operation finished: a setter ran
-/// (`true`), or it was rejected by a non-writable data property or a
-/// getter-only accessor (`false`). `WriteData` means the caller should create
-/// or overwrite an own data property and report success.
-enum SetStep {
-    Done(bool),
-    WriteData,
-}
-
-/// Implements the property-inspection prelude of OrdinarySet for a resolved
-/// own-or-inherited `property`. Returns whether `[[Set]]` succeeded, or signals
-/// that a data write should follow.
-fn apply_set_step(
-    property: Option<Property>,
-    receiver: Value,
-    value: Value,
-    env: &mut CallEnv,
-) -> Result<SetStep, RuntimeError> {
-    let Some(property) = property else {
-        return Ok(SetStep::WriteData);
-    };
-    if property.is_accessor() {
-        // Accessor property: succeed only when a setter exists.
-        return match property.set {
-            Some(setter) => {
-                call_function(setter, receiver, vec![value], env, false)?;
-                Ok(SetStep::Done(true))
-            }
-            None => Ok(SetStep::Done(false)),
-        };
-    }
-    // Data property (own or inherited). A non-writable data property in the
-    // chain rejects the write entirely; OrdinarySet otherwise falls through to
-    // creating/overwriting an own data property.
-    if !property.writable {
-        return Ok(SetStep::Done(false));
-    }
-    Ok(SetStep::WriteData)
-}
-
-/// OrdinarySet for objects backed by an [`ObjectRef`] (plain objects, Map, Set
-/// exotic wrappers). Honors own and inherited non-writable data properties and
-/// accessors, returning the `[[Set]]` success boolean.
-fn ordinary_set_object(
-    object: &ObjectRef,
-    receiver: Value,
-    key: String,
-    value: Value,
-    env: &mut CallEnv,
-) -> Result<bool, RuntimeError> {
-    match apply_set_step(object.property(&key), receiver, value.clone(), env)? {
-        SetStep::Done(ok) => Ok(ok),
-        SetStep::WriteData => {
-            // Creating an own property (the key is only inherited or absent)
-            // requires an extensible receiver. An own writable data property is
-            // overwritten in place regardless of extensibility.
-            if object.own_property(&key).is_none() && !object.is_extensible() {
-                return Ok(false);
-            }
-            object.set(key, value);
-            Ok(true)
-        }
-    }
-}
-
-pub(super) fn property_set_uses_setter(object: &Value, key: &PropertyKey, env: &CallEnv) -> bool {
-    property_for_set(object, key, env).is_some_and(|property| property.set.is_some())
-}
-
-fn property_for_set(object: &Value, key: &PropertyKey, env: &CallEnv) -> Option<Property> {
-    let PropertyKey::String(key) = key else {
-        return symbol_property_for_set(object, key, env);
-    };
-    match object {
-        Value::Object(object) => object.property(key),
-        Value::Function(function) => function_property_for_set(function, env, key),
-        Value::Array(elements) => elements.property(key).or_else(|| {
-            elements
-                .prototype_override()
-                .unwrap_or_else(|| array_prototype(env))
-                .and_then(|prototype| prototype.property(key))
-        }),
-        Value::Map(map) => map.object().property(key),
-        Value::Set(set) => set.object().property(key),
-        _ => None,
-    }
-}
-
-fn function_property_for_set(
-    function: &crate::Function,
-    env: &CallEnv,
-    key: &str,
-) -> Option<Property> {
-    function_own_property_descriptor(function, key)
-        .or_else(|| function_prototype_chain_descriptor(function, env, key))
-}
-
-fn symbol_property_for_set(object: &Value, key: &PropertyKey, env: &CallEnv) -> Option<Property> {
-    let PropertyKey::Symbol(symbol) = key else {
-        unreachable!("symbol property helper should only receive symbol keys");
-    };
-    match object {
-        Value::Object(object) => object.symbol_property(symbol),
-        Value::Function(function) => function.symbol_property(symbol, env),
-        Value::Map(map) => map.object().symbol_property(symbol),
-        Value::Set(set) => set.object().symbol_property(symbol),
-        Value::Array(elements) => elements.symbol_property(symbol).or_else(|| {
-            elements
-                .prototype_override()
-                .unwrap_or_else(|| array_prototype(env))
-                .and_then(|prototype| prototype.symbol_property(symbol))
-        }),
-        _ => None,
     }
 }
 

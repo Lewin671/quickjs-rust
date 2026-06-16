@@ -185,11 +185,13 @@ fn fast_strict_eq(left: &Value, right: &Value) -> Option<bool> {
         | (Value::Map(_), _)
         | (Value::Set(_), _)
         | (Value::Object(_), _)
+        | (Value::Proxy(_), _)
         | (_, Value::Array(_))
         | (_, Value::Function(_))
         | (_, Value::Map(_))
         | (_, Value::Set(_))
-        | (_, Value::Object(_)) => None,
+        | (_, Value::Object(_))
+        | (_, Value::Proxy(_)) => None,
         _ => Some(false),
     }
 }

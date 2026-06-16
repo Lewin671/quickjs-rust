@@ -450,11 +450,23 @@ fn instanceof_prototype_is_object(value: &Value) -> bool {
 }
 
 fn eval_in(left: Value, right: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
-    let key = to_property_key_value(left, env)?;
-    has_property_key(right, env, &key)
-        .map(Value::Boolean)
-        .map_err(|_| RuntimeError {
+    // `in` requires an object right operand (checked before HasProperty), and
+    // must propagate an abrupt completion from a Proxy `has` trap verbatim
+    // rather than masking it as a "not an object" error.
+    if !matches!(
+        right,
+        Value::Object(_)
+            | Value::Map(_)
+            | Value::Set(_)
+            | Value::Proxy(_)
+            | Value::Array(_)
+            | Value::Function(_)
+    ) {
+        return Err(RuntimeError {
             thrown: None,
-            message: "right operand of in is not an object".to_owned(),
-        })
+            message: "TypeError: right operand of in is not an object".to_owned(),
+        });
+    }
+    let key = to_property_key_value(left, env)?;
+    has_property_key(right, env, &key).map(Value::Boolean)
 }
