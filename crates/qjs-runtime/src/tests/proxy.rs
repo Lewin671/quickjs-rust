@@ -548,6 +548,27 @@ fn define_property_rejects_non_writable_redefinition_of_non_configurable_writabl
 }
 
 #[test]
+fn revoked_function_proxy_stays_callable_for_typeof() {
+    // Callability is fixed at ProxyCreate and survives revocation, so a proxy
+    // wrapping a revoked function proxy still reports `typeof === "function"`.
+    assert_eq!(
+        eval(
+            "let r = Proxy.revocable(function() {}, {}); r.revoke(); \
+             typeof new Proxy(r.proxy, {});"
+        ),
+        Ok(Value::String("function".to_owned()))
+    );
+    // A revoked non-callable proxy stays an object.
+    assert_eq!(
+        eval(
+            "let r = Proxy.revocable({}, {}); r.revoke(); \
+             typeof new Proxy(r.proxy, {});"
+        ),
+        Ok(Value::String("object".to_owned()))
+    );
+}
+
+#[test]
 fn revocation_function_is_anonymous() {
     assert_eq!(
         eval("Proxy.revocable({}, {}).revoke.name;"),

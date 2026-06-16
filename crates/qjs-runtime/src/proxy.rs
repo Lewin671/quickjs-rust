@@ -16,6 +16,11 @@ pub struct ProxyRef {
 struct ProxyData {
     state: RefCell<Option<ProxyState>>,
     private_state: RefCell<PrivateState>,
+    /// Whether the proxy exposes `[[Call]]`/`[[Construct]]`. ProxyCreate fixes
+    /// these from the target's callability at creation, and they survive
+    /// revocation (so `typeof` of a revoked function proxy stays `"function"`).
+    callable: bool,
+    constructor: bool,
 }
 
 struct ProxyState {
@@ -31,10 +36,14 @@ impl fmt::Debug for ProxyRef {
 
 impl ProxyRef {
     pub(crate) fn new(target: Value, handler: Value) -> Self {
+        let callable = target_is_callable(&target);
+        let constructor = target_is_constructor(&target);
         Self {
             inner: Rc::new(ProxyData {
                 state: RefCell::new(Some(ProxyState { target, handler })),
                 private_state: RefCell::new(PrivateState::default()),
+                callable,
+                constructor,
             }),
         }
     }
@@ -843,20 +852,32 @@ pub(crate) fn proxy_construct(
     }
 }
 
-/// A Proxy is callable when (recursively) its target is callable.
+/// A Proxy is callable when its target was callable at creation. Recorded at
+/// ProxyCreate so the answer is stable across revocation.
 pub(crate) fn proxy_is_callable(proxy: &ProxyRef) -> bool {
-    match proxy.target_result() {
-        Ok(Value::Function(_)) => true,
-        Ok(Value::Proxy(inner)) => proxy_is_callable(&inner),
+    proxy.inner.callable
+}
+
+/// A Proxy is a constructor when its target was a constructor at creation.
+pub(crate) fn proxy_is_constructor(proxy: &ProxyRef) -> bool {
+    proxy.inner.constructor
+}
+
+/// Whether `target` exposes `[[Call]]` for ProxyCreate. A proxy target reports
+/// its own recorded callability (so a revoked function proxy still counts).
+fn target_is_callable(target: &Value) -> bool {
+    match target {
+        Value::Function(_) => true,
+        Value::Proxy(inner) => inner.inner.callable,
         _ => false,
     }
 }
 
-/// A Proxy is a constructor when (recursively) its target is a constructor.
-pub(crate) fn proxy_is_constructor(proxy: &ProxyRef) -> bool {
-    match proxy.target_result() {
-        Ok(Value::Function(function)) => function.constructable,
-        Ok(Value::Proxy(inner)) => proxy_is_constructor(&inner),
+/// Whether `target` exposes `[[Construct]]` for ProxyCreate.
+fn target_is_constructor(target: &Value) -> bool {
+    match target {
+        Value::Function(function) => function.constructable,
+        Value::Proxy(inner) => inner.inner.constructor,
         _ => false,
     }
 }
