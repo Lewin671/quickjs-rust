@@ -81,6 +81,23 @@ pub(crate) fn iterable_values_with_env(
     context: &str,
     env: &mut CallEnv,
 ) -> Result<Vec<Value>, RuntimeError> {
+    let mut values = Vec::new();
+    for_each_iterable_value_with_env(value, context, env, |value, _| {
+        values.push(value);
+        Ok(())
+    })?;
+    Ok(values)
+}
+
+pub(crate) fn for_each_iterable_value_with_env<F>(
+    value: Value,
+    context: &str,
+    env: &mut CallEnv,
+    mut visit: F,
+) -> Result<(), RuntimeError>
+where
+    F: FnMut(Value, &mut CallEnv) -> Result<(), RuntimeError>,
+{
     let Some(iterator_symbol) = symbol::iterator_symbol(env) else {
         return Err(RuntimeError {
             thrown: None,
@@ -96,6 +113,12 @@ pub(crate) fn iterable_values_with_env(
         });
     }
     let iterator = call_function(iterator_method, value, Vec::new(), env, false)?;
+    if !is_object_like(&iterator) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: format!("{context} iterator method must return an object"),
+        });
+    }
     let next = property_value(iterator.clone(), "next", env)?;
     if !matches!(next, Value::Function(_)) {
         return Err(RuntimeError {
@@ -104,18 +127,9 @@ pub(crate) fn iterable_values_with_env(
         });
     }
 
-    let mut values = Vec::new();
     loop {
         let step = call_function(next.clone(), iterator.clone(), Vec::new(), env, false)?;
-        if !matches!(
-            step,
-            Value::Object(_)
-                | Value::Array(_)
-                | Value::Function(_)
-                | Value::Map(_)
-                | Value::Set(_)
-                | Value::Proxy(_)
-        ) {
+        if !is_object_like(&step) {
             return Err(RuntimeError {
                 thrown: None,
                 message: format!("{context} iterator result is not an object"),
@@ -124,9 +138,15 @@ pub(crate) fn iterable_values_with_env(
         if is_truthy(&property_value(step.clone(), "done", env)?) {
             break;
         }
-        values.push(property_value(step, "value", env)?);
+        let value = match property_value(step, "value", env) {
+            Ok(value) => value,
+            Err(error) => return Err(iterator_close_on_throw(&iterator, error, env)),
+        };
+        if let Err(error) = visit(value, env) {
+            return Err(iterator_close_on_throw(&iterator, error, env));
+        }
     }
-    Ok(values)
+    Ok(())
 }
 
 pub(crate) fn array_like_values_from_receiver(
@@ -176,4 +196,29 @@ pub(super) fn array_like_receiver(value: Value, env: &CallEnv) -> Value {
         }
         _ => value,
     }
+}
+
+fn is_object_like(value: &Value) -> bool {
+    matches!(
+        value,
+        Value::Object(_)
+            | Value::Array(_)
+            | Value::Function(_)
+            | Value::Map(_)
+            | Value::Set(_)
+            | Value::Proxy(_)
+    )
+}
+
+fn iterator_close_on_throw(
+    iterator: &Value,
+    error: RuntimeError,
+    env: &mut CallEnv,
+) -> RuntimeError {
+    if let Ok(return_method) = property_value(iterator.clone(), "return", env)
+        && !matches!(return_method, Value::Null | Value::Undefined)
+    {
+        let _ = call_function(return_method, iterator.clone(), Vec::new(), env, false);
+    }
+    error
 }

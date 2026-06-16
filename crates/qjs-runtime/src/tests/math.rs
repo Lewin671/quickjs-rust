@@ -207,6 +207,22 @@ fn evaluates_math_builtins() {
         Ok(Value::Boolean(true))
     );
     assert_eq!(
+        eval("function* values() { yield 1; yield 2; } Math.sumPrecise(values());"),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval(
+            "let values = [4]; values[Symbol.iterator] = function* () { yield 1; yield 2; }; Math.sumPrecise(values);"
+        ),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval(
+            "let closed = 0; let iterator = { next() { return { done: false, value: {} }; }, return() { closed += 1; return {}; } }; let iterable = { [Symbol.iterator]() { return iterator; } }; let caught = false; try { Math.sumPrecise(iterable); } catch (error) { caught = error instanceof TypeError; } caught && closed === 1;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
         eval("Math.log1p(-1) === -Infinity;"),
         Ok(Value::Boolean(true))
     );

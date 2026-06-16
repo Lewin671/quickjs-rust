@@ -3270,6 +3270,8 @@ cases/math-sum-precise-nan.js
 cases/math-sum-precise-not-a-constructor.js
 cases/math-sum-precise-prop-desc.js
 cases/math-sum-precise-throws-on-non-number.js
+test/built-ins/Math/sumPrecise/takes-iterable.js
+test/built-ins/Math/sumPrecise/throws-on-non-number.js
 cases/math-transcendental-basic.js
 cases/math-transcendental-length.js
 cases/math-acos-name.js

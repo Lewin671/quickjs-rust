@@ -7,7 +7,7 @@ use std::{
 use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
-    array::array_like_values_with_env, symbol, to_number_with_env, to_uint32_number,
+    array::for_each_iterable_value_with_env, symbol, to_number_with_env, to_uint32_number,
 };
 
 pub(super) fn install_math(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
@@ -307,7 +307,7 @@ pub(super) fn native_math_sum_precise(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let mut sum = SumPrecise::new();
-    for value in array_like_values_with_env(items, "Math.sumPrecise", env)? {
+    for_each_iterable_value_with_env(items, "Math.sumPrecise", env, |value, _| {
         match value {
             Value::Number(number) => sum.add(number),
             _ => {
@@ -317,7 +317,8 @@ pub(super) fn native_math_sum_precise(
                 });
             }
         }
-    }
+        Ok(())
+    })?;
     Ok(Value::Number(sum.result()))
 }
 
