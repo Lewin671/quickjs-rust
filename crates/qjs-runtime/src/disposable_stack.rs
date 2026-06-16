@@ -77,6 +77,12 @@ pub(crate) fn install_disposable_stack(
     }
     define_prototype_method(
         &prototype,
+        "move",
+        0,
+        NativeFunction::DisposableStackPrototypeMove,
+    );
+    define_prototype_method(
+        &prototype,
         "use",
         1,
         NativeFunction::DisposableStackPrototypeUse,
@@ -252,6 +258,36 @@ pub(crate) fn native_disposable_stack_prototype_dispose(
         return Err(error);
     }
     Ok(Value::Undefined)
+}
+
+pub(crate) fn native_disposable_stack_prototype_move(
+    this_value: Value,
+    env: &CallEnv,
+) -> Result<Value, RuntimeError> {
+    let object = disposable_stack_object(&this_value)?;
+    ensure_pending(&object)?;
+    let resources = disposable_stack_resources(&object)?;
+    let moved_resources = resources.to_vec();
+    resources.replace_with(Vec::new());
+    object.define_property(
+        DISPOSABLE_STACK_DISPOSED.to_owned(),
+        Property::non_enumerable(Value::Boolean(true)),
+    );
+
+    let prototype = env
+        .get("DisposableStack")
+        .and_then(|constructor| crate::constructor_prototype_slot(&constructor, env));
+    let new_stack = ObjectRef::with_prototype_slot(HashMap::new(), prototype);
+    new_stack.set_to_string_tag("DisposableStack");
+    new_stack.define_property(
+        DISPOSABLE_STACK_DISPOSED.to_owned(),
+        Property::non_enumerable(Value::Boolean(false)),
+    );
+    new_stack.define_property(
+        DISPOSABLE_STACK_RESOURCES.to_owned(),
+        Property::non_enumerable(Value::Array(ArrayRef::new(moved_resources))),
+    );
+    Ok(Value::Object(new_stack))
 }
 
 pub(crate) fn native_disposable_stack_prototype_use(

@@ -165,6 +165,7 @@ pub(crate) enum NativeFunction {
     DisposableStackPrototypeDefer,
     DisposableStackPrototypeDisposed,
     DisposableStackPrototypeDispose,
+    DisposableStackPrototypeMove,
     DisposableStackPrototypeUse,
     Uint8Array,
     Int8Array,

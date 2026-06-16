@@ -29,6 +29,9 @@ pub(super) fn call_disposable_stack_native(
         NativeFunction::DisposableStackPrototypeDispose => {
             disposable_stack::native_disposable_stack_prototype_dispose(this_value, env)?
         }
+        NativeFunction::DisposableStackPrototypeMove => {
+            disposable_stack::native_disposable_stack_prototype_move(this_value, env)?
+        }
         NativeFunction::DisposableStackPrototypeUse => {
             disposable_stack::native_disposable_stack_prototype_use(
                 this_value,

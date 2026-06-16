@@ -8,6 +8,18 @@
   stack.dispose();
   stack.dispose();
 
+  let movedSource = new DisposableStack();
+  movedSource.defer(() => order.push("moved:first"));
+  movedSource.defer(() => order.push("moved:second"));
+  let moved = movedSource.move();
+  let moveState = [
+    movedSource.disposed,
+    moved.disposed,
+    moved !== movedSource,
+    moved instanceof DisposableStack
+  ].join(",");
+  moved.dispose();
+
   let error1 = new Error("first");
   let error2 = new Error("second");
   let error3 = new Error("third");
@@ -19,6 +31,7 @@
     errors.dispose();
   } catch (error) {
     return order.join(",") + ":" +
+      moveState + ":" +
       stack.disposed + ":" +
       (error instanceof SuppressedError) + ":" +
       (error.error === error1) + ":" +
