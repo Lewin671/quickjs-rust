@@ -200,10 +200,13 @@ fn install_error_cause(
 }
 
 fn is_object_value(value: &Value) -> bool {
-    matches!(
-        value,
-        Value::Object(_) | Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_)
-    )
+    match value {
+        Value::Object(object) => !symbol::is_symbol_primitive(object),
+        Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) | Value::Proxy(_) => {
+            true
+        }
+        _ => false,
+    }
 }
 
 pub(crate) fn is_native_error(native: NativeFunction) -> bool {

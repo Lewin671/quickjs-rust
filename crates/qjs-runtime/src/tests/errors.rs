@@ -360,6 +360,10 @@ fn error_cause_property() {
         eval("Object.hasOwn(new Error('msg', 42), 'cause');"),
         Ok(Value::Boolean(false))
     );
+    assert_eq!(
+        eval("Object.hasOwn(new Error('msg', Symbol()), 'cause');"),
+        Ok(Value::Boolean(false))
+    );
     // no cause when options object has no cause property
     assert_eq!(
         eval("Object.hasOwn(new Error('msg', {}), 'cause');"),
@@ -399,6 +403,25 @@ fn error_cause_property() {
              var caught = false; \
              try { \
                new Error('msg', { get cause() { throw marker; } }); \
+             } catch (e) { \
+               caught = e === marker; \
+             } \
+             caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "var marker = {}; \
+             var options = new Proxy({}, { \
+               has: function(target, key) { \
+                 if (key === 'cause') throw marker; \
+                 return key in target; \
+               } \
+             }); \
+             var caught = false; \
+             try { \
+               new Error('msg', options); \
              } catch (e) { \
                caught = e === marker; \
              } \
