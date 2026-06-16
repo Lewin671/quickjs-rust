@@ -5,7 +5,7 @@ use crate::{
     Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function,
     has_property_key, is_truthy,
     private::{PrivateState, PrivateStorage},
-    property_value, property_value_key_with_receiver,
+    property_value, property_value_key_with_receiver, to_length_with_env,
 };
 
 #[derive(Clone)]
@@ -551,12 +551,7 @@ pub(crate) fn proxy_own_keys(
     let result = call_function(trap, handler, vec![target.clone()], env, false)?;
 
     // CreateListFromArrayLike, restricted to String and Symbol elements.
-    let elements = match &result {
-        Value::Array(array) => array.to_vec(),
-        _ => {
-            return Err(invariant_error("ownKeys trap result must be an array-like"));
-        }
-    };
+    let elements = create_list_from_array_like(result, env)?;
     let mut keys: Vec<PropertyKey> = Vec::with_capacity(elements.len());
     let mut seen_strings: Vec<String> = Vec::new();
     let mut seen_symbols: Vec<ObjectRef> = Vec::new();
@@ -621,6 +616,27 @@ pub(crate) fn proxy_own_keys(
         }
     }
     Ok(keys)
+}
+
+fn create_list_from_array_like(
+    value: Value,
+    env: &mut CallEnv,
+) -> Result<Vec<Value>, RuntimeError> {
+    match value {
+        Value::Array(array) => Ok(array.to_vec()),
+        Value::Object(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) | Value::Proxy(_) => {
+            let length = to_length_with_env(property_value(value.clone(), "length", env)?, env)?;
+            (0..length)
+                .map(|index| property_value(value.clone(), &index.to_string(), env))
+                .collect()
+        }
+        Value::String(_)
+        | Value::Number(_)
+        | Value::BigInt(_)
+        | Value::Boolean(_)
+        | Value::Null
+        | Value::Undefined => Err(invariant_error("ownKeys trap result must be an array-like")),
+    }
 }
 
 /// The ordinary own keys of a value: string-keyed names followed by symbols,

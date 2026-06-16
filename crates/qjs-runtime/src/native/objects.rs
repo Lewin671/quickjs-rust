@@ -58,7 +58,7 @@ pub(super) fn call_object_native(
             object::native_object_set_prototype_of(argument_values, env)?
         }
         NativeFunction::ObjectEntries => object::native_object_entries(argument_values, env)?,
-        NativeFunction::ObjectKeys => object::native_object_keys(argument_values)?,
+        NativeFunction::ObjectKeys => object::native_object_keys(argument_values, env)?,
         NativeFunction::ObjectValues => object::native_object_values(argument_values, env)?,
         NativeFunction::ObjectPrototypeHasOwnProperty => {
             object::native_object_prototype_has_own_property(this_value, argument_values, env)?

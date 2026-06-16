@@ -3473,6 +3473,7 @@ cases/object-entries-inherited-omitted.js
 cases/object-entries-length.js
 cases/object-entries-primitive-number.js
 cases/object-entries-primitive-string.js
+cases/object-entries-proxy-observable-operations.js
 cases/object-entries-tamper-with-global-object.js
 cases/object-from-entries-basic.js
 cases/object-from-entries-duplicate-keys.js
@@ -3611,6 +3612,7 @@ cases/object-keys-null-throws.js
 cases/object-keys-primitive-number-basic.js
 cases/object-keys-primitive-string-basic.js
 cases/object-keys-prototype-negative.js
+cases/object-keys-proxy-array-like-ownkeys.js
 cases/object-keys-sparse-array-index-descriptor.js
 cases/object-keys-undefined-throws.js
 cases/object-values-basic.js
@@ -3622,6 +3624,7 @@ cases/object-values-length.js
 cases/object-values-order-after-define.js
 cases/object-values-primitive-number.js
 cases/object-values-primitive-string.js
+cases/object-values-proxy-observable-operations.js
 cases/object-values-tamper-with-global-object.js
 cases/object-literal-basic.js
 cases/object-literal-object-instanceof-basic.js

@@ -212,3 +212,37 @@ fn evaluates_object_enumeration_builtins() {
         Ok(Value::String("true:true:true:psv".to_owned()))
     );
 }
+
+#[test]
+fn object_enumeration_builtins_observe_proxy_traps() {
+    assert_eq!(
+        eval(
+            "let log = ''; let target = { a: 1, b: 2 }; let proxy = new Proxy(target, { ownKeys(t) { log += '|ownKeys'; return ['a', 'b']; }, getOwnPropertyDescriptor(t, k) { log += '|desc:' + k; return Object.getOwnPropertyDescriptor(t, k); }, get(t, k) { log += '|get:' + k; return t[k]; } }); Object.keys(proxy).join(',') + ';' + log;"
+        ),
+        Ok(Value::String("a,b;|ownKeys|desc:a|desc:b".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let log = ''; let trapKeys = { get length() { log += '|length'; return 2; }, get 0() { log += '|key0'; return 'a'; }, get 1() { log += '|key1'; return 'b'; } }; let proxy = new Proxy({}, { ownKeys() { log += '|ownKeys'; return trapKeys; }, getOwnPropertyDescriptor(t, k) { log += '|desc:' + k; return { value: k, enumerable: k === 'a', configurable: true }; } }); Object.keys(proxy).join(',') + ';' + log;"
+        ),
+        Ok(Value::String(
+            "a;|ownKeys|length|key0|key1|desc:a|desc:b".to_owned()
+        ))
+    );
+    assert_eq!(
+        eval(
+            "let log = ''; let target = { a: 1, b: 2 }; let proxy = new Proxy(target, { ownKeys(t) { log += '|ownKeys'; return ['a', 'b']; }, getOwnPropertyDescriptor(t, k) { log += '|desc:' + k; return Object.getOwnPropertyDescriptor(t, k); }, get(t, k) { log += '|get:' + k; return t[k]; } }); Object.values(proxy).join(',') + ';' + log;"
+        ),
+        Ok(Value::String(
+            "1,2;|ownKeys|desc:a|get:a|desc:b|get:b".to_owned()
+        ))
+    );
+    assert_eq!(
+        eval(
+            "let log = ''; let target = { a: 1, b: 2 }; let proxy = new Proxy(target, { ownKeys(t) { log += '|ownKeys'; return ['a', 'b']; }, getOwnPropertyDescriptor(t, k) { log += '|desc:' + k; return Object.getOwnPropertyDescriptor(t, k); }, get(t, k) { log += '|get:' + k; return t[k]; } }); let entries = Object.entries(proxy); entries[0][0] + ':' + entries[0][1] + ',' + entries[1][0] + ':' + entries[1][1] + ';' + log;"
+        ),
+        Ok(Value::String(
+            "a:1,b:2;|ownKeys|desc:a|get:a|desc:b|get:b".to_owned()
+        ))
+    );
+}

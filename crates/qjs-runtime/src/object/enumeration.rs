@@ -4,10 +4,13 @@ use crate::{
     function_own_property_symbols, property_value, property_value_key, to_property_key_value,
 };
 
-use super::descriptor::{own_property_descriptor, own_property_descriptor_key};
+use super::descriptor::own_property_descriptor_key;
 use crate::CallEnv;
 
-pub(crate) fn native_object_keys(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+pub(crate) fn native_object_keys(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if matches!(target, Value::Null | Value::Undefined) {
         return Err(RuntimeError {
@@ -16,7 +19,7 @@ pub(crate) fn native_object_keys(argument_values: &[Value]) -> Result<Value, Run
         });
     }
 
-    let keys = own_property_keys(target);
+    let keys = enumerable_property_keys(target, env)?;
     Ok(Value::Array(ArrayRef::new(
         keys.into_iter().map(Value::String).collect(),
     )))
@@ -121,14 +124,21 @@ pub(crate) fn enumerable_property_entries(
     value: Value,
     env: &mut CallEnv,
 ) -> Result<Vec<(String, Value)>, RuntimeError> {
-    let keys = own_property_keys(value.clone());
+    let keys = own_property_keys_for_enumeration(value.clone(), false, env)?;
     let mut entries = Vec::with_capacity(keys.len());
     for key in keys {
-        if let Some(Property { enumerable, .. }) = own_property_descriptor(value.clone(), &key)?
-            && enumerable
-        {
-            let property = property_value(value.clone(), &key, env)?;
-            entries.push((key, property));
+        let PropertyKey::String(name) = key else {
+            continue;
+        };
+        if let Some(Property {
+            enumerable: true, ..
+        }) = observable_own_property_descriptor(
+            value.clone(),
+            &PropertyKey::String(name.clone()),
+            env,
+        )? {
+            let property = property_value(value.clone(), &name, env)?;
+            entries.push((name, property));
         }
     }
     Ok(entries)
@@ -138,16 +148,11 @@ pub(crate) fn enumerable_property_entries_with_symbols(
     value: Value,
     env: &mut CallEnv,
 ) -> Result<Vec<(PropertyKey, Value)>, RuntimeError> {
-    let string_keys = own_property_keys(value.clone())
-        .into_iter()
-        .map(PropertyKey::String);
-    let symbol_keys = own_property_symbols(value.clone())
-        .into_iter()
-        .map(PropertyKey::Symbol);
-    let keys: Vec<_> = string_keys.chain(symbol_keys).collect();
+    let keys = own_property_keys_for_enumeration(value.clone(), true, env)?;
     let mut entries = Vec::with_capacity(keys.len());
     for key in keys {
-        if let Some(Property { enumerable, .. }) = own_property_descriptor_key(value.clone(), &key)?
+        if let Some(Property { enumerable, .. }) =
+            observable_own_property_descriptor(value.clone(), &key, env)?
             && enumerable
         {
             let property = property_value_key(value.clone(), &key, env)?;
@@ -155,6 +160,71 @@ pub(crate) fn enumerable_property_entries_with_symbols(
         }
     }
     Ok(entries)
+}
+
+fn enumerable_property_keys(value: Value, env: &mut CallEnv) -> Result<Vec<String>, RuntimeError> {
+    let keys = own_property_keys_for_enumeration(value.clone(), false, env)?;
+    let mut enumerable = Vec::with_capacity(keys.len());
+    for key in keys {
+        let PropertyKey::String(name) = key else {
+            continue;
+        };
+        if let Some(Property {
+            enumerable: true, ..
+        }) = observable_own_property_descriptor(
+            value.clone(),
+            &PropertyKey::String(name.clone()),
+            env,
+        )? {
+            enumerable.push(name);
+        }
+    }
+    Ok(enumerable)
+}
+
+fn own_property_keys_for_enumeration(
+    value: Value,
+    include_symbols: bool,
+    env: &mut CallEnv,
+) -> Result<Vec<PropertyKey>, RuntimeError> {
+    if let Value::Proxy(proxy) = value {
+        return Ok(crate::proxy::proxy_own_keys(proxy, env)?
+            .into_iter()
+            .filter(|key| include_symbols || matches!(key, PropertyKey::String(_)))
+            .collect());
+    }
+
+    let string_keys = own_property_keys(value.clone())
+        .into_iter()
+        .map(PropertyKey::String);
+    if !include_symbols {
+        return Ok(string_keys.collect());
+    }
+
+    Ok(string_keys
+        .chain(
+            own_property_symbols(value)
+                .into_iter()
+                .map(PropertyKey::Symbol),
+        )
+        .collect())
+}
+
+fn observable_own_property_descriptor(
+    value: Value,
+    key: &PropertyKey,
+    env: &mut CallEnv,
+) -> Result<Option<Property>, RuntimeError> {
+    if let Value::Proxy(proxy) = &value {
+        return crate::proxy::proxy_get_own_property_descriptor(
+            proxy.clone(),
+            key,
+            env,
+            |target, _env| own_property_descriptor_key(target, key),
+        );
+    }
+
+    own_property_descriptor_key(value, key)
 }
 
 pub(crate) fn own_property_keys(value: Value) -> Vec<String> {
