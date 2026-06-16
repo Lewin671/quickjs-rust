@@ -6,6 +6,15 @@
 // Derived from: test/built-ins/Map/Symbol.species/return-value.js
 // Derived from: test/built-ins/Map/Symbol.species/length.js
 // Derived from: test/built-ins/Map/Symbol.species/symbol-species-name.js
+// Derived from: test/built-ins/Promise/Symbol.species/species.js
+// Derived from: test/built-ins/Promise/Symbol.species/return-value.js
+// Derived from: test/built-ins/Promise/Symbol.species/length.js
+// Derived from: test/built-ins/Promise/Symbol.species/symbol-species-name.js
+// Derived from: test/built-ins/RegExp/Symbol.species/species.js
+// Derived from: test/built-ins/RegExp/Symbol.species/return-value.js
+// Derived from: test/built-ins/RegExp/Symbol.species/length.js
+// Derived from: test/built-ins/RegExp/Symbol.species/symbol-species-name.js
+// Derived from: test/built-ins/Symbol/species/builtin-getter-name.js
 // Derived from: test/built-ins/Set/Symbol.species/symbol-species.js
 // Derived from: test/built-ins/Set/Symbol.species/return-value.js
 // Derived from: test/built-ins/Set/Symbol.species/length.js
@@ -29,4 +38,6 @@ function verifySpeciesAccessor(ctor, name) {
 
 verifySpeciesAccessor(Array, "Array");
 verifySpeciesAccessor(Map, "Map");
+verifySpeciesAccessor(Promise, "Promise");
+verifySpeciesAccessor(RegExp, "RegExp");
 verifySpeciesAccessor(Set, "Set");

@@ -156,6 +156,7 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(regexp_prototype)),
     );
+    symbol::define_species_accessor(env, &regexp_function);
 
     let regexp_value = Value::Function(regexp_function);
     env.insert_realm("RegExp".to_owned(), regexp_value.clone());

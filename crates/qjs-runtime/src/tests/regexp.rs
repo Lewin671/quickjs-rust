@@ -110,6 +110,22 @@ fn evaluates_regexp_constructor_identity() {
 }
 
 #[test]
+fn exposes_regexp_species_accessor() {
+    assert_eq!(
+        eval("RegExp[Symbol.species] === RegExp;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let desc = Object.getOwnPropertyDescriptor(RegExp, Symbol.species); let receiver = {}; [desc.get.call(receiver) === receiver, desc.set === undefined, desc.enumerable, desc.configurable, desc.get.name, desc.get.length].join(':');"
+        ),
+        Ok(Value::String(
+            "true:true:false:true:get [Symbol.species]:0".to_owned()
+        ))
+    );
+}
+
+#[test]
 fn evaluates_regexp_escape() {
     assert_eq!(
         eval("typeof RegExp.escape;"),

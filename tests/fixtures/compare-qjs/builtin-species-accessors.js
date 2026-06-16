@@ -9,5 +9,6 @@
       desc.get.name + ":" +
       desc.get.length;
   }
-  return describe(Array) + "|" + describe(Map) + "|" + describe(Set);
+  return describe(Array) + "|" + describe(Map) + "|" + describe(Promise) + "|" +
+    describe(RegExp) + "|" + describe(Set);
 })()
