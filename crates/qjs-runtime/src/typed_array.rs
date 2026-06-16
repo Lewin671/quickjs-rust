@@ -318,6 +318,12 @@ fn install_typed_array_constructor(
 fn install_uint8_array_prototype_methods(prototype: &ObjectRef) {
     define_prototype_method(
         prototype,
+        "toBase64",
+        0,
+        NativeFunction::Uint8ArrayPrototypeToBase64,
+    );
+    define_prototype_method(
+        prototype,
         "setFromHex",
         1,
         NativeFunction::Uint8ArrayPrototypeSetFromHex,
@@ -394,7 +400,7 @@ pub(crate) fn native_typed_array_prototype_length(
     Ok(Value::Number(typed_array_length(&object) as f64))
 }
 
-fn typed_array_receiver(value: &Value) -> Result<ObjectRef, RuntimeError> {
+pub(crate) fn typed_array_receiver(value: &Value) -> Result<ObjectRef, RuntimeError> {
     match value {
         Value::Object(object) if is_typed_array_object(object) => Ok(object.clone()),
         _ => Err(typed_array_receiver_error()),

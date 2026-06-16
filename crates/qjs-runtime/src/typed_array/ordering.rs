@@ -13,13 +13,14 @@ use std::collections::HashMap;
 
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, array, array_buffer,
-    call_function, object_prototype, property_value, to_number_with_env,
+    call_function, is_truthy, object_prototype, property_value, to_number_with_env,
 };
 
 use super::element::{read_view_elements, set_view_elements};
 use super::{
     coerce_element, is_big_int_kind, is_typed_array_object, typed_array_is_out_of_bounds,
-    typed_array_kind, typed_array_length, validate_typed_array, validate_typed_array_write,
+    typed_array_kind, typed_array_length, typed_array_receiver, validate_typed_array,
+    validate_typed_array_write,
 };
 use crate::CallEnv;
 
@@ -378,7 +379,135 @@ pub(crate) fn native_typed_array_prototype_with(
     )))
 }
 
-// --- Uint8Array.prototype.setFromHex ----------------------------------------
+// --- Uint8Array.prototype.toBase64 / setFromHex -----------------------------
+
+pub(crate) fn native_uint8_array_prototype_to_base64(
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let object = typed_array_receiver(&this_value)?;
+    if typed_array_kind(&object) != NativeFunction::Uint8Array {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Uint8Array.prototype.toBase64 requires a Uint8Array receiver"
+                .to_owned(),
+        });
+    }
+    let options = to_base64_options(argument_values.first().cloned(), env)?;
+    if super::typed_array_buffer_detached(&object) {
+        return Err(array_buffer::detached_error());
+    }
+    if typed_array_is_out_of_bounds(&object) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: TypedArray is out of bounds".to_owned(),
+        });
+    }
+    let length = typed_array_length(&object);
+    let bytes: Vec<u8> = read_view_elements(&object, 0, length)
+        .into_iter()
+        .map(|value| match value {
+            Value::Number(number) => number as u8,
+            _ => 0,
+        })
+        .collect();
+    Ok(Value::String(encode_base64(
+        &bytes,
+        options.alphabet,
+        options.omit_padding,
+    )))
+}
+
+#[derive(Clone, Copy)]
+enum Base64Alphabet {
+    Base64,
+    Base64Url,
+}
+
+struct ToBase64Options {
+    alphabet: Base64Alphabet,
+    omit_padding: bool,
+}
+
+fn to_base64_options(
+    value: Option<Value>,
+    env: &mut CallEnv,
+) -> Result<ToBase64Options, RuntimeError> {
+    let mut options = ToBase64Options {
+        alphabet: Base64Alphabet::Base64,
+        omit_padding: false,
+    };
+    let Some(value) = value else {
+        return Ok(options);
+    };
+    if matches!(value, Value::Undefined) {
+        return Ok(options);
+    }
+    match value {
+        Value::Object(_)
+        | Value::Array(_)
+        | Value::Function(_)
+        | Value::Map(_)
+        | Value::Proxy(_)
+        | Value::Set(_) => {
+            let alphabet = property_value(value.clone(), "alphabet", env)?;
+            match alphabet {
+                Value::Undefined => {}
+                Value::String(name) if name == "base64" => {
+                    options.alphabet = Base64Alphabet::Base64;
+                }
+                Value::String(name) if name == "base64url" => {
+                    options.alphabet = Base64Alphabet::Base64Url;
+                }
+                _ => {
+                    return Err(RuntimeError {
+                        thrown: None,
+                        message: "TypeError: invalid base64 alphabet".to_owned(),
+                    });
+                }
+            }
+            let omit_padding = property_value(value, "omitPadding", env)?;
+            options.omit_padding = is_truthy(&omit_padding);
+            Ok(options)
+        }
+        _ => Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Uint8Array.prototype.toBase64 options must be an object"
+                .to_owned(),
+        }),
+    }
+}
+
+fn encode_base64(bytes: &[u8], alphabet: Base64Alphabet, omit_padding: bool) -> String {
+    let table = match alphabet {
+        Base64Alphabet::Base64 => {
+            b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+        }
+        Base64Alphabet::Base64Url => {
+            b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+        }
+    };
+    let mut output = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let first = chunk[0];
+        let second = *chunk.get(1).unwrap_or(&0);
+        let third = *chunk.get(2).unwrap_or(&0);
+        output.push(table[(first >> 2) as usize] as char);
+        output.push(table[(((first & 0b0000_0011) << 4) | (second >> 4)) as usize] as char);
+        if chunk.len() > 1 {
+            output.push(table[(((second & 0b0000_1111) << 2) | (third >> 6)) as usize] as char);
+        } else if !omit_padding {
+            output.push('=');
+        }
+        if chunk.len() > 2 {
+            output.push(table[(third & 0b0011_1111) as usize] as char);
+        } else if !omit_padding {
+            output.push('=');
+        }
+    }
+    output
+}
 
 pub(crate) fn native_uint8_array_prototype_set_from_hex(
     this_value: Value,

@@ -760,6 +760,67 @@ fn uint8_array_set_from_hex_decodes_and_reports_progress() {
 }
 
 #[test]
+fn uint8_array_to_base64_encodes_with_options() {
+    assert_eq!(
+        eval(
+            "[
+               new Uint8Array([]).toBase64(),
+               new Uint8Array([102]).toBase64(),
+               new Uint8Array([102, 111]).toBase64(),
+               new Uint8Array([102, 111, 111]).toBase64(),
+               new Uint8Array([199, 239, 242]).toBase64({ alphabet: 'base64url' }),
+               new Uint8Array([255]).toBase64({ omitPadding: true }),
+               new Uint8Array([255]).toBase64({ alphabet: 'base64url', omitPadding: true })
+             ].join('|');"
+        ),
+        Ok(Value::String("|Zg==|Zm8=|Zm9v|x-_y|/w|_w".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([0]); \
+             let calls = 0; \
+             let options = {}; \
+             Object.defineProperty(options, 'alphabet', { get() { calls++; a[0] = 255; return 'base64'; } }); \
+             a.toBase64(options) + ':' + calls + ':' + a[0];"
+        ),
+        Ok(Value::String("/w==:1:255".to_owned()))
+    );
+}
+
+#[test]
+fn uint8_array_to_base64_surface_and_errors() {
+    assert_eq!(
+        eval(
+            "let d = Object.getOwnPropertyDescriptor(Uint8Array.prototype, 'toBase64'); \
+             d.writable + ':' + d.enumerable + ':' + d.configurable + ':' \
+             + Uint8Array.prototype.toBase64.name + ':' \
+             + Uint8Array.prototype.toBase64.length;"
+        ),
+        Ok(Value::String("true:false:true:toBase64:0".to_owned()))
+    );
+    assert!(eval("new Uint8Array.prototype.toBase64();").is_err());
+    assert!(eval("Uint8Array.prototype.toBase64.call(new Int8Array(1));").is_err());
+    assert!(eval("new Uint8Array([1]).toBase64({ alphabet: 'other' });").is_err());
+    assert!(eval("new Uint8Array([1]).toBase64({ alphabet: Object('base64') });").is_err());
+}
+
+#[test]
+fn uint8_array_to_base64_checks_detached_after_options() {
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array(2); \
+             let calls = 0; \
+             let options = {}; \
+             Object.defineProperty(options, 'alphabet', { get() { calls++; __quickjsRustDetachArrayBuffer(a.buffer); return 'base64'; } }); \
+             let threw = false; \
+             try { a.toBase64(options); } catch (e) { threw = e instanceof TypeError; } \
+             threw + ':' + calls;"
+        ),
+        Ok(Value::String("true:1".to_owned()))
+    );
+}
+
+#[test]
 fn uint8_array_set_from_hex_surface_and_receiver_checks() {
     assert_eq!(
         eval(
