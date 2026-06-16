@@ -73,6 +73,12 @@ fn evaluates_json_builtins() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "let rejected = 0; for (let text of ['', ' 1', '1 ', '\\t1', '1\\n', '\\r1', '1\\r']) { try { JSON.rawJSON(text); } catch (error) { if (error instanceof SyntaxError) rejected++; } } rejected;"
+        ),
+        Ok(Value::Number(7.0))
+    );
 }
 
 #[test]

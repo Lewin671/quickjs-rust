@@ -12,6 +12,16 @@
   } catch (error) {
     objectRejected = error instanceof SyntaxError;
   }
+  var edgeRejected = 0;
+  for (var text of ["", " 1", "1 ", "\t1", "1\n", "\r1", "1\r"]) {
+    try {
+      JSON.rawJSON(text);
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        edgeRejected++;
+      }
+    }
+  }
   return JSON.rawJSON.length + ":" +
     JSON.isRawJSON.length + ":" +
     JSON.stringify(raw) + ":" +
@@ -24,5 +34,6 @@
     parsedObject.bool + ":" +
     parsedObject.string + ":" +
     arrayJson + ":" +
-    objectRejected;
+    objectRejected + ":" +
+    edgeRejected;
 })()

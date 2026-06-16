@@ -14,6 +14,7 @@ pub(crate) fn native_json_raw_json(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
+    reject_empty_or_padded_raw_json(&text)?;
     match parse_json_text(&text, env)? {
         Value::Array(_) | Value::Object(_) => {
             return Err(RuntimeError {
@@ -29,6 +30,28 @@ pub(crate) fn native_json_raw_json(
     object.mark_raw_json();
     object.freeze();
     Ok(Value::Object(object))
+}
+
+fn reject_empty_or_padded_raw_json(text: &str) -> Result<(), RuntimeError> {
+    let mut chars = text.chars();
+    let Some(first) = chars.next() else {
+        return Err(raw_json_syntax_error());
+    };
+    if is_forbidden_edge_char(first) || text.chars().last().is_some_and(is_forbidden_edge_char) {
+        return Err(raw_json_syntax_error());
+    }
+    Ok(())
+}
+
+fn is_forbidden_edge_char(ch: char) -> bool {
+    matches!(ch, '\t' | '\n' | '\r' | ' ')
+}
+
+fn raw_json_syntax_error() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "SyntaxError: invalid JSON.rawJSON text".to_owned(),
+    }
 }
 
 pub(crate) fn native_json_is_raw_json(argument_values: &[Value]) -> Result<Value, RuntimeError> {

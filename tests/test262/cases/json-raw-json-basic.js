@@ -1,5 +1,6 @@
 // Derived from: test/built-ins/JSON/rawJSON/basic.js
 // Derived from: test/built-ins/JSON/rawJSON/returns-expected-object.js
+// Derived from: test/built-ins/JSON/rawJSON/illegal-empty-and-start-end-chars.js
 // Derived from: test/built-ins/JSON/isRawJSON/basic.js
 if (JSON.rawJSON.length !== 1) {
   throw "expected JSON.rawJSON length";
@@ -58,4 +59,16 @@ try {
 }
 if (!rejected) {
   throw "expected object raw JSON text rejection";
+}
+
+for (var text of ["", " 1", "1 ", "\t1", "1\n", "\r1", "1\r"]) {
+  rejected = false;
+  try {
+    JSON.rawJSON(text);
+  } catch (error) {
+    rejected = error instanceof SyntaxError;
+  }
+  if (!rejected) {
+    throw "expected edge whitespace raw JSON text rejection";
+  }
 }
