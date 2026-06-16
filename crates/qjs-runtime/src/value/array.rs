@@ -164,6 +164,14 @@ impl ArrayRef {
     /// could intercept the read, the default prototype, and that prototype owning
     /// no indexed property whose value an absent element would inherit.
     pub(crate) fn dense_argument_values(&self, env: &CallEnv) -> Option<Vec<Value>> {
+        self.with_dense_argument_elements(env, |elements| elements.to_vec())
+    }
+
+    pub(crate) fn with_dense_argument_elements<R>(
+        &self,
+        env: &CallEnv,
+        read: impl FnOnce(&[Value]) -> R,
+    ) -> Option<R> {
         let elements = self.elements.borrow();
         if self.length.get() != elements.len() || !self.holes.borrow().is_empty() {
             return None;
@@ -182,7 +190,7 @@ impl ArrayRef {
                 }
             }
         }
-        Some(elements.clone())
+        Some(read(&elements))
     }
 
     /// Reads one element directly when ordinary property lookup cannot observe a

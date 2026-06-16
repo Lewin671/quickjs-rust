@@ -391,6 +391,24 @@ fn evaluates_function_declarations_and_calls() {
     );
     assert_eq!(
         eval(
+            "let values = [65, 0x1F600, 67]; String.fromCodePoint.apply(null, values).length + ':' + String.fromCodePoint.apply(null, values).charCodeAt(1);"
+        ),
+        Ok(Value::String("4:55357".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let calls = 0; let values = [{ valueOf() { calls = calls + 1; return 65; } }]; String.fromCodePoint.apply(null, values) + ':' + calls;"
+        ),
+        Ok(Value::String("A:1".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { String.fromCodePoint.apply(null, [0x110000]); } catch (error) { caught = error instanceof RangeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
             "function fn() {} var caught = ''; for (var i = 0; i < 4; i = i + 1) { var value = i === 0 ? true : (i === 1 ? NaN : (i === 2 ? '1,2,3' : Symbol())); try { fn.apply(null, value); caught = caught + '0'; } catch (error) { caught = caught + (error instanceof TypeError ? '1' : '2'); } } caught;"
         ),
         Ok(Value::String("1111".to_owned()))

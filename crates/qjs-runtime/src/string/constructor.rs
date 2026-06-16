@@ -52,6 +52,10 @@ pub(crate) fn native_string_from_code_point(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
+    if let Some(result) = string_from_code_point_numbers(argument_values) {
+        return result.map(Value::String);
+    }
+
     // Reserve roughly one byte per argument up front (BMP code points are one to
     // three UTF-8 bytes) and push each code point directly into the accumulator
     // instead of allocating a throwaway `String` per argument.
@@ -61,6 +65,28 @@ pub(crate) fn native_string_from_code_point(
         push_code_point(&mut result, code_point);
     }
     Ok(Value::String(result))
+}
+
+pub(crate) fn string_from_code_point_numbers(
+    argument_values: &[Value],
+) -> Option<Result<String, RuntimeError>> {
+    if !argument_values
+        .iter()
+        .all(|value| matches!(value, Value::Number(_)))
+    {
+        return None;
+    }
+    let mut result = String::with_capacity(argument_values.len());
+    for value in argument_values {
+        let Value::Number(number) = value else {
+            unreachable!("all values were checked as numbers");
+        };
+        match code_point_from_number(*number) {
+            Ok(code_point) => push_code_point(&mut result, code_point),
+            Err(error) => return Some(Err(error)),
+        }
+    }
+    Some(Ok(result))
 }
 
 pub(crate) fn native_string_raw(
@@ -93,15 +119,22 @@ pub(crate) fn native_string_raw(
 
 fn to_code_point(value: Value, env: &mut CallEnv) -> Result<u32, RuntimeError> {
     let number = to_number_with_env(value, env)?;
+    code_point_from_number(number)
+}
+
+fn code_point_from_number(number: f64) -> Result<u32, RuntimeError> {
     if !number.is_finite() || number < 0.0 || number > 0x10FFFF as f64 || number.trunc() != number {
-        return Err(RuntimeError {
-            thrown: None,
-            message:
-                "RangeError: String.fromCodePoint code point must be an integer in [0, 0x10FFFF]"
-                    .to_owned(),
-        });
+        return Err(from_code_point_range_error());
     }
     Ok(number as u32)
+}
+
+fn from_code_point_range_error() -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: "RangeError: String.fromCodePoint code point must be an integer in [0, 0x10FFFF]"
+            .to_owned(),
+    }
 }
 
 /// Appends `code_point` to `result` without an intermediate allocation. A BMP

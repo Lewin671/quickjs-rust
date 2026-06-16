@@ -6,7 +6,7 @@ use qjs_parser::parse_script;
 use crate::CallEnv;
 use crate::function::CompiledUserFunction;
 use crate::{
-    Function, GLOBAL_THIS_BINDING, Prototype, RuntimeError, Value,
+    Function, GLOBAL_THIS_BINDING, NativeFunction, Prototype, RuntimeError, Value,
     array::array_like_values_with_env, object::boxed_primitive, property_value,
     to_js_string_with_env, to_length_with_env,
 };
@@ -187,12 +187,35 @@ pub(crate) fn native_function_prototype_apply(
     }
 
     let call_this = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    if let Some(result) = apply_dense_native_fast_path(&this_value, argument_values, env) {
+        return result;
+    }
     let apply_arguments = apply_argument_list(
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
 
     crate::call_function(this_value, call_this, apply_arguments, env, false)
+}
+
+fn apply_dense_native_fast_path(
+    target: &Value,
+    argument_values: &[Value],
+    env: &CallEnv,
+) -> Option<Result<Value, RuntimeError>> {
+    let Value::Function(function) = target else {
+        return None;
+    };
+    if function.native_kind() != Some(NativeFunction::StringFromCodePoint) {
+        return None;
+    }
+    let Some(Value::Array(array)) = argument_values.get(1) else {
+        return None;
+    };
+    array.with_dense_argument_elements(env, |elements| {
+        crate::string::string_from_code_point_numbers(elements)
+            .map(|result| result.map(Value::String))
+    })?
 }
 
 fn apply_argument_list(arg_array: Value, env: &mut CallEnv) -> Result<Vec<Value>, RuntimeError> {
