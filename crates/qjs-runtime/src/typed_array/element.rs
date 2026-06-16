@@ -369,18 +369,22 @@ fn valid_integer_index(object: &ObjectRef, number: f64) -> Option<usize> {
 
 // --- view-level element access ----------------------------------------------
 
-/// Reads element `index` of a branded typed-array view from its backing buffer.
-/// Returns the neutral element if the buffer is detached or out of range.
+/// Reads element `index` of a branded typed-array view from its backing buffer,
+/// implementing IntegerIndexedElementGet: a detached buffer or an index outside
+/// the view's current bounds (e.g. after a resizable buffer shrank mid-loop)
+/// yields `undefined`, not the neutral element. Callers that need the neutral
+/// element for a valid index never hit these branches: the indexed-read path
+/// and `at` resolve the bounds first.
 pub(crate) fn get_view_element(object: &ObjectRef, index: usize) -> Value {
     let native = typed_array_kind(object);
     let Some(buffer) = super::typed_array_buffer(object) else {
-        return zero_value(native);
+        return Value::Undefined;
     };
     if array_buffer::is_detached(&buffer) {
-        return zero_value(native);
+        return Value::Undefined;
     }
     if index >= typed_array_length(object) {
-        return zero_value(native);
+        return Value::Undefined;
     }
     let bytes = array_buffer::buffer_bytes(&buffer);
     let element = bytes_per_element(native);

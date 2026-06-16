@@ -20,7 +20,12 @@ f();
 Variants confirming the trigger (all observed via
 `cargo run -p qjs-cli -- -e '<src>'`):
 
-- `let c` instead of `var c` → correct (1). The bug is specific to `var`.
+- `let c` instead of `var c` → correct (1) in the simple sibling-call shape.
+  But a related shape breaks `let` too: an outer `let values` reassigned each
+  loop iteration and read by a sibling callback invoked through a native method
+  desyncs — `let values; function cb(v){values.push(v);} for(...){ values=[];
+  [10,20].forEach(cb); }` collects into the previous iteration's array. Same
+  snapshot-staleness root; both binding kinds are affected depending on shape.
 - A nested function scope instead of global scope → still wrong (0).
 - `f` that only does `c = 0` (no sibling call) → correct: the realm sees 0.
 - `[1,2].forEach(inc)` with no reassignment in the callback → correct (sum).
@@ -32,6 +37,15 @@ This surfaced in Test262
 and `calls-valueof-from-each-value.js` (the common `var calls; ...; calls = 0`
 counter idiom inside a test callback), and likely many other
 counter/observer-callback cases.
+
+It also blocks the whole `resizable-buffer-{grow,shrink}-mid-iteration` cluster
+across `test/built-ins/TypedArray/prototype/*` and `test/built-ins/Array/prototype/*`
+(~40 cases): those use `resizableArrayBufferUtils.js`'s `let values; ...;
+values = []; view.forEach(ResizeMidIteration)` pattern, where the sibling
+`ResizeMidIteration` reads the stale `values`. The element-read prerequisite for
+that cluster is already done — `get_view_element` now returns `undefined` for an
+out-of-bounds/detached index (IntegerIndexedElementGet) — so those cases should
+fall out once this binding bug is fixed.
 
 ## Root cause (analysis, not yet fixed)
 

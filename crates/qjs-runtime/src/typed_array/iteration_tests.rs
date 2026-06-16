@@ -395,6 +395,32 @@ fn iteration_methods_read_values_live() {
 }
 
 #[test]
+fn iteration_reads_undefined_past_shrunk_or_detached_bounds() {
+    // IntegerIndexedElementGet returns undefined for an index outside the
+    // view's current bounds: a callback that shrinks the backing resizable
+    // buffer mid-loop makes later reads undefined, not the neutral element.
+    assert_eq!(
+        eval(
+            "let rab = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let v = new Uint8Array(rab, 0, 4); v.set([0, 2, 4, 6]); \
+             let out = []; let n = 0; \
+             v.forEach(function(x) { out.push(x); if (++n === 2) { rab.resize(3); } }); \
+             out.map(String).join(',');"
+        ),
+        Ok(Value::String("0,2,undefined,undefined".to_owned()))
+    );
+    // Detaching mid-iteration likewise reads undefined for the remaining slots.
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([5, 6, 7, 8]); let seen = []; let n = 0; \
+             a.forEach(function(x) { seen.push(x); if (++n === 2) { __quickjsRustDetachArrayBuffer(a.buffer); } }); \
+             seen.map(String).join(',');"
+        ),
+        Ok(Value::String("5,6,undefined,undefined".to_owned()))
+    );
+}
+
+#[test]
 fn subarray_creates_shared_buffer_view() {
     assert_eq!(
         eval(
