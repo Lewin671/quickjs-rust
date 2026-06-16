@@ -476,3 +476,11 @@ fn in_operator_propagates_proxy_has_trap_throw() {
         Ok(Value::Boolean(true))
     );
 }
+
+#[test]
+fn object_create_accepts_an_array_prototype() {
+    assert_eq!(
+        eval("let o = Object.create([7, 8, 9]); o.length + ':' + o[1];"),
+        Ok(Value::String("3:8".to_owned()))
+    );
+}
