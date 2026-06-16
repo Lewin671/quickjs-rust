@@ -511,6 +511,20 @@ fn evaluates_function_declarations_and_calls() {
         eval("function add(a, b) { return a + b; } Object.hasOwn(add.bind(null), 'prototype');"),
         Ok(Value::Boolean(false))
     );
+    // A function's own `prototype` is writable and non-enumerable but
+    // non-configurable, so a (sloppy) delete is a no-op.
+    assert_eq!(
+        eval(
+            "function f() {} let d = Object.getOwnPropertyDescriptor(f, 'prototype'); \
+             d.writable + ':' + d.enumerable + ':' + d.configurable + ':' + (delete f.prototype) + ':' + ('prototype' in f);"
+        ),
+        Ok(Value::String("true:false:false:false:true".to_owned()))
+    );
+    // `Proxy` is constructable yet exposes no own `prototype`.
+    assert_eq!(
+        eval("Object.hasOwn(Proxy, 'prototype');"),
+        Ok(Value::Boolean(false))
+    );
     assert_eq!(
         eval(
             "function f() {} let data = 'data'; Object.defineProperty(Function.prototype, 'prop', { get: function() { return data; }, set: function(value) { data = value; }, configurable: true }); let bound = f.bind({}); bound.prop = 'overrideData'; let result = bound.hasOwnProperty('prop') + ':' + bound.prop + ':' + data; delete Function.prototype.prop; result;"

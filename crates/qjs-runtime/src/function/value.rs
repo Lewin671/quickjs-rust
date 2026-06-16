@@ -287,7 +287,10 @@ impl Function {
                 .define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
             function.define_property(
                 "prototype".to_owned(),
-                Property::non_enumerable(Value::Object(prototype)),
+                // A function's `prototype` is writable and non-enumerable but
+                // non-configurable (a class constructor's is also non-writable,
+                // wired separately by the class builder).
+                Property::data(Value::Object(prototype), false, true, false),
             );
         }
         Ok(function)
@@ -363,7 +366,10 @@ impl Function {
                 .define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
             function.define_property(
                 "prototype".to_owned(),
-                Property::non_enumerable(Value::Object(prototype)),
+                // A function's `prototype` is writable and non-enumerable but
+                // non-configurable (a class constructor's is also non-writable,
+                // wired separately by the class builder).
+                Property::data(Value::Object(prototype), false, true, false),
             );
         }
         function
@@ -519,7 +525,10 @@ impl Function {
                 .define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
             function.define_property(
                 "prototype".to_owned(),
-                Property::non_enumerable(Value::Object(prototype)),
+                // A function's `prototype` is writable and non-enumerable but
+                // non-configurable (a class constructor's is also non-writable,
+                // wired separately by the class builder).
+                Property::data(Value::Object(prototype), false, true, false),
             );
         }
         function
@@ -705,6 +714,16 @@ impl Function {
             .borrow_mut()
             .retain(|existing| existing != key);
         true
+    }
+
+    /// Removes an own property regardless of its `[[Configurable]]` attribute,
+    /// for install-time setup of native objects that must not expose a property
+    /// the generic builder added (e.g. `Proxy` has no own `prototype`).
+    pub(crate) fn remove_own_property_unchecked(&self, key: &str) {
+        self.properties.borrow_mut().remove(key);
+        self.property_order
+            .borrow_mut()
+            .retain(|existing| existing != key);
     }
 
     pub(crate) fn symbol_property(&self, symbol: &ObjectRef, env: &CallEnv) -> Option<Property> {
