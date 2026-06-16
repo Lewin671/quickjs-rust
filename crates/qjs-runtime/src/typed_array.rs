@@ -7,11 +7,13 @@ use crate::{
     symbol, to_number_with_env,
 };
 
+mod base64;
 mod construct;
 mod element;
 mod iteration;
 mod ordering;
 
+pub(crate) use base64::*;
 pub(crate) use construct::{native_typed_array, native_typed_array_from, native_typed_array_of};
 pub(crate) use element::{
     IndexedDefine, IndexedDelete, IndexedRead, IndexedWrite, define_indexed_element_value,
@@ -321,6 +323,12 @@ fn install_uint8_array_prototype_methods(prototype: &ObjectRef) {
         "toBase64",
         0,
         NativeFunction::Uint8ArrayPrototypeToBase64,
+    );
+    define_prototype_method(
+        prototype,
+        "setFromBase64",
+        1,
+        NativeFunction::Uint8ArrayPrototypeSetFromBase64,
     );
     define_prototype_method(
         prototype,
@@ -801,6 +809,8 @@ fn native_for_name(name: &str) -> NativeFunction {
         .unwrap_or(NativeFunction::Uint8Array)
 }
 
+#[cfg(test)]
+mod base64_tests;
 #[cfg(test)]
 mod ordering_tests;
 #[cfg(test)]
