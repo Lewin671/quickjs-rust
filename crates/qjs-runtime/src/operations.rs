@@ -424,9 +424,11 @@ pub(crate) fn ordinary_has_instance(
     if let Some(bound) = &constructor.bound {
         return ordinary_has_instance(left, bound.target.clone(), env);
     }
-    let Some(left_prototype) = value_prototype_slot(left, env) else {
+    // OrdinaryHasInstance step 3: a non-object operand is never an instance
+    // (checked before reading the constructor's `prototype`).
+    if !instanceof_prototype_is_object(&left) {
         return Ok(false);
-    };
+    }
     let prototype = property_value(Value::Function(constructor), "prototype", env)?;
     if !instanceof_prototype_is_object(&prototype) {
         return Err(RuntimeError {
@@ -434,7 +436,32 @@ pub(crate) fn ordinary_has_instance(
             message: "function prototype is not an object".to_owned(),
         });
     }
-    Ok(left_prototype.chain_contains_value(&prototype))
+    // Walk the operand's [[GetPrototypeOf]] chain so a Proxy's getPrototypeOf
+    // trap participates (and its invariant checks can throw), instead of a
+    // structural walk over the raw prototype slots.
+    let mut current = left;
+    loop {
+        match value_get_prototype_of(current, env)? {
+            Value::Null => return Ok(false),
+            proto => {
+                if proto.same_value(&prototype) {
+                    return Ok(true);
+                }
+                current = proto;
+            }
+        }
+    }
+}
+
+/// A value's `[[GetPrototypeOf]]` as a JavaScript value (object or null),
+/// dispatching a Proxy's `getPrototypeOf` trap.
+fn value_get_prototype_of(value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+    match value {
+        Value::Proxy(proxy) => crate::proxy::proxy_get_prototype_of(proxy, env),
+        other => Ok(value_prototype_slot(other, env)
+            .map(|prototype| prototype.to_value())
+            .unwrap_or(Value::Null)),
+    }
 }
 
 fn instanceof_prototype_is_object(value: &Value) -> bool {

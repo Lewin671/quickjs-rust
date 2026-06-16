@@ -500,6 +500,38 @@ fn has_own_property_and_property_is_enumerable_dispatch_proxy_trap() {
 }
 
 #[test]
+fn instanceof_dispatches_proxy_get_prototype_of_trap() {
+    // `instanceof` walks the operand's [[GetPrototypeOf]] chain, so a proxy's
+    // getPrototypeOf trap decides the result.
+    assert_eq!(
+        eval(
+            "function Custom() {} \
+             let p = new Proxy({}, { getPrototypeOf() { return Custom.prototype; } }); \
+             p instanceof Custom;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    // A getPrototypeOf trap that contradicts a non-extensible target's prototype
+    // violates the invariant, and `instanceof` propagates that TypeError.
+    assert_eq!(
+        eval(
+            "function Custom() {} \
+             let target = {}; \
+             let p = new Proxy(target, { getPrototypeOf() { return Custom.prototype; } }); \
+             Object.preventExtensions(target); \
+             let threw = false; \
+             try { p instanceof Custom; } catch (e) { threw = e instanceof TypeError; } threw;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    // Ordinary instanceof is unaffected.
+    assert_eq!(
+        eval("([] instanceof Array) + ':' + ({} instanceof Object) + ':' + (1 instanceof Object);"),
+        Ok(Value::String("true:true:false".to_owned()))
+    );
+}
+
+#[test]
 fn object_create_accepts_an_array_prototype() {
     assert_eq!(
         eval("let o = Object.create([7, 8, 9]); o.length + ':' + o[1];"),

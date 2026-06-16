@@ -70,46 +70,6 @@ impl Prototype {
         }
     }
 
-    /// Whether the object `target` appears at or beyond this point in the
-    /// chain.
-    pub(crate) fn chain_contains(&self, target: &ObjectRef) -> bool {
-        match self {
-            Self::Object(object) => object.ptr_eq(target) || object.has_prototype(target),
-            Self::Function(function) => function.chain_contains_object(target),
-            Self::Proxy(proxy) => match proxy.target_result() {
-                Ok(Value::Object(object)) => object.ptr_eq(target) || object.has_prototype(target),
-                Ok(proxy_target) => {
-                    crate::property::value_has_prototype_object(proxy_target, target)
-                }
-                Err(_) => false,
-            },
-        }
-    }
-
-    /// Whether the value `target` (object or function) appears at or beyond this
-    /// point in the chain, by reference identity.
-    pub(crate) fn chain_contains_value(&self, target: &Value) -> bool {
-        match (self, target) {
-            (Self::Object(object), Value::Object(target)) => {
-                object.ptr_eq(target) || object.has_prototype(target)
-            }
-            (Self::Object(object), _) => object
-                .prototype_slot()
-                .is_some_and(|next| next.chain_contains_value(target)),
-            (Self::Function(function), Value::Function(target)) => {
-                function.ptr_eq(target) || function.chain_contains_function(target)
-            }
-            (Self::Function(function), _) => function.chain_contains_value(target),
-            (Self::Proxy(proxy), Value::Proxy(target)) => proxy.ptr_eq(target),
-            (Self::Proxy(proxy), _) => match proxy.target_result() {
-                Ok(proxy_target) => {
-                    crate::property::value_has_prototype_value(proxy_target, target)
-                }
-                Err(_) => false,
-            },
-        }
-    }
-
     /// Whether this prototype is (or descends to) the object `target`, used to
     /// reject prototype cycles.
     fn would_cycle(&self, target: &ObjectRef) -> bool {
@@ -462,13 +422,6 @@ impl ObjectRef {
     /// Whether the object `prototype` appears as a function prototype anywhere
     /// in this object's chain. Used by `isPrototypeOf`/`instanceof` to walk past
     /// a function sitting mid-chain.
-    pub(crate) fn has_prototype_object(&self, prototype: &ObjectRef) -> bool {
-        self.prototype
-            .borrow()
-            .as_ref()
-            .is_some_and(|proto| proto.chain_contains(prototype))
-    }
-
     pub(crate) fn has_own_property(&self, key: &str) -> bool {
         self.properties.borrow().contains_key(key)
     }
@@ -640,10 +593,6 @@ impl ObjectRef {
             .iter()
             .map(|(symbol, _)| symbol.clone())
             .collect()
-    }
-
-    pub(crate) fn has_prototype(&self, prototype: &ObjectRef) -> bool {
-        self.has_prototype_object(prototype)
     }
 
     /// The [[Prototype]] as an object, or `None` if absent or a function. Use

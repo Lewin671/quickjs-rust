@@ -787,47 +787,6 @@ impl Function {
             })
     }
 
-    /// Whether the object `target` appears in this function's [[Prototype]]
-    /// chain (used by `isPrototypeOf`/`instanceof` when a function is mid-chain).
-    pub(crate) fn chain_contains_object(&self, target: &ObjectRef) -> bool {
-        match self.effective_internal_prototype() {
-            Some(Prototype::Object(prototype)) => {
-                prototype.ptr_eq(target) || prototype.has_prototype(target)
-            }
-            Some(Prototype::Function(parent)) => parent.chain_contains_object(target),
-            Some(Prototype::Proxy(proxy)) => proxy.target_result().is_ok_and(|target_value| {
-                crate::property::value_has_prototype_object(target_value, target)
-            }),
-            None => false,
-        }
-    }
-
-    /// Whether the function `target` appears in this function's [[Prototype]]
-    /// chain (for example a superclass constructor).
-    pub(crate) fn chain_contains_function(&self, target: &Self) -> bool {
-        match self.effective_internal_prototype() {
-            Some(Prototype::Function(parent)) => {
-                parent.ptr_eq(target) || parent.chain_contains_function(target)
-            }
-            Some(Prototype::Proxy(proxy)) => proxy.target_result().is_ok_and(|target_value| {
-                crate::property::value_has_prototype_value(
-                    target_value,
-                    &Value::Function(target.clone()),
-                )
-            }),
-            Some(Prototype::Object(_)) | None => false,
-        }
-    }
-
-    /// Whether the value `target` (object or function) appears beyond this
-    /// function in the [[Prototype]] chain.
-    pub(crate) fn chain_contains_value(&self, target: &Value) -> bool {
-        match self.effective_internal_prototype() {
-            Some(prototype) => prototype.chain_contains_value(target),
-            None => false,
-        }
-    }
-
     pub(crate) fn define_symbol_property(&self, symbol: ObjectRef, property: Property) {
         let mut properties = self.symbol_properties.borrow_mut();
         if let Some((_, existing)) = properties

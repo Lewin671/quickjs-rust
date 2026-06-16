@@ -209,58 +209,6 @@ fn prototype_symbol_descriptor_without_traps(
     }
 }
 
-pub(crate) fn value_has_prototype_object(value: Value, target: &crate::ObjectRef) -> bool {
-    match value {
-        Value::Object(object) => object.has_prototype(target),
-        Value::Map(map) => map.object().has_prototype(target),
-        Value::Set(set) => set.object().has_prototype(target),
-        Value::Array(elements) => elements
-            .prototype_slot_override()
-            .and_then(|slot| slot)
-            .is_some_and(|prototype| prototype.chain_contains(target)),
-        Value::Function(function) => function.chain_contains_object(target),
-        Value::Proxy(proxy) => proxy
-            .target_result()
-            .is_ok_and(|target_value| value_has_prototype_object(target_value, target)),
-        Value::String(_)
-        | Value::Number(_)
-        | Value::BigInt(_)
-        | Value::Boolean(_)
-        | Value::Null
-        | Value::Undefined => false,
-    }
-}
-
-pub(crate) fn value_has_prototype_value(value: Value, target: &Value) -> bool {
-    match value {
-        Value::Object(object) => object
-            .prototype_slot()
-            .is_some_and(|prototype| prototype.chain_contains_value(target)),
-        Value::Map(map) => map
-            .object()
-            .prototype_slot()
-            .is_some_and(|prototype| prototype.chain_contains_value(target)),
-        Value::Set(set) => set
-            .object()
-            .prototype_slot()
-            .is_some_and(|prototype| prototype.chain_contains_value(target)),
-        Value::Array(elements) => elements
-            .prototype_slot_override()
-            .and_then(|slot| slot)
-            .is_some_and(|prototype| prototype.chain_contains_value(target)),
-        Value::Function(function) => function.chain_contains_value(target),
-        Value::Proxy(proxy) => proxy
-            .target_result()
-            .is_ok_and(|target_value| value_has_prototype_value(target_value, target)),
-        Value::String(_)
-        | Value::Number(_)
-        | Value::BigInt(_)
-        | Value::Boolean(_)
-        | Value::Null
-        | Value::Undefined => false,
-    }
-}
-
 fn has_symbol_property(
     value: Value,
     env: &CallEnv,
