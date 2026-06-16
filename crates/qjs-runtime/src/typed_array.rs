@@ -2,8 +2,9 @@ use std::collections::HashMap;
 
 use crate::CallEnv;
 use crate::{
-    Function, NativeFunction, ObjectRef, Property, Prototype, RuntimeError, Value, array_buffer,
-    property_value, symbol, to_number_with_env,
+    Function, NativeFunction, ObjectRef, Property, PropertyKey, Prototype, RuntimeError, Value,
+    array_buffer, construct_function, ensure_constructor, property_value, property_value_key,
+    symbol, to_number_with_env,
 };
 
 mod construct;
@@ -459,6 +460,72 @@ pub(crate) fn create_typed_array_of_kind(
     env: &CallEnv,
 ) -> ObjectRef {
     construct::create_with_values(native, values, env)
+}
+
+/// Implements TypedArraySpeciesCreate for prototype methods that allocate a
+/// result through the receiver's constructor / @@species hook.
+pub(crate) fn typed_array_species_create(
+    exemplar: &ObjectRef,
+    length: usize,
+    env: &mut CallEnv,
+) -> Result<(Value, ObjectRef), RuntimeError> {
+    let default_constructor = env
+        .get(typed_array_name(typed_array_kind(exemplar)))
+        .unwrap_or(Value::Undefined);
+    let constructor = typed_array_species_constructor(exemplar, default_constructor, env)?;
+    ensure_constructor(&constructor).map_err(|_| RuntimeError {
+        thrown: None,
+        message: "TypeError: TypedArray species is not a constructor".to_owned(),
+    })?;
+    let result = construct_function(
+        constructor.clone(),
+        constructor,
+        vec![Value::Number(length as f64)],
+        env,
+    )?;
+    let (object, actual_length) = validate_typed_array(&result)?;
+    if actual_length < length {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: typed array species result is too short".to_owned(),
+        });
+    }
+    Ok((result, object))
+}
+
+fn typed_array_species_constructor(
+    exemplar: &ObjectRef,
+    default_constructor: Value,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let constructor = property_value(Value::Object(exemplar.clone()), "constructor", env)?;
+    if matches!(constructor, Value::Undefined) {
+        return Ok(default_constructor);
+    }
+    if !is_object_like(&constructor) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: TypedArray constructor property is not an object".to_owned(),
+        });
+    }
+    let species = match symbol::species_symbol(env) {
+        Some(symbol) => property_value_key(constructor, &PropertyKey::Symbol(symbol), env)?,
+        None => Value::Undefined,
+    };
+    if matches!(species, Value::Undefined | Value::Null) {
+        return Ok(default_constructor);
+    }
+    Ok(species)
+}
+
+fn is_object_like(value: &Value) -> bool {
+    if matches!(value, Value::Object(object) if symbol::is_symbol_primitive(object)) {
+        return false;
+    }
+    matches!(
+        value,
+        Value::Object(_) | Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_)
+    ) || matches!(value, Value::Proxy(_))
 }
 
 // --- Internal-slot helpers ---------------------------------------------------

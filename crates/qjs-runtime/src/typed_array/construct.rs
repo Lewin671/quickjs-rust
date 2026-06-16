@@ -192,7 +192,7 @@ fn initialize_from_buffer(
             (length, byte_length)
         }
         None => {
-            if buffer_byte_length % element != 0 {
+            if !array_buffer::is_resizable(&buffer) && buffer_byte_length % element != 0 {
                 return Err(range_error("buffer length is not aligned to element size"));
             }
             if offset > buffer_byte_length {

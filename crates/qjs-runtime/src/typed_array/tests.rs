@@ -159,6 +159,14 @@ fn resizable_buffer_views_track_effective_length() {
         ),
         Ok(Value::String("4:7:0".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(10, { maxByteLength: 20 }); \
+             let a = new Float64Array(b); \
+             a.length + ':' + a.byteLength;"
+        ),
+        Ok(Value::String("1:8".to_owned()))
+    );
 }
 
 #[test]
@@ -589,6 +597,81 @@ fn map_filter_slice_build_same_kind() {
     assert_eq!(
         eval("new Uint8Array([1]).map(() => 257).join(',');"),
         Ok(Value::String("1".to_owned()))
+    );
+}
+
+#[test]
+fn slice_uses_species_constructor() {
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([40, 41, 42]); \
+             let observed = ''; \
+             a.constructor = {}; \
+             a.constructor[Symbol.species] = function(count) { observed = String(count); return new Int16Array(count); }; \
+             let r = a.slice(1); \
+             observed + ':' + (r instanceof Int16Array) + ':' + r.join(',');"
+        ),
+        Ok(Value::String("2:true:41,42".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([1]); \
+             let other = new Int8Array([5, 6]); \
+             a.constructor = {}; \
+             a.constructor[Symbol.species] = function() { return other; }; \
+             let r = a.slice(0, 0); \
+             (r === other) + ':' + r.join(',');"
+        ),
+        Ok(Value::String("true:5,6".to_owned()))
+    );
+}
+
+#[test]
+fn slice_rejects_invalid_species_result() {
+    assert!(
+        eval(
+            "let a = new Uint8Array([1, 2]); \
+             a.constructor = {}; \
+             a.constructor[Symbol.species] = function() { return {}; }; \
+             a.slice();"
+        )
+        .is_err()
+    );
+    assert!(
+        eval(
+            "let a = new Uint8Array([1, 2]); \
+             a.constructor = {}; \
+             a.constructor[Symbol.species] = 0; \
+             a.slice();"
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn slice_rechecks_source_after_species_constructor() {
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([7]); \
+             let calls = 0; \
+             a.constructor = {}; \
+             a.constructor[Symbol.species] = function(count) { calls++; __quickjsRustDetachArrayBuffer(a.buffer); return new Uint8Array(count); }; \
+             let threw = false; \
+             try { a.slice(); } catch (e) { threw = e instanceof TypeError; } \
+             calls + ':' + threw;"
+        ),
+        Ok(Value::String("1:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([7]); \
+             let calls = 0; \
+             a.constructor = {}; \
+             a.constructor[Symbol.species] = function(count) { calls++; __quickjsRustDetachArrayBuffer(a.buffer); return new Uint8Array(count); }; \
+             let r = a.slice(0, 0); \
+             calls + ':' + r.length;"
+        ),
+        Ok(Value::String("1:0".to_owned()))
     );
 }
 

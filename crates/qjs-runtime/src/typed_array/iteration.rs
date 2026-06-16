@@ -11,8 +11,9 @@ use crate::{
 
 use super::element::{ViewSnapshot, get_view_element, read_view_elements};
 use super::{
-    bytes_per_element, typed_array_buffer, typed_array_byte_offset, typed_array_kind,
-    validate_typed_array, validate_typed_array_length,
+    bytes_per_element, typed_array_buffer, typed_array_byte_offset, typed_array_is_out_of_bounds,
+    typed_array_kind, typed_array_species_create, validate_typed_array,
+    validate_typed_array_length,
 };
 use crate::CallEnv;
 
@@ -555,7 +556,6 @@ pub(crate) fn native_typed_array_prototype_slice(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
-    let native = typed_array_kind(&object);
     let start = relative_index(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         length,
@@ -568,14 +568,22 @@ pub(crate) fn native_typed_array_prototype_slice(
         length as i64,
         env,
     )?;
-    let values = if start < end {
-        read_view_elements(&object, start, end - start)
+    let count = end.saturating_sub(start);
+    let (result, _result_object) = typed_array_species_create(&object, count, env)?;
+    if count > 0 {
+        if super::typed_array_buffer_detached(&object) || typed_array_is_out_of_bounds(&object) {
+            return Err(array_buffer::detached_error());
+        }
+        for (index, value) in read_view_elements(&object, start, count)
+            .into_iter()
+            .enumerate()
+        {
+            crate::bytecode::set_object_property(result.clone(), index.to_string(), value, env)?;
+        }
+        Ok(result)
     } else {
-        Vec::new()
-    };
-    Ok(Value::Object(super::create_typed_array_of_kind(
-        native, values, env,
-    )))
+        Ok(result)
+    }
 }
 
 fn validate_subarray_range(
