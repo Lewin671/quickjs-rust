@@ -33,10 +33,10 @@ pub(super) fn call_object_native(
             object::native_object_get_prototype_of(argument_values, env)?
         }
         NativeFunction::ObjectGetOwnPropertyNames => {
-            object::native_object_get_own_property_names(argument_values)?
+            object::native_object_get_own_property_names(argument_values, env)?
         }
         NativeFunction::ObjectGetOwnPropertySymbols => {
-            object::native_object_get_own_property_symbols(argument_values)?
+            object::native_object_get_own_property_symbols(argument_values, env)?
         }
         NativeFunction::ObjectFromEntries => {
             object::native_object_from_entries(argument_values, env)?

@@ -179,6 +179,27 @@ fn evaluates_object_enumeration_builtins() {
         Ok(Value::String("1:2".to_owned()))
     );
     assert!(eval("Object.getOwnPropertySymbols(null);").is_err());
+    // getOwnPropertyNames/Symbols run a Proxy's full [[OwnPropertyKeys]] (with
+    // its invariants over both key kinds) before filtering by key type.
+    assert_eq!(
+        eval(
+            "let p = new Proxy({}, { ownKeys() { return ['b', 'a']; }, getOwnPropertyDescriptor() { return { value: 1, enumerable: true, configurable: true }; } }); \
+             Object.getOwnPropertyNames(p).join(',');"
+        ),
+        Ok(Value::String("b,a".to_owned()))
+    );
+    // A symbol-key invariant violation throws even through getOwnPropertyNames.
+    assert!(
+        eval(
+            "let s = Symbol(); Object.getOwnPropertyNames(new Proxy({}, { ownKeys() { return [s, s]; } }));"
+        )
+        .is_err()
+    );
+    // A string-key invariant violation throws even through getOwnPropertySymbols.
+    assert!(
+        eval("Object.getOwnPropertySymbols(new Proxy({}, { ownKeys() { return ['a', 'a']; } }));")
+            .is_err()
+    );
     assert_eq!(eval("Object.hasOwn.length;"), Ok(Value::Number(2.0)));
     assert_eq!(
         eval("Object.hasOwn({ value: 1 }, 'value');"),

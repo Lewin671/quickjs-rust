@@ -67,6 +67,7 @@ pub(crate) fn native_object_entries(
 
 pub(crate) fn native_object_get_own_property_names(
     argument_values: &[Value],
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if matches!(target, Value::Null | Value::Undefined) {
@@ -75,14 +76,28 @@ pub(crate) fn native_object_get_own_property_names(
             message: "Object.getOwnPropertyNames target must not be null or undefined".to_owned(),
         });
     }
-    let names = own_property_names(target);
-    Ok(Value::Array(ArrayRef::new(
-        names.into_iter().map(Value::String).collect(),
-    )))
+    // GetOwnPropertyKeys runs O.[[OwnPropertyKeys]] (with the Proxy ownKeys
+    // invariants over both string and symbol keys) and then filters to strings.
+    let names = if let Value::Proxy(proxy) = &target {
+        crate::proxy::proxy_own_keys(proxy.clone(), env)?
+            .into_iter()
+            .filter_map(|key| match key {
+                PropertyKey::String(name) => Some(Value::String(name)),
+                PropertyKey::Symbol(_) => None,
+            })
+            .collect()
+    } else {
+        own_property_names(target)
+            .into_iter()
+            .map(Value::String)
+            .collect()
+    };
+    Ok(Value::Array(ArrayRef::new(names)))
 }
 
 pub(crate) fn native_object_get_own_property_symbols(
     argument_values: &[Value],
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if matches!(target, Value::Null | Value::Undefined) {
@@ -91,12 +106,21 @@ pub(crate) fn native_object_get_own_property_symbols(
             message: "Object.getOwnPropertySymbols target must not be null or undefined".to_owned(),
         });
     }
-    Ok(Value::Array(ArrayRef::new(
+    let symbols = if let Value::Proxy(proxy) = &target {
+        crate::proxy::proxy_own_keys(proxy.clone(), env)?
+            .into_iter()
+            .filter_map(|key| match key {
+                PropertyKey::Symbol(symbol) => Some(Value::Object(symbol)),
+                PropertyKey::String(_) => None,
+            })
+            .collect()
+    } else {
         own_property_symbols(target)
             .into_iter()
             .map(Value::Object)
-            .collect(),
-    )))
+            .collect()
+    };
+    Ok(Value::Array(ArrayRef::new(symbols)))
 }
 
 pub(crate) fn native_object_has_own(
