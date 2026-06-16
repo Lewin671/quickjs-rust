@@ -47,6 +47,13 @@ Campaign working rules:
   273) stay in the normal gap queue; promote one to a campaign file when its
   slices stop fitting in single reviewable units.
 
+## Engine Correctness
+
+- `T014-var-closure-binding-staleness.md` — a `var` mutated by one function is
+  lost when a sibling function reassigned it first (snapshot-based closure model
+  desync on the realm channel). Affects common Test262 counter-callback idioms.
+  Touches the hottest call path; needs a focused slice, not a drive-by fix.
+
 ## Performance
 
 - `T011-call-performance.md` — cut per-call environment-cloning cost. The
