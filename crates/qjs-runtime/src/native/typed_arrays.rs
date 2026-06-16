@@ -170,6 +170,9 @@ pub(super) fn call_typed_array_native(
         NativeFunction::Uint8ArrayPrototypeToBase64 => {
             typed_array::native_uint8_array_prototype_to_base64(this_value, argument_values, env)?
         }
+        NativeFunction::Uint8ArrayPrototypeToHex => {
+            typed_array::native_uint8_array_prototype_to_hex(this_value)?
+        }
         NativeFunction::Uint8ArrayPrototypeSetFromBase64 => {
             typed_array::native_uint8_array_prototype_set_from_base64(
                 this_value,

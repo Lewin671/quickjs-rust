@@ -130,6 +130,7 @@ pub(crate) enum NativeFunction {
     Uint8ArrayFromBase64,
     Uint8ArrayFromHex,
     Uint8ArrayPrototypeToBase64,
+    Uint8ArrayPrototypeToHex,
     Uint8ArrayPrototypeSetFromBase64,
     Uint8ArrayPrototypeSetFromHex,
     DataView,

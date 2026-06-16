@@ -379,7 +379,7 @@ pub(crate) fn native_typed_array_prototype_with(
     )))
 }
 
-// --- Uint8Array.prototype.setFromHex ----------------------------------------
+// --- Uint8Array hex codecs ---------------------------------------------------
 
 pub(crate) fn native_uint8_array_from_hex(
     argument_values: &[Value],
@@ -393,6 +393,27 @@ pub(crate) fn native_uint8_array_from_hex(
         values,
         env,
     )))
+}
+
+pub(crate) fn native_uint8_array_prototype_to_hex(
+    this_value: Value,
+) -> Result<Value, RuntimeError> {
+    let (object, length) = validate_typed_array(&this_value)?;
+    if typed_array_kind(&object) != NativeFunction::Uint8Array {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Uint8Array.prototype.toHex requires a Uint8Array receiver"
+                .to_owned(),
+        });
+    }
+    let bytes: Vec<u8> = read_view_elements(&object, 0, length)
+        .into_iter()
+        .map(|value| match value {
+            Value::Number(number) => number as u8,
+            _ => 0,
+        })
+        .collect();
+    Ok(Value::String(encode_hex_string(&bytes)))
 }
 
 pub(crate) fn native_uint8_array_prototype_set_from_hex(
@@ -476,6 +497,16 @@ fn decode_hex_string(source: &str, max_length: usize) -> Result<Vec<u8>, Runtime
         read += 2;
     }
     Ok(values)
+}
+
+fn encode_hex_string(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut result = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        result.push(HEX[(byte >> 4) as usize] as char);
+        result.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    result
 }
 
 fn hex_value(ch: char) -> Option<u8> {

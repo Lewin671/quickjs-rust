@@ -335,6 +335,12 @@ fn install_uint8_array_prototype_methods(prototype: &ObjectRef) {
     );
     define_prototype_method(
         prototype,
+        "toHex",
+        0,
+        NativeFunction::Uint8ArrayPrototypeToHex,
+    );
+    define_prototype_method(
+        prototype,
         "setFromHex",
         1,
         NativeFunction::Uint8ArrayPrototypeSetFromHex,
@@ -836,6 +842,8 @@ fn native_for_name(name: &str) -> NativeFunction {
 
 #[cfg(test)]
 mod base64_tests;
+#[cfg(test)]
+mod hex_tests;
 #[cfg(test)]
 mod ordering_tests;
 #[cfg(test)]
