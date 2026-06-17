@@ -65,11 +65,18 @@ fn evaluates_bigint_arithmetic_and_equality() {
         "let o = { value: 10n }; o.value--; String(o.value);",
         Value::String("9".to_owned()),
     );
+    assert_eval("String(5n << 3n);", Value::String("40".to_owned()));
+    assert_eval("String(5n << -1n);", Value::String("2".to_owned()));
+    assert_eval("String(5n >> -2n);", Value::String("20".to_owned()));
+    assert_eval("String(-5n >> 1n);", Value::String("-3".to_owned()));
+    assert_eval("String(-5n >> 2n);", Value::String("-2".to_owned()));
     assert_eval("1n === 1n;", Value::Boolean(true));
     assert_eval("1n == 1;", Value::Boolean(true));
     assert_eval("Object(2n) * 3n;", Value::BigInt(6.into()));
     assert_eval("1n === 1;", Value::Boolean(false));
     assert_type_error("1n + 1;");
+    assert_type_error("1n >> 1;");
+    assert_type_error("1n >>> 0n;");
 }
 
 #[test]

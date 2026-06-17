@@ -6,9 +6,10 @@ use qjs_ast::{BinaryOp, UnaryOp};
 
 use crate::CallEnv;
 use crate::{
-    PropertyKey, RuntimeError, Value, call_function, error, has_property_key, is_truthy,
-    property_value, string, symbol, to_int32_number, to_js_string_with_env, to_number_with_env,
-    to_primitive_with_env, to_property_key_value, to_uint32_number, value_prototype_slot,
+    PreferredType, PropertyKey, RuntimeError, Value, call_function, error, has_property_key,
+    is_truthy, property_value, string, symbol, to_int32_number, to_js_string_with_env,
+    to_number_with_env, to_primitive_with_env, to_primitive_with_hint, to_property_key_value,
+    to_uint32_number, value_prototype_slot,
 };
 
 pub(crate) fn eval_unary(
@@ -87,15 +88,16 @@ pub(crate) fn eval_binary(
         _ => {}
     }
 
-    let left = to_primitive_with_env(left, env)?;
-    let right = to_primitive_with_env(right, env)?;
+    let left = to_numeric_with_env(left, env)?;
+    let right = to_numeric_with_env(right, env)?;
 
     if matches!(left, Value::BigInt(_)) || matches!(right, Value::BigInt(_)) {
         return eval_bigint_binary(left, op, right);
     }
 
-    let left = to_number_with_env(left, env)?;
-    let right = to_number_with_env(right, env)?;
+    let (Value::Number(left), Value::Number(right)) = (left, right) else {
+        unreachable!("ToNumeric should return either Number or BigInt")
+    };
 
     let value = match op {
         BinaryOp::Add => left + right,
@@ -157,6 +159,22 @@ pub(crate) fn eval_binary(
     Ok(Value::Number(value))
 }
 
+fn to_numeric_with_env(value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+    let primitive = match value {
+        Value::Object(_)
+        | Value::Function(_)
+        | Value::Array(_)
+        | Value::Map(_)
+        | Value::Set(_)
+        | Value::Proxy(_) => to_primitive_with_hint(value, PreferredType::Number, env)?,
+        value => value,
+    };
+    match primitive {
+        Value::BigInt(_) => Ok(primitive),
+        value => Ok(Value::Number(to_number_with_env(value, env)?)),
+    }
+}
+
 fn eval_bigint_binary(left: Value, op: BinaryOp, right: Value) -> Result<Value, RuntimeError> {
     let (Value::BigInt(left), Value::BigInt(right)) = (left, right) else {
         return Err(bigint_mix_error());
@@ -195,15 +213,47 @@ fn eval_bigint_binary(left: Value, op: BinaryOp, right: Value) -> Result<Value, 
         BinaryOp::BitwiseAnd => left & right,
         BinaryOp::BitwiseXor => left ^ right,
         BinaryOp::BitwiseOr => left | right,
-        BinaryOp::Shl | BinaryOp::Shr | BinaryOp::UShr => {
+        BinaryOp::Shl => bigint_left_shift(left, right)?,
+        BinaryOp::Shr => bigint_signed_right_shift(left, right)?,
+        BinaryOp::UShr => {
             return Err(RuntimeError {
                 thrown: None,
-                message: "TypeError: BigInt shifts are not supported yet".to_owned(),
+                message: "TypeError: BigInts have no unsigned right shift".to_owned(),
             });
         }
         _ => unreachable!("BigInt binary operator should be arithmetic or bitwise"),
     };
     Ok(Value::BigInt(value))
+}
+
+fn bigint_left_shift(left: BigInt, right: BigInt) -> Result<BigInt, RuntimeError> {
+    let (negative, amount) = bigint_shift_count(right)?;
+    Ok(if negative {
+        left >> amount
+    } else {
+        left << amount
+    })
+}
+
+fn bigint_signed_right_shift(left: BigInt, right: BigInt) -> Result<BigInt, RuntimeError> {
+    let (negative, amount) = bigint_shift_count(right)?;
+    Ok(if negative {
+        left << amount
+    } else {
+        left >> amount
+    })
+}
+
+fn bigint_shift_count(value: BigInt) -> Result<(bool, usize), RuntimeError> {
+    let negative = value.sign() == Sign::Minus;
+    let magnitude = if negative { -value } else { value };
+    let Some(amount) = magnitude.to_usize() else {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "RangeError: BigInt shift count is too large".to_owned(),
+        });
+    };
+    Ok((negative, amount))
 }
 
 fn eval_relational(
