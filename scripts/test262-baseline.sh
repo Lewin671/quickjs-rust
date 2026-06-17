@@ -335,7 +335,7 @@ assert.sameValue = __quickjsRustAssertSameValue;
 EOF
 }
 emit_quickjs_rust_case_source() {
-  sed 's/assert[.]sameValue(/__quickjsRustAssertSameValue(/g' "$1"
+  cat "$1"
 }
 harness_include_uses() {
   local includes="$1" pattern="$2" include
@@ -350,7 +350,7 @@ needs_assert_prelude() {
   local assert_helper_pattern='(^|[^A-Za-z0-9_$])(compareArray|formatIdentityFreeValue|formatSimpleValue|isNegativeZero|isPrimitive)([^A-Za-z0-9_$]|$)'
   [[ "$flags" == *async* ]] && return 0
   grep -Eq 'assert[(]' "$source" && return 0
-  [[ "$flags" == *module* ]] && grep -q 'assert[.]sameValue' "$source" && return 0
+  grep -q 'assert[.]sameValue' "$source" && return 0
   sed 's/assert[.]sameValue//g' "$source" | grep -q 'assert[.]' && return 0
   grep -Eq "$assert_helper_pattern" "$source" && return 0
   [[ " $includes " == *" compareArray.js "* ]] && return 0

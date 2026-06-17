@@ -277,7 +277,10 @@ or included harness file needs `Test262Error`/`$DONOTEVALUATE`, the `$262` host
 shim for `$262`, `doneprintHandle.js` for async completion, plus declared
 metadata includes. Include-only stress cases therefore do not pay for the full
 assertion, `Test262Error`, and host prelude unless those helpers are used by the
-case or by an included harness file.
+case or by an included harness file. The `assert.sameValue` fast path is
+installed by assigning `assert.sameValue = __quickjsRustAssertSameValue` after
+`assert.js` loads; the harness does not rewrite test source identifiers, because
+doing so changes observable `with`/Proxy name resolution.
 The
 `Test262 Coverage` GitHub Actions workflow starts for each successful `CI`
 commit, but a newer push to the same branch cancels a superseded in-flight

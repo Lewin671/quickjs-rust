@@ -158,7 +158,7 @@ assert.sameValue = __quickjsRustAssertSameValue;
 EOF
 }
 emit_quickjs_rust_case_source() {
-  sed 's/assert[.]sameValue(/__quickjsRustAssertSameValue(/g' "$1"
+  cat "$1"
 }
 needs_test262_prelude() {
   local source="$1"
@@ -168,6 +168,9 @@ needs_test262_prelude() {
     return 0
   fi
   if grep -Eq '[$]262|Test262Error|assert[(]' "$source"; then
+    return 0
+  fi
+  if grep -q 'assert[.]sameValue' "$source"; then
     return 0
   fi
   if sed 's/assert[.]sameValue//g' "$source" | grep -q 'assert[.]'; then
@@ -311,7 +314,7 @@ make_upstream_case() {
       awk 1 "${parts[@]}"
     fi
     emit_quickjs_rust_case_source "$source"
-  } | sed 's/assert[.]sameValue(/__quickjsRustAssertSameValue(/g' >"$output"
+  } >"$output"
 }
 
 RESULT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/qjs-test262-subset-XXXXXX")"
