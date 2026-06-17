@@ -284,6 +284,14 @@ impl<'a> Vm<'a> {
                 }
                 Op::TypeofGlobal(name) => {
                     let value = self.env.get(&name).unwrap_or(Value::Undefined);
+                    let value = if matches!(
+                        &value,
+                        Value::Function(function) if function.is_uninitialized_lexical_marker()
+                    ) {
+                        Value::Undefined
+                    } else {
+                        value
+                    };
                     self.stack.push(Value::String(typeof_value(value)));
                 }
                 op @ (Op::EnterWith

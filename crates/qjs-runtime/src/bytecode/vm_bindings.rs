@@ -205,6 +205,15 @@ impl Vm<'_> {
         // created directly on `globalThis` (`this.x = 1` and realm bindings
         // share one global namespace).
         if let Some(value) = self.env.get(name) {
+            if matches!(
+                &value,
+                Value::Function(function) if function.is_uninitialized_lexical_marker()
+            ) {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: format!("ReferenceError: undefined identifier `{name}`"),
+                });
+            }
             return Ok(value);
         }
         let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
@@ -439,6 +448,14 @@ impl Vm<'_> {
         let value = match slot {
             Some(slot) => self.load_local(slot)?,
             None => self.env.get(name).unwrap_or(Value::Undefined),
+        };
+        let value = if matches!(
+            &value,
+            Value::Function(function) if function.is_uninitialized_lexical_marker()
+        ) {
+            Value::Undefined
+        } else {
+            value
         };
         Ok(Value::String(typeof_value(value)))
     }
@@ -770,6 +787,10 @@ impl Vm<'_> {
         let locals = env.into_locals();
         for (name, value) in locals {
             if let Some(index) = self.bytecode.local_slot(&name) {
+                if self.in_parameter_prologue() && !self.bytecode.local_is_parameter(index) {
+                    self.env.insert(name, value);
+                    continue;
+                }
                 let syncs_global_this = self.bytecode.local_is_sloppy_global_fallback(index)
                     || (self.bytecode.global_scope
                         && self.bytecode.local_is_body_hoist_only(index)

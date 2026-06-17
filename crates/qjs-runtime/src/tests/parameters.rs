@@ -40,6 +40,71 @@ fn default_parameter_closures_do_not_capture_body_var_environment() {
         ),
         Ok(Value::String("outside:inside".to_owned()))
     );
+
+    assert_eq!(
+        eval(
+            "let name; \
+             function f(read = () => x) { \
+               var x = 'inside'; \
+               try { read(); } catch (error) { name = error.name; } \
+             } \
+             f(); \
+             name;"
+        ),
+        Ok(Value::String("ReferenceError".to_owned()))
+    );
+
+    assert_eq!(
+        eval("function f(read = () => typeof x) { var x = 'inside'; return read(); } f();"),
+        Ok(Value::String("undefined".to_owned()))
+    );
+}
+
+#[test]
+fn default_parameter_eval_closures_capture_parameter_eval_bindings() {
+    assert_eq!(
+        eval(
+            "const f = (p = eval(\"var arguments = 'param'\"), q = () => arguments) => { \
+               var arguments = 'local'; \
+               return arguments + ':' + q(); \
+             }; \
+             f();"
+        ),
+        Ok(Value::String("local:param".to_owned()))
+    );
+
+    assert_eq!(
+        eval(
+            "const f = (p = eval(\"var arguments = 'param'\"), q = () => arguments) => { \
+               let arguments = 'local'; \
+               return arguments + ':' + q(); \
+             }; \
+             f();"
+        ),
+        Ok(Value::String("local:param".to_owned()))
+    );
+
+    assert_eq!(
+        eval(
+            "const f = (p = eval(\"var arguments = 'param'\"), q = () => arguments) => { \
+               function arguments() {} \
+               return typeof arguments + ':' + q(); \
+             }; \
+             f();"
+        ),
+        Ok(Value::String("function:param".to_owned()))
+    );
+
+    assert_eq!(
+        eval(
+            "function f(read = (eval(\"var x = 'eval'\"), () => x)) { \
+               var x = 'body'; \
+               return read; \
+             } \
+             f()();"
+        ),
+        Ok(Value::String("eval".to_owned()))
+    );
 }
 
 #[test]

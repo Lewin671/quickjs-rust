@@ -59,6 +59,14 @@ impl Vm<'_> {
                 .local_slot(name)
                 .is_some_and(|slot| self.bytecode.local_is_body_hoist_only(slot))
         {
+            if let Some(value) = self.env.get(name) {
+                env.insert(name.to_owned(), value);
+            } else {
+                env.insert(
+                    name.to_owned(),
+                    Value::Function(Function::uninitialized_lexical_marker()),
+                );
+            }
             return;
         }
         let value = self
