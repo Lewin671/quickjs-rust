@@ -169,6 +169,24 @@ pub(super) fn caller_global_this_has_own_property(caller_env: &CallEnv, name: &s
     )
 }
 
+pub(super) fn caller_capture_matches_existing(
+    local_env: &HashMap<String, Value>,
+    env: &CallEnv,
+    name: &str,
+    caller_shares_capture_source: bool,
+    callee: &Value,
+) -> bool {
+    !env.locals()
+        .get(name)
+        .is_some_and(|value| value == callee && local_env.get(name) != Some(value))
+        && (caller_shares_capture_source
+            || !local_env.contains_key(name)
+            || env.locals().contains_key(name)
+            || env
+                .get(name)
+                .is_some_and(|value| local_env.get(name) == Some(&value)))
+}
+
 fn captured_value_matches_global_this(
     captured_env: &Rc<RefCell<HashMap<String, Value>>>,
     caller_env: &CallEnv,

@@ -514,6 +514,14 @@ fn seeds_bytecode_function_env_from_referenced_caller_bindings() {
     );
     assert_eq!(
         eval_bytecode_source(
+            "function combo(callback) { function test(input) { callback(input); } test(1); } \
+             function wrap(callback) { return combo(function(input) { callback(input); }); } \
+             var seen = 0; wrap(function(value) { seen = value; }); seen;",
+        ),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval_bytecode_source(
             "function throws(expected, fn) { try { fn(); } catch (error) { if (error.constructor !== expected) { throw error; } return; } throw new Error('missing'); } \
              { const rab = new ArrayBuffer(64, { maxByteLength: 1024 }); let called = false; throws(TypeError, () => rab.resize({ valueOf() { __quickjsRustDetachArrayBuffer(rab); called = true; } })); if (!called) { throw new Error('first'); } } \
              { const rab = new ArrayBuffer(64, { maxByteLength: 1024 }); __quickjsRustDetachArrayBuffer(rab); let called = false; throws(TypeError, () => rab.resize({ valueOf() { called = true; } })); called; }",

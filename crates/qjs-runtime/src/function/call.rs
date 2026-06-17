@@ -11,8 +11,9 @@ use super::{
     CallEnv, InstanceElementInitializer,
     arguments::arguments_object,
     captures::{
-        caller_global_this_has_own_property, captured_global_this_has_own_property,
-        is_call_frame_binding, propagate_function_captures, sync_global_var_captures,
+        caller_capture_matches_existing, caller_global_this_has_own_property,
+        captured_global_this_has_own_property, is_call_frame_binding, propagate_function_captures,
+        sync_global_var_captures,
     },
     function_call_this, is_internal_binding_name, parameter_binding_name,
     rest_parameter_binding_name,
@@ -536,6 +537,7 @@ fn function_env(
         &function.local_names,
         env,
         caller_shares_capture_source,
+        &callee,
     );
     insert_caller_scope_bindings(
         &mut local_env,
@@ -815,14 +817,17 @@ fn insert_caller_bytecode_bindings(
     function_local_names: &[String],
     env: &CallEnv,
     caller_shares_capture_source: bool,
+    callee: &Value,
 ) {
     for name in bytecode.global_names() {
         let write_back_to_caller = !function_local_names.iter().any(|local| local == name);
-        let existing_capture_matches_caller = !local_env.contains_key(name)
-            || env.locals().contains_key(name)
-            || env
-                .get(name)
-                .is_some_and(|value| local_env.get(name) == Some(&value));
+        let existing_capture_matches_caller = caller_capture_matches_existing(
+            local_env,
+            env,
+            name,
+            caller_shares_capture_source,
+            callee,
+        );
         insert_caller_binding(
             local_env,
             caller_binding_names,
@@ -850,11 +855,13 @@ fn insert_caller_bytecode_bindings(
             let from_env = bytecode
                 .local_slot(name)
                 .is_some_and(|slot| bytecode.local_is_from_env(slot));
-            let existing_capture_matches_caller = !local_env.contains_key(name)
-                || env.locals().contains_key(name)
-                || env
-                    .get(name)
-                    .is_some_and(|value| local_env.get(name) == Some(&value));
+            let existing_capture_matches_caller = caller_capture_matches_existing(
+                local_env,
+                env,
+                name,
+                caller_shares_capture_source,
+                callee,
+            );
             let allow_live_env_override = from_env
                 && existing_capture_matches_caller
                 && (env.module_host().is_some()
