@@ -43,6 +43,21 @@ pub(super) fn sync_global_var_captures(
     }
 }
 
+pub(super) fn refresh_class_constructor_captures_from_caller(function: &Function, env: &CallEnv) {
+    let names = function
+        .captured_env
+        .borrow()
+        .keys()
+        .cloned()
+        .collect::<Vec<_>>();
+    let mut captured = function.captured_env.borrow_mut();
+    for name in names {
+        if let Some(value) = env.locals().get(&name).cloned() {
+            captured.insert(name, value);
+        }
+    }
+}
+
 pub(super) fn propagate_function_captures(
     function: &Function,
     bytecode: &Bytecode,

@@ -391,6 +391,66 @@ fn map_filter_observe_species_ordering() {
         ),
         Ok(Value::String("42,42,42".to_owned()))
     );
+    // Class constructors used as species constructors see live outer lexical
+    // bindings, not the value captured when the class was defined.
+    assert_eq!(
+        eval(
+            "let resize = false; \
+             class C { constructor() { this.value = resize; } } \
+             resize = true; \
+             new C().value;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let out = []; \
+             for (let ctor of [Uint8Array]) { \
+                 let resize = false; \
+                 class C extends ctor { constructor() { super(1); out.push(resize); } } \
+                 resize = true; new C(); \
+             } \
+             for (let ctor of [Uint8Array]) { \
+                 let resize = false; \
+                 class C extends ctor { constructor() { super(1); out.push(resize); } } \
+                 resize = true; new C(); \
+             } \
+             out.join(',');"
+        ),
+        Ok(Value::String("true,true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let rab = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let write = new Uint8Array(rab); write.set([0, 1, 2, 3]); \
+             let resize = false; \
+             class MyArray extends Uint8Array { \
+                 constructor(...params) { super(...params); if (resize) { rab.resize(6); } } \
+             } \
+             let fixed = new MyArray(rab, 0, 4); \
+             resize = true; \
+             let values = []; \
+             fixed.map(function(n) { values.push(n); return 0; }); \
+             values.join(',') + ':' + rab.byteLength;"
+        ),
+        Ok(Value::String("0,1,2,3:6".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let rab = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let write = new Uint8Array(rab); write.set([0, 1, 2, 3]); \
+             let resize = false; \
+             class MyArray extends Uint8Array { \
+                 constructor(...params) { super(...params); if (resize) { rab.resize(2); } } \
+             } \
+             let tracking = new MyArray(rab); \
+             resize = true; \
+             let values = []; \
+             tracking.map(function(n) { values.push(String(n)); return 0; }); \
+             values.join(',') + ':' + rab.byteLength;"
+        ),
+        Ok(Value::String("0,1,undefined,undefined:2".to_owned()))
+    );
 }
 
 #[test]

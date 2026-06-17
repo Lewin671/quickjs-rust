@@ -330,6 +330,7 @@ pub(super) struct ClassConstructorDef {
     pub(super) name: Option<String>,
     pub(super) params: FunctionParams,
     pub(super) local_names: Vec<String>,
+    pub(super) lexical_captures: Vec<(String, usize)>,
     pub(super) bytecode: Rc<Bytecode>,
 }
 

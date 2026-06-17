@@ -422,6 +422,8 @@ test/built-ins/TypedArray/prototype/lastIndexOf/coerced-position-grow.js
 test/built-ins/TypedArray/prototype/lastIndexOf/coerced-position-shrink.js
 test/built-ins/TypedArray/prototype/lastIndexOf/detached-buffer-during-fromIndex-returns-minus-one-for-zero.js
 test/built-ins/TypedArray/prototype/lastIndexOf/tointeger-fromindex.js
+test/built-ins/TypedArray/prototype/map/speciesctor-resizable-buffer-grow.js
+test/built-ins/TypedArray/prototype/map/speciesctor-resizable-buffer-shrink.js
 test/built-ins/TypedArray/prototype/toLocaleString/BigInt/return-abrupt-from-firstelement-tolocalestring.js
 test/built-ins/TypedArray/prototype/toLocaleString/BigInt/return-abrupt-from-firstelement-tostring.js
 test/built-ins/TypedArray/prototype/toLocaleString/BigInt/return-abrupt-from-firstelement-valueof.js

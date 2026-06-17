@@ -91,8 +91,10 @@ gaps: `TypedArray` 2,027, `ArrayBuffer` 263, `DataView` 188 — concentrated in
       `%TypedArray%.prototype.map`/`filter` now allocate their result through
       `TypedArraySpeciesCreate` (the `@@species` constructor / default), read
       source elements live each step, and `Set` mapped/kept values through the
-      result's element coercion: `filter` moved 40 -> 4 and `map` 32 -> 5
-      actionable gaps, leaving only resizable/immutable-buffer variants.
+      result's element coercion. `map` species constructors now see live
+      same-named block lexical captures across repeated for-of blocks, so
+      resizable-buffer grow/shrink species cases pass: `map` 2 -> 0 actionable
+      gaps; `filter` remains at 4 actionable gaps.
       `subarray` now allocates through `TypedArraySpeciesCreate(O, « buffer,
       beginByteOffset, newLength »)` and only brand-checks O up front (a
       detached/out-of-bounds view yields srcLength 0, still coerces start/end,

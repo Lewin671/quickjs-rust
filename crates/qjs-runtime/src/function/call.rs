@@ -13,7 +13,7 @@ use super::{
     captures::{
         caller_capture_matches_existing, caller_global_this_has_own_property,
         captured_global_this_has_own_property, is_call_frame_binding, propagate_function_captures,
-        sync_global_var_captures,
+        refresh_class_constructor_captures_from_caller, sync_global_var_captures,
     },
     function_call_this, is_internal_binding_name, parameter_binding_name,
     rest_parameter_binding_name,
@@ -98,6 +98,9 @@ pub(crate) fn call_function(
         );
     }
     if let Some(bytecode) = &function.bytecode {
+        if function.is_class_constructor {
+            refresh_class_constructor_captures_from_caller(&function, env);
+        }
         if function.is_generator && function.is_async {
             let function_env = function_env(
                 &function,

@@ -61,8 +61,9 @@ impl Vm<'_> {
             None => object_prototype(&self.env).map(crate::Prototype::Object),
         };
 
-        let constructor_env =
+        let mut constructor_env =
             self.function_capture_env(&constructor.bytecode, &constructor.local_names);
+        self.insert_lexical_captures(&mut constructor_env, &constructor.lexical_captures);
         self.refresh_captured_env(&constructor_env);
         let constructor_captured = Rc::new(RefCell::new(constructor_env.clone()));
         let super_constructor = match &heritage {

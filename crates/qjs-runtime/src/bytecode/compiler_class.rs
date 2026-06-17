@@ -12,6 +12,7 @@ use crate::{
 };
 
 use super::compiler::{Compiler, compile_function_body_with_strict};
+use super::compiler_lexical::LexicalCapture;
 use super::ir::{
     Bytecode, ClassComputedKeyDef, ClassConstructorDef, ClassElementDef, ClassFieldDef,
     ClassFieldInitializerDef, ClassMemberKeyDef, ClassMethodDef, ClassMethodKind,
@@ -115,24 +116,34 @@ impl Compiler {
                     // constructor compile with strict semantics regardless of
                     // context.
                     let local_names = collect_function_local_names(None, params, body, true);
-                    let bytecode = compile_class_function_body(
+
+                    if member.kind == MethodKind::Constructor {
+                        let (bytecode, lexical_captures) = self.compile_class_function_body(
+                            name,
+                            params,
+                            body,
+                            &local_names,
+                            is_generator,
+                            is_async,
+                        )?;
+                        constructor = Some(ClassConstructorDef {
+                            name: name.map(str::to_owned),
+                            params: params.clone(),
+                            local_names,
+                            lexical_captures,
+                            bytecode: Rc::new(bytecode),
+                        });
+                        continue;
+                    }
+                    let bytecode = compile_class_function_body_with_captures(
                         name,
                         params,
                         body,
                         &local_names,
                         is_generator,
                         is_async,
+                        &[],
                     )?;
-
-                    if member.kind == MethodKind::Constructor {
-                        constructor = Some(ClassConstructorDef {
-                            name: name.map(str::to_owned),
-                            params: params.clone(),
-                            local_names,
-                            bytecode: Rc::new(bytecode),
-                        });
-                        continue;
-                    }
 
                     let method_kind = match member.kind {
                         MethodKind::Method => ClassMethodKind::Method,
@@ -242,8 +253,15 @@ fn compile_computed_key(
         span: expr.span(),
     }];
     let local_names = collect_function_local_names(None, &params, &body, true);
-    let bytecode =
-        compile_class_function_body(class_name, &params, &body, &local_names, false, false)?;
+    let bytecode = compile_class_function_body_with_captures(
+        class_name,
+        &params,
+        &body,
+        &local_names,
+        false,
+        false,
+        &[],
+    )?;
     Ok(ClassComputedKeyDef::Deferred {
         local_names,
         bytecode: Rc::new(bytecode),
@@ -442,24 +460,88 @@ fn compile_static_block(
 ) -> Result<ClassStaticBlockDef, RuntimeError> {
     let params = FunctionParams::positional(Vec::new());
     let local_names = collect_function_local_names(None, &params, &block.body, true);
-    let bytecode =
-        compile_class_function_body(class_name, &params, &block.body, &local_names, false, false)?;
+    let bytecode = compile_class_function_body_with_captures(
+        class_name,
+        &params,
+        &block.body,
+        &local_names,
+        false,
+        false,
+        &[],
+    )?;
     Ok(ClassStaticBlockDef {
         local_names,
         bytecode: Rc::new(bytecode),
     })
 }
 
-fn compile_class_function_body(
+fn runtime_lexical_captures(captures: Vec<LexicalCapture>) -> Vec<(String, usize)> {
+    captures
+        .into_iter()
+        .map(|capture| (capture.storage_name, capture.slot))
+        .collect()
+}
+
+impl Compiler {
+    fn compile_class_function_body(
+        &self,
+        class_name: Option<&str>,
+        params: &FunctionParams,
+        body: &[Stmt],
+        local_names: &[String],
+        is_generator: bool,
+        is_async: bool,
+    ) -> Result<(super::ir::Bytecode, Vec<(String, usize)>), RuntimeError> {
+        let mut bytecode = compile_class_function_body_with_captures(
+            class_name,
+            params,
+            body,
+            local_names,
+            is_generator,
+            is_async,
+            &[],
+        )?;
+        let mut lexical_captures = self.active_lexical_captures(&bytecode, local_names);
+        if !lexical_captures.is_empty() {
+            let captured_lexicals = lexical_captures
+                .iter()
+                .map(|capture| {
+                    (
+                        capture.name.as_str(),
+                        capture.storage_name.as_str(),
+                        self.locals[capture.slot].mutable,
+                    )
+                })
+                .collect::<Vec<_>>();
+            bytecode = compile_class_function_body_with_captures(
+                class_name,
+                params,
+                body,
+                local_names,
+                is_generator,
+                is_async,
+                &captured_lexicals,
+            )?;
+            lexical_captures = self.active_lexical_captures(&bytecode, local_names);
+        }
+        Ok((bytecode, runtime_lexical_captures(lexical_captures)))
+    }
+}
+
+fn compile_class_function_body_with_captures(
     class_name: Option<&str>,
     params: &FunctionParams,
     body: &[Stmt],
     local_names: &[String],
     is_generator: bool,
     is_async: bool,
+    captured_lexicals: &[(&str, &str, bool)],
 ) -> Result<super::ir::Bytecode, RuntimeError> {
     let mut compiler = Compiler::strict_function_compiler();
     compiler.async_generator_body = is_generator && is_async;
+    for (name, storage_name, mutable) in captured_lexicals {
+        compiler.declare_captured_lexical_slot_with_storage_name(name, storage_name, *mutable);
+    }
     if let Some(name) = class_name
         && local_names
             .binary_search_by(|local| local.as_str().cmp(name))
@@ -509,6 +591,7 @@ fn default_constructor(name: Option<&str>, has_heritage: bool) -> ClassConstruct
             name: name.map(str::to_owned),
             params,
             local_names,
+            lexical_captures: Vec::new(),
             bytecode: Rc::new(bytecode),
         };
     }
@@ -532,6 +615,7 @@ fn default_constructor(name: Option<&str>, has_heritage: bool) -> ClassConstruct
         name: name.map(str::to_owned),
         params,
         local_names,
+        lexical_captures: Vec::new(),
         bytecode: Rc::new(bytecode),
     }
 }
