@@ -119,10 +119,25 @@ impl Parser {
                 span: token.span,
             });
         };
-        if crate::helpers::is_reserved_identifier_name(&name) {
+        self.validate_binding_identifier_name(&name, token.span)?;
+        Ok(BindingPattern::Identifier {
+            name,
+            span: token.span,
+        })
+    }
+
+    /// Validates that `name` (its StringValue, so escaped spellings are caught)
+    /// may legally name a binding in the current context, rejecting reserved
+    /// words, context-sensitive `await`, and strict-mode reserved names.
+    pub(crate) fn validate_binding_identifier_name(
+        &self,
+        name: &str,
+        span: Span,
+    ) -> Result<(), ParseError> {
+        if crate::helpers::is_reserved_identifier_name(name) {
             return Err(ParseError {
                 message: format!("`{name}` is a reserved word"),
-                span: token.span,
+                span,
             });
         }
         // `await` may not be used as a binding identifier inside an async
@@ -131,29 +146,26 @@ impl Parser {
         if (self.in_async || self.in_static_block) && name == "await" {
             return Err(ParseError {
                 message: "`await` is not allowed as a binding identifier here".to_owned(),
-                span: token.span,
+                span,
             });
         }
         // Strict-mode reserved words (including escaped spellings such as
         // `package`) may not name a binding. The lexer keeps escaped
         // spellings as Identifier tokens, so this StringValue check is reached
         // for both plain and escaped forms.
-        if self.strict && crate::statement::functions::is_strict_reserved_word(&name) {
+        if self.strict && crate::statement::functions::is_strict_reserved_word(name) {
             return Err(ParseError {
                 message: format!("`{name}` is a reserved word in strict mode"),
-                span: token.span,
+                span,
             });
         }
-        if self.strict && matches!(name.as_str(), "eval" | "arguments") {
+        if self.strict && matches!(name, "eval" | "arguments") {
             return Err(ParseError {
                 message: format!("`{name}` cannot be used as a binding name in strict mode"),
-                span: token.span,
+                span,
             });
         }
-        Ok(BindingPattern::Identifier {
-            name,
-            span: token.span,
-        })
+        Ok(())
     }
 
     pub(crate) fn binding_element(&mut self) -> Result<BindingElement, ParseError> {
@@ -228,6 +240,7 @@ impl Parser {
                         span: token.span,
                     });
                 };
+                self.validate_binding_identifier_name(&name, token.span)?;
                 rest = Some(Box::new(BindingPattern::Identifier {
                     name,
                     span: token.span,
@@ -261,11 +274,16 @@ impl Parser {
             let binding = if self.match_kind(&TokenKind::Colon) {
                 self.binding_pattern()?
             } else if shorthand {
+                let name = key
+                    .as_literal()
+                    .expect("shorthand keys are always literal")
+                    .to_owned();
+                // A shorthand binding `{ x }` is also a binding identifier, so
+                // it may not be a reserved word -- including escaped spellings
+                // like `{ break }`, whose StringValue is still `break`.
+                self.validate_binding_identifier_name(&name, key_span)?;
                 BindingPattern::Identifier {
-                    name: key
-                        .as_literal()
-                        .expect("shorthand keys are always literal")
-                        .to_owned(),
+                    name,
                     span: key_span,
                 }
             } else {

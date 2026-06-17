@@ -50,6 +50,20 @@ fn escaped_reserved_word_binding_is_allowed_in_sloppy_mode() {
 }
 
 #[test]
+fn escaped_reserved_word_object_binding_shorthand_is_rejected() {
+    // An object binding shorthand `{ x }` is a binding identifier, so a
+    // reserved word -- including an escaped spelling whose StringValue is still
+    // reserved -- is a SyntaxError in every binding context.
+    assert!(parse_script("var { cl\\u0061ss } = obj;").is_err());
+    assert!(parse_script("var { break } = obj;").is_err());
+    assert!(parse_script("function f({ \\u0074his }) {}").is_err());
+    assert!(parse_script("var { ...cl\\u0061ss } = obj;").is_err());
+    // Non-reserved shorthand bindings keep parsing.
+    parse_script("var { ok, also } = obj;").expect("plain shorthand bindings parse");
+    parse_script("var { ...rest } = obj;").expect("plain rest binding parses");
+}
+
+#[test]
 fn escaped_always_reserved_word_is_rejected_as_identifier() {
     // `\u{62}reak` decodes to `break`, an unconditionally reserved word, which
     // may be an IdentifierName but not a binding or identifier reference.
