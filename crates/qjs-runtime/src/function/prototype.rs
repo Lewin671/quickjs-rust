@@ -18,7 +18,7 @@ pub(crate) fn native_function(
     constructor: &Function,
     _this_value: Value,
     argument_values: &[Value],
-    _is_construct: bool,
+    is_construct: bool,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let (params, body) = function_source_parts(argument_values, env)?;
@@ -47,8 +47,16 @@ pub(crate) fn native_function(
         body,
         dynamic_function_scope_snapshot(env),
     )?;
+    // `new Function(...)` derives the [[Prototype]] from new.target, but a plain
+    // `Function(...)` call must ignore the ambient new.target (e.g. when invoked
+    // inside another constructor's body) and use %Function.prototype%.
+    let prototype_slot = if is_construct {
+        crate::native_construct_prototype_slot(constructor, env)?
+    } else {
+        crate::function_prototype(constructor).map(Prototype::Object)
+    };
     created
-        .set_internal_prototype_slot(crate::native_construct_prototype_slot(constructor, env)?)
+        .set_internal_prototype_slot(prototype_slot)
         .map_err(|_| RuntimeError {
             thrown: None,
             message: "TypeError: dynamic function prototype could not be set".to_owned(),
