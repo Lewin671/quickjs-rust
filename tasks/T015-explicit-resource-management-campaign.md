@@ -17,11 +17,14 @@ exit. Unlocks ~113 QuickJS-NG-passing Test262 cases under
   Contextual disambiguation, initializer-required, identifier-only, and the
   invalid-position rejections (labelled/single-statement body, redeclaration)
   are in place and covered by `crates/qjs-parser/src/tests/using_declarations.rs`.
-- **Slice A.2 — for-head parsing (TODO).** `for (using x of e)`,
-  `for (await using x of e)`, `for await (using x of e)`, and C-style
-  `for (using x = e; ;)`. Reject `for (using x in e)` (for-in). Extend the
-  for-head detection in `crates/qjs-parser/src/statement/control.rs:410` to
-  recognize `using_declaration_kind()` and route to for-of (not for-in).
+- **Slice A.2 — for-head parsing (DONE, commit `79e24d16`).**
+  `for (using x of e)`, `for await (using x of e)`, and C-style
+  `for (using x = e; ;)` parse; `for (using x in e)` is rejected. Disposal for
+  these heads (end-of-loop for C-style, per-iteration for for-of) is a runtime
+  follow-up; the bindings parse and resolve today.
+- **Slice A.3 — top-level rejection (DONE, commit `8d2d9f62`).** `using` at the
+  Script/eval top level is now a SyntaxError (restored the regressed negative
+  cases). Module top level still permits it.
 - **Slice B — sync block disposal (DONE, commit `fb470c14`).** A `{ }` block
   declaring sync `using` resources compiles into an implicit try/finally
   (`EnterDisposableScope` / `RegisterDisposable` / `DisposeScope` ops, VM frame
@@ -37,12 +40,9 @@ exit. Unlocks ~113 QuickJS-NG-passing Test262 cases under
   highest-value (~3-5 cases: `initializer-disposed-at-end-of-functionbody`,
   `...generatorbody`, the top-level `throws-if-initializer-*` cases). Watch the
   function-body stack/return semantics (the hot compile path).
-- **Slice B.3 — parser refinements (TODO).** Reject `using` at the top level of
-  a Script / global eval (`using-not-allowed-at-top-level-of-script` /
-  `...-of-eval` — currently accepted, a Slice A regression on 2 negative cases)
-  and directly in a `switch` CaseClause; add `for`-head parsing
-  (`for (using x of e)`, C-style, reject `for (using x in e)`). Reassignment to
-  a `using` binding must be a TypeError (it is already, as a const slot).
+- **Slice B.3 — remaining parser refinements (TODO).** Reject `using` directly
+  in a `switch` CaseClause (must be in a block). Top-level rejection and
+  for-heads are done (A.2/A.3).
 - **Slice C — async runtime disposal (TODO).** `Symbol.asyncDispose` with an
   `await` at each disposal; per-iteration disposal in `for-of`.
 
