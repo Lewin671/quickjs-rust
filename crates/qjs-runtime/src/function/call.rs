@@ -754,6 +754,9 @@ fn insert_function_captures(
     names.sort();
     names.dedup();
     for name in names {
+        if function_local_names.iter().any(|local| local == &name) {
+            continue;
+        }
         insert_function_capture(
             local_env,
             &mut writeback_names,

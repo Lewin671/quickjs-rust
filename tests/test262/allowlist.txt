@@ -4972,6 +4972,7 @@ test/language/statements/class/static-init-super-property.js
 test/language/statements/class/static-init-scope-lex-open.js
 test/language/statements/class/static-init-scope-var-open.js
 test/language/statements/class/static-init-abrupt.js
+test/language/statements/class/elements/intercalated-static-non-static-computed-fields.js
 test/language/types/number/S8.5_A10_T2.js
 test/language/types/number/S8.5_A4_T2.js
 test/language/literals/numeric/numeric-separators/numeric-separator-literal-bil-bd-nsl-bd.js
