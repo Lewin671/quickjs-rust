@@ -289,6 +289,16 @@ impl Compiler {
     }
 
     pub(super) fn emit_store_var_initializer(&mut self, slot: usize, name: &str, kind: VarKind) {
+        if kind == VarKind::Var && self.inside_with() {
+            // Inside a `with`, a `var` initializer assignment is an ordinary
+            // PutValue on a reference resolved through the current lexical
+            // chain, which includes the with object's environment record. The
+            // binding is already hoisted to `slot`, so the with-aware store
+            // falls back to it when the with object lacks the property.
+            let local = self.resolve_local_slot(name);
+            self.emit_store_identifier(name, local, None);
+            return;
+        }
         let store_slot = self.var_initializer_slot(name, slot, kind);
         if store_slot != slot && kind == VarKind::Var {
             self.emit(Op::StoreLocal(store_slot));

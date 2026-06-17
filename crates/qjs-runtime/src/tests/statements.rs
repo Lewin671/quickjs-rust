@@ -28,6 +28,38 @@ fn with_statement_resolves_object_bindings() {
 }
 
 #[test]
+fn with_statement_var_initializer_targets_with_object() {
+    // A `var` initializer inside `with` is an ordinary PutValue through the
+    // scope chain: when the with-object owns the name, the property is updated
+    // and no global binding is created.
+    assert_eq!(
+        eval("var o = { foo: 1 }; with (o) { var foo = 2; } o.foo;"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval("var o = { foo: 1 }; with (o) { var foo = 2; } typeof globalThis.foo;"),
+        Ok(Value::String("undefined".to_owned()))
+    );
+    // When the with-object lacks the name, the hoisted var binding is written.
+    assert_eq!(
+        eval("var o = { foo: 1 }; with (o) { var bar = 7; } bar;"),
+        Ok(Value::Number(7.0))
+    );
+    assert_eq!(
+        eval("var o = { foo: 1 }; with (o) { var bar = 7; } 'bar' in o;"),
+        Ok(Value::Boolean(false))
+    );
+    // At function scope the hoisted local is the fallback target.
+    assert_eq!(
+        eval(
+            "function f() { var o = { foo: 1 }; with (o) { var foo = 2; var bar = 3; } \
+             return o.foo + ':' + bar; } f();"
+        ),
+        Ok(Value::String("2:3".to_owned()))
+    );
+}
+
+#[test]
 fn for_in_assignment_targets_respect_lexical_tdz() {
     assert_eq!(
         eval(
