@@ -111,3 +111,42 @@ fn nested_closures_capture_live_outer_bindings() {
         Ok(Value::String("42,43|42,43,3,4".to_owned()))
     );
 }
+
+#[test]
+fn sibling_closure_mutation_observes_latest_var_binding() {
+    assert_eq!(
+        eval(
+            "var c = 9;
+             function inc() { c++; return c; }
+             function f() { c = 0; var r = inc(); return r + ':' + c; }
+             f() + ':' + c;"
+        ),
+        Ok(Value::String("1:1:1".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "function outer() {
+                 var c = 9;
+                 function inc() { c++; }
+                 function f() { c = 0; inc(); }
+                 f();
+                 return c;
+             }
+             outer();"
+        ),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval(
+            "var c = 100;
+             function outer() {
+                 var c = 9;
+                 function inc() { c++; }
+                 function f() { c = 0; inc(); return c; }
+                 return f() + ':' + c;
+             }
+             outer() + ':' + c;"
+        ),
+        Ok(Value::String("1:1:100".to_owned()))
+    );
+}

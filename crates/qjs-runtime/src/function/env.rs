@@ -196,6 +196,16 @@ impl CallEnv {
         self.captured_binding_source_env.as_ref()
     }
 
+    pub(crate) fn captures_binding(&self, name: &str) -> bool {
+        self.activation_captured_env
+            .as_ref()
+            .is_some_and(|activation| activation.borrow().contains_key(name))
+            || self
+                .captured_binding_source_env
+                .as_ref()
+                .is_some_and(|source| source.borrow().contains_key(name))
+    }
+
     /// This frame's own locals layer, mutably.
     pub(crate) fn locals_mut(&mut self) -> &mut HashMap<String, Value> {
         &mut self.locals

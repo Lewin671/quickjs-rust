@@ -612,6 +612,23 @@ impl Vm<'_> {
             if let Some(index) = self.bytecode.local_slot(name) {
                 self.locals[index] = Some(value.clone());
                 self.write_through_captured(name, value);
+                if self.env.locals().contains_key(name) {
+                    let value = self.locals[index]
+                        .as_ref()
+                        .expect("slot was just assigned")
+                        .clone();
+                    self.env.insert(name.clone(), value);
+                }
+                if !self.env.locals().contains_key(name)
+                    && !self.has_captured_binding(name)
+                    && env.realm_contains(name)
+                {
+                    let value = self.locals[index]
+                        .as_ref()
+                        .expect("slot was just assigned")
+                        .clone();
+                    env.insert_realm(name.clone(), value);
+                }
             } else if self.env.locals().contains_key(name) {
                 // A caller-scope binding this frame itself carries in its
                 // locals layer (e.g. an outer `let` riding through nested
@@ -624,11 +641,19 @@ impl Vm<'_> {
                     .contains_key(crate::SUPER_CONSTRUCTOR_BINDING)
             {
                 self.env.insert(name.clone(), value);
+            } else if !self.has_captured_binding(name) && env.realm_contains(name) {
+                env.insert_realm(name.clone(), value);
             }
-            // Realm bindings need no write-back: the callee mutated the shared
-            // cell directly.
         }
         self.refresh_derived_constructor_this_from_captured();
+    }
+
+    fn has_captured_binding(&self, name: &str) -> bool {
+        self.captured_env.borrow().contains_key(name)
+            || self
+                .env
+                .captured_binding_source_env()
+                .is_some_and(|source| source.borrow().contains_key(name))
     }
 
     pub(super) fn apply_env(&mut self, env: CallEnv) {

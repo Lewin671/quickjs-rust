@@ -22,9 +22,6 @@ pub(crate) fn call_function(
     env: &mut CallEnv,
     is_construct: bool,
 ) -> Result<Value, RuntimeError> {
-    // An exotic Proxy whose target is callable dispatches through its `apply`
-    // trap (or forwards to the target). Construction routes through
-    // `construct_function`, so only the call path is handled here.
     if let Value::Proxy(proxy) = &callee {
         if is_construct {
             return crate::proxy::proxy_construct(
@@ -97,10 +94,6 @@ pub(crate) fn call_function(
         );
     }
     if let Some(bytecode) = &function.bytecode {
-        // Calling an async generator function captures the call frame and
-        // returns an async generator object whose next/return/throw drive the
-        // body and yield promises of iterator results. Checked before the plain
-        // generator and async branches because both flags are set.
         if function.is_generator && function.is_async {
             let function_env = function_env(
                 &function,
@@ -789,6 +782,11 @@ fn insert_caller_bytecode_bindings(
             write_back_to_caller,
         );
     }
+    for name in bytecode.sloppy_global_assignment_names() {
+        if env.realm_contains(name) && !env.captures_binding(name) {
+            insert_missing_caller_binding_name(caller_binding_names, name);
+        }
+    }
     for name in bytecode.local_names() {
         if function_local_names
             .binary_search_by(|local| local.as_str().cmp(name))
@@ -832,9 +830,6 @@ fn insert_caller_binding(
     {
         return;
     }
-    // Only the caller's *frame locals* need to ride into the callee frame;
-    // realm bindings (intrinsics and true globals) are visible through the
-    // shared realm cell and must not be copied or written back.
     if let Some(value) = env.locals().get(name) {
         local_env.insert(name.to_owned(), value.clone());
         if write_back_to_caller {
@@ -896,9 +891,12 @@ fn propagate_caller_bindings(
     for name in caller_binding_names {
         if !is_call_frame_binding(name)
             && let Some(final_value) = result.binding(name)
-            && let Some(binding) = env.get_local_mut(name)
         {
-            *binding = final_value;
+            if let Some(binding) = env.get_local_mut(name) {
+                *binding = final_value;
+            } else if env.realm_contains(name) {
+                env.insert_realm(name.clone(), final_value);
+            }
         }
     }
     // Sloppy-mode global creation: a new binding the callee introduced is

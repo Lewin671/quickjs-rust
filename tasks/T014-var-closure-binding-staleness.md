@@ -47,7 +47,7 @@ that cluster is already done — `get_view_element` now returns `undefined` for 
 out-of-bounds/detached index (IntegerIndexedElementGet) — so those cases should
 fall out once this binding bug is fixed.
 
-## Root cause (analysis, not yet fixed)
+## Root cause
 
 Closures use a snapshot + write-back model rather than shared cells
 (`crates/qjs-runtime/src/bytecode/vm_capture.rs`,
@@ -65,22 +65,21 @@ the realm. On `f`'s return, `propagate_caller_bindings`
 (`crates/qjs-runtime/src/function/call.rs:891`) writes `f`'s stale `0` back over
 the caller's binding, clobbering `inc`'s `1`.
 
-`let` is unaffected because lexical bindings live in `captured_env`, which the
-existing after-call refresh paths do reconcile.
+The fix refreshes/write-backs selected caller bindings through the same
+channel that owns them: frame locals are updated after callee return,
+environment-local caches are kept in sync, captured lexical bindings continue
+through `captured_env`, and realm-backed sloppy/global assignments write their
+final value through the shared realm only when no captured binding shadows the
+name.
 
-## Likely fix directions (decide during implementation)
+## Implemented direction
 
-- Refresh a frame's cached realm-`var` local slots from the realm after each
-  sub-call returns (mirror the `captured_env` reconciliation for the realm
-  channel). Watch the hot call path's cost.
-- Or stop caching realm `var`s in frame locals and always route their
-  read/write through the realm (slower reads, simpler correctness).
-- Or move global/outer `var`s onto the same shared-cell mechanism as lexical
-  captures so there is one reconciliation channel.
-
-A correct fix touches the hottest call path and the most heuristic-heavy code
-in the VM, so it needs its own focused slice with broad regression coverage,
-not a drive-by change.
+- Reconcile frame-local slots and environment-local caches in
+  `Vm::apply_selected_env` after sub-call return.
+- Register sloppy/global assignment names for caller write-back only when the
+  binding is realm-backed and not captured by an intervening environment.
+- Preserve captured lexical binding behavior by checking the activation and
+  captured binding-source environments before using the realm write-back path.
 
 ## Scope
 
