@@ -120,6 +120,29 @@ fn legacy_octal_escapes_match_top_level_atoms() {
 }
 
 #[test]
+fn hex_escapes_match_code_units() {
+    // `\xHH` decodes two hex digits to a single code unit, as a top-level atom
+    // and inside a character class (including as a range bound).
+    let matched = regexp_match_range(r"\x41", "A", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 1));
+    assert!(regexp_match_range(r"\x41", "x41", 0, false, false, false).is_none());
+    let matched = regexp_match_range(r"[\x5D]", "]", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 1));
+    assert!(regexp_match_range(r"[\x5D]", "x", 0, false, false, false).is_none());
+    let matched = regexp_match_range(r"[\xC0-\xD6]", "\u{00C7}", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 1));
+    assert!(regexp_match_range(r"[\xC0-\xD6]", "A", 0, false, false, false).is_none());
+    // Unicode mode and case-insensitive matching.
+    let matched = regexp_match_range(r"\x41", "A", 0, false, true, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 1));
+    let matched = regexp_match_range(r"\x41", "a", 0, true, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 1));
+    // Annex B: `\x` without two hex digits is a literal `x`.
+    let matched = regexp_match_range(r"\x4", "x4", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 2));
+}
+
+#[test]
 fn legacy_class_control_escapes_match_digits_and_underscore() {
     let matched = regexp_match_range(r"[\c0]", "\u{0010}", 0, false, false, false).unwrap();
     assert_eq!((matched.start, matched.end), (0, 1));

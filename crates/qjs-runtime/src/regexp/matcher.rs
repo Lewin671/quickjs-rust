@@ -15,8 +15,9 @@ mod tests;
 
 use classes::class_match;
 use escapes::{
-    PropertyCache, chars_equal, control_letter_escape, legacy_octal_escape, regexp_control_escape,
-    regexp_whitespace, regexp_word_char, unicode_escape,
+    ParsedEscape, PropertyCache, char_code_unit, chars_equal, control_letter_escape, hex_escape,
+    is_trailing_surrogate_position, legacy_octal_escape, regexp_control_escape, regexp_whitespace,
+    regexp_word_char, unicode_escape,
 };
 use fast_scan::{repeat_simple_atom, simple_atom_matcher};
 use groups::{
@@ -185,28 +186,6 @@ fn regexp_match(
     })
 }
 
-fn is_trailing_surrogate_position(text: &[char], index: usize) -> bool {
-    if index == 0 || index >= text.len() {
-        return false;
-    }
-    matches!(
-        (char_code_unit(text[index - 1]), char_code_unit(text[index])),
-        (Some(0xD800..=0xDBFF), Some(0xDC00..=0xDFFF))
-    )
-}
-
-fn char_code_unit(value: char) -> Option<u16> {
-    if let Some(code_unit) = surrogate_escape_code_unit(value) {
-        return Some(code_unit);
-    }
-    let code_point = value as u32;
-    if code_point <= 0xFFFF {
-        return Some(code_point as u16);
-    }
-    let mut buffer = [0u16; 2];
-    value.encode_utf16(&mut buffer).first().copied()
-}
-
 fn capture_group_indices(pattern: &[char]) -> HashMap<usize, usize> {
     let mut indices = HashMap::new();
     let mut escaped = false;
@@ -321,6 +300,9 @@ fn atom_end(
         }
         '\\' if control_letter_escape(pattern, pc).is_some() => {
             control_letter_escape(pattern, pc).map(|escape| escape.next_pc)
+        }
+        '\\' if hex_escape(pattern, pc).is_some() => {
+            hex_escape(pattern, pc).map(|escape| escape.next_pc)
         }
         '\\' if !unicode && pattern.get(pc + 1) == Some(&'c') => Some(pc + 1),
         '\\' if !unicode && legacy_octal_escape(pattern, pc).is_some() => {
@@ -478,21 +460,11 @@ fn match_escape(
         'w' => (regexp_word_char(value), pc + 2),
         'W' => (!regexp_word_char(value), pc + 2),
         'u' => {
-            let Some(escape) = unicode_escape(pattern, pc, options.unicode) else {
-                let matched = chars_equal(value, 'u', options.ignore_case);
-                if matched {
-                    state.index += 1;
-                    return vec![(pc + 2, state)];
-                }
-                return Vec::new();
-            };
-            return match_unicode_escape(
-                text,
-                state,
-                escape.value,
-                escape.next_pc,
-                options.ignore_case,
-            );
+            let e = unicode_escape(pattern, pc, options.unicode);
+            return match_code_unit_escape(text, state, e, 'u', pc, options);
+        }
+        'x' => {
+            return match_code_unit_escape(text, state, hex_escape(pattern, pc), 'x', pc, options);
         }
         literal => (
             chars_equal(value, regexp_control_escape(literal), options.ignore_case),
@@ -504,6 +476,34 @@ fn match_escape(
     }
     state.index += 1;
     vec![(next_pc, state)]
+}
+
+/// Match a fixed code-unit escape (`\uHHHH` or `\xHH`); `literal` is the Annex B
+/// identity fallback when the escape did not parse.
+fn match_code_unit_escape(
+    text: &[char],
+    mut state: MatchState,
+    escape: Option<ParsedEscape>,
+    literal: char,
+    pc: usize,
+    options: MatchOptions,
+) -> Vec<(usize, MatchState)> {
+    if let Some(escape) = escape {
+        return match_unicode_escape(
+            text,
+            state,
+            escape.value,
+            escape.next_pc,
+            options.ignore_case,
+        );
+    }
+    match text.get(state.index).copied() {
+        Some(value) if chars_equal(value, literal, options.ignore_case) => {
+            state.index += 1;
+            vec![(pc + 2, state)]
+        }
+        _ => Vec::new(),
+    }
 }
 
 fn match_backreference(

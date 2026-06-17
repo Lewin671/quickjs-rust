@@ -10,8 +10,8 @@
 //! points inside the matcher's budget.
 
 use super::escapes::{
-    self, chars_equal, control_letter_escape, legacy_octal_escape, regexp_control_escape,
-    regexp_whitespace, regexp_word_char, unicode_escape,
+    self, chars_equal, control_letter_escape, hex_escape, legacy_octal_escape,
+    regexp_control_escape, regexp_whitespace, regexp_word_char, unicode_escape,
 };
 use super::groups::{named_backreference, named_group_index};
 use super::{
@@ -83,6 +83,9 @@ pub(super) fn simple_atom_matcher<'a>(
                 return Some(SimpleAtom::UnicodeEscape(escape.value));
             }
             if let Some(escape) = control_letter_escape(pattern, atom_pc) {
+                return Some(SimpleAtom::UnicodeEscape(escape.value));
+            }
+            if let Some(escape) = hex_escape(pattern, atom_pc) {
                 return Some(SimpleAtom::UnicodeEscape(escape.value));
             }
             if !options.unicode

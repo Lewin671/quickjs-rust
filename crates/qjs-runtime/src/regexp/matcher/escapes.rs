@@ -1,7 +1,29 @@
 use std::collections::HashMap;
 
 use crate::regexp::unicode::{self, PropertySet};
-use crate::string::string_from_code_unit;
+use crate::string::{string_from_code_unit, surrogate_escape_code_unit};
+
+pub(super) fn is_trailing_surrogate_position(text: &[char], index: usize) -> bool {
+    if index == 0 || index >= text.len() {
+        return false;
+    }
+    matches!(
+        (char_code_unit(text[index - 1]), char_code_unit(text[index])),
+        (Some(0xD800..=0xDBFF), Some(0xDC00..=0xDFFF))
+    )
+}
+
+pub(super) fn char_code_unit(value: char) -> Option<u16> {
+    if let Some(code_unit) = surrogate_escape_code_unit(value) {
+        return Some(code_unit);
+    }
+    let code_point = value as u32;
+    if code_point <= 0xFFFF {
+        return Some(code_point as u16);
+    }
+    let mut buffer = [0u16; 2];
+    value.encode_utf16(&mut buffer).first().copied()
+}
 
 /// Resolved `\p{...}` / `\P{...}` escapes for one pattern, keyed by the absolute
 /// position of the leading backslash in the pattern's `char` slice.
@@ -123,6 +145,24 @@ pub(super) fn control_letter_escape(pattern: &[char], pc: usize) -> Option<Parse
     char::from_u32(u32::from(escaped) % 32).map(|value| ParsedEscape {
         value,
         next_pc: pc + 3,
+    })
+}
+
+/// Parse a `\xHH` hex escape at `pc` (pointing at the backslash).
+///
+/// Requires exactly two hexadecimal digits after `\x`; otherwise the escape is
+/// not a hex escape (in non-unicode mode the matcher then treats `\x` as the
+/// literal `x`, matching Annex B `IdentityEscape` semantics).
+pub(super) fn hex_escape(pattern: &[char], pc: usize) -> Option<ParsedEscape> {
+    if pattern.get(pc + 1) != Some(&'x') {
+        return None;
+    }
+    let high = pattern.get(pc + 2)?.to_digit(16)?;
+    let low = pattern.get(pc + 3)?.to_digit(16)?;
+    let value = (high * 16 + low) as u16;
+    Some(ParsedEscape {
+        value: char_from_code_unit(value),
+        next_pc: pc + 4,
     })
 }
 

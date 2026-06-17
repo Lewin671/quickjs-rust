@@ -1,7 +1,7 @@
 use super::MatchOptions;
 use super::escapes::{
-    PropertyCache, chars_equal, class_range_contains, control_letter_escape, regexp_control_escape,
-    regexp_whitespace, regexp_word_char, unicode_escape,
+    PropertyCache, chars_equal, class_range_contains, control_letter_escape, hex_escape,
+    regexp_control_escape, regexp_whitespace, regexp_word_char, unicode_escape,
 };
 use crate::string::surrogate_escape_code_unit;
 
@@ -109,6 +109,12 @@ fn class_atom(class: &[char], index: usize, options: MatchOptions) -> Option<Cla
             next_index: escape.next_pc,
         });
     }
+    if let Some(escape) = hex_escape(class, index) {
+        return Some(ClassAtom {
+            value: escape.value,
+            next_index: escape.next_pc,
+        });
+    }
     if !options.unicode
         && let Some(escape) = legacy_octal_escape(class, index)
     {
@@ -175,6 +181,8 @@ fn class_escape_matches(class: &[char], index: usize, value: char, options: Matc
         Some('w') => regexp_word_char(value),
         Some('W') => !regexp_word_char(value),
         Some('u') => unicode_escape(class, index, options.unicode)
+            .is_some_and(|escape| chars_equal(value, escape.value, options.ignore_case)),
+        Some('x') if hex_escape(class, index).is_some() => hex_escape(class, index)
             .is_some_and(|escape| chars_equal(value, escape.value, options.ignore_case)),
         Some(escaped) => chars_equal(regexp_control_escape(escaped), value, options.ignore_case),
         None => false,
