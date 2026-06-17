@@ -686,6 +686,16 @@ fn parses_object_literal_and_member_assignment() {
 }
 
 #[test]
+fn rejects_duplicate_object_literal_proto_setters() {
+    let error = parse_script("({ __proto__: null, other: null, '__proto__': null });")
+        .expect_err("duplicate __proto__ colon data properties are an early error");
+    assert!(error.message.contains("duplicate __proto__"));
+
+    parse_script("({ __proto__: null, ['__proto__']: 1, __proto__() { return 2; } });")
+        .expect("only colon data __proto__ properties participate in the duplicate check");
+}
+
+#[test]
 fn parses_regexp_literal_as_regexp_constructor_expression() {
     let script = parse_script("/./;").expect("source should parse");
     let [

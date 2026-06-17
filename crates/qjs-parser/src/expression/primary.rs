@@ -406,6 +406,7 @@ impl Parser {
 
     fn object_literal(&mut self, start: usize) -> Result<Expr, ParseError> {
         let mut properties = Vec::new();
+        let mut seen_proto_setter = false;
         if !self.at(&TokenKind::RightBrace) {
             loop {
                 if self.at(&TokenKind::DotDotDot) {
@@ -488,6 +489,16 @@ impl Parser {
                     // literal-key colon data form, not shorthand/computed/method.
                     let is_proto_setter = is_colon_data
                         && matches!(&key, ObjectPropertyKey::Literal(name) if name == "__proto__");
+                    if is_proto_setter {
+                        if seen_proto_setter {
+                            return Err(ParseError {
+                                message: "duplicate __proto__ property in object literal"
+                                    .to_owned(),
+                                span: key_span,
+                            });
+                        }
+                        seen_proto_setter = true;
+                    }
                     (key, ObjectPropertyKind::Data, is_proto_setter, value)
                 };
                 let span = Span::new(key_span.start, value.span().end);
