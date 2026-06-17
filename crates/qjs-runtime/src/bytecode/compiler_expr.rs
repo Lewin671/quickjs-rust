@@ -48,8 +48,17 @@ impl Compiler {
     }
 
     fn compile_if_clause_stmt(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
-        if let Stmt::FunctionDecl { .. } = stmt {
-            return self.compile_function_decl(stmt);
+        if let Stmt::FunctionDecl { name, .. } = stmt {
+            if self.annex_b_function_name_blocked(name) {
+                self.emit_load_undefined();
+                return Ok(());
+            }
+            return self.with_lexical_scope(|compiler| {
+                compiler
+                    .with_annex_b_blocked_function_names(std::slice::from_ref(name), |compiler| {
+                        compiler.compile_function_decl(stmt)
+                    })
+            });
         }
         self.compile_stmt(stmt)
     }

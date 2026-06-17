@@ -8,8 +8,8 @@ use crate::{
 };
 
 use super::compiler_lexical::{
-    catch_param_annex_b_blocked_names, function_body_annex_b_blocked_names, function_param_names,
-    lexical_declared_names, nested_block_annex_b_blocked_names, switch_lexical_declared_names,
+    annex_b_blocked_names, catch_param_annex_b_blocked_names, function_body_annex_b_blocked_names,
+    function_param_names, lexical_declared_names, switch_lexical_declared_names,
 };
 use super::ir::{Bytecode, Local, Op};
 use super::util::{stmt_accepts_pending_label, stmt_updates_statement_list_completion};
@@ -460,6 +460,14 @@ impl Compiler {
             .any(|names| names.iter().any(|blocked| blocked == name))
     }
 
+    pub(super) fn annex_b_function_name_blocked_by_outer_scope(&self, name: &str) -> bool {
+        self.annex_b_blocked_function_names
+            .iter()
+            .rev()
+            .skip(1)
+            .any(|names| names.iter().any(|blocked| blocked == name))
+    }
+
     pub(super) fn annex_b_arguments_function_name_blocked(&self, name: &str) -> bool {
         name == "arguments" && self.annex_b_function_name_blocked(name)
     }
@@ -787,7 +795,7 @@ impl Compiler {
         match stmt {
             Stmt::Expr(expr) => self.compile_expr(expr),
             Stmt::Block { body, .. } => self.with_lexical_scope(|compiler| {
-                let blocked = lexical_declared_names(body);
+                let blocked = annex_b_blocked_names(body);
                 compiler.with_annex_b_blocked_function_names(&blocked, |compiler| {
                     compiler.predeclare_current_scope_lexicals(body);
                     if body.is_empty() {
@@ -795,16 +803,12 @@ impl Compiler {
                         return Ok(());
                     }
                     compiler.compile_hoisted_function_decls(body)?;
-                    let nested_blocked = nested_block_annex_b_blocked_names(body);
-                    compiler.with_annex_b_blocked_function_names(&nested_blocked, |compiler| {
-                        for (index, stmt) in body.iter().enumerate() {
-                            compiler.compile_stmt(stmt)?;
-                            if index + 1 != body.len() {
-                                compiler.store_or_pop_statement_list_completion(stmt);
-                            }
+                    for (index, stmt) in body.iter().enumerate() {
+                        compiler.compile_stmt(stmt)?;
+                        if index + 1 != body.len() {
+                            compiler.store_or_pop_statement_list_completion(stmt);
                         }
-                        Ok(())
-                    })?;
+                    }
                     for slot in compiler.current_lexical_slots_for_names(&blocked) {
                         compiler.emit(Op::ClearLocal(slot));
                     }

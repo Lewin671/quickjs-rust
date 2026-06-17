@@ -293,6 +293,37 @@ fn evaluates_direct_eval_annex_b_function_bindings_in_function_frames() {
 }
 
 #[test]
+fn eval_annex_b_function_declarations_capture_block_scoped_binding() {
+    assert_eq!(
+        eval(
+            "var initialBV, currentBV; \
+             eval('{ function f() { initialBV = f; f = 123; currentBV = f; return \"decl\"; } }'); \
+             f(); \
+             initialBV() + ':' + currentBV + ':' + f();"
+        ),
+        Ok(Value::String("decl:123:decl".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var initialBV, currentBV; \
+             eval('if (true) function f() { initialBV = f; f = 123; currentBV = f; return \"decl\"; } else function _f() {}'); \
+             f(); \
+             initialBV() + ':' + currentBV + ':' + f();"
+        ),
+        Ok(Value::String("decl:123:decl".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var initialBV, currentBV; \
+             eval('switch (1) { case 1: function f() { initialBV = f; f = 123; currentBV = f; return \"decl\"; } }'); \
+             f(); \
+             initialBV() + ':' + currentBV + ':' + f();"
+        ),
+        Ok(Value::String("decl:123:decl".to_owned()))
+    );
+}
+
+#[test]
 fn evaluates_global_eval_annex_b_bindings_as_configurable() {
     assert_eq!(
         eval(

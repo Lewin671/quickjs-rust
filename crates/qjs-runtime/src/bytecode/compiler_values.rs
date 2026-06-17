@@ -20,10 +20,7 @@ impl Compiler {
         body: &[Stmt],
     ) -> Result<(), RuntimeError> {
         for stmt in body {
-            if let Stmt::FunctionDecl { name, .. } = stmt
-                && (!self.annex_b_function_name_blocked(name)
-                    || self.annex_b_arguments_function_name_blocked(name))
-            {
+            if let Stmt::FunctionDecl { .. } = stmt {
                 self.compile_function_decl(stmt)?;
                 self.emit(Op::Pop);
             }
@@ -395,8 +392,13 @@ impl Compiler {
         };
         let blocked_arguments = self.annex_b_arguments_function_name_blocked(name);
         if self.annex_b_function_name_blocked(name) && !blocked_arguments {
-            self.emit_load_undefined();
-            return Ok(());
+            return self.compile_block_scoped_function_decl(
+                name,
+                params,
+                body,
+                *is_generator,
+                *is_async,
+            );
         }
         let is_strict = self.strict || is_strict_function_body(body);
         let local_names = collect_function_local_names(Some(name), params, body, true);
@@ -432,6 +434,51 @@ impl Compiler {
         } else {
             let slot = self.local_slot(name, true);
             self.emit(Op::StoreLocal(slot));
+        }
+        self.emit_load_undefined();
+        Ok(())
+    }
+
+    fn compile_block_scoped_function_decl(
+        &mut self,
+        name: &String,
+        params: &qjs_ast::FunctionParams,
+        body: &[Stmt],
+        is_generator: bool,
+        is_async: bool,
+    ) -> Result<(), RuntimeError> {
+        let lexical_slot = self.declare_lexical_slot(name, true);
+        let is_strict = self.strict || is_strict_function_body(body);
+        let local_names = collect_function_local_names(None, params, body, true);
+        let (bytecode, lexical_captures) = self.compile_nested_function_body(
+            params,
+            body,
+            is_strict,
+            is_generator,
+            is_async,
+            &local_names,
+        )?;
+        self.emit(Op::NewFunction {
+            name: Some(name.to_owned()),
+            has_name_binding: false,
+            params: params.clone(),
+            local_names,
+            lexical_captures,
+            bytecode: Rc::new(bytecode),
+            constructable: !is_generator && !is_async,
+            is_strict,
+            lexical_this: false,
+            lexical_arguments: false,
+            is_generator,
+            is_async,
+        });
+        self.emit(Op::Dup);
+        self.emit(Op::StoreLocal(lexical_slot));
+        if self.annex_b_function_name_blocked_by_outer_scope(name) {
+            self.emit(Op::Pop);
+        } else {
+            let var_slot = self.local_slot(name, true);
+            self.emit_store_var_binding(var_slot, name, VarKind::Var);
         }
         self.emit_load_undefined();
         Ok(())

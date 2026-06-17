@@ -266,6 +266,26 @@ pub(super) fn switch_lexical_declared_names(cases: &[SwitchCase]) -> Vec<String>
     names
 }
 
+pub(super) fn switch_annex_b_blocked_names(cases: &[SwitchCase]) -> Vec<String> {
+    let mut names = Vec::new();
+    for case in cases {
+        names.extend(annex_b_blocked_names(&case.consequent));
+    }
+    names
+}
+
+pub(super) fn annex_b_blocked_names(body: &[Stmt]) -> Vec<String> {
+    let mut names = lexical_declared_names(body);
+    for stmt in body {
+        if let Stmt::FunctionDecl { name, .. } = stmt
+            && !names.iter().any(|existing| existing == name)
+        {
+            names.push(name.clone());
+        }
+    }
+    names
+}
+
 pub(super) fn lexical_declared_names(body: &[Stmt]) -> Vec<String> {
     let mut names = Vec::new();
     for stmt in body {
@@ -318,18 +338,6 @@ pub(super) fn current_scope_lexical_declared_bindings(body: &[Stmt]) -> Vec<(Str
             }
             Stmt::ClassDecl { name, .. } => names.push((name.clone(), true)),
             _ => {}
-        }
-    }
-    names
-}
-
-pub(super) fn nested_block_annex_b_blocked_names(body: &[Stmt]) -> Vec<String> {
-    let mut names = lexical_declared_names(body);
-    for stmt in body {
-        if let Stmt::FunctionDecl { name, .. } = stmt
-            && !names.iter().any(|existing| existing == name)
-        {
-            names.push(name.clone());
         }
     }
     names

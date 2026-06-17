@@ -7,7 +7,7 @@ use crate::{RuntimeError, Value};
 use super::compiler::{Compiler, LoopIterator};
 use super::compiler_lexical::{
     current_scope_lexical_declared_bindings, for_in_left_lexical_names, is_lexical_for_in_left,
-    switch_lexical_declared_names,
+    switch_annex_b_blocked_names,
 };
 use super::ir::Op;
 
@@ -406,7 +406,7 @@ impl Compiler {
         }
 
         let no_match_jump = self.emit(Op::Jump(usize::MAX));
-        let blocked = switch_lexical_declared_names(cases);
+        let blocked = switch_annex_b_blocked_names(cases);
         for (name, mutable) in cases
             .iter()
             .flat_map(|case| current_scope_lexical_declared_bindings(&case.consequent))
