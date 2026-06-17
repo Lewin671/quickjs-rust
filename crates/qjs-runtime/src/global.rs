@@ -260,7 +260,10 @@ pub(super) fn native_global_eval(
         );
     let bytecode = compile_direct_eval_script(&script, caller_strict)?;
     if direct_function_eval
-        && eval_env.get_local("arguments").is_some()
+        && matches!(
+            eval_env.get(crate::DIRECT_EVAL_ARGUMENTS_BINDING),
+            Some(Value::Boolean(true))
+        )
         && bytecode
             .hoisted_local_names()
             .any(|name| name == "arguments")

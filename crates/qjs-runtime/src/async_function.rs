@@ -162,7 +162,7 @@ fn drive(context: &ObjectRef, result_promise: &ObjectRef, resume: Resume, env: &
             promise::resolve_promise_capability(result_promise, value, env);
         }
         Err(error) => {
-            let reason = error.thrown.map_or(Value::Undefined, |value| *value);
+            let reason = crate::error::runtime_error_to_value(error, env);
             promise::reject_promise_capability(result_promise, reason, env);
         }
     }

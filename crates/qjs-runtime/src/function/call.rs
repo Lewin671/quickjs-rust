@@ -1,10 +1,10 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
-    ArrayRef, Bytecode, FIELD_INITIALIZER_EVAL_BINDING, Function, NEW_TARGET_BINDING,
-    NativeFunction, ObjectRef, RuntimeError, Value, bytecode::eval_function_bytecode,
-    function_prototype, native::call_native_function, object_prototype,
-    private::PrivateEnvironment, symbol,
+    ArrayRef, Bytecode, DIRECT_EVAL_ARGUMENTS_BINDING, FIELD_INITIALIZER_EVAL_BINDING, Function,
+    NEW_TARGET_BINDING, NativeFunction, ObjectRef, RuntimeError, Value,
+    bytecode::eval_function_bytecode, function_prototype, native::call_native_function,
+    object_prototype, private::PrivateEnvironment, symbol,
 };
 
 use super::{
@@ -608,7 +608,8 @@ fn function_env(
             .unwrap_or(Value::Undefined);
         local_env.insert(parameter_binding_name(&element.binding, index), value);
     }
-    if !function.lexical_arguments && bytecode.needs_arguments_object() {
+    let has_own_arguments_object = !function.lexical_arguments && bytecode.needs_arguments_object();
+    if has_own_arguments_object {
         local_env.insert(
             "arguments".to_owned(),
             arguments_object(function, argument_values, env),
@@ -623,6 +624,18 @@ fn function_env(
         local_env.insert(
             rest_parameter_binding_name(rest),
             Value::Array(ArrayRef::new(values)),
+        );
+    }
+    if has_own_arguments_object
+        || function
+            .params
+            .names()
+            .iter()
+            .any(|name| name == "arguments")
+    {
+        local_env.insert(
+            DIRECT_EVAL_ARGUMENTS_BINDING.to_owned(),
+            Value::Boolean(true),
         );
     }
     let mut frame_env = env.with_frame_locals(local_env);

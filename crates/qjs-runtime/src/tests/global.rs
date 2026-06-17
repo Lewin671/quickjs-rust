@@ -579,3 +579,23 @@ fn direct_function_eval_rejects_var_arguments() {
         Ok(Value::Number(7.0))
     );
 }
+
+#[test]
+fn direct_eval_allows_arrow_body_arguments_binding() {
+    assert_eq!(
+        eval(
+            "let f = (p = eval(\"var arguments = 'param'\")) => { \
+             var arguments = 'local'; \
+             return arguments; \
+             }; \
+             f();"
+        ),
+        Ok(Value::String("local".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let f = (p = eval(\"var arguments = 'param'\"), arguments) => {}; try { f(); } catch (error) { error instanceof SyntaxError; }"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}

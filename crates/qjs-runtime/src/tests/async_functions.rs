@@ -222,6 +222,26 @@ fn body_throw_before_await_rejects() {
 }
 
 #[test]
+fn parameter_eval_syntax_error_rejects_with_error_object() {
+    assert_eq!(
+        eval_log(
+            "var o = []; \
+             async function f(p = eval('var arguments')) {} \
+             f().then(() => o.push('ok'), e => o.push(e instanceof SyntaxError)); o;"
+        ),
+        "Boolean(true)"
+    );
+    assert_eq!(
+        eval_log(
+            "var o = []; \
+             let obj = { async f(p = eval('var arguments')) {} }; \
+             obj.f().then(() => o.push('ok'), e => o.push(e instanceof SyntaxError)); o;"
+        ),
+        "Boolean(true)"
+    );
+}
+
+#[test]
 fn multiple_sequential_awaits() {
     assert_eq!(
         eval_log(

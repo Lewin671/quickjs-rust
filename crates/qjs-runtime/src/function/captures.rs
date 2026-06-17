@@ -1,9 +1,9 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
-    ACTIVE_CONSTRUCTOR_BINDING, Bytecode, DIRECT_EVAL_STRICT_BINDING,
-    FIELD_INITIALIZER_EVAL_BINDING, Function, GLOBAL_THIS_BINDING, HOME_OBJECT_BINDING,
-    NEW_TARGET_BINDING, SUPER_CONSTRUCTOR_BINDING, Value, function::CallEnv,
+    ACTIVE_CONSTRUCTOR_BINDING, Bytecode, DIRECT_EVAL_ARGUMENTS_BINDING,
+    DIRECT_EVAL_STRICT_BINDING, FIELD_INITIALIZER_EVAL_BINDING, Function, GLOBAL_THIS_BINDING,
+    HOME_OBJECT_BINDING, NEW_TARGET_BINDING, SUPER_CONSTRUCTOR_BINDING, Value, function::CallEnv,
 };
 
 const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
@@ -284,6 +284,7 @@ pub(super) fn is_call_frame_binding(name: &str) -> bool {
         name,
         GLOBAL_THIS_BINDING
             | DIRECT_EVAL_STRICT_BINDING
+            | DIRECT_EVAL_ARGUMENTS_BINDING
             | FIELD_INITIALIZER_EVAL_BINDING
             | HOME_OBJECT_BINDING
             | NEW_TARGET_BINDING
