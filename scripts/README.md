@@ -12,6 +12,10 @@ each script is for.
 - `check-ci.sh`: Local parity wrapper for the GitHub Actions `check` job. It
   runs `check.sh` with serialized, split runtime tests and skips Test262
   because the workflow owns that in a dedicated job.
+- `check-touched.sh`: Change-aware fast gate for AI iteration and pre-commit.
+  Use `--staged --explain` before committing, or `--base <ref> --explain` to
+  validate a branch slice. It runs relevant crate tests and focused Test262
+  allowlist filters when touched paths imply a semantic area.
 - `compare-qjs.sh`: Runs `tests/fixtures/compare-qjs/` fixtures against both
   quickjs-rust and the pinned QuickJS-NG reference.
 - `find-qjsng-gaps.sh`: First agent entrypoint for conformance work. Wraps

@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if [ "${QJS_SKIP_PRE_PUSH:-0}" = "1" ]; then
+  echo "pre-push: skipped because QJS_SKIP_PRE_PUSH=1"
+  exit 0
+fi
+
+echo "pre-push: full local gate..."
+"$ROOT_DIR/scripts/check.sh"

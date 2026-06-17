@@ -15,11 +15,57 @@ if ! CARGO_BIN="$(qjs_resolve_cargo)"; then
   exit 127
 fi
 
+FILTER_PREFIXES=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --filter)
+      if [ "$#" -lt 2 ]; then
+        echo "error: --filter requires an allowlist prefix" >&2
+        exit 2
+      fi
+      FILTER_PREFIXES+=("$2")
+      shift 2
+      ;;
+    --filter=*)
+      FILTER_PREFIXES+=("${1#--filter=}")
+      shift
+      ;;
+    -h|--help)
+      cat <<'EOF'
+Usage: ./scripts/test262-subset.sh [--filter <allowlist-prefix>]...
+
+Runs the curated Test262 allowlist. When one or more --filter values are
+provided, only allowlist entries with a matching path prefix are validated and
+executed.
+EOF
+      exit 0
+      ;;
+    *)
+      echo "error: unknown argument: $1" >&2
+      exit 2
+      ;;
+  esac
+done
+
 trim_ws() {
   local value="$1"
   value="${value#${value%%[![:space:]]*}}"
   value="${value%${value##*[![:space:]]}}"
   printf '%s' "$value"
+}
+
+matches_filter_prefixes() {
+  local entry="$1"
+  local prefix
+  if [ "${#FILTER_PREFIXES[@]}" -eq 0 ]; then
+    return 0
+  fi
+  for prefix in "${FILTER_PREFIXES[@]}"; do
+    case "$entry" in
+      "$prefix"*) return 0 ;;
+    esac
+  done
+  return 1
 }
 
 TEST262_JOBS="${TEST262_JOBS:-$(qjs_detect_jobs)}"
@@ -322,18 +368,27 @@ trap 'rm -rf "$RESULT_DIR"' EXIT
 mkdir -p "$RESULT_DIR/meta"
 
 allowlist_count=0
+unfiltered_allowlist_count=0
 allowlist_entries=()
 while IFS= read -r line; do
   entry="${line%%#*}"
   entry="$(trim_ws "$entry")"
   [ -z "$entry" ] && continue
+  unfiltered_allowlist_count=$((unfiltered_allowlist_count + 1))
+  if ! matches_filter_prefixes "$entry"; then
+    continue
+  fi
 
   allowlist_count=$((allowlist_count + 1))
   allowlist_entries+=("$entry")
 done < "$ALLOWLIST"
 
 if [ "$allowlist_count" -eq 0 ]; then
-  echo "error: Test262 allowlist is empty; add at least one runnable subset case" >&2
+  if [ "${#FILTER_PREFIXES[@]}" -gt 0 ]; then
+    echo "error: Test262 allowlist filters selected no cases: ${FILTER_PREFIXES[*]}" >&2
+  else
+    echo "error: Test262 allowlist is empty; add at least one runnable subset case" >&2
+  fi
   exit 1
 fi
 
@@ -355,6 +410,9 @@ while IFS= read -r line; do
 
   entry="${line%%#*}"
   entry="$(trim_ws "$entry")"
+  if ! matches_filter_prefixes "$entry"; then
+    continue
+  fi
   expected_failure_entries+=("$entry")
 done < "$EXPECTED_FAILURES"
 
@@ -408,6 +466,9 @@ if [ "$validate_status" -ne 0 ]; then
 fi
 
 echo "building qjs-cli for Test262 subset"
+if [ "${#FILTER_PREFIXES[@]}" -gt 0 ]; then
+  echo "test262: selected $allowlist_count/$unfiltered_allowlist_count allowlist cases with filters: ${FILTER_PREFIXES[*]}"
+fi
 QJS_CLI_BIN="$(qjs_build_cli_bin "$CARGO_BIN")"
 
 # Pre-concatenate the harness prelude shared by every non-raw upstream case.

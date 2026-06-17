@@ -58,6 +58,17 @@ CI runs that subset in a separate job. `scripts/check.sh` prints coarse stage
 timings in both normal and split modes so a canceled remote step leaves enough
 context to distinguish compile, lint, runtime, file-size, and subset failures.
 
+For AI iteration and pre-commit validation, use the touched-file gate:
+
+```sh
+./scripts/check-touched.sh --staged --explain
+```
+
+The touched gate keeps commits fast by selecting crate tests and focused
+Test262 allowlist prefixes from changed paths. Use `--base <ref> --explain`
+when validating an accumulated branch slice. It is an early warning gate, not a
+replacement for `./scripts/check.sh` before final handoff or push.
+
 ## Parallel Task
 
 Use isolated worktrees only when ownership boundaries are clear:

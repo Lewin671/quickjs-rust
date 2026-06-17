@@ -13,6 +13,10 @@ boundaries and make each change verifiable with focused tests.
 ## Standard Commands
 
 - Fresh checkout setup: `./scripts/bootstrap.sh`
+- Touched check (staged, AI-friendly pre-commit gate):
+  `./scripts/check-touched.sh --staged --explain`
+- Touched check against a base ref:
+  `./scripts/check-touched.sh --base <ref> --explain`
 - Full check (fmt, clippy, tests, file-size guard, Test262 subset): `./scripts/check.sh`
 - CLI smoke test: `cargo run -p qjs-cli -- -e "1 + 2;"`
 - QuickJS-NG comparison smoke tests: `./scripts/compare-qjs.sh`
@@ -88,6 +92,11 @@ installed, report that clearly and do not fake test results.
 - One commit per reviewable unit: one feature, fix, refactor, dependency
   update, or documentation/policy update. No unrelated formatting or cleanup
   mixed in; never stage user or unrelated workspace changes.
+- Before committing, run `./scripts/check-touched.sh --staged --explain`
+  unless the installed pre-commit hook has already run it. This is the
+  AI-friendly fast gate: it selects crate tests and focused Test262 slices from
+  staged paths. It does not replace `./scripts/check.sh` for final handoff or
+  push.
 - For gap work, one recommendation-queue area or one coherent semantic family
   is the commit boundary. Verify the area with
   `./scripts/find-qjsng-gaps.sh --filter <area> --all` before implementation
@@ -154,7 +163,9 @@ global error models, or broad architecture docs. Full runbook:
 For code changes:
 
 1. The relevant crate has unit or integration coverage.
-2. `./scripts/check.sh` passes, or the failure is explained with exact output.
+2. `./scripts/check-touched.sh --staged --explain` passes before commit, and
+   `./scripts/check.sh` passes before final handoff or push, or any failure is
+   explained with exact output.
 3. Docs and crate metadata are updated when behavior, commands, APIs, or
    conformance expectations change.
 4. New dependencies, public APIs, or architecture shifts are justified.
@@ -173,8 +184,11 @@ changed.
    of re-running global probes.
 2. Read the related crate, `docs/architecture.md`, and `docs/harness.md`.
 3. Implement the smallest useful slice, with tests.
-4. Run `./scripts/check.sh`.
-5. Summarize behavior, risks, verification, and the next useful task.
+4. Run `./scripts/check-touched.sh --staged --explain` before committing; for
+   runtime, parser, or lexer semantics, include the focused Test262 slices it
+   selects or explain why no slice matched.
+5. Run `./scripts/check.sh` before final handoff or push.
+6. Summarize behavior, risks, verification, and the next useful task.
 
 If requirements are ambiguous, prefer a small reversible implementation and
 state the assumption. Ask for user input only when the ambiguity changes

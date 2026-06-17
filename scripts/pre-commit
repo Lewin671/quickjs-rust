@@ -11,13 +11,5 @@ done
 ROOT_DIR="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
 . "$ROOT_DIR/scripts/lib.sh"
 
-if ! CARGO_BIN="$(qjs_resolve_cargo)"; then
-  echo "pre-commit: cargo not found, skipping checks" >&2
-  exit 0
-fi
-
-echo "pre-commit: fmt + clippy + test + file-size..."
-"$CARGO_BIN" fmt --all -- --check
-"$CARGO_BIN" clippy --workspace --all-targets -- -D warnings
-"$CARGO_BIN" test --workspace -q
-"$ROOT_DIR/scripts/check-file-size.sh"
+echo "pre-commit: change-aware fast checks..."
+"$ROOT_DIR/scripts/check-touched.sh" --staged --explain
