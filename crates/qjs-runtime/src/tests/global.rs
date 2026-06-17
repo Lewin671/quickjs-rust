@@ -365,6 +365,37 @@ fn evaluates_indirect_eval_against_global_scope() {
 }
 
 #[test]
+fn eval_script_host_evaluates_global_script() {
+    // __quickjsRustEvalScript ($262.evalScript) runs a global script: top-level
+    // `let`/`const`/`class` become persistent, referenceable global lexical
+    // bindings that are not own properties of the global object.
+    assert_eq!(
+        eval(
+            "__quickjsRustEvalScript('let scriptLexical = 5;'); \
+             scriptLexical + ':' + Object.prototype.hasOwnProperty.call(this, 'scriptLexical');"
+        ),
+        Ok(Value::String("5:false".to_owned()))
+    );
+    // var/function declarations reach the global var environment (own property).
+    assert_eq!(
+        eval(
+            "__quickjsRustEvalScript('var scriptVar = 9;'); \
+             scriptVar + ':' + Object.prototype.hasOwnProperty.call(this, 'scriptVar');"
+        ),
+        Ok(Value::String("9:true".to_owned()))
+    );
+    // A sloppy Annex B block-function hoisted by eval is configurable, so a
+    // later global lexical declaration of the same name does not collide.
+    assert_eq!(
+        eval(
+            "eval('if (true) { function collide() {} }'); \
+             __quickjsRustEvalScript('let collide = 1;'); collide;"
+        ),
+        Ok(Value::Number(1.0))
+    );
+}
+
+#[test]
 fn initializes_global_hoisted_bindings_before_script_execution() {
     assert_eq!(
         eval("var before = f; { function f() { return 9; } } before === undefined && f() === 9;"),

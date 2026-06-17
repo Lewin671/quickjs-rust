@@ -186,6 +186,7 @@ pub(crate) enum NativeFunction {
     BigUint64Array,
     IsHtmlDda,
     DetachArrayBuffer,
+    EvalScript,
     IteratorPrototypeIterator,
     // %Iterator% intrinsic (ES2025 Iterator Helpers).
     Iterator,

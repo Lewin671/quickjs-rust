@@ -129,7 +129,9 @@ var $262 = {
   IsHTMLDDA: __quickjsRustIsHTMLDDA,
   detachArrayBuffer: __quickjsRustDetachArrayBuffer,
   evalScript: function(source) {
-    return (0, eval)(source);
+    return (typeof __quickjsRustEvalScript === 'function')
+      ? __quickjsRustEvalScript(source)
+      : (0, eval)(source);
   },
   createRealm: function() {
     var crossRealmArray = function Array() {

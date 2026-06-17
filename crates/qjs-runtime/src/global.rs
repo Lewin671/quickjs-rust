@@ -88,6 +88,13 @@ pub(super) fn install_globals(env: &mut CallEnv, global_this: &Value) {
         1,
         NativeFunction::DetachArrayBuffer,
     );
+    define_global_function(
+        env,
+        global_this,
+        "__quickjsRustEvalScript",
+        1,
+        NativeFunction::EvalScript,
+    );
 }
 
 fn define_global_function(
@@ -305,6 +312,49 @@ pub(super) fn native_global_eval(
     // via define_eval_global_binding) reach the global var environment.
     if direct_eval {
         *env = eval_env;
+    }
+    result.value
+}
+
+/// Host `$262.evalScript`: evaluates `source` as a global script in the current
+/// realm. Unlike indirect `eval`, a script's top-level lexical declarations
+/// (`let`/`const`/`class`) become persistent global lexical bindings, so a
+/// later declaration of the same name observes them (and var/function
+/// declarations reach the global var environment). Used by the Test262 harness.
+pub(super) fn native_eval_script(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
+    let Value::String(source) = value else {
+        return Ok(value);
+    };
+    let script = parse_script(&source).map_err(|error| RuntimeError {
+        thrown: None,
+        message: format!("SyntaxError: {}", error.message),
+    })?;
+    let bytecode = compile_direct_eval_script(&script, false)?;
+    let mut eval_env = CallEnv::new(env.realm_rc());
+    validate_eval_global_lexical_bindings(&bytecode, &eval_env)?;
+    initialize_direct_eval_bindings(&bytecode, &mut eval_env, false, &HashSet::new());
+    let result = eval_bytecode_with_env(&bytecode, eval_env.clone());
+    for name in bytecode
+        .hoisted_local_names()
+        .chain(bytecode.global_names().iter().map(String::as_str))
+    {
+        if let Some(value) = result.binding(name) {
+            define_eval_global_binding(&mut eval_env, name, value.clone());
+        }
+    }
+    // Top-level lexical declarations persist as global lexical bindings.
+    let hoisted = bytecode.hoisted_local_names().collect::<HashSet<_>>();
+    for name in bytecode.local_names() {
+        if hoisted.contains(name) {
+            continue;
+        }
+        if let Some(value) = result.binding(name) {
+            eval_env.insert_realm(name.to_owned(), value.clone());
+        }
     }
     result.value
 }
