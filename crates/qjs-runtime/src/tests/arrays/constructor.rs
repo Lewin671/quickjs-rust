@@ -48,6 +48,12 @@ fn array_constructor_uses_new_target_array_prototype() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "let realmArrayPrototype = { realm: 'proxy-target' }; function C() {} Object.defineProperty(C, '__quickjsRustRealmArrayPrototype', { value: realmArrayPrototype }); C.prototype = false; let proxy = new Proxy(C, {}); Object.getPrototypeOf(Reflect.construct(Array, [], proxy)) === realmArrayPrototype;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]

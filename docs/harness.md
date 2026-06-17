@@ -281,6 +281,9 @@ case or by an included harness file. The `assert.sameValue` fast path is
 installed by assigning `assert.sameValue = __quickjsRustAssertSameValue` after
 `assert.js` loads; the harness does not rewrite test source identifiers, because
 doing so changes observable `with`/Proxy name resolution.
+The cross-realm `Array` shim forwards through `Reflect.construct` with the
+incoming `new.target`, so proxy-wrapped constructor targets still exercise
+`GetFunctionRealm`-style fallback behavior.
 The
 `Test262 Coverage` GitHub Actions workflow starts for each successful `CI`
 commit, but a newer push to the same branch cancels a superseded in-flight

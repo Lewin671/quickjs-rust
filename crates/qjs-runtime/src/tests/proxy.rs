@@ -170,6 +170,13 @@ fn evaluates_proxy_define_property_trap() {
         ),
         Ok(Value::Boolean(true))
     );
+    // FromPropertyDescriptor creates the trap argument in the current realm.
+    assert_eq!(
+        eval(
+            "let desc; let p = new Proxy({}, { defineProperty: function(target, key, descriptor) { desc = descriptor; return true; } }); p.a = 0; Object.getPrototypeOf(desc) === Object.prototype;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]

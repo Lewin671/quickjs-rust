@@ -27,7 +27,7 @@ pub(super) fn array_constructor_prototype_slot(
     if let Some(prototype) = array_prototype_slot_from_value(prototype, env) {
         return Ok(Some(prototype));
     }
-    if let Some(prototype) = cross_realm_array_prototype_slot(new_target, env) {
+    if let Some(prototype) = cross_realm_array_prototype_slot(new_target, env)? {
         return Ok(Some(prototype));
     }
     Ok(array_prototype(env).map(Prototype::Object))
@@ -42,15 +42,20 @@ fn array_prototype_slot_from_value(value: Value, env: &CallEnv) -> Option<Protot
         Value::Array(array) => Some(Prototype::Object(crate::array_as_object_prototype(
             &array, env,
         ))),
+        Value::Proxy(prototype) => Some(Prototype::Proxy(prototype)),
         _ => None,
     }
 }
 
-fn cross_realm_array_prototype_slot(new_target: Value, env: &CallEnv) -> Option<Prototype> {
-    let Value::Function(function) = new_target else {
-        return None;
-    };
-    function
-        .own_property(CROSS_REALM_ARRAY_PROTOTYPE)
-        .and_then(|property| array_prototype_slot_from_value(property.value, env))
+fn cross_realm_array_prototype_slot(
+    new_target: Value,
+    env: &CallEnv,
+) -> Result<Option<Prototype>, RuntimeError> {
+    match new_target {
+        Value::Function(function) => Ok(function
+            .own_property(CROSS_REALM_ARRAY_PROTOTYPE)
+            .and_then(|property| array_prototype_slot_from_value(property.value, env))),
+        Value::Proxy(proxy) => cross_realm_array_prototype_slot(proxy.target_result()?, env),
+        _ => Ok(None),
+    }
 }

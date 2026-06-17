@@ -263,8 +263,8 @@ var $262 = {
     return (0, eval)(source);
   },
   createRealm: function() {
-    var crossRealmArray = function Array(length) {
-      return arguments.length === 0 ? [] : globalThis.Array(length);
+    var crossRealmArray = function Array() {
+      return Reflect.construct(globalThis.Array, globalThis.Array.prototype.slice.call(arguments), new.target || crossRealmArray);
     };
     Object.defineProperty(crossRealmArray, "__quickjsRustCrossRealmArray", {
       value: true

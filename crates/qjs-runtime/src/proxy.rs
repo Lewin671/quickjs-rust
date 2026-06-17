@@ -354,8 +354,9 @@ pub(crate) fn proxy_define_property(
     let Some(trap) = proxy_trap(handler.clone(), "defineProperty", env)? else {
         return forward(target, env);
     };
-    let descriptor_object =
-        Value::Object(crate::object::property_descriptor_record_object(descriptor));
+    let descriptor_object = Value::Object(crate::object::property_descriptor_record_object(
+        descriptor, env,
+    ));
     let result = call_function(
         trap,
         handler,

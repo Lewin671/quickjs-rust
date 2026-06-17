@@ -3586,6 +3586,8 @@ cases/object-entries-length.js
 cases/object-entries-primitive-number.js
 cases/object-entries-primitive-string.js
 cases/object-entries-proxy-observable-operations.js
+test/built-ins/Proxy/defineProperty/desc-realm.js
+test/built-ins/Proxy/get-fn-realm.js
 test/built-ins/Proxy/has/return-true-target-prop-exists-using-with.js
 cases/object-entries-tamper-with-global-object.js
 cases/object-from-entries-basic.js

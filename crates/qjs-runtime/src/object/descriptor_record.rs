@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
 use crate::CallEnv;
-use crate::{ObjectRef, Property, RuntimeError, Value, has_property, is_truthy, property_value};
+use crate::{
+    ObjectRef, Property, RuntimeError, Value, has_property, is_truthy, object_prototype,
+    property_value,
+};
 
 pub(crate) fn resolve_property_definition(
     existing: Option<Property>,
@@ -167,8 +170,11 @@ pub(crate) struct PropertyDescriptor {
 /// descriptor record actually specifies. Used to forward a `defineProperty`
 /// request to a Proxy handler trap, which receives a descriptor object rather
 /// than a record.
-pub(crate) fn property_descriptor_record_object(descriptor: &PropertyDescriptor) -> ObjectRef {
-    let result = ObjectRef::new(HashMap::new());
+pub(crate) fn property_descriptor_record_object(
+    descriptor: &PropertyDescriptor,
+    env: &CallEnv,
+) -> ObjectRef {
+    let result = ObjectRef::with_prototype(HashMap::new(), object_prototype(env));
     if let Some(value) = &descriptor.value {
         result.define_property("value".to_owned(), Property::enumerable(value.clone()));
     }
