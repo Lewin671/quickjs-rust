@@ -84,22 +84,19 @@ fn date_utc_from_arguments(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<f64, RuntimeError> {
-    let year = to_number_with_env(
-        argument_values.first().cloned().unwrap_or(Value::Undefined),
-        env,
-    )?;
-    let month = optional_utc_number(argument_values, 1, 0.0, env)?;
-    let date = optional_utc_number(argument_values, 2, 1.0, env)?;
-    let hours = optional_utc_number(argument_values, 3, 0.0, env)?;
-    let minutes = optional_utc_number(argument_values, 4, 0.0, env)?;
-    let seconds = optional_utc_number(argument_values, 5, 0.0, env)?;
-    let millis = optional_utc_number(argument_values, 6, 0.0, env)?;
-    if [year, month, date, hours, minutes, seconds, millis]
-        .into_iter()
-        .any(|value| !value.is_finite())
-    {
+    let values = [
+        optional_utc_number(argument_values, 0, f64::NAN, env)?,
+        optional_utc_number(argument_values, 1, 0.0, env)?,
+        optional_utc_number(argument_values, 2, 1.0, env)?,
+        optional_utc_number(argument_values, 3, 0.0, env)?,
+        optional_utc_number(argument_values, 4, 0.0, env)?,
+        optional_utc_number(argument_values, 5, 0.0, env)?,
+        optional_utc_number(argument_values, 6, 0.0, env)?,
+    ];
+    if values.into_iter().any(|value| !value.is_finite()) {
         return Ok(f64::NAN);
     }
+    let [year, month, date, hours, minutes, seconds, millis] = values;
 
     let year_integer = year.trunc();
     let year = if (0.0..=99.0).contains(&year_integer) {

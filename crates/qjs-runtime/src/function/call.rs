@@ -1,19 +1,22 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
-    ACTIVE_CONSTRUCTOR_BINDING, ArrayRef, Bytecode, DIRECT_EVAL_STRICT_BINDING,
-    FIELD_INITIALIZER_EVAL_BINDING, Function, GLOBAL_THIS_BINDING, HOME_OBJECT_BINDING,
-    NEW_TARGET_BINDING, NativeFunction, ObjectRef, RuntimeError, SUPER_CONSTRUCTOR_BINDING, Value,
-    bytecode::eval_function_bytecode, function_prototype, native::call_native_function,
-    object_prototype, private::PrivateEnvironment, symbol,
+    ArrayRef, Bytecode, FIELD_INITIALIZER_EVAL_BINDING, Function, NEW_TARGET_BINDING,
+    NativeFunction, ObjectRef, RuntimeError, Value, bytecode::eval_function_bytecode,
+    function_prototype, native::call_native_function, object_prototype,
+    private::PrivateEnvironment, symbol,
 };
 
 use super::{
-    CallEnv, InstanceElementInitializer, arguments::arguments_object, function_call_this,
-    is_internal_binding_name, parameter_binding_name, rest_parameter_binding_name,
+    CallEnv, InstanceElementInitializer,
+    arguments::arguments_object,
+    captures::{
+        caller_global_this_has_own_property, captured_global_this_has_own_property,
+        is_call_frame_binding, propagate_function_captures, sync_global_var_captures,
+    },
+    function_call_this, is_internal_binding_name, parameter_binding_name,
+    rest_parameter_binding_name,
 };
-
-const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 
 pub(crate) fn call_function(
     callee: Value,
@@ -130,6 +133,8 @@ pub(crate) fn call_function(
                 crate::bytecode::CaptureWriteback {
                     target: Rc::clone(&function.captured_env),
                     names: function_env.function_capture_names,
+                    aliases: Vec::new(),
+                    parent: None,
                 }
             });
             return crate::generator::make_generator_object(
@@ -195,6 +200,8 @@ pub(crate) fn call_function(
             crate::bytecode::CaptureWriteback {
                 target: Rc::clone(&function.captured_env),
                 names: function_env.function_capture_names.clone(),
+                aliases: Vec::new(),
+                parent: None,
             }
         });
         let result = eval_function_bytecode(
@@ -204,9 +211,16 @@ pub(crate) fn call_function(
             function.with_stack.clone(),
             activation_writeback,
         );
-        propagate_function_captures(&function, &function_env.function_capture_names, &result);
+        propagate_function_captures(
+            &function,
+            bytecode,
+            &function_env.function_capture_names,
+            env,
+            &result,
+        );
         propagate_lexical_super_this(&function, bytecode, &result);
         propagate_caller_bindings(env, &function_env.caller_binding_names, &result);
+        sync_global_var_captures(&function, bytecode, env);
         // A derived constructor implicitly returns its (super-bound) `this`
         // when the body does not return an object, and it is a ReferenceError
         // to finish without having called `super(...)`.
@@ -482,14 +496,6 @@ struct FunctionCallEnv {
     caller_binding_names: Vec<String>,
 }
 
-struct CallerCaptureContext<'a> {
-    protected_names: &'a [String],
-    callee: &'a Value,
-    shares_capture_env: bool,
-    shares_writeback_target: bool,
-    writeback_names: &'a [String],
-}
-
 fn function_env(
     function: &Function,
     bytecode: &Bytecode,
@@ -512,31 +518,16 @@ fn function_env(
         &captured_env,
     );
     drop(captured_env);
-    let caller_shares_capture_env = env
-        .activation_captured_env()
-        .is_some_and(|activation| Rc::ptr_eq(activation, &function.captured_env))
-        || env
-            .captured_binding_source_env()
-            .is_some_and(|source| Rc::ptr_eq(source, &function.captured_env));
-    let (caller_shares_writeback_target, capture_writeback_names) =
-        if let Some(writeback) = &function.capture_writeback {
-            let shares_target = env
-                .activation_captured_env()
-                .is_some_and(|activation| Rc::ptr_eq(activation, &writeback.target))
-                || env
-                    .captured_binding_source_env()
-                    .is_some_and(|source| Rc::ptr_eq(source, &writeback.target));
-            (shares_target, writeback.names.as_slice())
-        } else {
-            (false, &[][..])
-        };
-    let caller_capture = CallerCaptureContext {
-        protected_names: &protected_capture_names,
-        callee: &callee,
-        shares_capture_env: caller_shares_capture_env,
-        shares_writeback_target: caller_shares_writeback_target,
-        writeback_names: capture_writeback_names,
-    };
+    refresh_written_global_captures_from_caller(
+        &function.captured_env,
+        &mut local_env,
+        bytecode,
+        &protected_capture_names,
+        env,
+    );
+    let caller_shares_capture_source = env
+        .captured_binding_source_env()
+        .is_some_and(|source| Rc::ptr_eq(source, &function.captured_env));
     let mut caller_binding_names = Vec::new();
     insert_caller_bytecode_bindings(
         &mut local_env,
@@ -544,15 +535,19 @@ fn function_env(
         bytecode,
         &function.local_names,
         env,
-        &caller_capture,
+        caller_shares_capture_source,
     );
     insert_caller_scope_bindings(
         &mut local_env,
         &mut caller_binding_names,
         &function.local_names,
         env,
-        &caller_capture,
     );
+    if let Some(writeback) = &function.capture_writeback
+        && let Some(parent) = writeback.parent.as_deref()
+    {
+        refresh_writeback_captures_from_caller(&mut local_env, parent, env);
+    }
     if function.has_name_binding
         && let Some(name) = &function.name
     {
@@ -639,6 +634,54 @@ fn function_env(
     }
 }
 
+fn refresh_writeback_captures_from_caller(
+    local_env: &mut HashMap<String, Value>,
+    writeback: &crate::bytecode::CaptureWriteback,
+    caller_env: &CallEnv,
+) {
+    for name in &writeback.names {
+        if let Some(value) = caller_env.get(name) {
+            local_env.insert(name.clone(), value);
+        }
+    }
+    for (source_name, target_name) in &writeback.aliases {
+        if let Some(value) = caller_env
+            .get(target_name)
+            .or_else(|| caller_env.get(source_name))
+        {
+            local_env.insert(source_name.clone(), value);
+        }
+    }
+    if let Some(parent) = writeback.parent.as_deref() {
+        refresh_writeback_captures_from_caller(local_env, parent, caller_env);
+    }
+}
+
+fn refresh_written_global_captures_from_caller(
+    captured_env: &Rc<RefCell<HashMap<String, Value>>>,
+    local_env: &mut HashMap<String, Value>,
+    bytecode: &Bytecode,
+    protected_capture_names: &[String],
+    caller_env: &CallEnv,
+) {
+    let written_names = bytecode.closure_written_binding_names();
+    let names = local_env.keys().cloned().collect::<Vec<_>>();
+    for name in names {
+        if protected_capture_names
+            .iter()
+            .any(|protected| protected == &name)
+            || !written_names.iter().any(|written| written == &name)
+            || !captured_global_this_has_own_property(captured_env, &name)
+            || !caller_global_this_has_own_property(caller_env, &name)
+        {
+            continue;
+        }
+        if let Some(value) = caller_env.get(&name) {
+            local_env.insert(name, value);
+        }
+    }
+}
+
 /// Installs the per-frame `super` and `new.target` bindings. A method or
 /// constructor uses its own `[[HomeObject]]`, parent constructor, and (when
 /// constructing) `new.target`; an arrow inherits all three from the enclosing
@@ -706,21 +749,22 @@ fn insert_function_captures(
 ) -> (Vec<String>, Vec<String>) {
     let mut writeback_names = Vec::new();
     let mut protected_names = Vec::new();
-    for name in bytecode.global_names() {
+    let mut names = bytecode.closure_referenced_global_names();
+    names.extend(bytecode.closure_written_binding_names());
+    names.sort();
+    names.dedup();
+    for name in names {
         insert_function_capture(
             local_env,
             &mut writeback_names,
             &mut protected_names,
             bytecode,
             function_env,
-            name,
+            &name,
         );
     }
     for name in bytecode.local_names() {
-        if function_local_names
-            .binary_search_by(|local| local.as_str().cmp(name))
-            .is_err()
-        {
+        if !function_local_names.iter().any(|local| local == name) {
             insert_function_capture(
                 local_env,
                 &mut writeback_names,
@@ -767,19 +811,23 @@ fn insert_caller_bytecode_bindings(
     bytecode: &Bytecode,
     function_local_names: &[String],
     env: &CallEnv,
-    caller_capture: &CallerCaptureContext<'_>,
+    caller_shares_capture_source: bool,
 ) {
     for name in bytecode.global_names() {
-        let write_back_to_caller = function_local_names
-            .binary_search_by(|local| local.as_str().cmp(name))
-            .is_err();
+        let write_back_to_caller = !function_local_names.iter().any(|local| local == name);
         insert_caller_binding(
             local_env,
             caller_binding_names,
             env,
             name,
-            caller_capture,
             write_back_to_caller,
+            (caller_shares_capture_source && bytecode.sloppy_global_fallback_binding(name))
+                || (bytecode.local_slot(name).is_none()
+                    && ((env.module_host().is_some() && env.realm_contains(name))
+                        || (bytecode.writes_binding(name) && env.realm_contains(name))
+                        || env
+                            .captured_binding_source_env()
+                            .is_some_and(|source| source.borrow().contains_key(name)))),
         );
     }
     for name in bytecode.sloppy_global_assignment_names() {
@@ -788,17 +836,20 @@ fn insert_caller_bytecode_bindings(
         }
     }
     for name in bytecode.local_names() {
-        if function_local_names
-            .binary_search_by(|local| local.as_str().cmp(name))
-            .is_err()
-        {
+        if !function_local_names.iter().any(|local| local == name) {
+            let allow_live_env_override = bytecode
+                .local_slot(name)
+                .is_some_and(|slot| bytecode.local_is_from_env(slot))
+                && (env.module_host().is_some()
+                    || (bytecode.writes_binding(name)
+                        && caller_global_this_has_own_property(env, name)));
             insert_caller_binding(
                 local_env,
                 caller_binding_names,
                 env,
                 name,
-                caller_capture,
                 true,
+                allow_live_env_override,
             );
         }
     }
@@ -809,25 +860,16 @@ fn insert_caller_binding(
     caller_binding_names: &mut Vec<String>,
     env: &CallEnv,
     name: &str,
-    caller_capture: &CallerCaptureContext<'_>,
     write_back_to_caller: bool,
+    allow_existing_override: bool,
 ) {
     if is_internal_binding_name(name) {
         return;
     }
-    if local_env.contains_key(name)
-        && (!(caller_capture.shares_capture_env
-            || caller_capture.shares_writeback_target
-                && caller_capture
-                    .writeback_names
-                    .iter()
-                    .any(|existing| existing == name))
-            || caller_capture
-                .protected_names
-                .iter()
-                .any(|existing| existing == name)
-            || caller_binding_is_callee(env, name, caller_capture.callee))
-    {
+    if local_env.contains_key(name) && !allow_existing_override {
+        if write_back_to_caller && caller_global_this_has_own_property(env, name) {
+            insert_missing_caller_binding_name(caller_binding_names, name);
+        }
         return;
     }
     if let Some(value) = env.locals().get(name) {
@@ -835,6 +877,13 @@ fn insert_caller_binding(
         if write_back_to_caller {
             insert_missing_caller_binding_name(caller_binding_names, name);
         }
+    } else if allow_existing_override && let Some(value) = env.get_realm(name) {
+        local_env.insert(name.to_owned(), value);
+    } else if allow_existing_override
+        && let Some(source) = env.captured_binding_source_env()
+        && let Some(value) = source.borrow().get(name).cloned()
+    {
+        local_env.insert(name.to_owned(), value);
     }
 }
 
@@ -849,38 +898,16 @@ fn insert_caller_scope_bindings(
     caller_binding_names: &mut Vec<String>,
     function_local_names: &[String],
     env: &CallEnv,
-    caller_capture: &CallerCaptureContext<'_>,
 ) {
     // Iterate only the caller's frame locals; realm bindings are shared and need
     // no per-frame copy. The O(50)-per-key intrinsic scan is gone.
     let names: Vec<String> = env.locals().keys().cloned().collect();
     for name in names {
-        if is_call_frame_binding(&name)
-            || function_local_names
-                .binary_search_by(|local| local.as_str().cmp(&name))
-                .is_ok()
-        {
+        if is_call_frame_binding(&name) || function_local_names.iter().any(|local| local == &name) {
             continue;
         }
-        insert_caller_binding(
-            local_env,
-            caller_binding_names,
-            env,
-            &name,
-            caller_capture,
-            true,
-        );
+        insert_caller_binding(local_env, caller_binding_names, env, &name, true, false);
     }
-}
-
-fn caller_binding_is_callee(env: &CallEnv, name: &str, callee: &Value) -> bool {
-    let Some(Value::Function(binding)) = env.locals().get(name) else {
-        return false;
-    };
-    let Value::Function(callee) = callee else {
-        return false;
-    };
-    binding.ptr_eq(callee)
 }
 
 fn propagate_caller_bindings(
@@ -911,17 +938,6 @@ fn propagate_caller_bindings(
     }
 }
 
-fn propagate_function_captures(
-    function: &Function,
-    function_capture_names: &[String],
-    result: &crate::bytecode::FunctionBytecodeResult<'_>,
-) {
-    write_function_capture_values(&function.captured_env, function_capture_names, result);
-    if let Some(writeback) = &function.capture_writeback {
-        write_function_capture_values(&writeback.target, &writeback.names, result);
-    }
-}
-
 fn propagate_lexical_super_this(
     function: &Function,
     bytecode: &Bytecode,
@@ -949,49 +965,4 @@ fn propagate_lexical_super_this(
             .borrow_mut()
             .insert("this".to_owned(), this_value);
     }
-}
-
-fn write_function_capture_values(
-    target: &Rc<RefCell<HashMap<String, Value>>>,
-    names: &[String],
-    result: &crate::bytecode::FunctionBytecodeResult<'_>,
-) {
-    if names.is_empty() {
-        return;
-    }
-    let realm_global = target
-        .borrow()
-        .get(DYNAMIC_FUNCTION_REALM_GLOBAL)
-        .and_then(|value| match value {
-            Value::Object(object) => Some(object.clone()),
-            _ => None,
-        });
-    let mut captured_env = target.borrow_mut();
-    for name in names {
-        if !is_call_frame_binding(name)
-            && let Some(final_value) = result.binding(name)
-        {
-            captured_env.insert(name.clone(), final_value.clone());
-            if let Some(global) = &realm_global
-                && global.has_own_property(name)
-            {
-                global.define_property(name.clone(), crate::Property::enumerable(final_value));
-            }
-        }
-    }
-}
-
-fn is_call_frame_binding(name: &str) -> bool {
-    matches!(
-        name,
-        GLOBAL_THIS_BINDING
-            | DIRECT_EVAL_STRICT_BINDING
-            | FIELD_INITIALIZER_EVAL_BINDING
-            | HOME_OBJECT_BINDING
-            | NEW_TARGET_BINDING
-            | SUPER_CONSTRUCTOR_BINDING
-            | ACTIVE_CONSTRUCTOR_BINDING
-            | "this"
-            | "arguments"
-    )
 }

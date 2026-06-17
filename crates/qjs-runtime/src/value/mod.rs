@@ -19,6 +19,7 @@ use crate::{Function, proxy::ProxyRef, string};
 
 /// A JavaScript value supported by the current runtime subset.
 #[derive(Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum Value {
     /// Number value.
     Number(f64),

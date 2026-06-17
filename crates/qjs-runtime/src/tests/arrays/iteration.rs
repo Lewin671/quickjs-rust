@@ -315,6 +315,12 @@ fn evaluates_array_iteration_builtins() {
         Ok(Value::Number(10.0))
     );
     assert_eq!(
+        eval(
+            "var xs = ['Shoes', 'Car', 'Bike']; var called = 0; xs.findLast(function() { called++; return true; }); called = 0; var result = xs.findLast(function(value) { called++; return value === 'Shoes'; }); called + ':' + result;"
+        ),
+        Ok(Value::String("3:Shoes".to_owned()))
+    );
+    assert_eq!(
         eval("[1, 2, 3, 4].findLastIndex(function(value) { return value > 2; });"),
         Ok(Value::Number(3.0))
     );

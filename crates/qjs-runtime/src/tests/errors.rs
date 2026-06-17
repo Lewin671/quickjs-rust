@@ -216,6 +216,14 @@ fn evaluates_aggregate_error_builtin() {
         Ok(Value::Boolean(true))
     );
     assert_eq!(
+        eval(
+            "function scanGlobal() { for (var key in this) {} } \
+             scanGlobal(); \
+             Object.getOwnPropertyDescriptor(this, 'AggregateError').enumerable;"
+        ),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
         eval("let error = new AggregateError([1, 2], 'boom'); error.message;"),
         Ok(Value::String("boom".to_owned()))
     );

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{RuntimeError, Value, function::CallEnv};
 
 use super::ir::Bytecode;
@@ -7,6 +9,7 @@ pub(crate) struct FunctionBytecodeResult<'a> {
     pub(super) bytecode: &'a Bytecode,
     pub(super) env: CallEnv,
     pub(super) locals: Vec<Option<Value>>,
+    pub(super) captured_env: HashMap<String, Value>,
     pub(crate) sloppy_global_names: Vec<String>,
 }
 
@@ -79,6 +82,7 @@ impl FunctionBytecodeResult<'_> {
             .and_then(|index| self.locals.get(index))
             .and_then(Option::as_ref)
             .cloned()
+            .or_else(|| self.captured_env.get(name).cloned())
             .or_else(|| self.env.get(name))
     }
 }

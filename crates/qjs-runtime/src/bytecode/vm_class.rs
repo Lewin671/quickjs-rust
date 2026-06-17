@@ -510,6 +510,8 @@ impl Vm<'_> {
         (!names.is_empty()).then(|| CaptureWriteback {
             target: self.captured_env.clone(),
             names,
+            aliases: Vec::new(),
+            parent: None,
         })
     }
 

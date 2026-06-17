@@ -534,6 +534,48 @@ impl Bytecode {
         &self.global_names
     }
 
+    pub(crate) fn referenced_global_names(&self) -> Vec<String> {
+        let mut names = BTreeSet::new();
+        for name in &self.global_names {
+            names.insert(name.clone());
+        }
+        for local in &self.locals {
+            if !local.sloppy_global_fallback && !local.from_env {
+                names.remove(&local.name);
+            }
+        }
+        names.into_iter().collect()
+    }
+
+    pub(crate) fn closure_referenced_global_names(&self) -> Vec<String> {
+        let mut names = BTreeSet::new();
+        for name in self.referenced_global_names() {
+            names.insert(name);
+        }
+        super::ir_names::collect_nested_global_names_from_ops(&self.code, &mut names);
+        names.into_iter().collect()
+    }
+
+    pub(crate) fn written_binding_names(&self) -> Vec<String> {
+        let mut names = BTreeSet::new();
+        collect_written_binding_names_from_ops(self, &self.code, &mut names);
+        for local in &self.locals {
+            if !local.sloppy_global_fallback && !local.from_env {
+                names.remove(&local.name);
+            }
+        }
+        names.into_iter().collect()
+    }
+
+    pub(crate) fn closure_written_binding_names(&self) -> Vec<String> {
+        let mut names = BTreeSet::new();
+        for name in self.written_binding_names() {
+            names.insert(name);
+        }
+        super::ir_names::collect_nested_written_binding_names_from_ops(&self.code, &mut names);
+        names.into_iter().collect()
+    }
+
     pub(crate) fn global_lexical_names(&self) -> &[String] {
         &self.global_lexical_names
     }
@@ -565,10 +607,24 @@ impl Bytecode {
         self.locals.get(slot).is_some_and(|local| local.mutable)
     }
 
+    pub(crate) fn local_is_sloppy_global_fallback(&self, slot: usize) -> bool {
+        self.locals
+            .get(slot)
+            .is_some_and(|local| local.sloppy_global_fallback)
+    }
+
     pub(crate) fn local_is_body_hoist_only(&self, slot: usize) -> bool {
         self.locals
             .get(slot)
             .is_some_and(|local| local.hoisted && !local.parameter)
+    }
+
+    pub(crate) fn local_is_parameter(&self, slot: usize) -> bool {
+        self.locals.get(slot).is_some_and(|local| local.parameter)
+    }
+
+    pub(crate) fn local_is_from_env(&self, slot: usize) -> bool {
+        self.locals.get(slot).is_some_and(|local| local.from_env)
     }
 
     /// Whether the body can create a nested closure, class, generator, or async
@@ -650,6 +706,49 @@ impl Bytecode {
             || matches!(op, Op::StoreLocal(slot) | Op::AssignLocal(slot) if self.locals.get(*slot).is_some_and(|local| local.from_env))
         })
     }
+
+    pub(crate) fn writes_binding(&self, binding_name: &str) -> bool {
+        self.code.iter().any(|op| match op {
+            Op::StoreGlobalStrict(name)
+            | Op::StoreGlobalSloppy(name)
+            | Op::StoreLocalOrGlobalSloppy { name, .. }
+            | Op::StoreIdentWith {
+                name, slot: None, ..
+            }
+            | Op::StoreResolvedIdentWith {
+                name, slot: None, ..
+            } => name == binding_name,
+            Op::StoreLocal(slot)
+            | Op::AssignLocal(slot)
+            | Op::StoreIdentWith {
+                slot: Some(slot), ..
+            }
+            | Op::StoreResolvedIdentWith {
+                slot: Some(slot), ..
+            } => self
+                .locals
+                .get(*slot)
+                .is_some_and(|local| local.name == binding_name),
+            Op::NewFunction { bytecode, .. } => bytecode.writes_binding(binding_name),
+            Op::NewClass {
+                constructor,
+                elements,
+                ..
+            } => {
+                constructor.bytecode.writes_binding(binding_name)
+                    || elements
+                        .iter()
+                        .any(|element| class_element_writes_binding(element, binding_name))
+            }
+            _ => false,
+        })
+    }
+
+    pub(crate) fn sloppy_global_fallback_binding(&self, binding_name: &str) -> bool {
+        self.locals
+            .iter()
+            .any(|local| local.name == binding_name && local.sloppy_global_fallback)
+    }
 }
 
 fn collect_local_slots(locals: &[Local]) -> HashMap<String, usize> {
@@ -658,6 +757,67 @@ fn collect_local_slots(locals: &[Local]) -> HashMap<String, usize> {
         slots.entry(local.name.clone()).or_insert(slot);
     }
     slots
+}
+
+fn class_element_writes_binding(element: &ClassElementDef, binding_name: &str) -> bool {
+    match element {
+        ClassElementDef::Method(def) => def.bytecode.writes_binding(binding_name),
+        ClassElementDef::Field(def) => def
+            .initializer
+            .as_ref()
+            .is_some_and(|initializer| initializer.bytecode.writes_binding(binding_name)),
+        ClassElementDef::Private(def) => private_class_element_writes_binding(def, binding_name),
+        ClassElementDef::StaticBlock(def) => def.bytecode.writes_binding(binding_name),
+    }
+}
+
+fn private_class_element_writes_binding(
+    element: &ClassPrivateElementDef,
+    binding_name: &str,
+) -> bool {
+    match element {
+        ClassPrivateElementDef::Field { initializer, .. } => initializer
+            .as_ref()
+            .is_some_and(|initializer| initializer.bytecode.writes_binding(binding_name)),
+        ClassPrivateElementDef::Method { def, .. }
+        | ClassPrivateElementDef::Getter { def, .. }
+        | ClassPrivateElementDef::Setter { def, .. } => def.bytecode.writes_binding(binding_name),
+    }
+}
+
+fn collect_written_binding_names_from_ops(
+    bytecode: &Bytecode,
+    code: &[Op],
+    names: &mut BTreeSet<String>,
+) {
+    for op in code {
+        match op {
+            Op::StoreGlobalStrict(name)
+            | Op::StoreGlobalSloppy(name)
+            | Op::StoreLocalOrGlobalSloppy { name, .. }
+            | Op::StoreIdentWith {
+                name, slot: None, ..
+            }
+            | Op::StoreResolvedIdentWith {
+                name, slot: None, ..
+            } => {
+                names.insert(name.clone());
+            }
+            Op::StoreLocal(slot)
+            | Op::AssignLocal(slot)
+            | Op::StoreIdentWith {
+                slot: Some(slot), ..
+            }
+            | Op::StoreResolvedIdentWith {
+                slot: Some(slot), ..
+            } => {
+                if let Some(local) = bytecode.locals.get(*slot) {
+                    names.insert(local.name.clone());
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 fn collect_global_names(code: &[Op]) -> Vec<String> {

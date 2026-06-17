@@ -226,6 +226,11 @@ impl CallEnv {
         self.realm.borrow().get(name).cloned()
     }
 
+    /// Looks up `name` in the shared realm layer only.
+    pub(crate) fn get_realm(&self, name: &str) -> Option<Value> {
+        self.realm.borrow().get(name).cloned()
+    }
+
     /// True if `name` is bound in either layer.
     pub(crate) fn contains_key(&self, name: &str) -> bool {
         self.locals.contains_key(name) || self.realm.borrow().contains_key(name)

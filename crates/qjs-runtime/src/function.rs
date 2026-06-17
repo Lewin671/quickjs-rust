@@ -1,5 +1,6 @@
 mod arguments;
 mod call;
+mod captures;
 mod env;
 mod install;
 mod local_names;

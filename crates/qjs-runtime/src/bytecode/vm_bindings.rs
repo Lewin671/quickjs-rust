@@ -184,6 +184,21 @@ impl Vm<'_> {
                     .to_owned(),
             });
         }
+        if !self.bytecode.global_scope
+            && let Some(slot) = self.bytecode.local_slot(name)
+            && self.bytecode.local_is_sloppy_global_fallback(slot)
+            && let Some(value) = self.locals.get(slot).and_then(Option::as_ref)
+        {
+            return Ok(value.clone());
+        }
+        if self.bytecode.global_scope
+            && let Some(slot) = self.bytecode.local_slot(name)
+            && self.bytecode.local_is_body_hoist_only(slot)
+            && !is_compiler_temporary(name)
+            && let Some(value) = self.global_this_property(name)
+        {
+            return Ok(value);
+        }
         // A "global" name may actually be a caller-scope binding carried in this
         // frame's own locals layer (e.g. an outer `var`/`let` the body closes
         // over); check that first, then the shared realm, then a property
@@ -481,13 +496,19 @@ impl Vm<'_> {
         // through `captured_env`; keep a captured copy of this slot current so
         // later calls of that closure observe the new value.
         self.write_through_captured(&local_meta.name, value.clone());
-        if local_meta.from_env
-            && !local_meta.hoisted
+        let syncs_global_var = (local_meta.from_env && !local_meta.hoisted)
+            || (self.bytecode.global_scope
+                && self.bytecode.local_is_body_hoist_only(slot)
+                && !is_compiler_temporary(&local_meta.name));
+        if syncs_global_var
             && let Some(Value::Object(global_this)) =
                 self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned()
             && global_this.has_own_property(&local_meta.name)
         {
-            global_this.set(local_meta.name, value);
+            global_this.set(local_meta.name.clone(), value.clone());
+            if self.realm.borrow().contains_key(&local_meta.name) {
+                self.realm.borrow_mut().insert(local_meta.name, value);
+            }
         }
         Ok(())
     }
@@ -515,18 +536,50 @@ impl Vm<'_> {
         name: String,
         value: Value,
     ) -> Result<(), RuntimeError> {
+        let is_sloppy_global_fallback = self
+            .bytecode
+            .locals
+            .get(slot)
+            .is_some_and(|local| local.sloppy_global_fallback);
         match self.locals.get(slot) {
             Some(Some(_)) => {
-                if self.has_realm_or_global_this_binding(&name) {
-                    self.store_realm_or_global_this_sloppy(name.clone(), value)?;
-                    let value = self.load_global(&name)?;
+                if is_sloppy_global_fallback || self.has_realm_or_global_this_binding(&name) {
+                    let syncs_global_snapshot = is_sloppy_global_fallback
+                        && self.captured_or_local_matches_global_this(&name);
+                    self.store_realm_or_global_this_sloppy(name.clone(), value.clone())?;
                     self.store_local(slot, value)?;
+                    if syncs_global_snapshot && let Some(value) = self.locals[slot].clone() {
+                        self.sync_global_this_own_property(&name, value);
+                    }
                 } else {
                     self.store_local(slot, value)?;
                 }
                 Ok(())
             }
             Some(None) => {
+                if is_sloppy_global_fallback {
+                    let syncs_global_snapshot = self.captured_or_local_matches_global_this(&name);
+                    self.store_realm_or_global_this_sloppy(name.clone(), value.clone())?;
+                    self.store_local(slot, value)?;
+                    if syncs_global_snapshot && let Some(value) = self.locals[slot].clone() {
+                        self.sync_global_this_own_property(&name, value);
+                    }
+                    return Ok(());
+                }
+                if self.capture_writeback_targets_name(&name)
+                    && !self.has_realm_or_global_this_binding(&name)
+                {
+                    if self.env.locals().contains_key(&name) {
+                        self.env.insert(name.clone(), value.clone());
+                    }
+                    self.write_through_captured(&name, value.clone());
+                    if let Some(source) = self.env.captured_binding_source_env()
+                        && source.borrow().contains_key(&name)
+                    {
+                        source.borrow_mut().insert(name, value);
+                    }
+                    return Ok(());
+                }
                 self.store_global_sloppy(name.clone(), value)?;
                 self.record_sloppy_global_name(&name);
                 let global_value = self.load_global(&name)?;
@@ -598,18 +651,41 @@ impl Vm<'_> {
             // write back: a newer value may have arrived through the shared
             // captured_env while this call was in flight.
             if injected.get(name) == Some(&value) {
-                if let Some(captured) = self.captured_env.borrow().get(name).cloned()
+                if let Some(index) = self.bytecode.local_slot(name)
+                    && let Some(current) = self.locals[index].clone()
+                    && Some(&current) != injected.get(name)
+                {
+                    self.write_through_captured(name, current.clone());
+                    if self.env.locals().contains_key(name) {
+                        self.env.insert(name.clone(), current);
+                    }
+                    continue;
+                }
+                let captured = self
+                    .captured_env
+                    .borrow()
+                    .get(name)
+                    .cloned()
+                    .or_else(|| env.get_realm(name));
+                if let Some(captured) = captured
                     && Some(&captured) != injected.get(name)
                 {
                     if let Some(index) = self.bytecode.local_slot(name) {
-                        self.locals[index] = Some(captured);
+                        if self.should_skip_global_shadow_writeback(index, name, &captured) {
+                            continue;
+                        }
+                        self.locals[index] = Some(captured.clone());
                     } else if self.env.locals().contains_key(name) {
-                        self.env.insert(name.clone(), captured);
+                        self.env.insert(name.clone(), captured.clone());
                     }
+                    self.write_through_captured(name, captured);
                 }
                 continue;
             }
             if let Some(index) = self.bytecode.local_slot(name) {
+                if self.should_skip_global_shadow_writeback(index, name, &value) {
+                    continue;
+                }
                 self.locals[index] = Some(value.clone());
                 self.write_through_captured(name, value);
                 if self.env.locals().contains_key(name) {
@@ -633,7 +709,8 @@ impl Vm<'_> {
                 // A caller-scope binding this frame itself carries in its
                 // locals layer (e.g. an outer `let` riding through nested
                 // calls): keep it current so it propagates further out.
-                self.env.insert(name.clone(), value);
+                self.env.insert(name.clone(), value.clone());
+                self.write_through_captured(name, value);
             } else if name == "this"
                 && self
                     .env
@@ -648,12 +725,35 @@ impl Vm<'_> {
         self.refresh_derived_constructor_this_from_captured();
     }
 
+    fn should_skip_global_shadow_writeback(&self, index: usize, name: &str, value: &Value) -> bool {
+        self.global_this_property(name).as_ref() == Some(value)
+            && self.locals.get(index).and_then(Option::as_ref) != Some(value)
+    }
+
     fn has_captured_binding(&self, name: &str) -> bool {
         self.captured_env.borrow().contains_key(name)
             || self
                 .env
                 .captured_binding_source_env()
                 .is_some_and(|source| source.borrow().contains_key(name))
+    }
+
+    pub(super) fn capture_writeback_targets_name(&self, name: &str) -> bool {
+        fn writeback_contains(writeback: &super::CaptureWriteback, name: &str) -> bool {
+            writeback.names.iter().any(|candidate| candidate == name)
+                || writeback
+                    .aliases
+                    .iter()
+                    .any(|(source, target)| source == name || target == name)
+                || writeback
+                    .parent
+                    .as_deref()
+                    .is_some_and(|parent| writeback_contains(parent, name))
+        }
+
+        self.capture_writeback
+            .as_ref()
+            .is_some_and(|writeback| writeback_contains(writeback, name))
     }
 
     pub(super) fn apply_env(&mut self, env: CallEnv) {
@@ -664,8 +764,25 @@ impl Vm<'_> {
         let locals = env.into_locals();
         for (name, value) in locals {
             if let Some(index) = self.bytecode.local_slot(&name) {
-                if self.locals[index].is_some() {
+                let syncs_global_this = self.bytecode.local_is_sloppy_global_fallback(index)
+                    || (self.bytecode.global_scope
+                        && self.bytecode.local_is_body_hoist_only(index)
+                        && !is_compiler_temporary(&name));
+                let value = if syncs_global_this {
+                    self.global_this_property(&name).unwrap_or(value)
+                } else {
+                    value
+                };
+                if self.locals[index].is_some() || self.bytecode.local_is_from_env(index) {
                     self.locals[index] = Some(value.clone());
+                    self.write_through_captured(&name, value.clone());
+                    if self.bytecode.global_scope && self.realm.borrow().contains_key(&name) {
+                        self.realm.borrow_mut().insert(name, value);
+                    } else if syncs_global_this {
+                        self.sync_global_this_own_property(&name, value);
+                    }
+                } else if self.env.locals().contains_key(&name) {
+                    self.env.insert(name.clone(), value.clone());
                     self.write_through_captured(&name, value);
                 }
             } else if self.env.locals().contains_key(&name) {
@@ -678,6 +795,29 @@ impl Vm<'_> {
             }
         }
         self.refresh_derived_constructor_this_from_captured();
+    }
+
+    fn sync_global_this_own_property(&self, name: &str, value: Value) {
+        let Some(Value::Object(global_this)) =
+            self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned()
+        else {
+            return;
+        };
+        if global_this.has_own_property(name) {
+            global_this.set(name.to_owned(), value.clone());
+            self.realm.borrow_mut().insert(name.to_owned(), value);
+        }
+    }
+
+    fn captured_or_local_matches_global_this(&self, name: &str) -> bool {
+        let Some(global_value) = self.global_this_property(name) else {
+            return false;
+        };
+        self.captured_env
+            .borrow()
+            .get(name)
+            .or_else(|| self.env.locals().get(name))
+            == Some(&global_value)
     }
 
     fn refresh_derived_constructor_this_from_captured(&mut self) {
@@ -831,4 +971,8 @@ impl Vm<'_> {
         self.apply_env(env);
         Ok(())
     }
+}
+
+pub(super) fn is_compiler_temporary(name: &str) -> bool {
+    name.starts_with("\0\0")
 }

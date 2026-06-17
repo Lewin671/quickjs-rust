@@ -16,6 +16,7 @@ use super::{Property, Value};
 /// `Object.create(fn)`). The variants keep both forms first-class so property
 /// lookup walks through either uniformly.
 #[derive(Clone)]
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum Prototype {
     Object(ObjectRef),
     Function(Function),

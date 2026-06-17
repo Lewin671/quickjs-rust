@@ -184,3 +184,36 @@ fn instance_fields_are_writable_and_configurable() {
         Ok(Value::String("true,true,true".to_owned()))
     );
 }
+
+#[test]
+fn derived_public_fields_define_through_proxy_receiver() {
+    assert_eq!(
+        eval(
+            "let log = []; \
+             let expectedTarget = null; \
+             function Base() { \
+               expectedTarget = this; \
+               return new Proxy(this, { \
+                 defineProperty(target, key, descriptor) { \
+                   log.push(key); \
+                   log.push(descriptor.value); \
+                   log.push(target); \
+                   log.push(descriptor.enumerable); \
+                   log.push(descriptor.configurable); \
+                   log.push(descriptor.writable); \
+                   return Reflect.defineProperty(target, key, descriptor); \
+                 } \
+               }); \
+             } \
+             class C extends Base { f = 3; g = 'Test262'; } \
+             let c = new C(); \
+             c.f + ':' + c.g + ':' + \
+               [log[0], log[1], log[2] === expectedTarget, log[3], log[4], log[5], \
+                log[6], log[7], log[8] === expectedTarget, log[9], log[10], log[11]].join('|') + \
+               ':' + (expectedTarget === null);"
+        ),
+        Ok(Value::String(
+            "3:Test262:f|3|true|true|true|true|g|Test262|true|true|true|true:false".to_owned()
+        ))
+    );
+}

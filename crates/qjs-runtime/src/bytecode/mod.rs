@@ -15,6 +15,7 @@ mod compiler_pattern;
 mod compiler_try;
 mod compiler_values;
 mod ir;
+mod ir_names;
 mod util;
 mod vm;
 mod vm_bindings;

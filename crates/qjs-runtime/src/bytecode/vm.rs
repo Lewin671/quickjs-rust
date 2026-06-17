@@ -44,6 +44,7 @@ pub(super) fn eval_function_bytecode(
         bytecode,
         env: vm.env,
         locals: vm.locals,
+        captured_env: vm.captured_env.borrow().clone(),
         sloppy_global_names: vm.sloppy_global_names,
     }
 }
@@ -373,6 +374,11 @@ impl<'a> Vm<'a> {
                 } => {
                     let mut env = self.function_capture_env(&bytecode, &local_names);
                     self.insert_lexical_captures(&mut env, &lexical_captures);
+                    let capture_writeback = self.capture_writeback_for_bytecode(
+                        &bytecode,
+                        &local_names,
+                        &lexical_captures,
+                    );
                     let (home_object, super_constructor) = if lexical_this {
                         let home_object = self.env.get(HOME_OBJECT_BINDING);
                         let super_constructor = self.env.get(SUPER_CONSTRUCTOR_BINDING);
@@ -415,7 +421,7 @@ impl<'a> Vm<'a> {
                         super_constructor,
                         captured_env,
                         with_stack: self.with_stack.clone(),
-                        capture_writeback: self.capture_writeback.clone(),
+                        capture_writeback,
                     });
                     self.capture_private_environment(&function);
                     if is_generator && is_async {
@@ -847,17 +853,24 @@ impl<'a> Vm<'a> {
         function_bytecode: &Bytecode,
         function_local_names: &[String],
     ) {
-        for name in function_bytecode.global_names() {
-            self.insert_call_binding(locals, binding_names, name);
+        let mut referenced_names = function_bytecode.referenced_global_names();
+        referenced_names.extend(function_bytecode.written_binding_names());
+        referenced_names.sort();
+        referenced_names.dedup();
+        for name in referenced_names {
+            let declared_local = function_bytecode.local_slot(&name).is_some_and(|slot| {
+                function_bytecode.local_is_body_hoist_only(slot)
+                    || function_bytecode.local_is_parameter(slot)
+            });
+            if !declared_local {
+                self.insert_call_binding(locals, binding_names, &name);
+            }
         }
         for name in function_bytecode.sloppy_global_assignment_names() {
             insert_missing_binding_name(binding_names, name);
         }
         for name in function_bytecode.local_names() {
-            if function_local_names
-                .binary_search_by(|local| local.as_str().cmp(name))
-                .is_err()
-            {
+            if !function_local_names.iter().any(|local| local == name) {
                 self.insert_call_binding(locals, binding_names, name);
             }
         }
@@ -911,11 +924,29 @@ impl<'a> Vm<'a> {
             return;
         }
         for (name, value) in captured.iter() {
-            if let Some(index) = self.bytecode.local_slot(name)
-                && let Some(slot) = self.locals.get_mut(index)
-                && slot.is_some()
-            {
-                *slot = Some(value.clone());
+            if matches!(
+                value,
+                Value::Function(function) if function.is_uninitialized_lexical_marker()
+            ) {
+                continue;
+            }
+            if let Some(index) = self.bytecode.local_slot(name) {
+                let value = if self.bytecode.global_scope
+                    && self.bytecode.local_is_body_hoist_only(index)
+                    && !super::vm_bindings::is_compiler_temporary(name)
+                {
+                    self.global_this_property(name)
+                        .unwrap_or_else(|| value.clone())
+                } else {
+                    value.clone()
+                };
+                let Some(slot) = self.locals.get_mut(index) else {
+                    continue;
+                };
+                if slot.is_none() && !self.bytecode.local_is_body_hoist_only(index) {
+                    continue;
+                }
+                *slot = Some(value);
             }
         }
     }

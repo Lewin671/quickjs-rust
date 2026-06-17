@@ -50,6 +50,8 @@ pub(crate) struct GeneratorStart {
 pub(crate) struct CaptureWriteback {
     pub(crate) target: Rc<RefCell<HashMap<String, Value>>>,
     pub(crate) names: Vec<String>,
+    pub(crate) aliases: Vec<(String, String)>,
+    pub(crate) parent: Option<Box<CaptureWriteback>>,
 }
 
 /// A snapshot of a generator body's VM state, taken at a `yield`.
@@ -234,10 +236,12 @@ impl Vm<'_> {
     /// Reads a binding by name from the body's current locals (preferred) or
     /// frame environment.
     fn binding_value(&self, name: &str) -> Option<Value> {
-        if let Some(index) = self.bytecode.local_slot(name)
-            && let Some(Some(value)) = self.locals.get(index)
-        {
-            return Some(value.clone());
+        if let Some(index) = self.bytecode.local_slot(name) {
+            match self.locals.get(index) {
+                Some(Some(value)) => return Some(value.clone()),
+                Some(None) if !self.bytecode.local_is_body_hoist_only(index) => return None,
+                _ => {}
+            }
         }
         self.env.get(name)
     }

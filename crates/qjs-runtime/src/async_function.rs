@@ -103,6 +103,8 @@ pub(crate) fn call_async_function(
     let capture_writeback = (!function_capture_names.is_empty()).then(|| CaptureWriteback {
         target: Rc::clone(&function.captured_env),
         names: function_capture_names,
+        aliases: Vec::new(),
+        parent: None,
     });
     let context = ObjectRef::new(HashMap::new());
     *context.generator_state().borrow_mut() =
