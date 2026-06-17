@@ -364,6 +364,32 @@ fn map_filter_use_species_constructor() {
         ),
         Ok(Value::String("true:47,0,1".to_owned()))
     );
+    // filter validates the species result with write access after all
+    // callbacks, rejecting an immutable destination before writing kept values.
+    assert_eq!(
+        eval(
+            "let calls = []; \
+             let a = new Uint8Array([1, 2]); \
+             let iab = new Uint8Array([3, 4]).buffer.transferToImmutable(); \
+             a.constructor = {}; \
+             a.constructor[Symbol.species] = function() { \
+                 calls.push('construct'); \
+                 let result = new Uint8Array(iab); \
+                 calls.push('return'); \
+                 return result; \
+             }; \
+             let caught = false; \
+             try { \
+                 a.filter(function(value, index) { calls.push('filter ' + index); return !index; }); \
+             } catch (error) { \
+                 caught = error.constructor === TypeError; \
+             } \
+             caught + ':' + calls.join('|');"
+        ),
+        Ok(Value::String(
+            "true:filter 0|filter 1|construct|return".to_owned()
+        ))
+    );
 }
 
 #[test]

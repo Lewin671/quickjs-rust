@@ -506,6 +506,12 @@ pub(crate) fn typed_array_species_create(
 ) -> Result<(Value, ObjectRef), RuntimeError> {
     let (result, object) =
         typed_array_species_create_with_args(exemplar, vec![Value::Number(length as f64)], env)?;
+    if typed_array_buffer(&object).is_some_and(|buffer| array_buffer::is_immutable(&buffer)) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: ArrayBuffer is immutable".to_owned(),
+        });
+    }
     if typed_array_length(&object) < length {
         return Err(RuntimeError {
             thrown: None,

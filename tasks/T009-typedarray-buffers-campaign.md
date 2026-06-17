@@ -94,7 +94,9 @@ gaps: `TypedArray` 2,027, `ArrayBuffer` 263, `DataView` 188 — concentrated in
       result's element coercion. `map` species constructors now see live
       same-named block lexical captures across repeated for-of blocks, so
       resizable-buffer grow/shrink species cases pass: `map` 2 -> 0 actionable
-      gaps; `filter` remains at 4 actionable gaps.
+      gaps. `filter` now validates the species result with write access, so an
+      immutable destination buffer throws after all callbacks run: 1 -> 0
+      non-timeout actionable gaps.
       `subarray` now allocates through `TypedArraySpeciesCreate(O, « buffer,
       beginByteOffset, newLength »)` and only brand-checks O up front (a
       detached/out-of-bounds view yields srcLength 0, still coerces start/end,
