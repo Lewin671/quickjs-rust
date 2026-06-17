@@ -344,12 +344,23 @@ fn evaluates_indirect_eval_against_global_scope() {
         ),
         Ok(Value::String("undefined".to_owned()))
     );
+    // Indirect eval evaluates lexical declarations in a fresh declarative
+    // environment that is discarded afterwards: the binding neither persists as
+    // a referenceable name nor becomes an own property of the global object.
     assert_eq!(
         eval(
             "(function(source) { return (0, eval)(source); }('let indirectLexical = 1;')); \
-             indirectLexical + ':' + Object.prototype.hasOwnProperty.call(this, 'indirectLexical');"
+             Object.prototype.hasOwnProperty.call(this, 'indirectLexical');"
         ),
-        Ok(Value::String("1:false".to_owned()))
+        Ok(Value::Boolean(false))
+    );
+    assert!(
+        eval(
+            "(function(source) { return (0, eval)(source); }('let indirectLexical = 1;')); \
+             indirectLexical;"
+        )
+        .is_err(),
+        "indirect eval lexical binding must not leak into global scope"
     );
 }
 

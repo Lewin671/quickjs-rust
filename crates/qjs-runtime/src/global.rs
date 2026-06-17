@@ -289,17 +289,11 @@ pub(super) fn native_global_eval(
             }
         }
     }
-    if !direct_eval {
-        let hoisted = bytecode.hoisted_local_names().collect::<HashSet<_>>();
-        for name in bytecode.local_names() {
-            if hoisted.contains(name) {
-                continue;
-            }
-            if let Some(value) = result.binding(name) {
-                eval_env.insert_realm(name.to_owned(), value.clone());
-            }
-        }
-    }
+    // Indirect eval evaluates its lexical declarations (let/const/class) in a
+    // fresh declarative environment whose parent is the global environment;
+    // those bindings are discarded when the eval completes and never become
+    // global lexical bindings. Only var/function declarations (handled above
+    // via define_eval_global_binding) reach the global var environment.
     if direct_eval {
         *env = eval_env;
     }
