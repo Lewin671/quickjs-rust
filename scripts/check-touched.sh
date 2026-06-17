@@ -88,7 +88,9 @@ test262_filters=()
 add_filter() {
   local filter="$1"
   local existing
-  for existing in "${test262_filters[@]}"; do
+  # Guard the array expansion: under `set -u`, bash 3.2 (macOS) errors on
+  # "${arr[@]}" when the array is empty, which it is on the first call.
+  for existing in ${test262_filters[@]+"${test262_filters[@]}"}; do
     [ "$existing" = "$filter" ] && return
   done
   test262_filters+=("$filter")
