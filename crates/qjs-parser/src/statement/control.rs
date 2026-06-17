@@ -407,12 +407,27 @@ impl Parser {
             None
         };
         self.expect(&TokenKind::LeftParen)?;
-        if self.at(&TokenKind::Var) || self.at(&TokenKind::Let) || self.at(&TokenKind::Const) {
+        let for_head_using = self.using_declaration_kind();
+        if self.at(&TokenKind::Var)
+            || self.at(&TokenKind::Let)
+            || self.at(&TokenKind::Const)
+            || for_head_using.is_some()
+        {
             let var_head_start = self.cursor;
-            let kind_token = self.advance();
-            let kind = var_kind(&kind_token.kind).expect("token should be declaration kind");
+            let head_start = self.peek().map_or(start, |token| token.span.start);
+            let (kind, is_let_token) = if let Some(using_kind) = for_head_using {
+                if using_kind == VarKind::AwaitUsing {
+                    self.advance(); // `await`
+                }
+                self.advance(); // `using`
+                (using_kind, false)
+            } else {
+                let kind_token = self.advance();
+                let kind = var_kind(&kind_token.kind).expect("token should be declaration kind");
+                (kind, kind_token.kind == TokenKind::Let)
+            };
             if let Some(binding) = self.for_head_binding(kind) {
-                let init = if kind == VarKind::Var
+                let init = if (kind == VarKind::Var || kind.is_using())
                     && matches!(binding, BindingPattern::Identifier { .. })
                     && self.match_kind(&TokenKind::Equal)
                 {
@@ -420,8 +435,15 @@ impl Parser {
                 } else {
                     None
                 };
-                let left_span = Span::new(kind_token.span.start, binding.span().end);
+                let left_span = Span::new(head_start, binding.span().end);
                 if self.match_kind(&TokenKind::In) {
+                    if kind.is_using() {
+                        return Err(ParseError {
+                            message: "`using` declarations may not appear in a for-in loop head"
+                                .to_owned(),
+                            span: left_span,
+                        });
+                    }
                     if self.strict && init.is_some() {
                         return Err(ParseError {
                             message:
@@ -452,7 +474,7 @@ impl Parser {
                 }
             }
             self.cursor = var_head_start;
-            if kind_token.kind == TokenKind::Let && !self.at(&TokenKind::Semicolon) {
+            if is_let_token && !self.at(&TokenKind::Semicolon) {
                 let cursor = self.cursor;
                 if let Ok(left) = self.assignment_pattern() {
                     if self.match_kind(&TokenKind::In) {
@@ -508,7 +530,10 @@ impl Parser {
 
         let init = if self.match_kind(&TokenKind::Semicolon) {
             None
-        } else if self.at(&TokenKind::Var) || self.at(&TokenKind::Let) || self.at(&TokenKind::Const)
+        } else if self.at(&TokenKind::Var)
+            || self.at(&TokenKind::Let)
+            || self.at(&TokenKind::Const)
+            || self.using_declaration_kind().is_some()
         {
             let init = self.for_variable_declaration()?;
             self.expect(&TokenKind::Semicolon)?;

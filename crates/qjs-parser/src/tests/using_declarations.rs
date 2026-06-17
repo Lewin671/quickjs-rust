@@ -85,3 +85,13 @@ fn using_is_rejected_as_a_single_statement_body() {
     assert!(parse_script("if (cond) using x = res;").is_err());
     assert!(parse_script("label: using x = res;").is_err());
 }
+
+#[test]
+fn parses_using_in_for_heads() {
+    // for-of and for-await-of allow `using`; the C-style for head allows it
+    // with an initializer; for-in does not.
+    parse_script("for (using x of iter) {}").expect("for-of using parses");
+    parse_module("for await (using x of iter) {}").expect("for-await-of using parses");
+    parse_script("for (using x = res; cond; ) {}").expect("C-style for using parses");
+    assert!(parse_script("for (using x in obj) {}").is_err());
+}
