@@ -508,3 +508,32 @@ fn keeps_global_object_properties_and_bindings_in_sync() {
         Ok(Value::Boolean(false))
     );
 }
+
+#[test]
+fn direct_function_eval_rejects_var_arguments() {
+    // A non-arrow function always binds `arguments`, so a direct eval hoisting
+    // a `var`/`function` declaration named `arguments` is a SyntaxError.
+    assert!(
+        eval("function f() { eval('var arguments = 1'); } f();").is_err(),
+        "non-arrow eval declaring var arguments must throw"
+    );
+    assert!(
+        eval("function f() { eval('function arguments() {}'); } f();").is_err(),
+        "non-arrow eval declaring function arguments must throw"
+    );
+    // Reading `arguments` through eval is fine.
+    assert_eq!(
+        eval("function f() { return eval('arguments.length'); } f(1, 2, 3);"),
+        Ok(Value::Number(3.0))
+    );
+    // Declaring a non-`arguments` var in a function eval is fine.
+    assert_eq!(
+        eval("function f() { return eval('var nonArg = 5; nonArg'); } f();"),
+        Ok(Value::Number(5.0))
+    );
+    // Global eval may declare `var arguments` freely.
+    assert_eq!(
+        eval("eval('var arguments = 7'); arguments;"),
+        Ok(Value::Number(7.0))
+    );
+}

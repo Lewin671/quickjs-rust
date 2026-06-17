@@ -243,6 +243,24 @@ pub(super) fn native_global_eval(
     };
     let direct_function_eval = direct_eval && eval_env.get_local("this").is_some();
     let bytecode = compile_direct_eval_script(&script)?;
+    if direct_function_eval
+        && eval_env.get_local("arguments").is_some()
+        && bytecode
+            .hoisted_local_names()
+            .any(|name| name == "arguments")
+    {
+        // EvalDeclarationInstantiation: a direct eval may not hoist a `var` or
+        // `function` declaration named `arguments` when the surrounding
+        // function environment already binds `arguments` -- i.e. inside a
+        // non-arrow function (which always has the arguments object) or inside
+        // an arrow whose parameter list is named `arguments`. An arrow with no
+        // such binding (or one that only binds `arguments` in its body) may
+        // declare it freely.
+        return Err(RuntimeError {
+            thrown: None,
+            message: "SyntaxError: cannot declare 'arguments' in function eval".to_owned(),
+        });
+    }
     if !direct_function_eval {
         validate_eval_global_lexical_bindings(&bytecode, &eval_env)?;
     }
