@@ -180,6 +180,36 @@ fn with_statement_rejected_in_strict_mode() {
 }
 
 #[test]
+fn block_scoped_function_hoisting_respects_strict_mode() {
+    // Sloppy mode: Annex B B.3.3 hoists the block function into the enclosing
+    // var scope, so the name is visible after the block.
+    assert_eq!(
+        eval("{ function f() { return 1; } } typeof f;"),
+        Ok(Value::String("function".to_owned()))
+    );
+    assert_eq!(
+        eval("eval('{ function g() {} }'); typeof g;"),
+        Ok(Value::String("function".to_owned()))
+    );
+    // Strict mode: the block function stays lexically scoped to the block.
+    assert!(
+        eval("'use strict'; { function f() {} } f;").is_err(),
+        "strict block function must not hoist to the enclosing scope"
+    );
+    // Direct eval in strict code is strict even without its own prologue.
+    assert!(
+        eval("'use strict'; eval('{ function f() {} }'); typeof f;")
+            .is_ok_and(|value| value == Value::String("undefined".to_owned())),
+        "strict direct eval block function must not leak to global scope"
+    );
+    // A strict prologue inside the eval body has the same effect.
+    assert!(
+        eval("eval('\"use strict\"; { function f() {} }'); typeof f;")
+            .is_ok_and(|value| value == Value::String("undefined".to_owned()))
+    );
+}
+
+#[test]
 fn evaluates_variable_declarations() {
     assert_eq!(
         eval("let x = 2; const y = 3; x * y;"),

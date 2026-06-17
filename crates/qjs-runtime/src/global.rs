@@ -242,7 +242,16 @@ pub(super) fn native_global_eval(
         CallEnv::new(env.realm_rc())
     };
     let direct_function_eval = direct_eval && eval_env.get_local("this").is_some();
-    let bytecode = compile_direct_eval_script(&script)?;
+    // Direct eval inside strict code is itself strict even without its own
+    // "use strict" prologue; seed the compiler so Annex B block-function
+    // hoisting is correctly suppressed. Indirect eval is sloppy unless its own
+    // body opts in.
+    let caller_strict = direct_eval
+        && matches!(
+            env.get(crate::DIRECT_EVAL_STRICT_BINDING),
+            Some(Value::Boolean(true))
+        );
+    let bytecode = compile_direct_eval_script(&script, caller_strict)?;
     if direct_function_eval
         && eval_env.get_local("arguments").is_some()
         && bytecode

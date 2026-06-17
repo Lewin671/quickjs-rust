@@ -474,7 +474,10 @@ impl Compiler {
         });
         self.emit(Op::Dup);
         self.emit(Op::StoreLocal(lexical_slot));
-        if self.annex_b_function_name_blocked_by_outer_scope(name) {
+        // Annex B B.3.3 hoists a block-scoped function declaration into the
+        // enclosing var scope only in sloppy mode; strict code keeps it purely
+        // block-scoped (lexical).
+        if self.strict || self.annex_b_function_name_blocked_by_outer_scope(name) {
             self.emit(Op::Pop);
         } else {
             let var_slot = self.local_slot(name, true);

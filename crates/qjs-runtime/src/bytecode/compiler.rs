@@ -26,20 +26,19 @@ pub(super) struct Compiler {
     pub(super) strict: bool,
     pub(super) global_scope: bool,
     /// Names of `var`/function declarations hoisted at global script scope.
-    /// They live in the realm (and on `globalThis`), not in frame slots, so
-    /// deferred closures, direct eval, and promise jobs observe one binding.
+    /// They live in the realm (and on `globalThis`), not frame slots, so
+    /// closures, direct eval, and promise jobs all observe one binding.
     pub(super) global_hoisted: std::collections::HashSet<String>,
     annex_b_blocked_function_names: Vec<Vec<String>>,
     /// Count of `with` scopes currently open around the code being compiled.
     /// Break/continue/return that leave one or more of them emit `Op::ExitWith`
     /// for each scope crossed, keeping the VM's with-object stack balanced.
     pub(super) with_depth: usize,
-    /// `with` scopes captured from an enclosing function-creation environment.
-    /// They are present when the frame starts, so returns must not emit
-    /// `ExitWith` for these baseline entries.
+    /// `with` scopes captured from an enclosing function-creation environment;
+    /// present when the frame starts, so returns must not `ExitWith` them.
     pub(super) with_base_depth: usize,
-    /// Set when an invalid `/.../` regexp literal aborted compilation; such
-    /// literals are parse-phase errors, not generic early errors.
+    /// Set when an invalid `/.../` regexp literal aborted compilation (a
+    /// parse-phase error, not a generic early error).
     pub(super) regexp_literal_error: bool,
     /// Whether the current function body is an async generator. `yield*` uses
     /// the async iterator protocol only in this context.
@@ -56,8 +55,7 @@ pub(super) struct TryResultEntry {
     /// The local slot tracking this block's accumulated completion value.
     pub(super) result_slot: usize,
     /// The loop stack depth when the try/finally block was entered. A
-    /// break/continue whose target loop index is below this depth must
-    /// propagate this result slot.
+    /// break/continue targeting a loop below this depth propagates this slot.
     pub(super) loop_depth: usize,
     /// Whether this entry is for a `finally` block. Break/continue inside
     /// finally must emit `DiscardPendingAbrupt` to clear stale pending
@@ -118,9 +116,13 @@ pub(super) fn compile_script(script: &Script) -> Result<Bytecode, super::Compile
     result.map_err(|error| super::CompileError { error, parse_stage })
 }
 
-pub(super) fn compile_direct_eval_script(script: &Script) -> Result<Bytecode, RuntimeError> {
+pub(super) fn compile_direct_eval_script(
+    script: &Script,
+    strict: bool,
+) -> Result<Bytecode, RuntimeError> {
     let mut compiler = Compiler {
         global_scope: false,
+        strict,
         ..Compiler::default()
     };
     compiler.compile_eval_into(script)
@@ -156,10 +158,8 @@ pub(super) fn compile_function_body_with_strict(
     .compile_function(params, body)
 }
 
-/// Compiles a function body. Generator bodies compile through the same path:
-/// `yield` is already gated by the parser and lowers to `Op::Yield`, while the
-/// generator-ness is carried on the resulting function value, not the bytecode.
-/// This wrapper documents the intent at the call sites that handle `*`.
+/// Compiles a function body, carrying generator/async-ness on the resulting
+/// function value (`yield` is parser-gated and lowers to `Op::Yield`).
 pub(super) fn compile_function_body_with_strict_generator(
     params: &FunctionParams,
     body: &[Stmt],
@@ -204,7 +204,7 @@ impl Compiler {
 
     fn compile_into(&mut self, script: &Script) -> Result<Bytecode, RuntimeError> {
         self.strict = self.strict || is_strict_function_body(&script.body);
-        self.collect_hoisted_locals(&script.body);
+        self.collect_hoisted_locals(&script.body, false);
         self.predeclare_current_scope_lexicals(&script.body);
         let blocked = lexical_declared_names(&script.body);
         let global_lexical_names = blocked.clone();
@@ -225,7 +225,7 @@ impl Compiler {
 
     fn compile_eval_into(&mut self, script: &Script) -> Result<Bytecode, RuntimeError> {
         self.strict = self.strict || is_strict_function_body(&script.body);
-        self.collect_hoisted_locals(&script.body);
+        self.collect_hoisted_locals(&script.body, false);
         self.predeclare_current_scope_lexicals(&script.body);
         let blocked = lexical_declared_names(&script.body);
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
@@ -269,7 +269,7 @@ impl Compiler {
         self.emit(Op::FunctionPrologueEnd);
         let param_blocked = function_param_names(params);
         self.with_annex_b_blocked_function_names(&param_blocked, |compiler| {
-            compiler.collect_hoisted_locals(body);
+            compiler.collect_hoisted_locals(body, false);
             Ok(())
         })?;
         let blocked = function_body_annex_b_blocked_names(params, body);
@@ -286,7 +286,11 @@ impl Compiler {
         Ok(Bytecode::new(self.constants, self.locals, self.code))
     }
 
-    fn collect_hoisted_locals(&mut self, body: &[Stmt]) {
+    /// `nested` is true once recursion descends below the top level of the body
+    /// (into a block, `if`, loop, `switch` case, `try`, `with`, or label) --
+    /// where a function declaration is only Annex B sloppy-mode hoistable. The
+    /// top-level entry points pass `false`.
+    fn collect_hoisted_locals(&mut self, body: &[Stmt], nested: bool) {
         let blocked = lexical_declared_names(body);
         let pushed_blocked = !blocked.is_empty();
         if pushed_blocked {
@@ -294,19 +298,19 @@ impl Compiler {
         }
         for stmt in body {
             match stmt {
-                Stmt::Block { body, .. } => self.collect_hoisted_locals(body),
+                Stmt::Block { body, .. } => self.collect_hoisted_locals(body, true),
                 Stmt::If {
                     consequent,
                     alternate,
                     ..
                 } => {
-                    self.collect_hoisted_locals(std::slice::from_ref(consequent));
+                    self.collect_hoisted_locals(std::slice::from_ref(consequent), true);
                     if let Some(alternate) = alternate {
-                        self.collect_hoisted_locals(std::slice::from_ref(alternate));
+                        self.collect_hoisted_locals(std::slice::from_ref(alternate), true);
                     }
                 }
                 Stmt::While { body, .. } | Stmt::DoWhile { body, .. } => {
-                    self.collect_hoisted_locals(std::slice::from_ref(body));
+                    self.collect_hoisted_locals(std::slice::from_ref(body), true);
                 }
                 Stmt::For { init, body, .. } => {
                     if let Some(ForInit::VarDecl {
@@ -321,7 +325,7 @@ impl Compiler {
                             }
                         }
                     }
-                    self.collect_hoisted_locals(std::slice::from_ref(body));
+                    self.collect_hoisted_locals(std::slice::from_ref(body), true);
                 }
                 Stmt::ForIn { left, body, .. } | Stmt::ForOf { left, body, .. } => {
                     if let ForInLeft::VarDecl {
@@ -334,15 +338,17 @@ impl Compiler {
                             self.local_slot(&name, true);
                         }
                     }
-                    self.collect_hoisted_locals(std::slice::from_ref(body));
+                    self.collect_hoisted_locals(std::slice::from_ref(body), true);
                 }
                 Stmt::FunctionDecl { name, .. } => {
-                    if !self.annex_b_function_name_blocked(name) {
+                    // Nested-block functions hoist to the var scope only under
+                    // Annex B (sloppy mode); strict code keeps them block-scoped.
+                    if (!nested || !self.strict) && !self.annex_b_function_name_blocked(name) {
                         self.local_slot(name, true);
                     }
                 }
                 Stmt::Labelled { body, .. } | Stmt::With { body, .. } => {
-                    self.collect_hoisted_locals(std::slice::from_ref(body));
+                    self.collect_hoisted_locals(std::slice::from_ref(body), true);
                 }
                 Stmt::VarDecl {
                     kind: VarKind::Var,
@@ -362,7 +368,7 @@ impl Compiler {
                         self.annex_b_blocked_function_names.push(blocked);
                     }
                     for case in cases {
-                        self.collect_hoisted_locals(&case.consequent);
+                        self.collect_hoisted_locals(&case.consequent, true);
                     }
                     if pushed_switch_blocked {
                         self.annex_b_blocked_function_names
@@ -376,17 +382,17 @@ impl Compiler {
                     finalizer,
                     ..
                 } => {
-                    self.collect_hoisted_locals(block);
+                    self.collect_hoisted_locals(block, true);
                     if let Some(handler) = handler {
                         let blocked = catch_param_annex_b_blocked_names(handler.param.as_ref());
                         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
-                            compiler.collect_hoisted_locals(&handler.body);
+                            compiler.collect_hoisted_locals(&handler.body, true);
                             Ok(())
                         })
                         .expect("hoisted local collection should not fail");
                     }
                     if let Some(finalizer) = finalizer {
-                        self.collect_hoisted_locals(finalizer);
+                        self.collect_hoisted_locals(finalizer, true);
                     }
                 }
                 Stmt::Expr(_)
