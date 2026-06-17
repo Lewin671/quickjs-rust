@@ -23,6 +23,27 @@ impl Parser {
                 body.push(self.statement()?);
             }
         }
+        // A `using`/`await using` declaration is a Syntax Error at the top level
+        // of a Script (and eval, which uses the Script goal): it must be
+        // contained in a block, function/generator body, for-head, or class
+        // static block. Module top level permits it.
+        if self.goal == Goal::Script {
+            for stmt in &body {
+                if let Stmt::VarDecl {
+                    kind: VarKind::Using | VarKind::AwaitUsing,
+                    span,
+                    ..
+                } = stmt
+                {
+                    return Err(ParseError {
+                        message:
+                            "`using` declarations are not allowed at the top level of a script"
+                                .to_owned(),
+                        span: *span,
+                    });
+                }
+            }
+        }
         validate_statement_list_declarations(&body)?;
         validate_statement_list_labels(&body)?;
         // Any private-name reference that never resolved to an enclosing class

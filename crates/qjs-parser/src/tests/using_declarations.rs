@@ -6,18 +6,32 @@ use qjs_ast::{Stmt, VarKind};
 
 use crate::{parse_module, parse_script};
 
-fn first_decl_kind(source: &str) -> VarKind {
-    let script = parse_script(source).expect("source should parse");
-    let [Stmt::VarDecl { kind, .. }] = script.body.as_slice() else {
-        panic!("expected a single var declaration, got {:?}", script.body);
+/// Parses `using`/`await using` inside a block (it is a Syntax Error at the
+/// script top level) and returns the declaration kind.
+fn block_using_kind(decl_source: &str) -> VarKind {
+    let script = parse_script(&format!("{{ {decl_source} }}")).expect("source should parse");
+    let [Stmt::Block { body, .. }] = script.body.as_slice() else {
+        panic!("expected a block, got {:?}", script.body);
+    };
+    let [Stmt::VarDecl { kind, .. }] = body.as_slice() else {
+        panic!("expected a single var declaration, got {body:?}");
     };
     *kind
 }
 
 #[test]
 fn parses_using_declaration() {
-    assert_eq!(first_decl_kind("using x = res;"), VarKind::Using);
-    assert_eq!(first_decl_kind("using a = one, b = two;"), VarKind::Using);
+    assert_eq!(block_using_kind("using x = res;"), VarKind::Using);
+    assert_eq!(block_using_kind("using a = one, b = two;"), VarKind::Using);
+}
+
+#[test]
+fn using_is_rejected_at_script_top_level() {
+    // Allowed only inside a block, function/generator body, for-head, or class
+    // static block -- not directly at the Script (or eval) top level.
+    assert!(parse_script("using x = res;").is_err());
+    parse_script("{ using x = res; }").expect("using in a block parses");
+    parse_script("function f() { using x = res; }").expect("using in a function parses");
 }
 
 #[test]
@@ -31,7 +45,7 @@ fn parses_await_using_declaration_in_module() {
 
 #[test]
 fn using_requires_an_initializer() {
-    assert!(parse_script("using x;").is_err());
+    assert!(parse_script("{ using x; }").is_err());
 }
 
 #[test]
