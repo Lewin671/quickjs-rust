@@ -32,6 +32,7 @@ latest `docs/conformance/burndown.jsonl` entry before starting new work.
 | `T010-generators-iteration-campaign.md` | generators/iteration | 1,960 | engine failures |
 | `T012-modules-campaign.md` | ES modules | 1,621 | not-run (module filter) + fails |
 | `T013-temporal-campaign.md` | Temporal | 4,603 | engine failures (not implemented) |
+| `T015-explicit-resource-management-campaign.md` | using/await using | ~113 | parser landed; disposal runtime pending |
 
 Campaign working rules:
 
