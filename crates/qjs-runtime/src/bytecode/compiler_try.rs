@@ -84,6 +84,43 @@ impl Compiler {
         Ok(())
     }
 
+    /// Compiles a statement list (a function/generator body — no new lexical
+    /// scope) wrapped in a disposal try/finally so its top-level `using`
+    /// resources are disposed when the body exits on any path.
+    pub(super) fn compile_statements_with_disposal(
+        &mut self,
+        body: &[Stmt],
+    ) -> Result<(), RuntimeError> {
+        self.emit(Op::EnterDisposableScope);
+        let result_slot = self.temp_local("body_using_result");
+        let loop_depth = self.loop_stack_depth();
+        self.push_try_result_slot(result_slot, loop_depth, false);
+        let enter = self.emit(Op::EnterTry {
+            catch: None,
+            finally: None,
+            catch_scope: None,
+        });
+        self.disposable_scope_depth += 1;
+        let mut body_result = Ok(());
+        for stmt in body {
+            if let Err(error) = self.compile_stmt(stmt) {
+                body_result = Err(error);
+                break;
+            }
+        }
+        self.disposable_scope_depth -= 1;
+        body_result?;
+        self.emit(Op::ExitTry);
+        let normal_jump = self.emit(Op::Jump(usize::MAX));
+        self.pop_try_result_slot();
+        let finally_target = self.compile_dispose_finally();
+        if let Op::EnterTry { finally, .. } = &mut self.code[enter] {
+            *finally = Some(finally_target);
+        }
+        self.patch_jump(normal_jump, finally_target);
+        Ok(())
+    }
+
     /// Emits the disposal finally body (`DisposeScope; EndFinally`) and returns
     /// its entry IP.
     fn compile_dispose_finally(&mut self) -> usize {

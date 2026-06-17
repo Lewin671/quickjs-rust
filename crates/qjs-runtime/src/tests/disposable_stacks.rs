@@ -350,3 +350,29 @@ fn using_disposal_errors_chain_with_suppressed_error() {
         Ok(Value::String("SuppressedError:dispose:body".to_owned()))
     );
 }
+
+#[test]
+fn using_in_function_body_disposes_at_return() {
+    // A `using` at the top level of a function body disposes when the function
+    // returns, after any nested-block resources.
+    assert_eq!(
+        eval(
+            "let log = []; \
+             function f() { using a = { [Symbol.dispose]() { log.push('a'); } }; \
+                            { using b = { [Symbol.dispose]() { log.push('b'); } }; } \
+                            log.push('body'); return 9; } \
+             f() + ':' + log.join(',');"
+        ),
+        Ok(Value::String("9:b,body,a".to_owned()))
+    );
+    // And when the body throws.
+    assert_eq!(
+        eval(
+            "let log = []; \
+             function f() { using x = { [Symbol.dispose]() { log.push('d'); } }; \
+                            throw new Error('boom'); } \
+             try { f(); } catch (e) { log.push('caught'); } log.join(',');"
+        ),
+        Ok(Value::String("d,caught".to_owned()))
+    );
+}

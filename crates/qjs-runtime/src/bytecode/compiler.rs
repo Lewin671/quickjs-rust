@@ -270,9 +270,8 @@ impl Compiler {
             self.snapshot_non_simple_parameter_arguments(params)?;
         }
         self.compile_parameter_bindings(params, non_simple_params)?;
-        // Mark the end of parameter instantiation. Generators/async generators
-        // run their prologue synchronously at the call and suspend here; other
-        // functions skip past it.
+        // Mark the end of parameter instantiation: generators run the prologue
+        // synchronously at the call and suspend here; others skip past it.
         self.emit(Op::FunctionPrologueEnd);
         let param_blocked = function_param_names(params);
         self.with_annex_b_blocked_function_names(&param_blocked, |compiler| {
@@ -283,8 +282,12 @@ impl Compiler {
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
             compiler.predeclare_current_scope_lexicals(body);
             compiler.compile_hoisted_function_decls(body)?;
-            for stmt in body {
-                compiler.compile_stmt(stmt)?;
+            if block_has_sync_using(body) {
+                compiler.compile_statements_with_disposal(body)?;
+            } else {
+                for stmt in body {
+                    compiler.compile_stmt(stmt)?;
+                }
             }
             Ok(())
         })?;
@@ -707,10 +710,9 @@ impl Compiler {
     /// Also emits `DiscardPendingAbrupt` when crossing a finally boundary
     /// to clear any stale pending throw/return.
     fn propagate_try_result_to_loop(&mut self, target_loop_index: usize) {
-        // Find the innermost try_result_slot whose loop_depth is strictly
-        // greater than target_loop_index, meaning it was entered inside (or
-        // deeper than) the target loop and the break/continue will cross its
-        // boundary.
+        // The innermost try_result_slot whose loop_depth exceeds
+        // target_loop_index was entered inside the target loop, so a
+        // break/continue crosses its boundary.
         if let Some(entry) = self
             .try_result_slots
             .iter()
