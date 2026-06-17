@@ -533,7 +533,7 @@ fn seeds_bytecode_function_env_from_referenced_caller_bindings() {
 #[test]
 fn reports_unsupported_bytecode_surface() {
     let error = eval_bytecode_source("break;").expect_err("top-level break must not compile");
-    assert_eq!(error.message, "break outside loop");
+    assert_eq!(error.message, "SyntaxError: Illegal break statement");
 
     let error = eval_bytecode_source("continue;").expect_err("top-level continue must not compile");
     assert_eq!(error.message, "`continue` has no target");

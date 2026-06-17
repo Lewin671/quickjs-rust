@@ -554,8 +554,8 @@ impl Compiler {
             return Err(RuntimeError {
                 thrown: None,
                 message: label.map_or_else(
-                    || "break outside loop".to_owned(),
-                    |label| format!("undefined break label: {label}"),
+                    || "SyntaxError: Illegal break statement".to_owned(),
+                    |label| format!("SyntaxError: undefined break label: {label}"),
                 ),
             });
         };
@@ -580,8 +580,8 @@ impl Compiler {
             return Err(RuntimeError {
                 thrown: None,
                 message: label.map_or_else(
-                    || "continue outside loop".to_owned(),
-                    |label| format!("undefined continue label: {label}"),
+                    || "SyntaxError: Illegal continue statement".to_owned(),
+                    |label| format!("SyntaxError: undefined continue label: {label}"),
                 ),
             });
         };
