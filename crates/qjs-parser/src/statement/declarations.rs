@@ -7,6 +7,55 @@ use qjs_lexer::TokenKind;
 use crate::{ParseError, Parser};
 
 impl Parser {
+    /// Recognizes the start of a `using` / `await using` declaration. Both are
+    /// contextual: `using` is a declaration only when immediately followed (no
+    /// LineTerminator) by a `BindingIdentifier` on the same line, and `await
+    /// using` only where `await` is a keyword (async function or module). A
+    /// `using` followed by a newline, `[`, `{`, `=`, or anything other than a
+    /// binding identifier is an ordinary `using` identifier expression.
+    pub(super) fn using_declaration_kind(&self) -> Option<VarKind> {
+        // `await using x` -- only where `await` is a keyword (async function or,
+        // because module top level sets `in_async`, module code).
+        if self.in_async
+            && self.token_is_identifier(0, "await")
+            && self.token_is_identifier(1, "using")
+            && self.identifier_follows_on_same_line(1)
+            && self.tokens_on_same_line(0, 1)
+        {
+            return Some(VarKind::AwaitUsing);
+        }
+        // `using x`
+        if self.token_is_identifier(0, "using") && self.identifier_follows_on_same_line(0) {
+            return Some(VarKind::Using);
+        }
+        None
+    }
+
+    fn token_is_identifier(&self, offset: usize, name: &str) -> bool {
+        matches!(
+            self.peek_nth(offset),
+            Some(token) if matches!(&token.kind, TokenKind::Identifier(value) if value == name)
+        )
+    }
+
+    /// Whether the token after `peek_nth(offset)` is a `BindingIdentifier` (a
+    /// plain identifier, not `[`/`{`) on the same source line.
+    fn identifier_follows_on_same_line(&self, offset: usize) -> bool {
+        let Some(next) = self.peek_nth(offset + 1) else {
+            return false;
+        };
+        matches!(next.kind, TokenKind::Identifier(_))
+            && self.tokens_on_same_line(offset, offset + 1)
+    }
+
+    fn tokens_on_same_line(&self, left_offset: usize, right_offset: usize) -> bool {
+        let (Some(left), Some(right)) = (self.peek_nth(left_offset), self.peek_nth(right_offset))
+        else {
+            return false;
+        };
+        !self.has_line_terminator_between(left.span.end, right.span.start)
+    }
+
     pub(super) fn variable_declaration(&mut self) -> Result<Stmt, ParseError> {
         let ForInit::VarDecl {
             kind,
@@ -34,6 +83,12 @@ impl Parser {
             VarKind::Var
         } else if self.match_kind(&TokenKind::Let) {
             VarKind::Let
+        } else if let Some(using_kind) = self.using_declaration_kind() {
+            if using_kind == VarKind::AwaitUsing {
+                self.advance(); // `await`
+            }
+            self.advance(); // `using`
+            using_kind
         } else {
             self.expect(&TokenKind::Const)?;
             VarKind::Const
@@ -71,6 +126,12 @@ impl Parser {
                         span: binding.span(),
                     });
                 }
+                if kind.is_using() {
+                    return Err(ParseError {
+                        message: "`using` declarations require an initializer".to_owned(),
+                        span: binding.span(),
+                    });
+                }
                 None
             };
             let end = init
@@ -99,6 +160,17 @@ impl Parser {
             return Ok(BindingPattern::Identifier {
                 name: "let".to_owned(),
                 span: token.span,
+            });
+        }
+        // `using`/`await using` bind only simple identifiers; array/object
+        // binding patterns are a SyntaxError.
+        if kind.is_using()
+            && !matches!(self.peek(), Some(token) if matches!(token.kind, TokenKind::Identifier(_)))
+        {
+            let span = self.peek().map_or(Span::new(0, 0), |token| token.span);
+            return Err(ParseError {
+                message: "`using` declarations may only bind identifiers".to_owned(),
+                span,
             });
         }
         self.binding_pattern()

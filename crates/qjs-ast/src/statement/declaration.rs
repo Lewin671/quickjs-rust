@@ -155,4 +155,33 @@ pub enum VarKind {
     Let,
     /// `const`.
     Const,
+    /// `using` (Explicit Resource Management): a block-scoped, immutable binding
+    /// whose value is disposed via `Symbol.dispose` at scope exit.
+    Using,
+    /// `await using`: like `using` but disposed via `Symbol.asyncDispose`
+    /// (falling back to `Symbol.dispose`), awaiting each disposal.
+    AwaitUsing,
+}
+
+impl VarKind {
+    /// Whether this declaration is lexically (block) scoped: everything except
+    /// `var`.
+    #[must_use]
+    pub fn is_lexical(self) -> bool {
+        !matches!(self, VarKind::Var)
+    }
+
+    /// Whether bindings of this kind are immutable (reassignment is rejected):
+    /// `const`, `using`, and `await using`.
+    #[must_use]
+    pub fn is_immutable(self) -> bool {
+        matches!(self, VarKind::Const | VarKind::Using | VarKind::AwaitUsing)
+    }
+
+    /// Whether this declaration manages a disposable resource (`using` /
+    /// `await using`).
+    #[must_use]
+    pub fn is_using(self) -> bool {
+        matches!(self, VarKind::Using | VarKind::AwaitUsing)
+    }
 }

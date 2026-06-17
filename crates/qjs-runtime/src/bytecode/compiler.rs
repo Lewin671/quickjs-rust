@@ -881,7 +881,7 @@ impl Compiler {
                 for declaration in declarations {
                     for name in declaration.binding.names() {
                         let slot = self.declare_var_kind_slot(&name, *kind);
-                        if matches!(kind, VarKind::Let | VarKind::Const) {
+                        if kind.is_lexical() {
                             self.emit(Op::ClearLocal(slot));
                         }
                     }

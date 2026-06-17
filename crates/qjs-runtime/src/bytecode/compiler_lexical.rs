@@ -226,7 +226,7 @@ pub(super) fn catch_param_annex_b_blocked_names(param: Option<&BindingPattern>) 
 pub(super) fn for_init_lexical_names(init: &ForInit) -> Vec<String> {
     match init {
         ForInit::VarDecl {
-            kind: VarKind::Let | VarKind::Const,
+            kind: VarKind::Let | VarKind::Const | VarKind::Using | VarKind::AwaitUsing,
             declarations,
             ..
         } => declarations
@@ -240,7 +240,7 @@ pub(super) fn for_init_lexical_names(init: &ForInit) -> Vec<String> {
 pub(super) fn for_in_left_lexical_names(left: &ForInLeft) -> Vec<String> {
     match left {
         ForInLeft::VarDecl {
-            kind: VarKind::Let | VarKind::Const,
+            kind: VarKind::Let | VarKind::Const | VarKind::Using | VarKind::AwaitUsing,
             binding,
             ..
         } => binding.names(),
@@ -252,7 +252,7 @@ pub(super) fn is_lexical_for_in_left(left: &ForInLeft) -> bool {
     matches!(
         left,
         ForInLeft::VarDecl {
-            kind: VarKind::Let | VarKind::Const,
+            kind: VarKind::Let | VarKind::Const | VarKind::Using | VarKind::AwaitUsing,
             ..
         }
     )
@@ -291,7 +291,7 @@ pub(super) fn lexical_declared_names(body: &[Stmt]) -> Vec<String> {
     for stmt in body {
         match stmt {
             Stmt::VarDecl {
-                kind: VarKind::Let | VarKind::Const,
+                kind: VarKind::Let | VarKind::Const | VarKind::Using | VarKind::AwaitUsing,
                 declarations,
                 ..
             } => names.extend(
@@ -318,7 +318,7 @@ pub(super) fn current_scope_lexical_declared_bindings(body: &[Stmt]) -> Vec<(Str
     for stmt in body {
         match stmt {
             Stmt::VarDecl {
-                kind: VarKind::Let | VarKind::Const,
+                kind: VarKind::Let | VarKind::Const | VarKind::Using | VarKind::AwaitUsing,
                 declarations,
                 ..
             } => {

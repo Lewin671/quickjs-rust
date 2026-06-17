@@ -8,7 +8,7 @@ fn disallowed_declaration(stmt: &Stmt) -> Option<(&'static str, Span)> {
     match stmt {
         Stmt::ClassDecl { span, .. } => Some(("class declarations", *span)),
         Stmt::VarDecl {
-            kind: VarKind::Let | VarKind::Const,
+            kind: VarKind::Let | VarKind::Const | VarKind::Using | VarKind::AwaitUsing,
             span,
             ..
         } => Some(("lexical declarations", *span)),
@@ -72,7 +72,7 @@ pub(super) fn disallowed_labelled_body(stmt: &Stmt, strict: bool) -> Option<(&'s
     match stmt {
         Stmt::ClassDecl { span, .. } => Some(("class declarations", *span)),
         Stmt::VarDecl {
-            kind: VarKind::Let | VarKind::Const,
+            kind: VarKind::Let | VarKind::Const | VarKind::Using | VarKind::AwaitUsing,
             span,
             ..
         } => Some(("lexical declarations", *span)),
@@ -165,7 +165,7 @@ fn lexical_names_of(stmt: &Stmt, strict: bool) -> Vec<(String, Span)> {
     match stmt {
         Stmt::ClassDecl { name, span, .. } => vec![(name.clone(), *span)],
         Stmt::VarDecl {
-            kind: VarKind::Let | VarKind::Const,
+            kind: VarKind::Let | VarKind::Const | VarKind::Using | VarKind::AwaitUsing,
             declarations,
             span,
             ..
@@ -217,7 +217,7 @@ fn collect_var_declared_names(stmt: &Stmt, names: &mut Vec<(String, Span)>) {
             }
         }
         Stmt::VarDecl {
-            kind: VarKind::Let | VarKind::Const,
+            kind: VarKind::Let | VarKind::Const | VarKind::Using | VarKind::AwaitUsing,
             ..
         } => {}
         Stmt::Block { body, .. }

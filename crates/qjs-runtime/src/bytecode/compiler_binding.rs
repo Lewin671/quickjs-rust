@@ -277,7 +277,12 @@ impl Compiler {
         match kind {
             VarKind::Var => self.local_slot(name, true),
             VarKind::Let => self.declare_lexical_slot(name, true),
-            VarKind::Const => self.declare_lexical_slot(name, false),
+            // `using`/`await using` are immutable, block-scoped bindings. Their
+            // disposal semantics are layered on separately; the binding itself
+            // behaves like `const`.
+            VarKind::Const | VarKind::Using | VarKind::AwaitUsing => {
+                self.declare_lexical_slot(name, false)
+            }
         }
     }
 

@@ -21,7 +21,7 @@ impl Compiler {
         if matches!(
             left,
             ForInLeft::VarDecl {
-                kind: VarKind::Let | VarKind::Const,
+                kind: VarKind::Let | VarKind::Const | VarKind::Using | VarKind::AwaitUsing,
                 ..
             }
         ) {
@@ -40,7 +40,7 @@ impl Compiler {
         if matches!(
             left,
             ForInLeft::VarDecl {
-                kind: VarKind::Let | VarKind::Const,
+                kind: VarKind::Let | VarKind::Const | VarKind::Using | VarKind::AwaitUsing,
                 ..
             }
         ) {
@@ -59,7 +59,7 @@ impl Compiler {
         if matches!(
             left,
             ForInLeft::VarDecl {
-                kind: VarKind::Let | VarKind::Const,
+                kind: VarKind::Let | VarKind::Const | VarKind::Using | VarKind::AwaitUsing,
                 ..
             }
         ) {
@@ -467,7 +467,10 @@ impl Compiler {
                 // before re-initialization each round.
                 for name in binding.names() {
                     let slot = self.declare_var_kind_slot(&name, *kind);
-                    if matches!(kind, VarKind::Let | VarKind::Const) {
+                    if matches!(
+                        kind,
+                        VarKind::Let | VarKind::Const | VarKind::Using | VarKind::AwaitUsing
+                    ) {
                         self.emit(Op::ClearLocal(slot));
                     }
                 }
@@ -516,7 +519,7 @@ impl Compiler {
     fn for_in_left_iteration_slots(&mut self, left: &ForInLeft) -> Vec<usize> {
         let ForInLeft::VarDecl {
             binding,
-            kind: kind @ (VarKind::Let | VarKind::Const),
+            kind: kind @ (VarKind::Let | VarKind::Const | VarKind::Using | VarKind::AwaitUsing),
             ..
         } = left
         else {
@@ -532,7 +535,7 @@ impl Compiler {
     fn declare_for_in_head_tdz(&mut self, left: &ForInLeft) {
         let ForInLeft::VarDecl {
             binding,
-            kind: kind @ (VarKind::Let | VarKind::Const),
+            kind: kind @ (VarKind::Let | VarKind::Const | VarKind::Using | VarKind::AwaitUsing),
             ..
         } = left
         else {

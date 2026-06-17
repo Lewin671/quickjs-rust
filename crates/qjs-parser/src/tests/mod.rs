@@ -6,3 +6,4 @@ mod generators;
 mod literals_and_functions;
 mod private_names;
 mod statements;
+mod using_declarations;

@@ -124,7 +124,7 @@ impl Compiler {
         if matches!(
             init,
             Some(ForInit::VarDecl {
-                kind: VarKind::Let | VarKind::Const,
+                kind: VarKind::Let | VarKind::Const | VarKind::Using | VarKind::AwaitUsing,
                 ..
             })
         ) {
@@ -162,7 +162,7 @@ impl Compiler {
         let iteration_slots: Vec<usize> = if matches!(
             init,
             Some(ForInit::VarDecl {
-                kind: VarKind::Let | VarKind::Const,
+                kind: VarKind::Let | VarKind::Const | VarKind::Using | VarKind::AwaitUsing,
                 ..
             })
         ) {
@@ -209,7 +209,10 @@ impl Compiler {
                 for declaration in declarations {
                     for name in declaration.binding.names() {
                         let slot = self.declare_var_kind_slot(&name, *kind);
-                        if matches!(kind, VarKind::Let | VarKind::Const) {
+                        if matches!(
+                            kind,
+                            VarKind::Let | VarKind::Const | VarKind::Using | VarKind::AwaitUsing
+                        ) {
                             self.emit(Op::ClearLocal(slot));
                         }
                     }

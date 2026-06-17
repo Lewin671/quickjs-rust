@@ -126,6 +126,10 @@ impl Parser {
         if self.at(&TokenKind::Let) && self.let_is_declaration_start() {
             return self.variable_declaration();
         }
+        // `using x = ...` / `await using x = ...` are contextual declarations.
+        if self.using_declaration_kind().is_some() {
+            return self.variable_declaration();
+        }
         if self.at(&TokenKind::Let)
             && matches!(self.peek_nth(1), Some(token) if token.kind == TokenKind::LeftBracket)
         {
@@ -334,7 +338,7 @@ fn validate_statement_list_declarations(body: &[Stmt]) -> Result<(), ParseError>
     for stmt in body {
         match stmt {
             Stmt::VarDecl {
-                kind: VarKind::Let | VarKind::Const,
+                kind: VarKind::Let | VarKind::Const | VarKind::Using | VarKind::AwaitUsing,
                 declarations,
                 ..
             } => {

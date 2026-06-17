@@ -708,7 +708,7 @@ fn validate_static_block_declarations(body: &[Stmt]) -> Result<(), ParseError> {
     for stmt in body {
         match stmt {
             Stmt::VarDecl {
-                kind: VarKind::Let | VarKind::Const,
+                kind: VarKind::Let | VarKind::Const | VarKind::Using | VarKind::AwaitUsing,
                 declarations,
                 ..
             } => {
@@ -923,7 +923,7 @@ fn validate_static_block_labels(
 
 fn validate_static_block_for_init(init: &Option<ForInit>) -> Result<(), ParseError> {
     if let Some(ForInit::VarDecl {
-        kind: VarKind::Let | VarKind::Const,
+        kind: VarKind::Let | VarKind::Const | VarKind::Using | VarKind::AwaitUsing,
         declarations,
         ..
     }) = init

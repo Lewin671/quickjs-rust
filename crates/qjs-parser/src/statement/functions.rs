@@ -418,7 +418,11 @@ fn body_lexically_declared_names(body: &[Stmt]) -> Vec<String> {
     for stmt in body {
         match stmt {
             Stmt::VarDecl {
-                kind: qjs_ast::VarKind::Let | qjs_ast::VarKind::Const,
+                kind:
+                    qjs_ast::VarKind::Let
+                    | qjs_ast::VarKind::Const
+                    | qjs_ast::VarKind::Using
+                    | qjs_ast::VarKind::AwaitUsing,
                 declarations,
                 ..
             } => {
