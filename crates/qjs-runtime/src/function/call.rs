@@ -818,19 +818,26 @@ fn insert_caller_bytecode_bindings(
 ) {
     for name in bytecode.global_names() {
         let write_back_to_caller = !function_local_names.iter().any(|local| local == name);
+        let existing_capture_matches_caller = !local_env.contains_key(name)
+            || env.locals().contains_key(name)
+            || env
+                .get(name)
+                .is_some_and(|value| local_env.get(name) == Some(&value));
         insert_caller_binding(
             local_env,
             caller_binding_names,
             env,
             name,
             write_back_to_caller,
-            (caller_shares_capture_source && bytecode.sloppy_global_fallback_binding(name))
-                || (bytecode.local_slot(name).is_none()
-                    && ((env.module_host().is_some() && env.realm_contains(name))
-                        || (bytecode.writes_binding(name) && env.realm_contains(name))
-                        || env
-                            .captured_binding_source_env()
-                            .is_some_and(|source| source.borrow().contains_key(name)))),
+            existing_capture_matches_caller
+                && ((caller_shares_capture_source
+                    && bytecode.sloppy_global_fallback_binding(name))
+                    || (bytecode.local_slot(name).is_none()
+                        && ((env.module_host().is_some() && env.realm_contains(name))
+                            || (bytecode.writes_binding(name) && env.realm_contains(name))
+                            || env
+                                .captured_binding_source_env()
+                                .is_some_and(|source| source.borrow().contains_key(name))))),
         );
     }
     for name in bytecode.sloppy_global_assignment_names() {
@@ -840,9 +847,16 @@ fn insert_caller_bytecode_bindings(
     }
     for name in bytecode.local_names() {
         if !function_local_names.iter().any(|local| local == name) {
-            let allow_live_env_override = bytecode
+            let from_env = bytecode
                 .local_slot(name)
-                .is_some_and(|slot| bytecode.local_is_from_env(slot))
+                .is_some_and(|slot| bytecode.local_is_from_env(slot));
+            let existing_capture_matches_caller = !local_env.contains_key(name)
+                || env.locals().contains_key(name)
+                || env
+                    .get(name)
+                    .is_some_and(|value| local_env.get(name) == Some(&value));
+            let allow_live_env_override = from_env
+                && existing_capture_matches_caller
                 && (env.module_host().is_some()
                     || (bytecode.writes_binding(name)
                         && caller_global_this_has_own_property(env, name)));

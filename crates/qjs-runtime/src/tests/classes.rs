@@ -1,4 +1,4 @@
-use crate::{Value, eval};
+use crate::{MapResolver, Value, eval, eval_classified_with_resolver};
 
 #[test]
 fn instantiates_class_and_reads_field() {
@@ -665,6 +665,22 @@ fn class_method_default_parameter_closure_does_not_capture_body_var_environment(
              } \
              C.prototype.m(); \
              probeParams() + ':' + probeBody();"
+        ),
+        Ok(Value::String("outside:inside".to_owned()))
+    );
+    assert_eq!(
+        eval_classified_with_resolver(
+            "var x = 'outside'; var probeParams, probeBody; \
+             class C { \
+               m(_ = probeParams = function() { return x; }) { \
+                 var x = 'inside'; \
+                 probeBody = function() { return x; }; \
+               } \
+             } \
+             C.prototype.m(); \
+             probeParams() + ':' + probeBody();",
+            "<test>",
+            Box::new(MapResolver::new()),
         ),
         Ok(Value::String("outside:inside".to_owned()))
     );

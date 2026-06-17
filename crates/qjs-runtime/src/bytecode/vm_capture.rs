@@ -62,8 +62,11 @@ impl Vm<'_> {
             return;
         }
         let value = self
-            .current_local_binding(name)
-            .cloned()
+            .bytecode
+            .local_slot(name)
+            .filter(|slot| self.bytecode.local_is_body_hoist_only(*slot))
+            .and_then(|_| self.env.locals().get(name).cloned())
+            .or_else(|| self.current_local_binding(name).cloned())
             .or_else(|| self.env.locals().get(name).cloned());
         if let Some(value) = value {
             env.insert(name.to_owned(), value);
