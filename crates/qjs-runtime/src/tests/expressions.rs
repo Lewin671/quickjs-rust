@@ -238,6 +238,26 @@ fn evaluates_comparison_and_equality() {
     assert!(
         eval("function C() {} C.prototype = 1; let object = {}; object instanceof C;").is_err()
     );
+    // A Symbol-valued `prototype` is not an object: OrdinaryHasInstance throws.
+    assert!(
+        eval("function C() {} C.prototype = Symbol(); let object = {}; object instanceof C;")
+            .is_err()
+    );
+    // A Symbol primitive operand is not an object, so it is never an instance.
+    assert_eq!(
+        eval("function C() {} Symbol() instanceof C;"),
+        Ok(Value::Boolean(false))
+    );
+    // ToObject boxes a Symbol receiver: Array.prototype.sort returns the
+    // Symbol wrapper object, which is an instance of Symbol.
+    assert_eq!(
+        eval("[].sort.call(Symbol()) instanceof Symbol;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("typeof [].sort.call(Symbol());"),
+        Ok(Value::String("object".to_owned()))
+    );
     assert_eq!(
         eval(
             "let calls = 0; let F = {}; F[Symbol.hasInstance] = function(value) { calls = calls + (this === F ? 1 : 0); return value === 7; }; (7 instanceof F) + ':' + (8 instanceof F) + ':' + calls;"

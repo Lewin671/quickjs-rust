@@ -515,15 +515,15 @@ fn value_get_prototype_of(value: Value, env: &mut CallEnv) -> Result<Value, Runt
 }
 
 fn instanceof_prototype_is_object(value: &Value) -> bool {
-    matches!(
-        value,
-        Value::Object(_)
-            | Value::Array(_)
-            | Value::Function(_)
-            | Value::Map(_)
-            | Value::Set(_)
-            | Value::Proxy(_)
-    )
+    match value {
+        // Symbol primitives are represented as `Value::Object` internally but
+        // are not objects for the purposes of OrdinaryHasInstance.
+        Value::Object(object) => !crate::symbol::is_symbol_primitive(object),
+        Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) | Value::Proxy(_) => {
+            true
+        }
+        _ => false,
+    }
 }
 
 fn eval_in(left: Value, right: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {

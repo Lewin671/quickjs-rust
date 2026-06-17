@@ -182,6 +182,11 @@ pub(super) fn array_like_receiver(value: Value, env: &CallEnv) -> Value {
         Value::Boolean(_) | Value::BigInt(_) | Value::Number(_) => {
             object::boxed_primitive(value.clone(), env).unwrap_or(value)
         }
+        Value::Object(ref object) if symbol::is_symbol_primitive(object) => {
+            // A Symbol primitive (represented as `Value::Object`) is boxed to a
+            // Symbol wrapper object by ToObject, like the other primitives.
+            object::boxed_primitive(value.clone(), env).unwrap_or(value)
+        }
         Value::String(value) => {
             let mut properties = HashMap::new();
             properties.insert(
