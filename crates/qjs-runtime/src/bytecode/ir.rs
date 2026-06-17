@@ -86,6 +86,18 @@ pub(super) enum Op {
         raw: Vec<String>,
     },
     NewObjectLiteral,
+    /// Opens a `using` disposal scope: subsequent `RegisterDisposable` ops add
+    /// to it until the matching `DisposeScope`.
+    EnterDisposableScope,
+    /// Registers the value on top of the stack (a `using` initializer result,
+    /// left in place) as a disposable resource in the current scope: resolves
+    /// `Symbol.dispose` once. `null`/`undefined` are ignored; a non-object or a
+    /// missing/non-callable `dispose` is a TypeError.
+    RegisterDisposable,
+    /// Closes the current disposal scope, disposing its resources LIFO. A
+    /// dispose failure while a throw is already propagating is wrapped in a
+    /// `SuppressedError`.
+    DisposeScope,
     /// Names an anonymous object-literal function/accessor from its computed
     /// key. Stack (unchanged): `[..., key, function]`. A symbol key yields
     /// `[description]`; accessors are prefixed with `get `/`set `.

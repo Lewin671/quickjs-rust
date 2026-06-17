@@ -75,7 +75,11 @@ pub(super) struct Vm<'a> {
     pub(super) stop_at_prologue: bool,
     /// Enclosing `with` object-environment records, innermost last.
     pub(super) with_stack: Vec<Value>,
+    /// Active `using` disposal scopes (innermost last); each block's resources,
+    /// disposed LIFO when the scope exits via the block's implicit finally.
+    pub(super) disposable_scopes: Vec<Vec<super::vm_dispose::DisposeResource>>,
 }
+
 impl<'a> Vm<'a> {
     pub(super) fn new(bytecode: &'a Bytecode) -> Result<Self, RuntimeError> {
         let mut globals = HashMap::new();
@@ -143,6 +147,7 @@ impl<'a> Vm<'a> {
             stop_at_prologue: false,
             array_prototype_cache: None,
             with_stack,
+            disposable_scopes: Vec::new(),
         }
     }
 
@@ -206,8 +211,7 @@ impl<'a> Vm<'a> {
     }
 
     /// Runs the bytecode loop until it returns or yields. Generator bodies
-    /// re-enter this loop on each resume; ordinary functions and scripts run it
-    /// once and only ever observe `Completion::Return`.
+    /// re-enter on each resume; ordinary functions/scripts run it once.
     pub(super) fn run_completion(&mut self) -> Result<Completion, RuntimeError> {
         loop {
             let op = self
@@ -302,6 +306,9 @@ impl<'a> Vm<'a> {
                 Op::NewArray { elements } => self.new_array(&elements)?,
                 Op::NewTemplateObject { cooked, raw } => self.new_template_object(&cooked, &raw),
                 Op::NewObjectLiteral => self.new_object_literal(),
+                op @ (Op::EnterDisposableScope | Op::RegisterDisposable | Op::DisposeScope) => {
+                    self.run_disposal_op(&op)?;
+                }
                 Op::SetComputedFunctionName(kind) => self.set_computed_function_name(kind)?,
                 Op::DefineObjectProperty(meta) => self.define_object_property(meta)?,
                 Op::CopyObjectSpread => self.copy_object_spread()?,

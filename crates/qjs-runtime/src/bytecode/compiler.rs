@@ -8,9 +8,10 @@ use crate::{
 };
 
 use super::compiler_lexical::{
-    annex_b_blocked_names, catch_param_annex_b_blocked_names, function_body_annex_b_blocked_names,
-    function_param_names, lexical_declared_names, switch_lexical_declared_names,
+    catch_param_annex_b_blocked_names, function_body_annex_b_blocked_names, function_param_names,
+    lexical_declared_names, switch_lexical_declared_names,
 };
+use super::compiler_try::block_has_sync_using;
 use super::ir::{Bytecode, Local, Op};
 use super::util::{stmt_accepts_pending_label, stmt_updates_statement_list_completion};
 
@@ -48,6 +49,11 @@ pub(super) struct Compiler {
     /// be propagated to the target loop's result slot so UpdateEmpty semantics
     /// are preserved.
     pub(super) try_result_slots: Vec<TryResultEntry>,
+    /// Open `using` disposal scopes around the code being compiled. A `using`
+    /// initializer emits `RegisterDisposable` only when this is non-zero (i.e.
+    /// its block opened a disposal scope), so contexts not yet wired for
+    /// disposal never emit an unmatched register.
+    pub(super) disposable_scope_depth: usize,
 }
 
 /// Tracks a try/catch/finally result slot for completion value propagation.
@@ -105,6 +111,7 @@ impl Default for Compiler {
             regexp_literal_error: false,
             async_generator_body: false,
             try_result_slots: Vec::new(),
+            disposable_scope_depth: 0,
         }
     }
 }
@@ -800,27 +807,13 @@ impl Compiler {
     pub(super) fn compile_stmt(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
         match stmt {
             Stmt::Expr(expr) => self.compile_expr(expr),
-            Stmt::Block { body, .. } => self.with_lexical_scope(|compiler| {
-                let blocked = annex_b_blocked_names(body);
-                compiler.with_annex_b_blocked_function_names(&blocked, |compiler| {
-                    compiler.predeclare_current_scope_lexicals(body);
-                    if body.is_empty() {
-                        compiler.emit_load_undefined();
-                        return Ok(());
-                    }
-                    compiler.compile_hoisted_function_decls(body)?;
-                    for (index, stmt) in body.iter().enumerate() {
-                        compiler.compile_stmt(stmt)?;
-                        if index + 1 != body.len() {
-                            compiler.store_or_pop_statement_list_completion(stmt);
-                        }
-                    }
-                    for slot in compiler.current_lexical_slots_for_names(&blocked) {
-                        compiler.emit(Op::ClearLocal(slot));
-                    }
-                    Ok(())
-                })
-            }),
+            Stmt::Block { body, .. } => {
+                if block_has_sync_using(body) {
+                    self.compile_disposable_block(body)
+                } else {
+                    self.compile_block_body(body)
+                }
+            }
             Stmt::If {
                 test,
                 consequent,
@@ -891,6 +884,12 @@ impl Compiler {
                     } else {
                         self.emit_load_undefined();
                     }
+                    // A sync `using` registers its initializer value with the
+                    // enclosing disposal scope before the binding store consumes
+                    // it (RegisterDisposable inspects the stack top in place).
+                    if *kind == VarKind::Using && self.disposable_scope_depth > 0 {
+                        self.emit(Op::RegisterDisposable);
+                    }
                     if has_init {
                         self.compile_binding_initializer(&declaration.binding, *kind)?;
                     } else {
@@ -958,7 +957,7 @@ impl Compiler {
         Ok(())
     }
 
-    fn store_or_pop_statement_list_completion(&mut self, stmt: &Stmt) {
+    pub(super) fn store_or_pop_statement_list_completion(&mut self, stmt: &Stmt) {
         if let Some(result_slot) = self.current_loop_result_slot()
             && stmt_updates_statement_list_completion(stmt)
         {

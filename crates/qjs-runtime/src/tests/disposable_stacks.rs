@@ -284,3 +284,69 @@ fn async_disposable_stack_adopt_and_use_surface_and_errors() {
     assert!(eval("new AsyncDisposableStack().adopt(null, null);").is_err());
     assert!(eval("new AsyncDisposableStack().use({});").is_err());
 }
+
+#[test]
+fn using_declaration_disposes_at_block_exit() {
+    // Resources are disposed LIFO when the block completes normally.
+    assert_eq!(
+        eval(
+            "let log = []; \
+             { using a = { [Symbol.dispose]() { log.push('a'); } }; \
+               using b = { [Symbol.dispose]() { log.push('b'); } }; \
+               log.push('body'); } \
+             log.join(',');"
+        ),
+        Ok(Value::String("body,b,a".to_owned()))
+    );
+}
+
+#[test]
+fn using_declaration_disposes_on_abrupt_completion() {
+    // Disposal runs on throw, then the error propagates.
+    assert_eq!(
+        eval(
+            "let log = []; \
+             try { { using x = { [Symbol.dispose]() { log.push('d'); } }; \
+                     throw new Error('boom'); } } \
+             catch (e) { log.push('caught'); } \
+             log.join(',');"
+        ),
+        Ok(Value::String("d,caught".to_owned()))
+    );
+    // And on return from a function.
+    assert_eq!(
+        eval(
+            "let log = []; \
+             function f() { { using x = { [Symbol.dispose]() { log.push('d'); } }; \
+                             return 7; } } \
+             f() + ':' + log.join(',');"
+        ),
+        Ok(Value::String("7:d".to_owned()))
+    );
+}
+
+#[test]
+fn using_declaration_rejects_non_disposable_initializers() {
+    // null/undefined are allowed (no-op); other non-disposables throw a
+    // TypeError when the declaration is evaluated.
+    assert_eq!(
+        eval("{ using x = null; using y = undefined; } 'ok';"),
+        Ok(Value::String("ok".to_owned()))
+    );
+    assert!(eval("{ using x = {}; }").is_err());
+    assert!(eval("{ using x = 5; }").is_err());
+}
+
+#[test]
+fn using_disposal_errors_chain_with_suppressed_error() {
+    // A dispose failure that overrides a body throw is wrapped in a
+    // SuppressedError carrying both errors.
+    assert_eq!(
+        eval(
+            "try { { using x = { [Symbol.dispose]() { throw new Error('dispose'); } }; \
+                     throw new Error('body'); } } \
+             catch (e) { e.constructor.name + ':' + e.error.message + ':' + e.suppressed.message; }"
+        ),
+        Ok(Value::String("SuppressedError:dispose:body".to_owned()))
+    );
+}

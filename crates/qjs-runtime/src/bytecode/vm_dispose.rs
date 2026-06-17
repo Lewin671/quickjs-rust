@@ -1,0 +1,153 @@
+//! `using` disposal for the bytecode VM (Explicit Resource Management, sync).
+//!
+//! A block containing `using` declarations is compiled with an implicit
+//! try/finally: `EnterDisposableScope` opens a scope, each `using` initializer
+//! is registered via `RegisterDisposable`, and the finally runs `DisposeScope`,
+//! which disposes the resources LIFO on every completion path. A dispose
+//! failure that overrides a pending throw is chained with `SuppressedError`.
+
+use crate::{
+    PropertyKey, RuntimeError, Value, call_function, error::create_suppressed_error,
+    error::runtime_error_to_value, property_value_key, symbol,
+};
+
+use super::vm::Vm;
+
+/// A resource registered by a `using` declaration: the value and the
+/// `Symbol.dispose` method resolved once at registration time.
+pub(super) struct DisposeResource {
+    pub(super) value: Value,
+    pub(super) method: Value,
+}
+
+impl Vm<'_> {
+    /// Dispatches the three `using` disposal ops, routing register/dispose
+    /// failures through the throw machinery so a `try` can catch them.
+    pub(super) fn run_disposal_op(&mut self, op: &super::ir::Op) -> Result<(), RuntimeError> {
+        use super::ir::Op;
+        match op {
+            Op::EnterDisposableScope => {
+                self.disposable_scopes.push(Vec::new());
+                Ok(())
+            }
+            Op::RegisterDisposable => {
+                let result = self.register_disposable();
+                self.handle_runtime_result(result).map(|_| ())
+            }
+            Op::DisposeScope => {
+                let result = self.dispose_scope();
+                self.handle_runtime_result(result).map(|_| ())
+            }
+            _ => Ok(()),
+        }
+    }
+
+    fn register_disposable(&mut self) -> Result<(), RuntimeError> {
+        // The resource value stays on the stack (it is also bound to the
+        // declaration); only inspect it here.
+        let value = match self.stack.last() {
+            Some(value) => value.clone(),
+            None => {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: "missing `using` resource value on the stack".to_owned(),
+                });
+            }
+        };
+        // `using null`/`using undefined` register nothing (disposed as a no-op).
+        if matches!(value, Value::Null | Value::Undefined) {
+            return Ok(());
+        }
+        if !is_disposable_object(&value) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: `using` value is not an object".to_owned(),
+            });
+        }
+        let mut env = self.current_env();
+        let Some(dispose_symbol) = symbol::dispose_symbol(&env) else {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: Symbol.dispose is not available".to_owned(),
+            });
+        };
+        let method = property_value_key(
+            value.clone(),
+            &PropertyKey::Symbol(dispose_symbol),
+            &mut env,
+        )?;
+        self.apply_env(env);
+        if matches!(method, Value::Null | Value::Undefined) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: `using` value is missing Symbol.dispose".to_owned(),
+            });
+        }
+        if !is_callable(&method) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: Symbol.dispose is not callable".to_owned(),
+            });
+        }
+        self.disposable_scopes
+            .last_mut()
+            .expect("a disposable scope is open while registering")
+            .push(DisposeResource { value, method });
+        Ok(())
+    }
+
+    fn dispose_scope(&mut self) -> Result<(), RuntimeError> {
+        let resources = self.disposable_scopes.pop().unwrap_or_default();
+        // Seed the accumulated completion with any throw the block raised (the
+        // finally was entered via throw_value, which stages pending_throw). A
+        // dispose failure then suppresses it.
+        let mut pending = self.pending_throw.take();
+        for resource in resources.into_iter().rev() {
+            let mut env = self.current_env();
+            let result =
+                call_function(resource.method, resource.value, Vec::new(), &mut env, false);
+            self.apply_env(env);
+            if let Err(error) = result {
+                let env = self.current_env();
+                let thrown = runtime_error_to_value(error, &env);
+                pending = Some(match pending.take() {
+                    None => thrown,
+                    Some(previous) => {
+                        let mut env = self.current_env();
+                        let suppressed = create_suppressed_error(thrown, previous, &mut env)?;
+                        self.apply_env(env);
+                        suppressed
+                    }
+                });
+            }
+        }
+        if let Some(error) = pending {
+            // A throw (re-staged block throw or a dispose failure) overrides any
+            // pending return/break that entered the finally.
+            self.pending_return = None;
+            self.pending_jump = None;
+            self.pending_throw = Some(error);
+        }
+        Ok(())
+    }
+}
+
+fn is_disposable_object(value: &Value) -> bool {
+    matches!(
+        value,
+        Value::Object(_)
+            | Value::Array(_)
+            | Value::Function(_)
+            | Value::Map(_)
+            | Value::Set(_)
+            | Value::Proxy(_)
+    )
+}
+
+fn is_callable(value: &Value) -> bool {
+    match value {
+        Value::Function(_) => true,
+        Value::Proxy(proxy) => crate::proxy::proxy_is_callable(proxy),
+        _ => false,
+    }
+}

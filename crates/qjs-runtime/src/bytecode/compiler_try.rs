@@ -3,10 +3,100 @@ use qjs_ast::{BindingPattern, CatchClause, Stmt, VarKind};
 use crate::RuntimeError;
 
 use super::compiler::Compiler;
-use super::compiler_lexical::catch_param_annex_b_blocked_names;
+use super::compiler_lexical::{annex_b_blocked_names, catch_param_annex_b_blocked_names};
 use super::ir::{CatchScope, Op};
 
+/// Whether a block directly declares a sync `using` resource (so its scope
+/// needs an implicit disposal try/finally). `await using` is handled by the
+/// async path.
+pub(super) fn block_has_sync_using(body: &[Stmt]) -> bool {
+    body.iter().any(|stmt| {
+        matches!(
+            stmt,
+            Stmt::VarDecl {
+                kind: VarKind::Using,
+                ..
+            }
+        )
+    })
+}
+
 impl Compiler {
+    /// Compiles a block body in its own lexical scope, leaving the block's
+    /// completion value on the stack. Shared by plain and disposable blocks.
+    pub(super) fn compile_block_body(&mut self, body: &[Stmt]) -> Result<(), RuntimeError> {
+        self.with_lexical_scope(|compiler| {
+            let blocked = annex_b_blocked_names(body);
+            compiler.with_annex_b_blocked_function_names(&blocked, |compiler| {
+                compiler.predeclare_current_scope_lexicals(body);
+                if body.is_empty() {
+                    compiler.emit_load_undefined();
+                    return Ok(());
+                }
+                compiler.compile_hoisted_function_decls(body)?;
+                for (index, stmt) in body.iter().enumerate() {
+                    compiler.compile_stmt(stmt)?;
+                    if index + 1 != body.len() {
+                        compiler.store_or_pop_statement_list_completion(stmt);
+                    }
+                }
+                for slot in compiler.current_lexical_slots_for_names(&blocked) {
+                    compiler.emit(Op::ClearLocal(slot));
+                }
+                Ok(())
+            })
+        })
+    }
+
+    /// Compiles a block that declares `using` resources: opens a disposal scope,
+    /// runs the body inside an implicit try whose finally disposes the
+    /// resources LIFO on every completion path.
+    pub(super) fn compile_disposable_block(&mut self, body: &[Stmt]) -> Result<(), RuntimeError> {
+        self.emit(Op::EnterDisposableScope);
+        let result_slot = self.temp_local("using_result");
+        self.emit_load_undefined();
+        self.emit(Op::StoreLocal(result_slot));
+
+        let loop_depth = self.loop_stack_depth();
+        self.push_try_result_slot(result_slot, loop_depth, false);
+
+        let enter = self.emit(Op::EnterTry {
+            catch: None,
+            finally: None,
+            catch_scope: None,
+        });
+        self.disposable_scope_depth += 1;
+        let body_result = self.compile_block_body(body);
+        self.disposable_scope_depth -= 1;
+        body_result?;
+        self.emit(Op::StoreLocal(result_slot));
+        self.emit(Op::ExitTry);
+        let normal_jump = self.emit(Op::Jump(usize::MAX));
+
+        self.pop_try_result_slot();
+
+        let finally_target = self.compile_dispose_finally();
+        if let Op::EnterTry { finally, .. } = &mut self.code[enter] {
+            *finally = Some(finally_target);
+        }
+        self.patch_jump(normal_jump, finally_target);
+        self.emit(Op::LoadLocal(result_slot));
+        Ok(())
+    }
+
+    /// Emits the disposal finally body (`DisposeScope; EndFinally`) and returns
+    /// its entry IP.
+    fn compile_dispose_finally(&mut self) -> usize {
+        let finally_result_slot = self.temp_local("dispose_result");
+        let loop_depth = self.loop_stack_depth();
+        self.push_try_result_slot(finally_result_slot, loop_depth, true);
+        let target = self.code.len();
+        self.emit(Op::DisposeScope);
+        self.pop_try_result_slot();
+        self.emit(Op::EndFinally);
+        target
+    }
+
     pub(super) fn compile_try(
         &mut self,
         block: &[Stmt],
