@@ -22,7 +22,27 @@ exit. Unlocks ~113 QuickJS-NG-passing Test262 cases under
   `for (using x = e; ;)`. Reject `for (using x in e)` (for-in). Extend the
   for-head detection in `crates/qjs-parser/src/statement/control.rs:410` to
   recognize `using_declaration_kind()` and route to for-of (not for-in).
-- **Slice B — sync runtime disposal (TODO).** See plan below.
+- **Slice B — sync block disposal (DONE, commit `fb470c14`).** A `{ }` block
+  declaring sync `using` resources compiles into an implicit try/finally
+  (`EnterDisposableScope` / `RegisterDisposable` / `DisposeScope` ops, VM frame
+  `disposable_scopes`, logic in `bytecode/vm_dispose.rs`). Disposes LIFO on
+  every completion path (normal/throw/return/break/continue), with
+  `SuppressedError` chaining and the `Symbol.dispose` resolution/validation
+  TypeErrors. Registration is gated on `Compiler::disposable_scope_depth`, so
+  `using` in not-yet-wired scopes binds without crashing.
+- **Slice B.2 — wider sync scopes (TODO).** Wrap the remaining statement-list
+  scopes that can hold `using`: function/generator bodies, `for`-statement
+  bodies, and `switch` CaseBlocks. Each needs the same EnterDisposableScope +
+  implicit-finally(DisposeScope) wrapping; function/generator bodies are the
+  highest-value (~3-5 cases: `initializer-disposed-at-end-of-functionbody`,
+  `...generatorbody`, the top-level `throws-if-initializer-*` cases). Watch the
+  function-body stack/return semantics (the hot compile path).
+- **Slice B.3 — parser refinements (TODO).** Reject `using` at the top level of
+  a Script / global eval (`using-not-allowed-at-top-level-of-script` /
+  `...-of-eval` — currently accepted, a Slice A regression on 2 negative cases)
+  and directly in a `switch` CaseClause; add `for`-head parsing
+  (`for (using x of e)`, C-style, reject `for (using x in e)`). Reassignment to
+  a `using` binding must be a TypeError (it is already, as a const slot).
 - **Slice C — async runtime disposal (TODO).** `Symbol.asyncDispose` with an
   `await` at each disposal; per-iteration disposal in `for-of`.
 
