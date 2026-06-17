@@ -318,16 +318,37 @@ pub(crate) fn native_function_prototype_has_instance(
 pub(crate) fn native_function_prototype_to_string(
     this_value: Value,
 ) -> Result<Value, RuntimeError> {
-    let Value::Function(function) = this_value else {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "Function.prototype.toString requires a callable receiver".to_owned(),
-        });
+    let name = match &this_value {
+        Value::Function(function) => function.name.clone().unwrap_or_default(),
+        // A callable Proxy is an acceptable receiver: unwrap to the underlying
+        // function for the name and emit a NativeFunction-shaped string.
+        Value::Proxy(proxy) if crate::proxy::proxy_is_callable(proxy) => {
+            callable_proxy_target_name(proxy)
+        }
+        _ => {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: Function.prototype.toString requires a callable receiver"
+                    .to_owned(),
+            });
+        }
     };
-    let name = function.name.clone().unwrap_or_default();
     Ok(Value::String(format!(
         "function {name}() {{ [native code] }}"
     )))
+}
+
+/// Resolves the name of the function wrapped (possibly through nested proxies)
+/// by a callable Proxy, defaulting to the empty string.
+fn callable_proxy_target_name(proxy: &crate::proxy::ProxyRef) -> String {
+    let mut target = proxy.target();
+    loop {
+        match target {
+            Value::Function(function) => return function.name.clone().unwrap_or_default(),
+            Value::Proxy(inner) => target = inner.target(),
+            _ => return String::new(),
+        }
+    }
 }
 
 pub(crate) fn native_throw_type_error() -> Result<Value, RuntimeError> {

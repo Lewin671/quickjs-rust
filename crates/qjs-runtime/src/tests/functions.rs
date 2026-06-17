@@ -240,6 +240,23 @@ fn evaluates_function_declarations_and_calls() {
         eval("Function.prototype.toString.call(Array.isArray).includes('[native code]');"),
         Ok(Value::Boolean(true))
     );
+    // A callable Proxy is an acceptable toString receiver and reports the
+    // wrapped function's name.
+    assert_eq!(
+        eval(
+            "let p = new Proxy(function foo() {}, {}); \
+             Function.prototype.toString.call(p);"
+        ),
+        Ok(Value::String("function foo() { [native code] }".to_owned()))
+    );
+    // A non-callable receiver still throws a TypeError.
+    assert_eq!(
+        eval(
+            "try { Function.prototype.toString.call({}); 'no-throw'; } \
+             catch (error) { error.constructor.name; }"
+        ),
+        Ok(Value::String("TypeError".to_owned()))
+    );
     assert_eq!(
         eval("delete decodeURI.length; decodeURI.length;"),
         Ok(Value::Number(0.0))
