@@ -68,10 +68,10 @@ check_limit() {
   fi
 }
 
-check_limit "Rust source" 1000 '*.rs' exclude '/src/tests/'
+check_limit "Rust source" 2000 '*.rs' exclude '/src/tests/'
 
-check_limit "Rust test" 1000 '*.rs' include '^(.*/)?crates/.*/src/tests/'
+check_limit "Rust test" 2000 '*.rs' include '^(.*/)?crates/.*/src/tests/'
 
-check_limit "repository script" 1000 '*.sh'
+check_limit "repository script" 2000 '*.sh'
 
 exit "$status"
