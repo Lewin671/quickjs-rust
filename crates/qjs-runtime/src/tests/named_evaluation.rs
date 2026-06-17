@@ -83,10 +83,24 @@ fn object_method_shorthand_keeps_its_name() {
 }
 
 #[test]
-fn computed_object_property_value_is_unnamed() {
-    // Computed-key NamedEvaluation is a known gap (the key is only known at
-    // runtime); the value keeps the empty name for now.
-    assert_eq!(name_of("let k = 'c'; ({ [k]: function () {} }).c.name"), "");
+fn computed_object_property_value_is_named_from_key() {
+    // A computed key names an anonymous function value via SetFunctionName,
+    // resolved at runtime from the evaluated key.
+    assert_eq!(
+        name_of("let k = 'c'; ({ [k]: function () {} }).c.name"),
+        "c"
+    );
+    // A named function expression keeps its own name.
+    assert_eq!(
+        name_of("let k = 'c'; ({ [k]: function foo() {} }).c.name"),
+        "foo"
+    );
+    // A Symbol key yields a bracketed description (empty when undescribed).
+    assert_eq!(
+        name_of("let s = Symbol('d'); ({ [s]() {} })[s].name"),
+        "[d]"
+    );
+    assert_eq!(name_of("let s = Symbol(); ({ [s]() {} })[s].name"), "");
 }
 
 // --- Default values --------------------------------------------------------

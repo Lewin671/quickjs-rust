@@ -865,7 +865,7 @@ pub(super) fn class_method_function_name_with_base(
     }
 }
 
-fn function_name_from_property_key(key: &PropertyKey) -> Option<String> {
+pub(super) fn function_name_from_property_key(key: &PropertyKey) -> Option<String> {
     match key {
         PropertyKey::String(name) => Some(name.clone()),
         PropertyKey::Symbol(symbol) => {

@@ -13,9 +13,10 @@ use crate::{
     array::iterable_values_with_env, object, object_prototype, to_property_key_value,
 };
 
-use super::ir::{ArrayElementKind, ObjectPropertyMeta};
+use super::ir::{ArrayElementKind, ComputedNameKind, ObjectPropertyMeta};
 use super::util::stack_underflow;
 use super::vm::Vm;
+use super::vm_class::function_name_from_property_key;
 
 impl Vm<'_> {
     pub(super) fn new_array(&mut self, elements: &[ArrayElementKind]) -> Result<(), RuntimeError> {
@@ -78,6 +79,37 @@ impl Vm<'_> {
             HashMap::new(),
             object_prototype(&self.env),
         )));
+    }
+
+    /// Names an anonymous object-literal function/accessor from its computed
+    /// key (`[k]() {}`, `get [k]() {}`, `{ [k]: () => {} }`). The key is
+    /// converted to a property key once here and the normalized primitive is
+    /// pushed back so the following `DefineObjectProperty` does not re-run any
+    /// key coercion side effects.
+    pub(super) fn set_computed_function_name(
+        &mut self,
+        kind: ComputedNameKind,
+    ) -> Result<(), RuntimeError> {
+        let value = self.pop()?;
+        let key_value = self.pop()?;
+        let mut key_env = self.current_env();
+        let key = to_property_key_value(key_value, &mut key_env)?;
+        self.apply_env(key_env);
+        if let Value::Function(ref function) = value {
+            let base = function_name_from_property_key(&key).unwrap_or_default();
+            let name = match kind {
+                ComputedNameKind::Plain => base,
+                ComputedNameKind::Getter => format!("get {base}"),
+                ComputedNameKind::Setter => format!("set {base}"),
+            };
+            function.define_property(
+                "name".to_owned(),
+                Property::data(Value::String(name), false, false, true),
+            );
+        }
+        self.stack.push(key.into_value());
+        self.stack.push(value);
+        Ok(())
     }
 
     pub(super) fn define_object_property(

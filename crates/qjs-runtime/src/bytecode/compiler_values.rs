@@ -11,7 +11,7 @@ use crate::{
 };
 
 use super::compiler::Compiler;
-use super::ir::{ArrayElementKind, ObjectPropertyMeta, Op};
+use super::ir::{ArrayElementKind, ComputedNameKind, ObjectPropertyMeta, Op};
 use super::util::unsupported_stmt;
 
 impl Compiler {
@@ -114,7 +114,30 @@ impl Compiler {
                         continue;
                     }
                 }
-                ObjectPropertyKey::Computed(expr) => self.compile_expr(expr)?,
+                ObjectPropertyKey::Computed(expr) => {
+                    self.compile_expr(expr)?;
+                    self.compile_expr(&property.value)?;
+                    // A computed key names an anonymous function/accessor value
+                    // via SetFunctionName (a Symbol key becomes "[description]").
+                    let name_kind = match property.kind {
+                        ObjectPropertyKind::Getter => Some(ComputedNameKind::Getter),
+                        ObjectPropertyKind::Setter => Some(ComputedNameKind::Setter),
+                        ObjectPropertyKind::Data
+                            if is_anonymous_function_definition(&property.value) =>
+                        {
+                            Some(ComputedNameKind::Plain)
+                        }
+                        _ => None,
+                    };
+                    if let Some(kind) = name_kind {
+                        self.emit(Op::SetComputedFunctionName(kind));
+                    }
+                    self.emit(Op::DefineObjectProperty(ObjectPropertyMeta {
+                        kind: property.kind,
+                        is_proto_setter: property.is_proto_setter,
+                    }));
+                    continue;
+                }
             }
             self.compile_expr(&property.value)?;
             self.emit(Op::DefineObjectProperty(ObjectPropertyMeta {
@@ -522,4 +545,13 @@ fn validate_regexp_literal_new(
     };
     let flags = literals.next().unwrap_or("");
     crate::regexp::validate_regexp_literal(pattern, flags)
+}
+
+/// Whether `expr` is an anonymous function definition (an unnamed function,
+/// arrow, or class) that participates in NamedEvaluation / SetFunctionName.
+fn is_anonymous_function_definition(expr: &Expr) -> bool {
+    matches!(
+        expr,
+        Expr::Function { name: None, .. } | Expr::Class { name: None, .. }
+    )
 }

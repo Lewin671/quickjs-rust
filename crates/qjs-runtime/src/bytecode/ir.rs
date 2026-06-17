@@ -86,6 +86,10 @@ pub(super) enum Op {
         raw: Vec<String>,
     },
     NewObjectLiteral,
+    /// Names an anonymous object-literal function/accessor from its computed
+    /// key. Stack (unchanged): `[..., key, function]`. A symbol key yields
+    /// `[description]`; accessors are prefixed with `get `/`set `.
+    SetComputedFunctionName(ComputedNameKind),
     DefineObjectProperty(ObjectPropertyMeta),
     CopyObjectSpread,
     EnumerateKeys,
@@ -465,6 +469,17 @@ pub(super) enum ArrayElementKind {
     Expr,
     Elision,
     Spread,
+}
+
+/// How to derive an anonymous function's name from a computed property key.
+#[derive(Clone, Copy, Debug)]
+pub(super) enum ComputedNameKind {
+    /// Data property or method: the key name verbatim.
+    Plain,
+    /// Getter accessor: `get ` prefix.
+    Getter,
+    /// Setter accessor: `set ` prefix.
+    Setter,
 }
 
 /// Per-property metadata for an object literal definition.

@@ -302,6 +302,7 @@ impl<'a> Vm<'a> {
                 Op::NewArray { elements } => self.new_array(&elements)?,
                 Op::NewTemplateObject { cooked, raw } => self.new_template_object(&cooked, &raw),
                 Op::NewObjectLiteral => self.new_object_literal(),
+                Op::SetComputedFunctionName(kind) => self.set_computed_function_name(kind)?,
                 Op::DefineObjectProperty(meta) => self.define_object_property(meta)?,
                 Op::CopyObjectSpread => self.copy_object_spread()?,
                 Op::EnumerateKeys => self.enumerate_keys()?,
