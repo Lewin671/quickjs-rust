@@ -546,6 +546,9 @@ impl Vm<'_> {
                 if is_sloppy_global_fallback || self.has_realm_or_global_this_binding(&name) {
                     let syncs_global_snapshot = is_sloppy_global_fallback
                         && self.captured_or_local_matches_global_this(&name);
+                    if syncs_global_snapshot {
+                        self.record_sloppy_global_name(&name);
+                    }
                     self.store_realm_or_global_this_sloppy(name.clone(), value.clone())?;
                     self.store_local(slot, value)?;
                     if syncs_global_snapshot && let Some(value) = self.locals[slot].clone() {
@@ -559,6 +562,9 @@ impl Vm<'_> {
             Some(None) => {
                 if is_sloppy_global_fallback {
                     let syncs_global_snapshot = self.captured_or_local_matches_global_this(&name);
+                    if syncs_global_snapshot {
+                        self.record_sloppy_global_name(&name);
+                    }
                     self.store_realm_or_global_this_sloppy(name.clone(), value.clone())?;
                     self.store_local(slot, value)?;
                     if syncs_global_snapshot && let Some(value) = self.locals[slot].clone() {

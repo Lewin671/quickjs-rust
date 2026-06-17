@@ -276,7 +276,11 @@ pub(crate) fn native_typed_array_prototype_to_locale_string(
 fn call_to_locale_string(value: Value, env: &mut CallEnv) -> Result<String, RuntimeError> {
     // Per spec, Invoke the element's own `toLocaleString` (resolved through its
     // prototype, so a user-overridden Number.prototype.toLocaleString is
-    // honored) and ToString the result. Element values are never null/undefined.
+    // honored) and ToString the result. Elements that became out-of-bounds
+    // during iteration read as `undefined` and contribute the empty string.
+    if matches!(value, Value::Undefined | Value::Null) {
+        return Ok(String::new());
+    }
     let method = property_value(value.clone(), "toLocaleString", env)?;
     let localized = call_function(method, value, Vec::new(), env, false)?;
     to_js_string_with_env(localized, env)

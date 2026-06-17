@@ -123,6 +123,32 @@ fn to_locale_string_invokes_each_element() {
         )
         .is_err()
     );
+    // A throwing ToString of the Invoke result propagates.
+    assert!(
+        eval(
+            "Number.prototype.toLocaleString = function() { \
+                 return { toString: function() { throw new TypeError('boom'); } }; \
+             }; \
+             new Uint8Array([1]).toLocaleString();"
+        )
+        .is_err()
+    );
+    // If the view shrinks during iteration, out-of-bounds elements read as
+    // undefined and contribute empty strings.
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let a = new Uint8Array(b); \
+             let remaining = 2; \
+             Number.prototype.toLocaleString = function() { \
+                 remaining--; \
+                 if (remaining === 0) { b.resize(2); } \
+                 return '0'; \
+             }; \
+             a.toLocaleString();"
+        ),
+        Ok(Value::String("0,0,,".to_owned()))
+    );
 }
 
 #[test]

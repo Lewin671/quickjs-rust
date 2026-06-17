@@ -916,6 +916,7 @@ impl<'a> Vm<'a> {
         } else {
             self.apply_env(env.env);
         }
+        self.refresh_realm_backed_locals_from_realm();
         if !self.bytecode.global_scope {
             return;
         }
@@ -948,6 +949,32 @@ impl<'a> Vm<'a> {
                 }
                 *slot = Some(value);
             }
+        }
+    }
+
+    fn refresh_realm_backed_locals_from_realm(&mut self) {
+        for index in 0..self.locals.len() {
+            if !self.bytecode.local_is_sloppy_global_fallback(index) {
+                continue;
+            }
+            let Some(name) = self.bytecode.local_name_at(index) else {
+                continue;
+            };
+            if !self
+                .sloppy_global_names
+                .iter()
+                .any(|candidate| candidate == name)
+            {
+                continue;
+            }
+            let Some(value) = self
+                .global_this_property(name)
+                .or_else(|| self.realm.borrow().get(name).cloned())
+            else {
+                continue;
+            };
+            self.locals[index] = Some(value.clone());
+            self.write_through_captured(name, value);
         }
     }
 

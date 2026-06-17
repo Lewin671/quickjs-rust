@@ -102,12 +102,10 @@ gaps: `TypedArray` 2,027, `ArrayBuffer` 263, `DataView` 188 — concentrated in
       `undefined`, computes the relative start index from the original length,
       and clips searches after detach/shrink: 5 -> 0 actionable gaps.
       `toLocaleString` now Invokes each element's own `toLocaleString` (resolved
-      through `Number.prototype`, so an overridden one is honored) and
-      ToString-coerces the result, matching `Array.prototype.toLocaleString`:
-      19 -> 5 actionable gaps. The remaining `calls-tostring`/`calls-valueof`
-      variants fail on a separate closure-binding bug (a function that assigns a
-      free `var` desyncs a previously-captured closure's view of it, tracked in
-      T014), not the typed-array surface; the last is a resizable-buffer variant.
+      through `Number.prototype`, so an overridden one is honored), ToString-
+      coerces the result including abrupt completions, and treats elements that
+      became out-of-bounds during iteration as empty strings: 13 -> 0 actionable
+      gaps.
       `some`/`every`/`find`/`findIndex`/`findLast`/`findLastIndex`/`reduce`/
       `reduceRight` now read each element live via `get_view_element` instead of
       a one-shot `ViewSnapshot`, so callbacks that mutate a not-yet-visited index
