@@ -239,6 +239,8 @@ impl<'a> Vm<'a> {
                     self.stack.push(self.load_local_or_undefined(slot)?)
                 }
                 Op::LoadNewTarget => self.stack.push(self.load_new_target()),
+                op @ (Op::AppendStringLiteralLocal { .. }
+                | Op::AppendStringLiteralGlobal { .. }) => self.run_string_append_op(op)?,
                 Op::StoreLocal(slot) => {
                     let value = self.pop()?;
                     let result = self.store_local(slot, value);

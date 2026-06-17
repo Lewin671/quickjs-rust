@@ -1,4 +1,4 @@
-use qjs_ast::{AssignmentOp, AssignmentTarget, Expr, UpdateOp};
+use qjs_ast::{AssignmentOp, AssignmentTarget, Expr, Literal, UpdateOp};
 
 use crate::{RuntimeError, Value};
 
@@ -186,6 +186,24 @@ impl Compiler {
                 self.patch_jump(end_jump, end);
             }
             _ => {
+                if op == AssignmentOp::AddAssign
+                    && !self.inside_with()
+                    && let Expr::Literal(Literal::String { value, .. }) = value
+                {
+                    if let Some(slot) = slot {
+                        self.emit(Op::AppendStringLiteralLocal {
+                            slot,
+                            value: value.clone(),
+                        });
+                    } else {
+                        self.emit(Op::AppendStringLiteralGlobal {
+                            name: name.clone(),
+                            value: value.clone(),
+                            is_strict: self.strict,
+                        });
+                    }
+                    return Ok(());
+                }
                 self.emit_load_identifier(name, slot);
                 self.compile_expr(value)?;
                 self.emit(Op::Binary(assignment_binary_op(op)?));

@@ -13,6 +13,15 @@ pub(super) enum Op {
     LoadLocal(usize),
     LoadLocalOrUndefined(usize),
     LoadNewTarget,
+    AppendStringLiteralLocal {
+        slot: usize,
+        value: String,
+    },
+    AppendStringLiteralGlobal {
+        name: String,
+        value: String,
+        is_strict: bool,
+    },
     StoreLocal(usize),
     AssignLocal(usize),
     ClearLocal(usize),

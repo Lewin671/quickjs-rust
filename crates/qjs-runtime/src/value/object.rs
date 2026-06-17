@@ -452,6 +452,19 @@ impl ObjectRef {
         }
     }
 
+    pub(crate) fn append_string_property(&self, key: &str, suffix: &str) -> Option<Value> {
+        let mut properties = self.properties.borrow_mut();
+        let property = properties.get_mut(key)?;
+        if !property.writable || property.accessor {
+            return None;
+        }
+        let Value::String(string) = &mut property.value else {
+            return None;
+        };
+        string.push_str(suffix);
+        Some(Value::String(string.clone()))
+    }
+
     pub(crate) fn is_sealed(&self) -> bool {
         !self.extensible.get()
             && self
