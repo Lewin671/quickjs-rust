@@ -45,6 +45,39 @@ fn at_and_includes_and_index_of() {
 }
 
 #[test]
+fn last_index_of_coerces_from_index_and_rechecks_view_length() {
+    assert_eq!(
+        eval("let a = new Uint8Array([42, 43]); a.lastIndexOf(43, undefined);"),
+        Ok(Value::Number(-1.0))
+    );
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([0]); \
+             a.lastIndexOf(0, { valueOf() { __quickjsRustDetachArrayBuffer(a.buffer); return 0; } });"
+        ),
+        Ok(Value::Number(-1.0))
+    );
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let a = new Uint8Array(b); \
+             a[0] = 0; a[1] = 1; a[2] = 2; a[3] = 3; \
+             a.lastIndexOf(2, { valueOf() { b.resize(2); return 2; } });"
+        ),
+        Ok(Value::Number(-1.0))
+    );
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let a = new Uint8Array(b); \
+             a[0] = 1; a[1] = 1; a[2] = 1; a[3] = 1; \
+             a.lastIndexOf(0, { valueOf() { b.resize(6); return -1; } });"
+        ),
+        Ok(Value::Number(-1.0))
+    );
+}
+
+#[test]
 fn join_and_to_string() {
     assert_eq!(
         eval("new Uint8Array([1, 2, 3]).join('-');"),

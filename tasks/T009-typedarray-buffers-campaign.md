@@ -98,6 +98,9 @@ gaps: `TypedArray` 2,027, `ArrayBuffer` 263, `DataView` 188 — concentrated in
       detached/out-of-bounds view yields srcLength 0, still coerces start/end,
       then construction throws): 24 -> 2 actionable gaps, leaving
       resizable-buffer variants.
+      `lastIndexOf` now distinguishes omitted `fromIndex` from an explicit
+      `undefined`, computes the relative start index from the original length,
+      and clips searches after detach/shrink: 5 -> 0 actionable gaps.
       `toLocaleString` now Invokes each element's own `toLocaleString` (resolved
       through `Number.prototype`, so an overridden one is honored) and
       ToString-coerces the result, matching `Array.prototype.toLocaleString`:

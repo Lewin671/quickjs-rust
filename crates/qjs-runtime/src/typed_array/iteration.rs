@@ -142,30 +142,35 @@ pub(crate) fn native_typed_array_prototype_last_index_of(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let (object, length) = validate_typed_array(&this_value)?;
-    if length == 0 {
+    let (object, original_length) = validate_typed_array(&this_value)?;
+    if original_length == 0 {
         return Ok(Value::Number(-1.0));
     }
     let search = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    let start = match argument_values.get(1).cloned() {
-        None | Some(Value::Undefined) => length - 1,
-        Some(other) => {
-            let number = to_number_with_env(other, env)?;
-            let from = if number.is_nan() { 0.0 } else { number.trunc() };
-            if from >= 0.0 {
-                (from as usize).min(length - 1)
-            } else {
-                let candidate = length as f64 + from;
-                if candidate < 0.0 {
-                    return Ok(Value::Number(-1.0));
-                }
-                candidate as usize
+    let from_index = argument_values
+        .get(1)
+        .cloned()
+        .map(|value| to_number_with_env(value, env))
+        .transpose()?
+        .map(|number| if number.is_nan() { 0.0 } else { number.trunc() });
+    let length = typed_array_length(&object);
+    if length == 0 {
+        return Ok(Value::Number(-1.0));
+    }
+    let start = match from_index {
+        None => original_length - 1,
+        Some(from) if from >= 0.0 => (from as usize).min(original_length - 1),
+        Some(from) => {
+            let candidate = original_length as f64 + from;
+            if candidate < 0.0 {
+                return Ok(Value::Number(-1.0));
             }
+            candidate as usize
         }
     };
-    let scanned = read_view_elements(&object, 0, start + 1);
+    let start = start.min(length - 1);
     for index in (0..=start).rev() {
-        if strict_same(&scanned[index], &search) {
+        if strict_same(&get_view_element(&object, index), &search) {
             return Ok(Value::Number(index as f64));
         }
     }

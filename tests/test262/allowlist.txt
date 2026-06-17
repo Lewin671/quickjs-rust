@@ -416,6 +416,12 @@ test/built-ins/TypedArrayConstructors/of/BigInt/inherited.js
 test/built-ins/TypedArrayConstructors/ctors/length-arg/custom-proto-access-throws.js
 test/built-ins/TypedArrayConstructors/ctors/length-arg/is-negative-integer-throws-rangeerror.js
 test/built-ins/TypedArrayConstructors/ctors/length-arg/is-symbol-throws.js
+test/built-ins/TypedArray/prototype/lastIndexOf/BigInt/detached-buffer-during-fromIndex-returns-minus-one-for-zero.js
+test/built-ins/TypedArray/prototype/lastIndexOf/BigInt/tointeger-fromindex.js
+test/built-ins/TypedArray/prototype/lastIndexOf/coerced-position-grow.js
+test/built-ins/TypedArray/prototype/lastIndexOf/coerced-position-shrink.js
+test/built-ins/TypedArray/prototype/lastIndexOf/detached-buffer-during-fromIndex-returns-minus-one-for-zero.js
+test/built-ins/TypedArray/prototype/lastIndexOf/tointeger-fromindex.js
 test/built-ins/TypedArray/prototype/toString.js
 cases/array-at-array-like.js
 cases/array-at-basic.js
