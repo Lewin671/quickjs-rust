@@ -259,6 +259,7 @@ pub(super) fn native_global_eval(
             Some(Value::Boolean(true))
         );
     let bytecode = compile_direct_eval_script(&script, caller_strict)?;
+    let eval_strict = bytecode.is_strict();
     if direct_function_eval
         && matches!(
             eval_env.get(crate::DIRECT_EVAL_ARGUMENTS_BINDING),
@@ -284,11 +285,17 @@ pub(super) fn native_global_eval(
         validate_eval_global_lexical_bindings(&bytecode, &eval_env)?;
     }
     let caller_locals = eval_env.locals().keys().cloned().collect::<HashSet<_>>();
+    let hoisted_names = bytecode
+        .hoisted_local_names()
+        .map(str::to_owned)
+        .collect::<HashSet<_>>();
+    let mut strict_direct_writeback_env = (direct_eval && eval_strict).then(|| env.clone());
     initialize_direct_eval_bindings(
         &bytecode,
         &mut eval_env,
         direct_function_eval,
         &caller_locals,
+        eval_strict,
     );
     let result = eval_bytecode_with_env(&bytecode, eval_env.clone());
     for name in bytecode
@@ -296,6 +303,18 @@ pub(super) fn native_global_eval(
         .chain(bytecode.global_names().iter().map(String::as_str))
     {
         if let Some(value) = result.binding(name) {
+            if let Some(writeback_env) = strict_direct_writeback_env.as_mut() {
+                if hoisted_names.contains(name) {
+                    continue;
+                }
+                if caller_locals.contains(name) {
+                    // Strict direct eval runs declarations in its own eval
+                    // variable environment, but ordinary assignments to
+                    // caller-scope bindings still write through to the caller.
+                    writeback_env.insert(name.to_owned(), value.clone());
+                }
+                continue;
+            }
             if caller_locals.contains(name) {
                 // A caller frame binding (an outer `let`/`var` the eval'd code
                 // assigned): write it back through the frame so the caller's
@@ -314,7 +333,7 @@ pub(super) fn native_global_eval(
     // global lexical bindings. Only var/function declarations (handled above
     // via define_eval_global_binding) reach the global var environment.
     if direct_eval {
-        *env = eval_env;
+        *env = strict_direct_writeback_env.unwrap_or(eval_env);
     }
     result.value
 }
@@ -339,7 +358,7 @@ pub(super) fn native_eval_script(
     let bytecode = compile_direct_eval_script(&script, false)?;
     let mut eval_env = CallEnv::new(env.realm_rc());
     validate_eval_global_lexical_bindings(&bytecode, &eval_env)?;
-    initialize_direct_eval_bindings(&bytecode, &mut eval_env, false, &HashSet::new());
+    initialize_direct_eval_bindings(&bytecode, &mut eval_env, false, &HashSet::new(), false);
     let result = eval_bytecode_with_env(&bytecode, eval_env.clone());
     for name in bytecode
         .hoisted_local_names()
@@ -480,6 +499,7 @@ fn initialize_direct_eval_bindings(
     env: &mut CallEnv,
     direct_function_eval: bool,
     caller_locals: &HashSet<String>,
+    eval_strict: bool,
 ) {
     if !env.locals().contains_key("this")
         && let Some(value) = env.get("this")
@@ -487,7 +507,11 @@ fn initialize_direct_eval_bindings(
         env.insert("this".to_owned(), value);
     }
     for name in bytecode.hoisted_local_names() {
-        if caller_locals.contains(name) {
+        if !eval_strict && caller_locals.contains(name) {
+            continue;
+        }
+        if eval_strict {
+            env.insert(name.to_owned(), Value::Undefined);
             continue;
         }
         if direct_function_eval {

@@ -531,6 +531,10 @@ pub struct Bytecode {
     /// `this` resolves to the realm global; function bodies resolve `this`
     /// from their own frame.
     pub(super) global_scope: bool,
+    /// Whether this bytecode was compiled in strict mode after applying any
+    /// source prologue. Direct eval needs this to choose the correct
+    /// declaration instantiation environment.
+    strict: bool,
     pub(super) code: Vec<Op>,
 }
 
@@ -555,6 +559,24 @@ impl Bytecode {
         global_scope: bool,
         global_lexical_names: Vec<String>,
     ) -> Self {
+        Self::with_scope_global_lexical_names_and_strict(
+            constants,
+            locals,
+            code,
+            global_scope,
+            global_lexical_names,
+            false,
+        )
+    }
+
+    pub(super) fn with_scope_global_lexical_names_and_strict(
+        constants: Vec<Value>,
+        locals: Vec<Local>,
+        code: Vec<Op>,
+        global_scope: bool,
+        global_lexical_names: Vec<String>,
+        strict: bool,
+    ) -> Self {
         Self {
             constants,
             local_slots: collect_local_slots(&locals),
@@ -563,8 +585,13 @@ impl Bytecode {
             global_lexical_names,
             sloppy_global_assignment_names: collect_sloppy_global_assignment_names(&code),
             global_scope,
+            strict,
             code,
         }
+    }
+
+    pub(crate) fn is_strict(&self) -> bool {
+        self.strict
     }
 
     pub(crate) fn global_names(&self) -> &[String] {

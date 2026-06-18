@@ -221,12 +221,13 @@ impl Compiler {
             Ok(())
         })?;
         self.code.push(Op::Return);
-        Ok(Bytecode::with_scope_and_global_lexical_names(
+        Ok(Bytecode::with_scope_global_lexical_names_and_strict(
             std::mem::take(&mut self.constants),
             std::mem::take(&mut self.locals),
             std::mem::take(&mut self.code),
             true,
             global_lexical_names,
+            self.strict,
         ))
     }
 
@@ -241,12 +242,13 @@ impl Compiler {
             Ok(())
         })?;
         self.code.push(Op::Return);
-        Ok(Bytecode::with_scope_and_global_lexical_names(
+        Ok(Bytecode::with_scope_global_lexical_names_and_strict(
             std::mem::take(&mut self.constants),
             std::mem::take(&mut self.locals),
             std::mem::take(&mut self.code),
             false,
             blocked,
+            self.strict,
         ))
     }
 

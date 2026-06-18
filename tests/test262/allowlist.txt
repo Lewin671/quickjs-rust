@@ -4848,6 +4848,13 @@ cases/template-literal-no-substitution-basic.js
 cases/template-literal-line-terminators.js
 cases/tagged-template-basic.js
 cases/template-literal-substitution-basic.js
+test/language/eval-code/direct/var-env-func-strict-caller-2.js
+test/language/eval-code/direct/var-env-func-strict-caller.js
+test/language/eval-code/direct/var-env-func-strict-source.js
+test/language/eval-code/direct/var-env-var-strict-caller-2.js
+test/language/eval-code/direct/var-env-var-strict-caller-3.js
+test/language/eval-code/direct/var-env-var-strict-caller.js
+test/language/eval-code/direct/var-env-var-strict-source.js
 test/language/expressions/arrow-function/lexical-arguments.js
 test/language/expressions/arrow-function/lexical-this.js
 test/language/expressions/arrow-function/params-trailing-comma-multiple.js

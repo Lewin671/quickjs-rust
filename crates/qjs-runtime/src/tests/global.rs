@@ -256,6 +256,80 @@ fn evaluates_global_eval_builtin() {
 }
 
 #[test]
+fn strict_direct_eval_declarations_stay_eval_local() {
+    assert_eq!(
+        eval(
+            "'use strict'; \
+             function testcase() { \
+                 var value = 0; \
+                 eval('var value = 1;'); \
+                 return value; \
+             } \
+             testcase();"
+        ),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval(
+            "'use strict'; \
+             function testcase() { \
+                 eval('function evalLocalFunction(x) { return x; }'); \
+                 return typeof evalLocalFunction; \
+             } \
+             testcase();"
+        ),
+        Ok(Value::String("undefined".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "function testcase() { \
+                 eval('\"use strict\"; var sourceStrictValue = 1;'); \
+                 return typeof sourceStrictValue; \
+             } \
+             testcase();"
+        ),
+        Ok(Value::String("undefined".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "function testcase() { \
+                 eval('\"use strict\"; function sourceStrictFunction(x) { return x; }'); \
+                 return typeof sourceStrictFunction; \
+             } \
+             testcase();"
+        ),
+        Ok(Value::String("undefined".to_owned()))
+    );
+}
+
+#[test]
+fn strict_direct_eval_assignments_write_back_to_caller() {
+    assert_eq!(
+        eval(
+            "'use strict'; \
+             function testcase() { \
+                 var value = 0; \
+                 eval('value = 2;'); \
+                 return value; \
+             } \
+             testcase();"
+        ),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval(
+            "function testcase() { \
+                 var value = 0; \
+                 eval('\"use strict\"; value = 3;'); \
+                 return value; \
+             } \
+             testcase();"
+        ),
+        Ok(Value::Number(3.0))
+    );
+}
+
+#[test]
 fn evaluates_global_eval_pure_regexp_literals() {
     assert_eq!(
         eval(
