@@ -786,6 +786,66 @@ fn subarray_uses_species_constructor() {
 }
 
 #[test]
+fn subarray_preserves_length_tracking_result_when_end_is_undefined() {
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let a = new Uint8Array(b); a.set([1, 2, 3, 4]); \
+             let r = a.subarray(1); \
+             let before = r.length + ':' + r.join(','); \
+             b.resize(6); a[4] = 5; a[5] = 6; \
+             before + '|' + r.length + ':' + r.join(',');"
+        ),
+        Ok(Value::String("3:2,3,4|5:2,3,4,5,6".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let a = new Uint8Array(b); \
+             let args = ''; \
+             a.constructor = {}; \
+             a.constructor[Symbol.species] = function(buffer, offset, length) { \
+                 args = arguments.length + ',' + offset + ',' + String(length); \
+                 return new Uint8Array(buffer, offset); \
+             }; \
+             a.subarray(1); \
+             args;"
+        ),
+        Ok(Value::String("2,1,undefined".to_owned()))
+    );
+}
+
+#[test]
+fn subarray_out_of_bounds_resizable_views_use_current_constructor_bounds() {
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let tracking = new Uint8Array(b, 4); \
+             b.resize(2); \
+             let start = { valueOf() { b.resize(8); return 0; } }; \
+             let r = tracking.subarray(start); \
+             let before = r.byteOffset + ':' + r.length; \
+             b.resize(6); \
+             before + '|' + r.byteOffset + ':' + r.length;"
+        ),
+        Ok(Value::String("4:4|4:2".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let fixed = new Uint8Array(b, 2, 2); \
+             b.resize(1); \
+             let start = { valueOf() { b.resize(8); return 0; } }; \
+             let r = fixed.subarray(start); \
+             let before = r.byteOffset + ':' + r.length; \
+             b.resize(4); \
+             before + '|' + r.byteOffset + ':' + r.length;"
+        ),
+        Ok(Value::String("2:0|2:0".to_owned()))
+    );
+}
+
+#[test]
 fn subarray_on_detached_coerces_then_throws() {
     // A detached buffer yields srcLength 0 but the relative-index arguments are
     // still coerced (observable valueOf) before construction throws.

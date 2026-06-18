@@ -12,8 +12,9 @@ use crate::{
 use super::element::{get_view_element, read_view_elements};
 use super::{
     bytes_per_element, typed_array_buffer, typed_array_buffer_detached, typed_array_byte_offset,
-    typed_array_is_out_of_bounds, typed_array_kind, typed_array_length, typed_array_receiver,
-    typed_array_species_create, typed_array_species_create_with_args, validate_typed_array,
+    typed_array_is_length_tracking, typed_array_is_out_of_bounds, typed_array_kind,
+    typed_array_length, typed_array_receiver, typed_array_species_create,
+    typed_array_species_create_with_args, validate_typed_array,
 };
 use crate::CallEnv;
 
@@ -662,12 +663,9 @@ pub(crate) fn native_typed_array_prototype_subarray(
         0,
         env,
     )?;
-    let end = relative_index(
-        argument_values.get(1).cloned().unwrap_or(Value::Undefined),
-        length,
-        length as i64,
-        env,
-    )?;
+    let end_argument = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
+    let end_is_undefined = matches!(end_argument, Value::Undefined);
+    let end = relative_index(end_argument, length, length as i64, env)?;
     let count = if start < end {
         validate_subarray_range(&object, start, end - start)?;
         end - start
@@ -680,16 +678,13 @@ pub(crate) fn native_typed_array_prototype_subarray(
         thrown: None,
         message: "TypeError: TypedArray has no backing buffer".to_owned(),
     })?;
-    // TypedArraySpeciesCreate(O, « buffer, beginByteOffset, newLength »): the
-    // result shares O's buffer but is allocated through the @@species hook.
-    let (result, _result_object) = typed_array_species_create_with_args(
-        &object,
-        vec![
-            Value::Object(buffer),
-            Value::Number(byte_offset as f64),
-            Value::Number(count as f64),
-        ],
-        env,
-    )?;
+    // TypedArraySpeciesCreate allocates through @@species over O's buffer.
+    // Auto-length receivers with an undefined end omit the length argument so
+    // the result also tracks the resizable backing buffer.
+    let mut args = vec![Value::Object(buffer), Value::Number(byte_offset as f64)];
+    if !(typed_array_is_length_tracking(&object) && end_is_undefined) {
+        args.push(Value::Number(count as f64));
+    }
+    let (result, _result_object) = typed_array_species_create_with_args(&object, args, env)?;
     Ok(result)
 }
