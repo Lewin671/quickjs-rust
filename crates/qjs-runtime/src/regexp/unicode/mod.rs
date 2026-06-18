@@ -61,6 +61,11 @@ fn resolve_property_value(name: &str, value: &str) -> Option<&'static [(u32, u32
             tables::script_ranges(canon)
         }
         "Script_Extensions" => {
+            // The `scx_*` tables store the complete Script_Extensions set for
+            // each script (the script's own code points unioned with the
+            // points whose explicit Script_Extensions list names it); for
+            // `Common`/`Inherited` the points reassigned to specific scripts
+            // are removed. Resolution is therefore a single table lookup.
             let canon = aliases::script_value_alias(value)?;
             tables::script_ext_ranges(canon)
         }
