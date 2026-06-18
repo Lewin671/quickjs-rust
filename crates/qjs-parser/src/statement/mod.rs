@@ -7,7 +7,7 @@ mod module;
 pub(crate) use functions::duplicate_parameter_span;
 mod simple;
 
-use qjs_ast::{Script, Span, Stmt, VarKind};
+use qjs_ast::{ForInLeft, ForInit, Script, Span, Stmt, VarKind};
 use qjs_lexer::TokenKind;
 
 use crate::{Goal, ParseError, Parser};
@@ -380,15 +380,6 @@ fn validate_statement_list_declarations(body: &[Stmt]) -> Result<(), ParseError>
                     lexical_names.extend(declarator.binding.named_spans());
                 }
             }
-            Stmt::VarDecl {
-                kind: VarKind::Var,
-                declarations,
-                ..
-            } => {
-                for declarator in declarations {
-                    var_names.extend(declarator.binding.named_spans());
-                }
-            }
             Stmt::ClassDecl { name, span, .. } => lexical_names.push((name.clone(), *span)),
             Stmt::FunctionDecl {
                 name,
@@ -406,6 +397,12 @@ fn validate_statement_list_declarations(body: &[Stmt]) -> Result<(), ParseError>
             _ => {}
         }
     }
+
+    // `var` declarations hoist through nested blocks (and other non-function
+    // statements) up to this statement list, so a `var` in an inner block is a
+    // VarDeclaredName of this block and conflicts with a lexical name declared
+    // here. Collect those hoisted names without crossing a function boundary.
+    collect_hoisted_var_names(body, &mut var_names);
 
     for (index, (name, _)) in lexical_names.iter().enumerate() {
         for (candidate, span) in &lexical_names[index + 1..] {
@@ -432,6 +429,92 @@ fn validate_statement_list_declarations(body: &[Stmt]) -> Result<(), ParseError>
     }
 
     Ok(())
+}
+
+/// Collects the `VarDeclaredNames` reachable from `stmts`: every `var` binding
+/// declared directly or in a nested statement that does not cross a function
+/// boundary (`var` hoists through blocks, `if`/loop bodies, `switch`, `try`,
+/// labels, and `with`, but not into nested function or class bodies). Function
+/// and class *declarations* are scope boundaries, so their bodies are not
+/// descended and their names are not collected here.
+fn collect_hoisted_var_names(stmts: &[Stmt], out: &mut Vec<(String, Span)>) {
+    for stmt in stmts {
+        match stmt {
+            Stmt::VarDecl {
+                kind: VarKind::Var,
+                declarations,
+                ..
+            } => {
+                for declarator in declarations {
+                    out.extend(declarator.binding.named_spans());
+                }
+            }
+            Stmt::Block { body, .. } => collect_hoisted_var_names(body, out),
+            Stmt::If {
+                consequent,
+                alternate,
+                ..
+            } => {
+                collect_hoisted_var_names(std::slice::from_ref(consequent), out);
+                if let Some(alternate) = alternate {
+                    collect_hoisted_var_names(std::slice::from_ref(alternate), out);
+                }
+            }
+            Stmt::While { body, .. }
+            | Stmt::DoWhile { body, .. }
+            | Stmt::Labelled { body, .. }
+            | Stmt::With { body, .. } => {
+                collect_hoisted_var_names(std::slice::from_ref(body), out);
+            }
+            Stmt::For { init, body, .. } => {
+                if let Some(ForInit::VarDecl {
+                    kind: VarKind::Var,
+                    declarations,
+                    ..
+                }) = init
+                {
+                    for declarator in declarations {
+                        out.extend(declarator.binding.named_spans());
+                    }
+                }
+                collect_hoisted_var_names(std::slice::from_ref(body), out);
+            }
+            Stmt::ForIn { left, body, .. } | Stmt::ForOf { left, body, .. } => {
+                if let ForInLeft::VarDecl {
+                    kind: VarKind::Var,
+                    binding,
+                    ..
+                } = left
+                {
+                    out.extend(binding.named_spans());
+                }
+                collect_hoisted_var_names(std::slice::from_ref(body), out);
+            }
+            Stmt::Switch { cases, .. } => {
+                for case in cases {
+                    collect_hoisted_var_names(&case.consequent, out);
+                }
+            }
+            Stmt::Try {
+                block,
+                handler,
+                finalizer,
+                ..
+            } => {
+                collect_hoisted_var_names(block, out);
+                if let Some(handler) = handler {
+                    collect_hoisted_var_names(&handler.body, out);
+                }
+                if let Some(finalizer) = finalizer {
+                    collect_hoisted_var_names(finalizer, out);
+                }
+            }
+            // Function/class declarations are scope boundaries; everything else
+            // (expressions, `return`/`throw`/`break`/`continue`, ...) declares
+            // no hoisted `var` names.
+            _ => {}
+        }
+    }
 }
 
 fn validate_statement_list_labels(body: &[Stmt]) -> Result<(), ParseError> {

@@ -84,6 +84,39 @@ fn rejects_destructuring_declaration_without_initializer() {
 }
 
 #[test]
+fn rejects_var_hoisted_from_nested_block_conflicting_with_lexical() {
+    // A `var` in an inner block hoists to the enclosing block's
+    // VarDeclaredNames, so it conflicts with a lexical name declared there.
+    for source in [
+        "{ { var f; } let f; }",
+        "{ let f; { var f; } }",
+        "{ { var f; } const f = 1; }",
+        "{ { var f; } class f {} }",
+        "{ { var f; } async function f() {} }",
+        "{ if (1) var f; let f; }",
+        "function g() { { var f; } let f; }",
+    ] {
+        let error = parse_script(source).expect_err("hoisted var must conflict");
+        assert_eq!(
+            error.message, "declaration `f` conflicts with a lexical declaration",
+            "source: {source}"
+        );
+    }
+
+    // A `var` that does not hoist into the lexical name's block (sibling block,
+    // deeper block, or across a function/arrow boundary) is not a conflict.
+    for source in [
+        "{ { var f; } { let f; } }",
+        "{ var f; { let f; } }",
+        "{ let f; function g() { var f; } }",
+        "{ let f; (() => { var f; }); }",
+        "{ let f; } { var f; }",
+    ] {
+        parse_script(source).unwrap_or_else(|error| panic!("{source} should parse: {error:?}"));
+    }
+}
+
+#[test]
 fn requires_semicolon_or_asi_between_statements() {
     let error = parse_script("var str = '''';").expect_err("adjacent strings need a separator");
     assert_eq!(error.message, "expected `;` or newline after statement");
