@@ -177,8 +177,27 @@ impl Vm<'_> {
     /// when the slot changes, so closures sharing the Rc observe the update.
     pub(super) fn write_through_captured(&self, name: &str, value: Value) {
         let mut captured = self.captured_env.borrow_mut();
+        if captured.is_empty() {
+            return;
+        }
         if let Some(slot_value) = captured.get_mut(name) {
             *slot_value = value;
+        }
+    }
+
+    /// Slot-addressed `write_through_captured`: resolves the binding name from
+    /// the slot metadata only when a closure actually shares this frame's
+    /// captured env, so the common no-capture local write skips the name hash
+    /// and the value clone entirely.
+    pub(super) fn write_through_captured_slot(&self, slot: usize, value: &Value) {
+        let mut captured = self.captured_env.borrow_mut();
+        if captured.is_empty() {
+            return;
+        }
+        if let Some(name) = self.bytecode.locals.get(slot).map(|local| &local.name)
+            && let Some(slot_value) = captured.get_mut(name)
+        {
+            *slot_value = value.clone();
         }
     }
 
@@ -528,20 +547,22 @@ impl Vm<'_> {
     }
 
     pub(super) fn store_local(&mut self, slot: usize, value: Value) -> Result<(), RuntimeError> {
-        let local_meta = self
-            .bytecode
-            .locals
-            .get(slot)
-            .cloned()
-            .ok_or_else(|| RuntimeError {
+        // Read only the `Copy` slot metadata up front so the hot local write
+        // never clones the `Local` (its owned `name` would be a heap
+        // allocation on every assignment); the binding name is resolved by
+        // reference, and only on the cold capture/global-sync paths.
+        let (mutable, from_env, hoisted) = {
+            let local_meta = self.bytecode.locals.get(slot).ok_or_else(|| RuntimeError {
                 thrown: None,
                 message: "bytecode local index out of bounds".to_owned(),
             })?;
+            (local_meta.mutable, local_meta.from_env, local_meta.hoisted)
+        };
         let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
             thrown: None,
             message: "bytecode local index out of bounds".to_owned(),
         })?;
-        if !local_meta.mutable && local.is_some() {
+        if !mutable && local.is_some() {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: assignment to constant variable".to_owned(),
@@ -551,19 +572,20 @@ impl Vm<'_> {
         // A closure created in this frame shares its captured-binding snapshot
         // through `captured_env`; keep a captured copy of this slot current so
         // later calls of that closure observe the new value.
-        self.write_through_captured(&local_meta.name, value.clone());
-        let syncs_global_var = (local_meta.from_env && !local_meta.hoisted)
+        self.write_through_captured_slot(slot, &value);
+        let syncs_global_var = (from_env && !hoisted)
             || (self.bytecode.global_scope
                 && self.bytecode.local_is_body_hoist_only(slot)
-                && !is_compiler_temporary(&local_meta.name));
+                && !is_compiler_temporary(&self.bytecode.locals[slot].name));
         if syncs_global_var
             && let Some(Value::Object(global_this)) =
                 self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned()
-            && global_this.has_own_property(&local_meta.name)
+            && global_this.has_own_property(&self.bytecode.locals[slot].name)
         {
-            global_this.set(local_meta.name.clone(), value.clone());
-            if self.realm.borrow().contains_key(&local_meta.name) {
-                self.realm.borrow_mut().insert(local_meta.name, value);
+            let name = self.bytecode.locals[slot].name.clone();
+            global_this.set(name.clone(), value.clone());
+            if self.realm.borrow().contains_key(&name) {
+                self.realm.borrow_mut().insert(name, value);
             }
         }
         Ok(())
