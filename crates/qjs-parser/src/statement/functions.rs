@@ -190,15 +190,18 @@ impl Parser {
         let previous_async = self.in_async;
         let previous_static_block = self.in_static_block;
         let previous_function = self.in_function;
+        let previous_allow_return = self.allow_return;
         self.in_generator = is_generator;
         self.in_async = is_async;
         self.in_static_block = false;
         self.in_function = true;
+        self.allow_return = true;
         let body = self.without_super_context(Self::block_body);
         self.in_generator = previous_generator;
         self.in_async = previous_async;
         self.in_static_block = previous_static_block;
         self.in_function = previous_function;
+        self.allow_return = previous_allow_return;
         body
     }
 

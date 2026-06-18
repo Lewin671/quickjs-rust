@@ -146,6 +146,10 @@ struct Parser {
     /// block, and field-initializer bodies are function-like contexts for this
     /// early error; arrow functions inherit the enclosing setting.
     in_function: bool,
+    /// Whether a `return` statement is currently allowed. Direct eval may
+    /// inherit the caller's `new.target` context without becoming a function
+    /// body, so this is intentionally separate from `in_function`.
+    allow_return: bool,
     /// Whether the parser is inside a class static block statement list. Static
     /// blocks have dedicated early errors for `return`, `await`, `yield`, and
     /// `arguments`; ordinary nested functions and methods reset this context.

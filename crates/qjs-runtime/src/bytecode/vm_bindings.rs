@@ -884,6 +884,12 @@ impl Vm<'_> {
         if !is_sloppy_global {
             if let Some(slot) = self.bytecode.local_slot(name) {
                 if self.locals[slot].is_some() {
+                    if self.bytecode.local_is_eval_deletable(slot) {
+                        self.locals[slot] = None;
+                        self.env.remove(name);
+                        self.captured_env.borrow_mut().remove(name);
+                        return true;
+                    }
                     return false;
                 }
             }

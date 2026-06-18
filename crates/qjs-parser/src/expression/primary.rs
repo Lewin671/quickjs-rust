@@ -586,8 +586,10 @@ impl Parser {
             };
             let previous_method = self.in_method;
             let previous_function = self.in_function;
+            let previous_allow_return = self.allow_return;
             self.in_method = true;
             self.in_function = true;
+            self.allow_return = true;
             let params = self.function_parameters()?;
             reject_duplicate_method_parameters(&params)?;
             let body_start = self
@@ -598,6 +600,7 @@ impl Parser {
             let body = self.block_body()?;
             self.in_method = previous_method;
             self.in_function = previous_function;
+            self.allow_return = previous_allow_return;
             self.reject_invalid_function_parameters(&params, &body, body_start)?;
             let end = self
                 .tokens
@@ -654,11 +657,14 @@ impl Parser {
         }
         let previous_method = self.in_method;
         let previous_function = self.in_function;
+        let previous_allow_return = self.allow_return;
         self.in_method = true;
         self.in_function = true;
+        self.allow_return = true;
         let body = self.block_body()?;
         self.in_method = previous_method;
         self.in_function = previous_function;
+        self.allow_return = previous_allow_return;
         let end = self
             .tokens
             .get(self.cursor.saturating_sub(1))
@@ -703,11 +709,14 @@ impl Parser {
         reject_duplicate_method_parameters(&params)?;
         let previous_method = self.in_method;
         let previous_function = self.in_function;
+        let previous_allow_return = self.allow_return;
         self.in_method = true;
         self.in_function = true;
+        self.allow_return = true;
         let body = self.block_body()?;
         self.in_method = previous_method;
         self.in_function = previous_function;
+        self.allow_return = previous_allow_return;
         let end = self
             .tokens
             .get(self.cursor.saturating_sub(1))
@@ -755,10 +764,12 @@ impl Parser {
         let previous_generator = self.in_generator;
         let previous_async = self.in_async;
         let previous_function = self.in_function;
+        let previous_allow_return = self.allow_return;
         self.in_method = true;
         self.in_generator = true;
         self.in_async = is_async;
         self.in_function = true;
+        self.allow_return = true;
         let params = self.function_parameters_with_context(true, is_async)?;
         reject_duplicate_method_parameters(&params)?;
         let body_start = self
@@ -771,6 +782,7 @@ impl Parser {
         self.in_generator = previous_generator;
         self.in_async = previous_async;
         self.in_function = previous_function;
+        self.allow_return = previous_allow_return;
         self.reject_invalid_function_parameters(&params, &body, body_start)?;
         let end = self
             .tokens
@@ -817,9 +829,11 @@ impl Parser {
         let previous_method = self.in_method;
         let previous_async = self.in_async;
         let previous_function = self.in_function;
+        let previous_allow_return = self.allow_return;
         self.in_method = true;
         self.in_async = true;
         self.in_function = true;
+        self.allow_return = true;
         let params = self.function_parameters_with_context(false, true)?;
         reject_duplicate_method_parameters(&params)?;
         let body_start = self
@@ -831,6 +845,7 @@ impl Parser {
         self.in_method = previous_method;
         self.in_async = previous_async;
         self.in_function = previous_function;
+        self.allow_return = previous_allow_return;
         self.reject_invalid_function_parameters(&params, &body, body_start)?;
         let end = self
             .tokens

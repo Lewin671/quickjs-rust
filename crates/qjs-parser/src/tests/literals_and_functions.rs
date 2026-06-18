@@ -299,6 +299,24 @@ fn rejects_new_target_outside_function_context() {
 }
 
 #[test]
+fn rejects_return_outside_function_body() {
+    assert!(parse_script("return;").is_err());
+    assert!(parse_direct_eval_script("return;", EvalParseContext::default()).is_err());
+    assert!(
+        parse_direct_eval_script(
+            "return;",
+            EvalParseContext {
+                in_function: true,
+                ..EvalParseContext::default()
+            },
+        )
+        .is_err()
+    );
+    parse_script("function f() { return; }").expect("function body may return");
+    parse_script("({ m() { return 1; } });").expect("method body may return");
+}
+
+#[test]
 fn parses_direct_eval_with_caller_context() {
     let context = EvalParseContext {
         in_function: true,

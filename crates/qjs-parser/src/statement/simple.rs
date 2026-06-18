@@ -16,6 +16,12 @@ impl Parser {
                 span: Span::new(start, start + "return".len()),
             });
         }
+        if !self.allow_return {
+            return Err(ParseError {
+                message: "`return` is only allowed inside functions".to_owned(),
+                span: Span::new(start, start + "return".len()),
+            });
+        }
         let return_token_end = self
             .peek()
             .expect("parser should always have eof token")

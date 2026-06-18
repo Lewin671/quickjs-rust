@@ -86,6 +86,7 @@ pub(crate) const GLOBAL_THIS_BINDING: &str = "\0global_this";
 pub(crate) const DIRECT_EVAL_BINDING: &str = "\0\0direct_eval";
 pub(crate) const DIRECT_EVAL_STRICT_BINDING: &str = "\0\0direct_eval_strict";
 pub(crate) const DIRECT_EVAL_ARGUMENTS_BINDING: &str = "\0\0direct_eval_arguments";
+pub(crate) const DIRECT_EVAL_FUNCTION_CONTEXT_BINDING: &str = "\0\0direct_eval_function_context";
 /// Per-frame marker used by direct eval to apply class-field-initializer early
 /// errors.
 pub(crate) const FIELD_INITIALIZER_EVAL_BINDING: &str = "\0field_initializer_eval";

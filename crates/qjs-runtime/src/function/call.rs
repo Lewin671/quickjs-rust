@@ -1,10 +1,10 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
-    ArrayRef, Bytecode, DIRECT_EVAL_ARGUMENTS_BINDING, FIELD_INITIALIZER_EVAL_BINDING, Function,
-    NEW_TARGET_BINDING, NativeFunction, ObjectRef, RuntimeError, Value,
-    bytecode::eval_function_bytecode, function_prototype, native::call_native_function,
-    object_prototype, private::PrivateEnvironment, symbol,
+    ArrayRef, Bytecode, DIRECT_EVAL_ARGUMENTS_BINDING, DIRECT_EVAL_FUNCTION_CONTEXT_BINDING,
+    FIELD_INITIALIZER_EVAL_BINDING, Function, NEW_TARGET_BINDING, NativeFunction, ObjectRef,
+    RuntimeError, Value, bytecode::eval_function_bytecode, function_prototype,
+    native::call_native_function, object_prototype, private::PrivateEnvironment, symbol,
 };
 
 use super::{
@@ -635,6 +635,12 @@ fn function_env(
     {
         local_env.insert(
             DIRECT_EVAL_ARGUMENTS_BINDING.to_owned(),
+            Value::Boolean(true),
+        );
+    }
+    if !function.lexical_this || function.is_field_initializer {
+        local_env.insert(
+            DIRECT_EVAL_FUNCTION_CONTEXT_BINDING.to_owned(),
             Value::Boolean(true),
         );
     }

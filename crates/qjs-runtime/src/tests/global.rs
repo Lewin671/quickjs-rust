@@ -715,3 +715,62 @@ fn direct_eval_allows_arrow_body_arguments_binding() {
         Ok(Value::Boolean(true))
     );
 }
+
+#[test]
+fn direct_eval_rejects_return_even_inside_function() {
+    assert_eq!(
+        eval("try { eval('return;'); false; } catch (error) { error instanceof SyntaxError; }"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "function f() { \
+               try { eval('return;'); return false; } \
+               catch (error) { return error instanceof SyntaxError; } \
+             } \
+             f();"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn direct_eval_new_target_context_excludes_arrow_functions() {
+    assert_eq!(
+        eval("function f() { return eval('new.target === undefined'); } f();"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let f = () => eval('new.target;'); \
+             try { f(); false; } catch (error) { error instanceof SyntaxError; }"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn sloppy_function_direct_eval_new_bindings_are_deletable() {
+    assert_eq!(
+        eval(
+            "var initial, postDeletion; \
+             (function() { \
+               eval('initial = x; delete x; postDeletion = function() { x; }; var x;'); \
+             }()); \
+             (initial === undefined) + ':' + \
+             (function() { try { postDeletion(); return false; } catch (error) { return error instanceof ReferenceError; } }());"
+        ),
+        Ok(Value::String("true:true".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var initial, postDeletion; \
+             (function() { \
+               eval('initial = f; delete f; postDeletion = function() { f; }; function f() { return 33; }'); \
+             }()); \
+             (typeof initial) + ':' + initial() + ':' + \
+             (function() { try { postDeletion(); return false; } catch (error) { return error instanceof ReferenceError; } }());"
+        ),
+        Ok(Value::String("function:33:true".to_owned()))
+    );
+}

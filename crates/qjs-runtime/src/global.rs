@@ -258,7 +258,7 @@ pub(super) fn native_global_eval(
             env.get(crate::DIRECT_EVAL_STRICT_BINDING),
             Some(Value::Boolean(true))
         );
-    let bytecode = compile_direct_eval_script(&script, caller_strict)?;
+    let mut bytecode = compile_direct_eval_script(&script, caller_strict)?;
     let eval_strict = bytecode.is_strict();
     if direct_function_eval
         && matches!(
@@ -300,6 +300,14 @@ pub(super) fn native_global_eval(
             &caller_locals,
             &hoisted_function_names,
         )?;
+    }
+    if direct_function_eval && !eval_strict {
+        bytecode.mark_eval_deletable_locals(
+            hoisted_names
+                .iter()
+                .filter(|name| !caller_locals.contains(*name))
+                .cloned(),
+        );
     }
     let mut strict_direct_writeback_env = (direct_eval && eval_strict).then(|| env.clone());
     initialize_direct_eval_bindings(
@@ -471,7 +479,13 @@ fn direct_eval_parse_context(env: &CallEnv) -> EvalParseContext {
             env.get(crate::DIRECT_EVAL_STRICT_BINDING),
             Some(Value::Boolean(true))
         ),
-        in_function: env.get_local("this").is_some(),
+        in_function: matches!(
+            env.get(crate::DIRECT_EVAL_FUNCTION_CONTEXT_BINDING),
+            Some(Value::Boolean(true))
+        ) || matches!(
+            env.get(crate::FIELD_INITIALIZER_EVAL_BINDING),
+            Some(Value::Boolean(true))
+        ),
         in_method: env.get(crate::HOME_OBJECT_BINDING).is_some(),
         in_derived_constructor: env.get(crate::SUPER_CONSTRUCTOR_BINDING).is_some(),
         in_field_initializer: matches!(

@@ -202,7 +202,9 @@ impl Parser {
             .span
             .start;
         let previous_static_block = self.in_static_block;
+        let previous_allow_return = self.allow_return;
         self.in_static_block = false;
+        self.allow_return = true;
         let body = if self.at(&TokenKind::LeftBrace) {
             self.block_body()
         } else {
@@ -215,6 +217,7 @@ impl Parser {
             })
         };
         self.in_static_block = previous_static_block;
+        self.allow_return = previous_allow_return;
         let body = body?;
         if !params.is_simple() && body_has_strict_directive(&body) {
             return Err(ParseError {
