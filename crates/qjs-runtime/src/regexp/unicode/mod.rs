@@ -118,5 +118,31 @@ fn has_extra_whitespace(text: &str) -> bool {
     text != text.trim() || text.is_empty()
 }
 
+/// True if `code_point` carries the Unicode `ID_Start` property. The RegExp
+/// `GroupName` grammar (`RegExpIdentifierName`) is defined in terms of
+/// `ID_Start`/`ID_Continue` independently of the `u` flag.
+pub(crate) fn is_id_start(code_point: u32) -> bool {
+    tables::binary_ranges("ID_Start").is_some_and(|ranges| ranges_contain(ranges, code_point))
+}
+
+/// True if `code_point` carries the Unicode `ID_Continue` property.
+pub(crate) fn is_id_continue(code_point: u32) -> bool {
+    tables::binary_ranges("ID_Continue").is_some_and(|ranges| ranges_contain(ranges, code_point))
+}
+
+fn ranges_contain(ranges: &[(u32, u32)], code_point: u32) -> bool {
+    ranges
+        .binary_search_by(|&(start, end)| {
+            if code_point < start {
+                std::cmp::Ordering::Greater
+            } else if code_point > end {
+                std::cmp::Ordering::Less
+            } else {
+                std::cmp::Ordering::Equal
+            }
+        })
+        .is_ok()
+}
+
 #[cfg(test)]
 mod tests;

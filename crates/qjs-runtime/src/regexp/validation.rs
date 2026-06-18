@@ -25,6 +25,7 @@ fn validate_regexp_flags(flags: &str) -> Result<(), RuntimeError> {
 fn validate_regexp_pattern(source: &str, unicode: bool) -> Result<(), RuntimeError> {
     let pattern: Vec<_> = source.chars().collect();
     let capture_count = regexp_capture_count(&pattern);
+    validate_named_group_definitions(&pattern)?;
     validate_named_group_references(&pattern, unicode)?;
     let mut index = 0;
     let mut has_atom = false;
@@ -329,6 +330,145 @@ fn is_lookbehind_group(pattern: &[char], index: usize) -> bool {
 /// Validate `\k<name>` named backreferences against the named groups declared
 /// in the pattern.
 ///
+/// Validates every `(?<name>` group specifier as a well-formed
+/// `RegExpIdentifierName`: a non-empty identifier whose first code point is a
+/// RegExp identifier start (`ID_Start`, `$`, or `_`) and whose remaining code
+/// points are identifier parts (`ID_Continue`, `$`, `_`, ZWNJ, or ZWJ). A name
+/// may spell its code points with `\u` escapes (`\uXXXX`, a `\uXXXX\uXXXX`
+/// surrogate pair, or `\u{...}`) regardless of the `u` flag. This runs at parse
+/// time for both regex literals and `new RegExp`, so a malformed group name is a
+/// SyntaxError rather than a silently accepted pattern.
+fn validate_named_group_definitions(pattern: &[char]) -> Result<(), RuntimeError> {
+    let mut index = 0;
+    let mut in_class = false;
+    while index < pattern.len() {
+        match pattern[index] {
+            '\\' => index += 2,
+            '[' => {
+                in_class = true;
+                index += 1;
+            }
+            ']' => {
+                in_class = false;
+                index += 1;
+            }
+            '(' if !in_class
+                && pattern.get(index + 1) == Some(&'?')
+                && pattern.get(index + 2) == Some(&'<')
+                && !matches!(pattern.get(index + 3), Some('=') | Some('!')) =>
+            {
+                index = validate_group_name(pattern, index + 3)?;
+            }
+            _ => index += 1,
+        }
+    }
+    Ok(())
+}
+
+/// Validates the `RegExpIdentifierName` whose first character is at `start`
+/// (just past `(?<`), returning the index just past the closing `>`.
+fn validate_group_name(pattern: &[char], start: usize) -> Result<usize, RuntimeError> {
+    let mut index = start;
+    let mut is_first = true;
+    loop {
+        match pattern.get(index) {
+            None => return Err(invalid_group_name()),
+            Some('>') if is_first => return Err(invalid_group_name()),
+            Some('>') => return Ok(index + 1),
+            Some('\\') => {
+                let (code_point, next) = group_name_unicode_escape(pattern, index)?;
+                check_group_name_char(code_point, is_first)?;
+                is_first = false;
+                index = next;
+            }
+            Some(&ch) => {
+                check_group_name_char(ch as u32, is_first)?;
+                is_first = false;
+                index += 1;
+            }
+        }
+    }
+}
+
+fn check_group_name_char(code_point: u32, is_first: bool) -> Result<(), RuntimeError> {
+    const DOLLAR: u32 = 0x24;
+    const UNDERSCORE: u32 = 0x5f;
+    const ZWNJ: u32 = 0x200c;
+    const ZWJ: u32 = 0x200d;
+    let ok = if is_first {
+        code_point == DOLLAR || code_point == UNDERSCORE || unicode::is_id_start(code_point)
+    } else {
+        code_point == DOLLAR
+            || code_point == UNDERSCORE
+            || code_point == ZWNJ
+            || code_point == ZWJ
+            || unicode::is_id_continue(code_point)
+    };
+    if ok {
+        Ok(())
+    } else {
+        Err(invalid_group_name())
+    }
+}
+
+/// Decodes the `\u` escape at `index` (where `pattern[index] == '\\'`) into a
+/// single code point, returning it with the index just past the escape. Only
+/// `\u` escapes are valid inside a group name; anything else is a SyntaxError.
+fn group_name_unicode_escape(pattern: &[char], index: usize) -> Result<(u32, usize), RuntimeError> {
+    if pattern.get(index + 1) != Some(&'u') {
+        return Err(invalid_group_name());
+    }
+    if pattern.get(index + 2) == Some(&'{') {
+        let mut cursor = index + 3;
+        let mut value: u32 = 0;
+        let mut digits = 0;
+        while let Some(&ch) = pattern.get(cursor) {
+            if ch == '}' {
+                break;
+            }
+            let digit = ch.to_digit(16).ok_or_else(invalid_group_name)?;
+            value = value
+                .checked_mul(16)
+                .and_then(|value| value.checked_add(digit))
+                .filter(|value| *value <= 0x10_ffff)
+                .ok_or_else(invalid_group_name)?;
+            digits += 1;
+            cursor += 1;
+        }
+        if digits == 0 || pattern.get(cursor) != Some(&'}') {
+            return Err(invalid_group_name());
+        }
+        return Ok((value, cursor + 1));
+    }
+    let high = read_four_hex(pattern, index + 2)?;
+    if (0xd800..=0xdbff).contains(&high)
+        && pattern.get(index + 6) == Some(&'\\')
+        && pattern.get(index + 7) == Some(&'u')
+        && let Ok(low) = read_four_hex(pattern, index + 8)
+        && (0xdc00..=0xdfff).contains(&low)
+    {
+        let code_point = 0x10000 + ((high - 0xd800) << 10) + (low - 0xdc00);
+        return Ok((code_point, index + 12));
+    }
+    Ok((high, index + 6))
+}
+
+fn read_four_hex(pattern: &[char], start: usize) -> Result<u32, RuntimeError> {
+    let mut value = 0u32;
+    for offset in 0..4 {
+        let digit = pattern
+            .get(start + offset)
+            .and_then(|ch| ch.to_digit(16))
+            .ok_or_else(invalid_group_name)?;
+        value = value * 16 + digit;
+    }
+    Ok(value)
+}
+
+fn invalid_group_name() -> RuntimeError {
+    regexp_syntax_error("invalid regular expression group name")
+}
+
 /// A `\k<name>` is a `GroupName` (and so must resolve) whenever the pattern
 /// contains any named group, or when the `u` flag is set. In Annex-B mode with
 /// no named groups at all, a bare `\k` is an `IdentityEscape` and is left to

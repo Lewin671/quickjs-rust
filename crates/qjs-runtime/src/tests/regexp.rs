@@ -25,6 +25,54 @@ fn rejects_invalid_regexp_literal_at_parse_phase() {
 }
 
 #[test]
+fn rejects_malformed_named_group_specifiers_at_parse_phase() {
+    // `(?<name>` must be a well-formed RegExpIdentifierName; a malformed name
+    // is a parse-phase SyntaxError for regexp literals (Test262
+    // `negative: phase: parse`).
+    for source in [
+        "throw 'unreached'; /(?<>a)/;",            // empty name
+        "throw 'unreached'; /(?<42a>a)/;",         // non-identifier-start digit
+        "throw 'unreached'; /(?<a.b>a)/;",         // punctuator in name
+        "throw 'unreached'; /(?<a)/;",             // unterminated name
+        "throw 'unreached'; /(?<\\u2764>a)/;",     // a non-ID code point
+        "throw 'unreached'; /(?<\\uD800>a)/u;",    // lone surrogate
+        "throw 'unreached'; /(?<\\u{1f98a}>a)/u;", // astral non-ID (emoji)
+    ] {
+        let error = eval_classified(source).expect_err("invalid group name must fail");
+        assert_eq!(error.kind, EvalErrorKind::Parse, "source: {source}");
+        assert!(
+            error.message.contains("SyntaxError"),
+            "expected SyntaxError, got {} for {source}",
+            error.message
+        );
+    }
+}
+
+#[test]
+fn accepts_well_formed_named_group_specifiers() {
+    // Plain, `$`/`_`, `\u` escape, raw astral ID_Start, CJK, and a ZWJ part are
+    // all valid RegExpIdentifierName forms regardless of the `u` flag.
+    for source in [
+        "/(?<name>a)/.source",
+        "/(?<$_a>a)/.source",
+        "/(?<\\u0041>a)/.source",
+        "/(?<\\u{1d453}o>a)/u.source",
+        "/(?<\u{1d453}\u{1d45c}\u{1d465}>a)/u.source",
+        "/(?<\u{72f8}>a)/u.source",
+    ] {
+        assert!(
+            eval(source).is_ok(),
+            "expected a valid group name to compile: {source}"
+        );
+    }
+    // The group is usable: backreference and `.groups` access still work.
+    assert_eq!(
+        eval("let m = 'ab'.match(/(?<g>a)(?<h>b)/); m.groups.g + m.groups.h"),
+        Ok(Value::String("ab".to_owned()))
+    );
+}
+
+#[test]
 fn accepts_valid_regexp_literal_during_compilation() {
     assert_eq!(
         eval("/[0-9]+/g.source;"),
