@@ -294,7 +294,7 @@ impl Compiler {
     }
 
     pub(super) fn emit_store_var_initializer(&mut self, slot: usize, name: &str, kind: VarKind) {
-        if kind == VarKind::Var && self.inside_with() {
+        if kind == VarKind::Var && self.inside_current_with() {
             // Inside a `with`, a `var` initializer assignment is an ordinary
             // PutValue on a reference resolved through the current lexical
             // chain, which includes the with object's environment record. The

@@ -577,6 +577,7 @@ impl Compiler {
         self.compile_expr(object)?;
         self.emit(Op::EnterWith);
         self.with_depth += 1;
+        self.reset_current_loop_completion_to_undefined();
         let result = self.compile_stmt(body);
         self.with_depth -= 1;
         result?;

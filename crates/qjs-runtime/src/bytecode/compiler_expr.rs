@@ -234,7 +234,7 @@ impl Compiler {
             Expr::Literal(literal) => self.compile_literal(literal),
             Expr::Identifier { name, .. } => {
                 let slot = self.resolve_local_slot(name);
-                if self.inside_with() {
+                if self.identifier_needs_with_resolution(slot) {
                     self.emit(Op::LoadIdentWith {
                         name: name.clone(),
                         slot,

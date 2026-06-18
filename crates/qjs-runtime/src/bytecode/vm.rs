@@ -298,6 +298,7 @@ impl<'a> Vm<'a> {
                 | Op::ExitWith
                 | Op::LoadIdentWith { .. }
                 | Op::ResolveIdentWith { .. }
+                | Op::LoadResolvedIdentWith { .. }
                 | Op::StoreIdentWith { .. }
                 | Op::StoreResolvedIdentWith { .. }
                 | Op::TypeofIdentWith { .. }

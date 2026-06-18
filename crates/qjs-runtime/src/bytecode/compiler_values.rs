@@ -188,8 +188,8 @@ impl Compiler {
                         ),
                     });
                 }
-                if self.inside_with() {
-                    let slot = self.resolve_local_slot(name);
+                let slot = self.resolve_local_slot(name);
+                if self.identifier_needs_with_resolution(slot) {
                     self.emit(Op::DeleteIdentWith {
                         name: name.clone(),
                         slot,

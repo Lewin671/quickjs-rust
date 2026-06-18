@@ -151,6 +151,63 @@ fn with_statement_honors_symbol_unscopables() {
 }
 
 #[test]
+fn with_captured_by_function_does_not_capture_function_var_initializers() {
+    assert_eq!(
+        eval(
+            "var scope = { value: 'outer', p: 1 };
+             with (scope) {
+               var f = function() {
+                 p = 2;
+                 var value = 'local';
+                 return value;
+               };
+             }
+             f() + ':' + scope.value + ':' + scope.p;"
+        ),
+        Ok(Value::String("local:outer:2".to_owned()))
+    );
+}
+
+#[test]
+fn with_update_expression_uses_resolved_unscopables_binding_once() {
+    assert_eq!(
+        eval(
+            "var calls = 0, flag = true, outer, inner;
+             with (outer = { x: 7 }) {
+               with (inner = { x: 4, get [Symbol.unscopables]() {
+                 calls++;
+                 return { x: flag = !flag };
+               } }) {
+                 x++;
+               }
+             }
+             calls + ':' + outer.x + ':' + inner.x;"
+        ),
+        Ok(Value::String("1:7:5".to_owned()))
+    );
+}
+
+#[test]
+fn with_empty_abrupt_completion_updates_to_undefined() {
+    assert_eq!(
+        eval("eval('1; do { 2; with({}) { 3; break; } 4; } while (false);');"),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval("eval('5; do { 6; with({}) { break; } 7; } while (false);');"),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval("eval('8; do { 9; with({}) { 10; continue; } 11; } while (false)');"),
+        Ok(Value::Number(10.0))
+    );
+    assert_eq!(
+        eval("eval('12; do { 13; with({}) { continue; } 14; } while (false)');"),
+        Ok(Value::Undefined)
+    );
+}
+
+#[test]
 fn with_statement_unwinds_on_abrupt_completion() {
     // break out of a with body keeps the with-object stack balanced.
     assert_eq!(

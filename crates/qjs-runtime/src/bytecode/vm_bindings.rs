@@ -55,6 +55,16 @@ impl Vm<'_> {
                 let result = self.resolve_ident_with(&name, object_slot);
                 self.handle_runtime_result(result)?;
             }
+            Op::LoadResolvedIdentWith {
+                name,
+                slot,
+                object_slot,
+            } => {
+                let result = self.load_resolved_ident_with(&name, slot, object_slot);
+                if let Some(value) = self.handle_runtime_result(result)? {
+                    self.stack.push(value);
+                }
+            }
             Op::StoreIdentWith {
                 name,
                 slot,
@@ -394,6 +404,26 @@ impl Vm<'_> {
     ) -> Result<(), RuntimeError> {
         let value = self.with_binding_object(name)?.unwrap_or(Value::Undefined);
         self.store_local(object_slot, value)
+    }
+
+    pub(super) fn load_resolved_ident_with(
+        &mut self,
+        name: &str,
+        slot: Option<usize>,
+        object_slot: usize,
+    ) -> Result<Value, RuntimeError> {
+        match self.load_local(object_slot)? {
+            Value::Undefined => match slot {
+                Some(slot) => self.load_local(slot),
+                None => self.load_global(name),
+            },
+            object => {
+                let mut env = self.current_env();
+                let value = get_property(object, name, &mut env)?;
+                self.apply_env(env);
+                Ok(value)
+            }
+        }
     }
 
     pub(super) fn store_resolved_ident_with(

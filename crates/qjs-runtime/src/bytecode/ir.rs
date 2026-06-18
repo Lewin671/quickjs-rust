@@ -55,6 +55,12 @@ pub(super) enum Op {
         slot: Option<usize>,
         object_slot: usize,
     },
+    /// Loads from the target previously captured by `ResolveIdentWith`.
+    LoadResolvedIdentWith {
+        name: String,
+        slot: Option<usize>,
+        object_slot: usize,
+    },
     /// Stores to an identifier from inside a `with` body, mirroring
     /// `LoadIdentWith` resolution. `is_strict` selects strict vs sloppy global
     /// store semantics for the fallback.
@@ -759,6 +765,9 @@ impl Bytecode {
                 Op::LoadIdentWith {
                     slot: Some(slot), ..
                 }
+                | Op::LoadResolvedIdentWith {
+                    slot: Some(slot), ..
+                }
                 | Op::TypeofIdentWith {
                     slot: Some(slot), ..
                 } => *slot == arguments_slot,
@@ -927,6 +936,9 @@ fn collect_global_names_from_ops(code: &[Op], names: &mut BTreeSet<String>) {
             }
             Op::LoadIdentWith { name, slot: None }
             | Op::ResolveIdentWith {
+                name, slot: None, ..
+            }
+            | Op::LoadResolvedIdentWith {
                 name, slot: None, ..
             }
             | Op::StoreIdentWith {

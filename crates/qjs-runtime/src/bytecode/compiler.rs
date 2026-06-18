@@ -982,6 +982,13 @@ impl Compiler {
         }
     }
 
+    pub(super) fn reset_current_loop_completion_to_undefined(&mut self) {
+        if let Some(result_slot) = self.current_loop_result_slot() {
+            self.emit_load_undefined();
+            self.emit(Op::StoreLocal(result_slot));
+        }
+    }
+
     fn current_loop_result_slot(&self) -> Option<usize> {
         self.loop_stack.last().map(|context| context.result_slot)
     }
@@ -990,6 +997,14 @@ impl Compiler {
     /// identifier references must consult the with-object stack at runtime.
     pub(super) fn inside_with(&self) -> bool {
         self.with_depth > 0
+    }
+
+    pub(super) fn inside_current_with(&self) -> bool {
+        self.with_depth > self.with_base_depth
+    }
+
+    pub(super) fn identifier_needs_with_resolution(&self, slot: Option<usize>) -> bool {
+        self.inside_current_with() || (slot.is_none() && self.inside_with())
     }
 
     fn compile_labelled(&mut self, label: &str, body: &Stmt) -> Result<(), RuntimeError> {

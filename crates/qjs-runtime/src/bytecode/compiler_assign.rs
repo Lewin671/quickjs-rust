@@ -22,7 +22,7 @@ impl Compiler {
                 // class assigned to a plain identifier takes that identifier's
                 // name. Member targets (`obj.x = <anon>`) never do.
                 let slot = self.resolve_local_slot(name);
-                if self.inside_with() {
+                if self.identifier_needs_with_resolution(slot) {
                     let object_slot = self.temp_local("with_assignment_object");
                     self.emit(Op::ResolveIdentWith {
                         name: name.clone(),
@@ -142,7 +142,7 @@ impl Compiler {
         let resolved_with_object_slot = self.resolve_with_identifier_target(name, slot);
         match op {
             AssignmentOp::LogicalAndAssign => {
-                self.emit_load_identifier(name, slot);
+                self.emit_load_identifier(name, slot, resolved_with_object_slot);
                 let end_jump = self.emit(Op::JumpIfFalse(usize::MAX));
                 self.emit(Op::Pop);
                 // `f &&= <anon>` names the anonymous value after the target
@@ -158,7 +158,7 @@ impl Compiler {
                 self.patch_jump(end_jump, end);
             }
             AssignmentOp::LogicalOrAssign => {
-                self.emit_load_identifier(name, slot);
+                self.emit_load_identifier(name, slot, resolved_with_object_slot);
                 let end_jump = self.emit(Op::JumpIfTrue(usize::MAX));
                 self.emit(Op::Pop);
                 if *parenthesized {
@@ -172,7 +172,7 @@ impl Compiler {
                 self.patch_jump(end_jump, end);
             }
             AssignmentOp::NullishAssign => {
-                self.emit_load_identifier(name, slot);
+                self.emit_load_identifier(name, slot, resolved_with_object_slot);
                 let end_jump = self.emit(Op::JumpIfNotNullish(usize::MAX));
                 self.emit(Op::Pop);
                 if *parenthesized {
@@ -204,7 +204,7 @@ impl Compiler {
                     }
                     return Ok(());
                 }
-                self.emit_load_identifier(name, slot);
+                self.emit_load_identifier(name, slot, resolved_with_object_slot);
                 self.compile_expr(value)?;
                 self.emit(Op::Binary(assignment_binary_op(op)?));
                 self.emit(Op::Dup);
@@ -225,7 +225,7 @@ impl Compiler {
         };
         let slot = self.resolve_local_slot(name);
         let resolved_with_object_slot = self.resolve_with_identifier_target(name, slot);
-        self.emit_load_identifier(name, slot);
+        self.emit_load_identifier(name, slot, resolved_with_object_slot);
         self.emit(Op::ToNumeric);
         if !prefix {
             self.emit(Op::Dup);
@@ -240,8 +240,19 @@ impl Compiler {
         Ok(())
     }
 
-    fn emit_load_identifier(&mut self, name: &str, slot: Option<usize>) {
-        if self.inside_with() {
+    fn emit_load_identifier(
+        &mut self,
+        name: &str,
+        slot: Option<usize>,
+        resolved_with_object_slot: Option<usize>,
+    ) {
+        if let Some(object_slot) = resolved_with_object_slot {
+            self.emit(Op::LoadResolvedIdentWith {
+                name: name.to_owned(),
+                slot,
+                object_slot,
+            });
+        } else if self.identifier_needs_with_resolution(slot) {
             self.emit(Op::LoadIdentWith {
                 name: name.to_owned(),
                 slot,
@@ -254,7 +265,7 @@ impl Compiler {
     }
 
     fn resolve_with_identifier_target(&mut self, name: &str, slot: Option<usize>) -> Option<usize> {
-        if !self.inside_with() {
+        if !self.identifier_needs_with_resolution(slot) {
             return None;
         }
         let object_slot = self.temp_local("with_assignment_object");
@@ -279,7 +290,7 @@ impl Compiler {
                 object_slot,
                 is_strict: self.strict,
             });
-        } else if self.inside_with() {
+        } else if self.identifier_needs_with_resolution(slot) {
             self.emit(Op::StoreIdentWith {
                 name: name.to_owned(),
                 slot,
@@ -519,7 +530,7 @@ impl Compiler {
         match argument {
             Expr::Identifier { name, .. } => {
                 let slot = self.resolve_local_slot(name);
-                if self.inside_with() {
+                if self.identifier_needs_with_resolution(slot) {
                     self.emit(Op::TypeofIdentWith {
                         name: name.clone(),
                         slot,
