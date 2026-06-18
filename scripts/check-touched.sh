@@ -106,6 +106,10 @@ add_common_filters_for_path() {
       add_filter "test/language/statements/function/"
       ;;
     crates/qjs-runtime/src/function/*|crates/qjs-runtime/src/tests/functions.rs)
+      add_filter "cases/arguments-"
+      add_filter "cases/call-"
+      add_filter "cases/function-"
+      add_filter "cases/named-function-"
       add_filter "test/language/function-code/"
       add_filter "test/language/expressions/call/"
       add_filter "test/language/statements/function/"
