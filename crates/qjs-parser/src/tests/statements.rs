@@ -210,6 +210,7 @@ fn validates_for_in_head_static_semantics() {
         "for (let x in {}) { var x; }",
         "for (const x in {}) { var x; }",
         "for (let x in {}) if (true) var x;",
+        "\"use strict\"; for (let in {}) {}",
         "\"use strict\"; for (var eval in null) {}",
         "\"use strict\"; for (var arguments in null) {}",
         "\"use strict\"; function f() { for (var arguments in null) {} }",
@@ -228,6 +229,18 @@ fn validates_for_in_head_static_semantics() {
     parse_script("for (var x in null) let\n[a] = 0;")
         .expect_err("expression statements may not start with `let [`");
     parse_script("let\n[a] = 0;").expect_err("expression statements may not start with `let [`");
+}
+
+#[test]
+fn parses_let_across_line_terminator_as_lexical_declaration_in_statement_lists() {
+    parse_script("let\nlet;").expect_err("`let let` is a lexical declaration early error");
+    parse_script("let\nlet = 1;")
+        .expect_err("`let let = ...` is a lexical declaration early error");
+    parse_script("function* f() { let\nyield 0; }")
+        .expect_err("`let yield` in a generator is a lexical declaration early error");
+
+    parse_script("for (var x in null) let\nx = 1;")
+        .expect("single-statement bodies still allow sloppy `let` expression statements");
 }
 
 #[test]

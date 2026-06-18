@@ -20,7 +20,7 @@ impl Parser {
             if self.goal == Goal::Module {
                 body.push(self.module_item()?);
             } else {
-                body.push(self.statement()?);
+                body.push(self.statement_list_item()?);
             }
         }
         // A `using`/`await using` declaration is a Syntax Error at the top level
@@ -60,7 +60,18 @@ impl Parser {
         Ok(Script { body })
     }
 
+    pub(super) fn statement_list_item(&mut self) -> Result<Stmt, ParseError> {
+        self.statement_with_lexical_declarations(true)
+    }
+
     fn statement(&mut self) -> Result<Stmt, ParseError> {
+        self.statement_with_lexical_declarations(false)
+    }
+
+    fn statement_with_lexical_declarations(
+        &mut self,
+        allow_lexical_declarations: bool,
+    ) -> Result<Stmt, ParseError> {
         if self.match_kind(&TokenKind::Semicolon) {
             return Ok(Stmt::Empty);
         }
@@ -144,7 +155,7 @@ impl Parser {
         if self.at(&TokenKind::Var) || self.at(&TokenKind::Const) {
             return self.variable_declaration();
         }
-        if self.at(&TokenKind::Let) && self.let_is_declaration_start() {
+        if self.at(&TokenKind::Let) && self.let_is_declaration_start(allow_lexical_declarations) {
             return self.variable_declaration();
         }
         // `using x = ...` / `await using x = ...` are contextual declarations.
@@ -190,7 +201,7 @@ impl Parser {
         })
     }
 
-    fn let_is_declaration_start(&self) -> bool {
+    fn let_is_declaration_start(&self, allow_line_terminator_before_identifier: bool) -> bool {
         if self.strict {
             return true;
         }
@@ -210,8 +221,10 @@ impl Parser {
             TokenKind::Identifier(_) => {
                 let let_end = self.tokens[self.cursor].span.end;
                 let next_start = next.span.start;
-                !self.has_line_terminator_between(let_end, next_start)
+                allow_line_terminator_before_identifier
+                    || !self.has_line_terminator_between(let_end, next_start)
             }
+            TokenKind::Let => allow_line_terminator_before_identifier,
             _ => false,
         }
     }
@@ -278,7 +291,7 @@ impl Parser {
         self.expect(&TokenKind::LeftBrace)?;
         let mut body = Vec::new();
         while !self.at(&TokenKind::RightBrace) && !self.at(&TokenKind::Eof) {
-            body.push(self.statement()?);
+            body.push(self.statement_list_item()?);
         }
         validate_statement_list_declarations(&body)?;
         let end = self
@@ -300,7 +313,7 @@ impl Parser {
         let result = (|parser: &mut Self| {
             let mut body = Vec::new();
             while !parser.at(&TokenKind::RightBrace) && !parser.at(&TokenKind::Eof) {
-                body.push(parser.statement()?);
+                body.push(parser.statement_list_item()?);
             }
             validate_statement_list_declarations(&body)?;
             validate_statement_list_labels(&body)?;
@@ -316,7 +329,7 @@ impl Parser {
         self.expect(&TokenKind::LeftBrace)?;
         let mut body = Vec::new();
         while !self.at(&TokenKind::RightBrace) && !self.at(&TokenKind::Eof) {
-            body.push(self.statement()?);
+            body.push(self.statement_list_item()?);
         }
         validate_statement_list_declarations(&body)?;
         self.expect(&TokenKind::RightBrace)?;

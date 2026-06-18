@@ -474,7 +474,7 @@ impl Parser {
                 }
             }
             self.cursor = var_head_start;
-            if is_let_token && !self.at(&TokenKind::Semicolon) {
+            if is_let_token && !self.strict && !self.at(&TokenKind::Semicolon) {
                 let cursor = self.cursor;
                 if let Ok(left) = self.assignment_pattern() {
                     if self.match_kind(&TokenKind::In) {

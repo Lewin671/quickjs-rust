@@ -20,7 +20,7 @@ impl Parser {
                 .export_declaration()
                 .map(|decl| Stmt::ModuleDecl(ModuleDecl::Export(decl)));
         }
-        self.statement()
+        self.statement_list_item()
     }
 
     /// Reports whether the cursor is at an `import` declaration (as opposed to
