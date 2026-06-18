@@ -356,7 +356,11 @@ impl Compiler {
                     // Nested-block functions hoist to the var scope only under
                     // Annex B (sloppy mode); strict code keeps them block-scoped.
                     if (!nested || !self.strict) && !self.annex_b_function_name_blocked(name) {
-                        self.local_slot(name, true);
+                        if nested {
+                            self.local_slot(name, true);
+                        } else {
+                            self.hoisted_function_slot(name);
+                        }
                     }
                 }
                 Stmt::Labelled { body, .. } | Stmt::With { body, .. } => {
@@ -440,12 +444,19 @@ impl Compiler {
         self.locals.push(Local {
             name: name.to_owned(),
             hoisted,
+            hoisted_function: false,
             parameter: false,
             mutable: true,
             from_env: true,
             sloppy_global_fallback: false,
         });
         self.local_slots.insert(name.to_owned(), slot);
+        slot
+    }
+
+    fn hoisted_function_slot(&mut self, name: &str) -> usize {
+        let slot = self.local_slot(name, true);
+        self.locals[slot].hoisted_function = true;
         slot
     }
 

@@ -3,7 +3,7 @@ use std::collections::HashSet;
 
 use crate::CallEnv;
 use crate::{
-    Function, GLOBAL_THIS_BINDING, NativeFunction, Property, RuntimeError, Value,
+    Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, Property, RuntimeError, Value,
     bytecode::{compile_direct_eval_script, eval_bytecode_with_env},
     string::{string_code_units, string_from_code_unit},
     to_js_string_with_env, to_number_with_env,
@@ -289,6 +289,18 @@ pub(super) fn native_global_eval(
         .hoisted_local_names()
         .map(str::to_owned)
         .collect::<HashSet<_>>();
+    let hoisted_function_names = bytecode
+        .hoisted_function_names()
+        .map(str::to_owned)
+        .collect::<HashSet<_>>();
+    if !direct_function_eval && !eval_strict {
+        validate_sloppy_global_eval_declarations(
+            &bytecode,
+            &eval_env,
+            &caller_locals,
+            &hoisted_function_names,
+        )?;
+    }
     let mut strict_direct_writeback_env = (direct_eval && eval_strict).then(|| env.clone());
     initialize_direct_eval_bindings(
         &bytecode,
@@ -322,6 +334,10 @@ pub(super) fn native_global_eval(
                 eval_env.insert(name.to_owned(), value.clone());
             } else if direct_function_eval {
                 eval_env.insert(name.to_owned(), value.clone());
+            } else if hoisted_function_names.contains(name) {
+                create_eval_global_function_binding(&mut eval_env, name, value.clone());
+            } else if hoisted_names.contains(name) {
+                create_eval_global_var_binding(&mut eval_env, name, value.clone());
             } else {
                 define_eval_global_binding(&mut eval_env, name, value.clone());
             }
@@ -494,6 +510,63 @@ fn validate_eval_global_lexical_bindings(
     Ok(())
 }
 
+fn validate_sloppy_global_eval_declarations(
+    bytecode: &crate::bytecode::Bytecode,
+    env: &CallEnv,
+    caller_locals: &HashSet<String>,
+    function_names: &HashSet<String>,
+) -> Result<(), RuntimeError> {
+    let Some(global_this) = env.get(GLOBAL_THIS_BINDING).and_then(|value| match value {
+        Value::Object(object) => Some(object),
+        _ => None,
+    }) else {
+        return Ok(());
+    };
+    for name in bytecode.hoisted_local_names() {
+        if (caller_locals.contains(name) || env.realm_contains(name))
+            && !global_this.has_own_property(name)
+        {
+            return Err(RuntimeError {
+                thrown: None,
+                message: format!(
+                    "SyntaxError: global var declaration `{name}` conflicts with a global lexical binding"
+                ),
+            });
+        }
+    }
+    for name in function_names {
+        if !can_declare_global_function(&global_this, name) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: format!("TypeError: cannot declare global function `{name}`"),
+            });
+        }
+    }
+    for name in bytecode.hoisted_local_names() {
+        if function_names.contains(name) {
+            continue;
+        }
+        if !can_declare_global_var(&global_this, name) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: format!("TypeError: cannot declare global var `{name}`"),
+            });
+        }
+    }
+    Ok(())
+}
+
+fn can_declare_global_var(global_this: &ObjectRef, name: &str) -> bool {
+    global_this.has_own_property(name) || global_this.is_extensible()
+}
+
+fn can_declare_global_function(global_this: &ObjectRef, name: &str) -> bool {
+    let Some(existing) = global_this.own_property(name) else {
+        return global_this.is_extensible();
+    };
+    existing.configurable || (!existing.accessor && existing.writable && existing.enumerable)
+}
+
 fn initialize_direct_eval_bindings(
     bytecode: &crate::bytecode::Bytecode,
     env: &mut CallEnv,
@@ -535,6 +608,48 @@ fn initialize_direct_eval_bindings(
             define_eval_global_binding(env, name, Value::Undefined);
         }
     }
+}
+
+fn create_eval_global_var_binding(env: &mut CallEnv, name: &str, value: Value) {
+    let global_this = env.get(GLOBAL_THIS_BINDING).and_then(|value| match value {
+        Value::Object(object) => Some(object),
+        _ => None,
+    });
+    if let Some(global_this) = global_this {
+        if global_this.has_own_property(name) {
+            global_this.set(name.to_owned(), value.clone());
+            let value = global_this
+                .own_property(name)
+                .map(|property| property.value)
+                .unwrap_or(value);
+            env.insert_realm(name.to_owned(), value);
+            return;
+        }
+        global_this.define_property(
+            name.to_owned(),
+            Property::data(value.clone(), true, true, true),
+        );
+    }
+    env.insert_realm(name.to_owned(), value);
+}
+
+fn create_eval_global_function_binding(env: &mut CallEnv, name: &str, value: Value) {
+    let global_this = env.get(GLOBAL_THIS_BINDING).and_then(|value| match value {
+        Value::Object(object) => Some(object),
+        _ => None,
+    });
+    if let Some(global_this) = global_this {
+        let property = match global_this.own_property(name) {
+            Some(existing) if !existing.configurable => {
+                let mut property = existing;
+                property.value = value.clone();
+                property
+            }
+            _ => Property::data(value.clone(), true, true, true),
+        };
+        global_this.define_property(name.to_owned(), property);
+    }
+    env.insert_realm(name.to_owned(), value);
 }
 
 fn define_eval_global_binding(env: &mut CallEnv, name: &str, value: Value) {

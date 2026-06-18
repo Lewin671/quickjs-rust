@@ -4848,9 +4848,16 @@ cases/template-literal-no-substitution-basic.js
 cases/template-literal-line-terminators.js
 cases/tagged-template-basic.js
 cases/template-literal-substitution-basic.js
+test/language/eval-code/direct/non-definable-function-with-function.js
+test/language/eval-code/direct/non-definable-function-with-variable.js
+test/language/eval-code/direct/non-definable-global-function.js
+test/language/eval-code/direct/non-definable-global-generator.js
+test/language/eval-code/direct/non-definable-global-var.js
+test/language/eval-code/direct/var-env-func-init-global-update-configurable.js
 test/language/eval-code/direct/var-env-func-strict-caller-2.js
 test/language/eval-code/direct/var-env-func-strict-caller.js
 test/language/eval-code/direct/var-env-func-strict-source.js
+cases/eval-direct-var-env-global-lex-non-strict.js
 test/language/eval-code/direct/var-env-var-strict-caller-2.js
 test/language/eval-code/direct/var-env-var-strict-caller-3.js
 test/language/eval-code/direct/var-env-var-strict-caller.js

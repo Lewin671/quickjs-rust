@@ -330,6 +330,48 @@ fn strict_direct_eval_assignments_write_back_to_caller() {
 }
 
 #[test]
+fn sloppy_global_eval_validates_global_declarations_before_instantiation() {
+    assert_eq!(
+        eval(
+            "let error; \
+             try { eval('function NaN() {}'); } catch (caught) { error = caught; } \
+             error instanceof TypeError;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "try { eval('var shouldNotBeDefined; function NaN() {}'); } catch (caught) {} \
+             Object.getOwnPropertyDescriptor(this, 'shouldNotBeDefined') === undefined;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert!(
+        eval(
+            "let evalGlobalLexCollision; \
+             eval('var evalGlobalLexCollision;');"
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn sloppy_global_eval_function_binding_updates_configurable_property_descriptor() {
+    assert_eq!(
+        eval(
+            "Object.defineProperty(this, 'evalConfigurableFunction', { \
+                 enumerable: false, writable: false, configurable: true \
+             }); \
+             let initial = null; \
+             eval('initial = evalConfigurableFunction; function evalConfigurableFunction() { return 345; }'); \
+             let descriptor = Object.getOwnPropertyDescriptor(this, 'evalConfigurableFunction'); \
+             (typeof initial) + ':' + initial() + ':' + descriptor.writable + ':' + descriptor.enumerable + ':' + descriptor.configurable;"
+        ),
+        Ok(Value::String("function:345:true:true:true".to_owned()))
+    );
+}
+
+#[test]
 fn evaluates_global_eval_pure_regexp_literals() {
     assert_eq!(
         eval(

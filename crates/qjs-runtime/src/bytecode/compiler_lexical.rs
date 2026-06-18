@@ -34,6 +34,7 @@ impl Compiler {
         self.locals.push(Local {
             name: storage_name.to_owned(),
             hoisted: false,
+            hoisted_function: false,
             parameter: false,
             mutable,
             from_env: false,
@@ -62,6 +63,7 @@ impl Compiler {
         self.locals.push(Local {
             name: storage_name.to_owned(),
             hoisted: false,
+            hoisted_function: false,
             parameter: false,
             mutable,
             from_env: true,
@@ -105,6 +107,7 @@ impl Compiler {
         self.locals.push(Local {
             name: name.to_owned(),
             hoisted: false,
+            hoisted_function: false,
             parameter: false,
             mutable: true,
             from_env: false,
