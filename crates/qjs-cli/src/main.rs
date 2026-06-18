@@ -217,25 +217,43 @@ fn with_script_args(source: &str, script_args: &[String]) -> String {
         .collect::<Vec<_>>()
         .join(", ");
     let declaration = format!("var scriptArgs = [{args}];\n");
+    let (hashbang, source) = split_hashbang_prefix(source);
     if let Some(rest) = source.strip_prefix("\"use strict\";\n") {
-        return format!("\"use strict\";\n{declaration}{rest}");
+        return format!("{hashbang}\"use strict\";\n{declaration}{rest}");
     }
     if let Some(rest) = source.strip_prefix("\"use strict\";") {
-        return format!("\"use strict\";\n{declaration}{rest}");
+        return format!("{hashbang}\"use strict\";\n{declaration}{rest}");
     }
     if let Some(rest) = source.strip_prefix("\"use strict\"\n") {
-        return format!("\"use strict\";\n{declaration}{rest}");
+        return format!("{hashbang}\"use strict\";\n{declaration}{rest}");
     }
     if let Some(rest) = source.strip_prefix("'use strict';\n") {
-        return format!("'use strict';\n{declaration}{rest}");
+        return format!("{hashbang}'use strict';\n{declaration}{rest}");
     }
     if let Some(rest) = source.strip_prefix("'use strict';") {
-        return format!("'use strict';\n{declaration}{rest}");
+        return format!("{hashbang}'use strict';\n{declaration}{rest}");
     }
     if let Some(rest) = source.strip_prefix("'use strict'\n") {
-        return format!("'use strict';\n{declaration}{rest}");
+        return format!("{hashbang}'use strict';\n{declaration}{rest}");
     }
-    format!("{declaration}{source}")
+    format!("{hashbang}{declaration}{source}")
+}
+
+fn split_hashbang_prefix(source: &str) -> (String, &str) {
+    if !source.starts_with("#!") {
+        return (String::new(), source);
+    }
+    for (index, ch) in source.char_indices() {
+        if matches!(ch, '\n' | '\r' | '\u{2028}' | '\u{2029}') {
+            let end = if ch == '\r' && source[index + ch.len_utf8()..].starts_with('\n') {
+                index + 2
+            } else {
+                index + ch.len_utf8()
+            };
+            return (source[..end].to_owned(), &source[end..]);
+        }
+    }
+    (format!("{source}\n"), "")
 }
 
 fn escape_js_string(value: &str) -> String {
@@ -284,6 +302,24 @@ mod tests {
         let wrapped = with_script_args(source, &["case.js".to_owned()]);
 
         assert!(wrapped.starts_with("'use strict';\nvar scriptArgs = [\"case.js\"];\n"));
+    }
+
+    #[test]
+    fn inserts_script_args_after_hashbang() {
+        let source = "#!/usr/bin/env qjs\nanswer;";
+        let wrapped = with_script_args(source, &["case.js".to_owned()]);
+
+        assert!(wrapped.starts_with("#!/usr/bin/env qjs\nvar scriptArgs = [\"case.js\"];\n"));
+    }
+
+    #[test]
+    fn inserts_script_args_after_hashbang_and_use_strict_directive() {
+        let source = "#!/usr/bin/env qjs\r\n\"use strict\";\nthis === undefined;";
+        let wrapped = with_script_args(source, &["case.js".to_owned()]);
+
+        assert!(wrapped.starts_with(
+            "#!/usr/bin/env qjs\r\n\"use strict\";\nvar scriptArgs = [\"case.js\"];\n"
+        ));
     }
 
     #[test]

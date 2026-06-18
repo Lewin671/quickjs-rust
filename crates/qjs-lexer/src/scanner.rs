@@ -1,6 +1,6 @@
 use qjs_ast::Span;
 
-use crate::{LexError, Token, TokenKind};
+use crate::{LexError, LexOptions, Token, TokenKind};
 
 mod char_class;
 mod comments;
@@ -15,6 +15,7 @@ pub(crate) struct Lexer<'src> {
     pub(in crate::scanner) cursor: usize,
     pub(in crate::scanner) tokens: Vec<Token>,
     pub(in crate::scanner) template_stack: Vec<TemplateState>,
+    options: LexOptions,
 }
 
 pub(in crate::scanner) struct TemplateState {
@@ -22,12 +23,13 @@ pub(in crate::scanner) struct TemplateState {
 }
 
 impl<'src> Lexer<'src> {
-    pub(crate) fn new(source: &'src str) -> Self {
+    pub(crate) fn with_options(source: &'src str, options: LexOptions) -> Self {
         Self {
             source,
             cursor: 0,
             tokens: Vec::new(),
             template_stack: Vec::new(),
+            options,
         }
     }
 
@@ -73,6 +75,12 @@ impl<'src> Lexer<'src> {
                 ':' => self.single(TokenKind::Colon),
                 '?' => self.question(),
                 ';' => self.single(TokenKind::Semicolon),
+                '#' if self.options.hashbang
+                    && self.cursor == 0
+                    && self.peek_nth(1) == Some('!') =>
+                {
+                    self.hashbang_comment();
+                }
                 '#' => self.private_name()?,
                 _ => {
                     let start = self.cursor;

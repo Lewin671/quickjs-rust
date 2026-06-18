@@ -6,7 +6,7 @@ mod helpers;
 mod statement;
 
 use qjs_ast::{Script, Span};
-use qjs_lexer::{Token, lex};
+use qjs_lexer::{LexOptions, Token, lex, lex_with_options};
 
 /// A parse error.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -23,7 +23,24 @@ pub struct ParseError {
 ///
 /// Returns a structured error for lexing or parsing failures.
 pub fn parse_script(source: &str) -> Result<Script, ParseError> {
-    let tokens = lex(source).map_err(|error| ParseError {
+    parse_script_with_options(source, LexOptions::default())
+}
+
+/// Parses dynamically-created function source.
+///
+/// Function constructor source is parsed through a synthetic function
+/// declaration, but its source text is a function body, not Script or Module
+/// source text. In particular, it must not accept a leading hashbang comment.
+///
+/// # Errors
+///
+/// Returns a structured error for lexing or parsing failures.
+pub fn parse_dynamic_function_script(source: &str) -> Result<Script, ParseError> {
+    parse_script_with_options(source, LexOptions { hashbang: false })
+}
+
+fn parse_script_with_options(source: &str, options: LexOptions) -> Result<Script, ParseError> {
+    let tokens = lex_with_options(source, options).map_err(|error| ParseError {
         message: error.message,
         span: error.span,
     })?;

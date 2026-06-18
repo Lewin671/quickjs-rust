@@ -80,14 +80,12 @@ pub(super) fn call_core_native(
         NativeFunction::GeneratorFunction => {
             crate::function::native_generator_function(function, argument_values, env)
         }
-        NativeFunction::AsyncFunction => Err(RuntimeError {
-            thrown: None,
-            message: "TypeError: AsyncFunction constructor is not implemented".to_owned(),
-        }),
-        NativeFunction::AsyncGeneratorFunction => Err(RuntimeError {
-            thrown: None,
-            message: "TypeError: AsyncGeneratorFunction constructor is not implemented".to_owned(),
-        }),
+        NativeFunction::AsyncFunction => {
+            crate::function::native_async_function_constructor(argument_values, env)
+        }
+        NativeFunction::AsyncGeneratorFunction => {
+            crate::function::native_async_generator_function_constructor(argument_values, env)
+        }
         NativeFunction::FunctionPrototypeApply => {
             crate::function::native_function_prototype_apply(this_value, argument_values, env)
         }

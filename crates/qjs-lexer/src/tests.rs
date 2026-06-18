@@ -1,6 +1,6 @@
 use qjs_ast::Span;
 
-use super::{TemplateSegment, Token, TokenKind, lex};
+use super::{LexOptions, TemplateSegment, Token, TokenKind, lex, lex_with_options};
 
 fn kinds(source: &str) -> Vec<TokenKind> {
     lex(source)
@@ -303,6 +303,38 @@ fn skips_line_and_block_comments() {
             TokenKind::Identifier("two".to_owned()),
             TokenKind::Eof,
         ]
+    );
+}
+
+#[test]
+fn skips_source_start_hashbang_comments() {
+    for terminator in ["\n", "\r", "\u{2028}", "\u{2029}"] {
+        let source = format!("#! /usr/bin/env qjs{terminator}answer");
+        assert_eq!(
+            kinds(&source),
+            vec![TokenKind::Identifier("answer".to_owned()), TokenKind::Eof]
+        );
+    }
+    assert_eq!(kinds("#! no terminator"), vec![TokenKind::Eof]);
+}
+
+#[test]
+fn hashbang_comment_only_applies_at_source_start() {
+    let error = lex("\n#! no longer source start")
+        .expect_err("hashbang after a line terminator should stay invalid");
+    assert_eq!(
+        error.message,
+        "`#` must be followed by a private name identifier"
+    );
+}
+
+#[test]
+fn hashbang_comments_can_be_disabled_for_function_body_source() {
+    let error = lex_with_options("#! disabled", LexOptions { hashbang: false })
+        .expect_err("function body source should not accept hashbang comments");
+    assert_eq!(
+        error.message,
+        "`#` must be followed by a private name identifier"
     );
 }
 

@@ -669,6 +669,27 @@ fn evaluates_function_declarations_and_calls() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "let caught = false; try { Function('#!\\n_', ''); } catch (error) { caught = error instanceof SyntaxError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; try { Function('#!\\n_'); } catch (error) { caught = error instanceof SyntaxError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let ctors = [Function, (async function(){}).constructor, (function*(){}).constructor, (async function*(){}).constructor]; \
+             ctors.every(function(ctor) { \
+               try { ctor('#!\\n_', ''); return false; } catch (error) { return error instanceof SyntaxError; } \
+             });"
+        ),
+        Ok(Value::Boolean(true))
+    );
     assert!(eval("Function('a +', 'return a;');").is_err());
     assert!(eval("Function('break;');").is_err());
 }

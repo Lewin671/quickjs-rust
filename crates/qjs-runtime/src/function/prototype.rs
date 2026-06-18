@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use qjs_ast::Stmt;
-use qjs_parser::parse_script;
+use qjs_parser::parse_dynamic_function_script;
 
 use crate::CallEnv;
 use crate::function::CompiledUserFunction;
@@ -23,7 +23,7 @@ pub(crate) fn native_function(
 ) -> Result<Value, RuntimeError> {
     let (params, body) = function_source_parts(argument_values, env)?;
     let source = format!("function anonymous({params}\n) {{\n{body}\n}}");
-    let script = parse_script(&source).map_err(|error| RuntimeError {
+    let script = parse_dynamic_function_script(&source).map_err(|error| RuntimeError {
         thrown: None,
         message: format!(
             "SyntaxError: invalid Function constructor source: {}",
@@ -71,7 +71,7 @@ pub(crate) fn native_generator_function(
 ) -> Result<Value, RuntimeError> {
     let (params, body) = function_source_parts(argument_values, env)?;
     let source = format!("function* anonymous({params}\n) {{\n{body}\n}}");
-    let script = parse_script(&source).map_err(|error| RuntimeError {
+    let script = parse_dynamic_function_script(&source).map_err(|error| RuntimeError {
         thrown: None,
         message: format!(
             "SyntaxError: invalid GeneratorFunction constructor source: {}",
@@ -130,6 +130,57 @@ pub(crate) fn native_generator_function(
             message: "TypeError: dynamic generator function prototype could not be set".to_owned(),
         })?;
     Ok(Value::Function(created))
+}
+
+pub(crate) fn native_async_function_constructor(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    parse_dynamic_function_constructor_source(
+        "AsyncFunction",
+        "async function",
+        argument_values,
+        env,
+    )?;
+    Err(RuntimeError {
+        thrown: None,
+        message: "TypeError: AsyncFunction constructor is not implemented".to_owned(),
+    })
+}
+
+pub(crate) fn native_async_generator_function_constructor(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    parse_dynamic_function_constructor_source(
+        "AsyncGeneratorFunction",
+        "async function*",
+        argument_values,
+        env,
+    )?;
+    Err(RuntimeError {
+        thrown: None,
+        message: "TypeError: AsyncGeneratorFunction constructor is not implemented".to_owned(),
+    })
+}
+
+fn parse_dynamic_function_constructor_source(
+    constructor_name: &str,
+    function_prefix: &str,
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<(), RuntimeError> {
+    let (params, body) = function_source_parts(argument_values, env)?;
+    let source = format!("{function_prefix} anonymous({params}\n) {{\n{body}\n}}");
+    parse_dynamic_function_script(&source)
+        .map(|_| ())
+        .map_err(|error| RuntimeError {
+            thrown: None,
+            message: format!(
+                "SyntaxError: invalid {constructor_name} constructor source: {}",
+                error.message
+            ),
+        })
 }
 
 fn generator_construct_prototype_slot(

@@ -8,6 +8,16 @@ use super::{
 };
 
 impl Lexer<'_> {
+    pub(super) fn hashbang_comment(&mut self) {
+        debug_assert_eq!(self.cursor, 0);
+        debug_assert_eq!(self.peek(), Some('#'));
+        debug_assert_eq!(self.peek_nth(1), Some('!'));
+
+        self.advance();
+        self.advance();
+        self.skip_line_comment_tail();
+    }
+
     pub(super) fn html_open_comment(&mut self) -> bool {
         if self.peek() != Some('<')
             || self.peek_nth(1) != Some('!')
