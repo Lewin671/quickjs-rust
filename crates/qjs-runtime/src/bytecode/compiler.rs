@@ -957,6 +957,9 @@ impl Compiler {
     }
 
     fn compile_script_statement_list(&mut self, body: &[Stmt]) -> Result<(), RuntimeError> {
+        if block_has_sync_using(body) {
+            return self.compile_script_statement_list_with_disposal(body);
+        }
         let result_slot = self.temp_local("script_result");
         self.emit_load_undefined();
         self.emit(Op::StoreLocal(result_slot));
@@ -972,19 +975,62 @@ impl Compiler {
         Ok(())
     }
 
-    pub(super) fn store_or_pop_statement_list_completion(&mut self, stmt: &Stmt) {
-        if let Some(result_slot) = self.current_loop_result_slot()
-            && stmt_updates_statement_list_completion(stmt)
-        {
-            self.emit(Op::StoreLocal(result_slot));
-        } else {
-            self.emit(Op::Pop);
+    fn compile_script_statement_list_with_disposal(
+        &mut self,
+        body: &[Stmt],
+    ) -> Result<(), RuntimeError> {
+        self.emit(Op::EnterDisposableScope);
+        let result_slot = self.temp_local("script_using_result");
+        self.emit_load_undefined();
+        self.emit(Op::StoreLocal(result_slot));
+
+        let enter = self.emit(Op::EnterTry {
+            catch: None,
+            finally: None,
+            catch_scope: None,
+        });
+        self.disposable_scope_depth += 1;
+        let body_result = (|| {
+            for stmt in body {
+                self.compile_stmt(stmt)?;
+                if stmt_updates_statement_list_completion(stmt) {
+                    self.emit(Op::StoreLocal(result_slot));
+                } else {
+                    self.emit(Op::Pop);
+                }
+            }
+            Ok(())
+        })();
+        self.disposable_scope_depth -= 1;
+        body_result?;
+        self.emit(Op::ExitTry);
+        let normal_jump = self.emit(Op::Jump(usize::MAX));
+
+        let finally_target = self.compile_dispose_finally();
+        if let Op::EnterTry { finally, .. } = &mut self.code[enter] {
+            *finally = Some(finally_target);
         }
+        self.patch_jump(normal_jump, finally_target);
+        self.emit(Op::LoadLocal(result_slot));
+        Ok(())
     }
 
     pub(super) fn reset_current_loop_completion_to_undefined(&mut self) {
         if let Some(result_slot) = self.current_loop_result_slot() {
             self.emit_load_undefined();
+            self.emit(Op::StoreLocal(result_slot));
+        }
+    }
+
+    pub(super) fn store_statement_list_completion(&mut self, result_slot: usize) {
+        if self.current_loop_result_slot().is_some() {
+            self.emit(Op::Dup);
+            self.emit(Op::StoreLocal(result_slot));
+            let loop_slot = self
+                .current_loop_result_slot()
+                .expect("loop result slot should still exist");
+            self.emit(Op::StoreLocal(loop_slot));
+        } else {
             self.emit(Op::StoreLocal(result_slot));
         }
     }

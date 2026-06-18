@@ -407,7 +407,11 @@ impl Parser {
             None
         };
         self.expect(&TokenKind::LeftParen)?;
-        let for_head_using = self.using_declaration_kind();
+        let for_head_using = if self.at_for_using_of_identifier_head() {
+            None
+        } else {
+            self.using_declaration_kind()
+        };
         if self.at(&TokenKind::Var)
             || self.at(&TokenKind::Let)
             || self.at(&TokenKind::Const)
@@ -533,7 +537,7 @@ impl Parser {
         } else if self.at(&TokenKind::Var)
             || self.at(&TokenKind::Let)
             || self.at(&TokenKind::Const)
-            || self.using_declaration_kind().is_some()
+            || (!self.at_for_using_of_identifier_head() && self.using_declaration_kind().is_some())
         {
             let init = self.for_variable_declaration()?;
             self.expect(&TokenKind::Semicolon)?;
@@ -649,7 +653,20 @@ impl Parser {
                 && !self.at(&TokenKind::RightBrace)
                 && !self.at(&TokenKind::Eof)
             {
-                consequent.push(self.statement()?);
+                let stmt = self.statement()?;
+                if let Stmt::VarDecl {
+                    kind: VarKind::Using | VarKind::AwaitUsing,
+                    span,
+                    ..
+                } = &stmt
+                {
+                    return Err(ParseError {
+                        message: "`using` declarations are not allowed directly in switch clauses"
+                            .to_owned(),
+                        span: *span,
+                    });
+                }
+                consequent.push(stmt);
             }
             let end = consequent
                 .last()
@@ -673,6 +690,20 @@ impl Parser {
             cases,
             span: Span::new(start, end),
         })
+    }
+
+    fn at_for_using_of_identifier_head(&self) -> bool {
+        let (Some(using_token), Some(first_of_token), Some(second_of_token)) =
+            (self.peek_nth(0), self.peek_nth(1), self.peek_nth(2))
+        else {
+            return false;
+        };
+        matches!(&using_token.kind, TokenKind::Identifier(name) if name == "using")
+            && matches!(&first_of_token.kind, TokenKind::Identifier(name) if name == "of")
+            && matches!(&second_of_token.kind, TokenKind::Identifier(name) if name == "of")
+            && !self.has_line_terminator_between(using_token.span.end, first_of_token.span.start)
+            && !self
+                .has_line_terminator_between(first_of_token.span.end, second_of_token.span.start)
     }
 
     pub(super) fn try_statement(&mut self) -> Result<Stmt, ParseError> {

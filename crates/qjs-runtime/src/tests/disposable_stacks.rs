@@ -1,4 +1,5 @@
-use crate::{Value, eval};
+use crate::{Value, bytecode, eval};
+use qjs_parser::parse_module;
 
 #[test]
 fn disposable_stack_constructor_and_prototype_surface() {
@@ -338,6 +339,13 @@ fn using_declaration_rejects_non_disposable_initializers() {
 }
 
 #[test]
+fn using_declaration_has_empty_block_completion() {
+    assert_eq!(eval("{ using x = null; }"), Ok(Value::Undefined));
+    assert_eq!(eval("4; { using x = null; }"), Ok(Value::Number(4.0)));
+    assert_eq!(eval("5; { 6; using x = null; }"), Ok(Value::Number(6.0)));
+}
+
+#[test]
 fn using_disposal_errors_chain_with_suppressed_error() {
     // A dispose failure that overrides a body throw is wrapped in a
     // SuppressedError carrying both errors.
@@ -374,5 +382,84 @@ fn using_in_function_body_disposes_at_return() {
              try { f(); } catch (e) { log.push('caught'); } log.join(',');"
         ),
         Ok(Value::String("d,caught".to_owned()))
+    );
+}
+
+#[test]
+fn using_for_initializer_disposes_when_loop_exits() {
+    assert_eq!(
+        eval(
+            "let log = []; \
+             let i = 0; \
+             for (using x = { [Symbol.dispose]() { log.push('dispose'); } }; i < 2; i++) { \
+               log.push('body:' + i); \
+             } \
+             log.join(',');"
+        ),
+        Ok(Value::String("body:0,body:1,dispose".to_owned()))
+    );
+}
+
+#[test]
+fn using_for_initializer_disposes_if_later_initializer_throws() {
+    assert_eq!(
+        eval(
+            "let log = []; \
+             function fail() { throw new Error('boom'); } \
+             try { \
+               for (using x = { [Symbol.dispose]() { log.push('dispose'); } }, y = fail(); false;) {} \
+             } catch (e) { log.push('caught'); } \
+             log.join(',');"
+        ),
+        Ok(Value::String("dispose,caught".to_owned()))
+    );
+}
+
+#[test]
+fn using_generator_body_preserves_disposal_scope_across_yield() {
+    assert_eq!(
+        eval(
+            "let log = []; \
+             function *f() { \
+               using x = { [Symbol.dispose]() { log.push('dispose'); } }; \
+               yield 'pause'; \
+             } \
+             let g = f(); \
+             let first = g.next(); \
+             let before = log.join(','); \
+             let second = g.next(); \
+             first.value + ':' + first.done + ':' + before + ':' + second.done + ':' + log.join(',');"
+        ),
+        Ok(Value::String("pause:false::true:dispose".to_owned()))
+    );
+}
+
+#[test]
+fn using_module_statement_list_disposes_top_level_resources() {
+    let script = parse_module(
+        "class MyError extends Error {} \
+         const error1 = new MyError(); \
+         const error2 = new MyError(); \
+         const error3 = new MyError(); \
+         let result; \
+         try { \
+           using _1 = { [Symbol.dispose]() { throw error1; } }; \
+           using _2 = { [Symbol.dispose]() { throw error2; } }; \
+           throw error3; \
+         } catch (e) { \
+           result = (e instanceof SuppressedError) + ':' + \
+             (e.error === error1) + ':' + \
+             (e.suppressed instanceof SuppressedError) + ':' + \
+             (e.suppressed.error === error2) + ':' + \
+             (e.suppressed.suppressed === error3); \
+         } \
+         result;",
+    )
+    .expect("module source should parse");
+    let bytecode = bytecode::compile_module(&script).expect("module should compile");
+
+    assert_eq!(
+        bytecode::eval_bytecode(&bytecode),
+        Ok(Value::String("true:true:true:true:true".to_owned()))
     );
 }

@@ -142,13 +142,76 @@ impl Compiler {
         update: Option<&Expr>,
         body: &Stmt,
     ) -> Result<(), RuntimeError> {
+        if for_init_has_sync_using(init) {
+            return self.compile_for_with_disposal(init, test, update, body);
+        }
         if let Some(init) = init {
             self.compile_for_init(init)?;
             self.emit(Op::Pop);
         }
+        self.compile_for_loop_after_init(init, test, update, body)
+    }
+
+    fn compile_for_with_disposal(
+        &mut self,
+        init: Option<&ForInit>,
+        test: Option<&Expr>,
+        update: Option<&Expr>,
+        body: &Stmt,
+    ) -> Result<(), RuntimeError> {
+        self.emit(Op::EnterDisposableScope);
         let result_slot = self.temp_local("loop_result");
         self.emit_load_undefined();
         self.emit(Op::StoreLocal(result_slot));
+
+        let enter = self.emit(Op::EnterTry {
+            catch: None,
+            finally: None,
+            catch_scope: None,
+        });
+        self.disposable_scope_depth += 1;
+        let body_result = (|| {
+            if let Some(init) = init {
+                self.compile_for_init(init)?;
+                self.emit(Op::Pop);
+            }
+            self.compile_for_loop_after_init_with_result(init, test, update, body, result_slot)
+        })();
+        self.disposable_scope_depth -= 1;
+        body_result?;
+        self.emit(Op::ExitTry);
+        let normal_jump = self.emit(Op::Jump(usize::MAX));
+
+        let finally_target = self.compile_dispose_finally();
+        if let Op::EnterTry { finally, .. } = &mut self.code[enter] {
+            *finally = Some(finally_target);
+        }
+        self.patch_jump(normal_jump, finally_target);
+        self.emit(Op::LoadLocal(result_slot));
+        Ok(())
+    }
+
+    fn compile_for_loop_after_init(
+        &mut self,
+        init: Option<&ForInit>,
+        test: Option<&Expr>,
+        update: Option<&Expr>,
+        body: &Stmt,
+    ) -> Result<(), RuntimeError> {
+        let result_slot = self.temp_local("loop_result");
+        self.emit_load_undefined();
+        self.emit(Op::StoreLocal(result_slot));
+        self.compile_for_loop_after_init_with_result(init, test, update, body, result_slot)
+    }
+
+    fn compile_for_loop_after_init_with_result(
+        &mut self,
+        init: Option<&ForInit>,
+        test: Option<&Expr>,
+        update: Option<&Expr>,
+        body: &Stmt,
+        result_slot: usize,
+    ) -> Result<(), RuntimeError> {
         let loop_start = self.code.len();
         let exit_jump = if let Some(test) = test {
             self.compile_expr(test)?;
@@ -218,6 +281,9 @@ impl Compiler {
                     }
                     if let Some(init) = &declaration.init {
                         self.compile_declaration_init(&declaration.binding, init)?;
+                        if *kind == VarKind::Using && self.disposable_scope_depth > 0 {
+                            self.emit(Op::RegisterDisposable);
+                        }
                         self.compile_binding_initializer(&declaration.binding, *kind)?;
                     } else {
                         self.compile_binding_uninitialized(&declaration.binding, *kind)?;
@@ -826,4 +892,14 @@ impl Compiler {
         self.patch_jump(end_jump, end);
         Ok(())
     }
+}
+
+fn for_init_has_sync_using(init: Option<&ForInit>) -> bool {
+    matches!(
+        init,
+        Some(ForInit::VarDecl {
+            kind: VarKind::Using,
+            ..
+        })
+    )
 }

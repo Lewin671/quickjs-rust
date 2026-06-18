@@ -5,6 +5,7 @@ use crate::RuntimeError;
 use super::compiler::Compiler;
 use super::compiler_lexical::{annex_b_blocked_names, catch_param_annex_b_blocked_names};
 use super::ir::{CatchScope, Op};
+use super::util::stmt_updates_statement_list_completion;
 
 /// Whether a block directly declares a sync `using` resource (so its scope
 /// needs an implicit disposal try/finally). `await using` is handled by the
@@ -34,15 +35,21 @@ impl Compiler {
                     return Ok(());
                 }
                 compiler.compile_hoisted_function_decls(body)?;
-                for (index, stmt) in body.iter().enumerate() {
+                let result_slot = compiler.temp_local("block_result");
+                compiler.emit_load_undefined();
+                compiler.emit(Op::StoreLocal(result_slot));
+                for stmt in body {
                     compiler.compile_stmt(stmt)?;
-                    if index + 1 != body.len() {
-                        compiler.store_or_pop_statement_list_completion(stmt);
+                    if stmt_updates_statement_list_completion(stmt) {
+                        compiler.store_statement_list_completion(result_slot);
+                    } else {
+                        compiler.emit(Op::Pop);
                     }
                 }
                 for slot in compiler.current_lexical_slots_for_names(&blocked) {
                     compiler.emit(Op::ClearLocal(slot));
                 }
+                compiler.emit(Op::LoadLocal(result_slot));
                 Ok(())
             })
         })
@@ -123,7 +130,7 @@ impl Compiler {
 
     /// Emits the disposal finally body (`DisposeScope; EndFinally`) and returns
     /// its entry IP.
-    fn compile_dispose_finally(&mut self) -> usize {
+    pub(super) fn compile_dispose_finally(&mut self) -> usize {
         let finally_result_slot = self.temp_local("dispose_result");
         let loop_depth = self.loop_stack_depth();
         self.push_try_result_slot(finally_result_slot, loop_depth, true);
@@ -152,7 +159,12 @@ impl Compiler {
             finally: None,
             catch_scope: None,
         });
-        self.with_lexical_scope(|compiler| compiler.compile_try_body(block, result_slot))?;
+        if block_has_sync_using(block) {
+            self.compile_disposable_block(block)?;
+            self.emit(Op::StoreLocal(result_slot));
+        } else {
+            self.with_lexical_scope(|compiler| compiler.compile_try_body(block, result_slot))?;
+        }
         self.emit(Op::ExitTry);
 
         let normal_jump = self.emit(Op::Jump(usize::MAX));

@@ -95,3 +95,20 @@ fn parses_using_in_for_heads() {
     parse_script("for (using x = res; cond; ) {}").expect("C-style for using parses");
     assert!(parse_script("for (using x in obj) {}").is_err());
 }
+
+#[test]
+fn using_of_of_for_head_is_an_identifier_target() {
+    parse_script("for (using of of [0, 1, 2]) {}")
+        .expect("using/of/of parses as identifier target plus of-loop");
+}
+
+#[test]
+fn using_declarations_are_rejected_directly_in_switch_clauses() {
+    assert!(parse_script("switch (0) { case 0: using _ = null; }").is_err());
+    assert!(parse_script("switch (0) { default: using _ = null; }").is_err());
+
+    parse_script("switch (0) { case 0: { using _ = null; } }")
+        .expect("using inside a nested switch-clause block parses");
+    parse_script("switch (0) { default: { using _ = null; } }")
+        .expect("using inside a nested default-clause block parses");
+}

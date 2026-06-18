@@ -15,6 +15,7 @@ use crate::{ObjectRef, RuntimeError, Value};
 
 use super::ir::Bytecode;
 use super::vm::{Slot, Vm};
+use super::vm_dispose::DisposeResource;
 use super::vm_result::Completion;
 use super::vm_try::TryFrame;
 use crate::CallEnv;
@@ -67,6 +68,7 @@ pub(crate) struct GeneratorSnapshot {
     capture_writeback: Option<CaptureWriteback>,
     sloppy_global_names: Vec<String>,
     try_stack: Vec<TryFrame>,
+    disposable_scopes: Vec<Vec<DisposeResource>>,
     pending_throw: Option<Value>,
     pending_return: Option<Value>,
     pending_jump: Option<usize>,
@@ -266,6 +268,7 @@ impl Vm<'_> {
             capture_writeback,
             sloppy_global_names: self.sloppy_global_names,
             try_stack: self.try_stack,
+            disposable_scopes: self.disposable_scopes,
             pending_throw: self.pending_throw,
             pending_return: self.pending_return,
             pending_jump: self.pending_jump,
@@ -372,6 +375,7 @@ fn run_from_yield(
     vm.pending_return = snapshot.pending_return;
     vm.pending_jump = snapshot.pending_jump;
     vm.try_stack = snapshot.try_stack;
+    vm.disposable_scopes = snapshot.disposable_scopes;
     let capture_writeback = snapshot.capture_writeback;
     if snapshot.refresh_captured_slots_on_resume {
         vm.refresh_from_captured_env();

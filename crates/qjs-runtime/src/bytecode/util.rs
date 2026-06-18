@@ -124,6 +124,9 @@ pub(super) fn unsupported_module_item() -> RuntimeError {
 /// Whether `stmt`'s value updates a statement list's completion value (used to
 /// decide between storing and popping the result of each statement).
 pub(super) fn stmt_updates_statement_list_completion(stmt: &Stmt) -> bool {
+    if let Stmt::Block { body, .. } = stmt {
+        return body.iter().any(stmt_updates_statement_list_completion);
+    }
     !matches!(
         stmt,
         Stmt::Debugger { .. }
