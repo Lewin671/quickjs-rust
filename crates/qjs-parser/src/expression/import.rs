@@ -10,7 +10,7 @@
 use qjs_ast::{Expr, Span};
 use qjs_lexer::TokenKind;
 
-use crate::{ParseError, Parser};
+use crate::{Goal, ParseError, Parser};
 
 impl Parser {
     /// Reports whether the cursor is at an `import(...)` call or `import.meta`
@@ -46,6 +46,15 @@ impl Parser {
                 return Err(ParseError {
                     message: "only `import.meta` is a valid `import.` meta-property".to_owned(),
                     span: property.span,
+                });
+            }
+            // `import.meta` is only legal when the syntactic goal is Module; it
+            // is an early SyntaxError in a Script, a `Function`/`AsyncFunction`/
+            // generator constructor body, or any other non-module parse.
+            if self.goal != Goal::Module {
+                return Err(ParseError {
+                    message: "`import.meta` is only valid in a module".to_owned(),
+                    span: Span::new(start, property.span.end),
                 });
             }
             return Ok(Expr::ImportMeta {

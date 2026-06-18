@@ -146,6 +146,26 @@ fn rejects_yield_as_binding_identifier_inside_generator() {
 }
 
 #[test]
+fn restricts_import_meta_to_module_goal() {
+    use crate::parse_module;
+
+    // `import.meta` is an early SyntaxError under the Script goal (a plain
+    // script or a `Function` constructor body).
+    for source in ["import.meta;", "x = import.meta", "() => import.meta"] {
+        let error = parse_script(source).expect_err("import.meta is invalid in a script");
+        assert_eq!(error.message, "`import.meta` is only valid in a module");
+    }
+
+    // Under the Module goal it parses as a meta-property.
+    for source in ["import.meta;", "const u = import.meta.url;"] {
+        parse_module(source).unwrap_or_else(|error| panic!("{source} should parse: {error:?}"));
+    }
+
+    // `import.foo` is never a valid meta-property.
+    parse_module("import.foo;").expect_err("only import.meta is a valid meta-property");
+}
+
+#[test]
 fn requires_semicolon_or_asi_between_statements() {
     let error = parse_script("var str = '''';").expect_err("adjacent strings need a separator");
     assert_eq!(error.message, "expected `;` or newline after statement");
