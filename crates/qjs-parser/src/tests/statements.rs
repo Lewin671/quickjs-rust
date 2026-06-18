@@ -117,6 +117,47 @@ fn rejects_var_hoisted_from_nested_block_conflicting_with_lexical() {
 }
 
 #[test]
+fn rejects_import_and_export_as_binding_identifiers() {
+    // `import`/`export` are reserved words and may not name a binding, including
+    // their escaped spellings (which arrive as plain Identifier tokens).
+    for source in [
+        "var export = 1;",
+        "let import = 1;",
+        "function f(import) {}",
+        "try {} catch (export) {}",
+        "const { export } = {};",
+    ] {
+        let error = parse_script(source).expect_err("import/export binding must be rejected");
+        assert!(
+            error.message.contains("reserved word"),
+            "source: {source}, got: {}",
+            error.message
+        );
+    }
+
+    // The arrow-parameter destructuring forms are also a SyntaxError (Test262
+    // arrow-function/dstr/syntax-error-ident-ref-{export,import}-escaped),
+    // though the object/arrow disambiguation may report it differently.
+    for source in [
+        "var x = ({ export }) => {};",
+        "var x = ({ \\u0065xport }) => {};",
+        "var x = ({ \\u0069mport }) => {};",
+    ] {
+        parse_script(source).expect_err("import/export arrow-param binding must be rejected");
+    }
+
+    // They remain valid as property names and identifier-like names that merely
+    // contain the substring.
+    for source in [
+        "({ import: 1 });",
+        "var o = {}; o.export;",
+        "var x = ({ exporter }) => {};",
+    ] {
+        parse_script(source).unwrap_or_else(|error| panic!("{source} should parse: {error:?}"));
+    }
+}
+
+#[test]
 fn rejects_block_level_function_conflicting_with_var() {
     // Inside a block, a plain function declaration is a LexicallyDeclaredName,
     // so it conflicts with a same-named `var` (including a `var` hoisted from a

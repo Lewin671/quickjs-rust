@@ -212,6 +212,16 @@ impl Parser {
                 span,
             });
         }
+        // `import` and `export` are reserved words and may not name a binding
+        // (including their escaped spellings, which reach the parser as plain
+        // Identifier tokens). They stay valid as property names and as the
+        // `import(...)`/`import.meta` contextual forms, which never reach here.
+        if matches!(name, "import" | "export") {
+            return Err(ParseError {
+                message: format!("`{name}` is a reserved word"),
+                span,
+            });
+        }
         // `await` may not be used as a binding identifier inside an async
         // function (parameters or local bindings). Ordinary nested functions
         // reset the async context, so `await` is a legal binding name there.
