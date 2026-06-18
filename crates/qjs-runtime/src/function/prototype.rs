@@ -257,7 +257,15 @@ pub(crate) fn native_function_prototype_apply(
     crate::call_function(this_value, call_this, apply_arguments, env, false)
 }
 
-fn apply_dense_native_fast_path(
+/// The `fn.apply(this, denseArray)` fast path for self-contained native
+/// targets (currently `String.fromCodePoint`): reads the argument array
+/// straight out of dense element storage and computes the result without
+/// building a forwarding call environment. Exposed so the VM call site can
+/// take it before materializing (and deep-cloning) the caller's frame
+/// locals, which is what otherwise makes a repeated
+/// `String.fromCodePoint.apply` in a `buildString`-style loop quadratic in
+/// the accumulated string size.
+pub(crate) fn apply_dense_native_fast_path(
     target: &Value,
     argument_values: &[Value],
     env: &CallEnv,

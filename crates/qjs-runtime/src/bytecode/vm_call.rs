@@ -60,6 +60,27 @@ impl Vm<'_> {
             }
             return Ok(());
         }
+        // `fn.apply(this, denseArray)` for a self-contained native target reads
+        // its arguments straight out of the array and needs nothing from the
+        // caller frame. Take that fast path before `call_env`, whose
+        // forwarding-native branch materializes and deep-clones every caller
+        // local: with a large accumulating string local (the `buildString`
+        // harness loop behind RegExp property-escape tests) that clone is what
+        // turns repeated `String.fromCodePoint.apply` quadratic.
+        if matches!(
+            &callee,
+            Value::Function(function)
+                if function.native == Some(NativeFunction::FunctionPrototypeApply)
+        ) && let Some(result) = crate::function::apply_dense_native_fast_path(
+            &this_value,
+            &arguments,
+            &self.realm_env(),
+        ) {
+            if let Some(value) = self.handle_runtime_result(result)? {
+                self.stack.push(value);
+            }
+            return Ok(());
+        }
         let mut env = self.call_env(&callee);
         if direct_eval {
             env.env
