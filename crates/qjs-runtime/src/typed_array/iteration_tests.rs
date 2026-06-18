@@ -45,6 +45,58 @@ fn at_and_includes_and_index_of() {
 }
 
 #[test]
+fn includes_coerces_from_index_and_reads_live_elements() {
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([0]); \
+             a.includes(undefined, { valueOf() { __quickjsRustDetachArrayBuffer(a.buffer); return 0; } });"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([0]); \
+             a.includes(0, { valueOf() { __quickjsRustDetachArrayBuffer(a.buffer); return 0; } });"
+        ),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval(
+            "let a = new BigInt64Array([0n]); \
+             a.includes(undefined, { valueOf() { __quickjsRustDetachArrayBuffer(a.buffer); return 0; } });"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let a = new Uint8Array(b, 0, 4); \
+             a[0] = 0; a[1] = 1; a[2] = 2; a[3] = 3; \
+             a.includes(undefined, { valueOf() { b.resize(2); return 0; } });"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let a = new Uint8Array(b); \
+             a[0] = 0; a[1] = 1; a[2] = 2; a[3] = 3; \
+             a.includes(undefined, { valueOf() { b.resize(2); return 0; } });"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let a = new Uint8Array(b); \
+             a[0] = 1; a[1] = 1; a[2] = 1; a[3] = 1; \
+             a.includes(0, { valueOf() { b.resize(6); return 0; } });"
+        ),
+        Ok(Value::Boolean(false))
+    );
+}
+
+#[test]
 fn index_of_coerces_from_index_and_rechecks_view_length() {
     assert_eq!(
         eval(
@@ -144,6 +196,50 @@ fn join_and_to_string() {
     assert_eq!(
         eval("Object.getPrototypeOf(Uint8Array.prototype).toString === Array.prototype.toString;"),
         Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn join_coerces_separator_then_reads_live_elements() {
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([1, 2, 3]); \
+             a.join({ toString() { __quickjsRustDetachArrayBuffer(a.buffer); return ','; } });"
+        ),
+        Ok(Value::String(",,".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let a = new BigInt64Array([1n, 2n, 3n]); \
+             a.join({ toString() { __quickjsRustDetachArrayBuffer(a.buffer); return ','; } });"
+        ),
+        Ok(Value::String(",,".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let a = new Uint8Array(b, 0, 4); \
+             a.join({ toString() { b.resize(2); return '.'; } });"
+        ),
+        Ok(Value::String("...".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let a = new Uint8Array(b); \
+             a.join({ toString() { b.resize(2); return '.'; } });"
+        ),
+        Ok(Value::String("0.0..".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(3, { maxByteLength: 5 }); \
+             let a = new Int8Array(b); \
+             let calls = 0; \
+             let result = a.join({ toString() { calls++; b.resize(0); return '-'; } }); \
+             calls + ':' + result;"
+        ),
+        Ok(Value::String("1:--".to_owned()))
     );
 }
 

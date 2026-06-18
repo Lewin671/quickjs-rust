@@ -188,19 +188,18 @@ pub(crate) fn native_typed_array_prototype_includes(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let (object, length) = validate_typed_array(&this_value)?;
-    if length == 0 {
+    let (object, original_length) = validate_typed_array(&this_value)?;
+    if original_length == 0 {
         return Ok(Value::Boolean(false));
     }
     let search = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let start = search_start_index(
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
-        length,
+        original_length,
         env,
     )?;
-    let scanned = read_view_elements(&object, start, length - start);
-    for value in &scanned {
-        if same_value_zero(value, &search) {
+    for index in start..original_length {
+        if same_value_zero(&get_view_element(&object, index), &search) {
             return Ok(Value::Boolean(true));
         }
     }
@@ -246,10 +245,14 @@ pub(crate) fn native_typed_array_prototype_join(
         Value::Undefined => ",".to_owned(),
         value => to_js_string_with_env(value, env)?,
     };
-    let elements = read_view_elements(&object, 0, length);
     let mut parts = Vec::with_capacity(length);
-    for element in elements {
-        parts.push(to_js_string_with_env(element, env)?);
+    for index in 0..length {
+        let element = get_view_element(&object, index);
+        let part = match element {
+            Value::Undefined | Value::Null => String::new(),
+            value => to_js_string_with_env(value, env)?,
+        };
+        parts.push(part);
     }
     Ok(Value::String(parts.join(&separator)))
 }
