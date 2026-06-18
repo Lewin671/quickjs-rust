@@ -221,6 +221,16 @@ impl Parser {
                 span,
             });
         }
+        // `yield` may not be used as a binding identifier inside a generator
+        // (parameters or local bindings), a class static block, or anywhere in
+        // strict mode. Ordinary nested functions reset the generator context,
+        // so `yield` is a legal binding name there in sloppy code.
+        if (self.strict || self.in_generator || self.in_static_block) && name == "yield" {
+            return Err(ParseError {
+                message: "`yield` is not allowed as a binding identifier here".to_owned(),
+                span,
+            });
+        }
         // Strict-mode reserved words (including escaped spellings such as
         // `package`) may not name a binding. The lexer keeps escaped
         // spellings as Identifier tokens, so this StringValue check is reached

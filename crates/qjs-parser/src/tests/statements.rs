@@ -117,6 +117,35 @@ fn rejects_var_hoisted_from_nested_block_conflicting_with_lexical() {
 }
 
 #[test]
+fn rejects_yield_as_binding_identifier_inside_generator() {
+    // `yield` is reserved inside a generator (parameters and body), so it may
+    // not name a binding there even in sloppy code.
+    for source in [
+        "({ *m(yield) {} })",
+        "({ *m() { var yield; } })",
+        "({ async *m(yield) {} })",
+        "function* g(yield) {}",
+        "function* g() { let yield; }",
+        "({ *m() { let [yield] = []; } })",
+    ] {
+        parse_script(source).expect_err("yield binding in generator must be rejected");
+    }
+
+    // Outside a generator (a plain method/function or top-level sloppy code) and
+    // inside a nested ordinary function, `yield` is a legal binding name; a
+    // `yield` expression inside the generator body is still fine.
+    for source in [
+        "({ m(yield) {} })",
+        "function f(yield) {}",
+        "let yield = 1;",
+        "function* g() { function h() { var yield; } }",
+        "({ *m() { yield 1; } })",
+    ] {
+        parse_script(source).unwrap_or_else(|error| panic!("{source} should parse: {error:?}"));
+    }
+}
+
+#[test]
 fn requires_semicolon_or_asi_between_statements() {
     let error = parse_script("var str = '''';").expect_err("adjacent strings need a separator");
     assert_eq!(error.message, "expected `;` or newline after statement");
