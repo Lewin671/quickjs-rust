@@ -59,6 +59,19 @@ impl Parser {
             TokenKind::New => return self.new_expression(token.span.start),
             _ => return self.postfix(),
         };
+        if op == UnaryOp::Typeof
+            && matches!(self.peek_nth(1), Some(next) if matches!(&next.kind, TokenKind::Identifier(name) if name == "import") && !next.had_escape)
+            && !matches!(
+                self.peek_nth(2).map(|next| &next.kind),
+                Some(TokenKind::LeftParen | TokenKind::Dot)
+            )
+        {
+            let import_token = self.peek_nth(1).expect("checked import token").clone();
+            return Err(ParseError {
+                message: "`import` must be followed by `(` or `.` after `typeof`".to_owned(),
+                span: import_token.span,
+            });
+        }
         self.advance();
         let argument = self.unary()?;
         if op == UnaryOp::Delete {
@@ -190,10 +203,18 @@ impl Parser {
                 span: Span::new(start, property.span.end),
             });
         }
+        let callee_parenthesized = self.at(&TokenKind::LeftParen);
         let callee = self.member_chain()?;
         // `import(...)` is a CallExpression and `import.meta` a meta-property;
-        // neither is a valid constructor for `new` (no-new-call-expression).
-        if matches!(callee, Expr::ImportCall { .. } | Expr::ImportMeta { .. }) {
+        // a direct `new import(...)` is a syntax error, while `new
+        // (import(...))` is a covered expression and reaches runtime.
+        if matches!(callee, Expr::ImportCall { .. }) && !callee_parenthesized {
+            return Err(ParseError {
+                message: "`import` is not a valid `new` operand".to_owned(),
+                span: callee.span(),
+            });
+        }
+        if matches!(callee, Expr::ImportMeta { .. }) {
             return Err(ParseError {
                 message: "`import` is not a valid `new` operand".to_owned(),
                 span: callee.span(),

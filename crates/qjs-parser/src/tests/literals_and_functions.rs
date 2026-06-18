@@ -276,6 +276,17 @@ fn parses_new_expression() {
 }
 
 #[test]
+fn parses_parenthesized_dynamic_import_as_new_operand() {
+    parse_script("new (import('module'));").expect("covered import call can be a new operand");
+    parse_script("new (function() {}, import('module'));")
+        .expect("covered sequence ending in import call can be a new operand");
+    parse_script("new (import('module'), function C() {});")
+        .expect("covered sequence with constructable final expression parses");
+
+    assert!(parse_script("new import('module');").is_err());
+}
+
+#[test]
 fn parses_new_target_meta_property() {
     let script = parse_script("function C() { return new.target; }").expect("source should parse");
     let [Stmt::FunctionDecl { body, .. }] = script.body.as_slice() else {

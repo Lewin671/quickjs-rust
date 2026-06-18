@@ -251,6 +251,16 @@ fn parses_update_and_compound_assignment() {
 }
 
 #[test]
+fn rejects_bare_dynamic_import_keyword_in_expression_position() {
+    assert!(parse_script("typeof import;").is_err());
+    assert!(parse_script("function f() { return typeof import; }").is_err());
+    assert!(parse_script("let f = () => typeof import;").is_err());
+
+    parse_script("typeof import('specifier');")
+        .expect("dynamic import call remains valid after typeof");
+}
+
+#[test]
 fn rejects_invalid_assignment_target() {
     let error = parse_script("(1 + 2) = 3;").expect_err("assignment target should fail");
     assert_eq!(error.message, "invalid assignment target");
