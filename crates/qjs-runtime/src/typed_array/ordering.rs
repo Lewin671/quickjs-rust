@@ -159,26 +159,29 @@ pub(crate) fn native_typed_array_prototype_copy_within(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let (object, length) = validate_typed_array(&this_value)?;
-    let target = relative_index(
+    let (object, initial_length) = validate_typed_array_write(&this_value)?;
+    let target = relative_integer(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
-        length,
-        0,
+        0.0,
         env,
     )?;
-    let start = relative_index(
+    let start = relative_integer(
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
-        length,
-        0,
+        0.0,
         env,
     )?;
-    let end = relative_index(
-        argument_values.get(2).cloned().unwrap_or(Value::Undefined),
-        length,
-        length as i64,
-        env,
-    )?;
-    let count = end.saturating_sub(start).min(length.saturating_sub(target));
+    let end = match argument_values.get(2).cloned().unwrap_or(Value::Undefined) {
+        Value::Undefined => None,
+        value => Some(relative_integer(value, initial_length as f64, env)?),
+    };
+    let target = relative_index_from_integer(target, initial_length);
+    let start = relative_index_from_integer(start, initial_length);
+    let end = relative_index_from_integer(end.unwrap_or(initial_length as f64), initial_length);
+    let (_object, current_length) = validate_typed_array(&this_value)?;
+    let count = end
+        .saturating_sub(start)
+        .min(initial_length.saturating_sub(target))
+        .min(current_length.saturating_sub(target.max(start)));
     // Snapshot the source range to handle overlap correctly.
     let snapshot = read_view_elements(&object, start, count);
     set_view_elements(&object, target, snapshot);
@@ -550,19 +553,27 @@ fn relative_index(
     default: i64,
     env: &mut CallEnv,
 ) -> Result<usize, RuntimeError> {
-    let relative = match value {
-        Value::Undefined => default as f64,
+    let relative = relative_integer(value, default as f64, env)?;
+    Ok(relative_index_from_integer(relative, length))
+}
+
+fn relative_integer(value: Value, default: f64, env: &mut CallEnv) -> Result<f64, RuntimeError> {
+    Ok(match value {
+        Value::Undefined => default,
         other => {
             let number = to_number_with_env(other, env)?;
             if number.is_nan() { 0.0 } else { number.trunc() }
         }
-    };
+    })
+}
+
+fn relative_index_from_integer(relative: f64, length: usize) -> usize {
     let resolved = if relative < 0.0 {
         (length as f64 + relative).max(0.0)
     } else {
         relative.min(length as f64)
     };
-    Ok(resolved as usize)
+    resolved as usize
 }
 
 fn range_error(message: &str) -> RuntimeError {

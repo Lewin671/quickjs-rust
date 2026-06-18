@@ -179,6 +179,93 @@ fn copy_within_handles_overlap() {
 }
 
 #[test]
+fn copy_within_rejects_immutable_buffer_before_arguments() {
+    assert_eq!(
+        eval(
+            "let calls = ''; \
+             let target = new Uint8Array(new ArrayBuffer(4).transferToImmutable()); \
+             let to = { valueOf() { calls += 'target'; return 1; } }; \
+             let from = { valueOf() { calls += 'start'; return 2; } }; \
+             let end = { valueOf() { calls += 'end'; return 3; } }; \
+             try { target.copyWithin(to, from, end); } \
+             catch (e) { calls + ':' + (e instanceof TypeError) + ':' + target.join(','); }"
+        ),
+        Ok(Value::String(":true:0,0,0,0".to_owned()))
+    );
+}
+
+#[test]
+fn copy_within_revalidates_after_argument_coercion() {
+    assert_eq!(
+        eval(
+            "let target = new Uint8Array([1, 2, 3, 4]); \
+             let start = { valueOf() { __quickjsRustDetachArrayBuffer(target.buffer); return 1; } }; \
+             try { target.copyWithin(0, start, 3); false; } catch (e) { e instanceof TypeError; }"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let target = new Uint8Array([1, 2, 3, 4]); \
+             let end = { valueOf() { __quickjsRustDetachArrayBuffer(target.buffer); return 3; } }; \
+             try { target.copyWithin(0, 1, end); false; } catch (e) { e instanceof TypeError; }"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
+fn copy_within_recomputes_resizable_view_length_after_coercion() {
+    assert_eq!(
+        eval(
+            "let buffer = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let fixed = new Uint8Array(buffer, 0, 4); \
+             fixed.set([0, 1, 2, 3]); \
+             let target = { valueOf() { buffer.resize(2); return 1; } }; \
+             try { fixed.copyWithin(target, 0); false; } catch (e) { e instanceof TypeError; }"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let buffer = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let tracking = new Uint8Array(buffer); \
+             tracking.set([0, 1, 2, 3]); \
+             let start = { valueOf() { buffer.resize(3); return 2; } }; \
+             tracking.copyWithin(0, start); \
+             tracking.join(',');"
+        ),
+        Ok(Value::String("2,1,2".to_owned()))
+    );
+}
+
+#[test]
+fn copy_within_does_not_extend_copy_range_after_grow() {
+    assert_eq!(
+        eval(
+            "let buffer = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let tracking = new Uint8Array(buffer); \
+             tracking.set([0, 1, 2, 3]); \
+             let target = { valueOf() { buffer.resize(6); tracking[4] = 4; tracking[5] = 5; return 0; } }; \
+             tracking.copyWithin(target, 2); \
+             tracking.join(',');"
+        ),
+        Ok(Value::String("2,3,2,3,4,5".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let buffer = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let tracking = new Uint8Array(buffer); \
+             tracking.set([0, 1, 2, 3]); \
+             let start = { valueOf() { buffer.resize(6); tracking[4] = 4; tracking[5] = 5; return 0; } }; \
+             tracking.copyWithin(2, start); \
+             tracking.join(',');"
+        ),
+        Ok(Value::String("0,1,0,1,4,5".to_owned()))
+    );
+}
+
+#[test]
 fn reverse_in_place_and_to_reversed_copies() {
     assert_eq!(
         eval(
