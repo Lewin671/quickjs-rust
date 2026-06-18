@@ -117,6 +117,39 @@ fn rejects_var_hoisted_from_nested_block_conflicting_with_lexical() {
 }
 
 #[test]
+fn rejects_block_level_function_conflicting_with_var() {
+    // Inside a block, a plain function declaration is a LexicallyDeclaredName,
+    // so it conflicts with a same-named `var` (including a `var` hoisted from a
+    // nested block). Annex B's function-as-var relaxation does not apply here.
+    for source in [
+        "{ var f; function f() {} }",
+        "{ function f() {} var f; }",
+        "{ { var f; } function f() {} }",
+        "function g() { { function f() {} var f; } }",
+    ] {
+        let error = parse_script(source).expect_err("block function vs var must conflict");
+        assert!(
+            error
+                .message
+                .contains("conflicts with a lexical declaration"),
+            "source: {source}, got: {}",
+            error.message
+        );
+    }
+
+    // Annex B keeps `var` + plain function legal at a function/script top level,
+    // and two plain functions may share a name in any sloppy block.
+    for source in [
+        "var f; function f() {}",
+        "function f() {} var f;",
+        "function g() { var f; function f() {} }",
+        "{ function f() {} function f() {} }",
+    ] {
+        parse_script(source).unwrap_or_else(|error| panic!("{source} should parse: {error:?}"));
+    }
+}
+
+#[test]
 fn rejects_yield_as_binding_identifier_inside_generator() {
     // `yield` is reserved inside a generator (parameters and body), so it may
     // not name a binding there even in sloppy code.

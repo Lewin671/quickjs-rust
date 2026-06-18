@@ -44,7 +44,7 @@ impl Parser {
                 }
             }
         }
-        validate_statement_list_declarations(&body)?;
+        validate_statement_list_declarations(&body, false)?;
         validate_statement_list_labels(&body)?;
         // Any private-name reference that never resolved to an enclosing class
         // is a syntax error.
@@ -293,7 +293,7 @@ impl Parser {
         while !self.at(&TokenKind::RightBrace) && !self.at(&TokenKind::Eof) {
             body.push(self.statement_list_item()?);
         }
-        validate_statement_list_declarations(&body)?;
+        validate_statement_list_declarations(&body, true)?;
         let end = self
             .peek()
             .expect("parser should always have eof token")
@@ -315,7 +315,7 @@ impl Parser {
             while !parser.at(&TokenKind::RightBrace) && !parser.at(&TokenKind::Eof) {
                 body.push(parser.statement_list_item()?);
             }
-            validate_statement_list_declarations(&body)?;
+            validate_statement_list_declarations(&body, false)?;
             validate_statement_list_labels(&body)?;
             parser.expect(&TokenKind::RightBrace).map(|()| body)
         })(self);
@@ -331,7 +331,7 @@ impl Parser {
         while !self.at(&TokenKind::RightBrace) && !self.at(&TokenKind::Eof) {
             body.push(self.statement_list_item()?);
         }
-        validate_statement_list_declarations(&body)?;
+        validate_statement_list_declarations(&body, true)?;
         self.expect(&TokenKind::RightBrace)?;
         Ok(body)
     }
@@ -366,9 +366,14 @@ impl Parser {
     }
 }
 
-fn validate_statement_list_declarations(body: &[Stmt]) -> Result<(), ParseError> {
+fn validate_statement_list_declarations(body: &[Stmt], is_block: bool) -> Result<(), ParseError> {
     let mut lexical_names: Vec<(String, Span)> = Vec::new();
     let mut var_names: Vec<(String, Span)> = Vec::new();
+    // Plain (non-async, non-generator) function declarations are tracked apart
+    // from `lexical_names`: two of them may share a name (Annex B sloppy
+    // semantics), but each still conflicts with a same-named lexical binding,
+    // and inside a block also with a same-named `var`.
+    let mut block_function_names: Vec<(String, Span)> = Vec::new();
     for stmt in body {
         match stmt {
             Stmt::VarDecl {
@@ -391,7 +396,7 @@ fn validate_statement_list_declarations(body: &[Stmt]) -> Result<(), ParseError>
                 if *is_generator || *is_async {
                     lexical_names.push((name.clone(), *span));
                 } else {
-                    var_names.push((name.clone(), *span));
+                    block_function_names.push((name.clone(), *span));
                 }
             }
             _ => {}
@@ -425,6 +430,24 @@ fn validate_statement_list_declarations(body: &[Stmt]) -> Result<(), ParseError>
                     span: *span,
                 });
             }
+        }
+    }
+
+    // A plain function declaration is a LexicallyDeclaredName, so it clashes with
+    // a same-named lexical binding (`let`/`const`/`class`/async/generator
+    // function) regardless of scope, and — inside a block, where Annex B's
+    // function-as-var relaxation does not apply — also with a same-named `var`.
+    for (function_name, span) in &block_function_names {
+        let conflicts_with_lexical = lexical_names.iter().any(|(name, _)| name == function_name);
+        let conflicts_with_var =
+            is_block && var_names.iter().any(|(name, _)| name == function_name);
+        if conflicts_with_lexical || conflicts_with_var {
+            return Err(ParseError {
+                message: format!(
+                    "declaration `{function_name}` conflicts with a lexical declaration"
+                ),
+                span: *span,
+            });
         }
     }
 
