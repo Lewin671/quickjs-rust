@@ -456,6 +456,10 @@ test/built-ins/TypedArray/prototype/toLocaleString/return-abrupt-from-nextelemen
 test/built-ins/TypedArray/prototype/toLocaleString/return-abrupt-from-nextelement-valueof.js
 test/built-ins/TypedArray/prototype/toLocaleString/user-provided-tolocalestring-shrink.js
 test/built-ins/TypedArray/prototype/toString.js
+test/built-ins/TypedArray/prototype/with/index-validated-against-current-length.js
+test/built-ins/TypedArray/prototype/with/negative-index-resize-to-out-of-bounds.js
+test/built-ins/TypedArray/prototype/with/valid-typedarray-index-checked-after-coercions.js
+test/built-ins/TypedArray/prototype/with/value-throw-completion.js
 cases/array-at-array-like.js
 cases/array-at-basic.js
 cases/array-at-length.js

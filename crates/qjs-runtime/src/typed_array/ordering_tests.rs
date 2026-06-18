@@ -321,6 +321,50 @@ fn to_sorted_copies_and_with_replaces() {
 }
 
 #[test]
+fn with_coerces_value_before_validating_current_index() {
+    assert_eq!(
+        eval(
+            "function MyError() {} \
+             let value = { valueOf() { throw new MyError(); } }; \
+             try { new Uint8Array(1).with(100, value); false; } \
+             catch (e) { e instanceof MyError; }"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let rab = new ArrayBuffer(2, { maxByteLength: 5 }); \
+             let ta = new Int8Array(rab); \
+             ta[0] = 11; ta[1] = 22; \
+             let value = { valueOf() { rab.resize(5); return 123; } }; \
+             let result = ta.with(4, value); \
+             ta.length + ':' + result.length + ':' + result.join(',');"
+        ),
+        Ok(Value::String("5:2:11,22".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let rab = new ArrayBuffer(0, { maxByteLength: 1 }); \
+             let ta = new Uint8Array(rab); \
+             let value = { valueOf() { rab.resize(1); return 0; } }; \
+             let result = ta.with(0, value); \
+             result.length + ':' + rab.byteLength;"
+        ),
+        Ok(Value::String("0:1".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "let rab = new ArrayBuffer(4, { maxByteLength: 4 }); \
+             let ta = new Uint8Array(rab); \
+             let value = { valueOf() { rab.resize(1); return 123; } }; \
+             try { ta.with(-1, value); false; } \
+             catch (e) { (e instanceof RangeError) + ':' + rab.byteLength; }"
+        ),
+        Ok(Value::String("true:1".to_owned()))
+    );
+}
+
+#[test]
 fn bigint_fill_rejects_number() {
     assert!(eval("new BigInt64Array(2).fill(5);").is_err());
     assert_eq!(

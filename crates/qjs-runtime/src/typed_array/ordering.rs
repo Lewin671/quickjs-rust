@@ -16,7 +16,7 @@ use crate::{
     call_function, object_prototype, property_value, to_number_with_env,
 };
 
-use super::element::{read_view_elements, set_view_elements};
+use super::element::{get_view_element, read_view_elements, set_view_elements};
 use super::{
     MAX_TYPED_ARRAY_LENGTH, coerce_element, construct, is_big_int_kind, is_typed_array_object,
     typed_array_is_out_of_bounds, typed_array_kind, typed_array_length, validate_typed_array,
@@ -364,19 +364,30 @@ pub(crate) fn native_typed_array_prototype_with(
     } else {
         relative
     };
-    if actual < 0.0 || actual >= length as f64 {
-        return Err(range_error("invalid index"));
-    }
-    let actual = actual as usize;
     // Coerce the replacement value up front so type errors surface before the
-    // copy (BigInt arrays reject Number values, and vice versa).
+    // current-index validation (BigInt arrays reject Number values, and vice
+    // versa).
     let replacement = coerce_element(
         native,
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    let mut values: Vec<Value> = read_view_elements(&object, 0, length);
-    values[actual] = replacement;
+    if actual < 0.0 {
+        return Err(range_error("invalid index"));
+    }
+    let actual = actual as usize;
+    if actual >= typed_array_length(&object) || typed_array_is_out_of_bounds(&object) {
+        return Err(range_error("invalid index"));
+    }
+    let mut values = Vec::with_capacity(length);
+    for index in 0..length {
+        let value = if index == actual {
+            replacement.clone()
+        } else {
+            coerce_element(native, get_view_element(&object, index), env)?
+        };
+        values.push(value);
+    }
     Ok(Value::Object(super::create_typed_array_of_kind(
         native, values, env,
     )))
