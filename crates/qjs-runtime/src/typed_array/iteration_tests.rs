@@ -472,6 +472,28 @@ fn slice_rechecks_source_after_species_constructor() {
         ),
         Ok(Value::String("1:0".to_owned()))
     );
+    assert_eq!(
+        eval(
+            "let rab = new ArrayBuffer(4, { maxByteLength: 4 }); \
+             let fixed = new Uint8Array(rab, 0, 4); \
+             let resizeWhenConstructorCalled = false; \
+             class MyArray extends Uint8Array { \
+                 constructor(...args) { \
+                     super(...args); \
+                     if (resizeWhenConstructorCalled) { rab.resize(2); } \
+                 } \
+             } \
+             fixed.constructor = {}; \
+             fixed.constructor[Symbol.species] = MyArray; \
+             function throws(callback) { \
+                 try { callback(); return false; } \
+                 catch (error) { return error instanceof TypeError; } \
+             } \
+             resizeWhenConstructorCalled = true; \
+             throws(() => fixed.slice()) + ':' + rab.byteLength + ':' + fixed.length;"
+        ),
+        Ok(Value::String("true:2:0".to_owned()))
+    );
 }
 
 #[test]

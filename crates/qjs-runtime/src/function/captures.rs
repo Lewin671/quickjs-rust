@@ -53,10 +53,62 @@ pub(super) fn refresh_class_constructor_captures_from_caller(function: &Function
         .collect::<Vec<_>>();
     let mut captured = function.captured_env.borrow_mut();
     for name in names {
-        if let Some(value) = env.locals().get(&name).cloned() {
+        if let Some(value) = refreshed_class_capture_value(function, env, &name) {
             captured.insert(name, value);
         }
     }
+}
+
+fn refreshed_class_capture_value(function: &Function, env: &CallEnv, name: &str) -> Option<Value> {
+    env.locals()
+        .get(name)
+        .cloned()
+        .or_else(|| {
+            function
+                .capture_writeback
+                .as_ref()
+                .and_then(|writeback| capture_writeback_value(writeback, name))
+        })
+        .or_else(|| {
+            env.captured_binding_source_env()
+                .and_then(|source| source.borrow().get(name).cloned())
+        })
+}
+
+fn capture_writeback_value(
+    writeback: &crate::bytecode::CaptureWriteback,
+    name: &str,
+) -> Option<Value> {
+    {
+        let target = writeback.target.borrow();
+        if writeback.names.iter().any(|candidate| candidate == name)
+            && let Some(value) = target.get(name).cloned()
+        {
+            return Some(value);
+        }
+        for (source_name, target_name) in &writeback.aliases {
+            if source_name == name
+                && let Some(value) = target
+                    .get(source_name)
+                    .or_else(|| target.get(target_name))
+                    .cloned()
+            {
+                return Some(value);
+            }
+            if target_name == name
+                && let Some(value) = target
+                    .get(target_name)
+                    .or_else(|| target.get(source_name))
+                    .cloned()
+            {
+                return Some(value);
+            }
+        }
+    }
+    writeback
+        .parent
+        .as_deref()
+        .and_then(|parent| capture_writeback_value(parent, name))
 }
 
 pub(super) fn propagate_function_captures(
