@@ -419,6 +419,10 @@ test/built-ins/TypedArrayConstructors/ctors/length-arg/is-symbol-throws.js
 test/built-ins/TypedArray/prototype/copyWithin/coerced-target-start-end-shrink.js
 test/built-ins/TypedArray/prototype/copyWithin/coerced-target-start-grow.js
 test/built-ins/TypedArray/prototype/copyWithin/immutable-buffer.js
+test/built-ins/TypedArray/prototype/indexOf/BigInt/detached-buffer-during-fromIndex-returns-minus-one-for-zero.js
+test/built-ins/TypedArray/prototype/indexOf/coerced-searchelement-fromindex-grow.js
+test/built-ins/TypedArray/prototype/indexOf/coerced-searchelement-fromindex-shrink.js
+test/built-ins/TypedArray/prototype/indexOf/detached-buffer-during-fromIndex-returns-minus-one-for-zero.js
 test/built-ins/TypedArray/prototype/lastIndexOf/BigInt/detached-buffer-during-fromIndex-returns-minus-one-for-zero.js
 test/built-ins/TypedArray/prototype/lastIndexOf/BigInt/tointeger-fromindex.js
 test/built-ins/TypedArray/prototype/lastIndexOf/coerced-position-grow.js

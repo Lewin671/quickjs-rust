@@ -45,6 +45,60 @@ fn at_and_includes_and_index_of() {
 }
 
 #[test]
+fn index_of_coerces_from_index_and_rechecks_view_length() {
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([0]); \
+             a.indexOf(0, { valueOf() { __quickjsRustDetachArrayBuffer(a.buffer); return 0; } });"
+        ),
+        Ok(Value::Number(-1.0))
+    );
+    assert_eq!(
+        eval(
+            "let a = new BigInt64Array([0n]); \
+             a.indexOf(0n, { valueOf() { __quickjsRustDetachArrayBuffer(a.buffer); return 0; } });"
+        ),
+        Ok(Value::Number(-1.0))
+    );
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let a = new Uint8Array(b, 0, 4); \
+             a[0] = 0; a[1] = 1; a[2] = 2; a[3] = 3; \
+             a.indexOf(0, { valueOf() { b.resize(2); return 0; } });"
+        ),
+        Ok(Value::Number(-1.0))
+    );
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let a = new Uint8Array(b); \
+             a[0] = 0; a[1] = 1; a[2] = 2; a[3] = 3; \
+             a.indexOf(2, { valueOf() { b.resize(2); return 0; } });"
+        ),
+        Ok(Value::Number(-1.0))
+    );
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let a = new Uint8Array(b); \
+             a[0] = 1; a[1] = 1; a[2] = 1; a[3] = 1; \
+             a.indexOf(0, { valueOf() { b.resize(6); return 0; } });"
+        ),
+        Ok(Value::Number(-1.0))
+    );
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let a = new Uint8Array(b); \
+             a[0] = 1; \
+             a.indexOf(1, { valueOf() { b.resize(6); return -4; } });"
+        ),
+        Ok(Value::Number(0.0))
+    );
+}
+
+#[test]
 fn last_index_of_coerces_from_index_and_rechecks_view_length() {
     assert_eq!(
         eval("let a = new Uint8Array([42, 43]); a.lastIndexOf(43, undefined);"),

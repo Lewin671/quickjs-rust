@@ -118,20 +118,26 @@ pub(crate) fn native_typed_array_prototype_index_of(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let (object, length) = validate_typed_array(&this_value)?;
-    if length == 0 {
+    let (object, original_length) = validate_typed_array(&this_value)?;
+    if original_length == 0 {
         return Ok(Value::Number(-1.0));
     }
     let search = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let start = search_start_index(
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
-        length,
+        original_length,
         env,
     )?;
-    let scanned = read_view_elements(&object, start, length - start);
-    for (offset, value) in scanned.iter().enumerate() {
-        if strict_same(value, &search) {
-            return Ok(Value::Number((start + offset) as f64));
+    if typed_array_buffer_detached(&object) || typed_array_is_out_of_bounds(&object) {
+        return Ok(Value::Number(-1.0));
+    }
+    let length = typed_array_length(&object).min(original_length);
+    if start >= length {
+        return Ok(Value::Number(-1.0));
+    }
+    for index in start..length {
+        if strict_same(&get_view_element(&object, index), &search) {
+            return Ok(Value::Number(index as f64));
         }
     }
     Ok(Value::Number(-1.0))
