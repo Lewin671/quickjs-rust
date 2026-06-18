@@ -724,6 +724,41 @@ fn assignments_respect_lexical_tdz() {
 }
 
 #[test]
+fn nested_destructuring_assignments_capture_later_script_lexicals_tdz() {
+    assert_eq!(
+        eval(
+            "var result = '';
+             try { (function() { 0, [x] = []; })(); result = 'no throw'; }
+             catch (error) { result = error instanceof ReferenceError ? 'reference' : error.name; }
+             let x;
+             result;"
+        ),
+        Ok(Value::String("reference".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var x;
+             var result = '';
+             try { (function() { 0, [x = y] = []; })(); result = 'no throw'; }
+             catch (error) { result = error instanceof ReferenceError ? 'reference' : error.name; }
+             let y;
+             result;"
+        ),
+        Ok(Value::String("reference".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var result = '';
+             try { (function() { 0, [...x] = []; })(); result = 'no throw'; }
+             catch (error) { result = error instanceof ReferenceError ? 'reference' : error.name; }
+             let x;
+             result;"
+        ),
+        Ok(Value::String("reference".to_owned()))
+    );
+}
+
+#[test]
 fn typeof_respects_lexical_tdz() {
     assert_eq!(
         eval(

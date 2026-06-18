@@ -462,6 +462,15 @@ impl Vm<'_> {
 
     pub(super) fn load_local(&self, slot: usize) -> Result<Value, RuntimeError> {
         match self.locals.get(slot) {
+            Some(Some(Value::Function(function))) if function.is_uninitialized_lexical_marker() => {
+                Err(RuntimeError {
+                    thrown: None,
+                    message: format!(
+                        "ReferenceError: undefined identifier `{}`",
+                        self.bytecode.locals[slot].name
+                    ),
+                })
+            }
             Some(Some(value)) => Ok(value.clone()),
             Some(None) => Err(RuntimeError {
                 thrown: None,
@@ -532,6 +541,15 @@ impl Vm<'_> {
 
     pub(super) fn assign_local(&mut self, slot: usize, value: Value) -> Result<(), RuntimeError> {
         match self.locals.get(slot) {
+            Some(Some(Value::Function(function))) if function.is_uninitialized_lexical_marker() => {
+                Err(RuntimeError {
+                    thrown: None,
+                    message: format!(
+                        "ReferenceError: undefined identifier `{}`",
+                        self.bytecode.locals[slot].name
+                    ),
+                })
+            }
             Some(Some(_)) => self.store_local(slot, value),
             Some(None) => Err(RuntimeError {
                 thrown: None,

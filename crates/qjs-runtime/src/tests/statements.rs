@@ -808,6 +808,83 @@ fn for_of_lexical_head_capture_scope_does_not_leak_after_loop() {
 }
 
 #[test]
+fn nested_for_of_destructuring_assignments_capture_later_script_lexicals_tdz() {
+    assert_eq!(
+        eval(
+            "var result = '';
+             try { (function() { for ([x] of [[]]) { result = 'body'; } result = 'after'; })(); }
+             catch (error) { result = error instanceof ReferenceError ? 'reference' : error.name; }
+             let x;
+             result;"
+        ),
+        Ok(Value::String("reference".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var x;
+             var result = '';
+             try { (function() { for ([x = y] of [[]]) { result = 'body'; } result = 'after'; })(); }
+             catch (error) { result = error instanceof ReferenceError ? 'reference' : error.name; }
+             let y;
+             result;"
+        ),
+        Ok(Value::String("reference".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var result = '';
+             try { (function() { for ([...x] of [[]]) { result = 'body'; } result = 'after'; })(); }
+             catch (error) { result = error instanceof ReferenceError ? 'reference' : error.name; }
+             let x;
+             result;"
+        ),
+        Ok(Value::String("reference".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var result = '';
+             try { (function() { for ({x} of [{}]) { result = 'body'; } result = 'after'; })(); }
+             catch (error) { result = error instanceof ReferenceError ? 'reference' : error.name; }
+             let x;
+             result;"
+        ),
+        Ok(Value::String("reference".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var x;
+             var result = '';
+             try { (function() { for ({x = y} of [{}]) { result = 'body'; } result = 'after'; })(); }
+             catch (error) { result = error instanceof ReferenceError ? 'reference' : error.name; }
+             let y;
+             result;"
+        ),
+        Ok(Value::String("reference".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var result = '';
+             try { (function() { for ({a: x} of [{}]) { result = 'body'; } result = 'after'; })(); }
+             catch (error) { result = error instanceof ReferenceError ? 'reference' : error.name; }
+             let x;
+             result;"
+        ),
+        Ok(Value::String("reference".to_owned()))
+    );
+    assert_eq!(
+        eval(
+            "var x;
+             var result = '';
+             try { (function() { for ({a: x = y} of [{}]) { result = 'body'; } result = 'after'; })(); }
+             catch (error) { result = error instanceof ReferenceError ? 'reference' : error.name; }
+             let y;
+             result;"
+        ),
+        Ok(Value::String("reference".to_owned()))
+    );
+}
+
+#[test]
 fn for_of_closes_iterator_on_abrupt_exits() {
     let source_prefix = "
         function makeIterable(log) {
