@@ -10,6 +10,7 @@ use crate::{
 use super::{
     bytes_per_element, clamp_uint8, is_big_int_kind, modulo_integer, signed_integer,
     typed_array_byte_offset, typed_array_kind, typed_array_length,
+    typed_array_length_for_buffer_byte_length,
 };
 
 /// Coerces an arbitrary value to the canonical element value for `native`,
@@ -383,13 +384,14 @@ pub(crate) fn get_view_element(object: &ObjectRef, index: usize) -> Value {
     if array_buffer::is_detached(&buffer) {
         return Value::Undefined;
     }
-    if index >= typed_array_length(object) {
-        return Value::Undefined;
-    }
-    let bytes = array_buffer::buffer_bytes(&buffer);
     let element = bytes_per_element(native);
     let byte_index = typed_array_byte_offset(object) + index * element;
-    read_element(native, &bytes, byte_index)
+    array_buffer::with_buffer_bytes(&buffer, |bytes| {
+        if index >= typed_array_length_for_buffer_byte_length(object, bytes.len()) {
+            return Value::Undefined;
+        }
+        read_element(native, bytes, byte_index)
+    })
 }
 
 /// Reads `count` elements of a branded typed-array view starting at `start`,
@@ -404,20 +406,21 @@ pub(crate) fn read_view_elements(object: &ObjectRef, start: usize, count: usize)
     let Some(buffer) = buffer else {
         return std::iter::repeat_n(zero_value(native), count).collect();
     };
-    let length = typed_array_length(object);
-    let bytes = array_buffer::buffer_bytes(&buffer);
     let element = bytes_per_element(native);
     let base = typed_array_byte_offset(object);
-    (0..count)
-        .map(|offset| {
-            let index = start + offset;
-            if index < length {
-                read_element(native, &bytes, base + index * element)
-            } else {
-                zero_value(native)
-            }
-        })
-        .collect()
+    array_buffer::with_buffer_bytes(&buffer, |bytes| {
+        let length = typed_array_length_for_buffer_byte_length(object, bytes.len());
+        (0..count)
+            .map(|offset| {
+                let index = start + offset;
+                if index < length {
+                    read_element(native, bytes, base + index * element)
+                } else {
+                    zero_value(native)
+                }
+            })
+            .collect()
+    })
 }
 
 /// Writes the already-coerced `values` into the contiguous element range

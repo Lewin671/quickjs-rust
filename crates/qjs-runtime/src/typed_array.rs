@@ -590,6 +590,19 @@ pub(crate) fn typed_array_kind(object: &ObjectRef) -> NativeFunction {
 }
 
 pub(crate) fn typed_array_length(object: &ObjectRef) -> usize {
+    let Some(buffer) = typed_array_buffer(object) else {
+        return typed_array_fixed_length(object).unwrap_or(0);
+    };
+    if array_buffer::is_detached(&buffer) {
+        return 0;
+    }
+    typed_array_length_for_buffer_byte_length(object, array_buffer::buffer_byte_length(&buffer))
+}
+
+pub(super) fn typed_array_length_for_buffer_byte_length(
+    object: &ObjectRef,
+    buffer_byte_length: usize,
+) -> usize {
     let fixed_length = match object.own_property(TYPED_ARRAY_LENGTH_PROPERTY) {
         Some(Property {
             value: Value::Number(length),
@@ -597,13 +610,6 @@ pub(crate) fn typed_array_length(object: &ObjectRef) -> usize {
         }) => length as usize,
         _ => return 0,
     };
-    let Some(buffer) = typed_array_buffer(object) else {
-        return fixed_length;
-    };
-    if array_buffer::is_detached(&buffer) {
-        return 0;
-    }
-    let buffer_byte_length = array_buffer::buffer_bytes(&buffer).len();
     let offset = typed_array_byte_offset(object);
     let element = bytes_per_element(typed_array_kind(object));
     if typed_array_is_length_tracking(object) {
@@ -625,6 +631,16 @@ pub(crate) fn typed_array_length(object: &ObjectRef) -> usize {
     }
 }
 
+fn typed_array_fixed_length(object: &ObjectRef) -> Option<usize> {
+    match object.own_property(TYPED_ARRAY_LENGTH_PROPERTY) {
+        Some(Property {
+            value: Value::Number(length),
+            ..
+        }) => Some(length as usize),
+        _ => None,
+    }
+}
+
 pub(crate) fn typed_array_is_length_tracking(object: &ObjectRef) -> bool {
     matches!(
         object.own_property(TYPED_ARRAY_LENGTH_TRACKING_PROPERTY),
@@ -642,8 +658,9 @@ pub(crate) fn typed_array_is_out_of_bounds(object: &ObjectRef) -> bool {
     if array_buffer::is_detached(&buffer) {
         return false;
     }
+    let buffer_byte_length = array_buffer::buffer_byte_length(&buffer);
     if typed_array_is_length_tracking(object) {
-        typed_array_byte_offset(object) > array_buffer::buffer_bytes(&buffer).len()
+        typed_array_byte_offset(object) > buffer_byte_length
     } else {
         let fixed_length = match object.own_property(TYPED_ARRAY_LENGTH_PROPERTY) {
             Some(Property {
@@ -657,7 +674,7 @@ pub(crate) fn typed_array_is_out_of_bounds(object: &ObjectRef) -> bool {
         byte_length.is_none_or(|byte_length| {
             typed_array_byte_offset(object)
                 .checked_add(byte_length)
-                .is_none_or(|end| end > array_buffer::buffer_bytes(&buffer).len())
+                .is_none_or(|end| end > buffer_byte_length)
         })
     }
 }

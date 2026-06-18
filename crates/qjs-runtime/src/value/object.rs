@@ -245,6 +245,11 @@ impl ObjectRef {
         self.internal_bytes.borrow().clone()
     }
 
+    pub(crate) fn with_internal_bytes<T>(&self, f: impl FnOnce(Option<&[u8]>) -> T) -> T {
+        let bytes = self.internal_bytes.borrow();
+        f(bytes.as_deref())
+    }
+
     pub(crate) fn set_internal_bytes(&self, bytes: Vec<u8>) {
         *self.internal_bytes.borrow_mut() = Some(bytes);
     }

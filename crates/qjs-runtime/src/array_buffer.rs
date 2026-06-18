@@ -637,12 +637,27 @@ pub(crate) fn array_buffer_bytes(object: &ObjectRef) -> Vec<u8> {
     }
 }
 
+/// Borrows the backing bytes of a non-detached `ArrayBuffer` for the duration
+/// of `f`. New buffers use `ObjectRef`'s internal byte slot; the string fallback
+/// only exists for older objects built before that slot was introduced.
+pub(crate) fn with_array_buffer_bytes<T>(object: &ObjectRef, f: impl FnOnce(&[u8]) -> T) -> T {
+    object.with_internal_bytes(|bytes| match bytes {
+        Some(bytes) => f(bytes),
+        None => {
+            let bytes = match object.own_property(ARRAY_BUFFER_DATA_PROPERTY) {
+                Some(Property {
+                    value: Value::String(data),
+                    ..
+                }) => string_to_bytes(&data),
+                _ => Vec::new(),
+            };
+            f(&bytes)
+        }
+    })
+}
+
 pub(crate) fn buffer_byte_length(object: &ObjectRef) -> usize {
-    if is_shared_array_buffer_object(object) {
-        shared_array_buffer_bytes(object).len()
-    } else {
-        array_buffer_bytes(object).len()
-    }
+    with_buffer_bytes(object, <[u8]>::len)
 }
 
 pub(crate) fn buffer_bytes(object: &ObjectRef) -> Vec<u8> {
@@ -650,6 +665,20 @@ pub(crate) fn buffer_bytes(object: &ObjectRef) -> Vec<u8> {
         shared_array_buffer_bytes(object)
     } else {
         array_buffer_bytes(object)
+    }
+}
+
+pub(crate) fn with_buffer_bytes<T>(object: &ObjectRef, f: impl FnOnce(&[u8]) -> T) -> T {
+    if is_shared_array_buffer_object(object) {
+        object.with_internal_bytes(|bytes| match bytes {
+            Some(bytes) => f(bytes),
+            None => {
+                let bytes = shared_array_buffer_bytes(object);
+                f(&bytes)
+            }
+        })
+    } else {
+        with_array_buffer_bytes(object, f)
     }
 }
 

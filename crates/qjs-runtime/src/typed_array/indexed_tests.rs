@@ -142,6 +142,25 @@ fn own_property_descriptor_uses_current_indexed_element_state() {
 }
 
 #[test]
+fn indexed_reads_use_current_resizable_buffer_bounds() {
+    assert_eq!(
+        eval(
+            "let b = new ArrayBuffer(4, { maxByteLength: 8 }); \
+             let fixed = new Uint8Array(b, 0, 4); \
+             let tracking = new Uint8Array(b, 1); \
+             fixed.set([10, 20, 30, 40]); \
+             b.resize(2); \
+             let shrunk = (fixed[0] === undefined) + ':' + (fixed[2] === undefined) + ':' \
+               + tracking.length + ':' + tracking[0] + ':' + (tracking[1] === undefined); \
+             b.resize(5); \
+             shrunk + '|' + fixed.length + ':' + fixed[2] + ':' \
+               + tracking.length + ':' + tracking[3];"
+        ),
+        Ok(Value::String("true:true:1:20:true|4:0:4:0".to_owned()))
+    );
+}
+
+#[test]
 fn define_own_property_uses_integer_indexed_semantics() {
     assert_eq!(
         eval(
