@@ -795,6 +795,40 @@ fn evaluates_arrow_functions_with_lexical_arguments() {
 }
 
 #[test]
+fn bound_function_construct_substitutes_new_target() {
+    // `new B()` where `B = A.bind()` constructs `A` with `new.target` set to
+    // `A` (the bound function is the new.target, so step 4 substitutes the
+    // target), including through chained binds.
+    assert_eq!(
+        eval("var nt; function A() { nt = new.target; } var B = A.bind(); new B(); nt === A;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "var nt; function A() { nt = new.target; } var C = A.bind().bind(); new C(); nt === A;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    // An explicit `new.target` via Reflect.construct is preserved, not replaced.
+    assert_eq!(
+        eval(
+            "var nt; function A() { nt = new.target; } var B = A.bind(); \
+             Reflect.construct(B, [], Object); nt === Object;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    // The instance's prototype comes from the target and bound arguments are
+    // still prepended.
+    assert_eq!(
+        eval(
+            "function A(x, y) { this.sum = x + y; } var B = A.bind(null, 10); \
+             var o = new B(5); o.sum + ':' + (o instanceof A);"
+        ),
+        Ok(Value::String("15:true".to_owned()))
+    );
+}
+
+#[test]
 fn evaluates_new_expressions() {
     assert_eq!(
         eval(

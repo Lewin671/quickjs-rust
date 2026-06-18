@@ -362,6 +362,26 @@ pub(crate) fn construct_function(
         ensure_constructor(&new_target)?;
         return crate::proxy::proxy_construct(proxy.clone(), new_target, argument_values, env);
     }
+    // A bound function's [[Construct]] prepends the bound arguments and forwards
+    // to its target. Per step 4, when the bound function is itself the
+    // `new.target` (`new B()` where `B = A.bind()`), `new.target` becomes the
+    // target so the constructed instance and `new.target` observe the target,
+    // not the bound wrapper. Reflect.construct with an explicit new.target keeps
+    // it. Unwrapping here (before the receiver is allocated from
+    // `new.target.prototype`) also handles chained binds.
+    if let Value::Function(function) = &target
+        && let Some(bound) = &function.bound
+    {
+        let real_target = bound.target.clone();
+        let mut combined_arguments = bound.arguments.clone();
+        combined_arguments.extend(argument_values);
+        let forwarded_new_target = if target.same_value(&new_target) {
+            real_target.clone()
+        } else {
+            new_target
+        };
+        return construct_function(real_target, forwarded_new_target, combined_arguments, env);
+    }
     ensure_constructor(&target)?;
     ensure_constructor(&new_target)?;
 
