@@ -424,6 +424,44 @@ fn await_using_block_registers_async_disposables() {
 }
 
 #[test]
+fn await_using_for_initializer_disposes_at_loop_exit() {
+    assert_eq!(
+        eval_log(
+            "let log = []; \
+             async function f() { \
+               let resource = { [Symbol.dispose]() { log.push('disposed'); } }; \
+               let during; \
+               for (await using x = resource; log.length < 1; log.push('update')) { \
+                 during = log.length; \
+               } \
+               log.push('during:' + during); \
+             } \
+             f(); log;"
+        ),
+        "update,disposed,during:0"
+    );
+}
+
+#[test]
+fn await_using_for_initializer_disposes_if_later_initializer_throws() {
+    assert_eq!(
+        eval_log(
+            "let log = []; \
+             async function f() { \
+               let resource = { [Symbol.dispose]() { log.push('disposed'); } }; \
+               try { \
+                 for (await using x = resource, y = (() => { throw new Error('boom'); })(); false;) {} \
+               } catch (error) { \
+                 log.push(error instanceof Error); \
+               } \
+             } \
+             f(); log;"
+        ),
+        "disposed,true"
+    );
+}
+
+#[test]
 fn using_disposal_errors_chain_with_suppressed_error() {
     // A dispose failure that overrides a body throw is wrapped in a
     // SuppressedError carrying both errors.

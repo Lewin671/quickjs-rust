@@ -184,7 +184,7 @@ impl Compiler {
         update: Option<&Expr>,
         body: &Stmt,
     ) -> Result<(), RuntimeError> {
-        if for_init_has_sync_using(init) {
+        if for_init_has_using(init) {
             return self.compile_for_with_disposal(init, test, update, body);
         }
         if let Some(init) = init {
@@ -1121,11 +1121,11 @@ impl Compiler {
     }
 }
 
-fn for_init_has_sync_using(init: Option<&ForInit>) -> bool {
+fn for_init_has_using(init: Option<&ForInit>) -> bool {
     matches!(
         init,
         Some(ForInit::VarDecl {
-            kind: VarKind::Using,
+            kind: VarKind::Using | VarKind::AwaitUsing,
             ..
         })
     )
