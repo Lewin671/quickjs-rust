@@ -247,11 +247,15 @@ fn import_with_string_export_name_and_alias_parses() {
 // --- script-mode regression guards -------------------------------------------
 
 #[test]
-fn script_mode_treats_import_as_identifier() {
-    // `import` is an ordinary identifier in script source; this is a comma
-    // expression statement, not a module item.
-    let script = parse_script("import, x;").expect("script source should parse");
-    assert!(matches!(script.body[0], Stmt::Expr(_)));
+fn import_is_a_reserved_word_in_expression_position() {
+    // `import` is a reserved word: outside the `import(...)` / `import.meta`
+    // forms it may not appear as an identifier reference (matching QuickJS-NG,
+    // which rejects `import, x`).
+    parse_script("import, x;").expect_err("`import` is not an ordinary identifier");
+    parse_script("import;").expect_err("`import` is not an ordinary identifier");
+    // The call and meta forms, and `import` as a property name, stay valid.
+    parse_script("import(\"x\");").expect("import() call parses");
+    parse_script("var o = { import: 1 }; o.import;").expect("`import` as a property name parses");
 }
 
 #[test]

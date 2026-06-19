@@ -38,6 +38,17 @@ impl Parser {
                         span: token.span,
                     });
                 }
+                // `import`/`export` are reserved words; the bare keyword forms
+                // (`import(...)`, `import.meta`, module `import`/`export`) are
+                // handled before reaching here, so an identifier spelled
+                // `import`/`export` only arrives via an escape sequence
+                // (`import`), which is an early error.
+                if name == "import" || name == "export" {
+                    return Err(ParseError {
+                        message: format!("`{name}` is a reserved word"),
+                        span: token.span,
+                    });
+                }
                 if (self.strict || self.in_generator) && name == "yield" {
                     return Err(ParseError {
                         message: "`yield` may not be used as an identifier here".to_owned(),
