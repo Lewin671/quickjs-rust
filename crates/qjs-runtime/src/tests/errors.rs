@@ -340,6 +340,22 @@ fn aggregate_error_evaluates_message_before_errors() {
 }
 
 #[test]
+fn suppressed_error_defines_message_before_error_properties() {
+    assert_eq!(
+        eval(
+            "let messageStringified = false; \
+             let message = { toString: function() { messageStringified = true; return ''; } }; \
+             let error = {}; \
+             let suppressed = {}; \
+             let e = new SuppressedError(error, suppressed, message); \
+             let keys = Object.getOwnPropertyNames(e); \
+             messageStringified + ':' + keys.indexOf('message') + ':' + keys.indexOf('error') + ':' + keys.indexOf('suppressed');"
+        ),
+        Ok(Value::String("true:0:1:2".to_owned().into()))
+    );
+}
+
+#[test]
 fn error_cause_property() {
     // Basic cause on Error
     assert_eq!(

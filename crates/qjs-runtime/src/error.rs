@@ -167,6 +167,19 @@ pub(crate) fn native_suppressed_error(
     };
     ensure_default_error_prototype(&object, function);
     define_error_data(&object);
+    if let Some(message) = argument_values.get(2) {
+        if !matches!(message, Value::Undefined) {
+            object.define_property(
+                "message".to_owned(),
+                Property::data(
+                    Value::String(to_js_string_with_env(message.clone(), env)?.into()),
+                    false,
+                    true,
+                    true,
+                ),
+            );
+        }
+    }
     object.define_property(
         "error".to_owned(),
         Property::data(
@@ -185,19 +198,6 @@ pub(crate) fn native_suppressed_error(
             true,
         ),
     );
-    if let Some(message) = argument_values.get(2) {
-        if !matches!(message, Value::Undefined) {
-            object.define_property(
-                "message".to_owned(),
-                Property::data(
-                    Value::String(to_js_string_with_env(message.clone(), env)?.into()),
-                    false,
-                    true,
-                    true,
-                ),
-            );
-        }
-    }
     Ok(Value::Object(object))
 }
 
