@@ -565,7 +565,12 @@ impl Parser {
                     );
                 }
                 if self.match_contextual_keyword("of") {
-                    reject_for_of_lhs_keyword(&left, "async")?;
+                    // The leading-`async` restriction is `for-of` only; `for
+                    // await (async of x)` is valid (the for-await grammar has no
+                    // such lookahead restriction).
+                    if is_await.is_none() {
+                        reject_for_of_lhs_keyword(&left, "async")?;
+                    }
                     return self.finish_for_in_of(
                         start,
                         ForInLeft::Target(left),
