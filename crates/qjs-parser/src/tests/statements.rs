@@ -400,6 +400,31 @@ fn parses_let_across_line_terminator_as_lexical_declaration_in_statement_lists()
 }
 
 #[test]
+fn validates_for_of_head_static_semantics() {
+    for source in [
+        // ForBinding bound names may not also be VarDeclaredNames of the body,
+        // including the `using`/`await using` declaration forms.
+        "for (using x of []) { var x; }",
+        "async function f() { for (await using x of []) { var x; } }",
+        // The for-of LeftHandSideExpression forbids a bare `let` and a leading
+        // `async` identifier.
+        "for (let of []) ;",
+        "for (async of [1]) ;",
+    ] {
+        parse_script(source).expect_err("for-of static semantics should reject source");
+    }
+
+    // The same forms stay valid where the restriction does not apply.
+    parse_script("for (using x of []) { var y; }").expect("non-conflicting using head is valid");
+    parse_script("for (let in [1]) ;").expect("`let` is a valid for-in target");
+    parse_script("for (async in [1]) ;").expect("`async` is a valid for-in target");
+    parse_script("var obj = {}; for (obj.x of [1]) ;").expect("member for-of target is valid");
+    parse_script("var async; for ((async) of [1]) ;")
+        .expect("parenthesized `async` for-of target is valid");
+    parse_script("for (let x of []) ;").expect("a `let` declaration head is valid");
+}
+
+#[test]
 fn parses_for_of_statement() {
     let script =
         parse_script("for (const value of values) { value; }").expect("source should parse");

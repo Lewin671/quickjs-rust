@@ -1,4 +1,7 @@
-use qjs_ast::{BindingPattern, CatchClause, ForInLeft, ForInit, Span, Stmt, SwitchCase, VarKind};
+use qjs_ast::{
+    AssignmentTarget, BindingPattern, CatchClause, ForInLeft, ForInit, Span, Stmt, SwitchCase,
+    VarKind,
+};
 use qjs_lexer::TokenKind;
 
 use crate::helpers::{stmt_end, var_kind};
@@ -539,6 +542,7 @@ impl Parser {
                         );
                     }
                     if self.match_contextual_keyword("of") {
+                        reject_for_of_lhs_keyword(&left, "let")?;
                         return self.finish_for_in_of(
                             start,
                             ForInLeft::Target(left),
@@ -561,6 +565,7 @@ impl Parser {
                     );
                 }
                 if self.match_contextual_keyword("of") {
+                    reject_for_of_lhs_keyword(&left, "async")?;
                     return self.finish_for_in_of(
                         start,
                         ForInLeft::Target(left),
@@ -899,9 +904,30 @@ impl Parser {
     }
 }
 
+/// Rejects a bare `let`/`async` identifier as the left-hand side of a `for-of`
+/// loop. The ForBinding grammar forbids `[lookahead = let]` and a leading
+/// `async`, so `for (let of x)` / `for (async of y)` are early errors — but the
+/// parenthesized (`for ((let) of x)`) and member (`for (let.p of x)`) forms stay
+/// valid, and `for-in` is unaffected.
+fn reject_for_of_lhs_keyword(left: &AssignmentTarget, keyword: &str) -> Result<(), ParseError> {
+    if let AssignmentTarget::Identifier {
+        name,
+        span,
+        parenthesized: false,
+    } = left
+        && name == keyword
+    {
+        return Err(ParseError {
+            message: format!("`{keyword}` is not allowed as the left-hand side of a `for-of` loop"),
+            span: *span,
+        });
+    }
+    Ok(())
+}
+
 fn validate_for_in_of_head(left: &ForInLeft, body: &Stmt) -> Result<(), ParseError> {
     let ForInLeft::VarDecl {
-        kind: VarKind::Let | VarKind::Const,
+        kind: VarKind::Let | VarKind::Const | VarKind::Using | VarKind::AwaitUsing,
         binding,
         ..
     } = left
