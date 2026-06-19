@@ -120,6 +120,15 @@ fn class_atom(class: &[char], index: usize, options: MatchOptions) -> Option<Cla
     {
         return Some(escape);
     }
+    if options.unicode
+        && class.get(index + 1) == Some(&'0')
+        && !class.get(index + 2).is_some_and(char::is_ascii_digit)
+    {
+        return Some(ClassAtom {
+            value: '\u{0000}',
+            next_index: index + 2,
+        });
+    }
     if !options.unicode
         && let Some(escape) = legacy_control_letter_escape(class, index)
     {

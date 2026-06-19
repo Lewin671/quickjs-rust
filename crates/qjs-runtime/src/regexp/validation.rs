@@ -208,14 +208,23 @@ fn validate_class_ranges(
     let mut index = start;
     while index < end {
         if pattern[index] == '\\' {
-            if unicode && matches!(pattern.get(index + 1), Some('p' | 'P')) {
-                index = validate_property_escape(pattern, index)?;
+            if unicode && let Some(set_end) = unicode_class_set_escape_end(pattern, index)? {
+                if pattern.get(set_end) == Some(&'-') && set_end + 1 < end {
+                    return Err(regexp_syntax_error("invalid regular expression pattern"));
+                }
+                index = set_end;
                 continue;
             }
             index = class_escape_end(pattern, index, unicode);
             continue;
         }
         if index + 2 < end && pattern[index + 1] == '-' {
+            if unicode
+                && pattern[index + 2] == '\\'
+                && unicode_class_set_escape_end(pattern, index + 2)?.is_some()
+            {
+                return Err(regexp_syntax_error("invalid regular expression pattern"));
+            }
             if pattern[index] > pattern[index + 2] {
                 return Err(regexp_syntax_error("invalid regular expression pattern"));
             }
@@ -225,6 +234,17 @@ fn validate_class_ranges(
         index += 1;
     }
     Ok(())
+}
+
+fn unicode_class_set_escape_end(
+    pattern: &[char],
+    start: usize,
+) -> Result<Option<usize>, RuntimeError> {
+    match pattern.get(start + 1) {
+        Some('d' | 'D' | 's' | 'S' | 'w' | 'W') => Ok(Some(start + 2)),
+        Some('p' | 'P') => validate_property_escape(pattern, start).map(Some),
+        _ => Ok(None),
+    }
 }
 
 /// Validate a `\p{...}` / `\P{...}` Unicode property escape (unicode mode).

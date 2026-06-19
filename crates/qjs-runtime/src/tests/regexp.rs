@@ -12,6 +12,9 @@ fn rejects_invalid_regexp_literal_at_parse_phase() {
         "throw 'unreached'; /\\2(a)/u;",
         "throw 'unreached'; /.(?<!.){2,3}/;",
         "throw 'unreached'; /a/biu;",
+        "throw 'unreached'; /[\\d-a]/u;",
+        "throw 'unreached'; /[%-\\d]/u;",
+        "throw 'unreached'; /[\\s-\\d]/u;",
     ] {
         let error = eval_classified(source).expect_err("invalid regexp literal must fail");
         // Invalid regexp literals are parse-phase errors (kind=parse), so the
@@ -1026,6 +1029,20 @@ fn null_character_escape_in_unicode_mode_matches_nul() {
         Ok(Value::Boolean(true))
     );
     assert_eq!(eval(r#"/\0/.test("0");"#), Ok(Value::Boolean(false)));
+}
+
+#[test]
+fn null_character_escape_in_unicode_character_class_matches_nul() {
+    // Character classes use the same `\0` CharacterEscape semantics under `u`.
+    assert_eq!(
+        eval(r#"/[\0]/u.test(String.fromCharCode(0));"#),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(eval(r#"/[\0]/u.test("0");"#), Ok(Value::Boolean(false)));
+    assert_eq!(
+        eval(r#"/[\0-\u0001]/u.test(String.fromCharCode(1));"#),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]
