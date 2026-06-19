@@ -27,30 +27,40 @@ fn validate_regexp_pattern(source: &str, unicode: bool) -> Result<(), RuntimeErr
     let capture_count = regexp_capture_count(&pattern);
     validate_named_group_definitions(&pattern)?;
     validate_named_group_references(&pattern, unicode)?;
-    let mut index = 0;
+    validate_pattern_range(&pattern, 0, pattern.len(), unicode, capture_count)
+}
+
+fn validate_pattern_range(
+    pattern: &[char],
+    start: usize,
+    end: usize,
+    unicode: bool,
+    capture_count: usize,
+) -> Result<(), RuntimeError> {
+    let mut index = start;
     let mut has_atom = false;
-    while index < pattern.len() {
+    while index < end {
         match pattern[index] {
             '\\' => {
-                if index + 1 >= pattern.len() {
+                if index + 1 >= end {
                     return Err(regexp_syntax_error("invalid regular expression pattern"));
                 }
                 if pattern[index + 1] == 'u' && pattern.get(index + 2) == Some(&'{') {
                     if unicode {
                         // In unicode mode `\u{ CodePoint }` must hold 1+ hex
                         // digits naming a value <= 0x10FFFF.
-                        index = validate_braced_unicode_escape(&pattern, index + 2)?;
+                        index = validate_braced_unicode_escape(pattern, index + 2)?;
                         has_atom = true;
                         continue;
                     }
-                    if let Some(end) = braced_escape_end(&pattern, index + 2) {
+                    if let Some(end) = braced_escape_end(pattern, index + 2) {
                         index = end + 1;
                         has_atom = true;
                         continue;
                     }
                 }
                 if unicode && matches!(pattern[index + 1], 'p' | 'P') {
-                    let end = validate_property_escape(&pattern, index)?;
+                    let end = validate_property_escape(pattern, index)?;
                     index = end;
                     has_atom = true;
                     continue;
@@ -63,7 +73,7 @@ fn validate_regexp_pattern(source: &str, unicode: bool) -> Result<(), RuntimeErr
                 {
                     return Err(regexp_syntax_error("invalid regular expression pattern"));
                 }
-                if unicode && !is_valid_unicode_escape(&pattern, index) {
+                if unicode && !is_valid_unicode_escape(pattern, index) {
                     // In unicode mode only specific escapes are legal; an
                     // arbitrary IdentityEscape (`\M`, `\a`, `\c0`) is rejected.
                     return Err(regexp_syntax_error("invalid regular expression pattern"));
@@ -72,10 +82,10 @@ fn validate_regexp_pattern(source: &str, unicode: bool) -> Result<(), RuntimeErr
                 has_atom = true;
             }
             '[' => {
-                let Some(end) = class_end(&pattern, index) else {
+                let Some(end) = class_end(pattern, index) else {
                     return Err(regexp_syntax_error("invalid regular expression pattern"));
                 };
-                validate_class_ranges(&pattern, index + 1, end, unicode)?;
+                validate_class_ranges(pattern, index + 1, end, unicode)?;
                 index = end + 1;
                 has_atom = true;
             }
@@ -83,14 +93,16 @@ fn validate_regexp_pattern(source: &str, unicode: bool) -> Result<(), RuntimeErr
                 return Err(regexp_syntax_error("invalid regular expression pattern"));
             }
             '(' => {
-                let Some(end) = group_end(&pattern, index) else {
+                let Some(end) = group_end(pattern, index) else {
                     return Err(regexp_syntax_error("invalid regular expression pattern"));
                 };
+                let body_start = group_body_start(pattern, index)?;
+                validate_pattern_range(pattern, body_start, end, unicode, capture_count)?;
                 // Lookbehind assertions are not `QuantifiableAssertion`s, so a
                 // quantifier immediately after `(?<=...)` / `(?<!...)` is a
                 // SyntaxError in both Annex-B and non-Annex-B modes.
-                if (is_lookbehind_group(&pattern, index)
-                    || (unicode && is_lookahead_group(&pattern, index)))
+                if (is_lookbehind_group(pattern, index)
+                    || (unicode && is_lookahead_group(pattern, index)))
                     && pattern
                         .get(end + 1)
                         .is_some_and(|next| matches!(next, '*' | '+' | '?' | '{'))
@@ -119,7 +131,7 @@ fn validate_regexp_pattern(source: &str, unicode: bool) -> Result<(), RuntimeErr
                 }
                 has_atom = false;
             }
-            '{' => match counted_quantifier_bounds(&pattern, index) {
+            '{' => match counted_quantifier_bounds(pattern, index) {
                 Some((min, Some(max), _)) if min > max => {
                     return Err(regexp_syntax_error("invalid regular expression pattern"));
                 }
@@ -152,6 +164,18 @@ fn validate_regexp_pattern(source: &str, unicode: bool) -> Result<(), RuntimeErr
         }
     }
     Ok(())
+}
+
+fn group_body_start(pattern: &[char], start: usize) -> Result<usize, RuntimeError> {
+    if pattern.get(start + 1) != Some(&'?') {
+        return Ok(start + 1);
+    }
+    match pattern.get(start + 2) {
+        Some(':') | Some('=') | Some('!') => Ok(start + 3),
+        Some('<') if matches!(pattern.get(start + 3), Some('=') | Some('!')) => Ok(start + 4),
+        Some('<') => validate_group_name(pattern, start + 3).map(|(body_start, _)| body_start),
+        _ => Ok(start + 1),
+    }
 }
 
 fn regexp_capture_count(pattern: &[char]) -> usize {

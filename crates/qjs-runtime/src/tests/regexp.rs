@@ -15,6 +15,7 @@ fn rejects_invalid_regexp_literal_at_parse_phase() {
         "throw 'unreached'; /[\\d-a]/u;",
         "throw 'unreached'; /[%-\\d]/u;",
         "throw 'unreached'; /[\\s-\\d]/u;",
+        "throw 'unreached'; /(?<a>\\a)/u;",
     ] {
         let error = eval_classified(source).expect_err("invalid regexp literal must fail");
         // Invalid regexp literals are parse-phase errors (kind=parse), so the
