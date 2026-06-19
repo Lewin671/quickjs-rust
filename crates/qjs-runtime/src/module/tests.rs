@@ -128,6 +128,34 @@ fn ambiguous_star_export_is_syntax_error() {
 }
 
 #[test]
+fn circular_indirect_reexport_is_syntax_error() {
+    // `a` re-exports `x` from `b`, `b` re-exports `x` from `a`, neither defines
+    // `x`: ResolveExport cycles with no binding, a SyntaxError at link time.
+    // The bare `import "a"` does not itself name `x`, so this exercises the
+    // module's own indirect-export validation rather than the import check.
+    let error = run(
+        "import \"a\";\nexport const v = 1;",
+        &[
+            ("a", "export { x } from \"b\";"),
+            ("b", "export { x } from \"a\";"),
+        ],
+    )
+    .expect_err("circular re-export rejected");
+    assert_eq!(error.kind, EvalErrorKind::Early);
+
+    // A valid indirect re-export still links and evaluates.
+    let namespace = run(
+        "import { x } from \"a\";\nexport const v = x;",
+        &[
+            ("a", "export { x } from \"b\";"),
+            ("b", "export const x = 5;"),
+        ],
+    )
+    .expect("valid re-export evaluates");
+    assert_eq!(export(&namespace, "v"), Value::Number(5.0));
+}
+
+#[test]
 fn namespace_object_shape() {
     let namespace = run(
         "export const b = 2;\nexport const a = 1;\nexport default 3;",

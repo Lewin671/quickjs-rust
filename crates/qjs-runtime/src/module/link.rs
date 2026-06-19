@@ -256,6 +256,24 @@ impl ModuleGraph {
                 )));
             }
         }
+        // ModuleDeclarationInstantiation calls ResolveExport on every exported
+        // name; an indirect re-export (`export { x } from './m'`) that resolves
+        // to nothing (a re-export cycle) or to two distinct bindings (ambiguous)
+        // is a SyntaxError. `resolve_export` already reports the ambiguous case;
+        // the cycle case surfaces here as an unresolved (`None`) result.
+        let indirect_export_names: Vec<String> = self.modules[key]
+            .record
+            .indirect_exports
+            .iter()
+            .map(|indirect| indirect.export_name.clone())
+            .collect();
+        for name in indirect_export_names {
+            if self.resolve_export(key, &name, &mut Vec::new())?.is_none() {
+                return Err(LinkError::syntax(format!(
+                    "SyntaxError: module '{key}' re-export '{name}' could not be resolved"
+                )));
+            }
+        }
         self.set_status(key, Status::Linked);
         Ok(())
     }
