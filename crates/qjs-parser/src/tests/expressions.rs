@@ -450,6 +450,42 @@ fn rejects_reserved_object_assignment_shorthand_targets() {
 }
 
 #[test]
+fn object_shorthand_identifier_reference_rules() {
+    // `let` is a contextual keyword: it is a valid shorthand IdentifierReference
+    // in sloppy mode, and still works as a property/method name.
+    parse_script("var let = 1; ({ let });").expect("`let` shorthand is valid in sloppy mode");
+    parse_script("({ let: 1 });").expect("`let` stays a valid property name");
+    parse_script("({ let() {} });").expect("`let` stays a valid method name");
+
+    // A shorthand reads a binding, so a strict-mode reserved word as a shorthand
+    // is an early SyntaxError (it would otherwise be a runtime ReferenceError).
+    for name in [
+        "implements",
+        "interface",
+        "package",
+        "private",
+        "protected",
+        "public",
+        "static",
+    ] {
+        assert!(
+            parse_script(&format!("'use strict'; ({{ {name} }});")).is_err(),
+            "strict-mode reserved `{name}` shorthand should be rejected"
+        );
+        // The same name stays valid as a sloppy shorthand and as a property name.
+        parse_script(&format!("var {name} = 1; ({{ {name} }});"))
+            .unwrap_or_else(|_| panic!("`{name}` shorthand is valid in sloppy mode"));
+        parse_script(&format!("({{ {name}: 1 }});"))
+            .unwrap_or_else(|_| panic!("`{name}` stays a valid property name"));
+    }
+    assert!(parse_script("'use strict'; ({ yield });").is_err());
+    assert!(parse_script("'use strict'; ({ let });").is_err());
+    assert!(parse_script("function* g() { ({ yield }); }").is_err());
+    // A hard keyword is never a shorthand.
+    assert!(parse_script("({ if });").is_err());
+}
+
+#[test]
 fn rejects_tagged_template_in_optional_chain() {
     // A tagged template in the tail of an optional chain is a SyntaxError.
     assert!(parse_script("a?.b`t`;").is_err());

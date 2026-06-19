@@ -4,7 +4,7 @@ mod declarations;
 mod functions;
 mod module;
 
-pub(crate) use functions::duplicate_parameter_span;
+pub(crate) use functions::{duplicate_parameter_span, is_strict_reserved_word};
 mod simple;
 
 use qjs_ast::{ForInLeft, ForInit, Script, Span, Stmt, VarKind};

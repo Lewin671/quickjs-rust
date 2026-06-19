@@ -541,6 +541,18 @@ impl Parser {
                 };
                 Ok((ObjectPropertyKey::Literal(name), Some(value)))
             }
+            TokenKind::Let => {
+                // `let` is a contextual keyword with a dedicated token. As an
+                // object shorthand it is an `IdentifierReference` (legal in
+                // sloppy mode, rejected in strict mode by the shorthand
+                // validator), while it stays a valid property/method name
+                // (`{ let: 1 }`, `{ let() {} }`) through its literal key.
+                let value = Expr::Identifier {
+                    name: "let".to_owned(),
+                    span: key_token.span,
+                };
+                Ok((ObjectPropertyKey::Literal("let".to_owned()), Some(value)))
+            }
             TokenKind::String(name) => Ok((ObjectPropertyKey::Literal(name), None)),
             TokenKind::Number(raw) => {
                 self.reject_strict_legacy_numeric_literal(&raw, key_token.span)?;
@@ -568,6 +580,44 @@ impl Parser {
                 }
             }
         }
+    }
+
+    /// Validates an object-literal shorthand `IdentifierReference` (`{ x }`).
+    /// A shorthand reads the binding `x`, so the name must be a legal identifier
+    /// reference in the current context. A shorthand reads its key token
+    /// directly, bypassing the validation a parsed identifier expression
+    /// receives, so the same strict-mode reserved-word and context-restricted
+    /// (`await`/`arguments`/`yield`) early errors are applied here.
+    fn validate_object_shorthand_identifier(
+        &self,
+        name: &str,
+        span: Span,
+    ) -> Result<(), ParseError> {
+        if (self.strict || self.in_generator) && name == "yield" {
+            return Err(ParseError {
+                message: "`yield` may not be used as an identifier here".to_owned(),
+                span,
+            });
+        }
+        if self.strict && crate::statement::is_strict_reserved_word(name) {
+            return Err(ParseError {
+                message: format!("`{name}` is a reserved word in strict mode"),
+                span,
+            });
+        }
+        if (self.in_async || self.in_static_block) && name == "await" {
+            return Err(ParseError {
+                message: format!("`{name}` is not allowed as an identifier here"),
+                span,
+            });
+        }
+        if self.in_static_block && matches!(name, "arguments" | "yield") {
+            return Err(ParseError {
+                message: format!("`{name}` is not allowed in a class static block"),
+                span,
+            });
+        }
+        Ok(())
     }
 
     /// Parses an object property value. The returned flag is `true` only for
@@ -635,6 +685,9 @@ impl Parser {
         }
 
         if let Some(value) = shorthand_value {
+            if let Expr::Identifier { name, span } = &value {
+                self.validate_object_shorthand_identifier(name, *span)?;
+            }
             return Ok((value, false));
         }
 
