@@ -35,13 +35,19 @@ fn validate_regexp_pattern(source: &str, unicode: bool) -> Result<(), RuntimeErr
                 if index + 1 >= pattern.len() {
                     return Err(regexp_syntax_error("invalid regular expression pattern"));
                 }
-                if pattern[index + 1] == 'u'
-                    && pattern.get(index + 2) == Some(&'{')
-                    && let Some(end) = braced_escape_end(&pattern, index + 2)
-                {
-                    index = end + 1;
-                    has_atom = true;
-                    continue;
+                if pattern[index + 1] == 'u' && pattern.get(index + 2) == Some(&'{') {
+                    if unicode {
+                        // In unicode mode `\u{ CodePoint }` must hold 1+ hex
+                        // digits naming a value <= 0x10FFFF.
+                        index = validate_braced_unicode_escape(&pattern, index + 2)?;
+                        has_atom = true;
+                        continue;
+                    }
+                    if let Some(end) = braced_escape_end(&pattern, index + 2) {
+                        index = end + 1;
+                        has_atom = true;
+                        continue;
+                    }
                 }
                 if unicode && matches!(pattern[index + 1], 'p' | 'P') {
                     let end = validate_property_escape(&pattern, index)?;
@@ -250,6 +256,42 @@ fn class_escape_end(pattern: &[char], start: usize, unicode: bool) -> usize {
     (start + 2).min(pattern.len())
 }
 
+/// Validates a unicode-mode `\u{ … }` code-point escape whose `{` is at
+/// `brace_index`, returning the index just past `}`. The body must be one or
+/// more hex digits naming a value no greater than 0x10FFFF.
+fn validate_braced_unicode_escape(
+    pattern: &[char],
+    brace_index: usize,
+) -> Result<usize, RuntimeError> {
+    let mut cursor = brace_index + 1;
+    let mut value: u32 = 0;
+    let mut digits = 0;
+    while let Some(&ch) = pattern.get(cursor) {
+        if ch == '}' {
+            break;
+        }
+        let Some(digit) = ch.to_digit(16) else {
+            return Err(regexp_syntax_error(
+                "invalid Unicode escape in regular expression",
+            ));
+        };
+        value = value.saturating_mul(16).saturating_add(digit);
+        if value > 0x10_FFFF {
+            return Err(regexp_syntax_error(
+                "invalid Unicode escape in regular expression",
+            ));
+        }
+        digits += 1;
+        cursor += 1;
+    }
+    if digits == 0 || pattern.get(cursor) != Some(&'}') {
+        return Err(regexp_syntax_error(
+            "invalid Unicode escape in regular expression",
+        ));
+    }
+    Ok(cursor + 1)
+}
+
 fn braced_escape_end(pattern: &[char], start: usize) -> Option<usize> {
     let mut index = start + 1;
     while index < pattern.len() {
@@ -341,6 +383,7 @@ fn is_lookbehind_group(pattern: &[char], index: usize) -> bool {
 fn validate_named_group_definitions(pattern: &[char]) -> Result<(), RuntimeError> {
     let mut index = 0;
     let mut in_class = false;
+    let mut seen_names: Vec<String> = Vec::new();
     while index < pattern.len() {
         match pattern[index] {
             '\\' => index += 2,
@@ -357,7 +400,14 @@ fn validate_named_group_definitions(pattern: &[char]) -> Result<(), RuntimeError
                 && pattern.get(index + 2) == Some(&'<')
                 && !matches!(pattern.get(index + 3), Some('=') | Some('!')) =>
             {
-                index = validate_group_name(pattern, index + 3)?;
+                let (next, name) = validate_group_name(pattern, index + 3)?;
+                // Two GroupSpecifiers may not share a name (QuickJS-NG rejects
+                // all duplicates, including across alternatives).
+                if seen_names.contains(&name) {
+                    return Err(invalid_group_name());
+                }
+                seen_names.push(name);
+                index = next;
             }
             _ => index += 1,
         }
@@ -367,22 +417,27 @@ fn validate_named_group_definitions(pattern: &[char]) -> Result<(), RuntimeError
 
 /// Validates the `RegExpIdentifierName` whose first character is at `start`
 /// (just past `(?<`), returning the index just past the closing `>`.
-fn validate_group_name(pattern: &[char], start: usize) -> Result<usize, RuntimeError> {
+fn validate_group_name(pattern: &[char], start: usize) -> Result<(usize, String), RuntimeError> {
     let mut index = start;
     let mut is_first = true;
+    let mut name = String::new();
     loop {
         match pattern.get(index) {
             None => return Err(invalid_group_name()),
             Some('>') if is_first => return Err(invalid_group_name()),
-            Some('>') => return Ok(index + 1),
+            Some('>') => return Ok((index + 1, name)),
             Some('\\') => {
                 let (code_point, next) = group_name_unicode_escape(pattern, index)?;
                 check_group_name_char(code_point, is_first)?;
+                if let Some(ch) = char::from_u32(code_point) {
+                    name.push(ch);
+                }
                 is_first = false;
                 index = next;
             }
             Some(&ch) => {
                 check_group_name_char(ch as u32, is_first)?;
+                name.push(ch);
                 is_first = false;
                 index += 1;
             }
@@ -613,6 +668,27 @@ mod tests {
         // Lookahead remains a QuantifiableAssertion in Annex-B mode.
         accepts(".(?=.)?", "");
         accepts("(?<=a)b", "");
+    }
+
+    #[test]
+    fn rejects_duplicate_named_groups() {
+        rejects("(?<a>a)(?<a>a)", "");
+        rejects("(?<a>a)(?<a>a)", "u");
+        rejects("(?<a>x)|(?<a>y)", "");
+        rejects("(?<a>a)(?<b>b)(?<a>c)", "");
+        accepts("(?<a>a)(?<b>b)", "");
+        accepts("(?<a>a)\\k<a>", "");
+    }
+
+    #[test]
+    fn validates_braced_unicode_escape_in_unicode_mode() {
+        rejects("\\u{110000}", "u");
+        rejects("\\u{1,}", "u");
+        rejects("\\u{1F_639}", "u");
+        rejects("\\u{}", "u");
+        accepts("\\u{1F639}", "u");
+        accepts("\\u{10FFFF}", "u");
+        accepts("\\u{0}", "u");
     }
 
     #[test]
