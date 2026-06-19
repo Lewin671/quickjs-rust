@@ -735,6 +735,24 @@ fn evaluates_regexp_symbol_replace() {
         ),
         Ok(Value::String("xbx:0".to_owned().into()))
     );
+    // A non-functional replace performs ToObject(namedCaptures) eagerly when
+    // `exec` reports groups, so `groups: null` throws a TypeError even when the
+    // replacement string has no `$<name>` reference.
+    assert_eq!(
+        eval(
+            "var re = /./; re.exec = function () { return { length: 1, 0: '', index: 0, groups: null }; }; \
+             try { re[Symbol.replace]('bar', ''); 'no throw'; } catch (error) { error instanceof TypeError ? 'TypeError' : 'other'; }"
+        ),
+        Ok(Value::String("TypeError".to_owned().into()))
+    );
+    // `undefined` groups (the common case) are left untouched.
+    assert_eq!(
+        eval(
+            "var re = /./; re.exec = function () { return { length: 1, 0: 'b', index: 0, groups: undefined }; }; \
+             re[Symbol.replace]('bar', 'X');"
+        ),
+        Ok(Value::String("Xar".to_owned().into()))
+    );
 }
 
 #[test]

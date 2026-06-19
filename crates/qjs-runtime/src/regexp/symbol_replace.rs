@@ -164,15 +164,22 @@ fn replace_matches(
             Replacement::Function(function) => {
                 functional_replacement((**function).clone(), &match_record, input.clone(), env)?
             }
-            Replacement::String(replacement) => get_substitution(
-                replacement,
-                &match_record.matched,
-                match_record.start,
-                &input,
-                &match_record.captures,
-                &match_record.groups,
-                env,
-            )?,
+            Replacement::String(replacement) => {
+                // GetSubstitution's caller performs `ToObject(namedCaptures)`
+                // when groups is present (ES2023 22.2.6.11 step 14.l.i.1), so a
+                // non-functional replace with `groups: null` throws a TypeError
+                // eagerly — before, and regardless of, any `$<name>` reference.
+                let named_captures = coerce_named_captures(match_record.groups.clone())?;
+                get_substitution(
+                    replacement,
+                    &match_record.matched,
+                    match_record.start,
+                    &input,
+                    &match_record.captures,
+                    &named_captures,
+                    env,
+                )?
+            }
         };
         result.push_str(&replacement_string);
         copied_until = match_record.end;
@@ -183,6 +190,21 @@ fn replace_matches(
         input.chars().count(),
     ));
     Ok(Value::String(result.into()))
+}
+
+/// Applies `ToObject(namedCaptures)` for the string-replacement path. The
+/// caller only invokes this when groups were produced by `exec`; `undefined`
+/// (no groups) is left untouched, `null` throws a TypeError, and any other
+/// value is already object-coercible and passes through. The functional-replace
+/// path forwards groups unconverted, so it does not call this.
+fn coerce_named_captures(groups: Value) -> Result<Value, RuntimeError> {
+    if matches!(groups, Value::Null) {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Cannot convert null named captures to object".to_owned(),
+        });
+    }
+    Ok(groups)
 }
 
 fn functional_replacement(
