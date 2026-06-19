@@ -252,7 +252,10 @@ impl Lexer<'_> {
                     TokenKind::QuestionQuestion
                 }
             }
-            Some('.') => {
+            // `?.` is the optional-chaining punctuator only when not followed by
+            // a decimal digit, so `x ?.3 : y` lexes as `?` `.3` (a ternary with
+            // a fractional number) rather than an optional chain.
+            Some('.') if !matches!(self.peek_nth(1), Some(c) if c.is_ascii_digit()) => {
                 self.advance();
                 TokenKind::QuestionDot
             }

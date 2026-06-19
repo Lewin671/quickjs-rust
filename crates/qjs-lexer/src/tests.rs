@@ -869,3 +869,30 @@ fn lexes_multi_character_punctuators_with_longest_match() {
         ]
     );
 }
+
+#[test]
+fn question_dot_followed_by_digit_is_not_optional_chain() {
+    // `?.` is optional chaining only when not followed by a decimal digit, so
+    // `a ?.3 : b` is a ternary whose consequent is the number `.3`.
+    assert_eq!(
+        kinds("a ?.3 : b"),
+        vec![
+            TokenKind::Identifier("a".to_owned()),
+            TokenKind::Question,
+            TokenKind::Number(".3".to_owned()),
+            TokenKind::Colon,
+            TokenKind::Identifier("b".to_owned()),
+            TokenKind::Eof,
+        ]
+    );
+    // A non-digit still produces the optional-chaining punctuator.
+    assert_eq!(
+        kinds("a?.b"),
+        vec![
+            TokenKind::Identifier("a".to_owned()),
+            TokenKind::QuestionDot,
+            TokenKind::Identifier("b".to_owned()),
+            TokenKind::Eof,
+        ]
+    );
+}
