@@ -15,7 +15,9 @@ pub(crate) fn has_legacy_octal_escape(raw: &str) -> bool {
                     return true;
                 }
             }
-            '1'..='7' => return true,
+            // `\1`-`\7` are legacy octal; `\8`/`\9` are NonOctalDecimalEscape.
+            // Both are rejected in strict mode (and in templates).
+            '1'..='9' => return true,
             _ => {}
         }
     }

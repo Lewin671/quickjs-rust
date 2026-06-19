@@ -560,7 +560,10 @@ fn rejects_invalid_string_escape_sequences() {
     assert!(lex(r#""\xG0""#).is_err());
     assert!(lex(r#""\u00G0""#).is_err());
     assert!(lex(r#""\u{}""#).is_err());
-    assert!(lex(r#""\8""#).is_err());
+    // `\8`/`\9` (NonOctalDecimalEscape) lex successfully (cooking to the digit);
+    // strict-mode rejection happens later, in the parser.
+    assert!(lex(r#""\8""#).is_ok());
+    assert!(lex(r#""\9""#).is_ok());
 }
 
 #[test]

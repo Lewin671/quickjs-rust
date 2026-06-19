@@ -479,12 +479,10 @@ impl Lexer<'_> {
             'v' => Some('\u{000b}'),
             '0' if !matches!(self.peek(), Some(next) if next.is_ascii_digit()) => Some('\0'),
             '0'..='7' => Some(self.legacy_octal_escape(ch, literal_start)?),
-            '8' | '9' => {
-                return Err(LexError {
-                    message: "legacy octal escape sequence is not supported".to_owned(),
-                    span: Span::new(literal_start, self.cursor),
-                });
-            }
+            // `\8` / `\9` (NonOctalDecimalEscapeSequence) cook to the literal
+            // digit in sloppy code; strict mode rejects them in the parser via
+            // has_legacy_octal_escape.
+            '8' | '9' => Some(ch),
             'x' => Some(self.fixed_hex_escape(literal_start, 2)?),
             'u' => Some(self.unicode_escape(literal_start)?),
             '\n' => None,

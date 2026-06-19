@@ -1075,3 +1075,13 @@ fn string_coercion_of_array_honors_to_string() {
         Ok(Value::String("X".to_owned().into()))
     );
 }
+
+#[test]
+fn non_octal_decimal_escapes_cook_in_sloppy_mode() {
+    // \8 and \9 are NonOctalDecimalEscapeSequence: in sloppy code they cook to
+    // the literal digit; strict mode rejects them.
+    assert_eq!(eval(r"'\8';"), Ok(Value::String("8".to_owned().into())));
+    assert_eq!(eval(r"'\9';"), Ok(Value::String("9".to_owned().into())));
+    assert!(eval(r"'use strict'; '\8';").is_err());
+    assert!(eval(r"'use strict'; '\9';").is_err());
+}
