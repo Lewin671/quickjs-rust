@@ -66,12 +66,12 @@ fn validate_pattern_range(
                     continue;
                 }
                 if unicode
-                    && pattern[index + 1].is_ascii_digit()
-                    && pattern[index + 1]
-                        .to_digit(10)
-                        .is_some_and(|value| value as usize > capture_count)
+                    && let Some(next) =
+                        validate_unicode_decimal_escape(pattern, index, capture_count, true)?
                 {
-                    return Err(regexp_syntax_error("invalid regular expression pattern"));
+                    index = next;
+                    has_atom = true;
+                    continue;
                 }
                 if unicode && !is_valid_unicode_escape(pattern, index) {
                     // In unicode mode only specific escapes are legal; an
@@ -232,6 +232,12 @@ fn validate_class_ranges(
     let mut index = start;
     while index < end {
         if pattern[index] == '\\' {
+            if unicode
+                && let Some(next) = validate_unicode_decimal_escape(pattern, index, 0, false)?
+            {
+                index = next;
+                continue;
+            }
             if unicode && let Some(set_end) = unicode_class_set_escape_end(pattern, index)? {
                 if pattern.get(set_end) == Some(&'-') && set_end + 1 < end {
                     return Err(regexp_syntax_error("invalid regular expression pattern"));
@@ -258,6 +264,43 @@ fn validate_class_ranges(
         index += 1;
     }
     Ok(())
+}
+
+fn validate_unicode_decimal_escape(
+    pattern: &[char],
+    start: usize,
+    capture_count: usize,
+    allow_backreference: bool,
+) -> Result<Option<usize>, RuntimeError> {
+    let Some(&first) = pattern.get(start + 1) else {
+        return Ok(None);
+    };
+    if !first.is_ascii_digit() {
+        return Ok(None);
+    }
+    if first == '0' {
+        if pattern
+            .get(start + 2)
+            .is_some_and(|next| next.is_ascii_digit())
+        {
+            return Err(regexp_syntax_error("invalid regular expression pattern"));
+        }
+        return Ok(Some(start + 2));
+    }
+    let mut index = start + 1;
+    let mut value = 0usize;
+    while let Some(digit) = pattern
+        .get(index)
+        .filter(|ch| ch.is_ascii_digit())
+        .and_then(|ch| ch.to_digit(10))
+    {
+        value = value.saturating_mul(10).saturating_add(digit as usize);
+        index += 1;
+    }
+    if allow_backreference && value <= capture_count {
+        return Ok(Some(index));
+    }
+    Err(regexp_syntax_error("invalid regular expression pattern"))
 }
 
 fn unicode_class_set_escape_end(
@@ -767,6 +810,24 @@ mod tests {
         accepts("\\n\\t\\b", "u");
         accepts("\\^\\$\\.", "u");
         accepts("(?<a>x)\\k<a>", "u");
+    }
+
+    #[test]
+    fn rejects_unicode_legacy_octal_and_invalid_decimal_escapes() {
+        accepts("\\0", "u");
+        accepts("[\\0]", "u");
+        accepts("(a)\\1", "u");
+        accepts("(a)(b)(c)(d)(e)(f)(g)(h)(i)\\9", "u");
+        rejects("\\00", "u");
+        rejects("\\01", "u");
+        rejects("\\07", "u");
+        rejects("\\08", "u");
+        rejects("\\1", "u");
+        rejects("(a)\\2", "u");
+        rejects("[\\00]", "u");
+        rejects("[\\01]", "u");
+        rejects("[\\1]", "u");
+        rejects("[\\9]", "u");
     }
 
     #[test]

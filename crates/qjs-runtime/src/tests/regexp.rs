@@ -1047,6 +1047,18 @@ fn null_character_escape_in_unicode_character_class_matches_nul() {
 }
 
 #[test]
+fn unicode_mode_rejects_legacy_octal_and_invalid_decimal_escapes() {
+    assert_eq!(eval(r#"/(a)\1/u.test("aa");"#), Ok(Value::Boolean(true)));
+    assert!(eval(r#"new RegExp("\\00", "u");"#).is_err());
+    assert!(eval(r#"new RegExp("\\01", "u");"#).is_err());
+    assert!(eval(r#"new RegExp("\\1", "u");"#).is_err());
+    assert!(eval(r#"new RegExp("[\\00]", "u");"#).is_err());
+    assert!(eval(r#"new RegExp("[\\1]", "u");"#).is_err());
+    assert!(eval(r#"/\00/u;"#).is_err());
+    assert!(eval(r#"/[\1]/u;"#).is_err());
+}
+
+#[test]
 fn named_group_unicode_escapes_decode_to_property_key() {
     // A `(?<A>...)` name must be decoded to `A` so the match's `groups`
     // object and `\k<...>` backreference use the decoded key.
