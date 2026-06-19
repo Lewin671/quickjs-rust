@@ -522,6 +522,25 @@ fn rejects_static_block_early_error_contexts() {
 }
 
 #[test]
+fn static_block_early_errors_do_not_cross_object_method_boundary() {
+    // The static-block early errors (`return`/`await`/`arguments`/`yield`) stop
+    // at a nested function boundary, including object-literal methods and
+    // accessors. These are all legal because the restricted productions occur
+    // inside the nested method/accessor body, not the static block itself.
+    for source in [
+        "class C { static { ({ m() { return 1; } }); } }",
+        "class C { static { ({ m() { arguments; } }); } }",
+        "class C { static { ({ m() { var await; } }); } }",
+        "class C { static { ({ get g() { return 1; } }); } }",
+        "class C { static { ({ set s(v) { return; } }); } }",
+    ] {
+        parse_script(source).expect("nested object method should not inherit static-block errors");
+    }
+    // The static block itself still rejects them.
+    parse_script("class C { static { return 1; } }").expect_err("direct return must fail");
+}
+
+#[test]
 fn rejects_static_block_statement_list_early_errors() {
     for source in [
         "class C { static { x: x: 0; } }",

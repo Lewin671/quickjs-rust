@@ -587,9 +587,14 @@ impl Parser {
             let previous_method = self.in_method;
             let previous_function = self.in_function;
             let previous_allow_return = self.allow_return;
+            let previous_static_block = self.in_static_block;
             self.in_method = true;
             self.in_function = true;
             self.allow_return = true;
+            // An object-literal method body is a function boundary: a class
+            // static block's early errors (no `return`/`await`/`arguments`/…)
+            // do not reach into it.
+            self.in_static_block = false;
             let params = self.function_parameters()?;
             reject_duplicate_method_parameters(&params)?;
             let body_start = self
@@ -601,6 +606,7 @@ impl Parser {
             self.in_method = previous_method;
             self.in_function = previous_function;
             self.allow_return = previous_allow_return;
+            self.in_static_block = previous_static_block;
             self.reject_invalid_function_parameters(&params, &body, body_start)?;
             let end = self
                 .tokens
@@ -658,13 +664,19 @@ impl Parser {
         let previous_method = self.in_method;
         let previous_function = self.in_function;
         let previous_allow_return = self.allow_return;
+        let previous_static_block = self.in_static_block;
         self.in_method = true;
         self.in_function = true;
         self.allow_return = true;
+        // An object-literal accessor body is a function boundary: a class
+        // static block's early errors (no `return`/`await`/`arguments`/…) do
+        // not reach into it.
+        self.in_static_block = false;
         let body = self.block_body()?;
         self.in_method = previous_method;
         self.in_function = previous_function;
         self.allow_return = previous_allow_return;
+        self.in_static_block = previous_static_block;
         let end = self
             .tokens
             .get(self.cursor.saturating_sub(1))
@@ -710,13 +722,19 @@ impl Parser {
         let previous_method = self.in_method;
         let previous_function = self.in_function;
         let previous_allow_return = self.allow_return;
+        let previous_static_block = self.in_static_block;
         self.in_method = true;
         self.in_function = true;
         self.allow_return = true;
+        // An object-literal accessor body is a function boundary: a class
+        // static block's early errors (no `return`/`await`/`arguments`/…) do
+        // not reach into it.
+        self.in_static_block = false;
         let body = self.block_body()?;
         self.in_method = previous_method;
         self.in_function = previous_function;
         self.allow_return = previous_allow_return;
+        self.in_static_block = previous_static_block;
         let end = self
             .tokens
             .get(self.cursor.saturating_sub(1))
