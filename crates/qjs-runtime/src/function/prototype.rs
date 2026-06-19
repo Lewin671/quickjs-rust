@@ -6,7 +6,7 @@ use qjs_parser::parse_dynamic_function_script;
 use crate::CallEnv;
 use crate::function::CompiledUserFunction;
 use crate::{
-    Function, GLOBAL_THIS_BINDING, NativeFunction, Prototype, RuntimeError, Value,
+    Function, GLOBAL_THIS_BINDING, NativeFunction, Property, Prototype, RuntimeError, Value,
     array::array_like_values_with_env, object::boxed_primitive, property_value,
     to_js_string_with_env, to_length_with_env,
 };
@@ -355,8 +355,9 @@ pub(crate) fn native_function_prototype_call(
 pub(crate) fn native_function_prototype_bind(
     this_value: Value,
     argument_values: &[Value],
+    env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let Value::Function(target) = this_value.clone() else {
+    if !matches!(this_value, Value::Function(_)) {
         return Err(RuntimeError {
             thrown: None,
             message: "Function.prototype.bind target is not callable".to_owned(),
@@ -365,8 +366,39 @@ pub(crate) fn native_function_prototype_bind(
 
     let bound_this = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let bound_arguments = argument_values.iter().skip(1).cloned().collect::<Vec<_>>();
-    let length = target.params.length().saturating_sub(bound_arguments.len());
-    let bound = Function::new_bound(this_value, bound_this, bound_arguments, length);
+    let arg_count = bound_arguments.len() as f64;
+
+    // SetFunctionLength: derive the bound length from Get(Target, "length")
+    // through ToIntegerOrInfinity, clamped to >= 0 after subtracting the bound
+    // argument count. +Infinity is preserved; a non-Number length yields 0.
+    let target_length = property_value(this_value.clone(), "length", env)?;
+    let bound_length = match target_length {
+        Value::Number(value) if value == f64::INFINITY => f64::INFINITY,
+        Value::Number(value) if value == f64::NEG_INFINITY => 0.0,
+        Value::Number(value) => {
+            let as_int = if value.is_nan() { 0.0 } else { value.trunc() };
+            (as_int - arg_count).max(0.0)
+        }
+        _ => 0.0,
+    };
+
+    // SetFunctionName(F, Get(Target, "name"), "bound"): a throwing name getter
+    // propagates; a non-String name is treated as the empty string.
+    let target_name = property_value(this_value.clone(), "name", env)?;
+    let bound_name = match target_name {
+        Value::String(name) => format!("bound {name}"),
+        _ => "bound ".to_owned(),
+    };
+
+    let bound = Function::new_bound(this_value, bound_this, bound_arguments, 0);
+    bound.define_property(
+        "length".to_owned(),
+        Property::data(Value::Number(bound_length), false, false, true),
+    );
+    bound.define_property(
+        "name".to_owned(),
+        Property::data(Value::String(bound_name.into()), false, false, true),
+    );
     Ok(Value::Function(bound))
 }
 

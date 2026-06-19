@@ -90,7 +90,7 @@ pub(super) fn call_core_native(
             crate::function::native_function_prototype_apply(this_value, argument_values, env)
         }
         NativeFunction::FunctionPrototypeBind => {
-            crate::function::native_function_prototype_bind(this_value, argument_values)
+            crate::function::native_function_prototype_bind(this_value, argument_values, env)
         }
         NativeFunction::FunctionPrototypeCall => {
             crate::function::native_function_prototype_call(this_value, argument_values, env)

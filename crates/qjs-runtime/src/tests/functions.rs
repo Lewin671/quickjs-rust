@@ -952,3 +952,49 @@ fn function_prototype_has_empty_name_after_length() {
         Ok(Value::Boolean(true))
     );
 }
+
+#[test]
+fn bound_function_length_and_name_follow_spec() {
+    // Length is derived from the target's `length` via ToIntegerOrInfinity,
+    // minus bound args, clamped to >= 0; +Infinity is preserved.
+    assert_eq!(
+        eval("(function (a, b, c) {}).bind().length;"),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        // bind(0, 0): the first 0 is thisArg, the second is one bound arg, so
+        // length is 3 - 1 = 2.
+        eval("(function (a, b, c) {}).bind(0, 0).length;"),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval(
+            "var f = function () {}; Object.defineProperty(f, 'length', { value: Infinity }); f.bind(0, 0).length;"
+        ),
+        Ok(Value::Number(f64::INFINITY))
+    );
+    assert_eq!(
+        eval(
+            "var f = function () {}; Object.defineProperty(f, 'length', { value: NaN }); f.bind().length;"
+        ),
+        Ok(Value::Number(0.0))
+    );
+    assert_eq!(
+        eval(
+            "var f = function () {}; Object.defineProperty(f, 'length', { value: 3.66 }); f.bind().length;"
+        ),
+        Ok(Value::Number(3.0))
+    );
+    // Name is "bound " + target name; a throwing name getter propagates.
+    assert_eq!(
+        eval("function foo() {} foo.bind().name;"),
+        Ok(Value::String("bound foo".to_owned().into()))
+    );
+    assert!(
+        eval(
+            "var t = Object.defineProperty(function () {}, 'name', { get() { throw new TypeError('x'); } });
+             t.bind();"
+        )
+        .is_err()
+    );
+}
