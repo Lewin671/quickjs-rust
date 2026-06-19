@@ -52,16 +52,75 @@ pub(super) fn named_group_name(pattern: &[char], pc: usize) -> Option<String> {
     if !matches!(group_kind(pattern, pc), GroupKind::Named { .. }) {
         return None;
     }
-    let mut index = pc + 3;
+    decode_group_name(pattern, pc + 3).map(|(name, _)| name)
+}
+
+/// Read a group name starting at `start` (the first character after `(?<` or
+/// `\k<`) up to the closing `>`. `\uXXXX`, surrogate pairs, and `\u{...}`
+/// escapes are decoded to their code points so the resulting name matches the
+/// decoded key in the `groups` object. Returns the name and the index of `>`.
+///
+/// The pattern has already passed validation, so a malformed escape simply
+/// yields `None` (the caller then treats the construct as absent).
+fn decode_group_name(pattern: &[char], start: usize) -> Option<(String, usize)> {
+    let mut index = start;
     let mut name = String::new();
     while let Some(&value) = pattern.get(index) {
         if value == '>' {
-            return Some(name);
+            return Some((name, index));
+        }
+        if value == '\\' {
+            let (code_point, next) = decode_group_name_escape(pattern, index)?;
+            name.push(char::from_u32(code_point)?);
+            index = next;
+            continue;
         }
         name.push(value);
         index += 1;
     }
     None
+}
+
+/// Decode the `\u`/`\u{...}` escape at `index` (where `pattern[index] == '\\'`)
+/// into a single code point, returning it with the index just past the escape.
+fn decode_group_name_escape(pattern: &[char], index: usize) -> Option<(u32, usize)> {
+    if pattern.get(index + 1) != Some(&'u') {
+        return None;
+    }
+    if pattern.get(index + 2) == Some(&'{') {
+        let mut cursor = index + 3;
+        let mut value: u32 = 0;
+        while let Some(&ch) = pattern.get(cursor) {
+            if ch == '}' {
+                break;
+            }
+            value = value.checked_mul(16)?.checked_add(ch.to_digit(16)?)?;
+            cursor += 1;
+        }
+        if pattern.get(cursor) != Some(&'}') {
+            return None;
+        }
+        return Some((value, cursor + 1));
+    }
+    let high = read_four_hex(pattern, index + 2)?;
+    if (0xd800..=0xdbff).contains(&high)
+        && pattern.get(index + 6) == Some(&'\\')
+        && pattern.get(index + 7) == Some(&'u')
+        && let Some(low) = read_four_hex(pattern, index + 8)
+        && (0xdc00..=0xdfff).contains(&low)
+    {
+        let code_point = 0x10000 + ((high - 0xd800) << 10) + (low - 0xdc00);
+        return Some((code_point, index + 12));
+    }
+    Some((high, index + 6))
+}
+
+fn read_four_hex(pattern: &[char], start: usize) -> Option<u32> {
+    let mut value = 0u32;
+    for offset in 0..4 {
+        value = value * 16 + pattern.get(start + offset)?.to_digit(16)?;
+    }
+    Some(value)
 }
 
 pub(super) fn is_non_capturing_group(pattern: &[char], pc: usize) -> bool {
@@ -94,19 +153,11 @@ pub(super) fn named_backreference(pattern: &[char], pc: usize) -> Option<(String
     if pattern.get(pc + 1) != Some(&'k') || pattern.get(pc + 2) != Some(&'<') {
         return None;
     }
-    let mut index = pc + 3;
-    let mut name = String::new();
-    while let Some(&value) = pattern.get(index) {
-        if value == '>' {
-            if name.is_empty() {
-                return None;
-            }
-            return Some((name, index + 1));
-        }
-        name.push(value);
-        index += 1;
+    let (name, gt_index) = decode_group_name(pattern, pc + 3)?;
+    if name.is_empty() {
+        return None;
     }
-    None
+    Some((name, gt_index + 1))
 }
 
 /// Resolve a named group to its zero-based capture index by scanning the

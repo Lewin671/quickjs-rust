@@ -1027,3 +1027,22 @@ fn null_character_escape_in_unicode_mode_matches_nul() {
     );
     assert_eq!(eval(r#"/\0/.test("0");"#), Ok(Value::Boolean(false)));
 }
+
+#[test]
+fn named_group_unicode_escapes_decode_to_property_key() {
+    // A `(?<A>...)` name must be decoded to `A` so the match's `groups`
+    // object and `\k<...>` backreference use the decoded key.
+    assert_eq!(
+        eval(r#"new RegExp("(?<\\u0041>x)").exec("x").groups.A;"#),
+        Ok(Value::String("x".to_owned().into()))
+    );
+    assert_eq!(
+        eval(r#"/(?<\u{03C0}>a)/u.exec("bab").groups.\u{03C0};"#),
+        Ok(Value::String("a".to_owned().into()))
+    );
+    // A `\k<\u...>` backreference resolves against the decoded name.
+    assert_eq!(
+        eval(r#"/(?<A>.)\k<A>/.test("aa");"#),
+        Ok(Value::Boolean(true))
+    );
+}
