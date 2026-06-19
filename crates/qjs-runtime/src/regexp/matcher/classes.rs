@@ -59,7 +59,7 @@ fn class_match_positive(
                 continue;
             }
 
-            if chars_equal(start.value, value, options.ignore_case) {
+            if chars_equal(start.value, value, options.ignore_case, options.unicode) {
                 return true;
             }
             index = start.next_index;
@@ -195,11 +195,20 @@ fn class_escape_matches(class: &[char], index: usize, value: char, options: Matc
         Some('S') => !regexp_whitespace(value),
         Some('w') => regexp_word_char(value),
         Some('W') => !regexp_word_char(value),
-        Some('u') => unicode_escape(class, index, options.unicode)
-            .is_some_and(|escape| chars_equal(value, escape.value, options.ignore_case)),
-        Some('x') if hex_escape(class, index).is_some() => hex_escape(class, index)
-            .is_some_and(|escape| chars_equal(value, escape.value, options.ignore_case)),
-        Some(escaped) => chars_equal(regexp_control_escape(escaped), value, options.ignore_case),
+        Some('u') => unicode_escape(class, index, options.unicode).is_some_and(|escape| {
+            chars_equal(value, escape.value, options.ignore_case, options.unicode)
+        }),
+        Some('x') if hex_escape(class, index).is_some() => {
+            hex_escape(class, index).is_some_and(|escape| {
+                chars_equal(value, escape.value, options.ignore_case, options.unicode)
+            })
+        }
+        Some(escaped) => chars_equal(
+            regexp_control_escape(escaped),
+            value,
+            options.ignore_case,
+            options.unicode,
+        ),
         None => false,
     }
 }

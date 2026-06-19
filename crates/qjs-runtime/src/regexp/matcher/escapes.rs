@@ -184,11 +184,20 @@ pub(super) fn legacy_octal_escape(pattern: &[char], pc: usize) -> Option<ParsedE
     char::from_u32(value).map(|value| ParsedEscape { value, next_pc })
 }
 
-pub(super) fn chars_equal(left: char, right: char, ignore_case: bool) -> bool {
-    if ignore_case {
-        left.eq_ignore_ascii_case(&right)
-    } else {
-        left == right
+pub(super) fn chars_equal(left: char, right: char, ignore_case: bool, unicode: bool) -> bool {
+    if !ignore_case {
+        return left == right;
+    }
+    if left.eq_ignore_ascii_case(&right) {
+        return true;
+    }
+    unicode && unicode_canonicalize(left) == unicode_canonicalize(right)
+}
+
+fn unicode_canonicalize(value: char) -> char {
+    match value {
+        '\u{212a}' => 'k',
+        _ => value.to_ascii_lowercase(),
     }
 }
 

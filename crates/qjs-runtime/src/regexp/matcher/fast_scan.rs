@@ -133,7 +133,8 @@ impl SimpleAtom<'_> {
             }
             SimpleAtom::Literal(literal) => {
                 let value = *text.get(index)?;
-                chars_equal(value, *literal, options.ignore_case).then_some(index + 1)
+                chars_equal(value, *literal, options.ignore_case, options.unicode)
+                    .then_some(index + 1)
             }
             SimpleAtom::Class { class, base } => {
                 let (value, next_index) = regexp_code_point_at(text, index, options.unicode)?;
@@ -141,7 +142,7 @@ impl SimpleAtom<'_> {
             }
             SimpleAtom::UnicodeEscape(value) => {
                 let current = *text.get(index)?;
-                if chars_equal(current, *value, options.ignore_case) {
+                if chars_equal(current, *value, options.ignore_case, options.unicode) {
                     return Some(index + 1);
                 }
                 let mut buffer = [0u16; 2];
@@ -167,7 +168,12 @@ impl SimpleAtom<'_> {
                     'S' => !regexp_whitespace(value),
                     'w' => regexp_word_char(value),
                     'W' => !regexp_word_char(value),
-                    other => chars_equal(value, regexp_control_escape(*other), options.ignore_case),
+                    other => chars_equal(
+                        value,
+                        regexp_control_escape(*other),
+                        options.ignore_case,
+                        options.unicode,
+                    ),
                 };
                 matched.then_some(index + 1)
             }

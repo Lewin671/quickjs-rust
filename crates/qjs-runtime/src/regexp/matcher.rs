@@ -356,7 +356,14 @@ fn match_atom(
         '[' => match_class(pattern, text, pc, state, properties, options),
         '(' => match_group(pattern, text, pc, state, group_indices, properties, options),
         '.' => match_any(text, pc + 1, state, options),
-        literal => match_literal(text, pc + 1, state, literal, options.ignore_case),
+        literal => match_literal(
+            text,
+            pc + 1,
+            state,
+            literal,
+            options.ignore_case,
+            options.unicode,
+        ),
     }
 }
 
@@ -404,10 +411,11 @@ fn match_literal(
     mut state: MatchState,
     literal: char,
     ignore_case: bool,
+    unicode: bool,
 ) -> Vec<(usize, MatchState)> {
     if !text
         .get(state.index)
-        .is_some_and(|value| chars_equal(*value, literal, ignore_case))
+        .is_some_and(|value| chars_equal(*value, literal, ignore_case, unicode))
     {
         return Vec::new();
     }
@@ -442,6 +450,7 @@ fn match_escape(
             escape.value,
             escape.next_pc,
             options.ignore_case,
+            options.unicode,
         );
     }
     if options.unicode
@@ -465,9 +474,17 @@ fn match_escape(
                 escape.value,
                 escape.next_pc,
                 options.ignore_case,
+                options.unicode,
             );
         }
-        return match_literal(text, pc + 1, state, '\\', options.ignore_case);
+        return match_literal(
+            text,
+            pc + 1,
+            state,
+            '\\',
+            options.ignore_case,
+            options.unicode,
+        );
     }
     let Some(value) = text.get(state.index).copied() else {
         return Vec::new();
@@ -489,11 +506,17 @@ fn match_escape(
         // In unicode mode `\0` (not followed by a decimal digit) is the NUL
         // character escape, not the literal `0`. Non-unicode `\0` is handled by
         // the legacy-octal branch above.
-        '0' if options.unicode && !pattern.get(pc + 2).is_some_and(char::is_ascii_digit) => {
-            (chars_equal(value, '\u{0000}', options.ignore_case), pc + 2)
-        }
+        '0' if options.unicode && !pattern.get(pc + 2).is_some_and(char::is_ascii_digit) => (
+            chars_equal(value, '\u{0000}', options.ignore_case, options.unicode),
+            pc + 2,
+        ),
         literal => (
-            chars_equal(value, regexp_control_escape(literal), options.ignore_case),
+            chars_equal(
+                value,
+                regexp_control_escape(literal),
+                options.ignore_case,
+                options.unicode,
+            ),
             pc + 2,
         ),
     };
@@ -521,10 +544,11 @@ fn match_code_unit_escape(
             escape.value,
             escape.next_pc,
             options.ignore_case,
+            options.unicode,
         );
     }
     match text.get(state.index).copied() {
-        Some(value) if chars_equal(value, literal, options.ignore_case) => {
+        Some(value) if chars_equal(value, literal, options.ignore_case, options.unicode) => {
             state.index += 1;
             vec![(pc + 2, state)]
         }
@@ -551,6 +575,7 @@ fn match_backreference(
             text[state.index + offset],
             text[start + offset],
             options.ignore_case,
+            options.unicode,
         )
     });
     if !matched {
@@ -566,11 +591,12 @@ fn match_unicode_escape(
     value: char,
     next_pc: usize,
     ignore_case: bool,
+    unicode: bool,
 ) -> Vec<(usize, MatchState)> {
     let mut matches = Vec::new();
     if text
         .get(state.index)
-        .is_some_and(|current| chars_equal(*current, value, ignore_case))
+        .is_some_and(|current| chars_equal(*current, value, ignore_case, unicode))
     {
         let mut matched = state.clone();
         matched.index += 1;
