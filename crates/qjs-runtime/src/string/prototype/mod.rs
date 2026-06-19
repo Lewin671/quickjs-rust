@@ -7,6 +7,11 @@ mod sequence;
 mod trim;
 mod well_formed;
 
+/// Maximum string length, matching QuickJS-NG's `JS_STRING_LEN_MAX` (2^30 - 1).
+/// String-producing builtins throw `RangeError: invalid string length` rather
+/// than attempt an allocation beyond this.
+pub(super) const MAX_STRING_LENGTH: usize = (1 << 30) - 1;
+
 pub(crate) use case::{
     native_string_prototype_locale_compare, native_string_prototype_normalize,
     native_string_prototype_to_lower_case, native_string_prototype_to_upper_case,

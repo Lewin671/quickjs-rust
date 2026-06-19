@@ -5,6 +5,7 @@ use crate::{
 };
 
 use super::super::indexing::{string_slice_index, string_substring_index, this_string_value};
+use super::MAX_STRING_LENGTH;
 use crate::CallEnv;
 
 pub(crate) fn native_string_prototype_concat(
@@ -40,6 +41,19 @@ pub(crate) fn native_string_prototype_repeat(
     }
 
     let count = count.trunc() as usize;
+    // The result must not exceed the maximum string length, matching QuickJS-NG
+    // (2^30 - 1); otherwise repeat would attempt a multi-gigabyte allocation.
+    let too_long = value
+        .chars()
+        .count()
+        .checked_mul(count)
+        .is_none_or(|len| len > MAX_STRING_LENGTH);
+    if too_long {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "RangeError: invalid string length".to_owned(),
+        });
+    }
     Ok(Value::String(value.repeat(count)))
 }
 

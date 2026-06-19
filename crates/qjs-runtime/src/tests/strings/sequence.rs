@@ -207,3 +207,12 @@ fn evaluates_string_html_builtins() {
     assert!(eval("String.prototype.bold.call(null);").is_err());
     assert!(eval("String.prototype.link.call(undefined, 'x');").is_err());
 }
+
+#[test]
+fn repeat_beyond_max_length_throws_range_error() {
+    // Result length must stay within the 2^30-1 string-length limit. The
+    // accepted boundary is exercised against QuickJS-NG, not here, to avoid
+    // allocating a gigabyte-scale string in the unit test.
+    assert!(eval("'a'.repeat(1073741824);").is_err());
+    assert!(eval("'ab'.repeat(1073741824);").is_err());
+}

@@ -24,6 +24,14 @@ pub(crate) fn native_string_prototype_pad(
     if max_length <= string_length {
         return Ok(Value::String(value));
     }
+    // The padded result must not exceed the maximum string length; QuickJS-NG
+    // throws rather than attempt a multi-gigabyte allocation.
+    if max_length > super::MAX_STRING_LENGTH {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "RangeError: invalid string length".to_owned(),
+        });
+    }
 
     let fill_string = match argument_values.get(1).cloned().unwrap_or(Value::Undefined) {
         Value::Undefined => " ".to_owned(),

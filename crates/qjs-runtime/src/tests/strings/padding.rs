@@ -82,3 +82,11 @@ fn evaluates_string_padding_and_repeat_builtins() {
         ))
     );
 }
+
+#[test]
+fn pad_beyond_max_length_throws_range_error() {
+    // Padding past the 2^30-1 string-length limit throws instead of allocating
+    // a multi-gigabyte string.
+    assert!(eval("'a'.padStart(1073741824);").is_err());
+    assert!(eval("'a'.padEnd(2147483648);").is_err());
+}
