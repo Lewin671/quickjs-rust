@@ -17,7 +17,7 @@ pub(super) fn escape_regexp_source(source: &str) -> String {
 }
 
 pub(super) fn canonical_regexp_flags(flags: &str) -> String {
-    "dgimsyu"
+    "dgimsuvy"
         .chars()
         .filter(|flag| flags.contains(*flag))
         .collect()

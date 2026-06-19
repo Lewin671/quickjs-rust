@@ -3,31 +3,41 @@ use crate::RuntimeError;
 
 pub(crate) fn validate_regexp_init(source: &str, flags: &str) -> Result<(), RuntimeError> {
     validate_regexp_flags(flags)?;
-    validate_regexp_pattern(source, flags.contains('u'))
+    let unicode_sets = flags.contains('v');
+    validate_regexp_pattern(source, flags.contains('u') || unicode_sets, unicode_sets)
 }
 
 fn validate_regexp_flags(flags: &str) -> Result<(), RuntimeError> {
-    // The `v` (unicodeSets) flag is not accepted yet: its stricter
-    // character-class syntax is unimplemented, and the `RegExp.prototype.
-    // unicodeSets` accessor still reports `false` for every constructable
-    // RegExp. Accepting `v` without that syntax would wrongly allow patterns
-    // (e.g. `/[(]/v`) the spec rejects at parse time.
     let mut seen = Vec::with_capacity(flags.len());
     for flag in flags.chars() {
-        if !"dgimsuy".contains(flag) || seen.contains(&flag) {
+        if !"dgimsuvy".contains(flag) || seen.contains(&flag) {
             return Err(regexp_syntax_error("invalid regular expression flags"));
         }
         seen.push(flag);
     }
+    if seen.contains(&'u') && seen.contains(&'v') {
+        return Err(regexp_syntax_error("invalid regular expression flags"));
+    }
     Ok(())
 }
 
-fn validate_regexp_pattern(source: &str, unicode: bool) -> Result<(), RuntimeError> {
+fn validate_regexp_pattern(
+    source: &str,
+    unicode: bool,
+    unicode_sets: bool,
+) -> Result<(), RuntimeError> {
     let pattern: Vec<_> = source.chars().collect();
     let capture_count = regexp_capture_count(&pattern);
     validate_named_group_definitions(&pattern)?;
     validate_named_group_references(&pattern, unicode)?;
-    validate_pattern_range(&pattern, 0, pattern.len(), unicode, capture_count)
+    validate_pattern_range(
+        &pattern,
+        0,
+        pattern.len(),
+        unicode,
+        unicode_sets,
+        capture_count,
+    )
 }
 
 fn validate_pattern_range(
@@ -35,6 +45,7 @@ fn validate_pattern_range(
     start: usize,
     end: usize,
     unicode: bool,
+    unicode_sets: bool,
     capture_count: usize,
 ) -> Result<(), RuntimeError> {
     let mut index = start;
@@ -85,7 +96,7 @@ fn validate_pattern_range(
                 let Some(end) = class_end(pattern, index) else {
                     return Err(regexp_syntax_error("invalid regular expression pattern"));
                 };
-                validate_class_ranges(pattern, index + 1, end, unicode)?;
+                validate_class_ranges(pattern, index + 1, end, unicode, unicode_sets)?;
                 index = end + 1;
                 has_atom = true;
             }
@@ -97,7 +108,14 @@ fn validate_pattern_range(
                     return Err(regexp_syntax_error("invalid regular expression pattern"));
                 };
                 let body_start = group_body_start(pattern, index)?;
-                validate_pattern_range(pattern, body_start, end, unicode, capture_count)?;
+                validate_pattern_range(
+                    pattern,
+                    body_start,
+                    end,
+                    unicode,
+                    unicode_sets,
+                    capture_count,
+                )?;
                 // Lookbehind assertions are not `QuantifiableAssertion`s, so a
                 // quantifier immediately after `(?<=...)` / `(?<!...)` is a
                 // SyntaxError in both Annex-B and non-Annex-B modes.
@@ -228,6 +246,7 @@ fn validate_class_ranges(
     start: usize,
     end: usize,
     unicode: bool,
+    unicode_sets: bool,
 ) -> Result<(), RuntimeError> {
     let mut index = start;
     while index < end {
@@ -248,6 +267,16 @@ fn validate_class_ranges(
             index = class_escape_end(pattern, index, unicode);
             continue;
         }
+        if unicode_sets && is_unicode_sets_reserved_class_char(pattern[index]) {
+            return Err(regexp_syntax_error("invalid regular expression pattern"));
+        }
+        if unicode_sets
+            && index + 1 < end
+            && pattern[index] == pattern[index + 1]
+            && is_unicode_sets_double_punctuator_char(pattern[index])
+        {
+            return Err(regexp_syntax_error("invalid regular expression pattern"));
+        }
         if index + 2 < end && pattern[index + 1] == '-' {
             if unicode
                 && pattern[index + 2] == '\\'
@@ -264,6 +293,34 @@ fn validate_class_ranges(
         index += 1;
     }
     Ok(())
+}
+
+fn is_unicode_sets_reserved_class_char(ch: char) -> bool {
+    matches!(ch, '(' | ')' | '[' | ']' | '{' | '}' | '/' | '-' | '|')
+}
+
+fn is_unicode_sets_double_punctuator_char(ch: char) -> bool {
+    matches!(
+        ch,
+        '&' | '!'
+            | '#'
+            | '$'
+            | '%'
+            | '*'
+            | '+'
+            | ','
+            | '.'
+            | ':'
+            | ';'
+            | '<'
+            | '='
+            | '>'
+            | '?'
+            | '@'
+            | '^'
+            | '`'
+            | '~'
+    )
 }
 
 fn validate_unicode_decimal_escape(

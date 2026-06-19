@@ -303,17 +303,29 @@ fn evaluates_regexp_prototype_accessors() {
     assert_eq!(eval("/^.$/u.test('\\u{10300}');"), Ok(Value::Boolean(true)));
     assert_eq!(eval("/test/i.ignoreCase;"), Ok(Value::Boolean(true)));
     assert_eq!(eval("/test/m.multiline;"), Ok(Value::Boolean(true)));
-    // The `unicodeSets` (`v`) accessor exists and reports `false` for every
-    // constructable RegExp: the `v` flag is not accepted yet, so its stricter
-    // character-class syntax keeps rejecting patterns like `/[(]/v`.
     assert_eq!(eval("/test/.unicodeSets;"), Ok(Value::Boolean(false)));
+    assert_eq!(eval("/test/v.unicodeSets;"), Ok(Value::Boolean(true)));
     assert_eq!(eval("RegExp.prototype.unicodeSets;"), Ok(Value::Undefined));
     assert_eq!(
         eval("Object.getOwnPropertyDescriptor(RegExp.prototype, 'unicodeSets').get.name;"),
         Ok(Value::String("get unicodeSets".to_owned().into()))
     );
     assert!(eval("Object.create(RegExp.prototype).unicodeSets;").is_err());
-    assert!(eval("new RegExp('.', 'v');").is_err());
+    assert_eq!(
+        eval("new RegExp('.', 'v').unicodeSets;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("/test/v.flags;"),
+        Ok(Value::String("v".to_owned().into()))
+    );
+    assert_eq!(
+        eval("/test/vdgy.flags;"),
+        Ok(Value::String("dgvy".to_owned().into()))
+    );
+    assert!(eval("new RegExp('.', 'uv');").is_err());
+    assert!(eval("new RegExp('.', 'vu');").is_err());
+    assert!(eval("new RegExp('[(]', 'v');").is_err());
     assert_eq!(eval("/test/.global;"), Ok(Value::Boolean(false)));
     assert_eq!(
         eval("/test/iyg.flags;"),
