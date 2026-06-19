@@ -352,9 +352,15 @@ impl ModuleGraph {
         self.set_status(key, Status::Evaluating);
         let deps = self.dependency_keys(key);
         for dep in deps {
-            self.evaluate_with_drain(&dep, drain)?;
+            if let Err(error) = self.evaluate_with_drain(&dep, drain) {
+                self.set_status(key, Status::Linked);
+                return Err(error);
+            }
         }
-        self.evaluate_body(key, drain)?;
+        if let Err(error) = self.evaluate_body(key, drain) {
+            self.set_status(key, Status::Linked);
+            return Err(error);
+        }
         self.set_status(key, Status::Evaluated);
         Ok(())
     }

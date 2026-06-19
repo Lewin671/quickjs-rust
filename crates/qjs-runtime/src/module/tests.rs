@@ -430,6 +430,21 @@ fn dynamic_import_rejects_on_module_body_error() {
 }
 
 #[test]
+fn dynamic_import_rejects_errored_module_again() {
+    let namespace = run(
+        "export const log = [];\n\
+         async function main() {\n\
+           try { await import('boom'); } catch { log.push('first'); }\n\
+           try { await import('boom'); } catch { log.push('second'); }\n\
+         }\n\
+         main();",
+        &[("boom", "throw new Error('explode');")],
+    )
+    .expect("graph evaluates");
+    assert_eq!(export_log(&namespace, "log"), "first,second");
+}
+
+#[test]
 fn dynamic_import_then_runs_after_current_job() {
     // The synchronous body completes (pushing "sync") before the import's
     // `.then` callback (pushing "async") runs as a later microtask.
