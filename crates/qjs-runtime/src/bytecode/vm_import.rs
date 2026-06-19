@@ -36,15 +36,15 @@ impl Vm<'_> {
         env
     }
 
-    /// Evaluates `Op::ImportCall`: the specifier is on top of the stack (and the
-    /// options argument below it when `has_options`). Builds the import promise
-    /// (coercion failures reject it rather than throwing) and pushes it.
+    /// Evaluates `Op::ImportCall`: the options argument is on top of the stack
+    /// (when `has_options`) with the specifier below it. Builds the import
+    /// promise (coercion failures reject it rather than throwing) and pushes it.
     pub(super) fn import_call(&mut self, has_options: bool) -> Result<(), RuntimeError> {
-        let specifier = self.pop()?;
         // The second (options/attributes) argument is validated per spec
         // (EvaluateImportCall): a non-object or a non-string `with` attribute
         // rejects the import promise. Attributes do not affect resolution here.
         let options = if has_options { Some(self.pop()?) } else { None };
+        let specifier = self.pop()?;
         let mut env = self.current_env();
         let promise = crate::promise::dynamic_import(specifier, options, &mut env);
         self.apply_env(env);

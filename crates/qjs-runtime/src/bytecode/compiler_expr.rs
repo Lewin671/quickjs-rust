@@ -540,12 +540,13 @@ impl Compiler {
             Expr::ImportCall {
                 specifier, options, ..
             } => {
-                // Evaluate the options argument first (when present) so it sits
-                // below the specifier; both are left on the stack for the op.
+                // Per EvaluateImportCall the specifier is evaluated before the
+                // options argument; emit the specifier first so it sits below
+                // the options on the stack for the op.
+                self.compile_expr(specifier)?;
                 if let Some(options) = options {
                     self.compile_expr(options)?;
                 }
-                self.compile_expr(specifier)?;
                 self.emit(Op::ImportCall {
                     has_options: options.is_some(),
                 });
