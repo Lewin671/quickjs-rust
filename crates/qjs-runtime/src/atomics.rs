@@ -194,11 +194,20 @@ pub(crate) fn native_atomics_wait(
             }
         }
     };
-    let _ = (value, timeout);
-    Err(RuntimeError {
-        thrown: None,
-        message: "TypeError: Atomics.wait cannot suspend the current agent".to_owned(),
-    })
+    // This engine runs a single agent (no worker threads), so no other agent
+    // can ever notify a waiter. Per the spec single-agent semantics: load the
+    // current value; if it differs from the comparand return "not-equal";
+    // otherwise the wait reaches its timeout (we need not actually block, since
+    // `timeout` is only an upper bound and no notifier can exist) → "timed-out".
+    let _ = timeout;
+    let current = typed_array::get_view_element(&object, index);
+    let equal = match (&current, &value) {
+        (Value::Number(current), Value::Number(value)) => current == value,
+        (Value::BigInt(current), Value::BigInt(value)) => current == value,
+        _ => false,
+    };
+    let result = if equal { "timed-out" } else { "not-equal" };
+    Ok(Value::String(result.to_owned().into()))
 }
 
 pub(crate) fn native_atomics_read_modify_write(

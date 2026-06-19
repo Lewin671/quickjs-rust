@@ -92,22 +92,31 @@ fn atomics_notify_validates_and_returns_zero_without_waiters() {
 }
 
 #[test]
-fn atomics_wait_validates_and_rejects_main_agent_suspend() {
+fn atomics_wait_returns_timed_out_in_single_agent() {
+    // The single agent can block but no other agent can notify it, so a wait
+    // whose value matches the comparand reaches its timeout and returns
+    // "timed-out" (the timeout argument is still coerced via valueOf).
     assert_eq!(
         eval(
             "let i32 = new Int32Array(new SharedArrayBuffer(4)); \
              let i64 = new BigInt64Array(new SharedArrayBuffer(8)); \
              let calls = ''; \
              let timeout = { valueOf() { calls += 'timeout'; return 0; } }; \
-             let i32Type = false; \
-             let i64Type = false; \
-             try { Atomics.wait(i32, 0, 0, timeout); } catch (e) { i32Type = e instanceof TypeError; } \
-             try { Atomics.wait(i64, 0, 0n, timeout); } catch (e) { i64Type = e instanceof TypeError; } \
-             [Atomics.wait.length, i32Type, i64Type, calls].join(':');"
+             let r32 = Atomics.wait(i32, 0, 0, timeout); \
+             let r64 = Atomics.wait(i64, 0, 0n, timeout); \
+             [Atomics.wait.length, r32, r64, calls].join(':');"
         ),
         Ok(Value::String(
-            "4:true:true:timeouttimeout".to_owned().into()
+            "4:timed-out:timed-out:timeouttimeout".to_owned().into()
         ))
+    );
+    // A mismatched value returns "not-equal" without coercing the timeout.
+    assert_eq!(
+        eval(
+            "let i32 = new Int32Array(new SharedArrayBuffer(4)); i32[0] = 7; \
+             Atomics.wait(i32, 0, 0, 0);"
+        ),
+        Ok(Value::String("not-equal".to_owned().into()))
     );
     assert_eq!(
         eval(

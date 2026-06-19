@@ -364,7 +364,13 @@ needs_sta_prelude() {
 needs_host_prelude() { local source="$1" includes="$2"; grep -q '[$]262' "$source" || harness_include_uses "$includes" '[$]262'; }
 needs_agent_harness() {
   local source="$1" flags="$2" includes="$3"
-  [[ "$flags" == *CanBlockIsTrue* ]] || [[ " $includes " == *" atomicsHelper.js "* ]] || grep -q '[$]262[.]agent' "$source" || harness_include_uses "$includes" '[$]262[.]agent'
+  # A test needs the (unsupported) multi-agent / can't-block harness when it
+  # drives a second agent (`$262.agent` / `atomicsHelper.js`) or requires a
+  # `[[CanBlock]] == false` agent (`CanBlockIsFalse`, where `Atomics.wait` must
+  # throw). The `CanBlockIsTrue` flag does NOT need it: this engine's single
+  # agent can block, so standalone `Atomics.wait` returns "timed-out"/"not-equal"
+  # per spec and those tests run.
+  [[ "$flags" == *CanBlockIsFalse* ]] || [[ " $includes " == *" atomicsHelper.js "* ]] || grep -q '[$]262[.]agent' "$source" || harness_include_uses "$includes" '[$]262[.]agent'
 }
 prefix_list_contains() {
   local rel="$1"
