@@ -721,6 +721,30 @@ fn evaluates_regexp_symbol_replace() {
         Ok(Value::String("x a2".to_owned().into()))
     );
     assert_eq!(
+        eval(
+            "let obj = { get flags() { throw new Error('flags'); }, get global() { throw new Error('global'); } }; \
+             try { RegExp.prototype[Symbol.replace].call(obj, '', ''); 'none'; } catch (error) { error.message; }"
+        ),
+        Ok(Value::String("flags".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "let re = /./g; \
+             Object.defineProperty(re, 'flags', { get: function() { return { [Symbol.toPrimitive]: function(hint) { if (hint === 'string') { throw new Error('coerce'); } } }; } }); \
+             Object.defineProperty(re, 'global', { get: function() { throw new Error('global'); } }); \
+             try { re[Symbol.replace]('', ''); 'none'; } catch (error) { error.message; }"
+        ),
+        Ok(Value::String("coerce".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "let re = /./; \
+             Object.defineProperty(re, 'unicode', { get: function() { throw new Error('unicode'); } }); \
+             try { re[Symbol.replace]('', ''); 'none'; } catch (error) { error.message; }"
+        ),
+        Ok(Value::String("unicode".to_owned().into()))
+    );
+    assert_eq!(
         eval("RegExp.prototype[Symbol.replace].call(/a(.)/g, 'a1 a2', '[$1:$&]');"),
         Ok(Value::String("[1:a1] [2:a2]".to_owned().into()))
     );

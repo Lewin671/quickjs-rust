@@ -2,7 +2,7 @@ use crate::CallEnv;
 use crate::string::{string_code_units, string_from_code_units};
 use crate::{
     Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function,
-    is_truthy, property_value, reflect, symbol, to_js_string_with_env, to_length_with_env,
+    property_value, reflect, symbol, to_js_string_with_env, to_length_with_env,
 };
 
 pub(crate) fn install_regexp_prototype_replace(env: &CallEnv, prototype: &ObjectRef) {
@@ -43,12 +43,9 @@ pub(crate) fn native_regexp_prototype_replace(
         Replacement::String(to_js_string_with_env(replace_value, env)?)
     };
 
-    let global = is_truthy(&property_value(this_value.clone(), "global", env)?);
-    let unicode = if global {
-        is_truthy(&property_value(this_value.clone(), "unicode", env)?)
-    } else {
-        false
-    };
+    let flags = to_js_string_with_env(property_value(this_value.clone(), "flags", env)?, env)?;
+    let global = flags.contains('g');
+    let unicode = flags.contains('u');
     if global {
         set_last_index(this_value.clone(), Value::Number(0.0), env)?;
     }
