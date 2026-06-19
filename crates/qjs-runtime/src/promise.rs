@@ -264,6 +264,19 @@ pub(crate) fn promise_resolve(
     Ok(capability.promise)
 }
 
+/// Builds a promise (via constructor `c`'s capability) already rejected with
+/// `reason`. Used by builtins that must reject their returned promise rather
+/// than throw synchronously.
+pub(crate) fn promise_reject(
+    c: &Value,
+    reason: Value,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let capability = capability::new_promise_capability(c, env)?;
+    capability::capability_reject(&capability, reason, env)?;
+    Ok(capability.promise)
+}
+
 pub(crate) fn native_promise_then(
     function: &Function,
     this_value: Value,

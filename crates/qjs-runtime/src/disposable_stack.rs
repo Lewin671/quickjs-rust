@@ -298,8 +298,23 @@ pub(crate) fn native_async_disposable_stack_prototype_dispose_async(
             Property::non_enumerable(Value::Boolean(true)),
         );
         let resources = disposable_stack_resources(&object)?;
+        // Dispose LIFO, accumulating failures into a SuppressedError chain (the
+        // returned promise rejects with the chain) rather than stopping at the
+        // first error, mirroring the synchronous `dispose`.
+        let mut completion: Option<RuntimeError> = None;
         while let Some(resource) = resources.pop() {
-            dispose_resource(resource, env)?;
+            if let Some(error) = dispose_resource(resource, env).err() {
+                completion = Some(match completion {
+                    Some(suppressed) => suppressed_error(error, suppressed, env)?,
+                    None => error,
+                });
+            }
+        }
+        if let Some(error) = completion {
+            // A dispose failure rejects the returned promise (with the
+            // SuppressedError chain) rather than throwing synchronously.
+            let reason = crate::error::runtime_error_to_value(error, env);
+            return rejected_promise(reason, env);
         }
     }
     fulfilled_promise(Value::Undefined, env)
@@ -697,6 +712,16 @@ fn fulfilled_promise(value: Value, env: &mut CallEnv) -> Result<Value, RuntimeEr
         return Ok(value);
     };
     crate::promise::promise_resolve(&constructor, value, env)
+}
+
+fn rejected_promise(reason: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+    let Some(constructor) = env.get("Promise") else {
+        return Err(RuntimeError {
+            thrown: Some(Box::new(reason)),
+            message: "throw statement executed".to_owned(),
+        });
+    };
+    crate::promise::promise_reject(&constructor, reason, env)
 }
 
 fn suppressed_error(
