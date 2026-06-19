@@ -241,6 +241,21 @@ fn yield_is_identifier_in_sloppy_non_generator_code() {
 }
 
 #[test]
+fn function_expression_named_yield_is_allowed_inside_generator() {
+    // A non-generator function expression's own-name binding is in the
+    // `[~Yield]` context, so `yield` is a legal name even when the expression
+    // appears inside a generator body.
+    parse_script("function* g() { (function yield() {}); }")
+        .expect("function-expression name `yield` is valid inside a generator");
+    // The enclosing generator still rejects a generator-function *declaration*
+    // named `yield`, which is checked in the enclosing (`[+Yield]`) context.
+    assert!(
+        parse_script("function* g() { function yield() {} }").is_err(),
+        "function declaration named `yield` is rejected inside a generator"
+    );
+}
+
+#[test]
 fn yield_is_reserved_in_strict_nested_function_inside_class_generator_method() {
     assert!(
         parse_script("class C { *m() { function inner() { yield = 1; } } }").is_err(),

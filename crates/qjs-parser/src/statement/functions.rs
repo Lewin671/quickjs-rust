@@ -141,7 +141,23 @@ impl Parser {
                     span: token.span,
                 });
             }
-            self.check_binding_identifier(&name, token.span)?;
+            // The name binding lives inside the function expression, so the
+            // enclosing Yield/Await/static-block context does not apply to it
+            // (those are handled above against the *inner* context); e.g.
+            // `(function yield() {})` is legal inside a generator. Validate the
+            // remaining strict-mode reserved-word rules with that context
+            // cleared.
+            let previous_generator = self.in_generator;
+            let previous_async = self.in_async;
+            let previous_static_block = self.in_static_block;
+            self.in_generator = false;
+            self.in_async = false;
+            self.in_static_block = false;
+            let binding_check = self.check_binding_identifier(&name, token.span);
+            self.in_generator = previous_generator;
+            self.in_async = previous_async;
+            self.in_static_block = previous_static_block;
+            binding_check?;
             Some(name)
         } else {
             None
