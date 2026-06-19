@@ -423,7 +423,7 @@ impl<'a> Vm<'a> {
                     let function = Function::new_user_compiled(CompiledUserFunction {
                         name,
                         has_name_binding,
-                        params,
+                        params: Rc::new(params),
                         env,
                         bytecode,
                         local_names,

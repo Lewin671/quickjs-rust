@@ -64,8 +64,12 @@ pub struct Function {
     /// Whether `name` also creates the function body's internal name binding.
     /// Method definitions have a name property but no inner binding.
     pub(crate) has_name_binding: bool,
-    /// Parameter names.
-    pub params: FunctionParams,
+    /// Parameter names. Held behind `Rc` so the frequent `Function` value
+    /// clones (every property read, capture sync, and call setup) only bump a
+    /// refcount instead of deep-cloning the parameter AST, which dominated call
+    /// cost (`tasks/T011-call-performance.md`). Parameters are immutable after
+    /// the function is created.
+    pub params: Rc<FunctionParams>,
     /// Environment captured when the function was created.
     pub env: HashMap<String, Value>,
     pub(crate) captured_env: Rc<RefCell<HashMap<String, Value>>>,
@@ -136,7 +140,7 @@ pub(crate) struct BoundFunction {
 pub(crate) struct CompiledUserFunction {
     pub(crate) name: Option<String>,
     pub(crate) has_name_binding: bool,
-    pub(crate) params: FunctionParams,
+    pub(crate) params: Rc<FunctionParams>,
     pub(crate) env: HashMap<String, Value>,
     pub(crate) bytecode: Rc<Bytecode>,
     pub(crate) local_names: Vec<String>,
@@ -250,7 +254,7 @@ impl Function {
         let function = Self {
             has_name_binding: name.is_some(),
             name,
-            params,
+            params: Rc::new(params),
             env,
             captured_env,
             with_stack: Vec::new(),
@@ -437,7 +441,7 @@ impl Function {
         let function = Self {
             name: Some(name),
             has_name_binding: false,
-            params: FunctionParams::positional(vec![String::new(); length]),
+            params: Rc::new(FunctionParams::positional(vec![String::new(); length])),
             env: HashMap::new(),
             captured_env: Rc::new(RefCell::new(HashMap::new())),
             with_stack: Vec::new(),
@@ -488,7 +492,7 @@ impl Function {
         let function = Self {
             has_name_binding: false,
             name,
-            params: FunctionParams::positional(params),
+            params: Rc::new(FunctionParams::positional(params)),
             env,
             captured_env,
             with_stack: Vec::new(),

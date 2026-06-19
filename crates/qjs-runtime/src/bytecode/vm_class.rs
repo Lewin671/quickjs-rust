@@ -74,7 +74,7 @@ impl Vm<'_> {
         let constructor_function = Function::new_user_compiled(CompiledUserFunction {
             name: constructor.name.clone(),
             has_name_binding: false,
-            params: constructor.params.clone(),
+            params: std::rc::Rc::new(constructor.params.clone()),
             env: constructor_env,
             bytecode: constructor.bytecode.clone(),
             local_names: constructor.local_names.clone(),
@@ -326,7 +326,7 @@ impl Vm<'_> {
                     let thunk = Function::new_user_compiled(CompiledUserFunction {
                         name: None,
                         has_name_binding: false,
-                        params: qjs_ast::FunctionParams::positional(Vec::new()),
+                        params: std::rc::Rc::new(qjs_ast::FunctionParams::positional(Vec::new())),
                         env: key_env.clone(),
                         bytecode: bytecode.clone(),
                         local_names: local_names.clone(),
@@ -380,7 +380,7 @@ impl Vm<'_> {
         let method_function = Function::new_user_compiled(CompiledUserFunction {
             name: class_method_function_name(method, &key),
             has_name_binding: false,
-            params: method.params.clone(),
+            params: std::rc::Rc::new(method.params.clone()),
             env: method_env.clone(),
             bytecode: method.bytecode.clone(),
             local_names: method.local_names.clone(),
@@ -470,7 +470,7 @@ impl Vm<'_> {
         Some(Function::new_user_compiled(CompiledUserFunction {
             name: None,
             has_name_binding: false,
-            params: qjs_ast::FunctionParams::positional(Vec::new()),
+            params: std::rc::Rc::new(qjs_ast::FunctionParams::positional(Vec::new())),
             env: field_env.clone(),
             bytecode: bytecode.clone(),
             local_names: local_names.clone(),
@@ -546,7 +546,7 @@ impl Vm<'_> {
         let thunk = Function::new_user_compiled(CompiledUserFunction {
             name: None,
             has_name_binding: false,
-            params: qjs_ast::FunctionParams::positional(Vec::new()),
+            params: std::rc::Rc::new(qjs_ast::FunctionParams::positional(Vec::new())),
             env: block_env.clone(),
             bytecode: bytecode.clone(),
             local_names: local_names.clone(),

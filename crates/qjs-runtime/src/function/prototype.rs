@@ -103,7 +103,7 @@ pub(crate) fn native_generator_function(
     let created = Function::new_user_compiled(CompiledUserFunction {
         name: Some(name),
         has_name_binding: true,
-        params,
+        params: std::rc::Rc::new(params),
         env: env_snapshot.clone(),
         bytecode: Rc::new(bytecode),
         local_names,
