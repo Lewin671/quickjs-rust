@@ -425,6 +425,24 @@ fn dynamic_import_in_script_resolves_namespace() {
     assert_eq!(export_log(&namespace, "log"), "99");
 }
 
+#[test]
+fn import_meta_is_null_prototype_object_in_modules() {
+    let namespace = run(
+        "export const proto = Object.getPrototypeOf(import.meta);\n\
+         export const keys = Object.keys(import.meta).length;\n\
+         export const log = [];\n\
+         import(import.meta).then(\n\
+           () => log.push('fulfilled'),\n\
+           error => log.push(error instanceof TypeError)\n\
+         );",
+        &[],
+    )
+    .expect("graph evaluates");
+    assert_eq!(export(&namespace, "proto"), Value::Null);
+    assert_eq!(export(&namespace, "keys"), Value::Number(0.0));
+    assert_eq!(export_log(&namespace, "log"), "true");
+}
+
 // --- top-level await (T012 S5) --------------------------------------------
 
 #[test]

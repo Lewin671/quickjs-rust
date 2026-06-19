@@ -663,10 +663,17 @@ impl<'a> Vm<'a> {
                 },
                 Op::ImportCall { has_options } => self.import_call(has_options)?,
                 Op::ImportMeta => {
-                    return Err(RuntimeError {
-                        thrown: None,
-                        message: "SyntaxError: 'import.meta' is only valid in a module".to_owned(),
-                    });
+                    if self.module_host.is_none() {
+                        return Err(RuntimeError {
+                            thrown: None,
+                            message: "SyntaxError: 'import.meta' is only valid in a module"
+                                .to_owned(),
+                        });
+                    }
+                    self.stack.push(Value::Object(ObjectRef::with_prototype(
+                        HashMap::new(),
+                        None,
+                    )));
                 }
             }
         }
