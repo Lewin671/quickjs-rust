@@ -577,9 +577,19 @@ impl Vm<'_> {
             || (self.bytecode.global_scope
                 && self.bytecode.local_is_body_hoist_only(slot)
                 && !is_compiler_temporary(&self.bytecode.locals[slot].name));
-        if syncs_global_var
-            && let Some(Value::Object(global_this)) =
-                self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned()
+        // Resolve `globalThis` into a local first so the `self.realm` borrow is
+        // released before the body re-borrows it mutably (an `if let` chain
+        // would otherwise hold the immutable borrow across the body and panic on
+        // the `borrow_mut` below).
+        let global_this = if syncs_global_var {
+            match self.realm.borrow().get(GLOBAL_THIS_BINDING).cloned() {
+                Some(Value::Object(global_this)) => Some(global_this),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        if let Some(global_this) = global_this
             && global_this.has_own_property(&self.bytecode.locals[slot].name)
         {
             let name = self.bytecode.locals[slot].name.clone();
