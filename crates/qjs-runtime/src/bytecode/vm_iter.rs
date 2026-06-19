@@ -549,13 +549,23 @@ fn iterator_for_value(value: Value, env: &mut CallEnv) -> Result<Value, RuntimeE
     Ok(iterator)
 }
 
+/// Whether an iterator-protocol result is an Object per spec. Symbols are
+/// modeled as `Value::Object` wrappers in this engine, so `is_object_value`
+/// alone accepts a symbol-primitive `next()` result; the spec requires
+/// `Type(result) is Object`, so a bare symbol primitive must be rejected (a
+/// boxed `Object(symbol)` wrapper stays a valid object).
+fn is_iterator_result_object(value: &Value) -> bool {
+    is_object_value(value)
+        && !matches!(value, Value::Object(object) if crate::symbol::is_symbol_primitive(object))
+}
+
 fn iterator_step_value(
     iterator: &Value,
     next: &Value,
     env: &mut CallEnv,
 ) -> Result<Option<Value>, RuntimeError> {
     let result = call_function(next.clone(), iterator.clone(), Vec::new(), env, false)?;
-    if !is_object_value(&result) {
+    if !is_iterator_result_object(&result) {
         return Err(RuntimeError {
             thrown: None,
             message: "TypeError: iterator result is not an object".to_owned(),

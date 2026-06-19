@@ -621,6 +621,19 @@ fn evaluates_for_of_statements() {
         ),
         Ok(Value::Boolean(true))
     );
+    // An iterator `next()` result that is not an Object throws a TypeError. A
+    // Symbol primitive is not an Object even though symbols are modeled as
+    // object wrappers internally.
+    assert_eq!(
+        eval(
+            "let source = {}; source[Symbol.iterator] = function () { \
+                 let done = { value: null, done: true }; let n = Symbol('s'); \
+                 return { next: function () { let r = n; n = done; return r; } }; \
+             }; \
+             let caught = false; try { for (var value of source) {} } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]
