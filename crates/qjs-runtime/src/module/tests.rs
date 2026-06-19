@@ -461,6 +461,56 @@ fn dynamic_import_rejects_errored_module_again() {
 }
 
 #[test]
+fn for_await_over_dynamic_imports_observes_values_then_rejection() {
+    let namespace = run(
+        "export const log = [];\n\
+         async function main() {\n\
+           try {\n\
+             for await (const ns of [import('a'), import('b'), import('boom')]) {\n\
+               log.push(ns.x);\n\
+             }\n\
+           } catch (error) {\n\
+             log.push(error);\n\
+           }\n\
+         }\n\
+         main();",
+        &[
+            ("a", "export var x = 42;"),
+            ("b", "export var x = 39;"),
+            ("boom", "throw 'foo';"),
+        ],
+    )
+    .expect("graph evaluates");
+    assert_eq!(export_log(&namespace, "log"), "42,39,foo");
+}
+
+#[test]
+fn async_generator_yielding_dynamic_imports_rejects_queued_next() {
+    let namespace = run(
+        "export const log = [];\n\
+         async function* gen() {\n\
+           yield import('a');\n\
+           yield import('b');\n\
+           yield import('boom');\n\
+         }\n\
+         const it = gen();\n\
+         it.next().then(r => log.push(r.value.x));\n\
+         it.next().then(r => log.push(r.value.x));\n\
+         it.next().then(\n\
+           () => log.push('fulfilled'),\n\
+           error => log.push(error)\n\
+         );",
+        &[
+            ("a", "export var x = 42;"),
+            ("b", "export var x = 39;"),
+            ("boom", "throw 'foo';"),
+        ],
+    )
+    .expect("graph evaluates");
+    assert_eq!(export_log(&namespace, "log"), "42,39,foo");
+}
+
+#[test]
 fn dynamic_import_then_runs_after_current_job() {
     // The synchronous body completes (pushing "sync") before the import's
     // `.then` callback (pushing "async") runs as a later microtask.

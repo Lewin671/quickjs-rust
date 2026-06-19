@@ -20,6 +20,7 @@ use super::resolver::ModuleResolver;
 pub(super) struct LinkError {
     pub(super) kind: LinkErrorKind,
     pub(super) message: String,
+    pub(super) thrown: Option<Box<Value>>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -36,6 +37,7 @@ impl LinkError {
         Self {
             kind: LinkErrorKind::Syntax,
             message: message.into(),
+            thrown: None,
         }
     }
 }
@@ -149,6 +151,7 @@ impl ModuleGraph {
             let record = build_record(&resolved.source).map_err(|message| LinkError {
                 kind: LinkErrorKind::Parse,
                 message,
+                thrown: None,
             })?;
             self.insert_and_load_dependencies(key.clone(), record, resolver)?;
         }
@@ -156,10 +159,12 @@ impl ModuleGraph {
         self.evaluate_with_drain(&key, false)
             .map_err(|error| LinkError {
                 // A runtime failure during module evaluation rejects the import
-                // promise; reuse the Runtime variant as a transport and carry
-                // the message through verbatim.
+                // promise. Preserve the original JS throw completion when the
+                // VM provides one so `throw 'x'` rejects with `'x'`, not a
+                // synthesized Error object.
                 kind: LinkErrorKind::Runtime,
                 message: error.message,
+                thrown: error.thrown,
             })?;
         Ok(self.namespace(&key))
     }
@@ -182,6 +187,7 @@ impl ModuleGraph {
         let record = build_record(source).map_err(|message| LinkError {
             kind: LinkErrorKind::Parse,
             message,
+            thrown: None,
         })?;
         let key = specifier.to_owned();
         self.insert_and_load_dependencies(key.clone(), record, resolver)?;
@@ -224,6 +230,7 @@ impl ModuleGraph {
                 let dep_record = build_record(&resolved.source).map_err(|message| LinkError {
                     kind: LinkErrorKind::Parse,
                     message,
+                    thrown: None,
                 })?;
                 self.insert_and_load_dependencies(resolved.key, dep_record, resolver)?;
             }

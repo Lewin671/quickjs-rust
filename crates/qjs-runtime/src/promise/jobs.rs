@@ -148,11 +148,13 @@ fn run_dynamic_import_job(job: &ObjectRef, env: &mut CallEnv) -> Result<(), Runt
             call_function(resolve, Value::Undefined, vec![namespace], env, false)?;
         }
         Err(error) => {
-            let message = match error.kind {
-                ImportErrorKind::Syntax => format!("SyntaxError: {}", error.message),
-                ImportErrorKind::Runtime => error.message,
+            let reason = match (error.kind, error.thrown) {
+                (ImportErrorKind::Runtime, Some(thrown)) => *thrown,
+                (ImportErrorKind::Syntax, _) => {
+                    error_reason(&format!("SyntaxError: {}", error.message), env)
+                }
+                (ImportErrorKind::Runtime, None) => error_reason(&error.message, env),
             };
-            let reason = error_reason(&message, env);
             call_function(reject, Value::Undefined, vec![reason], env, false)?;
         }
     }

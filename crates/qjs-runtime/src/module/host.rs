@@ -37,6 +37,7 @@ pub(crate) enum ImportErrorKind {
 pub(crate) struct ImportError {
     pub(crate) kind: ImportErrorKind,
     pub(crate) message: String,
+    pub(crate) thrown: Option<Box<Value>>,
 }
 
 /// Per-realm dynamic-import host: the shared module graph (which owns the
@@ -81,5 +82,6 @@ fn import_error(error: LinkError) -> ImportError {
             LinkErrorKind::Runtime => ImportErrorKind::Runtime,
         },
         message: error.message,
+        thrown: error.thrown,
     }
 }
