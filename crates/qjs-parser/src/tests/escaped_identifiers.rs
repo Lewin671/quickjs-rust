@@ -108,6 +108,19 @@ fn escaped_reserved_word_label_is_rejected() {
 }
 
 #[test]
+fn escaped_let_is_rejected_as_binding_in_strict_mode() {
+    // The plain `let` keyword has a dedicated token path; the escaped spelling
+    // arrives as an identifier whose StringValue is `let`, which is a reserved
+    // word in strict-mode code and may not name a binding (ECMA-262 13.1.1).
+    assert!(parse_script("\"use strict\"; function l\\u0065t() {}").is_err());
+    assert!(parse_script("\"use strict\"; var l\\u0065t = 1;").is_err());
+    assert!(parse_script("\"use strict\"; class l\\u0065t {}").is_err());
+    // Sloppy-mode `let` (escaped or not) stays a valid binding name.
+    assert!(parse_script("function l\\u0065t() { return 1; }").is_ok());
+    assert!(parse_script("var l\\u0065t = 1;").is_ok());
+}
+
+#[test]
 fn unescaped_get_set_async_are_still_keywords_or_names() {
     // The unescaped accessor/method forms keep working.
     assert!(parse_script("({ get m() { return 1; } });").is_ok());

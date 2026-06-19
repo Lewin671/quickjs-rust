@@ -442,16 +442,17 @@ fn body_lexically_declared_names(body: &[Stmt]) -> Vec<String> {
 
 /// Reports whether `name` is a word that may not be used as a binding
 /// identifier (or label/reference) in strict-mode code. Covers the
-/// strict-mode future reserved words plus `yield` and `static`. `let` is
-/// contextual and handled by its own dedicated path; `eval`/`arguments` have
-/// their own dedicated diagnostics. The StringValue comparison is
-/// escape-insensitive, so an escaped spelling such as `package` is rejected
-/// the same as `package`.
+/// strict-mode future reserved words plus `let`, `yield`, and `static`.
+/// `eval`/`arguments` have their own dedicated diagnostics. The StringValue
+/// comparison is escape-insensitive, so an escaped spelling such as `package`
+/// or `let` is rejected the same as its plain form (the plain `let`
+/// keyword is also caught earlier by its dedicated token path).
 pub(crate) fn is_strict_reserved_word(name: &str) -> bool {
     matches!(
         name,
         "implements"
             | "interface"
+            | "let"
             | "package"
             | "private"
             | "protected"
