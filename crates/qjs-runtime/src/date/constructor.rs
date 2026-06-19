@@ -4,7 +4,8 @@ use crate::{
     date::{
         MS_PER_DAY,
         value::{
-            current_time_ms, define_date_value, parse_date_string, time_clip, time_from_components,
+            current_time_ms, date_value_from_object, define_date_value, is_date_object,
+            parse_date_string, time_clip, time_from_components,
         },
     },
     to_number_with_env, to_primitive_with_hint,
@@ -68,6 +69,11 @@ fn construct_date_value(argument_values: &[Value], env: &mut CallEnv) -> Result<
     if argument_values.len() == 1 {
         return match &argument_values[0] {
             Value::String(source) => Ok(parse_date_string(source)),
+            // `new Date(dateObject)` copies the existing [[DateValue]] directly,
+            // without invoking ToPrimitive/valueOf/toString on the argument.
+            Value::Object(object) if is_date_object(object) => {
+                date_value_from_object(object).map(time_clip)
+            }
             value => {
                 let primitive = to_primitive_with_hint(value.clone(), PreferredType::Default, env)?;
                 match primitive {

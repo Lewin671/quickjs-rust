@@ -525,3 +525,19 @@ fn date_parse_rejects_out_of_range_month_and_day() {
         Ok(Value::Number(1606780800000.0))
     );
 }
+
+#[test]
+fn new_date_from_date_object_copies_value_without_coercion() {
+    // `new Date(dateObject)` uses the existing [[DateValue]] directly, without
+    // calling the argument's toString/valueOf/Symbol.toPrimitive.
+    assert_eq!(
+        eval(
+            "var d = new Date(1438560000000);
+             d.toString = function () { throw new Error('toString'); };
+             d.valueOf = function () { throw new Error('valueOf'); };
+             d[Symbol.toPrimitive] = function () { throw new Error('toPrimitive'); };
+             new Date(d).getTime();"
+        ),
+        Ok(Value::Number(1438560000000.0))
+    );
+}
