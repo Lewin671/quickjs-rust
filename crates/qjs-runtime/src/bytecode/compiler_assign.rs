@@ -337,6 +337,9 @@ impl Compiler {
         else {
             return Err(unsupported_target(target));
         };
+        if matches!(object.as_ref(), Expr::Super { .. }) {
+            return self.compile_super_member_compound_assign(property, op, value);
+        }
         let object_slot = self.temp_local("assign_object");
         let key_slot = self.temp_local("assign_key");
         let value_slot = self.temp_local("assign_value");
@@ -472,6 +475,9 @@ impl Compiler {
         else {
             return Err(unsupported_target(target));
         };
+        if matches!(object.as_ref(), Expr::Super { .. }) {
+            return self.compile_super_member_update(property, op, prefix);
+        }
         let object_slot = self.temp_local("update_object");
         let key_slot = self.temp_local("update_key");
         let old_slot = self.temp_local("update_old");
@@ -503,6 +509,146 @@ impl Compiler {
         self.emit(Op::SetProp {
             is_strict: self.strict,
         });
+    }
+
+    /// Compiles `super.x <op>= value` / `super[k] <op>= value` (including the
+    /// short-circuiting `&&=`, `||=`, `??=`). For the computed form the key is
+    /// evaluated exactly once and reused for the read and the write-back.
+    fn compile_super_member_compound_assign(
+        &mut self,
+        property: &qjs_ast::MemberProperty,
+        op: AssignmentOp,
+        value: &Expr,
+    ) -> Result<(), RuntimeError> {
+        let is_strict = self.strict;
+        // `key_slot` only used by the computed form; named uses the op's key.
+        let key_slot = match property {
+            qjs_ast::MemberProperty::Named(_) => None,
+            qjs_ast::MemberProperty::Computed(expr) => {
+                self.emit(Op::RequireSuperThis);
+                let slot = self.temp_local("assign_key");
+                self.compile_expr(expr)?;
+                self.emit(Op::StoreLocal(slot));
+                Some(slot)
+            }
+            qjs_ast::MemberProperty::Private(name) => {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: format!("SyntaxError: super.#{name} is not allowed"),
+                });
+            }
+        };
+        let emit_get = |compiler: &mut Self| match property {
+            qjs_ast::MemberProperty::Named(name) => {
+                compiler.emit(Op::SuperGet { key: name.clone() });
+            }
+            _ => {
+                compiler.emit(Op::LoadLocal(key_slot.unwrap()));
+                compiler.emit(Op::SuperGetComputed);
+            }
+        };
+        let emit_set = |compiler: &mut Self, value_slot: usize| match property {
+            qjs_ast::MemberProperty::Named(name) => {
+                compiler.emit(Op::LoadLocal(value_slot));
+                compiler.emit(Op::SuperSet {
+                    key: name.clone(),
+                    is_strict,
+                });
+            }
+            _ => {
+                compiler.emit(Op::LoadLocal(key_slot.unwrap()));
+                compiler.emit(Op::LoadLocal(value_slot));
+                compiler.emit(Op::SuperSetComputed { is_strict });
+            }
+        };
+        let value_slot = self.temp_local("assign_value");
+        emit_get(self);
+        match op {
+            AssignmentOp::LogicalAndAssign
+            | AssignmentOp::LogicalOrAssign
+            | AssignmentOp::NullishAssign => {
+                let jump = match op {
+                    AssignmentOp::LogicalAndAssign => self.emit(Op::JumpIfFalse(usize::MAX)),
+                    AssignmentOp::LogicalOrAssign => self.emit(Op::JumpIfTrue(usize::MAX)),
+                    AssignmentOp::NullishAssign => self.emit(Op::JumpIfNotNullish(usize::MAX)),
+                    _ => unreachable!(),
+                };
+                self.emit(Op::Pop);
+                self.compile_expr(value)?;
+                self.emit(Op::StoreLocal(value_slot));
+                emit_set(self, value_slot);
+                let end = self.code.len();
+                self.patch_jump(jump, end);
+            }
+            _ => {
+                self.compile_expr(value)?;
+                self.emit(Op::Binary(assignment_binary_op(op)?));
+                self.emit(Op::StoreLocal(value_slot));
+                emit_set(self, value_slot);
+            }
+        }
+        Ok(())
+    }
+
+    /// Compiles `super.x++` / `++super[k]` (and `--`). Evaluates to the numeric
+    /// value before (postfix) or after (prefix) the update.
+    fn compile_super_member_update(
+        &mut self,
+        property: &qjs_ast::MemberProperty,
+        op: UpdateOp,
+        prefix: bool,
+    ) -> Result<(), RuntimeError> {
+        let is_strict = self.strict;
+        let key_slot = match property {
+            qjs_ast::MemberProperty::Named(_) => None,
+            qjs_ast::MemberProperty::Computed(expr) => {
+                self.emit(Op::RequireSuperThis);
+                let slot = self.temp_local("update_key");
+                self.compile_expr(expr)?;
+                self.emit(Op::StoreLocal(slot));
+                Some(slot)
+            }
+            qjs_ast::MemberProperty::Private(name) => {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: format!("SyntaxError: super.#{name} is not allowed"),
+                });
+            }
+        };
+        let old_slot = self.temp_local("update_old");
+        let new_slot = self.temp_local("update_new");
+        match property {
+            qjs_ast::MemberProperty::Named(name) => {
+                self.emit(Op::SuperGet { key: name.clone() });
+            }
+            _ => {
+                self.emit(Op::LoadLocal(key_slot.unwrap()));
+                self.emit(Op::SuperGetComputed);
+            }
+        }
+        self.emit(Op::ToNumeric);
+        self.emit(Op::StoreLocal(old_slot));
+        self.emit(Op::LoadLocal(old_slot));
+        self.emit(Op::Update(op));
+        self.emit(Op::StoreLocal(new_slot));
+        match property {
+            qjs_ast::MemberProperty::Named(name) => {
+                self.emit(Op::LoadLocal(new_slot));
+                self.emit(Op::SuperSet {
+                    key: name.clone(),
+                    is_strict,
+                });
+            }
+            _ => {
+                self.emit(Op::LoadLocal(key_slot.unwrap()));
+                self.emit(Op::LoadLocal(new_slot));
+                self.emit(Op::SuperSetComputed { is_strict });
+            }
+        }
+        // SuperSet/SuperSetComputed leave the stored value on the stack.
+        self.emit(Op::Pop);
+        self.emit(Op::LoadLocal(if prefix { new_slot } else { old_slot }));
+        Ok(())
     }
 
     fn compile_member_reference(

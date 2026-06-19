@@ -113,3 +113,75 @@ fn computed_super_property_evaluates_key_after_super_call() {
         Ok(Value::String("7:1".to_owned().into()))
     );
 }
+
+#[test]
+fn super_property_compound_assignment_reads_and_writes_through_super() {
+    // `super.x <op>= v` reads the prototype accessor, combines, and writes back
+    // through the home object's prototype setter.
+    assert_eq!(
+        eval(
+            "class A { get x() { return this._x; } set x(v) { this._x = v; } } \
+             class B extends A { \
+               constructor() { super(); this._x = 10; } \
+               run() { super.x += 5; return super.x; } \
+             } \
+             new B().run();"
+        ),
+        Ok(Value::Number(15.0))
+    );
+    // Computed key is evaluated exactly once.
+    assert_eq!(
+        eval(
+            "var keyEvals = 0; \
+             class A { get x() { return this._x; } set x(v) { this._x = v; } } \
+             class B extends A { \
+               constructor() { super(); this._x = 1; } \
+               run() { super[(keyEvals++, 'x')] += 100; return super.x + ':' + keyEvals; } \
+             } \
+             new B().run();"
+        ),
+        Ok(Value::String("101:1".to_owned().into()))
+    );
+}
+
+#[test]
+fn super_property_update_returns_old_or_new_value() {
+    assert_eq!(
+        eval(
+            "class A { get x() { return this._x; } set x(v) { this._x = v; } } \
+             class B extends A { \
+               constructor() { super(); this._x = 4; } \
+               post() { return super.x++; } \
+               peek() { return super.x; } \
+             } \
+             var b = new B(); var old = b.post(); old + ':' + b.peek();"
+        ),
+        Ok(Value::String("4:5".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "class A { get x() { return this._x; } set x(v) { this._x = v; } } \
+             class B extends A { \
+               constructor() { super(); this._x = 4; } \
+               pre() { return ++super.x; } \
+             } \
+             new B().pre();"
+        ),
+        Ok(Value::Number(5.0))
+    );
+}
+
+#[test]
+fn super_property_logical_assignment_short_circuits() {
+    assert_eq!(
+        eval(
+            "class A { get x() { return this._x; } set x(v) { this._x = v; } } \
+             class B extends A { \
+               constructor() { super(); this._x = 0; } \
+               run() { super.x ||= 9; super.x &&= 7; return super.x; } \
+             } \
+             new B().run();"
+        ),
+        Ok(Value::Number(7.0))
+    );
+}
