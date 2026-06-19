@@ -11,7 +11,7 @@ use super::compiler_lexical::{
     catch_param_annex_b_blocked_names, function_body_annex_b_blocked_names, function_param_names,
     lexical_declared_names, switch_lexical_declared_names,
 };
-use super::compiler_try::block_has_sync_using;
+use super::compiler_try::block_has_using;
 use super::ir::{Bytecode, Local, Op};
 use super::util::{stmt_accepts_pending_label, stmt_updates_statement_list_completion};
 
@@ -293,7 +293,7 @@ impl Compiler {
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
             compiler.predeclare_current_scope_lexicals(body);
             compiler.compile_hoisted_function_decls(body)?;
-            if block_has_sync_using(body) {
+            if block_has_using(body) {
                 compiler.compile_statements_with_disposal(body)?;
             } else {
                 for stmt in body {
@@ -832,7 +832,7 @@ impl Compiler {
         match stmt {
             Stmt::Expr(expr) => self.compile_expr(expr),
             Stmt::Block { body, .. } => {
-                if block_has_sync_using(body) {
+                if block_has_using(body) {
                     self.compile_disposable_block(body)
                 } else {
                     self.compile_block_body(body)
@@ -908,11 +908,19 @@ impl Compiler {
                     } else {
                         self.emit_load_undefined();
                     }
-                    // A sync `using` registers its initializer value with the
-                    // enclosing disposal scope before the binding store consumes
-                    // it (RegisterDisposable inspects the stack top in place).
-                    if *kind == VarKind::Using && self.disposable_scope_depth > 0 {
-                        self.emit(Op::RegisterDisposable);
+                    // A `using`/`await using` registers its initializer value
+                    // with the enclosing disposal scope before the binding
+                    // store consumes it (register ops inspect the stack top).
+                    if self.disposable_scope_depth > 0 {
+                        match kind {
+                            VarKind::Using => {
+                                self.emit(Op::RegisterDisposable);
+                            }
+                            VarKind::AwaitUsing => {
+                                self.emit(Op::RegisterAsyncDisposable);
+                            }
+                            _ => {}
+                        }
                     }
                     if has_init {
                         self.compile_binding_initializer(&declaration.binding, *kind)?;
@@ -966,7 +974,7 @@ impl Compiler {
     }
 
     fn compile_script_statement_list(&mut self, body: &[Stmt]) -> Result<(), RuntimeError> {
-        if block_has_sync_using(body) {
+        if block_has_using(body) {
             return self.compile_script_statement_list_with_disposal(body);
         }
         let result_slot = self.temp_local("script_result");

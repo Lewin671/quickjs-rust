@@ -43,8 +43,16 @@ exit. Unlocks ~113 QuickJS-NG-passing Test262 cases under
 - **Slice B.3 — remaining parser refinements (TODO).** Reject `using` directly
   in a `switch` CaseClause (must be in a block). Top-level rejection and
   for-heads are done (A.2/A.3).
-- **Slice C — async runtime disposal (TODO).** `Symbol.asyncDispose` with an
-  `await` at each disposal; per-iteration disposal in `for-of`.
+- **Slice C.1 — async disposal registration (DONE).**
+  `await using` now opens the existing disposal scope for block/function/module
+  bodies and registers resources by resolving `Symbol.asyncDispose` first,
+  falling back to `Symbol.dispose`. This covers synchronous-completion async
+  disposers and method-resolution ordering, reducing the QuickJS-NG
+  `test/language/statements/await-using` exact gap from 36 to 9.
+- **Slice C.2 — awaited disposal completion (TODO).** Actually suspend via
+  `Op::Await` for each async-dispose result while preserving pending
+  throw/return/break through finally, and wire per-iteration disposal in
+  `for-of` / `for-await-of` heads.
 
 ## Slice B plan (sync `using` disposal)
 
@@ -86,12 +94,14 @@ Estimated unlock: ~45 of 47 `using` cases.
 
 ## Slice C plan (async `await using`)
 
-Extend `RegisterDisposable`/`DisposeScope` with an async hint: resolve
-`Symbol.asyncDispose` first (fall back to `Symbol.dispose`), and suspend via
-`Op::Await` on each disposal result. Per-iteration disposal for `for-of`
-(`compiler_control.rs::compile_for_of` / `compile_for_await_of`). Hardest part:
-LIFO disposals each individually awaited while preserving the pending
-completion (throw/return) across suspension (extends `vm_try.rs::end_finally`).
+Extend `DisposeScope` with awaited async completion: it already has enough
+registration metadata to resolve `Symbol.asyncDispose` first (falling back to
+`Symbol.dispose`), but it still calls disposal methods synchronously and ignores
+returned promises. Next, suspend via `Op::Await` on each async-dispose result.
+Per-iteration disposal for `for-of` (`compiler_control.rs::compile_for_of` /
+`compile_for_await_of`) remains unwired. Hardest part: LIFO disposals each
+individually awaited while preserving the pending completion (throw/return)
+across suspension (extends `vm_try.rs::end_finally`).
 Estimated unlock: ~66 `await-using` + 2 `using` cases.
 
 ## Verification

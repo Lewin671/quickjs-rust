@@ -7,15 +7,14 @@ use super::compiler_lexical::{annex_b_blocked_names, catch_param_annex_b_blocked
 use super::ir::{CatchScope, Op};
 use super::util::stmt_updates_statement_list_completion;
 
-/// Whether a block directly declares a sync `using` resource (so its scope
-/// needs an implicit disposal try/finally). `await using` is handled by the
-/// async path.
-pub(super) fn block_has_sync_using(body: &[Stmt]) -> bool {
+/// Whether a block directly declares a `using`/`await using` resource (so its
+/// scope needs an implicit disposal try/finally).
+pub(super) fn block_has_using(body: &[Stmt]) -> bool {
     body.iter().any(|stmt| {
         matches!(
             stmt,
             Stmt::VarDecl {
-                kind: VarKind::Using,
+                kind: VarKind::Using | VarKind::AwaitUsing,
                 ..
             }
         )
@@ -159,7 +158,7 @@ impl Compiler {
             finally: None,
             catch_scope: None,
         });
-        if block_has_sync_using(block) {
+        if block_has_using(block) {
             self.compile_disposable_block(block)?;
             self.emit(Op::StoreLocal(result_slot));
         } else {

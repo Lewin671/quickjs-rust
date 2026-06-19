@@ -92,14 +92,17 @@ pub(super) enum Op {
         raw: Vec<String>,
     },
     NewObjectLiteral,
-    /// Opens a `using` disposal scope: subsequent `RegisterDisposable` ops add
-    /// to it until the matching `DisposeScope`.
+    /// Opens a `using` disposal scope: subsequent register ops add to it until
+    /// the matching `DisposeScope`.
     EnterDisposableScope,
     /// Registers the value on top of the stack (a `using` initializer result,
     /// left in place) as a disposable resource in the current scope: resolves
     /// `Symbol.dispose` once. `null`/`undefined` are ignored; a non-object or a
     /// missing/non-callable `dispose` is a TypeError.
     RegisterDisposable,
+    /// Registers an `await using` initializer result in the current scope:
+    /// resolves `Symbol.asyncDispose` first, falling back to `Symbol.dispose`.
+    RegisterAsyncDisposable,
     /// Closes the current disposal scope, disposing its resources LIFO. A
     /// dispose failure while a throw is already propagating is wrapped in a
     /// `SuppressedError`.

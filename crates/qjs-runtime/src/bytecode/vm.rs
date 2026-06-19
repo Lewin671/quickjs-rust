@@ -315,7 +315,10 @@ impl<'a> Vm<'a> {
                 Op::NewArray { elements } => self.new_array(&elements)?,
                 Op::NewTemplateObject { cooked, raw } => self.new_template_object(&cooked, &raw),
                 Op::NewObjectLiteral => self.new_object_literal(),
-                op @ (Op::EnterDisposableScope | Op::RegisterDisposable | Op::DisposeScope) => {
+                op @ (Op::EnterDisposableScope
+                | Op::RegisterDisposable
+                | Op::RegisterAsyncDisposable
+                | Op::DisposeScope) => {
                     self.run_disposal_op(&op)?;
                 }
                 Op::SetComputedFunctionName(kind) => self.set_computed_function_name(kind)?,

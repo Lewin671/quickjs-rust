@@ -1,10 +1,10 @@
 //! `using` disposal for the bytecode VM (Explicit Resource Management, sync).
 //!
 //! A block containing `using` declarations is compiled with an implicit
-//! try/finally: `EnterDisposableScope` opens a scope, each `using` initializer
-//! is registered via `RegisterDisposable`, and the finally runs `DisposeScope`,
-//! which disposes the resources LIFO on every completion path. A dispose
-//! failure that overrides a pending throw is chained with `SuppressedError`.
+//! try/finally: `EnterDisposableScope` opens a scope, each `using`/`await using`
+//! initializer is registered, and the finally runs `DisposeScope`, which
+//! disposes the resources LIFO on every completion path. A dispose failure that
+//! overrides a pending throw is chained with `SuppressedError`.
 
 use crate::{
     PropertyKey, RuntimeError, Value, call_function, error::create_suppressed_error,
@@ -13,11 +13,17 @@ use crate::{
 
 use super::vm::Vm;
 
-/// A resource registered by a `using` declaration: the value and the
-/// `Symbol.dispose` method resolved once at registration time.
+/// A resource registered by a `using` declaration: the value and disposal
+/// method resolved once at registration time.
 pub(super) struct DisposeResource {
     pub(super) value: Value,
     pub(super) method: Value,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DisposeHint {
+    Sync,
+    Async,
 }
 
 impl Vm<'_> {
@@ -31,7 +37,11 @@ impl Vm<'_> {
                 Ok(())
             }
             Op::RegisterDisposable => {
-                let result = self.register_disposable();
+                let result = self.register_disposable(DisposeHint::Sync);
+                self.handle_runtime_result(result).map(|_| ())
+            }
+            Op::RegisterAsyncDisposable => {
+                let result = self.register_disposable(DisposeHint::Async);
                 self.handle_runtime_result(result).map(|_| ())
             }
             Op::DisposeScope => {
@@ -42,7 +52,7 @@ impl Vm<'_> {
         }
     }
 
-    fn register_disposable(&mut self) -> Result<(), RuntimeError> {
+    fn register_disposable(&mut self, hint: DisposeHint) -> Result<(), RuntimeError> {
         // The resource value stays on the stack (it is also bound to the
         // declaration); only inspect it here.
         let value = match self.stack.last() {
@@ -54,7 +64,6 @@ impl Vm<'_> {
                 });
             }
         };
-        // `using null`/`using undefined` register nothing (disposed as a no-op).
         if matches!(value, Value::Null | Value::Undefined) {
             return Ok(());
         }
@@ -65,28 +74,18 @@ impl Vm<'_> {
             });
         }
         let mut env = self.current_env();
-        let Some(dispose_symbol) = symbol::dispose_symbol(&env) else {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "TypeError: Symbol.dispose is not available".to_owned(),
-            });
-        };
-        let method = property_value_key(
-            value.clone(),
-            &PropertyKey::Symbol(dispose_symbol),
-            &mut env,
-        )?;
+        let method = resolve_dispose_method(value.clone(), hint, &mut env)?;
         self.apply_env(env);
         if matches!(method, Value::Null | Value::Undefined) {
             return Err(RuntimeError {
                 thrown: None,
-                message: "TypeError: `using` value is missing Symbol.dispose".to_owned(),
+                message: missing_dispose_message(hint).to_owned(),
             });
         }
         if !is_callable(&method) {
             return Err(RuntimeError {
                 thrown: None,
-                message: "TypeError: Symbol.dispose is not callable".to_owned(),
+                message: not_callable_message(hint).to_owned(),
             });
         }
         self.disposable_scopes
@@ -129,6 +128,52 @@ impl Vm<'_> {
             self.pending_throw = Some(error);
         }
         Ok(())
+    }
+}
+
+fn resolve_dispose_method(
+    value: Value,
+    hint: DisposeHint,
+    env: &mut crate::CallEnv,
+) -> Result<Value, RuntimeError> {
+    if hint == DisposeHint::Async {
+        let Some(async_dispose_symbol) = symbol::async_dispose_symbol(env) else {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: Symbol.asyncDispose is not available".to_owned(),
+            });
+        };
+        let method = property_value_key(
+            value.clone(),
+            &PropertyKey::Symbol(async_dispose_symbol),
+            env,
+        )?;
+        if !matches!(method, Value::Null | Value::Undefined) {
+            return Ok(method);
+        }
+    }
+    let Some(dispose_symbol) = symbol::dispose_symbol(env) else {
+        return Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: Symbol.dispose is not available".to_owned(),
+        });
+    };
+    property_value_key(value, &PropertyKey::Symbol(dispose_symbol), env)
+}
+
+fn missing_dispose_message(hint: DisposeHint) -> &'static str {
+    match hint {
+        DisposeHint::Sync => "TypeError: `using` value is missing Symbol.dispose",
+        DisposeHint::Async => {
+            "TypeError: `await using` value is missing Symbol.asyncDispose or Symbol.dispose"
+        }
+    }
+}
+
+fn not_callable_message(hint: DisposeHint) -> &'static str {
+    match hint {
+        DisposeHint::Sync => "TypeError: Symbol.dispose is not callable",
+        DisposeHint::Async => "TypeError: Symbol.asyncDispose or Symbol.dispose is not callable",
     }
 }
 

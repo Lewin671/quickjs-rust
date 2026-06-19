@@ -330,8 +330,16 @@ impl Compiler {
                     }
                     if let Some(init) = &declaration.init {
                         self.compile_declaration_init(&declaration.binding, init)?;
-                        if *kind == VarKind::Using && self.disposable_scope_depth > 0 {
-                            self.emit(Op::RegisterDisposable);
+                        if self.disposable_scope_depth > 0 {
+                            match kind {
+                                VarKind::Using => {
+                                    self.emit(Op::RegisterDisposable);
+                                }
+                                VarKind::AwaitUsing => {
+                                    self.emit(Op::RegisterAsyncDisposable);
+                                }
+                                _ => {}
+                            }
                         }
                         self.compile_binding_initializer(&declaration.binding, *kind)?;
                     } else {

@@ -401,6 +401,29 @@ fn using_declaration_has_empty_block_completion() {
 }
 
 #[test]
+fn await_using_block_registers_async_disposables() {
+    assert_eq!(
+        eval_log(
+            "let log = []; \
+             async function f() { \
+               let asyncResource = { \
+                 [Symbol.asyncDispose]() { log.push('async'); }, \
+                 [Symbol.dispose]() { log.push('sync-unreached'); } \
+               }; \
+               let fallback = { \
+                 [Symbol.asyncDispose]: null, \
+                 [Symbol.dispose]() { log.push('fallback'); } \
+               }; \
+               { await using a = asyncResource; await using b = fallback; await using c = null; } \
+               log.push('after'); \
+             } \
+             f(); log;"
+        ),
+        "fallback,async,after"
+    );
+}
+
+#[test]
 fn using_disposal_errors_chain_with_suppressed_error() {
     // A dispose failure that overrides a body throw is wrapped in a
     // SuppressedError carrying both errors.
