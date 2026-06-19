@@ -6,7 +6,7 @@ pub(crate) fn string_property(value: &str, key: &str) -> Option<Value> {
     let index = canonical_string_index(key)?;
     string_code_units(value)
         .get(index)
-        .map(|code_unit| Value::String(string_from_code_unit(*code_unit)))
+        .map(|code_unit| Value::String(string_from_code_unit(*code_unit).into()))
 }
 
 pub(crate) fn string_has_own_property(value: &str, key: &str) -> bool {

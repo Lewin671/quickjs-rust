@@ -73,7 +73,7 @@ pub(crate) fn eval_binary(
                 // buffer by move (no copy).
                 let mut accumulator = to_js_string_with_env(left, env)?;
                 accumulator.push_str(&to_js_string_with_env(right, env)?);
-                return Ok(Value::String(accumulator));
+                return Ok(Value::String(accumulator.into()));
             }
             if matches!(left, Value::BigInt(_)) || matches!(right, Value::BigInt(_)) {
                 return eval_bigint_binary(left, op, right);

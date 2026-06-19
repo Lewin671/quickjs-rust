@@ -23,20 +23,22 @@ fn evaluates_date_local_format_builtins() {
             "let f = Date.prototype[Symbol.toPrimitive]; let d = Object.getOwnPropertyDescriptor(Date.prototype, Symbol.toPrimitive); typeof f + ':' + f.length + ':' + f.name + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
         Ok(Value::String(
-            "function:1:[Symbol.toPrimitive]:false:false:true".to_owned()
+            "function:1:[Symbol.toPrimitive]:false:false:true"
+                .to_owned()
+                .into()
         ))
     );
     assert_eq!(
         eval(
             "let log = ''; let object = { toString: function() { log = log + 't'; return {}; }, valueOf: function() { log = log + 'v'; return 5; } }; Date.prototype[Symbol.toPrimitive].call(object, 'default') + ':' + log;"
         ),
-        Ok(Value::String("5:tv".to_owned()))
+        Ok(Value::String("5:tv".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let log = ''; let object = { toString: function() { log = log + 't'; return 'str'; }, valueOf: function() { log = log + 'v'; return 5; } }; Date.prototype[Symbol.toPrimitive].call(object, 'number') + ':' + log;"
         ),
-        Ok(Value::String("5:v".to_owned()))
+        Ok(Value::String("5:v".to_owned().into()))
     );
     assert!(eval("Date.prototype[Symbol.toPrimitive].call({}, 'bad');").is_err());
     assert!(eval("Date.prototype[Symbol.toPrimitive].call(1, 'string');").is_err());
@@ -46,53 +48,53 @@ fn evaluates_date_local_format_builtins() {
     );
     assert_eq!(
         eval("new Date(0).toDateString();"),
-        Ok(Value::String("Thu Jan 01 1970".to_owned()))
+        Ok(Value::String("Thu Jan 01 1970".to_owned().into()))
     );
     assert_eq!(
         eval("new Date(0).toTimeString();"),
-        Ok(Value::String("00:00:00 GMT+0000".to_owned()))
+        Ok(Value::String("00:00:00 GMT+0000".to_owned().into()))
     );
     assert_eq!(
         eval("new Date(0).toString();"),
         Ok(Value::String(
-            "Thu Jan 01 1970 00:00:00 GMT+0000".to_owned()
+            "Thu Jan 01 1970 00:00:00 GMT+0000".to_owned().into()
         ))
     );
     assert_eq!(
         eval("new Date('0020-01-01T00:00:00Z').toDateString();"),
-        Ok(Value::String("Wed Jan 01 0020".to_owned()))
+        Ok(Value::String("Wed Jan 01 0020".to_owned().into()))
     );
     assert_eq!(
         eval("new Date('-000001-07-01T00:00Z').toDateString();"),
-        Ok(Value::String("Thu Jul 01 -0001".to_owned()))
+        Ok(Value::String("Thu Jul 01 -0001".to_owned().into()))
     );
     assert_eq!(
         eval("new Date('-000001-07-01T00:00:00Z').toDateString();"),
-        Ok(Value::String("Thu Jul 01 -0001".to_owned()))
+        Ok(Value::String("Thu Jul 01 -0001".to_owned().into()))
     );
     assert_eq!(
         eval("new Date('-000001-07-01T00:00:00Z').toString();"),
         Ok(Value::String(
-            "Thu Jul 01 -0001 00:00:00 GMT+0000".to_owned()
+            "Thu Jul 01 -0001 00:00:00 GMT+0000".to_owned().into()
         ))
     );
     assert_eq!(
         eval("new Date('-000012-07-01T00:00:00Z').toString();"),
         Ok(Value::String(
-            "Fri Jul 01 -0012 00:00:00 GMT+0000".to_owned()
+            "Fri Jul 01 -0012 00:00:00 GMT+0000".to_owned().into()
         ))
     );
     assert_eq!(
         eval("new Date(NaN).toString();"),
-        Ok(Value::String("Invalid Date".to_owned()))
+        Ok(Value::String("Invalid Date".to_owned().into()))
     );
     assert_eq!(
         eval("new Date(NaN).toDateString();"),
-        Ok(Value::String("Invalid Date".to_owned()))
+        Ok(Value::String("Invalid Date".to_owned().into()))
     );
     assert_eq!(
         eval("new Date(NaN).toTimeString();"),
-        Ok(Value::String("Invalid Date".to_owned()))
+        Ok(Value::String("Invalid Date".to_owned().into()))
     );
     assert_eq!(
         eval("Number.isNaN(new Date(NaN).getTimezoneOffset());"),

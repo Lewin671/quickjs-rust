@@ -13,9 +13,9 @@ pub(crate) fn native_array_prototype_join(
         Value::Undefined => ",".to_owned(),
         value => to_js_string_with_env(value, env)?,
     };
-    Ok(Value::String(array_join_array_like(
-        array_like, &separator, env,
-    )?))
+    Ok(Value::String(
+        array_join_array_like(array_like, &separator, env)?.into(),
+    ))
 }
 
 pub(crate) fn native_array_prototype_to_string(
@@ -56,7 +56,7 @@ pub(crate) fn native_array_prototype_to_locale_string(
         };
         parts.push(part);
     }
-    Ok(Value::String(parts.join(",")))
+    Ok(Value::String(parts.join(",").into()))
 }
 
 pub(crate) fn array_join(

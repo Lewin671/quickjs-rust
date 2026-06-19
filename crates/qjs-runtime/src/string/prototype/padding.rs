@@ -22,7 +22,7 @@ pub(crate) fn native_string_prototype_pad(
     )?;
     let string_length = value.chars().count();
     if max_length <= string_length {
-        return Ok(Value::String(value));
+        return Ok(Value::String(value.into()));
     }
     // The padded result must not exceed the maximum string length; QuickJS-NG
     // throws rather than attempt a multi-gigabyte allocation.
@@ -38,15 +38,18 @@ pub(crate) fn native_string_prototype_pad(
         value => to_js_string_with_env(value, env)?,
     };
     if fill_string.is_empty() {
-        return Ok(Value::String(value));
+        return Ok(Value::String(value.into()));
     }
 
     let fill_length = max_length - string_length;
     let filler = repeated_prefix(&fill_string, fill_length);
-    Ok(Value::String(match kind {
-        StringPadKind::Start => format!("{filler}{value}"),
-        StringPadKind::End => format!("{value}{filler}"),
-    }))
+    Ok(Value::String(
+        match kind {
+            StringPadKind::Start => format!("{filler}{value}"),
+            StringPadKind::End => format!("{value}{filler}"),
+        }
+        .into(),
+    ))
 }
 
 fn repeated_prefix(pattern: &str, length: usize) -> String {

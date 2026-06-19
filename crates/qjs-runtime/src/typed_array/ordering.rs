@@ -427,7 +427,7 @@ pub(crate) fn native_uint8_array_prototype_to_hex(
             _ => 0,
         })
         .collect();
-    Ok(Value::String(encode_hex_string(&bytes)))
+    Ok(Value::String(encode_hex_string(&bytes).into()))
 }
 
 pub(crate) fn native_uint8_array_prototype_set_from_hex(
@@ -480,7 +480,7 @@ pub(crate) fn native_uint8_array_prototype_set_from_hex(
 
 fn hex_source(value: Option<&Value>, method: &str) -> Result<String, RuntimeError> {
     match value {
-        Some(Value::String(source)) => Ok(source.clone()),
+        Some(Value::String(source)) => Ok(source.clone().to_string()),
         _ => Err(RuntimeError {
             thrown: None,
             message: format!("TypeError: {method} requires a string"),

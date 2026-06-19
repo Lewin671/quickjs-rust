@@ -47,7 +47,7 @@ fn anonymous_default_class_gets_default_name_in_static_initializer() {
     .expect("module evaluates");
     assert_eq!(
         export(&namespace, "observed"),
-        Value::String("default".to_owned())
+        Value::String("default".to_owned().into())
     );
 }
 
@@ -168,7 +168,7 @@ fn module_vars_do_not_leak_to_global_this() {
     // and a subsequent script must not see it.
     run("var leaked = 123;\nexport const v = leaked;", &[]).expect("module evaluates");
     let result = crate::eval("typeof leaked;").expect("script evaluates");
-    assert_eq!(result, Value::String("undefined".to_owned()));
+    assert_eq!(result, Value::String("undefined".to_owned().into()));
 }
 
 #[test]
@@ -238,7 +238,7 @@ fn export_log(namespace: &Value, name: &str) -> String {
             .to_vec()
             .into_iter()
             .map(|value| match value {
-                Value::String(text) => text,
+                Value::String(text) => text.to_string(),
                 Value::Number(number) => number.to_string(),
                 Value::Boolean(flag) => flag.to_string(),
                 other => format!("{other:?}"),
@@ -372,7 +372,10 @@ fn dependent_sees_settled_tla_binding() {
         &[("dep", "export const ready = await Promise.resolve('done');")],
     )
     .expect("graph evaluates");
-    assert_eq!(export(&namespace, "seen"), Value::String("done".to_owned()));
+    assert_eq!(
+        export(&namespace, "seen"),
+        Value::String("done".to_owned().into())
+    );
 }
 
 #[test]

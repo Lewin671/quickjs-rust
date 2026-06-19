@@ -4,7 +4,7 @@ use crate::{Value, eval};
 fn evaluates_object_prototype_property_checks() {
     assert_eq!(
         eval("Object.keys('ab')[1];"),
-        Ok(Value::String("1".to_owned()))
+        Ok(Value::String("1".to_owned().into()))
     );
     assert_eq!(eval("Object.keys(0).length;"), Ok(Value::Number(0.0)));
     assert_eq!(
@@ -70,11 +70,11 @@ fn evaluates_object_prototype_property_checks() {
     );
     assert_eq!(
         eval("Object.prototype.__defineGetter__.name;"),
-        Ok(Value::String("__defineGetter__".to_owned()))
+        Ok(Value::String("__defineGetter__".to_owned().into()))
     );
     assert_eq!(
         eval("Object.prototype.__defineSetter__.name;"),
-        Ok(Value::String("__defineSetter__".to_owned()))
+        Ok(Value::String("__defineSetter__".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -84,7 +84,7 @@ fn evaluates_object_prototype_property_checks() {
              let desc = Object.getOwnPropertyDescriptor(object, 'value'); \
              [result, object.value, desc.get.name, desc.set, desc.enumerable, desc.configurable].join('|');"
         ),
-        Ok(Value::String("|7|getter||true|true".to_owned()))
+        Ok(Value::String("|7|getter||true|true".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -95,7 +95,7 @@ fn evaluates_object_prototype_property_checks() {
              let desc = Object.getOwnPropertyDescriptor(object, 'value'); \
              [result, object.stored, desc.get, desc.set.name, desc.enumerable, desc.configurable].join('|');"
         ),
-        Ok(Value::String("|9||setter|true|true".to_owned()))
+        Ok(Value::String("|9||setter|true|true".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -108,7 +108,7 @@ fn evaluates_object_prototype_property_checks() {
              let desc = Object.getOwnPropertyDescriptor(object, 'value'); \
              [object.value, desc.set.name, desc.enumerable, desc.configurable].join('|');"
         ),
-        Ok(Value::String("2|originalSet|true|true".to_owned()))
+        Ok(Value::String("2|originalSet|true|true".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -122,7 +122,7 @@ fn evaluates_object_prototype_property_checks() {
              let desc = Object.getOwnPropertyDescriptor(object, 'value'); \
              [object.value, object.stored, desc.get.name, desc.enumerable, desc.configurable].join('|');"
         ),
-        Ok(Value::String("1|3|originalGet|true|true".to_owned()))
+        Ok(Value::String("1|3|originalGet|true|true".to_owned().into()))
     );
     assert!(eval("({}).__defineGetter__('value', 1);").is_err());
     assert!(eval("({}).__defineSetter__('value', 1);").is_err());
@@ -140,19 +140,19 @@ fn evaluates_object_prototype_property_checks() {
         eval(
             "let object = {}; Object.defineProperty(object, 'value', { get: function getter() { return 1; }, configurable: true }); object.__lookupGetter__('value').name;"
         ),
-        Ok(Value::String("getter".to_owned()))
+        Ok(Value::String("getter".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let object = {}; Object.defineProperty(object, 'value', { set: function setter(v) {}, configurable: true }); object.__lookupSetter__('value').name;"
         ),
-        Ok(Value::String("setter".to_owned()))
+        Ok(Value::String("setter".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let proto = {}; Object.defineProperty(proto, 'value', { get: function inherited() { return 1; }, configurable: true }); Object.create(proto).__lookupGetter__('value').name;"
         ),
-        Ok(Value::String("inherited".to_owned()))
+        Ok(Value::String("inherited".to_owned().into()))
     );
     assert_eq!(
         eval("let object = { value: 1 }; object.__lookupGetter__('value');"),
@@ -162,7 +162,7 @@ fn evaluates_object_prototype_property_checks() {
         eval(
             "let key = Symbol(); let object = {}; Object.defineProperty(object, key, { get: function symbolic() { return 1; }, configurable: true }); object.__lookupGetter__(key).name;"
         ),
-        Ok(Value::String("symbolic".to_owned()))
+        Ok(Value::String("symbolic".to_owned().into()))
     );
     assert_eq!(
         eval("'ab'.__lookupGetter__('length');"),
@@ -173,12 +173,12 @@ fn evaluates_object_prototype_property_checks() {
         eval(
             "class C { get #m() { return 'Test262'; } check() { return [this.hasOwnProperty('#m'), '#m' in this, this.__lookupGetter__('#m'), this.#m].join('|'); } } new C().check();"
         ),
-        Ok(Value::String("false|false||Test262".to_owned()))
+        Ok(Value::String("false|false||Test262".to_owned().into()))
     );
     assert_eq!(
         eval(
             "class C { set #m(value) { this.value = value; } check() { return [this.hasOwnProperty('#m'), '#m' in this, this.__lookupSetter__('#m')].join('|'); } } new C().check();"
         ),
-        Ok(Value::String("false|false|".to_owned()))
+        Ok(Value::String("false|false|".to_owned().into()))
     );
 }

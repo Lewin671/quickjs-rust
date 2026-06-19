@@ -64,7 +64,7 @@ impl Compiler {
             }
             match &property.key {
                 ObjectPropertyKey::Literal(key) => {
-                    let slot = self.const_slot(Value::String(key.clone()));
+                    let slot = self.const_slot(Value::String(key.clone().into()));
                     self.emit(Op::LoadConst(slot));
                     // `{ f: <anon> }` names a plain property value after the
                     // key via NamedEvaluation. Object method syntax also gets
@@ -154,7 +154,7 @@ impl Compiler {
     ) -> Result<(), RuntimeError> {
         match property {
             MemberProperty::Named(name) => {
-                let slot = self.const_slot(Value::String(name.clone()));
+                let slot = self.const_slot(Value::String(name.clone().into()));
                 self.emit(Op::LoadConst(slot));
                 Ok(())
             }

@@ -25,7 +25,7 @@ fn block_scoped_lexicals_are_captured_independently() {
              { let x = 'inside'; inside = function() { return x; }; } \
              before() + ':' + inside() + ':' + x;"
         ),
-        Ok(Value::String("outside:inside:outside".to_owned()))
+        Ok(Value::String("outside:inside:outside".to_owned().into()))
     );
 }
 
@@ -69,7 +69,7 @@ fn evaluates_number_binary_fast_paths_with_bytecode() {
         eval_bytecode_source(
             "let accessed = false; let left = { valueOf: function() { accessed = true; return 4; } }; let right = { valueOf: function() { return 2; } }; (left <= right) + ':' + accessed;"
         ),
-        Ok(Value::String("false:true".to_owned()))
+        Ok(Value::String("false:true".to_owned().into()))
     );
     assert!(matches!(
         eval_bytecode_source("(function() { return 1; }) * {};"),
@@ -95,7 +95,7 @@ fn evaluates_number_unary_fast_paths_with_bytecode() {
         eval_bytecode_source(
             "let accessed = false; let object = { valueOf: function() { accessed = true; return 1; } }; (+object) + ':' + accessed;"
         ),
-        Ok(Value::String("1:true".to_owned()))
+        Ok(Value::String("1:true".to_owned().into()))
     );
     assert_eq!(
         eval_bytecode_source("Object.is(-(0), -0);"),
@@ -153,27 +153,27 @@ fn evaluates_slot_locals_with_bytecode() {
     );
     assert_eq!(
         eval_bytecode_source("function f(x) { { let x = 'inner'; } return x; } f('outer');"),
-        Ok(Value::String("outer".to_owned()))
+        Ok(Value::String("outer".to_owned().into()))
     );
     assert_eq!(
         eval_bytecode_source("function f(x) { { const x = 'inner'; } return x; } f('outer');"),
-        Ok(Value::String("outer".to_owned()))
+        Ok(Value::String("outer".to_owned().into()))
     );
     assert_eq!(
         eval_bytecode_source("let x = 'outer'; { let x = 'inner'; } x;"),
-        Ok(Value::String("outer".to_owned()))
+        Ok(Value::String("outer".to_owned().into()))
     );
     assert_eq!(
         eval_bytecode_source("let x = 'outer'; try { let x = 'inner'; } catch (e) {} x;"),
-        Ok(Value::String("outer".to_owned()))
+        Ok(Value::String("outer".to_owned().into()))
     );
     assert_eq!(
         eval_bytecode_source("let x = 'outer'; try { 1; } finally { let x = 'inner'; } x;"),
-        Ok(Value::String("outer".to_owned()))
+        Ok(Value::String("outer".to_owned().into()))
     );
     assert_eq!(
         eval_bytecode_source("let x = 'outer'; switch (1) { case 1: let x = 'inner'; } x;"),
-        Ok(Value::String("outer".to_owned()))
+        Ok(Value::String("outer".to_owned().into()))
     );
 }
 
@@ -322,17 +322,17 @@ fn evaluates_branch_and_loop_bytecode_subset() {
     assert_bytecode_evaluates("try { throw 'hit'; } catch (error) { error; }");
     assert_eq!(
         eval_bytecode_source("try { throw 'x'; } catch (e) {} typeof e;"),
-        Ok(Value::String("undefined".to_owned()))
+        Ok(Value::String("undefined".to_owned().into()))
     );
     assert_eq!(
         eval_bytecode_source("let e = 'outer'; try { throw 'x'; } catch (e) {} e;"),
-        Ok(Value::String("outer".to_owned()))
+        Ok(Value::String("outer".to_owned().into()))
     );
     assert_eq!(
         eval_bytecode_source(
             "function f() { try { throw 'x'; } catch (e) { return 'catch'; } finally { return typeof e; } } f();"
         ),
-        Ok(Value::String("undefined".to_owned()))
+        Ok(Value::String("undefined".to_owned().into()))
     );
     assert_bytecode_evaluates("let x = 1; try { x = 2; } finally { x = x + 3; } x;");
     assert_bytecode_evaluates(
@@ -364,14 +364,14 @@ fn evaluates_branch_and_loop_bytecode_subset() {
             "function f() { throw 'native bridge must not rewrite JS throws'; } let caught; try { f(); } catch (error) { caught = error; } caught;"
         ),
         Ok(Value::String(
-            "native bridge must not rewrite JS throws".to_owned()
+            "native bridge must not rewrite JS throws".to_owned().into()
         ))
     );
     assert_eq!(
         eval_bytecode_source(
             "function f() { throw { name: 'kept' }; } let caught; try { f(); } catch (error) { caught = error.name; } caught;"
         ),
-        Ok(Value::String("kept".to_owned()))
+        Ok(Value::String("kept".to_owned().into()))
     );
     assert_eq!(
         eval_bytecode_source(
@@ -383,13 +383,13 @@ fn evaluates_branch_and_loop_bytecode_subset() {
         eval_bytecode_source(
             "let object = { valueOf: function() { throw 'error'; }, toString: function() { return 1; } }; let caught; try { object >>> 0; } catch (error) { caught = error; } caught;"
         ),
-        Ok(Value::String("error".to_owned()))
+        Ok(Value::String("error".to_owned().into()))
     );
     assert_eq!(
         eval_bytecode_source(
             "let object = { valueOf: function() { throw 'unary'; }, toString: function() { return 1; } }; let caught; try { +object; } catch (error) { caught = error; } caught;"
         ),
-        Ok(Value::String("unary".to_owned()))
+        Ok(Value::String("unary".to_owned().into()))
     );
     assert_eq!(
         eval_bytecode_source(
@@ -472,7 +472,7 @@ fn evaluates_objects_arrays_members_and_calls_with_bytecode() {
         eval_bytecode_source(
             "let out = ''; String.prototype.charAt.extra = true; for (var key in String.prototype.charAt) { out = out + key; } out;"
         ),
-        Ok(Value::String("extra".to_owned()))
+        Ok(Value::String("extra".to_owned().into()))
     );
 }
 
@@ -486,13 +486,13 @@ fn seeds_bytecode_function_env_from_referenced_caller_bindings() {
         eval_bytecode_source(
             "let seen = ''; [1, 2].forEach(function(value) { seen = seen + value; }); seen;",
         ),
-        Ok(Value::String("12".to_owned()))
+        Ok(Value::String("12".to_owned().into()))
     );
     assert_eq!(
         eval_bytecode_source(
             "(function() { function a() { return 1; } function b() { return 2; } function c() { return a() + b(); } return [a(), b(), c()].join('|'); })();",
         ),
-        Ok(Value::String("1|2|3".to_owned()))
+        Ok(Value::String("1|2|3".to_owned().into()))
     );
     assert_eq!(
         eval_bytecode_source(
@@ -504,13 +504,13 @@ fn seeds_bytecode_function_env_from_referenced_caller_bindings() {
         eval_bytecode_source(
             "function makeCounter() { let index = 0; return function() { index = index + 1; return index; }; } let next = makeCounter(); next() + ':' + next();",
         ),
-        Ok(Value::String("1:2".to_owned()))
+        Ok(Value::String("1:2".to_owned().into()))
     );
     assert_eq!(
         eval_bytecode_source(
             "function makePair() { let index = 0; return [function() { index = index + 1; return index; }, function() { index = index + 1; return index; }]; } let pair = makePair(); pair[0]() + ':' + pair[1]() + ':' + pair[0]();",
         ),
-        Ok(Value::String("1:2:3".to_owned()))
+        Ok(Value::String("1:2:3".to_owned().into()))
     );
     assert_eq!(
         eval_bytecode_source(

@@ -9,7 +9,7 @@ fn private_async_generator_method_is_an_async_generator() {
             "class C { async *#m() { yield 1; } get m() { return this.#m; } } \
              Object.prototype.toString.call(new C().m());"
         ),
-        Ok(Value::String("[object AsyncGenerator]".to_owned()))
+        Ok(Value::String("[object AsyncGenerator]".to_owned().into()))
     );
     // A private sync `*#m` stays a sync generator.
     assert_eq!(
@@ -17,7 +17,7 @@ fn private_async_generator_method_is_an_async_generator() {
             "class C { *#m() { yield 1; } get m() { return this.#m; } } \
              Object.prototype.toString.call(new C().m());"
         ),
-        Ok(Value::String("[object Generator]".to_owned()))
+        Ok(Value::String("[object Generator]".to_owned().into()))
     );
 }
 
@@ -40,7 +40,7 @@ fn optional_private_member_access_short_circuits_nullish_base() {
              let c = new C();
              C.access(c) + ':' + C.access(null) + ':' + C.access(undefined);"
         ),
-        Ok(Value::String("ok:undefined:undefined".to_owned()))
+        Ok(Value::String("ok:undefined:undefined".to_owned().into()))
     );
 }
 
@@ -55,7 +55,7 @@ fn optional_chain_can_feed_private_member_access() {
              let c = new C();
              c.access({holder: c}) + ':' + c.access(null) + ':' + c.access(undefined);"
         ),
-        Ok(Value::String("ok:undefined:undefined".to_owned()))
+        Ok(Value::String("ok:undefined:undefined".to_owned().into()))
     );
 }
 
@@ -121,7 +121,7 @@ fn for_in_and_for_of_write_private_field_targets() {
              let c = new C();
              c.forOf() + ':' + c.forIn();"
         ),
-        Ok(Value::String("2:a".to_owned()))
+        Ok(Value::String("2:a".to_owned().into()))
     );
 }
 
@@ -270,7 +270,7 @@ fn static_private_field_is_not_visible_through_default_proxy() {
              try { P.x(); } catch (error) { caught = error instanceof TypeError; }
              C.x() + ':' + caught;"
         ),
-        Ok(Value::String("1:true".to_owned()))
+        Ok(Value::String("1:true".to_owned().into()))
     );
 }
 
@@ -316,7 +316,7 @@ fn private_elements_on_proxy_receiver_bypass_get_trap() {
              class C extends Base { #f = 3; method() { return this.#f; } } \
              let c = new C(); c.method() + ':' + hits.join('|');"
         ),
-        Ok(Value::String("3:method".to_owned()))
+        Ok(Value::String("3:method".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -325,7 +325,7 @@ fn private_elements_on_proxy_receiver_bypass_get_trap() {
              class C extends Base { get #f() { return 3; } method() { return this.#f; } } \
              let c = new C(); c.method() + ':' + hits.join('|');"
         ),
-        Ok(Value::String("3:method".to_owned()))
+        Ok(Value::String("3:method".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -334,7 +334,7 @@ fn private_elements_on_proxy_receiver_bypass_get_trap() {
              class C extends Base { #m() { return 3; } method() { return this.#m(); } } \
              let c = new C(); c.method() + ':' + hits.join('|');"
         ),
-        Ok(Value::String("3:method".to_owned()))
+        Ok(Value::String("3:method".to_owned().into()))
     );
 }
 
@@ -465,7 +465,7 @@ fn nested_function_resolves_enclosing_private_field() {
             "class C { #f = 'ok'; read() { let self = this; \
              function inner() { return self.#f; } return inner(); } } new C().read();"
         ),
-        Ok(Value::String("ok".to_owned()))
+        Ok(Value::String("ok".to_owned().into()))
     );
 }
 

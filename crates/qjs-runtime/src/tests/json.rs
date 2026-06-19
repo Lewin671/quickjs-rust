@@ -2,10 +2,13 @@ use crate::{Value, eval};
 
 #[test]
 fn evaluates_json_builtins() {
-    assert_eq!(eval("typeof JSON;"), Ok(Value::String("object".to_owned())));
+    assert_eq!(
+        eval("typeof JSON;"),
+        Ok(Value::String("object".to_owned().into()))
+    );
     assert_eq!(
         eval("Object.prototype.toString.call(JSON);"),
-        Ok(Value::String("[object JSON]".to_owned()))
+        Ok(Value::String("[object JSON]".to_owned().into()))
     );
     assert_eq!(eval("JSON.parse.length;"), Ok(Value::Number(2.0)));
     assert_eq!(eval("JSON.rawJSON.length;"), Ok(Value::Number(1.0)));
@@ -16,11 +19,11 @@ fn evaluates_json_builtins() {
     assert_eq!(eval("JSON.parse('-12.5e2');"), Ok(Value::Number(-1250.0)));
     assert_eq!(
         eval("JSON.parse('\"text\"');"),
-        Ok(Value::String("text".to_owned()))
+        Ok(Value::String("text".to_owned().into()))
     );
     assert_eq!(
         eval("JSON.parse('\"line\\\\nfeed\"');"),
-        Ok(Value::String("line\nfeed".to_owned()))
+        Ok(Value::String("line\nfeed".to_owned().into()))
     );
     assert_eq!(
         eval("JSON.parse('[1, true, null]')[1];"),
@@ -32,22 +35,24 @@ fn evaluates_json_builtins() {
     );
     assert_eq!(
         eval("JSON.stringify({a: 1, b: [true, null], c: undefined});"),
-        Ok(Value::String("{\"a\":1,\"b\":[true,null]}".to_owned()))
+        Ok(Value::String(
+            "{\"a\":1,\"b\":[true,null]}".to_owned().into()
+        ))
     );
     assert_eq!(
         eval("JSON.stringify(['x', undefined, NaN, Infinity]);"),
-        Ok(Value::String("[\"x\",null,null,null]".to_owned()))
+        Ok(Value::String("[\"x\",null,null,null]".to_owned().into()))
     );
     assert_eq!(eval("JSON.stringify(undefined);"), Ok(Value::Undefined));
     assert_eq!(
         eval("JSON.stringify(JSON.rawJSON(1.1));"),
-        Ok(Value::String("1.1".to_owned()))
+        Ok(Value::String("1.1".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let parsed = JSON.parse(JSON.stringify({x: JSON.rawJSON('true'), y: JSON.rawJSON('\"text\"')})); parsed.x + ':' + parsed.y;"
         ),
-        Ok(Value::String("true:text".to_owned()))
+        Ok(Value::String("true:text".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -87,13 +92,13 @@ fn json_stringify_observes_replacer_and_wrapper_semantics() {
         eval(
             "let n = new Number(10); n.toString = function() { return 'toString'; }; n.valueOf = function() { throw new Error('bad'); }; JSON.stringify({10: 1, toString: 2}, [n]);"
         ),
-        Ok(Value::String("{\"toString\":2}".to_owned()))
+        Ok(Value::String("{\"toString\":2}".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let s = new String('str'); s.toString = function() { return 'toString'; }; s.valueOf = function() { throw new Error('bad'); }; JSON.stringify({str: 1, toString: 2}, [s]);"
         ),
-        Ok(Value::String("{\"toString\":2}".to_owned()))
+        Ok(Value::String("{\"toString\":2}".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -108,30 +113,30 @@ fn json_stringify_space_and_primitive_wrappers_use_conversion() {
     assert_eq!(
         eval("JSON.stringify({a:{b:1}}, null, new Number(2));"),
         Ok(Value::String(
-            "{\n  \"a\": {\n    \"b\": 1\n  }\n}".to_owned()
+            "{\n  \"a\": {\n    \"b\": 1\n  }\n}".to_owned().into()
         ))
     );
     assert_eq!(
         eval(
             "let n = new Number(1); n.valueOf = function() { return 3; }; JSON.stringify({a:1}, null, n);"
         ),
-        Ok(Value::String("{\n   \"a\": 1\n}".to_owned()))
+        Ok(Value::String("{\n   \"a\": 1\n}".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let s = new String('x'); s.toString = function() { return '--'; }; JSON.stringify({a:1}, null, s);"
         ),
-        Ok(Value::String("{\n--\"a\": 1\n}".to_owned()))
+        Ok(Value::String("{\n--\"a\": 1\n}".to_owned().into()))
     );
     assert_eq!(
         eval("let n = new Number(1); n.valueOf = function() { return 2; }; JSON.stringify([n]);"),
-        Ok(Value::String("[2]".to_owned()))
+        Ok(Value::String("[2]".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let s = new String('x'); s.toString = function() { return 'ok'; }; JSON.stringify([s]);"
         ),
-        Ok(Value::String("[\"ok\"]".to_owned()))
+        Ok(Value::String("[\"ok\"]".to_owned().into()))
     );
 }
 
@@ -143,13 +148,13 @@ fn json_stringify_to_json_proxy_and_cycle_semantics() {
     );
     assert_eq!(
         eval("JSON.stringify({ toJSON: function() { return [false]; } });"),
-        Ok(Value::String("[false]".to_owned()))
+        Ok(Value::String("[false]".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let objectProxy = new Proxy({}, { getOwnPropertyDescriptor() { return { value: 1, writable: true, enumerable: true, configurable: true }; }, get() { return 1; }, ownKeys() { return ['a', 'b']; } }); JSON.stringify(new Proxy(objectProxy, {}));"
         ),
-        Ok(Value::String("{\"a\":1,\"b\":1}".to_owned()))
+        Ok(Value::String("{\"a\":1,\"b\":1}".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -163,7 +168,7 @@ fn json_stringify_to_json_proxy_and_cycle_semantics() {
 fn json_stringify_escapes_unpaired_surrogates() {
     assert_eq!(
         eval("JSON.stringify(String.fromCharCode(0xD834));"),
-        Ok(Value::String("\"\\ud834\"".to_owned()))
+        Ok(Value::String("\"\\ud834\"".to_owned().into()))
     );
 }
 
@@ -173,14 +178,16 @@ fn json_parse_reviver_observes_context_and_forward_modifications() {
         eval(
             "let log = []; JSON.parse('{\"a\":1,\"b\":[2]}', function(k, v, c) { log.push(k + ':' + String(c.source)); return v; }); log.join('|');"
         ),
-        Ok(Value::String("a:1|0:2|b:undefined|:undefined".to_owned()))
+        Ok(Value::String(
+            "a:1|0:2|b:undefined|:undefined".to_owned().into()
+        ))
     );
     assert_eq!(
         eval(
             "let log = []; let out = JSON.parse('[1,2]', function(k, v, c) { log.push(k + ':' + String(v) + ':' + String(c.source)); if (k === '0') this[1] = 3; return this[k]; }); out.join(',') + '|' + log.join('|');"
         ),
         Ok(Value::String(
-            "1,3|0:1:1|1:3:undefined|:1,3:undefined".to_owned()
+            "1,3|0:1:1|1:3:undefined|:1,3:undefined".to_owned().into()
         ))
     );
     assert_eq!(
@@ -197,13 +204,13 @@ fn json_parse_reviver_uses_property_internal_methods() {
         eval(
             "let object = JSON.parse('{\"a\":1,\"b\":2}', function(k, v) { if (k === 'a') Object.defineProperty(this, 'b', { configurable: false }); if (k === 'b') return 22; return v; }); object.a + ':' + object.b;"
         ),
-        Ok(Value::String("1:2".to_owned()))
+        Ok(Value::String("1:2".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let array = JSON.parse('[1,2]', function(k, v) { if (k === '0') Object.defineProperty(this, '1', { configurable: false }); if (k === '1') return; return v; }); array[0] + ':' + array.hasOwnProperty('1') + ':' + array[1];"
         ),
-        Ok(Value::String("1:true:2".to_owned()))
+        Ok(Value::String("1:true:2".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -221,6 +228,6 @@ fn json_parse_reviver_uses_property_internal_methods() {
         eval(
             "let target = { a: 1 }; let proxy = new Proxy(target, { ownKeys() { return ['a']; }, getOwnPropertyDescriptor() { return { value: 1, enumerable: true, configurable: true }; }, get(t, k) { return t[k]; } }); let log = []; JSON.parse('[0,0]', function(k, v) { if (k === '0') this[1] = proxy; log.push(k); return v; }); log.join(',');"
         ),
-        Ok(Value::String("0,a,1,".to_owned()))
+        Ok(Value::String("0,a,1,".to_owned().into()))
     );
 }

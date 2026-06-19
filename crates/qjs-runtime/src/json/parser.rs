@@ -94,7 +94,7 @@ fn internalize_json_property(
         reviver.clone(),
         holder.clone(),
         vec![
-            Value::String(name.to_owned()),
+            Value::String(name.to_owned().into()),
             value,
             reviver_context(node, env),
         ],
@@ -191,7 +191,7 @@ fn reviver_context(node: &JsonNode, env: &CallEnv) -> Value {
     if let Some(source) = &node.source {
         context.define_property(
             "source".to_owned(),
-            Property::enumerable(Value::String(source.clone())),
+            Property::enumerable(Value::String(source.clone().into())),
         );
     }
     Value::Object(context)
@@ -404,7 +404,7 @@ impl<'a> JsonParser<'a> {
         let start = self.cursor;
         let value = self.string()?;
         Ok(JsonNode {
-            value: Value::String(value),
+            value: Value::String(value.into()),
             source: Some(self.source[start..self.cursor].to_owned()),
             children: JsonNodeChildren::None,
         })

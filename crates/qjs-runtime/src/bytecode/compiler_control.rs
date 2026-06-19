@@ -568,7 +568,7 @@ impl Compiler {
     }
 
     fn emit_string(&mut self, value: &str) {
-        let slot = self.const_slot(Value::String(value.to_owned()));
+        let slot = self.const_slot(Value::String(value.to_owned().into()));
         self.emit(Op::LoadConst(slot));
     }
 

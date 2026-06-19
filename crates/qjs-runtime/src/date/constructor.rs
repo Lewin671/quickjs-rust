@@ -18,9 +18,9 @@ pub(crate) fn native_date(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if !is_construct {
-        return Ok(Value::String(super::iso::format_local_string(
-            current_time_ms(),
-        )));
+        return Ok(Value::String(
+            super::iso::format_local_string(current_time_ms()).into(),
+        ));
     }
 
     let Value::Object(object) = this_value else {

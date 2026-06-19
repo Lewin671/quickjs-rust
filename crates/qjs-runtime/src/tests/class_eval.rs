@@ -9,7 +9,7 @@ fn class_field_direct_eval_inherits_initializer_context() {
              class C extends A { field = eval('executed = true; () => super.x;'); } \
              var c = new C(); c.field.call(c) + ':' + executed;"
         ),
-        Ok(Value::String("9:true".to_owned()))
+        Ok(Value::String("9:true".to_owned().into()))
     );
     assert_eq!(
         eval("(function() { class C { field = eval('new.target;'); } return new C().field; })();"),
@@ -27,7 +27,7 @@ fn class_field_nested_arrow_eval_keeps_initializer_context() {
              try { new C().field(); } catch (error) { caught = error instanceof SyntaxError; } \
              caught + ':' + executed;"
         ),
-        Ok(Value::String("true:false".to_owned()))
+        Ok(Value::String("true:false".to_owned().into()))
     );
 }
 
@@ -41,7 +41,7 @@ fn class_field_eval_applies_initializer_early_errors() {
              try { new C(); } catch (error) { caught = error instanceof SyntaxError; } \
              caught + ':' + executed;"
         ),
-        Ok(Value::String("true:false".to_owned()))
+        Ok(Value::String("true:false".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -52,7 +52,7 @@ fn class_field_eval_applies_initializer_early_errors() {
              try { new C().field(); } catch (error) { caught = error instanceof SyntaxError; } \
              caught + ':' + executed;"
         ),
-        Ok(Value::String("true:false".to_owned()))
+        Ok(Value::String("true:false".to_owned().into()))
     );
 }
 
@@ -66,7 +66,7 @@ fn class_field_indirect_eval_uses_global_script_context() {
              try { new C(); } catch (error) { caught = error instanceof SyntaxError; } \
              caught + ':' + executed;"
         ),
-        Ok(Value::String("true:false".to_owned()))
+        Ok(Value::String("true:false".to_owned().into()))
     );
     assert_eq!(
         eval(

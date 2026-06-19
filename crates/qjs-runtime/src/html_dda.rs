@@ -38,7 +38,7 @@ mod tests {
                 "let v = __quickjsRustIsHTMLDDA; typeof v + ':' + !v + ':' + (v == null) + ':' + (v == undefined) + ':' + (v === undefined) + ':' + v();"
             ),
             Ok(Value::String(
-                "undefined:true:true:true:false:null".to_owned()
+                "undefined:true:true:true:false:null".to_owned().into()
             ))
         );
     }

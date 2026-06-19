@@ -42,7 +42,7 @@ fn data_view_accepts_shared_array_buffer() {
              let v = new DataView(b, 2, 4); \
              [v.byteLength, v.byteOffset, v.buffer === b].join(':');"
         ),
-        Ok(Value::String("4:2:true".to_owned()))
+        Ok(Value::String("4:2:true".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -88,7 +88,7 @@ fn data_view_constructor_reads_custom_new_target_prototype_after_offset() {
              Reflect.construct(DataView, [buffer, offset], newTarget); \
              calls.join(':');"
         ),
-        Ok(Value::String("offset:prototype".to_owned()))
+        Ok(Value::String("offset:prototype".to_owned().into()))
     );
 }
 
@@ -145,7 +145,7 @@ fn data_view_constructor_rechecks_resized_buffer_after_custom_prototype_access()
              catch (e) { invalidThrows = e instanceof RangeError; } \
              [valid.byteLength, invalidThrows].join(':');"
         ),
-        Ok(Value::String("0:true".to_owned()))
+        Ok(Value::String("0:true".to_owned().into()))
     );
 }
 
@@ -154,7 +154,7 @@ fn data_view_constructor_length_and_name() {
     assert_eq!(eval("DataView.length;"), Ok(Value::Number(1.0)));
     assert_eq!(
         eval("DataView.name;"),
-        Ok(Value::String("DataView".to_owned()))
+        Ok(Value::String("DataView".to_owned().into()))
     );
 }
 
@@ -162,14 +162,14 @@ fn data_view_constructor_length_and_name() {
 fn data_view_to_string_tag_is_data_property() {
     assert_eq!(
         eval("Object.prototype.toString.call(new DataView(new ArrayBuffer(4)));"),
-        Ok(Value::String("[object DataView]".to_owned()))
+        Ok(Value::String("[object DataView]".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let d = Object.getOwnPropertyDescriptor(DataView.prototype, Symbol.toStringTag); \
              [d.value, d.writable, d.enumerable, d.configurable].join(',');"
         ),
-        Ok(Value::String("DataView,false,false,true".to_owned()))
+        Ok(Value::String("DataView,false,false,true".to_owned().into()))
     );
 }
 
@@ -280,7 +280,7 @@ fn data_view_float16_round_trips_and_uses_expected_bytes() {
              [v.getFloat16(0), v.getUint8(0), v.getUint8(1), \
               v.getFloat16(2, true), v.getUint8(2), v.getUint8(3)].join(':');"
         ),
-        Ok(Value::String("1.5:62:0:42:64:81".to_owned()))
+        Ok(Value::String("1.5:62:0:42:64:81".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -306,7 +306,9 @@ fn data_view_float16_handles_special_values() {
               v.getFloat16(6), Number.isNaN(v.getFloat16(8))].join(':');"
         ),
         Ok(Value::String(
-            "Infinity:-Infinity:true:5.960464477539063e-8:true".to_owned()
+            "Infinity:-Infinity:true:5.960464477539063e-8:true"
+                .to_owned()
+                .into()
         ))
     );
 }
@@ -326,7 +328,7 @@ fn data_view_float16_accessors_follow_resizable_buffer() {
              values.push(getThrows, setThrows); \
              values.join(':');"
         ),
-        Ok(Value::String(":10:true:true".to_owned()))
+        Ok(Value::String(":10:true:true".to_owned().into()))
     );
 }
 
@@ -383,7 +385,7 @@ fn data_view_set_rejects_immutable_buffer_before_argument_coercion() {
              try { view.setUint8(offset, value); } catch (e) { calls.push(e instanceof TypeError); } \
              calls.join(':');"
         ),
-        Ok(Value::String("true".to_owned()))
+        Ok(Value::String("true".to_owned().into()))
     );
 }
 
@@ -400,7 +402,7 @@ fn data_view_methods_reject_resized_out_of_bounds_view() {
              try { view.getUint8(0); } catch (e) { getThrows = e instanceof TypeError; } \
              setThrows + ':' + getThrows;"
         ),
-        Ok(Value::String("true:true".to_owned()))
+        Ok(Value::String("true:true".to_owned().into()))
     );
 }
 
@@ -417,7 +419,7 @@ fn data_view_length_tracking_accessors_follow_resizable_buffer() {
              values.push(view.byteLength, view.byteOffset); \
              values.join(':');"
         ),
-        Ok(Value::String("3:1:5:1:0:1".to_owned()))
+        Ok(Value::String("3:1:5:1:0:1".to_owned().into()))
     );
 }
 
@@ -441,7 +443,7 @@ fn data_view_accessors_reject_resized_out_of_bounds_view() {
              try { tracking.byteOffset; } catch (e) { trackingOffsetThrows = e instanceof TypeError; } \
              [fixedLengthThrows, fixedOffsetThrows, trackingLengthThrows, trackingOffsetThrows].join(':');"
         ),
-        Ok(Value::String("true:true:true:true".to_owned()))
+        Ok(Value::String("true:true:true:true".to_owned().into()))
     );
 }
 
@@ -493,7 +495,7 @@ fn data_view_set_coerces_value_before_bounds_check() {
              try { v.setInt32(8, value); } catch (e) {} \
              log.join(',');"
         ),
-        Ok(Value::String("value".to_owned()))
+        Ok(Value::String("value".to_owned().into()))
     );
 }
 
@@ -509,7 +511,7 @@ fn data_view_set_coerces_index_before_value() {
              v.setInt32(offset, value); \
              log.join(',');"
         ),
-        Ok(Value::String("offset,value".to_owned()))
+        Ok(Value::String("offset,value".to_owned().into()))
     );
 }
 

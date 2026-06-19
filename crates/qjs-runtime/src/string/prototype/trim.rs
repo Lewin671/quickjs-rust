@@ -7,37 +7,39 @@ pub(crate) fn native_string_prototype_trim(
     this_value: Value,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    Ok(Value::String(trim_js(&this_string_value(this_value, env)?)))
+    Ok(Value::String(
+        trim_js(&this_string_value(this_value, env)?).into(),
+    ))
 }
 
 pub(crate) fn native_string_prototype_trim_end(
     this_value: Value,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    Ok(Value::String(trim_js_end(&this_string_value(
-        this_value, env,
-    )?)))
+    Ok(Value::String(
+        trim_js_end(&this_string_value(this_value, env)?).into(),
+    ))
 }
 
 pub(crate) fn native_string_prototype_trim_start(
     this_value: Value,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    Ok(Value::String(trim_js_start(&this_string_value(
-        this_value, env,
-    )?)))
+    Ok(Value::String(
+        trim_js_start(&this_string_value(this_value, env)?).into(),
+    ))
 }
 
 pub(crate) fn native_string_prototype_to_string(
     this_value: Value,
     _env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    Ok(Value::String(strict_this_string_value(this_value)?))
+    Ok(Value::String(strict_this_string_value(this_value)?.into()))
 }
 
 fn strict_this_string_value(value: Value) -> Result<String, RuntimeError> {
     match value {
-        Value::String(value) => Ok(value),
+        Value::String(value) => Ok(value.to_string()),
         Value::Object(object) => string_object_value(&object).ok_or_else(string_receiver_error),
         _ => Err(string_receiver_error()),
     }

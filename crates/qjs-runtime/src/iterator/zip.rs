@@ -403,7 +403,10 @@ fn zip_helper(
     env: &CallEnv,
 ) -> ObjectRef {
     let helper = ObjectRef::with_prototype(HashMap::new(), super::iterator_helper_prototype(env));
-    helper.define_non_enumerable(HELPER_KIND.to_owned(), Value::String("zip".to_owned()));
+    helper.define_non_enumerable(
+        HELPER_KIND.to_owned(),
+        Value::String("zip".to_owned().into()),
+    );
     helper.define_non_enumerable(HELPER_DONE.to_owned(), Value::Boolean(false));
     helper.define_non_enumerable(HELPER_EXECUTING.to_owned(), Value::Boolean(false));
     helper.define_non_enumerable(HELPER_STARTED.to_owned(), Value::Boolean(false));

@@ -243,7 +243,7 @@ fn define_data(object: &ObjectRef, bytes: Vec<u8>) {
     object.set_internal_bytes(bytes);
     object.define_property(
         SHARED_ARRAY_BUFFER_DATA_PROPERTY.to_owned(),
-        Property::non_enumerable(Value::String(String::new())),
+        Property::non_enumerable(Value::String(::std::rc::Rc::new(String::new()))),
     );
     object.set_to_string_tag("SharedArrayBuffer");
 }
@@ -259,7 +259,7 @@ pub(crate) fn set_bytes(object: &ObjectRef, bytes: Vec<u8>) {
     object.set_internal_bytes(bytes);
     object.define_property(
         SHARED_ARRAY_BUFFER_DATA_PROPERTY.to_owned(),
-        Property::non_enumerable(Value::String(String::new())),
+        Property::non_enumerable(Value::String(::std::rc::Rc::new(String::new()))),
     );
 }
 

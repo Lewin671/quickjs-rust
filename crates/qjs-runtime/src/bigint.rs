@@ -169,7 +169,7 @@ pub(crate) fn native_bigint_prototype_to_string(
             radix as u32
         }
     };
-    Ok(Value::String(bigint_to_string_radix(&value, radix)))
+    Ok(Value::String(bigint_to_string_radix(&value, radix).into()))
 }
 
 pub(crate) fn native_bigint_prototype_value_of(this_value: Value) -> Result<Value, RuntimeError> {

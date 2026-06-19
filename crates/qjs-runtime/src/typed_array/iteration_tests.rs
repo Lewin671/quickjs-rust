@@ -25,13 +25,13 @@ fn prototype_methods_are_shared_and_brand_checked() {
 fn at_and_includes_and_index_of() {
     assert_eq!(
         eval("let a = new Int16Array([5, 10, 15]); a.at(-1) + ':' + a.at(0) + ':' + a.at(5);"),
-        Ok(Value::String("15:5:undefined".to_owned()))
+        Ok(Value::String("15:5:undefined".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let a = new Uint8Array([1, 2, 3]); a.indexOf(2) + ':' + a.indexOf(9) + ':' + a.lastIndexOf(3);"
         ),
-        Ok(Value::String("1:-1:2".to_owned()))
+        Ok(Value::String("1:-1:2".to_owned().into()))
     );
     assert_eq!(
         eval("new Float64Array([NaN]).includes(NaN);"),
@@ -187,11 +187,11 @@ fn last_index_of_coerces_from_index_and_rechecks_view_length() {
 fn join_and_to_string() {
     assert_eq!(
         eval("new Uint8Array([1, 2, 3]).join('-');"),
-        Ok(Value::String("1-2-3".to_owned()))
+        Ok(Value::String("1-2-3".to_owned().into()))
     );
     assert_eq!(
         eval("new Uint8Array([1, 2, 3]).toString();"),
-        Ok(Value::String("1,2,3".to_owned()))
+        Ok(Value::String("1,2,3".to_owned().into()))
     );
     assert_eq!(
         eval("Object.getPrototypeOf(Uint8Array.prototype).toString === Array.prototype.toString;"),
@@ -206,14 +206,14 @@ fn join_coerces_separator_then_reads_live_elements() {
             "let a = new Uint8Array([1, 2, 3]); \
              a.join({ toString() { __quickjsRustDetachArrayBuffer(a.buffer); return ','; } });"
         ),
-        Ok(Value::String(",,".to_owned()))
+        Ok(Value::String(",,".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let a = new BigInt64Array([1n, 2n, 3n]); \
              a.join({ toString() { __quickjsRustDetachArrayBuffer(a.buffer); return ','; } });"
         ),
-        Ok(Value::String(",,".to_owned()))
+        Ok(Value::String(",,".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -221,7 +221,7 @@ fn join_coerces_separator_then_reads_live_elements() {
              let a = new Uint8Array(b, 0, 4); \
              a.join({ toString() { b.resize(2); return '.'; } });"
         ),
-        Ok(Value::String("...".to_owned()))
+        Ok(Value::String("...".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -229,7 +229,7 @@ fn join_coerces_separator_then_reads_live_elements() {
              let a = new Uint8Array(b); \
              a.join({ toString() { b.resize(2); return '.'; } });"
         ),
-        Ok(Value::String("0.0..".to_owned()))
+        Ok(Value::String("0.0..".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -239,7 +239,7 @@ fn join_coerces_separator_then_reads_live_elements() {
              let result = a.join({ toString() { calls++; b.resize(0); return '-'; } }); \
              calls + ':' + result;"
         ),
-        Ok(Value::String("1:--".to_owned()))
+        Ok(Value::String("1:--".to_owned().into()))
     );
 }
 
@@ -252,7 +252,7 @@ fn to_locale_string_invokes_each_element() {
             "Number.prototype.toLocaleString = function() { return 'n' + this; }; \
              new Uint8Array([1, 2, 3]).toLocaleString();"
         ),
-        Ok(Value::String("n1,n2,n3".to_owned()))
+        Ok(Value::String("n1,n2,n3".to_owned().into()))
     );
     // The Invoke result is ToString-coerced: an object result runs toString.
     assert_eq!(
@@ -263,7 +263,7 @@ fn to_locale_string_invokes_each_element() {
              }; \
              new Uint8Array([4, 5]).toLocaleString();"
         ),
-        Ok(Value::String("X,X".to_owned()))
+        Ok(Value::String("X,X".to_owned().into()))
     );
     // A throwing element toLocaleString propagates.
     assert!(
@@ -297,7 +297,7 @@ fn to_locale_string_invokes_each_element() {
              }; \
              a.toLocaleString();"
         ),
-        Ok(Value::String("0,0,,".to_owned()))
+        Ok(Value::String("0,0,,".to_owned().into()))
     );
 }
 
@@ -305,17 +305,17 @@ fn to_locale_string_invokes_each_element() {
 fn iterators_keys_values_entries() {
     assert_eq!(
         eval("Array.from(new Uint8Array([7, 8]).keys()).join(',');"),
-        Ok(Value::String("0,1".to_owned()))
+        Ok(Value::String("0,1".to_owned().into()))
     );
     assert_eq!(
         eval("[...new Uint8Array([7, 8])].join(',');"),
-        Ok(Value::String("7,8".to_owned()))
+        Ok(Value::String("7,8".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let e = [...new Uint8Array([7, 8]).entries()]; e[0].join(':') + '|' + e[1].join(':');"
         ),
-        Ok(Value::String("0:7|1:8".to_owned()))
+        Ok(Value::String("0:7|1:8".to_owned().into()))
     );
     // Symbol.iterator is the same function object as values.
     assert_eq!(
@@ -380,22 +380,22 @@ fn map_filter_slice_build_same_kind() {
         eval(
             "let r = new Int16Array([1, 2, 3]).map(x => x * 2); r.constructor === Int16Array ? r.join(',') : 'wrong';"
         ),
-        Ok(Value::String("2,4,6".to_owned()))
+        Ok(Value::String("2,4,6".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let r = new Uint8Array([1, 2, 3, 4]).filter(x => x % 2 === 0); (r instanceof Uint8Array) + ':' + r.join(',');"
         ),
-        Ok(Value::String("true:2,4".to_owned()))
+        Ok(Value::String("true:2,4".to_owned().into()))
     );
     assert_eq!(
         eval("new Uint8Array([1, 2, 3, 4]).slice(1, 3).join(',');"),
-        Ok(Value::String("2,3".to_owned()))
+        Ok(Value::String("2,3".to_owned().into()))
     );
     // map applies per-type conversion to the callback result.
     assert_eq!(
         eval("new Uint8Array([1]).map(() => 257).join(',');"),
-        Ok(Value::String("1".to_owned()))
+        Ok(Value::String("1".to_owned().into()))
     );
 }
 
@@ -410,7 +410,7 @@ fn slice_uses_species_constructor() {
              let r = a.slice(1); \
              observed + ':' + (r instanceof Int16Array) + ':' + r.join(',');"
         ),
-        Ok(Value::String("2:true:41,42".to_owned()))
+        Ok(Value::String("2:true:41,42".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -421,7 +421,7 @@ fn slice_uses_species_constructor() {
              let r = a.slice(0, 0); \
              (r === other) + ':' + r.join(',');"
         ),
-        Ok(Value::String("true:5,6".to_owned()))
+        Ok(Value::String("true:5,6".to_owned().into()))
     );
 }
 
@@ -459,7 +459,7 @@ fn slice_rechecks_source_after_species_constructor() {
              try { a.slice(); } catch (e) { threw = e instanceof TypeError; } \
              calls + ':' + threw;"
         ),
-        Ok(Value::String("1:true".to_owned()))
+        Ok(Value::String("1:true".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -470,7 +470,7 @@ fn slice_rechecks_source_after_species_constructor() {
              let r = a.slice(0, 0); \
              calls + ':' + r.length;"
         ),
-        Ok(Value::String("1:0".to_owned()))
+        Ok(Value::String("1:0".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -492,7 +492,7 @@ fn slice_rechecks_source_after_species_constructor() {
              resizeWhenConstructorCalled = true; \
              throws(() => fixed.slice()) + ':' + rab.byteLength + ':' + fixed.length;"
         ),
-        Ok(Value::String("true:2:0".to_owned()))
+        Ok(Value::String("true:2:0".to_owned().into()))
     );
 }
 
@@ -509,7 +509,7 @@ fn map_filter_use_species_constructor() {
              let r = a.map(x => x + 7); \
              observed + ':' + (r instanceof Int16Array) + ':' + r.join(',');"
         ),
-        Ok(Value::String("2:true:47,48".to_owned()))
+        Ok(Value::String("2:true:47,48".to_owned().into()))
     );
     // filter calls @@species after every callback, with the captured count, and
     // a custom constructor result receives the kept values.
@@ -522,7 +522,7 @@ fn map_filter_use_species_constructor() {
              let r = a.filter(x => x % 2 === 0); \
              observed + ':' + (r instanceof Int16Array) + ':' + r.join(',');"
         ),
-        Ok(Value::String("2:true:2,4".to_owned()))
+        Ok(Value::String("2:true:2,4".to_owned().into()))
     );
     // A species constructor returning a different instance is used verbatim.
     assert_eq!(
@@ -534,7 +534,7 @@ fn map_filter_use_species_constructor() {
              let r = a.map(x => x + 7); \
              (r === other) + ':' + r.join(',');"
         ),
-        Ok(Value::String("true:47,0,1".to_owned()))
+        Ok(Value::String("true:47,0,1".to_owned().into()))
     );
     // filter validates the species result with write access after all
     // callbacks, rejecting an immutable destination before writing kept values.
@@ -559,7 +559,7 @@ fn map_filter_use_species_constructor() {
              caught + ':' + calls.join('|');"
         ),
         Ok(Value::String(
-            "true:filter 0|filter 1|construct|return".to_owned()
+            "true:filter 0|filter 1|construct|return".to_owned().into()
         ))
     );
 }
@@ -577,7 +577,7 @@ fn map_filter_observe_species_ordering() {
              a.filter(() => { calls++; }); \
              calls + ':' + before;"
         ),
-        Ok(Value::String("3:true".to_owned()))
+        Ok(Value::String("3:true".to_owned().into()))
     );
     // map does not cache source values: a callback mutation is visible later.
     assert_eq!(
@@ -587,7 +587,7 @@ fn map_filter_observe_species_ordering() {
              a.map(function(v, i) { if (i < 2) a[i + 1] = 42; seen.push(v); return v; }); \
              seen.join(',');"
         ),
-        Ok(Value::String("42,42,42".to_owned()))
+        Ok(Value::String("42,42,42".to_owned().into()))
     );
     // Class constructors used as species constructors see live outer lexical
     // bindings, not the value captured when the class was defined.
@@ -615,7 +615,7 @@ fn map_filter_observe_species_ordering() {
              } \
              out.join(',');"
         ),
-        Ok(Value::String("true,true".to_owned()))
+        Ok(Value::String("true,true".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -631,7 +631,7 @@ fn map_filter_observe_species_ordering() {
              fixed.map(function(n) { values.push(n); return 0; }); \
              values.join(',') + ':' + rab.byteLength;"
         ),
-        Ok(Value::String("0,1,2,3:6".to_owned()))
+        Ok(Value::String("0,1,2,3:6".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -647,7 +647,7 @@ fn map_filter_observe_species_ordering() {
              tracking.map(function(n) { values.push(String(n)); return 0; }); \
              values.join(',') + ':' + rab.byteLength;"
         ),
-        Ok(Value::String("0,1,undefined,undefined:2".to_owned()))
+        Ok(Value::String("0,1,undefined,undefined:2".to_owned().into()))
     );
 }
 
@@ -659,7 +659,7 @@ fn reduce_and_reduce_right() {
     );
     assert_eq!(
         eval("new Uint8Array([1, 2, 3]).reduceRight((a, x) => a + '' + x, '');"),
-        Ok(Value::String("321".to_owned()))
+        Ok(Value::String("321".to_owned().into()))
     );
     assert!(eval("new Uint8Array([]).reduce((a, x) => a + x);").is_err());
 }
@@ -674,7 +674,7 @@ fn iteration_methods_read_values_live() {
              let r = a.find(function(v, i) { if (i === 0) { a[2] = 7; } return v === 7; }); \
              String(r);"
         ),
-        Ok(Value::String("7".to_owned()))
+        Ok(Value::String("7".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -682,7 +682,7 @@ fn iteration_methods_read_values_live() {
              let r = a.findIndex(function(v, i) { if (i === 0) { a[2] = 5; } return v === 5; }); \
              String(r);"
         ),
-        Ok(Value::String("2".to_owned()))
+        Ok(Value::String("2".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -690,7 +690,7 @@ fn iteration_methods_read_values_live() {
              let r = a.some(function(v, i) { if (i === 0) { a[2] = 9; } return v === 9; }); \
              String(r);"
         ),
-        Ok(Value::String("true".to_owned()))
+        Ok(Value::String("true".to_owned().into()))
     );
     // findLast walks high-to-low; mutating a lower, not-yet-visited index is seen.
     assert_eq!(
@@ -699,7 +699,7 @@ fn iteration_methods_read_values_live() {
              let r = a.findLast(function(v, i) { if (i === 2) { a[0] = 8; } return v === 8; }); \
              String(r);"
         ),
-        Ok(Value::String("8".to_owned()))
+        Ok(Value::String("8".to_owned().into()))
     );
     // reduce sees a value written by an earlier callback step.
     assert_eq!(
@@ -724,7 +724,7 @@ fn iteration_reads_undefined_past_shrunk_or_detached_bounds() {
              v.forEach(function(x) { out.push(x); if (++n === 2) { rab.resize(3); } }); \
              out.map(String).join(',');"
         ),
-        Ok(Value::String("0,2,undefined,undefined".to_owned()))
+        Ok(Value::String("0,2,undefined,undefined".to_owned().into()))
     );
     // Detaching mid-iteration likewise reads undefined for the remaining slots.
     assert_eq!(
@@ -733,7 +733,7 @@ fn iteration_reads_undefined_past_shrunk_or_detached_bounds() {
              a.forEach(function(x) { seen.push(x); if (++n === 2) { __quickjsRustDetachArrayBuffer(a.buffer); } }); \
              seen.map(String).join(',');"
         ),
-        Ok(Value::String("5,6,undefined,undefined".to_owned()))
+        Ok(Value::String("5,6,undefined,undefined".to_owned().into()))
     );
 }
 
@@ -746,7 +746,7 @@ fn subarray_creates_shared_buffer_view() {
              view[0] = 20; \
              view.join(',') + '|' + base.join(',');"
         ),
-        Ok(Value::String("20,3|1,20,3,4".to_owned()))
+        Ok(Value::String("20,3|1,20,3,4".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -757,7 +757,7 @@ fn subarray_creates_shared_buffer_view() {
              let result = fixed.subarray(begin, 1); \
              result.length + ':' + result.join(',');"
         ),
-        Ok(Value::String("0:".to_owned()))
+        Ok(Value::String("0:".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -772,7 +772,7 @@ fn subarray_creates_shared_buffer_view() {
              catch (e) { threw = e instanceof RangeError; } \
              smaller + ':' + threw;"
         ),
-        Ok(Value::String("0:true".to_owned()))
+        Ok(Value::String("0:true".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -783,7 +783,7 @@ fn subarray_creates_shared_buffer_view() {
              try { offset.subarray(0); } catch (e) { threw = e instanceof RangeError; } \
              String(threw);"
         ),
-        Ok(Value::String("true".to_owned()))
+        Ok(Value::String("true".to_owned().into()))
     );
 }
 
@@ -803,7 +803,7 @@ fn subarray_uses_species_constructor() {
              let r = a.subarray(1); \
              args + ':' + r.join(',');"
         ),
-        Ok(Value::String("true,1,2:41,42".to_owned()))
+        Ok(Value::String("true,1,2:41,42".to_owned().into()))
     );
 }
 
@@ -818,7 +818,7 @@ fn subarray_preserves_length_tracking_result_when_end_is_undefined() {
              b.resize(6); a[4] = 5; a[5] = 6; \
              before + '|' + r.length + ':' + r.join(',');"
         ),
-        Ok(Value::String("3:2,3,4|5:2,3,4,5,6".to_owned()))
+        Ok(Value::String("3:2,3,4|5:2,3,4,5,6".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -833,7 +833,7 @@ fn subarray_preserves_length_tracking_result_when_end_is_undefined() {
              a.subarray(1); \
              args;"
         ),
-        Ok(Value::String("2,1,undefined".to_owned()))
+        Ok(Value::String("2,1,undefined".to_owned().into()))
     );
 }
 
@@ -850,7 +850,7 @@ fn subarray_out_of_bounds_resizable_views_use_current_constructor_bounds() {
              b.resize(6); \
              before + '|' + r.byteOffset + ':' + r.length;"
         ),
-        Ok(Value::String("4:4|4:2".to_owned()))
+        Ok(Value::String("4:4|4:2".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -863,7 +863,7 @@ fn subarray_out_of_bounds_resizable_views_use_current_constructor_bounds() {
              b.resize(4); \
              before + '|' + r.byteOffset + ':' + r.length;"
         ),
-        Ok(Value::String("2:0|2:0".to_owned()))
+        Ok(Value::String("2:0|2:0".to_owned().into()))
     );
 }
 
@@ -882,6 +882,6 @@ fn subarray_on_detached_coerces_then_throws() {
              try { a.subarray(begin, end); } catch (e) { threw = e instanceof TypeError; } \
              seen + ':' + threw;"
         ),
-        Ok(Value::String("be:true".to_owned()))
+        Ok(Value::String("be:true".to_owned().into()))
     );
 }

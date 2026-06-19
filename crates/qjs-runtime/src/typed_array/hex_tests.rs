@@ -8,7 +8,7 @@ fn uint8_array_set_from_hex_decodes_and_reports_progress() {
              let r = a.setFromHex('0aFf10'); \
              a.join(',') + '|' + r.read + ':' + r.written;"
         ),
-        Ok(Value::String("10,255,16,0|6:3".to_owned()))
+        Ok(Value::String("10,255,16,0|6:3".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -17,7 +17,7 @@ fn uint8_array_set_from_hex_decodes_and_reports_progress() {
              let r = a.setFromHex('aabbcc'); \
              a.join(',') + '|' + base.join(',') + '|' + r.read + ':' + r.written;"
         ),
-        Ok(Value::String("170,187|1,170,187,4|4:2".to_owned()))
+        Ok(Value::String("170,187|1,170,187,4|4:2".to_owned().into()))
     );
 }
 
@@ -29,7 +29,9 @@ fn uint8_array_from_hex_decodes_and_checks_surface() {
              (Object.getPrototypeOf(a) === Uint8Array.prototype) + ':' + \
              a.length + ':' + a.buffer.byteLength + ':' + a.join(',');"
         ),
-        Ok(Value::String("true:6:6:102,111,111,98,97,114".to_owned()))
+        Ok(Value::String(
+            "true:6:6:102,111,111,98,97,114".to_owned().into()
+        ))
     );
     assert_eq!(
         eval(
@@ -37,7 +39,7 @@ fn uint8_array_from_hex_decodes_and_checks_surface() {
              d.writable + ':' + d.enumerable + ':' + d.configurable + ':' \
              + Uint8Array.fromHex.name + ':' + Uint8Array.fromHex.length;"
         ),
-        Ok(Value::String("true:false:true:fromHex:1".to_owned()))
+        Ok(Value::String("true:false:true:fromHex:1".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -47,7 +49,7 @@ fn uint8_array_from_hex_decodes_and_checks_surface() {
              (Object.getPrototypeOf(fromSubclass) === Uint8Array.prototype) + ':' + \
              fromSubclass[0] + ':' + fromBare[0];"
         ),
-        Ok(Value::String("true:170:187".to_owned()))
+        Ok(Value::String("true:170:187".to_owned().into()))
     );
 }
 
@@ -72,7 +74,7 @@ fn uint8_array_to_hex_encodes_and_checks_surface() {
                Uint8Array.fromHex('666f6f').subarray(1).toHex()
              ].join('|');"
         ),
-        Ok(Value::String("|00|0a0f10ff|6f6f".to_owned()))
+        Ok(Value::String("|00|0a0f10ff|6f6f".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -81,7 +83,7 @@ fn uint8_array_to_hex_encodes_and_checks_surface() {
              + Uint8Array.prototype.toHex.name + ':' \
              + Uint8Array.prototype.toHex.length;"
         ),
-        Ok(Value::String("true:false:true:toHex:0".to_owned()))
+        Ok(Value::String("true:false:true:toHex:0".to_owned().into()))
     );
     assert!(eval("new Uint8Array.prototype.toHex();").is_err());
     assert!(eval("Uint8Array.prototype.toHex.call(new Int8Array([1]));").is_err());
@@ -97,7 +99,9 @@ fn uint8_array_set_from_hex_surface_and_receiver_checks() {
              + Uint8Array.prototype.setFromHex.name + ':' \
              + Uint8Array.prototype.setFromHex.length;"
         ),
-        Ok(Value::String("true:false:true:setFromHex:1".to_owned()))
+        Ok(Value::String(
+            "true:false:true:setFromHex:1".to_owned().into()
+        ))
     );
     assert!(eval("new Uint8Array.prototype.setFromHex();").is_err());
     assert!(eval("Uint8Array.prototype.setFromHex.call(new Int8Array(1), '00');").is_err());
@@ -111,14 +115,14 @@ fn uint8_array_set_from_hex_errors_preserve_specified_writes() {
             "let a = new Uint8Array([1, 2]); \
              try { a.setFromHex('aaa'); } catch (e) { (e instanceof SyntaxError) + ':' + a.join(','); }"
         ),
-        Ok(Value::String("true:1,2".to_owned()))
+        Ok(Value::String("true:1,2".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let a = new Uint8Array([1, 2]); \
              try { a.setFromHex('aaa '); } catch (e) { (e instanceof SyntaxError) + ':' + a.join(','); }"
         ),
-        Ok(Value::String("true:170,2".to_owned()))
+        Ok(Value::String("true:170,2".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -126,6 +130,6 @@ fn uint8_array_set_from_hex_errors_preserve_specified_writes() {
              let arg = { toString() { a[0] = 99; return '00'; } }; \
              try { a.setFromHex(arg); } catch (e) { (e instanceof TypeError) + ':' + a[0]; }"
         ),
-        Ok(Value::String("true:1".to_owned()))
+        Ok(Value::String("true:1".to_owned().into()))
     );
 }

@@ -93,7 +93,7 @@ fn evaluates_string_search_builtins() {
         eval(
             "let calls = 0; let searcher = { [Symbol.search]: function(input) { calls = calls + 1; return this === searcher && input === 'abc' ? 42 : -1; } }; 'abc'.search(searcher) + ':' + calls;"
         ),
-        Ok(Value::String("42:1".to_owned()))
+        Ok(Value::String("42:1".to_owned().into()))
     );
     assert!(eval("let searcher = { get [Symbol.search]() { throw new Error('search'); } }; ''.search(searcher);").is_err());
     assert_eq!(
@@ -106,7 +106,7 @@ fn evaluates_string_search_builtins() {
         eval(
             "let original = RegExp.prototype[Symbol.search]; RegExp.prototype[Symbol.search] = function(input) { return this.source + ':' + input; }; let result = 'abc'.search('b'); RegExp.prototype[Symbol.search] = original; result;"
         ),
-        Ok(Value::String("b:abc".to_owned()))
+        Ok(Value::String("b:abc".to_owned().into()))
     );
     assert_eq!(
         eval("new String('test string').search(/String/i);"),
@@ -139,13 +139,13 @@ fn evaluates_string_search_builtins() {
     );
     assert_eq!(
         eval("'foo foo'.replace('foo', 'bar');"),
-        Ok(Value::String("bar foo".to_owned()))
+        Ok(Value::String("bar foo".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let calls = 0; let search = { [Symbol.replace]: function(input, replacement) { calls = calls + 1; return this === search && input === 'abc' && replacement === 7 ? 42 : -1; } }; 'abc'.replace(search, 7) + ':' + calls;"
         ),
-        Ok(Value::String("42:1".to_owned()))
+        Ok(Value::String("42:1".to_owned().into()))
     );
     assert!(
         eval("let search = { get [Symbol.replace]() { throw new Error('replace'); } }; ''.replace(search, 'x');")
@@ -155,87 +155,87 @@ fn evaluates_string_search_builtins() {
         eval(
             "let search = { [Symbol.replace]: null, toString: function() { return '3'; } }; 'ab3c'.replace(search, '<foo>');"
         ),
-        Ok(Value::String("ab<foo>c".to_owned()))
+        Ok(Value::String("ab<foo>c".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let search = { toString: function() { throw 'search'; } }; let replacement = { toString: function() { throw 'replacement'; } }; try { 'abc'.replace(search, replacement); } catch (error) { error; }"
         ),
-        Ok(Value::String("search".to_owned()))
+        Ok(Value::String("search".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let search = { toString: function() { return 'b'; } }; let replacement = { toString: function() { throw 'replacement'; } }; try { 'abc'.replace(search, replacement); } catch (error) { error; }"
         ),
-        Ok(Value::String("replacement".to_owned()))
+        Ok(Value::String("replacement".to_owned().into()))
     );
     assert_eq!(
         eval("'abc'.replace('', '-');"),
-        Ok(Value::String("-abc".to_owned()))
+        Ok(Value::String("-abc".to_owned().into()))
     );
     assert_eq!(
         eval("'aba'.replace('a', '[$&:$`:$\\']');"),
-        Ok(Value::String("[a::ba]ba".to_owned()))
+        Ok(Value::String("[a::ba]ba".to_owned().into()))
     );
     assert_eq!(
         eval("'foo-x-bar'.replace(/(x)($^)?/, '|$01:$02:$10:$20|');"),
-        Ok(Value::String("foo-|x::x0:0|-bar".to_owned()))
+        Ok(Value::String("foo-|x::x0:0|-bar".to_owned().into()))
     );
     assert_eq!(
         eval("'uid=31'.replace(/(uid=)(\\d+)/, '$11' + 15);"),
-        Ok(Value::String("uid=115".to_owned()))
+        Ok(Value::String("uid=115".to_owned().into()))
     );
     assert_eq!(
         eval(
             "'a-b-a'.replace('a', function(match, position, input) { return match + position + input.length; });"
         ),
-        Ok(Value::String("a05-b-a".to_owned()))
+        Ok(Value::String("a05-b-a".to_owned().into()))
     );
     assert_eq!(
         eval(
             "'abc12 def34'.replace(/([a-z]+)([0-9]+)/, function() { return arguments[2] + arguments[1]; });"
         ),
-        Ok(Value::String("12abc def34".to_owned()))
+        Ok(Value::String("12abc def34".to_owned().into()))
     );
     assert_eq!(
         eval("'a1b2'.replace(/(\\d)/g, '[$1:$&]');"),
-        Ok(Value::String("a[1:1]b[2:2]".to_owned()))
+        Ok(Value::String("a[1:1]b[2:2]".to_owned().into()))
     );
     assert_eq!(
         eval("'aaaaaaaaaa,aaaaaaaaaaaaaaa'.replace(/^(a+)\\1*,\\1+$/, '$1');"),
-        Ok(Value::String("aaaaa".to_owned()))
+        Ok(Value::String("aaaaa".to_owned().into()))
     );
     assert_eq!(
         eval("'asdf'.replace(new RegExp(undefined, 'g'), '1');"),
-        Ok(Value::String("1a1s1d1f1".to_owned()))
+        Ok(Value::String("1a1s1d1f1".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let d = Object.getOwnPropertyDescriptor(String.prototype, 'replace'); (d.value === String.prototype.replace) + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
-        Ok(Value::String("true:true:false:true".to_owned()))
+        Ok(Value::String("true:true:false:true".to_owned().into()))
     );
     assert_eq!(
         eval("'foo foo'.replaceAll('foo', 'bar');"),
-        Ok(Value::String("bar bar".to_owned()))
+        Ok(Value::String("bar bar".to_owned().into()))
     );
     assert_eq!(
         eval("'abc'.replaceAll('', '-');"),
-        Ok(Value::String("-a-b-c-".to_owned()))
+        Ok(Value::String("-a-b-c-".to_owned().into()))
     );
     assert_eq!(
         eval("'aba'.replaceAll('a', '[$&:$`:$\\']');"),
-        Ok(Value::String("[a::ba]b[a:ab:]".to_owned()))
+        Ok(Value::String("[a::ba]b[a:ab:]".to_owned().into()))
     );
     assert_eq!(
         eval(
             "'a-b-a'.replaceAll('a', function(match, position, input) { return match + position + input.length; });"
         ),
-        Ok(Value::String("a05-b-a45".to_owned()))
+        Ok(Value::String("a05-b-a45".to_owned().into()))
     );
     assert_eq!(
         eval("'a1b2'.replaceAll(/(\\d)/g, '[$1:$&]');"),
-        Ok(Value::String("a[1:1]b[2:2]".to_owned()))
+        Ok(Value::String("a[1:1]b[2:2]".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -247,13 +247,13 @@ fn evaluates_string_search_builtins() {
         eval(
             "let calls = 0; let search = { [Symbol.match]: true, get flags() { calls = calls + 1; return 'g'; }, toString: function() { return 'a'; } }; 'aba'.replaceAll(search, 'x') + ':' + calls;"
         ),
-        Ok(Value::String("xbx:1".to_owned()))
+        Ok(Value::String("xbx:1".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let search = { [Symbol.match]: false, get flags() { throw new Error('flags'); }, toString: function() { return 'a'; } }; 'aba'.replaceAll(search, 'x');"
         ),
-        Ok(Value::String("xbx".to_owned()))
+        Ok(Value::String("xbx".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -271,19 +271,19 @@ fn evaluates_string_search_builtins() {
         eval(
             "let calls = 0; let search = /./g; Object.defineProperty(search, Symbol.replace, { value: function(input, replacement) { calls = calls + 1; return this === search && input == 'abc' && replacement === 7 ? 42 : -1; } }); new String('abc').replaceAll(search, 7) + ':' + calls;"
         ),
-        Ok(Value::String("42:1".to_owned()))
+        Ok(Value::String("42:1".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let poisoned = 0; let poison = { toString: function() { poisoned = poisoned + 1; throw new Error('poison'); } }; let search = /./g; Object.defineProperty(search, Symbol.replace, { value: function(input, replacement) { return input === poison && replacement === poison ? 'ok' : 'bad'; } }); ''.replaceAll.call(poison, search, poison) + ':' + poisoned;"
         ),
-        Ok(Value::String("ok:0".to_owned()))
+        Ok(Value::String("ok:0".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let search = { [Symbol.replace]: null, toString: function() { return 'a'; } }; 'aba'.replaceAll(search, 'x');"
         ),
-        Ok(Value::String("xbx".to_owned()))
+        Ok(Value::String("xbx".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -297,13 +297,13 @@ fn evaluates_string_search_builtins() {
 fn evaluates_string_match_basic_regexp() {
     assert_eq!(
         eval("'abc'.match(/b/)[0];"),
-        Ok(Value::String("b".to_owned()))
+        Ok(Value::String("b".to_owned().into()))
     );
     assert_eq!(eval("'abc'.match(/z/);"), Ok(Value::Null));
     assert_eq!(eval("'abc'.match(/b/).index;"), Ok(Value::Number(1.0)));
     assert_eq!(
         eval("'abc'.match(/b/).input;"),
-        Ok(Value::String("abc".to_owned()))
+        Ok(Value::String("abc".to_owned().into()))
     );
 }
 
@@ -315,11 +315,11 @@ fn evaluates_string_match_global_regexp() {
     );
     assert_eq!(
         eval("'343443444'.match(/34/g)[1];"),
-        Ok(Value::String("34".to_owned()))
+        Ok(Value::String("34".to_owned().into()))
     );
     assert_eq!(
         eval("'123456abcde7890'.match(/\\d{2}/g).join(',');"),
-        Ok(Value::String("12,34,56,78,90".to_owned()))
+        Ok(Value::String("12,34,56,78,90".to_owned().into()))
     );
     assert_eq!(eval("'abc'.match(/\\d/g);"), Ok(Value::Null));
 }
@@ -330,7 +330,7 @@ fn evaluates_string_match_coercions() {
         eval(
             "let calls = 0; let matcher = { [Symbol.match]: function(input) { calls = calls + 1; return this === matcher && input === 'abc' ? 42 : -1; } }; 'abc'.match(matcher) + ':' + calls;"
         ),
-        Ok(Value::String("42:1".to_owned()))
+        Ok(Value::String("42:1".to_owned().into()))
     );
     assert!(
         eval(
@@ -342,40 +342,40 @@ fn evaluates_string_match_coercions() {
         eval(
             "let matcher = { [Symbol.match]: null, toString: function() { return '\\\\d'; } }; 'ab3'.match(matcher)[0];"
         ),
-        Ok(Value::String("3".to_owned()))
+        Ok(Value::String("3".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let original = RegExp.prototype[Symbol.match]; let calls = 0; RegExp.prototype[Symbol.match] = function(input) { calls = calls + 1; return this.source + ':' + input; }; let result = 'abc'.match('b'); RegExp.prototype[Symbol.match] = original; result + ':' + calls;"
         ),
-        Ok(Value::String("b:abc:1".to_owned()))
+        Ok(Value::String("b:abc:1".to_owned().into()))
     );
     assert_eq!(
         eval("String.prototype.match.call(12345, /34/)[0];"),
-        Ok(Value::String("34".to_owned()))
+        Ok(Value::String("34".to_owned().into()))
     );
     assert_eq!(
         eval("'12345'.match(34)[0];"),
-        Ok(Value::String("34".to_owned()))
+        Ok(Value::String("34".to_owned().into()))
     );
     assert_eq!(eval("'12345'.match(34).index;"), Ok(Value::Number(2.0)));
     assert_eq!(eval("'undefined'.match().length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("'undefined'.match().index;"), Ok(Value::Number(0.0)));
     assert_eq!(
         eval("'ABBABAB'.match({ toString: function() { return 'AB'; } })[0];"),
-        Ok(Value::String("AB".to_owned()))
+        Ok(Value::String("AB".to_owned().into()))
     );
     assert_eq!(
         eval(
             "'ABBAB1ABAB1BBAA'.match({ toString: function() { return {}; }, valueOf: function() { return 1; } })[0];"
         ),
-        Ok(Value::String("1".to_owned()))
+        Ok(Value::String("1".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let caught; try { 'ABBABAB'.match({ toString: function() { throw 'intostr'; } }); } catch (error) { caught = error; } caught;"
         ),
-        Ok(Value::String("intostr".to_owned()))
+        Ok(Value::String("intostr".to_owned().into()))
     );
 }
 
@@ -389,19 +389,19 @@ fn evaluates_string_match_all_symbol_dispatch() {
         eval(
             "let d = Object.getOwnPropertyDescriptor(String.prototype, 'matchAll'); (d.value === String.prototype.matchAll) + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
-        Ok(Value::String("true:true:false:true".to_owned()))
+        Ok(Value::String("true:true:false:true".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let calls = 0; let matcher = { [Symbol.matchAll]: function(input) { calls = calls + 1; return this === matcher && input === 'abc' ? 42 : -1; } }; 'abc'.matchAll(matcher) + ':' + calls;"
         ),
-        Ok(Value::String("42:1".to_owned()))
+        Ok(Value::String("42:1".to_owned().into()))
     );
     assert_eq!(
         eval(
             "String.prototype.matchAll.call(12345, { [Symbol.matchAll]: function(input) { return input; } });"
         ),
-        Ok(Value::String("12345".to_owned()))
+        Ok(Value::String("12345".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -424,25 +424,25 @@ fn evaluates_string_match_all_regexp_iterator() {
         eval(
             "Array.from('a1 a2'.matchAll(/a./g)).map(function(match) { return match[0] + ':' + match.index + ':' + match.input; }).join('|');"
         ),
-        Ok(Value::String("a1:0:a1 a2|a2:3:a1 a2".to_owned()))
+        Ok(Value::String("a1:0:a1 a2|a2:3:a1 a2".to_owned().into()))
     );
     assert_eq!(
         eval(
             "Array.from('-null-'.matchAll(null)).map(function(match) { return match[0] + ':' + match.index; }).join('|');"
         ),
-        Ok(Value::String("null:1".to_owned()))
+        Ok(Value::String("null:1".to_owned().into()))
     );
     assert_eq!(
         eval(
             "Array.from('a'.matchAll()).map(function(match) { return match[0] + ':' + match.index; }).join('|');"
         ),
-        Ok(Value::String(":0|:1".to_owned()))
+        Ok(Value::String(":0|:1".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let original = RegExp.prototype[Symbol.matchAll]; let calls = 0; RegExp.prototype[Symbol.matchAll] = function(input) { calls = calls + 1; return this.source + ':' + this.flags + ':' + input; }; let result = 'abc'.matchAll('b'); RegExp.prototype[Symbol.matchAll] = original; result + ':' + calls;"
         ),
-        Ok(Value::String("b:g:abc:1".to_owned()))
+        Ok(Value::String("b:g:abc:1".to_owned().into()))
     );
     assert_eq!(
         eval(

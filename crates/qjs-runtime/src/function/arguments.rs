@@ -97,7 +97,7 @@ fn mapped_argument_getter(parameter_name: String, backing: ObjectRef) -> Value {
     Value::Function(Function::new_bound(
         target,
         Value::Undefined,
-        vec![Value::String(parameter_name), Value::Object(backing)],
+        vec![Value::String(parameter_name.into()), Value::Object(backing)],
         1,
     ))
 }
@@ -112,7 +112,7 @@ fn mapped_argument_setter(parameter_name: String, backing: ObjectRef) -> Value {
     Value::Function(Function::new_bound(
         target,
         Value::Undefined,
-        vec![Value::String(parameter_name), Value::Object(backing)],
+        vec![Value::String(parameter_name.into()), Value::Object(backing)],
         1,
     ))
 }

@@ -116,7 +116,7 @@ fn boxed_string(value: &str, env: &CallEnv) -> Value {
     let object = ObjectRef::with_prototype(HashMap::new(), constructor_prototype("String", env));
     object.define_non_enumerable(
         STRING_DATA_PROPERTY.to_owned(),
-        Value::String(value.to_owned()),
+        Value::String(value.to_owned().into()),
     );
     object.define_property(
         "length".to_owned(),
@@ -131,7 +131,7 @@ fn boxed_string(value: &str, env: &CallEnv) -> Value {
         object.define_property(
             index.to_string(),
             Property::data(
-                Value::String(string::string_from_code_unit(code_unit)),
+                Value::String(string::string_from_code_unit(code_unit).into()),
                 true,
                 false,
                 false,

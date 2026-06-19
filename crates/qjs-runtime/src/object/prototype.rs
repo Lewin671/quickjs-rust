@@ -511,12 +511,12 @@ pub(crate) fn native_object_prototype_to_string(
     let tag = builtin_to_string_tag(this_value.clone())?;
     let tag = match symbol::to_string_tag_symbol(env) {
         Some(symbol) => match property_value_key(this_value, &PropertyKey::Symbol(symbol), env)? {
-            Value::String(tag) => tag,
+            Value::String(tag) => tag.to_string(),
             _ => tag,
         },
         None => tag,
     };
-    Ok(Value::String(format!("[object {tag}]")))
+    Ok(Value::String(format!("[object {tag}]").into()))
 }
 
 fn builtin_to_string_tag(value: Value) -> Result<String, RuntimeError> {

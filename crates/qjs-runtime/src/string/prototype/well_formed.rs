@@ -17,7 +17,7 @@ pub(crate) fn native_string_prototype_to_well_formed(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
-    Ok(Value::String(to_well_formed(&value)))
+    Ok(Value::String(to_well_formed(&value).into()))
 }
 
 fn is_well_formed(value: &str) -> bool {

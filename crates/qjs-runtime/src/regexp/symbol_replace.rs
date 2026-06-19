@@ -106,7 +106,7 @@ fn regexp_exec(regexp: Value, input: &str, env: &mut CallEnv) -> Result<Value, R
     let result = call_function(
         exec,
         regexp,
-        vec![Value::String(input.to_owned())],
+        vec![Value::String(input.to_owned().into())],
         env,
         false,
     )?;
@@ -134,7 +134,7 @@ fn match_record(
         let capture = property_value(exec_result.clone(), &index.to_string(), env)?;
         captures.push(match capture {
             Value::Undefined => Value::Undefined,
-            value => Value::String(to_js_string_with_env(value, env)?),
+            value => Value::String(to_js_string_with_env(value, env)?.into()),
         });
     }
     let groups = property_value(exec_result, "groups", env)?;
@@ -182,7 +182,7 @@ fn replace_matches(
         copied_until,
         input.chars().count(),
     ));
-    Ok(Value::String(result))
+    Ok(Value::String(result.into()))
 }
 
 fn functional_replacement(
@@ -192,10 +192,10 @@ fn functional_replacement(
     env: &mut CallEnv,
 ) -> Result<String, RuntimeError> {
     let mut arguments = Vec::with_capacity(4 + match_record.captures.len());
-    arguments.push(Value::String(match_record.matched.clone()));
+    arguments.push(Value::String(match_record.matched.clone().into()));
     arguments.extend(match_record.captures.iter().cloned());
     arguments.push(Value::Number(match_record.start as f64));
-    arguments.push(Value::String(input));
+    arguments.push(Value::String(input.into()));
     if !matches!(match_record.groups, Value::Undefined) {
         arguments.push(match_record.groups.clone());
     }

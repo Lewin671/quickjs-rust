@@ -554,7 +554,7 @@ impl Function {
         self.define_property(
             "name".to_owned(),
             Property::data(
-                Value::String(self.name.clone().unwrap_or_default()),
+                Value::String(self.name.clone().unwrap_or_default().into()),
                 false,
                 false,
                 true,
@@ -920,7 +920,7 @@ fn bound_function_name(target: &Value) -> String {
             .borrow()
             .get("name")
             .and_then(|property| match &property.value {
-                Value::String(name) => Some(name.clone()),
+                Value::String(name) => Some(name.to_string()),
                 _ => None,
             })
             .or_else(|| function.name.clone())

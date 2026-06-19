@@ -15,7 +15,7 @@ pub(crate) fn native_reflect_own_keys(
         return Ok(Value::Array(crate::ArrayRef::new(
             keys.into_iter()
                 .map(|key| match key {
-                    PropertyKey::String(name) => Value::String(name),
+                    PropertyKey::String(name) => Value::String(name.into()),
                     PropertyKey::Symbol(symbol) => Value::Object(symbol),
                 })
                 .collect(),
@@ -61,7 +61,7 @@ pub(crate) fn native_reflect_own_keys(
     Ok(Value::Array(crate::ArrayRef::new(
         names
             .into_iter()
-            .map(Value::String)
+            .map(|s| Value::String(s.into()))
             .chain(symbols.into_iter().map(Value::Object))
             .collect(),
     )))

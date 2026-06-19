@@ -11,7 +11,7 @@ fn super_property_assignment_to_null_base_evaluates_rhs_before_type_error() {
              try { C.m(); } catch (error) { caught = error instanceof TypeError; } \
              caught + ':' + count;"
         ),
-        Ok(Value::String("true:1".to_owned()))
+        Ok(Value::String("true:1".to_owned().into()))
     );
 }
 
@@ -26,7 +26,7 @@ fn computed_super_property_assignment_to_null_base_evaluates_rhs_before_type_err
              try { C.m(); } catch (error) { caught = error instanceof TypeError; } \
              caught + ':' + count;"
         ),
-        Ok(Value::String("true:1".to_owned()))
+        Ok(Value::String("true:1".to_owned().into()))
     );
 }
 
@@ -42,7 +42,7 @@ fn computed_super_property_checks_this_before_key() {
              } \
              try { new Derived(); } catch (error) { error.name + ':' + keyEvaluated; }"
         ),
-        Ok(Value::String("ReferenceError:false".to_owned()))
+        Ok(Value::String("ReferenceError:false".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -54,7 +54,7 @@ fn computed_super_property_checks_this_before_key() {
              } \
              try { new Derived(); } catch (error) { error.name + ':' + keyEvaluated; }"
         ),
-        Ok(Value::String("ReferenceError:false".to_owned()))
+        Ok(Value::String("ReferenceError:false".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -67,7 +67,7 @@ fn computed_super_property_checks_this_before_key() {
              } \
              try { new Derived(); } catch (error) { error.name + ':' + keyEvaluated; }"
         ),
-        Ok(Value::String("ReferenceError:false".to_owned()))
+        Ok(Value::String("ReferenceError:false".to_owned().into()))
     );
 }
 
@@ -87,6 +87,6 @@ fn computed_super_property_evaluates_key_after_super_call() {
              new Derived(); \
              result;"
         ),
-        Ok(Value::String("7:1".to_owned()))
+        Ok(Value::String("7:1".to_owned().into()))
     );
 }

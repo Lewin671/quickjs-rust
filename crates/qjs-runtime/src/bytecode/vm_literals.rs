@@ -67,9 +67,13 @@ impl Vm<'_> {
         let cooked_values = cooked
             .iter()
             .cloned()
-            .map(Value::String)
+            .map(|s| Value::String(s.into()))
             .collect::<Vec<_>>();
-        let raw_values = raw.iter().cloned().map(Value::String).collect::<Vec<_>>();
+        let raw_values = raw
+            .iter()
+            .cloned()
+            .map(|s| Value::String(s.into()))
+            .collect::<Vec<_>>();
         let cooked_array = ArrayRef::new(cooked_values);
         let raw_array = ArrayRef::new(raw_values);
         raw_array.freeze();
@@ -111,7 +115,7 @@ impl Vm<'_> {
             };
             function.define_property(
                 "name".to_owned(),
-                Property::data(Value::String(name), false, false, true),
+                Property::data(Value::String(name.into()), false, false, true),
             );
         }
         self.stack.push(key.into_value());

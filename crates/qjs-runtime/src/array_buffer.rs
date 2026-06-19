@@ -558,7 +558,7 @@ fn define_array_buffer_data(object: &ObjectRef, bytes: Vec<u8>) {
     object.set_internal_bytes(bytes);
     object.define_property(
         ARRAY_BUFFER_DATA_PROPERTY.to_owned(),
-        Property::non_enumerable(Value::String(String::new())),
+        Property::non_enumerable(Value::String(::std::rc::Rc::new(String::new()))),
     );
     object.set_to_string_tag("ArrayBuffer");
 }
@@ -687,7 +687,7 @@ pub(crate) fn set_array_buffer_bytes(object: &ObjectRef, bytes: Vec<u8>) {
     object.set_internal_bytes(bytes);
     object.define_property(
         ARRAY_BUFFER_DATA_PROPERTY.to_owned(),
-        Property::non_enumerable(Value::String(String::new())),
+        Property::non_enumerable(Value::String(::std::rc::Rc::new(String::new()))),
     );
 }
 

@@ -151,7 +151,7 @@ fn build_aggregate_error(
     env: &mut CallEnv,
 ) -> Value {
     let errors_value = Value::Array(errors.clone());
-    let message = Value::String("All promises were rejected".to_owned());
+    let message = Value::String("All promises were rejected".to_owned().into());
     let constructor = constructor.or_else(|| env.get("AggregateError"));
     if let Some(constructor) = constructor {
         if let Ok(value) = crate::construct_function(
@@ -167,7 +167,7 @@ fn build_aggregate_error(
     let object = ObjectRef::new(HashMap::from([
         (
             "name".to_owned(),
-            Value::String("AggregateError".to_owned()),
+            Value::String("AggregateError".to_owned().into()),
         ),
         ("message".to_owned(), message),
         ("errors".to_owned(), errors_value),

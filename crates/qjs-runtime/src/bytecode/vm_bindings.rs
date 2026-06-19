@@ -492,7 +492,7 @@ impl Vm<'_> {
             let mut env = self.current_env();
             let value = get_property(object, name, &mut env)?;
             self.apply_env(env);
-            return Ok(Value::String(typeof_value(value)));
+            return Ok(Value::String(typeof_value(value).into()));
         }
         let value = match slot {
             Some(slot) => self.load_local(slot)?,
@@ -506,7 +506,7 @@ impl Vm<'_> {
         } else {
             value
         };
-        Ok(Value::String(typeof_value(value)))
+        Ok(Value::String(typeof_value(value).into()))
     }
 
     pub(super) fn load_local(&self, slot: usize) -> Result<Value, RuntimeError> {

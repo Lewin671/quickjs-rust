@@ -2,7 +2,7 @@ use crate::{Value, eval};
 
 fn string(source: &str) -> String {
     match eval(source) {
-        Ok(Value::String(value)) => value,
+        Ok(Value::String(value)) => value.to_string(),
         other => panic!("expected string, got {other:?}"),
     }
 }

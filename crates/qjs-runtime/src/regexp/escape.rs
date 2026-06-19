@@ -10,7 +10,7 @@ pub(crate) fn native_regexp_escape(argument_values: &[Value]) -> Result<Value, R
             message: "TypeError: RegExp.escape argument must be a string".to_owned(),
         });
     };
-    Ok(Value::String(regexp_escape(source)))
+    Ok(Value::String(regexp_escape(source).into()))
 }
 
 fn regexp_escape(source: &str) -> String {

@@ -4,11 +4,11 @@ use crate::{Value, eval};
 fn evaluates_array_iteration_builtins() {
     assert_eq!(
         eval("[1, 2, 3].map(function(value) { return value * 2; }).join();"),
-        Ok(Value::String("2,4,6".to_owned()))
+        Ok(Value::String("2,4,6".to_owned().into()))
     );
     assert_eq!(
         eval("[10, 20].map(function(value, index) { return value + index; }).join('|');"),
-        Ok(Value::String("10|21".to_owned()))
+        Ok(Value::String("10|21".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -70,13 +70,13 @@ fn evaluates_array_iteration_builtins() {
         eval(
             "let xs = [0, , 2]; Object.defineProperty(xs, '0', { get: function() { Object.defineProperty(xs, '1', { get: function() { return 1; }, configurable: true }); return 0; }, configurable: true }); xs.map(function(value, index) { return index === 1 && value === 1 ? false : true; }).join('|');"
         ),
-        Ok(Value::String("true|false|true".to_owned()))
+        Ok(Value::String("true|false|true".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let xs = [0, , 2]; Object.defineProperty(xs, '0', { get: function() { Object.defineProperty(Array.prototype, '1', { get: function() { return 6.99; }, configurable: true }); return 0; }, configurable: true }); xs.map(function(value, index) { return index === 1 && value === 6.99 ? false : true; }).join('|');"
         ),
-        Ok(Value::String("true|false|true".to_owned()))
+        Ok(Value::String("true|false|true".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -88,13 +88,13 @@ fn evaluates_array_iteration_builtins() {
         eval(
             "let calls = 0; let xs = []; xs.constructor = 1; let caught = false; try { xs.map(function() { calls = calls + 1; }); } catch (error) { caught = error.constructor === TypeError; } caught + ':' + calls;"
         ),
-        Ok(Value::String("true:0".to_owned()))
+        Ok(Value::String("true:0".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let calls = 0; let marker = { ok: true }; let xs = []; Object.defineProperty(xs, 'constructor', { get: function() { throw marker; }, configurable: true }); let caught = false; try { xs.map(function() { calls = calls + 1; }); } catch (error) { caught = error === marker; } caught + ':' + calls;"
         ),
-        Ok(Value::String("true:0".to_owned()))
+        Ok(Value::String("true:0".to_owned().into()))
     );
     assert!(eval("Array.prototype.map.call({ length: 4294967296 }, function() {});").is_err());
     assert!(eval("Array.prototype.map.call({ length: 4294967297 }, function() {});").is_err());
@@ -102,7 +102,7 @@ fn evaluates_array_iteration_builtins() {
         eval(
             "let object = {}; object.length = 2; object[0] = 3; object[1] = 4; Array.prototype.map.call(object, function(value, index, receiver) { return receiver === object ? value + index : 0; }).join('|');"
         ),
-        Ok(Value::String("3|5".to_owned()))
+        Ok(Value::String("3|5".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -114,7 +114,7 @@ fn evaluates_array_iteration_builtins() {
         eval(
             "function capture() { return Array.prototype.map.call(arguments, function(value, index, receiver) { return Object.prototype.toString.call(receiver) === '[object Arguments]' ? value + index : 0; }).join('|'); } capture(4, 8);"
         ),
-        Ok(Value::String("4|9".to_owned()))
+        Ok(Value::String("4|9".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -132,13 +132,13 @@ fn evaluates_array_iteration_builtins() {
         eval(
             "function pair(a, b) {} pair[0] = 11; pair[1] = 9; Array.prototype.map.call(pair, function(value, index, receiver) { return receiver instanceof Function ? value + index : 0; }).join('|');"
         ),
-        Ok(Value::String("11|10".to_owned()))
+        Ok(Value::String("11|10".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let proto = {}; Object.defineProperty(proto, 'length', { get: function() { return 2; }, configurable: true }); let object = Object.create(proto); object[0] = 5; object[1] = 7; Array.prototype.map.call(object, function(value) { return value + 1; }).join('|');"
         ),
-        Ok(Value::String("6|8".to_owned()))
+        Ok(Value::String("6|8".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -156,7 +156,7 @@ fn evaluates_array_iteration_builtins() {
         eval(
             "let object = { 10: 10 }; let lengthAccessed = false; let loopAccessed = false; Object.defineProperty(object, 'length', { get: function() { lengthAccessed = true; return 20; }, configurable: true }); Object.defineProperty(object, '0', { get: function() { loopAccessed = true; return 10; }, configurable: true }); try { Array.prototype.map.call(object); } catch (error) {} lengthAccessed + ':' + loopAccessed;"
         ),
-        Ok(Value::String("true:false".to_owned()))
+        Ok(Value::String("true:false".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -174,7 +174,7 @@ fn evaluates_array_iteration_builtins() {
         eval(
             "let xs = [1, , 3]; let result = xs.map(function(value) { return value * 2; }); result.length + ':' + Object.prototype.hasOwnProperty.call(result, '1') + ':' + result[0] + ':' + result[2];"
         ),
-        Ok(Value::String("3:false:2:6".to_owned()))
+        Ok(Value::String("3:false:2:6".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -196,13 +196,13 @@ fn evaluates_array_iteration_builtins() {
     );
     assert_eq!(
         eval("[1, 2, 3, 4].filter(function(value) { return value > 2; }).join();"),
-        Ok(Value::String("3,4".to_owned()))
+        Ok(Value::String("3,4".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let calls = 0; let xs = []; xs.constructor = 1; let caught = false; try { xs.filter(function() { calls = calls + 1; }); } catch (error) { caught = error.constructor === TypeError; } caught + ':' + calls;"
         ),
-        Ok(Value::String("true:0".to_owned()))
+        Ok(Value::String("true:0".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -226,7 +226,7 @@ fn evaluates_array_iteration_builtins() {
         eval(
             "let obj = { length: 2 }; Object.defineProperty(obj, '0', { get: function() { Object.defineProperty(Object.prototype, '1', { get: function() { return 6.99; }, configurable: true }); return 0; }, configurable: true }); let result = Array.prototype.filter.call(obj, function() { return true; }); result.length + ':' + Array[1];"
         ),
-        Ok(Value::String("2:6.99".to_owned()))
+        Ok(Value::String("2:6.99".to_owned().into()))
     );
     assert_eq!(
         eval("[10, 20, 30].filter(function(value, index) { return index === 1; })[0];"),
@@ -236,7 +236,7 @@ fn evaluates_array_iteration_builtins() {
         eval(
             "let receiver = [2]; [1, 2].filter(function(value, index, array) { return this === receiver && array[index] === value && value === receiver[0]; }, receiver).join();"
         ),
-        Ok(Value::String("2".to_owned()))
+        Ok(Value::String("2".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -280,13 +280,13 @@ fn evaluates_array_iteration_builtins() {
         eval(
             "let xs = ['Shoes', 'Car', 'Bike']; let seen = []; xs.find(function(value) { if (seen.length === 0) { xs.splice(1, 1); } seen.push(value); return false; }); seen.length + ':' + seen[0] + ':' + seen[1] + ':' + seen[2];"
         ),
-        Ok(Value::String("3:Shoes:Bike:undefined".to_owned()))
+        Ok(Value::String("3:Shoes:Bike:undefined".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let xs = ['Skateboard', 'Barefoot']; let seen = []; xs.find(function(value) { if (seen.length === 0) { xs.push('Motorcycle'); xs[1] = 'Magic Carpet'; } seen.push(value); return false; }); seen.length + ':' + seen[0] + ':' + seen[1];"
         ),
-        Ok(Value::String("2:Skateboard:Magic Carpet".to_owned()))
+        Ok(Value::String("2:Skateboard:Magic Carpet".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -306,7 +306,7 @@ fn evaluates_array_iteration_builtins() {
         eval(
             "let xs = [1, 2, 3]; let seen = []; xs.findLast(function(value) { if (seen.length === 0) { delete xs[1]; xs[0] = 9; } seen.push(value); return false; }); seen.join('|');"
         ),
-        Ok(Value::String("3||9".to_owned()))
+        Ok(Value::String("3||9".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -318,7 +318,7 @@ fn evaluates_array_iteration_builtins() {
         eval(
             "var xs = ['Shoes', 'Car', 'Bike']; var called = 0; xs.findLast(function() { called++; return true; }); called = 0; var result = xs.findLast(function(value) { called++; return value === 'Shoes'; }); called + ':' + result;"
         ),
-        Ok(Value::String("3:Shoes".to_owned()))
+        Ok(Value::String("3:Shoes".to_owned().into()))
     );
     assert_eq!(
         eval("[1, 2, 3, 4].findLastIndex(function(value) { return value > 2; });"),
@@ -364,7 +364,7 @@ fn evaluates_array_iteration_builtins() {
         eval(
             "let seen = ''; [10, 20].forEach(function(value, index, array) { seen = seen + value + ':' + index + ':' + (array[index] === value) + '|'; }); seen;"
         ),
-        Ok(Value::String("10:0:true|20:1:true|".to_owned()))
+        Ok(Value::String("10:0:true|20:1:true|".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -436,7 +436,7 @@ fn evaluates_array_iteration_builtins() {
         eval(
             "let accessed = false; let obj = { 0: 9, length: 'Infinity' }; Array.prototype.every.call(obj, function(value) { accessed = true; return value > 10; }) + ':' + accessed;"
         ),
-        Ok(Value::String("false:true".to_owned()))
+        Ok(Value::String("false:true".to_owned().into()))
     );
     assert_eq!(
         eval("[1, 2, 3].reduce(function(accumulator, value) { return accumulator + value; });"),
@@ -450,7 +450,7 @@ fn evaluates_array_iteration_builtins() {
         eval(
             "let seen = ''; [10, 20].reduce(function(accumulator, value, index, array) { seen = seen + accumulator + ':' + value + ':' + index + ':' + (array[index] === value) + '|'; return accumulator + value; }, 5); seen;"
         ),
-        Ok(Value::String("5:10:0:true|15:20:1:true|".to_owned()))
+        Ok(Value::String("5:10:0:true|15:20:1:true|".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -466,19 +466,19 @@ fn evaluates_array_iteration_builtins() {
         eval(
             "let xs = [, , 3]; Array.prototype[1] = 2; let result = xs.reduce(function(accumulator, value, index) { return accumulator + ':' + index + ':' + value; }); delete Array.prototype[1]; result;"
         ),
-        Ok(Value::String("2:2:3".to_owned()))
+        Ok(Value::String("2:2:3".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let xs = [1, 2, 3]; let seen = ''; xs.reduce(function(accumulator, value, index) { if (index === 1) { delete xs[2]; } seen = seen + value + '|'; return accumulator + value; }, 0); seen;"
         ),
-        Ok(Value::String("1|2|".to_owned()))
+        Ok(Value::String("1|2|".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let xs = [1, , 3]; let seen = ''; xs.reduce(function(accumulator, value, index) { if (index === 0) { xs[1] = 2; } seen = seen + value + ':' + index + '|'; return accumulator + value; }, 0); seen;"
         ),
-        Ok(Value::String("1:0|2:1|3:2|".to_owned()))
+        Ok(Value::String("1:0|2:1|3:2|".to_owned().into()))
     );
     assert_eq!(
         eval("[].reduce(function(accumulator, value) { return accumulator + value; }, 7);"),
@@ -491,7 +491,7 @@ fn evaluates_array_iteration_builtins() {
         eval(
             "[1, 2, 3].reduceRight(function(accumulator, value) { return accumulator + '-' + value; });"
         ),
-        Ok(Value::String("3-2-1".to_owned()))
+        Ok(Value::String("3-2-1".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -503,25 +503,25 @@ fn evaluates_array_iteration_builtins() {
         eval(
             "let seen = ''; [10, 20].reduceRight(function(accumulator, value, index, array) { seen = seen + accumulator + ':' + value + ':' + index + ':' + (array[index] === value) + '|'; return accumulator + value; }, 5); seen;"
         ),
-        Ok(Value::String("5:20:1:true|25:10:0:true|".to_owned()))
+        Ok(Value::String("5:20:1:true|25:10:0:true|".to_owned().into()))
     );
     assert_eq!(
         eval(
             "[1, , 3].reduceRight(function(accumulator, value, index) { return accumulator + ':' + index + ':' + value; });"
         ),
-        Ok(Value::String("3:0:1".to_owned()))
+        Ok(Value::String("3:0:1".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let xs = [1, , 3]; let seen = ''; xs.reduceRight(function(accumulator, value, index) { if (index === 2) { xs[1] = 2; } seen = seen + value + ':' + index + '|'; return accumulator + value; }, 0); seen;"
         ),
-        Ok(Value::String("3:2|2:1|1:0|".to_owned()))
+        Ok(Value::String("3:2|2:1|1:0|".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let xs = [1, 2, 3]; let seen = ''; xs.reduceRight(function(accumulator, value, index) { if (index === 2) { delete xs[1]; } seen = seen + value + ':' + index + '|'; return accumulator + value; }, 0); seen;"
         ),
-        Ok(Value::String("3:2|1:0|".to_owned()))
+        Ok(Value::String("3:2|1:0|".to_owned().into()))
     );
     assert_eq!(
         eval("[].reduceRight(function(accumulator, value) { return accumulator + value; }, 7);"),

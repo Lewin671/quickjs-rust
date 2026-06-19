@@ -570,7 +570,11 @@ fn iterator_result(value: Value, done: bool, env: &CallEnv) -> Value {
 }
 
 fn not_an_async_generator_value() -> Value {
-    Value::String("TypeError: method called on a non-async-generator object".to_owned())
+    Value::String(
+        "TypeError: method called on a non-async-generator object"
+            .to_owned()
+            .into(),
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -719,7 +723,11 @@ fn async_from_sync_method(
     if !matches!(result, Value::Object(_) | Value::Array(_)) {
         promise::reject_promise_capability(
             &capability,
-            Value::String("TypeError: iterator result is not an object".to_owned()),
+            Value::String(
+                "TypeError: iterator result is not an object"
+                    .to_owned()
+                    .into(),
+            ),
             env,
         );
         return Value::Object(capability);

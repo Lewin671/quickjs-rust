@@ -11,20 +11,18 @@ pub(crate) fn native_string_prototype_to_lower_case(
     this_value: Value,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    Ok(Value::String(case_convert(
-        &this_string_value(this_value, env)?,
-        str::to_lowercase,
-    )))
+    Ok(Value::String(
+        case_convert(&this_string_value(this_value, env)?, str::to_lowercase).into(),
+    ))
 }
 
 pub(crate) fn native_string_prototype_to_upper_case(
     this_value: Value,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    Ok(Value::String(case_convert(
-        &this_string_value(this_value, env)?,
-        str::to_uppercase,
-    )))
+    Ok(Value::String(
+        case_convert(&this_string_value(this_value, env)?, str::to_uppercase).into(),
+    ))
 }
 
 pub(crate) fn native_string_prototype_locale_compare(
@@ -70,7 +68,7 @@ pub(crate) fn native_string_prototype_normalize(
             });
         }
     };
-    Ok(Value::String(normalized))
+    Ok(Value::String(normalized.into()))
 }
 
 fn canonical_locale_compare_key(value: &str) -> Cow<'_, str> {

@@ -65,7 +65,7 @@ fn global_match(
 
         let match_string = to_js_string_with_env(property_value(result, "0", env)?, env)?;
         let empty = match_string.is_empty();
-        matches.push(Value::String(match_string));
+        matches.push(Value::String(match_string.into()));
         if empty {
             let last_index =
                 to_length_with_env(property_value(regexp.clone(), "lastIndex", env)?, env)?;
@@ -86,7 +86,7 @@ fn regexp_exec(regexp: Value, input: &str, env: &mut CallEnv) -> Result<Value, R
     let result = call_function(
         exec,
         regexp,
-        vec![Value::String(input.to_owned())],
+        vec![Value::String(input.to_owned().into())],
         env,
         false,
     )?;

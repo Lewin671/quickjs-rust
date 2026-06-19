@@ -52,7 +52,7 @@ pub(crate) fn native_regexp_prototype_split(
         set_last_index(splitter.clone(), Value::Number(0.0), env)?;
         let result = regexp_exec(splitter, &input, env)?;
         if matches!(result, Value::Null) {
-            parts.push(Value::String(String::new()));
+            parts.push(Value::String(::std::rc::Rc::new(String::new())));
         } else {
             ensure_exec_result_object(result)?;
         }
@@ -76,11 +76,9 @@ pub(crate) fn native_regexp_prototype_split(
             continue;
         }
 
-        parts.push(Value::String(input_slice(
-            &input,
-            segment_start,
-            search_index,
-        )));
+        parts.push(Value::String(
+            input_slice(&input, segment_start, search_index).into(),
+        ));
         if parts.len() == limit {
             return Ok(Value::Array(ArrayRef::new(parts)));
         }
@@ -94,7 +92,9 @@ pub(crate) fn native_regexp_prototype_split(
         search_index = match_end;
     }
 
-    parts.push(Value::String(input_slice(&input, segment_start, input_len)));
+    parts.push(Value::String(
+        input_slice(&input, segment_start, input_len).into(),
+    ));
     Ok(Value::Array(ArrayRef::new(parts)))
 }
 
@@ -110,7 +110,7 @@ fn split_regexp_clone(value: Value, env: &mut CallEnv) -> Result<(Value, bool), 
     let splitter = construct_function(
         constructor.clone(),
         constructor,
-        vec![value, Value::String(split_flags)],
+        vec![value, Value::String(split_flags.into())],
         env,
     )?;
     Ok((splitter, unicode_matching))
@@ -121,7 +121,7 @@ fn regexp_exec(splitter: Value, input: &str, env: &mut CallEnv) -> Result<Value,
     call_function(
         exec,
         splitter,
-        vec![Value::String(input.to_owned())],
+        vec![Value::String(input.to_owned().into())],
         env,
         false,
     )

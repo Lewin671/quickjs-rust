@@ -423,7 +423,10 @@ fn map_iterator(this_value: Value, env: &CallEnv, kind: &str) -> Result<Value, R
     iterator.define_non_enumerable(MAP_ITERATOR.to_owned(), this_value);
     iterator.define_non_enumerable(MAP_ITERATOR_NEXT_INDEX.to_owned(), Value::Number(0.0));
     iterator.define_non_enumerable(MAP_ITERATOR_DONE.to_owned(), Value::Boolean(false));
-    iterator.define_non_enumerable(MAP_ITERATOR_KIND.to_owned(), Value::String(kind.to_owned()));
+    iterator.define_non_enumerable(
+        MAP_ITERATOR_KIND.to_owned(),
+        Value::String(kind.to_owned().into()),
+    );
     Ok(Value::Object(iterator))
 }
 
@@ -458,7 +461,7 @@ fn iterator_slot(iterator: &ObjectRef, key: &str) -> Result<Value, RuntimeError>
 
 fn iterator_kind(iterator: &ObjectRef) -> Result<String, RuntimeError> {
     match iterator_slot(iterator, MAP_ITERATOR_KIND)? {
-        Value::String(kind) => Ok(kind),
+        Value::String(kind) => Ok(kind.to_string()),
         _ => Err(RuntimeError {
             thrown: None,
             message: "Map iterator kind is invalid".to_owned(),

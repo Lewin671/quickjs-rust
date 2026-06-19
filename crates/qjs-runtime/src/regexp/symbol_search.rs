@@ -27,7 +27,7 @@ pub(crate) fn native_regexp_prototype_search(
     let result = call_function(
         exec,
         this_value.clone(),
-        vec![Value::String(input)],
+        vec![Value::String(input.into())],
         env,
         false,
     )?;

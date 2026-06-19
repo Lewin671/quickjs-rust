@@ -59,14 +59,14 @@ impl Vm<'_> {
             let result = operations::eval_binary(
                 left,
                 BinaryOp::Add,
-                Value::String(suffix.to_owned()),
+                Value::String(suffix.to_owned().into()),
                 &mut env,
             )?;
             self.apply_env(env);
             self.store_local(slot, result.clone())?;
             return Ok(result);
         };
-        string.push_str(suffix);
+        std::rc::Rc::make_mut(string).push_str(suffix);
         let result = Value::String(string.clone());
         self.write_through_captured(&local_meta.name, result.clone());
         let syncs_global_var = (local_meta.from_env && !local_meta.hoisted)
@@ -102,7 +102,7 @@ impl Vm<'_> {
         {
             let mut realm = self.realm.borrow_mut();
             if let Some(Value::String(string)) = realm.get_mut(name) {
-                string.push_str(suffix);
+                std::rc::Rc::make_mut(string).push_str(suffix);
                 let result = Value::String(string.clone());
                 drop(realm);
                 if let Some(Value::Object(global_this)) =
@@ -125,7 +125,7 @@ impl Vm<'_> {
         let result = operations::eval_binary(
             left,
             BinaryOp::Add,
-            Value::String(suffix.to_owned()),
+            Value::String(suffix.to_owned().into()),
             &mut env,
         )?;
         self.apply_env(env);

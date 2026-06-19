@@ -3,18 +3,36 @@ use crate::{Value, eval};
 #[test]
 fn evaluates_string_code_unit_builtins() {
     assert_eq!(eval("String.prototype.at.length;"), Ok(Value::Number(1.0)));
-    assert_eq!(eval("'abc'.at(1);"), Ok(Value::String("b".to_owned())));
-    assert_eq!(eval("'abc'.at(-1);"), Ok(Value::String("c".to_owned())));
+    assert_eq!(
+        eval("'abc'.at(1);"),
+        Ok(Value::String("b".to_owned().into()))
+    );
+    assert_eq!(
+        eval("'abc'.at(-1);"),
+        Ok(Value::String("c".to_owned().into()))
+    );
     assert_eq!(eval("'abc'.at(3);"), Ok(Value::Undefined));
     assert_eq!(eval("'abc'.at(-4);"), Ok(Value::Undefined));
-    assert_eq!(eval("'abc'.at();"), Ok(Value::String("a".to_owned())));
-    assert_eq!(eval("'abc'.at(1.9);"), Ok(Value::String("b".to_owned())));
+    assert_eq!(
+        eval("'abc'.at();"),
+        Ok(Value::String("a".to_owned().into()))
+    );
+    assert_eq!(
+        eval("'abc'.at(1.9);"),
+        Ok(Value::String("b".to_owned().into()))
+    );
     assert_eq!(
         eval("String.prototype.charAt.length;"),
         Ok(Value::Number(1.0))
     );
-    assert_eq!(eval("'abc'.charAt(1);"), Ok(Value::String("b".to_owned())));
-    assert_eq!(eval("'abc'.charAt(9);"), Ok(Value::String(String::new())));
+    assert_eq!(
+        eval("'abc'.charAt(1);"),
+        Ok(Value::String("b".to_owned().into()))
+    );
+    assert_eq!(
+        eval("'abc'.charAt(9);"),
+        Ok(Value::String(::std::rc::Rc::new(String::new())))
+    );
     assert_eq!(
         eval("String.prototype.charCodeAt.length;"),
         Ok(Value::Number(1.0))
@@ -50,7 +68,7 @@ fn evaluates_string_code_unit_builtins() {
         eval(
             "let object = new Object(42); object.charAt = String.prototype.charAt; object.charAt(false) + object.charAt(true);"
         ),
-        Ok(Value::String("42".to_owned()))
+        Ok(Value::String("42".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -75,17 +93,17 @@ fn evaluates_string_code_unit_builtins() {
     assert_eq!(eval("'😀'.codePointAt(1);"), Ok(Value::Number(56_832.0)));
     assert_eq!(
         eval("let seen = ''; for (var ch of 'ab') { seen += ch; } seen;"),
-        Ok(Value::String("ab".to_owned()))
+        Ok(Value::String("ab".to_owned().into()))
     );
     assert_eq!(
         eval("let seen = ''; for (var ch of 'a\\uD801\\uDC28b') { seen += ch + '|'; } seen;"),
-        Ok(Value::String("a|𐐨|b|".to_owned()))
+        Ok(Value::String("a|𐐨|b|".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let seen = ''; for (var ch of 'a\\uD801b') { seen += ch.length + ':' + ch.charCodeAt(0) + '|'; } seen;"
         ),
-        Ok(Value::String("1:97|1:55297|1:98|".to_owned()))
+        Ok(Value::String("1:97|1:55297|1:98|".to_owned().into()))
     );
     assert_eq!(
         eval("let iterator = 'x'[Symbol.iterator](); iterator[Symbol.iterator]() === iterator;"),

@@ -10,13 +10,19 @@ fn assert_job_order(source: &str, expected: &str) {
     let promise = eval(source).unwrap();
     assert_eq!(
         promise::promise_debug_state_result(&promise),
-        Some(("fulfilled".to_owned(), Value::String(expected.to_owned())))
+        Some((
+            "fulfilled".to_owned(),
+            Value::String(expected.to_owned().into())
+        ))
     );
 }
 
 #[test]
 fn evaluates_promise_constructor_shell() {
-    assert_eval("typeof Promise;", Value::String("function".to_owned()));
+    assert_eval(
+        "typeof Promise;",
+        Value::String("function".to_owned().into()),
+    );
     assert_eval("Promise.length;", Value::Number(1.0));
     assert_eval(
         "new Promise(function(resolve) { resolve(1); }) instanceof Promise;",
@@ -24,11 +30,11 @@ fn evaluates_promise_constructor_shell() {
     );
     assert_eval(
         "Object.prototype.toString.call(new Promise(function(resolve) { resolve(1); }));",
-        Value::String("[object Promise]".to_owned()),
+        Value::String("[object Promise]".to_owned().into()),
     );
     assert_eval(
         "var called = false; new Promise(function(resolve, reject) { called = typeof resolve + ':' + typeof reject; resolve(1); }); called;",
-        Value::String("function:function".to_owned()),
+        Value::String("function:function".to_owned().into()),
     );
     assert!(eval("Promise(function() {});").is_err());
     assert!(eval("new Promise(1);").is_err());
@@ -48,7 +54,7 @@ fn evaluates_promise_resolve_reject_shell() {
     );
     assert_eval(
         "Object.prototype.toString.call(Promise.resolve(1));",
-        Value::String("[object Promise]".to_owned()),
+        Value::String("[object Promise]".to_owned().into()),
     );
     assert_eval(
         "var p = Promise.resolve(1); Promise.resolve(p) === p;",
@@ -99,7 +105,7 @@ fn promise_has_symbol_species_accessor() {
     );
     assert_eval(
         "Object.getOwnPropertyDescriptor(Promise, Symbol.species).get.name;",
-        Value::String("get [Symbol.species]".to_owned()),
+        Value::String("get [Symbol.species]".to_owned().into()),
     );
 }
 
@@ -116,7 +122,10 @@ fn promise_then_uses_species_constructor() {
 
 #[test]
 fn evaluates_promise_all_shell() {
-    assert_eval("typeof Promise.all;", Value::String("function".to_owned()));
+    assert_eval(
+        "typeof Promise.all;",
+        Value::String("function".to_owned().into()),
+    );
     assert_eval("Promise.all.length;", Value::Number(1.0));
     assert_eval(
         "Promise.propertyIsEnumerable('all');",
@@ -125,7 +134,7 @@ fn evaluates_promise_all_shell() {
     assert_eval("Promise.all([]) instanceof Promise;", Value::Boolean(true));
     assert_eval(
         "Object.prototype.toString.call(Promise.all([]));",
-        Value::String("[object Promise]".to_owned()),
+        Value::String("[object Promise]".to_owned().into()),
     );
 }
 
@@ -152,7 +161,7 @@ fn promise_all_reads_constructor_resolve_once_per_element() {
         "var getCount = 0, callCount = 0; var real = Promise.resolve;\
          Object.defineProperty(Promise, 'resolve', { configurable: true, get: function(){ getCount++; return function(){ callCount++; return real.apply(Promise, arguments); }; } });\
          Promise.all([1, 2, 3]); getCount + ':' + callCount;",
-        Value::String("1:3".to_owned()),
+        Value::String("1:3".to_owned().into()),
     );
 }
 
@@ -230,7 +239,7 @@ fn promise_self_resolution_rejects_with_type_error() {
 fn promise_constructor_resolving_functions_are_anonymous() {
     assert_eval(
         "var r; new Promise(function(resolve){ r = resolve; }); r.name + ':' + r.length;",
-        Value::String(":1".to_owned()),
+        Value::String(":1".to_owned().into()),
     );
 }
 
@@ -294,7 +303,10 @@ fn promise_try_resolves_and_uses_this_constructor() {
 
 #[test]
 fn evaluates_promise_any_shell() {
-    assert_eval("typeof Promise.any;", Value::String("function".to_owned()));
+    assert_eval(
+        "typeof Promise.any;",
+        Value::String("function".to_owned().into()),
+    );
     assert_eval("Promise.any.length;", Value::Number(1.0));
     assert_eval(
         "Promise.propertyIsEnumerable('any');",
@@ -303,13 +315,16 @@ fn evaluates_promise_any_shell() {
     assert_eval("Promise.any([]) instanceof Promise;", Value::Boolean(true));
     assert_eval(
         "Object.prototype.toString.call(Promise.any([]));",
-        Value::String("[object Promise]".to_owned()),
+        Value::String("[object Promise]".to_owned().into()),
     );
 }
 
 #[test]
 fn evaluates_promise_try_shell() {
-    assert_eval("typeof Promise.try;", Value::String("function".to_owned()));
+    assert_eval(
+        "typeof Promise.try;",
+        Value::String("function".to_owned().into()),
+    );
     assert_eval("Promise.try.length;", Value::Number(1.0));
     assert_eval(
         "Promise.propertyIsEnumerable('try');",
@@ -325,7 +340,7 @@ fn evaluates_promise_try_shell() {
 fn evaluates_promise_with_resolvers_shell() {
     assert_eval(
         "typeof Promise.withResolvers;",
-        Value::String("function".to_owned()),
+        Value::String("function".to_owned().into()),
     );
     assert_eval("Promise.withResolvers.length;", Value::Number(0.0));
     assert_eval(
@@ -338,7 +353,7 @@ fn evaluates_promise_with_resolvers_shell() {
     );
     assert_eval(
         "var c = Promise.withResolvers(); typeof c.resolve + ':' + c.resolve.length + ':' + c.resolve.name + ':' + typeof c.reject + ':' + c.reject.length + ':' + c.reject.name;",
-        Value::String("function:1::function:1:".to_owned()),
+        Value::String("function:1::function:1:".to_owned().into()),
     );
 }
 
@@ -346,7 +361,7 @@ fn evaluates_promise_with_resolvers_shell() {
 fn evaluates_promise_all_settled_shell() {
     assert_eval(
         "typeof Promise.allSettled;",
-        Value::String("function".to_owned()),
+        Value::String("function".to_owned().into()),
     );
     assert_eval("Promise.allSettled.length;", Value::Number(1.0));
     assert_eval(
@@ -359,13 +374,16 @@ fn evaluates_promise_all_settled_shell() {
     );
     assert_eval(
         "Object.prototype.toString.call(Promise.allSettled([]));",
-        Value::String("[object Promise]".to_owned()),
+        Value::String("[object Promise]".to_owned().into()),
     );
 }
 
 #[test]
 fn evaluates_promise_race_shell() {
-    assert_eval("typeof Promise.race;", Value::String("function".to_owned()));
+    assert_eval(
+        "typeof Promise.race;",
+        Value::String("function".to_owned().into()),
+    );
     assert_eval("Promise.race.length;", Value::Number(1.0));
     assert_eval(
         "Promise.propertyIsEnumerable('race');",
@@ -374,7 +392,7 @@ fn evaluates_promise_race_shell() {
     assert_eval("Promise.race([]) instanceof Promise;", Value::Boolean(true));
     assert_eval(
         "Object.prototype.toString.call(Promise.race([]));",
-        Value::String("[object Promise]".to_owned()),
+        Value::String("[object Promise]".to_owned().into()),
     );
 }
 
@@ -382,7 +400,7 @@ fn evaluates_promise_race_shell() {
 fn evaluates_promise_then_shell() {
     assert_eval(
         "typeof Promise.prototype.then;",
-        Value::String("function".to_owned()),
+        Value::String("function".to_owned().into()),
     );
     assert_eval("Promise.prototype.then.length;", Value::Number(2.0));
     assert_eval(
@@ -395,7 +413,7 @@ fn evaluates_promise_then_shell() {
     );
     assert_eval(
         "Object.prototype.toString.call(Promise.resolve(1).then());",
-        Value::String("[object Promise]".to_owned()),
+        Value::String("[object Promise]".to_owned().into()),
     );
     assert_eval(
         "var called = false; Promise.resolve(1).then(function() { called = true; }); called;",
@@ -409,7 +427,7 @@ fn evaluates_promise_then_shell() {
 fn evaluates_promise_catch_shell() {
     assert_eval(
         "typeof Promise.prototype.catch;",
-        Value::String("function".to_owned()),
+        Value::String("function".to_owned().into()),
     );
     assert_eval("Promise.prototype.catch.length;", Value::Number(1.0));
     assert_eval(
@@ -422,11 +440,11 @@ fn evaluates_promise_catch_shell() {
     );
     assert_eval(
         "Object.prototype.toString.call(Promise.reject(1).catch(function() {}));",
-        Value::String("[object Promise]".to_owned()),
+        Value::String("[object Promise]".to_owned().into()),
     );
     assert_eval(
         "var receiver = { then: function(onFulfilled, onRejected) { return typeof onFulfilled + ':' + typeof onRejected + ':' + (this === receiver); } }; Promise.prototype.catch.call(receiver, function() {});",
-        Value::String("undefined:function:true".to_owned()),
+        Value::String("undefined:function:true".to_owned().into()),
     );
     assert!(eval("Promise.prototype.catch.call({});").is_err());
     assert!(eval("Promise.prototype.catch.call(3);").is_err());
@@ -436,7 +454,7 @@ fn evaluates_promise_catch_shell() {
 fn evaluates_promise_finally_shell() {
     assert_eval(
         "typeof Promise.prototype.finally;",
-        Value::String("function".to_owned()),
+        Value::String("function".to_owned().into()),
     );
     assert_eval("Promise.prototype.finally.length;", Value::Number(1.0));
     assert_eval(
@@ -449,15 +467,15 @@ fn evaluates_promise_finally_shell() {
     );
     assert_eval(
         "Object.prototype.toString.call(Promise.resolve(1).finally(function() {}));",
-        Value::String("[object Promise]".to_owned()),
+        Value::String("[object Promise]".to_owned().into()),
     );
     assert_eval(
         "var receiver = { then: function(onFulfilled, onRejected) { return typeof onFulfilled + ':' + typeof onRejected + ':' + (this === receiver); } }; Promise.prototype.finally.call(receiver, function() {});",
-        Value::String("function:function:true".to_owned()),
+        Value::String("function:function:true".to_owned().into()),
     );
     assert_eval(
         "var receiver = { then: function(onFulfilled, onRejected) { return (onFulfilled === 1) + ':' + (onRejected === 1); } }; Promise.prototype.finally.call(receiver, 1);",
-        Value::String("true:true".to_owned()),
+        Value::String("true:true".to_owned().into()),
     );
     assert!(eval("Promise.prototype.finally.call({});").is_err());
     assert!(eval("Promise.prototype.finally.call(3);").is_err());
@@ -514,7 +532,10 @@ fn jobs_are_drained_between_evaluations() {
     .unwrap();
     assert_eq!(
         promise::promise_debug_state_result(&first),
-        Some(("fulfilled".to_owned(), Value::String("first".to_owned())))
+        Some((
+            "fulfilled".to_owned(),
+            Value::String("first".to_owned().into())
+        ))
     );
     let second = eval(
         "var order = []; Promise.resolve().then(function() { order.push('second'); }); Promise.resolve().then(function(){}).then(function() { return order.join(','); });",
@@ -522,7 +543,10 @@ fn jobs_are_drained_between_evaluations() {
     .unwrap();
     assert_eq!(
         promise::promise_debug_state_result(&second),
-        Some(("fulfilled".to_owned(), Value::String("second".to_owned())))
+        Some((
+            "fulfilled".to_owned(),
+            Value::String("second".to_owned().into())
+        ))
     );
 }
 
@@ -534,7 +558,10 @@ fn keep_jobs_defers_reactions_until_run_jobs() {
         "var order = []; globalThis.order = order; Promise.resolve().then(function() { order.push('deferred'); }); order.join(',');",
     )
     .unwrap();
-    assert_eq!(outcome.value, Value::String(String::new()));
+    assert_eq!(
+        outcome.value,
+        Value::String(::std::rc::Rc::new(String::new()))
+    );
     outcome.run_jobs().unwrap();
 }
 
@@ -636,7 +663,7 @@ fn assimilates_promise_thenables_after_script() {
         promise::promise_debug_state_result(&proxied),
         Some((
             "fulfilled".to_owned(),
-            Value::String("then,call:17".to_owned())
+            Value::String("then,call:17".to_owned().into())
         ))
     );
 }
@@ -698,7 +725,10 @@ fn drains_promise_all_jobs_after_script() {
     .unwrap();
     assert_eq!(
         promise::promise_debug_state_result(&mixed),
-        Some(("fulfilled".to_owned(), Value::String("1:2:3".to_owned())))
+        Some((
+            "fulfilled".to_owned(),
+            Value::String("1:2:3".to_owned().into())
+        ))
     );
 
     let first_settlement = eval(
@@ -760,7 +790,10 @@ fn drains_promise_any_rejections_after_script() {
     .unwrap();
     assert_eq!(
         promise::promise_debug_state_result(&empty),
-        Some(("fulfilled".to_owned(), Value::String("true:0".to_owned())))
+        Some((
+            "fulfilled".to_owned(),
+            Value::String("true:0".to_owned().into())
+        ))
     );
 
     let rejected = eval(
@@ -769,7 +802,10 @@ fn drains_promise_any_rejections_after_script() {
     .unwrap();
     assert_eq!(
         promise::promise_debug_state_result(&rejected),
-        Some(("fulfilled".to_owned(), Value::String("true:ab".to_owned())))
+        Some((
+            "fulfilled".to_owned(),
+            Value::String("true:ab".to_owned().into())
+        ))
     );
 
     let poisoned = eval(
@@ -778,7 +814,10 @@ fn drains_promise_any_rejections_after_script() {
     .unwrap();
     assert_eq!(
         promise::promise_debug_state_result(&poisoned),
-        Some(("fulfilled".to_owned(), Value::String("true:8".to_owned())))
+        Some((
+            "fulfilled".to_owned(),
+            Value::String("true:8".to_owned().into())
+        ))
     );
 }
 
@@ -796,7 +835,10 @@ fn drains_promise_try_after_script() {
     .unwrap();
     assert_eq!(
         promise::promise_debug_state_result(&args),
-        Some(("fulfilled".to_owned(), Value::String("1:2:true".to_owned())))
+        Some((
+            "fulfilled".to_owned(),
+            Value::String("1:2:true".to_owned().into())
+        ))
     );
 
     let rejected = eval("Promise.try(function() { throw 7; });").unwrap();
@@ -861,7 +903,7 @@ fn drains_promise_all_settled_jobs_after_script() {
         promise::promise_debug_state_result(&fulfilled),
         Some((
             "fulfilled".to_owned(),
-            Value::String("fulfilled:1:fulfilled:2".to_owned())
+            Value::String("fulfilled:1:fulfilled:2".to_owned().into())
         ))
     );
 
@@ -873,7 +915,7 @@ fn drains_promise_all_settled_jobs_after_script() {
         promise::promise_debug_state_result(&mixed),
         Some((
             "fulfilled".to_owned(),
-            Value::String("rejected:3:fulfilled:4".to_owned())
+            Value::String("rejected:3:fulfilled:4".to_owned().into())
         ))
     );
 
@@ -885,7 +927,7 @@ fn drains_promise_all_settled_jobs_after_script() {
         promise::promise_debug_state_result(&first_settlement),
         Some((
             "fulfilled".to_owned(),
-            Value::String("fulfilled:5".to_owned())
+            Value::String("fulfilled:5".to_owned().into())
         ))
     );
 }
@@ -900,7 +942,7 @@ fn drains_promise_all_settled_thenable_rejections_after_script() {
         promise::promise_debug_state_result(&rejected),
         Some((
             "fulfilled".to_owned(),
-            Value::String("rejected:7".to_owned())
+            Value::String("rejected:7".to_owned().into())
         ))
     );
 
@@ -912,7 +954,7 @@ fn drains_promise_all_settled_thenable_rejections_after_script() {
         promise::promise_debug_state_result(&poisoned),
         Some((
             "fulfilled".to_owned(),
-            Value::String("rejected:8".to_owned())
+            Value::String("rejected:8".to_owned().into())
         ))
     );
 }

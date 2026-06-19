@@ -50,7 +50,7 @@ fn evaluates_object_integrity_builtins() {
     assert_eq!(eval("Object.seal.length;"), Ok(Value::Number(1.0)));
     assert_eq!(
         eval("typeof Object.seal;"),
-        Ok(Value::String("function".to_owned()))
+        Ok(Value::String("function".to_owned().into()))
     );
     assert_eq!(eval("Object.isSealed.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("Object.isSealed({});"), Ok(Value::Boolean(false)));
@@ -108,7 +108,7 @@ fn evaluates_object_integrity_builtins() {
     assert_eq!(eval("Object.freeze.length;"), Ok(Value::Number(1.0)));
     assert_eq!(
         eval("typeof Object.freeze;"),
-        Ok(Value::String("function".to_owned()))
+        Ok(Value::String("function".to_owned().into()))
     );
     assert_eq!(eval("Object.isFrozen.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("Object.isFrozen({});"), Ok(Value::Boolean(false)));
@@ -212,7 +212,7 @@ fn object_seal_and_freeze_route_through_proxy_traps() {
              Object.freeze(p); \
              seen.join('|') + '#' + Object.getOwnPropertyDescriptor(t, 'a').writable;"
         ),
-        Ok(Value::String("a:false:false#false".to_owned()))
+        Ok(Value::String("a:false:false#false".to_owned().into()))
     );
     // Seal makes own keys non-configurable but leaves writability untouched.
     assert_eq!(
@@ -220,6 +220,6 @@ fn object_seal_and_freeze_route_through_proxy_traps() {
             "let t = { a: 1 }; Object.seal(new Proxy(t, {})); \
              let d = Object.getOwnPropertyDescriptor(t, 'a'); d.configurable + ':' + d.writable;"
         ),
-        Ok(Value::String("false:true".to_owned()))
+        Ok(Value::String("false:true".to_owned().into()))
     );
 }

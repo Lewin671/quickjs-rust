@@ -8,7 +8,7 @@ use crate::{Value, eval};
 
 fn name_of(source: &str) -> String {
     match eval(source) {
-        Ok(Value::String(name)) => name,
+        Ok(Value::String(name)) => name.to_string(),
         other => panic!("expected a string name, got {other:?}"),
     }
 }

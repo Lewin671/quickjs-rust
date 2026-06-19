@@ -131,7 +131,7 @@ impl Compiler {
     ) {
         match key {
             AssignmentTargetPropertyKey::Literal(key) => {
-                let key = self.const_slot(Value::String(key.clone()));
+                let key = self.const_slot(Value::String(key.clone().into()));
                 self.emit(Op::LoadConst(key));
             }
             AssignmentTargetPropertyKey::Computed(_) => {

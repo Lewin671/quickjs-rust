@@ -116,7 +116,7 @@ impl Compiler {
     ) {
         match key {
             ObjectBindingPropertyKey::Literal(key) => {
-                let key = self.const_slot(Value::String(key.clone()));
+                let key = self.const_slot(Value::String(key.clone().into()));
                 self.emit(Op::LoadConst(key));
             }
             ObjectBindingPropertyKey::Computed(_) => {
@@ -188,7 +188,7 @@ impl Compiler {
         self.emit(Op::GetIterator);
         self.emit(Op::StoreLocal(iterator_slot));
         self.emit(Op::LoadLocal(iterator_slot));
-        let next_key = self.const_slot(Value::String("next".to_owned()));
+        let next_key = self.const_slot(Value::String("next".to_owned().into()));
         self.emit(Op::LoadConst(next_key));
         self.emit(Op::GetProp);
         self.emit(Op::StoreLocal(next_slot));

@@ -4,7 +4,7 @@ use crate::{Value, eval};
 fn evaluates_weak_set_constructor_and_prototype() {
     assert_eq!(
         eval("typeof WeakSet;"),
-        Ok(Value::String("function".to_owned()))
+        Ok(Value::String("function".to_owned().into()))
     );
     assert_eq!(eval("WeakSet.length;"), Ok(Value::Number(0.0)));
     assert_eq!(
@@ -17,7 +17,7 @@ fn evaluates_weak_set_constructor_and_prototype() {
     );
     assert_eq!(
         eval("Object.prototype.toString.call(new WeakSet());"),
-        Ok(Value::String("[object WeakSet]".to_owned()))
+        Ok(Value::String("[object WeakSet]".to_owned().into()))
     );
     assert_eq!(eval("WeakSet.prototype.size;"), Ok(Value::Undefined));
     assert_eq!(
@@ -43,7 +43,7 @@ fn evaluates_weak_set_iterable_constructor_arguments() {
         eval(
             "let key = {}; let set = new WeakSet([key, key]); set.delete(key) + ':' + set.has(key);"
         ),
-        Ok(Value::String("true:false".to_owned()))
+        Ok(Value::String("true:false".to_owned().into()))
     );
     assert!(eval("new WeakSet([1]);").is_err());
     assert!(eval("new WeakSet({});").is_err());
@@ -55,7 +55,7 @@ fn weak_set_constructor_uses_prototype_add_adder() {
         eval(
             "let first = {}; let second = {}; let calls = 0; let original = WeakSet.prototype.add; WeakSet.prototype.add = function(value) { calls = calls + 1; return original.call(this, value); }; let set = new WeakSet([first, second]); calls + ':' + set.has(first) + ':' + set.has(second);"
         ),
-        Ok(Value::String("2:true:true".to_owned()))
+        Ok(Value::String("2:true:true".to_owned().into()))
     );
     assert!(
         eval(
@@ -80,7 +80,7 @@ fn evaluates_weak_set_basic_methods() {
         eval(
             "let key = {}; let set = new WeakSet(); set.add(key); set.delete(key) + ':' + set.delete(key) + ':' + set.has(key);"
         ),
-        Ok(Value::String("true:false:false".to_owned()))
+        Ok(Value::String("true:false:false".to_owned().into()))
     );
 }
 
@@ -90,13 +90,13 @@ fn evaluates_weak_set_object_value_identity() {
         eval(
             "let a = {}; let b = {}; let set = new WeakSet(); set.add(a); set.has(a) + ':' + set.has(b);"
         ),
-        Ok(Value::String("true:false".to_owned()))
+        Ok(Value::String("true:false".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let array = []; let fn = function() {}; let set = new WeakSet(); set.add(array); set.add(fn); set.has(array) + ':' + set.has(fn);"
         ),
-        Ok(Value::String("true:true".to_owned()))
+        Ok(Value::String("true:true".to_owned().into()))
     );
 }
 

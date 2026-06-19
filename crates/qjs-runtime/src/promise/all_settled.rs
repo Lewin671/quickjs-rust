@@ -192,7 +192,7 @@ fn settled_result_object(state: &str, value: Value, env: &CallEnv) -> Value {
     let object = ObjectRef::with_prototype(HashMap::new(), crate::object_prototype(env));
     object.define_property(
         "status".to_owned(),
-        Property::data(Value::String(state.to_owned()), true, true, true),
+        Property::data(Value::String(state.to_owned().into()), true, true, true),
     );
     let (key, value_key) = if state == PROMISE_FULFILLED {
         ("value", value)

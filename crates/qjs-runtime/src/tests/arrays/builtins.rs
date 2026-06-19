@@ -4,7 +4,7 @@ use crate::{Value, eval};
 fn evaluates_array_builtins() {
     assert_eq!(
         eval("typeof Array;"),
-        Ok(Value::String("function".to_owned()))
+        Ok(Value::String("function".to_owned().into()))
     );
     assert_eq!(eval("Array.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("Array.from.length;"), Ok(Value::Number(1.0)));
@@ -109,11 +109,11 @@ fn evaluates_array_builtins() {
         eval(
             "let d = Object.getOwnPropertyDescriptor(Array.prototype, 'toLocaleString'); (d.value === Array.prototype.toLocaleString) + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
-        Ok(Value::String("true:true:false:true".to_owned()))
+        Ok(Value::String("true:true:false:true".to_owned().into()))
     );
     assert_eq!(
         eval("[1, 'x', true].toLocaleString();"),
-        Ok(Value::String("1,x,true".to_owned()))
+        Ok(Value::String("1,x,true".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -127,7 +127,7 @@ fn evaluates_array_builtins() {
             "'use strict'; Boolean.prototype.toString = function() { return typeof this; }; \
              [true, false].toLocaleString();"
         ),
-        Ok(Value::String("boolean,boolean".to_owned()))
+        Ok(Value::String("boolean,boolean".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -135,13 +135,13 @@ fn evaluates_array_builtins() {
              Array.prototype[1] = item; let xs = [item]; xs.length = 2; \
              let result = xs.toLocaleString() + ':' + calls; delete Array.prototype[1]; result;"
         ),
-        Ok(Value::String("proto,proto:2".to_owned()))
+        Ok(Value::String("proto,proto:2".to_owned().into()))
     );
     assert_eq!(eval("Array().length;"), Ok(Value::Number(0.0)));
     assert_eq!(eval("Array(1, 2)[1];"), Ok(Value::Number(2.0)));
     assert_eq!(
         eval("let array = new Array('x'); array[0];"),
-        Ok(Value::String("x".to_owned()))
+        Ok(Value::String("x".to_owned().into()))
     );
     assert_eq!(eval("Array.isArray([]);"), Ok(Value::Boolean(true)));
     assert_eq!(
@@ -157,7 +157,7 @@ fn evaluates_array_builtins() {
              let arrayProxyProxy = new Proxy(arrayProxy, {}); \
              Array.isArray(objectProxy) + ':' + Array.isArray(arrayProxy) + ':' + Array.isArray(arrayProxyProxy);"
         ),
-        Ok(Value::String("false:true:true".to_owned()))
+        Ok(Value::String("false:true:true".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -201,7 +201,7 @@ fn array_prototype_is_array_exotic_object() {
              Object.prototype.toString.call(Array.prototype);"
         ),
         Ok(Value::String(
-            "true:false:false:3:42:[object Array]".to_owned()
+            "true:false:false:3:42:[object Array]".to_owned().into()
         ))
     );
 }
@@ -239,7 +239,9 @@ fn array_prototype_to_string_falls_back_to_intrinsic_object_to_string() {
              object + ':' + array + ':' + callable;"
         ),
         Ok(Value::String(
-            "[object Object]:[object Array]:[object Function]".to_owned()
+            "[object Object]:[object Array]:[object Function]"
+                .to_owned()
+                .into()
         ))
     );
 }
@@ -256,6 +258,6 @@ fn array_prototype_to_string_reads_join_before_length() {
              Array.prototype.toString.call(object); \
              order.join(',');"
         ),
-        Ok(Value::String("join".to_owned()))
+        Ok(Value::String("join".to_owned().into()))
     );
 }

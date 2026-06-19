@@ -916,7 +916,7 @@ impl Compiler {
         let value = match literal {
             Literal::Number { raw, .. } => Value::Number(parse_number_literal(raw)?),
             Literal::BigInt { raw, .. } => Value::BigInt(crate::bigint::parse_bigint_literal(raw)?),
-            Literal::String { value, .. } => Value::String(value.clone()),
+            Literal::String { value, .. } => Value::String(value.clone().into()),
             Literal::Boolean { value, .. } => Value::Boolean(*value),
             Literal::Null { .. } => Value::Null,
         };
@@ -965,14 +965,16 @@ impl Compiler {
         parts: &[String],
         expressions: &[Expr],
     ) -> Result<(), RuntimeError> {
-        let first = self.const_slot(Value::String(parts.first().cloned().unwrap_or_default()));
+        let first = self.const_slot(Value::String(
+            parts.first().cloned().unwrap_or_default().into(),
+        ));
         self.emit(Op::LoadConst(first));
         for (index, expression) in expressions.iter().enumerate() {
             self.compile_expr(expression)?;
             self.emit(Op::ToString);
             self.emit(Op::Binary(BinaryOp::Add));
             let part = self.const_slot(Value::String(
-                parts.get(index + 1).cloned().unwrap_or_default(),
+                parts.get(index + 1).cloned().unwrap_or_default().into(),
             ));
             self.emit(Op::LoadConst(part));
             self.emit(Op::Binary(BinaryOp::Add));

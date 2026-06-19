@@ -4,7 +4,7 @@ use crate::{Value, eval};
 fn evaluates_finalization_registry_constructor_and_prototype() {
     assert_eq!(
         eval("typeof FinalizationRegistry;"),
-        Ok(Value::String("function".to_owned()))
+        Ok(Value::String("function".to_owned().into()))
     );
     assert_eq!(eval("FinalizationRegistry.length;"), Ok(Value::Number(1.0)));
     assert_eq!(
@@ -17,7 +17,9 @@ fn evaluates_finalization_registry_constructor_and_prototype() {
     );
     assert_eq!(
         eval("Object.prototype.toString.call(new FinalizationRegistry(function() {}));"),
-        Ok(Value::String("[object FinalizationRegistry]".to_owned()))
+        Ok(Value::String(
+            "[object FinalizationRegistry]".to_owned().into()
+        ))
     );
     assert!(eval("FinalizationRegistry(function() {});").is_err());
     assert!(eval("new FinalizationRegistry(1);").is_err());
@@ -30,14 +32,14 @@ fn finalization_registry_surface_descriptors_match_spec() {
             "let d = Object.getOwnPropertyDescriptor(FinalizationRegistry, 'prototype'); \
              d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
-        Ok(Value::String("false:false:false".to_owned()))
+        Ok(Value::String("false:false:false".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let d = Object.getOwnPropertyDescriptor(FinalizationRegistry.prototype, 'constructor'); \
              (d.value === FinalizationRegistry) + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
-        Ok(Value::String("true:true:false:true".to_owned()))
+        Ok(Value::String("true:true:false:true".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -45,7 +47,7 @@ fn finalization_registry_surface_descriptors_match_spec() {
              d.value + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
         Ok(Value::String(
-            "FinalizationRegistry:false:false:true".to_owned()
+            "FinalizationRegistry:false:false:true".to_owned().into()
         ))
     );
 }
@@ -102,7 +104,7 @@ fn finalization_registry_unregister_removes_matching_tokens() {
              let token2 = {}; \
              registry.unregister(token1) + ':' + registry.unregister(token2);"
         ),
-        Ok(Value::String("false:false".to_owned()))
+        Ok(Value::String("false:false".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -114,7 +116,7 @@ fn finalization_registry_unregister_removes_matching_tokens() {
              registry.register(target2, 'two', token); \
              registry.unregister(target1) + ':' + registry.unregister(token) + ':' + registry.unregister(token);"
         ),
-        Ok(Value::String("false:true:false".to_owned()))
+        Ok(Value::String("false:true:false".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -124,7 +126,7 @@ fn finalization_registry_unregister_removes_matching_tokens() {
              registry.register(target, 'held', token); \
              registry.unregister(token) + ':' + registry.unregister(token);"
         ),
-        Ok(Value::String("true:false".to_owned()))
+        Ok(Value::String("true:false".to_owned().into()))
     );
     assert!(eval("new FinalizationRegistry(function() {}).unregister(undefined);").is_err());
     assert!(
@@ -148,14 +150,16 @@ fn finalization_registry_method_descriptors_match_spec() {
             "let d = Object.getOwnPropertyDescriptor(FinalizationRegistry.prototype, 'register'); \
              d.value.name + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
-        Ok(Value::String("register:true:false:true".to_owned()))
+        Ok(Value::String("register:true:false:true".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let d = Object.getOwnPropertyDescriptor(FinalizationRegistry.prototype, 'unregister'); \
              d.value.name + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
-        Ok(Value::String("unregister:true:false:true".to_owned()))
+        Ok(Value::String(
+            "unregister:true:false:true".to_owned().into()
+        ))
     );
     assert!(eval("new FinalizationRegistry.prototype.register({}, 'held');").is_err());
     assert!(eval("new FinalizationRegistry.prototype.unregister({});").is_err());

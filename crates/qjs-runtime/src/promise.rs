@@ -624,7 +624,7 @@ fn initialize_promise(object: &ObjectRef) {
     if object.own_property(PROMISE_STATE).is_none() {
         object.define_non_enumerable(
             PROMISE_STATE.to_owned(),
-            Value::String(PROMISE_PENDING.to_owned()),
+            Value::String(PROMISE_PENDING.to_owned().into()),
         );
         object.define_non_enumerable(PROMISE_RESULT.to_owned(), Value::Undefined);
         object.define_non_enumerable(
@@ -637,11 +637,14 @@ fn initialize_promise(object: &ObjectRef) {
 fn settle_promise(object: &ObjectRef, state: &str, result: Value, env: &mut CallEnv) {
     if !matches!(
         object.own_property(PROMISE_STATE).map(|property| property.value),
-        Some(Value::String(current)) if current == PROMISE_PENDING
+        Some(Value::String(current)) if current == PROMISE_PENDING.to_owned().into()
     ) {
         return;
     }
-    object.define_non_enumerable(PROMISE_STATE.to_owned(), Value::String(state.to_owned()));
+    object.define_non_enumerable(
+        PROMISE_STATE.to_owned(),
+        Value::String(state.to_owned().into()),
+    );
     object.define_non_enumerable(PROMISE_RESULT.to_owned(), result.clone());
     let reactions = promise_reactions(object);
     object.define_non_enumerable(
@@ -872,7 +875,7 @@ fn promise_state(promise: &ObjectRef) -> Option<String> {
         .own_property(PROMISE_STATE)
         .map(|property| property.value)
     {
-        Some(Value::String(state)) => Some(state),
+        Some(Value::String(state)) => Some(state.to_string()),
         _ => None,
     }
 }

@@ -4,7 +4,7 @@ use crate::{Value, eval};
 fn evaluates_boolean_builtins() {
     assert_eq!(
         eval("typeof Boolean;"),
-        Ok(Value::String("function".to_owned()))
+        Ok(Value::String("function".to_owned().into()))
     );
     assert_eq!(eval("Boolean.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("Boolean();"), Ok(Value::Boolean(false)));
@@ -26,7 +26,7 @@ fn evaluates_boolean_builtins() {
     );
     assert_eq!(
         eval("Boolean.prototype.toString();"),
-        Ok(Value::String("false".to_owned()))
+        Ok(Value::String("false".to_owned().into()))
     );
     assert_eq!(
         eval("Boolean.prototype.valueOf();"),
@@ -34,12 +34,12 @@ fn evaluates_boolean_builtins() {
     );
     assert_eq!(
         eval("true.toString();"),
-        Ok(Value::String("true".to_owned()))
+        Ok(Value::String("true".to_owned().into()))
     );
     assert_eq!(eval("false.valueOf();"), Ok(Value::Boolean(false)));
     assert_eq!(
         eval("(new Boolean(true)).toString();"),
-        Ok(Value::String("true".to_owned()))
+        Ok(Value::String("true".to_owned().into()))
     );
     assert_eq!(
         eval("(new Boolean(0)).valueOf();"),
@@ -56,7 +56,7 @@ fn evaluates_global_undefined_binding() {
         eval(
             "let d = Object.getOwnPropertyDescriptor(this, 'undefined'); d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
-        Ok(Value::String("false:false:false".to_owned()))
+        Ok(Value::String("false:false:false".to_owned().into()))
     );
 }
 
@@ -65,7 +65,7 @@ fn global_nan_is_non_writable() {
     // Sloppy mode: assignment silently fails, NaN remains a number.
     assert_eq!(
         eval("NaN = true; typeof NaN;"),
-        Ok(Value::String("number".to_owned()))
+        Ok(Value::String("number".to_owned().into()))
     );
     assert_eq!(eval("NaN = true; NaN !== NaN;"), Ok(Value::Boolean(true)));
     assert_eq!(
@@ -77,7 +77,7 @@ fn global_nan_is_non_writable() {
         eval(
             "let d = Object.getOwnPropertyDescriptor(this, 'NaN'); d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
-        Ok(Value::String("false:false:false".to_owned()))
+        Ok(Value::String("false:false:false".to_owned().into()))
     );
     // Strict mode: TypeError on assignment to non-writable NaN.
     assert!(eval("'use strict'; NaN = 1;").is_err());
@@ -94,7 +94,7 @@ fn global_infinity_is_non_writable() {
     // Sloppy mode: assignment silently fails, Infinity remains a number.
     assert_eq!(
         eval("Infinity = true; typeof Infinity;"),
-        Ok(Value::String("number".to_owned()))
+        Ok(Value::String("number".to_owned().into()))
     );
     assert_eq!(
         eval("Infinity = true; Infinity === 1/0;"),
@@ -109,7 +109,7 @@ fn global_infinity_is_non_writable() {
         eval(
             "let d = Object.getOwnPropertyDescriptor(this, 'Infinity'); d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
-        Ok(Value::String("false:false:false".to_owned()))
+        Ok(Value::String("false:false:false".to_owned().into()))
     );
     // Strict mode: TypeError on assignment to non-writable Infinity.
     assert!(eval("'use strict'; Infinity = 1;").is_err());
@@ -126,7 +126,7 @@ fn global_undefined_is_non_writable() {
     // Sloppy mode: assignment silently fails, undefined stays undefined.
     assert_eq!(
         eval("undefined = true; typeof undefined;"),
-        Ok(Value::String("undefined".to_owned()))
+        Ok(Value::String("undefined".to_owned().into()))
     );
     // Strict mode: TypeError on assignment to non-writable undefined.
     assert!(eval("'use strict'; undefined = 1;").is_err());
@@ -167,7 +167,7 @@ fn evaluates_global_this_binding() {
 fn exposes_print_host_global() {
     assert_eq!(
         eval("typeof print;"),
-        Ok(Value::String("function".to_owned()))
+        Ok(Value::String("function".to_owned().into()))
     );
     assert_eq!(eval("print.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("this.print === print;"), Ok(Value::Boolean(true)));
@@ -197,7 +197,7 @@ fn evaluates_test262_same_value_host_helper() {
 fn evaluates_global_eval_builtin() {
     assert_eq!(
         eval("typeof eval;"),
-        Ok(Value::String("function".to_owned()))
+        Ok(Value::String("function".to_owned().into()))
     );
     assert_eq!(eval("eval.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("this.eval === eval;"), Ok(Value::Boolean(true)));
@@ -205,13 +205,13 @@ fn evaluates_global_eval_builtin() {
         eval(
             "let d = Object.getOwnPropertyDescriptor(this, 'eval'); (d.value === eval) + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
-        Ok(Value::String("true:true:false:true".to_owned()))
+        Ok(Value::String("true:true:false:true".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let d = Object.getOwnPropertyDescriptor(this, 'Object'); (d.value === Object) + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
-        Ok(Value::String("true:true:false:true".to_owned()))
+        Ok(Value::String("true:true:false:true".to_owned().into()))
     );
     assert_eq!(eval("eval(7);"), Ok(Value::Number(7.0)));
     assert_eq!(eval("eval('1 + 2;');"), Ok(Value::Number(3.0)));
@@ -225,7 +225,7 @@ fn evaluates_global_eval_builtin() {
     );
     assert_eq!(
         eval("eval('{ let lexical = 1; }'); typeof lexical;"),
-        Ok(Value::String("undefined".to_owned()))
+        Ok(Value::String("undefined".to_owned().into()))
     );
     assert!(eval("eval('{ let lexical = 1; } lexical;')").is_err());
     assert!(eval("eval('{ let f = 123; { function f() {} } } f;')").is_err());
@@ -251,7 +251,7 @@ fn evaluates_global_eval_builtin() {
              try { eval('var evalLexCollisionVar; let evalLexCollisionFn;'); } catch (error) { caught = error instanceof SyntaxError; } \
              caught + ':' + (typeof evalLexCollisionVar);"
         ),
-        Ok(Value::String("true:undefined".to_owned()))
+        Ok(Value::String("true:undefined".to_owned().into()))
     );
 }
 
@@ -278,7 +278,7 @@ fn strict_direct_eval_declarations_stay_eval_local() {
              } \
              testcase();"
         ),
-        Ok(Value::String("undefined".to_owned()))
+        Ok(Value::String("undefined".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -288,7 +288,7 @@ fn strict_direct_eval_declarations_stay_eval_local() {
              } \
              testcase();"
         ),
-        Ok(Value::String("undefined".to_owned()))
+        Ok(Value::String("undefined".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -298,7 +298,7 @@ fn strict_direct_eval_declarations_stay_eval_local() {
              } \
              testcase();"
         ),
-        Ok(Value::String("undefined".to_owned()))
+        Ok(Value::String("undefined".to_owned().into()))
     );
 }
 
@@ -367,7 +367,9 @@ fn sloppy_global_eval_function_binding_updates_configurable_property_descriptor(
              let descriptor = Object.getOwnPropertyDescriptor(this, 'evalConfigurableFunction'); \
              (typeof initial) + ':' + initial() + ':' + descriptor.writable + ':' + descriptor.enumerable + ':' + descriptor.configurable;"
         ),
-        Ok(Value::String("function:345:true:true:true".to_owned()))
+        Ok(Value::String(
+            "function:345:true:true:true".to_owned().into()
+        ))
     );
 }
 
@@ -377,7 +379,7 @@ fn evaluates_global_eval_pure_regexp_literals() {
         eval(
             "let RegExp = function() { throw new Error('shadowed'); }; eval('/\\\\u0041/i').source + ':' + eval('/a/i').ignoreCase;"
         ),
-        Ok(Value::String("\\u0041:true".to_owned()))
+        Ok(Value::String("\\u0041:true".to_owned().into()))
     );
     assert_eq!(
         eval("eval('/[\\\\/]/').test('/');"),
@@ -396,7 +398,7 @@ fn evaluates_direct_eval_annex_b_function_bindings_in_function_frames() {
              (function() { eval('init = f; f = 123; changed = f; { function f() {} }'); }()); \
              String(init) + ':' + changed + ':' + typeof f;"
         ),
-        Ok(Value::String("undefined:123:undefined".to_owned()))
+        Ok(Value::String("undefined:123:undefined".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -404,7 +406,7 @@ fn evaluates_direct_eval_annex_b_function_bindings_in_function_frames() {
              (function(f) { eval('init = f; { function f() {} } after = typeof f;'); }(123)); \
              init + ':' + after + ':' + typeof f;"
         ),
-        Ok(Value::String("123:function:undefined".to_owned()))
+        Ok(Value::String("123:function:undefined".to_owned().into()))
     );
 }
 
@@ -417,7 +419,7 @@ fn eval_annex_b_function_declarations_capture_block_scoped_binding() {
              f(); \
              initialBV() + ':' + currentBV + ':' + f();"
         ),
-        Ok(Value::String("decl:123:decl".to_owned()))
+        Ok(Value::String("decl:123:decl".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -426,7 +428,7 @@ fn eval_annex_b_function_declarations_capture_block_scoped_binding() {
              f(); \
              initialBV() + ':' + currentBV + ':' + f();"
         ),
-        Ok(Value::String("decl:123:decl".to_owned()))
+        Ok(Value::String("decl:123:decl".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -435,7 +437,7 @@ fn eval_annex_b_function_declarations_capture_block_scoped_binding() {
              f(); \
              initialBV() + ':' + currentBV + ':' + f();"
         ),
-        Ok(Value::String("decl:123:decl".to_owned()))
+        Ok(Value::String("decl:123:decl".to_owned().into()))
     );
 }
 
@@ -447,7 +449,7 @@ fn evaluates_global_eval_annex_b_bindings_as_configurable() {
              let d = Object.getOwnPropertyDescriptor(this, 'test262Fn'); \
              typeof test262Fn + ':' + d.configurable;"
         ),
-        Ok(Value::String("function:true".to_owned()))
+        Ok(Value::String("function:true".to_owned().into()))
     );
 }
 
@@ -458,7 +460,7 @@ fn evaluates_indirect_eval_against_global_scope() {
             "let local = 1; \
              (function() { let local = 2; return (0, eval)('typeof local'); }());"
         ),
-        Ok(Value::String("undefined".to_owned()))
+        Ok(Value::String("undefined".to_owned().into()))
     );
     // Indirect eval evaluates lexical declarations in a fresh declarative
     // environment that is discarded afterwards: the binding neither persists as
@@ -490,7 +492,7 @@ fn eval_script_host_evaluates_global_script() {
             "__quickjsRustEvalScript('let scriptLexical = 5;'); \
              scriptLexical + ':' + Object.prototype.hasOwnProperty.call(this, 'scriptLexical');"
         ),
-        Ok(Value::String("5:false".to_owned()))
+        Ok(Value::String("5:false".to_owned().into()))
     );
     // var/function declarations reach the global var environment (own property).
     assert_eq!(
@@ -498,7 +500,7 @@ fn eval_script_host_evaluates_global_script() {
             "__quickjsRustEvalScript('var scriptVar = 9;'); \
              scriptVar + ':' + Object.prototype.hasOwnProperty.call(this, 'scriptVar');"
         ),
-        Ok(Value::String("9:true".to_owned()))
+        Ok(Value::String("9:true".to_owned().into()))
     );
     // A sloppy Annex B block-function hoisted by eval is configurable, so a
     // later global lexical declaration of the same name does not collide.
@@ -521,7 +523,7 @@ fn initializes_global_hoisted_bindings_before_script_execution() {
         eval(
             "{ function f() {} } var d = Object.getOwnPropertyDescriptor(this, 'f'); d.enumerable + ':' + d.writable + ':' + d.configurable;"
         ),
-        Ok(Value::String("true:true:false".to_owned()))
+        Ok(Value::String("true:true:false".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -530,7 +532,7 @@ fn initializes_global_hoisted_bindings_before_script_execution() {
              let d = Object.getOwnPropertyDescriptor(this, 'annexGlobalFn'); \
              annexGlobalFn() + ':' + d.enumerable + ':' + d.writable + ':' + d.configurable;"
         ),
-        Ok(Value::String("9:false:true:true".to_owned()))
+        Ok(Value::String("9:false:true:true".to_owned().into()))
     );
 }
 
@@ -540,13 +542,13 @@ fn skips_annex_b_function_binding_for_parameter_collisions() {
         eval(
             "var init, after; (function(f) { init = f; if (false) function _f() {} else function f() {} after = f; }(123)); init + ':' + after;"
         ),
-        Ok(Value::String("123:123".to_owned()))
+        Ok(Value::String("123:123".to_owned().into()))
     );
     assert_eq!(
         eval(
             "var init, after; (function(f = 123) { init = f; if (false) function _f() {} else function f() {} after = f; }()); init + ':' + after;"
         ),
-        Ok(Value::String("123:123".to_owned()))
+        Ok(Value::String("123:123".to_owned().into()))
     );
 }
 
@@ -560,35 +562,41 @@ fn evaluates_uri_coding_builtins() {
         eval(
             "let d = Object.getOwnPropertyDescriptor(this, 'decodeURIComponent'); (d.value === decodeURIComponent) + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
-        Ok(Value::String("true:true:false:true".to_owned()))
+        Ok(Value::String("true:true:false:true".to_owned().into()))
     );
     assert_eq!(
         eval("encodeURI('https://example.test/a b?x=1&y=\\u00E9#frag');"),
         Ok(Value::String(
-            "https://example.test/a%20b?x=1&y=%C3%A9#frag".to_owned()
+            "https://example.test/a%20b?x=1&y=%C3%A9#frag"
+                .to_owned()
+                .into()
         ))
     );
     assert_eq!(
         eval("encodeURIComponent('a b?x=1&y=\\u00E9');"),
-        Ok(Value::String("a%20b%3Fx%3D1%26y%3D%C3%A9".to_owned()))
+        Ok(Value::String(
+            "a%20b%3Fx%3D1%26y%3D%C3%A9".to_owned().into()
+        ))
     );
     assert_eq!(
         eval("decodeURI('https://example.test/a%20b?x=1&y=%C3%A9%23frag');"),
         Ok(Value::String(
-            "https://example.test/a b?x=1&y=\u{00E9}%23frag".to_owned()
+            "https://example.test/a b?x=1&y=\u{00E9}%23frag"
+                .to_owned()
+                .into()
         ))
     );
     assert_eq!(
         eval("decodeURIComponent('a%20b%3Fx%3D1%26y%3D%C3%A9');"),
-        Ok(Value::String("a b?x=1&y=\u{00E9}".to_owned()))
+        Ok(Value::String("a b?x=1&y=\u{00E9}".to_owned().into()))
     );
     assert_eq!(
         eval("encodeURIComponent(String.fromCodePoint(0x1D306));"),
-        Ok(Value::String("%F0%9D%8C%86".to_owned()))
+        Ok(Value::String("%F0%9D%8C%86".to_owned().into()))
     );
     assert_eq!(
         eval("encodeURIComponent(decodeURIComponent('%F0%9D%8C%86'));"),
-        Ok(Value::String("%F0%9D%8C%86".to_owned()))
+        Ok(Value::String("%F0%9D%8C%86".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -602,22 +610,25 @@ fn evaluates_uri_coding_builtins() {
 fn evaluates_annex_b_escape_builtins() {
     assert_eq!(eval("escape.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("unescape.length;"), Ok(Value::Number(1.0)));
-    assert_eq!(eval("escape('');"), Ok(Value::String(String::new())));
+    assert_eq!(
+        eval("escape('');"),
+        Ok(Value::String(::std::rc::Rc::new(String::new())))
+    );
     assert_eq!(
         eval("escape('AZaz09@*_+-./');"),
-        Ok(Value::String("AZaz09@*_+-./".to_owned()))
+        Ok(Value::String("AZaz09@*_+-./".to_owned().into()))
     );
     assert_eq!(
         eval("escape(' #éĀ');"),
-        Ok(Value::String("%20%23%E9%u0100".to_owned()))
+        Ok(Value::String("%20%23%E9%u0100".to_owned().into()))
     );
     assert_eq!(
         eval("escape(String.fromCodePoint(0x1D306));"),
-        Ok(Value::String("%uD834%uDF06".to_owned()))
+        Ok(Value::String("%uD834%uDF06".to_owned().into()))
     );
     assert_eq!(
         eval("unescape('%20%23%E9%u0100');"),
-        Ok(Value::String(" #éĀ".to_owned()))
+        Ok(Value::String(" #éĀ".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -627,7 +638,7 @@ fn evaluates_annex_b_escape_builtins() {
     );
     assert_eq!(
         eval("unescape('%zz%u12xz');"),
-        Ok(Value::String("%zz%u12xz".to_owned()))
+        Ok(Value::String("%zz%u12xz".to_owned().into()))
     );
 }
 
@@ -652,14 +663,14 @@ fn keeps_global_object_properties_and_bindings_in_sync() {
             "toString = Object.prototype.toString; typeof toString + ':' + typeof this.toString + ':' + this.toString();"
         ),
         Ok(Value::String(
-            "function:function:[object Object]".to_owned()
+            "function:function:[object Object]".to_owned().into()
         ))
     );
     assert_eq!(
         eval(
             "Object.defineProperty(Object.prototype, 'prop', { value: 1001, writable: false, configurable: false }); var prop = 1002; this.hasOwnProperty('prop') + ':' + prop + ':' + this.prop;"
         ),
-        Ok(Value::String("true:1002:1002".to_owned()))
+        Ok(Value::String("true:1002:1002".to_owned().into()))
     );
     assert_eq!(
         eval("function f() { var localOnly = 1; return this.hasOwnProperty('localOnly'); } f();"),
@@ -706,7 +717,7 @@ fn direct_eval_allows_arrow_body_arguments_binding() {
              }; \
              f();"
         ),
-        Ok(Value::String("local".to_owned()))
+        Ok(Value::String("local".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -760,7 +771,7 @@ fn sloppy_function_direct_eval_new_bindings_are_deletable() {
              (initial === undefined) + ':' + \
              (function() { try { postDeletion(); return false; } catch (error) { return error instanceof ReferenceError; } }());"
         ),
-        Ok(Value::String("true:true".to_owned()))
+        Ok(Value::String("true:true".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -771,6 +782,6 @@ fn sloppy_function_direct_eval_new_bindings_are_deletable() {
              (typeof initial) + ':' + initial() + ':' + \
              (function() { try { postDeletion(); return false; } catch (error) { return error instanceof ReferenceError; } }());"
         ),
-        Ok(Value::String("function:33:true".to_owned()))
+        Ok(Value::String("function:33:true".to_owned().into()))
     );
 }

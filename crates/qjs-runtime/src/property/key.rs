@@ -12,7 +12,7 @@ pub(crate) enum PropertyKey {
 impl PropertyKey {
     pub(crate) fn into_value(self) -> Value {
         match self {
-            Self::String(key) => Value::String(key),
+            Self::String(key) => Value::String(key.into()),
             Self::Symbol(symbol) => Value::Object(symbol),
         }
     }
@@ -36,7 +36,7 @@ pub(crate) fn to_property_key_value(
     };
 
     match primitive {
-        Value::String(value) => Ok(PropertyKey::String(value)),
+        Value::String(value) => Ok(PropertyKey::String(value.to_string())),
         Value::Number(number) => Ok(PropertyKey::String(number::number_to_js_string(number))),
         Value::BigInt(value) => Ok(PropertyKey::String(value.to_string())),
         Value::Boolean(true) => Ok(PropertyKey::String("true".to_owned())),

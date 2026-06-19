@@ -8,7 +8,7 @@ fn array_buffer_constructor_and_byte_length() {
     );
     assert_eq!(
         eval("Object.prototype.toString.call(new ArrayBuffer(0));"),
-        Ok(Value::String("[object ArrayBuffer]".to_owned()))
+        Ok(Value::String("[object ArrayBuffer]".to_owned().into()))
     );
 }
 
@@ -82,7 +82,7 @@ fn array_buffer_slice_rejects_immutable_species_result() {
              try { buffer.slice(); } catch (_) {} \
              calls.join('|');"
         ),
-        Ok(Value::String("species:8".to_owned()))
+        Ok(Value::String("species:8".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -96,7 +96,7 @@ fn array_buffer_slice_rejects_immutable_species_result() {
              try { buffer.slice(start, end); } catch (_) {} \
              calls.join('|');"
         ),
-        Ok(Value::String("start|end|species:1".to_owned()))
+        Ok(Value::String("start|end|species:1".to_owned().into()))
     );
 }
 
@@ -110,7 +110,7 @@ fn array_buffer_slice_to_immutable_copies_and_marks_result() {
              let c = b.sliceToImmutable(1, 4); \
              [c.byteLength, c.immutable, c.resizable, new Uint8Array(c)[0], new Uint8Array(c)[1], new Uint8Array(c)[2]].join(':');"
         ),
-        Ok(Value::String("3:true:false:2:3:4".to_owned()))
+        Ok(Value::String("3:true:false:2:3:4".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -158,7 +158,7 @@ fn array_buffer_slice_to_immutable_rechecks_after_bounds_side_effects() {
              let c = b.sliceToImmutable(start, end); \
              [b.byteLength, c.byteLength, new Uint8Array(c)[0], new Uint8Array(c)[1], new Uint8Array(c)[2]].join(':');"
         ),
-        Ok(Value::String("12:3:4:5:6".to_owned()))
+        Ok(Value::String("12:3:4:5:6".to_owned().into()))
     );
     assert!(
         eval(
@@ -205,7 +205,7 @@ fn shared_array_buffer_slice_copies_bounds() {
              let c = b.slice(2, 6); \
              [c instanceof SharedArrayBuffer, c.byteLength].join(':');"
         ),
-        Ok(Value::String("true:4".to_owned()))
+        Ok(Value::String("true:4".to_owned().into()))
     );
     assert_eq!(
         eval("new SharedArrayBuffer(8).slice(-5, -1).byteLength;"),
@@ -278,14 +278,14 @@ fn shared_array_buffer_growable_constructor_and_accessors() {
             "let b = new SharedArrayBuffer(4, { maxByteLength: 8 }); \
              [b.byteLength, b.maxByteLength, b.growable].join(':');"
         ),
-        Ok(Value::String("4:8:true".to_owned()))
+        Ok(Value::String("4:8:true".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let b = new SharedArrayBuffer(4); \
              [b.byteLength, b.maxByteLength, b.growable].join(':');"
         ),
-        Ok(Value::String("4:4:false".to_owned()))
+        Ok(Value::String("4:4:false".to_owned().into()))
     );
     assert_eq!(
         eval("new SharedArrayBuffer(0, null).growable;"),
@@ -326,7 +326,7 @@ fn shared_array_buffer_grow_resizes_within_max_length() {
              let result = b.grow(6); \
              [result, b.byteLength, b.maxByteLength, b.growable].join(':');"
         ),
-        Ok(Value::String(":6:6:true".to_owned()))
+        Ok(Value::String(":6:6:true".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -356,21 +356,21 @@ fn array_buffer_resize_and_resizable_accessors() {
             "let b = new ArrayBuffer(8, { maxByteLength: 16 }); \
              b.resizable + ':' + b.byteLength + ':' + b.maxByteLength;"
         ),
-        Ok(Value::String("true:8:16".to_owned()))
+        Ok(Value::String("true:8:16".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let b = new ArrayBuffer(8, { maxByteLength: 16 }); \
              b.resize(12); b.byteLength + ':' + new Uint8Array(b)[10];"
         ),
-        Ok(Value::String("12:0".to_owned()))
+        Ok(Value::String("12:0".to_owned().into()))
     );
     assert!(eval("new ArrayBuffer(8, { maxByteLength: 4 });").is_err());
     assert!(eval("let b = new ArrayBuffer(8); b.resize(4);").is_err());
     // A plain or undefined options argument must still succeed.
     assert_eq!(
         eval("let b = new ArrayBuffer(8, {}); b.resizable + ':' + b.maxByteLength;"),
-        Ok(Value::String("false:8".to_owned()))
+        Ok(Value::String("false:8".to_owned().into()))
     );
     assert_eq!(
         eval("new ArrayBuffer(8, undefined).byteLength;"),
@@ -417,7 +417,7 @@ fn array_buffer_immutable_accessor_and_transfer() {
              let c = b.transferToImmutable(6); \
              [b.byteLength, b.detached, c.byteLength, c.immutable, new Uint8Array(c)[0], new Uint8Array(c)[1], new Uint8Array(c)[5]].join(':');"
         ),
-        Ok(Value::String("0:true:6:true:7:8:0".to_owned()))
+        Ok(Value::String("0:true:6:true:7:8:0".to_owned().into()))
     );
     assert_eq!(
         eval("let b = new ArrayBuffer(4); b.immutable;"),
@@ -444,7 +444,7 @@ fn array_buffer_transfer_copies_detaches_and_preserves_resizability() {
              let c = b.transfer(6); \
              [b.byteLength, b.detached, c.byteLength, c.resizable, c.maxByteLength, new Uint8Array(c)[0], new Uint8Array(c)[1], new Uint8Array(c)[5]].join(':');"
         ),
-        Ok(Value::String("0:true:6:true:8:7:8:0".to_owned()))
+        Ok(Value::String("0:true:6:true:8:7:8:0".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -453,7 +453,7 @@ fn array_buffer_transfer_copies_detaches_and_preserves_resizability() {
              let c = b.transfer(2); \
              [b.byteLength, c.byteLength, c.resizable, c.maxByteLength, new Uint8Array(c)[0], new Uint8Array(c)[1]].join(':');"
         ),
-        Ok(Value::String("0:2:false:2:3:4".to_owned()))
+        Ok(Value::String("0:2:false:2:3:4".to_owned().into()))
     );
 }
 
@@ -466,7 +466,7 @@ fn array_buffer_transfer_to_fixed_length_drops_resizability() {
              let c = b.transferToFixedLength(5); \
              [b.byteLength, b.detached, c.byteLength, c.resizable, c.maxByteLength, new Uint8Array(c)[0], new Uint8Array(c)[1], new Uint8Array(c)[4]].join(':');"
         ),
-        Ok(Value::String("0:true:5:false:5:1:2:0".to_owned()))
+        Ok(Value::String("0:true:5:false:5:1:2:0".to_owned().into()))
     );
 }
 

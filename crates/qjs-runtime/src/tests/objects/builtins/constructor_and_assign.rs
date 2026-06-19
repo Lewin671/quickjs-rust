@@ -4,7 +4,7 @@ use crate::{Value, eval};
 fn evaluates_object_constructor_and_assign() {
     assert_eq!(
         eval("typeof Object;"),
-        Ok(Value::String("function".to_owned()))
+        Ok(Value::String("function".to_owned().into()))
     );
     assert_eq!(eval("Object.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("Object.assign.length;"), Ok(Value::Number(2.0)));
@@ -26,11 +26,11 @@ fn evaluates_object_constructor_and_assign() {
     );
     assert_eq!(
         eval("let target = {}; Object.assign(target, 'ab', null, undefined); target[1];"),
-        Ok(Value::String("b".to_owned()))
+        Ok(Value::String("b".to_owned().into()))
     );
     assert_eq!(
         eval("let result = Object.assign('a'); typeof result + ':' + result.valueOf();"),
-        Ok(Value::String("object:a".to_owned()))
+        Ok(Value::String("object:a".to_owned().into()))
     );
     assert_eq!(
         eval("let result = Object.assign(1, { a: 2 }); result.valueOf() + result.a;"),
@@ -44,7 +44,7 @@ fn evaluates_object_constructor_and_assign() {
         eval(
             "let result = Object.assign(Symbol('foo'), { a: 1 }); typeof result + ':' + result.toString() + ':' + result.a;"
         ),
-        Ok(Value::String("object:Symbol(foo):1".to_owned()))
+        Ok(Value::String("object:Symbol(foo):1".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -56,19 +56,19 @@ fn evaluates_object_constructor_and_assign() {
         eval(
             "let target = []; let result = Object.assign(target, { 0: 'a', 2: 'c' }); (result === target) + ':' + target.length + ':' + target.join('-');"
         ),
-        Ok(Value::String("true:3:a--c".to_owned()))
+        Ok(Value::String("true:3:a--c".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let target = [1]; Object.assign(target, { label: 'ok' }); target.length + ':' + target.label;"
         ),
-        Ok(Value::String("1:ok".to_owned()))
+        Ok(Value::String("1:ok".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let target = [1, 2, 3]; Object.assign(target, { length: 1 }); target.length + ':' + target.join('-');"
         ),
-        Ok(Value::String("1:1".to_owned()))
+        Ok(Value::String("1:1".to_owned().into()))
     );
     assert!(
         eval(
@@ -87,7 +87,7 @@ fn evaluates_object_constructor_and_assign() {
         eval(
             "let target = 12; let result = Object.assign(target, 'aaa', 'bb2b', '1c'); Object.getOwnPropertyNames(result).length + ':' + result[0] + ':' + result[1] + ':' + result[2] + ':' + result[3];"
         ),
-        Ok(Value::String("4:1:c:2:b".to_owned()))
+        Ok(Value::String("4:1:c:2:b".to_owned().into()))
     );
     assert_eq!(
         eval(

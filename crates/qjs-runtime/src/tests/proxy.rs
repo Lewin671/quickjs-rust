@@ -4,7 +4,7 @@ use crate::{Value, eval};
 fn evaluates_proxy_constructor_and_basic_traps() {
     assert_eq!(
         eval("typeof Proxy + ':' + Proxy.length;"),
-        Ok(Value::String("function:2".to_owned()))
+        Ok(Value::String("function:2".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -16,13 +16,13 @@ fn evaluates_proxy_constructor_and_basic_traps() {
         eval(
             "let p = new Proxy({}, { has: function(target, key) { return key === 'present'; } }); ('present' in p) + ':' + ('missing' in p);"
         ),
-        Ok(Value::String("true:false".to_owned()))
+        Ok(Value::String("true:false".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let deleted = ''; let p = new Proxy({ value: 1 }, { deleteProperty: function(target, key) { deleted = key; return true; } }); Reflect.deleteProperty(p, 'value'); deleted;"
         ),
-        Ok(Value::String("value".to_owned()))
+        Ok(Value::String("value".to_owned().into()))
     );
 }
 
@@ -32,7 +32,7 @@ fn evaluates_proxy_revocable_and_revoked_operations() {
         eval(
             "let r = Proxy.revocable({ value: 1 }, {}); r.proxy.value + ':' + typeof r.revoke + ':' + Proxy.revocable.length;"
         ),
-        Ok(Value::String("1:function:2".to_owned()))
+        Ok(Value::String("1:function:2".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -64,11 +64,11 @@ fn evaluates_proxy_apply_trap() {
     // A callable proxy reports `typeof` as function.
     assert_eq!(
         eval("typeof new Proxy(function () {}, {});"),
-        Ok(Value::String("function".to_owned()))
+        Ok(Value::String("function".to_owned().into()))
     );
     assert_eq!(
         eval("typeof new Proxy({}, {});"),
-        Ok(Value::String("object".to_owned()))
+        Ok(Value::String("object".to_owned().into()))
     );
     // Reflect.apply routes through the apply trap.
     assert_eq!(
@@ -145,7 +145,7 @@ fn evaluates_proxy_define_property_trap() {
         eval(
             "let t = {}; Object.defineProperty(t, 'a', { value: 0, writable: true, configurable: false }); let seen; let p = new Proxy(t, { defineProperty: function(target, key, desc) { seen = key + ':' + desc.value + ':' + desc.configurable; return true; } }); Object.defineProperty(p, 'a', { value: 1, configurable: false }); seen;"
         ),
-        Ok(Value::String("a:1:false".to_owned()))
+        Ok(Value::String("a:1:false".to_owned().into()))
     );
     // Defining a property on a non-extensible target through a trap that does
     // not actually add it violates the invariant.
@@ -231,7 +231,7 @@ fn evaluates_proxy_extensibility_traps() {
         eval(
             "let count = 0; let p = new Proxy({}, { preventExtensions: function(target) { count++; Object.preventExtensions(target); return true; } }); Object.preventExtensions(p); count + ':' + Object.isExtensible(p);"
         ),
-        Ok(Value::String("1:false".to_owned()))
+        Ok(Value::String("1:false".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -248,7 +248,7 @@ fn evaluates_proxy_extensibility_traps() {
              let p = new Proxy(target, {}); \
              Object.isExtensible(p) + ':' + (calls > 0);"
         ),
-        Ok(Value::String("false:true".to_owned()))
+        Ok(Value::String("false:true".to_owned().into()))
     );
     // deleteProperty forwards through a Proxy target: a configurable property is
     // dropped, a non-configurable one reports false.
@@ -257,14 +257,14 @@ fn evaluates_proxy_extensibility_traps() {
             "let t = {}; Object.defineProperty(t, 'a', { value: 1, configurable: true }); \
              let p = new Proxy(new Proxy(t, {}), {}); (delete p.a) + ':' + ('a' in t);"
         ),
-        Ok(Value::String("true:false".to_owned()))
+        Ok(Value::String("true:false".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let t = {}; Object.defineProperty(t, 'b', { value: 1, configurable: false }); \
              let p = new Proxy(new Proxy(t, {}), {}); Reflect.deleteProperty(p, 'b') + ':' + ('b' in t);"
         ),
-        Ok(Value::String("false:true".to_owned()))
+        Ok(Value::String("false:true".to_owned().into()))
     );
 }
 
@@ -296,7 +296,7 @@ fn evaluates_proxy_prototype_traps() {
         eval(
             "let seen; let p = new Proxy({}, { setPrototypeOf: function(target, proto) { seen = proto; return true; } }); let r = Reflect.setPrototypeOf(p, null); r + ':' + (seen === null);"
         ),
-        Ok(Value::String("true:true".to_owned()))
+        Ok(Value::String("true:true".to_owned().into()))
     );
     // Changing the prototype of a non-extensible target is a TypeError.
     assert_eq!(
@@ -340,7 +340,7 @@ fn evaluates_proxy_own_keys_trap() {
         eval(
             "let p = new Proxy({}, { ownKeys: function() { return ['b', 'a']; } }); Reflect.ownKeys(p).join(',');"
         ),
-        Ok(Value::String("b,a".to_owned()))
+        Ok(Value::String("b,a".to_owned().into()))
     );
     // Duplicate keys in the trap result are a TypeError.
     assert_eq!(
@@ -420,7 +420,7 @@ fn proxy_traps_enforce_target_consistency_invariants() {
             "let t = { a: 1 }; let p = new Proxy(t, { get() { return 9; }, has() { return false; }, set() { return true; }, deleteProperty() { return true; } }); \
              p.a + ':' + ('a' in p) + ':' + ((p.a = 5), true) + ':' + (delete p.a);"
         ),
-        Ok(Value::String("9:false:true:true".to_owned()))
+        Ok(Value::String("9:false:true:true".to_owned().into()))
     );
 }
 
@@ -443,7 +443,7 @@ fn dispatches_proxy_traps_through_the_prototype_chain() {
              let handler = { set(t, prop, value, receiver) { log = (t === target) + ':' + prop + ':' + value + ':' + (receiver === o); return true; } }; \
              let p = new Proxy(target, handler); var o = Object.create(p); o.prop = 'v'; log;"
         ),
-        Ok(Value::String("true:prop:v:true".to_owned()))
+        Ok(Value::String("true:prop:v:true".to_owned().into()))
     );
     // An absent trap forwards through a proxy target that is itself a proxy.
     assert_eq!(
@@ -494,7 +494,7 @@ fn has_own_property_and_property_is_enumerable_dispatch_proxy_trap() {
              let p = new Proxy(inner, { getOwnPropertyDescriptor: null }); \
              p.hasOwnProperty('foo') + ':' + p.hasOwnProperty('bar');"
         ),
-        Ok(Value::String("true:false".to_owned()))
+        Ok(Value::String("true:false".to_owned().into()))
     );
     // propertyIsEnumerable reads the trap-reported enumerable flag.
     assert_eq!(
@@ -534,7 +534,7 @@ fn instanceof_dispatches_proxy_get_prototype_of_trap() {
     // Ordinary instanceof is unaffected.
     assert_eq!(
         eval("([] instanceof Array) + ':' + ({} instanceof Object) + ':' + (1 instanceof Object);"),
-        Ok(Value::String("true:true:false".to_owned()))
+        Ok(Value::String("true:true:false".to_owned().into()))
     );
 }
 
@@ -550,7 +550,7 @@ fn define_property_rejects_non_writable_redefinition_of_non_configurable_writabl
              try { Reflect.defineProperty(p, 'prop', { writable: false }); } catch (e) { threw = e instanceof TypeError; } \
              threw + ':' + calls;"
         ),
-        Ok(Value::String("true:1".to_owned()))
+        Ok(Value::String("true:1".to_owned().into()))
     );
 }
 
@@ -563,7 +563,7 @@ fn revoked_function_proxy_stays_callable_for_typeof() {
             "let r = Proxy.revocable(function() {}, {}); r.revoke(); \
              typeof new Proxy(r.proxy, {});"
         ),
-        Ok(Value::String("function".to_owned()))
+        Ok(Value::String("function".to_owned().into()))
     );
     // A revoked non-callable proxy stays an object.
     assert_eq!(
@@ -571,7 +571,7 @@ fn revoked_function_proxy_stays_callable_for_typeof() {
             "let r = Proxy.revocable({}, {}); r.revoke(); \
              typeof new Proxy(r.proxy, {});"
         ),
-        Ok(Value::String("object".to_owned()))
+        Ok(Value::String("object".to_owned().into()))
     );
 }
 
@@ -579,14 +579,14 @@ fn revoked_function_proxy_stays_callable_for_typeof() {
 fn revocation_function_is_anonymous() {
     assert_eq!(
         eval("Proxy.revocable({}, {}).revoke.name;"),
-        Ok(Value::String(String::new()))
+        Ok(Value::String(::std::rc::Rc::new(String::new())))
     );
     assert_eq!(
         eval(
             "let d = Object.getOwnPropertyDescriptor(Proxy.revocable({}, {}).revoke, 'name'); \
              d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
-        Ok(Value::String("false:false:true".to_owned()))
+        Ok(Value::String("false:false:true".to_owned().into()))
     );
 }
 
@@ -594,6 +594,6 @@ fn revocation_function_is_anonymous() {
 fn object_create_accepts_an_array_prototype() {
     assert_eq!(
         eval("let o = Object.create([7, 8, 9]); o.length + ':' + o[1];"),
-        Ok(Value::String("3:8".to_owned()))
+        Ok(Value::String("3:8".to_owned().into()))
     );
 }

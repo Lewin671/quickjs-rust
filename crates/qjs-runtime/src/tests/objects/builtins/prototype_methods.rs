@@ -8,27 +8,27 @@ fn evaluates_object_prototype_methods() {
     );
     assert_eq!(
         eval("Object.prototype.toString();"),
-        Ok(Value::String("[object Object]".to_owned()))
+        Ok(Value::String("[object Object]".to_owned().into()))
     );
     assert_eq!(
         eval("({}).toString();"),
-        Ok(Value::String("[object Object]".to_owned()))
+        Ok(Value::String("[object Object]".to_owned().into()))
     );
     assert_eq!(
         eval("Object.prototype.toString.call(new Date(0));"),
-        Ok(Value::String("[object Date]".to_owned()))
+        Ok(Value::String("[object Date]".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let object = {}; object[Symbol.toStringTag] = 'custom'; Object.prototype.toString.call(object);"
         ),
-        Ok(Value::String("[object custom]".to_owned()))
+        Ok(Value::String("[object custom]".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let object = {}; object[Symbol.toStringTag] = 86; Object.prototype.toString.call(object);"
         ),
-        Ok(Value::String("[object Object]".to_owned()))
+        Ok(Value::String("[object Object]".to_owned().into()))
     );
     assert!(
         eval("let object = {}; Object.defineProperty(object, Symbol.toStringTag, { get: function() { throw new Error('tag'); } }); Object.prototype.toString.call(object);").is_err()
@@ -40,7 +40,9 @@ fn evaluates_object_prototype_methods() {
              Object.defineProperty(BigInt.prototype, Symbol.toStringTag, { value: undefined, configurable: true }); \
              Object.prototype.toString.call(bigint) + ':' + Object.prototype.toString.call(boxed);"
         ),
-        Ok(Value::String("[object Object]:[object Object]".to_owned()))
+        Ok(Value::String(
+            "[object Object]:[object Object]".to_owned().into()
+        ))
     );
     assert_eq!(
         eval(
@@ -56,7 +58,9 @@ fn evaluates_object_prototype_methods() {
              initial + ':' + boxed + ':' + toString.call(iterator);"
         ),
         Ok(Value::String(
-            "[object Set Iterator]:[object Object]:[object Iterator]".to_owned()
+            "[object Set Iterator]:[object Object]:[object Iterator]"
+                .to_owned()
+                .into()
         ))
     );
     assert_eq!(
@@ -73,7 +77,9 @@ fn evaluates_object_prototype_methods() {
                Object.prototype.toString.call(asyncProxyProxy);"
         ),
         Ok(Value::String(
-            "[object Function]:[object Function]:[object Function]:[object Function]".to_owned()
+            "[object Function]:[object Function]:[object Function]:[object Function]"
+                .to_owned()
+                .into()
         ))
     );
     assert_eq!(
@@ -82,25 +88,25 @@ fn evaluates_object_prototype_methods() {
     );
     assert_eq!(
         eval("Object.prototype.toLocaleString();"),
-        Ok(Value::String("[object Object]".to_owned()))
+        Ok(Value::String("[object Object]".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let object = { toString: function() { return 'custom'; } }; object.toLocaleString();"
         ),
-        Ok(Value::String("custom".to_owned()))
+        Ok(Value::String("custom".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let receiver = null; let object = {}; Object.defineProperty(object, 'toString', { get: function() { receiver = this; return function() { return receiver === object ? 'getter' : 'bad'; }; }, configurable: true }); object.toLocaleString();"
         ),
-        Ok(Value::String("getter".to_owned()))
+        Ok(Value::String("getter".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let receiver = null; Object.defineProperty(Boolean.prototype, 'toString', { get: function() { 'use strict'; receiver = this; return function() { return receiver === true ? 'primitive' : 'bad'; }; }, configurable: true }); Object.prototype.toLocaleString.call(true);"
         ),
-        Ok(Value::String("primitive".to_owned()))
+        Ok(Value::String("primitive".to_owned().into()))
     );
     assert!(eval("Object.prototype.toLocaleString.call(null);").is_err());
     assert!(eval("Object.prototype.toLocaleString.call(undefined);").is_err());
@@ -112,7 +118,7 @@ fn evaluates_object_prototype_methods() {
         eval(
             "let d = Object.getOwnPropertyDescriptor(Object.prototype.valueOf, 'name'); d.value + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
-        Ok(Value::String("valueOf:false:false:true".to_owned()))
+        Ok(Value::String("valueOf:false:false:true".to_owned().into()))
     );
     assert_eq!(
         eval("let object = { value: 1 }; object.valueOf() === object;"),
@@ -120,11 +126,11 @@ fn evaluates_object_prototype_methods() {
     );
     assert_eq!(
         eval("typeof Object.prototype.valueOf.call(true);"),
-        Ok(Value::String("object".to_owned()))
+        Ok(Value::String("object".to_owned().into()))
     );
     assert_eq!(
         eval("typeof Object.prototype.valueOf.call(false);"),
-        Ok(Value::String("object".to_owned()))
+        Ok(Value::String("object".to_owned().into()))
     );
     assert_eq!(
         eval("Object.prototype.valueOf() === Object.prototype;"),
@@ -179,7 +185,7 @@ fn object_prototype_proto_setter_uses_proxy_set_prototype_trap() {
              catch (error) { caught = error instanceof Sentinel; } \
              caught + ':' + (Object.getPrototypeOf(subject) === Object.prototype);"
         ),
-        Ok(Value::String("true:true".to_owned()))
+        Ok(Value::String("true:true".to_owned().into()))
     );
 }
 
@@ -209,6 +215,6 @@ fn object_prototype_is_prototype_of_order_and_proxy() {
              let proxy = new Proxy({}, { getPrototypeOf: function() { log += 'g'; return proxyProto; } }); \
              proxyProto.isPrototypeOf(proxy) + ':' + log;"
         ),
-        Ok(Value::String("true:g".to_owned()))
+        Ok(Value::String("true:g".to_owned().into()))
     );
 }

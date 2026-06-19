@@ -21,7 +21,9 @@ pub(crate) fn native_string_prototype_at(
         return Ok(Value::Undefined);
     };
 
-    Ok(Value::String(string_from_code_unit(code_units[index])))
+    Ok(Value::String(
+        string_from_code_unit(code_units[index]).into(),
+    ))
 }
 
 pub(crate) fn native_string_prototype_char_at(
@@ -35,14 +37,15 @@ pub(crate) fn native_string_prototype_char_at(
         env,
     )?;
     if position < 0.0 {
-        return Ok(Value::String(String::new()));
+        return Ok(Value::String(::std::rc::Rc::new(String::new())));
     }
     let index = position as usize;
     Ok(Value::String(
         string_code_units(&value)
             .get(index)
             .map(|code_unit| string_from_code_unit(*code_unit))
-            .unwrap_or_default(),
+            .unwrap_or_default()
+            .into(),
     ))
 }
 

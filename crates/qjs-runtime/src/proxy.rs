@@ -697,8 +697,8 @@ pub(crate) fn proxy_own_keys(
                 if seen_strings.contains(&name) {
                     return Err(invariant_error("ownKeys trap returned duplicate keys"));
                 }
-                seen_strings.push(name.clone());
-                keys.push(PropertyKey::String(name));
+                seen_strings.push(name.clone().to_string());
+                keys.push(PropertyKey::String(name.to_string()));
             }
             Value::Object(object) if crate::symbol::is_symbol_primitive(&object) => {
                 if seen_symbols.iter().any(|seen| seen.ptr_eq(&object)) {
@@ -963,7 +963,7 @@ fn ordinary_delete_property(target: Value, key: &PropertyKey) -> bool {
 
 fn property_key_to_value(key: &PropertyKey) -> Value {
     match key {
-        PropertyKey::String(key) => Value::String(key.clone()),
+        PropertyKey::String(key) => Value::String(key.clone().into()),
         PropertyKey::Symbol(symbol) => Value::Object(symbol.clone()),
     }
 }

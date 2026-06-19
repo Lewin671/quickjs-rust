@@ -6,19 +6,21 @@ fn evaluates_array_sort_default_order() {
         eval(
             "let xs = [3, 20, 100, 1]; let result = xs.sort(); (result === xs) + ':' + xs.join();"
         ),
-        Ok(Value::String("true:1,100,20,3".to_owned()))
+        Ok(Value::String("true:1,100,20,3".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let xs = ['b', undefined, 'a']; xs.sort(); xs.length + ':' + xs.join('|') + ':' + (xs[2] === undefined);"
         ),
-        Ok(Value::String("3:a|b|:true".to_owned()))
+        Ok(Value::String("3:a|b|:true".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let xs = ['a', , undefined]; xs.sort(); xs.length + ':' + xs.hasOwnProperty('0') + ':' + xs.hasOwnProperty('1') + ':' + xs.hasOwnProperty('2') + ':' + xs[0] + ':' + (xs[1] === undefined) + ':' + (xs[2] === undefined);"
         ),
-        Ok(Value::String("3:true:true:false:a:true:true".to_owned()))
+        Ok(Value::String(
+            "3:true:true:false:a:true:true".to_owned().into()
+        ))
     );
 }
 
@@ -26,11 +28,11 @@ fn evaluates_array_sort_default_order() {
 fn evaluates_array_sort_with_compare_function() {
     assert_eq!(
         eval("[3, 1, 2].sort(function(left, right) { return left - right; }).join();"),
-        Ok(Value::String("1,2,3".to_owned()))
+        Ok(Value::String("1,2,3".to_owned().into()))
     );
     assert_eq!(
         eval("[3, 1, 2].sort(function(left, right) { return right - left; }).join();"),
-        Ok(Value::String("3,2,1".to_owned()))
+        Ok(Value::String("3,2,1".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -40,7 +42,7 @@ fn evaluates_array_sort_with_compare_function() {
         // run element, so the adjacent pair [2, 1] is passed as (2, 1). The
         // comparator argument order is implementation-defined; only the sorted
         // result and stability are observable per spec.
-        Ok(Value::String("2:1".to_owned()))
+        Ok(Value::String("2:1".to_owned().into()))
     );
 }
 
@@ -67,7 +69,9 @@ fn array_sort_preserves_receiver_when_compare_throws() {
             "let logs = []; Object.defineProperty(Object.prototype, '2', { get: function() { logs.push('get'); return 4; }, set: function(v) { logs.push('set ' + v); }, configurable: true }); let array = [undefined, 3, , 2, undefined, , 1]; let count = 0; try { array.sort(function(a, b) { if (++count === 3) { throw new Error('stop'); } return b - a; }); } catch (error) { logs.push(error.message); } let result = logs.join('|') + ':' + (array[0] === undefined) + ':' + array[1] + ':' + ('2' in array) + ':' + array.hasOwnProperty('2') + ':' + array[3] + ':' + (array[4] === undefined) + ':' + ('5' in array) + ':' + array[6]; delete Object.prototype[2]; result;"
         ),
         Ok(Value::String(
-            "get|stop:true:3:true:false:2:true:false:1".to_owned()
+            "get|stop:true:3:true:false:2:true:false:1"
+                .to_owned()
+                .into()
         ))
     );
 }
@@ -83,13 +87,15 @@ fn evaluates_array_to_sorted_default_order() {
         eval(
             "let xs = [3, 20, 100, 1]; let result = xs.toSorted(); result.join() + ':' + xs.join() + ':' + (result === xs);"
         ),
-        Ok(Value::String("1,100,20,3:3,20,100,1:false".to_owned()))
+        Ok(Value::String(
+            "1,100,20,3:3,20,100,1:false".to_owned().into()
+        ))
     );
     assert_eq!(
         eval(
             "['b', undefined, 'a'].toSorted().join('|') + ':' + ([undefined].toSorted()[0] === undefined);"
         ),
-        Ok(Value::String("a|b|:true".to_owned()))
+        Ok(Value::String("a|b|:true".to_owned().into()))
     );
 }
 
@@ -97,17 +103,17 @@ fn evaluates_array_to_sorted_default_order() {
 fn evaluates_array_to_sorted_with_compare_function() {
     assert_eq!(
         eval("[3, 1, 2].toSorted(function(left, right) { return left - right; }).join();"),
-        Ok(Value::String("1,2,3".to_owned()))
+        Ok(Value::String("1,2,3".to_owned().into()))
     );
     assert_eq!(
         eval("[3, 1, 2].toSorted(function(left, right) { return right - left; }).join();"),
-        Ok(Value::String("3,2,1".to_owned()))
+        Ok(Value::String("3,2,1".to_owned().into()))
     );
     assert_eq!(
         eval(
             "Array.prototype.toSorted.call({ length: 3, 0: 4, 1: 0, 2: 1 }, function(left, right) { return left - right; }).join();"
         ),
-        Ok(Value::String("0,1,4".to_owned()))
+        Ok(Value::String("0,1,4".to_owned().into()))
     );
     assert_eq!(
         eval("Array.prototype.toSorted.length;"),

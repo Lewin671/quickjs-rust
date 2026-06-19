@@ -292,7 +292,7 @@ impl<'a> Vm<'a> {
                     } else {
                         value
                     };
-                    self.stack.push(Value::String(typeof_value(value)));
+                    self.stack.push(Value::String(typeof_value(value).into()));
                 }
                 op @ (Op::EnterWith
                 | Op::ExitWith
@@ -530,14 +530,14 @@ impl<'a> Vm<'a> {
                 }
                 Op::Typeof => {
                     let value = self.pop()?;
-                    self.stack.push(Value::String(typeof_value(value)));
+                    self.stack.push(Value::String(typeof_value(value).into()));
                 }
                 Op::ToString => {
                     let value = self.pop()?;
                     let mut env = self.current_env();
                     let result = to_js_string_with_env(value, &mut env);
                     self.apply_env(env);
-                    self.stack.push(Value::String(result?));
+                    self.stack.push(Value::String(result?.into()));
                 }
                 Op::ToPropertyKey => {
                     let value = self.pop()?;
@@ -669,7 +669,7 @@ impl<'a> Vm<'a> {
                 "undefined"
             };
             let key_name = match &key_value {
-                Value::String(key) => Some(key.clone()),
+                Value::String(key) => Some(key.to_string()),
                 Value::Number(number) => Some(number.to_string()),
                 _ => None,
             };

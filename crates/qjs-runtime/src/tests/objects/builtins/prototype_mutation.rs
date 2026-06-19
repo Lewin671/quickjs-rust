@@ -8,7 +8,7 @@ fn evaluates_object_prototype_mutation_builtins() {
     );
     assert_eq!(
         eval("typeof Object.setPrototypeOf;"),
-        Ok(Value::String("function".to_owned()))
+        Ok(Value::String("function".to_owned().into()))
     );
     assert_eq!(
         eval(

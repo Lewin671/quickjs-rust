@@ -5,7 +5,7 @@ use qjs_parser::parse_module;
 fn disposable_stack_constructor_and_prototype_surface() {
     assert_eq!(
         eval("typeof DisposableStack;"),
-        Ok(Value::String("function".to_owned()))
+        Ok(Value::String("function".to_owned().into()))
     );
     assert_eq!(eval("DisposableStack.length;"), Ok(Value::Number(0.0)));
     assert_eq!(
@@ -18,7 +18,7 @@ fn disposable_stack_constructor_and_prototype_surface() {
     );
     assert_eq!(
         eval("Object.prototype.toString.call(new DisposableStack());"),
-        Ok(Value::String("[object DisposableStack]".to_owned()))
+        Ok(Value::String("[object DisposableStack]".to_owned().into()))
     );
     assert!(eval("DisposableStack();").is_err());
 }
@@ -30,28 +30,30 @@ fn disposable_stack_surface_descriptors_match_spec() {
             "let d = Object.getOwnPropertyDescriptor(DisposableStack, 'prototype'); \
              d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
-        Ok(Value::String("false:false:false".to_owned()))
+        Ok(Value::String("false:false:false".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let d = Object.getOwnPropertyDescriptor(DisposableStack.prototype, 'constructor'); \
              (d.value === DisposableStack) + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
-        Ok(Value::String("true:true:false:true".to_owned()))
+        Ok(Value::String("true:true:false:true".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let d = Object.getOwnPropertyDescriptor(DisposableStack.prototype, Symbol.toStringTag); \
              d.value + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
-        Ok(Value::String("DisposableStack:false:false:true".to_owned()))
+        Ok(Value::String(
+            "DisposableStack:false:false:true".to_owned().into()
+        ))
     );
     assert_eq!(
         eval(
             "let d = Object.getOwnPropertyDescriptor(DisposableStack.prototype, Symbol.dispose); \
              (d.value === DisposableStack.prototype.dispose) + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
-        Ok(Value::String("true:true:false:true".to_owned()))
+        Ok(Value::String("true:true:false:true".to_owned().into()))
     );
 }
 
@@ -64,14 +66,14 @@ fn disposable_stack_empty_dispose_marks_receiver() {
              stack.dispose(); \
              before + ':' + stack.disposed;"
         ),
-        Ok(Value::String("false:true".to_owned()))
+        Ok(Value::String("false:true".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let d = Object.getOwnPropertyDescriptor(DisposableStack.prototype, 'disposed'); typeof d.get + ':' + d.get.name + ':' + d.get.length + ':' + d.enumerable + ':' + d.configurable;"
         ),
         Ok(Value::String(
-            "function:get disposed:0:false:true".to_owned()
+            "function:get disposed:0:false:true".to_owned().into()
         ))
     );
     assert!(eval("let get = Object.getOwnPropertyDescriptor(DisposableStack.prototype, 'disposed').get; get.call([]);").is_err());
@@ -92,7 +94,9 @@ fn disposable_stack_disposes_resources_in_reverse_order() {
              stack.dispose(); \
              order.join(',') + ':' + stack.disposed;"
         ),
-        Ok(Value::String("defer,adopt:value,use:true".to_owned()))
+        Ok(Value::String(
+            "defer,adopt:value,use:true".to_owned().into()
+        ))
     );
 }
 
@@ -145,7 +149,7 @@ fn disposable_stack_dispose_error_completion_matches_sync_disposal() {
                (e.suppressed.suppressed === error3); \
              }"
         ),
-        Ok(Value::String("true:true:true:true:true".to_owned()))
+        Ok(Value::String("true:true:true:true:true".to_owned().into()))
     );
 }
 
@@ -162,7 +166,7 @@ fn disposable_stack_move_transfers_resources_and_disposes_source() {
              moved.dispose(); \
              before + ':' + order.join(',');"
         ),
-        Ok(Value::String(":true:false:second,first".to_owned()))
+        Ok(Value::String(":true:false:second,first".to_owned().into()))
     );
     assert!(eval("let stack = new DisposableStack(); stack.dispose(); stack.move();").is_err());
     assert!(eval("DisposableStack.prototype.move.call({});").is_err());
@@ -175,7 +179,9 @@ fn disposable_stack_move_surface_and_subclassing() {
             "let d = Object.getOwnPropertyDescriptor(DisposableStack.prototype, 'move'); \
              typeof d.value + ':' + d.value.name + ':' + d.value.length + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
-        Ok(Value::String("function:move:0:true:false:true".to_owned()))
+        Ok(Value::String(
+            "function:move:0:true:false:true".to_owned().into()
+        ))
     );
     assert_eq!(
         eval(
@@ -186,7 +192,7 @@ fn disposable_stack_move_surface_and_subclassing() {
              (moved instanceof DisposableStack) + ':' + \
              (moved instanceof MyDisposableStack);"
         ),
-        Ok(Value::String("true:true:false".to_owned()))
+        Ok(Value::String("true:true:false".to_owned().into()))
     );
 }
 
@@ -203,7 +209,7 @@ fn async_disposable_stack_move_transfers_resources_and_disposes_source() {
              moved.disposeAsync(); \
              before + ':' + order.join(',');"
         ),
-        Ok(Value::String(":true:false:second,first".to_owned()))
+        Ok(Value::String(":true:false:second,first".to_owned().into()))
     );
     assert!(
         eval("let stack = new AsyncDisposableStack(); stack.disposeAsync(); stack.move();")
@@ -219,7 +225,9 @@ fn async_disposable_stack_move_surface_and_subclassing() {
             "let d = Object.getOwnPropertyDescriptor(AsyncDisposableStack.prototype, 'move'); \
              typeof d.value + ':' + d.value.name + ':' + d.value.length + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
-        Ok(Value::String("function:move:0:true:false:true".to_owned()))
+        Ok(Value::String(
+            "function:move:0:true:false:true".to_owned().into()
+        ))
     );
     assert_eq!(
         eval(
@@ -230,7 +238,7 @@ fn async_disposable_stack_move_surface_and_subclassing() {
              (moved instanceof AsyncDisposableStack) + ':' + \
              (moved instanceof MyAsyncDisposableStack);"
         ),
-        Ok(Value::String("true:true:false".to_owned()))
+        Ok(Value::String("true:true:false".to_owned().into()))
     );
 }
 
@@ -254,7 +262,9 @@ fn async_disposable_stack_adopt_and_use_register_resources() {
              (nullResult === null) + ':' + order.join(',');"
         ),
         Ok(Value::String(
-            "true:true:true:true:sync-use,async-use,adopt".to_owned()
+            "true:true:true:true:sync-use,async-use,adopt"
+                .to_owned()
+                .into()
         ))
     );
 }
@@ -269,7 +279,9 @@ fn async_disposable_stack_adopt_and_use_surface_and_errors() {
              use.value.name + ':' + use.value.length + ':' + use.writable + ':' + use.enumerable + ':' + use.configurable;"
         ),
         Ok(Value::String(
-            "adopt:2:true:false:true;use:1:true:false:true".to_owned()
+            "adopt:2:true:false:true;use:1:true:false:true"
+                .to_owned()
+                .into()
         ))
     );
     assert!(
@@ -297,7 +309,7 @@ fn using_declaration_disposes_at_block_exit() {
                log.push('body'); } \
              log.join(',');"
         ),
-        Ok(Value::String("body,b,a".to_owned()))
+        Ok(Value::String("body,b,a".to_owned().into()))
     );
 }
 
@@ -312,7 +324,7 @@ fn using_declaration_disposes_on_abrupt_completion() {
              catch (e) { log.push('caught'); } \
              log.join(',');"
         ),
-        Ok(Value::String("d,caught".to_owned()))
+        Ok(Value::String("d,caught".to_owned().into()))
     );
     // And on return from a function.
     assert_eq!(
@@ -322,7 +334,7 @@ fn using_declaration_disposes_on_abrupt_completion() {
                              return 7; } } \
              f() + ':' + log.join(',');"
         ),
-        Ok(Value::String("7:d".to_owned()))
+        Ok(Value::String("7:d".to_owned().into()))
     );
 }
 
@@ -332,7 +344,7 @@ fn using_declaration_rejects_non_disposable_initializers() {
     // TypeError when the declaration is evaluated.
     assert_eq!(
         eval("{ using x = null; using y = undefined; } 'ok';"),
-        Ok(Value::String("ok".to_owned()))
+        Ok(Value::String("ok".to_owned().into()))
     );
     assert!(eval("{ using x = {}; }").is_err());
     assert!(eval("{ using x = 5; }").is_err());
@@ -355,7 +367,9 @@ fn using_disposal_errors_chain_with_suppressed_error() {
                      throw new Error('body'); } } \
              catch (e) { e.constructor.name + ':' + e.error.message + ':' + e.suppressed.message; }"
         ),
-        Ok(Value::String("SuppressedError:dispose:body".to_owned()))
+        Ok(Value::String(
+            "SuppressedError:dispose:body".to_owned().into()
+        ))
     );
 }
 
@@ -371,7 +385,7 @@ fn using_in_function_body_disposes_at_return() {
                             log.push('body'); return 9; } \
              f() + ':' + log.join(',');"
         ),
-        Ok(Value::String("9:b,body,a".to_owned()))
+        Ok(Value::String("9:b,body,a".to_owned().into()))
     );
     // And when the body throws.
     assert_eq!(
@@ -381,7 +395,7 @@ fn using_in_function_body_disposes_at_return() {
                             throw new Error('boom'); } \
              try { f(); } catch (e) { log.push('caught'); } log.join(',');"
         ),
-        Ok(Value::String("d,caught".to_owned()))
+        Ok(Value::String("d,caught".to_owned().into()))
     );
 }
 
@@ -396,7 +410,7 @@ fn using_for_initializer_disposes_when_loop_exits() {
              } \
              log.join(',');"
         ),
-        Ok(Value::String("body:0,body:1,dispose".to_owned()))
+        Ok(Value::String("body:0,body:1,dispose".to_owned().into()))
     );
 }
 
@@ -411,7 +425,7 @@ fn using_for_initializer_disposes_if_later_initializer_throws() {
              } catch (e) { log.push('caught'); } \
              log.join(',');"
         ),
-        Ok(Value::String("dispose,caught".to_owned()))
+        Ok(Value::String("dispose,caught".to_owned().into()))
     );
 }
 
@@ -430,7 +444,7 @@ fn using_generator_body_preserves_disposal_scope_across_yield() {
              let second = g.next(); \
              first.value + ':' + first.done + ':' + before + ':' + second.done + ':' + log.join(',');"
         ),
-        Ok(Value::String("pause:false::true:dispose".to_owned()))
+        Ok(Value::String("pause:false::true:dispose".to_owned().into()))
     );
 }
 
@@ -460,6 +474,6 @@ fn using_module_statement_list_disposes_top_level_resources() {
 
     assert_eq!(
         bytecode::eval_bytecode(&bytecode),
-        Ok(Value::String("true:true:true:true:true".to_owned()))
+        Ok(Value::String("true:true:true:true:true".to_owned().into()))
     );
 }

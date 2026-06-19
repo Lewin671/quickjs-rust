@@ -66,13 +66,13 @@ fn evaluates_object_descriptor_queries() {
         eval(
             "let object = Object.create({ inherited: 1 }, { own: { value: 2, enumerable: true } }); Object.keys(Object.getOwnPropertyDescriptors(object)).join();"
         ),
-        Ok(Value::String("own".to_owned()))
+        Ok(Value::String("own".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let descriptors = Object.getOwnPropertyDescriptors('ab'); descriptors.length.value + ':' + descriptors[0].value + ':' + descriptors[0].writable + ':' + descriptors[0].configurable;"
         ),
-        Ok(Value::String("2:a:false:false".to_owned()))
+        Ok(Value::String("2:a:false:false".to_owned().into()))
     );
     assert_eq!(
         eval("Object.keys(Object.getOwnPropertyDescriptors(0)).length;"),
@@ -82,7 +82,9 @@ fn evaluates_object_descriptor_queries() {
         eval(
             "let object = {}; let value = {}; let hidden = Symbol('hidden'); let shown = Symbol('shown'); object[shown] = value; Object.defineProperty(object, hidden, { value: value, enumerable: false, writable: true, configurable: true }); let descriptors = Object.getOwnPropertyDescriptors(object); let symbols = Object.getOwnPropertySymbols(descriptors); symbols.length + ':' + (symbols[0] === shown) + ':' + (symbols[1] === hidden) + ':' + descriptors[shown].enumerable + ':' + descriptors[hidden].enumerable + ':' + (descriptors[hidden].value === value);"
         ),
-        Ok(Value::String("2:true:true:true:false:true".to_owned()))
+        Ok(Value::String(
+            "2:true:true:true:false:true".to_owned().into()
+        ))
     );
     assert_eq!(
         eval(
@@ -112,7 +114,7 @@ fn evaluates_object_descriptor_queries() {
              let p = new Proxy(t, { ownKeys(o) { log += 'K'; return Reflect.ownKeys(o); }, getOwnPropertyDescriptor(o, k) { log += k; return Reflect.getOwnPropertyDescriptor(o, k); } }); \
              let d = Object.getOwnPropertyDescriptors(p); log + ':' + Object.keys(d).join(',') + ':' + d.b.value;"
         ),
-        Ok(Value::String("Kabc:a,b,c:2".to_owned()))
+        Ok(Value::String("Kabc:a,b,c:2".to_owned().into()))
     );
 }
 

@@ -5,7 +5,7 @@ fn evaluates_object_from_entries() {
     assert_eq!(eval("Object.fromEntries.length;"), Ok(Value::Number(1.0)));
     assert_eq!(
         eval("let result = Object.fromEntries([['key', 'value']]); result.key;"),
-        Ok(Value::String("value".to_owned()))
+        Ok(Value::String("value".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -15,7 +15,7 @@ fn evaluates_object_from_entries() {
     );
     assert_eq!(
         eval("let entry = { 0: 'name', 1: 'value' }; Object.fromEntries([entry]).name;"),
-        Ok(Value::String("value".to_owned()))
+        Ok(Value::String("value".to_owned().into()))
     );
     assert_eq!(
         eval("Object.getPrototypeOf(Object.fromEntries([])) === Object.prototype;"),
@@ -25,15 +25,15 @@ fn evaluates_object_from_entries() {
         eval(
             "let result = Object.fromEntries([['x', 1]]); let d = Object.getOwnPropertyDescriptor(result, 'x'); d.value + ':' + d.enumerable + ':' + d.writable + ':' + d.configurable;"
         ),
-        Ok(Value::String("1:true:true:true".to_owned()))
+        Ok(Value::String("1:true:true:true".to_owned().into()))
     );
     assert_eq!(
         eval("let key = Symbol(); let result = Object.fromEntries([[key, 'value']]); result[key];"),
-        Ok(Value::String("value".to_owned()))
+        Ok(Value::String("value".to_owned().into()))
     );
     assert_eq!(
         eval("let result = Object.fromEntries([[['nested'], 'value']].values()); result.nested;"),
-        Ok(Value::String("value".to_owned()))
+        Ok(Value::String("value".to_owned().into()))
     );
     assert!(eval("Object.fromEntries();").is_err());
     assert!(eval("Object.fromEntries(['ab']);").is_err());
@@ -71,7 +71,7 @@ fn iterator_closed_for_null_entry() {
             threw + ':' + returned;
             "#
         ),
-        Ok(Value::String("true:true".to_owned()))
+        Ok(Value::String("true:true".to_owned().into()))
     );
 }
 
@@ -108,7 +108,7 @@ fn iterator_closed_for_string_entry() {
             threw + ':' + returned;
             "#
         ),
-        Ok(Value::String("true:true".to_owned()))
+        Ok(Value::String("true:true".to_owned().into()))
     );
 }
 
@@ -143,7 +143,7 @@ fn iterator_closed_for_number_entry() {
             threw + ':' + returned;
             "#
         ),
-        Ok(Value::String("true:true".to_owned()))
+        Ok(Value::String("true:true".to_owned().into()))
     );
 }
 
@@ -178,7 +178,7 @@ fn iterator_closed_for_undefined_entry() {
             threw + ':' + returned;
             "#
         ),
-        Ok(Value::String("true:true".to_owned()))
+        Ok(Value::String("true:true".to_owned().into()))
     );
 }
 
@@ -213,7 +213,7 @@ fn iterator_closed_for_boolean_entry() {
             threw + ':' + returned;
             "#
         ),
-        Ok(Value::String("true:true".to_owned()))
+        Ok(Value::String("true:true".to_owned().into()))
     );
 }
 
@@ -256,7 +256,7 @@ fn iterator_closed_for_throwing_key_accessor() {
             threwDummy + ':' + returned;
             "#
         ),
-        Ok(Value::String("true:true".to_owned()))
+        Ok(Value::String("true:true".to_owned().into()))
     );
 }
 
@@ -300,7 +300,7 @@ fn iterator_closed_for_throwing_value_accessor() {
             threwDummy + ':' + returned;
             "#
         ),
-        Ok(Value::String("true:true".to_owned()))
+        Ok(Value::String("true:true".to_owned().into()))
     );
 }
 
@@ -343,7 +343,7 @@ fn iterator_closed_for_throwing_key_tostring() {
             threwDummy + ':' + returned;
             "#
         ),
-        Ok(Value::String("true:true".to_owned()))
+        Ok(Value::String("true:true".to_owned().into()))
     );
 }
 
@@ -403,7 +403,9 @@ fn evaluation_order() {
             orderOk + ':' + result['first key'] + ':' + result['second key'];
             "#
         ),
-        Ok(Value::String("true:first value:second value".to_owned()))
+        Ok(Value::String(
+            "true:first value:second value".to_owned().into()
+        ))
     );
 }
 
@@ -435,6 +437,6 @@ fn iterator_not_closed_when_no_return_method() {
             String(threw);
             "#
         ),
-        Ok(Value::String("true".to_owned()))
+        Ok(Value::String("true".to_owned().into()))
     );
 }

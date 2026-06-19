@@ -30,7 +30,7 @@ fn static_blocks_and_fields_run_in_source_order() {
                static { C.log.push(4); } \
              } C.log.join(',');"
         ),
-        Ok(Value::String("1,2,3,4".to_owned()))
+        Ok(Value::String("1,2,3,4".to_owned().into()))
     );
 }
 
@@ -51,7 +51,7 @@ fn numeric_literal_member_keys_use_their_canonical_name() {
     // so `0b10` defines `"2"` (matching object literals).
     assert_eq!(
         eval("class C { get 0b10() { return 'g'; } } C.prototype['2'];"),
-        Ok(Value::String("g".to_owned()))
+        Ok(Value::String("g".to_owned().into()))
     );
     assert_eq!(
         eval("class C { 0x10() { return 5; } } new C()['16']();"),
@@ -111,7 +111,7 @@ fn class_method_computed_object_binding_key_is_evaluated_once() {
              class C { method({ [key]: value }) { return value + ':' + calls; } } \
              new C().method({ x: 7 });"
         ),
-        Ok(Value::String("7:1".to_owned()))
+        Ok(Value::String("7:1".to_owned().into()))
     );
 }
 
@@ -123,7 +123,7 @@ fn class_method_computed_object_binding_key_is_excluded_from_rest() {
              class C { method({ [key]: value, ...rest }) { return value + ':' + rest.x + ':' + rest.y; } } \
              new C().method({ x: 1, y: 2 });"
         ),
-        Ok(Value::String("1:undefined:2".to_owned()))
+        Ok(Value::String("1:undefined:2".to_owned().into()))
     );
 }
 
@@ -149,7 +149,7 @@ fn prototype_property_is_non_writable_non_enumerable_non_configurable() {
         eval(
             "class C {} let d = Object.getOwnPropertyDescriptor(C, 'prototype'); [d.writable, d.enumerable, d.configurable].join(',');"
         ),
-        Ok(Value::String("false,false,false".to_owned()))
+        Ok(Value::String("false,false,false".to_owned().into()))
     );
 }
 
@@ -159,7 +159,7 @@ fn constructor_back_reference_is_writable_non_enumerable_configurable() {
         eval(
             "class C {} let d = Object.getOwnPropertyDescriptor(C.prototype, 'constructor'); [d.writable, d.enumerable, d.configurable].join(',');"
         ),
-        Ok(Value::String("true,false,true".to_owned()))
+        Ok(Value::String("true,false,true".to_owned().into()))
     );
 }
 
@@ -169,7 +169,7 @@ fn methods_are_non_enumerable_writable_configurable() {
         eval(
             "class C { m() {} } let d = Object.getOwnPropertyDescriptor(C.prototype, 'm'); [d.writable, d.enumerable, d.configurable].join(',');"
         ),
-        Ok(Value::String("true,false,true".to_owned()))
+        Ok(Value::String("true,false,true".to_owned().into()))
     );
 }
 
@@ -185,7 +185,7 @@ fn methods_are_not_own_enumerable_keys() {
 fn constructor_name_comes_from_binding() {
     assert_eq!(
         eval("class C {} C.name;"),
-        Ok(Value::String("C".to_owned()))
+        Ok(Value::String("C".to_owned().into()))
     );
 }
 
@@ -208,7 +208,7 @@ fn calling_class_without_new_throws_type_error() {
         eval(
             "class C {} try { C(); 'no throw'; } catch (e) { e instanceof TypeError ? 'TypeError' : 'other'; }"
         ),
-        Ok(Value::String("TypeError".to_owned()))
+        Ok(Value::String("TypeError".to_owned().into()))
     );
 }
 
@@ -221,7 +221,7 @@ fn derived_constructor_returning_symbol_throws_type_error() {
             "class B {} class D extends B { constructor() { super(); return Symbol(); } } \
              try { new D(); 'no throw'; } catch (e) { e instanceof TypeError ? 'TypeError' : 'other'; }"
         ),
-        Ok(Value::String("TypeError".to_owned()))
+        Ok(Value::String("TypeError".to_owned().into()))
     );
     // An object return still overrides `this`.
     assert_eq!(
@@ -239,7 +239,7 @@ fn method_is_not_constructable() {
         eval(
             "class C { m() {} } let c = new C(); try { new c.m(); 'no throw'; } catch (e) { e instanceof TypeError ? 'TypeError' : 'other'; }"
         ),
-        Ok(Value::String("TypeError".to_owned()))
+        Ok(Value::String("TypeError".to_owned().into()))
     );
 }
 
@@ -263,7 +263,7 @@ fn class_expression_anonymous_is_constructable() {
 fn named_class_expression_exposes_name() {
     assert_eq!(
         eval("let x = class Named {}; x.name;"),
-        Ok(Value::String("Named".to_owned()))
+        Ok(Value::String("Named".to_owned().into()))
     );
 }
 
@@ -314,7 +314,7 @@ fn class_inner_name_binding_shadows_outer_binding_inside_members() {
              setOuter(); \
              [C === null, cls.prototype.self() === cls].join(':');"
         ),
-        Ok(Value::String("true:true".to_owned()))
+        Ok(Value::String("true:true".to_owned().into()))
     );
 }
 
@@ -322,7 +322,7 @@ fn class_inner_name_binding_shadows_outer_binding_inside_members() {
 fn class_declaration_is_block_scoped() {
     assert_eq!(
         eval("{ class C {} } typeof C;"),
-        Ok(Value::String("undefined".to_owned()))
+        Ok(Value::String("undefined".to_owned().into()))
     );
 }
 
@@ -334,7 +334,7 @@ fn class_declaration_is_not_hoisted_like_var() {
         eval(
             "try { let probe = C; 'no throw'; class C {} } catch (e) { e instanceof ReferenceError ? 'ReferenceError' : 'other'; }"
         ),
-        Ok(Value::String("ReferenceError".to_owned()))
+        Ok(Value::String("ReferenceError".to_owned().into()))
     );
 }
 
@@ -345,7 +345,7 @@ fn class_body_is_strict_mode_code() {
         eval(
             "class C { m() { undeclaredStrict = 1; } } try { new C().m(); 'no throw'; } catch (e) { e instanceof ReferenceError ? 'ReferenceError' : 'other'; }"
         ),
-        Ok(Value::String("ReferenceError".to_owned()))
+        Ok(Value::String("ReferenceError".to_owned().into()))
     );
 }
 
@@ -369,7 +369,7 @@ fn static_method_installs_on_constructor() {
 fn static_method_is_not_on_prototype() {
     assert_eq!(
         eval("class C { static m() {} } typeof C.prototype.m;"),
-        Ok(Value::String("undefined".to_owned()))
+        Ok(Value::String("undefined".to_owned().into()))
     );
 }
 
@@ -379,7 +379,7 @@ fn static_method_descriptor_is_non_enumerable_writable_configurable() {
         eval(
             "class C { static m() {} } let d = Object.getOwnPropertyDescriptor(C, 'm'); [d.writable, d.enumerable, d.configurable].join(',');"
         ),
-        Ok(Value::String("true,false,true".to_owned()))
+        Ok(Value::String("true,false,true".to_owned().into()))
     );
 }
 
@@ -417,7 +417,7 @@ fn getter_and_setter_merge_into_one_accessor() {
         eval(
             "class C { get x() { return this._x; } set x(v) { this._x = v; } } let d = Object.getOwnPropertyDescriptor(C.prototype, 'x'); [typeof d.get, typeof d.set].join(',');"
         ),
-        Ok(Value::String("function,function".to_owned()))
+        Ok(Value::String("function,function".to_owned().into()))
     );
 }
 
@@ -427,7 +427,7 @@ fn accessor_descriptor_is_non_enumerable_configurable() {
         eval(
             "class C { get x() {} } let d = Object.getOwnPropertyDescriptor(C.prototype, 'x'); [d.enumerable, d.configurable].join(',');"
         ),
-        Ok(Value::String("false,true".to_owned()))
+        Ok(Value::String("false,true".to_owned().into()))
     );
 }
 
@@ -461,7 +461,7 @@ fn computed_keys_evaluate_in_source_order() {
         eval(
             "let log = []; function k(n) { log.push(n); return 'm' + n; } class C { [k(1)]() {} [k(2)]() {} } log.join(',');"
         ),
-        Ok(Value::String("1,2".to_owned()))
+        Ok(Value::String("1,2".to_owned().into()))
     );
 }
 
@@ -482,7 +482,9 @@ fn computed_class_keys_yield_in_enclosing_generator() {
              let third = iter.next('s'); \
              [first.value, second.value, third.value.prototype.m(), third.value.s()].join(':');"
         ),
-        Ok(Value::String("method:static:method:static".to_owned()))
+        Ok(Value::String(
+            "method:static:method:static".to_owned().into()
+        ))
     );
 }
 
@@ -500,7 +502,7 @@ fn static_get_set_are_valid_method_names() {
         eval(
             "class C { static() { return 1; } get() { return 2; } set() { return 3; } } let c = new C(); [c.static(), c.get(), c.set()].join(',');"
         ),
-        Ok(Value::String("1,2,3".to_owned()))
+        Ok(Value::String("1,2,3".to_owned().into()))
     );
 }
 
@@ -518,7 +520,7 @@ fn subclass_instance_is_instanceof_both() {
         eval(
             "class A {} class B extends A {} let b = new B(); [b instanceof B, b instanceof A].join(',');"
         ),
-        Ok(Value::String("true,true".to_owned()))
+        Ok(Value::String("true,true".to_owned().into()))
     );
 }
 
@@ -534,7 +536,7 @@ fn subclass_prototype_chain_links_to_parent() {
 fn subclass_inherits_parent_method() {
     assert_eq!(
         eval("class A { hi() { return 'a'; } } class B extends A {} new B().hi();"),
-        Ok(Value::String("a".to_owned()))
+        Ok(Value::String("a".to_owned().into()))
     );
 }
 
@@ -544,7 +546,7 @@ fn override_delegates_to_super_method() {
         eval(
             "class A { who() { return 'A'; } } class B extends A { who() { return super.who() + 'B'; } } new B().who();"
         ),
-        Ok(Value::String("AB".to_owned()))
+        Ok(Value::String("AB".to_owned().into()))
     );
 }
 
@@ -554,7 +556,7 @@ fn super_call_binds_this_and_forwards_arguments() {
         eval(
             "class A { constructor(x) { this.x = x; } } class B extends A { constructor(x) { super(x * 2); this.y = x; } } let b = new B(5); [b.x, b.y].join(',');"
         ),
-        Ok(Value::String("10,5".to_owned()))
+        Ok(Value::String("10,5".to_owned().into()))
     );
 }
 
@@ -604,7 +606,7 @@ fn super_in_static_method_calls_parent_static() {
         eval(
             "class A { static who() { return 'A'; } } class B extends A { static who() { return super.who() + 'B'; } } B.who();"
         ),
-        Ok(Value::String("AB".to_owned()))
+        Ok(Value::String("AB".to_owned().into()))
     );
 }
 
@@ -626,8 +628,8 @@ fn super_property_in_async_method_default_parameter() {
     assert_eq!(
         array.to_vec(),
         vec![
-            Value::String("sup".to_owned()),
-            Value::String("done".to_owned())
+            Value::String("sup".to_owned().into()),
+            Value::String("done".to_owned().into())
         ]
     );
 }
@@ -640,7 +642,7 @@ fn class_method_default_parameters_use_parameter_tdz() {
              let name; try { C.prototype.method(); } catch (error) { name = error.name; } \
              name + ':' + calls;"
         ),
-        Ok(Value::String("ReferenceError:0".to_owned()))
+        Ok(Value::String("ReferenceError:0".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -648,7 +650,7 @@ fn class_method_default_parameters_use_parameter_tdz() {
              let name; try { C.prototype.method(); } catch (error) { name = error.name; } \
              name + ':' + calls;"
         ),
-        Ok(Value::String("ReferenceError:0".to_owned()))
+        Ok(Value::String("ReferenceError:0".to_owned().into()))
     );
 }
 
@@ -666,7 +668,7 @@ fn class_method_default_parameter_closure_does_not_capture_body_var_environment(
              C.prototype.m(); \
              probeParams() + ':' + probeBody();"
         ),
-        Ok(Value::String("outside:inside".to_owned()))
+        Ok(Value::String("outside:inside".to_owned().into()))
     );
     assert_eq!(
         eval_classified_with_resolver(
@@ -682,7 +684,7 @@ fn class_method_default_parameter_closure_does_not_capture_body_var_environment(
             "<test>",
             Box::new(MapResolver::new()),
         ),
-        Ok(Value::String("outside:inside".to_owned()))
+        Ok(Value::String("outside:inside".to_owned().into()))
     );
 }
 
@@ -695,7 +697,7 @@ fn class_heritage_expression_functions_are_strict() {
              try { new D(); } catch (error) { name = error.name; } \
              name;"
         ),
-        Ok(Value::String("TypeError".to_owned()))
+        Ok(Value::String("TypeError".to_owned().into()))
     );
 }
 
@@ -734,7 +736,7 @@ fn class_declaration_heritage_closures_capture_inner_name_binding() {
              try { setHeritage(); } catch (error) { threw = error instanceof TypeError; } \
              [probeBefore() === null, probeHeritage() === cls, threw].join(':');"
         ),
-        Ok(Value::String("true:true:true".to_owned()))
+        Ok(Value::String("true:true:true".to_owned().into()))
     );
 }
 
@@ -750,7 +752,7 @@ fn named_class_expression_inner_binding_is_visible_to_methods() {
 fn subclass_inherits_static_method() {
     assert_eq!(
         eval("class A { static who() { return 'A'; } } class B extends A {} B.who();"),
-        Ok(Value::String("A".to_owned()))
+        Ok(Value::String("A".to_owned().into()))
     );
 }
 
@@ -782,7 +784,7 @@ fn subclass_constructor_restricted_function_properties_throw_on_write() {
              try { B.arguments = 1; } catch (error) { args = error instanceof TypeError; } \
              [B.hasOwnProperty('caller'), B.hasOwnProperty('arguments'), caller, args].join(':');"
         ),
-        Ok(Value::String("false:false:true:true".to_owned()))
+        Ok(Value::String("false:false:true:true".to_owned().into()))
     );
 }
 
@@ -810,7 +812,7 @@ fn static_super_resolves_through_function_prototype() {
         eval(
             "class A { static who() { return 'super'; } } class B extends A { static who() { return 'sub-' + super.who(); } } B.who();"
         ),
-        Ok(Value::String("sub-super".to_owned()))
+        Ok(Value::String("sub-super".to_owned().into()))
     );
 }
 
@@ -847,7 +849,7 @@ fn extends_non_constructor_is_type_error() {
 fn extends_null_keeps_constructor_callable_and_null_prototype() {
     assert_eq!(
         eval("class C extends null {} typeof C;"),
-        Ok(Value::String("function".to_owned()))
+        Ok(Value::String("function".to_owned().into()))
     );
     assert_eq!(
         eval("class C extends null {} Object.getPrototypeOf(C.prototype) === null;"),
@@ -865,7 +867,7 @@ fn superclass_html_dda_prototype_is_an_object_for_heritage() {
              let c = new C(); \
              (c instanceof C) + ':' + (c instanceof Superclass);"
         ),
-        Ok(Value::String("true:true".to_owned()))
+        Ok(Value::String("true:true".to_owned().into()))
     );
 }
 
@@ -893,7 +895,7 @@ fn class_method_name_does_not_create_inner_binding() {
         eval(
             "var method = 0; class C { method() { method = 1; return method; } } let result = new C().method(); method + ':' + result + ':' + new C().method.name;"
         ),
-        Ok(Value::String("1:1:method".to_owned()))
+        Ok(Value::String("1:1:method".to_owned().into()))
     );
 }
 
@@ -903,6 +905,6 @@ fn private_class_method_name_does_not_create_inner_binding() {
         eval(
             "var method = 0; class C { #method() { method = 1; return method; } call() { return this.#method(); } } let result = new C().call(); method + ':' + result;"
         ),
-        Ok(Value::String("1:1".to_owned()))
+        Ok(Value::String("1:1".to_owned().into()))
     );
 }

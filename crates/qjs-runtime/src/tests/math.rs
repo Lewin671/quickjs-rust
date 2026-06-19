@@ -2,14 +2,17 @@ use crate::{Value, eval};
 
 #[test]
 fn evaluates_math_builtins() {
-    assert_eq!(eval("typeof Math;"), Ok(Value::String("object".to_owned())));
+    assert_eq!(
+        eval("typeof Math;"),
+        Ok(Value::String("object".to_owned().into()))
+    );
     assert_eq!(
         eval("Object.prototype.toString.call(Math);"),
-        Ok(Value::String("[object Math]".to_owned()))
+        Ok(Value::String("[object Math]".to_owned().into()))
     );
     assert_eq!(
         eval("typeof Math.PI;"),
-        Ok(Value::String("number".to_owned()))
+        Ok(Value::String("number".to_owned().into()))
     );
     assert_eq!(eval("NaN === NaN;"), Ok(Value::Boolean(false)));
     assert_eq!(eval("Infinity === 1 / 0;"), Ok(Value::Boolean(true)));
@@ -244,7 +247,7 @@ fn evaluates_math_builtins() {
         eval(
             "let d = Object.getOwnPropertyDescriptor(Math, 'random'); d.enumerable + ':' + d.writable + ':' + d.configurable;"
         ),
-        Ok(Value::String("false:true:true".to_owned()))
+        Ok(Value::String("false:true:true".to_owned().into()))
     );
     assert!(eval("new Math.abs(1);").is_err());
 }

@@ -17,7 +17,7 @@ pub(crate) fn native_string_prototype_concat(
     for value in argument_values.iter().cloned() {
         result.push_str(&to_js_string_with_env(value, env)?);
     }
-    Ok(Value::String(result))
+    Ok(Value::String(result.into()))
 }
 
 pub(crate) fn native_string_prototype_repeat(
@@ -37,7 +37,7 @@ pub(crate) fn native_string_prototype_repeat(
         });
     }
     if count.is_nan() || count == 0.0 {
-        return Ok(Value::String(String::new()));
+        return Ok(Value::String(::std::rc::Rc::new(String::new())));
     }
 
     let count = count.trunc() as usize;
@@ -54,7 +54,7 @@ pub(crate) fn native_string_prototype_repeat(
             message: "RangeError: invalid string length".to_owned(),
         });
     }
-    Ok(Value::String(value.repeat(count)))
+    Ok(Value::String(value.repeat(count).into()))
 }
 
 pub(crate) fn native_string_prototype_slice(
@@ -78,9 +78,11 @@ pub(crate) fn native_string_prototype_slice(
         env,
     )?;
     if end <= start {
-        return Ok(Value::String(String::new()));
+        return Ok(Value::String(::std::rc::Rc::new(String::new())));
     }
-    Ok(Value::String(chars[start..end].iter().collect()))
+    Ok(Value::String(
+        chars[start..end].iter().collect::<String>().into(),
+    ))
 }
 
 pub(crate) fn native_string_prototype_split(
@@ -116,7 +118,9 @@ pub(crate) fn native_string_prototype_split(
         if limit == 0 {
             return Ok(Value::Array(ArrayRef::new(Vec::new())));
         }
-        return Ok(Value::Array(ArrayRef::new(vec![Value::String(value)])));
+        return Ok(Value::Array(ArrayRef::new(vec![Value::String(
+            value.into(),
+        )])));
     }
 
     if regexp::regexp_is_regexp(&separator_value) {
@@ -134,13 +138,13 @@ pub(crate) fn native_string_prototype_split(
         value
             .chars()
             .take(limit)
-            .map(|character| Value::String(character.to_string()))
+            .map(|character| Value::String(character.to_string().into()))
             .collect()
     } else {
         value
             .split(&separator)
             .take(limit)
-            .map(|part| Value::String(part.to_owned()))
+            .map(|part| Value::String(part.to_owned().into()))
             .collect()
     };
     Ok(Value::Array(ArrayRef::new(parts)))
@@ -196,7 +200,7 @@ fn string_split_regexp(
         let result = call_function(
             exec,
             regexp.clone(),
-            vec![Value::String(input.clone())],
+            vec![Value::String(input.clone().into())],
             env,
             false,
         )?;
@@ -220,11 +224,9 @@ fn string_split_regexp(
             continue;
         }
 
-        parts.push(Value::String(input_char_slice(
-            &input,
-            segment_start,
-            match_start,
-        )));
+        parts.push(Value::String(
+            input_char_slice(&input, segment_start, match_start).into(),
+        ));
         if parts.len() == limit {
             return Ok(Value::Array(ArrayRef::new(parts)));
         }
@@ -239,11 +241,9 @@ fn string_split_regexp(
     }
 
     if segment_start < input_len || !trailing_empty {
-        parts.push(Value::String(input_char_slice(
-            &input,
-            segment_start,
-            input_len,
-        )));
+        parts.push(Value::String(
+            input_char_slice(&input, segment_start, input_len).into(),
+        ));
     }
     Ok(Value::Array(ArrayRef::new(
         parts.into_iter().take(limit).collect(),
@@ -258,7 +258,7 @@ fn string_split_regexp_clone(separator: Value, env: &mut CallEnv) -> Result<Valu
     call_function(
         constructor,
         Value::Undefined,
-        vec![separator, Value::String("g".to_owned())],
+        vec![separator, Value::String("g".to_owned().into())],
         env,
         false,
     )
@@ -309,7 +309,12 @@ pub(crate) fn native_string_prototype_substr(
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    Ok(Value::String(chars[start..start + count].iter().collect()))
+    Ok(Value::String(
+        chars[start..start + count]
+            .iter()
+            .collect::<String>()
+            .into(),
+    ))
 }
 
 pub(crate) fn native_string_prototype_substring(
@@ -337,7 +342,9 @@ pub(crate) fn native_string_prototype_substring(
     } else {
         (end, start)
     };
-    Ok(Value::String(chars[from..to].iter().collect()))
+    Ok(Value::String(
+        chars[from..to].iter().collect::<String>().into(),
+    ))
 }
 
 fn string_substr_start(

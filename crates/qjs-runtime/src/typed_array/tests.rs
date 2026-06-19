@@ -41,7 +41,7 @@ fn concrete_constructor_requires_new() {
 fn construct_from_length_and_no_args() {
     assert_eq!(
         eval("let a = new Float64Array(3); a.length + ':' + a[0] + ':' + a[2];"),
-        Ok(Value::String("3:0:0".to_owned()))
+        Ok(Value::String("3:0:0".to_owned().into()))
     );
     assert_eq!(eval("new Uint8Array().length;"), Ok(Value::Number(0.0)));
 }
@@ -56,7 +56,7 @@ fn construct_from_length_uses_to_index_and_new_target_prototype() {
              try { new Uint8Array(Symbol('1')); } catch (e) { symbol = e instanceof TypeError; } \
              negative + ':' + symbol;"
         ),
-        Ok(Value::String("true:true".to_owned()))
+        Ok(Value::String("true:true".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -84,13 +84,13 @@ fn construct_from_length_uses_to_index_and_new_target_prototype() {
 fn instances_inherit_length_accessor_and_allow_own_length() {
     assert_eq!(
         eval("let a = new Uint8Array([7]); a.length + ':' + a.hasOwnProperty('length');"),
-        Ok(Value::String("1:false".to_owned()))
+        Ok(Value::String("1:false".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let a = new Uint8Array([7]); Object.defineProperty(a, 'length', { value: 3 }); a[Symbol.isConcatSpreadable] = true; let out = [].concat(a); out.length + ':' + out[0] + ':' + out.hasOwnProperty('1') + ':' + out.hasOwnProperty('2');"
         ),
-        Ok(Value::String("3:7:false:false".to_owned()))
+        Ok(Value::String("3:7:false:false".to_owned().into()))
     );
 }
 
@@ -98,16 +98,16 @@ fn instances_inherit_length_accessor_and_allow_own_length() {
 fn construct_from_array_like_and_iterable() {
     assert_eq!(
         eval("let a = new Uint8Array([1, 258]); a.length + ':' + a[0] + ':' + a[1];"),
-        Ok(Value::String("2:1:2".to_owned()))
+        Ok(Value::String("2:1:2".to_owned().into()))
     );
     assert_eq!(
         eval("let a = new Int8Array([127, 128, 255]); a[0] + ':' + a[1] + ':' + a[2];"),
-        Ok(Value::String("127:-128:-1".to_owned()))
+        Ok(Value::String("127:-128:-1".to_owned().into()))
     );
     // Iterable (a Set) is consumed through Symbol.iterator.
     assert_eq!(
         eval("let a = new Uint16Array(new Set([7, 8, 7])); a.length + ':' + a[0] + ':' + a[1];"),
-        Ok(Value::String("2:7:8".to_owned()))
+        Ok(Value::String("2:7:8".to_owned().into()))
     );
 }
 
@@ -117,7 +117,7 @@ fn construct_from_typed_array_converts_elements() {
         eval(
             "let s = new Uint8Array([1, 2, 3]); let c = new Int16Array(s); c.length + ':' + c[0] + ':' + c[2];"
         ),
-        Ok(Value::String("3:1:3".to_owned()))
+        Ok(Value::String("3:1:3".to_owned().into()))
     );
 }
 
@@ -127,14 +127,14 @@ fn construct_from_buffer_with_offset_and_length() {
         eval(
             "let b = new ArrayBuffer(8); let a = new Uint8Array(b, 2, 4); a.length + ':' + a.byteOffset + ':' + a.byteLength;"
         ),
-        Ok(Value::String("4:2:4".to_owned()))
+        Ok(Value::String("4:2:4".to_owned().into()))
     );
     // Default length covers the rest of the buffer.
     assert_eq!(
         eval(
             "let b = new ArrayBuffer(8); let a = new Uint32Array(b, 4); a.length + ':' + a.byteOffset;"
         ),
-        Ok(Value::String("1:4".to_owned()))
+        Ok(Value::String("1:4".to_owned().into()))
     );
 }
 
@@ -149,7 +149,7 @@ fn resizable_buffer_views_track_effective_length() {
              fixed.length + ':' + fixed.byteLength + ':' + fixed.byteOffset + '|' \
              + tracking.length + ':' + tracking.byteLength + ':' + tracking.byteOffset;"
         ),
-        Ok(Value::String("0:0:0|1:1:2".to_owned()))
+        Ok(Value::String("0:0:0|1:1:2".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -157,7 +157,7 @@ fn resizable_buffer_views_track_effective_length() {
              let a = new Uint8Array(b); a[0] = 7; b.resize(2); b.resize(4); \
              a.length + ':' + a[0] + ':' + a[2];"
         ),
-        Ok(Value::String("4:7:0".to_owned()))
+        Ok(Value::String("4:7:0".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -165,7 +165,7 @@ fn resizable_buffer_views_track_effective_length() {
              let a = new Float64Array(b); \
              a.length + ':' + a.byteLength;"
         ),
-        Ok(Value::String("1:8".to_owned()))
+        Ok(Value::String("1:8".to_owned().into()))
     );
 }
 
@@ -185,7 +185,7 @@ fn construct_from_resizable_typed_array_uses_current_bounds() {
              [fixedThrew, Array.from(new Uint8Array(tracking)).join(','), \
               Array.from(new Uint8Array(trackingOffset)).join(',')].join('|');"
         ),
-        Ok(Value::String("true|1,2,3|3".to_owned()))
+        Ok(Value::String("true|1,2,3|3".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -199,7 +199,7 @@ fn construct_from_resizable_typed_array_uses_current_bounds() {
              try { new Uint8Array(trackingOffset); } catch (e) { trackingThrew = e instanceof TypeError; } \
              fixedThrew + ':' + trackingThrew;"
         ),
-        Ok(Value::String("true:true".to_owned()))
+        Ok(Value::String("true:true".to_owned().into()))
     );
 }
 
@@ -212,7 +212,7 @@ fn array_copy_within_uses_resizable_typed_array_elements() {
              Array.prototype.copyWithin.call(a, 1, 2); \
              Array.prototype.join.call(a);"
         ),
-        Ok(Value::String("0,2,3,3".to_owned()))
+        Ok(Value::String("0,2,3,3".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -221,7 +221,7 @@ fn array_copy_within_uses_resizable_typed_array_elements() {
              b.resize(2); Array.prototype.copyWithin.call(fixed, 0, 1); \
              fixed.length + ':' + fixed[0] + ':' + Array.prototype.join.call(new Uint8Array(b));"
         ),
-        Ok(Value::String("0:undefined:0,1".to_owned()))
+        Ok(Value::String("0:undefined:0,1".to_owned().into()))
     );
 }
 
@@ -236,7 +236,7 @@ fn array_prototype_iterators_validate_resizable_view_on_next() {
              iterator.next(); \
              before + ':' + reads;"
         ),
-        Ok(Value::String("0:1".to_owned()))
+        Ok(Value::String("0:1".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -249,7 +249,7 @@ fn array_prototype_iterators_validate_resizable_view_on_next() {
              try { Array.from(Array.prototype.entries.call(a)); } catch (e) { threw = e instanceof TypeError; } \
              created + ':' + threw;"
         ),
-        Ok(Value::String("true:true".to_owned()))
+        Ok(Value::String("true:true".to_owned().into()))
     );
 }
 
@@ -269,7 +269,7 @@ fn construct_from_buffer_validates_alignment_and_bounds() {
 fn typed_array_of_constructs_and_coerces() {
     assert_eq!(
         eval("let a = Uint8Array.of(5, 6, 257); a.length + ':' + a[0] + ':' + a[2];"),
-        Ok(Value::String("3:5:1".to_owned()))
+        Ok(Value::String("3:5:1".to_owned().into()))
     );
     // `of` is shared across the concrete constructors via %TypedArray%.
     assert_eq!(
@@ -282,7 +282,7 @@ fn typed_array_of_constructs_and_coerces() {
              typeof a[0] + ':' + a[1] + ':' + (BigInt64Array.of === Uint8Array.of) + ':' \
              + BigInt64Array.hasOwnProperty('of');"
         ),
-        Ok(Value::String("bigint:2:true:false".to_owned()))
+        Ok(Value::String("bigint:2:true:false".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -290,7 +290,7 @@ fn typed_array_of_constructs_and_coerces() {
              let result = BigInt64Array.of.call(function() { return custom; }, 1n, 2n); \
              (result === custom) + ':' + custom[0] + ':' + custom[1] + ':' + custom[2];"
         ),
-        Ok(Value::String("true:1:2:0".to_owned()))
+        Ok(Value::String("true:1:2:0".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -320,7 +320,7 @@ fn typed_array_of_constructs_and_coerces() {
              catch (e) { caught = e === marker; } \
              caught + ':' + last;"
         ),
-        Ok(Value::String("true:second".to_owned()))
+        Ok(Value::String("true:second".to_owned().into()))
     );
 }
 
@@ -328,24 +328,24 @@ fn typed_array_of_constructs_and_coerces() {
 fn typed_array_from_iterable_array_like_and_mapfn() {
     assert_eq!(
         eval("let a = Uint8Array.from([1, 2, 300]); a.length + ':' + a[0] + ':' + a[2];"),
-        Ok(Value::String("3:1:44".to_owned()))
+        Ok(Value::String("3:1:44".to_owned().into()))
     );
     // Array-like (no Symbol.iterator) source.
     assert_eq!(
         eval("let a = Int8Array.from({ length: 2, 0: 10, 1: 20 }); a[0] + ':' + a[1];"),
-        Ok(Value::String("10:20".to_owned()))
+        Ok(Value::String("10:20".to_owned().into()))
     );
     // mapfn receives (value, index).
     assert_eq!(
         eval("let a = Int8Array.from([1, 2, 3], (v, i) => v * 10 + i); a[0] + ':' + a[2];"),
-        Ok(Value::String("10:32".to_owned()))
+        Ok(Value::String("10:32".to_owned().into()))
     );
     // A non-callable mapfn throws.
     assert!(eval("Uint8Array.from([1], 5);").is_err());
     // BigInt arrays round-trip BigInt elements.
     assert_eq!(
         eval("let a = BigInt64Array.from([1n, 2n]); typeof a[0] + ':' + a[1];"),
-        Ok(Value::String("bigint:2".to_owned()))
+        Ok(Value::String("bigint:2".to_owned().into()))
     );
 }
 
@@ -357,7 +357,7 @@ fn instance_accessors_report_view_geometry() {
         eval(
             "let a = new Int16Array(3); a.buffer.byteLength + ':' + a.byteLength + ':' + a.byteOffset + ':' + a.length;"
         ),
-        Ok(Value::String("6:6:0:3".to_owned()))
+        Ok(Value::String("6:6:0:3".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -391,7 +391,9 @@ fn accessors_brand_check_their_receiver() {
 fn object_to_string_reports_kind() {
     assert_eq!(
         eval("Object.prototype.toString.call(new Uint8ClampedArray(0));"),
-        Ok(Value::String("[object Uint8ClampedArray]".to_owned()))
+        Ok(Value::String(
+            "[object Uint8ClampedArray]".to_owned().into()
+        ))
     );
 }
 
@@ -401,7 +403,7 @@ fn object_to_string_reports_kind() {
 fn uint8_clamped_clamps_and_rounds_half_even() {
     assert_eq!(
         eval("Array.prototype.join.call(new Uint8ClampedArray([-1, 2.5, 3.5, 300]));"),
-        Ok(Value::String("0,2,4,255".to_owned()))
+        Ok(Value::String("0,2,4,255".to_owned().into()))
     );
 }
 
@@ -409,11 +411,11 @@ fn uint8_clamped_clamps_and_rounds_half_even() {
 fn bigint_arrays_wrap_and_reject_numbers() {
     assert_eq!(
         eval("let a = new BigInt64Array([1n, 2n]); typeof a[0] + ':' + a[0] + ':' + a[1];"),
-        Ok(Value::String("bigint:1:2".to_owned()))
+        Ok(Value::String("bigint:1:2".to_owned().into()))
     );
     assert_eq!(
         eval("let a = new BigInt64Array(['0', true]); typeof a[0] + ':' + a[0] + ':' + a[1];"),
-        Ok(Value::String("bigint:0:1".to_owned()))
+        Ok(Value::String("bigint:0:1".to_owned().into()))
     );
     assert!(eval("new BigInt64Array([1]);").is_err());
 }
@@ -442,7 +444,7 @@ fn object_constructor_rejects_non_callable_iterator_method() {
 fn bytes_per_element_surface() {
     assert_eq!(
         eval("Int16Array.BYTES_PER_ELEMENT + ':' + Int32Array.prototype.BYTES_PER_ELEMENT;"),
-        Ok(Value::String("2:4".to_owned()))
+        Ok(Value::String("2:4".to_owned().into()))
     );
 }
 
@@ -460,7 +462,9 @@ fn uint8_array_to_base64_encodes_with_options() {
                new Uint8Array([255]).toBase64({ alphabet: 'base64url', omitPadding: true })
              ].join('|');"
         ),
-        Ok(Value::String("|Zg==|Zm8=|Zm9v|x-_y|/w|_w".to_owned()))
+        Ok(Value::String(
+            "|Zg==|Zm8=|Zm9v|x-_y|/w|_w".to_owned().into()
+        ))
     );
     assert_eq!(
         eval(
@@ -470,7 +474,7 @@ fn uint8_array_to_base64_encodes_with_options() {
              Object.defineProperty(options, 'alphabet', { get() { calls++; a[0] = 255; return 'base64'; } }); \
              a.toBase64(options) + ':' + calls + ':' + a[0];"
         ),
-        Ok(Value::String("/w==:1:255".to_owned()))
+        Ok(Value::String("/w==:1:255".to_owned().into()))
     );
 }
 
@@ -483,7 +487,9 @@ fn uint8_array_to_base64_surface_and_errors() {
              + Uint8Array.prototype.toBase64.name + ':' \
              + Uint8Array.prototype.toBase64.length;"
         ),
-        Ok(Value::String("true:false:true:toBase64:0".to_owned()))
+        Ok(Value::String(
+            "true:false:true:toBase64:0".to_owned().into()
+        ))
     );
     assert!(eval("new Uint8Array.prototype.toBase64();").is_err());
     assert!(eval("Uint8Array.prototype.toBase64.call(new Int8Array(1));").is_err());
@@ -503,7 +509,7 @@ fn uint8_array_to_base64_checks_detached_after_options() {
              try { a.toBase64(options); } catch (e) { threw = e instanceof TypeError; } \
              threw + ':' + calls;"
         ),
-        Ok(Value::String("true:1".to_owned()))
+        Ok(Value::String("true:1".to_owned().into()))
     );
 }
 
@@ -516,7 +522,7 @@ fn sort_rejects_immutable_buffer_before_comparing() {
              try { a.sort(() => { calls += 'compare'; return 0; }); } \
              catch (e) { calls + ':' + (e instanceof TypeError) + ':' + a.length; }"
         ),
-        Ok(Value::String(":true:4".to_owned()))
+        Ok(Value::String(":true:4".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -525,7 +531,7 @@ fn sort_rejects_immutable_buffer_before_comparing() {
              try { a.sort(() => { calls += 'compare'; return 0; }); } \
              catch (e) { calls + ':' + (e instanceof TypeError) + ':' + a.length; }"
         ),
-        Ok(Value::String(":true:0".to_owned()))
+        Ok(Value::String(":true:0".to_owned().into()))
     );
 }
 
@@ -542,7 +548,7 @@ fn batched_writes_stay_correct_across_a_full_buffer() {
              a.set([1, 2, 3], 10); a.copyWithin(20, 10, 13); \
              a[0] + ':' + a[10] + ':' + a[22] + ':' + a[255];"
         ),
-        Ok(Value::String("7:1:3:7".to_owned()))
+        Ok(Value::String("7:1:3:7".to_owned().into()))
     );
     // A reversed view reads back consistently through materialized properties.
     assert_eq!(
@@ -550,7 +556,7 @@ fn batched_writes_stay_correct_across_a_full_buffer() {
             "let a = new Int32Array(100); for (let i = 0; i < 100; i++) a.fill(0); \
              let b = a.map((_, i) => i); b.reverse(); b[0] + ':' + b[99];"
         ),
-        Ok(Value::String("99:0".to_owned()))
+        Ok(Value::String("99:0".to_owned().into()))
     );
 }
 
@@ -573,7 +579,7 @@ fn callback_iteration_reads_each_element_from_the_buffer() {
             "let a = new Int8Array([10, 20, 30]); let parts = []; \
              a.forEach((v, i) => parts.push(i + '=' + v)); parts.join(',');"
         ),
-        Ok(Value::String("0=10,1=20,2=30".to_owned()))
+        Ok(Value::String("0=10,1=20,2=30".to_owned().into()))
     );
     // Callback-driven reads must observe writes made by earlier callbacks.
     assert_eq!(
@@ -582,7 +588,7 @@ fn callback_iteration_reads_each_element_from_the_buffer() {
              a.forEach((v, i) => { seen.push(v); if (i < a.length - 1) a[i + 1] = 42; }); \
              seen.join(',');"
         ),
-        Ok(Value::String("42,42,42".to_owned()))
+        Ok(Value::String("42,42,42".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -590,6 +596,6 @@ fn callback_iteration_reads_each_element_from_the_buffer() {
              a.forEach((v, i) => { seen.push(String(v)); if (i < a.length - 1) a[i + 1] = 42n; }); \
              seen.join(',');"
         ),
-        Ok(Value::String("42,42,42".to_owned()))
+        Ok(Value::String("42,42,42".to_owned().into()))
     );
 }

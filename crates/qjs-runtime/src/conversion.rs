@@ -18,7 +18,7 @@ pub(crate) fn to_js_string_with_env(
     match value {
         Value::Number(number) => Ok(number::number_to_js_string(number)),
         Value::BigInt(value) => Ok(value.to_string()),
-        Value::String(value) => Ok(value),
+        Value::String(value) => Ok(value.to_string()),
         Value::Boolean(true) => Ok("true".to_owned()),
         Value::Boolean(false) => Ok("false".to_owned()),
         Value::Null => Ok("null".to_owned()),
@@ -52,7 +52,7 @@ pub(crate) fn error_value(value: Value) -> String {
     match value {
         Value::Number(number) => number::number_to_js_string(number),
         Value::BigInt(value) => value.to_string(),
-        Value::String(value) => value,
+        Value::String(value) => value.to_string(),
         Value::Boolean(true) => "true".to_owned(),
         Value::Boolean(false) => "false".to_owned(),
         Value::Null => "null".to_owned(),
@@ -204,7 +204,7 @@ pub(crate) fn to_primitive_with_hint(
             let primitive = call_function(
                 method,
                 value.clone(),
-                vec![Value::String(hint.name().to_owned())],
+                vec![Value::String(hint.name().to_owned().into())],
                 env,
                 false,
             )?;

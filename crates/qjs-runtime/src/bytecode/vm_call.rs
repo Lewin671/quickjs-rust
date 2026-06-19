@@ -246,7 +246,7 @@ pub(super) fn try_fast_global_native_call(
         NativeFunction::DecodeUri | NativeFunction::DecodeUriComponent => {
             let source = match arguments.first().cloned().unwrap_or(Value::Undefined) {
                 Value::String(source) => source,
-                Value::Undefined => "undefined".to_owned(),
+                Value::Undefined => "undefined".to_owned().into(),
                 _ => return None,
             };
             let result = match native {
@@ -256,7 +256,7 @@ pub(super) fn try_fast_global_native_call(
                 }
                 _ => unreachable!("URI native matched above"),
             };
-            result.map(Value::String)
+            result.map(|s| Value::String(s.into()))
         }
         NativeFunction::StringFromCharCode => {
             if !arguments
@@ -265,12 +265,14 @@ pub(super) fn try_fast_global_native_call(
             {
                 return None;
             }
-            Ok(Value::String(fast_string_from_char_code_numbers(arguments)))
+            Ok(Value::String(
+                fast_string_from_char_code_numbers(arguments).into(),
+            ))
         }
         NativeFunction::ParseInt => {
             let source = match arguments.first().cloned().unwrap_or(Value::Undefined) {
                 Value::String(source) => source,
-                Value::Undefined => "undefined".to_owned(),
+                Value::Undefined => "undefined".to_owned().into(),
                 _ => return None,
             };
             let radix = match arguments.get(1).cloned().unwrap_or(Value::Undefined) {
@@ -285,7 +287,7 @@ pub(super) fn try_fast_global_native_call(
         NativeFunction::ParseFloat => {
             let source = match arguments.first().cloned().unwrap_or(Value::Undefined) {
                 Value::String(source) => source,
-                Value::Undefined => "undefined".to_owned(),
+                Value::Undefined => "undefined".to_owned().into(),
                 _ => return None,
             };
             Ok(Value::Number(crate::number::parse_float_string(&source)))
@@ -314,7 +316,7 @@ pub(super) fn try_fast_global_native_call(
                 }
                 _ => return None,
             };
-            crate::number::number_to_radix_string(*number, radix).map(Value::String)
+            crate::number::number_to_radix_string(*number, radix).map(|s| Value::String(s.into()))
         }
         NativeFunction::Test262AssertSameValue => {
             crate::global::native_test262_assert_same_value(arguments)

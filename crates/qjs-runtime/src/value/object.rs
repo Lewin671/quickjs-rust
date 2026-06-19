@@ -466,7 +466,7 @@ impl ObjectRef {
         let Value::String(string) = &mut property.value else {
             return None;
         };
-        string.push_str(suffix);
+        std::rc::Rc::make_mut(string).push_str(suffix);
         Some(Value::String(string.clone()))
     }
 

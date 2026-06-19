@@ -231,7 +231,7 @@ pub(crate) fn install_iterator(
         helper_prototype.define_symbol_property(
             tag_symbol,
             Property::data(
-                Value::String("Iterator Helper".to_owned()),
+                Value::String("Iterator Helper".to_owned().into()),
                 false,
                 false,
                 true,
@@ -306,7 +306,12 @@ pub(crate) fn install_iterator(
         if let Some(tag_symbol) = symbol::to_string_tag_symbol(env) {
             prototype.define_symbol_property(
                 tag_symbol,
-                Property::data(Value::String(kind.tag().to_owned()), false, false, true),
+                Property::data(
+                    Value::String(kind.tag().to_owned().into()),
+                    false,
+                    false,
+                    true,
+                ),
             );
         }
         env.insert_realm(kind.binding().to_owned(), Value::Object(prototype));
@@ -351,7 +356,7 @@ pub(crate) fn call_iterator_native(
             helpers::native_iterator_zip_keyed(argument_values, env)?
         }
         NativeFunction::IteratorPrototypeToStringTagGet => {
-            return Ok(Some(Value::String("Iterator".to_owned())));
+            return Ok(Some(Value::String("Iterator".to_owned().into())));
         }
         NativeFunction::IteratorPrototypeToStringTagSet => {
             let key = symbol::to_string_tag_symbol(env).map(SetterKey::Symbol);

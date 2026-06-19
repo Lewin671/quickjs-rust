@@ -86,7 +86,10 @@ fn array_iterator_from_receiver(receiver: Value, env: &mut CallEnv, kind: &str) 
     iterator.define_non_enumerable(ITERATED_OBJECT.to_owned(), receiver);
     iterator.define_non_enumerable(ITERATOR_NEXT_INDEX.to_owned(), Value::Number(0.0));
     iterator.define_non_enumerable(ITERATOR_DONE.to_owned(), Value::Boolean(false));
-    iterator.define_non_enumerable(ITERATOR_KIND.to_owned(), Value::String(kind.to_owned()));
+    iterator.define_non_enumerable(
+        ITERATOR_KIND.to_owned(),
+        Value::String(kind.to_owned().into()),
+    );
     Value::Object(iterator)
 }
 
@@ -174,7 +177,7 @@ fn iterator_slot(iterator: &ObjectRef, key: &str) -> Result<Value, RuntimeError>
 
 fn iterator_kind(iterator: &ObjectRef) -> Result<String, RuntimeError> {
     match iterator_slot(iterator, ITERATOR_KIND)? {
-        Value::String(kind) => Ok(kind),
+        Value::String(kind) => Ok(kind.to_string()),
         _ => Err(RuntimeError {
             thrown: None,
             message: "Array iterator kind is invalid".to_owned(),

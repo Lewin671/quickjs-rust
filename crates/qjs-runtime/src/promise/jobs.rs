@@ -84,7 +84,7 @@ pub(super) fn enqueue_dynamic_import_job(
     job.define_non_enumerable(PROMISE_IMPORT_REJECT.to_owned(), reject);
     job.define_non_enumerable(
         PROMISE_IMPORT_SPECIFIER.to_owned(),
-        Value::String(specifier),
+        Value::String(specifier.into()),
     );
     let jobs = promise_jobs(env);
     jobs.set(jobs.len(), Value::Object(job));
@@ -129,7 +129,7 @@ fn run_dynamic_import_job(job: &ObjectRef, env: &mut CallEnv) -> Result<(), Runt
         .map(|property| property.value)
     {
         Some(Value::String(specifier)) => specifier,
-        _ => String::new(),
+        _ => String::new().into(),
     };
 
     let outcome = match env.module_host() {

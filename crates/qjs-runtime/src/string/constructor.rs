@@ -25,7 +25,7 @@ pub(crate) fn native_string(
         None => String::new(),
     };
     if !is_construct {
-        return Ok(Value::String(value));
+        return Ok(Value::String(value.into()));
     }
 
     let object = match this_value {
@@ -45,7 +45,7 @@ pub(crate) fn native_string_from_char_code(
         let code_unit = to_uint16_with_env(value, env)?;
         result.push_str(&string_from_code_unit(code_unit));
     }
-    Ok(Value::String(result))
+    Ok(Value::String(result.into()))
 }
 
 pub(crate) fn native_string_from_code_point(
@@ -53,7 +53,7 @@ pub(crate) fn native_string_from_code_point(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if let Some(result) = string_from_code_point_numbers(argument_values) {
-        return result.map(Value::String);
+        return result.map(|s| Value::String(s.into()));
     }
 
     // Reserve roughly one byte per argument up front (BMP code points are one to
@@ -64,7 +64,7 @@ pub(crate) fn native_string_from_code_point(
         let code_point = to_code_point(value, env)?;
         push_code_point(&mut result, code_point);
     }
-    Ok(Value::String(result))
+    Ok(Value::String(result.into()))
 }
 
 pub(crate) fn string_from_code_point_numbers(
@@ -100,7 +100,7 @@ pub(crate) fn native_string_raw(
     let raw = require_object_coercible(property_value(template, "raw", env)?, "String.raw raw")?;
     let raw_length = to_length_with_env(property_value(raw.clone(), "length", env)?, env)?;
     if raw_length == 0 {
-        return Ok(Value::String(String::new()));
+        return Ok(Value::String(::std::rc::Rc::new(String::new())));
     }
 
     let mut result = String::new();
@@ -114,7 +114,7 @@ pub(crate) fn native_string_raw(
             }
         }
     }
-    Ok(Value::String(result))
+    Ok(Value::String(result.into()))
 }
 
 fn to_code_point(value: Value, env: &mut CallEnv) -> Result<u32, RuntimeError> {
@@ -165,7 +165,7 @@ fn require_object_coercible(value: Value, context: &str) -> Result<Value, Runtim
 pub(super) fn define_string_data(object: &ObjectRef, value: &str) {
     object.define_non_enumerable(
         STRING_DATA_PROPERTY.to_owned(),
-        Value::String(value.to_owned()),
+        Value::String(value.to_owned().into()),
     );
     object.define_property(
         "length".to_owned(),
@@ -180,7 +180,7 @@ pub(super) fn define_string_data(object: &ObjectRef, value: &str) {
         object.define_property(
             index.to_string(),
             Property::data(
-                Value::String(string_from_code_units(&[code_unit])),
+                Value::String(string_from_code_units(&[code_unit]).into()),
                 true,
                 false,
                 false,
@@ -194,7 +194,7 @@ pub(crate) fn string_object_value(object: &ObjectRef) -> Option<String> {
         Some(Property {
             value: Value::String(value),
             ..
-        }) => Some(value),
+        }) => Some(value.to_string()),
         _ => None,
     }
 }

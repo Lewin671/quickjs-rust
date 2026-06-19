@@ -31,26 +31,28 @@ fn evaluates_function_declarations_and_calls() {
             "(function() { let before = arguments.toString(); let during; { during = arguments(); function arguments() {} } return before + ':' + during + ':' + arguments.toString(); }());"
         ),
         Ok(Value::String(
-            "[object Arguments]:undefined:[object Arguments]".to_owned()
+            "[object Arguments]:undefined:[object Arguments]"
+                .to_owned()
+                .into()
         ))
     );
     assert_eq!(
         eval(
             "var after; eval('if (true) function f() { return \"declaration\"; } else function _f() {} after = f;'); after();"
         ),
-        Ok(Value::String("declaration".to_owned()))
+        Ok(Value::String("declaration".to_owned().into()))
     );
     assert_eq!(
         eval(
             "var after = 'unchanged'; eval('if (false) function f() { return \"no\"; } else function _f() { return \"alternate\"; } after = _f;'); after();"
         ),
-        Ok(Value::String("alternate".to_owned()))
+        Ok(Value::String("alternate".to_owned().into()))
     );
     assert_eq!(
         eval(
             "var after; eval('switch (1) { default: function f() { return \"switch\"; } } after = f;'); after();"
         ),
-        Ok(Value::String("switch".to_owned()))
+        Ok(Value::String("switch".to_owned().into()))
     );
     assert_eq!(
         eval("function first(a) { return a; } first();"),
@@ -76,69 +78,69 @@ fn evaluates_function_declarations_and_calls() {
     );
     assert_eq!(
         eval("function keys() { return Object.keys(arguments).join('|'); } keys(1, 2, 3);"),
-        Ok(Value::String("0|1|2".to_owned()))
+        Ok(Value::String("0|1|2".to_owned().into()))
     );
     assert_eq!(
         eval(
             "function values() { let seen = ''; for (var value of arguments) { seen += value; } return seen; } values('a', 'b', 'c');"
         ),
-        Ok(Value::String("abc".to_owned()))
+        Ok(Value::String("abc".to_owned().into()))
     );
     assert_eq!(
         eval(
             "function values() { let descriptor = Object.getOwnPropertyDescriptor(arguments, Symbol.iterator); return (typeof descriptor.value) + ':' + descriptor.enumerable + ':' + descriptor.writable + ':' + descriptor.configurable; } values(1);"
         ),
-        Ok(Value::String("function:false:true:true".to_owned()))
+        Ok(Value::String("function:false:true:true".to_owned().into()))
     );
     assert_eq!(
         eval(
             "function values() { let seen = ''; for (var value of arguments) { seen += value; arguments[1] = 'z'; } return seen; } values('a', 'b');"
         ),
-        Ok(Value::String("az".to_owned()))
+        Ok(Value::String("az".to_owned().into()))
     );
     assert_eq!(
         eval(
             "function values(a, b, c) { let seen = ''; for (var value of arguments) { a = b; b = c; c = 1; seen += value; } return seen; } values(1, 2, 3);"
         ),
-        Ok(Value::String("131".to_owned()))
+        Ok(Value::String("131".to_owned().into()))
     );
     assert_eq!(
         eval(
             "function values(a, b) { arguments[0] = 'x'; return a + ':' + arguments[0]; } values('a', 'b');"
         ),
-        Ok(Value::String("x:x".to_owned()))
+        Ok(Value::String("x:x".to_owned().into()))
     );
     assert_eq!(
         eval("let args = (function(a) { arguments[0] = 'x'; return arguments; })('a'); args[0];"),
-        Ok(Value::String("x".to_owned()))
+        Ok(Value::String("x".to_owned().into()))
     );
     assert_eq!(
         eval("let args = (function(a) { return arguments; })('a'); args[0] = 'x'; args[0];"),
-        Ok(Value::String("x".to_owned()))
+        Ok(Value::String("x".to_owned().into()))
     );
     assert_eq!(
         eval(
             "function makeCounter() { let index = 0; return function() { index = index + 1; return index; }; } let next = makeCounter(); next() + ':' + next();"
         ),
-        Ok(Value::String("1:2".to_owned()))
+        Ok(Value::String("1:2".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let calls = 0; function callback() { calls = calls + 1; return calls; } function helper(fn) { return fn(); } helper(function() { return callback(); }) + ':' + calls;"
         ),
-        Ok(Value::String("1:1".to_owned()))
+        Ok(Value::String("1:1".to_owned().into()))
     );
     assert_eq!(
         eval(
             "function makePair() { let index = 0; return [function() { index = index + 1; return index; }, function() { index = index + 1; return index; }]; } let pair = makePair(); pair[0]() + ':' + pair[1]() + ':' + pair[0]();"
         ),
-        Ok(Value::String("1:2:3".to_owned()))
+        Ok(Value::String("1:2:3".to_owned().into()))
     );
     assert_eq!(
         eval(
             "function values(a, a) { arguments[0] = 'x'; arguments[1] = 'y'; return arguments[0] + ':' + a; } values('a', 'b');"
         ),
-        Ok(Value::String("x:y".to_owned()))
+        Ok(Value::String("x:y".to_owned().into()))
     );
     assert_eq!(
         eval("function none() { return arguments.length; } none();"),
@@ -148,13 +150,13 @@ fn evaluates_function_declarations_and_calls() {
         eval(
             "let left = function() {}; let right = function() {}; (left === left) + ':' + (left === right);"
         ),
-        Ok(Value::String("true:false".to_owned()))
+        Ok(Value::String("true:false".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let target = function() {}; function values(a, b) { arguments[2] = function() {}; return Array.prototype.lastIndexOf.call(arguments, target) + ':' + Array.prototype.lastIndexOf.call(arguments, arguments[2]); } values(0, target);"
         ),
-        Ok(Value::String("1:-1".to_owned()))
+        Ok(Value::String("1:-1".to_owned().into()))
     );
     assert_eq!(
         eval("function pair(a, b) { return b; } pair(1);"),
@@ -172,13 +174,13 @@ fn evaluates_function_declarations_and_calls() {
         eval(
             "function collect(first, ...rest) { return first + ':' + rest.join('|'); } collect('a', 'b', 'c');"
         ),
-        Ok(Value::String("a:b|c".to_owned()))
+        Ok(Value::String("a:b|c".to_owned().into()))
     );
     assert_eq!(
         eval(
             "function collect(...rest) { return rest.length + ':' + Array.isArray(rest); } collect();"
         ),
-        Ok(Value::String("0:true".to_owned()))
+        Ok(Value::String("0:true".to_owned().into()))
     );
     assert_eq!(
         eval("function collect(first, ...rest) {} collect.length;"),
@@ -206,7 +208,7 @@ fn evaluates_function_declarations_and_calls() {
     );
     assert_eq!(
         eval("((first, ...rest) => first + rest[1])('a', 'b', 'c');"),
-        Ok(Value::String("ac".to_owned()))
+        Ok(Value::String("ac".to_owned().into()))
     );
     assert_eq!(eval("((a, b = a + 1,) => b)(3);"), Ok(Value::Number(4.0)));
     assert_eq!(
@@ -222,19 +224,21 @@ fn evaluates_function_declarations_and_calls() {
         eval(
             "let d = Object.getOwnPropertyDescriptor(Function.prototype, 'toString'); (d.value === Function.prototype.toString) + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
-        Ok(Value::String("true:true:false:true".to_owned()))
+        Ok(Value::String("true:true:false:true".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let a = Object.getOwnPropertyDescriptor(Function.prototype, 'arguments'); let c = Object.getOwnPropertyDescriptor(Function.prototype, 'caller'); (typeof a.get) + ':' + (a.get === a.set) + ':' + (a.get === c.get) + ':' + a.enumerable + ':' + a.configurable;"
         ),
-        Ok(Value::String("function:true:true:false:true".to_owned()))
+        Ok(Value::String(
+            "function:true:true:false:true".to_owned().into()
+        ))
     );
     assert_eq!(
         eval(
             "let got = false; let set = false; try { Function.prototype.arguments; } catch (error) { got = error instanceof TypeError; } try { Function.prototype.arguments = 1; } catch (error) { set = error instanceof TypeError; } got + ':' + set;"
         ),
-        Ok(Value::String("true:true".to_owned()))
+        Ok(Value::String("true:true".to_owned().into()))
     );
     assert_eq!(
         eval("Function.prototype.toString.call(Array.isArray).includes('[native code]');"),
@@ -247,7 +251,9 @@ fn evaluates_function_declarations_and_calls() {
             "let p = new Proxy(function foo() {}, {}); \
              Function.prototype.toString.call(p);"
         ),
-        Ok(Value::String("function foo() { [native code] }".to_owned()))
+        Ok(Value::String(
+            "function foo() { [native code] }".to_owned().into()
+        ))
     );
     // A non-callable receiver still throws a TypeError.
     assert_eq!(
@@ -255,7 +261,7 @@ fn evaluates_function_declarations_and_calls() {
             "try { Function.prototype.toString.call({}); 'no-throw'; } \
              catch (error) { error.constructor.name; }"
         ),
-        Ok(Value::String("TypeError".to_owned()))
+        Ok(Value::String("TypeError".to_owned().into()))
     );
     // A plain `Function(...)` call inside a constructor ignores the ambient
     // new.target: the created function's prototype is %Function.prototype%, so
@@ -266,7 +272,7 @@ fn evaluates_function_declarations_and_calls() {
              function F() { applyType = typeof Function('return 1;').apply; } \
              new F(); applyType;"
         ),
-        Ok(Value::String("function".to_owned()))
+        Ok(Value::String("function".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -283,13 +289,13 @@ fn evaluates_function_declarations_and_calls() {
         eval(
             "function pair(a, b) {} let d = Object.getOwnPropertyDescriptor(pair, 'name'); d.value + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
-        Ok(Value::String("pair:false:false:true".to_owned()))
+        Ok(Value::String("pair:false:false:true".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let d = Object.getOwnPropertyDescriptor(Array.isArray, 'name'); d.value + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
-        Ok(Value::String("isArray:false:false:true".to_owned()))
+        Ok(Value::String("isArray:false:false:true".to_owned().into()))
     );
     assert_eq!(
         eval("function noReturn() { 1 + 2; } noReturn();"),
@@ -342,7 +348,7 @@ fn evaluates_function_declarations_and_calls() {
     );
     assert_eq!(
         eval("let f = function named() { return typeof named; }; f();"),
-        Ok(Value::String("function".to_owned()))
+        Ok(Value::String("function".to_owned().into()))
     );
     assert_eq!(
         eval("let f = function named() { return named === f; }; f();"),
@@ -350,7 +356,7 @@ fn evaluates_function_declarations_and_calls() {
     );
     assert_eq!(
         eval("let f = function hidden() { return 1; }; typeof hidden;"),
-        Ok(Value::String("undefined".to_owned()))
+        Ok(Value::String("undefined".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -416,25 +422,25 @@ fn evaluates_function_declarations_and_calls() {
         eval(
             "var i = 0; var p = { toString: function() { return 'a' + (++i); } }; var obj = {}; new Function(p, p, p, 'this.shifted = a3;').apply(obj, (function() { return arguments; })('a', 'b', 'c')); obj.shifted;"
         ),
-        Ok(Value::String("c".to_owned()))
+        Ok(Value::String("c".to_owned().into()))
     );
     assert_eq!(
         eval(
             "function count(a, b, c) { return arguments.length + ':' + (a === undefined) + ':' + b + ':' + (c === undefined); } count.apply(null, [, 2, ,]);"
         ),
-        Ok(Value::String("3:true:2:true".to_owned()))
+        Ok(Value::String("3:true:2:true".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let values = [65, 0x1F600, 67]; String.fromCodePoint.apply(null, values).length + ':' + String.fromCodePoint.apply(null, values).charCodeAt(1);"
         ),
-        Ok(Value::String("4:55357".to_owned()))
+        Ok(Value::String("4:55357".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let calls = 0; let values = [{ valueOf() { calls = calls + 1; return 65; } }]; String.fromCodePoint.apply(null, values) + ':' + calls;"
         ),
-        Ok(Value::String("A:1".to_owned()))
+        Ok(Value::String("A:1".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -446,7 +452,7 @@ fn evaluates_function_declarations_and_calls() {
         eval(
             "function fn() {} var caught = ''; for (var i = 0; i < 4; i = i + 1) { var value = i === 0 ? true : (i === 1 ? NaN : (i === 2 ? '1,2,3' : Symbol())); try { fn.apply(null, value); caught = caught + '0'; } catch (error) { caught = caught + (error instanceof TypeError ? '1' : '2'); } } caught;"
         ),
-        Ok(Value::String("1111".to_owned()))
+        Ok(Value::String("1111".to_owned().into()))
     );
     assert_eq!(
         eval("function getThis() { return this; } getThis.call(undefined) === this;"),
@@ -488,7 +494,7 @@ fn evaluates_function_declarations_and_calls() {
              let hasOwn = Function.prototype.call.bind(Object.prototype.hasOwnProperty); \
              uncurried({ tag: 'ctx' }, 1, 2, 3) + '|' + prebound('b', 'c') + '|' + hasOwn({ x: 1 }, 'x');"
         ),
-        Ok(Value::String("ctx:1:2:3|pre:a:b:c|true".to_owned()))
+        Ok(Value::String("ctx:1:2:3|pre:a:b:c|true".to_owned().into()))
     );
     assert_eq!(
         eval("'use strict'; let getThis = function() { return this; }; getThis() === undefined;"),
@@ -524,7 +530,7 @@ fn evaluates_function_declarations_and_calls() {
     );
     assert_eq!(
         eval("function join(a, b, c) { return '' + a + b + c; } join.bind(null, 'a').name;"),
-        Ok(Value::String("bound join".to_owned()))
+        Ok(Value::String("bound join".to_owned().into()))
     );
     assert_eq!(
         eval("function add(a, b) { return a + b; } add.bind(null, 2).bind(null, 3)();"),
@@ -553,7 +559,9 @@ fn evaluates_function_declarations_and_calls() {
             "function f() {} let d = Object.getOwnPropertyDescriptor(f, 'prototype'); \
              d.writable + ':' + d.enumerable + ':' + d.configurable + ':' + (delete f.prototype) + ':' + ('prototype' in f);"
         ),
-        Ok(Value::String("true:false:false:false:true".to_owned()))
+        Ok(Value::String(
+            "true:false:false:false:true".to_owned().into()
+        ))
     );
     // `Proxy` is constructable yet exposes no own `prototype`.
     assert_eq!(
@@ -564,7 +572,9 @@ fn evaluates_function_declarations_and_calls() {
         eval(
             "function f() {} let data = 'data'; Object.defineProperty(Function.prototype, 'prop', { get: function() { return data; }, set: function(value) { data = value; }, configurable: true }); let bound = f.bind({}); bound.prop = 'overrideData'; let result = bound.hasOwnProperty('prop') + ':' + bound.prop + ':' + data; delete Function.prototype.prop; result;"
         ),
-        Ok(Value::String("false:overrideData:overrideData".to_owned()))
+        Ok(Value::String(
+            "false:overrideData:overrideData".to_owned().into()
+        ))
     );
     assert_eq!(
         eval("function add(a, b) { return a + b; } add.call.propertyIsEnumerable('length');"),
@@ -586,17 +596,19 @@ fn evaluates_function_declarations_and_calls() {
         eval(
             "let d = Object.getOwnPropertyDescriptor(Function.prototype, Symbol.hasInstance); typeof d.value + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
-        Ok(Value::String("function:false:false:false".to_owned()))
+        Ok(Value::String(
+            "function:false:false:false".to_owned().into()
+        ))
     );
     assert_eq!(
         eval("let f = Function.prototype[Symbol.hasInstance]; f.length + ':' + f.name;"),
-        Ok(Value::String("1:[Symbol.hasInstance]".to_owned()))
+        Ok(Value::String("1:[Symbol.hasInstance]".to_owned().into()))
     );
     assert_eq!(
         eval(
             "function C() {} let instance = new C(); Function.prototype[Symbol.hasInstance].call(C, instance) + ':' + Function.prototype[Symbol.hasInstance].call(C, {});"
         ),
-        Ok(Value::String("true:false".to_owned()))
+        Ok(Value::String("true:false".to_owned().into()))
     );
     assert_eq!(
         eval("Function.prototype[Symbol.hasInstance].call({}, {});"),
@@ -612,7 +624,7 @@ fn evaluates_function_declarations_and_calls() {
         eval(
             "function F() {} let s = Symbol(); F[s] = 1; let before = Object.getOwnPropertySymbols(F)[0] === s; let descriptor = Object.getOwnPropertyDescriptor(F, s); delete F[s]; before + ':' + descriptor.value + ':' + descriptor.enumerable + ':' + Object.hasOwn(F, s);"
         ),
-        Ok(Value::String("true:1:true:false".to_owned()))
+        Ok(Value::String("true:1:true:false".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -624,7 +636,7 @@ fn evaluates_function_declarations_and_calls() {
         eval(
             "function make(value) { return function() { return [value, 2].join('|'); }; } make(1)();"
         ),
-        Ok(Value::String("1|2".to_owned()))
+        Ok(Value::String("1|2".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -638,17 +650,17 @@ fn evaluates_function_declarations_and_calls() {
     );
     assert_eq!(
         eval("let add = new Function('a,b', 'return a + b;'); add.length + ':' + add(2, 3);"),
-        Ok(Value::String("2:5".to_owned()))
+        Ok(Value::String("2:5".to_owned().into()))
     );
     assert_eq!(
         eval("Function('return 1;').name;"),
-        Ok(Value::String("anonymous".to_owned()))
+        Ok(Value::String("anonymous".to_owned().into()))
     );
     assert_eq!(
         eval(
             "var i = 0; var p = { toString: function() { return 'a' + (++i); } }; let f = new Function(p, p, p, 'return a1 + a2 + a3;'); f('a', 'b', 'c');"
         ),
-        Ok(Value::String("abc".to_owned()))
+        Ok(Value::String("abc".to_owned().into()))
     );
     assert_eq!(
         eval("let f = Function('this.value = 7;'); let o = {}; f.call(o); o.value;"),
@@ -700,7 +712,7 @@ fn evaluates_spread_call_arguments() {
         eval(
             "function collect(a, b, c, d) { return '' + a + b + c + d; } collect(0, ...[1, 2], 3);"
         ),
-        Ok(Value::String("0123".to_owned()))
+        Ok(Value::String("0123".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -728,7 +740,7 @@ fn evaluates_sloppy_undeclared_global_assignment() {
         eval(
             "function set() { descriptorGlobal = 1; } set(); let d = Object.getOwnPropertyDescriptor(this, 'descriptorGlobal'); d.value + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
-        Ok(Value::String("1:true:true:true".to_owned()))
+        Ok(Value::String("1:true:true:true".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -740,7 +752,7 @@ fn evaluates_sloppy_undeclared_global_assignment() {
         eval(
             "function makeCounter() { let index = 0; return function() { index = index + 1; return index; }; } let left = makeCounter(); let right = makeCounter(); left() + ':' + right() + ':' + left();"
         ),
-        Ok(Value::String("1:1:2".to_owned()))
+        Ok(Value::String("1:1:2".to_owned().into()))
     );
 }
 
@@ -750,25 +762,25 @@ fn evaluates_arrow_functions_with_lexical_this() {
         eval(
             "this.marker = 'global'; let receiver = { marker: 'receiver' }; let read = () => this.marker; read.call(receiver);"
         ),
-        Ok(Value::String("global".to_owned()))
+        Ok(Value::String("global".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let receiver = { marker: 'receiver' }; let read = function() { return this.marker; }; read.call(receiver);"
         ),
-        Ok(Value::String("receiver".to_owned()))
+        Ok(Value::String("receiver".to_owned().into()))
     );
     assert_eq!(
         eval(
             "this.marker = 'global'; let receiver = { marker: 'receiver' }; [1].map(() => this.marker, receiver)[0];"
         ),
-        Ok(Value::String("global".to_owned()))
+        Ok(Value::String("global".to_owned().into()))
     );
     assert_eq!(
         eval(
             "this.marker = 'global'; let receiver = { marker: 'receiver' }; let seen; new Set([1]).forEach(() => { seen = this.marker; }, receiver); seen;"
         ),
-        Ok(Value::String("global".to_owned()))
+        Ok(Value::String("global".to_owned().into()))
     );
 }
 
@@ -784,13 +796,13 @@ fn evaluates_arrow_functions_with_lexical_arguments() {
         eval(
             "function outer() { let read = (value) => arguments[0] + ':' + arguments.length + ':' + value; return read('arrow'); } outer('outer', 'second');"
         ),
-        Ok(Value::String("outer:2:arrow".to_owned()))
+        Ok(Value::String("outer:2:arrow".to_owned().into()))
     );
     assert_eq!(
         eval(
             "function outer() { let read = () => { return function() { return arguments[0]; }('inner'); }; return read(); } outer('outer');"
         ),
-        Ok(Value::String("inner".to_owned()))
+        Ok(Value::String("inner".to_owned().into()))
     );
 }
 
@@ -824,7 +836,7 @@ fn bound_function_construct_substitutes_new_target() {
             "function A(x, y) { this.sum = x + y; } var B = A.bind(null, 10); \
              var o = new B(5); o.sum + ':' + (o instanceof A);"
         ),
-        Ok(Value::String("15:true".to_owned()))
+        Ok(Value::String("15:true".to_owned().into()))
     );
 }
 
@@ -882,7 +894,7 @@ fn evaluates_new_expressions() {
         eval(
             "let proto = Function(); proto.value = 12; function C() {} C.prototype = proto; let instance = new C(); typeof instance.apply + ':' + instance.value;"
         ),
-        Ok(Value::String("function:12".to_owned()))
+        Ok(Value::String("function:12".to_owned().into()))
     );
     assert_eq!(
         eval(

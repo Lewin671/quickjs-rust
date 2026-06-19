@@ -20,7 +20,7 @@ pub(crate) fn native_date_prototype_to_iso_string(
             message: "RangeError: Invalid time value".to_owned(),
         });
     }
-    Ok(Value::String(format_iso_string(millis)))
+    Ok(Value::String(format_iso_string(millis).into()))
 }
 
 pub(crate) fn native_date_prototype_to_utc_string(
@@ -28,9 +28,9 @@ pub(crate) fn native_date_prototype_to_utc_string(
 ) -> Result<Value, RuntimeError> {
     let millis = date_value(this_value)?;
     if !millis.is_finite() {
-        return Ok(Value::String("Invalid Date".to_owned()));
+        return Ok(Value::String("Invalid Date".to_owned().into()));
     }
-    Ok(Value::String(format_utc_string(millis)))
+    Ok(Value::String(format_utc_string(millis).into()))
 }
 
 pub(crate) fn native_date_prototype_to_date_string(
@@ -92,8 +92,12 @@ pub(crate) fn native_date_prototype_to_primitive(
     }
 
     let hint = match hint {
-        Value::String(hint) if hint == "string" || hint == "default" => PreferredType::String,
-        Value::String(hint) if hint == "number" => PreferredType::Number,
+        Value::String(hint)
+            if hint == "string".to_owned().into() || hint == "default".to_owned().into() =>
+        {
+            PreferredType::String
+        }
+        Value::String(hint) if hint == "number".to_owned().into() => PreferredType::Number,
         _ => {
             return Err(RuntimeError {
                 thrown: None,
@@ -110,7 +114,7 @@ fn format_date_value(
 ) -> Result<Value, RuntimeError> {
     let millis = date_value(this_value)?;
     if !millis.is_finite() {
-        return Ok(Value::String("Invalid Date".to_owned()));
+        return Ok(Value::String("Invalid Date".to_owned().into()));
     }
-    Ok(Value::String(formatter(millis)))
+    Ok(Value::String(formatter(millis).into()))
 }

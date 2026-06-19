@@ -8,14 +8,16 @@ fn uint8_array_from_base64_decodes_with_options() {
              (Object.getPrototypeOf(a) === Uint8Array.prototype) + ':' + \
              a.length + ':' + a.buffer.byteLength + ':' + a.join(',');"
         ),
-        Ok(Value::String("true:6:6:102,111,111,98,97,114".to_owned()))
+        Ok(Value::String(
+            "true:6:6:102,111,111,98,97,114".to_owned().into()
+        ))
     );
     assert_eq!(
         eval(
             "let a = Uint8Array.fromBase64('x-_y', { alphabet: 'base64url' }); \
              a.join(',');"
         ),
-        Ok(Value::String("199,239,242".to_owned()))
+        Ok(Value::String("199,239,242".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -23,7 +25,7 @@ fn uint8_array_from_base64_decodes_with_options() {
              let stop = Uint8Array.fromBase64('ZXhhZg', { lastChunkHandling: 'stop-before-partial' }); \
              loose.join(',') + '|' + stop.join(',');"
         ),
-        Ok(Value::String("101,120,97,102|101,120,97".to_owned()))
+        Ok(Value::String("101,120,97,102|101,120,97".to_owned().into()))
     );
 }
 
@@ -35,7 +37,9 @@ fn uint8_array_from_base64_surface_and_errors() {
              d.writable + ':' + d.enumerable + ':' + d.configurable + ':' \
              + Uint8Array.fromBase64.name + ':' + Uint8Array.fromBase64.length;"
         ),
-        Ok(Value::String("true:false:true:fromBase64:1".to_owned()))
+        Ok(Value::String(
+            "true:false:true:fromBase64:1".to_owned().into()
+        ))
     );
     assert!(eval("new Uint8Array.fromBase64('');").is_err());
     assert_eq!(
@@ -56,7 +60,7 @@ fn uint8_array_from_base64_surface_and_errors() {
             "Uint8Array.fromBase64('AA=', { lastChunkHandling: 'stop-before-partial' }).length + ':' + \
              Uint8Array.fromBase64('ABCDAA=', { lastChunkHandling: 'stop-before-partial' }).join(',');"
         ),
-        Ok(Value::String("0:0,16,131".to_owned()))
+        Ok(Value::String("0:0,16,131".to_owned().into()))
     );
     assert!(
         eval("Uint8Array.fromBase64('AAAA=', { lastChunkHandling: 'stop-before-partial' });")
@@ -72,7 +76,7 @@ fn uint8_array_set_from_base64_decodes_with_options() {
              let r = a.setFromBase64('Zm9vYmE='); \
              r.read + ':' + r.written + ':' + a.join(',');"
         ),
-        Ok(Value::String("8:5:102,111,111,98,97,255".to_owned()))
+        Ok(Value::String("8:5:102,111,111,98,97,255".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -80,7 +84,7 @@ fn uint8_array_set_from_base64_decodes_with_options() {
              let r = a.setFromBase64('x-_y', { alphabet: 'base64url' }); \
              r.read + ':' + r.written + ':' + a.join(',');"
         ),
-        Ok(Value::String("4:3:199,239,242,255".to_owned()))
+        Ok(Value::String("4:3:199,239,242,255".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -92,7 +96,9 @@ fn uint8_array_set_from_base64_decodes_with_options() {
              stop.read + ':' + stop.written + ':' + b.join(',');"
         ),
         Ok(Value::String(
-            "6:4:101,120,97,102,255,255|4:3:101,120,97,255,255,255".to_owned()
+            "6:4:101,120,97,102,255,255|4:3:101,120,97,255,255,255"
+                .to_owned()
+                .into()
         ))
     );
 }
@@ -106,7 +112,9 @@ fn uint8_array_set_from_base64_surface_and_errors() {
              + Uint8Array.prototype.setFromBase64.name + ':' \
              + Uint8Array.prototype.setFromBase64.length;"
         ),
-        Ok(Value::String("true:false:true:setFromBase64:1".to_owned()))
+        Ok(Value::String(
+            "true:false:true:setFromBase64:1".to_owned().into()
+        ))
     );
     assert!(eval("new Uint8Array.prototype.setFromBase64('');").is_err());
     assert!(eval("Uint8Array.prototype.setFromBase64.call(new Int8Array(1), 'AA==');").is_err());
@@ -132,14 +140,14 @@ fn uint8_array_set_from_base64_target_size_and_error_writes() {
              let r = a.setFromBase64('Zm9vYmFy'); \
              r.read + ':' + r.written + ':' + a.join(',');"
         ),
-        Ok(Value::String("4:3:102,111,111,255,255".to_owned()))
+        Ok(Value::String("4:3:102,111,111,255,255".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let a = new Uint8Array([255,255,255,255,255]); \
              try { a.setFromBase64('MjYyZm.9v'); } catch (e) { (e instanceof SyntaxError) + ':' + a.join(','); }"
         ),
-        Ok(Value::String("true:50,54,50,255,255".to_owned()))
+        Ok(Value::String("true:50,54,50,255,255".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -147,7 +155,7 @@ fn uint8_array_set_from_base64_target_size_and_error_writes() {
              let r = a.setFromBase64('aaaa#', { lastChunkHandling: 'strict' }); \
              r.read + ':' + r.written + ':' + a.join(',');"
         ),
-        Ok(Value::String("4:3:105,166,154".to_owned()))
+        Ok(Value::String("4:3:105,166,154".to_owned().into()))
     );
 }
 
@@ -160,7 +168,7 @@ fn uint8_array_set_from_base64_validation_order() {
              let options = { get alphabet() { calls++; return 'base64'; } }; \
              try { a.setFromBase64('AA==', options); } catch (e) { (e instanceof TypeError) + ':' + calls + ':' + a[0]; }"
         ),
-        Ok(Value::String("true:0:0".to_owned()))
+        Ok(Value::String("true:0:0".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -170,7 +178,7 @@ fn uint8_array_set_from_base64_validation_order() {
              Object.defineProperty(options, 'alphabet', { get() { calls++; __quickjsRustDetachArrayBuffer(a.buffer); return 'base64'; } }); \
              try { a.setFromBase64('Zg==', options); } catch (e) { (e instanceof TypeError) + ':' + calls; }"
         ),
-        Ok(Value::String("true:1".to_owned()))
+        Ok(Value::String("true:1".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -179,6 +187,6 @@ fn uint8_array_set_from_base64_validation_order() {
              let arg = { toString() { throw 'no'; } }; \
              try { new Uint8Array(1).setFromBase64(arg, options); } catch (e) { (e instanceof TypeError) + ':' + optionCalls; }"
         ),
-        Ok(Value::String("true:0".to_owned()))
+        Ok(Value::String("true:0".to_owned().into()))
     );
 }

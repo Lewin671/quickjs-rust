@@ -4,34 +4,36 @@ use crate::{Value, eval};
 fn evaluates_string_case_and_trim_builtins() {
     assert_eq!(
         eval("'abc'.toString();"),
-        Ok(Value::String("abc".to_owned()))
+        Ok(Value::String("abc".to_owned().into()))
     );
     assert_eq!(
         eval("'abc'.valueOf();"),
-        Ok(Value::String("abc".to_owned()))
+        Ok(Value::String("abc".to_owned().into()))
     );
     assert_eq!(
         eval("(new String('abc')).toString();"),
-        Ok(Value::String("abc".to_owned()))
+        Ok(Value::String("abc".to_owned().into()))
     );
     assert_eq!(
         eval("(new String('abc')).valueOf();"),
-        Ok(Value::String("abc".to_owned()))
+        Ok(Value::String("abc".to_owned().into()))
     );
     assert_eq!(
         eval("'ABC'.toLocaleLowerCase();"),
-        Ok(Value::String("abc".to_owned()))
+        Ok(Value::String("abc".to_owned().into()))
     );
     assert_eq!(
         eval("'abc'.toLocaleUpperCase();"),
-        Ok(Value::String("ABC".to_owned()))
+        Ok(Value::String("ABC".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let lower = Object.getOwnPropertyDescriptor(String.prototype, 'toLocaleLowerCase'); let upper = Object.getOwnPropertyDescriptor(String.prototype, 'toLocaleUpperCase'); (lower.value === String.prototype.toLocaleLowerCase) + ':' + lower.writable + ':' + lower.enumerable + ':' + lower.configurable + '|' + (upper.value === String.prototype.toLocaleUpperCase) + ':' + upper.writable + ':' + upper.enumerable + ':' + upper.configurable;"
         ),
         Ok(Value::String(
-            "true:true:false:true|true:true:false:true".to_owned()
+            "true:true:false:true|true:true:false:true"
+                .to_owned()
+                .into()
         ))
     );
     assert_eq!(
@@ -42,7 +44,7 @@ fn evaluates_string_case_and_trim_builtins() {
     );
     assert_eq!(
         eval("typeof Symbol;"),
-        Ok(Value::String("function".to_owned()))
+        Ok(Value::String("function".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -66,11 +68,11 @@ fn evaluates_string_case_and_trim_builtins() {
     );
     assert_eq!(
         eval("'AbC123'.toLowerCase();"),
-        Ok(Value::String("abc123".to_owned()))
+        Ok(Value::String("abc123".to_owned().into()))
     );
     assert_eq!(
         eval("'AbC123'.toUpperCase();"),
-        Ok(Value::String("ABC123".to_owned()))
+        Ok(Value::String("ABC123".to_owned().into()))
     );
     assert_eq!(
         eval("String.prototype.isWellFormed.length;"),
@@ -105,37 +107,37 @@ fn evaluates_string_case_and_trim_builtins() {
     );
     assert_eq!(
         eval("'  abc  '.trim();"),
-        Ok(Value::String("abc".to_owned()))
+        Ok(Value::String("abc".to_owned().into()))
     );
     assert_eq!(
         eval("'\\uFEFFabc\\uFEFF'.trim();"),
-        Ok(Value::String("abc".to_owned()))
+        Ok(Value::String("abc".to_owned().into()))
     );
     assert_eq!(
         eval(
             "'\\u0009\\u000A\\u000B\\u000C\\u000D\\u0020\\u00A0\\u1680\\u2000\\u2001\\u2002\\u2003\\u2004\\u2005\\u2006\\u2007\\u2008\\u2009\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000\\uFEFF'.trim();"
         ),
-        Ok(Value::String(String::new()))
+        Ok(Value::String(::std::rc::Rc::new(String::new())))
     );
     assert_eq!(
         eval("String.prototype.trim.call(new RegExp(/test/));"),
-        Ok(Value::String("/test/".to_owned()))
+        Ok(Value::String("/test/".to_owned().into()))
     );
     assert_eq!(
         eval("'  abc  '.trimStart();"),
-        Ok(Value::String("abc  ".to_owned()))
+        Ok(Value::String("abc  ".to_owned().into()))
     );
     assert_eq!(
         eval("'  abc  '.trimLeft();"),
-        Ok(Value::String("abc  ".to_owned()))
+        Ok(Value::String("abc  ".to_owned().into()))
     );
     assert_eq!(
         eval("'  abc  '.trimEnd();"),
-        Ok(Value::String("  abc".to_owned()))
+        Ok(Value::String("  abc".to_owned().into()))
     );
     assert_eq!(
         eval("'  abc  '.trimRight();"),
-        Ok(Value::String("  abc".to_owned()))
+        Ok(Value::String("  abc".to_owned().into()))
     );
     assert_eq!(
         eval("String.prototype.trim.length;"),

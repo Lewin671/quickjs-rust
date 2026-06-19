@@ -21,7 +21,7 @@ pub(crate) fn native_object_keys(
 
     let keys = enumerable_property_keys(target, env)?;
     Ok(Value::Array(ArrayRef::new(
-        keys.into_iter().map(Value::String).collect(),
+        keys.into_iter().map(|s| Value::String(s.into())).collect(),
     )))
 }
 
@@ -60,7 +60,7 @@ pub(crate) fn native_object_entries(
     Ok(Value::Array(ArrayRef::new(
         enumerable_property_entries(target, env)?
             .into_iter()
-            .map(|(key, value)| Value::Array(ArrayRef::new(vec![Value::String(key), value])))
+            .map(|(key, value)| Value::Array(ArrayRef::new(vec![Value::String(key.into()), value])))
             .collect(),
     )))
 }
@@ -82,14 +82,14 @@ pub(crate) fn native_object_get_own_property_names(
         crate::proxy::proxy_own_keys(proxy.clone(), env)?
             .into_iter()
             .filter_map(|key| match key {
-                PropertyKey::String(name) => Some(Value::String(name)),
+                PropertyKey::String(name) => Some(Value::String(name.into())),
                 PropertyKey::Symbol(_) => None,
             })
             .collect()
     } else {
         own_property_names(target)
             .into_iter()
-            .map(Value::String)
+            .map(|s| Value::String(s.into()))
             .collect()
     };
     Ok(Value::Array(ArrayRef::new(names)))

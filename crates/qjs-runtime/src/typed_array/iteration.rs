@@ -255,7 +255,7 @@ pub(crate) fn native_typed_array_prototype_join(
         };
         parts.push(part);
     }
-    Ok(Value::String(parts.join(&separator)))
+    Ok(Value::String(parts.join(&separator).into()))
 }
 
 pub(crate) fn native_typed_array_prototype_to_string(
@@ -280,7 +280,7 @@ pub(crate) fn native_typed_array_prototype_to_locale_string(
         let part = call_to_locale_string(element, env)?;
         parts.push(part);
     }
-    Ok(Value::String(parts.join(",")))
+    Ok(Value::String(parts.join(",").into()))
 }
 
 fn call_to_locale_string(value: Value, env: &mut CallEnv) -> Result<String, RuntimeError> {

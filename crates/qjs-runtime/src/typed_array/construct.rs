@@ -309,7 +309,7 @@ fn install_view(
     object.set_to_string_tag(name);
     object.define_property(
         TYPED_ARRAY_KIND_PROPERTY.to_owned(),
-        Property::non_enumerable(Value::String(name.to_owned())),
+        Property::non_enumerable(Value::String(name.to_owned().into())),
     );
     object.define_property(
         TYPED_ARRAY_BUFFER_PROPERTY.to_owned(),

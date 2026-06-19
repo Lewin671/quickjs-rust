@@ -132,13 +132,19 @@ pub(crate) fn native_string_prototype_match(
     let input = this_string_value(this_value, env)?;
     let regexp = regexp_value(pattern, env)?;
     if let Some(matcher) = symbol_match_method(regexp.clone(), env)?.method {
-        return call_function(matcher, regexp, vec![Value::String(input)], env, false);
+        return call_function(
+            matcher,
+            regexp,
+            vec![Value::String(input.into())],
+            env,
+            false,
+        );
     }
     if regexp::regexp_is_global(&regexp) {
         return regexp::native_regexp_global_match(regexp, &input, env);
     }
     let exec = property_value(regexp.clone(), "exec", env)?;
-    call_function(exec, regexp, vec![Value::String(input)], env, false)
+    call_function(exec, regexp, vec![Value::String(input.into())], env, false)
 }
 
 pub(crate) fn native_string_prototype_match_all(
@@ -177,7 +183,7 @@ pub(crate) fn native_string_prototype_match_all(
             return call_function(
                 matcher,
                 regexp.clone(),
-                vec![Value::String(input)],
+                vec![Value::String(input.into())],
                 env,
                 false,
             );
@@ -306,10 +312,16 @@ pub(crate) fn native_string_prototype_search(
     let input = this_string_value(this_value, env)?;
     let regexp = regexp_value(search_value, env)?;
     if let Some(searcher) = symbol_search_method(regexp.clone(), env)?.method {
-        return call_function(searcher, regexp, vec![Value::String(input)], env, false);
+        return call_function(
+            searcher,
+            regexp,
+            vec![Value::String(input.into())],
+            env,
+            false,
+        );
     }
     let exec = property_value(regexp.clone(), "exec", env)?;
-    match call_function(exec, regexp, vec![Value::String(input)], env, false)? {
+    match call_function(exec, regexp, vec![Value::String(input.into())], env, false)? {
         Value::Array(array) => property_value(Value::Array(array), "index", env),
         Value::Null => Ok(Value::Number(-1.0)),
         _ => Ok(Value::Number(-1.0)),
@@ -441,7 +453,7 @@ fn regexp_match_positions(
         let result = call_function(
             exec,
             regexp.clone(),
-            vec![Value::String(input.to_owned())],
+            vec![Value::String(input.to_owned().into())],
             env,
             false,
         )?;
@@ -460,7 +472,7 @@ fn regexp_match_positions(
         matches.push(StringMatch {
             start,
             end,
-            matched,
+            matched: matched.to_string(),
             captures,
         });
         if empty {
@@ -480,7 +492,7 @@ fn regexp_first_match_position(
     let result = call_function(
         exec,
         regexp.clone(),
-        vec![Value::String(input.to_owned())],
+        vec![Value::String(input.to_owned().into())],
         env,
         false,
     )?;
@@ -497,7 +509,7 @@ fn regexp_first_match_position(
     Ok(Some(StringMatch {
         start,
         end: start + matched.chars().count(),
-        matched,
+        matched: matched.to_string(),
         captures,
     }))
 }
@@ -532,7 +544,7 @@ fn replace_matches(
         copied_until,
         input.chars().count(),
     ));
-    Ok(Value::String(result))
+    Ok(Value::String(result.into()))
 }
 
 fn functional_replacement(
@@ -542,10 +554,10 @@ fn functional_replacement(
     env: &mut CallEnv,
 ) -> Result<String, RuntimeError> {
     let mut arguments = Vec::with_capacity(3 + string_match.captures.len());
-    arguments.push(Value::String(string_match.matched.clone()));
+    arguments.push(Value::String(string_match.matched.clone().into()));
     arguments.extend(string_match.captures.iter().cloned());
     arguments.push(Value::Number(string_match.start as f64));
-    arguments.push(Value::String(input));
+    arguments.push(Value::String(input.into()));
     let value = call_function(function, Value::Undefined, arguments, env, false)?;
     to_js_string_with_env(value, env)
 }
@@ -585,7 +597,7 @@ fn regexp_value_with_flags(
     construct_function(
         constructor.clone(),
         constructor,
-        vec![pattern, Value::String(flags.to_owned())],
+        vec![pattern, Value::String(flags.to_owned().into())],
         env,
     )
 }
@@ -608,7 +620,13 @@ fn invoke_symbol_match_all(
             message: "TypeError: Symbol.matchAll method is not callable".to_owned(),
         });
     }
-    call_function(matcher, regexp, vec![Value::String(input)], env, false)
+    call_function(
+        matcher,
+        regexp,
+        vec![Value::String(input.into())],
+        env,
+        false,
+    )
 }
 
 fn reject_regexp_search_value(

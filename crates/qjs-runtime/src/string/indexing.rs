@@ -6,7 +6,7 @@ use crate::{
 
 pub(super) fn this_string_value(value: Value, env: &mut CallEnv) -> Result<String, RuntimeError> {
     match value {
-        Value::String(value) => Ok(value),
+        Value::String(value) => Ok(value.to_string()),
         Value::Object(object) => {
             if let Some(value) = string_object_value(&object) {
                 Ok(value)

@@ -23,7 +23,8 @@ impl Vm<'_> {
                         error
                             .message
                             .trim_start_matches("throw statement executed: ")
-                            .to_owned(),
+                            .to_owned()
+                            .into(),
                     )
                 });
                 self.throw_value(value)?;
@@ -64,7 +65,7 @@ impl Vm<'_> {
         error::native_error(
             &function,
             Value::Undefined,
-            &[Value::String(message)],
+            &[Value::String(message.into())],
             false,
             &mut self.realm_env(),
         )

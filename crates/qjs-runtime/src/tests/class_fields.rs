@@ -28,7 +28,7 @@ fn field_shadows_prototype_method_and_is_own_enumerable() {
         eval(
             "class C { m() { return 'method'; } m = 7; } let c = new C(); [typeof c.m, c.m, Object.keys(c).join(',')].join('|');"
         ),
-        Ok(Value::String("number|7|m".to_owned()))
+        Ok(Value::String("number|7|m".to_owned().into()))
     );
 }
 
@@ -38,7 +38,7 @@ fn prototype_methods_stay_non_enumerable_with_fields() {
         eval(
             "class C { x = 1; m() {} } Object.keys(C.prototype).length === 0 && Object.keys(new C()).join(',');"
         ),
-        Ok(Value::String("x".to_owned()))
+        Ok(Value::String("x".to_owned().into()))
     );
 }
 
@@ -90,7 +90,7 @@ fn computed_static_and_instance_fields_preserve_evaluation_order() {
              scanDescriptor(Object.getOwnPropertyDescriptor(c, '0')); \
              [i, c[0], c[2], C[1], c.hasOwnProperty('1'), C.hasOwnProperty('0'), C.hasOwnProperty('2')].join(',');"
         ),
-        Ok(Value::String("6,4,5,3,false,false,false".to_owned()))
+        Ok(Value::String("6,4,5,3,false,false,false".to_owned().into()))
     );
 }
 
@@ -101,7 +101,7 @@ fn derived_instance_fields_run_after_super() {
         eval(
             "class A { constructor() { this.tag = 'A'; } } class B extends A { x = this.tag + 'B'; } new B().x;"
         ),
-        Ok(Value::String("AB".to_owned()))
+        Ok(Value::String("AB".to_owned().into()))
     );
 }
 
@@ -124,7 +124,9 @@ fn derived_instance_field_sees_this_bound_for_pre_super_arrow() {
              [fieldThis === c, probeThis === c, ctorThis === c, before, duringBase].join(':');"
         ),
         Ok(Value::String(
-            "true:true:true:ReferenceError:ReferenceError".to_owned()
+            "true:true:true:ReferenceError:ReferenceError"
+                .to_owned()
+                .into()
         ))
     );
 }
@@ -176,7 +178,7 @@ fn super_property_assignment_in_field_initializer_arrow() {
              C.staticFunc();
              c.prop + ':' + C.staticProp;"
         ),
-        Ok(Value::String("test262:static test262".to_owned()))
+        Ok(Value::String("test262:static test262".to_owned().into()))
     );
 }
 
@@ -186,7 +188,7 @@ fn instance_fields_are_writable_and_configurable() {
         eval(
             "class C { x = 1; } let c = new C(); let d = Object.getOwnPropertyDescriptor(c, 'x'); [d.writable, d.enumerable, d.configurable].join(',');"
         ),
-        Ok(Value::String("true,true,true".to_owned()))
+        Ok(Value::String("true,true,true".to_owned().into()))
     );
 }
 
@@ -218,7 +220,9 @@ fn derived_public_fields_define_through_proxy_receiver() {
                ':' + (expectedTarget === null);"
         ),
         Ok(Value::String(
-            "3:Test262:f|3|true|true|true|true|g|Test262|true|true|true|true:false".to_owned()
+            "3:Test262:f|3|true|true|true|true|g|Test262|true|true|true|true:false"
+                .to_owned()
+                .into()
         ))
     );
 }

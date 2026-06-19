@@ -24,8 +24,12 @@ pub(crate) fn install_error(env: &mut CallEnv, global_this: &Value, object_proto
         "constructor".to_owned(),
         Value::Function(error_function.clone()),
     );
-    error_prototype.define_non_enumerable("name".to_owned(), Value::String("Error".to_owned()));
-    error_prototype.define_non_enumerable("message".to_owned(), Value::String(String::new()));
+    error_prototype
+        .define_non_enumerable("name".to_owned(), Value::String("Error".to_owned().into()));
+    error_prototype.define_non_enumerable(
+        "message".to_owned(),
+        Value::String(::std::rc::Rc::new(String::new())),
+    );
     error_prototype.define_non_enumerable(
         "toString".to_owned(),
         Value::Function(Function::new_native(
@@ -103,7 +107,7 @@ pub(crate) fn native_error(
             object.define_property(
                 "message".to_owned(),
                 Property::data(
-                    Value::String(to_js_string_with_env(message.clone(), env)?),
+                    Value::String(to_js_string_with_env(message.clone(), env)?.into()),
                     false,
                     true,
                     true,
@@ -133,7 +137,7 @@ pub(crate) fn native_aggregate_error(
             object.define_property(
                 "message".to_owned(),
                 Property::data(
-                    Value::String(to_js_string_with_env(message.clone(), env)?),
+                    Value::String(to_js_string_with_env(message.clone(), env)?.into()),
                     false,
                     true,
                     true,
@@ -186,7 +190,7 @@ pub(crate) fn native_suppressed_error(
             object.define_property(
                 "message".to_owned(),
                 Property::data(
-                    Value::String(to_js_string_with_env(message.clone(), env)?),
+                    Value::String(to_js_string_with_env(message.clone(), env)?.into()),
                     false,
                     true,
                     true,
@@ -203,12 +207,16 @@ pub(crate) fn create_suppressed_error(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let Some(Value::Function(function)) = env.get("SuppressedError") else {
-        return Ok(Value::String("SuppressedError".to_owned()));
+        return Ok(Value::String("SuppressedError".to_owned().into()));
     };
     native_suppressed_error(
         &function,
         Value::Undefined,
-        &[error, suppressed, Value::String(String::new())],
+        &[
+            error,
+            suppressed,
+            Value::String(::std::rc::Rc::new(String::new())),
+        ],
         false,
         env,
     )
@@ -311,12 +319,15 @@ pub(crate) fn native_error_prototype_to_string(
         value => to_js_string_with_env(value, env)?,
     };
 
-    Ok(Value::String(match (name.is_empty(), message.is_empty()) {
-        (true, true) => String::new(),
-        (true, false) => message,
-        (false, true) => name,
-        (false, false) => format!("{name}: {message}"),
-    }))
+    Ok(Value::String(
+        match (name.is_empty(), message.is_empty()) {
+            (true, true) => String::new(),
+            (true, false) => message,
+            (false, true) => name,
+            (false, false) => format!("{name}: {message}"),
+        }
+        .into(),
+    ))
 }
 
 fn is_error_to_string_receiver_object(value: &Value) -> bool {
@@ -359,14 +370,14 @@ pub(crate) fn runtime_error_to_value(error: RuntimeError, env: &CallEnv) -> Valu
         if let Ok(value) = native_error(
             &function,
             Value::Undefined,
-            &[Value::String(detail.clone())],
+            &[Value::String(detail.clone().into())],
             false,
             &mut CallEnv::new(env.realm_rc()),
         ) {
             return value;
         }
     }
-    Value::String(message.to_owned())
+    Value::String(message.to_owned().into())
 }
 
 /// Splits a `"TypeError: detail"`-style message into its constructor name and
@@ -394,7 +405,7 @@ pub(crate) fn error_object_to_string(object: &ObjectRef) -> Option<String> {
         return None;
     }
     let name = match object.get("name") {
-        Some(Value::String(value)) if !value.is_empty() => value,
+        Some(Value::String(value)) if !value.is_empty() => value.to_string(),
         Some(Value::String(_)) => return object_message(object),
         Some(Value::Undefined) | None => "Error".to_owned(),
         _ => "Error".to_owned(),
@@ -428,8 +439,11 @@ fn install_native_error(
     };
     let function = Function::new_native(Some(name), length, native, true);
     prototype.define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
-    prototype.define_non_enumerable("name".to_owned(), Value::String(name.to_owned()));
-    prototype.define_non_enumerable("message".to_owned(), Value::String(String::new()));
+    prototype.define_non_enumerable("name".to_owned(), Value::String(name.to_owned().into()));
+    prototype.define_non_enumerable(
+        "message".to_owned(),
+        Value::String(::std::rc::Rc::new(String::new())),
+    );
     function.properties.borrow_mut().insert(
         "prototype".to_owned(),
         Property::fixed_non_enumerable(Value::Object(prototype)),
@@ -460,13 +474,13 @@ fn native_error_name(native: NativeFunction) -> Option<&'static str> {
 fn define_function_name(function: &Function, name: &str) {
     function.properties.borrow_mut().insert(
         "name".to_owned(),
-        Property::data(Value::String(name.to_owned()), false, false, true),
+        Property::data(Value::String(name.to_owned().into()), false, false, true),
     );
 }
 
 fn object_message(object: &ObjectRef) -> Option<String> {
     match object.get("message") {
-        Some(Value::String(value)) => Some(value),
+        Some(Value::String(value)) => Some(value.to_string()),
         Some(Value::Undefined) | None => Some(String::new()),
         _ => None,
     }

@@ -40,30 +40,39 @@ fn evaluates_bitwise_and_shift_expressions() {
 
 #[test]
 fn evaluates_string_addition() {
-    assert_eq!(eval("'x' + 1;"), Ok(Value::String("x1".to_owned())));
-    assert_eq!(eval("`x` + 1;"), Ok(Value::String("x1".to_owned())));
-    assert_eq!(eval("`` + `x`;"), Ok(Value::String("x".to_owned())));
+    assert_eq!(eval("'x' + 1;"), Ok(Value::String("x1".to_owned().into())));
+    assert_eq!(eval("`x` + 1;"), Ok(Value::String("x1".to_owned().into())));
+    assert_eq!(eval("`` + `x`;"), Ok(Value::String("x".to_owned().into())));
     assert_eq!(
         eval(r#""\x41" + "\u0042" + "\u{43}" + "\A";"#),
-        Ok(Value::String("ABCA".to_owned()))
+        Ok(Value::String("ABCA".to_owned().into()))
     );
-    assert_eq!(eval("\"a\\\nb\";"), Ok(Value::String("ab".to_owned())));
-    assert_eq!(eval("1 + 'x';"), Ok(Value::String("1x".to_owned())));
-    assert_eq!(eval("'x' + true;"), Ok(Value::String("xtrue".to_owned())));
-    assert_eq!(eval("'x' + null;"), Ok(Value::String("xnull".to_owned())));
+    assert_eq!(
+        eval("\"a\\\nb\";"),
+        Ok(Value::String("ab".to_owned().into()))
+    );
+    assert_eq!(eval("1 + 'x';"), Ok(Value::String("1x".to_owned().into())));
+    assert_eq!(
+        eval("'x' + true;"),
+        Ok(Value::String("xtrue".to_owned().into()))
+    );
+    assert_eq!(
+        eval("'x' + null;"),
+        Ok(Value::String("xnull".to_owned().into()))
+    );
     assert_eq!(
         eval("'x' + undefined;"),
-        Ok(Value::String("xundefined".to_owned()))
+        Ok(Value::String("xundefined".to_owned().into()))
     );
     assert_eq!(
         eval("'x' + { valueOf: function() { return 2; } };"),
-        Ok(Value::String("x2".to_owned()))
+        Ok(Value::String("x2".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let object = {}; object[Symbol.toPrimitive] = function(hint) { return hint; }; String(object) + ':' + (+object) + ':' + (object + '');"
         ),
-        Ok(Value::String("string:NaN:default".to_owned()))
+        Ok(Value::String("string:NaN:default".to_owned().into()))
     );
     assert!(
         eval(
@@ -97,14 +106,14 @@ fn accumulates_string_concatenation_in_place() {
     assert_eq!(
         eval("let s = ''; for (let i = 0; i < 5; i++) { s += 'ab'; s += i; s += true; } s;"),
         Ok(Value::String(
-            "ab0trueab1trueab2trueab3trueab4true".to_owned()
+            "ab0trueab1trueab2trueab3trueab4true".to_owned().into()
         ))
     );
     // A non-string left operand promoted by a string right operand must not be
     // corrupted by the in-place append.
     assert_eq!(
         eval("let s = 1; s = s + 'x'; s += 2; s;"),
-        Ok(Value::String("1x2".to_owned()))
+        Ok(Value::String("1x2".to_owned().into()))
     );
 }
 
@@ -112,19 +121,19 @@ fn accumulates_string_concatenation_in_place() {
 fn evaluates_template_literal_substitutions() {
     assert_eq!(
         eval("let name = 'quickjs'; `hello ${name}`;"),
-        Ok(Value::String("hello quickjs".to_owned()))
+        Ok(Value::String("hello quickjs".to_owned().into()))
     );
     assert_eq!(
         eval("`${1 + 2}:${true}:${null}:${undefined}`;"),
-        Ok(Value::String("3:true:null:undefined".to_owned()))
+        Ok(Value::String("3:true:null:undefined".to_owned().into()))
     );
     assert_eq!(
         eval("`${{ value: 7 }.value}`;"),
-        Ok(Value::String("7".to_owned()))
+        Ok(Value::String("7".to_owned().into()))
     );
     assert_eq!(
         eval("`escaped \\${name}`;"),
-        Ok(Value::String("escaped ${name}".to_owned()))
+        Ok(Value::String("escaped ${name}".to_owned().into()))
     );
 }
 
@@ -132,7 +141,7 @@ fn evaluates_template_literal_substitutions() {
 fn evaluates_legacy_octal_escapes_inside_template_expressions() {
     assert_eq!(
         eval("`${'\\07'}`;"),
-        Ok(Value::String("\u{0007}".to_owned()))
+        Ok(Value::String("\u{0007}".to_owned().into()))
     );
 }
 
@@ -155,7 +164,7 @@ fn template_literal_substitutions_to_string_before_next_expression() {
         eval(
             "let log = ''; let first = { toString: function() { log += 'a'; return 'A'; } }; let second = { toString: function() { log += 'b'; return 'B'; } }; `${first}${second}` + ':' + log;"
         ),
-        Ok(Value::String("AB:ab".to_owned()))
+        Ok(Value::String("AB:ab".to_owned().into()))
     );
 }
 
@@ -165,17 +174,17 @@ fn evaluates_tagged_template_literals() {
         eval(
             "function tag(strings, a, b) { return strings[0] + ':' + strings[1] + ':' + strings.raw[1] + ':' + a + ':' + b; } tag`a ${1 + 1} \\n${3} b`;"
         ),
-        Ok(Value::String("a : \n: \\n:2:3".to_owned()))
+        Ok(Value::String("a : \n: \\n:2:3".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let object = { prefix: 'p', tag: function(strings, value) { return this.prefix + ':' + strings[0] + ':' + strings.raw[0] + ':' + value; } }; object.tag`\\t${4}`;"
         ),
-        Ok(Value::String("p:\t:\\t:4".to_owned()))
+        Ok(Value::String("p:\t:\\t:4".to_owned().into()))
     );
     assert_eq!(
         eval("function tag(strings) { return strings[0] + ':' + strings.raw[0]; } tag`plain`;"),
-        Ok(Value::String("plain:plain".to_owned()))
+        Ok(Value::String("plain:plain".to_owned().into()))
     );
 }
 
@@ -256,25 +265,25 @@ fn evaluates_comparison_and_equality() {
     );
     assert_eq!(
         eval("typeof [].sort.call(Symbol());"),
-        Ok(Value::String("object".to_owned()))
+        Ok(Value::String("object".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let calls = 0; let F = {}; F[Symbol.hasInstance] = function(value) { calls = calls + (this === F ? 1 : 0); return value === 7; }; (7 instanceof F) + ':' + (8 instanceof F) + ':' + calls;"
         ),
-        Ok(Value::String("true:false:2".to_owned()))
+        Ok(Value::String("true:false:2".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let F = {}; F[Symbol.hasInstance] = function(value) { return value === 1 ? 'yes' : ''; }; (1 instanceof F) + ':' + (2 instanceof F);"
         ),
-        Ok(Value::String("true:false".to_owned()))
+        Ok(Value::String("true:false".to_owned().into()))
     );
     assert_eq!(
         eval(
             "function F() {} Object.defineProperty(F, Symbol.hasInstance, { value: function(value) { return value === 3; }, configurable: true }); (3 instanceof F) + ':' + (4 instanceof F);"
         ),
-        Ok(Value::String("true:false".to_owned()))
+        Ok(Value::String("true:false".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -310,7 +319,7 @@ fn evaluates_conditional_expressions() {
     assert_eq!(eval("false ? 1 : 2;"), Ok(Value::Number(2.0)));
     assert_eq!(
         eval("let x = true ? 'yes' : 'no'; x;"),
-        Ok(Value::String("yes".to_owned()))
+        Ok(Value::String("yes".to_owned().into()))
     );
     assert_eq!(eval("true ? 1 : missing;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("false ? missing : 2;"), Ok(Value::Number(2.0)));
@@ -354,7 +363,7 @@ fn evaluates_update_and_compound_assignment() {
     assert_eq!(eval("let x = 5; x |= 2; x;"), Ok(Value::Number(7.0)));
     assert_eq!(
         eval("let x = 'a'; x += 1; x;"),
-        Ok(Value::String("a1".to_owned()))
+        Ok(Value::String("a1".to_owned().into()))
     );
     assert_eq!(
         eval("let o = { count: 1 }; o.count++; o.count;"),
@@ -399,24 +408,39 @@ fn evaluates_unary_expressions() {
 fn evaluates_typeof_expressions() {
     assert_eq!(
         eval("typeof undefined;"),
-        Ok(Value::String("undefined".to_owned()))
+        Ok(Value::String("undefined".to_owned().into()))
     );
     assert_eq!(
         eval("typeof neverDeclared;"),
-        Ok(Value::String("undefined".to_owned()))
+        Ok(Value::String("undefined".to_owned().into()))
     );
     assert_eq!(
         eval("typeof true;"),
-        Ok(Value::String("boolean".to_owned()))
+        Ok(Value::String("boolean".to_owned().into()))
     );
-    assert_eq!(eval("typeof 1;"), Ok(Value::String("number".to_owned())));
-    assert_eq!(eval("typeof 'x';"), Ok(Value::String("string".to_owned())));
-    assert_eq!(eval("typeof null;"), Ok(Value::String("object".to_owned())));
-    assert_eq!(eval("typeof {};"), Ok(Value::String("object".to_owned())));
-    assert_eq!(eval("typeof this;"), Ok(Value::String("object".to_owned())));
+    assert_eq!(
+        eval("typeof 1;"),
+        Ok(Value::String("number".to_owned().into()))
+    );
+    assert_eq!(
+        eval("typeof 'x';"),
+        Ok(Value::String("string".to_owned().into()))
+    );
+    assert_eq!(
+        eval("typeof null;"),
+        Ok(Value::String("object".to_owned().into()))
+    );
+    assert_eq!(
+        eval("typeof {};"),
+        Ok(Value::String("object".to_owned().into()))
+    );
+    assert_eq!(
+        eval("typeof this;"),
+        Ok(Value::String("object".to_owned().into()))
+    );
     assert_eq!(
         eval("function f() { return 1; } typeof f;"),
-        Ok(Value::String("function".to_owned()))
+        Ok(Value::String("function".to_owned().into()))
     );
 }
 
@@ -484,7 +508,7 @@ fn evaluates_in_operator() {
 fn evaluates_destructuring_assignment_expressions() {
     assert_eq!(
         eval("var a = 1, b = 2; [a, b] = [b, a]; a + ':' + b;"),
-        Ok(Value::String("2:1".to_owned()))
+        Ok(Value::String("2:1".to_owned().into()))
     );
     assert_eq!(eval("var y; ({y = 9} = {}); y;"), Ok(Value::Number(9.0)));
     assert_eq!(
@@ -492,7 +516,7 @@ fn evaluates_destructuring_assignment_expressions() {
             "var out = {}; var y, rest; ({x: out.first, y, ...rest} = {x: 1, y: 2, z: 3});
              out.first + ':' + y + ':' + Object.keys(rest).join('|');"
         ),
-        Ok(Value::String("1:2:z".to_owned()))
+        Ok(Value::String("1:2:z".to_owned().into()))
     );
     assert_eq!(
         eval("var x, y; [[x], {p: y = 7}] = [[5], {}]; x + y;"),
@@ -502,7 +526,7 @@ fn evaluates_destructuring_assignment_expressions() {
         eval(
             "var source = {p: 42}; var p; var result = ({p} = source); (result === source) + ':' + p;"
         ),
-        Ok(Value::String("true:42".to_owned()))
+        Ok(Value::String("true:42".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -513,7 +537,7 @@ fn evaluates_destructuring_assignment_expressions() {
              var result = ({...rest} = o);
              calls.join('|') + ':' + Object.keys(rest).join('|') + ':' + (Object.getOwnPropertySymbols(rest)[0] === s) + ':' + (result === o);"
         ),
-        Ok(Value::String("1|z|a|Symbol(foo):1|z|a:true:true".to_owned()))
+        Ok(Value::String("1|z|a|Symbol(foo):1|z|a:true:true".to_owned().into()))
     );
 }
 
@@ -531,7 +555,7 @@ fn assignment_in_with_uses_initial_reference() {
              }
              testFunction();"
         ),
-        Ok(Value::String("2:0".to_owned()))
+        Ok(Value::String("2:0".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -542,7 +566,7 @@ fn assignment_in_with_uses_initial_reference() {
              }
              scope.x + ':' + x;"
         ),
-        Ok(Value::String("2:0".to_owned()))
+        Ok(Value::String("2:0".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -555,7 +579,7 @@ fn assignment_in_with_uses_initial_reference() {
              }
              innerScope.x + ':' + outerScope.x;"
         ),
-        Ok(Value::String("2:0".to_owned()))
+        Ok(Value::String("2:0".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -569,7 +593,7 @@ fn assignment_in_with_uses_initial_reference() {
              }
              testAssignment();"
         ),
-        Ok(Value::String("2:1".to_owned()))
+        Ok(Value::String("2:1".to_owned().into()))
     );
 }
 
@@ -588,7 +612,7 @@ fn strict_compound_assignment_rechecks_resolved_object_environment_binding() {
              }
              count + ':' + ('x' in scope);"
         ),
-        Ok(Value::String("2:false".to_owned()))
+        Ok(Value::String("2:false".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -604,7 +628,7 @@ fn strict_compound_assignment_rechecks_resolved_object_environment_binding() {
              })();
              count + ':' + ('x' in this);"
         ),
-        Ok(Value::String("2:false".to_owned()))
+        Ok(Value::String("2:false".to_owned().into()))
     );
 }
 
@@ -619,7 +643,7 @@ fn member_compound_assignment_evaluates_reference_before_rhs() {
              catch (error) { hits += ':' + error; }
              hits;"
         ),
-        Ok(Value::String("prop:key".to_owned()))
+        Ok(Value::String("prop:key".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -630,7 +654,7 @@ fn member_compound_assignment_evaluates_reference_before_rhs() {
              catch (error) { hits += error instanceof TypeError ? ':type' : ':other'; }
              hits;"
         ),
-        Ok(Value::String(":type".to_owned()))
+        Ok(Value::String(":type".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -655,7 +679,7 @@ fn member_assignment_delays_put_value_checks_until_after_rhs() {
              catch (error) { hits += ':' + error; }
              hits;"
         ),
-        Ok(Value::String("prop:key".to_owned()))
+        Ok(Value::String("prop:key".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -666,7 +690,7 @@ fn member_assignment_delays_put_value_checks_until_after_rhs() {
              catch (error) { hits += ':' + error; }
              hits;"
         ),
-        Ok(Value::String(":rhs:rhs".to_owned()))
+        Ok(Value::String(":rhs:rhs".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -698,7 +722,7 @@ fn assignments_respect_lexical_tdz() {
              let x;
              result;"
         ),
-        Ok(Value::String("reference".to_owned()))
+        Ok(Value::String("reference".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -708,7 +732,7 @@ fn assignments_respect_lexical_tdz() {
              let x;
              result;"
         ),
-        Ok(Value::String("reference".to_owned()))
+        Ok(Value::String("reference".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -719,7 +743,7 @@ fn assignments_respect_lexical_tdz() {
              let y;
              result;"
         ),
-        Ok(Value::String("reference".to_owned()))
+        Ok(Value::String("reference".to_owned().into()))
     );
 }
 
@@ -733,7 +757,7 @@ fn nested_destructuring_assignments_capture_later_script_lexicals_tdz() {
              let x;
              result;"
         ),
-        Ok(Value::String("reference".to_owned()))
+        Ok(Value::String("reference".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -744,7 +768,7 @@ fn nested_destructuring_assignments_capture_later_script_lexicals_tdz() {
              let y;
              result;"
         ),
-        Ok(Value::String("reference".to_owned()))
+        Ok(Value::String("reference".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -754,7 +778,7 @@ fn nested_destructuring_assignments_capture_later_script_lexicals_tdz() {
              let x;
              result;"
         ),
-        Ok(Value::String("reference".to_owned()))
+        Ok(Value::String("reference".to_owned().into()))
     );
 }
 
@@ -768,11 +792,11 @@ fn typeof_respects_lexical_tdz() {
              let x;
              result;"
         ),
-        Ok(Value::String("reference".to_owned()))
+        Ok(Value::String("reference".to_owned().into()))
     );
     assert_eq!(
         eval("typeof definitelyUnresolvable;"),
-        Ok(Value::String("undefined".to_owned()))
+        Ok(Value::String("undefined".to_owned().into()))
     );
 }
 
@@ -787,7 +811,7 @@ fn destructuring_assignment_evaluates_member_targets_before_value_reads() {
              ({a: target().x} = source);
              order.join(',') + '|' + out.x;"
         ),
-        Ok(Value::String("lref,get|1".to_owned()))
+        Ok(Value::String("lref,get|1".to_owned().into()))
     );
 }
 
@@ -806,7 +830,7 @@ fn destructuring_assignment_evaluates_computed_keys_before_member_targets() {
              ({[key]: target().x} = source);
              order.join(',');"
         ),
-        Ok(Value::String("key,target,get,set:7".to_owned()))
+        Ok(Value::String("key,target,get,set:7".to_owned().into()))
     );
 }
 
@@ -823,7 +847,7 @@ fn destructuring_assignment_closes_iterators() {
              };
              var a; [a] = iterable; returned + ':' + a;"
         ),
-        Ok(Value::String("true:1".to_owned()))
+        Ok(Value::String("true:1".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -838,7 +862,7 @@ fn destructuring_assignment_closes_iterators() {
              try { 0, [ ({})[thrower()] ] = iterable; } catch (error) { caught = true; }
              caught + ':' + nextCount + ':' + returnCount;"
         ),
-        Ok(Value::String("true:0:1".to_owned()))
+        Ok(Value::String("true:0:1".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -859,7 +883,7 @@ fn destructuring_assignment_closes_iterators() {
              var result = iter.return(777);
              returnCount + ':' + unreachable + ':' + result.value + ':' + result.done;"
         ),
-        Ok(Value::String("1:0:777:true".to_owned()))
+        Ok(Value::String("1:0:777:true".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -876,7 +900,7 @@ fn destructuring_assignment_closes_iterators() {
              try { iter.return(777); } catch (error) { caught = error.message; }
              caught + ':' + returnCount;"
         ),
-        Ok(Value::String("close:1".to_owned()))
+        Ok(Value::String("close:1".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -893,7 +917,7 @@ fn destructuring_assignment_closes_iterators() {
              try { iter.return(777); } catch (error) { caught = error instanceof TypeError ? 'type' : error.name; }
              caught + ':' + returnCount;"
         ),
-        Ok(Value::String("type:1".to_owned()))
+        Ok(Value::String("type:1".to_owned().into()))
     );
 }
 
@@ -921,7 +945,7 @@ fn optional_chaining_method_call_keeps_receiver_this() {
     // evaluating arguments or throwing.
     assert_eq!(
         eval("var n = null; var ran = false; var r = n?.m(ran = true); r + ':' + ran;"),
-        Ok(Value::String("undefined:false".to_owned()))
+        Ok(Value::String("undefined:false".to_owned().into()))
     );
     // The receiver is evaluated exactly once.
     assert_eq!(
@@ -949,7 +973,7 @@ fn optional_chaining_short_circuits_through_calls() {
     );
     assert_eq!(
         eval("var o = null; var r = o?.m().n; typeof r;"),
-        Ok(Value::String("undefined".to_owned()))
+        Ok(Value::String("undefined".to_owned().into()))
     );
     // A live chain still threads results and receivers correctly.
     assert_eq!(
@@ -967,7 +991,7 @@ fn optional_chaining_on_new_target_and_super() {
     );
     assert_eq!(
         eval("function f() { return new.target?.name; } new f().wrapped ? 'x' : (new f(), 'ran');"),
-        Ok(Value::String("ran".to_owned()))
+        Ok(Value::String("ran".to_owned().into()))
     );
     // `super.x` heads an optional chain through the super-property path.
     assert_eq!(

@@ -51,7 +51,7 @@ pub(crate) fn native_number_prototype_to_string(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    Ok(Value::String(number_to_radix_string(number, radix)?))
+    Ok(Value::String(number_to_radix_string(number, radix)?.into()))
 }
 
 pub(crate) fn native_number_prototype_to_fixed(
@@ -64,10 +64,9 @@ pub(crate) fn native_number_prototype_to_fixed(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    Ok(Value::String(number_to_fixed_string(
-        number,
-        fraction_digits,
-    )))
+    Ok(Value::String(
+        number_to_fixed_string(number, fraction_digits).into(),
+    ))
 }
 
 pub(crate) fn native_number_prototype_to_exponential(
@@ -81,7 +80,7 @@ pub(crate) fn native_number_prototype_to_exponential(
         env,
     )?;
     if !number.is_finite() {
-        return Ok(Value::String(number_to_js_string(number)));
+        return Ok(Value::String(number_to_js_string(number).into()));
     }
     let fraction_digits = match fraction_digits {
         Some(digits) => Some(validate_digits(
@@ -92,10 +91,9 @@ pub(crate) fn native_number_prototype_to_exponential(
         )?),
         None => None,
     };
-    Ok(Value::String(number_to_exponential_string(
-        number,
-        fraction_digits,
-    )))
+    Ok(Value::String(
+        number_to_exponential_string(number, fraction_digits).into(),
+    ))
 }
 
 pub(crate) fn native_number_prototype_to_precision(
@@ -105,14 +103,14 @@ pub(crate) fn native_number_prototype_to_precision(
 ) -> Result<Value, RuntimeError> {
     let number = this_number_value(this_value)?;
     if matches!(argument_values.first(), None | Some(Value::Undefined)) {
-        return Ok(Value::String(number_to_js_string(number)));
+        return Ok(Value::String(number_to_js_string(number).into()));
     }
     let precision = optional_digit_number(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
         env,
     )?;
     if !number.is_finite() {
-        return Ok(Value::String(number_to_js_string(number)));
+        return Ok(Value::String(number_to_js_string(number).into()));
     }
     let precision = validate_digits(
         precision.expect("precision undefined handled above"),
@@ -120,10 +118,9 @@ pub(crate) fn native_number_prototype_to_precision(
         100,
         "RangeError: toPrecision precision must be between 1 and 100",
     )?;
-    Ok(Value::String(number_to_precision_string(
-        number,
-        Some(precision),
-    )))
+    Ok(Value::String(
+        number_to_precision_string(number, Some(precision)).into(),
+    ))
 }
 
 pub(crate) fn native_number_prototype_value_of(this_value: Value) -> Result<Value, RuntimeError> {

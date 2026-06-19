@@ -22,7 +22,7 @@ fn evaluates_object_definition_and_creation_builtins() {
         eval(
             "let object = {}; Object.defineProperty(object, 'value', { value: 7, enumerable: true, writable: true, configurable: true }); Object.keys(object)[0];"
         ),
-        Ok(Value::String("value".to_owned()))
+        Ok(Value::String("value".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -88,49 +88,49 @@ fn evaluates_object_definition_and_creation_builtins() {
         eval(
             "let object = {}; Object.defineProperty(object, 'prop', { get: undefined, set: undefined, enumerable: true, configurable: true }); let before = Object.getOwnPropertyDescriptor(object, 'prop'); Object.defineProperty(object, 'prop', { value: 1001 }); let after = Object.getOwnPropertyDescriptor(object, 'prop'); before.hasOwnProperty('get') + ':' + after.hasOwnProperty('value') + ':' + after.value;"
         ),
-        Ok(Value::String("true:true:1001".to_owned()))
+        Ok(Value::String("true:true:1001".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let object = {}; Object.defineProperty(object, 'prop', { get: undefined, set: undefined, configurable: false }); let caught = false; try { Object.defineProperty(object, 'prop', { value: 1001 }); } catch (error) { caught = error instanceof TypeError; } let after = Object.getOwnPropertyDescriptor(object, 'prop'); caught + ':' + after.hasOwnProperty('get') + ':' + after.hasOwnProperty('value');"
         ),
-        Ok(Value::String("true:true:false".to_owned()))
+        Ok(Value::String("true:true:false".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let caught = false; let array = []; try { Object.defineProperty(array, 'length', { value: -1 }); } catch (error) { caught = error instanceof RangeError; } caught + ':' + array.length;"
         ),
-        Ok(Value::String("true:0".to_owned()))
+        Ok(Value::String("true:0".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let a = false, b = false, c = false; try { Object.defineProperty([], 'length', { value: -1, configurable: true }); } catch (error) { a = error instanceof RangeError; } try { Object.defineProperty([], 'length', { value: NaN, enumerable: true }); } catch (error) { b = error instanceof RangeError; } let array = []; Object.defineProperty(array, 'length', { writable: false }); try { Object.defineProperty(array, 'length', { value: Number.MAX_SAFE_INTEGER, writable: true }); } catch (error) { c = error instanceof RangeError; } a + ':' + b + ':' + c;"
         ),
-        Ok(Value::String("true:true:true".to_owned()))
+        Ok(Value::String("true:true:true".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let caught = false; let array = [0, 1, 2]; Object.defineProperty(array, '2', { configurable: false }); try { Object.defineProperty(array, 'length', { value: 1 }); } catch (error) { caught = error instanceof TypeError; } caught + ':' + array.length + ':' + array[2];"
         ),
-        Ok(Value::String("true:3:2".to_owned()))
+        Ok(Value::String("true:3:2".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let caught = false; let array = [0, 1, 2]; Object.defineProperty(array, 'length', { writable: false }); try { Object.defineProperty(array, '3', { value: 3 }); } catch (error) { caught = error instanceof TypeError; } caught + ':' + array.length + ':' + array.hasOwnProperty('3');"
         ),
-        Ok(Value::String("true:3:false".to_owned()))
+        Ok(Value::String("true:3:false".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let a = false, b = false, c = false; try { Object.defineProperty([], 'length', { configurable: true }); } catch (error) { a = error instanceof TypeError; } try { Object.defineProperty([], 'length', { enumerable: true }); } catch (error) { b = error instanceof TypeError; } try { Object.defineProperty([], 'length', { get: function() {} }); } catch (error) { c = error instanceof TypeError; } a + ':' + b + ':' + c;"
         ),
-        Ok(Value::String("true:true:true".to_owned()))
+        Ok(Value::String("true:true:true".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let a = [1]; let b = false, c = false; try { Object.defineProperty(a, 'length', { value: 1, configurable: true }); } catch (error) { b = error instanceof TypeError; } try { Object.defineProperty(a, 'length', { value: 2, configurable: true }); } catch (error) { c = error instanceof TypeError; } b + ':' + c + ':' + a.length;"
         ),
-        Ok(Value::String("true:true:1".to_owned()))
+        Ok(Value::String("true:true:1".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -142,25 +142,25 @@ fn evaluates_object_definition_and_creation_builtins() {
         eval(
             "let array = []; let valueOfAccessed = false; let toStringAccessed = false; Object.defineProperty(array, 'length', { value: { valueOf: function() { valueOfAccessed = true; return 3; }, toString: function() { toStringAccessed = true; return '2'; } } }); array.length + ':' + valueOfAccessed + ':' + toStringAccessed;"
         ),
-        Ok(Value::String("3:true:false".to_owned()))
+        Ok(Value::String("3:true:false".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let array = [1, 2]; let calls = 0; let length = { valueOf: function() { calls += 1; if (calls !== 1) { Object.defineProperty(array, 'length', { writable: false }); } return array.length; } }; let caught = false; try { Object.defineProperty(array, 'length', { value: length, writable: true }); } catch (error) { caught = error instanceof TypeError; } caught + ':' + calls + ':' + Object.getOwnPropertyDescriptor(array, 'length').writable;"
         ),
-        Ok(Value::String("true:2:false".to_owned()))
+        Ok(Value::String("true:2:false".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let array = []; let valueOfAccessed = false; let toStringAccessed = false; Object.defineProperty(array, 'length', { value: { valueOf: function() { valueOfAccessed = true; return {}; }, toString: function() { toStringAccessed = true; return '2'; } } }); array.length + ':' + valueOfAccessed + ':' + toStringAccessed;"
         ),
-        Ok(Value::String("2:true:true".to_owned()))
+        Ok(Value::String("2:true:true".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let array = []; let valueOfAccessed = false; let toStringAccessed = false; let caught = false; try { Object.defineProperty(array, 'length', { value: { valueOf: function() { valueOfAccessed = true; return {}; }, toString: function() { toStringAccessed = true; return {}; } } }); } catch (error) { caught = error instanceof TypeError; } caught + ':' + valueOfAccessed + ':' + toStringAccessed + ':' + array.length;"
         ),
-        Ok(Value::String("true:true:true:0".to_owned()))
+        Ok(Value::String("true:true:true:0".to_owned().into()))
     );
     assert_eq!(
         eval("Object.defineProperties.length;"),
@@ -203,7 +203,7 @@ fn evaluates_object_definition_and_creation_builtins() {
              Object.defineProperties(o, { a: { value: 1, enumerable: true }, [s]: { value: 2, enumerable: true } }); \
              o.a + ':' + o[s];"
         ),
-        Ok(Value::String("1:2".to_owned()))
+        Ok(Value::String("1:2".to_owned().into()))
     );
     // A Proxy descriptor source is read through ownKeys then per-key
     // getOwnPropertyDescriptor, in [[OwnPropertyKeys]] order.
@@ -213,7 +213,7 @@ fn evaluates_object_definition_and_creation_builtins() {
              let seen = []; let p = new Proxy(src, { getOwnPropertyDescriptor(_t, k) { seen.push(typeof k === 'symbol' ? 'sym' : k); return undefined; } }); \
              Object.defineProperties({}, p); seen.join(',');"
         ),
-        Ok(Value::String("0,foo,sym".to_owned()))
+        Ok(Value::String("0,foo,sym".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -225,7 +225,7 @@ fn evaluates_object_definition_and_creation_builtins() {
         eval(
             "let object = {}; let descriptors = []; descriptors[0] = { value: 7, enumerable: true }; let result = Object.defineProperties(object, descriptors); (result === object) + ':' + object[0] + ':' + Object.keys(object)[0];"
         ),
-        Ok(Value::String("true:7:0".to_owned()))
+        Ok(Value::String("true:7:0".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -248,7 +248,7 @@ fn evaluates_object_definition_and_creation_builtins() {
         eval(
             "let object = Object.create(null, { own: { value: 2, enumerable: true } }); Object.keys(object)[0];"
         ),
-        Ok(Value::String("own".to_owned()))
+        Ok(Value::String("own".to_owned().into()))
     );
     assert_eq!(
         eval("Object.create({}, undefined) instanceof Object;"),
@@ -264,13 +264,13 @@ fn evaluates_object_definition_and_creation_builtins() {
         eval(
             "let desc = {}; Object.defineProperty(desc, 'configurable', { get: function() { return true; } }); let object = Object.create({}, { own: desc }); let before = object.hasOwnProperty('own'); delete object.own; before + ':' + object.hasOwnProperty('own');"
         ),
-        Ok(Value::String("true:false".to_owned()))
+        Ok(Value::String("true:false".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let desc = function() {}; desc.enumerable = true; desc.value = 9; let object = Object.create({}, { own: desc }); Object.keys(object)[0] + ':' + object.own;"
         ),
-        Ok(Value::String("own:9".to_owned()))
+        Ok(Value::String("own:9".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -282,31 +282,31 @@ fn evaluates_object_definition_and_creation_builtins() {
         eval(
             "let accessed = false; let object = {}; Object.defineProperty(object, 'value', { get: function() { accessed = true; return 12; } }); object.value + ':' + accessed;"
         ),
-        Ok(Value::String("12:true".to_owned()))
+        Ok(Value::String("12:true".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let accessed = false; let args = (function() { return arguments; })(1, 2, 3); Object.defineProperty(args, '0', { get: function() { accessed = true; return 12; } }); args[0] + ':' + accessed;"
         ),
-        Ok(Value::String("12:true".to_owned()))
+        Ok(Value::String("12:true".to_owned().into()))
     );
     assert_eq!(
         eval(
             "(function(a, b) { Object.defineProperty(arguments, '0', { value: 20, writable: false, enumerable: false, configurable: false }); let d = Object.getOwnPropertyDescriptor(arguments, '0'); return a + ':' + d.value + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable; })(0, 1);"
         ),
-        Ok(Value::String("20:20:false:false:false".to_owned()))
+        Ok(Value::String("20:20:false:false:false".to_owned().into()))
     );
     assert_eq!(
         eval(
             "(function(a) { Object.defineProperty(arguments, '0', { value: 10, writable: false }); Object.defineProperty(arguments, '0', { value: 20 }); let d = Object.getOwnPropertyDescriptor(arguments, '0'); return a + ':' + d.value + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable; })(0);"
         ),
-        Ok(Value::String("10:20:false:true:true".to_owned()))
+        Ok(Value::String("10:20:false:true:true".to_owned().into()))
     );
     assert_eq!(
         eval(
             "(function(a) { Object.defineProperty(arguments, '0', { value: 10, writable: false, configurable: false }); let caught = false; try { Object.defineProperty(arguments, '0', { value: 20 }); } catch (error) { caught = error instanceof TypeError; } return caught + ':' + a + ':' + arguments[0]; })(0);"
         ),
-        Ok(Value::String("true:10:10".to_owned()))
+        Ok(Value::String("true:10:10".to_owned().into()))
     );
     assert_eq!(
         eval(

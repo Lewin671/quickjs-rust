@@ -20,8 +20,8 @@ fn assert_syntax_error(source: &str) {
 
 #[test]
 fn evaluates_bigint_literals_and_constructor() {
-    assert_eval("typeof 1n;", Value::String("bigint".to_owned()));
-    assert_eval("String(1_000n);", Value::String("1000".to_owned()));
+    assert_eval("typeof 1n;", Value::String("bigint".to_owned().into()));
+    assert_eval("String(1_000n);", Value::String("1000".to_owned().into()));
     assert_eval("BigInt('0x10') === 16n;", Value::Boolean(true));
     assert_eval("BigInt(44) === 44n;", Value::Boolean(true));
     assert_eval("BigInt(true) === 1n;", Value::Boolean(true));
@@ -47,29 +47,29 @@ fn evaluates_bigint_literals_and_constructor() {
 
 #[test]
 fn evaluates_bigint_arithmetic_and_equality() {
-    assert_eval("String(1n + 2n);", Value::String("3".to_owned()));
-    assert_eval("String(7n - 4n);", Value::String("3".to_owned()));
-    assert_eval("String(3n * 4n);", Value::String("12".to_owned()));
-    assert_eval("String(7n / 2n);", Value::String("3".to_owned()));
-    assert_eval("String(7n % 2n);", Value::String("1".to_owned()));
-    assert_eval("String(-5n);", Value::String("-5".to_owned()));
-    assert_eval("String(~0n);", Value::String("-1".to_owned()));
-    assert_eval("String(2n ** 8n);", Value::String("256".to_owned()));
+    assert_eval("String(1n + 2n);", Value::String("3".to_owned().into()));
+    assert_eval("String(7n - 4n);", Value::String("3".to_owned().into()));
+    assert_eval("String(3n * 4n);", Value::String("12".to_owned().into()));
+    assert_eval("String(7n / 2n);", Value::String("3".to_owned().into()));
+    assert_eval("String(7n % 2n);", Value::String("1".to_owned().into()));
+    assert_eval("String(-5n);", Value::String("-5".to_owned().into()));
+    assert_eval("String(~0n);", Value::String("-1".to_owned().into()));
+    assert_eval("String(2n ** 8n);", Value::String("256".to_owned().into()));
     assert_eval(
         "let i = 10n; i++; String(i);",
-        Value::String("11".to_owned()),
+        Value::String("11".to_owned().into()),
     );
     assert_eval("let i = 10n; ++i;", Value::BigInt(11.into()));
     assert_eval("let i = 10n; i++;", Value::BigInt(10.into()));
     assert_eval(
         "let o = { value: 10n }; o.value--; String(o.value);",
-        Value::String("9".to_owned()),
+        Value::String("9".to_owned().into()),
     );
-    assert_eval("String(5n << 3n);", Value::String("40".to_owned()));
-    assert_eval("String(5n << -1n);", Value::String("2".to_owned()));
-    assert_eval("String(5n >> -2n);", Value::String("20".to_owned()));
-    assert_eval("String(-5n >> 1n);", Value::String("-3".to_owned()));
-    assert_eval("String(-5n >> 2n);", Value::String("-2".to_owned()));
+    assert_eval("String(5n << 3n);", Value::String("40".to_owned().into()));
+    assert_eval("String(5n << -1n);", Value::String("2".to_owned().into()));
+    assert_eval("String(5n >> -2n);", Value::String("20".to_owned().into()));
+    assert_eval("String(-5n >> 1n);", Value::String("-3".to_owned().into()));
+    assert_eval("String(-5n >> 2n);", Value::String("-2".to_owned().into()));
     assert_eval("1n === 1n;", Value::Boolean(true));
     assert_eval("1n == 1;", Value::Boolean(true));
     assert_eval("Object(2n) * 3n;", Value::BigInt(6.into()));
@@ -97,15 +97,15 @@ fn evaluates_bigint_statics_and_prototype_methods() {
     assert_type_error("BigInt.asUintN(0, 0);");
     assert_type_error("BigInt.asUintN(0, Object(0));");
     assert_type_error("BigInt.asUintN(0, { valueOf: function() { return 0; } });");
-    assert_eval("(10n).toString(16);", Value::String("a".to_owned()));
+    assert_eval("(10n).toString(16);", Value::String("a".to_owned().into()));
     assert_eval("Object(1n).valueOf() === 1n;", Value::Boolean(true));
     assert_eval(
         "Object.prototype.toString.call(1n);",
-        Value::String("[object BigInt]".to_owned()),
+        Value::String("[object BigInt]".to_owned().into()),
     );
     assert_eval(
         "Object.prototype.toString.call(Object(1n));",
-        Value::String("[object BigInt]".to_owned()),
+        Value::String("[object BigInt]".to_owned().into()),
     );
     assert_eval("Object(1n) == 1n;", Value::Boolean(true));
     assert_eval(
@@ -114,11 +114,11 @@ fn evaluates_bigint_statics_and_prototype_methods() {
     );
     assert_eval(
         "let BigIntValueOf = BigInt.prototype.valueOf; Object.defineProperty(BigInt.prototype, 'toString', { value: undefined, configurable: true }); Object.defineProperty(BigInt.prototype, 'valueOf', { get: function() { return function() { return BigIntValueOf.call(this) * 2n; }; }, configurable: true }); ''.concat(Object(1n));",
-        Value::String("2".to_owned()),
+        Value::String("2".to_owned().into()),
     );
     assert_eval(
         "let d = Object.getOwnPropertyDescriptor(BigInt.prototype, Symbol.toStringTag); d.value + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;",
-        Value::String("BigInt:false:false:true".to_owned()),
+        Value::String("BigInt:false:false:true".to_owned().into()),
     );
     assert_eval("Number(10n);", Value::Number(10.0));
     assert_type_error("BigInt.prototype.valueOf.call(1);");

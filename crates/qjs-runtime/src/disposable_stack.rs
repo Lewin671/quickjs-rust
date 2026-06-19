@@ -654,7 +654,7 @@ fn resource_record(kind: DisposableResourceKind, value: Value, method: Value) ->
     let record = ObjectRef::with_prototype(HashMap::new(), None);
     record.define_property(
         RESOURCE_KIND.to_owned(),
-        Property::non_enumerable(Value::String(kind.as_str().to_owned())),
+        Property::non_enumerable(Value::String(kind.as_str().to_owned().into())),
     );
     record.define_property(RESOURCE_VALUE.to_owned(), Property::non_enumerable(value));
     record.define_property(RESOURCE_METHOD.to_owned(), Property::non_enumerable(method));

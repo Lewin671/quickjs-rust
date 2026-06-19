@@ -181,7 +181,7 @@ pub(super) fn native_global_encode_uri(
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let source = to_js_string_with_env(value, env)?;
-    encode_uri(&source, UriEncodeKind::Uri).map(Value::String)
+    encode_uri(&source, UriEncodeKind::Uri).map(|s| Value::String(s.into()))
 }
 
 pub(super) fn native_global_encode_uri_component(
@@ -190,7 +190,7 @@ pub(super) fn native_global_encode_uri_component(
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let source = to_js_string_with_env(value, env)?;
-    encode_uri(&source, UriEncodeKind::Component).map(Value::String)
+    encode_uri(&source, UriEncodeKind::Component).map(|s| Value::String(s.into()))
 }
 
 pub(super) fn native_global_decode_uri(
@@ -199,7 +199,7 @@ pub(super) fn native_global_decode_uri(
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let source = to_js_string_with_env(value, env)?;
-    decode_uri_string(&source).map(Value::String)
+    decode_uri_string(&source).map(|s| Value::String(s.into()))
 }
 
 pub(super) fn native_global_decode_uri_component(
@@ -208,7 +208,7 @@ pub(super) fn native_global_decode_uri_component(
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let source = to_js_string_with_env(value, env)?;
-    decode_uri_component_string(&source).map(Value::String)
+    decode_uri_component_string(&source).map(|s| Value::String(s.into()))
 }
 
 pub(crate) fn decode_uri_string(source: &str) -> Result<String, RuntimeError> {
@@ -700,7 +700,7 @@ pub(super) fn native_global_escape(
             escaped.push_str(&format!("%u{code_unit:04X}"));
         }
     }
-    Ok(Value::String(escaped))
+    Ok(Value::String(escaped.into()))
 }
 
 fn is_escape_unescaped(code_unit: u16) -> bool {
@@ -732,7 +732,7 @@ pub(super) fn native_global_unescape(
         output.push_str(&string_from_code_unit(code_units[index]));
         index += 1;
     }
-    Ok(Value::String(output))
+    Ok(Value::String(output.into()))
 }
 
 fn parse_hex_escape(code_units: &[u16], index: usize) -> Option<u16> {

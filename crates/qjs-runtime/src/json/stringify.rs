@@ -34,7 +34,7 @@ pub(crate) fn native_json_stringify(
     );
     let mut state = ctx;
     match serialize_json_property("", Value::Object(wrapper), &mut state, env)? {
-        Some(json) => Ok(Value::String(json)),
+        Some(json) => Ok(Value::String(json.into())),
         None => Ok(Value::Undefined),
     }
 }
@@ -60,7 +60,7 @@ fn build_property_list(
     for index in 0..length {
         let item = property_value(replacer.clone(), &index.to_string(), env)?;
         let key = match item {
-            Value::String(value) => Some(value),
+            Value::String(value) => Some(value.to_string()),
             Value::Number(value) => Some(number::number_to_js_string(value)),
             Value::Object(object)
                 if wrapper_string_value(&object).is_some()
@@ -129,7 +129,7 @@ fn serialize_json_property(
             value = call_function(
                 to_json,
                 value,
-                vec![Value::String(key.to_owned())],
+                vec![Value::String(key.to_owned().into())],
                 env,
                 false,
             )?;
@@ -139,7 +139,7 @@ fn serialize_json_property(
         value = call_function(
             replacer.clone(),
             holder,
-            vec![Value::String(key.to_owned()), value],
+            vec![Value::String(key.to_owned().into()), value],
             env,
             false,
         )?;
@@ -337,7 +337,7 @@ fn unbox_json_wrapper(value: Value, env: &mut CallEnv) -> Result<Value, RuntimeE
             to_number_with_env(Value::Object(object), env)?,
         )),
         Value::Object(object) if wrapper_string_value(&object).is_some() => Ok(Value::String(
-            to_js_string_with_env(Value::Object(object), env)?,
+            to_js_string_with_env(Value::Object(object), env)?.into(),
         )),
         Value::Object(object) => Ok(wrapper_boolean_value(&object)
             .map(Value::Boolean)

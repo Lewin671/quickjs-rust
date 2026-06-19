@@ -10,7 +10,7 @@ fn indexed_write_routes_through_per_kind_conversion() {
              a[0] + ',' + a[1] + ',' + a[2] + '|' \
              + Array.prototype.join.call(new Uint8Array(a.buffer));"
         ),
-        Ok(Value::String("1,255,3|1,255,3".to_owned()))
+        Ok(Value::String("1,255,3|1,255,3".to_owned().into()))
     );
     assert_eq!(
         eval("let c = new Uint8ClampedArray(1); c[0] = 300; c[0];"),
@@ -18,11 +18,11 @@ fn indexed_write_routes_through_per_kind_conversion() {
     );
     assert_eq!(
         eval("let b = new BigInt64Array(1); b[0] = 5n; typeof b[0] + ':' + b[0];"),
-        Ok(Value::String("bigint:5".to_owned()))
+        Ok(Value::String("bigint:5".to_owned().into()))
     );
     assert_eq!(
         eval("let a = new Uint8Array([1]); Reflect.set(a, 0, 257) + ':' + a[0];"),
-        Ok(Value::String("true:1".to_owned()))
+        Ok(Value::String("true:1".to_owned().into()))
     );
 }
 
@@ -34,14 +34,14 @@ fn reflect_set_typed_array_index_uses_receiver_define_semantics() {
              let value = { valueOf() { throw 'coerced'; } }; \
              Reflect.set(target, 0, value, receiver) + ':' + target[0] + ':' + (receiver[0] === value);"
         ),
-        Ok(Value::String("true:0:true".to_owned()))
+        Ok(Value::String("true:0:true".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let target = new Uint8Array([0]); let receiver = new Uint8Array([1]); \
              Reflect.set(target, 0, 257, receiver) + ':' + target[0] + ':' + receiver[0];"
         ),
-        Ok(Value::String("true:0:1".to_owned()))
+        Ok(Value::String("true:0:1".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -50,14 +50,14 @@ fn reflect_set_typed_array_index_uses_receiver_define_semantics() {
              Reflect.set(target, 1, value, receiver) + ':' + target[1] + ':' \
              + receiver.hasOwnProperty(1) + ':' + calls;"
         ),
-        Ok(Value::String("false:0:false:0".to_owned()))
+        Ok(Value::String("false:0:false:0".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let target = new BigInt64Array([0n]); let receiver = new BigInt64Array([1n]); \
              Reflect.set(target, 0, Object(2n), receiver) + ':' + target[0] + ':' + receiver[0];"
         ),
-        Ok(Value::String("true:0:2".to_owned()))
+        Ok(Value::String("true:0:2".to_owned().into()))
     );
 }
 
@@ -79,7 +79,7 @@ fn indexed_write_drops_out_of_range_and_canonical_indices() {
             "let log = []; let a = new Uint8Array(1); \
              a[3] = { valueOf() { log.push('x'); return 0; } }; log.join(',');"
         ),
-        Ok(Value::String("x".to_owned()))
+        Ok(Value::String("x".to_owned().into()))
     );
 }
 
@@ -87,7 +87,7 @@ fn indexed_write_drops_out_of_range_and_canonical_indices() {
 fn non_numeric_property_writes_still_work() {
     assert_eq!(
         eval("let a = new Uint8Array(1); a.foo = 'bar'; a.foo;"),
-        Ok(Value::String("bar".to_owned()))
+        Ok(Value::String("bar".to_owned().into()))
     );
 }
 
@@ -105,14 +105,14 @@ fn detached_typed_array_numeric_delete_succeeds() {
             "let a = new BigInt64Array([1n]); a.buffer.transfer(); \
              Reflect.deleteProperty(a, 0) + ':' + Reflect.deleteProperty(a, '-0');"
         ),
-        Ok(Value::String("true:true".to_owned()))
+        Ok(Value::String("true:true".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let a = new BigInt64Array([1n]); a.extra = 1; a.buffer.transfer(); \
              delete a.extra + ':' + a.hasOwnProperty('extra');"
         ),
-        Ok(Value::String("true:false".to_owned()))
+        Ok(Value::String("true:false".to_owned().into()))
     );
 }
 
@@ -130,7 +130,7 @@ fn own_property_descriptor_uses_current_indexed_element_state() {
              before.value + ':' + before.enumerable + ':' + before.writable + ':' \
              + before.configurable + '|' + grown.value + '|' + (detached === undefined);"
         ),
-        Ok(Value::String("7:true:true:true|9|true".to_owned()))
+        Ok(Value::String("7:true:true:true|9|true".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -156,7 +156,9 @@ fn indexed_reads_use_current_resizable_buffer_bounds() {
              shrunk + '|' + fixed.length + ':' + fixed[2] + ':' \
                + tracking.length + ':' + tracking[3];"
         ),
-        Ok(Value::String("true:true:1:20:true|4:0:4:0".to_owned()))
+        Ok(Value::String(
+            "true:true:1:20:true|4:0:4:0".to_owned().into()
+        ))
     );
 }
 
@@ -182,7 +184,7 @@ fn define_own_property_uses_integer_indexed_semantics() {
              + rejectFractional + ':' + (a['0.5'] === undefined);"
         ),
         Ok(Value::String(
-            "true:1:false:2:false:true:false:true".to_owned()
+            "true:1:false:2:false:true:false:true".to_owned().into()
         ))
     );
     assert_eq!(
@@ -190,7 +192,7 @@ fn define_own_property_uses_integer_indexed_semantics() {
             "let a = new BigInt64Array([1n]); \
              Reflect.defineProperty(a, '0', { value: Object(2n) }) + ':' + a[0];"
         ),
-        Ok(Value::String("true:2".to_owned()))
+        Ok(Value::String("true:2".to_owned().into()))
     );
 }
 
@@ -206,7 +208,7 @@ fn object_define_property_throws_for_rejected_typed_array_indices() {
              catch (e) { badAttrs = e instanceof TypeError; } \
              badIndex + ':' + badAttrs + ':' + a[0];"
         ),
-        Ok(Value::String("true:true:1".to_owned()))
+        Ok(Value::String("true:true:1".to_owned().into()))
     );
 }
 
@@ -220,7 +222,7 @@ fn typed_array_define_property_coercion_order_matches_integer_indexed_set() {
              let rejected = Reflect.defineProperty(a, '1', { value }); \
              ok + ':' + rejected + ':' + calls + ':' + a[0] + ':' + (a[1] === undefined);"
         ),
-        Ok(Value::String("true:false:1:2:true".to_owned()))
+        Ok(Value::String("true:false:1:2:true".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -230,7 +232,7 @@ fn typed_array_define_property_coercion_order_matches_integer_indexed_set() {
              }); \
              ok + ':' + (a[0] === undefined);"
         ),
-        Ok(Value::String("true:true".to_owned()))
+        Ok(Value::String("true:true".to_owned().into()))
     );
 }
 
@@ -244,7 +246,7 @@ fn detached_typed_array_for_in_skips_stale_index_descriptors() {
              for (let key in a) { after += 1; } \
              before + ':' + after;"
         ),
-        Ok(Value::String("4:0".to_owned()))
+        Ok(Value::String("4:0".to_owned().into()))
     );
 }
 
@@ -260,7 +262,7 @@ fn own_keys_track_resizable_typed_array_length() {
              b.resize(1); let boundary = Reflect.ownKeys(a).join(','); \
              grown + '|' + shrunk + '|' + boundary;"
         ),
-        Ok(Value::String("0,1,2,3,4|0,1|".to_owned()))
+        Ok(Value::String("0,1,2,3,4|0,1|".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -271,7 +273,7 @@ fn own_keys_track_resizable_typed_array_length() {
              b.resize(2); let out = Reflect.ownKeys(a).join(','); \
              initial + '|' + grown + '|' + out;"
         ),
-        Ok(Value::String("0,1|0,1|".to_owned()))
+        Ok(Value::String("0,1|0,1|".to_owned().into()))
     );
 }
 
@@ -284,7 +286,7 @@ fn own_keys_keep_non_index_properties_after_dynamic_indices() {
              b.resize(2); \
              Object.keys(a).join(',') + '|' + Object.getOwnPropertyNames(a).join(',');"
         ),
-        Ok(Value::String("0,1,extra|0,1,extra".to_owned()))
+        Ok(Value::String("0,1,extra|0,1,extra".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -293,6 +295,6 @@ fn own_keys_keep_non_index_properties_after_dynamic_indices() {
              b.resize(3); let keys = Reflect.ownKeys(a); \
              keys.length + ':' + keys.slice(0, 3).join(',') + ':' + (keys[3] === s);"
         ),
-        Ok(Value::String("4:0,1,2:true".to_owned()))
+        Ok(Value::String("4:0,1,2:true".to_owned().into()))
     );
 }

@@ -6,7 +6,7 @@ fn evaluates_array_constructor_length_argument() {
     assert_eq!(eval("new Array(3)[0];"), Ok(Value::Undefined));
     assert_eq!(
         eval("let value = new Array('3'); value.length + ':' + value[0];"),
-        Ok(Value::String("1:3".to_owned()))
+        Ok(Value::String("1:3".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -63,7 +63,7 @@ fn evaluates_array_of_static_constructor() {
         eval(
             "let values = Array.of(1, 'x', true, null, undefined); values.length + ':' + values[0] + ':' + values[1] + ':' + values[2] + ':' + (values[3] === null) + ':' + (values[4] === undefined);"
         ),
-        Ok(Value::String("5:1:x:true:true:true".to_owned()))
+        Ok(Value::String("5:1:x:true:true:true".to_owned().into()))
     );
     assert_eq!(eval("Array.of(3).length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("Array.of(3)[0];"), Ok(Value::Number(3.0)));
@@ -75,7 +75,7 @@ fn evaluates_array_of_static_constructor() {
         eval(
             "function Coop() {} let coop = Array.of.call(Coop, 'a', 'b'); (coop instanceof Coop) + ':' + coop.length + ':' + coop[0] + ':' + coop[1];"
         ),
-        Ok(Value::String("true:2:a:b".to_owned()))
+        Ok(Value::String("true:2:a:b".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -105,7 +105,7 @@ fn evaluates_array_of_static_constructor() {
         eval(
             "let hits = 0; let value = 0; function Pack() { Object.defineProperty(this, 'length', { set: function(next) { hits = hits + 1; value = next; } }); } Array.of.call(Pack, 'a', 'b'); hits + ':' + value;"
         ),
-        Ok(Value::String("1:2".to_owned()))
+        Ok(Value::String("1:2".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -122,15 +122,17 @@ fn evaluates_array_from_static_constructor() {
         eval(
             "let source = [0, 'foo', undefined, Infinity]; let result = Array.from(source); result.length + ':' + result[0] + ':' + result[1] + ':' + (result[2] === undefined) + ':' + result[3] + ':' + (result === source);"
         ),
-        Ok(Value::String("4:0:foo:true:Infinity:false".to_owned()))
+        Ok(Value::String(
+            "4:0:foo:true:Infinity:false".to_owned().into()
+        ))
     );
     assert_eq!(
         eval("Array.from('Test').join('');"),
-        Ok(Value::String("Test".to_owned()))
+        Ok(Value::String("Test".to_owned().into()))
     );
     assert_eq!(
         eval("Array.from({ length: 3, 0: 'a', 2: 'c' }).join('|');"),
-        Ok(Value::String("a||c".to_owned()))
+        Ok(Value::String("a||c".to_owned().into()))
     );
     assert_eq!(
         eval("Array.from.call(Object, []).constructor === Object;"),
@@ -146,7 +148,7 @@ fn evaluates_array_from_static_constructor() {
         eval(
             "function C() { Object.defineProperty(this, '0', { value: 1, writable: false, configurable: true }); } let result = Array.from.call(C, { length: 1, 0: 2 }); let desc = Object.getOwnPropertyDescriptor(result, '0'); result[0] + ':' + desc.writable + ':' + desc.enumerable + ':' + desc.configurable;"
         ),
-        Ok(Value::String("2:true:true:true".to_owned()))
+        Ok(Value::String("2:true:true:true".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -166,13 +168,13 @@ fn evaluates_array_from_static_constructor() {
 fn exposes_array_from_async_static_surface() {
     assert_eq!(
         eval("typeof Array.fromAsync + ':' + Array.fromAsync.length + ':' + Array.fromAsync.name;"),
-        Ok(Value::String("function:1:fromAsync".to_owned()))
+        Ok(Value::String("function:1:fromAsync".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let desc = Object.getOwnPropertyDescriptor(Array, 'fromAsync'); desc.writable + ':' + desc.enumerable + ':' + desc.configurable;"
         ),
-        Ok(Value::String("true:false:true".to_owned()))
+        Ok(Value::String("true:false:true".to_owned().into()))
     );
     assert_eq!(
         eval("Array.fromAsync.hasOwnProperty('prototype');"),
@@ -201,7 +203,7 @@ fn array_from_async_resolves_array_like_and_sync_iterable_inputs() {
         ),
         Some((
             "fulfilled".to_owned(),
-            Value::String("3:a:b:undefined".to_owned())
+            Value::String("3:a:b:undefined".to_owned().into())
         ))
     );
     assert_eq!(
@@ -209,7 +211,7 @@ fn array_from_async_resolves_array_like_and_sync_iterable_inputs() {
             &eval("Array.fromAsync('hi', function(value, index) { return value + index; }).then(function(value) { return value.join(''); });")
                 .unwrap()
         ),
-        Some(("fulfilled".to_owned(), Value::String("h0i1".to_owned())))
+        Some(("fulfilled".to_owned(), Value::String("h0i1".to_owned().into())))
     );
     assert_eq!(
         promise::promise_debug_state_result(
@@ -218,7 +220,7 @@ fn array_from_async_resolves_array_like_and_sync_iterable_inputs() {
             )
             .unwrap()
         ),
-        Some(("fulfilled".to_owned(), Value::String("xy".to_owned())))
+        Some(("fulfilled".to_owned(), Value::String("xy".to_owned().into())))
     );
     assert_eq!(
         promise::promise_debug_state_result(
@@ -227,7 +229,7 @@ fn array_from_async_resolves_array_like_and_sync_iterable_inputs() {
             )
             .unwrap()
         ),
-        Some(("fulfilled".to_owned(), Value::String("1:2".to_owned())))
+        Some(("fulfilled".to_owned(), Value::String("1:2".to_owned().into())))
     );
 }
 
@@ -253,7 +255,7 @@ fn array_from_async_awaits_thenable_inputs_and_map_results() {
             )
             .unwrap()
         ),
-        Some(("fulfilled".to_owned(), Value::String("1:8".to_owned())))
+        Some(("fulfilled".to_owned(), Value::String("1:8".to_owned().into())))
     );
 }
 
@@ -289,7 +291,10 @@ fn array_from_async_awaits_async_iterable_mapped_thenables() {
             )
             .unwrap()
         ),
-        Some(("fulfilled".to_owned(), Value::String("3:0,1,2".to_owned())))
+        Some((
+            "fulfilled".to_owned(),
+            Value::String("3:0,1,2".to_owned().into())
+        ))
     );
 }
 
@@ -311,7 +316,7 @@ fn array_from_async_closes_iterators_when_async_mapping_rejects() {
         ),
         Some((
             "fulfilled".to_owned(),
-            Value::String("true:true".to_owned())
+            Value::String("true:true".to_owned().into())
         ))
     );
 
@@ -331,7 +336,7 @@ fn array_from_async_closes_iterators_when_async_mapping_rejects() {
         ),
         Some((
             "fulfilled".to_owned(),
-            Value::String("true:true".to_owned())
+            Value::String("true:true".to_owned().into())
         ))
     );
 }
@@ -411,7 +416,7 @@ fn array_from_async_sync_iterator_close_writes_back_captured_generator_locals() 
             )
             .unwrap()
         ),
-        Some(("fulfilled".to_owned(), Value::String("1".to_owned())))
+        Some(("fulfilled".to_owned(), Value::String("1".to_owned().into())))
     );
 }
 
@@ -428,7 +433,7 @@ fn array_from_async_boxes_sloppy_primitive_this_arg() {
         ),
         Some((
             "fulfilled".to_owned(),
-            Value::String("object:true:true".to_owned())
+            Value::String("object:true:true".to_owned().into())
         ))
     );
 
@@ -444,7 +449,7 @@ fn array_from_async_boxes_sloppy_primitive_this_arg() {
         ),
         Some((
             "fulfilled".to_owned(),
-            Value::String("object:true:true".to_owned())
+            Value::String("object:true:true".to_owned().into())
         ))
     );
 }
@@ -467,7 +472,7 @@ fn array_from_async_custom_constructor_sets_proxy_length_after_elements() {
         ),
         Some((
             "fulfilled".to_owned(),
-            Value::String("define 0|define 1|set length".to_owned())
+            Value::String("define 0|define 1|set length".to_owned().into())
         ))
     );
 }
@@ -519,7 +524,9 @@ fn exposes_array_species_accessor() {
             "let desc = Object.getOwnPropertyDescriptor(Array, Symbol.species); let receiver = {}; [desc.get.call(receiver) === receiver, desc.set === undefined, desc.enumerable, desc.configurable, desc.get.name, desc.get.length].join(':');"
         ),
         Ok(Value::String(
-            "true:true:false:true:get [Symbol.species]:0".to_owned()
+            "true:true:false:true:get [Symbol.species]:0"
+                .to_owned()
+                .into()
         ))
     );
 }
@@ -528,7 +535,7 @@ fn exposes_array_species_accessor() {
 fn evaluates_array_from_mapping() {
     assert_eq!(
         eval("Array.from([1, 2], function(value, index) { return value + index; }).join();"),
-        Ok(Value::String("1,3".to_owned()))
+        Ok(Value::String("1,3".to_owned().into()))
     );
     assert_eq!(
         eval("Array.from([1], function(value) { return value + this.offset; }, { offset: 4 })[0];"),
@@ -542,25 +549,25 @@ fn evaluates_array_from_mapping() {
 fn evaluates_array_from_iterables() {
     assert_eq!(
         eval("Array.from(new Set(['a', 'b'])).join('|');"),
-        Ok(Value::String("a|b".to_owned()))
+        Ok(Value::String("a|b".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let source = { length: 1, 0: 'array-like' }; source[Symbol.iterator] = function() { return ['iterable'][Symbol.iterator](); }; Array.from(source)[0];"
         ),
-        Ok(Value::String("iterable".to_owned()))
+        Ok(Value::String("iterable".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let source = {}; source[Symbol.iterator] = function() { let index = 0; return { next: function() { index = index + 1; return index > 2 ? { done: true } : { value: index * 3, done: false }; } }; }; Array.from(source).join();"
         ),
-        Ok(Value::String("3,6".to_owned()))
+        Ok(Value::String("3,6".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let log = ''; function C() { log += 'c'; } let source = {}; source[Symbol.iterator] = function() { log += 'i'; return { next: function() { return { done: true }; } }; }; let result = Array.from.call(C, source); log + ':' + (result instanceof C);"
         ),
-        Ok(Value::String("ci:true".to_owned()))
+        Ok(Value::String("ci:true".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -576,19 +583,19 @@ fn maps_array_from_iterables_during_consumption() {
         eval(
             "let log = ''; let source = {}; source[Symbol.iterator] = function() { let index = 0; return { next: function() { log = log + 'n' + index; index = index + 1; return index > 2 ? { done: true } : { value: index, done: false }; } }; }; Array.from(source, function(value, index) { log = log + 'm' + index; return value; }); log;"
         ),
-        Ok(Value::String("n0m0n1m1n2".to_owned()))
+        Ok(Value::String("n0m0n1m1n2".to_owned().into()))
     );
     assert_eq!(
         eval(
             "Array.from(new Set([1, 2]), function(value, index) { return value + index + this.offset; }, { offset: 4 }).join();"
         ),
-        Ok(Value::String("5,7".to_owned()))
+        Ok(Value::String("5,7".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let closeCount = 0; let marker = {}; let source = {}; source[Symbol.iterator] = function() { return { return: function() { closeCount += 1; return {}; }, next: function() { return { value: 1, done: false }; } }; }; let caught = false; try { Array.from(source, function() { throw marker; }); } catch (error) { caught = error === marker; } caught + ':' + closeCount;"
         ),
-        Ok(Value::String("true:1".to_owned()))
+        Ok(Value::String("true:1".to_owned().into()))
     );
     assert_eq!(
         eval(

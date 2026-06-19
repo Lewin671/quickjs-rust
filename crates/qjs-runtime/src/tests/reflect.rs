@@ -4,11 +4,11 @@ use crate::{Value, eval};
 fn evaluates_reflect_prototype_builtins() {
     assert_eq!(
         eval("typeof Reflect;"),
-        Ok(Value::String("object".to_owned()))
+        Ok(Value::String("object".to_owned().into()))
     );
     assert_eq!(
         eval("typeof Reflect.getPrototypeOf;"),
-        Ok(Value::String("function".to_owned()))
+        Ok(Value::String("function".to_owned().into()))
     );
     assert_eq!(eval("Reflect.apply.length;"), Ok(Value::Number(3.0)));
     assert_eq!(eval("Reflect.construct.length;"), Ok(Value::Number(2.0)));
@@ -71,13 +71,13 @@ fn evaluates_reflect_prototype_builtins() {
         eval(
             "function join(a, b) { return a + ':' + b + ':' + arguments.length; } Reflect.apply(join, null, { 0: 'x', 1: 'y', length: 2 });"
         ),
-        Ok(Value::String("x:y:2".to_owned()))
+        Ok(Value::String("x:y:2".to_owned().into()))
     );
     assert_eq!(
         eval(
             "function count() { return arguments.length + ':' + arguments[0]; } let args = function() {}; Object.defineProperty(args, 'length', { get: function() { return 1; } }); Reflect.apply(count, null, args);"
         ),
-        Ok(Value::String("1:undefined".to_owned()))
+        Ok(Value::String("1:undefined".to_owned().into()))
     );
     assert_eq!(
         eval("function getThis() { return this; } Reflect.apply(getThis, undefined, []) === this;"),
@@ -174,7 +174,7 @@ fn evaluates_reflect_prototype_builtins() {
         eval(
             "let array = [1, 2, 3]; let hints = []; let length = {}; length[Symbol.toPrimitive] = function(hint) { hints.push(hint); Object.defineProperty(array, 'length', { writable: false }); return 0; }; Reflect.set(array, 'length', length) + ':' + hints.join() + ':' + array.length;"
         ),
-        Ok(Value::String("false:number,number:3".to_owned()))
+        Ok(Value::String("false:number,number:3".to_owned().into()))
     );
     assert_eq!(
         eval("function f() {} Reflect.set(f, 'value', 53) && f.value;"),
@@ -254,13 +254,13 @@ fn evaluates_reflect_prototype_builtins() {
         eval(
             "let log = []; let proto = new Proxy({}, { has: function(target, key) { log.push(key); return key === 'marker'; } }); let object = {}; Reflect.setPrototypeOf(object, proto); Reflect.has(object, 'marker') + ':' + log.join('|');"
         ),
-        Ok(Value::String("true:marker".to_owned()))
+        Ok(Value::String("true:marker".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let log = []; let proto = new Proxy({ marker: 1 }, { get: function(target, key, receiver) { log.push(key); return Reflect.get(target, key, receiver); } }); let array = []; Reflect.setPrototypeOf(array, proto); Reflect.getPrototypeOf(array).marker + ':' + log.join('|');"
         ),
-        Ok(Value::String("1:marker".to_owned()))
+        Ok(Value::String("1:marker".to_owned().into()))
     );
     assert_eq!(
         eval("Reflect.has(function f() {}, 'call');"),
@@ -299,14 +299,16 @@ fn evaluates_reflect_prototype_builtins() {
             "Object.getOwnPropertyNames(Reflect.getOwnPropertyDescriptor({ value: 1 }, 'value')).join(',');"
         ),
         Ok(Value::String(
-            "value,writable,enumerable,configurable".to_owned()
+            "value,writable,enumerable,configurable".to_owned().into()
         ))
     );
     assert_eq!(
         eval(
             "let object = {}; Object.defineProperty(object, 'value', { get: function() {}, configurable: true }); Object.getOwnPropertyNames(Reflect.getOwnPropertyDescriptor(object, 'value')).join(',');"
         ),
-        Ok(Value::String("get,set,enumerable,configurable".to_owned()))
+        Ok(Value::String(
+            "get,set,enumerable,configurable".to_owned().into()
+        ))
     );
     assert_eq!(
         eval("Reflect.getOwnPropertyDescriptor([1, 2], 'length').enumerable;"),
@@ -330,7 +332,7 @@ fn evaluates_reflect_prototype_builtins() {
         eval(
             "let object = {}; Reflect.defineProperty(object, 'hidden', { value: 23 }); Object.keys(object).length + ':' + object.hidden;"
         ),
-        Ok(Value::String("0:23".to_owned()))
+        Ok(Value::String("0:23".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -396,23 +398,23 @@ fn evaluates_reflect_prototype_builtins() {
     );
     assert_eq!(
         eval("Reflect.ownKeys({ a: 1, b: 2 }).join();"),
-        Ok(Value::String("a,b".to_owned()))
+        Ok(Value::String("a,b".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let object = {}; Object.defineProperty(object, 'hidden', { value: 1 }); object.shown = 2; Reflect.ownKeys(object).join();"
         ),
-        Ok(Value::String("hidden,shown".to_owned()))
+        Ok(Value::String("hidden,shown".to_owned().into()))
     );
     assert_eq!(
         eval("Reflect.ownKeys([1, 2]).join();"),
-        Ok(Value::String("0,1,length".to_owned()))
+        Ok(Value::String("0,1,length".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let a = Symbol('a'); let b = Symbol('b'); let object = {}; object[a] = 1; Object.defineProperty(object, b, { value: 2 }); let keys = Reflect.ownKeys(object); keys.length + ':' + (keys[0] === a) + ':' + (keys[1] === b);"
         ),
-        Ok(Value::String("2:true:true".to_owned()))
+        Ok(Value::String("2:true:true".to_owned().into()))
     );
     assert!(eval("Reflect.apply(1, null, []);").is_err());
     assert!(eval("Reflect.apply(function f() {}, null, 1);").is_err());

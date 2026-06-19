@@ -19,7 +19,10 @@ pub(crate) fn native_string_prototype_iterator(
         crate::iterator::BuiltinIteratorKind::String,
     );
     let iterator = ObjectRef::with_prototype(HashMap::new(), prototype);
-    iterator.define_non_enumerable(STRING_ITERATOR_STRING.to_owned(), Value::String(source));
+    iterator.define_non_enumerable(
+        STRING_ITERATOR_STRING.to_owned(),
+        Value::String(source.into()),
+    );
     iterator.define_non_enumerable(STRING_ITERATOR_NEXT_INDEX.to_owned(), Value::Number(0.0));
     iterator.define_non_enumerable(STRING_ITERATOR_DONE.to_owned(), Value::Boolean(false));
     Ok(Value::Object(iterator))
@@ -58,7 +61,7 @@ pub(crate) fn native_string_iterator_next(this_value: Value) -> Result<Value, Ru
         Value::Number((index + width) as f64),
     );
     Ok(iterator_result(
-        Value::String(string_from_code_units(&code_units[index..index + width])),
+        Value::String(string_from_code_units(&code_units[index..index + width]).into()),
         false,
     ))
 }
@@ -84,7 +87,7 @@ fn iterator_index(iterator: &ObjectRef) -> Result<usize, RuntimeError> {
 
 fn iterator_string(iterator: &ObjectRef) -> Result<String, RuntimeError> {
     match iterator_slot(iterator, STRING_ITERATOR_STRING)? {
-        Value::String(value) => Ok(value),
+        Value::String(value) => Ok(value.to_string()),
         _ => Err(RuntimeError {
             thrown: None,
             message: "String iterator source is invalid".to_owned(),

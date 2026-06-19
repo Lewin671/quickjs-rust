@@ -58,11 +58,9 @@ pub(crate) fn native_uint8_array_prototype_to_base64(
             _ => 0,
         })
         .collect();
-    Ok(Value::String(encode_base64(
-        &bytes,
-        options.alphabet,
-        options.omit_padding,
-    )))
+    Ok(Value::String(
+        encode_base64(&bytes, options.alphabet, options.omit_padding).into(),
+    ))
 }
 
 pub(crate) fn native_uint8_array_prototype_set_from_base64(
@@ -113,7 +111,7 @@ pub(crate) fn native_uint8_array_prototype_set_from_base64(
 
 fn base64_source(value: Option<&Value>, method: &str) -> Result<String, RuntimeError> {
     match value {
-        Some(Value::String(source)) => Ok(source.clone()),
+        Some(Value::String(source)) => Ok(source.clone().to_string()),
         _ => Err(RuntimeError {
             thrown: None,
             message: format!("TypeError: {method} requires a string"),
@@ -233,13 +231,13 @@ fn base64_decode_options(
             let last_chunk_handling = property_value(value, "lastChunkHandling", env)?;
             match last_chunk_handling {
                 Value::Undefined => {}
-                Value::String(name) if name == "loose" => {
+                Value::String(name) if name == "loose".to_owned().into() => {
                     options.last_chunk_handling = LastChunkHandling::Loose;
                 }
-                Value::String(name) if name == "strict" => {
+                Value::String(name) if name == "strict".to_owned().into() => {
                     options.last_chunk_handling = LastChunkHandling::Strict;
                 }
-                Value::String(name) if name == "stop-before-partial" => {
+                Value::String(name) if name == "stop-before-partial".to_owned().into() => {
                     options.last_chunk_handling = LastChunkHandling::StopBeforePartial;
                 }
                 _ => {
@@ -261,8 +259,10 @@ fn base64_decode_options(
 fn base64_alphabet_option(value: Value) -> Result<Base64Alphabet, RuntimeError> {
     match value {
         Value::Undefined => Ok(Base64Alphabet::Base64),
-        Value::String(name) if name == "base64" => Ok(Base64Alphabet::Base64),
-        Value::String(name) if name == "base64url" => Ok(Base64Alphabet::Base64Url),
+        Value::String(name) if name == "base64".to_owned().into() => Ok(Base64Alphabet::Base64),
+        Value::String(name) if name == "base64url".to_owned().into() => {
+            Ok(Base64Alphabet::Base64Url)
+        }
         _ => Err(RuntimeError {
             thrown: None,
             message: "TypeError: invalid base64 alphabet".to_owned(),

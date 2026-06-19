@@ -26,7 +26,7 @@ pub(crate) fn native_json_raw_json(
     }
 
     let object = ObjectRef::with_prototype(HashMap::new(), None);
-    object.set(RAW_JSON_PROPERTY.to_owned(), Value::String(text));
+    object.set(RAW_JSON_PROPERTY.to_owned(), Value::String(text.into()));
     object.mark_raw_json();
     object.freeze();
     Ok(Value::Object(object))
@@ -67,7 +67,7 @@ pub(crate) fn raw_json_value(object: &ObjectRef) -> Option<String> {
     }
     match object.own_property(RAW_JSON_PROPERTY) {
         Some(property) => match property.value {
-            Value::String(value) => Some(value),
+            Value::String(value) => Some(value.to_string()),
             _ => None,
         },
         None => None,

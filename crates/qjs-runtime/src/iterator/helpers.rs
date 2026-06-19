@@ -84,7 +84,7 @@ pub(super) fn native_iterator_concat(
     let helper = ObjectRef::with_prototype(HashMap::new(), super::iterator_helper_prototype(env));
     helper.define_non_enumerable(
         HELPER_KIND.to_owned(),
-        Value::String(HelperKind::Concat.tag().to_owned()),
+        Value::String(HelperKind::Concat.tag().to_owned().into()),
     );
     helper.define_non_enumerable(HELPER_DONE.to_owned(), Value::Boolean(false));
     helper.define_non_enumerable(HELPER_EXECUTING.to_owned(), Value::Boolean(false));
@@ -202,7 +202,10 @@ pub(super) fn native_lazy_helper(
     };
 
     let helper = ObjectRef::with_prototype(HashMap::new(), super::iterator_helper_prototype(env));
-    helper.define_non_enumerable(HELPER_KIND.to_owned(), Value::String(kind.tag().to_owned()));
+    helper.define_non_enumerable(
+        HELPER_KIND.to_owned(),
+        Value::String(kind.tag().to_owned().into()),
+    );
     helper.define_non_enumerable(HELPER_UNDERLYING.to_owned(), iterator.clone());
     helper.define_non_enumerable(HELPER_NEXT.to_owned(), next);
     helper.define_non_enumerable(HELPER_DONE.to_owned(), Value::Boolean(false));

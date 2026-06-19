@@ -6,11 +6,11 @@ fn numeric_literal_keys_use_their_canonical_name() {
     // notations for the same value name the same property.
     assert_eq!(
         eval("let o = { 0b10: 'a', 0x10: 'b', 1.0: 'c' }; o[2] + o[16] + o[1];"),
-        Ok(Value::String("abc".to_owned()))
+        Ok(Value::String("abc".to_owned().into()))
     );
     assert_eq!(
         eval("let o = { 0o17: 'x' }; o['15'];"),
-        Ok(Value::String("x".to_owned()))
+        Ok(Value::String("x".to_owned().into()))
     );
 }
 
@@ -36,7 +36,7 @@ fn evaluates_object_literals_and_member_access() {
     );
     assert_eq!(
         eval("let o = { [1 + 1]: 'two' }; o[2];"),
-        Ok(Value::String("two".to_owned()))
+        Ok(Value::String("two".to_owned().into()))
     );
     assert_eq!(
         eval("let key = Symbol('key'); let object = { [key]: 42 }; object[key];"),
@@ -66,25 +66,25 @@ fn evaluates_object_spread_properties() {
         eval(
             "let source = { x: 1, y: 2 }; let object = { ...source, y: 3 }; object.x + ':' + object.y + ':' + Object.keys(object).join(',');"
         ),
-        Ok(Value::String("1:3:x,y".to_owned()))
+        Ok(Value::String("1:3:x,y".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let object = { a: 1, ...null, ...undefined, b: 2 }; Object.keys(object).join(',') + ':' + object.a + ':' + object.b;"
         ),
-        Ok(Value::String("a,b:1:2".to_owned()))
+        Ok(Value::String("a,b:1:2".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let source = { x: 1 }; let object = { ...source, y: (source.x = 9) }; object.x + ':' + object.y + ':' + source.x;"
         ),
-        Ok(Value::String("1:9:9".to_owned()))
+        Ok(Value::String("1:9:9".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let calls = 0; let source = { get x() { calls = calls + 1; return 7; } }; let object = { ...source }; object.x + ':' + calls;"
         ),
-        Ok(Value::String("7:1".to_owned()))
+        Ok(Value::String("7:1".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -108,7 +108,7 @@ fn proto_literal_special_form_sets_prototype() {
     );
     assert_eq!(
         eval("Object.keys({ __proto__: { a: 1 }, b: 2 }).join(',');"),
-        Ok(Value::String("b".to_owned()))
+        Ok(Value::String("b".to_owned().into()))
     );
     // A null proto literal yields an object with no prototype.
     assert_eq!(
@@ -147,7 +147,7 @@ fn proto_only_special_for_literal_colon_data_form() {
 fn object_prototype_proto_accessor_descriptor() {
     assert_eq!(
         eval("typeof Object.getOwnPropertyDescriptor(Object.prototype, '__proto__').get;"),
-        Ok(Value::String("function".to_owned()))
+        Ok(Value::String("function".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -157,7 +157,7 @@ fn object_prototype_proto_accessor_descriptor() {
     );
     assert_eq!(
         eval("Object.getOwnPropertyDescriptor(Object.prototype, '__proto__').get.name;"),
-        Ok(Value::String("get __proto__".to_owned()))
+        Ok(Value::String("get __proto__".to_owned().into()))
     );
     // Setter on a primitive `this` is a no-op; on null/undefined it throws.
     assert_eq!(

@@ -7,13 +7,13 @@ fn evaluates_object_group_by_arrays() {
         eval(
             "let groups = Object.groupBy([1, 2, 3, 4], function(value) { return value % 2 ? 'odd' : 'even'; }); groups.odd.join('|') + ':' + groups.even.join('|');"
         ),
-        Ok(Value::String("1|3:2|4".to_owned()))
+        Ok(Value::String("1|3:2|4".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let seen = ''; let groups = Object.groupBy(['a', 'b'], function(value, index) { seen = seen + value + index; return index; }); Object.keys(groups).join('|') + ':' + groups[0][0] + ':' + groups[1][0] + ':' + seen;"
         ),
-        Ok(Value::String("0|1:a:b:a0b1".to_owned()))
+        Ok(Value::String("0|1:a:b:a0b1".to_owned().into()))
     );
     assert!(
         eval("Object.groupBy({ 0: 'a', 1: 'b', length: 2 }, function() { return 'x'; });").is_err()
@@ -32,7 +32,7 @@ fn evaluates_object_group_by_property_keys() {
         eval(
             "let groups = Object.groupBy([1, 2], function(value) { return value === 1; }); groups.true[0] + ':' + groups.false[0];"
         ),
-        Ok(Value::String("1:2".to_owned()))
+        Ok(Value::String("1:2".to_owned().into()))
     );
     assert_eq!(
         eval(

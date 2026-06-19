@@ -4,7 +4,7 @@ use crate::{Value, eval};
 fn default_constructor_creates_instance() {
     assert_eq!(
         eval("class C {} typeof new C();"),
-        Ok(Value::String("object".to_owned()))
+        Ok(Value::String("object".to_owned().into()))
     );
 }
 
@@ -18,7 +18,7 @@ fn default_derived_constructor_arguments_do_not_shadow_outer_bindings() {
              new Derived(0, 1, 2); \
              args.length + ':' + (that instanceof Derived);"
         ),
-        Ok(Value::String("3:true".to_owned()))
+        Ok(Value::String("3:true".to_owned().into()))
     );
 }
 
@@ -96,7 +96,7 @@ fn native_super_constructors_use_derived_new_target_prototype() {
             "true:true:true:true",
         ),
     ] {
-        assert_eq!(eval(source), Ok(Value::String(expected.to_owned())));
+        assert_eq!(eval(source), Ok(Value::String(expected.to_owned().into())));
     }
 }
 
@@ -157,7 +157,7 @@ fn proxy_constructor_has_no_class_heritage_prototype() {
              catch (error) { result = error.name; } \
              [Proxy.hasOwnProperty('prototype'), result].join(':');"
         ),
-        Ok(Value::String("false:TypeError".to_owned()))
+        Ok(Value::String("false:TypeError".to_owned().into()))
     );
 }
 
@@ -181,7 +181,7 @@ fn null_extending_class_uses_function_prototype_as_constructor_parent() {
              [Object.getPrototypeOf(C) === Function.prototype, superError, returnError, reached, after].join(':');"
         ),
         Ok(Value::String(
-            "true:TypeError:ReferenceError:1:1".to_owned()
+            "true:TypeError:ReferenceError:1:1".to_owned().into()
         ))
     );
 }
@@ -237,7 +237,7 @@ fn derived_constructor_return_waits_for_lexical_super_in_cleanup() {
              } \
              typeof new C();"
         ),
-        Ok(Value::String("object".to_owned()))
+        Ok(Value::String("object".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -249,7 +249,7 @@ fn derived_constructor_return_waits_for_lexical_super_in_cleanup() {
              } \
              typeof new C();"
         ),
-        Ok(Value::String("object".to_owned()))
+        Ok(Value::String("object".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -266,6 +266,6 @@ fn derived_constructor_return_waits_for_lexical_super_in_cleanup() {
              } \
              typeof new C();"
         ),
-        Ok(Value::String("object".to_owned()))
+        Ok(Value::String("object".to_owned().into()))
     );
 }

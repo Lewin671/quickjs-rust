@@ -281,7 +281,7 @@ pub(crate) fn apply_dense_native_fast_path(
     };
     array.with_dense_argument_elements(env, |elements| {
         crate::string::string_from_code_point_numbers(elements)
-            .map(|result| result.map(Value::String))
+            .map(|result| result.map(|s| Value::String(s.into())))
     })?
 }
 
@@ -400,9 +400,9 @@ pub(crate) fn native_function_prototype_to_string(
             });
         }
     };
-    Ok(Value::String(format!(
-        "function {name}() {{ [native code] }}"
-    )))
+    Ok(Value::String(
+        format!("function {name}() {{ [native code] }}").into(),
+    ))
 }
 
 /// Resolves the name of the function wrapped (possibly through nested proxies)

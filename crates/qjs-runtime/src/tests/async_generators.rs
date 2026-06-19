@@ -14,7 +14,7 @@ fn eval_log(source: &str) -> String {
             .to_vec()
             .into_iter()
             .map(|value| match value {
-                Value::String(text) => text,
+                Value::String(text) => text.to_string(),
                 Value::Number(number) => number.to_string(),
                 Value::Boolean(flag) => flag.to_string(),
                 Value::Undefined => "undefined".to_owned(),
@@ -51,7 +51,7 @@ fn calling_async_generator_returns_an_async_generator() {
          var it = g(); typeof it.next();",
     )
     .expect("eval");
-    assert_eq!(value, Value::String("object".to_owned()));
+    assert_eq!(value, Value::String("object".to_owned().into()));
     let promise = eval(
         "async function* g() { yield 1; } \
          g().next();",
@@ -373,7 +373,7 @@ fn prototype_chain_tags() {
              Object.prototype.toString.call(Object.getPrototypeOf(g));"
         )
         .expect("eval"),
-        Value::String("[object AsyncGeneratorFunction]".to_owned())
+        Value::String("[object AsyncGeneratorFunction]".to_owned().into())
     );
     assert_eq!(
         eval(
@@ -382,7 +382,7 @@ fn prototype_chain_tags() {
              Object.prototype.toString.call(proto);"
         )
         .expect("eval"),
-        Value::String("[object AsyncGenerator]".to_owned())
+        Value::String("[object AsyncGenerator]".to_owned().into())
     );
     assert_eq!(
         eval(
@@ -410,7 +410,7 @@ fn prototype_chain_tags() {
     );
     assert_eq!(
         eval("typeof AsyncGeneratorFunction;").expect("eval"),
-        Value::String("undefined".to_owned())
+        Value::String("undefined".to_owned().into())
     );
 }
 

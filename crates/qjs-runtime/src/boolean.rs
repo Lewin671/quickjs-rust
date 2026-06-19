@@ -73,11 +73,14 @@ pub(super) fn native_boolean(
 }
 
 pub(super) fn native_boolean_prototype_to_string(this_value: Value) -> Result<Value, RuntimeError> {
-    Ok(Value::String(if this_boolean_value(this_value)? {
-        "true".to_owned()
-    } else {
-        "false".to_owned()
-    }))
+    Ok(Value::String(
+        if this_boolean_value(this_value)? {
+            "true".to_owned()
+        } else {
+            "false".to_owned()
+        }
+        .into(),
+    ))
 }
 
 pub(super) fn native_boolean_prototype_value_of(this_value: Value) -> Result<Value, RuntimeError> {

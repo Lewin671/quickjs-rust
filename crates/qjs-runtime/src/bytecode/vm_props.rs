@@ -656,7 +656,7 @@ pub(super) fn enumerable_keys(value: Value, env: &mut CallEnv) -> Result<Vec<Val
             next => current = next,
         }
     }
-    Ok(keys.into_iter().map(Value::String).collect())
+    Ok(keys.into_iter().map(|s| Value::String(s.into())).collect())
 }
 
 /// The (enumerable-own, all-own) string key lists for an ordinary value, used

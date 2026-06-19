@@ -68,7 +68,7 @@ fn accepts_well_formed_named_group_specifiers() {
     // The group is usable: backreference and `.groups` access still work.
     assert_eq!(
         eval("let m = 'ab'.match(/(?<g>a)(?<h>b)/); m.groups.g + m.groups.h"),
-        Ok(Value::String("ab".to_owned()))
+        Ok(Value::String("ab".to_owned().into()))
     );
 }
 
@@ -76,7 +76,7 @@ fn accepts_well_formed_named_group_specifiers() {
 fn accepts_valid_regexp_literal_during_compilation() {
     assert_eq!(
         eval("/[0-9]+/g.source;"),
-        Ok(Value::String("[0-9]+".to_owned()))
+        Ok(Value::String("[0-9]+".to_owned().into()))
     );
     // A genuine `new RegExp(...)` with a runtime-built invalid pattern still
     // fails at runtime, not at the parse/early stage.
@@ -88,7 +88,7 @@ fn accepts_valid_regexp_literal_during_compilation() {
 fn evaluates_regexp_constructor_identity() {
     assert_eq!(
         eval("typeof RegExp;"),
-        Ok(Value::String("function".to_owned()))
+        Ok(Value::String("function".to_owned().into()))
     );
     assert_eq!(eval("RegExp.length;"), Ok(Value::Number(2.0)));
     assert_eq!(
@@ -99,11 +99,11 @@ fn evaluates_regexp_constructor_identity() {
     assert!(eval("[].find(/./);").is_err());
     assert_eq!(
         eval("Object.prototype.toString.call(new RegExp());"),
-        Ok(Value::String("[object RegExp]".to_owned()))
+        Ok(Value::String("[object RegExp]".to_owned().into()))
     );
     assert_eq!(
         eval("new RegExp('test').toString();"),
-        Ok(Value::String("/test/".to_owned()))
+        Ok(Value::String("/test/".to_owned().into()))
     );
     assert_eq!(
         eval("let obj = { constructor: RegExp }; obj[Symbol.match] = true; RegExp(obj) === obj;"),
@@ -113,13 +113,13 @@ fn evaluates_regexp_constructor_identity() {
         eval(
             "let obj = { source: 'source text', flags: 'i' }; obj[Symbol.match] = []; let result = new RegExp(obj); Object.getPrototypeOf(result) === RegExp.prototype && result.source + ':' + result.flags;"
         ),
-        Ok(Value::String("source text:i".to_owned()))
+        Ok(Value::String("source text:i".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let obj = { source: 'source text' }; Object.defineProperty(obj, 'flags', { get: function() { throw 'flags'; } }); obj[Symbol.match] = true; let result = new RegExp(obj, 'g'); result.source + ':' + result.flags;"
         ),
-        Ok(Value::String("source text:g".to_owned()))
+        Ok(Value::String("source text:g".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -129,11 +129,11 @@ fn evaluates_regexp_constructor_identity() {
     );
     assert_eq!(
         eval("/test/.toString();"),
-        Ok(Value::String("/test/".to_owned()))
+        Ok(Value::String("/test/".to_owned().into()))
     );
     assert_eq!(
         eval("/\\n/iyg.toString();"),
-        Ok(Value::String("/\\n/giy".to_owned()))
+        Ok(Value::String("/\\n/giy".to_owned().into()))
     );
     assert_eq!(
         eval("/test/.test('a test value');"),
@@ -147,13 +147,13 @@ fn evaluates_regexp_constructor_identity() {
         eval(
             "let re = new RegExp(''); let d = Object.getOwnPropertyDescriptor(re, 'lastIndex'); re.lastIndex + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
-        Ok(Value::String("0:true:false:false".to_owned()))
+        Ok(Value::String("0:true:false:false".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let re = /./; let d = Object.getOwnPropertyDescriptor(re, 'lastIndex'); d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
-        Ok(Value::String("true:false:false".to_owned()))
+        Ok(Value::String("true:false:false".to_owned().into()))
     );
 }
 
@@ -168,7 +168,9 @@ fn exposes_regexp_species_accessor() {
             "let desc = Object.getOwnPropertyDescriptor(RegExp, Symbol.species); let receiver = {}; [desc.get.call(receiver) === receiver, desc.set === undefined, desc.enumerable, desc.configurable, desc.get.name, desc.get.length].join(':');"
         ),
         Ok(Value::String(
-            "true:true:false:true:get [Symbol.species]:0".to_owned()
+            "true:true:false:true:get [Symbol.species]:0"
+                .to_owned()
+                .into()
         ))
     );
 }
@@ -177,17 +179,19 @@ fn exposes_regexp_species_accessor() {
 fn evaluates_regexp_escape() {
     assert_eq!(
         eval("typeof RegExp.escape;"),
-        Ok(Value::String("function".to_owned()))
+        Ok(Value::String("function".to_owned().into()))
     );
     assert_eq!(eval("RegExp.escape.length;"), Ok(Value::Number(1.0)));
     assert_eq!(
         eval("RegExp.escape('abc123');"),
-        Ok(Value::String("\\x61bc123".to_owned()))
+        Ok(Value::String("\\x61bc123".to_owned().into()))
     );
     assert_eq!(
         eval(r#"RegExp.escape('^$\\.*+?()[]{}|/');"#),
         Ok(Value::String(
-            "\\^\\$\\\\\\.\\*\\+\\?\\(\\)\\[\\]\\{\\}\\|\\/".to_owned()
+            "\\^\\$\\\\\\.\\*\\+\\?\\(\\)\\[\\]\\{\\}\\|\\/"
+                .to_owned()
+                .into()
         ))
     );
     assert_eq!(
@@ -195,23 +199,24 @@ fn evaluates_regexp_escape() {
         Ok(Value::String(
             "\\x2c\\x2d\\x3d\\x3c\\x3e\\x23\\x26\\x21\\x25\\x3a\\x3b\\x40\\x7e\\x27\\x60\\x22"
                 .to_owned()
+                .into()
         ))
     );
     assert_eq!(
         eval("RegExp.escape('\\t\\n\\v\\f\\r ');"),
-        Ok(Value::String("\\t\\n\\v\\f\\r\\x20".to_owned()))
+        Ok(Value::String("\\t\\n\\v\\f\\r\\x20".to_owned().into()))
     );
     assert_eq!(
         eval("RegExp.escape(String.fromCharCode(0x00a0, 0x2028, 0xfeff));"),
-        Ok(Value::String("\\xa0\\u2028\\ufeff".to_owned()))
+        Ok(Value::String("\\xa0\\u2028\\ufeff".to_owned().into()))
     );
     assert_eq!(
         eval(r#"RegExp.escape("\ud800\udc00");"#),
-        Ok(Value::String("\\ud800\\udc00".to_owned()))
+        Ok(Value::String("\\ud800\\udc00".to_owned().into()))
     );
     assert_eq!(
         eval("RegExp.escape(String.fromCharCode(0x100));"),
-        Ok(Value::String(String::from_utf16(&[0x100]).unwrap()))
+        Ok(Value::String(String::from_utf16(&[0x100]).unwrap().into()))
     );
     assert!(eval("RegExp.escape(123);").is_err());
     assert!(eval("RegExp.escape(null);").is_err());
@@ -221,7 +226,7 @@ fn evaluates_regexp_escape() {
 fn evaluates_regexp_prototype_compile() {
     assert_eq!(
         eval("typeof RegExp.prototype.compile;"),
-        Ok(Value::String("function".to_owned()))
+        Ok(Value::String("function".to_owned().into()))
     );
     assert_eq!(
         eval("RegExp.prototype.compile.length;"),
@@ -231,17 +236,17 @@ fn evaluates_regexp_prototype_compile() {
         eval(
             "let re = /abc/gi; let same = re.compile('def'); (same === re) + ':' + re.source + ':' + re.flags + ':' + re.test('def') + ':' + re.test('DEF') + ':' + re.lastIndex;"
         ),
-        Ok(Value::String("true:def::true:false:0".to_owned()))
+        Ok(Value::String("true:def::true:false:0".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let re = /abc/g; let source = /def/i; source.lastIndex = 4; re.lastIndex = 9; let same = re.compile(source); (same === re) + ':' + (source.lastIndex === 4) + ':' + re.source + ':' + re.flags + ':' + re.test('DEF') + ':' + re.lastIndex;"
         ),
-        Ok(Value::String("true:true:def:i:true:0".to_owned()))
+        Ok(Value::String("true:true:def:i:true:0".to_owned().into()))
     );
     assert_eq!(
         eval("let re = /abc/; re.compile(); re.source + ':' + re.test('');"),
-        Ok(Value::String("(?:):true".to_owned()))
+        Ok(Value::String("(?:):true".to_owned().into()))
     );
     assert!(eval("RegExp.prototype.compile.call({}, 'abc');").is_err());
     assert!(eval("RegExp.prototype.compile.call(null, 'abc');").is_err());
@@ -250,19 +255,19 @@ fn evaluates_regexp_prototype_compile() {
         eval(
             "let re = /abc/; Object.defineProperty(re, 'lastIndex', { value: 45, writable: false }); let caught = false; try { re.compile(/def/g); } catch (error) { caught = error instanceof TypeError; } caught + ':' + re.toString() + ':' + re.lastIndex;"
         ),
-        Ok(Value::String("true:/def/g:45".to_owned()))
+        Ok(Value::String("true:/def/g:45".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let re = /test262/gi; let caught = false; try { re.compile('', 'igi'); } catch (error) { caught = error instanceof SyntaxError; } caught + ':' + re.toString() + ':' + re.test('TEsT262');"
         ),
-        Ok(Value::String("true:/test262/gi:true".to_owned()))
+        Ok(Value::String("true:/test262/gi:true".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let re = /test262/gi; let caught = false; try { re.compile('.{2,1}'); } catch (error) { caught = error instanceof SyntaxError; } caught + ':' + re.toString() + ':' + re.test('TEsT262');"
         ),
-        Ok(Value::String("true:/test262/gi:true".to_owned()))
+        Ok(Value::String("true:/test262/gi:true".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -274,7 +279,7 @@ fn evaluates_regexp_prototype_compile() {
         eval(
             "let re = /test262/gi; let caught = false; try { re.compile('\\\\2', 'u'); } catch (error) { caught = error instanceof SyntaxError; } caught + ':' + re.toString() + ':' + re.test('TEsT262');"
         ),
-        Ok(Value::String("true:/test262/gi:true".to_owned()))
+        Ok(Value::String("true:/test262/gi:true".to_owned().into()))
     );
 }
 
@@ -282,7 +287,7 @@ fn evaluates_regexp_prototype_compile() {
 fn evaluates_regexp_prototype_accessors() {
     assert_eq!(
         eval("/test/g.source;"),
-        Ok(Value::String("test".to_owned()))
+        Ok(Value::String("test".to_owned().into()))
     );
     assert_eq!(eval("/test/g.global;"), Ok(Value::Boolean(true)));
     assert_eq!(eval("/test/s.dotAll;"), Ok(Value::Boolean(true)));
@@ -300,22 +305,22 @@ fn evaluates_regexp_prototype_accessors() {
     assert_eq!(eval("RegExp.prototype.unicodeSets;"), Ok(Value::Undefined));
     assert_eq!(
         eval("Object.getOwnPropertyDescriptor(RegExp.prototype, 'unicodeSets').get.name;"),
-        Ok(Value::String("get unicodeSets".to_owned()))
+        Ok(Value::String("get unicodeSets".to_owned().into()))
     );
     assert!(eval("Object.create(RegExp.prototype).unicodeSets;").is_err());
     assert!(eval("new RegExp('.', 'v');").is_err());
     assert_eq!(eval("/test/.global;"), Ok(Value::Boolean(false)));
     assert_eq!(
         eval("/test/iyg.flags;"),
-        Ok(Value::String("giy".to_owned()))
+        Ok(Value::String("giy".to_owned().into()))
     );
     assert_eq!(
         eval("new RegExp('').source;"),
-        Ok(Value::String("(?:)".to_owned()))
+        Ok(Value::String("(?:)".to_owned().into()))
     );
     assert_eq!(
         eval("new RegExp('/').source;"),
-        Ok(Value::String("\\/".to_owned()))
+        Ok(Value::String("\\/".to_owned().into()))
     );
     assert_eq!(
         eval("eval('/' + new RegExp('/').source + '/').test('/');"),
@@ -323,7 +328,7 @@ fn evaluates_regexp_prototype_accessors() {
     );
     assert_eq!(
         eval(r#"/\u{1d306}/u.source;"#),
-        Ok(Value::String("\\u{1d306}".to_owned()))
+        Ok(Value::String("\\u{1d306}".to_owned().into()))
     );
     assert_eq!(
         eval(r#"/\ud834\udf06/u.test("𝌆");"#),
@@ -364,7 +369,7 @@ fn evaluates_regexp_prototype_accessors() {
     );
     assert_eq!(
         eval("new RegExp(String.fromCharCode(0x2028)).source;"),
-        Ok(Value::String("\\u2028".to_owned()))
+        Ok(Value::String("\\u2028".to_owned().into()))
     );
     assert_eq!(
         eval("Object.getOwnPropertyDescriptor(RegExp.prototype, 'global').set;"),
@@ -380,7 +385,7 @@ fn evaluates_regexp_prototype_accessors() {
     );
     assert_eq!(
         eval("RegExp.prototype.source;"),
-        Ok(Value::String("(?:)".to_owned()))
+        Ok(Value::String("(?:)".to_owned().into()))
     );
     assert_eq!(eval("RegExp.prototype.global;"), Ok(Value::Undefined));
     assert_eq!(eval("RegExp.prototype.dotAll;"), Ok(Value::Undefined));
@@ -401,7 +406,7 @@ fn evaluates_regexp_prototype_accessors() {
             "let get = Object.getOwnPropertyDescriptor(RegExp.prototype, 'flags').get; function throwsTypeError(value) { try { get.call(value); return false; } catch (error) { return error instanceof TypeError; } } throwsTypeError(undefined) + ':' + throwsTypeError(null) + ':' + throwsTypeError(4) + ':' + throwsTypeError('string') + ':' + throwsTypeError(false) + ':' + throwsTypeError(Symbol()) + ':' + throwsTypeError(4n);"
         ),
         Ok(Value::String(
-            "true:true:true:true:true:true:true".to_owned()
+            "true:true:true:true:true:true:true".to_owned().into()
         ))
     );
     assert_eq!(
@@ -410,7 +415,7 @@ fn evaluates_regexp_prototype_accessors() {
              Test262Error.prototype.toString = function() { return 'Test262Error'; }; \
              /a\\n/.source;"
         ),
-        Ok(Value::String("a\\n".to_owned()))
+        Ok(Value::String("a\\n".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -418,7 +423,7 @@ fn evaluates_regexp_prototype_accessors() {
              Object.defineProperty(re, 'source', { get: function() { return 'own'; } }); \
              re.source;"
         ),
-        Ok(Value::String("own".to_owned()))
+        Ok(Value::String("own".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -428,7 +433,7 @@ fn evaluates_regexp_prototype_accessors() {
              Object.defineProperty(RegExp.prototype, 'source', original); \
              result;"
         ),
-        Ok(Value::String("prototype".to_owned()))
+        Ok(Value::String("prototype".to_owned().into()))
     );
 }
 
@@ -436,7 +441,7 @@ fn evaluates_regexp_prototype_accessors() {
 fn evaluates_regexp_exec_literal_match() {
     assert_eq!(
         eval("/test/.exec('a test value')[0];"),
-        Ok(Value::String("test".to_owned()))
+        Ok(Value::String("test".to_owned().into()))
     );
     assert_eq!(eval("/missing/.exec('a test value');"), Ok(Value::Null));
     assert_eq!(
@@ -445,11 +450,11 @@ fn evaluates_regexp_exec_literal_match() {
     );
     assert_eq!(
         eval("/test/.exec('a test value').input;"),
-        Ok(Value::String("a test value".to_owned()))
+        Ok(Value::String("a test value".to_owned().into()))
     );
     assert_eq!(
         eval("RegExp('\\\\u0037+').exec('a777b')[0];"),
-        Ok(Value::String("777".to_owned()))
+        Ok(Value::String("777".to_owned().into()))
     );
     assert_eq!(
         eval("RegExp('\\\\s+').exec('a \\t b')[0].length;"),
@@ -463,47 +468,47 @@ fn evaluates_regexp_exec_literal_match() {
         eval(
             "let re = new RegExp('\\\\c' + String.fromCharCode(0x0410)); re.test('\\\\c' + String.fromCharCode(0x0410)) + ':' + re.test('c' + String.fromCharCode(0x0410));"
         ),
-        Ok(Value::String("true:false".to_owned()))
+        Ok(Value::String("true:false".to_owned().into()))
     );
     assert_eq!(
         eval(
             "new RegExp('[\\\\c!]').test('\\\\') + ':' + new RegExp('[\\\\c!]').test('c') + ':' + new RegExp('[\\\\c!]').test('!') + ':' + new RegExp('[\\\\c!]').test('\\x01');"
         ),
-        Ok(Value::String("true:true:true:false".to_owned()))
+        Ok(Value::String("true:true:true:false".to_owned().into()))
     );
     assert_eq!(
         eval(
             r#"/\k<a>/.test("k<a>") + ":" + /\k<a>\1/.test("k<a>\x01") + ":" + /\1(b)\k<a>/.test("bk<a>");"#
         ),
-        Ok(Value::String("true:true:true".to_owned()))
+        Ok(Value::String("true:true:true".to_owned().into()))
     );
     assert_eq!(
         eval(
             "/\\s/.test('\\u0085') + ':' + /\\S/.test('\\u0085') + ':' + /[\\s]/.test('\\u202f') + ':' + /[\\S]/.test('\\u180e');"
         ),
-        Ok(Value::String("false:true:true:true".to_owned()))
+        Ok(Value::String("false:true:true:true".to_owned().into()))
     );
     assert_eq!(
         eval("/String/i.exec('test string')[0];"),
-        Ok(Value::String("string".to_owned()))
+        Ok(Value::String("string".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let r = /[\\d][\\12-\\14]{1,}[^\\d]/.exec('line1\\n\\n\\n\\n\\nline2'); r.length + ':' + r.index + ':' + r[0];"
         ),
-        Ok(Value::String("1:4:1\n\n\n\n\nl".to_owned()))
+        Ok(Value::String("1:4:1\n\n\n\n\nl".to_owned().into()))
     );
     assert_eq!(
         eval(
             "/]/.test(']') + ':' + /{/.test('{') + ':' + /}/.test('}') + ':' + /x{o}x/.test('x{o}x');"
         ),
-        Ok(Value::String("true:true:true:true".to_owned()))
+        Ok(Value::String("true:true:true:true".to_owned().into()))
     );
     assert_eq!(
         eval(
             "/\\00/.exec('\\x00')[0].charCodeAt(0) + ':' + /\\07/.exec('\\x07')[0].charCodeAt(0) + ':' + /\\0111/.exec('\\x091')[0].length + ':' + /\\0003/.exec('\\x003')[0].length;"
         ),
-        Ok(Value::String("0:7:2:2".to_owned()))
+        Ok(Value::String("0:7:2:2".to_owned().into()))
     );
 }
 
@@ -513,13 +518,13 @@ fn evaluates_regexp_exec_global_last_index() {
         eval(
             "let re = /34/g; let first = re.exec('343443444'); first[0] + ':' + first.index + ':' + re.lastIndex;"
         ),
-        Ok(Value::String("34:0:2".to_owned()))
+        Ok(Value::String("34:0:2".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let re = /34/g; re.exec('343443444'); let second = re.exec('343443444'); second[0] + ':' + second.index + ':' + re.lastIndex;"
         ),
-        Ok(Value::String("34:2:4".to_owned()))
+        Ok(Value::String("34:2:4".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -531,7 +536,7 @@ fn evaluates_regexp_exec_global_last_index() {
         eval(
             "let re = /./ug; let match = re.exec('\\uD834\\uDF06'); match.index + ':' + match[0].length + ':' + re.lastIndex;"
         ),
-        Ok(Value::String("0:2:2".to_owned()))
+        Ok(Value::String("0:2:2".to_owned().into()))
     );
     assert_eq!(
         eval("/a/u.exec('\\uD834\\uDF06a').index;"),
@@ -547,19 +552,19 @@ fn evaluates_regexp_exec_global_last_index() {
         eval(
             "let gets = 0; let counter = { valueOf: function() { gets = gets + 1; return 0; } }; let re = /a/; re.lastIndex = counter; let result = re.exec('nbc'); (result === null) + ':' + (re.lastIndex === counter) + ':' + gets;"
         ),
-        Ok(Value::String("true:true:1".to_owned()))
+        Ok(Value::String("true:true:1".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let gets = 0; let counter = { valueOf: function() { gets = gets + 1; return 0; } }; let re = /./; re.lastIndex = counter; let result = re.exec('abc'); result[0] + ':' + (re.lastIndex === counter) + ':' + gets;"
         ),
-        Ok(Value::String("a:true:1".to_owned()))
+        Ok(Value::String("a:true:1".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let re = /./g; Object.defineProperty(re, 'lastIndex', { writable: false }); let caught = false; try { re.exec('abc'); } catch (error) { caught = error instanceof TypeError; } caught + ':' + re.lastIndex;"
         ),
-        Ok(Value::String("true:0".to_owned()))
+        Ok(Value::String("true:0".to_owned().into()))
     );
 }
 
@@ -567,7 +572,7 @@ fn evaluates_regexp_exec_global_last_index() {
 fn evaluates_regexp_symbol_search() {
     assert_eq!(
         eval("RegExp.prototype[Symbol.search].name;"),
-        Ok(Value::String("[Symbol.search]".to_owned()))
+        Ok(Value::String("[Symbol.search]".to_owned().into()))
     );
     assert_eq!(eval("/b/[Symbol.search]('abc');"), Ok(Value::Number(1.0)));
     assert_eq!(eval("/z/[Symbol.search]('abc');"), Ok(Value::Number(-1.0)));
@@ -593,7 +598,7 @@ fn evaluates_regexp_symbol_search() {
 fn evaluates_regexp_symbol_match_all() {
     assert_eq!(
         eval("typeof RegExp.prototype[Symbol.matchAll];"),
-        Ok(Value::String("function".to_owned()))
+        Ok(Value::String("function".to_owned().into()))
     );
     assert_eq!(
         eval("RegExp.prototype[Symbol.matchAll].length;"),
@@ -601,31 +606,31 @@ fn evaluates_regexp_symbol_match_all() {
     );
     assert_eq!(
         eval("RegExp.prototype[Symbol.matchAll].name;"),
-        Ok(Value::String("[Symbol.matchAll]".to_owned()))
+        Ok(Value::String("[Symbol.matchAll]".to_owned().into()))
     );
     assert_eq!(
         eval(
             "Array.from(/a./g[Symbol.matchAll]('a1 a2')).map(function(match) { return match[0] + ':' + match.index + ':' + match.input; }).join('|');"
         ),
-        Ok(Value::String("a1:0:a1 a2|a2:3:a1 a2".to_owned()))
+        Ok(Value::String("a1:0:a1 a2|a2:3:a1 a2".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let re = /a/g; re.lastIndex = 1; let result = Array.from(re[Symbol.matchAll]('aba')).map(function(match) { return match.index; }).join(','); re.lastIndex + ':' + result;"
         ),
-        Ok(Value::String("1:2".to_owned()))
+        Ok(Value::String("1:2".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let it = RegExp.prototype[Symbol.matchAll].call(/a/, 'aba'); let first = it.next(); let second = it.next(); first.value.index + ':' + first.value[0] + ':' + second.done;"
         ),
-        Ok(Value::String("0:a:true".to_owned()))
+        Ok(Value::String("0:a:true".to_owned().into()))
     );
     assert_eq!(
         eval(
             "Array.from(/(?:)/g[Symbol.matchAll]('a')).map(function(match) { return match.index; }).join(',');"
         ),
-        Ok(Value::String("0,1".to_owned()))
+        Ok(Value::String("0,1".to_owned().into()))
     );
 }
 
@@ -640,7 +645,7 @@ fn regexp_match_all_uses_species_constructor() {
              let iter = re[Symbol.matchAll]('a*b'); \
              args.length + ':' + (args[0] === re) + ':' + args[1] + ':' + Array.from(iter).map(m => m[0]).join(',');"
         ),
-        Ok(Value::String("2:true:u:a".to_owned()))
+        Ok(Value::String("2:true:u:a".to_owned().into()))
     );
     // A non-object, non-undefined constructor (including a Symbol) is a TypeError.
     assert!(eval("let re = /./; re.constructor = null; re[Symbol.matchAll]('');").is_err());
@@ -658,15 +663,15 @@ fn evaluates_regexp_symbol_match() {
         eval(
             "typeof RegExp.prototype[Symbol.match] + ':' + RegExp.prototype[Symbol.match].length + ':' + RegExp.prototype[Symbol.match].name;"
         ),
-        Ok(Value::String("function:1:[Symbol.match]".to_owned()))
+        Ok(Value::String("function:1:[Symbol.match]".to_owned().into()))
     );
     assert_eq!(
         eval("RegExp.prototype[Symbol.match].call(/a./, 'a1 a2')[0];"),
-        Ok(Value::String("a1".to_owned()))
+        Ok(Value::String("a1".to_owned().into()))
     );
     assert_eq!(
         eval("RegExp.prototype[Symbol.match].call(/a./g, 'a1 a2').join('|');"),
-        Ok(Value::String("a1|a2".to_owned()))
+        Ok(Value::String("a1|a2".to_owned().into()))
     );
     assert_eq!(
         eval("RegExp.prototype[Symbol.match].call(/z/g, 'a1 a2');"),
@@ -674,19 +679,19 @@ fn evaluates_regexp_symbol_match() {
     );
     assert_eq!(
         eval("let re = /(?:)/g; re[Symbol.match]('a').join('|') + ':' + re.lastIndex;"),
-        Ok(Value::String("|:0".to_owned()))
+        Ok(Value::String("|:0".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let calls = 0; let re = { global: false, exec(input) { calls = calls + 1; return { 0: input + ':' + calls, index: 0, length: 1 }; } }; RegExp.prototype[Symbol.match].call(re, 123)[0];"
         ),
-        Ok(Value::String("123:1".to_owned()))
+        Ok(Value::String("123:1".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let re = { flags: 'g', lastIndex: 0, exec() { if (this.lastIndex === 0) { this.lastIndex = 1; return { 0: 'a', index: 0, length: 1 }; } return null; } }; RegExp.prototype[Symbol.match].call(re, 'abc').join('|') + ':' + re.lastIndex;"
         ),
-        Ok(Value::String("a:1".to_owned()))
+        Ok(Value::String("a:1".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -702,31 +707,33 @@ fn evaluates_regexp_symbol_replace() {
         eval(
             "typeof RegExp.prototype[Symbol.replace] + ':' + RegExp.prototype[Symbol.replace].length + ':' + RegExp.prototype[Symbol.replace].name;"
         ),
-        Ok(Value::String("function:2:[Symbol.replace]".to_owned()))
+        Ok(Value::String(
+            "function:2:[Symbol.replace]".to_owned().into()
+        ))
     );
     assert_eq!(
         eval("RegExp.prototype[Symbol.replace].call(/a./, 'a1 a2', 'x');"),
-        Ok(Value::String("x a2".to_owned()))
+        Ok(Value::String("x a2".to_owned().into()))
     );
     assert_eq!(
         eval("RegExp.prototype[Symbol.replace].call(/a(.)/g, 'a1 a2', '[$1:$&]');"),
-        Ok(Value::String("[1:a1] [2:a2]".to_owned()))
+        Ok(Value::String("[1:a1] [2:a2]".to_owned().into()))
     );
     assert_eq!(
         eval(
             "RegExp.prototype[Symbol.replace].call(/(\\d)/g, 'a1b2', function(match, digit, position, input) { return digit + ':' + position + ':' + input.length; });"
         ),
-        Ok(Value::String("a1:1:4b2:3:4".to_owned()))
+        Ok(Value::String("a1:1:4b2:3:4".to_owned().into()))
     );
     assert_eq!(
         eval("let re = /(?:)/g; 'a'.replace(re, '-');"),
-        Ok(Value::String("-a-".to_owned()))
+        Ok(Value::String("-a-".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let re = /a/g; re.lastIndex = 1; let result = re[Symbol.replace]('aba', 'x'); result + ':' + re.lastIndex;"
         ),
-        Ok(Value::String("xbx:0".to_owned()))
+        Ok(Value::String("xbx:0".to_owned().into()))
     );
 }
 
@@ -734,21 +741,21 @@ fn evaluates_regexp_symbol_replace() {
 fn evaluates_regexp_exec_and_test_sticky_last_index() {
     assert_eq!(
         eval("let re = /abc/y; re.test('abc') + ':' + re.lastIndex;"),
-        Ok(Value::String("true:3".to_owned()))
+        Ok(Value::String("true:3".to_owned().into()))
     );
     assert_eq!(
         eval("let re = /b/y; re.test('ab') + ':' + re.lastIndex;"),
-        Ok(Value::String("false:0".to_owned()))
+        Ok(Value::String("false:0".to_owned().into()))
     );
     assert_eq!(
         eval("let re = /./y; re.lastIndex = 1; re.test('a') + ':' + re.lastIndex;"),
-        Ok(Value::String("false:0".to_owned()))
+        Ok(Value::String("false:0".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let re = /b/y; re.lastIndex = 1; let result = re.exec('abc'); result[0] + ':' + result.index + ':' + re.lastIndex;"
         ),
-        Ok(Value::String("b:1:2".to_owned()))
+        Ok(Value::String("b:1:2".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -766,7 +773,7 @@ fn evaluates_regexp_exec_captures() {
     );
     assert_eq!(
         eval(r#"'Boston, MA 02134'.match(/([\d]{5})([-\ ]?[\d]{4})?$/)[1];"#),
-        Ok(Value::String("02134".to_owned()))
+        Ok(Value::String("02134".to_owned().into()))
     );
     assert_eq!(
         eval(r#"'Boston, MA 02134'.match(/([\d]{5})([-\ ]?[\d]{4})?$/)[2];"#),
@@ -774,11 +781,11 @@ fn evaluates_regexp_exec_captures() {
     );
     assert_eq!(
         eval(r#"/(uid=)(\d+)/.exec('uid=31')[1] + '|' + /(uid=)(\d+)/.exec('uid=31')[2];"#),
-        Ok(Value::String("uid=|31".to_owned()))
+        Ok(Value::String("uid=|31".to_owned().into()))
     );
     assert_eq!(
         eval(r#"/((x))/.exec('foo-x-bar')[1] + '|' + /((x))/.exec('foo-x-bar')[2];"#),
-        Ok(Value::String("x|x".to_owned()))
+        Ok(Value::String("x|x".to_owned().into()))
     );
 }
 
@@ -795,7 +802,7 @@ fn evaluates_regexp_exec_empty_non_capturing_group() {
 fn evaluates_regexp_symbol_split() {
     assert_eq!(
         eval("RegExp.prototype[Symbol.split].name;"),
-        Ok(Value::String("[Symbol.split]".to_owned()))
+        Ok(Value::String("[Symbol.split]".to_owned().into()))
     );
     assert_eq!(
         eval("RegExp.prototype[Symbol.split].length;"),
@@ -803,15 +810,15 @@ fn evaluates_regexp_symbol_split() {
     );
     assert_eq!(
         eval("/d/[Symbol.split]('abcdefg').join('|');"),
-        Ok(Value::String("abc|efg".to_owned()))
+        Ok(Value::String("abc|efg".to_owned().into()))
     );
     assert_eq!(
         eval("/x/[Symbol.split]('axbxcxdxe', 3).join('|');"),
-        Ok(Value::String("a|b|c".to_owned()))
+        Ok(Value::String("a|b|c".to_owned().into()))
     );
     assert_eq!(
         eval("/c(d)(e)/[Symbol.split]('abcdefg', 2).join('|');"),
-        Ok(Value::String("ab|d".to_owned()))
+        Ok(Value::String("ab|d".to_owned().into()))
     );
     assert_eq!(
         eval("/(?:)/[Symbol.split]('').length;"),
@@ -819,7 +826,7 @@ fn evaluates_regexp_symbol_split() {
     );
     assert_eq!(
         eval("/./[Symbol.split]('').join('|');"),
-        Ok(Value::String(String::new()))
+        Ok(Value::String(::std::rc::Rc::new(String::new())))
     );
     assert_eq!(
         eval("let result = /\\uDF06/u[Symbol.split]('\\uD834\\uDF06'); result.length;"),
@@ -829,7 +836,7 @@ fn evaluates_regexp_symbol_split() {
         eval(
             "let result = /./u[Symbol.split]('\\uD834\\uDF06'); result.length + ':' + result.join('|');"
         ),
-        Ok(Value::String("2:|".to_owned()))
+        Ok(Value::String("2:|".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -847,7 +854,7 @@ fn evaluates_regexp_symbol_split() {
         eval(
             "let flagsArg; let re = {}; re.flags = 'i'; re.constructor = function() {}; re.constructor[Symbol.species] = function(_, flags) { flagsArg = flags; return /b/y; }; RegExp.prototype[Symbol.split].call(re, 'abc').join('|') + ':' + flagsArg;"
         ),
-        Ok(Value::String("a|c:iy".to_owned()))
+        Ok(Value::String("a|c:iy".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -859,7 +866,7 @@ fn evaluates_regexp_symbol_split() {
         eval(
             "let re = /a/; Object.defineProperty(re, Symbol.match, { get: function() { re.compile('b'); } }); let result = re[Symbol.split]('abba'); result.length + ':' + result.join('|');"
         ),
-        Ok(Value::String("3:a||a".to_owned()))
+        Ok(Value::String("3:a||a".to_owned().into()))
     );
 }
 
@@ -880,7 +887,7 @@ fn evaluates_regexp_named_capture_groups() {
         eval(
             r#"let m = /(?<year>\d{4})-(?<month>\d{2})/.exec("2024-06"); m.groups.year + "/" + m.groups.month;"#
         ),
-        Ok(Value::String("2024/06".to_owned()))
+        Ok(Value::String("2024/06".to_owned().into()))
     );
     assert_eq!(
         eval(r#"Object.getPrototypeOf(/(?<a>.)/.exec("x").groups);"#),
@@ -907,12 +914,12 @@ fn evaluates_regexp_named_capture_groups() {
     // `$<name>` substitution in String.prototype.replace.
     assert_eq!(
         eval(r#""2024-06".replace(/(?<y>\d{4})-(?<m>\d{2})/, "$<m>/$<y>");"#),
-        Ok(Value::String("06/2024".to_owned()))
+        Ok(Value::String("06/2024".to_owned().into()))
     );
     // Lookahead and lookbehind assertions.
     assert_eq!(
         eval(r#"/(?<=\$)\d+/.exec("$100")[0];"#),
-        Ok(Value::String("100".to_owned()))
+        Ok(Value::String("100".to_owned().into()))
     );
     assert_eq!(eval(r#"/q(?=u)/.test("queue");"#), Ok(Value::Boolean(true)));
     assert_eq!(
@@ -930,7 +937,7 @@ fn evaluates_regexp_match_indices_d_flag() {
         eval(
             r#"let m = /(a)(b)/d.exec("xab"); m.indices[0].join(",") + ":" + m.indices[1].join(",") + ":" + m.indices[2].join(",");"#
         ),
-        Ok(Value::String("1,3:1,2:2,3".to_owned()))
+        Ok(Value::String("1,3:1,2:2,3".to_owned().into()))
     );
     // Unmatched optional groups produce undefined entries.
     assert_eq!(
@@ -945,7 +952,7 @@ fn evaluates_regexp_match_indices_d_flag() {
     );
     assert_eq!(
         eval(r#"let m = /(?<g>b)/d.exec("ab"); m.indices.groups.g.join(",");"#),
-        Ok(Value::String("1,2".to_owned()))
+        Ok(Value::String("1,2".to_owned().into()))
     );
     assert_eq!(
         eval(r#"Object.getPrototypeOf(/(?<g>b)/d.exec("ab").indices.groups);"#),
@@ -956,6 +963,6 @@ fn evaluates_regexp_match_indices_d_flag() {
         eval(
             r#"let m = /(?<emoji>\u{1F600})/du.exec("x\u{1F600}y"); m.indices.groups.emoji.join(",");"#
         ),
-        Ok(Value::String("1,3".to_owned()))
+        Ok(Value::String("1,3".to_owned().into()))
     );
 }

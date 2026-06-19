@@ -16,7 +16,7 @@ fn evaluates_array_indexing() {
 fn evaluates_array_literals() {
     assert_eq!(
         eval("let xs = [1, 2 + 3, true]; xs.length + ':' + xs[0] + ':' + xs[1] + ':' + xs[2];"),
-        Ok(Value::String("3:1:5:true".to_owned()))
+        Ok(Value::String("3:1:5:true".to_owned().into()))
     );
     assert_eq!(eval("[] === [];"), Ok(Value::Boolean(false)));
     assert_eq!(
@@ -25,17 +25,17 @@ fn evaluates_array_literals() {
     );
     assert_eq!(
         eval("let xs = [1, ...[2, 3], ...'ab']; xs.join('|');"),
-        Ok(Value::String("1|2|3|a|b".to_owned()))
+        Ok(Value::String("1|2|3|a|b".to_owned().into()))
     );
     assert_eq!(
         eval("let xs = [...[1], , ...[3]]; xs.length + ':' + (1 in xs) + ':' + xs[2];"),
-        Ok(Value::String("3:false:3".to_owned()))
+        Ok(Value::String("3:false:3".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let xs = [...new Set([1, 2]), ...new Map([['a', 3]]), ...{ [Symbol.iterator]: function() { return ['z'][Symbol.iterator](); } }]; xs[0] + ':' + xs[1] + ':' + xs[2][0] + ':' + xs[2][1] + ':' + xs[3];"
         ),
-        Ok(Value::String("1:2:a:3:z".to_owned()))
+        Ok(Value::String("1:2:a:3:z".to_owned().into()))
     );
     assert!(eval("[...{}];").is_err());
 }
@@ -45,7 +45,7 @@ fn evaluates_array_member_access() {
     assert_eq!(eval("let xs = [1, 2 + 3]; xs[1];"), Ok(Value::Number(5.0)));
     assert_eq!(
         eval("let xs = [1, undefined, 3]; xs[0] + ':' + xs[1] + ':' + xs[2];"),
-        Ok(Value::String("1:undefined:3".to_owned()))
+        Ok(Value::String("1:undefined:3".to_owned().into()))
     );
     assert_eq!(eval("[1, 2, 3].length;"), Ok(Value::Number(3.0)));
     assert_eq!(eval("[1, , 3].length;"), Ok(Value::Number(3.0)));
@@ -75,13 +75,13 @@ fn evaluates_array_member_access() {
         eval(
             "let proto = { 0: 41 }; let xs = [7]; Object.setPrototypeOf(xs, proto); xs[0] + ':' + xs[1];"
         ),
-        Ok(Value::String("7:undefined".to_owned()))
+        Ok(Value::String("7:undefined".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let xs = [0, 1, 2]; xs[4294967294] = 4; xs.length = 2; xs[2] + ':' + xs[4294967294] + ':' + xs.length;"
         ),
-        Ok(Value::String("undefined:undefined:2".to_owned()))
+        Ok(Value::String("undefined:undefined:2".to_owned().into()))
     );
 }
 
@@ -97,14 +97,14 @@ fn dense_index_store_preserves_prototype_set_semantics() {
              let xs = []; xs[7] = 99; let result = hits + ':' + xs.hasOwnProperty('7'); \
              delete Array.prototype['7']; let ys = []; ys[7] = 5; result + ':' + (ys[7] === 5);"
         ),
-        Ok(Value::String("1:false:true".to_owned()))
+        Ok(Value::String("1:false:true".to_owned().into()))
     );
     assert_eq!(
         eval("let xs = []; xs[0] = 1; xs[1] = 2; xs[0] = 3; xs.join(',');"),
-        Ok(Value::String("3,2".to_owned()))
+        Ok(Value::String("3,2".to_owned().into()))
     );
     assert_eq!(
         eval("let xs = []; xs[4294967295] = 'x'; xs.length + ':' + xs['4294967295'];"),
-        Ok(Value::String("0:x".to_owned()))
+        Ok(Value::String("0:x".to_owned().into()))
     );
 }

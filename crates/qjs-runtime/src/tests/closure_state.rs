@@ -38,7 +38,7 @@ fn nested_closures_capture_live_outer_bindings() {
              }
              counters();"
         ),
-        Ok(Value::String("0:1:2".to_owned()))
+        Ok(Value::String("0:1:2".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -69,7 +69,7 @@ fn nested_closures_capture_live_outer_bindings() {
              }
              outer();"
         ),
-        Ok(Value::String("updated".to_owned()))
+        Ok(Value::String("updated".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -81,7 +81,7 @@ fn nested_closures_capture_live_outer_bindings() {
              let read = make();
              read() + ':' + src.join(',');"
         ),
-        Ok(Value::String("1:42,43".to_owned()))
+        Ok(Value::String("1:42,43".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -93,7 +93,7 @@ fn nested_closures_capture_live_outer_bindings() {
              let write = make();
              write() + ':' + src;"
         ),
-        Ok(Value::String("2:1".to_owned()))
+        Ok(Value::String("2:1".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -108,7 +108,7 @@ fn nested_closures_capture_live_outer_bindings() {
              sample.set(src, 0);
              src.join(',') + '|' + sample.join(',');"
         ),
-        Ok(Value::String("42,43|42,43,3,4".to_owned()))
+        Ok(Value::String("42,43|42,43,3,4".to_owned().into()))
     );
 }
 
@@ -121,7 +121,7 @@ fn sibling_closure_mutation_observes_latest_var_binding() {
              function f() { c = 0; var r = inc(); return r + ':' + c; }
              f() + ':' + c;"
         ),
-        Ok(Value::String("1:1:1".to_owned()))
+        Ok(Value::String("1:1:1".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -147,6 +147,6 @@ fn sibling_closure_mutation_observes_latest_var_binding() {
              }
              outer() + ':' + c;"
         ),
-        Ok(Value::String("1:1:100".to_owned()))
+        Ok(Value::String("1:1:100".to_owned().into()))
     );
 }

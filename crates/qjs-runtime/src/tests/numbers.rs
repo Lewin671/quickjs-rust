@@ -4,7 +4,7 @@ use crate::{Value, eval};
 fn evaluates_number_builtins() {
     assert_eq!(
         eval("typeof Number;"),
-        Ok(Value::String("function".to_owned()))
+        Ok(Value::String("function".to_owned().into()))
     );
     assert_eq!(eval("Number.length;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("Number();"), Ok(Value::Number(0.0)));
@@ -49,21 +49,21 @@ fn evaluates_number_builtins() {
     );
     assert_eq!(
         eval("let n = 10; n.toString();"),
-        Ok(Value::String("10".to_owned()))
+        Ok(Value::String("10".to_owned().into()))
     );
     assert_eq!(
         eval("(10).toLocaleString();"),
-        Ok(Value::String("10".to_owned()))
+        Ok(Value::String("10".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let d = Object.getOwnPropertyDescriptor(Number.prototype, 'toLocaleString'); (d.value === Number.prototype.toLocaleString) + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
         ),
-        Ok(Value::String("true:true:false:true".to_owned()))
+        Ok(Value::String("true:true:false:true".to_owned().into()))
     );
     assert_eq!(
         eval("let n = 255; n.toString(16);"),
-        Ok(Value::String("ff".to_owned()))
+        Ok(Value::String("ff".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -79,89 +79,92 @@ fn evaluates_number_builtins() {
     );
     assert_eq!(
         eval("let n = 1e21; n.toString();"),
-        Ok(Value::String("1e+21".to_owned()))
+        Ok(Value::String("1e+21".to_owned().into()))
     );
     assert_eq!(
         eval("let n = 1e-7; n.toString();"),
-        Ok(Value::String("1e-7".to_owned()))
+        Ok(Value::String("1e-7".to_owned().into()))
     );
     assert_eq!(
         eval("String.prototype.trim.call(1000000000000000000000);"),
-        Ok(Value::String("1e+21".to_owned()))
+        Ok(Value::String("1e+21".to_owned().into()))
     );
     assert_eq!(eval("let n = 10; n.valueOf();"), Ok(Value::Number(10.0)));
     assert_eq!(
         eval("(new Number(7)).toString();"),
-        Ok(Value::String("7".to_owned()))
+        Ok(Value::String("7".to_owned().into()))
     );
     assert_eq!(
         eval("(1000000000000000128).toString();"),
-        Ok(Value::String("1000000000000000100".to_owned()))
+        Ok(Value::String("1000000000000000100".to_owned().into()))
     );
     assert_eq!(
         eval("(1.25).toFixed(1);"),
-        Ok(Value::String("1.3".to_owned()))
+        Ok(Value::String("1.3".to_owned().into()))
     );
     assert_eq!(
         eval("(1.25).toFixed(2);"),
-        Ok(Value::String("1.25".to_owned()))
+        Ok(Value::String("1.25".to_owned().into()))
     );
     assert_eq!(
         eval("(1000000000000000128).toFixed(0);"),
-        Ok(Value::String("1000000000000000128".to_owned()))
+        Ok(Value::String("1000000000000000128".to_owned().into()))
     );
     assert_eq!(
         eval("(new Number(7)).toFixed(2);"),
-        Ok(Value::String("7.00".to_owned()))
+        Ok(Value::String("7.00".to_owned().into()))
     );
     assert_eq!(
         eval("Number.prototype.toFixed.call(-0, 2);"),
-        Ok(Value::String("0.00".to_owned()))
+        Ok(Value::String("0.00".to_owned().into()))
     );
     assert_eq!(
         eval("(1e21).toFixed(2);"),
-        Ok(Value::String("1e+21".to_owned()))
+        Ok(Value::String("1e+21".to_owned().into()))
     );
-    assert_eq!(eval("NaN.toFixed(2);"), Ok(Value::String("NaN".to_owned())));
+    assert_eq!(
+        eval("NaN.toFixed(2);"),
+        Ok(Value::String("NaN".to_owned().into()))
+    );
     assert_eq!(
         eval("(12.345).toExponential();"),
-        Ok(Value::String("1.2345e+1".to_owned()))
+        Ok(Value::String("1.2345e+1".to_owned().into()))
     );
     assert_eq!(
         eval("(12.345).toExponential(2);"),
-        Ok(Value::String("1.23e+1".to_owned()))
+        Ok(Value::String("1.23e+1".to_owned().into()))
     );
     assert_eq!(
         eval("(123.456).toExponential([2]);"),
-        Ok(Value::String("1.23e+2".to_owned()))
+        Ok(Value::String("1.23e+2".to_owned().into()))
     );
     assert_eq!(
         eval("(1).toExponential(0);"),
-        Ok(Value::String("1e+0".to_owned()))
+        Ok(Value::String("1e+0".to_owned().into()))
     );
     assert_eq!(
         eval("(25).toExponential(0);"),
-        Ok(Value::String("3e+1".to_owned()))
+        Ok(Value::String("3e+1".to_owned().into()))
     );
     assert_eq!(
         eval("(12345).toExponential(3);"),
-        Ok(Value::String("1.235e+4".to_owned()))
+        Ok(Value::String("1.235e+4".to_owned().into()))
     );
     assert_eq!(
         eval("Number.prototype.toExponential.call(-0, 2);"),
-        Ok(Value::String("0.00e+0".to_owned()))
+        Ok(Value::String("0.00e+0".to_owned().into()))
     );
     assert_eq!(
         eval("(new Number(7)).toExponential(1);"),
-        Ok(Value::String("7.0e+0".to_owned()))
+        Ok(Value::String("7.0e+0".to_owned().into()))
     );
     assert_eq!(
         eval("NaN.toExponential(101);"),
-        Ok(Value::String("NaN".to_owned()))
+        Ok(Value::String("NaN".to_owned().into()))
     );
     assert_eq!(
         eval("Infinity.toExponential(101);"),
-        Ok(Value::String("Infinity".to_owned()))
+        Ok(Value::String("Infinity".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -171,35 +174,35 @@ fn evaluates_number_builtins() {
     );
     assert_eq!(
         eval("(123.456).toPrecision();"),
-        Ok(Value::String("123.456".to_owned()))
+        Ok(Value::String("123.456".to_owned().into()))
     );
     assert_eq!(
         eval("(123.456).toPrecision(5);"),
-        Ok(Value::String("123.46".to_owned()))
+        Ok(Value::String("123.46".to_owned().into()))
     );
     assert_eq!(
         eval("(123.456).toPrecision(2);"),
-        Ok(Value::String("1.2e+2".to_owned()))
+        Ok(Value::String("1.2e+2".to_owned().into()))
     );
     assert_eq!(
         eval("(123.456).toPrecision([2]);"),
-        Ok(Value::String("1.2e+2".to_owned()))
+        Ok(Value::String("1.2e+2".to_owned().into()))
     );
     assert_eq!(
         eval("(0.0001234).toPrecision(5);"),
-        Ok(Value::String("0.00012340".to_owned()))
+        Ok(Value::String("0.00012340".to_owned().into()))
     );
     assert_eq!(
         eval("(1e-7).toPrecision(2);"),
-        Ok(Value::String("1.0e-7".to_owned()))
+        Ok(Value::String("1.0e-7".to_owned().into()))
     );
     assert_eq!(
         eval("(new Number(7)).toPrecision(3);"),
-        Ok(Value::String("7.00".to_owned()))
+        Ok(Value::String("7.00".to_owned().into()))
     );
     assert_eq!(
         eval("NaN.toPrecision(101);"),
-        Ok(Value::String("NaN".to_owned()))
+        Ok(Value::String("NaN".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -210,7 +213,7 @@ fn evaluates_number_builtins() {
     assert_eq!(eval("(new Number(7)).valueOf();"), Ok(Value::Number(7.0)));
     assert_eq!(
         eval("let n = new Number(7); n.tag = Object.prototype.toString; n.tag();"),
-        Ok(Value::String("[object Number]".to_owned()))
+        Ok(Value::String("[object Number]".to_owned().into()))
     );
     assert!(eval("let o = Object.create(Number.prototype); o.valueOf();").is_err());
     assert!(eval("let o = Object.create(Number.prototype); o.toFixed();").is_err());
@@ -327,7 +330,7 @@ fn evaluates_number_builtins() {
         eval(
             "let hits = []; parseInt({ toString() { hits.push('string'); return '11'; } }, { valueOf() { hits.push('radix'); return 2; } }) + ':' + hits.join(',');"
         ),
-        Ok(Value::String("3:string,radix".to_owned()))
+        Ok(Value::String("3:string,radix".to_owned().into()))
     );
     assert_eq!(
         eval("parseInt('10', 37) === NaN;"),
@@ -339,7 +342,7 @@ fn evaluates_number_builtins() {
         eval(
             "let hits = []; parseFloat({ toString() { hits.push('string'); return '1.5'; } }) + ':' + hits.join(',');"
         ),
-        Ok(Value::String("1.5:string".to_owned()))
+        Ok(Value::String("1.5:string".to_owned().into()))
     );
     assert_eq!(
         eval("parseFloat('Infinity');"),

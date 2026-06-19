@@ -1,4 +1,5 @@
 use std::fmt;
+use std::rc::Rc;
 
 use num_bigint::BigInt;
 
@@ -25,8 +26,12 @@ pub enum Value {
     Number(f64),
     /// BigInt value.
     BigInt(BigInt),
-    /// String value.
-    String(String),
+    /// String value. Held behind `Rc<String>` so cloning a string `Value`
+    /// (which happens on every property read, parameter pass, and environment
+    /// lookup) is a refcount bump rather than a full heap copy. JavaScript
+    /// strings are immutable, so sharing is safe; the in-place `+=` append fast
+    /// path uses `Rc::make_mut` to mutate the buffer when it is uniquely held.
+    String(Rc<String>),
     /// Boolean value.
     Boolean(bool),
     /// Null value.

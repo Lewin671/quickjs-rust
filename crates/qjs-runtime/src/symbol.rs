@@ -126,7 +126,7 @@ fn install_well_known_symbols(symbol_function: &Function, symbol_prototype: &Obj
     for name in WELL_KNOWN_SYMBOL_NAMES {
         let symbol = Value::Object(symbol_object(
             Some(symbol_prototype.clone()),
-            Value::String(format!("Symbol.{name}")),
+            Value::String(format!("Symbol.{name}").into()),
         ));
         properties.insert(
             name.to_string(),
@@ -150,7 +150,7 @@ pub(crate) fn native_symbol(
 
     let description = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
         Value::Undefined => Value::Undefined,
-        value => Value::String(to_js_string_with_env(value, env)?),
+        value => Value::String(to_js_string_with_env(value, env)?.into()),
     };
     Ok(Value::Object(symbol_object(
         function_prototype(function),
@@ -173,7 +173,7 @@ pub(crate) fn native_symbol_for(
 
     let symbol = Value::Object(symbol_object(
         symbol_prototype(env),
-        Value::String(key.clone()),
+        Value::String(key.clone().into()),
     ));
     registry.define_non_enumerable(key, symbol.clone());
     Ok(symbol)
@@ -197,7 +197,7 @@ pub(crate) fn native_symbol_key_for(
             registry.own_property(&key).map(|property| property.value),
             Some(Value::Object(symbol)) if symbol.ptr_eq(&target_object)
         ) {
-            return Ok(Value::String(key));
+            return Ok(Value::String(key.into()));
         }
     }
     Ok(Value::Undefined)
@@ -240,7 +240,7 @@ pub(crate) fn symbol_descriptive_string(object: &ObjectRef) -> String {
 
 pub(crate) fn symbol_function_name_description(object: &ObjectRef) -> Option<String> {
     match symbol_description(object) {
-        Value::String(description) => Some(description),
+        Value::String(description) => Some(description.to_string()),
         _ => None,
     }
 }
@@ -403,7 +403,7 @@ pub(crate) fn define_well_known_to_string_tag(env: &CallEnv, object: &ObjectRef,
 fn define_to_string_tag_property(object: &ObjectRef, symbol: ObjectRef, tag: &str) {
     object.define_symbol_property(
         symbol,
-        Property::data(Value::String(tag.to_owned()), false, false, true),
+        Property::data(Value::String(tag.to_owned().into()), false, false, true),
     );
 }
 
@@ -423,9 +423,9 @@ pub(crate) fn native_symbol_prototype_to_primitive(
 }
 
 pub(crate) fn native_symbol_prototype_to_string(this_value: Value) -> Result<Value, RuntimeError> {
-    Ok(Value::String(symbol_description_string(
-        this_symbol_description(this_value)?,
-    )))
+    Ok(Value::String(
+        symbol_description_string(this_symbol_description(this_value)?).into(),
+    ))
 }
 
 pub(crate) fn native_symbol_prototype_value_of(this_value: Value) -> Result<Value, RuntimeError> {

@@ -18,7 +18,7 @@ fn eval_log(source: &str) -> String {
             .to_vec()
             .into_iter()
             .map(|value| match value {
-                Value::String(text) => text,
+                Value::String(text) => text.to_string(),
                 Value::Number(number) => number.to_string(),
                 other => format!("{other:?}"),
             })
@@ -181,7 +181,7 @@ fn async_function_with_global_this_unscopables_updates_outer_lexical() {
              ref(10); \
              [count, callCount, globalThis.hasOwnProperty('count')].join(':');"
         ),
-        Ok(Value::String("4:1:false".to_owned()))
+        Ok(Value::String("4:1:false".to_owned().into()))
     );
 }
 
@@ -347,7 +347,7 @@ fn async_function_not_constructable() {
 fn async_function_has_no_prototype_property() {
     assert_eq!(
         eval("async function f() {} typeof f.prototype;").expect("eval"),
-        Value::String("undefined".to_owned())
+        Value::String("undefined".to_owned().into())
     );
 }
 
@@ -362,7 +362,7 @@ fn async_function_prototype_chain() {
              Object.prototype.toString.call(Object.getPrototypeOf(f));"
         )
         .expect("eval"),
-        Value::String("[object AsyncFunction]".to_owned())
+        Value::String("[object AsyncFunction]".to_owned().into())
     );
     assert_eq!(
         eval(

@@ -51,7 +51,7 @@ pub(crate) fn native_regexp_prototype_match_all(
     let matcher = construct_function(
         constructor.clone(),
         constructor,
-        vec![this_value.clone(), Value::String(flags)],
+        vec![this_value.clone(), Value::String(flags.into())],
         env,
     )?;
     // lastIndex = ToLength(? Get(R, "lastIndex")) — the coercion is observable
@@ -63,7 +63,7 @@ pub(crate) fn native_regexp_prototype_match_all(
     iterator.define_non_enumerable(REGEXP_STRING_ITERATOR_REGEXP.to_owned(), matcher);
     iterator.define_non_enumerable(
         REGEXP_STRING_ITERATOR_STRING.to_owned(),
-        Value::String(input),
+        Value::String(input.into()),
     );
     iterator.define_non_enumerable(
         REGEXP_STRING_ITERATOR_GLOBAL.to_owned(),
@@ -145,7 +145,7 @@ fn regexp_exec(regexp: Value, input: &str, env: &mut CallEnv) -> Result<Value, R
     call_function(
         exec,
         regexp,
-        vec![Value::String(input.to_owned())],
+        vec![Value::String(input.to_owned().into())],
         env,
         false,
     )
@@ -201,7 +201,7 @@ fn iterator_done(iterator: &ObjectRef) -> bool {
 
 fn iterator_string(iterator: &ObjectRef) -> Result<String, RuntimeError> {
     match iterator_slot(iterator, REGEXP_STRING_ITERATOR_STRING)? {
-        Value::String(value) => Ok(value),
+        Value::String(value) => Ok(value.to_string()),
         _ => Err(RuntimeError {
             thrown: None,
             message: "RegExp String iterator source is invalid".to_owned(),

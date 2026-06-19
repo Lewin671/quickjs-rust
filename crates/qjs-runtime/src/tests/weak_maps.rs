@@ -4,7 +4,7 @@ use crate::{Value, eval};
 fn evaluates_weak_map_constructor_and_prototype() {
     assert_eq!(
         eval("typeof WeakMap;"),
-        Ok(Value::String("function".to_owned()))
+        Ok(Value::String("function".to_owned().into()))
     );
     assert_eq!(eval("WeakMap.length;"), Ok(Value::Number(0.0)));
     assert_eq!(
@@ -17,7 +17,7 @@ fn evaluates_weak_map_constructor_and_prototype() {
     );
     assert_eq!(
         eval("Object.prototype.toString.call(new WeakMap());"),
-        Ok(Value::String("[object WeakMap]".to_owned()))
+        Ok(Value::String("[object WeakMap]".to_owned().into()))
     );
     assert_eq!(eval("WeakMap.prototype.size;"), Ok(Value::Undefined));
     assert_eq!(
@@ -54,7 +54,7 @@ fn weak_map_constructor_uses_prototype_set_adder() {
         eval(
             "let first = {}; let second = {}; let calls = 0; let original = WeakMap.prototype.set; WeakMap.prototype.set = function(key, value) { calls = calls + 1; return original.call(this, key, value); }; let map = new WeakMap([[first, 1], [second, 2]]); calls + ':' + map.get(first) + ':' + map.get(second);"
         ),
-        Ok(Value::String("2:1:2".to_owned()))
+        Ok(Value::String("2:1:2".to_owned().into()))
     );
     assert!(
         eval(
@@ -89,7 +89,7 @@ fn evaluates_weak_map_basic_methods() {
         eval(
             "let key = {}; let map = new WeakMap(); map.set(key, 1); map.delete(key) + ':' + map.delete(key) + ':' + map.has(key);"
         ),
-        Ok(Value::String("true:false:false".to_owned()))
+        Ok(Value::String("true:false:false".to_owned().into()))
     );
 }
 
@@ -99,19 +99,19 @@ fn evaluates_weak_map_get_or_insert() {
         eval(
             "let key = {}; let map = new WeakMap(); map.set(key, 1); map.getOrInsert(key, 2) + ':' + map.get(key);"
         ),
-        Ok(Value::String("1:1".to_owned()))
+        Ok(Value::String("1:1".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let key = {}; let map = new WeakMap(); map.getOrInsert(key, 2) + ':' + map.get(key);"
         ),
-        Ok(Value::String("2:2".to_owned()))
+        Ok(Value::String("2:2".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let key = Symbol('key'); let map = new WeakMap(); map.getOrInsert(key, 3) + ':' + map.get(key);"
         ),
-        Ok(Value::String("3:3".to_owned()))
+        Ok(Value::String("3:3".to_owned().into()))
     );
     assert_eq!(
         eval("WeakMap.prototype.getOrInsert.length;"),
@@ -128,19 +128,19 @@ fn evaluates_weak_map_get_or_insert_computed() {
         eval(
             "let calls = 0; let key = {}; let map = new WeakMap(); map.set(key, 1); map.getOrInsertComputed(key, function() { calls = calls + 1; return 2; }) + ':' + map.get(key) + ':' + calls;"
         ),
-        Ok(Value::String("1:1:0".to_owned()))
+        Ok(Value::String("1:1:0".to_owned().into()))
     );
     assert_eq!(
         eval(
             "\"use strict\"; let key = {}; let seen; let map = new WeakMap(); map.getOrInsertComputed(key, function(arg) { seen = arg === key && this === undefined && arguments.length === 1; return 2; }) + ':' + map.get(key) + ':' + seen;"
         ),
-        Ok(Value::String("2:2:true".to_owned()))
+        Ok(Value::String("2:2:true".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let key = Symbol('key'); let map = new WeakMap(); map.getOrInsertComputed(key, function(arg) { return arg === key ? 3 : 4; }) + ':' + map.get(key);"
         ),
-        Ok(Value::String("3:3".to_owned()))
+        Ok(Value::String("3:3".to_owned().into()))
     );
     assert_eq!(
         eval(
@@ -173,13 +173,13 @@ fn evaluates_weak_map_object_key_identity() {
         eval(
             "let a = {}; let b = {}; let map = new WeakMap(); map.set(a, 1); map.get(a) + ':' + map.has(b);"
         ),
-        Ok(Value::String("1:false".to_owned()))
+        Ok(Value::String("1:false".to_owned().into()))
     );
     assert_eq!(
         eval(
             "let array = []; let fn = function() {}; let map = new WeakMap(); map.set(array, 1); map.set(fn, 2); map.get(array) + ':' + map.get(fn);"
         ),
-        Ok(Value::String("1:2".to_owned()))
+        Ok(Value::String("1:2".to_owned().into()))
     );
 }
 

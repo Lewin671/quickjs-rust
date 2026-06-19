@@ -73,7 +73,7 @@ fn allows_functions_as_prototype_values() {
     // Function.prototype members (here `call`).
     assert_eq!(
         eval("function F() {} let o = {}; Object.setPrototypeOf(o, F); typeof o.call;"),
-        Ok(Value::String("function".to_owned()))
+        Ok(Value::String("function".to_owned().into()))
     );
     // A function sitting mid-chain is walked for property reads.
     assert_eq!(

@@ -44,7 +44,7 @@ pub(crate) fn array_like_values_with_env(
         Value::Array(array) => Ok(array.to_vec()),
         Value::String(value) => Ok(value
             .chars()
-            .map(|character| Value::String(character.to_string()))
+            .map(|character| Value::String(character.to_string().into()))
             .collect()),
         Value::Boolean(_)
         | Value::BigInt(_)
@@ -161,7 +161,7 @@ pub(crate) fn array_like_values_from_receiver(
         Value::Array(array) => Ok(array.to_vec()),
         Value::String(value) => Ok(value
             .chars()
-            .map(|character| Value::String(character.to_string()))
+            .map(|character| Value::String(character.to_string().into()))
             .collect()),
         Value::Function(function) => Ok((0..length)
             .map(|index| {
@@ -194,7 +194,10 @@ pub(super) fn array_like_receiver(value: Value, env: &CallEnv) -> Value {
                 Value::Number(value.chars().count() as f64),
             );
             for (index, character) in value.chars().enumerate() {
-                properties.insert(index.to_string(), Value::String(character.to_string()));
+                properties.insert(
+                    index.to_string(),
+                    Value::String(character.to_string().into()),
+                );
             }
             let object = ObjectRef::with_prototype(properties, string_prototype(env));
             Value::Object(object)

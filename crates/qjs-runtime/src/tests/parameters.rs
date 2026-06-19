@@ -7,14 +7,20 @@ fn default_parameter_initializers_use_parameter_tdz() {
          let name; try { f(); } catch (error) { name = error.name; } \
          name + ':' + calls;",
     );
-    assert_eq!(self_ref, Ok(Value::String("ReferenceError:0".to_owned())));
+    assert_eq!(
+        self_ref,
+        Ok(Value::String("ReferenceError:0".to_owned().into()))
+    );
 
     let later_ref = eval(
         "let calls = 0; function f(x = y, y) { calls = calls + 1; } \
          let name; try { f(); } catch (error) { name = error.name; } \
          name + ':' + calls;",
     );
-    assert_eq!(later_ref, Ok(Value::String("ReferenceError:0".to_owned())));
+    assert_eq!(
+        later_ref,
+        Ok(Value::String("ReferenceError:0".to_owned().into()))
+    );
 
     assert_eq!(
         eval("function f(x = 1, y = x + 1) { return x + y; } f();"),
@@ -38,7 +44,7 @@ fn default_parameter_closures_do_not_capture_body_var_environment() {
              f(); \
              probeParams() + ':' + probeBody();"
         ),
-        Ok(Value::String("outside:inside".to_owned()))
+        Ok(Value::String("outside:inside".to_owned().into()))
     );
 
     assert_eq!(
@@ -51,12 +57,12 @@ fn default_parameter_closures_do_not_capture_body_var_environment() {
              f(); \
              name;"
         ),
-        Ok(Value::String("ReferenceError".to_owned()))
+        Ok(Value::String("ReferenceError".to_owned().into()))
     );
 
     assert_eq!(
         eval("function f(read = () => typeof x) { var x = 'inside'; return read(); } f();"),
-        Ok(Value::String("undefined".to_owned()))
+        Ok(Value::String("undefined".to_owned().into()))
     );
 }
 
@@ -70,7 +76,7 @@ fn default_parameter_eval_closures_capture_parameter_eval_bindings() {
              }; \
              f();"
         ),
-        Ok(Value::String("local:param".to_owned()))
+        Ok(Value::String("local:param".to_owned().into()))
     );
 
     assert_eq!(
@@ -81,7 +87,7 @@ fn default_parameter_eval_closures_capture_parameter_eval_bindings() {
              }; \
              f();"
         ),
-        Ok(Value::String("local:param".to_owned()))
+        Ok(Value::String("local:param".to_owned().into()))
     );
 
     assert_eq!(
@@ -92,7 +98,7 @@ fn default_parameter_eval_closures_capture_parameter_eval_bindings() {
              }; \
              f();"
         ),
-        Ok(Value::String("function:param".to_owned()))
+        Ok(Value::String("function:param".to_owned().into()))
     );
 
     assert_eq!(
@@ -103,7 +109,7 @@ fn default_parameter_eval_closures_capture_parameter_eval_bindings() {
              } \
              f()();"
         ),
-        Ok(Value::String("eval".to_owned()))
+        Ok(Value::String("eval".to_owned().into()))
     );
 }
 
@@ -116,7 +122,7 @@ fn unmapped_arguments_callee_is_restricted() {
              function sloppySimple() { return arguments.callee === undefined; } \
              [strictArgs(), nonSimple(), sloppySimple()].join(':');"
         ),
-        Ok(Value::String("true:true:true".to_owned()))
+        Ok(Value::String("true:true:true".to_owned().into()))
     );
 }
 
@@ -156,13 +162,13 @@ fn evaluates_binding_pattern_rest_elements() {
         eval(
             "function f([first, ...others]) { return first + ':' + others.join('|'); } f([1, 2, 3]);"
         ),
-        Ok(Value::String("1:2|3".to_owned()))
+        Ok(Value::String("1:2|3".to_owned().into()))
     );
     assert_eq!(
         eval(
             "function f({a, ...rest}) { return a + ':' + Object.keys(rest).join('|') + ':' + rest.b; } f({a: 1, b: 2, c: 3});"
         ),
-        Ok(Value::String("1:b|c:2".to_owned()))
+        Ok(Value::String("1:b|c:2".to_owned().into()))
     );
 }
 
@@ -180,7 +186,7 @@ fn parameter_defaults_apply_only_to_undefined() {
         eval(
             "var log = []; function t(v) { log.push(v); return v; } function f(a = t(1), {b} = {b: t(2)}, c = t(3)) {} f(); log.join(',');"
         ),
-        Ok(Value::String("1,2,3".to_owned()))
+        Ok(Value::String("1,2,3".to_owned().into()))
     );
 }
 
@@ -188,11 +194,11 @@ fn parameter_defaults_apply_only_to_undefined() {
 fn destructured_parameters_iterate_iterables() {
     assert_eq!(
         eval("function f([a, b]) { return a + b; } f('xy');"),
-        Ok(Value::String("xy".to_owned()))
+        Ok(Value::String("xy".to_owned().into()))
     );
     assert_eq!(
         eval("function f([[k, v]]) { return k + '=' + v; } f(new Map([['a', 1]]));"),
-        Ok(Value::String("a=1".to_owned()))
+        Ok(Value::String("a=1".to_owned().into()))
     );
     // A hand-rolled iterable stands in for a generator until generator
     // evaluation lands in T010 S2.
@@ -205,7 +211,7 @@ fn destructured_parameters_iterate_iterables() {
              }
              function f([head, ...tail]) { return head + ':' + tail.join('|'); } f(range());"
         ),
-        Ok(Value::String("1:2|3".to_owned()))
+        Ok(Value::String("1:2|3".to_owned().into()))
     );
 }
 
@@ -239,7 +245,7 @@ fn non_simple_parameter_lists_unmap_arguments() {
         eval(
             "function f([a], {b}) { return arguments.length + ':' + arguments[0][0] + ':' + arguments[1].b; } f([7], {b: 8});"
         ),
-        Ok(Value::String("2:7:8".to_owned()))
+        Ok(Value::String("2:7:8".to_owned().into()))
     );
 }
 
@@ -249,13 +255,13 @@ fn destructuring_temporaries_stay_frame_local() {
         eval(
             "function g({p} = {p: 0}, {q} = {q: 0}) { return p + q; } function f([a] = [g({p: 1}, {q: 2})], [b]) { return a + ':' + b; } f(undefined, [33]);"
         ),
-        Ok(Value::String("3:33".to_owned()))
+        Ok(Value::String("3:33".to_owned().into()))
     );
     assert_eq!(
         eval(
             "function g([p, q]) { return p + q; } function f([a = g([1, 2]), b]) { return a + ':' + b; } f([undefined, 7]);"
         ),
-        Ok(Value::String("3:7".to_owned()))
+        Ok(Value::String("3:7".to_owned().into()))
     );
 }
 

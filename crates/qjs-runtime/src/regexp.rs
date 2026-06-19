@@ -376,15 +376,18 @@ pub(crate) fn native_regexp_prototype_to_string(this_value: Value) -> Result<Val
             message: "RegExp.prototype.toString requires an object receiver".to_owned(),
         });
     };
-    Ok(Value::String(format!(
-        "/{}/{}",
-        regexp_string_data(&object, REGEXP_SOURCE_PROPERTY)
-            .map(|source| escape_regexp_source(&source))
-            .unwrap_or_default(),
-        regexp_string_data(&object, REGEXP_FLAGS_PROPERTY)
-            .map(|flags| canonical_regexp_flags(&flags))
-            .unwrap_or_default()
-    )))
+    Ok(Value::String(
+        format!(
+            "/{}/{}",
+            regexp_string_data(&object, REGEXP_SOURCE_PROPERTY)
+                .map(|source| escape_regexp_source(&source))
+                .unwrap_or_default(),
+            regexp_string_data(&object, REGEXP_FLAGS_PROPERTY)
+                .map(|flags| canonical_regexp_flags(&flags))
+                .unwrap_or_default()
+        )
+        .into(),
+    ))
 }
 
 pub(crate) fn native_regexp_prototype_test(
@@ -401,7 +404,7 @@ pub(crate) fn native_regexp_prototype_source(
     env: &CallEnv,
 ) -> Result<Value, RuntimeError> {
     let source = regexp_accessor_data(&this_value, env, REGEXP_SOURCE_PROPERTY, "(?:)")?;
-    Ok(Value::String(escape_regexp_source(&source)))
+    Ok(Value::String(escape_regexp_source(&source).into()))
 }
 
 pub(crate) fn native_regexp_prototype_flags(
@@ -426,7 +429,7 @@ pub(crate) fn native_regexp_prototype_flags(
             flags.push(flag);
         }
     }
-    Ok(Value::String(flags))
+    Ok(Value::String(flags.into()))
 }
 
 pub(crate) fn native_regexp_prototype_flag(
@@ -459,7 +462,7 @@ pub(crate) fn default_regexp_source_accessor_value(
         Some(Value::Function(getter))
             if getter.native_kind() == Some(NativeFunction::RegExpPrototypeSource) =>
         {
-            Some(Value::String(escape_regexp_source(&source)))
+            Some(Value::String(escape_regexp_source(&source).into()))
         }
         _ => None,
     }
@@ -520,11 +523,11 @@ fn define_regexp_data(object: &ObjectRef, source: &str, flags: &str) {
 fn define_regexp_data_without_last_index(object: &ObjectRef, source: &str, flags: &str) {
     object.define_non_enumerable(
         REGEXP_SOURCE_PROPERTY.to_owned(),
-        Value::String(source.to_owned()),
+        Value::String(source.to_owned().into()),
     );
     object.define_non_enumerable(
         REGEXP_FLAGS_PROPERTY.to_owned(),
-        Value::String(flags.to_owned()),
+        Value::String(flags.to_owned().into()),
     );
 }
 
@@ -569,7 +572,7 @@ fn regexp_string_data(object: &ObjectRef, key: &str) -> Option<String> {
         Some(Property {
             value: Value::String(value),
             ..
-        }) => Some(value),
+        }) => Some(value.to_string()),
         _ => None,
     }
 }
@@ -624,8 +627,11 @@ pub(crate) fn native_regexp_global_match(
     regexp_set_last_index(&regexp, 0);
     let mut matches = Vec::new();
     loop {
-        let result =
-            native_regexp_prototype_exec(regexp.clone(), &[Value::String(input.to_owned())], env)?;
+        let result = native_regexp_prototype_exec(
+            regexp.clone(),
+            &[Value::String(input.to_owned().into())],
+            env,
+        )?;
         let Value::Array(array) = result else {
             break;
         };
@@ -729,15 +735,12 @@ fn regexp_match_array(
 ) -> Value {
     let captures = match_result.captures.clone();
     let mut values = Vec::with_capacity(1 + captures.len());
-    values.push(Value::String(input_slice(
-        input,
-        match_result.start,
-        match_result.end,
-        unicode,
-    )));
+    values.push(Value::String(
+        input_slice(input, match_result.start, match_result.end, unicode).into(),
+    ));
     values.extend(captures.iter().map(|capture| {
         capture
-            .map(|(start, end)| Value::String(input_slice(input, start, end, unicode)))
+            .map(|(start, end)| Value::String(input_slice(input, start, end, unicode).into()))
             .unwrap_or(Value::Undefined)
     }));
     let result = ArrayRef::new(values);
@@ -747,7 +750,7 @@ fn regexp_match_array(
         match_result.start
     };
     result.set_property("index".to_owned(), Value::Number(index as f64));
-    result.set_property("input".to_owned(), Value::String(input.to_owned()));
+    result.set_property("input".to_owned(), Value::String(input.to_owned().into()));
     result.set_property(
         "groups".to_owned(),
         regexp_groups_object(input, &captures, unicode, group_names),
@@ -843,7 +846,7 @@ fn regexp_groups_object(
             .get(capture_index)
             .copied()
             .flatten()
-            .map(|(start, end)| Value::String(input_slice(input, start, end, unicode)))
+            .map(|(start, end)| Value::String(input_slice(input, start, end, unicode).into()))
             .unwrap_or(Value::Undefined);
         groups.set(name.clone(), value);
     }
