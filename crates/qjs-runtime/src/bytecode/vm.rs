@@ -697,6 +697,18 @@ impl<'a> Vm<'a> {
             self.stack.push(value);
             return Ok(());
         }
+        // Typed-array integer-index read fast path: a non-negative integer index
+        // is owned by the exotic [[Get]], so read it directly from the backing
+        // buffer without building a string key or re-parsing it.
+        if let Value::Number(number) = &key_value
+            && let Some(index) = array_index_from_number(*number)
+            && let Value::Object(object) = &object
+            && crate::typed_array::is_typed_array_object(object)
+        {
+            let value = crate::typed_array::integer_indexed_value(object, index);
+            self.stack.push(value);
+            return Ok(());
+        }
         let key = self.coerce_property_key(key_value)?;
         let value = if let Some(value) = self.try_direct_get(&object, &key) {
             value

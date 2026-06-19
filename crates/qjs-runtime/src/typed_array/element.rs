@@ -260,6 +260,17 @@ pub(crate) fn indexed_element_value(object: &ObjectRef, key: &str) -> IndexedRea
     IndexedRead::Present(Box::new(get_view_element(object, index)))
 }
 
+/// IntegerIndexedElementGet by a `usize` index, skipping the string round-trip
+/// of `canonical_numeric_index`. A typed array's integer index is owned by the
+/// exotic `[[Get]]`, so an out-of-range or detached read yields `undefined`
+/// (never a prototype lookup). Used by the VM's integer-index fast path.
+pub(crate) fn integer_indexed_value(object: &ObjectRef, index: usize) -> Value {
+    match valid_integer_index(object, index as f64) {
+        Some(index) => get_view_element(object, index),
+        None => Value::Undefined,
+    }
+}
+
 /// Performs the integer-indexed write for `key = value` on a branded typed
 /// array. Coercion of `value` always runs first (its observable side effects
 /// must happen even for out-of-range or detached writes). When `key` names a

@@ -298,3 +298,30 @@ fn own_keys_keep_non_index_properties_after_dynamic_indices() {
         Ok(Value::String("4:0,1,2:true".to_owned().into()))
     );
 }
+
+#[test]
+fn integer_index_read_fast_path_matches_spec() {
+    // Integer-indexed reads are owned by the typed-array exotic [[Get]]:
+    // in-range returns the element, out-of-range is undefined, and a
+    // prototype getter at an integer key never fires.
+    assert_eq!(
+        eval("var ta = new Uint8Array(3); ta[1] = 7; ta[1];"),
+        Ok(Value::Number(7.0))
+    );
+    assert_eq!(
+        eval("var ta = new Uint8Array(3); typeof ta[5];"),
+        Ok(Value::String("undefined".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "Object.defineProperty(Uint8Array.prototype, '0', { get() { return 999; }, configurable: true });
+             var ta = new Uint8Array(1); ta[0] = 5; var r = ta[0]; delete Uint8Array.prototype[0]; r;"
+        ),
+        Ok(Value::Number(5.0))
+    );
+    // A non-canonical numeric-looking key is an ordinary property.
+    assert_eq!(
+        eval("var ta = new Uint8Array(2); ta['01'] = 'x'; ta['01'];"),
+        Ok(Value::String("x".to_owned().into()))
+    );
+}
