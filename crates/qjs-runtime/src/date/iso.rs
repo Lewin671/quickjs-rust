@@ -26,6 +26,11 @@ pub(super) fn parse_iso_string(source: &str) -> Option<f64> {
         return None;
     }
     let month = parse_i32(&source[cursor + 1..cursor + 3])?;
+    // The month must be in range for every form (year-month and date-only
+    // included), not just the date+time path checked below.
+    if !(1..=12).contains(&month) {
+        return None;
+    }
     // Year-month form: YYYY-MM
     if cursor + 3 == bytes.len() {
         let base_ms = days_from_civil(year, month, 1) as f64 * super::MS_PER_DAY;
@@ -35,6 +40,9 @@ pub(super) fn parse_iso_string(source: &str) -> Option<f64> {
         return None;
     }
     let day = parse_i32(&source[cursor + 4..cursor + 6])?;
+    if !(1..=31).contains(&day) {
+        return None;
+    }
     // Date-only form: YYYY-MM-DD (interpreted as UTC per spec)
     if cursor + 6 == bytes.len() {
         let base_ms = days_from_civil(year, month, day) as f64 * super::MS_PER_DAY;

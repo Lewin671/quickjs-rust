@@ -497,3 +497,31 @@ fn evaluates_date_builtins() {
     assert!(eval("Date.prototype.toJSON.call({});").is_err());
     assert!(eval("Date.prototype.toUTCString.call({});").is_err());
 }
+
+#[test]
+fn date_parse_rejects_out_of_range_month_and_day() {
+    // Month > 12 or day > 31 is invalid in every ISO form (date-only,
+    // year-month, and date+time), not just the date+time path.
+    for source in [
+        "2020-13-01",
+        "2020-01-32",
+        "2020-13",
+        "2020-13-01T00:00:00Z",
+        "2020-01-32T00:00:00Z",
+    ] {
+        assert_eq!(
+            eval(&format!("Number.isNaN(Date.parse('{source}'));")),
+            Ok(Value::Boolean(true)),
+            "expected NaN for {source}"
+        );
+    }
+    // In-range date-only and year-month values still parse.
+    assert_eq!(
+        eval("Date.parse('2020-12-31');"),
+        Ok(Value::Number(1609372800000.0))
+    );
+    assert_eq!(
+        eval("Date.parse('2020-12');"),
+        Ok(Value::Number(1606780800000.0))
+    );
+}
