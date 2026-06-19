@@ -101,6 +101,22 @@ fn unicode_character_classes_match_surrogate_pairs_as_code_points() {
 }
 
 #[test]
+fn unicode_character_class_escapes_advance_over_surrogate_pairs() {
+    let high = string_from_code_unit(0xD800);
+    let low = string_from_code_unit(0xDC00);
+    let input = format!("{high}{low}");
+
+    let matched = regexp_match_range(r"^\S$", &input, 0, false, true, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 2));
+    let matched = regexp_match_range(r"^\D$", &input, 0, false, true, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 2));
+    let matched = regexp_match_range(r"^\W$", &input, 0, false, true, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 2));
+
+    assert!(regexp_match_range(r"^\S$", &input, 0, false, false, false).is_none());
+}
+
+#[test]
 fn legacy_decimal_escapes_define_character_class_ranges() {
     let matched = regexp_match_range(r"[\12-\14]+", "\n\n", 0, false, false, false).unwrap();
     assert_eq!((matched.start, matched.end), (0, 2));

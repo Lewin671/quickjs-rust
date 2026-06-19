@@ -160,22 +160,35 @@ impl SimpleAtom<'_> {
                 (escape.set.contains(code_point) != escape.negated).then_some(next_index)
             }
             SimpleAtom::Escape(escaped) => {
-                let value = *text.get(index)?;
-                let matched = match escaped {
-                    'd' => value.is_ascii_digit(),
-                    'D' => !value.is_ascii_digit(),
-                    's' => regexp_whitespace(value),
-                    'S' => !regexp_whitespace(value),
-                    'w' => regexp_word_char(value),
-                    'W' => !regexp_word_char(value),
-                    other => chars_equal(
-                        value,
-                        regexp_control_escape(*other),
-                        options.ignore_case,
-                        options.unicode,
-                    ),
+                let (matched, next_index) = match escaped {
+                    'd' | 'D' | 's' | 'S' | 'w' | 'W' => {
+                        let (value, next_index) =
+                            regexp_code_point_at(text, index, options.unicode)?;
+                        let matched = match escaped {
+                            'd' => value.is_ascii_digit(),
+                            'D' => !value.is_ascii_digit(),
+                            's' => regexp_whitespace(value),
+                            'S' => !regexp_whitespace(value),
+                            'w' => regexp_word_char(value),
+                            'W' => !regexp_word_char(value),
+                            _ => unreachable!(),
+                        };
+                        (matched, next_index)
+                    }
+                    other => {
+                        let value = *text.get(index)?;
+                        (
+                            chars_equal(
+                                value,
+                                regexp_control_escape(*other),
+                                options.ignore_case,
+                                options.unicode,
+                            ),
+                            index + 1,
+                        )
+                    }
                 };
-                matched.then_some(index + 1)
+                matched.then_some(next_index)
             }
         }
     }

@@ -489,13 +489,24 @@ fn match_escape(
     let Some(value) = text.get(state.index).copied() else {
         return Vec::new();
     };
-    let (matched, next_pc) = match escaped {
-        'd' => (value.is_ascii_digit(), pc + 2),
-        'D' => (!value.is_ascii_digit(), pc + 2),
-        's' => (regexp_whitespace(value), pc + 2),
-        'S' => (!regexp_whitespace(value), pc + 2),
-        'w' => (regexp_word_char(value), pc + 2),
-        'W' => (!regexp_word_char(value), pc + 2),
+    let (matched, next_pc, next_index) = match escaped {
+        'd' | 'D' | 's' | 'S' | 'w' | 'W' => {
+            let Some((value, next_index)) =
+                regexp_code_point_at(text, state.index, options.unicode)
+            else {
+                return Vec::new();
+            };
+            let matched = match escaped {
+                'd' => value.is_ascii_digit(),
+                'D' => !value.is_ascii_digit(),
+                's' => regexp_whitespace(value),
+                'S' => !regexp_whitespace(value),
+                'w' => regexp_word_char(value),
+                'W' => !regexp_word_char(value),
+                _ => unreachable!(),
+            };
+            (matched, pc + 2, next_index)
+        }
         'u' => {
             let e = unicode_escape(pattern, pc, options.unicode);
             return match_code_unit_escape(text, state, e, 'u', pc, options);
@@ -509,6 +520,7 @@ fn match_escape(
         '0' if options.unicode && !pattern.get(pc + 2).is_some_and(char::is_ascii_digit) => (
             chars_equal(value, '\u{0000}', options.ignore_case, options.unicode),
             pc + 2,
+            state.index + 1,
         ),
         literal => (
             chars_equal(
@@ -518,12 +530,13 @@ fn match_escape(
                 options.unicode,
             ),
             pc + 2,
+            state.index + 1,
         ),
     };
     if !matched {
         return Vec::new();
     }
-    state.index += 1;
+    state.index = next_index;
     vec![(next_pc, state)]
 }
 
