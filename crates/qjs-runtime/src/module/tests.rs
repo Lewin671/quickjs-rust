@@ -209,6 +209,27 @@ fn namespace_object_shape() {
 }
 
 #[test]
+fn namespace_export_descriptors_are_writable_but_not_settable() {
+    let namespace = run(
+        "import * as ns from \"dep\";\n\
+         const desc = Object.getOwnPropertyDescriptor(ns, 'value');\n\
+         export const attrs = [desc.value, desc.writable, desc.enumerable, desc.configurable].join(':');\n\
+         export const setResult = Reflect.set(ns, 'value', 7);\n\
+         export const sameDefine = Reflect.defineProperty(ns, 'value', { writable: true, enumerable: true, configurable: false });\n\
+         export const changedDefine = Reflect.defineProperty(ns, 'value', { value: 7 });",
+        &[("dep", "export const value = 5;")],
+    )
+    .expect("module evaluates");
+    assert_eq!(
+        export(&namespace, "attrs"),
+        Value::String("5:true:true:false".to_owned().into())
+    );
+    assert_eq!(export(&namespace, "setResult"), Value::Boolean(false));
+    assert_eq!(export(&namespace, "sameDefine"), Value::Boolean(true));
+    assert_eq!(export(&namespace, "changedDefine"), Value::Boolean(false));
+}
+
+#[test]
 fn unresolvable_import_is_syntax_error() {
     let error = run("import { x } from \"missing\";\nexport const v = x;", &[])
         .expect_err("missing module rejected");

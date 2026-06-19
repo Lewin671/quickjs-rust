@@ -95,7 +95,8 @@ pub(crate) fn own_property_descriptor_key(
             ))
         }
         Value::Object(object) => Ok(match key {
-            PropertyKey::String(key) => object.own_property(key),
+            PropertyKey::String(key) => module_namespace_export_descriptor(&object, key)
+                .or_else(|| object.own_property(key)),
             PropertyKey::Symbol(symbol) => object.own_symbol_property(symbol),
         }),
         Value::Map(map) => Ok(match key {
@@ -154,6 +155,14 @@ pub(crate) fn define_property_descriptor_on_value_key(
                     crate::typed_array::IndexedDefine::Rejected => return Ok(false),
                     crate::typed_array::IndexedDefine::NotIndexed => {}
                 }
+            }
+            if object.is_module_namespace_exotic()
+                && let Some(existing) = object.own_property(&key)
+            {
+                return Ok(is_compatible_module_namespace_export_define(
+                    &existing,
+                    &descriptor,
+                ));
             }
             let existing = object.own_property(&key);
             let defines_new_property = existing.is_none();
@@ -535,6 +544,43 @@ fn define_symbol_property_descriptor_on_value(
             Ok(false)
         }
     }
+}
+
+fn module_namespace_export_descriptor(object: &ObjectRef, key: &str) -> Option<Property> {
+    if !object.is_module_namespace_exotic() {
+        return None;
+    }
+    let mut property = object.own_property(key)?;
+    property.writable = true;
+    Some(property)
+}
+
+fn is_compatible_module_namespace_export_define(
+    existing: &Property,
+    descriptor: &PropertyDescriptor,
+) -> bool {
+    if descriptor.is_accessor_descriptor() {
+        return false;
+    }
+    if descriptor.configurable_field() == Some(true) {
+        return false;
+    }
+    if let Some(enumerable) = descriptor.enumerable_field()
+        && !enumerable
+    {
+        return false;
+    }
+    if let Some(writable) = descriptor.writable_field()
+        && !writable
+    {
+        return false;
+    }
+    if let Some(value) = descriptor.value_field()
+        && !value.same_value(&existing.value)
+    {
+        return false;
+    }
+    true
 }
 
 pub(crate) fn define_property_on_value_key(

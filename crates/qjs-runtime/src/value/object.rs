@@ -122,6 +122,7 @@ pub struct ObjectRef {
     raw_json: Rc<Cell<bool>>,
     array_prototype_exotic: Rc<Cell<bool>>,
     immutable_prototype_exotic: Rc<Cell<bool>>,
+    module_namespace_exotic: Rc<Cell<bool>>,
     /// Generator [[GeneratorState]] for generator objects; `None` for ordinary
     /// objects. Lazily allocated so non-generator objects pay only one `Rc`.
     generator_state: Rc<RefCell<Option<crate::bytecode::GeneratorState>>>,
@@ -199,6 +200,7 @@ impl ObjectRef {
             raw_json: Rc::new(Cell::new(false)),
             array_prototype_exotic: Rc::new(Cell::new(false)),
             immutable_prototype_exotic: Rc::new(Cell::new(false)),
+            module_namespace_exotic: Rc::new(Cell::new(false)),
             generator_state: Rc::new(RefCell::new(None)),
             async_generator_state: Rc::new(RefCell::new(None)),
             private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
@@ -298,6 +300,14 @@ impl ObjectRef {
 
     pub(crate) fn mark_immutable_prototype_exotic(&self) {
         self.immutable_prototype_exotic.set(true);
+    }
+
+    pub(crate) fn mark_module_namespace_exotic(&self) {
+        self.module_namespace_exotic.set(true);
+    }
+
+    pub(crate) fn is_module_namespace_exotic(&self) -> bool {
+        self.module_namespace_exotic.get()
     }
 
     pub(crate) fn get(&self, key: &str) -> Option<Value> {

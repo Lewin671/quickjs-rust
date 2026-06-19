@@ -16,6 +16,7 @@ pub(super) fn build_namespace(mut bindings: Vec<(String, Value)>, env: &CallEnv)
     // Namespace objects have a null [[Prototype]].
     let namespace = ObjectRef::new(std::collections::HashMap::new());
     let _ = namespace.set_prototype(None);
+    namespace.mark_module_namespace_exotic();
     for (name, value) in bindings {
         // Non-writable + non-configurable so reassignment and deletion of an
         // existing export fail, matching the sealed namespace behavior.
