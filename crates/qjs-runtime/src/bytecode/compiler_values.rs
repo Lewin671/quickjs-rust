@@ -374,7 +374,10 @@ impl Compiler {
 
     /// Resolves a `super.m` / `super[expr]` method, leaving `[this, callee]`
     /// on the stack for a following `CallResolved`.
-    fn compile_super_method(&mut self, property: &MemberProperty) -> Result<(), RuntimeError> {
+    pub(super) fn compile_super_method(
+        &mut self,
+        property: &MemberProperty,
+    ) -> Result<(), RuntimeError> {
         match property {
             MemberProperty::Named(name) => {
                 self.emit(Op::SuperMethod { key: name.clone() });

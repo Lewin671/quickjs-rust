@@ -669,10 +669,29 @@ impl Compiler {
         base: &Expr,
         chain: &[OptionalChainEntry<'a>],
     ) -> Result<(), RuntimeError> {
-        self.compile_expr(base)?;
-
         let mut end_jumps = Vec::new();
         let mut index = 0;
+
+        // `super.method?.()` / `super.method(...)` needs super-method dispatch
+        // (the call's `this` is the current `this`, not the resolved value), so
+        // when the chain base is a super property immediately followed by a
+        // call, resolve it with SuperMethod (leaving `[this, callee]`) and
+        // dispatch via CallResolved instead of treating `super.method` as a
+        // standalone value.
+        if let Expr::Member {
+            object, property, ..
+        } = base
+            && matches!(object.as_ref(), Expr::Super { .. })
+            && let Some(first) = chain.first()
+            && let OptionalChainStep::Call(arguments) = &first.kind
+        {
+            self.compile_super_method(property)?;
+            self.compile_optional_resolved_call(first.optional, arguments, &mut end_jumps)?;
+            index = 1;
+        } else {
+            self.compile_expr(base)?;
+        }
+
         while index < chain.len() {
             let step = &chain[index];
             // A member immediately followed by a call is a method call: the
@@ -747,9 +766,20 @@ impl Compiler {
             self.compile_member_key(property)?;
             self.emit(Op::GetProp);
         }
+        self.compile_optional_resolved_call(call_optional, arguments, end_jumps)
+    }
+
+    /// Dispatches a call whose receiver and callee are already on the stack as
+    /// `[receiver, callee]` (a resolved method or super method). When
+    /// `call_optional`, a nullish callee short-circuits the chain, discarding
+    /// both stack entries before yielding `undefined`.
+    fn compile_optional_resolved_call(
+        &mut self,
+        call_optional: bool,
+        arguments: &[qjs_ast::CallArgument],
+        end_jumps: &mut Vec<usize>,
+    ) -> Result<(), RuntimeError> {
         if call_optional {
-            // `obj.m?.()`: skip the call when the method is nullish, discarding
-            // both the method and the receiver before yielding `undefined`.
             let call_jump = self.emit(Op::JumpIfNotNullish(usize::MAX));
             self.emit(Op::Pop);
             self.emit(Op::Pop);
@@ -847,6 +877,10 @@ impl Compiler {
                 });
                 base
             }
+            // `super(...)` is a SuperCall and must be compiled as a leaf base
+            // (not split into a bare Super plus a call step), so `super()?.a`
+            // works.
+            Expr::Call { callee, .. } if matches!(callee.as_ref(), Expr::Super { .. }) => expr,
             // A plain call within an optional chain (`a?.b.c(x).d`) is part of
             // the same chain: it must be collected as a step so a short-circuit
             // at any earlier link skips it (and its arguments) rather than

@@ -995,3 +995,35 @@ fn optional_chaining_on_new_target_and_super() {
         Ok(Value::Number(5.0))
     );
 }
+
+#[test]
+fn optional_chaining_super_method_and_super_call() {
+    // `super.m?.()` dispatches the super method and returns its result.
+    assert_eq!(
+        eval(
+            "class B { m() { return 7; } }
+             class F extends B { m() { return super.m?.(); } }
+             new F().m();"
+        ),
+        Ok(Value::Number(7.0))
+    );
+    // A missing super method short-circuits to undefined instead of throwing.
+    assert_eq!(
+        eval(
+            "class B {}
+             class F extends B { m() { return super.zzz?.(); } }
+             new F().m();"
+        ),
+        Ok(Value::Undefined)
+    );
+    // `super()` is a SuperCall that can head an optional chain in a derived
+    // constructor (`super()?.x` parses and compiles).
+    assert_eq!(
+        eval(
+            "class B {}
+             class D extends B { constructor() { super()?.x; } }
+             new D() instanceof D;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
