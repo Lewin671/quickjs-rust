@@ -966,3 +966,28 @@ fn evaluates_regexp_match_indices_d_flag() {
         Ok(Value::String("1,3".to_owned().into()))
     );
 }
+
+#[test]
+fn word_boundary_assertions_match_zero_width() {
+    // `\b` / `\B` are zero-width word-boundary assertions, not the literal `b`.
+    assert_eq!(
+        eval(r#"/\bp/.exec("pilot soviet")[0];"#),
+        Ok(Value::String("p".to_owned().into()))
+    );
+    assert_eq!(
+        eval(r#"/\bword\b/.test("a word here");"#),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(r#"/\Bevil\B/.test("devils");"#),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(r#""the cat sat".match(/\bcat\b/)[0];"#),
+        Ok(Value::String("cat".to_owned().into()))
+    );
+    assert_eq!(
+        eval(r#"/\bcat\b/.test("category");"#),
+        Ok(Value::Boolean(false))
+    );
+}

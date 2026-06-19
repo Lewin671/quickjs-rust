@@ -253,6 +253,26 @@ fn match_pattern(
                 Vec::new()
             }
         }
+        // `\b` / `\B` are zero-width word-boundary assertions, not literal atoms.
+        '\\' if matches!(pattern.get(pc + 1), Some('b' | 'B')) => {
+            let before = state.index > 0 && regexp_word_char(text[state.index - 1]);
+            let after = text.get(state.index).copied().is_some_and(regexp_word_char);
+            let want_boundary = pattern[pc + 1] == 'b';
+            if (before != after) == want_boundary {
+                match_pattern(
+                    pattern,
+                    text,
+                    pc + 2,
+                    end_pc,
+                    state,
+                    group_indices,
+                    properties,
+                    options,
+                )
+            } else {
+                Vec::new()
+            }
+        }
         _ => atom_end(pattern, pc, properties, options.unicode)
             .into_iter()
             .flat_map(|atom_end| {
