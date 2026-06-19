@@ -518,7 +518,7 @@ pub(crate) fn new_pending_promise(env: &CallEnv) -> ObjectRef {
 /// that coercion throws (in which case the promise rejects, never the call) —
 /// schedules a host load job that settles the promise with the module namespace
 /// or a load/link/evaluate error. Returns the capability's promise.
-pub(crate) fn dynamic_import(specifier: Value, env: &mut CallEnv) -> Value {
+pub(crate) fn dynamic_import(specifier: Value, options: Option<Value>, env: &mut CallEnv) -> Value {
     let promise = new_pending_promise(env);
     let (resolve, reject) = resolving_function_pair(Value::Object(promise.clone()));
     let specifier_string = match crate::to_js_string_with_env(specifier, env) {
@@ -530,8 +530,69 @@ pub(crate) fn dynamic_import(specifier: Value, env: &mut CallEnv) -> Value {
             return Value::Object(promise);
         }
     };
+    // EvaluateImportCall validates the options/attributes after ToString of the
+    // specifier; any violation rejects the promise. Attributes are otherwise
+    // unused for resolution here.
+    if let Some(options) = options
+        && let Err(error) = validate_import_options(options, env)
+    {
+        let reason = crate::error::runtime_error_to_value(error, env);
+        let _ = call_function(reject, Value::Undefined, vec![reason], env, false);
+        return Value::Object(promise);
+    }
     jobs::enqueue_dynamic_import_job(env, resolve, reject, specifier_string);
     Value::Object(promise)
+}
+
+/// Validates the second argument to `import(...)` (an options object whose
+/// `with` property holds the import-attributes record): `undefined` is allowed,
+/// a non-object options or non-object `with` is a TypeError, and every own
+/// enumerable attribute value must be a String (EvaluateImportCall).
+fn validate_import_options(options: Value, env: &mut CallEnv) -> Result<(), RuntimeError> {
+    if matches!(options, Value::Undefined) {
+        return Ok(());
+    }
+    if !import_options_is_object(&options) {
+        return Err(import_options_type_error(
+            "import options must be an object",
+        ));
+    }
+    let attributes = property_value(options, "with", env)?;
+    if matches!(attributes, Value::Undefined) {
+        return Ok(());
+    }
+    if !import_options_is_object(&attributes) {
+        return Err(import_options_type_error(
+            "import 'with' attributes must be an object",
+        ));
+    }
+    for (_key, value) in crate::object::enumerable_property_entries(attributes, env)? {
+        if !matches!(value, Value::String(_)) {
+            return Err(import_options_type_error(
+                "import attribute value must be a string",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn import_options_is_object(value: &Value) -> bool {
+    matches!(
+        value,
+        Value::Object(_)
+            | Value::Array(_)
+            | Value::Function(_)
+            | Value::Proxy(_)
+            | Value::Map(_)
+            | Value::Set(_)
+    )
+}
+
+fn import_options_type_error(message: &str) -> RuntimeError {
+    RuntimeError {
+        thrown: None,
+        message: format!("TypeError: {message}"),
+    }
 }
 
 /// Resolves `%Promise.prototype%` from the realm: prefer the internal binding,

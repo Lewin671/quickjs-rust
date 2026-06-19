@@ -41,13 +41,12 @@ impl Vm<'_> {
     /// (coercion failures reject it rather than throwing) and pushes it.
     pub(super) fn import_call(&mut self, has_options: bool) -> Result<(), RuntimeError> {
         let specifier = self.pop()?;
-        // The second (options/attributes) argument is evaluated for its side
-        // effects but otherwise ignored; discard it.
-        if has_options {
-            let _ = self.pop()?;
-        }
+        // The second (options/attributes) argument is validated per spec
+        // (EvaluateImportCall): a non-object or a non-string `with` attribute
+        // rejects the import promise. Attributes do not affect resolution here.
+        let options = if has_options { Some(self.pop()?) } else { None };
         let mut env = self.current_env();
-        let promise = crate::promise::dynamic_import(specifier, &mut env);
+        let promise = crate::promise::dynamic_import(specifier, options, &mut env);
         self.apply_env(env);
         self.stack.push(promise);
         Ok(())
