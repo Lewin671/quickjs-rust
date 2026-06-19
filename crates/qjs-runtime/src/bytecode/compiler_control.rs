@@ -130,16 +130,7 @@ impl Compiler {
         if !iteration_slots.is_empty() {
             self.emit(Op::FreshIterationScope(iteration_slots.clone()));
         }
-        self.compile_for_in_left(left, value_slot)?;
-        self.with_annex_b_blocked_function_names(&blocked, |compiler| {
-            compiler.push_loop_with_iterator(result_slot, iterator);
-            if has_iteration_scope {
-                compiler.mark_loop_captured_env_scope();
-            }
-            compiler.compile_stmt(body)?;
-            compiler.emit(Op::StoreLocal(result_slot));
-            Ok(())
-        })?;
+        self.compile_for_of_iteration(left, value_slot, body, result_slot, iterator, &blocked)?;
         let context = self.pop_loop();
 
         self.emit(Op::Jump(loop_start));
@@ -293,16 +284,7 @@ impl Compiler {
         if !iteration_slots.is_empty() {
             self.emit(Op::FreshIterationScope(iteration_slots.clone()));
         }
-        self.compile_for_in_left(left, value_slot)?;
-        self.with_annex_b_blocked_function_names(&blocked, |compiler| {
-            compiler.push_loop_with_iterator(result_slot, iterator);
-            if has_iteration_scope {
-                compiler.mark_loop_captured_env_scope();
-            }
-            compiler.compile_stmt(body)?;
-            compiler.emit(Op::StoreLocal(result_slot));
-            Ok(())
-        })?;
+        self.compile_for_of_iteration(left, value_slot, body, result_slot, iterator, &blocked)?;
         let context = self.pop_loop();
 
         self.emit(Op::Jump(loop_start));
@@ -315,6 +297,71 @@ impl Compiler {
         let cleanup_slots = self.current_lexical_slots_for_names(&blocked);
         self.emit_for_of_loop_completion(result_slot, iterator, &cleanup_slots, &context, enter);
         self.patch_loop_continues(&context, loop_start);
+        Ok(())
+    }
+
+    fn compile_for_of_iteration(
+        &mut self,
+        left: &ForInLeft,
+        value_slot: usize,
+        body: &Stmt,
+        result_slot: usize,
+        iterator: LoopIterator,
+        blocked: &[String],
+    ) -> Result<(), RuntimeError> {
+        self.with_annex_b_blocked_function_names(blocked, |compiler| {
+            compiler.push_loop_with_iterator(result_slot, iterator);
+            if is_lexical_for_in_left(left) {
+                compiler.mark_loop_captured_env_scope();
+            }
+            if for_in_left_has_disposal(left) {
+                compiler.compile_for_of_iteration_with_disposal(
+                    left,
+                    value_slot,
+                    body,
+                    result_slot,
+                )?;
+            } else {
+                compiler.compile_for_in_left(left, value_slot)?;
+                compiler.compile_stmt(body)?;
+                compiler.emit(Op::StoreLocal(result_slot));
+            }
+            Ok(())
+        })
+    }
+
+    fn compile_for_of_iteration_with_disposal(
+        &mut self,
+        left: &ForInLeft,
+        value_slot: usize,
+        body: &Stmt,
+        result_slot: usize,
+    ) -> Result<(), RuntimeError> {
+        self.emit(Op::EnterDisposableScope);
+        let loop_depth = self.loop_stack_depth();
+        self.push_try_result_slot(result_slot, loop_depth, false);
+        let enter = self.emit(Op::EnterTry {
+            catch: None,
+            finally: None,
+            catch_scope: None,
+        });
+        self.disposable_scope_depth += 1;
+        let body_result = (|| {
+            self.compile_for_in_left(left, value_slot)?;
+            self.compile_stmt(body)?;
+            self.emit(Op::StoreLocal(result_slot));
+            Ok(())
+        })();
+        self.disposable_scope_depth -= 1;
+        body_result?;
+        self.emit(Op::ExitTry);
+        let normal_jump = self.emit(Op::Jump(usize::MAX));
+        self.pop_try_result_slot();
+        let finally_target = self.compile_dispose_finally();
+        if let Op::EnterTry { finally, .. } = &mut self.code[enter] {
+            *finally = Some(finally_target);
+        }
+        self.patch_jump(normal_jump, finally_target);
         Ok(())
     }
 
@@ -475,6 +522,17 @@ impl Compiler {
                     }
                 }
                 self.emit(Op::LoadLocal(key_slot));
+                if self.disposable_scope_depth > 0 {
+                    match kind {
+                        VarKind::Using => {
+                            self.emit(Op::RegisterDisposable);
+                        }
+                        VarKind::AwaitUsing => {
+                            self.emit(Op::RegisterAsyncDisposable);
+                        }
+                        _ => {}
+                    }
+                }
                 self.compile_binding_initializer(binding, *kind)?;
             }
             ForInLeft::Target(AssignmentTarget::Identifier { name, .. }) => {
@@ -594,4 +652,14 @@ impl Compiler {
             self.emit(Op::ExitWith);
         }
     }
+}
+
+fn for_in_left_has_disposal(left: &ForInLeft) -> bool {
+    matches!(
+        left,
+        ForInLeft::VarDecl {
+            kind: VarKind::Using | VarKind::AwaitUsing,
+            ..
+        }
+    )
 }

@@ -462,6 +462,76 @@ fn await_using_for_initializer_disposes_if_later_initializer_throws() {
 }
 
 #[test]
+fn await_using_for_of_head_disposes_each_iteration() {
+    assert_eq!(
+        eval_log(
+            "let log = []; \
+             async function f() { \
+               let resources = [ \
+                 { name: 'a', [Symbol.dispose]() { log.push('dispose:' + this.name); } }, \
+                 { name: 'b', [Symbol.dispose]() { log.push('dispose:' + this.name); } } \
+               ]; \
+               for (await using value of resources) { \
+                 log.push('body:' + value.name); \
+               } \
+             } \
+             f(); log;"
+        ),
+        "body:a,dispose:a,body:b,dispose:b"
+    );
+}
+
+#[test]
+fn await_using_for_of_head_disposes_before_continue() {
+    assert_eq!(
+        eval_log(
+            "let log = []; \
+             async function f() { \
+               let resources = [ \
+                 { name: 'a', [Symbol.dispose]() { log.push('dispose:' + this.name); } }, \
+                 { name: 'b', [Symbol.dispose]() { log.push('dispose:' + this.name); } } \
+               ]; \
+               for (await using value of resources) { \
+                 log.push('body:' + value.name); \
+                 continue; \
+               } \
+             } \
+             f(); log;"
+        ),
+        "body:a,dispose:a,body:b,dispose:b"
+    );
+}
+
+#[test]
+fn await_using_for_of_head_disposes_before_break_and_closes_iterator() {
+    assert_eq!(
+        eval_log(
+            "let log = []; \
+             async function f() { \
+               let iterator = { \
+                 index: 0, \
+                 next() { \
+                   this.index++; \
+                   return { done: false, value: { \
+                     name: 'v' + this.index, \
+                     [Symbol.dispose]() { log.push('dispose:' + this.name); } \
+                   } }; \
+                 }, \
+                 return() { log.push('return'); return { done: true }; } \
+               }; \
+               let iterable = { [Symbol.iterator]() { return iterator; } }; \
+               for (await using value of iterable) { \
+                 log.push('body:' + value.name); \
+                 break; \
+               } \
+             } \
+             f(); log;"
+        ),
+        "body:v1,dispose:v1,return"
+    );
+}
+
+#[test]
 fn using_disposal_errors_chain_with_suppressed_error() {
     // A dispose failure that overrides a body throw is wrapped in a
     // SuppressedError carrying both errors.
