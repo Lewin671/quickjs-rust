@@ -985,6 +985,15 @@ fn bound_function_length_and_name_follow_spec() {
         ),
         Ok(Value::Number(3.0))
     );
+    // When the target has no *own* `length` (only an inherited one), the bound
+    // length is 0 rather than the inherited value (HasOwnProperty check).
+    assert_eq!(
+        eval(
+            "function bar() {} Object.setPrototypeOf(bar, { length: 42 }); delete bar.length;
+             Function.prototype.bind.call(bar, null, 1).length;"
+        ),
+        Ok(Value::Number(0.0))
+    );
     // Name is "bound " + target name; a throwing name getter propagates.
     assert_eq!(
         eval("function foo() {} foo.bind().name;"),

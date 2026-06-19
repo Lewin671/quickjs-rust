@@ -368,10 +368,21 @@ pub(crate) fn native_function_prototype_bind(
     let bound_arguments = argument_values.iter().skip(1).cloned().collect::<Vec<_>>();
     let arg_count = bound_arguments.len() as f64;
 
-    // SetFunctionLength: derive the bound length from Get(Target, "length")
-    // through ToIntegerOrInfinity, clamped to >= 0 after subtracting the bound
-    // argument count. +Infinity is preserved; a non-Number length yields 0.
-    let target_length = property_value(this_value.clone(), "length", env)?;
+    // SetFunctionLength: when the target has an own `length`, derive the bound
+    // length from Get(Target, "length") through ToIntegerOrInfinity, clamped to
+    // >= 0 after subtracting the bound argument count. +Infinity is preserved; a
+    // non-Number length yields 0. When the target has no *own* `length` (e.g. it
+    // was deleted, leaving only an inherited one), the spec uses 0 directly
+    // rather than reading the inherited value.
+    let has_own_length = matches!(
+        &this_value,
+        Value::Function(function) if function.own_property("length").is_some()
+    );
+    let target_length = if has_own_length {
+        property_value(this_value.clone(), "length", env)?
+    } else {
+        Value::Number(0.0)
+    };
     let bound_length = match target_length {
         Value::Number(value) if value == f64::INFINITY => f64::INFINITY,
         Value::Number(value) if value == f64::NEG_INFINITY => 0.0,
