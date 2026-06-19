@@ -785,3 +785,23 @@ fn sloppy_function_direct_eval_new_bindings_are_deletable() {
         Ok(Value::String("function:33:true".to_owned().into()))
     );
 }
+
+#[test]
+fn eval_script_runs_global_declaration_instantiation_checks() {
+    // $262.evalScript performs GlobalDeclarationInstantiation: a var/function
+    // declaration that cannot be created on a non-extensible global is a
+    // TypeError thrown before any evaluation.
+    assert!(
+        eval("Object.preventExtensions(this); __quickjsRustEvalScript('var brandNewGlobalA;');")
+            .is_err()
+    );
+    assert!(
+        eval("Object.preventExtensions(this); __quickjsRustEvalScript('function brandNewGlobalB() {}');")
+            .is_err()
+    );
+    // A declarable var still works on an extensible global.
+    assert_eq!(
+        eval("__quickjsRustEvalScript('var okGlobalVar = 7;'); okGlobalVar;"),
+        Ok(Value::Number(7.0))
+    );
+}

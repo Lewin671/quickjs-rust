@@ -382,6 +382,21 @@ pub(super) fn native_eval_script(
     let bytecode = compile_direct_eval_script(&script, false)?;
     let mut eval_env = CallEnv::new(env.realm_rc());
     validate_eval_global_lexical_bindings(&bytecode, &eval_env)?;
+    // $262.evalScript runs GlobalDeclarationInstantiation: a var/function
+    // declaration that cannot be created on a non-extensible global, or that
+    // collides with an existing global lexical, is rejected before evaluation.
+    let hoisted_function_names = bytecode
+        .hoisted_function_names()
+        .map(str::to_owned)
+        .collect::<HashSet<_>>();
+    if !bytecode.is_strict() {
+        validate_sloppy_global_eval_declarations(
+            &bytecode,
+            &eval_env,
+            &HashSet::new(),
+            &hoisted_function_names,
+        )?;
+    }
     initialize_direct_eval_bindings(&bytecode, &mut eval_env, false, &HashSet::new(), false);
     let result = eval_bytecode_with_env(&bytecode, eval_env.clone());
     for name in bytecode
