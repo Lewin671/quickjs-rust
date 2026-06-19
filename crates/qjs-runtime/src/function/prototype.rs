@@ -428,13 +428,11 @@ pub(crate) fn native_function_prototype_has_instance(
 pub(crate) fn native_function_prototype_to_string(
     this_value: Value,
 ) -> Result<Value, RuntimeError> {
-    // A user function — directly, or wrapped by a callable Proxy — with
-    // retained source returns its original source text verbatim.
+    // A user function with retained source returns its original source text
+    // verbatim. A callable Proxy receiver is handled below as a native-shaped
+    // callable object representation instead of exposing the target's source.
     let source_function = match &this_value {
         Value::Function(function) => Some(function.clone()),
-        Value::Proxy(proxy) if crate::proxy::proxy_is_callable(proxy) => {
-            callable_proxy_target_function(proxy)
-        }
         _ => None,
     };
     if let Some(function) = source_function
@@ -471,19 +469,6 @@ fn callable_proxy_target_name(proxy: &crate::proxy::ProxyRef) -> String {
             Value::Function(function) => return function.name.clone().unwrap_or_default(),
             Value::Proxy(inner) => target = inner.target(),
             _ => return String::new(),
-        }
-    }
-}
-
-/// Follows a callable Proxy's target chain to the underlying function, so
-/// `Function.prototype.toString` on a Proxy reproduces the target's source.
-fn callable_proxy_target_function(proxy: &crate::proxy::ProxyRef) -> Option<Function> {
-    let mut target = proxy.target();
-    loop {
-        match target {
-            Value::Function(function) => return Some(function),
-            Value::Proxy(inner) => target = inner.target(),
-            _ => return None,
         }
     }
 }

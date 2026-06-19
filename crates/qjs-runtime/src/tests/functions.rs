@@ -244,14 +244,15 @@ fn evaluates_function_declarations_and_calls() {
         eval("Function.prototype.toString.call(Array.isArray).includes('[native code]');"),
         Ok(Value::Boolean(true))
     );
-    // A callable Proxy is an acceptable toString receiver and reproduces the
-    // wrapped function's source (or the wrapped native's [native code] form).
+    // A callable Proxy is an acceptable toString receiver and uses a
+    // NativeFunction-shaped representation instead of exposing target source.
     assert_eq!(
         eval(
             "let p = new Proxy(function foo() {}, {}); \
-             Function.prototype.toString.call(p);"
+             let source = Function.prototype.toString.call(p); \
+             source.includes('[native code]') && source.startsWith('function');"
         ),
-        Ok(Value::String("function foo() {}".to_owned().into()))
+        Ok(Value::Boolean(true))
     );
     assert_eq!(
         eval(
