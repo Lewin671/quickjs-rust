@@ -734,3 +734,14 @@ fn rejects_duplicate_lexical_declarations_in_switch() {
             .is_err()
     );
 }
+
+#[test]
+fn rejects_catch_parameter_early_errors() {
+    // Duplicate bound names, and collisions with the block's lexical
+    // declarations, are Syntax Errors; a `var` redeclaration stays legal.
+    assert!(parse_script("try {} catch ([x, x]) {}").is_err());
+    assert!(parse_script("try {} catch (x) { let x; }").is_err());
+    assert!(parse_script("try {} catch (e) { function e() {} }").is_err());
+    assert!(parse_script("try {} catch (x) { var x; }").is_ok());
+    assert!(parse_script("try {} catch (x) { let y; }").is_ok());
+}

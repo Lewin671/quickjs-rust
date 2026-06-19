@@ -33,6 +33,55 @@ fn disallowed_declaration(stmt: &Stmt) -> Option<(&'static str, Span)> {
     }
 }
 
+/// CatchParameter early errors (13.15.1): its BoundNames must contain no
+/// duplicates, and must not collide with the catch block's lexically declared
+/// names (`let`/`const`/`class`/`function` declarations directly in the block).
+/// A plain `catch (x) { var x; }` remains legal.
+fn validate_catch_parameter(param: &BindingPattern, body: &[Stmt]) -> Result<(), ParseError> {
+    let bound = param.named_spans();
+    for (index, (name, _)) in bound.iter().enumerate() {
+        for (candidate, span) in &bound[index + 1..] {
+            if candidate == name {
+                return Err(ParseError {
+                    message: format!("duplicate catch parameter binding `{name}`"),
+                    span: *span,
+                });
+            }
+        }
+    }
+
+    let block_lexical: Vec<(String, Span)> = body
+        .iter()
+        .flat_map(|stmt| match stmt {
+            Stmt::ClassDecl { name, span, .. } | Stmt::FunctionDecl { name, span, .. } => {
+                vec![(name.clone(), *span)]
+            }
+            Stmt::VarDecl {
+                kind: VarKind::Let | VarKind::Const | VarKind::Using | VarKind::AwaitUsing,
+                declarations,
+                ..
+            } => declarations
+                .iter()
+                .flat_map(|declarator| declarator.binding.named_spans())
+                .collect(),
+            _ => Vec::new(),
+        })
+        .collect();
+
+    for (name, _) in &bound {
+        if let Some((_, span)) = block_lexical
+            .iter()
+            .find(|(candidate, _)| candidate == name)
+        {
+            return Err(ParseError {
+                message: format!("catch parameter `{name}` conflicts with a lexical declaration"),
+                span: *span,
+            });
+        }
+    }
+    Ok(())
+}
+
 fn disallowed_iteration_body(stmt: &Stmt) -> Option<(&'static str, Span)> {
     if let Some(r) = disallowed_declaration(stmt) {
         return Some(r);
@@ -762,6 +811,9 @@ impl Parser {
             None
         };
         let body = self.block_statements()?;
+        if let Some(param) = &param {
+            validate_catch_parameter(param, &body)?;
+        }
         let end = body.last().map_or(start + "catch".len(), stmt_end);
         Ok(CatchClause {
             param,
