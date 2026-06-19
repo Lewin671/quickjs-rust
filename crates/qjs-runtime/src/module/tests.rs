@@ -172,6 +172,26 @@ fn module_top_level_var_function_collision_is_syntax_error() {
 }
 
 #[test]
+fn namespace_has_own_to_string_tag_property() {
+    // A module namespace has an own `@@toStringTag` data property "Module"
+    // (writable:false, enumerable:false, configurable:false).
+    let namespace = run(
+        "import * as ns from \"dep\";\n\
+         export const tag = ns[Symbol.toStringTag];\n\
+         var d = Object.getOwnPropertyDescriptor(ns, Symbol.toStringTag);\n\
+         export const ok = d !== undefined && d.value === 'Module' \
+             && d.writable === false && d.enumerable === false && d.configurable === false;",
+        &[("dep", "export const x = 1;")],
+    )
+    .expect("module evaluates");
+    assert_eq!(
+        export(&namespace, "tag"),
+        Value::String("Module".to_owned().into())
+    );
+    assert_eq!(export(&namespace, "ok"), Value::Boolean(true));
+}
+
+#[test]
 fn namespace_object_shape() {
     let namespace = run(
         "export const b = 2;\nexport const a = 1;\nexport default 3;",

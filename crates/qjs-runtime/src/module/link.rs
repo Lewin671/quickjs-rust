@@ -440,7 +440,8 @@ impl ModuleGraph {
                 bindings.push((name, value));
             }
         }
-        let namespace = build_namespace(bindings);
+        let env = crate::CallEnv::new(self.realm.clone());
+        let namespace = build_namespace(bindings, &env);
         self.modules.get_mut(key).expect("module exists").namespace = Some(namespace.clone());
         namespace
     }
