@@ -124,3 +124,18 @@ fn evaluates_bigint_statics_and_prototype_methods() {
     assert_type_error("BigInt.prototype.valueOf.call(1);");
     assert_type_error("JSON.stringify(1n);");
 }
+
+#[test]
+fn bigint_string_relational_uses_exact_comparison() {
+    // A String operand of a BigInt relational comparison is parsed via
+    // StringToBigInt (exact), not coerced to a lossy f64.
+    assert_eq!(
+        eval("9007199254740993n > '9007199254740992';"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(eval("'0x10' > 15n;"), Ok(Value::Boolean(true)));
+    // A non-integer or non-numeric string is undefined -> every comparison false.
+    assert_eq!(eval("2n > '1.5';"), Ok(Value::Boolean(false)));
+    assert_eq!(eval("2n < '1.5';"), Ok(Value::Boolean(false)));
+    assert_eq!(eval("1n > 'abc';"), Ok(Value::Boolean(false)));
+}

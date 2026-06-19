@@ -359,14 +359,8 @@ fn eval_bigint_mixed_relational(
     right: Value,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let left = match left {
-        Value::BigInt(value) => BigIntComparable::BigInt(value),
-        value => BigIntComparable::Number(to_number_with_env(value, env)?),
-    };
-    let right = match right {
-        Value::BigInt(value) => BigIntComparable::BigInt(value),
-        value => BigIntComparable::Number(to_number_with_env(value, env)?),
-    };
+    let left = bigint_relational_operand(left, env)?;
+    let right = bigint_relational_operand(right, env)?;
     Ok(Value::Boolean(match op {
         BinaryOp::Lt => left.partial_cmp(&right) == Some(Ordering::Less),
         BinaryOp::Le => left
@@ -378,6 +372,23 @@ fn eval_bigint_mixed_relational(
             .is_some_and(|ordering| ordering != Ordering::Less),
         _ => unreachable!("relational operator required"),
     }))
+}
+
+fn bigint_relational_operand(
+    value: Value,
+    env: &mut CallEnv,
+) -> Result<BigIntComparable, RuntimeError> {
+    Ok(match value {
+        Value::BigInt(value) => BigIntComparable::BigInt(value),
+        // A String operand uses StringToBigInt: an integer literal compares
+        // exactly as a BigInt (no f64 precision loss); any other string is
+        // undefined, modelled here by NaN so every comparison yields false.
+        Value::String(value) => match crate::bigint::parse_bigint_string_value(value.trim()) {
+            Some(parsed) => BigIntComparable::BigInt(parsed),
+            None => BigIntComparable::Number(f64::NAN),
+        },
+        value => BigIntComparable::Number(to_number_with_env(value, env)?),
+    })
 }
 
 enum BigIntComparable {
