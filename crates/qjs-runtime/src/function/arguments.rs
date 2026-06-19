@@ -34,7 +34,7 @@ pub(super) fn arguments_object(
         }
     }
     if function.is_strict || !function.params.is_simple() {
-        define_restricted_callee(&object);
+        define_restricted_callee(&object, env);
     }
     define_arguments_iterator(&object, env);
     object.set_to_string_tag("Arguments");
@@ -117,13 +117,19 @@ fn mapped_argument_setter(parameter_name: String, backing: ObjectRef) -> Value {
     ))
 }
 
-fn define_restricted_callee(object: &ObjectRef) {
-    let throw_type_error = Value::Function(Function::new_native(
-        Some("ThrowTypeError"),
-        0,
-        NativeFunction::ThrowTypeError,
-        false,
-    ));
+fn define_restricted_callee(object: &ObjectRef, env: &CallEnv) {
+    // Reuse the realm's shared %ThrowTypeError% so the strict `callee` poison
+    // getter is the same object as `Function.prototype.arguments`/`caller`'s.
+    let throw_type_error = env
+        .get_realm(super::THROW_TYPE_ERROR_INTRINSIC)
+        .unwrap_or_else(|| {
+            Value::Function(Function::new_native(
+                Some("ThrowTypeError"),
+                0,
+                NativeFunction::ThrowTypeError,
+                false,
+            ))
+        });
     object.define_property(
         "callee".to_owned(),
         Property::accessor(

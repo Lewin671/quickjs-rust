@@ -9,6 +9,12 @@ mod prototype;
 mod strict;
 mod value;
 
+/// Realm key under which the single shared %ThrowTypeError% intrinsic is
+/// stashed. The `%`-delimited name cannot be spelled by a source identifier, so
+/// it is invisible to user code while letting the arguments-object builder reuse
+/// the exact function object installed on `Function.prototype`.
+pub(crate) const THROW_TYPE_ERROR_INTRINSIC: &str = "%ThrowTypeError%";
+
 pub(crate) use arguments::{native_mapped_argument_get, native_mapped_argument_set};
 pub(crate) use call::{
     call_function, construct_function, ensure_constructor, initialize_instance_fields,

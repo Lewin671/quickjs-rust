@@ -127,6 +127,22 @@ fn unmapped_arguments_callee_is_restricted() {
 }
 
 #[test]
+fn throw_type_error_poison_is_a_single_shared_intrinsic() {
+    // %ThrowTypeError% is one object: the strict `arguments.callee` poison
+    // getter is the same function as `Function.prototype.arguments`/`caller`'s.
+    assert_eq!(
+        eval(
+            "var callee = (function () { 'use strict'; \
+                 return Object.getOwnPropertyDescriptor(arguments, 'callee').get; })(); \
+             var args = Object.getOwnPropertyDescriptor(Function.prototype, 'arguments').get; \
+             var caller = Object.getOwnPropertyDescriptor(Function.prototype, 'caller').get; \
+             [callee === args, args === caller].join(':');"
+        ),
+        Ok(Value::String("true:true".to_owned().into()))
+    );
+}
+
+#[test]
 fn evaluates_destructured_parameters() {
     assert_eq!(
         eval(

@@ -61,12 +61,21 @@ pub(crate) fn install_function(
             false,
         )),
     );
+    // %ThrowTypeError% is a single shared intrinsic: the same function object
+    // backs `Function.prototype.arguments`/`caller` and the strict
+    // `arguments.callee` poison accessor, so their getters compare equal. Stash
+    // it in the realm (under a name no source identifier can spell) so the
+    // arguments-object builder reuses this exact object.
     let throw_type_error = Value::Function(Function::new_native(
         Some("ThrowTypeError"),
         0,
         NativeFunction::ThrowTypeError,
         false,
     ));
+    env.insert_realm(
+        super::THROW_TYPE_ERROR_INTRINSIC.to_owned(),
+        throw_type_error.clone(),
+    );
     let restricted_property = Property::accessor(
         Some(throw_type_error.clone()),
         Some(throw_type_error),
