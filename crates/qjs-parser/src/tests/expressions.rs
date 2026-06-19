@@ -460,3 +460,11 @@ fn rejects_tagged_template_in_optional_chain() {
     assert!(parse_script("(a?.b)`t`;").is_ok());
     assert!(parse_script("a.b`t`;").is_ok());
 }
+
+#[test]
+fn parses_nested_new_expression() {
+    // `new NewExpression`: the operand of `new` may itself be a `new`.
+    assert!(parse_script("new new F();").is_ok());
+    assert!(parse_script("new new F;").is_ok());
+    assert!(parse_script("new new B(1)(2);").is_ok());
+}

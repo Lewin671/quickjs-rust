@@ -208,7 +208,15 @@ impl Parser {
             return self.finish_call_member_chain(new_target);
         }
         let callee_parenthesized = self.at(&TokenKind::LeftParen);
-        let callee = self.member_chain()?;
+        // `new NewExpression`: the operand of `new` may itself be a `new`
+        // expression (`new new X`), which recurses rather than parsing as a
+        // MemberExpression primary. Any `(args)` binds to the inner `new`.
+        let callee = if self.at(&TokenKind::New) {
+            let nested_start = self.peek().map_or(start, |token| token.span.start);
+            self.new_expression(nested_start)?
+        } else {
+            self.member_chain()?
+        };
         // `import(...)` is a CallExpression and `import.meta` a meta-property;
         // a direct `new import(...)` is a syntax error, while `new
         // (import(...))` is a covered expression and reaches runtime.
