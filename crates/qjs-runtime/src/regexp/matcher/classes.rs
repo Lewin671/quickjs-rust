@@ -133,6 +133,12 @@ fn class_atom(class: &[char], index: usize, options: MatchOptions) -> Option<Cla
     }
     match class.get(index + 1).copied()? {
         'd' | 'D' | 's' | 'S' | 'w' | 'W' => None,
+        // Inside a character class `\b` is the backspace U+0008 (ClassEscape),
+        // not the word-boundary assertion it denotes outside a class.
+        'b' => Some(ClassAtom {
+            value: '\u{0008}',
+            next_index: index + 2,
+        }),
         escaped => Some(ClassAtom {
             value: regexp_control_escape(escaped),
             next_index: index + 2,
