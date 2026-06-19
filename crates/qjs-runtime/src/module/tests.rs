@@ -156,6 +156,22 @@ fn circular_indirect_reexport_is_syntax_error() {
 }
 
 #[test]
+fn module_top_level_var_function_collision_is_syntax_error() {
+    // At module top level a function declaration is a LexicallyDeclaredName, so
+    // it conflicts with a same-named `var` (a Script would accept this via Annex
+    // B). The collision is a parse-time SyntaxError.
+    let error = run(
+        "var smoosh;\nfunction smoosh() {}\nexport const v = 1;",
+        &[],
+    )
+    .expect_err("module var/function collision rejected");
+    assert!(error.message.contains("conflicts"), "{}", error.message);
+
+    // Distinct names, and a function declaration alone, stay valid.
+    run("var a;\nfunction b() {}\nexport const v = b;", &[]).expect("distinct names evaluate");
+}
+
+#[test]
 fn namespace_object_shape() {
     let namespace = run(
         "export const b = 2;\nexport const a = 1;\nexport default 3;",

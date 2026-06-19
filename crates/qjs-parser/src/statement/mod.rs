@@ -44,7 +44,11 @@ impl Parser {
                 }
             }
         }
-        validate_statement_list_declarations(&body, false)?;
+        // At the top level of a Module, function declarations are
+        // LexicallyDeclaredNames (unlike a Script, where Annex B treats them as
+        // var-like), so a top-level `function f(){}` clashing with a `var f`
+        // is an early error — the same rule that applies inside a block.
+        validate_statement_list_declarations(&body, self.goal == Goal::Module)?;
         validate_statement_list_labels(&body)?;
         // Any private-name reference that never resolved to an enclosing class
         // is a syntax error.
