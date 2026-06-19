@@ -3,11 +3,12 @@ use std::collections::HashMap;
 use crate::{ArrayRef, GLOBAL_THIS_BINDING, ObjectRef, RuntimeError, Value, call_function};
 
 use super::{
-    PROMISE_FULFILL_REACTION, PROMISE_HANDLER, PROMISE_IMPORT_REJECT, PROMISE_IMPORT_RESOLVE,
-    PROMISE_IMPORT_SPECIFIER, PROMISE_JOBS, PROMISE_REACTION_ARGUMENT, PROMISE_REACTION_CAPABILITY,
-    PROMISE_REACTION_REJECT, PROMISE_REACTION_RESOLVE, PROMISE_REJECTED, PROMISE_THEN,
-    PROMISE_THENABLE, PROMISE_THENABLE_CAPABILITY, is_promise_object, reaction_is_fulfill,
-    resolve_promise, resolving_function_pair, settle_promise,
+    PROMISE_ASYNC_DISPOSE_REJECTION, PROMISE_ASYNC_DISPOSE_RESULT, PROMISE_FULFILL_REACTION,
+    PROMISE_HANDLER, PROMISE_IMPORT_REJECT, PROMISE_IMPORT_RESOLVE, PROMISE_IMPORT_SPECIFIER,
+    PROMISE_JOBS, PROMISE_REACTION_ARGUMENT, PROMISE_REACTION_CAPABILITY, PROMISE_REACTION_REJECT,
+    PROMISE_REACTION_RESOLVE, PROMISE_REJECTED, PROMISE_THEN, PROMISE_THENABLE,
+    PROMISE_THENABLE_CAPABILITY, is_promise_object, reaction_is_fulfill, resolve_promise,
+    resolving_function_pair, settle_promise,
 };
 use crate::CallEnv;
 use crate::module::ImportErrorKind;
@@ -90,6 +91,23 @@ pub(super) fn enqueue_dynamic_import_job(
     jobs.set(jobs.len(), Value::Object(job));
 }
 
+pub(crate) fn enqueue_async_dispose_settle_job(
+    env: &mut CallEnv,
+    result_promise: ObjectRef,
+    rejection: Option<Value>,
+) {
+    let job = ObjectRef::new(HashMap::new());
+    job.define_non_enumerable(
+        PROMISE_ASYNC_DISPOSE_RESULT.to_owned(),
+        Value::Object(result_promise),
+    );
+    if let Some(rejection) = rejection {
+        job.define_non_enumerable(PROMISE_ASYNC_DISPOSE_REJECTION.to_owned(), rejection);
+    }
+    let jobs = promise_jobs(env);
+    jobs.set(jobs.len(), Value::Object(job));
+}
+
 pub(crate) fn drain_promise_jobs(env: &mut CallEnv) -> Result<(), RuntimeError> {
     loop {
         let jobs = promise_jobs(env);
@@ -104,6 +122,8 @@ pub(crate) fn drain_promise_jobs(env: &mut CallEnv) -> Result<(), RuntimeError> 
             };
             if job.own_property(PROMISE_IMPORT_SPECIFIER).is_some() {
                 run_dynamic_import_job(&job, env)?;
+            } else if job.own_property(PROMISE_ASYNC_DISPOSE_RESULT).is_some() {
+                run_async_dispose_settle_job(&job, env)?;
             } else if job.own_property(PROMISE_THENABLE).is_some() {
                 run_promise_thenable_job(&job, env)?;
             } else {
@@ -157,6 +177,25 @@ fn run_dynamic_import_job(job: &ObjectRef, env: &mut CallEnv) -> Result<(), Runt
             };
             call_function(reject, Value::Undefined, vec![reason], env, false)?;
         }
+    }
+    Ok(())
+}
+
+fn run_async_dispose_settle_job(job: &ObjectRef, env: &mut CallEnv) -> Result<(), RuntimeError> {
+    let result_promise = match job
+        .own_property(PROMISE_ASYNC_DISPOSE_RESULT)
+        .map(|property| property.value)
+    {
+        Some(Value::Object(promise)) if is_promise_object(&promise) => promise,
+        _ => return Ok(()),
+    };
+    if let Some(rejection) = job
+        .own_property(PROMISE_ASYNC_DISPOSE_REJECTION)
+        .map(|property| property.value)
+    {
+        settle_promise(&result_promise, PROMISE_REJECTED, rejection, env);
+    } else {
+        resolve_promise(&result_promise, Value::Undefined, env);
     }
     Ok(())
 }

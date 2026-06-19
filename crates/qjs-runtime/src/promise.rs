@@ -18,7 +18,7 @@ pub(crate) mod with_resolvers;
 use crate::CallEnv;
 pub(crate) use all::{native_promise_all, native_promise_all_resolve_element};
 pub(crate) use capability::native_get_capabilities_executor;
-pub(crate) use jobs::drain_promise_jobs;
+pub(crate) use jobs::{drain_promise_jobs, enqueue_async_dispose_settle_job};
 use jobs::{enqueue_promise_reaction_job, enqueue_promise_thenable_job};
 pub(crate) use race::native_promise_race;
 
@@ -50,6 +50,8 @@ const PROMISE_THENABLE_CAPABILITY: &str = "\0PromiseThenableCapability";
 const PROMISE_IMPORT_RESOLVE: &str = "\0PromiseImportResolve";
 const PROMISE_IMPORT_REJECT: &str = "\0PromiseImportReject";
 const PROMISE_IMPORT_SPECIFIER: &str = "\0PromiseImportSpecifier";
+const PROMISE_ASYNC_DISPOSE_RESULT: &str = "\0PromiseAsyncDisposeResult";
+const PROMISE_ASYNC_DISPOSE_REJECTION: &str = "\0PromiseAsyncDisposeRejection";
 const PROMISE_OBJECT_PROTOTYPE: &str = "\0PromiseObjectPrototype";
 const PROMISE_PROTOTYPE: &str = "\0PromisePrototype";
 const PROMISE_PENDING: &str = "pending";
@@ -268,19 +270,6 @@ pub(crate) fn promise_resolve(
     }
     let capability = capability::new_promise_capability(c, env)?;
     capability::capability_resolve(&capability, value, env)?;
-    Ok(capability.promise)
-}
-
-/// Builds a promise (via constructor `c`'s capability) already rejected with
-/// `reason`. Used by builtins that must reject their returned promise rather
-/// than throw synchronously.
-pub(crate) fn promise_reject(
-    c: &Value,
-    reason: Value,
-    env: &mut CallEnv,
-) -> Result<Value, RuntimeError> {
-    let capability = capability::new_promise_capability(c, env)?;
-    capability::capability_reject(&capability, reason, env)?;
     Ok(capability.promise)
 }
 

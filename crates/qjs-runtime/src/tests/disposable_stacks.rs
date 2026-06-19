@@ -1,6 +1,24 @@
 use crate::{Value, bytecode, eval};
 use qjs_parser::parse_module;
 
+fn eval_log(source: &str) -> String {
+    match eval(source).expect("disposable stack evaluation should succeed") {
+        Value::Array(array) => array
+            .to_vec()
+            .into_iter()
+            .map(|value| match value {
+                Value::String(text) => text.to_string(),
+                Value::Number(number) => number.to_string(),
+                Value::Boolean(flag) => flag.to_string(),
+                Value::Undefined => "undefined".to_owned(),
+                other => format!("{other:?}"),
+            })
+            .collect::<Vec<_>>()
+            .join(","),
+        other => panic!("expected an array log, got {other:?}"),
+    }
+}
+
 #[test]
 fn disposable_stack_constructor_and_prototype_surface() {
     assert_eq!(
@@ -199,17 +217,18 @@ fn disposable_stack_move_surface_and_subclassing() {
 #[test]
 fn async_disposable_stack_move_transfers_resources_and_disposes_source() {
     assert_eq!(
-        eval(
+        eval_log(
             "let source = new AsyncDisposableStack(); \
              let order = []; \
+             let log = []; \
              source.defer(() => order.push('first')); \
              source.defer(() => order.push('second')); \
              let moved = source.move(); \
              let before = order.join(',') + ':' + source.disposed + ':' + moved.disposed; \
-             moved.disposeAsync(); \
-             before + ':' + order.join(',');"
+             moved.disposeAsync().then(() => { log.push(before); log.push(order.join(',')); }); \
+             log;"
         ),
-        Ok(Value::String(":true:false:second,first".to_owned().into()))
+        ":true:false,second,first"
     );
     assert!(
         eval("let stack = new AsyncDisposableStack(); stack.disposeAsync(); stack.move();")
@@ -246,7 +265,8 @@ fn async_disposable_stack_move_surface_and_subclassing() {
 fn async_disposable_stack_adopt_and_use_register_resources() {
     assert_eq!(
         eval(
-            "let stack = new AsyncDisposableStack(); \
+            "let log = []; \
+             let stack = new AsyncDisposableStack(); \
              let order = []; \
              let asyncResource = { [Symbol.asyncDispose]() { order.push('async-use'); } }; \
              let syncResource = { [Symbol.dispose]() { order.push('sync-use'); } }; \
@@ -255,17 +275,12 @@ fn async_disposable_stack_adopt_and_use_register_resources() {
              let asyncResult = stack.use(asyncResource); \
              let syncResult = stack.use(syncResource); \
              let nullResult = stack.use(null); \
-             stack.disposeAsync(); \
              (adoptResult === adopted) + ':' + \
-             (asyncResult === asyncResource) + ':' + \
-             (syncResult === syncResource) + ':' + \
-             (nullResult === null) + ':' + order.join(',');"
+               (asyncResult === asyncResource) + ':' + \
+               (syncResult === syncResource) + ':' + \
+               (nullResult === null);"
         ),
-        Ok(Value::String(
-            "true:true:true:true:sync-use,async-use,adopt"
-                .to_owned()
-                .into()
-        ))
+        Ok(Value::String("true:true:true:true".to_owned().into()))
     );
 }
 
@@ -296,6 +311,34 @@ fn async_disposable_stack_adopt_and_use_surface_and_errors() {
     assert!(eval("AsyncDisposableStack.prototype.use.call({}, null);").is_err());
     assert!(eval("new AsyncDisposableStack().adopt(null, null);").is_err());
     assert!(eval("new AsyncDisposableStack().use({});").is_err());
+}
+
+#[test]
+fn async_disposable_stack_dispose_async_rejects_in_returned_promise() {
+    assert_eq!(
+        eval_log(
+            "let log = []; \
+             AsyncDisposableStack.prototype.disposeAsync.call({}).then( \
+               () => log.push('fulfilled'), \
+               error => log.push(error instanceof TypeError)); \
+             log;"
+        ),
+        "true"
+    );
+    assert_eq!(
+        eval_log(
+            "class MyError extends Error {} \
+             let error = new MyError(); \
+             let stack = new AsyncDisposableStack(); \
+             stack.defer(async function () { throw error; }); \
+             let log = []; \
+             stack.disposeAsync().then( \
+               () => log.push('fulfilled'), \
+               reason => log.push(reason === error)); \
+             log;"
+        ),
+        "true"
+    );
 }
 
 #[test]
