@@ -934,3 +934,26 @@ fn optional_chaining_method_call_keeps_receiver_this() {
         Ok(Value::Number(1.0))
     );
 }
+
+#[test]
+fn optional_chaining_short_circuits_through_calls() {
+    // A nullish link short-circuits the entire chain, including a trailing
+    // member after a call, without evaluating the call or its arguments.
+    assert_eq!(
+        eval("var a = undefined; var x = 1; a?.b.c(++x).d; x;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval("var a = undefined; var x = 1; a?.[++x]; x;"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval("var o = null; var r = o?.m().n; typeof r;"),
+        Ok(Value::String("undefined".to_owned()))
+    );
+    // A live chain still threads results and receivers correctly.
+    assert_eq!(
+        eval("var a = { b: { c(v) { return { d: v * 10 }; } } }; a?.b.c(5).d;"),
+        Ok(Value::Number(50.0))
+    );
+}

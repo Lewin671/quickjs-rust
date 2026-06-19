@@ -842,6 +842,20 @@ impl Compiler {
                 });
                 base
             }
+            // A plain call within an optional chain (`a?.b.c(x).d`) is part of
+            // the same chain: it must be collected as a step so a short-circuit
+            // at any earlier link skips it (and its arguments) rather than
+            // splitting the chain and evaluating the tail on `undefined`.
+            Expr::Call {
+                callee, arguments, ..
+            } => {
+                let base = Self::collect_optional_chain(callee, chain);
+                chain.push(OptionalChainEntry {
+                    kind: OptionalChainStep::Call(arguments),
+                    optional: false,
+                });
+                base
+            }
             _ => expr,
         }
     }
