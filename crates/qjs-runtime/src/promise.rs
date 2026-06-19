@@ -141,6 +141,13 @@ pub(crate) fn install_promise(env: &mut CallEnv, global_this: &Value, object_pro
         );
     }
 
+    // Expose `%Promise.prototype%` as an internal realm binding so internal
+    // promises (e.g. the one returned by `import(...)`) keep using the intrinsic
+    // prototype even after `globalThis.Promise` is reassigned.
+    env.insert_realm(
+        PROMISE_PROTOTYPE.to_owned(),
+        Value::Object(promise_prototype.clone()),
+    );
     let value = Value::Function(promise_function);
     env.insert_realm("Promise".to_owned(), value.clone());
     if let Value::Object(global_object) = global_this {
