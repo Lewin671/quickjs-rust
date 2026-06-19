@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use crate::{RuntimeError, Value, bytecode};
 
 use super::namespace::build_namespace;
-use super::records::{ImportName, ModuleRecord, build_record};
+use super::records::{ImportName, ModuleRecord, NAMESPACE_BINDING, build_record};
 use super::resolver::ModuleResolver;
 
 /// A linking-phase failure: a parse error or a SyntaxError-class link error.
@@ -308,7 +308,7 @@ impl ModuleGraph {
             if indirect.export_name == name {
                 let target = self.resolved(key, &indirect.module_request);
                 return match &indirect.import_name {
-                    ImportName::Namespace => Ok(Some((target, name.to_owned()))),
+                    ImportName::Namespace => Ok(Some((target, NAMESPACE_BINDING.to_owned()))),
                     ImportName::Named(inner) => self.resolve_export(&target, inner, visited),
                 };
             }
@@ -395,8 +395,11 @@ impl ModuleGraph {
 
     /// Reads the value of `name` exported by `key`, following indirect/star
     /// resolution to the binding that actually holds it.
-    fn export_value(&self, key: &str, name: &str) -> Value {
+    fn export_value(&mut self, key: &str, name: &str) -> Value {
         match self.resolve_export(key, name, &mut Vec::new()) {
+            Ok(Some((module_key, export_name))) if export_name == NAMESPACE_BINDING => {
+                self.namespace(&module_key)
+            }
             Ok(Some((module_key, export_name))) => self.modules[&module_key]
                 .exports
                 .get(&export_name)
@@ -433,14 +436,13 @@ impl ModuleGraph {
         let mut bindings = Vec::new();
         for name in names {
             // A namespace omits any name whose resolution is ambiguous.
-            if let Ok(Some((module_key, export_name))) =
-                self.resolve_export(key, &name, &mut Vec::new())
+            if self
+                .resolve_export(key, &name, &mut Vec::new())
+                .ok()
+                .flatten()
+                .is_some()
             {
-                let value = self.modules[&module_key]
-                    .exports
-                    .get(&export_name)
-                    .cloned()
-                    .unwrap_or(Value::Undefined);
+                let value = self.export_value(key, &name);
                 bindings.push((name, value));
             }
         }

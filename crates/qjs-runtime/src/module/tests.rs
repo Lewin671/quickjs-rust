@@ -127,6 +127,25 @@ fn star_export_aggregation() {
 }
 
 #[test]
+fn namespace_reexport_exposes_target_namespace() {
+    let namespace = run(
+        "import { nested } from \"agg\";\n\
+         export const value = nested.value;\n\
+         export const keys = Object.getOwnPropertyNames(nested).join(',');",
+        &[
+            ("agg", "export * as nested from \"dep\";"),
+            ("dep", "export default 7;\nexport const value = 3;"),
+        ],
+    )
+    .expect("namespace re-export evaluates");
+    assert_eq!(export(&namespace, "value"), Value::Number(3.0));
+    assert_eq!(
+        export(&namespace, "keys"),
+        Value::String("default,value".to_owned().into())
+    );
+}
+
+#[test]
 fn ambiguous_star_export_is_syntax_error() {
     let error = run(
         "import { x } from \"agg\";\nexport const v = x;",

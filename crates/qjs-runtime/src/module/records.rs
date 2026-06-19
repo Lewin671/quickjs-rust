@@ -11,6 +11,7 @@ use qjs_ast::{DefaultExport, ExportDecl, ImportSpecifier, ModuleDecl, Script, St
 /// The synthetic local-binding name holding a module's default export. It is
 /// not a valid identifier, so it never collides with a user binding.
 pub(super) const DEFAULT_BINDING: &str = "*default*";
+pub(super) const NAMESPACE_BINDING: &str = "*namespace*";
 
 /// An `import` entry: a local binding fed from another module.
 #[derive(Clone, Debug)]
