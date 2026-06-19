@@ -88,3 +88,13 @@ fn evaluates_string_constructor_and_statics() {
         Ok(Value::Boolean(true))
     );
 }
+
+#[test]
+fn new_string_with_symbol_throws() {
+    // String(symbol) returns the descriptive string; new String(symbol) throws.
+    assert_eq!(
+        eval("String(Symbol('66'));"),
+        Ok(Value::String("Symbol(66)".to_owned().into()))
+    );
+    assert!(eval("new String(Symbol('x'));").is_err());
+}

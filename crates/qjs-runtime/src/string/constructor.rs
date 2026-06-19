@@ -18,7 +18,9 @@ pub(crate) fn native_string(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let value = match argument_values.first().cloned() {
-        Some(Value::Object(object)) if symbol::is_symbol_primitive(&object) => {
+        // `String(symbol)` (non-construct) returns the descriptive string;
+        // `new String(symbol)` falls through to ToString, which throws.
+        Some(Value::Object(object)) if !is_construct && symbol::is_symbol_primitive(&object) => {
             symbol::symbol_descriptive_string(&object)
         }
         Some(value) => to_js_string_with_env(value, env)?,
