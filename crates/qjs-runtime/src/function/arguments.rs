@@ -35,6 +35,15 @@ pub(super) fn arguments_object(
     }
     if function.is_strict || !function.params.is_simple() {
         define_restricted_callee(&object, env);
+    } else {
+        // A sloppy-mode simple-parameter function's `arguments.callee` is a
+        // data property holding the executing function (CreateUnmappedArguments
+        // / CreateMappedArguments): `{value: F, writable, enumerable: false,
+        // configurable}`.
+        object.define_property(
+            "callee".to_owned(),
+            Property::non_enumerable(Value::Function(function.clone())),
+        );
     }
     define_arguments_iterator(&object, env);
     object.set_to_string_tag("Arguments");
@@ -145,15 +154,20 @@ fn define_arguments_iterator(object: &ObjectRef, env: &CallEnv) {
     let Some(iterator) = symbol::iterator_symbol(env) else {
         return;
     };
-    object.define_symbol_property(
-        iterator,
-        Property::non_enumerable(Value::Function(Function::new_native(
-            Some("[Symbol.iterator]"),
-            0,
-            NativeFunction::ArrayPrototypeValues,
-            false,
-        ))),
-    );
+    // Reuse the shared %Array.prototype.values% so `arguments[Symbol.iterator]`
+    // has the same identity as `Array.prototype.values`, falling back to a fresh
+    // native if the realm intrinsic is somehow absent.
+    let values = env
+        .get_realm(super::ARRAY_PROTO_VALUES_INTRINSIC)
+        .unwrap_or_else(|| {
+            Value::Function(Function::new_native(
+                Some("[Symbol.iterator]"),
+                0,
+                NativeFunction::ArrayPrototypeValues,
+                false,
+            ))
+        });
+    object.define_symbol_property(iterator, Property::non_enumerable(values));
 }
 
 pub(crate) fn native_mapped_argument_get(

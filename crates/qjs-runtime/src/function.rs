@@ -15,6 +15,11 @@ mod value;
 /// the exact function object installed on `Function.prototype`.
 pub(crate) const THROW_TYPE_ERROR_INTRINSIC: &str = "%ThrowTypeError%";
 
+/// Realm key for the shared `%Array.prototype.values%` intrinsic, reused so an
+/// arguments object's `[Symbol.iterator]` is the *same* function object as
+/// `Array.prototype.values` / `Array.prototype[Symbol.iterator]`.
+pub(crate) const ARRAY_PROTO_VALUES_INTRINSIC: &str = "%ArrayProto_values%";
+
 pub(crate) use arguments::{native_mapped_argument_get, native_mapped_argument_set};
 pub(crate) use call::{
     call_function, construct_function, ensure_constructor, initialize_instance_fields,

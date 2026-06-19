@@ -233,6 +233,14 @@ pub(crate) fn install_array(env: &mut CallEnv, global_this: &Value, object_proto
         NativeFunction::ArrayPrototypeValues,
     );
     symbol::define_well_known_iterator_alias(env, &array_prototype, "values");
+    // Share %Array.prototype.values% so an arguments object's
+    // `[Symbol.iterator]` is the same function object (spec %ArrayProto_values%).
+    if let Some(values) = array_prototype.own_property("values") {
+        env.insert_realm(
+            crate::function::ARRAY_PROTO_VALUES_INTRINSIC.to_owned(),
+            values.value.clone(),
+        );
+    }
     define_array_prototype_function(
         &array_prototype,
         "with",

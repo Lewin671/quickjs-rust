@@ -119,10 +119,40 @@ fn unmapped_arguments_callee_is_restricted() {
         eval(
             "function strictArgs() { 'use strict'; try { arguments.callee; } catch (error) { return error instanceof TypeError; } return false; } \
              function nonSimple(x = 1) { try { arguments.callee; } catch (error) { return error instanceof TypeError; } return false; } \
-             function sloppySimple() { return arguments.callee === undefined; } \
+             function sloppySimple() { return arguments.callee === sloppySimple; } \
              [strictArgs(), nonSimple(), sloppySimple()].join(':');"
         ),
         Ok(Value::String("true:true:true".to_owned().into()))
+    );
+}
+
+#[test]
+fn sloppy_simple_arguments_callee_is_a_data_property() {
+    // A sloppy-mode simple-parameter function's `arguments.callee` is a data
+    // property holding the executing function.
+    assert_eq!(
+        eval(
+            "function f(a) { \
+                 var d = Object.getOwnPropertyDescriptor(arguments, 'callee'); \
+                 return [d.value === f, d.writable, d.enumerable, d.configurable].join(':'); \
+             } f(1);"
+        ),
+        Ok(Value::String("true:true:false:true".to_owned().into()))
+    );
+}
+
+#[test]
+fn arguments_symbol_iterator_is_array_prototype_values() {
+    // An arguments object's `[Symbol.iterator]` is the same function object as
+    // `Array.prototype.values` / `Array.prototype[Symbol.iterator]`.
+    assert_eq!(
+        eval(
+            "(function () { \
+                 return arguments[Symbol.iterator] === [][Symbol.iterator] \
+                     && arguments[Symbol.iterator] === Array.prototype.values; \
+             })();"
+        ),
+        Ok(Value::Boolean(true))
     );
 }
 
