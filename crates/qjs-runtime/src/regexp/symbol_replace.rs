@@ -1,7 +1,8 @@
 use crate::CallEnv;
+use crate::string::{string_code_units, string_from_code_units};
 use crate::{
     Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function,
-    property_value, reflect, symbol, to_js_string_with_env, to_length_with_env,
+    is_truthy, property_value, reflect, symbol, to_js_string_with_env, to_length_with_env,
 };
 
 pub(crate) fn install_regexp_prototype_replace(env: &CallEnv, prototype: &ObjectRef) {
@@ -42,9 +43,12 @@ pub(crate) fn native_regexp_prototype_replace(
         Replacement::String(to_js_string_with_env(replace_value, env)?)
     };
 
-    let flags = to_js_string_with_env(property_value(this_value.clone(), "flags", env)?, env)?;
-    let global = flags.contains('g');
-    let unicode = flags.contains('u');
+    let global = is_truthy(&property_value(this_value.clone(), "global", env)?);
+    let unicode = if global {
+        is_truthy(&property_value(this_value.clone(), "unicode", env)?)
+    } else {
+        false
+    };
     if global {
         set_last_index(this_value.clone(), Value::Number(0.0), env)?;
     }
@@ -127,7 +131,7 @@ fn match_record(
 ) -> Result<MatchRecord, RuntimeError> {
     let matched = to_js_string_with_env(property_value(exec_result.clone(), "0", env)?, env)?;
     let position = to_length_with_env(property_value(exec_result.clone(), "index", env)?, env)?
-        .min(input.chars().count());
+        .min(string_code_units(input).len());
     let length = to_length_with_env(property_value(exec_result.clone(), "length", env)?, env)?;
     let mut captures = Vec::new();
     for index in 1..length {
@@ -140,7 +144,7 @@ fn match_record(
     let groups = property_value(exec_result, "groups", env)?;
     Ok(MatchRecord {
         start: position,
-        end: position + matched.chars().count(),
+        end: position + string_code_units(&matched).len(),
         matched,
         captures,
         groups,
@@ -187,7 +191,7 @@ fn replace_matches(
     result.push_str(&input_char_slice(
         &input,
         copied_until,
-        input.chars().count(),
+        string_code_units(&input).len(),
     ));
     Ok(Value::String(result.into()))
 }
@@ -252,8 +256,8 @@ fn get_substitution(
             '`' => result.push_str(&input_char_slice(input, 0, position)),
             '\'' => result.push_str(&input_char_slice(
                 input,
-                position + matched.chars().count(),
-                input.chars().count(),
+                position + string_code_units(matched).len(),
+                string_code_units(input).len(),
             )),
             '0'..='9' => substitute_capture(&mut result, &mut chars, captures, next),
             '<' if !matches!(named_captures, Value::Undefined) => {
@@ -351,19 +355,24 @@ fn set_last_index(receiver: Value, value: Value, env: &mut CallEnv) -> Result<()
 }
 
 fn advance_string_index(input: &str, index: usize, unicode: bool) -> usize {
-    let chars: Vec<_> = input.chars().collect();
-    crate::string::advance_string_index(&chars, index, unicode)
+    let code_units = string_code_units(input);
+    if unicode
+        && matches!(
+            (code_units.get(index), code_units.get(index + 1)),
+            (Some(0xD800..=0xDBFF), Some(0xDC00..=0xDFFF))
+        )
+    {
+        index + 2
+    } else {
+        index + 1
+    }
 }
 
 fn input_char_slice(input: &str, start: usize, end: usize) -> String {
-    let input_len = input.chars().count();
+    let input_len = string_code_units(input).len();
     let start = start.min(input_len);
     let end = end.min(input_len);
-    input
-        .chars()
-        .skip(start)
-        .take(end.saturating_sub(start))
-        .collect()
+    string_from_code_units(&string_code_units(input)[start..end])
 }
 
 fn is_object_value(value: &Value) -> bool {

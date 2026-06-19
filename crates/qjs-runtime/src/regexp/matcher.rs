@@ -145,12 +145,6 @@ fn regexp_match(
     };
     let starts: Vec<_> = if exact_start {
         vec![start_index]
-    } else if pattern.first() == Some(&'^') && !multiline {
-        if start_index == 0 {
-            vec![0]
-        } else {
-            Vec::new()
-        }
     } else {
         (start_index.min(text.len())..=text.len())
             .filter(|index| !options.unicode || !is_trailing_surrogate_position(&text, *index))

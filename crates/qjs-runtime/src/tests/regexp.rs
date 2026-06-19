@@ -736,6 +736,18 @@ fn evaluates_regexp_symbol_replace() {
     );
     assert_eq!(
         eval(
+            "let re = /^|\\udf06/g; \
+             Object.defineProperty(re, 'unicode', { writable: true }); \
+             re.unicode = false; \
+             let falsy = re[Symbol.replace]('\\ud834\\udf06', 'XXX'); \
+             re.unicode = true; \
+             let truthy = re[Symbol.replace]('\\ud834\\udf06', 'XXX'); \
+             [falsy.length, falsy.charCodeAt(3), falsy.slice(4), truthy.length, truthy.charCodeAt(3), truthy.charCodeAt(4)].join(':');"
+        ),
+        Ok(Value::String("7:55348:XXX:5:55348:57094".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
             "let re = /a/g; re.lastIndex = 1; let result = re[Symbol.replace]('aba', 'x'); result + ':' + re.lastIndex;"
         ),
         Ok(Value::String("xbx:0".to_owned().into()))
