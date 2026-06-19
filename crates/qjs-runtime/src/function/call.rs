@@ -568,10 +568,16 @@ fn function_env(
         &function.local_names,
         env,
     );
-    if let Some(writeback) = &function.capture_writeback
-        && let Some(parent) = writeback.parent.as_deref()
-    {
-        refresh_writeback_captures_from_caller(&mut local_env, parent, env);
+    if let Some(writeback) = &function.capture_writeback {
+        if !function.is_field_initializer
+            && !function.is_class_constructor
+            && !function.lexical_this
+            && !Rc::ptr_eq(&function.captured_env, &writeback.target)
+        {
+            refresh_writeback_captures_from_caller(&mut local_env, writeback, env);
+        } else if let Some(parent) = writeback.parent.as_deref() {
+            refresh_writeback_captures_from_caller(&mut local_env, parent, env);
+        }
     }
     if function.has_name_binding
         && let Some(name) = &function.name
@@ -684,7 +690,11 @@ fn refresh_writeback_captures_from_caller(
     caller_env: &CallEnv,
 ) {
     for name in &writeback.names {
-        if let Some(value) = caller_env.get(name) {
+        if let Some(value) = caller_env
+            .captured_binding_source_env()
+            .and_then(|source| source.borrow().get(name).cloned())
+            .or_else(|| caller_env.get(name))
+        {
             local_env.insert(name.clone(), value);
         }
     }

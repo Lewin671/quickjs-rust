@@ -422,6 +422,25 @@ fn getter_and_setter_merge_into_one_accessor() {
 }
 
 #[test]
+fn class_accessors_observe_reassigned_outer_lexicals() {
+    assert_eq!(
+        eval(
+            "let log = []; \
+             class C { \
+               get value() { log.push('get'); return 1; } \
+               get factory() { log.push('factory'); return function() { log.push('call'); }; } \
+             } \
+             log = []; \
+             let c = new C(); \
+             c.value; \
+             c.factory(); \
+             log.join('|');"
+        ),
+        Ok(Value::String("get|factory|call".to_owned().into()))
+    );
+}
+
+#[test]
 fn accessor_descriptor_is_non_enumerable_configurable() {
     assert_eq!(
         eval(
