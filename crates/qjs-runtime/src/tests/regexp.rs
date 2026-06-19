@@ -1010,3 +1010,20 @@ fn word_boundary_assertions_match_zero_width() {
         Ok(Value::Boolean(false))
     );
 }
+
+#[test]
+fn null_character_escape_in_unicode_mode_matches_nul() {
+    // In unicode mode `\0` (not followed by a decimal digit) is the NUL
+    // character escape, not the literal `0`.
+    assert_eq!(
+        eval(r#"/\0/u.test(String.fromCharCode(0));"#),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(eval(r#"/\0/u.test("0");"#), Ok(Value::Boolean(false)));
+    // Non-unicode `\0` is the legacy octal NUL escape and is unchanged.
+    assert_eq!(
+        eval(r#"/\0/.test(String.fromCharCode(0));"#),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(eval(r#"/\0/.test("0");"#), Ok(Value::Boolean(false)));
+}

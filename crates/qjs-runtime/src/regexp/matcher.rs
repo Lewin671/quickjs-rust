@@ -486,6 +486,12 @@ fn match_escape(
         'x' => {
             return match_code_unit_escape(text, state, hex_escape(pattern, pc), 'x', pc, options);
         }
+        // In unicode mode `\0` (not followed by a decimal digit) is the NUL
+        // character escape, not the literal `0`. Non-unicode `\0` is handled by
+        // the legacy-octal branch above.
+        '0' if options.unicode && !pattern.get(pc + 2).is_some_and(char::is_ascii_digit) => {
+            (chars_equal(value, '\u{0000}', options.ignore_case), pc + 2)
+        }
         literal => (
             chars_equal(value, regexp_control_escape(literal), options.ignore_case),
             pc + 2,

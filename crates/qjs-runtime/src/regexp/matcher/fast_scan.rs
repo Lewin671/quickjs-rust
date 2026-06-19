@@ -94,6 +94,15 @@ pub(super) fn simple_atom_matcher<'a>(
             {
                 return Some(SimpleAtom::UnicodeEscape(escape.value));
             }
+            // In unicode mode `\0` (not followed by a decimal digit) is the NUL
+            // character escape, not the literal `0` the generic `Escape` arm
+            // would match. Mirrors `match_escape` in the parent module.
+            if options.unicode
+                && escaped == '0'
+                && !pattern.get(atom_pc + 2).is_some_and(char::is_ascii_digit)
+            {
+                return Some(SimpleAtom::UnicodeEscape('\u{0000}'));
+            }
             if !options.unicode && escaped == 'c' {
                 return Some(SimpleAtom::Literal('\\'));
             }
