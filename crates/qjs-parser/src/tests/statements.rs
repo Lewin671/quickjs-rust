@@ -701,6 +701,17 @@ fn rejects_disallowed_declarations_in_statement_body() {
 }
 
 #[test]
+fn rejects_label_nested_inside_same_label() {
+    // A label may not appear inside a statement carrying the same label,
+    // whether directly or more deeply nested.
+    assert!(parse_script("foo: foo: 0;").is_err());
+    assert!(parse_script("foo: { bar: { foo: 0; } }").is_err());
+    // Sibling reuse and distinct nested labels remain valid.
+    assert!(parse_script("foo: 0; foo: 1;").is_ok());
+    assert!(parse_script("a: while (true) { b: while (true) { break a; } }").is_ok());
+}
+
+#[test]
 fn rejects_disallowed_declarations_in_labelled_body() {
     assert!(parse_script("label: class C {}").is_err());
     assert!(parse_script("label: let x = 1;").is_err());

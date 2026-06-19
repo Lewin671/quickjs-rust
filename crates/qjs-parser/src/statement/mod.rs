@@ -610,7 +610,19 @@ fn validate_statement_labels(stmt: &Stmt, context: &mut LabelContext) -> Result<
             }
         }
         Stmt::With { body, .. } => validate_statement_labels(body, context)?,
-        Stmt::Labelled { label, body, .. } => {
+        Stmt::Labelled { label, body, span } => {
+            // A label may not be nested inside another statement carrying the
+            // same label (`foo: foo: ;` or `foo: { bar: { foo: ; } }`).
+            if context
+                .break_labels
+                .iter()
+                .any(|candidate| candidate == label)
+            {
+                return Err(ParseError {
+                    message: format!("duplicate label `{label}`"),
+                    span: *span,
+                });
+            }
             context.break_labels.push(label.clone());
             let is_continue_target = statement_is_iteration_target(body);
             if is_continue_target {
