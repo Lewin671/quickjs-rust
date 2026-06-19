@@ -294,11 +294,17 @@ fn evaluates_function_declarations_and_calls() {
             "function* gen() { yield 1; }".to_owned().into()
         ))
     );
-    // CR and CRLF line terminators in the source normalize to LF.
+    // CR and CRLF line terminators in the source are retained verbatim.
     assert_eq!(
         eval("eval('var f = function () {\\r\\n  return 1;\\r};'); f.toString();"),
         Ok(Value::String(
-            "function () {\n  return 1;\n}".to_owned().into()
+            "function () {\r\n  return 1;\r}".to_owned().into()
+        ))
+    );
+    assert_eq!(
+        eval("eval('var f = function () {\\r  return 1;\\r};'); f.toString();"),
+        Ok(Value::String(
+            "function () {\r  return 1;\r}".to_owned().into()
         ))
     );
     // A plain `Function(...)` call inside a constructor ignores the ambient

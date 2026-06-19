@@ -429,8 +429,7 @@ pub(crate) fn native_function_prototype_to_string(
     this_value: Value,
 ) -> Result<Value, RuntimeError> {
     // A user function — directly, or wrapped by a callable Proxy — with
-    // retained source returns it verbatim (CR and CRLF line terminators
-    // normalize to LF per the spec note).
+    // retained source returns its original source text verbatim.
     let source_function = match &this_value {
         Value::Function(function) => Some(function.clone()),
         Value::Proxy(proxy) if crate::proxy::proxy_is_callable(proxy) => {
@@ -441,8 +440,7 @@ pub(crate) fn native_function_prototype_to_string(
     if let Some(function) = source_function
         && let Some(source) = function.source_text()
     {
-        let normalized = source.replace("\r\n", "\n").replace('\r', "\n");
-        return Ok(Value::String(normalized.into()));
+        return Ok(Value::String(source.to_string().into()));
     }
     let name = match &this_value {
         Value::Function(function) => function.name.clone().unwrap_or_default(),

@@ -1,3 +1,7 @@
+BEGIN {
+  RS = "\r\n|\n|\r"
+}
+
 function trim(value) {
   gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
   return value
