@@ -217,6 +217,13 @@ impl Compiler {
             .iter()
             .any(|argument| matches!(argument, CallArgument::Spread(_)));
 
+        // `obj?.method(...)` / `a?.b.c(...)`: the callee is an optional member
+        // chain, so the call must run inside that chain to short-circuit when a
+        // link is nullish and to keep the member's object as `this`.
+        if Self::member_chain_has_optional(callee) {
+            return self.compile_optional_chain_call(callee, arguments);
+        }
+
         // `super(...)` invokes the parent constructor.
         if matches!(callee, Expr::Super { .. }) {
             if has_spread {

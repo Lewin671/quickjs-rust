@@ -896,3 +896,41 @@ fn destructuring_assignment_closes_iterators() {
         Ok(Value::String("type:1".to_owned()))
     );
 }
+
+#[test]
+fn optional_chaining_method_call_keeps_receiver_this() {
+    // `obj.m?.()`, `obj?.m()`, and computed forms must call `m` with `this`
+    // bound to `obj`, matching a normal method call.
+    assert_eq!(
+        eval("var o = { x: 7, m() { return this.x; } }; o.m?.();"),
+        Ok(Value::Number(7.0))
+    );
+    assert_eq!(
+        eval("var o = { x: 7, m() { return this.x; } }; o?.m();"),
+        Ok(Value::Number(7.0))
+    );
+    assert_eq!(
+        eval("var o = { x: 7, m() { return this.x; } }; o?.m?.();"),
+        Ok(Value::Number(7.0))
+    );
+    assert_eq!(
+        eval("var o = { x: 7, m() { return this.x; } }; o['m']?.();"),
+        Ok(Value::Number(7.0))
+    );
+    // A nullish base short-circuits the whole call to undefined without
+    // evaluating arguments or throwing.
+    assert_eq!(
+        eval("var n = null; var ran = false; var r = n?.m(ran = true); r + ':' + ran;"),
+        Ok(Value::String("undefined:false".to_owned()))
+    );
+    // The receiver is evaluated exactly once.
+    assert_eq!(
+        eval(
+            "var calls = 0;
+             function get() { calls++; return { m() { return 1; } }; }
+             get().m?.();
+             calls;"
+        ),
+        Ok(Value::Number(1.0))
+    );
+}

@@ -642,10 +642,57 @@ impl Compiler {
     fn compile_optional_chain(&mut self, expr: &Expr) -> Result<(), RuntimeError> {
         let mut chain = Vec::new();
         let base = Self::collect_optional_chain(expr, &mut chain);
+        self.compile_optional_chain_steps(base, &chain)
+    }
+
+    /// Compiles `callee(arguments)` where `callee` is (or contains) an optional
+    /// member chain, e.g. `obj?.method()` or `a?.b.c()`. The trailing call is
+    /// not itself optional, but it must run inside the chain so a short-circuited
+    /// member yields `undefined` instead of calling, and a method call keeps the
+    /// member's object as its `this`.
+    pub(super) fn compile_optional_chain_call<'a>(
+        &mut self,
+        callee: &'a Expr,
+        arguments: &'a [qjs_ast::CallArgument],
+    ) -> Result<(), RuntimeError> {
+        let mut chain = Vec::new();
+        let base = Self::collect_optional_chain(callee, &mut chain);
+        chain.push(OptionalChainEntry {
+            kind: OptionalChainStep::Call(arguments),
+            optional: false,
+        });
+        self.compile_optional_chain_steps(base, &chain)
+    }
+
+    fn compile_optional_chain_steps<'a>(
+        &mut self,
+        base: &Expr,
+        chain: &[OptionalChainEntry<'a>],
+    ) -> Result<(), RuntimeError> {
         self.compile_expr(base)?;
 
         let mut end_jumps = Vec::new();
-        for step in &chain {
+        let mut index = 0;
+        while index < chain.len() {
+            let step = &chain[index];
+            // A member immediately followed by a call is a method call: the
+            // member's object must be preserved as `this`, so resolve the method
+            // while keeping the receiver and dispatch via CallResolved rather
+            // than dropping the object with a plain GetProp + Call.
+            if let OptionalChainStep::Member(property) = &step.kind
+                && let Some(next) = chain.get(index + 1)
+                && let OptionalChainStep::Call(arguments) = &next.kind
+            {
+                self.compile_optional_method_call(
+                    step.optional,
+                    property,
+                    next.optional,
+                    arguments,
+                    &mut end_jumps,
+                )?;
+                index += 2;
+                continue;
+            }
             if step.optional {
                 let access_jump = self.emit(Op::JumpIfNotNullish(usize::MAX));
                 self.emit(Op::Pop);
@@ -662,11 +709,69 @@ impl Compiler {
                     self.compile_optional_call_from_stack(arguments)?;
                 }
             }
+            index += 1;
         }
 
         let end_target = self.code.len();
         for jump in end_jumps {
             self.patch_jump(jump, end_target);
+        }
+        Ok(())
+    }
+
+    /// Emits a method call inside an optional chain, keeping the receiver as
+    /// `this`. On entry the stack holds `[receiver]`; on exit `[result]`.
+    /// `member_optional`/`call_optional` short-circuit the whole chain (pushing
+    /// `undefined`) when the receiver or the resolved method is nullish.
+    fn compile_optional_method_call(
+        &mut self,
+        member_optional: bool,
+        property: &qjs_ast::MemberProperty,
+        call_optional: bool,
+        arguments: &[qjs_ast::CallArgument],
+        end_jumps: &mut Vec<usize>,
+    ) -> Result<(), RuntimeError> {
+        if member_optional {
+            let access_jump = self.emit(Op::JumpIfNotNullish(usize::MAX));
+            self.emit(Op::Pop);
+            self.emit_load_undefined();
+            end_jumps.push(self.emit(Op::Jump(usize::MAX)));
+            let access_target = self.code.len();
+            self.patch_jump(access_jump, access_target);
+        }
+        // Resolve the method while keeping the receiver: [obj] -> [obj, method].
+        self.emit(Op::Dup);
+        if let qjs_ast::MemberProperty::Private(name) = property {
+            self.emit(Op::GetPrivate(name.clone()));
+        } else {
+            self.compile_member_key(property)?;
+            self.emit(Op::GetProp);
+        }
+        if call_optional {
+            // `obj.m?.()`: skip the call when the method is nullish, discarding
+            // both the method and the receiver before yielding `undefined`.
+            let call_jump = self.emit(Op::JumpIfNotNullish(usize::MAX));
+            self.emit(Op::Pop);
+            self.emit(Op::Pop);
+            self.emit_load_undefined();
+            end_jumps.push(self.emit(Op::Jump(usize::MAX)));
+            let call_target = self.code.len();
+            self.patch_jump(call_jump, call_target);
+        }
+        let has_spread = arguments
+            .iter()
+            .any(|a| matches!(a, qjs_ast::CallArgument::Spread(_)));
+        if has_spread {
+            self.compile_argument_array(arguments)?;
+            self.emit(Op::CallResolvedSpread);
+        } else {
+            for argument in arguments {
+                let qjs_ast::CallArgument::Expr(argument) = argument else {
+                    unreachable!("spread arguments are handled above");
+                };
+                self.compile_expr(argument)?;
+            }
+            self.emit(Op::CallResolved(arguments.len()));
         }
         Ok(())
     }
@@ -693,7 +798,7 @@ impl Compiler {
         Ok(())
     }
 
-    fn member_chain_has_optional(expr: &Expr) -> bool {
+    pub(super) fn member_chain_has_optional(expr: &Expr) -> bool {
         match expr {
             Expr::OptionalMember { .. } | Expr::OptionalCall { .. } => true,
             Expr::Member { object, .. } => Self::member_chain_has_optional(object),
