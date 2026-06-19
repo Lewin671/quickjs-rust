@@ -252,9 +252,9 @@ impl Parser {
         // `await` is reserved as a LabelIdentifier inside an async function and
         // `yield` inside a generator (or in strict mode), so they may not be
         // used as labels there.
-        if self.in_async && label == "await" {
+        if (self.in_async || self.in_static_block) && label == "await" {
             return Err(ParseError {
-                message: "`await` may not be used as a label in an async function".to_owned(),
+                message: "`await` may not be used as a label here".to_owned(),
                 span: label_token.span,
             });
         }

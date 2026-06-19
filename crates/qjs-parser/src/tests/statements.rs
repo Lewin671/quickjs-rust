@@ -745,3 +745,12 @@ fn rejects_catch_parameter_early_errors() {
     assert!(parse_script("try {} catch (x) { var x; }").is_ok());
     assert!(parse_script("try {} catch (x) { let y; }").is_ok());
 }
+
+#[test]
+fn rejects_await_label_in_class_static_block() {
+    // A class static block is an [+Await] context, so `await` is a reserved
+    // LabelIdentifier there.
+    assert!(parse_script("class C { static { await: 0; } }").is_err());
+    // `await` remains a valid label in ordinary (non-async) code.
+    assert!(parse_script("await: 0;").is_ok());
+}
