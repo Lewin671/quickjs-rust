@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap, HashSet},
     rc::Rc,
 };
 
@@ -544,6 +544,19 @@ pub struct Bytecode {
     /// declaration instantiation environment.
     strict: bool,
     pub(super) code: Vec<Op>,
+    /// Per-call metadata precomputed once at construction. Each of these used to
+    /// be recomputed on every call by recursively walking `code` (and nested
+    /// function/class op trees) and materializing a fresh `BTreeSet`/`Vec`,
+    /// which dominated call cost (`tasks/T011-call-performance.md`). A
+    /// `Bytecode` is immutable after compilation and lives behind `Rc`, and
+    /// nested bytecodes are fully built before their parent, so memoizing here
+    /// is a pure optimization with identical results.
+    cached_closure_referenced_global_names: Vec<String>,
+    cached_written_binding_names: Vec<String>,
+    cached_closure_written_binding_names: Vec<String>,
+    cached_writes_binding_set: HashSet<String>,
+    cached_creates_closures: bool,
+    cached_needs_arguments_object: bool,
 }
 
 impl Bytecode {
@@ -585,7 +598,7 @@ impl Bytecode {
         global_lexical_names: Vec<String>,
         strict: bool,
     ) -> Self {
-        Self {
+        let mut bytecode = Self {
             constants,
             local_slots: collect_local_slots(&locals),
             locals,
@@ -596,7 +609,26 @@ impl Bytecode {
             global_scope,
             strict,
             code,
-        }
+            cached_closure_referenced_global_names: Vec::new(),
+            cached_written_binding_names: Vec::new(),
+            cached_closure_written_binding_names: Vec::new(),
+            cached_writes_binding_set: HashSet::new(),
+            cached_creates_closures: false,
+            cached_needs_arguments_object: false,
+        };
+        // Order matters: closure/arguments metadata reads the simpler caches
+        // (written-binding names, creates-closures) computed just above. Nested
+        // bytecodes are already fully built, so their accessors return cached
+        // values here too.
+        bytecode.cached_closure_referenced_global_names =
+            bytecode.compute_closure_referenced_global_names();
+        bytecode.cached_written_binding_names = bytecode.compute_written_binding_names();
+        bytecode.cached_closure_written_binding_names =
+            bytecode.compute_closure_written_binding_names();
+        bytecode.cached_writes_binding_set = bytecode.compute_writes_binding_set();
+        bytecode.cached_creates_closures = bytecode.compute_creates_closures();
+        bytecode.cached_needs_arguments_object = bytecode.compute_needs_arguments_object();
+        bytecode
     }
 
     pub(crate) fn is_strict(&self) -> bool {
@@ -621,6 +653,10 @@ impl Bytecode {
     }
 
     pub(crate) fn closure_referenced_global_names(&self) -> Vec<String> {
+        self.cached_closure_referenced_global_names.clone()
+    }
+
+    fn compute_closure_referenced_global_names(&self) -> Vec<String> {
         let mut names = BTreeSet::new();
         for name in self.referenced_global_names() {
             names.insert(name);
@@ -630,6 +666,10 @@ impl Bytecode {
     }
 
     pub(crate) fn written_binding_names(&self) -> Vec<String> {
+        self.cached_written_binding_names.clone()
+    }
+
+    fn compute_written_binding_names(&self) -> Vec<String> {
         let mut names = BTreeSet::new();
         collect_written_binding_names_from_ops(self, &self.code, &mut names);
         for local in &self.locals {
@@ -641,6 +681,10 @@ impl Bytecode {
     }
 
     pub(crate) fn closure_written_binding_names(&self) -> Vec<String> {
+        self.cached_closure_written_binding_names.clone()
+    }
+
+    fn compute_closure_written_binding_names(&self) -> Vec<String> {
         let mut names = BTreeSet::new();
         for name in self.written_binding_names() {
             names.insert(name);
@@ -725,6 +769,10 @@ impl Bytecode {
     /// false, the activation captured env is never read, so the caller can skip
     /// cloning the whole frame env into it.
     pub(crate) fn creates_closures(&self) -> bool {
+        self.cached_creates_closures
+    }
+
+    fn compute_creates_closures(&self) -> bool {
         self.code
             .iter()
             .any(|op| matches!(op, Op::NewFunction { .. } | Op::NewClass { .. }))
@@ -745,6 +793,10 @@ impl Bytecode {
     }
 
     pub(crate) fn needs_arguments_object(&self) -> bool {
+        self.cached_needs_arguments_object
+    }
+
+    fn compute_needs_arguments_object(&self) -> bool {
         if self.global_names.iter().any(|name| name == "arguments") {
             return true;
         }
@@ -804,40 +856,43 @@ impl Bytecode {
     }
 
     pub(crate) fn writes_binding(&self, binding_name: &str) -> bool {
-        self.code.iter().any(|op| match op {
-            Op::StoreGlobalStrict(name)
-            | Op::StoreGlobalSloppy(name)
-            | Op::StoreLocalOrGlobalSloppy { name, .. }
-            | Op::StoreIdentWith {
-                name, slot: None, ..
+        self.cached_writes_binding_set.contains(binding_name)
+    }
+
+    /// Builds the set of every binding name written anywhere in this body,
+    /// including nested function and class bodies. `writes_binding(name)` is
+    /// then a `HashSet` membership test. The direct (this-level) store names are
+    /// exactly what `collect_written_binding_names_from_ops` gathers; nested
+    /// contributions come from already-cached child sets.
+    fn compute_writes_binding_set(&self) -> HashSet<String> {
+        let mut direct = BTreeSet::new();
+        collect_written_binding_names_from_ops(self, &self.code, &mut direct);
+        let mut set: HashSet<String> = direct.into_iter().collect();
+        for op in &self.code {
+            match op {
+                Op::NewFunction { bytecode, .. } => {
+                    set.extend(bytecode.cached_writes_binding_set.iter().cloned());
+                }
+                Op::NewClass {
+                    constructor,
+                    elements,
+                    ..
+                } => {
+                    set.extend(
+                        constructor
+                            .bytecode
+                            .cached_writes_binding_set
+                            .iter()
+                            .cloned(),
+                    );
+                    for element in elements {
+                        collect_class_element_writes_binding(element, &mut set);
+                    }
+                }
+                _ => {}
             }
-            | Op::StoreResolvedIdentWith {
-                name, slot: None, ..
-            } => name == binding_name,
-            Op::StoreLocal(slot)
-            | Op::AssignLocal(slot)
-            | Op::StoreIdentWith {
-                slot: Some(slot), ..
-            }
-            | Op::StoreResolvedIdentWith {
-                slot: Some(slot), ..
-            } => self
-                .locals
-                .get(*slot)
-                .is_some_and(|local| local.name == binding_name),
-            Op::NewFunction { bytecode, .. } => bytecode.writes_binding(binding_name),
-            Op::NewClass {
-                constructor,
-                elements,
-                ..
-            } => {
-                constructor.bytecode.writes_binding(binding_name)
-                    || elements
-                        .iter()
-                        .any(|element| class_element_writes_binding(element, binding_name))
-            }
-            _ => false,
-        })
+        }
+        set
     }
 
     pub(crate) fn sloppy_global_fallback_binding(&self, binding_name: &str) -> bool {
@@ -855,29 +910,50 @@ fn collect_local_slots(locals: &[Local]) -> HashMap<String, usize> {
     slots
 }
 
-fn class_element_writes_binding(element: &ClassElementDef, binding_name: &str) -> bool {
+fn collect_class_element_writes_binding(element: &ClassElementDef, set: &mut HashSet<String>) {
     match element {
-        ClassElementDef::Method(def) => def.bytecode.writes_binding(binding_name),
-        ClassElementDef::Field(def) => def
-            .initializer
-            .as_ref()
-            .is_some_and(|initializer| initializer.bytecode.writes_binding(binding_name)),
-        ClassElementDef::Private(def) => private_class_element_writes_binding(def, binding_name),
-        ClassElementDef::StaticBlock(def) => def.bytecode.writes_binding(binding_name),
+        ClassElementDef::Method(def) => {
+            set.extend(def.bytecode.cached_writes_binding_set.iter().cloned());
+        }
+        ClassElementDef::Field(def) => {
+            if let Some(initializer) = def.initializer.as_ref() {
+                set.extend(
+                    initializer
+                        .bytecode
+                        .cached_writes_binding_set
+                        .iter()
+                        .cloned(),
+                );
+            }
+        }
+        ClassElementDef::Private(def) => collect_private_class_element_writes_binding(def, set),
+        ClassElementDef::StaticBlock(def) => {
+            set.extend(def.bytecode.cached_writes_binding_set.iter().cloned());
+        }
     }
 }
 
-fn private_class_element_writes_binding(
+fn collect_private_class_element_writes_binding(
     element: &ClassPrivateElementDef,
-    binding_name: &str,
-) -> bool {
+    set: &mut HashSet<String>,
+) {
     match element {
-        ClassPrivateElementDef::Field { initializer, .. } => initializer
-            .as_ref()
-            .is_some_and(|initializer| initializer.bytecode.writes_binding(binding_name)),
+        ClassPrivateElementDef::Field { initializer, .. } => {
+            if let Some(initializer) = initializer.as_ref() {
+                set.extend(
+                    initializer
+                        .bytecode
+                        .cached_writes_binding_set
+                        .iter()
+                        .cloned(),
+                );
+            }
+        }
         ClassPrivateElementDef::Method { def, .. }
         | ClassPrivateElementDef::Getter { def, .. }
-        | ClassPrivateElementDef::Setter { def, .. } => def.bytecode.writes_binding(binding_name),
+        | ClassPrivateElementDef::Setter { def, .. } => {
+            set.extend(def.bytecode.cached_writes_binding_set.iter().cloned());
+        }
     }
 }
 
