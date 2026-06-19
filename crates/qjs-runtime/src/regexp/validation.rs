@@ -103,6 +103,12 @@ fn validate_regexp_pattern(source: &str, unicode: bool) -> Result<(), RuntimeErr
             ')' if unicode => {
                 return Err(regexp_syntax_error("invalid regular expression pattern"));
             }
+            // In unicode mode `}` is a syntax character that must be escaped; a
+            // lone closing brace (one not consumed by a counted quantifier) is a
+            // SyntaxError, mirroring the lone `]`/`)` rejections above.
+            '}' if unicode => {
+                return Err(regexp_syntax_error("invalid regular expression pattern"));
+            }
             '?' | '*' | '+' if !has_atom => {
                 return Err(regexp_syntax_error("invalid regular expression pattern"));
             }

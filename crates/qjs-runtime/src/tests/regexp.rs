@@ -6,6 +6,7 @@ fn rejects_invalid_regexp_literal_at_parse_phase() {
     // script body runs, mirroring Test262's `negative: phase: parse` cases.
     for source in [
         "throw 'unreached'; /]/u;",
+        "throw 'unreached'; /}/u;",
         "throw 'unreached'; /(/;",
         "throw 'unreached'; /a/gg;",
         "throw 'unreached'; /\\2(a)/u;",
