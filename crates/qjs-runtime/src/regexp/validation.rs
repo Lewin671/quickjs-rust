@@ -63,6 +63,11 @@ fn validate_regexp_pattern(source: &str, unicode: bool) -> Result<(), RuntimeErr
                 {
                     return Err(regexp_syntax_error("invalid regular expression pattern"));
                 }
+                if unicode && !is_valid_unicode_escape(&pattern, index) {
+                    // In unicode mode only specific escapes are legal; an
+                    // arbitrary IdentityEscape (`\M`, `\a`, `\c0`) is rejected.
+                    return Err(regexp_syntax_error("invalid regular expression pattern"));
+                }
                 index += 2;
                 has_atom = true;
             }
@@ -84,7 +89,8 @@ fn validate_regexp_pattern(source: &str, unicode: bool) -> Result<(), RuntimeErr
                 // Lookbehind assertions are not `QuantifiableAssertion`s, so a
                 // quantifier immediately after `(?<=...)` / `(?<!...)` is a
                 // SyntaxError in both Annex-B and non-Annex-B modes.
-                if is_lookbehind_group(&pattern, index)
+                if (is_lookbehind_group(&pattern, index)
+                    || (unicode && is_lookahead_group(&pattern, index)))
                     && pattern
                         .get(end + 1)
                         .is_some_and(|next| matches!(next, '*' | '+' | '?' | '{'))
@@ -367,6 +373,34 @@ fn is_lookbehind_group(pattern: &[char], index: usize) -> bool {
     pattern.get(index + 1) == Some(&'?')
         && pattern.get(index + 2) == Some(&'<')
         && matches!(pattern.get(index + 3), Some('=') | Some('!'))
+}
+
+/// `(?=...)` / `(?!...)` lookahead at `index`. In unicode mode lookahead is not
+/// a QuantifiableAssertion, so a following quantifier is a SyntaxError (in
+/// Annex-B mode it stays quantifiable).
+fn is_lookahead_group(pattern: &[char], index: usize) -> bool {
+    pattern.get(index + 1) == Some(&'?') && matches!(pattern.get(index + 2), Some('=') | Some('!'))
+}
+
+/// Whether the escape `\X` at `index` (where `pattern[index] == '\\'`) is a
+/// legal unicode-mode escape: a SyntaxCharacter or `/` (IdentityEscape), a
+/// CharacterClassEscape (`d D s S w W`; `p P` are handled separately), a
+/// ControlEscape / null / hex / unicode / boundary / named-backref escape, or
+/// `\c` followed by an ASCII letter. `\p`/`\P` and braced `\u{…}` are validated
+/// before this is reached.
+fn is_valid_unicode_escape(pattern: &[char], index: usize) -> bool {
+    match pattern.get(index + 1) {
+        Some(
+            '^' | '$' | '\\' | '.' | '*' | '+' | '?' | '(' | ')' | '[' | ']' | '{' | '}' | '|'
+            | '/' | 'd' | 'D' | 's' | 'S' | 'w' | 'W' | 'f' | 'n' | 'r' | 't' | 'v' | 'b' | 'B'
+            | 'u' | 'x' | 'k',
+        ) => true,
+        Some('0'..='9') => true,
+        Some('c') => pattern
+            .get(index + 2)
+            .is_some_and(|ch| ch.is_ascii_alphabetic()),
+        _ => false,
+    }
 }
 
 /// Validate `\k<name>` named backreferences against the named groups declared
@@ -668,6 +702,32 @@ mod tests {
         // Lookahead remains a QuantifiableAssertion in Annex-B mode.
         accepts(".(?=.)?", "");
         accepts("(?<=a)b", "");
+    }
+
+    #[test]
+    fn rejects_invalid_unicode_identity_escapes() {
+        // In unicode mode only specific escapes are legal.
+        rejects("\\M", "u");
+        rejects("\\a", "u");
+        rejects("\\c0", "u");
+        // Sloppy mode keeps Annex-B IdentityEscape; valid unicode escapes pass.
+        accepts("\\M", "");
+        accepts("\\cA", "u");
+        accepts("\\d\\w\\s", "u");
+        accepts("\\n\\t\\b", "u");
+        accepts("\\^\\$\\.", "u");
+        accepts("(?<a>x)\\k<a>", "u");
+    }
+
+    #[test]
+    fn rejects_quantified_lookahead_in_unicode_mode() {
+        rejects(".(?=.)?", "u");
+        rejects(".(?!.)?", "u");
+        rejects(".(?=.){2,3}", "u");
+        rejects(".(?!.){2,3}", "u");
+        // Annex-B keeps lookahead quantifiable; an unquantified lookahead is ok.
+        accepts(".(?=.)?", "");
+        accepts(".(?=.)", "u");
     }
 
     #[test]
