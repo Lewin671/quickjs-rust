@@ -219,9 +219,26 @@ impl Parser {
     }
 
     fn default_export(&mut self) -> Result<DefaultExport, ParseError> {
-        if self.at(&TokenKind::Function) || self.at_async_function_keyword() {
-            let stmt = self.statement()?;
-            return Ok(DefaultExport::Declaration(Box::new(stmt)));
+        if self.at_async_function_keyword() {
+            if self.default_function_has_name(true) {
+                let stmt = self.statement()?;
+                return Ok(DefaultExport::Declaration(Box::new(stmt)));
+            }
+            let async_token = self.advance();
+            self.expect(&TokenKind::Function)?;
+            let expr = self.function_expression_with_async(async_token.span.start, true)?;
+            self.match_kind(&TokenKind::Semicolon);
+            return Ok(DefaultExport::Expression(expr));
+        }
+        if self.at(&TokenKind::Function) {
+            if self.default_function_has_name(false) {
+                let stmt = self.statement()?;
+                return Ok(DefaultExport::Declaration(Box::new(stmt)));
+            }
+            let start = self.advance().span.start;
+            let expr = self.function_expression(start)?;
+            self.match_kind(&TokenKind::Semicolon);
+            return Ok(DefaultExport::Expression(expr));
         }
         if self.at(&TokenKind::Class) {
             let expr = self.assignment()?;
@@ -231,6 +248,20 @@ impl Parser {
         let expr = self.assignment()?;
         self.match_kind(&TokenKind::Semicolon);
         Ok(DefaultExport::Expression(expr))
+    }
+
+    fn default_function_has_name(&self, async_prefix: bool) -> bool {
+        let mut offset = if async_prefix { 2 } else { 1 };
+        if matches!(
+            self.peek_nth(offset).map(|token| &token.kind),
+            Some(TokenKind::Star)
+        ) {
+            offset += 1;
+        }
+        matches!(
+            self.peek_nth(offset).map(|token| &token.kind),
+            Some(TokenKind::Identifier(_))
+        )
     }
 
     fn export_specifier_list(&mut self) -> Result<Vec<ExportSpecifier>, ParseError> {

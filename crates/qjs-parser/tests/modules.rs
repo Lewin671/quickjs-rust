@@ -169,6 +169,33 @@ fn parses_export_default_function() {
 }
 
 #[test]
+fn parses_anonymous_export_default_function() {
+    let ExportDecl::Default { declaration, .. } = sole_export("export default function() {}")
+    else {
+        panic!("expected a default export");
+    };
+    let DefaultExport::Expression(Expr::Function { name: None, .. }) = declaration else {
+        panic!("expected an anonymous function expression default");
+    };
+}
+
+#[test]
+fn parses_anonymous_export_default_async_function() {
+    let ExportDecl::Default { declaration, .. } = sole_export("export default async function() {}")
+    else {
+        panic!("expected a default export");
+    };
+    let DefaultExport::Expression(Expr::Function {
+        name: None,
+        is_async: true,
+        ..
+    }) = declaration
+    else {
+        panic!("expected an anonymous async function expression default");
+    };
+}
+
+#[test]
 fn parses_export_default_class() {
     let ExportDecl::Default { declaration, .. } = sole_export("export default class C {}") else {
         panic!("expected a default export");

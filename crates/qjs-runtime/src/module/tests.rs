@@ -51,6 +51,22 @@ fn default_and_named_roundtrip() {
 }
 
 #[test]
+fn anonymous_default_function_import_is_callable() {
+    let namespace = run(
+        "import def from \"dep\";\n\
+         export const result = def();\n\
+         export const name = def.name;",
+        &[("dep", "export default function() { return 23; }")],
+    )
+    .expect("graph evaluates");
+    assert_eq!(export(&namespace, "result"), Value::Number(23.0));
+    assert_eq!(
+        export(&namespace, "name"),
+        Value::String("default".to_owned().into())
+    );
+}
+
+#[test]
 fn anonymous_default_class_gets_default_name_in_static_initializer() {
     let namespace = run(
         "var className;\n\
