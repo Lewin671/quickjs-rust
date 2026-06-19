@@ -47,7 +47,7 @@ pub(crate) fn set_property(
                 define_array_length_value(&elements, value, env)
             } else {
                 let receiver = Value::Array(elements.clone());
-                let property = match elements.property(&key) {
+                let property = match crate::array_own_property_descriptor(&elements, &key) {
                     Some(property) => Some(property),
                     None => {
                         // No own element/property: a Proxy in a custom prototype
@@ -71,6 +71,14 @@ pub(crate) fn set_property(
                 match apply_set_step(property, receiver, value.clone(), env)? {
                     SetStep::Done(ok) => Ok(ok),
                     SetStep::WriteData => {
+                        // Creating a brand-new own property requires an
+                        // extensible array; an existing own writable element is
+                        // overwritten as usual.
+                        if !crate::array_has_own_property(&elements, &key)
+                            && !elements.is_extensible()
+                        {
+                            return Ok(false);
+                        }
                         match key.parse::<usize>() {
                             Ok(index) => elements.set(index, value),
                             Err(_) => elements.set_property(key, value),

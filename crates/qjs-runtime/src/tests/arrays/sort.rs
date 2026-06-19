@@ -139,3 +139,20 @@ fn freeze_seal_cover_named_and_dense_array_properties() {
     // Deleting a dense element of a frozen array fails (throws in strict mode).
     assert!(eval("'use strict'; var a = [1, 2, 3]; Object.freeze(a); delete a[0];").is_err());
 }
+
+#[test]
+fn strict_writes_to_frozen_or_nonextensible_array_reject() {
+    // Writing an existing dense index of a frozen array throws in strict mode.
+    assert!(eval("'use strict'; var a = [0, 1, 2]; Object.freeze(a); a[0] = 9;").is_err());
+    // Adding a new index to a non-extensible array throws in strict mode.
+    assert!(eval("'use strict'; var b = [0]; Object.freeze(b); b[5] = 9;").is_err());
+    // Ordinary writes are unaffected.
+    assert_eq!(
+        eval("var a = [1, 2, 3]; a[0] = 9; a[0];"),
+        Ok(Value::Number(9.0))
+    );
+    assert_eq!(
+        eval("var a = [1]; a[5] = 9; a.length + ':' + a[5];"),
+        Ok(Value::String("6:9".to_owned().into()))
+    );
+}
