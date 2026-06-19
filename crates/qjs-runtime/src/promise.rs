@@ -590,15 +590,15 @@ fn validate_import_options(options: Value, env: &mut CallEnv) -> Result<(), Runt
 }
 
 fn import_options_is_object(value: &Value) -> bool {
-    matches!(
-        value,
-        Value::Object(_)
-            | Value::Array(_)
-            | Value::Function(_)
-            | Value::Proxy(_)
-            | Value::Map(_)
-            | Value::Set(_)
-    )
+    match value {
+        // Symbol primitives are boxed as objects internally, so they must be
+        // excluded from the `Type(options) is Object` guard.
+        Value::Object(object) => !symbol::is_symbol_primitive(object),
+        Value::Array(_) | Value::Function(_) | Value::Proxy(_) | Value::Map(_) | Value::Set(_) => {
+            true
+        }
+        _ => false,
+    }
 }
 
 fn import_options_type_error(message: &str) -> RuntimeError {
