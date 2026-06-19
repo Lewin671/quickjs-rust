@@ -1051,3 +1051,27 @@ fn optional_chaining_super_method_and_super_call() {
         Ok(Value::Boolean(true))
     );
 }
+
+#[test]
+fn to_primitive_short_circuits_non_objects() {
+    // `++`/`--` go through ToNumeric -> ToPrimitive; a non-object input is
+    // returned unchanged rather than throwing.
+    assert!(matches!(eval("var x; x++; x;"), Ok(Value::Number(n)) if n.is_nan()));
+    assert_eq!(eval("var x = null; x++; x;"), Ok(Value::Number(1.0)));
+    // A Symbol still throws when coerced to a number.
+    assert!(eval("var s = Symbol(); s++;").is_err());
+}
+
+#[test]
+fn string_coercion_of_array_honors_to_string() {
+    assert_eq!(
+        eval("String([1, 2, 3]);"),
+        Ok(Value::String("1,2,3".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "Array.prototype.toString = function () { return 'X'; }; var r = String([1]); delete Array.prototype.toString; r;"
+        ),
+        Ok(Value::String("X".to_owned().into()))
+    );
+}

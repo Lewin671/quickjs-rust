@@ -44,7 +44,7 @@ pub(crate) use iterator::{
     native_array_prototype_entries, native_array_prototype_keys, native_array_prototype_values,
 };
 pub(crate) use join::{
-    array_join, native_array_prototype_join, native_array_prototype_to_locale_string,
+    native_array_prototype_join, native_array_prototype_to_locale_string,
     native_array_prototype_to_string,
 };
 pub(crate) use mutation::{

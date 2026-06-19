@@ -1,7 +1,7 @@
 use crate::CallEnv;
 use crate::{
-    PropertyKey, RuntimeError, Value, array::array_join, call_function, date, number,
-    property_value, property_value_key, symbol,
+    PropertyKey, RuntimeError, Value, call_function, date, number, property_value,
+    property_value_key, symbol,
 };
 
 #[derive(Clone, Copy)]
@@ -27,7 +27,9 @@ pub(crate) fn to_js_string_with_env(
             Err(symbol_to_string_error())
         }
         Value::Object(object) => object_to_string(Value::Object(object), env),
-        Value::Array(_) => array_join(value, ",", env),
+        // Route arrays through ToPrimitive so an overridden `toString` (or
+        // `Array.prototype.toString`) is honored; the default still joins.
+        Value::Array(_) => object_to_string(value, env),
         Value::Function(_) | Value::Map(_) | Value::Set(_) | Value::Proxy(_) => {
             object_to_string(value, env)
         }
@@ -192,6 +194,12 @@ pub(crate) fn to_primitive_with_hint(
     hint: PreferredType,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
+    // ToPrimitive step 1: a non-Object input is returned unchanged. (Symbol
+    // primitives are stored as objects but excluded by `is_object_like`, so
+    // they pass through here and are rejected later by ToNumber, per spec.)
+    if !is_object_like(&value) {
+        return Ok(value);
+    }
     if let Some(symbol) = symbol::to_primitive_symbol(env) {
         let method = property_value_key(value.clone(), &PropertyKey::Symbol(symbol), env)?;
         if !matches!(method, Value::Undefined | Value::Null) {

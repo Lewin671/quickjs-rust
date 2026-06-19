@@ -307,6 +307,12 @@ impl ArrayRef {
         {
             return false;
         }
+        // A present dense element on a sealed/frozen array is non-configurable
+        // (its descriptor is synthesized from these flags), so its deletion is
+        // rejected even without a `properties` map entry.
+        if self.sealed.get() && self.has_index(index) {
+            return false;
+        }
         properties.remove(&key);
         drop(properties);
 
@@ -507,6 +513,11 @@ impl ArrayRef {
         for (_, property) in self.symbol_properties.borrow_mut().iter_mut() {
             property.make_non_configurable();
         }
+        // Named (non-index) own properties live in the `properties` map and must
+        // also become non-configurable when the array is sealed.
+        for (_, property) in self.properties.borrow_mut().iter_mut() {
+            property.make_non_configurable();
+        }
         self.sealed.set(true);
     }
 
@@ -517,6 +528,9 @@ impl ArrayRef {
     pub(crate) fn freeze(&self) {
         self.seal();
         for (_, property) in self.symbol_properties.borrow_mut().iter_mut() {
+            property.freeze_data();
+        }
+        for (_, property) in self.properties.borrow_mut().iter_mut() {
             property.freeze_data();
         }
         self.frozen.set(true);

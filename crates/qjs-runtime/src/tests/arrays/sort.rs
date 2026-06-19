@@ -126,3 +126,16 @@ fn rejects_non_callable_array_to_sorted_comparator() {
     assert!(eval("[1, 2].toSorted(1);").is_err());
     assert!(eval("Array.prototype.toSorted.call(null);").is_err());
 }
+
+#[test]
+fn freeze_seal_cover_named_and_dense_array_properties() {
+    // A named own property becomes non-writable/non-configurable when frozen.
+    assert_eq!(
+        eval(
+            "var a = []; a.foo = 10; Object.freeze(a); var d = Object.getOwnPropertyDescriptor(a, 'foo'); d.writable + ',' + d.configurable;"
+        ),
+        Ok(Value::String("false,false".to_owned().into()))
+    );
+    // Deleting a dense element of a frozen array fails (throws in strict mode).
+    assert!(eval("'use strict'; var a = [1, 2, 3]; Object.freeze(a); delete a[0];").is_err());
+}
