@@ -186,6 +186,45 @@ pub(crate) fn enumerable_property_entries_with_symbols(
     Ok(entries)
 }
 
+/// Like [`enumerable_property_entries_with_symbols`], but for object-rest
+/// destructuring (`{ ...rest }`): a key listed in `excluded` is skipped
+/// *before* its `[[GetOwnProperty]]` is observed. CopyDataProperties (ES2023
+/// 7.3.25 step 4) only invokes `[[GetOwnProperty]]` on keys not in the excluded
+/// set, so a Proxy `getOwnPropertyDescriptor` trap (or an accessor) must not run
+/// for an excluded key.
+pub(crate) fn enumerable_property_entries_excluding(
+    value: Value,
+    excluded: &[PropertyKey],
+    env: &mut CallEnv,
+) -> Result<Vec<(PropertyKey, Value)>, RuntimeError> {
+    let keys = own_property_keys_for_enumeration(value.clone(), true, env)?;
+    let mut entries = Vec::with_capacity(keys.len());
+    for key in keys {
+        if excluded
+            .iter()
+            .any(|excluded_key| property_keys_equal(excluded_key, &key))
+        {
+            continue;
+        }
+        if let Some(Property { enumerable, .. }) =
+            observable_own_property_descriptor(value.clone(), &key, env)?
+            && enumerable
+        {
+            let property = property_value_key(value.clone(), &key, env)?;
+            entries.push((key, property));
+        }
+    }
+    Ok(entries)
+}
+
+fn property_keys_equal(left: &PropertyKey, right: &PropertyKey) -> bool {
+    match (left, right) {
+        (PropertyKey::String(left), PropertyKey::String(right)) => left == right,
+        (PropertyKey::Symbol(left), PropertyKey::Symbol(right)) => left.ptr_eq(right),
+        _ => false,
+    }
+}
+
 fn enumerable_property_keys(value: Value, env: &mut CallEnv) -> Result<Vec<String>, RuntimeError> {
     let keys = own_property_keys_for_enumeration(value.clone(), false, env)?;
     let mut enumerable = Vec::with_capacity(keys.len());

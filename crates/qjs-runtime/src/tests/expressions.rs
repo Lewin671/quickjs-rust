@@ -835,6 +835,30 @@ fn destructuring_assignment_evaluates_computed_keys_before_member_targets() {
 }
 
 #[test]
+fn object_rest_skips_get_own_property_for_excluded_keys() {
+    // CopyDataProperties invokes `[[GetOwnProperty]]` only on keys not in the
+    // excluded set, so a Proxy `getOwnPropertyDescriptor` trap must not run for
+    // a destructured-away key.
+    assert_eq!(
+        eval(
+            "var seen = [];
+             var p = new Proxy(
+               { a: 1, b: 2, c: 3 },
+               {
+                 getOwnPropertyDescriptor: function (target, key) {
+                   seen.push(key);
+                   return Object.getOwnPropertyDescriptor(target, key);
+                 },
+               }
+             );
+             var { a, ...rest } = p;
+             seen.join(',') + '|' + JSON.stringify(rest);"
+        ),
+        Ok(Value::String("b,c|{\"b\":2,\"c\":3}".to_owned().into()))
+    );
+}
+
+#[test]
 fn destructuring_assignment_closes_iterators() {
     assert_eq!(
         eval(

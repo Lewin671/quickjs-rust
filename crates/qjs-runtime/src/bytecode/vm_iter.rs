@@ -158,19 +158,15 @@ impl Vm<'_> {
             }
         }
         let mut env = self.current_env();
-        let result = object::enumerable_property_entries_with_symbols(value, &mut env);
+        // Excluded keys are filtered before `[[GetOwnProperty]]` is observed, so
+        // a Proxy/accessor trap never runs for a destructured-away key.
+        let result = object::enumerable_property_entries_excluding(value, &excluded_keys, &mut env);
         self.apply_env(env);
         let Some(entries) = self.handle_runtime_result(result)? else {
             return Ok(());
         };
         let rest = ObjectRef::with_prototype(HashMap::new(), object_prototype(&self.env));
         for (key, value) in entries {
-            if excluded_keys
-                .iter()
-                .any(|excluded| property_keys_equal(excluded, &key))
-            {
-                continue;
-            }
             match key {
                 PropertyKey::String(key) => rest.set(key, value),
                 PropertyKey::Symbol(symbol) => {
@@ -569,14 +565,6 @@ fn iterator_step_value(
         return Ok(None);
     }
     Ok(Some(property_value(result, "value", env)?))
-}
-
-fn property_keys_equal(left: &PropertyKey, right: &PropertyKey) -> bool {
-    match (left, right) {
-        (PropertyKey::String(left), PropertyKey::String(right)) => left == right,
-        (PropertyKey::Symbol(left), PropertyKey::Symbol(right)) => left.ptr_eq(right),
-        _ => false,
-    }
 }
 
 fn iterator_rest_values(
