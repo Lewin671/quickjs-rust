@@ -8,7 +8,7 @@ use crate::{
 };
 
 use super::compiler::Compiler;
-use super::compiler_lexical::for_init_lexical_names;
+use super::compiler_lexical::{for_init_lexical_names, stmt_declares_capturable_lexical};
 use super::ir::Op;
 use super::util::parse_number_literal;
 
@@ -72,9 +72,14 @@ impl Compiler {
         let exit_jump = self.emit(Op::JumpIfFalse(usize::MAX));
         self.emit(Op::Pop);
         self.push_loop(result_slot);
+        let body_start = self.code.len();
         self.compile_stmt(body)?;
         self.emit(Op::StoreLocal(result_slot));
         let context = self.pop_loop();
+        // A `continue` (and the fall-through after the body) must pass through
+        // the per-iteration environment refresh, so the refresh — when needed —
+        // becomes the continue target rather than the loop top.
+        let continue_target = self.emit_loop_iteration_scope(body, body_start, loop_start);
         self.emit(Op::Jump(loop_start));
         let exit = self.code.len();
         self.patch_jump(exit_jump, exit);
@@ -82,8 +87,41 @@ impl Compiler {
         self.emit(Op::LoadLocal(result_slot));
         let done = self.code.len();
         self.patch_loop_breaks(&context, done);
-        self.patch_loop_continues(&context, loop_start);
+        self.patch_loop_continues(&context, continue_target);
         Ok(())
+    }
+
+    /// Emits a per-iteration captured-environment refresh for `while`/`do`-`while`
+    /// loops whose body declares lexical bindings captured by a closure, so each
+    /// iteration's closures capture that iteration's bindings. Returns the
+    /// continue target: the refresh instruction when one is emitted, otherwise
+    /// `fallback` (the loop's normal continue point). `for`-head loops re-home
+    /// their head slots through the existing `iteration_slots` path instead.
+    fn emit_loop_iteration_scope(
+        &mut self,
+        body: &Stmt,
+        body_start: usize,
+        fallback: usize,
+    ) -> usize {
+        if !self.loop_body_needs_iteration_scope(body, body_start) {
+            return fallback;
+        }
+        let target = self.code.len();
+        self.emit(Op::FreshIterationScope(Vec::new()));
+        target
+    }
+
+    /// Whether each iteration of a loop with the given `body` (compiled from
+    /// `body_start` onward in `self.code`) needs a fresh captured environment:
+    /// the body both declares a lexical binding and creates a closure that
+    /// could capture it. Loops that create no closure, or whose body declares
+    /// no lexical, keep the single shared environment to avoid a per-iteration
+    /// clone on the hot path.
+    fn loop_body_needs_iteration_scope(&self, body: &Stmt, body_start: usize) -> bool {
+        stmt_declares_capturable_lexical(body)
+            && self.code[body_start..]
+                .iter()
+                .any(|op| matches!(op, Op::NewFunction { .. } | Op::NewClass { .. }))
     }
 
     pub(super) fn compile_do_while(
@@ -96,10 +134,14 @@ impl Compiler {
         self.emit(Op::StoreLocal(result_slot));
         let loop_start = self.code.len();
         self.push_loop(result_slot);
+        let body_start = self.code.len();
         self.compile_stmt(body)?;
         self.emit(Op::StoreLocal(result_slot));
         let context = self.pop_loop();
+        // The refresh (when needed) sits before the test so both the
+        // fall-through and a `continue` (which targets the test) run it.
         let test_start = self.code.len();
+        let continue_target = self.emit_loop_iteration_scope(body, body_start, test_start);
         self.compile_expr(test)?;
         let exit_jump = self.emit(Op::JumpIfFalse(usize::MAX));
         self.emit(Op::Pop);
@@ -110,7 +152,7 @@ impl Compiler {
         self.emit(Op::LoadLocal(result_slot));
         let done = self.code.len();
         self.patch_loop_breaks(&context, done);
-        self.patch_loop_continues(&context, test_start);
+        self.patch_loop_continues(&context, continue_target);
         Ok(())
     }
 
@@ -236,6 +278,7 @@ impl Compiler {
         } else {
             Vec::new()
         };
+        let body_start = self.code.len();
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
             compiler.push_loop(result_slot);
             compiler.compile_stmt(body)?;
@@ -245,7 +288,13 @@ impl Compiler {
         let context = self.pop_loop();
         let update_start = self.code.len();
         if !iteration_slots.is_empty() {
+            // A lexical for-head already refreshes the captured environment each
+            // iteration, which also covers lexicals declared in the body.
             self.emit(Op::FreshIterationScope(iteration_slots));
+        } else if self.loop_body_needs_iteration_scope(body, body_start) {
+            // A non-lexical head (`for(var ...)`, `for(;;)`) still needs a fresh
+            // environment when the body declares captured lexicals.
+            self.emit(Op::FreshIterationScope(Vec::new()));
         }
         if let Some(update) = update {
             self.compile_expr(update)?;

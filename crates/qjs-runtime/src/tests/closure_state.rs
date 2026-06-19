@@ -113,6 +113,106 @@ fn nested_closures_capture_live_outer_bindings() {
 }
 
 #[test]
+fn loop_body_lexicals_get_per_iteration_environment() {
+    // A `let`/`const`/`class` declared in a `while`/`do`-`while`/`for(;;)` body
+    // and captured by a closure must be a fresh binding each iteration, so the
+    // closures observe each iteration's value rather than the final one.
+    assert_eq!(
+        eval(
+            "var fns = [];
+             var i = 0;
+             while (i < 3) { let x = i; fns.push(function () { return x; }); i++; }
+             fns.map(function (f) { return f(); }).join(',');"
+        ),
+        Ok(Value::String("0,1,2".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var fns = [];
+             var i = 0;
+             do { let x = i; fns.push(function () { return x; }); i++; } while (i < 3);
+             fns.map(function (f) { return f(); }).join(',');"
+        ),
+        Ok(Value::String("0,1,2".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var fns = [];
+             for (var i = 0; i < 3; i++) { let x = i; fns.push(function () { return x; }); }
+             fns.map(function (f) { return f(); }).join(',');"
+        ),
+        Ok(Value::String("0,1,2".to_owned().into()))
+    );
+    // A lexical declared in a nested block of the body is still per-iteration.
+    assert_eq!(
+        eval(
+            "var fns = [];
+             var i = 0;
+             while (i < 3) { { let x = i; fns.push(function () { return x; }); } i++; }
+             fns.map(function (f) { return f(); }).join(',');"
+        ),
+        Ok(Value::String("0,1,2".to_owned().into()))
+    );
+    // `continue` must still pass through the per-iteration refresh.
+    assert_eq!(
+        eval(
+            "var fns = [];
+             var i = -1;
+             while (i < 3) {
+                 i++;
+                 if (i === 1) continue;
+                 let x = i;
+                 fns.push(function () { return x; });
+             }
+             fns.map(function (f) { return f(); }).join(',');"
+        ),
+        Ok(Value::String("0,2,3".to_owned().into()))
+    );
+    // A conditionally-assigned body lexical starts fresh (uninitialized) each
+    // iteration rather than carrying the previous iteration's value.
+    assert_eq!(
+        eval(
+            "var fns = [];
+             for (var i = 0; i < 3; i++) {
+                 let x;
+                 if (i === 0) x = 10;
+                 fns.push(function () { return x; });
+             }
+             fns.map(function (f) { return String(f()); }).join(',');"
+        ),
+        Ok(Value::String("10,undefined,undefined".to_owned().into()))
+    );
+}
+
+#[test]
+fn loop_body_iteration_environment_preserves_outer_captures() {
+    // The per-iteration refresh must not freeze captures of a `var` declared
+    // *outside* the loop: closures over it still observe the final mutated
+    // value rather than a per-iteration snapshot. (Capturing an outer *lexical*
+    // binding at script scope has a separate, pre-existing limitation shared by
+    // all loop forms — for-of/for-in/for-head included — tracked under T014.)
+    assert_eq!(
+        eval(
+            "var fns = [];
+             var s = 0;
+             var i = 0;
+             while (i < 3) { let x = i; fns.push(function () { return s; }); s++; i++; }
+             fns.map(function (f) { return f(); }).join(',');"
+        ),
+        Ok(Value::String("3,3,3".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var fns = [];
+             var s = 0;
+             for (var i = 0; i < 3; i++) { let x = i; fns.push(function () { return s; }); s += 1; }
+             fns.map(function (f) { return f(); }).join(',');"
+        ),
+        Ok(Value::String("3,3,3".to_owned().into()))
+    );
+}
+
+#[test]
 fn sibling_closure_mutation_observes_latest_var_binding() {
     assert_eq!(
         eval(

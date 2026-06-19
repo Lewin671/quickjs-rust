@@ -346,6 +346,59 @@ pub(super) fn current_scope_lexical_declared_bindings(body: &[Stmt]) -> Vec<(Str
     names
 }
 
+/// Whether a loop body declares a lexical binding (`let`/`const`/`class`/
+/// `using`) within the same function scope (not inside a nested function).
+///
+/// Each loop iteration must give the body's lexical bindings a fresh
+/// per-iteration environment so closures created in one iteration capture that
+/// iteration's bindings (ES2023 14.7 `CreatePerIterationEnvironment`). The
+/// `for`-head case is handled by re-homing the head slots; this detects the
+/// same need for lexicals declared in the loop *body* of `while`, `do`/`while`,
+/// and `for(;;)` loops. Nested function and class *bodies* are their own
+/// scopes, so the walk does not descend into them.
+pub(super) fn stmt_declares_capturable_lexical(stmt: &Stmt) -> bool {
+    match stmt {
+        Stmt::VarDecl { kind, .. } => kind.is_lexical(),
+        Stmt::ClassDecl { .. } => true,
+        Stmt::Block { body, .. } => body.iter().any(stmt_declares_capturable_lexical),
+        Stmt::If {
+            consequent,
+            alternate,
+            ..
+        } => {
+            stmt_declares_capturable_lexical(consequent)
+                || alternate
+                    .as_deref()
+                    .is_some_and(stmt_declares_capturable_lexical)
+        }
+        Stmt::While { body, .. }
+        | Stmt::DoWhile { body, .. }
+        | Stmt::For { body, .. }
+        | Stmt::ForIn { body, .. }
+        | Stmt::ForOf { body, .. }
+        | Stmt::Labelled { body, .. }
+        | Stmt::With { body, .. } => stmt_declares_capturable_lexical(body),
+        Stmt::Switch { cases, .. } => cases
+            .iter()
+            .any(|case| case.consequent.iter().any(stmt_declares_capturable_lexical)),
+        Stmt::Try {
+            block,
+            handler,
+            finalizer,
+            ..
+        } => {
+            block.iter().any(stmt_declares_capturable_lexical)
+                || handler.as_ref().is_some_and(|handler| {
+                    handler.body.iter().any(stmt_declares_capturable_lexical)
+                })
+                || finalizer
+                    .as_ref()
+                    .is_some_and(|finalizer| finalizer.iter().any(stmt_declares_capturable_lexical))
+        }
+        _ => false,
+    }
+}
+
 pub(super) fn function_body_annex_b_blocked_names(
     params: &FunctionParams,
     body: &[Stmt],
