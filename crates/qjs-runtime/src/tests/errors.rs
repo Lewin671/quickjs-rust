@@ -498,3 +498,21 @@ fn spread_iterator_errors_are_catchable_at_top_level() {
         Ok(Value::String("TypeError".to_owned().into()))
     );
 }
+
+#[test]
+fn template_literal_tostring_errors_are_catchable() {
+    // A throw raised while coercing a substitution to string in a template
+    // literal must unwind to an enclosing try/catch, not escape the VM loop.
+    assert_eq!(
+        eval(
+            "var bad = { toString() { throw new TypeError('x'); } };
+             var c = ''; try { `${bad}`; } catch (e) { c = e.name; } c;"
+        ),
+        Ok(Value::String("TypeError".to_owned().into()))
+    );
+    // Coercing a Symbol in a template is a catchable TypeError too.
+    assert_eq!(
+        eval("var c = ''; try { `${Symbol()}`; } catch (e) { c = e.name; } c;"),
+        Ok(Value::String("TypeError".to_owned().into()))
+    );
+}

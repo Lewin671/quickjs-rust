@@ -537,7 +537,12 @@ impl<'a> Vm<'a> {
                     let mut env = self.current_env();
                     let result = to_js_string_with_env(value, &mut env);
                     self.apply_env(env);
-                    self.stack.push(Value::String(result?.into()));
+                    // Route a throwing toString/Symbol.toPrimitive through the
+                    // try-handler stack so `` `${bad}` `` is catchable, instead
+                    // of escaping the VM loop.
+                    if let Some(string) = self.handle_runtime_result(result)? {
+                        self.stack.push(Value::String(string.into()));
+                    }
                 }
                 Op::ToPropertyKey => {
                     let value = self.pop()?;
