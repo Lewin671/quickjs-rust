@@ -86,6 +86,7 @@ impl Parser {
         self.expect_contextual("from")?;
         let source = self.expect_string_literal()?;
         let end = self.finish_module_specifier(source.span);
+        validate_import_bound_names(&specifiers)?;
         Ok(ImportDecl {
             specifiers,
             source: source.value,
@@ -383,4 +384,27 @@ fn is_exportable_declaration(stmt: &Stmt) -> bool {
         stmt,
         Stmt::VarDecl { .. } | Stmt::FunctionDecl { .. } | Stmt::ClassDecl { .. }
     )
+}
+
+fn validate_import_bound_names(specifiers: &[ImportSpecifier]) -> Result<(), ParseError> {
+    let mut names = Vec::new();
+    for specifier in specifiers {
+        let (local, span) = import_local_name_and_span(specifier);
+        if names.contains(&local) {
+            return Err(ParseError {
+                message: format!("duplicate import binding `{local}`"),
+                span,
+            });
+        }
+        names.push(local);
+    }
+    Ok(())
+}
+
+fn import_local_name_and_span(specifier: &ImportSpecifier) -> (&str, Span) {
+    match specifier {
+        ImportSpecifier::Default { local, span }
+        | ImportSpecifier::Namespace { local, span }
+        | ImportSpecifier::Named { local, span, .. } => (local, *span),
+    }
 }

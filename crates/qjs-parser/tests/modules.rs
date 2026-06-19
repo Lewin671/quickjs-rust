@@ -98,6 +98,17 @@ fn parses_default_and_namespace_combination() {
 }
 
 #[test]
+fn rejects_duplicate_import_bound_names() {
+    for source in [
+        "import { x, y as x } from \"mod\";",
+        "import x, { y as x } from \"mod\";",
+    ] {
+        let error = parse_module(source).expect_err("duplicate import bindings should fail");
+        assert_eq!(error.message, "duplicate import binding `x`");
+    }
+}
+
+#[test]
 fn parses_named_export_clause() {
     let ExportDecl::Named {
         specifiers, source, ..
