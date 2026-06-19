@@ -932,3 +932,23 @@ fn evaluates_new_expressions() {
     );
     assert!(eval("new 1;").is_err());
 }
+
+#[test]
+fn function_prototype_has_empty_name_after_length() {
+    // %Function.prototype% exposes an empty, non-writable, non-enumerable,
+    // configurable `name`, ordered immediately after `length`.
+    assert_eq!(
+        eval("JSON.stringify(Object.getOwnPropertyDescriptor(Function.prototype, 'name'));"),
+        Ok(Value::String(
+            r#"{"value":"","writable":false,"enumerable":false,"configurable":true}"#
+                .to_owned()
+                .into()
+        ))
+    );
+    assert_eq!(
+        eval(
+            "var n = Object.getOwnPropertyNames(Function.prototype); n.indexOf('name') === n.indexOf('length') + 1;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}

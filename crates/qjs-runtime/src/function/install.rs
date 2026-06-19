@@ -15,6 +15,12 @@ pub(crate) fn install_function(
         "length".to_owned(),
         Property::data(Value::Number(0.0), false, false, true),
     );
+    // %Function.prototype% has an empty `name`, defined immediately after
+    // `length` so the built-in property order matches the spec.
+    function_prototype.define_property(
+        "name".to_owned(),
+        Property::data(Value::String(String::new().into()), false, false, true),
+    );
     function_prototype.define_non_enumerable(
         "constructor".to_owned(),
         Value::Function(function_constructor.clone()),
