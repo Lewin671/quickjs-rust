@@ -957,3 +957,41 @@ fn optional_chaining_short_circuits_through_calls() {
         Ok(Value::Number(50.0))
     );
 }
+
+#[test]
+fn optional_chaining_on_new_target_and_super() {
+    // `new.target` is a MetaProperty and may head an optional chain.
+    assert_eq!(
+        eval("function f() { return new.target?.name; } f();"),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval("function f() { return new.target?.name; } new f().wrapped ? 'x' : (new f(), 'ran');"),
+        Ok(Value::String("ran".to_owned()))
+    );
+    // `super.x` heads an optional chain through the super-property path.
+    assert_eq!(
+        eval(
+            "class B { get p() { return { q: 9 }; } }
+             class A extends B { m() { return super.p?.q; } }
+             new A().m();"
+        ),
+        Ok(Value::Number(9.0))
+    );
+    assert_eq!(
+        eval(
+            "class B {}
+             class A extends B { m() { return super.zzz?.q; } }
+             new A().m();"
+        ),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval(
+            "class B { a() { return { c: 5 }; } }
+             class A extends B { m() { return super.a?.().c; } }
+             new A().m();"
+        ),
+        Ok(Value::Number(5.0))
+    );
+}

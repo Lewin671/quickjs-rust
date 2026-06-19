@@ -812,6 +812,11 @@ impl Compiler {
         chain: &mut Vec<OptionalChainEntry<'a>>,
     ) -> &'a Expr {
         match expr {
+            // `super.x` / `super[x]` is a leaf base of the chain: it must be
+            // compiled through the dedicated super-property path (which resolves
+            // against the home object's prototype), not as a plain object on the
+            // stack followed by GetProp.
+            Expr::Member { object, .. } if matches!(object.as_ref(), Expr::Super { .. }) => expr,
             Expr::Member {
                 object, property, ..
             } => {

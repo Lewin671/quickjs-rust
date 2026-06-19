@@ -199,9 +199,13 @@ impl Parser {
                     span: Span::new(start, property.span.end),
                 });
             }
-            return Ok(Expr::NewTarget {
+            // `new.target` is a MetaProperty, i.e. a MemberExpression head, so
+            // it can be followed by member access, calls, and optional chains
+            // (`new.target?.()`, `new.target?.a`).
+            let new_target = Expr::NewTarget {
                 span: Span::new(start, property.span.end),
-            });
+            };
+            return self.finish_call_member_chain(new_target);
         }
         let callee_parenthesized = self.at(&TokenKind::LeftParen);
         let callee = self.member_chain()?;
