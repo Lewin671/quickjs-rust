@@ -451,3 +451,15 @@ fn for_await_outside_async_is_error() {
 fn for_await_with_for_in_is_error() {
     assert!(parse_script("async function f() { for await (const x in y) {} }").is_err());
 }
+
+#[test]
+fn await_is_rejected_as_single_arrow_parameter_in_async_or_static_block() {
+    // `await` is reserved as a binding name inside an async function or a class
+    // static block, so the single-identifier arrow `await => {}` is an early
+    // error there.
+    assert!(parse_script("async function f() { (await => 0); }").is_err());
+    assert!(parse_script("class C { static { (await => 0); } }").is_err());
+    // Outside those contexts `await` is a plain identifier and a valid arrow
+    // parameter.
+    parse_script("var f = (await => await);").expect("sloppy `await` arrow parameter is valid");
+}

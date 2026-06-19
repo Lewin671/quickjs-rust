@@ -268,6 +268,16 @@ impl Parser {
                         span: token.span,
                     });
                 }
+                // `await` is reserved as a binding name inside an async function
+                // or a class static block, so `await => {}` is an early error
+                // there (the parenthesized form is already rejected through the
+                // binding-pattern path).
+                if (self.in_async || self.in_static_block) && param == "await" {
+                    return Err(ParseError {
+                        message: "`await` may not be used as an arrow parameter here".to_owned(),
+                        span: token.span,
+                    });
+                }
                 Ok(Some(FunctionParams::positional(vec![param])))
             }
             Some(TokenKind::LeftParen) => self.parenthesized_arrow_parameters(),
