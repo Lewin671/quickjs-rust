@@ -263,6 +263,40 @@ fn evaluates_function_declarations_and_calls() {
         ),
         Ok(Value::String("TypeError".to_owned().into()))
     );
+    // A user function returns its original source text verbatim.
+    assert_eq!(
+        eval("function foo(a, b) { return a + b; } foo.toString();"),
+        Ok(Value::String(
+            "function foo(a, b) { return a + b; }".to_owned().into()
+        ))
+    );
+    assert_eq!(
+        eval("var f = (x) => x * 2; f.toString();"),
+        Ok(Value::String("(x) => x * 2".to_owned().into()))
+    );
+    // Source is retained through nested function compilation, and generators
+    // reproduce their `function*` form.
+    assert_eq!(
+        eval(
+            "function outer() { function inner(z) { return z; } return inner; } outer().toString();"
+        ),
+        Ok(Value::String(
+            "function inner(z) { return z; }".to_owned().into()
+        ))
+    );
+    assert_eq!(
+        eval("function* gen() { yield 1; } gen.toString();"),
+        Ok(Value::String(
+            "function* gen() { yield 1; }".to_owned().into()
+        ))
+    );
+    // CR and CRLF line terminators in the source normalize to LF.
+    assert_eq!(
+        eval("eval('var f = function () {\\r\\n  return 1;\\r};'); f.toString();"),
+        Ok(Value::String(
+            "function () {\n  return 1;\n}".to_owned().into()
+        ))
+    );
     // A plain `Function(...)` call inside a constructor ignores the ambient
     // new.target: the created function's prototype is %Function.prototype%, so
     // it has the usual callable methods.

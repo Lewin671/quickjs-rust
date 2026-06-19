@@ -418,11 +418,13 @@ impl Compiler {
             body,
             is_generator,
             is_async,
+            span,
             ..
         } = stmt
         else {
             return Err(unsupported_stmt(stmt));
         };
+        let source_text = self.function_source_text(*span);
         let blocked_arguments = self.annex_b_arguments_function_name_blocked(name);
         if self.annex_b_function_name_blocked(name) && !blocked_arguments {
             return self.compile_block_scoped_function_decl(
@@ -457,6 +459,7 @@ impl Compiler {
             lexical_arguments: false,
             is_generator: *is_generator,
             is_async: *is_async,
+            source_text,
         });
         if blocked_arguments {
             let slot = self.declare_lexical_slot(name, true);
@@ -504,6 +507,9 @@ impl Compiler {
             lexical_arguments: false,
             is_generator,
             is_async,
+            // The block-scoped Annex B path does not carry the source span;
+            // toString falls back to the [native code] form.
+            source_text: None,
         });
         self.emit(Op::Dup);
         self.emit(Op::StoreLocal(lexical_slot));

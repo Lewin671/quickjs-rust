@@ -54,6 +54,12 @@ pub(super) struct Compiler {
     /// its block opened a disposal scope), so contexts not yet wired for
     /// disposal never emit an unmatched register.
     pub(super) disposable_scope_depth: usize,
+    /// The original source text being compiled, shared across nested function
+    /// compilations. `Function.prototype.toString` slices it by a function's
+    /// source span to return the original text; empty when the source is
+    /// unavailable (e.g. internally synthesized bodies), which falls back to the
+    /// `[native code]` form.
+    pub(super) source: std::rc::Rc<str>,
 }
 
 /// Tracks a try/catch/finally result slot for completion value propagation.
@@ -112,6 +118,7 @@ impl Default for Compiler {
             async_generator_body: false,
             try_result_slots: Vec::new(),
             disposable_scope_depth: 0,
+            source: std::rc::Rc::from(""),
         }
     }
 }
@@ -210,6 +217,7 @@ impl Compiler {
     }
 
     fn compile_into(&mut self, script: &Script) -> Result<Bytecode, RuntimeError> {
+        self.source = script.source.clone();
         self.strict = self.strict || is_strict_function_body(&script.body);
         self.collect_hoisted_locals(&script.body, false);
         self.predeclare_current_scope_lexicals(&script.body);
@@ -232,6 +240,7 @@ impl Compiler {
     }
 
     fn compile_eval_into(&mut self, script: &Script) -> Result<Bytecode, RuntimeError> {
+        self.source = script.source.clone();
         self.strict = self.strict || is_strict_function_body(&script.body);
         self.collect_hoisted_locals(&script.body, false);
         self.predeclare_current_scope_lexicals(&script.body);

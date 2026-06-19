@@ -78,7 +78,10 @@ pub(super) fn build_record(source: &str) -> Result<ModuleRecord, String> {
         local_exports: Vec::new(),
         indirect_exports: Vec::new(),
         star_exports: Vec::new(),
-        body: Script { body: Vec::new() },
+        body: Script {
+            body: Vec::new(),
+            source: script.source.clone(),
+        },
     };
     for stmt in script.body {
         match stmt {

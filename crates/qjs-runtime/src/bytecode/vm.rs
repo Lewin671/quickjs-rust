@@ -390,6 +390,7 @@ impl<'a> Vm<'a> {
                     lexical_arguments,
                     is_generator,
                     is_async,
+                    source_text,
                 } => {
                     let mut env = self.function_capture_env(&bytecode, &local_names);
                     self.insert_lexical_captures(&mut env, &lexical_captures);
@@ -442,6 +443,7 @@ impl<'a> Vm<'a> {
                         with_stack: self.with_stack.clone(),
                         capture_writeback,
                     });
+                    function.set_source_text(source_text);
                     self.capture_private_environment(&function);
                     if is_generator && is_async {
                         crate::async_generator::wire_async_generator_function_intrinsics(

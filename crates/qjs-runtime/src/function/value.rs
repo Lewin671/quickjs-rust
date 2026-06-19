@@ -127,6 +127,10 @@ pub struct Function {
     /// Lazily populated; combined behind one allocation to keep `Function`
     /// small.
     private_state: Rc<RefCell<crate::private::PrivateState>>,
+    /// Original source text for `Function.prototype.toString` (a slice of the
+    /// compiled script's source), or `None` to use the `[native code]` form.
+    /// Shared across clones; set just after a user function is created.
+    source_text: Rc<RefCell<Option<Rc<str>>>>,
 }
 
 /// Bound function internal slots.
@@ -282,6 +286,7 @@ impl Function {
             sealed: Rc::new(Cell::new(false)),
             frozen: Rc::new(Cell::new(false)),
             internal_prototype: Rc::new(RefCell::new(None)),
+            source_text: Rc::new(RefCell::new(None)),
             private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
         };
         function.define_length_property();
@@ -358,6 +363,7 @@ impl Function {
             sealed: Rc::new(Cell::new(false)),
             frozen: Rc::new(Cell::new(false)),
             internal_prototype: Rc::new(RefCell::new(None)),
+            source_text: Rc::new(RefCell::new(None)),
             private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
         };
         function.define_length_property();
@@ -473,6 +479,7 @@ impl Function {
             sealed: Rc::new(Cell::new(false)),
             frozen: Rc::new(Cell::new(false)),
             internal_prototype: Rc::new(RefCell::new(None)),
+            source_text: Rc::new(RefCell::new(None)),
             private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
         };
         function.define_length_property();
@@ -520,6 +527,7 @@ impl Function {
             sealed: Rc::new(Cell::new(false)),
             frozen: Rc::new(Cell::new(false)),
             internal_prototype: Rc::new(RefCell::new(None)),
+            source_text: Rc::new(RefCell::new(None)),
             private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
         };
         function.define_length_property();
@@ -893,6 +901,17 @@ impl Function {
     /// The raw [[Prototype]] override slot, preserving a function prototype.
     pub(crate) fn internal_prototype_slot(&self) -> Option<Option<Prototype>> {
         self.internal_prototype.borrow().clone()
+    }
+
+    /// Records the function's original source text for `Function.prototype
+    /// .toString`.
+    pub(crate) fn set_source_text(&self, source: Option<Rc<str>>) {
+        *self.source_text.borrow_mut() = source;
+    }
+
+    /// The function's original source text, when retained.
+    pub(crate) fn source_text(&self) -> Option<Rc<str>> {
+        self.source_text.borrow().clone()
     }
 
     pub(crate) fn set_internal_prototype_slot(

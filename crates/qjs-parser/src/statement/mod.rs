@@ -61,7 +61,10 @@ impl Parser {
                 span: reference.span,
             });
         }
-        Ok(Script { body })
+        Ok(Script {
+            body,
+            source: self.source.as_str().into(),
+        })
     }
 
     pub(super) fn statement_list_item(&mut self) -> Result<Stmt, ParseError> {

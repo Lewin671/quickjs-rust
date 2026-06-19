@@ -208,6 +208,9 @@ pub(super) enum Op {
         lexical_arguments: bool,
         is_generator: bool,
         is_async: bool,
+        /// The function's original source text (for `Function.prototype
+        /// .toString`), or `None` to fall back to the `[native code]` form.
+        source_text: Option<Rc<str>>,
     },
     /// Builds a class constructor function object, wires its `prototype` and
     /// `constructor` properties, and installs prototype methods. Pushes the

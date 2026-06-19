@@ -428,6 +428,14 @@ pub(crate) fn native_function_prototype_has_instance(
 pub(crate) fn native_function_prototype_to_string(
     this_value: Value,
 ) -> Result<Value, RuntimeError> {
+    // A user function with retained source returns it verbatim (CR and CRLF
+    // line terminators normalize to LF per the spec note).
+    if let Value::Function(function) = &this_value
+        && let Some(source) = function.source_text()
+    {
+        let normalized = source.replace("\r\n", "\n").replace('\r', "\n");
+        return Ok(Value::String(normalized.into()));
+    }
     let name = match &this_value {
         Value::Function(function) => function.name.clone().unwrap_or_default(),
         // A callable Proxy is an acceptable receiver: unwrap to the underlying
