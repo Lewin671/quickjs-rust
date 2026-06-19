@@ -79,9 +79,13 @@ pub(super) struct ModuleGraph {
 
 impl ModuleGraph {
     pub(super) fn new() -> Self {
+        Self::with_realm(bytecode::new_module_realm())
+    }
+
+    pub(super) fn with_realm(realm: bytecode::ModuleRealm) -> Self {
         Self {
             modules: HashMap::new(),
-            realm: bytecode::new_module_realm(),
+            realm,
             host: None,
             resolver: None,
         }

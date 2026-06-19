@@ -261,10 +261,11 @@ pub fn eval_classified_with_resolver(
         message: error.message,
     })?;
     let bytecode = compile_script_classified(&script).map_err(compile_error_stage)?;
-    let host = module::new_script_module_host(referrer, resolver);
-    bytecode::eval_bytecode_with_module_host(&bytecode, host).map_err(|error| EvalError {
-        kind: EvalErrorKind::Runtime,
-        message: error.message,
+    bytecode::eval_bytecode_with_module_resolver(&bytecode, referrer, resolver).map_err(|error| {
+        EvalError {
+            kind: EvalErrorKind::Runtime,
+            message: error.message,
+        }
     })
 }
 

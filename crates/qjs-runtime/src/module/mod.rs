@@ -18,12 +18,12 @@
 //!
 //! # Environment model
 //!
-//! Each module is evaluated against its own fresh realm (see
-//! [`crate::bytecode::eval_module_body`]): the module's top-level `var`/`let`/
-//! `const`/`function`/`class` bindings live in that realm and never leak to a
-//! shared `globalThis`. Resolved imports are seeded into the importing module's
-//! realm as ordinary module-scope bindings before its body runs, so import
-//! references resolve through the normal global-load path.
+//! Each module graph evaluates against one shared realm: a static module entry
+//! creates a module realm, while script-goal dynamic import reuses the script
+//! realm. The module's top-level `var`/`let`/`const`/`function`/`class`
+//! bindings live in that graph realm. Resolved imports are seeded into the
+//! importing module's realm as ordinary module-scope bindings before its body
+//! runs, so import references resolve through the normal global-load path.
 //!
 //! # Live bindings (current limitation)
 //!
@@ -130,17 +130,18 @@ pub fn eval_module_with_prelude(
 }
 
 /// Builds a dynamic-import host for *script*-goal evaluation: a fresh module
-/// graph (with its own module realm, separate from the script's globals), the
-/// owned `resolver`, and `referrer` as the active referrer key. The returned
-/// handle is installed on the script's environment so a dynamic `import()`
-/// inside the script resolves and loads modules through it.
+/// graph sharing the script's realm, the owned `resolver`, and `referrer` as
+/// the active referrer key. The returned handle is installed on the script's
+/// environment so a dynamic `import()` inside the script resolves and loads
+/// modules through it.
 pub(crate) fn new_script_module_host(
     referrer: &str,
     resolver: Box<dyn ModuleResolver>,
+    realm: crate::bytecode::ModuleRealm,
 ) -> ModuleHostRef {
     use std::{cell::RefCell, rc::Rc};
 
-    let mut graph = link::ModuleGraph::new();
+    let mut graph = link::ModuleGraph::with_realm(realm);
     graph.set_resolver(resolver);
     let graph = Rc::new(RefCell::new(graph));
     let host = ModuleHost::new(Rc::clone(&graph), referrer.to_owned()).into_ref();

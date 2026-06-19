@@ -1,6 +1,9 @@
 //! Module record, linking, evaluation, and namespace tests (T012 S2).
 
-use crate::{EvalErrorKind, MapResolver, Value, eval_module, eval_module_with_prelude};
+use crate::{
+    EvalErrorKind, MapResolver, Value, eval_classified_with_resolver, eval_module,
+    eval_module_with_prelude,
+};
 
 /// Evaluates the module graph rooted at `"main"`, with extra `(key, source)`
 /// modules registered in an in-memory resolver. Returns the root namespace.
@@ -20,6 +23,17 @@ fn export(namespace: &Value, name: &str) -> Value {
             .map(|property| property.value)
             .unwrap_or(Value::Undefined),
         _ => panic!("expected a namespace object"),
+    }
+}
+
+fn settled_fulfillment(value: &Value) -> Option<Value> {
+    if let Value::Object(object) = value {
+        match crate::promise::settled_outcome(object) {
+            Some(Ok(value)) => Some(value),
+            _ => None,
+        }
+    } else {
+        None
     }
 }
 
@@ -423,6 +437,51 @@ fn dynamic_import_in_script_resolves_namespace() {
     )
     .expect("graph evaluates");
     assert_eq!(export_log(&namespace, "log"), "99");
+}
+
+#[test]
+fn dynamic_import_from_script_shares_script_realm() {
+    let mut resolver = MapResolver::new().with(
+        "dep",
+        "globalThis.seenFromDynamicImport = 7;\n\
+         export default null;",
+    );
+    let value = eval_classified_with_resolver(
+        "async function main() {\n\
+           globalThis.seenFromDynamicImport = 0;\n\
+           await import('dep');\n\
+           return globalThis.seenFromDynamicImport;\n\
+         }\n\
+         main();",
+        "main",
+        Box::new(resolver.clone()),
+    )
+    .expect("script evaluates");
+    assert_eq!(settled_fulfillment(&value), Some(Value::Number(7.0)));
+
+    resolver = resolver.with(
+        "once",
+        "globalThis.dynamicImportEvaluationCount = \
+           (globalThis.dynamicImportEvaluationCount || 0) + 1;\n\
+         if (globalThis.dynamicImportEvaluationCount > 1) {\n\
+           throw new Error('evaluated twice');\n\
+         }\n\
+         export default null;",
+    );
+    let value = eval_classified_with_resolver(
+        "async function main() {\n\
+           globalThis.dynamicImportEvaluationCount = 0;\n\
+           await Promise.all([import('once'), import('once')]);\n\
+           await import('once');\n\
+           await import('once');\n\
+           return globalThis.dynamicImportEvaluationCount;\n\
+         }\n\
+         main();",
+        "main",
+        Box::new(resolver),
+    )
+    .expect("script evaluates");
+    assert_eq!(settled_fulfillment(&value), Some(Value::Number(1.0)));
 }
 
 #[test]

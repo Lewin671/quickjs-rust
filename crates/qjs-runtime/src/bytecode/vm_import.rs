@@ -6,19 +6,21 @@
 //! through [`crate::promise::dynamic_import`], which schedules a host load job
 //! that settles the promise as a microtask.
 
-use crate::{RuntimeError, Value, function::CallEnv};
+use crate::{ModuleResolver, RuntimeError, Value, function::CallEnv};
 
 use super::ir::Bytecode;
 use super::vm::Vm;
 
-/// Evaluates compiled script bytecode with a dynamic-import `host` installed on
-/// its environment, draining the promise job queue (including any import jobs)
+/// Evaluates compiled script bytecode with a dynamic-import host installed on
+/// the script realm, draining the promise job queue (including any import jobs)
 /// before returning the completion value.
-pub(super) fn eval_bytecode_with_module_host(
+pub(super) fn eval_bytecode_with_module_resolver(
     bytecode: &Bytecode,
-    host: crate::module::ModuleHostRef,
+    referrer: &str,
+    resolver: Box<dyn ModuleResolver>,
 ) -> Result<Value, RuntimeError> {
     let mut vm = Vm::new(bytecode)?;
+    let host = crate::module::new_script_module_host(referrer, resolver, vm.realm.clone());
     vm.module_host = Some(host);
     let value = vm.run()?;
     vm.drain_promise_jobs()?;

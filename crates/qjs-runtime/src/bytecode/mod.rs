@@ -141,19 +141,20 @@ pub fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> {
     vm::eval_bytecode(bytecode)
 }
 
-/// Evaluates compiled script bytecode with a dynamic-import `host` installed on
+/// Evaluates compiled script bytecode with a dynamic-import host installed on
 /// its environment, so a dynamic `import()` in the script resolves and loads
-/// modules through the host. Drains the promise job queue (including any import
-/// jobs) before returning the completion value.
+/// modules through `resolver`. Drains the promise job queue (including any
+/// import jobs) before returning the completion value.
 ///
 /// # Errors
 ///
 /// Returns runtime failures or malformed bytecode failures.
-pub fn eval_bytecode_with_module_host(
+pub fn eval_bytecode_with_module_resolver(
     bytecode: &Bytecode,
-    host: crate::module::ModuleHostRef,
+    referrer: &str,
+    resolver: Box<dyn crate::ModuleResolver>,
 ) -> Result<Value, RuntimeError> {
-    vm_import::eval_bytecode_with_module_host(bytecode, host)
+    vm_import::eval_bytecode_with_module_resolver(bytecode, referrer, resolver)
 }
 
 /// Script completion paired with its realm's pending microtask queue.
