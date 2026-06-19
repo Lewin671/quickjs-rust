@@ -16,6 +16,10 @@ impl Parser {
     }
 
     pub(crate) fn finish_call_member_chain(&mut self, mut expr: Expr) -> Result<Expr, ParseError> {
+        // Once a chain contains an optional link (`?.`), a tagged template in
+        // the tail position is a SyntaxError: `a?.b`t`` is not allowed, while
+        // `(a?.b)`t`` is (the parentheses start a fresh chain).
+        let mut chain_is_optional = false;
         loop {
             if self.match_kind(&TokenKind::LeftParen) {
                 expr = self.finish_call(expr)?;
@@ -33,11 +37,21 @@ impl Parser {
             }
 
             if self.match_kind(&TokenKind::QuestionDot) {
+                chain_is_optional = true;
                 expr = self.finish_optional_member(expr)?;
                 continue;
             }
 
             if self.at_template_literal() {
+                if chain_is_optional {
+                    return Err(ParseError {
+                        message: "template literal cannot appear in an optional chain".to_owned(),
+                        span: self
+                            .peek()
+                            .expect("parser should always have eof token")
+                            .span,
+                    });
+                }
                 expr = self.finish_tagged_template_literal(expr)?;
                 continue;
             }

@@ -448,3 +448,15 @@ fn rejects_reserved_object_assignment_shorthand_targets() {
     parse_script("var target; ({ break: target } = { break: 42 });")
         .expect("reserved words remain valid explicit property names");
 }
+
+#[test]
+fn rejects_tagged_template_in_optional_chain() {
+    // A tagged template in the tail of an optional chain is a SyntaxError.
+    assert!(parse_script("a?.b`t`;").is_err());
+    assert!(parse_script("a?.b.c`t`;").is_err());
+    assert!(parse_script("a?.b()`t`;").is_err());
+    // Parentheses start a fresh chain, so the template is allowed; a chain with
+    // no optional link is unaffected.
+    assert!(parse_script("(a?.b)`t`;").is_ok());
+    assert!(parse_script("a.b`t`;").is_ok());
+}
