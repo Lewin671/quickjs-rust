@@ -185,3 +185,23 @@ fn super_property_logical_assignment_short_circuits() {
         Ok(Value::Number(7.0))
     );
 }
+
+#[test]
+fn computed_super_assignment_key_coercion_error_is_catchable() {
+    // A throwing ToPropertyKey on a computed super target must surface as a
+    // catchable JS exception, not an uncatchable VM fault.
+    assert_eq!(
+        eval(
+            "class A {} \
+             class B extends A { \
+               run() { \
+                 var key = { toString() { throw new TypeError('boom'); } }; \
+                 try { super[key]; return 'no throw'; } \
+                 catch (e) { return e.name; } \
+               } \
+             } \
+             new B().run();"
+        ),
+        Ok(Value::String("TypeError".to_owned().into()))
+    );
+}

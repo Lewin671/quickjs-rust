@@ -489,10 +489,12 @@ impl<'a> Vm<'a> {
                 }
                 Op::SuperGetComputed => {
                     let key_value = self.pop()?;
-                    let key = self.coerce_property_key(key_value)?;
-                    let result = self.super_get(&key);
-                    if let Some(value) = self.handle_runtime_result(result)? {
-                        self.stack.push(value);
+                    let key = self.coerce_property_key(key_value);
+                    if let Some(key) = self.handle_runtime_result(key)? {
+                        let result = self.super_get(&key);
+                        if let Some(value) = self.handle_runtime_result(result)? {
+                            self.stack.push(value);
+                        }
                     }
                 }
                 Op::SuperSet { key, is_strict } => {
@@ -504,10 +506,12 @@ impl<'a> Vm<'a> {
                 Op::SuperSetComputed { is_strict } => {
                     let value = self.pop()?;
                     let key_value = self.pop()?;
-                    let key = self.coerce_property_key(key_value)?;
-                    let result = self.super_set_value(key, value, is_strict);
-                    if let Some(value) = self.handle_runtime_result(result)? {
-                        self.stack.push(value);
+                    let key = self.coerce_property_key(key_value);
+                    if let Some(key) = self.handle_runtime_result(key)? {
+                        let result = self.super_set_value(key, value, is_strict);
+                        if let Some(value) = self.handle_runtime_result(result)? {
+                            self.stack.push(value);
+                        }
                     }
                 }
                 Op::SuperMethod { key } => {
@@ -516,9 +520,11 @@ impl<'a> Vm<'a> {
                 }
                 Op::SuperMethodComputed => {
                     let key_value = self.pop()?;
-                    let key = self.coerce_property_key(key_value)?;
-                    let result = self.super_method(key);
-                    self.handle_runtime_result(result)?;
+                    let key = self.coerce_property_key(key_value);
+                    if let Some(key) = self.handle_runtime_result(key)? {
+                        let result = self.super_method(key);
+                        self.handle_runtime_result(result)?;
+                    }
                 }
                 Op::CallResolved(argc) => self.call_resolved(argc)?,
                 Op::CallResolvedSpread => self.call_resolved_spread()?,
