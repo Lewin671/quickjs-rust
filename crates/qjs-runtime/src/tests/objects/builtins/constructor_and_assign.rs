@@ -108,3 +108,20 @@ fn evaluates_object_constructor_and_assign() {
         Ok(Value::Number(2.0))
     );
 }
+
+#[test]
+fn object_constructor_subclass_ignores_value_argument() {
+    // new Subclass(value) ignores `value` and uses NewTarget.prototype.
+    assert_eq!(
+        eval(
+            "class O extends Object {} var o = new O({ a: 1 }); o.a === undefined && Object.getPrototypeOf(o) === O.prototype;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "class O extends Object {} var o = Reflect.construct(Object, [{ b: 2 }], O); o.b === undefined && Object.getPrototypeOf(o) === O.prototype;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}

@@ -57,6 +57,16 @@ pub(crate) fn native_object(
     is_construct: bool,
     env: &CallEnv,
 ) -> Result<Value, RuntimeError> {
+    // Object([value]) step 1: when NewTarget is a subclass (not the active
+    // Object constructor), return OrdinaryCreateFromConstructor(NewTarget,
+    // "%Object.prototype%") and ignore `value`. The receiver was already
+    // allocated from NewTarget.prototype, so return it as-is.
+    if is_construct
+        && let Some(Value::Function(new_target)) = env.get(crate::NEW_TARGET_BINDING)
+        && !new_target.ptr_eq(function)
+    {
+        return Ok(this_value);
+    }
     match argument_values.first() {
         Some(Value::Object(object)) if symbol::is_symbol_primitive(object) => {
             Ok(symbol::boxed_symbol(object, env))
