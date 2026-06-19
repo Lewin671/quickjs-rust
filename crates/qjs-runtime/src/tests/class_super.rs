@@ -1,6 +1,29 @@
 use crate::{Value, eval};
 
 #[test]
+fn super_property_read_on_null_base_throws_type_error() {
+    // GetSuperBase requires the home object's [[Prototype]] be object-coercible,
+    // so reading `super.x` when it is null throws a TypeError (matching the
+    // existing assignment path).
+    assert_eq!(
+        eval(
+            "var o = { __proto__: null, m() { return super.x; } }; \
+             var caught = false; \
+             try { o.m(); } catch (error) { caught = error instanceof TypeError; } \
+             caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    // A non-null super base still reads normally.
+    assert_eq!(
+        eval(
+            "class A { foo() { return 7; } } class B extends A { bar() { return super.foo(); } } new B().bar();"
+        ),
+        Ok(Value::Number(7.0))
+    );
+}
+
+#[test]
 fn super_property_assignment_to_null_base_evaluates_rhs_before_type_error() {
     assert_eq!(
         eval(

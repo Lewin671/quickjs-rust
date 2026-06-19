@@ -596,6 +596,16 @@ impl Vm<'_> {
     pub(super) fn super_get(&mut self, key: &PropertyKey) -> Result<Value, RuntimeError> {
         let receiver = self.current_this()?;
         let lookup_base = self.super_lookup_base()?;
+        // GetSuperBase yields the home object's [[Prototype]]; reading a property
+        // off it requires RequireObjectCoercible, so a `null` super base (e.g.
+        // `extends null` or a null-proto home object) throws a TypeError.
+        if matches!(lookup_base, Value::Null | Value::Undefined) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: cannot read property of null or undefined super base"
+                    .to_owned(),
+            });
+        }
         let mut env = self.current_env();
         let value = property_value_key_with_receiver(lookup_base, key, receiver, &mut env)?;
         self.apply_env(env);
