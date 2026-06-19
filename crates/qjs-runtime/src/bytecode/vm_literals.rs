@@ -45,9 +45,16 @@ impl Vm<'_> {
                 ArrayElementKind::Spread => {
                     let value = next_value.next().ok_or_else(stack_underflow)?;
                     let mut env = self.current_env();
-                    let spread_values = iterable_values_with_env(value, "array spread", &mut env)?;
+                    let result = iterable_values_with_env(value, "array spread", &mut env);
                     self.apply_env(env);
-                    values.extend(spread_values);
+                    // Route an iterator error through the try-handler stack so a
+                    // throw during `[...iterable]` is catchable, instead of
+                    // escaping the VM loop. On a handled throw, stop building the
+                    // array; the catch handler resets the stack.
+                    match self.handle_runtime_result(result)? {
+                        Some(spread_values) => values.extend(spread_values),
+                        None => return Ok(()),
+                    }
                 }
             }
         }
@@ -145,8 +152,13 @@ impl Vm<'_> {
         }
         let object = self.object_literal_target()?;
         let mut env = self.current_env();
-        let entries = object::enumerable_property_entries_with_symbols(source, &mut env)?;
+        let result = object::enumerable_property_entries_with_symbols(source, &mut env);
         self.apply_env(env);
+        // A getter invoked while gathering `{...source}` properties may throw;
+        // route it through the try-handler stack so it is catchable.
+        let Some(entries) = self.handle_runtime_result(result)? else {
+            return Ok(());
+        };
         for (key, value) in entries {
             define_object_literal_property(
                 &object,

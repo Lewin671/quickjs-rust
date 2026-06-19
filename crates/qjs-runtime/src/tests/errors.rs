@@ -459,3 +459,36 @@ fn method_call_on_null_or_undefined_is_catchable_type_error() {
         Value::String("Cannot read properties of undefined (reading 'baz')".to_owned())
     );
 }
+
+#[test]
+fn spread_iterator_errors_are_catchable_at_top_level() {
+    // A throw raised while evaluating a spread must unwind through an enclosing
+    // try/catch in the global script frame, not escape the VM loop. Covers array
+    // literal, call, new, and object spread.
+    let throwing_iterable = "var bad = { [Symbol.iterator]() { return { next() { throw new TypeError('boom'); } }; } };";
+    assert_eq!(
+        eval(&format!(
+            "{throwing_iterable} var c = ''; try {{ [...bad]; }} catch (e) {{ c = e.name; }} c;"
+        )),
+        Ok(Value::String("TypeError".to_owned()))
+    );
+    assert_eq!(
+        eval(&format!(
+            "{throwing_iterable} var c = ''; try {{ Math.max(...bad); }} catch (e) {{ c = e.name; }} c;"
+        )),
+        Ok(Value::String("TypeError".to_owned()))
+    );
+    assert_eq!(
+        eval(&format!(
+            "{throwing_iterable} var c = ''; try {{ new (class {{}})(...bad); }} catch (e) {{ c = e.name; }} c;"
+        )),
+        Ok(Value::String("TypeError".to_owned()))
+    );
+    // Object spread invokes getters; a throwing getter is catchable too.
+    assert_eq!(
+        eval(
+            "var c = ''; try { var o = { ...{ get x() { throw new TypeError('g'); } } }; } catch (e) { c = e.name; } c;"
+        ),
+        Ok(Value::String("TypeError".to_owned()))
+    );
+}
