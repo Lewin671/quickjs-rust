@@ -1037,3 +1037,32 @@ fn evaluates_catch_parameter_patterns() {
         Ok(Value::String("rethrown".to_owned().into()))
     );
 }
+
+#[test]
+fn finally_override_supersedes_pending_completion() {
+    // An inner `finally { throw }` overriding the exception it interrupted must
+    // not leave the original exception pending to be re-raised by an outer
+    // finally; the catch sees the override and execution continues.
+    assert_eq!(
+        eval(
+            "var log = [];
+             try { try { throw 'ex2'; } finally { throw 'ex3'; } }
+             catch (e) { log.push('caught:' + e); }
+             finally { log.push('finally'); }
+             log.push('after'); log.join(',');"
+        ),
+        Ok(Value::String("caught:ex3,finally,after".to_owned().into()))
+    );
+    // A finally-throw overriding a `break` does not corrupt the value stack.
+    assert_eq!(
+        eval(
+            "var r = [];
+             for (var i = 0; i < 2; i++) {
+               try { try { r.push('t'); break; } finally { throw 'f'; } }
+               catch (e) { r.push('c' + e); }
+             }
+             r.join(',');"
+        ),
+        Ok(Value::String("t,cf,t,cf".to_owned().into()))
+    );
+}

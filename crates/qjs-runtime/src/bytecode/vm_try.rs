@@ -42,6 +42,13 @@ impl Vm<'_> {
     }
 
     pub(super) fn throw_value(&mut self, value: Value) -> Result<(), RuntimeError> {
+        // A fresh throw supersedes any abrupt completion deferred by an
+        // in-flight finally (e.g. an inner `finally { throw }` overriding the
+        // exception/break/return it interrupted), so the stale pending
+        // completion must not be re-raised later by an enclosing EndFinally.
+        self.pending_throw = None;
+        self.pending_return = None;
+        self.pending_jump = None;
         if let Some(frame) = self.try_stack.last_mut() {
             self.stack.truncate(frame.stack_depth);
             let with_depth = frame.with_depth;
