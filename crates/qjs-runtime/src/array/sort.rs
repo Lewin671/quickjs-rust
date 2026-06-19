@@ -81,7 +81,7 @@ fn sorted_array_values(
         }
     }
 
-    insertion_sort(&mut defined, comparator, env)?;
+    merge_sort(&mut defined, comparator, env)?;
     defined.extend(std::iter::repeat_n(Value::Undefined, undefined_count));
     Ok(defined)
 }
@@ -132,20 +132,72 @@ fn array_sort_comparator(
     }
 }
 
-fn insertion_sort(
-    values: &mut [Value],
+/// Stable, O(n log n)-comparison bottom-up merge sort.
+///
+/// QuickJS-NG and the ECMAScript specification both require `Array.prototype.sort`
+/// to be stable. A merge sort keeps the comparator-call count at `O(n log n)`,
+/// which prevents harness-heavy Test262 cases (e.g. the 513-element stability
+/// fixture) from timing out the way the previous `O(n^2)` insertion sort did.
+fn merge_sort(
+    values: &mut Vec<Value>,
     comparator: Option<&Function>,
     env: &mut CallEnv,
 ) -> Result<(), RuntimeError> {
-    for index in 1..values.len() {
-        let mut candidate = index;
-        while candidate > 0
-            && compare_values(&values[candidate], &values[candidate - 1], comparator, env)?
-                == Ordering::Less
-        {
-            values.swap(candidate, candidate - 1);
-            candidate -= 1;
+    let len = values.len();
+    if len <= 1 {
+        return Ok(());
+    }
+    let mut buffer: Vec<Value> = values.clone();
+    let mut width = 1;
+    while width < len {
+        let mut start = 0;
+        while start < len {
+            let left = start;
+            let mid = (start + width).min(len);
+            let right = (start + 2 * width).min(len);
+            merge_runs(values, &mut buffer, left, mid, right, comparator, env)?;
+            start += 2 * width;
         }
+        std::mem::swap(values, &mut buffer);
+        width *= 2;
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn merge_runs(
+    src: &[Value],
+    dst: &mut [Value],
+    left: usize,
+    mid: usize,
+    right: usize,
+    comparator: Option<&Function>,
+    env: &mut CallEnv,
+) -> Result<(), RuntimeError> {
+    let mut i = left;
+    let mut j = mid;
+    let mut k = left;
+    while i < mid && j < right {
+        // Stability: take from the left run whenever it does not compare greater,
+        // so equal elements keep their original relative order.
+        if compare_values(&src[i], &src[j], comparator, env)? == Ordering::Greater {
+            dst[k] = src[j].clone();
+            j += 1;
+        } else {
+            dst[k] = src[i].clone();
+            i += 1;
+        }
+        k += 1;
+    }
+    while i < mid {
+        dst[k] = src[i].clone();
+        i += 1;
+        k += 1;
+    }
+    while j < right {
+        dst[k] = src[j].clone();
+        j += 1;
+        k += 1;
     }
     Ok(())
 }

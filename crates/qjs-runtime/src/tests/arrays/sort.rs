@@ -36,7 +36,11 @@ fn evaluates_array_sort_with_compare_function() {
         eval(
             "let seen = ''; [2, 1].sort(function(left, right) { seen = seen + left + ':' + right; return left - right; }); seen;"
         ),
-        Ok(Value::String("1:2".to_owned()))
+        // The stable merge sort compares the left run element against the right
+        // run element, so the adjacent pair [2, 1] is passed as (2, 1). The
+        // comparator argument order is implementation-defined; only the sorted
+        // result and stability are observable per spec.
+        Ok(Value::String("2:1".to_owned()))
     );
 }
 
