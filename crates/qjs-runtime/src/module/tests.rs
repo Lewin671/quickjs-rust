@@ -917,6 +917,33 @@ fn dynamic_import_from_script_shares_script_realm() {
 }
 
 #[test]
+fn static_self_imports_evaluate_module_once() {
+    let source = "globalThis.staticSelfImportCount = \
+                    (globalThis.staticSelfImportCount || 0) + 1;\n\
+                  if (globalThis.staticSelfImportCount > 1) {\n\
+                    throw new Error('evaluated twice');\n\
+                  }\n\
+                  import {} from \"main\";\n\
+                  import \"main\";\n\
+                  import * as ns1 from \"main\";\n\
+                  import dflt1 from \"main\";\n\
+                  export {} from \"main\";\n\
+                  import dflt2, {} from \"main\";\n\
+                  export * from \"main\";\n\
+                  export * as ns2 from \"main\";\n\
+                  import dflt3, * as ns3 from \"main\";\n\
+                  export default null;\n\
+                  export const count = globalThis.staticSelfImportCount;";
+    let namespace = eval_module(
+        source,
+        "main",
+        Box::new(MapResolver::new().with("main", source)),
+    )
+    .expect("self-import graph evaluates");
+    assert_eq!(export(&namespace, "count"), Value::Number(1.0));
+}
+
+#[test]
 fn import_meta_is_null_prototype_object_in_modules() {
     let namespace = run(
         "export const proto = Object.getPrototypeOf(import.meta);\n\

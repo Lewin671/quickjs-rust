@@ -11,7 +11,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{ModuleNamespaceBindings, RuntimeError, Value, bytecode};
 
-use super::namespace::build_namespace;
+use super::namespace::{empty_namespace, populate_namespace};
 use super::records::{ImportName, ModuleRecord, NAMESPACE_BINDING, build_record};
 use super::resolver::ModuleResolver;
 
@@ -571,6 +571,13 @@ impl ModuleGraph {
         if let Some(namespace) = &self.modules[key].namespace {
             return namespace.clone();
         }
+        let env = crate::CallEnv::new(self.realm.clone());
+        let live_bindings =
+            ModuleNamespaceBindings::new(self.modules[key].live_lexical.clone(), HashMap::new());
+        let namespace = empty_namespace(live_bindings);
+        self.modules.get_mut(key).expect("module exists").namespace =
+            Some(Value::Object(namespace.clone()));
+
         let names = self.export_names(key, &mut Vec::new());
         let mut bindings = Vec::new();
         let mut aliases = HashMap::new();
@@ -597,12 +604,11 @@ impl ModuleGraph {
                 }
             }
         }
-        let env = crate::CallEnv::new(self.realm.clone());
         let live_bindings =
             ModuleNamespaceBindings::new(self.modules[key].live_lexical.clone(), aliases);
-        let namespace = build_namespace(bindings, live_bindings, &env);
-        self.modules.get_mut(key).expect("module exists").namespace = Some(namespace.clone());
-        namespace
+        namespace.set_module_namespace_bindings(live_bindings);
+        populate_namespace(&namespace, &mut bindings, &env);
+        Value::Object(namespace)
     }
 
     /// The exported names of `key` (GetExportedNames), including names
