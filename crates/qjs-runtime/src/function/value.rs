@@ -8,6 +8,7 @@ use std::{
 use qjs_ast::{FunctionParams, Stmt};
 
 use crate::CallEnv;
+use crate::function::ModuleImports;
 use crate::module::ModuleHostRef;
 use crate::{
     Bytecode, NativeFunction, ObjectRef, Property, PropertyKey, Prototype, Value,
@@ -75,6 +76,7 @@ pub struct Function {
     pub env: HashMap<String, Value>,
     pub(crate) captured_env: Rc<RefCell<HashMap<String, Value>>>,
     pub(crate) module_host: Option<ModuleHostRef>,
+    pub(crate) module_imports: ModuleImports,
     pub(crate) with_stack: Vec<Value>,
     pub(crate) capture_writeback: Option<CaptureWriteback>,
     pub(crate) local_names: Vec<String>,
@@ -149,6 +151,7 @@ pub(crate) struct CompiledUserFunction {
     pub(crate) params: Rc<FunctionParams>,
     pub(crate) env: HashMap<String, Value>,
     pub(crate) module_host: Option<ModuleHostRef>,
+    pub(crate) module_imports: ModuleImports,
     pub(crate) bytecode: Rc<Bytecode>,
     pub(crate) local_names: Vec<String>,
     pub(crate) constructable: bool,
@@ -265,6 +268,7 @@ impl Function {
             env,
             captured_env,
             module_host: None,
+            module_imports: HashMap::new(),
             with_stack: Vec::new(),
             capture_writeback: None,
             local_names,
@@ -316,6 +320,7 @@ impl Function {
             params,
             env,
             module_host,
+            module_imports,
             bytecode,
             local_names,
             constructable,
@@ -344,6 +349,7 @@ impl Function {
             env,
             captured_env,
             module_host,
+            module_imports,
             with_stack,
             capture_writeback,
             local_names,
@@ -457,6 +463,7 @@ impl Function {
             env: HashMap::new(),
             captured_env: Rc::new(RefCell::new(HashMap::new())),
             module_host: None,
+            module_imports: HashMap::new(),
             with_stack: Vec::new(),
             capture_writeback: None,
             local_names: Vec::new(),
@@ -510,6 +517,7 @@ impl Function {
             env,
             captured_env,
             module_host: None,
+            module_imports: HashMap::new(),
             with_stack: Vec::new(),
             capture_writeback: None,
             local_names: Vec::new(),

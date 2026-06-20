@@ -714,6 +714,7 @@ fn function_env(
     if let Some(host) = function.module_host.clone() {
         frame_env.set_module_host(host);
     }
+    frame_env.set_module_imports(function.module_imports.clone());
     frame_env.set_private_environment(function_private_environment(function));
     if let Some(writeback) = &function.capture_writeback {
         frame_env.set_captured_binding_source_env(Rc::clone(&writeback.target));

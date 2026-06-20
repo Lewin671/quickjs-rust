@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use qjs_ast::Stmt;
 use qjs_parser::parse_dynamic_function_script;
@@ -192,6 +192,7 @@ fn build_dynamic_function(
         params: Rc::new(params),
         env: env_snapshot.clone(),
         module_host: None,
+        module_imports: HashMap::new(),
         bytecode: Rc::new(bytecode),
         local_names,
         constructable: false,

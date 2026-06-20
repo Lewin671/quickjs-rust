@@ -27,6 +27,7 @@ use crate::{Value, private::PrivateEnvironment};
 
 /// The shared realm binding table: intrinsics plus the script's true globals.
 pub(crate) type Realm = Rc<RefCell<HashMap<String, Value>>>;
+pub(crate) type ModuleImports = HashMap<String, (Realm, String)>;
 
 /// A two-layer environment view: a shared realm cell plus this frame's locals.
 ///
@@ -60,7 +61,7 @@ pub(crate) struct CallEnv {
     /// Live module imports keyed by this module's local import binding name.
     /// Each entry points at the exporting module's shared lexical export cell
     /// and the local binding name that backs that export.
-    module_imports: HashMap<String, (Realm, String)>,
+    module_imports: ModuleImports,
 }
 
 impl std::fmt::Debug for CallEnv {
@@ -124,6 +125,18 @@ impl CallEnv {
     pub(crate) fn module_import_value(&self, local_name: &str) -> Option<Value> {
         let (bindings, exported_local_name) = self.module_imports.get(local_name)?;
         bindings.borrow().get(exported_local_name).cloned()
+    }
+
+    pub(crate) fn has_module_import(&self, local_name: &str) -> bool {
+        self.module_imports.contains_key(local_name)
+    }
+
+    pub(crate) fn module_imports(&self) -> ModuleImports {
+        self.module_imports.clone()
+    }
+
+    pub(crate) fn set_module_imports(&mut self, imports: ModuleImports) {
+        self.module_imports = imports;
     }
 
     /// Builds a standalone environment over a fresh, empty realm. Used by the

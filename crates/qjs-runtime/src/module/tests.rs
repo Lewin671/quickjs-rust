@@ -104,6 +104,56 @@ fn default_import_tracks_named_default_function_binding_updates() {
 }
 
 #[test]
+fn typeof_imported_const_observes_live_tdz() {
+    let source = "let caught = false;\n\
+        try { typeof y; } catch (error) { caught = error instanceof ReferenceError; }\n\
+        import { x as y } from \"main\";\n\
+        export const x = 23;\n\
+        export const done = caught;";
+    let namespace = eval_module(
+        source,
+        "main",
+        Box::new(MapResolver::new().with("main", source)),
+    )
+    .expect("module evaluates");
+    assert_eq!(export(&namespace, "done"), Value::Boolean(true));
+}
+
+#[test]
+fn callback_typeof_imported_const_observes_live_tdz() {
+    let source = "let caught = false;\n\
+        function probe() { typeof y; }\n\
+        try { probe(); } catch (error) { caught = error instanceof ReferenceError; }\n\
+        import { x as y } from \"main\";\n\
+        export const x = 23;\n\
+        export const done = caught;";
+    let namespace = eval_module(
+        source,
+        "main",
+        Box::new(MapResolver::new().with("main", source)),
+    )
+    .expect("module evaluates");
+    assert_eq!(export(&namespace, "done"), Value::Boolean(true));
+}
+
+#[test]
+fn callback_assignment_to_import_binding_is_rejected() {
+    let source = "let caught = false;\n\
+        function probe() { f2 = null; }\n\
+        import { f as f2 } from \"main\";\n\
+        export function f() { return 23; }\n\
+        try { probe(); } catch (error) { caught = error instanceof TypeError; }\n\
+        export const done = caught && f2() === 23;";
+    let namespace = eval_module(
+        source,
+        "main",
+        Box::new(MapResolver::new().with("main", source)),
+    )
+    .expect("module evaluates");
+    assert_eq!(export(&namespace, "done"), Value::Boolean(true));
+}
+
+#[test]
 fn anonymous_default_class_gets_default_name_in_static_initializer() {
     let namespace = run(
         "var className;\n\

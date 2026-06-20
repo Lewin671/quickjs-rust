@@ -229,6 +229,12 @@ impl Vm<'_> {
         name: String,
         value: Value,
     ) -> Result<(), RuntimeError> {
+        if self.env.has_module_import(&name) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: assignment to constant variable".to_owned(),
+            });
+        }
         // A caller-scope binding carried in this frame's locals layer is written
         // there (and propagated back to the caller on return); only a true realm
         // global goes to the shared cell.
@@ -321,6 +327,12 @@ impl Vm<'_> {
         name: String,
         value: Value,
     ) -> Result<(), RuntimeError> {
+        if self.env.has_module_import(&name) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: assignment to constant variable".to_owned(),
+            });
+        }
         if let Some(slot) = self.bytecode.local_slot(&name)
             && let Some(local) = self.locals.get_mut(slot)
             && local.is_some()

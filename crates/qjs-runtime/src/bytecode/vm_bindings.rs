@@ -536,7 +536,19 @@ impl Vm<'_> {
         }
         let value = match slot {
             Some(slot) => self.load_local(slot)?,
-            None => self.env.get(name).unwrap_or(Value::Undefined),
+            None => {
+                if let Some(value) = self.env.module_import_value(name) {
+                    if value.is_uninitialized_lexical_marker() {
+                        return Err(RuntimeError {
+                            thrown: None,
+                            message: format!("ReferenceError: undefined identifier `{name}`"),
+                        });
+                    }
+                    value
+                } else {
+                    self.env.get(name).unwrap_or(Value::Undefined)
+                }
+            }
         };
         let value = if matches!(
             &value,

@@ -25,7 +25,7 @@ pub(crate) use call::{
     call_function, construct_function, ensure_constructor, initialize_instance_fields,
 };
 #[allow(unused_imports)]
-pub(crate) use env::{CallEnv, Realm};
+pub(crate) use env::{CallEnv, ModuleImports, Realm};
 pub(crate) use install::install_function;
 pub(crate) use local_names::{
     collect_function_local_names, is_internal_binding_name, parameter_argument_binding_name,

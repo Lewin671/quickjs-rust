@@ -283,16 +283,33 @@ impl<'a> Vm<'a> {
                     self.handle_runtime_result(result)?;
                 }
                 Op::TypeofGlobal(name) => {
-                    let value = self.env.get(&name).unwrap_or(Value::Undefined);
-                    let value = if matches!(
-                        &value,
-                        Value::Function(function) if function.is_uninitialized_lexical_marker()
-                    ) {
-                        Value::Undefined
-                    } else {
-                        value
-                    };
-                    self.stack.push(Value::String(typeof_value(value).into()));
+                    let result: Result<Value, RuntimeError> = (|| {
+                        let value = if let Some(value) = self.env.module_import_value(&name) {
+                            if value.is_uninitialized_lexical_marker() {
+                                return Err(RuntimeError {
+                                    thrown: None,
+                                    message: format!(
+                                        "ReferenceError: undefined identifier `{name}`"
+                                    ),
+                                });
+                            }
+                            value
+                        } else {
+                            self.env.get(&name).unwrap_or(Value::Undefined)
+                        };
+                        let value = if matches!(
+                            &value,
+                            Value::Function(function) if function.is_uninitialized_lexical_marker()
+                        ) {
+                            Value::Undefined
+                        } else {
+                            value
+                        };
+                        Ok(Value::String(typeof_value(value).into()))
+                    })();
+                    if let Some(value) = self.handle_runtime_result(result)? {
+                        self.stack.push(value);
+                    }
                 }
                 op @ (Op::EnterWith
                 | Op::ExitWith
@@ -430,6 +447,7 @@ impl<'a> Vm<'a> {
                         params: Rc::new(params),
                         env,
                         module_host: self.module_host.clone(),
+                        module_imports: self.env.module_imports(),
                         bytecode,
                         local_names,
                         constructable,
