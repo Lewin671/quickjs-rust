@@ -313,6 +313,26 @@ fn mutual_cycle_with_hoisted_functions() {
 }
 
 #[test]
+fn dependency_can_call_root_hoisted_function_before_root_body() {
+    let main = "import \"a\";\n\
+                export { observed } from \"a\";\n\
+                export function check(value) { return value + 1; }";
+    let namespace = run(
+        main,
+        &[
+            (
+                "a",
+                "import { check } from \"main\";\n\
+             export const observed = check(2);",
+            ),
+            ("main", main),
+        ],
+    )
+    .expect("cyclic graph evaluates");
+    assert_eq!(export(&namespace, "observed"), Value::Number(3.0));
+}
+
+#[test]
 fn star_export_aggregation() {
     let namespace = run(
         "import * as ns from \"agg\";\n\

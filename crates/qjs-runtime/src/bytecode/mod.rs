@@ -242,6 +242,10 @@ pub(crate) fn compile_module(script: &Script) -> Result<Bytecode, RuntimeError> 
     compiler::compile_module(script)
 }
 
+pub(crate) fn compile_module_function_hoists(script: &Script) -> Result<Bytecode, RuntimeError> {
+    compiler::compile_module_function_hoists(script)
+}
+
 /// Compiles and evaluates a prelude *script* against the shared graph realm
 /// before any module body runs, so its top-level bindings are visible to every
 /// module. See [`vm_module::eval_prelude_script`].
@@ -273,6 +277,15 @@ pub(crate) fn eval_module_body(
     drain: bool,
 ) -> Result<ModuleEvaluation, RuntimeError> {
     vm_module::eval_module_body(bytecode, realm, imports, host, live_exports, drain)
+}
+
+pub(crate) fn eval_module_function_hoists(
+    bytecode: &Bytecode,
+    realm: &ModuleRealm,
+    host: Option<crate::module::ModuleHostRef>,
+    live_exports: ModuleLiveExports,
+) -> Result<(), RuntimeError> {
+    vm_module::eval_module_function_hoists(bytecode, realm, host, live_exports)
 }
 
 pub(crate) fn seed_module_live_bindings(bytecode: &Bytecode, live_exports: &ModuleLiveExports) {

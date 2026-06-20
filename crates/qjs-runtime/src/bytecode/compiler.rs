@@ -164,6 +164,30 @@ pub(super) fn compile_module(script: &Script) -> Result<Bytecode, RuntimeError> 
     Ok(bytecode)
 }
 
+pub(super) fn compile_module_function_hoists(script: &Script) -> Result<Bytecode, RuntimeError> {
+    let mut compiler = Compiler {
+        strict: true,
+        global_scope: false,
+        ..Compiler::default()
+    };
+    compiler.source = script.source.clone();
+    compiler.collect_hoisted_locals(&script.body, false);
+    compiler.predeclare_current_scope_lexicals(&script.body);
+    let blocked = lexical_declared_names(&script.body);
+    compiler.with_annex_b_blocked_function_names(&blocked, |compiler| {
+        compiler.compile_hoisted_function_decls(&script.body)
+    })?;
+    compiler.code.push(Op::Return);
+    Ok(Bytecode::with_scope_global_lexical_names_and_strict(
+        std::mem::take(&mut compiler.constants),
+        std::mem::take(&mut compiler.locals),
+        std::mem::take(&mut compiler.code),
+        false,
+        blocked,
+        compiler.strict,
+    ))
+}
+
 pub(super) fn compile_function_body(
     params: &FunctionParams,
     body: &[Stmt],

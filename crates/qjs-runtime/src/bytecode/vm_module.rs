@@ -113,6 +113,30 @@ pub(super) fn eval_module_body(
     })
 }
 
+pub(super) fn eval_module_function_hoists(
+    bytecode: &Bytecode,
+    realm: &Realm,
+    host: Option<crate::module::ModuleHostRef>,
+    live_exports: ModuleLiveExports,
+) -> Result<(), RuntimeError> {
+    let mut env = CallEnv::new(Rc::clone(realm));
+    if let Some(host) = host {
+        env.set_module_host(host);
+    }
+    for import in live_exports.imports {
+        env.set_module_import(import.local_name, import.bindings, import.binding_name);
+    }
+    seed_live_bindings(
+        &live_exports.bindings,
+        bytecode,
+        live_exports.names,
+        live_exports.seed_tdz_markers,
+    );
+    let mut vm = Vm::new_with_globals_and_captures(bytecode, env, live_exports.bindings);
+    vm.run()?;
+    Ok(())
+}
+
 /// Evaluates a module body that contains top-level `await`. The body is staged
 /// as a `SuspendedStart` async context and driven to completion, draining the
 /// realm job queue so each `await` resumes and the module settles before its

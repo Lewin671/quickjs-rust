@@ -57,6 +57,7 @@ enum Status {
 struct Module {
     record: ModuleRecord,
     status: Status,
+    function_hoists_instantiated: bool,
     /// Resolved canonical key per requested specifier.
     resolved_requests: HashMap<String, String>,
     /// The module's exported binding values, populated after evaluation:
@@ -217,6 +218,7 @@ impl ModuleGraph {
             Module {
                 record,
                 status: Status::Unlinked,
+                function_hoists_instantiated: false,
                 resolved_requests: HashMap::new(),
                 exports: HashMap::new(),
                 live_lexical: Rc::new(RefCell::new(HashMap::new())),
@@ -371,6 +373,10 @@ impl ModuleGraph {
             _ => {}
         }
         self.set_status(key, Status::Evaluating);
+        if let Err(error) = self.instantiate_function_hoists(key) {
+            self.set_status(key, Status::Linked);
+            return Err(error);
+        }
         let deps = self.dependency_keys(key);
         for dep in deps {
             if let Err(error) = self.evaluate_with_drain(&dep, drain) {
@@ -383,6 +389,41 @@ impl ModuleGraph {
             return Err(error);
         }
         self.set_status(key, Status::Evaluated);
+        Ok(())
+    }
+
+    fn instantiate_function_hoists(&mut self, key: &str) -> Result<(), RuntimeError> {
+        if self.modules[key].function_hoists_instantiated {
+            return Ok(());
+        }
+        let compiled = {
+            let module = &self.modules[key];
+            bytecode::compile_module_function_hoists(&module.record.body)?
+        };
+        let live_names: Vec<String> = self.modules[key]
+            .record
+            .local_exports
+            .iter()
+            .map(|export| export.local_name.clone())
+            .collect();
+        let live_bindings = self.modules[key].live_lexical.clone();
+        let seed_tdz_markers = self.needs_module_live_tdz_seed(key);
+        let live_imports = self.import_live_bindings(key);
+        let live_exports = bytecode::ModuleLiveExports {
+            names: live_names,
+            bindings: live_bindings,
+            seed_tdz_markers,
+            imports: live_imports,
+        };
+        let host = self
+            .host_graph
+            .as_ref()
+            .map(|graph| super::host::ModuleHost::new(graph.clone(), key.to_owned()).into_ref());
+        bytecode::eval_module_function_hoists(&compiled, &self.realm, host, live_exports)?;
+        self.modules
+            .get_mut(key)
+            .expect("module exists")
+            .function_hoists_instantiated = true;
         Ok(())
     }
 
