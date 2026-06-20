@@ -490,6 +490,7 @@ impl Compiler {
             hoisted,
             hoisted_function: false,
             parameter: false,
+            catch_binding: false,
             mutable: true,
             from_env: true,
             sloppy_global_fallback: false,

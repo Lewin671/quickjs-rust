@@ -821,6 +821,17 @@ impl Vm<'_> {
             message: "bytecode local index out of bounds".to_owned(),
         })?;
         *local = None;
+        if let Some(name) = self.bytecode.local_name_at(slot) {
+            if self
+                .bytecode
+                .locals
+                .get(slot)
+                .is_some_and(|local| local.catch_binding)
+            {
+                self.env.remove(name);
+                self.env.unmark_catch_binding(name);
+            }
+        }
         Ok(())
     }
 

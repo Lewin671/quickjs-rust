@@ -266,6 +266,7 @@ impl Compiler {
     fn compile_catch_param(&mut self, param: &BindingPattern) -> Result<Vec<usize>, RuntimeError> {
         if let BindingPattern::Identifier { name, .. } = param {
             let slot = self.declare_lexical_slot(name, true);
+            self.locals[slot].catch_binding = true;
             self.emit(Op::StoreLocal(slot));
             return Ok(vec![slot]);
         }

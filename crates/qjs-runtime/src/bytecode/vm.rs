@@ -184,10 +184,16 @@ impl<'a> Vm<'a> {
         let mut locals = self.env.snapshot_locals();
         for (index, slot) in self.locals.iter().enumerate() {
             if let Some(value) = slot {
-                locals.insert(self.bytecode.locals[index].name.clone(), value.clone());
+                let name = self.bytecode.locals[index].name.clone();
+                locals.insert(name.clone(), value.clone());
             }
         }
         let mut env = self.attach_host(self.env.with_frame_locals(locals));
+        for (index, slot) in self.locals.iter().enumerate() {
+            if slot.is_some() && self.bytecode.locals[index].catch_binding {
+                env.mark_catch_binding(self.bytecode.locals[index].name.clone());
+            }
+        }
         env.set_private_environment(self.current_private_environment());
         env.set_activation_captured_env(Rc::clone(&self.captured_env));
         if let Some(source) = self.env.captured_binding_source_env() {

@@ -578,7 +578,9 @@ fn validate_sloppy_global_eval_declarations(
         return Ok(());
     };
     for name in bytecode.hoisted_local_names() {
-        if (caller_locals.contains(name) && !global_this.has_own_property(name))
+        if (caller_locals.contains(name)
+            && !env.is_catch_binding(name)
+            && !global_this.has_own_property(name))
             || has_global_lexical_binding(env, &global_this, name, include_captured_global_lexicals)
         {
             return Err(RuntimeError {

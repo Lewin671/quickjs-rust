@@ -529,6 +529,7 @@ pub(super) struct Local {
     pub(super) hoisted: bool,
     pub(super) hoisted_function: bool,
     pub(super) parameter: bool,
+    pub(super) catch_binding: bool,
     pub(super) mutable: bool,
     pub(super) from_env: bool,
     pub(super) sloppy_global_fallback: bool,

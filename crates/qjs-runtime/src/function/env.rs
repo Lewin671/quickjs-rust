@@ -46,6 +46,7 @@ pub(crate) struct CallEnv {
     global_lexical_bindings: GlobalLexicalBindings,
     immutable_lexical_bindings: ImmutableLexicalBindings,
     locals: HashMap<String, Value>,
+    catch_bindings: HashSet<String>,
     /// The lexical private-name environment active for this frame. This is
     /// separate from `\0home_object`: ordinary nested functions do not inherit
     /// `super`, but they do retain access to private names declared by enclosing
@@ -85,6 +86,7 @@ impl std::fmt::Debug for CallEnv {
                 &self.immutable_lexical_bindings.borrow().len(),
             )
             .field("locals", &self.locals)
+            .field("catch_bindings", &self.catch_bindings)
             .field("module_host", &self.module_host.is_some())
             .field(
                 "activation_captured_env",
@@ -110,6 +112,7 @@ impl CallEnv {
             global_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             locals: HashMap::new(),
+            catch_bindings: HashSet::new(),
             private_environment: None,
             activation_captured_env: None,
             captured_binding_source_env: None,
@@ -173,6 +176,7 @@ impl CallEnv {
             global_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             locals: HashMap::new(),
+            catch_bindings: HashSet::new(),
             private_environment: None,
             activation_captured_env: None,
             captured_binding_source_env: None,
@@ -190,6 +194,7 @@ impl CallEnv {
             global_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             locals: HashMap::new(),
+            catch_bindings: HashSet::new(),
             private_environment: None,
             activation_captured_env: None,
             captured_binding_source_env: None,
@@ -205,6 +210,7 @@ impl CallEnv {
             global_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             locals,
+            catch_bindings: HashSet::new(),
             private_environment: None,
             activation_captured_env: None,
             captured_binding_source_env: None,
@@ -242,6 +248,18 @@ impl CallEnv {
 
     pub(crate) fn is_immutable_lexical_binding(&self, name: &str) -> bool {
         self.immutable_lexical_bindings.borrow().contains(name)
+    }
+
+    pub(crate) fn mark_catch_binding(&mut self, name: String) {
+        self.catch_bindings.insert(name);
+    }
+
+    pub(crate) fn unmark_catch_binding(&mut self, name: &str) {
+        self.catch_bindings.remove(name);
+    }
+
+    pub(crate) fn is_catch_binding(&self, name: &str) -> bool {
+        self.catch_bindings.contains(name)
     }
 
     /// This frame's own locals layer.
@@ -388,6 +406,7 @@ impl CallEnv {
             global_lexical_bindings: Rc::clone(&self.global_lexical_bindings),
             immutable_lexical_bindings: Rc::clone(&self.immutable_lexical_bindings),
             locals,
+            catch_bindings: self.catch_bindings.clone(),
             private_environment: self.private_environment.clone(),
             activation_captured_env: self.activation_captured_env.clone(),
             captured_binding_source_env: self.captured_binding_source_env.clone(),

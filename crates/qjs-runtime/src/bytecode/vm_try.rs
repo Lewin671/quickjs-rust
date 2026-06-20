@@ -1,9 +1,6 @@
 use crate::{RuntimeError, Value, error_value};
 
-use super::{
-    ir::CatchScope,
-    vm::{Slot, Vm},
-};
+use super::{ir::CatchScope, vm::Vm};
 
 #[derive(Clone)]
 pub(super) struct TryFrame {
@@ -133,20 +130,11 @@ impl Vm<'_> {
         match scope {
             Some(CatchScope::Clear { slots }) => {
                 for slot in slots {
-                    self.set_local_slot(slot, None)?;
+                    self.clear_local(slot)?;
                 }
                 Ok(())
             }
             None => Ok(()),
         }
-    }
-
-    fn set_local_slot(&mut self, slot: usize, value: Slot) -> Result<(), RuntimeError> {
-        let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
-            thrown: None,
-            message: "bytecode local index out of bounds".to_owned(),
-        })?;
-        *local = value;
-        Ok(())
     }
 }

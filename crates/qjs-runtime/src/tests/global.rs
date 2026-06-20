@@ -454,6 +454,35 @@ fn evaluates_global_eval_annex_b_bindings_as_configurable() {
 }
 
 #[test]
+fn sloppy_direct_eval_allows_annex_b_catch_parameter_redeclarations() {
+    assert_eq!(
+        eval(
+            "try { throw null; } catch (err) { \
+                 eval('function err() {}'); \
+                 eval('function* err() {}'); \
+                 eval('async function err() {}'); \
+                 eval('async function* err() {}'); \
+                 eval('var err;'); \
+                 eval('for (var err; false; ) {}'); \
+                 eval('for (var err in []) {}'); \
+                 eval('for (var err of []) {}'); \
+             } \
+             'done';"
+        ),
+        Ok(Value::String("done".to_owned().into()))
+    );
+    assert!(
+        eval(
+            "{ let blocked; \
+               try { eval('var blocked;'); } catch (error) { throw error; } \
+             }"
+        )
+        .is_err(),
+        "ordinary block lexicals must still reject direct eval var redeclarations"
+    );
+}
+
+#[test]
 fn evaluates_indirect_eval_against_global_scope() {
     assert_eq!(
         eval(
