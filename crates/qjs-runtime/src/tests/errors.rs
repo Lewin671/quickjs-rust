@@ -319,6 +319,16 @@ fn aggregate_error_uses_new_target_prototype() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "let realmPrototype = {}; \
+             function C() {} \
+             Object.defineProperty(C, '__quickjsRustRealmAggregateErrorPrototype', { value: realmPrototype }); \
+             C.prototype = undefined; \
+             Object.getPrototypeOf(Reflect.construct(AggregateError, [[]], C)) === realmPrototype;"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]

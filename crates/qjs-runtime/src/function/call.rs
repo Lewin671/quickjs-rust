@@ -21,6 +21,7 @@ use super::{
 
 const CROSS_REALM_OBJECT_PROTOTYPE: &str = "__quickjsRustRealmObjectPrototype";
 const CROSS_REALM_REGEXP_PROTOTYPE: &str = "__quickjsRustRealmRegExpPrototype";
+const CROSS_REALM_AGGREGATE_ERROR_PROTOTYPE: &str = "__quickjsRustRealmAggregateErrorPrototype";
 
 pub(crate) fn call_function(
     callee: Value,
@@ -482,6 +483,9 @@ fn cross_realm_construct_prototype_slot(
     env: &CallEnv,
 ) -> Result<Option<crate::Prototype>, RuntimeError> {
     let marker = match target {
+        Value::Function(function) if function.native == Some(NativeFunction::AggregateError) => {
+            CROSS_REALM_AGGREGATE_ERROR_PROTOTYPE
+        }
         Value::Function(function) if function.native == Some(NativeFunction::RegExp) => {
             CROSS_REALM_REGEXP_PROTOTYPE
         }
