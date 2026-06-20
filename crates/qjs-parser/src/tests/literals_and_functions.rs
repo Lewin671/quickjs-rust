@@ -3,7 +3,7 @@ use qjs_ast::{
     ObjectPropertyKey, ObjectPropertyKind, Stmt,
 };
 
-use crate::{EvalParseContext, parse_direct_eval_script, parse_script};
+use crate::{EvalParseContext, parse_direct_eval_script, parse_module, parse_script};
 
 fn positional_names(params: &FunctionParams) -> Vec<String> {
     params
@@ -273,6 +273,11 @@ fn parses_new_expression() {
     };
     assert_eq!(arguments.len(), 1);
     assert!(matches!(arguments[0], CallArgument::Spread(_)));
+}
+
+#[test]
+fn rejects_direct_await_as_new_operand_in_module() {
+    assert!(parse_module("new await;").is_err());
 }
 
 #[test]

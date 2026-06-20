@@ -214,6 +214,15 @@ impl Parser {
             return self.finish_call_member_chain(new_target);
         }
         let callee_parenthesized = self.at(&TokenKind::LeftParen);
+        if self.in_async
+            && matches!(self.peek().map(|token| &token.kind), Some(TokenKind::Identifier(name)) if name == "await")
+        {
+            let await_span = self.peek().expect("checked await token").span;
+            return Err(ParseError {
+                message: "`await` is not a valid direct `new` operand".to_owned(),
+                span: await_span,
+            });
+        }
         // `new NewExpression`: the operand of `new` may itself be a `new`
         // expression (`new new X`), which recurses rather than parsing as a
         // MemberExpression primary. Any `(args)` binds to the inner `new`.
