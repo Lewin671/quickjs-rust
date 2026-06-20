@@ -346,6 +346,9 @@ impl Vm<'_> {
         self.invalidate_array_prototype_cache(&name);
         if self.realm.borrow().contains_key(&name) {
             self.realm.borrow_mut().insert(name.clone(), value.clone());
+            if self.env.locals().contains_key(&name) {
+                self.env.insert(name.clone(), value.clone());
+            }
             self.write_through_captured(&name, value.clone());
             let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
                 Some(Value::Object(global_this)) => Some(global_this.clone()),
@@ -366,6 +369,9 @@ impl Vm<'_> {
             global_this.set(name.clone(), value.clone());
         }
         self.realm.borrow_mut().insert(name.clone(), value.clone());
+        if self.env.locals().contains_key(&name) {
+            self.env.insert(name.clone(), value.clone());
+        }
         self.write_through_captured(&name, value);
         Ok(())
     }
@@ -704,7 +710,10 @@ impl Vm<'_> {
             let name = self.bytecode.locals[slot].name.clone();
             global_this.set(name.clone(), value.clone());
             if self.realm.borrow().contains_key(&name) {
-                self.realm.borrow_mut().insert(name, value);
+                self.realm.borrow_mut().insert(name.clone(), value.clone());
+            }
+            if self.env.locals().contains_key(&name) {
+                self.env.insert(name, value);
             }
         }
         Ok(())
@@ -856,6 +865,10 @@ impl Vm<'_> {
                 .unwrap_or(value);
             self.invalidate_array_prototype_cache(&name);
             self.realm.borrow_mut().insert(name.clone(), value.clone());
+            if self.env.locals().contains_key(&name) {
+                self.env.insert(name.clone(), value.clone());
+            }
+            self.clear_global_var_local(&name);
             self.write_through_captured(&name, value);
             return Ok(());
         }
@@ -865,8 +878,26 @@ impl Vm<'_> {
         );
         self.invalidate_array_prototype_cache(&name);
         self.realm.borrow_mut().insert(name.clone(), value.clone());
+        if self.env.locals().contains_key(&name) {
+            self.env.insert(name.clone(), value.clone());
+        }
+        self.clear_global_var_local(&name);
         self.write_through_captured(&name, value);
         Ok(())
+    }
+
+    fn clear_global_var_local(&mut self, name: &str) {
+        if !self.bytecode.global_scope {
+            return;
+        }
+        let Some(slot) = self.bytecode.local_slot(name) else {
+            return;
+        };
+        if self.bytecode.local_is_body_hoist_only(slot)
+            && let Some(local) = self.locals.get_mut(slot)
+        {
+            *local = None;
+        }
     }
     pub(super) fn apply_selected_env(
         &mut self,

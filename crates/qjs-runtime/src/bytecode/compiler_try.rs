@@ -247,7 +247,9 @@ impl Compiler {
                 let slots = compiler.compile_catch_param(param)?;
                 let blocked = catch_param_annex_b_blocked_names(Some(param));
                 compiler.with_annex_b_blocked_function_names(&blocked, |compiler| {
-                    compiler.compile_try_body(&handler.body, result_slot)
+                    compiler.compile_block_body(&handler.body)?;
+                    compiler.emit(Op::StoreLocal(result_slot));
+                    Ok(())
                 })?;
                 compiler.emit(Op::ExitTry);
                 Ok(slots)
@@ -255,7 +257,8 @@ impl Compiler {
             return Ok((target, Some(CatchScope::Clear { slots })));
         } else {
             self.emit(Op::Pop);
-            self.compile_try_body(&handler.body, result_slot)?;
+            self.compile_block_body(&handler.body)?;
+            self.emit(Op::StoreLocal(result_slot));
         }
         self.emit(Op::ExitTry);
         Ok((target, None))

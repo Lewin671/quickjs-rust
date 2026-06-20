@@ -777,6 +777,39 @@ fn evaluates_try_catch_finally_statements() {
         Ok(Value::String("outer".to_owned().into()))
     );
     assert_eq!(
+        eval(
+            "let x = 1; let ranCatch = false; \
+             try { x = 2; throw new Error(); } \
+             catch { let x = 3; let y = true; ranCatch = true; } \
+             let yHidden = false; try { y; } catch (error) { yHidden = error instanceof ReferenceError; } \
+             ranCatch + ':' + x + ':' + yHidden;"
+        ),
+        Ok(Value::String("true:2:true".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var probeParam, probeBlock; let x = 'outside'; \
+             try { throw []; } \
+             catch ([_ = probeParam = function() { return x; }]) { \
+               probeBlock = function() { return x; }; let x = 'inside'; \
+             } \
+             probeParam() + ':' + probeBlock();"
+        ),
+        Ok(Value::String("outside:inside".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var x = 1; var probeBefore = function() { return x; }; \
+             var probeTry, probeParam, probeBlock; \
+             try { var x = 2; probeTry = function() { return x; }; throw []; } \
+             catch ([_ = (eval('var x = 3;'), probeParam = function() { return x; })]) { \
+               var x = 4; probeBlock = function() { return x; }; \
+             } \
+             probeBefore() + ':' + probeTry() + ':' + probeParam() + ':' + probeBlock() + ':' + x;"
+        ),
+        Ok(Value::String("4:4:4:4:4".to_owned().into()))
+    );
+    assert_eq!(
         eval("try { throw { marker: 7 }; } catch ({ marker }) { marker; }"),
         Ok(Value::Number(7.0))
     );
