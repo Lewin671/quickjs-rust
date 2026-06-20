@@ -18,7 +18,9 @@ pub(crate) mod with_resolvers;
 use crate::CallEnv;
 pub(crate) use all::{native_promise_all, native_promise_all_resolve_element};
 pub(crate) use capability::native_get_capabilities_executor;
-pub(crate) use jobs::{drain_promise_jobs, enqueue_async_dispose_settle_job};
+pub(crate) use jobs::{
+    drain_promise_jobs, drain_promise_jobs_until_dynamic_import, enqueue_async_dispose_settle_job,
+};
 use jobs::{enqueue_promise_reaction_job, enqueue_promise_thenable_job};
 pub(crate) use race::native_promise_race;
 

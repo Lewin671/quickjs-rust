@@ -68,6 +68,9 @@ struct Module {
     live_lexical: Rc<RefCell<HashMap<String, Value>>>,
     /// Cached namespace object, built lazily.
     namespace: Option<Value>,
+    /// Result promise for a top-level-await body whose dynamic import jobs may
+    /// settle after static graph evaluation releases its borrow.
+    async_result_promise: Option<crate::ObjectRef>,
 }
 
 /// The module graph: a registry of modules keyed by canonical key, plus the
@@ -223,6 +226,7 @@ impl ModuleGraph {
                 exports: HashMap::new(),
                 live_lexical: Rc::new(RefCell::new(HashMap::new())),
                 namespace: None,
+                async_result_promise: None,
             },
         );
         for specifier in requested {
@@ -478,8 +482,19 @@ impl ModuleGraph {
         }
         let module = self.modules.get_mut(key).expect("module exists");
         module.live_lexical = evaluation.captured_env;
+        module.async_result_promise = evaluation.async_result_promise;
         module.exports = export_pairs.into_iter().collect();
         Ok(())
+    }
+
+    pub(super) fn async_module_rejection(&self) -> Option<String> {
+        self.modules
+            .values()
+            .filter_map(|module| module.async_result_promise.as_ref())
+            .find_map(|promise| match crate::promise::settled_outcome(promise) {
+                Some(Err(reason)) => Some(rejection_message(reason)),
+                _ => None,
+            })
     }
 
     /// Builds the local-name -> value map seeded into the module realm: each
@@ -748,5 +763,14 @@ impl ModuleGraph {
                 )
             })
             .collect()
+    }
+}
+
+fn rejection_message(reason: Value) -> String {
+    match reason {
+        Value::Object(object) => crate::error::error_object_to_string(&object)
+            .unwrap_or_else(|| "module top-level await rejected".to_owned()),
+        Value::String(text) => text.to_string(),
+        other => format!("{other:?}"),
     }
 }

@@ -110,6 +110,7 @@ pub(super) fn eval_module_body(
     Ok(ModuleEvaluation {
         env: vm.current_env(),
         captured_env: vm.captured_env.clone(),
+        async_result_promise: None,
     })
 }
 
@@ -138,20 +139,18 @@ pub(super) fn eval_module_function_hoists(
 }
 
 /// Evaluates a module body that contains top-level `await`. The body is staged
-/// as a `SuspendedStart` async context and driven to completion, draining the
-/// realm job queue so each `await` resumes and the module settles before its
-/// dependents evaluate. A rejected completion is surfaced as a `RuntimeError`
-/// (carrying the rejection reason) so the linker propagates it to the caller /
-/// the import promise.
+/// as a `SuspendedStart` async context and driven through the realm job queue.
+/// Plain promise awaits settle here before dependents evaluate. Dynamic-import
+/// jobs are deferred to the outer module driver because they need to re-borrow
+/// the module graph after static evaluation releases it. A rejected completion
+/// that settles during this pass is surfaced as a `RuntimeError` (carrying the
+/// rejection reason) so the linker propagates it to the caller / import promise.
 ///
 /// The body's top-level `var`/`function` bindings live in the shared realm and
 /// its top-level `let`/`const` bindings write through to the shared
 /// `captured_env` cell (see `Vm::store_local`); the returned `CallEnv` merges
 /// both so the linker reads every export after the module has settled.
 ///
-/// Residue: a top-level `await` of a *dynamic* `import()` cannot drain here
-/// (the module graph is borrowed by the static evaluation, so a nested import
-/// job would re-borrow it); that path is left to the outer queue loop.
 fn eval_async_module_body(
     bytecode: &Bytecode,
     mut env: CallEnv,
@@ -198,8 +197,10 @@ fn eval_async_module_body(
         })));
 
     let result_promise = crate::async_function::drive_async_module(&context, &mut env);
-    // Resume the suspended `await`s and run any reactions the module scheduled.
-    crate::promise::drain_promise_jobs(&mut env)?;
+    // Resume ordinary `await`s and reactions, but stop before a dynamic import:
+    // the module graph is still borrowed by static evaluation and the outer
+    // driver will drain that import job once the borrow is released.
+    crate::promise::drain_promise_jobs_until_dynamic_import(&mut env)?;
     if let Some(Err(reason)) = crate::promise::settled_outcome(&result_promise) {
         return Err(RuntimeError {
             thrown: Some(Box::new(reason)),
@@ -221,6 +222,7 @@ fn eval_async_module_body(
     Ok(ModuleEvaluation {
         env: CallEnv::with_locals(realm, locals),
         captured_env,
+        async_result_promise: Some(result_promise),
     })
 }
 

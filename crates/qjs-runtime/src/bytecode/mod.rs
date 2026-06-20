@@ -212,6 +212,7 @@ pub(crate) type ModuleRealm = crate::function::Realm;
 pub(crate) struct ModuleEvaluation {
     pub(crate) env: crate::CallEnv,
     pub(crate) captured_env: Rc<RefCell<HashMap<String, Value>>>,
+    pub(crate) async_result_promise: Option<crate::ObjectRef>,
 }
 
 pub(crate) struct ModuleLiveExports {

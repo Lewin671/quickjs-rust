@@ -127,6 +127,12 @@ pub fn eval_module_with_prelude(
         kind: EvalErrorKind::Runtime,
         message: error.message,
     })?;
+    if let Some(message) = graph.borrow().async_module_rejection() {
+        return Err(EvalError {
+            kind: EvalErrorKind::Runtime,
+            message,
+        });
+    }
     Ok(graph.borrow_mut().namespace(&root))
 }
 

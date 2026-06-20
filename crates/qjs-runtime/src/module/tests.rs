@@ -1200,6 +1200,30 @@ fn top_level_await_of_plain_value() {
 }
 
 #[test]
+fn top_level_await_catches_dynamic_import_rejection() {
+    let namespace = run(
+        "let caught = false;\n\
+         try {\n\
+           await import('missing');\n\
+         } catch (error) {\n\
+           caught = true;\n\
+         }\n\
+         export { caught };",
+        &[],
+    )
+    .expect("graph evaluates");
+    assert_eq!(export(&namespace, "caught"), Value::Boolean(true));
+}
+
+#[test]
+fn top_level_await_propagates_dynamic_import_rejection() {
+    let error = run("await import('missing');", &[])
+        .expect_err("unhandled dynamic import rejection rejects module evaluation");
+    assert_eq!(error.kind, EvalErrorKind::Runtime);
+    assert!(error.message.contains("Cannot resolve module"));
+}
+
+#[test]
 fn dependent_sees_settled_tla_binding() {
     // An acyclic dependency uses top-level await; its importer must observe the
     // settled exported binding (the dependency fully settles before the

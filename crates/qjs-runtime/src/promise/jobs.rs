@@ -108,7 +108,22 @@ pub(crate) fn enqueue_async_dispose_settle_job(
     jobs.set(jobs.len(), Value::Object(job));
 }
 
+enum DrainMode {
+    All,
+    StopBeforeDynamicImport,
+}
+
 pub(crate) fn drain_promise_jobs(env: &mut CallEnv) -> Result<(), RuntimeError> {
+    drain_promise_jobs_with_mode(env, DrainMode::All)
+}
+
+pub(crate) fn drain_promise_jobs_until_dynamic_import(
+    env: &mut CallEnv,
+) -> Result<(), RuntimeError> {
+    drain_promise_jobs_with_mode(env, DrainMode::StopBeforeDynamicImport)
+}
+
+fn drain_promise_jobs_with_mode(env: &mut CallEnv, mode: DrainMode) -> Result<(), RuntimeError> {
     loop {
         let jobs = promise_jobs(env);
         let pending = jobs.to_vec();
@@ -116,11 +131,17 @@ pub(crate) fn drain_promise_jobs(env: &mut CallEnv) -> Result<(), RuntimeError> 
             return Ok(());
         }
         jobs.replace_with(Vec::new());
-        for job in pending {
+        for (index, job) in pending.iter().cloned().enumerate() {
             let Value::Object(job) = job else {
                 continue;
             };
             if job.own_property(PROMISE_IMPORT_SPECIFIER).is_some() {
+                if matches!(mode, DrainMode::StopBeforeDynamicImport) {
+                    let mut deferred = pending[index..].to_vec();
+                    deferred.extend(jobs.to_vec());
+                    jobs.replace_with(deferred);
+                    return Ok(());
+                }
                 run_dynamic_import_job(&job, env)?;
             } else if job.own_property(PROMISE_ASYNC_DISPOSE_RESULT).is_some() {
                 run_async_dispose_settle_job(&job, env)?;
