@@ -203,12 +203,12 @@ pub(crate) fn to_primitive_with_hint(
     if let Some(symbol) = symbol::to_primitive_symbol(env) {
         let method = property_value_key(value.clone(), &PropertyKey::Symbol(symbol), env)?;
         if !matches!(method, Value::Undefined | Value::Null) {
-            let Value::Function(_) = method else {
+            if !is_callable(&method) {
                 return Err(RuntimeError {
                     thrown: None,
                     message: "TypeError: Symbol.toPrimitive method is not callable".to_owned(),
                 });
-            };
+            }
             let primitive = call_function(
                 method,
                 value.clone(),
@@ -243,7 +243,7 @@ pub(crate) fn ordinary_to_primitive(
     };
     for method in methods {
         let method_value = property_value(value.clone(), method, env)?;
-        if matches!(method_value, Value::Function(_)) {
+        if is_callable(&method_value) {
             let primitive = call_function(method_value, value.clone(), Vec::new(), env, false)?;
             if !is_object_like(&primitive) {
                 return Ok(primitive);
@@ -269,7 +269,17 @@ fn object_to_string(value: Value, env: &mut CallEnv) -> Result<String, RuntimeEr
 fn is_object_like(value: &Value) -> bool {
     match value {
         Value::Object(object) => !symbol::is_symbol_primitive(object),
-        Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_) => true,
+        Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_) | Value::Proxy(_) => {
+            true
+        }
+        _ => false,
+    }
+}
+
+fn is_callable(value: &Value) -> bool {
+    match value {
+        Value::Function(_) => true,
+        Value::Proxy(proxy) => crate::proxy::proxy_is_callable(proxy),
         _ => false,
     }
 }

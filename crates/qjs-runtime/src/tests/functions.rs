@@ -260,6 +260,23 @@ fn evaluates_function_declarations_and_calls() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "let p = new Proxy(function() {}, {}); \
+             let source = '' + p; \
+             source.includes('[native code]') && source.startsWith('function');"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let fn = function() { return 'ok'; }; \
+             let p = new Proxy(fn, {}); \
+             let object = { [Symbol.toPrimitive]: p }; \
+             String(object);"
+        ),
+        Ok(Value::String("ok".to_owned().into()))
+    );
     // A non-callable receiver still throws a TypeError.
     assert_eq!(
         eval(
