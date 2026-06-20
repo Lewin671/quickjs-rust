@@ -455,6 +455,34 @@ fn evaluates_if_else_statements() {
 }
 
 #[test]
+fn if_empty_abrupt_completion_updates_to_undefined() {
+    assert_eq!(
+        eval("eval('1; do { if (false) { } else { break; } } while (false)')"),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval("eval('2; do { if (false) { } else { continue; } } while (false)')"),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval("eval('3; do { if (true) { break; } else { } } while (false)')"),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval("eval('4; do { if (true) { continue; } else { } } while (false)')"),
+        Ok(Value::Undefined)
+    );
+    assert_eq!(
+        eval("eval('5; do { 6; if (true) { 7; break; } 8; } while (false)')"),
+        Ok(Value::Number(7.0))
+    );
+    assert_eq!(
+        eval("eval('9; do { 10; if (true) { break; } 11; } while (false)')"),
+        Ok(Value::Undefined)
+    );
+}
+
+#[test]
 fn evaluates_while_statements() {
     assert_eq!(
         eval("let x = 0; while (x < 3) { x = x + 1; } x;"),
