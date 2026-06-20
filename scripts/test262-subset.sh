@@ -175,9 +175,21 @@ var $262 = {
       configurable: true
     });
     var crossRealmFunction = function Function() {
-      var fn = globalThis.Function.apply(this, arguments);
+      var previousRealm = __quickjsRustDynamicFunctionRealm;
+      __quickjsRustDynamicFunctionRealm = realmGlobal;
+      try {
+        var fn = globalThis.Function.apply(this, arguments);
+      } finally {
+        __quickjsRustDynamicFunctionRealm = previousRealm;
+      }
+      Object.defineProperty(fn, "__quickjsRustRealmObjectPrototype", {
+        value: crossRealmObject.prototype
+      });
       Object.defineProperty(fn, "__quickjsRustRealmArrayPrototype", {
         value: crossRealmArray.prototype
+      });
+      Object.defineProperty(fn, "__quickjsRustRealmRegExpPrototype", {
+        value: crossRealmRegExpPrototype
       });
       Object.defineProperty(fn, "__quickjsRustRealmGeneratorFunctionPrototype", {
         value: crossRealmGeneratorFunction.prototype
@@ -185,6 +197,17 @@ var $262 = {
       return fn;
     };
     var realmGlobal = Object.create(globalThis);
+    var crossRealmObject = function Object(value) {
+      return globalThis.Object(value);
+    };
+    var crossRealmObjectPrototype = Object.create(globalThis.Object.prototype);
+    Object.defineProperty(crossRealmObjectPrototype, "constructor", {
+      value: crossRealmObject,
+      writable: true,
+      enumerable: false,
+      configurable: true
+    });
+    crossRealmObject.prototype = crossRealmObjectPrototype;
     var crossRealmRegExp = function RegExp() {
       return Reflect.construct(globalThis.RegExp, globalThis.Array.prototype.slice.call(arguments), new.target || crossRealmRegExp);
     };
@@ -226,6 +249,15 @@ var $262 = {
       });
     });
     crossRealmRegExp.prototype = crossRealmRegExpPrototype;
+    if (typeof globalThis.RegExp.escape === "function") {
+      Object.defineProperty(crossRealmRegExp, "escape", {
+        value: globalThis.RegExp.escape,
+        writable: true,
+        enumerable: false,
+        configurable: true
+      });
+    }
+    realmGlobal.Object = crossRealmObject;
     realmGlobal.Array = crossRealmArray;
     realmGlobal.Function = crossRealmFunction;
     realmGlobal.RegExp = crossRealmRegExp;

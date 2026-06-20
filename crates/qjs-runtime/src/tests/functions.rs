@@ -886,6 +886,20 @@ fn bound_function_construct_substitutes_new_target() {
 }
 
 #[test]
+fn construct_falls_back_to_marked_object_realm_prototype() {
+    assert_eq!(
+        eval(
+            "let realmPrototype = { realm: 'other-object' }; \
+             function C() { return this; } \
+             Object.defineProperty(C, '__quickjsRustRealmObjectPrototype', { value: realmPrototype }); \
+             C.prototype = null; \
+             Object.getPrototypeOf(new C()) === realmPrototype;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn evaluates_new_expressions() {
     assert_eq!(
         eval(

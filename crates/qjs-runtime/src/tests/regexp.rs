@@ -127,6 +127,16 @@ fn evaluates_regexp_constructor_identity() {
     );
     assert_eq!(
         eval(
+            "let realmPrototype = {}; \
+             function C() {} \
+             Object.defineProperty(C, '__quickjsRustRealmRegExpPrototype', { value: realmPrototype }); \
+             C.prototype = null; \
+             Object.getPrototypeOf(Reflect.construct(RegExp, [], C)) === realmPrototype;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
             "let obj = { source: 'source text' }; Object.defineProperty(obj, 'flags', { get: function() { throw 'flags'; } }); obj[Symbol.match] = true; let result = new RegExp(obj, 'g'); result.source + ':' + result.flags;"
         ),
         Ok(Value::String("source text:g".to_owned().into()))

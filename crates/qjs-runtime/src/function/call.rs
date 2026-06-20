@@ -19,6 +19,9 @@ use super::{
     rest_parameter_binding_name,
 };
 
+const CROSS_REALM_OBJECT_PROTOTYPE: &str = "__quickjsRustRealmObjectPrototype";
+const CROSS_REALM_REGEXP_PROTOTYPE: &str = "__quickjsRustRealmRegExpPrototype";
+
 pub(crate) fn call_function(
     callee: Value,
     this_value: Value,
@@ -465,7 +468,44 @@ fn construct_prototype_slot(
         crate::property_value(new_target.clone(), "prototype", env)?,
         env,
     );
+    if prototype.is_none()
+        && let Some(prototype) = cross_realm_construct_prototype_slot(target, new_target, env)?
+    {
+        return Ok(Some(prototype));
+    }
     Ok(prototype.or_else(|| default_construct_prototype_slot(target, env)))
+}
+
+fn cross_realm_construct_prototype_slot(
+    target: &Value,
+    new_target: &Value,
+    env: &CallEnv,
+) -> Result<Option<crate::Prototype>, RuntimeError> {
+    let marker = match target {
+        Value::Function(function) if function.native == Some(NativeFunction::RegExp) => {
+            CROSS_REALM_REGEXP_PROTOTYPE
+        }
+        Value::Function(_) => CROSS_REALM_OBJECT_PROTOTYPE,
+        Value::Proxy(proxy) => {
+            return cross_realm_construct_prototype_slot(&proxy.target_result()?, new_target, env);
+        }
+        _ => CROSS_REALM_OBJECT_PROTOTYPE,
+    };
+    marked_realm_prototype_slot(new_target, marker, env)
+}
+
+fn marked_realm_prototype_slot(
+    new_target: &Value,
+    marker: &str,
+    env: &CallEnv,
+) -> Result<Option<crate::Prototype>, RuntimeError> {
+    match new_target {
+        Value::Function(function) => Ok(function
+            .own_property(marker)
+            .and_then(|property| prototype_value_to_slot(property.value, env))),
+        Value::Proxy(proxy) => marked_realm_prototype_slot(&proxy.target_result()?, marker, env),
+        _ => Ok(None),
+    }
 }
 
 fn prototype_value_to_slot(value: Value, env: &CallEnv) -> Option<crate::Prototype> {
