@@ -19,7 +19,8 @@ impl Lexer<'_> {
     }
 
     pub(super) fn html_open_comment(&mut self) -> bool {
-        if self.peek() != Some('<')
+        if !self.options.html_comments
+            || self.peek() != Some('<')
             || self.peek_nth(1) != Some('!')
             || self.peek_nth(2) != Some('-')
             || self.peek_nth(3) != Some('-')
@@ -36,7 +37,8 @@ impl Lexer<'_> {
     }
 
     pub(super) fn html_close_comment(&mut self) -> bool {
-        if self.peek() != Some('-')
+        if !self.options.html_comments
+            || self.peek() != Some('-')
             || self.peek_nth(1) != Some('-')
             || self.peek_nth(2) != Some('>')
             || !self.html_close_comment_allowed()

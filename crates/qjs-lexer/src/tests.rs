@@ -330,8 +330,14 @@ fn hashbang_comment_only_applies_at_source_start() {
 
 #[test]
 fn hashbang_comments_can_be_disabled_for_function_body_source() {
-    let error = lex_with_options("#! disabled", LexOptions { hashbang: false })
-        .expect_err("function body source should not accept hashbang comments");
+    let error = lex_with_options(
+        "#! disabled",
+        LexOptions {
+            hashbang: false,
+            ..LexOptions::default()
+        },
+    )
+    .expect_err("function body source should not accept hashbang comments");
     assert_eq!(
         error.message,
         "`#` must be followed by a private name identifier"
@@ -348,6 +354,30 @@ fn skips_annex_b_html_like_comments() {
             TokenKind::Identifier("one".to_owned()),
             TokenKind::Identifier("two".to_owned()),
             TokenKind::Identifier("three".to_owned()),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn html_like_comments_can_be_disabled_for_module_source() {
+    let tokens = lex_with_options(
+        "<!--\n-->",
+        LexOptions {
+            html_comments: false,
+            ..LexOptions::default()
+        },
+    )
+    .expect("source should lex as punctuators when html comments are disabled");
+    let kinds: Vec<_> = tokens.into_iter().map(|token| token.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::Less,
+            TokenKind::Bang,
+            TokenKind::MinusMinus,
+            TokenKind::MinusMinus,
+            TokenKind::Greater,
             TokenKind::Eof,
         ]
     );

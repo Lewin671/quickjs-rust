@@ -41,6 +41,18 @@ fn parses_side_effect_import() {
 }
 
 #[test]
+fn module_goal_rejects_html_like_comments() {
+    for source in ["<!--\n", "-->\n", "/*\n*/-->\n"] {
+        parse_module(source).expect_err("module source must not accept HTML-like comments");
+    }
+}
+
+#[test]
+fn script_goal_still_accepts_html_like_comments() {
+    parse_script("<!--\n-->\n").expect("script source keeps Annex B HTML-like comments");
+}
+
+#[test]
 fn parses_default_import() {
     let (specifiers, source) = sole_import("import def from \"mod\";");
     assert_eq!(source, "mod");

@@ -15,11 +15,17 @@ use scanner::Lexer;
 pub struct LexOptions {
     /// Whether a leading `#!` is treated as a hashbang comment.
     pub hashbang: bool,
+    /// Whether Annex B HTML-like comments (`<!--` and line-start `-->`) are
+    /// treated as line comments.
+    pub html_comments: bool,
 }
 
 impl Default for LexOptions {
     fn default() -> Self {
-        Self { hashbang: true }
+        Self {
+            hashbang: true,
+            html_comments: true,
+        }
     }
 }
 

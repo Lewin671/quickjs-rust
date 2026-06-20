@@ -36,7 +36,13 @@ pub fn parse_script(source: &str) -> Result<Script, ParseError> {
 ///
 /// Returns a structured error for lexing or parsing failures.
 pub fn parse_dynamic_function_script(source: &str) -> Result<Script, ParseError> {
-    parse_script_with_options(source, LexOptions { hashbang: false })
+    parse_script_with_options(
+        source,
+        LexOptions {
+            hashbang: false,
+            ..LexOptions::default()
+        },
+    )
 }
 
 fn parse_script_with_options(source: &str, options: LexOptions) -> Result<Script, ParseError> {
@@ -115,7 +121,14 @@ pub fn parse_direct_eval_script(
 ///
 /// Returns a structured error for lexing or parsing failures.
 pub fn parse_module(source: &str) -> Result<Script, ParseError> {
-    let tokens = lex(source).map_err(|error| ParseError {
+    let tokens = lex_with_options(
+        source,
+        LexOptions {
+            html_comments: false,
+            ..LexOptions::default()
+        },
+    )
+    .map_err(|error| ParseError {
         message: error.message,
         span: error.span,
     })?;
