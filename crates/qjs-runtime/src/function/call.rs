@@ -436,7 +436,8 @@ fn native_constructs_receiver_lazily(target: &Value) -> bool {
             if matches!(
                 function.native,
                 Some(
-                    NativeFunction::ArrayBuffer
+                    NativeFunction::Promise
+                        | NativeFunction::ArrayBuffer
                         | NativeFunction::DataView
                         | NativeFunction::SharedArrayBuffer
                         | NativeFunction::Uint8Array
@@ -460,14 +461,10 @@ fn construct_prototype_slot(
     new_target: &Value,
     env: &mut CallEnv,
 ) -> Result<Option<crate::Prototype>, RuntimeError> {
-    let prototype = if let Value::Proxy(_) = new_target {
-        prototype_value_to_slot(
-            crate::property_value(new_target.clone(), "prototype", env)?,
-            env,
-        )
-    } else {
-        crate::constructor_prototype_slot(new_target, env)
-    };
+    let prototype = prototype_value_to_slot(
+        crate::property_value(new_target.clone(), "prototype", env)?,
+        env,
+    );
     Ok(prototype.or_else(|| default_construct_prototype_slot(target, env)))
 }
 

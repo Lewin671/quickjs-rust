@@ -205,7 +205,10 @@ pub(crate) fn native_promise(
     }
     let object = match this_value {
         Value::Object(object) => object,
-        _ => ObjectRef::with_prototype(HashMap::new(), crate::function_prototype(function)),
+        _ => ObjectRef::with_prototype_slot(
+            HashMap::new(),
+            crate::native_construct_prototype_slot(function, env)?,
+        ),
     };
     initialize_promise(&object);
     let promise = Value::Object(object.clone());

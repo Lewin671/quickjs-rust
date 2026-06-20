@@ -41,6 +41,24 @@ fn evaluates_promise_constructor_shell() {
 }
 
 #[test]
+fn promise_constructor_propagates_new_target_prototype_getter_error() {
+    assert_eval(
+        "var bound = (function() {}).bind();\
+         var seen = false;\
+         Object.defineProperty(bound, 'prototype', { get: function() { seen = true; throw new Error('prototype'); } });\
+         try { Reflect.construct(Promise, [function() {}], bound); 'no throw'; } catch (error) { seen + ':' + error.message; }",
+        Value::String("true:prototype".to_owned().into()),
+    );
+    assert_eval(
+        "var bound = (function() {}).bind();\
+         var seen = false;\
+         Object.defineProperty(bound, 'prototype', { get: function() { seen = true; throw new Error('prototype'); } });\
+         try { Reflect.construct(Promise, [], bound); 'no throw'; } catch (error) { seen + ':' + (error instanceof TypeError); }",
+        Value::String("false:true".to_owned().into()),
+    );
+}
+
+#[test]
 fn evaluates_promise_resolve_reject_shell() {
     assert_eval("Promise.resolve.length;", Value::Number(1.0));
     assert_eval("Promise.reject.length;", Value::Number(1.0));
