@@ -218,6 +218,13 @@ pub(crate) struct ModuleLiveExports {
     pub(crate) names: Vec<String>,
     pub(crate) bindings: Rc<RefCell<HashMap<String, Value>>>,
     pub(crate) seed_tdz_markers: bool,
+    pub(crate) imports: Vec<ModuleLiveImport>,
+}
+
+pub(crate) struct ModuleLiveImport {
+    pub(crate) local_name: String,
+    pub(crate) bindings: Rc<RefCell<HashMap<String, Value>>>,
+    pub(crate) binding_name: String,
 }
 
 /// Builds the shared realm for a module graph. See

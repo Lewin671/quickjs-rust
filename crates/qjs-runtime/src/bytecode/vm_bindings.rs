@@ -249,6 +249,15 @@ impl Vm<'_> {
         {
             return Ok(value.clone());
         }
+        if let Some(value) = self.env.module_import_value(name) {
+            if value.is_uninitialized_lexical_marker() {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: format!("ReferenceError: undefined identifier `{name}`"),
+                });
+            }
+            return Ok(value);
+        }
         if self.bytecode.global_scope
             && let Some(slot) = self.bytecode.local_slot(name)
             && self.bytecode.local_is_body_hoist_only(slot)
@@ -541,6 +550,18 @@ impl Vm<'_> {
     }
 
     pub(super) fn load_local(&self, slot: usize) -> Result<Value, RuntimeError> {
+        if let Some(local) = self.bytecode.locals.get(slot)
+            && local.from_env
+            && let Some(value) = self.env.module_import_value(&local.name)
+        {
+            if value.is_uninitialized_lexical_marker() {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: format!("ReferenceError: undefined identifier `{}`", local.name),
+                });
+            }
+            return Ok(value);
+        }
         match self.locals.get(slot) {
             Some(Some(Value::Function(function))) if function.is_uninitialized_lexical_marker() => {
                 Err(RuntimeError {
@@ -567,6 +588,12 @@ impl Vm<'_> {
     }
 
     pub(super) fn load_local_or_undefined(&self, slot: usize) -> Result<Value, RuntimeError> {
+        if let Some(local) = self.bytecode.locals.get(slot)
+            && local.from_env
+            && let Some(value) = self.env.module_import_value(&local.name)
+        {
+            return Ok(value);
+        }
         match self.locals.get(slot) {
             Some(Some(value)) => Ok(value.clone()),
             Some(None) => Ok(Value::Undefined),

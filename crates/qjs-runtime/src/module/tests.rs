@@ -100,6 +100,44 @@ fn anonymous_default_class_gets_default_name_in_static_initializer() {
 }
 
 #[test]
+fn self_default_import_reads_live_default_export() {
+    let namespace = run(
+        "import { value, className } from \"dep\";\n\
+         export { value, className };",
+        &[(
+            "dep",
+            "export default class { valueOf() { return 45; } }\n\
+             import C from \"dep\";\n\
+             export const value = new C().valueOf();\n\
+             export const className = C.name;",
+        )],
+    )
+    .expect("module evaluates");
+    assert_eq!(export(&namespace, "value"), Value::Number(45.0));
+    assert_eq!(
+        export(&namespace, "className"),
+        Value::String("default".to_owned().into())
+    );
+}
+
+#[test]
+fn self_default_import_reads_live_default_expression() {
+    let namespace = run(
+        "import { observed } from \"dep\";\n\
+         export { observed };",
+        &[(
+            "dep",
+            "var x = { x: true };\n\
+             export default 'x' in x;\n\
+             import value from \"dep\";\n\
+             export const observed = value;",
+        )],
+    )
+    .expect("module evaluates");
+    assert_eq!(export(&namespace, "observed"), Value::Boolean(true));
+}
+
+#[test]
 fn live_binding_through_exported_function() {
     // The importer calls an exported function that reads the exporter's own
     // live top-level binding, observing the post-mutation value.

@@ -395,14 +395,16 @@ impl ModuleGraph {
             .map(|export| export.local_name.clone())
             .collect();
         let live_bindings = self.modules[key].live_lexical.clone();
-        let seed_tdz_markers = self.needs_namespace_tdz_seed(key);
+        let seed_tdz_markers = self.needs_module_live_tdz_seed(key);
+        let imports = self.import_bindings(key)?;
+        let live_imports = self.import_live_bindings(key);
         let live_exports = bytecode::ModuleLiveExports {
             names: live_names,
             bindings: live_bindings,
             seed_tdz_markers,
+            imports: live_imports,
         };
         bytecode::seed_module_live_bindings(&compiled, &live_exports);
-        let imports = self.import_bindings(key)?;
         let host = self
             .host_graph
             .as_ref()
@@ -451,11 +453,47 @@ impl ModuleGraph {
         Ok(bindings)
     }
 
-    fn needs_namespace_tdz_seed(&self, key: &str) -> bool {
-        self.modules[key].record.import_entries.iter().any(|entry| {
-            matches!(entry.import_name, ImportName::Namespace)
-                && self.resolved(key, &entry.module_request) == key
-        }) || self.modules[key].namespace.is_some()
+    fn import_live_bindings(&mut self, key: &str) -> Vec<bytecode::ModuleLiveImport> {
+        let entries = self.modules[key].record.import_entries.to_vec();
+        let mut imports = Vec::new();
+        for entry in entries {
+            let ImportName::Named(name) = &entry.import_name else {
+                continue;
+            };
+            let target = self.resolved(key, &entry.module_request);
+            let Ok(Some((module_key, export_name))) =
+                self.resolve_export(&target, name, &mut Vec::new())
+            else {
+                continue;
+            };
+            if export_name == NAMESPACE_BINDING {
+                continue;
+            }
+            let Some(binding_name) = self.modules[&module_key]
+                .record
+                .local_exports
+                .iter()
+                .find(|local| local.export_name == export_name)
+                .map(|local| local.local_name.clone())
+            else {
+                continue;
+            };
+            imports.push(bytecode::ModuleLiveImport {
+                local_name: entry.local_name,
+                bindings: self.modules[&module_key].live_lexical.clone(),
+                binding_name,
+            });
+        }
+        imports
+    }
+
+    fn needs_module_live_tdz_seed(&self, key: &str) -> bool {
+        self.modules[key]
+            .record
+            .import_entries
+            .iter()
+            .any(|entry| self.resolved(key, &entry.module_request) == key)
+            || self.modules[key].namespace.is_some()
     }
 
     /// Reads the value of `name` exported by `key`, following indirect/star

@@ -90,6 +90,9 @@ pub(super) fn eval_module_body(
     if bytecode.contains_top_level_await() {
         return eval_async_module_body(bytecode, env, live_exports);
     }
+    for import in live_exports.imports {
+        env.set_module_import(import.local_name, import.bindings, import.binding_name);
+    }
     seed_live_bindings(
         &live_exports.bindings,
         bytecode,
@@ -131,6 +134,9 @@ fn eval_async_module_body(
     live_exports: ModuleLiveExports,
 ) -> Result<ModuleEvaluation, RuntimeError> {
     let realm = env.realm_rc();
+    for import in live_exports.imports {
+        env.set_module_import(import.local_name, import.bindings, import.binding_name);
+    }
     // Seed the shared captured-env cell with every top-level local name so each
     // `store_local` (notably a `let`/`const` export written after an `await`
     // resumes) writes through to it; the linker reads these settled lexical

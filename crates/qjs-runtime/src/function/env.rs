@@ -57,6 +57,10 @@ pub(crate) struct CallEnv {
     /// when the code was not entered with a module host (the host then reports a
     /// dynamic-import-unsupported rejection).
     module_host: Option<crate::module::ModuleHostRef>,
+    /// Live module imports keyed by this module's local import binding name.
+    /// Each entry points at the exporting module's shared lexical export cell
+    /// and the local binding name that backs that export.
+    module_imports: HashMap<String, (Realm, String)>,
 }
 
 impl std::fmt::Debug for CallEnv {
@@ -73,6 +77,7 @@ impl std::fmt::Debug for CallEnv {
                 "captured_binding_source_env",
                 &self.captured_binding_source_env.is_some(),
             )
+            .field("module_imports", &self.module_imports.keys())
             .finish()
     }
 }
@@ -90,6 +95,7 @@ impl CallEnv {
             activation_captured_env: None,
             captured_binding_source_env: None,
             module_host: None,
+            module_imports: HashMap::new(),
         }
     }
 
@@ -101,6 +107,23 @@ impl CallEnv {
     /// Installs (or replaces) the dynamic-import host on this environment.
     pub(crate) fn set_module_host(&mut self, host: crate::module::ModuleHostRef) {
         self.module_host = Some(host);
+    }
+
+    /// Installs a live module import binding.
+    pub(crate) fn set_module_import(
+        &mut self,
+        local_name: String,
+        exported_bindings: Realm,
+        exported_local_name: String,
+    ) {
+        self.module_imports
+            .insert(local_name, (exported_bindings, exported_local_name));
+    }
+
+    /// Reads the current value of a live module import binding.
+    pub(crate) fn module_import_value(&self, local_name: &str) -> Option<Value> {
+        let (bindings, exported_local_name) = self.module_imports.get(local_name)?;
+        bindings.borrow().get(exported_local_name).cloned()
     }
 
     /// Builds a standalone environment over a fresh, empty realm. Used by the
@@ -115,6 +138,7 @@ impl CallEnv {
             activation_captured_env: None,
             captured_binding_source_env: None,
             module_host: None,
+            module_imports: HashMap::new(),
         }
     }
 
@@ -129,6 +153,7 @@ impl CallEnv {
             activation_captured_env: None,
             captured_binding_source_env: None,
             module_host: None,
+            module_imports: HashMap::new(),
         }
     }
 
@@ -141,6 +166,7 @@ impl CallEnv {
             activation_captured_env: None,
             captured_binding_source_env: None,
             module_host: None,
+            module_imports: HashMap::new(),
         }
     }
 
@@ -300,6 +326,7 @@ impl CallEnv {
             activation_captured_env: self.activation_captured_env.clone(),
             captured_binding_source_env: self.captured_binding_source_env.clone(),
             module_host: self.module_host.clone(),
+            module_imports: self.module_imports.clone(),
         }
     }
 }
