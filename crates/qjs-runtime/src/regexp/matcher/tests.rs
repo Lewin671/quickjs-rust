@@ -169,6 +169,22 @@ fn unicode_ignore_case_uses_simple_case_folding() {
     assert_eq!((matched.start, matched.end), (0, 1));
     let matched = regexp_match_range(r"\u212a", "K", 0, true, true, false).unwrap();
     assert_eq!((matched.start, matched.end), (0, 1));
+
+    let simple_pairs = [
+        (r"\u0390", "\u{1fd3}"),
+        (r"\u1fd3", "\u{0390}"),
+        (r"\u03b0", "\u{1fe3}"),
+        (r"\u1fe3", "\u{03b0}"),
+        (r"\ufb05", "\u{fb06}"),
+        (r"\ufb06", "\u{fb05}"),
+    ];
+    for (pattern, text) in simple_pairs {
+        let matched = regexp_match_range(pattern, text, 0, true, true, false).unwrap();
+        assert_eq!((matched.start, matched.end), (0, 1));
+        assert!(regexp_match_range(pattern, text, 0, true, false, false).is_none());
+    }
+
+    assert!(regexp_match_range(r"\u0390", "\u{03b9}", 0, true, true, false).is_none());
 }
 
 #[test]

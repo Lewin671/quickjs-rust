@@ -196,7 +196,10 @@ pub(super) fn chars_equal(left: char, right: char, ignore_case: bool, unicode: b
 
 fn unicode_canonicalize(value: char) -> char {
     match value {
+        '\u{1fd3}' => '\u{0390}',
+        '\u{1fe3}' => '\u{03b0}',
         '\u{212a}' => 'k',
+        '\u{fb05}' => '\u{fb06}',
         _ => value.to_ascii_lowercase(),
     }
 }
