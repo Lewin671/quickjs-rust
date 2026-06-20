@@ -18,6 +18,12 @@ impl Parser {
         // nested function resets the async context, so `await` is an identifier
         // there again.
         if self.in_async && matches!(&token.kind, TokenKind::Identifier(name) if name == "await") {
+            if token.had_escape {
+                return Err(ParseError {
+                    message: "`await` keyword may not contain escapes".to_owned(),
+                    span: token.span,
+                });
+            }
             return self.await_expression(token.span);
         }
         if token.kind == TokenKind::PlusPlus || token.kind == TokenKind::MinusMinus {

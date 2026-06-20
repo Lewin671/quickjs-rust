@@ -1,6 +1,6 @@
 use qjs_ast::{ClassElement, Expr, ForInLeft, MethodKind, Stmt};
 
-use crate::parse_script;
+use crate::{parse_module, parse_script};
 
 /// Extracts the single function declaration's async/generator flags and body.
 fn sole_function_decl(source: &str) -> (bool, bool, Vec<Stmt>) {
@@ -263,6 +263,11 @@ fn await_nests_right_associatively() {
         panic!("expected await expression");
     };
     assert!(matches!(argument.as_ref(), Expr::Await { .. }));
+}
+
+#[test]
+fn escaped_await_keyword_is_rejected_in_module() {
+    assert!(parse_module("\\u0061wait 0;").is_err());
 }
 
 #[test]
