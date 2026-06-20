@@ -464,6 +464,7 @@ pub(super) struct ClassMethodDef {
     pub(super) params: FunctionParams,
     pub(super) local_names: Vec<String>,
     pub(super) bytecode: Rc<Bytecode>,
+    pub(super) source_text: Option<Rc<str>>,
     /// Whether the method is a generator method (`*m() {}`).
     pub(super) is_generator: bool,
     /// Whether the method is an async method (`async m() {}`).

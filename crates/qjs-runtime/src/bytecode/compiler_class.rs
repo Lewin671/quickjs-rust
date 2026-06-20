@@ -151,6 +151,7 @@ impl Compiler {
                         MethodKind::Setter => ClassMethodKind::Setter,
                         MethodKind::Constructor => unreachable!("handled above"),
                     };
+                    let source_text = self.class_method_source_text(member.span, member.is_static);
 
                     // Private methods and accessors are not ordinary properties:
                     // route them to the private-element list keyed by name.
@@ -163,6 +164,7 @@ impl Compiler {
                             params: params.clone(),
                             local_names,
                             bytecode: Rc::new(bytecode),
+                            source_text,
                             is_generator,
                             is_async,
                         };
@@ -197,6 +199,7 @@ impl Compiler {
                         params: params.clone(),
                         local_names,
                         bytecode: Rc::new(bytecode),
+                        source_text,
                         is_generator,
                         is_async,
                     }));
@@ -241,6 +244,42 @@ impl Compiler {
         });
         Ok(())
     }
+
+    fn class_method_source_text(&self, span: Span, is_static: bool) -> Option<Rc<str>> {
+        let source = self.source.get(span.start..span.end)?;
+        let mut offset = skip_js_trivia(source, 0);
+        if is_static && source[offset..].starts_with("static") {
+            offset = skip_js_trivia(source, offset + "static".len());
+        }
+        self.source
+            .get((span.start + offset)..span.end)
+            .map(Rc::from)
+    }
+}
+
+fn skip_js_trivia(source: &str, mut index: usize) -> usize {
+    let bytes = source.as_bytes();
+    while index < bytes.len() {
+        match bytes[index] {
+            b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c => index += 1,
+            b'/' if bytes.get(index + 1) == Some(&b'/') => {
+                index += 2;
+                while index < bytes.len() && !matches!(bytes[index], b'\n' | b'\r') {
+                    index += 1;
+                }
+            }
+            b'/' if bytes.get(index + 1) == Some(&b'*') => {
+                index += 2;
+                while index + 1 < bytes.len() && !(bytes[index] == b'*' && bytes[index + 1] == b'/')
+                {
+                    index += 1;
+                }
+                index = (index + 2).min(bytes.len());
+            }
+            _ => break,
+        }
+    }
+    index
 }
 
 fn compile_computed_key(

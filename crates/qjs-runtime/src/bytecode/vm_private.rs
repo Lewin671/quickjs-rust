@@ -182,6 +182,7 @@ impl Vm<'_> {
                 name,
             ),
         });
+        function.set_source_text(def.source_text.clone());
         if def.is_generator && def.is_async {
             crate::async_generator::wire_async_generator_function_intrinsics(&function, &self.env);
         } else if def.is_generator {

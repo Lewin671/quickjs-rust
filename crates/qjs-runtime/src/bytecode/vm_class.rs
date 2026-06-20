@@ -412,6 +412,7 @@ impl Vm<'_> {
                 name,
             ),
         });
+        method_function.set_source_text(method.source_text.clone());
         if method.is_generator && method.is_async {
             crate::async_generator::wire_async_generator_function_intrinsics(
                 &method_function,
