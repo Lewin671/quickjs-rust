@@ -21,6 +21,18 @@ pub(super) fn block_has_using(body: &[Stmt]) -> bool {
     })
 }
 
+pub(super) fn block_has_await_using(body: &[Stmt]) -> bool {
+    body.iter().any(|stmt| {
+        matches!(
+            stmt,
+            Stmt::VarDecl {
+                kind: VarKind::AwaitUsing,
+                ..
+            }
+        )
+    })
+}
+
 impl Compiler {
     /// Compiles a block body in its own lexical scope, leaving the block's
     /// completion value on the stack. Shared by plain and disposable blocks.
@@ -81,7 +93,7 @@ impl Compiler {
 
         self.pop_try_result_slot();
 
-        let finally_target = self.compile_dispose_finally();
+        let finally_target = self.compile_dispose_finally(block_has_await_using(body));
         if let Op::EnterTry { finally, .. } = &mut self.code[enter] {
             *finally = Some(finally_target);
         }
@@ -119,7 +131,7 @@ impl Compiler {
         self.emit(Op::ExitTry);
         let normal_jump = self.emit(Op::Jump(usize::MAX));
         self.pop_try_result_slot();
-        let finally_target = self.compile_dispose_finally();
+        let finally_target = self.compile_dispose_finally(block_has_await_using(body));
         if let Op::EnterTry { finally, .. } = &mut self.code[enter] {
             *finally = Some(finally_target);
         }
@@ -127,14 +139,25 @@ impl Compiler {
         Ok(())
     }
 
-    /// Emits the disposal finally body (`DisposeScope; EndFinally`) and returns
-    /// its entry IP.
-    pub(super) fn compile_dispose_finally(&mut self) -> usize {
+    /// Emits the disposal finally body and returns its entry IP.
+    pub(super) fn compile_dispose_finally(&mut self, await_async: bool) -> usize {
         let finally_result_slot = self.temp_local("dispose_result");
         let loop_depth = self.loop_stack_depth();
         self.push_try_result_slot(finally_result_slot, loop_depth, true);
         let target = self.code.len();
-        self.emit(Op::DisposeScope);
+        self.emit(Op::DisposeScope { await_async });
+        if await_async {
+            let skip_await = self.emit(Op::JumpIfFalse(usize::MAX));
+            self.emit(Op::Pop);
+            self.emit(Op::Await);
+            let done = self.emit(Op::Jump(usize::MAX));
+            let skip_target = self.code.len();
+            self.emit(Op::Pop);
+            self.emit(Op::Pop);
+            let done_target = self.code.len();
+            self.patch_jump(skip_await, skip_target);
+            self.patch_jump(done, done_target);
+        }
         self.pop_try_result_slot();
         self.emit(Op::EndFinally);
         target

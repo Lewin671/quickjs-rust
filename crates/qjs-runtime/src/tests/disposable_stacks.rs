@@ -424,6 +424,157 @@ fn await_using_block_registers_async_disposables() {
 }
 
 #[test]
+fn await_using_null_disposal_suspends_async_function() {
+    assert_eq!(
+        eval_log(
+            "let log = []; \
+             async function f() { \
+               log.push('start'); \
+               { await using _ = null; log.push('inside'); } \
+               log.push('after'); \
+             } \
+             f(); \
+             log.push('sync'); \
+             Promise.resolve().then(() => log.push('then')); \
+             log;"
+        ),
+        "start,inside,sync,after,then"
+    );
+    assert_eq!(
+        eval_log(
+            "let log = []; \
+             let same = true; \
+             async function f() { \
+               { await using _ = null; } \
+               log.push(same); \
+             } \
+             let p = f(); \
+             same = false; \
+             p.then(() => log.push('done')); \
+             log;"
+        ),
+        "false,done"
+    );
+    assert_eq!(
+        eval_log(
+            "let log = []; \
+             async function outer() { \
+               let same = true; \
+               let observed; \
+               async function f() { \
+                 { await using _ = null; } \
+                 observed = same; \
+               } \
+               let p = f(); \
+               same = false; \
+               await p; \
+               log.push(observed); \
+             } \
+             outer(); log;"
+        ),
+        "false"
+    );
+    assert_eq!(
+        eval_log(
+            "let log = []; \
+             function asyncTest(testFunc) { testFunc().then(() => log.push('done'), e => log.push('fail')); } \
+             asyncTest(async function () { \
+               var isRunningInSameMicrotask = true; \
+               var wasRunningInSameMicrotask = true; \
+               async function f() { \
+                 { \
+                   await using _ = null; \
+                 } \
+                 wasRunningInSameMicrotask = isRunningInSameMicrotask; \
+               } \
+               var p = f(); \
+               isRunningInSameMicrotask = false; \
+               await p; \
+               log.push(wasRunningInSameMicrotask); \
+             }); \
+             log;"
+        ),
+        "false,done"
+    );
+}
+
+#[test]
+fn unevaluated_await_using_does_not_suspend_async_function() {
+    assert_eq!(
+        eval_log(
+            "let log = []; \
+             function asyncTest(testFunc) { testFunc().then(() => log.push('done'), e => log.push('fail')); } \
+             asyncTest(async function () { \
+               var breakEarly = true; \
+               var same = true; \
+               var observed = false; \
+               async function f() { \
+                 outer: { \
+                   if (breakEarly) break outer; \
+                   await using _ = null; \
+                 } \
+                 observed = same; \
+               } \
+               var p = f(); \
+               same = false; \
+               await p; \
+               log.push(observed); \
+             }); \
+             log;"
+        ),
+        "true,done"
+    );
+}
+
+#[test]
+fn await_using_rejected_async_disposer_throws_reason() {
+    assert_eq!(
+        eval_log(
+            "class MyError extends Error {} \
+             let reason = new MyError(); \
+             let log = []; \
+             async function f() { \
+               try { \
+                 await using _ = { [Symbol.asyncDispose]() { return Promise.reject(reason); } }; \
+               } catch (e) { \
+                 log.push(e === reason); \
+               } \
+             } \
+             f(); log;"
+        ),
+        "true"
+    );
+}
+
+#[test]
+fn await_using_multiple_rejections_chain_suppressed_error() {
+    assert_eq!(
+        eval_log(
+            "class MyError extends Error {} \
+             let error1 = new MyError(); \
+             let error2 = new MyError(); \
+             let error3 = new MyError(); \
+             let log = []; \
+             async function f() { \
+               try { \
+                 await using _1 = { [Symbol.asyncDispose]() { return Promise.reject(error1); } }; \
+                 await using _2 = { [Symbol.asyncDispose]() { return Promise.reject(error2); } }; \
+                 throw error3; \
+               } catch (e) { \
+                 log.push((e instanceof SuppressedError) + ':' + \
+                   (e.error === error1) + ':' + \
+                   (e.suppressed instanceof SuppressedError) + ':' + \
+                   (e.suppressed.error === error2) + ':' + \
+                   (e.suppressed.suppressed === error3)); \
+               } \
+             } \
+             f(); log;"
+        ),
+        "true:true:true:true:true"
+    );
+}
+
+#[test]
 fn await_using_for_initializer_disposes_at_loop_exit() {
     assert_eq!(
         eval_log(

@@ -69,6 +69,12 @@ impl Vm<'_> {
         std::rc::Rc::make_mut(string).push_str(suffix);
         let result = Value::String(string.clone());
         self.write_through_captured(&local_meta.name, result.clone());
+        if local_meta.from_env || self.bytecode.local_is_body_hoist_only(slot) {
+            let name = local_meta.name.clone();
+            if self.env.locals().contains_key(&name) {
+                self.env.insert(name, result.clone());
+            }
+        }
         let syncs_global_var = (local_meta.from_env && !local_meta.hoisted)
             || (self.bytecode.global_scope
                 && self.bytecode.local_is_body_hoist_only(slot)

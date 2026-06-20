@@ -335,7 +335,7 @@ impl<'a> Vm<'a> {
                 op @ (Op::EnterDisposableScope
                 | Op::RegisterDisposable
                 | Op::RegisterAsyncDisposable
-                | Op::DisposeScope) => {
+                | Op::DisposeScope { .. }) => {
                     self.run_disposal_op(&op)?;
                 }
                 Op::SetComputedFunctionName(kind) => self.set_computed_function_name(kind)?,

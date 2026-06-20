@@ -655,6 +655,12 @@ impl Vm<'_> {
         // later calls of that closure observe the new value.
         self.write_through_captured_slot(slot, &value);
         self.write_through_capture_writeback_slot(slot, &value);
+        if from_env || self.bytecode.local_is_body_hoist_only(slot) {
+            let name = self.bytecode.locals[slot].name.clone();
+            if self.env.locals().contains_key(&name) {
+                self.env.insert(name, value.clone());
+            }
+        }
         let syncs_global_var = (from_env && !hoisted)
             || (self.bytecode.global_scope
                 && self.bytecode.local_is_body_hoist_only(slot)

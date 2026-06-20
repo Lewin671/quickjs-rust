@@ -100,12 +100,30 @@ pub(crate) fn call_async_function(
         .clone()
         .expect("async function has a bytecode body");
     let captured = Rc::new(RefCell::new(function_env.snapshot_locals()));
-    let capture_writeback = (!function_capture_names.is_empty()).then(|| CaptureWriteback {
-        target: Rc::clone(&function.captured_env),
-        names: function_capture_names,
-        aliases: Vec::new(),
-        parent: None,
-    });
+    let mut capture_names = function_capture_names;
+    {
+        let captured = function.captured_env.borrow();
+        for name in captured.keys() {
+            if crate::function::is_internal_binding_name(name)
+                || matches!(name.as_str(), "this" | "arguments")
+            {
+                continue;
+            }
+            if bytecode.local_slot(name).is_some()
+                && !capture_names.iter().any(|existing| existing == name)
+            {
+                capture_names.push(name.clone());
+            }
+        }
+    }
+    let parent_writeback = function.capture_writeback.clone().map(Box::new);
+    let capture_writeback =
+        (!capture_names.is_empty() || parent_writeback.is_some()).then(|| CaptureWriteback {
+            target: Rc::clone(&function.captured_env),
+            names: capture_names,
+            aliases: Vec::new(),
+            parent: parent_writeback,
+        });
     let context = ObjectRef::new(HashMap::new());
     *context.generator_state().borrow_mut() =
         Some(GeneratorState::SuspendedStart(Box::new(GeneratorStart {

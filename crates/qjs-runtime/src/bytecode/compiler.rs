@@ -11,7 +11,7 @@ use super::compiler_lexical::{
     catch_param_annex_b_blocked_names, function_body_annex_b_blocked_names, function_param_names,
     lexical_declared_names, switch_lexical_declared_names,
 };
-use super::compiler_try::block_has_using;
+use super::compiler_try::{block_has_await_using, block_has_using};
 use super::ir::{Bytecode, Local, Op};
 use super::util::{stmt_accepts_pending_label, stmt_updates_statement_list_completion};
 
@@ -1058,7 +1058,7 @@ impl Compiler {
         self.emit(Op::ExitTry);
         let normal_jump = self.emit(Op::Jump(usize::MAX));
 
-        let finally_target = self.compile_dispose_finally();
+        let finally_target = self.compile_dispose_finally(block_has_await_using(body));
         if let Op::EnterTry { finally, .. } = &mut self.code[enter] {
             *finally = Some(finally_target);
         }

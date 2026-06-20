@@ -224,7 +224,7 @@ impl Compiler {
         self.emit(Op::ExitTry);
         let normal_jump = self.emit(Op::Jump(usize::MAX));
 
-        let finally_target = self.compile_dispose_finally();
+        let finally_target = self.compile_dispose_finally(for_init_has_await_using(init));
         if let Op::EnterTry { finally, .. } = &mut self.code[enter] {
             *finally = Some(finally_target);
         }
@@ -1126,6 +1126,16 @@ fn for_init_has_using(init: Option<&ForInit>) -> bool {
         init,
         Some(ForInit::VarDecl {
             kind: VarKind::Using | VarKind::AwaitUsing,
+            ..
+        })
+    )
+}
+
+fn for_init_has_await_using(init: Option<&ForInit>) -> bool {
+    matches!(
+        init,
+        Some(ForInit::VarDecl {
+            kind: VarKind::AwaitUsing,
             ..
         })
     )

@@ -186,14 +186,32 @@ impl Vm<'_> {
         let Some(writeback) = writeback else {
             return;
         };
+        self.refresh_one_capture_writeback(writeback);
+        self.refresh_from_capture_writeback(writeback.parent.as_deref());
+    }
+
+    fn refresh_one_capture_writeback(&mut self, writeback: &CaptureWriteback) {
         let target = writeback.target.borrow();
         for name in &writeback.names {
-            if let Some(value) = target.get(name)
-                && let Some(slot) = self.bytecode.local_slot(name)
-                && let Some(local) = self.locals.get_mut(slot)
-            {
-                *local = Some(value.clone());
+            if let Some(value) = target.get(name) {
+                self.refresh_capture_slot(name, value);
             }
+        }
+        for (source_name, target_name) in &writeback.aliases {
+            if let Some(value) = target.get(target_name) {
+                self.refresh_capture_slot(source_name, value);
+            }
+        }
+    }
+
+    fn refresh_capture_slot(&mut self, name: &str, value: &Value) {
+        if let Some(slot) = self.bytecode.local_slot(name)
+            && let Some(local) = self.locals.get_mut(slot)
+        {
+            *local = Some(value.clone());
+        }
+        if self.env.locals().contains_key(name) {
+            self.env.insert(name.to_owned(), value.clone());
         }
     }
 

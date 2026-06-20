@@ -105,8 +105,11 @@ pub(super) enum Op {
     RegisterAsyncDisposable,
     /// Closes the current disposal scope, disposing its resources LIFO. A
     /// dispose failure while a throw is already propagating is wrapped in a
-    /// `SuppressedError`.
-    DisposeScope,
+    /// `SuppressedError`. Async scopes leave the final awaited value on the
+    /// stack so the finally body can suspend before completing.
+    DisposeScope {
+        await_async: bool,
+    },
     /// Names an anonymous object-literal function/accessor from its computed
     /// key. Stack (unchanged): `[..., key, function]`. A symbol key yields
     /// `[description]`; accessors are prefixed with `get `/`set `.
