@@ -5,7 +5,7 @@ mod prototype;
 mod statics;
 
 pub(crate) use formatting::number_to_js_string;
-pub(super) use install::{inherited_number_prototype_property, install_number, is_number_object};
+pub(super) use install::{install_number, is_number_object};
 pub(super) use parsing::{native_parse_float, native_parse_int};
 pub(crate) use parsing::{parse_float_string, parse_int_string};
 pub(crate) use prototype::number_to_radix_string;

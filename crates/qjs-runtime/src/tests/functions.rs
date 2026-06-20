@@ -944,6 +944,36 @@ fn dynamic_function_construct_uses_marked_function_realm_prototype() {
 }
 
 #[test]
+fn inherited_primitive_accessors_preserve_receiver() {
+    assert_eq!(
+        eval(
+            "Object.defineProperty(Object.prototype, 'sloppyReceiver', { \
+                 configurable: true, \
+                 get: function() { return this; } \
+             }); \
+             let value = (5).sloppyReceiver; \
+             let result = typeof value + ':' + (value == 5) + ':' + (value === 5); \
+             delete Object.prototype.sloppyReceiver; \
+             result;"
+        ),
+        Ok(Value::String("object:true:false".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "Object.defineProperty(Object.prototype, 'strictReceiver', { \
+                 configurable: true, \
+                 get: function() { 'use strict'; return this; } \
+             }); \
+             let value = (5).strictReceiver; \
+             let result = typeof value + ':' + (value === 5); \
+             delete Object.prototype.strictReceiver; \
+             result;"
+        ),
+        Ok(Value::String("number:true".to_owned().into()))
+    );
+}
+
+#[test]
 fn evaluates_new_expressions() {
     assert_eq!(
         eval(

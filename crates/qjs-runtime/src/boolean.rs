@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, function_prototype,
-    inherited_object_prototype_property, is_truthy,
+    is_truthy,
 };
 
 pub(crate) const BOOLEAN_DATA_PROPERTY: &str = "\0BooleanData";
@@ -44,13 +44,6 @@ pub(super) fn install_boolean(env: &mut CallEnv, global_this: &Value, object_pro
     if let Value::Object(global_object) = global_this {
         global_object.define_non_enumerable("Boolean".to_owned(), boolean_value);
     }
-}
-
-fn boolean_prototype(env: &CallEnv) -> Option<ObjectRef> {
-    let Some(Value::Function(boolean_function)) = env.get("Boolean") else {
-        return None;
-    };
-    function_prototype(&boolean_function)
 }
 
 pub(super) fn native_boolean(
@@ -105,12 +98,6 @@ fn this_boolean_value(value: Value) -> Result<bool, RuntimeError> {
             message: "Boolean.prototype method called on non-boolean".to_owned(),
         }),
     }
-}
-
-pub(super) fn inherited_boolean_prototype_property(env: &CallEnv, key: &str) -> Option<Value> {
-    boolean_prototype(env)
-        .and_then(|prototype| prototype.get(key))
-        .or_else(|| inherited_object_prototype_property(env, key))
 }
 
 pub(super) fn is_boolean_object(object: &ObjectRef) -> bool {

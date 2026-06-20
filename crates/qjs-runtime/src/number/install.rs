@@ -1,9 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{
-    Function, NativeFunction, ObjectRef, Property, Value, function_prototype,
-    inherited_object_prototype_property,
-};
+use crate::{Function, NativeFunction, ObjectRef, Property, Value};
 
 use super::NUMBER_DATA_PROPERTY;
 use crate::CallEnv;
@@ -163,19 +160,6 @@ fn define_function_property(function: &Function, key: &str, length: usize, nativ
             false,
         ))),
     );
-}
-
-fn number_prototype(env: &CallEnv) -> Option<ObjectRef> {
-    let Some(Value::Function(number_function)) = env.get("Number") else {
-        return None;
-    };
-    function_prototype(&number_function)
-}
-
-pub(crate) fn inherited_number_prototype_property(env: &CallEnv, key: &str) -> Option<Value> {
-    number_prototype(env)
-        .and_then(|prototype| prototype.get(key))
-        .or_else(|| inherited_object_prototype_property(env, key))
 }
 
 pub(crate) fn is_number_object(object: &ObjectRef) -> bool {

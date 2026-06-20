@@ -189,27 +189,8 @@ pub(crate) fn value_prototype_slot(value: Value, env: &CallEnv) -> Option<crate:
     }
 }
 
-fn object_prototype_property(env: &CallEnv, key: &str) -> Option<Value> {
-    object_prototype(env).and_then(|prototype| prototype.get(key))
-}
-
 fn object_prototype_descriptor(env: &CallEnv, key: &str) -> Option<Property> {
     object_prototype(env).and_then(|prototype| prototype.property(key))
-}
-
-pub(crate) fn inherited_object_prototype_property(env: &CallEnv, key: &str) -> Option<Value> {
-    if matches!(
-        key,
-        "hasOwnProperty"
-            | "isPrototypeOf"
-            | "propertyIsEnumerable"
-            | "__lookupGetter__"
-            | "__lookupSetter__"
-    ) {
-        object_prototype_property(env, key)
-    } else {
-        None
-    }
 }
 
 pub(crate) fn inherited_object_prototype_descriptor(env: &CallEnv, key: &str) -> Option<Property> {
@@ -278,10 +259,4 @@ pub(crate) fn inherited_primitive_prototype_symbol_descriptor(
     constructor_named_prototype(env, constructor_name)
         .and_then(|prototype| prototype.symbol_property(symbol))
         .or_else(|| object_prototype(env).and_then(|prototype| prototype.symbol_property(symbol)))
-}
-
-pub(crate) fn inherited_string_prototype_property(env: &CallEnv, key: &str) -> Option<Value> {
-    string_prototype(env)
-        .and_then(|prototype| prototype.get(key))
-        .or_else(|| inherited_object_prototype_property(env, key))
 }

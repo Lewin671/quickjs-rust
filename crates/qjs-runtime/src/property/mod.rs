@@ -19,8 +19,7 @@ pub(crate) use key::{PropertyKey, to_property_key_value};
 pub(crate) use prototype::{
     array_as_object_prototype, array_prototype, constructor_prototype, constructor_prototype_slot,
     function_intrinsic_prototype_slot, function_prototype, function_prototype_chain_descriptor,
-    inherited_object_prototype_property, inherited_primitive_prototype_descriptor,
-    inherited_primitive_prototype_symbol_descriptor, inherited_string_prototype_property,
+    inherited_primitive_prototype_descriptor, inherited_primitive_prototype_symbol_descriptor,
     native_construct_prototype_slot, object_prototype, string_prototype, value_prototype,
     value_prototype_slot,
 };

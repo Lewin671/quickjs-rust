@@ -5,9 +5,8 @@ use num_traits::{One, Signed, Zero};
 
 use crate::CallEnv;
 use crate::{
-    Function, NativeFunction, ObjectRef, PreferredType, Property, RuntimeError, Value,
-    inherited_object_prototype_property, symbol, to_js_string_with_env, to_number_with_env,
-    to_primitive_with_hint,
+    Function, NativeFunction, ObjectRef, PreferredType, Property, RuntimeError, Value, symbol,
+    to_js_string_with_env, to_number_with_env, to_primitive_with_hint,
 };
 
 pub(crate) const BIGINT_DATA_PROPERTY: &str = "\0BigIntData";
@@ -195,12 +194,6 @@ pub(crate) fn is_bigint_object(object: &ObjectRef) -> bool {
             ..
         })
     )
-}
-
-pub(crate) fn inherited_bigint_prototype_property(env: &CallEnv, key: &str) -> Option<Value> {
-    bigint_prototype(env)
-        .and_then(|prototype| prototype.get(key))
-        .or_else(|| inherited_object_prototype_property(env, key))
 }
 
 pub(crate) fn to_bigint(value: Value, env: &mut CallEnv) -> Result<BigInt, RuntimeError> {

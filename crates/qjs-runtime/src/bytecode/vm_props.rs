@@ -2,11 +2,11 @@ use qjs_ast::{BinaryOp, UnaryOp};
 
 use crate::{
     GLOBAL_THIS_BINDING, ObjectRef, Property, PropertyKey, RuntimeError, Value, array_prototype,
-    bigint, boolean, function_delete_own_property, function_delete_own_symbol_property,
+    function_delete_own_property, function_delete_own_symbol_property,
     function_own_property_descriptor, function_own_property_names,
-    function_prototype_chain_descriptor, inherited_primitive_prototype_descriptor,
-    inherited_string_prototype_property, number, property_value, property_value_key, string,
-    symbol, to_int32_number, to_uint32_number,
+    function_prototype_chain_descriptor, inherited_primitive_prototype_descriptor, property_value,
+    property_value_key, property_value_key_with_receiver, string, symbol, to_int32_number,
+    to_uint32_number,
 };
 
 use super::vm::Vm;
@@ -521,17 +521,25 @@ pub(super) fn get_property(
         Value::String(value) if key == "length" => {
             Ok(Value::Number(string::string_code_units(&value).len() as f64))
         }
-        Value::String(value) => Ok(string::string_property(&value, key)
-            .or_else(|| inherited_string_prototype_property(env, key))
-            .unwrap_or(Value::Undefined)),
-        Value::Boolean(_) => {
-            Ok(boolean::inherited_boolean_prototype_property(env, key).unwrap_or(Value::Undefined))
-        }
-        Value::Number(_) => {
-            Ok(number::inherited_number_prototype_property(env, key).unwrap_or(Value::Undefined))
-        }
-        Value::BigInt(_) => {
-            Ok(bigint::inherited_bigint_prototype_property(env, key).unwrap_or(Value::Undefined))
+        Value::String(value) => match string::string_property(&value, key) {
+            Some(value) => Ok(value),
+            None => {
+                let receiver = Value::String(value);
+                property_value_key_with_receiver(
+                    receiver.clone(),
+                    &PropertyKey::String(key.to_owned()),
+                    receiver,
+                    env,
+                )
+            }
+        },
+        object @ (Value::Boolean(_) | Value::Number(_) | Value::BigInt(_)) => {
+            property_value_key_with_receiver(
+                object.clone(),
+                &PropertyKey::String(key.to_owned()),
+                object,
+                env,
+            )
         }
         Value::Map(_) | Value::Set(_) | Value::Proxy(_) | Value::Object(_) => {
             property_value(object, key, env)
