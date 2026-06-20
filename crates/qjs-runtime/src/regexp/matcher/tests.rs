@@ -429,6 +429,13 @@ fn lookahead_assertions_are_zero_width() {
 }
 
 #[test]
+fn lookahead_does_not_backtrack_after_continuation_fails() {
+    let matched = regexp_match_range(r"(?=(a+))a*b\1", "baaabac", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (3, 6));
+    assert_eq!(matched.captures, vec![Some((3, 4))]);
+}
+
+#[test]
 fn lookbehind_assertions_match_preceding_text() {
     let matched = regexp_match_range(r"(?<=\$)\d+", "$100", 0, false, false, false).unwrap();
     assert_eq!((matched.start, matched.end), (1, 4));

@@ -64,11 +64,7 @@ pub(super) fn match_lookaround(
     } else {
         // Positive assertions keep the captures established by the body but
         // restore the index to its position before the assertion.
-        let inner = if behind {
-            inner.into_iter().take(1).collect()
-        } else {
-            inner
-        };
+        let inner: Vec<_> = inner.into_iter().take(1).collect();
         inner
             .into_iter()
             .map(|mut matched| {
