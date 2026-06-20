@@ -96,6 +96,21 @@ fn parses_import_with_type_attribute() {
 }
 
 #[test]
+fn rejects_duplicate_import_attribute_keys() {
+    for source in [
+        "import value from \"mod\" with { type: \"json\", type: \"text\" };",
+        "import \"mod\" with { type: \"json\", type: \"text\" };",
+        "export * from \"mod\" with { type: \"json\", type: \"text\" };",
+    ] {
+        let err = parse_module(source).expect_err("duplicate import attributes must be rejected");
+        assert!(
+            err.message.contains("duplicate import attribute key"),
+            "unexpected error for {source:?}: {err:?}"
+        );
+    }
+}
+
+#[test]
 fn parses_namespace_import() {
     let (specifiers, _) = sole_import("import * as ns from \"mod\";");
     let [ImportSpecifier::Namespace { local, .. }] = specifiers.as_slice() else {

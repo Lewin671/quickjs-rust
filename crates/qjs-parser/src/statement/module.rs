@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use qjs_ast::{
     DEFAULT_EXPORT_BINDING, DefaultExport, ExportDecl, ExportSpecifier, Expr, ImportAttributes,
     ImportDecl, ImportSpecifier, ModuleDecl, ModuleExportName, Span, Stmt,
@@ -437,8 +439,16 @@ impl Parser {
             return Ok((ImportAttributes::default(), true));
         }
         let mut module_type = None;
+        let mut keys = HashSet::new();
         loop {
             let key = self.attribute_key()?;
+            if !keys.insert(key.clone()) {
+                let span = self.previous_span();
+                return Err(ParseError {
+                    message: "duplicate import attribute key".to_owned(),
+                    span,
+                });
+            }
             self.expect_kind(TokenKind::Colon)?;
             let value = self.expect_string_literal()?;
             if key == "type" {
