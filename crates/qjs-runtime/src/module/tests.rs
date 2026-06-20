@@ -67,6 +67,44 @@ fn anonymous_default_function_import_is_callable() {
 }
 
 #[test]
+fn anonymous_default_function_self_import_is_hoisted() {
+    let source = "import f from \"main\";\n\
+        export const before = f();\n\
+        export const name = f.name;\n\
+        export default function() { return 23; }";
+    let namespace = eval_module(
+        source,
+        "main",
+        Box::new(MapResolver::new().with("main", source)),
+    )
+    .expect("module evaluates");
+    assert_eq!(export(&namespace, "before"), Value::Number(23.0));
+    assert_eq!(
+        export(&namespace, "name"),
+        Value::String("default".to_owned().into())
+    );
+}
+
+#[test]
+fn anonymous_default_generator_self_import_is_hoisted() {
+    let source = "import g from \"main\";\n\
+        export const before = g().next().value;\n\
+        export const name = g.name;\n\
+        export default function* () { return 23; }";
+    let namespace = eval_module(
+        source,
+        "main",
+        Box::new(MapResolver::new().with("main", source)),
+    )
+    .expect("module evaluates");
+    assert_eq!(export(&namespace, "before"), Value::Number(23.0));
+    assert_eq!(
+        export(&namespace, "name"),
+        Value::String("default".to_owned().into())
+    );
+}
+
+#[test]
 fn named_default_function_binds_local_name() {
     let namespace = run(
         "export default function F() { return 31; }\n\

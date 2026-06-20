@@ -10,7 +10,7 @@ use qjs_ast::{DefaultExport, ExportDecl, ImportSpecifier, ModuleDecl, Script, St
 
 /// The synthetic local-binding name holding a module's default export. It is
 /// not a valid identifier, so it never collides with a user binding.
-pub(super) const DEFAULT_BINDING: &str = "*default*";
+pub(crate) const DEFAULT_BINDING: &str = qjs_ast::DEFAULT_EXPORT_BINDING;
 pub(super) const NAMESPACE_BINDING: &str = "*namespace*";
 
 /// An `import` entry: a local binding fed from another module.
@@ -207,6 +207,7 @@ fn default_export_stmts(declaration: DefaultExport, span: qjs_ast::Span) -> Vec<
 
 fn default_declaration_export_stmts(stmt: Stmt, span: qjs_ast::Span) -> Vec<Stmt> {
     match stmt {
+        Stmt::FunctionDecl { ref name, .. } if name == DEFAULT_BINDING => vec![stmt],
         Stmt::FunctionDecl { ref name, .. } | Stmt::ClassDecl { ref name, .. } => {
             let init = qjs_ast::Expr::Identifier {
                 name: name.clone(),

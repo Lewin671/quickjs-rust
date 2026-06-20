@@ -13,8 +13,8 @@ pub use declaration::{
     VarKind,
 };
 pub use module::{
-    DefaultExport, ExportDecl, ExportSpecifier, ImportDecl, ImportSpecifier, ModuleDecl,
-    ModuleExportName,
+    DEFAULT_EXPORT_BINDING, DefaultExport, ExportDecl, ExportSpecifier, ImportDecl,
+    ImportSpecifier, ModuleDecl, ModuleExportName,
 };
 pub use script::Script;
 

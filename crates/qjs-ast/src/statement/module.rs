@@ -2,6 +2,10 @@ use crate::expression::Expr;
 use crate::span::Span;
 use crate::statement::Stmt;
 
+/// Synthetic bound name for anonymous `export default function ...`
+/// declarations, matching ECMAScript's `*default*` module binding.
+pub const DEFAULT_EXPORT_BINDING: &str = "*default*";
+
 /// A module-level item: an `import` or `export` declaration. These appear only
 /// in source parsed under the Module goal symbol; the runtime currently rejects
 /// them with a structured "modules are not yet supported" error.

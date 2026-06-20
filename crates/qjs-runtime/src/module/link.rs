@@ -549,7 +549,14 @@ impl ModuleGraph {
         let module = &self.modules[key];
         let mut pairs = Vec::new();
         for local in &module.record.local_exports {
-            let mut value = env.get(&local.local_name).unwrap_or(Value::Undefined);
+            let mut value = module
+                .live_lexical
+                .borrow()
+                .get(&local.local_name)
+                .filter(|value| **value != Value::Undefined)
+                .cloned()
+                .or_else(|| env.get(&local.local_name))
+                .unwrap_or(Value::Undefined);
             if value == Value::Undefined
                 && let Some(global_value) = self.global_this_property(&local.local_name)
             {

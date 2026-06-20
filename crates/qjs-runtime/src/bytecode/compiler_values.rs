@@ -8,6 +8,7 @@ use qjs_ast::{
 use crate::{
     RuntimeError, Value,
     function::{collect_function_local_names, is_strict_function_body},
+    module::DEFAULT_BINDING,
 };
 
 use super::compiler::Compiler;
@@ -436,7 +437,22 @@ impl Compiler {
             );
         }
         let is_strict = self.strict || is_strict_function_body(body);
-        let local_names = collect_function_local_names(Some(name), params, body, true);
+        let is_anonymous_default_export = name == DEFAULT_BINDING;
+        let function_name = if is_anonymous_default_export {
+            "default"
+        } else {
+            name
+        };
+        let local_names = collect_function_local_names(
+            if is_anonymous_default_export {
+                None
+            } else {
+                Some(name)
+            },
+            params,
+            body,
+            true,
+        );
         let (bytecode, lexical_captures) = self.compile_nested_function_body(
             params,
             body,
@@ -446,8 +462,8 @@ impl Compiler {
             &local_names,
         )?;
         self.emit(Op::NewFunction {
-            name: Some(name.clone()),
-            has_name_binding: true,
+            name: Some(function_name.to_owned()),
+            has_name_binding: !is_anonymous_default_export,
             params: params.clone(),
             local_names,
             lexical_captures,

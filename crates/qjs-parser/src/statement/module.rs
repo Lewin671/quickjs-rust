@@ -1,6 +1,6 @@
 use qjs_ast::{
-    DefaultExport, ExportDecl, ExportSpecifier, ImportDecl, ImportSpecifier, ModuleDecl,
-    ModuleExportName, Span, Stmt,
+    DEFAULT_EXPORT_BINDING, DefaultExport, ExportDecl, ExportSpecifier, Expr, ImportDecl,
+    ImportSpecifier, ModuleDecl, ModuleExportName, Span, Stmt,
 };
 use qjs_lexer::TokenKind;
 
@@ -231,7 +231,7 @@ impl Parser {
             let async_token = self.advance();
             self.expect(&TokenKind::Function)?;
             let expr = self.function_expression_with_async(async_token.span.start, true)?;
-            return Ok(DefaultExport::Expression(expr));
+            return Self::anonymous_default_function_export(expr);
         }
         if self.at(&TokenKind::Function) {
             if self.default_function_has_name(false) {
@@ -240,7 +240,7 @@ impl Parser {
             }
             let start = self.advance().span.start;
             let expr = self.function_expression(start)?;
-            return Ok(DefaultExport::Expression(expr));
+            return Self::anonymous_default_function_export(expr);
         }
         if self.at(&TokenKind::Class) {
             let expr = self.assignment()?;
@@ -249,6 +249,29 @@ impl Parser {
         let expr = self.assignment()?;
         self.consume_module_declaration_terminator(expr.span().end)?;
         Ok(DefaultExport::Expression(expr))
+    }
+
+    fn anonymous_default_function_export(expr: Expr) -> Result<DefaultExport, ParseError> {
+        let Expr::Function {
+            name: None,
+            params,
+            body,
+            is_generator,
+            is_async,
+            span,
+            ..
+        } = expr
+        else {
+            return Ok(DefaultExport::Expression(expr));
+        };
+        Ok(DefaultExport::Declaration(Box::new(Stmt::FunctionDecl {
+            name: DEFAULT_EXPORT_BINDING.to_owned(),
+            params,
+            body,
+            is_generator,
+            is_async,
+            span,
+        })))
     }
 
     fn default_function_has_name(&self, async_prefix: bool) -> bool {

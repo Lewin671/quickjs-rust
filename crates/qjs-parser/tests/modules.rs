@@ -4,7 +4,8 @@
 //! declaration forms and confirm that script-mode parsing is unaffected.
 
 use qjs_ast::{
-    DefaultExport, ExportDecl, Expr, ImportSpecifier, ModuleDecl, ModuleExportName, Stmt,
+    DEFAULT_EXPORT_BINDING, DefaultExport, ExportDecl, Expr, ImportSpecifier, ModuleDecl,
+    ModuleExportName, Stmt,
 };
 use qjs_parser::{parse_module, parse_script};
 
@@ -299,8 +300,23 @@ fn parses_anonymous_export_default_function() {
     else {
         panic!("expected a default export");
     };
+    let DefaultExport::Declaration(stmt) = declaration else {
+        panic!("expected an anonymous function declaration default");
+    };
+    let Stmt::FunctionDecl { name, .. } = *stmt else {
+        panic!("expected a function declaration");
+    };
+    assert_eq!(name, DEFAULT_EXPORT_BINDING);
+}
+
+#[test]
+fn parses_parenthesized_export_default_function_as_expression() {
+    let ExportDecl::Default { declaration, .. } = sole_export("export default (function() {});")
+    else {
+        panic!("expected a default export");
+    };
     let DefaultExport::Expression(Expr::Function { name: None, .. }) = declaration else {
-        panic!("expected an anonymous function expression default");
+        panic!("expected a function expression default");
     };
 }
 
@@ -316,14 +332,18 @@ fn parses_anonymous_export_default_async_function() {
     else {
         panic!("expected a default export");
     };
-    let DefaultExport::Expression(Expr::Function {
-        name: None,
+    let DefaultExport::Declaration(stmt) = declaration else {
+        panic!("expected an anonymous async function declaration default");
+    };
+    let Stmt::FunctionDecl {
+        name,
         is_async: true,
         ..
-    }) = declaration
+    } = *stmt
     else {
-        panic!("expected an anonymous async function expression default");
+        panic!("expected an async function declaration");
     };
+    assert_eq!(name, DEFAULT_EXPORT_BINDING);
 }
 
 #[test]
