@@ -17,6 +17,10 @@ fn rejects_invalid_regexp_literal_at_parse_phase() {
         "throw 'unreached'; /[\\s-\\d]/u;",
         "throw 'unreached'; /[\\uFFFF-\\p{Hex}]/u;",
         "throw 'unreached'; /(?<a>\\a)/u;",
+        "throw 'unreached'; /\\x/u;",
+        "throw 'unreached'; /\\u123/u;",
+        "throw 'unreached'; /[\\B]/u;",
+        "throw 'unreached'; /[\\c0]/u;",
     ] {
         let error = eval_classified(source).expect_err("invalid regexp literal must fail");
         // Invalid regexp literals are parse-phase errors (kind=parse), so the
@@ -1105,6 +1109,33 @@ fn unicode_mode_rejects_legacy_octal_and_invalid_decimal_escapes() {
     assert!(eval(r#"new RegExp("[\\1]", "u");"#).is_err());
     assert!(eval(r#"/\00/u;"#).is_err());
     assert!(eval(r#"/[\1]/u;"#).is_err());
+}
+
+#[test]
+fn unicode_mode_rejects_invalid_identity_escapes() {
+    for source in [
+        r#"new RegExp("\\a", "u");"#,
+        r#"new RegExp("\\x", "u");"#,
+        r#"new RegExp("\\x1", "u");"#,
+        r#"new RegExp("\\u", "u");"#,
+        r#"new RegExp("\\u123", "u");"#,
+        r#"new RegExp("\\u{}", "u");"#,
+        r#"new RegExp("[\\a]", "u");"#,
+        r#"new RegExp("[\\B]", "u");"#,
+        r#"new RegExp("[\\x1]", "u");"#,
+        r#"new RegExp("[\\u123]", "u");"#,
+        r#"new RegExp("[\\c0]", "u");"#,
+    ] {
+        assert!(eval(source).is_err(), "source: {source}");
+    }
+    assert_eq!(
+        eval(r#"new RegExp("\\x41", "u").test("A");"#),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(r#"new RegExp("[\\-\\]\\b\\x41\\u0042\\u{43}]", "u").test("-");"#),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]

@@ -84,10 +84,12 @@ fn validate_pattern_range(
                     has_atom = true;
                     continue;
                 }
-                if unicode && !is_valid_unicode_escape(pattern, index) {
+                if unicode {
                     // In unicode mode only specific escapes are legal; an
                     // arbitrary IdentityEscape (`\M`, `\a`, `\c0`) is rejected.
-                    return Err(regexp_syntax_error("invalid regular expression pattern"));
+                    index = validate_unicode_escape(pattern, index, false)?;
+                    has_atom = true;
+                    continue;
                 }
                 index += 2;
                 has_atom = true;
@@ -264,7 +266,11 @@ fn validate_class_ranges(
                 index = set_end;
                 continue;
             }
-            let escape_end = class_escape_end(pattern, index, unicode);
+            let escape_end = if unicode {
+                validate_unicode_escape(pattern, index, true)?
+            } else {
+                class_escape_end(pattern, index, unicode)
+            };
             if unicode
                 && pattern.get(escape_end) == Some(&'-')
                 && escape_end + 1 < end
@@ -541,24 +547,63 @@ fn is_lookahead_group(pattern: &[char], index: usize) -> bool {
     pattern.get(index + 1) == Some(&'?') && matches!(pattern.get(index + 2), Some('=') | Some('!'))
 }
 
-/// Whether the escape `\X` at `index` (where `pattern[index] == '\\'`) is a
-/// legal unicode-mode escape: a SyntaxCharacter or `/` (IdentityEscape), a
-/// CharacterClassEscape (`d D s S w W`; `p P` are handled separately), a
-/// ControlEscape / null / hex / unicode / boundary / named-backref escape, or
-/// `\c` followed by an ASCII letter. `\p`/`\P` and braced `\u{…}` are validated
-/// before this is reached.
-fn is_valid_unicode_escape(pattern: &[char], index: usize) -> bool {
+/// Validate a unicode-mode `\X` escape at `index` (where
+/// `pattern[index] == '\\'`) and return the index just past it.
+///
+/// The AtomEscape and ClassEscape grammars overlap but are not identical:
+/// `\B` and named backreferences are atoms only, while `\-` is a class-only
+/// identity escape. `\p`/`\P` and decimal escapes are validated before this is
+/// reached.
+fn validate_unicode_escape(
+    pattern: &[char],
+    index: usize,
+    in_class: bool,
+) -> Result<usize, RuntimeError> {
     match pattern.get(index + 1) {
         Some(
             '^' | '$' | '\\' | '.' | '*' | '+' | '?' | '(' | ')' | '[' | ']' | '{' | '}' | '|'
-            | '/' | 'd' | 'D' | 's' | 'S' | 'w' | 'W' | 'f' | 'n' | 'r' | 't' | 'v' | 'b' | 'B'
-            | 'u' | 'x' | 'k',
-        ) => true,
-        Some('0'..='9') => true,
+            | '/',
+        ) => Ok(index + 2),
+        Some('-') if in_class => Ok(index + 2),
+        Some('d' | 'D' | 's' | 'S' | 'w' | 'W' | 'f' | 'n' | 'r' | 't' | 'v' | 'b') => {
+            Ok(index + 2)
+        }
+        Some('B') if !in_class => Ok(index + 2),
+        Some('0') if !pattern.get(index + 2).is_some_and(char::is_ascii_digit) => Ok(index + 2),
         Some('c') => pattern
             .get(index + 2)
-            .is_some_and(|ch| ch.is_ascii_alphabetic()),
-        _ => false,
+            .filter(|ch| ch.is_ascii_alphabetic())
+            .map(|_| index + 3)
+            .ok_or_else(|| regexp_syntax_error("invalid regular expression pattern")),
+        Some('x') => {
+            if pattern
+                .get(index + 2)
+                .is_some_and(|ch| ch.is_ascii_hexdigit())
+                && pattern
+                    .get(index + 3)
+                    .is_some_and(|ch| ch.is_ascii_hexdigit())
+            {
+                Ok(index + 4)
+            } else {
+                Err(regexp_syntax_error("invalid regular expression pattern"))
+            }
+        }
+        Some('u') if pattern.get(index + 2) == Some(&'{') => {
+            validate_braced_unicode_escape(pattern, index + 2)
+        }
+        Some('u') => {
+            if (0..4).all(|offset| {
+                pattern
+                    .get(index + 2 + offset)
+                    .is_some_and(|ch| ch.is_ascii_hexdigit())
+            }) {
+                Ok(index + 6)
+            } else {
+                Err(regexp_syntax_error("invalid regular expression pattern"))
+            }
+        }
+        Some('k') if !in_class => Ok(index + 2),
+        _ => Err(regexp_syntax_error("invalid regular expression pattern")),
     }
 }
 
@@ -869,12 +914,38 @@ mod tests {
         rejects("\\M", "u");
         rejects("\\a", "u");
         rejects("\\c0", "u");
+        rejects("\\c", "u");
+        rejects("\\x", "u");
+        rejects("\\x1", "u");
+        rejects("\\u", "u");
+        rejects("\\u1", "u");
+        rejects("\\u12", "u");
+        rejects("\\u123", "u");
+        rejects("\\u{", "u");
+        rejects("\\u{}", "u");
+        rejects("[\\M]", "u");
+        rejects("[\\a]", "u");
+        rejects("[\\B]", "u");
+        rejects("[\\c]", "u");
+        rejects("[\\c0]", "u");
+        rejects("[\\x]", "u");
+        rejects("[\\x1]", "u");
+        rejects("[\\u]", "u");
+        rejects("[\\u1]", "u");
+        rejects("[\\u12]", "u");
+        rejects("[\\u123]", "u");
+        rejects("[\\u{]", "u");
+        rejects("[\\u{}]", "u");
         // Sloppy mode keeps Annex-B IdentityEscape; valid unicode escapes pass.
         accepts("\\M", "");
         accepts("\\cA", "u");
+        accepts("\\x41", "u");
+        accepts("\\u0041", "u");
+        accepts("\\u{41}", "u");
         accepts("\\d\\w\\s", "u");
         accepts("\\n\\t\\b", "u");
         accepts("\\^\\$\\.", "u");
+        accepts("[\\-\\]\\b\\x41\\u0042\\u{43}]", "u");
         accepts("(?<a>x)\\k<a>", "u");
     }
 
