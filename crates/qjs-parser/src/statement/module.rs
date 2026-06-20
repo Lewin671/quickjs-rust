@@ -141,6 +141,7 @@ impl Parser {
                         span: imported.1,
                     });
                 };
+                self.check_binding_identifier(name, imported.1)?;
                 (name.clone(), imported.1)
             };
             specifiers.push(ImportSpecifier::Named {
@@ -431,5 +432,161 @@ fn import_local_name_and_span(specifier: &ImportSpecifier) -> (&str, Span) {
         ImportSpecifier::Default { local, span }
         | ImportSpecifier::Namespace { local, span }
         | ImportSpecifier::Named { local, span, .. } => (local, *span),
+    }
+}
+
+pub(super) fn validate_module_static_semantics(body: &[Stmt]) -> Result<(), ParseError> {
+    validate_module_exported_names(body)?;
+    validate_module_local_export_bindings(body)?;
+    validate_module_top_level_functions(body)
+}
+
+fn validate_module_exported_names(body: &[Stmt]) -> Result<(), ParseError> {
+    let mut exported_names: Vec<(String, Span)> = Vec::new();
+    for stmt in body {
+        let Stmt::ModuleDecl(ModuleDecl::Export(export)) = stmt else {
+            continue;
+        };
+        collect_exported_names(export, &mut exported_names);
+    }
+    for (index, (name, _)) in exported_names.iter().enumerate() {
+        for (candidate, span) in &exported_names[index + 1..] {
+            if candidate == name {
+                return Err(ParseError {
+                    message: format!("duplicate exported name `{name}`"),
+                    span: *span,
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+fn collect_exported_names(export: &ExportDecl, out: &mut Vec<(String, Span)>) {
+    match export {
+        ExportDecl::Named { specifiers, .. } => {
+            out.extend(
+                specifiers
+                    .iter()
+                    .map(|specifier| (specifier.exported.as_str().to_owned(), specifier.span)),
+            );
+        }
+        ExportDecl::All {
+            exported: Some(name),
+            span,
+            ..
+        } => out.push((name.as_str().to_owned(), *span)),
+        ExportDecl::All { exported: None, .. } => {}
+        ExportDecl::Default { span, .. } => out.push(("default".to_owned(), *span)),
+        ExportDecl::Declaration { declaration, .. } => {
+            out.extend(declared_names_and_spans(declaration));
+        }
+    }
+}
+
+fn validate_module_local_export_bindings(body: &[Stmt]) -> Result<(), ParseError> {
+    let declared_names = module_declared_names(body);
+    for stmt in body {
+        let Stmt::ModuleDecl(ModuleDecl::Export(ExportDecl::Named {
+            specifiers,
+            source: None,
+            ..
+        })) = stmt
+        else {
+            continue;
+        };
+        for specifier in specifiers {
+            if !declared_names
+                .iter()
+                .any(|name| name == specifier.local.as_str())
+            {
+                return Err(ParseError {
+                    message: format!(
+                        "exported binding `{}` is not declared in this module",
+                        specifier.local.as_str()
+                    ),
+                    span: specifier.span,
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+fn module_declared_names(body: &[Stmt]) -> Vec<String> {
+    let mut names = Vec::new();
+    for stmt in body {
+        match stmt {
+            Stmt::ModuleDecl(ModuleDecl::Import(import)) => {
+                names.extend(
+                    import
+                        .specifiers
+                        .iter()
+                        .map(|specifier| import_local_name_and_span(specifier).0.to_owned()),
+                );
+            }
+            Stmt::VarDecl { declarations, .. } => {
+                for declarator in declarations {
+                    names.extend(declarator.binding.names());
+                }
+            }
+            Stmt::FunctionDecl { name, .. } | Stmt::ClassDecl { name, .. } => {
+                names.push(name.clone());
+            }
+            Stmt::ModuleDecl(ModuleDecl::Export(ExportDecl::Declaration {
+                declaration, ..
+            })) => {
+                names.extend(
+                    declared_names_and_spans(declaration)
+                        .into_iter()
+                        .map(|(name, _)| name),
+                );
+            }
+            Stmt::ModuleDecl(ModuleDecl::Export(ExportDecl::Default { .. })) => {
+                names.push("default".to_owned());
+            }
+            _ => {}
+        }
+    }
+    names
+}
+
+fn validate_module_top_level_functions(body: &[Stmt]) -> Result<(), ParseError> {
+    let mut function_names: Vec<(&str, Span)> = Vec::new();
+    for stmt in body {
+        let Stmt::FunctionDecl {
+            name,
+            is_generator: false,
+            is_async: false,
+            span,
+            ..
+        } = stmt
+        else {
+            continue;
+        };
+        if let Some((_, original_span)) = function_names
+            .iter()
+            .find(|(candidate, _)| *candidate == name.as_str())
+        {
+            return Err(ParseError {
+                message: format!("duplicate lexical declaration `{name}`"),
+                span: *original_span,
+            });
+        }
+        function_names.push((name, *span));
+    }
+    Ok(())
+}
+
+fn declared_names_and_spans(stmt: &Stmt) -> Vec<(String, Span)> {
+    match stmt {
+        Stmt::VarDecl { declarations, .. } => declarations
+            .iter()
+            .flat_map(|declaration| declaration.binding.named_spans())
+            .collect(),
+        Stmt::FunctionDecl { name, span, .. } | Stmt::ClassDecl { name, span, .. } => {
+            vec![(name.clone(), *span)]
+        }
+        _ => Vec::new(),
     }
 }

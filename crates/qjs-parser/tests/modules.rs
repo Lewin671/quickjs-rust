@@ -135,10 +135,26 @@ fn rejects_duplicate_import_bound_names() {
 }
 
 #[test]
+fn rejects_restricted_unaliased_import_bindings() {
+    for source in [
+        "import { eval } from \"mod\";",
+        "import { arguments } from \"mod\";",
+    ] {
+        parse_module(source).expect_err("module import bindings are strict bindings");
+    }
+}
+
+#[test]
 fn parses_named_export_clause() {
     let ExportDecl::Named {
         specifiers, source, ..
-    } = sole_export("export { a, b as c };")
+    } = (match &parse_module("var a, b; export { a, b as c };")
+        .expect("module source should parse")
+        .body[1]
+    {
+        Stmt::ModuleDecl(ModuleDecl::Export(decl)) => decl.clone(),
+        other => panic!("expected a named export, got {other:?}"),
+    })
     else {
         panic!("expected a named export");
     };
@@ -147,6 +163,34 @@ fn parses_named_export_clause() {
     assert_eq!(specifiers[0].exported.as_str(), "a");
     assert_eq!(specifiers[1].local.as_str(), "b");
     assert_eq!(specifiers[1].exported.as_str(), "c");
+}
+
+#[test]
+fn rejects_duplicate_exported_names() {
+    for source in [
+        "var x, y; export { x as z }; export { y as z };",
+        "var x, y; export default x; export { y as default };",
+        "var x; export { x as z }; export * as z from \"mod\";",
+        "export function f() {} export function *f() {}",
+    ] {
+        let error = parse_module(source).expect_err("duplicate exported names should fail");
+        assert!(error.message.contains("duplicate exported name"));
+    }
+}
+
+#[test]
+fn rejects_unresolved_local_export_bindings() {
+    for source in ["export { missing };", "export { Number };"] {
+        let error = parse_module(source).expect_err("local exports must name module bindings");
+        assert!(error.message.contains("is not declared in this module"));
+    }
+}
+
+#[test]
+fn rejects_duplicate_top_level_module_functions() {
+    let error = parse_module("function x() {} function x() {}")
+        .expect_err("module functions are lexical declarations");
+    assert!(error.message.contains("duplicate lexical declaration"));
 }
 
 #[test]

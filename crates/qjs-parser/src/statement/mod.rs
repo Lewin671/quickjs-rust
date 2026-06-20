@@ -49,6 +49,9 @@ impl Parser {
         // var-like), so a top-level `function f(){}` clashing with a `var f`
         // is an early error — the same rule that applies inside a block.
         validate_statement_list_declarations(&body, self.goal == Goal::Module)?;
+        if self.goal == Goal::Module {
+            module::validate_module_static_semantics(&body)?;
+        }
         validate_statement_list_labels(&body)?;
         // Any private-name reference that never resolved to an enclosing class
         // is a syntax error.
