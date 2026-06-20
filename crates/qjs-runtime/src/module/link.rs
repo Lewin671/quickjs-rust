@@ -329,6 +329,11 @@ impl ModuleGraph {
                 };
             }
         }
+        if name == "default" {
+            return Err(LinkError::syntax(format!(
+                "SyntaxError: module '{key}' has no default export"
+            )));
+        }
         // `export * from` aggregation: a name found in exactly one star target
         // resolves; found in two distinct bindings is ambiguous.
         let mut found: Option<(String, String)> = None;

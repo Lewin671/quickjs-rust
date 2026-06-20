@@ -326,6 +326,20 @@ fn ambiguous_star_export_is_syntax_error() {
 }
 
 #[test]
+fn star_export_does_not_provide_default() {
+    let error = run(
+        "import value from \"agg\";\nexport const v = value;",
+        &[
+            ("agg", "export * from \"dep\";"),
+            ("dep", "export default 1;"),
+        ],
+    )
+    .expect_err("default is not re-exported through export-star");
+    assert_eq!(error.kind, EvalErrorKind::Early);
+    assert!(error.message.contains("default"), "{}", error.message);
+}
+
+#[test]
 fn circular_indirect_reexport_is_syntax_error() {
     // `a` re-exports `x` from `b`, `b` re-exports `x` from `a`, neither defines
     // `x`: ResolveExport cycles with no binding, a SyntaxError at link time.
