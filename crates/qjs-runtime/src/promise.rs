@@ -52,6 +52,7 @@ const PROMISE_THENABLE_CAPABILITY: &str = "\0PromiseThenableCapability";
 const PROMISE_IMPORT_RESOLVE: &str = "\0PromiseImportResolve";
 const PROMISE_IMPORT_REJECT: &str = "\0PromiseImportReject";
 const PROMISE_IMPORT_SPECIFIER: &str = "\0PromiseImportSpecifier";
+const PROMISE_IMPORT_TYPE: &str = "\0PromiseImportType";
 const PROMISE_ASYNC_DISPOSE_RESULT: &str = "\0PromiseAsyncDisposeResult";
 const PROMISE_ASYNC_DISPOSE_REJECTION: &str = "\0PromiseAsyncDisposeRejection";
 const PROMISE_OBJECT_PROTOTYPE: &str = "\0PromiseObjectPrototype";
@@ -547,14 +548,18 @@ pub(crate) fn dynamic_import(specifier: Value, options: Option<Value>, env: &mut
     // EvaluateImportCall validates the options/attributes after ToString of the
     // specifier; any violation rejects the promise. Attributes are otherwise
     // unused for resolution here.
-    if let Some(options) = options
-        && let Err(error) = validate_import_options(options, env)
-    {
-        let reason = crate::error::runtime_error_to_value(error, env);
-        let _ = call_function(reject, Value::Undefined, vec![reason], env, false);
-        return Value::Object(promise);
-    }
-    jobs::enqueue_dynamic_import_job(env, resolve, reject, specifier_string);
+    let module_type = match options {
+        Some(options) => match validate_import_options(options, env) {
+            Ok(module_type) => module_type,
+            Err(error) => {
+                let reason = crate::error::runtime_error_to_value(error, env);
+                let _ = call_function(reject, Value::Undefined, vec![reason], env, false);
+                return Value::Object(promise);
+            }
+        },
+        None => None,
+    };
+    jobs::enqueue_dynamic_import_job(env, resolve, reject, specifier_string, module_type);
     Value::Object(promise)
 }
 
@@ -562,9 +567,12 @@ pub(crate) fn dynamic_import(specifier: Value, options: Option<Value>, env: &mut
 /// `with` property holds the import-attributes record): `undefined` is allowed,
 /// a non-object options or non-object `with` is a TypeError, and every own
 /// enumerable attribute value must be a String (EvaluateImportCall).
-fn validate_import_options(options: Value, env: &mut CallEnv) -> Result<(), RuntimeError> {
+fn validate_import_options(
+    options: Value,
+    env: &mut CallEnv,
+) -> Result<Option<String>, RuntimeError> {
     if matches!(options, Value::Undefined) {
-        return Ok(());
+        return Ok(None);
     }
     if !import_options_is_object(&options) {
         return Err(import_options_type_error(
@@ -573,21 +581,27 @@ fn validate_import_options(options: Value, env: &mut CallEnv) -> Result<(), Runt
     }
     let attributes = property_value(options, "with", env)?;
     if matches!(attributes, Value::Undefined) {
-        return Ok(());
+        return Ok(None);
     }
     if !import_options_is_object(&attributes) {
         return Err(import_options_type_error(
             "import 'with' attributes must be an object",
         ));
     }
-    for (_key, value) in crate::object::enumerable_property_entries(attributes, env)? {
+    let mut module_type = None;
+    for (key, value) in crate::object::enumerable_property_entries(attributes, env)? {
         if !matches!(value, Value::String(_)) {
             return Err(import_options_type_error(
                 "import attribute value must be a string",
             ));
         }
+        if key == "type"
+            && let Value::String(value) = value
+        {
+            module_type = Some(value.to_string());
+        }
     }
-    Ok(())
+    Ok(module_type)
 }
 
 fn import_options_is_object(value: &Value) -> bool {

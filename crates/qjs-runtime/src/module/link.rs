@@ -13,8 +13,8 @@ use crate::{ModuleNamespaceBindings, RuntimeError, Value, bytecode};
 
 use super::namespace::{empty_namespace, populate_namespace};
 use super::records::{
-    DEFAULT_BINDING, ImportName, LocalExportEntry, ModuleKind, ModuleRecord, NAMESPACE_BINDING,
-    build_record,
+    DEFAULT_BINDING, ImportName, LocalExportEntry, ModuleKind, ModuleRecord, ModuleRequest,
+    NAMESPACE_BINDING, build_record,
 };
 use super::resolver::ModuleResolver;
 
@@ -135,10 +135,11 @@ impl ModuleGraph {
     pub(super) fn import_dynamic_owned(
         &mut self,
         specifier: &str,
+        module_type: Option<&str>,
         referrer: &str,
     ) -> Result<Value, LinkError> {
         let mut resolver = self.resolver.take().expect("resolver installed");
-        let result = self.import_dynamic(specifier, referrer, resolver.as_mut());
+        let result = self.import_dynamic(specifier, module_type, referrer, resolver.as_mut());
         self.resolver = Some(resolver);
         result
     }
@@ -156,6 +157,7 @@ impl ModuleGraph {
     pub(super) fn import_dynamic(
         &mut self,
         specifier: &str,
+        module_type: Option<&str>,
         referrer: &str,
         resolver: &mut dyn ModuleResolver,
     ) -> Result<Value, LinkError> {
@@ -165,14 +167,22 @@ impl ModuleGraph {
                 error.message
             ))
         })?;
-        let key = resolved.key.clone();
+        let request = ModuleRequest::from_type(resolved.key.clone(), module_type);
+        let key = request.cache_key();
         if !self.modules.contains_key(&key) {
-            let record = build_record(&resolved.source).map_err(|message| LinkError {
-                kind: LinkErrorKind::Parse,
-                message,
-                thrown: None,
-            })?;
-            self.insert_and_load_dependencies(key.clone(), record, resolver)?;
+            match request.kind {
+                ModuleKind::SourceText => {
+                    let record = build_record(&resolved.source).map_err(|message| LinkError {
+                        kind: LinkErrorKind::Parse,
+                        message,
+                        thrown: None,
+                    })?;
+                    self.insert_and_load_dependencies(key.clone(), record, resolver)?;
+                }
+                ModuleKind::Bytes => self.insert_bytes_module(key.clone(), resolved.bytes),
+                ModuleKind::Json => self.insert_json_module(key.clone(), &resolved.source)?,
+                ModuleKind::Text => self.insert_text_module(key.clone(), resolved.source),
+            }
         }
         self.link(&key)?;
         self.evaluate_with_drain(&key, false, false)
@@ -255,6 +265,8 @@ impl ModuleGraph {
             let resolved_key = match request.kind {
                 ModuleKind::SourceText => resolved.key.clone(),
                 ModuleKind::Bytes => format!("{}\0bytes", resolved.key),
+                ModuleKind::Json => format!("{}\0json", resolved.key),
+                ModuleKind::Text => format!("{}\0text", resolved.key),
             };
             self.modules
                 .get_mut(&key)
@@ -275,6 +287,8 @@ impl ModuleGraph {
                     self.insert_and_load_dependencies(resolved_key, dep_record, resolver)?;
                 }
                 ModuleKind::Bytes => self.insert_bytes_module(resolved_key, resolved.bytes),
+                ModuleKind::Json => self.insert_json_module(resolved_key, &resolved.source)?,
+                ModuleKind::Text => self.insert_text_module(resolved_key, resolved.source),
             }
         }
         Ok(())
@@ -286,7 +300,34 @@ impl ModuleGraph {
             &bytes, &env,
         ));
         let mut exports = HashMap::new();
-        exports.insert("default".to_owned(), value.clone());
+        exports.insert("default".to_owned(), value);
+        self.insert_synthetic_default_module(key, exports);
+    }
+
+    fn insert_json_module(&mut self, key: String, source: &str) -> Result<(), LinkError> {
+        let env = crate::CallEnv::new(self.realm.clone());
+        let value = crate::json::parse_json_text(source, &env).map_err(|error| LinkError {
+            kind: LinkErrorKind::Parse,
+            message: error.message,
+            thrown: error.thrown,
+        })?;
+        let mut exports = HashMap::new();
+        exports.insert("default".to_owned(), value);
+        self.insert_synthetic_default_module(key, exports);
+        Ok(())
+    }
+
+    fn insert_text_module(&mut self, key: String, source: String) {
+        let mut exports = HashMap::new();
+        exports.insert("default".to_owned(), Value::String(source.into()));
+        self.insert_synthetic_default_module(key, exports);
+    }
+
+    fn insert_synthetic_default_module(&mut self, key: String, exports: HashMap<String, Value>) {
+        let value = exports
+            .get("default")
+            .cloned()
+            .expect("synthetic module has default export");
         let mut live = HashMap::new();
         live.insert(DEFAULT_BINDING.to_owned(), value);
         self.modules.insert(

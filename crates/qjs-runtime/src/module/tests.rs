@@ -77,6 +77,82 @@ fn import_bytes_module_exports_immutable_uint8_array() {
 }
 
 #[test]
+fn import_json_module_exports_parsed_default_value() {
+    let resolver = MapResolver::new().with(
+        "data.json",
+        "{\"number\": -1.25, \"boolean\": true, \"array\": [], \"object\": {}}",
+    );
+    let namespace = eval_module(
+        "import value from \"data.json\" with { type: \"json\" };\n\
+         value.extra = 23;\n\
+         export const number = value.number;\n\
+         export const boolean = value.boolean;\n\
+         export const array = Array.isArray(value.array);\n\
+         export const objectProto = Object.getPrototypeOf(value.object) === Object.prototype;\n\
+         export const extensible = value.extra;",
+        "main",
+        Box::new(resolver),
+    )
+    .expect("graph evaluates");
+    assert_eq!(export(&namespace, "number"), Value::Number(-1.25));
+    assert_eq!(export(&namespace, "boolean"), Value::Boolean(true));
+    assert_eq!(export(&namespace, "array"), Value::Boolean(true));
+    assert_eq!(export(&namespace, "objectProto"), Value::Boolean(true));
+    assert_eq!(export(&namespace, "extensible"), Value::Number(23.0));
+}
+
+#[test]
+fn import_text_module_exports_source_without_parsing() {
+    let resolver = MapResolver::new().with("text.js", "invalid { javascript");
+    let namespace = eval_module(
+        "import value from \"text.js\" with { type: \"text\" };\n\
+         export const text = value;\n\
+         export const kind = typeof value;",
+        "main",
+        Box::new(resolver),
+    )
+    .expect("graph evaluates");
+    assert_eq!(
+        export(&namespace, "text"),
+        Value::String("invalid { javascript".to_owned().into())
+    );
+    assert_eq!(
+        export(&namespace, "kind"),
+        Value::String("string".to_owned().into())
+    );
+}
+
+#[test]
+fn import_attribute_synthetic_modules_support_namespace_and_dynamic_idempotency() {
+    let resolver = MapResolver::new()
+        .with("data.json", "{}")
+        .with("text.txt", "hello");
+    let namespace = eval_module(
+        "import jsonValue from \"data.json\" with { type: \"json\" };\n\
+         import * as jsonNs from \"data.json\" with { type: \"json\" };\n\
+         import * as textNs from \"text.txt\" with { type: \"text\" };\n\
+         const dynamicNs = await import(\"data.json\", { with: { type: \"json\" } });\n\
+         export const jsonKeys = Object.getOwnPropertyNames(jsonNs).join(',');\n\
+         export const textDefault = textNs.default;\n\
+         export const sameStatic = jsonNs.default === jsonValue;\n\
+         export const sameDynamic = dynamicNs.default === jsonValue;",
+        "main",
+        Box::new(resolver),
+    )
+    .expect("graph evaluates");
+    assert_eq!(
+        export(&namespace, "jsonKeys"),
+        Value::String("default".to_owned().into())
+    );
+    assert_eq!(
+        export(&namespace, "textDefault"),
+        Value::String("hello".to_owned().into())
+    );
+    assert_eq!(export(&namespace, "sameStatic"), Value::Boolean(true));
+    assert_eq!(export(&namespace, "sameDynamic"), Value::Boolean(true));
+}
+
+#[test]
 fn anonymous_default_function_import_is_callable() {
     let namespace = run(
         "import def from \"dep\";\n\

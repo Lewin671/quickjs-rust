@@ -5,10 +5,10 @@ use crate::{ArrayRef, GLOBAL_THIS_BINDING, ObjectRef, RuntimeError, Value, call_
 use super::{
     PROMISE_ASYNC_DISPOSE_REJECTION, PROMISE_ASYNC_DISPOSE_RESULT, PROMISE_FULFILL_REACTION,
     PROMISE_HANDLER, PROMISE_IMPORT_REJECT, PROMISE_IMPORT_RESOLVE, PROMISE_IMPORT_SPECIFIER,
-    PROMISE_JOBS, PROMISE_REACTION_ARGUMENT, PROMISE_REACTION_CAPABILITY, PROMISE_REACTION_REJECT,
-    PROMISE_REACTION_RESOLVE, PROMISE_REJECTED, PROMISE_THEN, PROMISE_THENABLE,
-    PROMISE_THENABLE_CAPABILITY, is_promise_object, reaction_is_fulfill, resolve_promise,
-    resolving_function_pair, settle_promise,
+    PROMISE_IMPORT_TYPE, PROMISE_JOBS, PROMISE_REACTION_ARGUMENT, PROMISE_REACTION_CAPABILITY,
+    PROMISE_REACTION_REJECT, PROMISE_REACTION_RESOLVE, PROMISE_REJECTED, PROMISE_THEN,
+    PROMISE_THENABLE, PROMISE_THENABLE_CAPABILITY, is_promise_object, reaction_is_fulfill,
+    resolve_promise, resolving_function_pair, settle_promise,
 };
 use crate::CallEnv;
 use crate::module::ImportErrorKind;
@@ -79,6 +79,7 @@ pub(super) fn enqueue_dynamic_import_job(
     resolve: Value,
     reject: Value,
     specifier: String,
+    module_type: Option<String>,
 ) {
     let job = ObjectRef::new(HashMap::new());
     job.define_non_enumerable(PROMISE_IMPORT_RESOLVE.to_owned(), resolve);
@@ -87,6 +88,12 @@ pub(super) fn enqueue_dynamic_import_job(
         PROMISE_IMPORT_SPECIFIER.to_owned(),
         Value::String(specifier.into()),
     );
+    if let Some(module_type) = module_type {
+        job.define_non_enumerable(
+            PROMISE_IMPORT_TYPE.to_owned(),
+            Value::String(module_type.into()),
+        );
+    }
     let jobs = promise_jobs(env);
     jobs.set(jobs.len(), Value::Object(job));
 }
@@ -172,9 +179,18 @@ fn run_dynamic_import_job(job: &ObjectRef, env: &mut CallEnv) -> Result<(), Runt
         Some(Value::String(specifier)) => specifier,
         _ => String::new().into(),
     };
+    let module_type = match job
+        .own_property(PROMISE_IMPORT_TYPE)
+        .map(|property| property.value)
+    {
+        Some(Value::String(module_type)) => Some(module_type),
+        _ => None,
+    };
 
     let outcome = match env.module_host() {
-        Some(host) => host.borrow_mut().import(&specifier),
+        Some(host) => host
+            .borrow_mut()
+            .import(&specifier, module_type.as_deref().map(String::as_str)),
         None => {
             let reason = error_reason(
                 "TypeError: dynamic import is not supported in this context",

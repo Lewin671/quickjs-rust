@@ -83,11 +83,15 @@ impl ModuleHost {
     /// Resolves and evaluates `specifier` against the active referrer, returning
     /// the requested module's namespace object. The graph deduplicates by key,
     /// so importing an already-loaded module yields the same namespace.
-    pub(crate) fn import(&mut self, specifier: &str) -> Result<Value, ImportError> {
+    pub(crate) fn import(
+        &mut self,
+        specifier: &str,
+        module_type: Option<&str>,
+    ) -> Result<Value, ImportError> {
         let referrer = self.referrer.clone();
         let mut graph = self.graph.borrow_mut();
         graph
-            .import_dynamic_owned(specifier, &referrer)
+            .import_dynamic_owned(specifier, module_type, &referrer)
             .map_err(import_error)
     }
 }

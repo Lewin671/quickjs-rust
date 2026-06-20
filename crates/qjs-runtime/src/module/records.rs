@@ -64,6 +64,8 @@ pub(super) struct IndirectExportEntry {
 pub(super) enum ModuleKind {
     SourceText,
     Bytes,
+    Json,
+    Text,
 }
 
 /// A module request plus its selected module kind.
@@ -85,8 +87,14 @@ impl ModuleRequest {
         specifier: impl Into<String>,
         attributes: &ImportAttributes,
     ) -> Self {
-        let kind = match attributes.module_type.as_deref() {
+        Self::from_type(specifier, attributes.module_type.as_deref())
+    }
+
+    pub(super) fn from_type(specifier: impl Into<String>, module_type: Option<&str>) -> Self {
+        let kind = match module_type {
             Some("bytes") => ModuleKind::Bytes,
+            Some("json") => ModuleKind::Json,
+            Some("text") => ModuleKind::Text,
             _ => ModuleKind::SourceText,
         };
         Self {
@@ -99,6 +107,8 @@ impl ModuleRequest {
         match self.kind {
             ModuleKind::SourceText => self.specifier.clone(),
             ModuleKind::Bytes => format!("{}\0bytes", self.specifier),
+            ModuleKind::Json => format!("{}\0json", self.specifier),
+            ModuleKind::Text => format!("{}\0text", self.specifier),
         }
     }
 }
