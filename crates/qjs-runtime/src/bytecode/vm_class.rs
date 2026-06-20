@@ -92,8 +92,11 @@ impl Vm<'_> {
             super_constructor: super_constructor.clone(),
             captured_env: constructor_captured,
             with_stack: self.with_stack.clone(),
-            capture_writeback: self
-                .class_member_capture_writeback(&constructor.bytecode, &constructor.local_names),
+            capture_writeback: self.class_member_capture_writeback(
+                &constructor.bytecode,
+                &constructor.local_names,
+                name,
+            ),
         });
 
         // Static-side inheritance: a subclass constructor inherits the parent
@@ -345,8 +348,11 @@ impl Vm<'_> {
                         super_constructor: None,
                         captured_env: Rc::new(RefCell::new(key_env)),
                         with_stack: self.with_stack.clone(),
-                        capture_writeback: self
-                            .class_member_capture_writeback(bytecode, local_names),
+                        capture_writeback: self.class_member_capture_writeback(
+                            bytecode,
+                            local_names,
+                            name,
+                        ),
                     });
                     let this_value = self.env.get("this").unwrap_or(Value::Undefined);
                     let value = self.run_field_initializer(&thunk, this_value)?;
@@ -400,8 +406,11 @@ impl Vm<'_> {
             super_constructor: None,
             captured_env: Rc::new(RefCell::new(method_env)),
             with_stack: self.with_stack.clone(),
-            capture_writeback: self
-                .class_member_capture_writeback(&method.bytecode, &method.local_names),
+            capture_writeback: self.class_member_capture_writeback(
+                &method.bytecode,
+                &method.local_names,
+                name,
+            ),
         });
         if method.is_generator && method.is_async {
             crate::async_generator::wire_async_generator_function_intrinsics(
@@ -491,7 +500,7 @@ impl Vm<'_> {
             super_constructor: None,
             captured_env: Rc::new(RefCell::new(field_env)),
             with_stack: self.with_stack.clone(),
-            capture_writeback: self.class_member_capture_writeback(bytecode, local_names),
+            capture_writeback: self.class_member_capture_writeback(bytecode, local_names, name),
         }))
     }
 
@@ -499,17 +508,18 @@ impl Vm<'_> {
         &self,
         bytecode: &Bytecode,
         local_names: &[String],
+        class_inner_name: Option<&str>,
     ) -> Option<CaptureWriteback> {
         let mut names = Vec::new();
         for name in bytecode.global_names() {
-            self.push_member_capture_name(&mut names, name);
+            self.push_member_capture_name(&mut names, name, class_inner_name);
         }
         for name in bytecode.local_names() {
             if local_names
                 .binary_search_by(|local| local.as_str().cmp(name))
                 .is_err()
             {
-                self.push_member_capture_name(&mut names, name);
+                self.push_member_capture_name(&mut names, name, class_inner_name);
             }
         }
         (!names.is_empty()).then(|| CaptureWriteback {
@@ -520,8 +530,16 @@ impl Vm<'_> {
         })
     }
 
-    fn push_member_capture_name(&self, names: &mut Vec<String>, name: &str) {
+    fn push_member_capture_name(
+        &self,
+        names: &mut Vec<String>,
+        name: &str,
+        class_inner_name: Option<&str>,
+    ) {
         if crate::function::is_internal_binding_name(name) {
+            return;
+        }
+        if Some(name) == class_inner_name {
             return;
         }
         if self.current_local_binding(name).is_none() && !self.env.locals().contains_key(name) {
@@ -568,7 +586,7 @@ impl Vm<'_> {
             super_constructor: None,
             captured_env: Rc::new(RefCell::new(block_env)),
             with_stack: self.with_stack.clone(),
-            capture_writeback: self.class_member_capture_writeback(bytecode, local_names),
+            capture_writeback: self.class_member_capture_writeback(bytecode, local_names, name),
         });
         self.run_field_initializer(&thunk, Value::Function(constructor_function.clone()))?;
         Ok(())

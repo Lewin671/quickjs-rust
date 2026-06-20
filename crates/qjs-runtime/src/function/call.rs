@@ -593,11 +593,14 @@ fn function_env(
     insert_caller_bytecode_bindings(
         &mut local_env,
         &mut caller_binding_names,
-        bytecode,
-        &function.local_names,
-        env,
-        caller_shares_capture_source,
-        &callee,
+        CallerBindingContext {
+            bytecode,
+            function_local_names: &function.local_names,
+            protected_capture_names: &protected_capture_names,
+            env,
+            caller_shares_capture_source,
+            callee: &callee,
+        },
     );
     insert_caller_scope_bindings(
         &mut local_env,
@@ -925,13 +928,20 @@ fn insert_function_capture(
 fn insert_caller_bytecode_bindings(
     local_env: &mut HashMap<String, Value>,
     caller_binding_names: &mut Vec<String>,
-    bytecode: &Bytecode,
-    function_local_names: &[String],
-    env: &CallEnv,
-    caller_shares_capture_source: bool,
-    callee: &Value,
+    context: CallerBindingContext<'_>,
 ) {
+    let CallerBindingContext {
+        bytecode,
+        function_local_names,
+        protected_capture_names,
+        env,
+        caller_shares_capture_source,
+        callee,
+    } = context;
     for name in bytecode.global_names() {
+        let is_protected_capture = protected_capture_names
+            .iter()
+            .any(|protected| protected == name);
         let write_back_to_caller = !function_local_names.iter().any(|local| local == name);
         let existing_capture_matches_caller = caller_capture_matches_existing(
             local_env,
@@ -946,7 +956,8 @@ fn insert_caller_bytecode_bindings(
             env,
             name,
             write_back_to_caller,
-            existing_capture_matches_caller
+            !is_protected_capture
+                && existing_capture_matches_caller
                 && ((caller_shares_capture_source
                     && bytecode.sloppy_global_fallback_binding(name))
                     || (bytecode.local_slot(name).is_none()
@@ -964,6 +975,9 @@ fn insert_caller_bytecode_bindings(
     }
     for name in bytecode.local_names() {
         if !function_local_names.iter().any(|local| local == name) {
+            let is_protected_capture = protected_capture_names
+                .iter()
+                .any(|protected| protected == name);
             let from_env = bytecode
                 .local_slot(name)
                 .is_some_and(|slot| bytecode.local_is_from_env(slot));
@@ -975,6 +989,7 @@ fn insert_caller_bytecode_bindings(
                 callee,
             );
             let allow_live_env_override = from_env
+                && !is_protected_capture
                 && existing_capture_matches_caller
                 && (env.module_host().is_some()
                     || (bytecode.writes_binding(name)
@@ -989,6 +1004,15 @@ fn insert_caller_bytecode_bindings(
             );
         }
     }
+}
+
+struct CallerBindingContext<'a> {
+    bytecode: &'a Bytecode,
+    function_local_names: &'a [String],
+    protected_capture_names: &'a [String],
+    env: &'a CallEnv,
+    caller_shares_capture_source: bool,
+    callee: &'a Value,
 }
 
 fn insert_caller_binding(

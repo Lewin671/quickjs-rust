@@ -45,3 +45,51 @@ fn class_members_write_enclosing_bindings() {
         Ok(Value::Number(3.0))
     );
 }
+
+#[test]
+fn class_members_keep_inner_name_binding_after_outer_mutation() {
+    assert_eq!(
+        eval(
+            "class C { method() { return C; } } \
+             var cls = C; \
+             C = null; \
+             [C === null, cls.prototype.method() === cls].join(':');"
+        ),
+        Ok(Value::String("true:true".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var probeBefore = function() { return C; }; \
+             var setBefore = function() { C = null; }; \
+             class C { \
+               probe() { return C; } \
+               modify() { C = null; } \
+             } \
+             var cls = probeBefore(); \
+             setBefore(); \
+             var modifyThrows = false; \
+             try { cls.prototype.modify(); } catch (e) { modifyThrows = e instanceof TypeError; } \
+             [probeBefore() === null, cls.prototype.probe() === cls, modifyThrows, typeof cls.prototype.probe()].join(':');"
+        ),
+        Ok(Value::String("true:true:true:function".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var setBefore = function() { C = null; }; \
+             var probeBefore = function() { return C; }; \
+             var probeHeritage, setHeritage; \
+             class C extends ( \
+               probeHeritage = function() { return C; }, \
+               setHeritage = function() { C = null; } \
+             ) { \
+               method() { return C; } \
+             } \
+             var cls = probeBefore(); \
+             setBefore(); \
+             var heritageSetThrows = false; \
+             try { setHeritage(); } catch (e) { heritageSetThrows = e instanceof TypeError; } \
+             [probeBefore() === null, probeHeritage() === cls, heritageSetThrows, cls.prototype.method() === cls].join(':');"
+        ),
+        Ok(Value::String("true:true:true:true".to_owned().into()))
+    );
+}
