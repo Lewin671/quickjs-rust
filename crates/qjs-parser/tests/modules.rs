@@ -305,6 +305,12 @@ fn parses_anonymous_export_default_function() {
 }
 
 #[test]
+fn parses_export_default_function_without_statement_terminator() {
+    assert!(parse_module("export default function() {} if (true) {}").is_ok());
+    assert!(parse_module("export default async function() {} if (true) {}").is_ok());
+}
+
+#[test]
 fn parses_anonymous_export_default_async_function() {
     let ExportDecl::Default { declaration, .. } = sole_export("export default async function() {}")
     else {
@@ -342,6 +348,12 @@ fn parses_anonymous_export_default_class() {
     let DefaultExport::Expression(Expr::Class { name: None, .. }) = declaration else {
         panic!("expected an anonymous class expression default");
     };
+}
+
+#[test]
+fn parses_export_default_class_without_statement_terminator() {
+    assert!(parse_module("export default class {} if (true) {}").is_ok());
+    assert!(parse_module("export default class C {} if (true) {}").is_ok());
 }
 
 #[test]

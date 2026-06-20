@@ -100,6 +100,30 @@ fn anonymous_default_class_gets_default_name_in_static_initializer() {
 }
 
 #[test]
+fn default_function_declaration_does_not_need_statement_terminator() {
+    let namespace = run(
+        "var count = 0;\n\
+         export default function() {} if (true) { count += 1; }\n\
+         export const observed = count;",
+        &[],
+    )
+    .expect("module evaluates");
+    assert_eq!(export(&namespace, "observed"), Value::Number(1.0));
+}
+
+#[test]
+fn default_class_declaration_does_not_need_statement_terminator() {
+    let namespace = run(
+        "var count = 0;\n\
+         export default class {} if (true) { count += 1; }\n\
+         export const observed = count;",
+        &[],
+    )
+    .expect("module evaluates");
+    assert_eq!(export(&namespace, "observed"), Value::Number(1.0));
+}
+
+#[test]
 fn self_default_import_reads_live_default_export() {
     let namespace = run(
         "import { value, className } from \"dep\";\n\

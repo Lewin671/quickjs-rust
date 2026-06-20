@@ -231,7 +231,6 @@ impl Parser {
             let async_token = self.advance();
             self.expect(&TokenKind::Function)?;
             let expr = self.function_expression_with_async(async_token.span.start, true)?;
-            self.consume_module_declaration_terminator(expr.span().end)?;
             return Ok(DefaultExport::Expression(expr));
         }
         if self.at(&TokenKind::Function) {
@@ -241,12 +240,10 @@ impl Parser {
             }
             let start = self.advance().span.start;
             let expr = self.function_expression(start)?;
-            self.consume_module_declaration_terminator(expr.span().end)?;
             return Ok(DefaultExport::Expression(expr));
         }
         if self.at(&TokenKind::Class) {
             let expr = self.assignment()?;
-            self.consume_module_declaration_terminator(expr.span().end)?;
             return Ok(DefaultExport::Expression(expr));
         }
         let expr = self.assignment()?;
