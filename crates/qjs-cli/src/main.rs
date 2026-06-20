@@ -165,10 +165,11 @@ impl ModuleResolver for FsResolver {
             message: format!("Cannot resolve module '{specifier}': {error}"),
         })?;
         let key = canonical.to_string_lossy().into_owned();
-        let source = fs::read_to_string(&canonical).map_err(|error| ModuleResolveError {
+        let bytes = fs::read(&canonical).map_err(|error| ModuleResolveError {
             message: format!("Cannot load module '{specifier}': {error}"),
         })?;
-        Ok(ResolvedModule { key, source })
+        let source = String::from_utf8_lossy(&bytes).into_owned();
+        Ok(ResolvedModule { key, source, bytes })
     }
 }
 

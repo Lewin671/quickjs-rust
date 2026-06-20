@@ -17,7 +17,7 @@ pub use expression::{
 pub use span::Span;
 pub use statement::{
     BindingElement, BindingPattern, CatchClause, DEFAULT_EXPORT_BINDING, DefaultExport, ExportDecl,
-    ExportSpecifier, ForInLeft, ForInit, ImportDecl, ImportSpecifier, ModuleDecl, ModuleExportName,
-    ObjectBindingProperty, ObjectBindingPropertyKey, Script, Stmt, SwitchCase, VarDeclarator,
-    VarKind,
+    ExportSpecifier, ForInLeft, ForInit, ImportAttributes, ImportDecl, ImportSpecifier, ModuleDecl,
+    ModuleExportName, ObjectBindingProperty, ObjectBindingPropertyKey, Script, Stmt, SwitchCase,
+    VarDeclarator, VarKind,
 };

@@ -4,8 +4,8 @@
 //! declaration forms and confirm that script-mode parsing is unaffected.
 
 use qjs_ast::{
-    DEFAULT_EXPORT_BINDING, DefaultExport, ExportDecl, Expr, ImportSpecifier, ModuleDecl,
-    ModuleExportName, Stmt,
+    DEFAULT_EXPORT_BINDING, DefaultExport, ExportDecl, Expr, ImportDecl, ImportSpecifier,
+    ModuleDecl, ModuleExportName, Stmt,
 };
 use qjs_parser::{parse_module, parse_script};
 
@@ -21,8 +21,13 @@ fn sole_module_decl(source: &str) -> ModuleDecl {
 }
 
 fn sole_import(source: &str) -> (Vec<ImportSpecifier>, String) {
+    let decl = sole_import_decl(source);
+    (decl.specifiers, decl.source)
+}
+
+fn sole_import_decl(source: &str) -> ImportDecl {
     match sole_module_decl(source) {
-        ModuleDecl::Import(decl) => (decl.specifiers, decl.source),
+        ModuleDecl::Import(decl) => decl,
         other => panic!("expected an import declaration, got {other:?}"),
     }
 }
@@ -65,16 +70,29 @@ fn parses_default_import() {
 
 #[test]
 fn parses_import_with_empty_attributes() {
-    let (specifiers, source) = sole_import("import def from \"mod\" with {};");
-    assert_eq!(source, "mod");
+    let decl = sole_import_decl("import def from \"mod\" with {};");
+    assert_eq!(decl.source, "mod");
+    assert_eq!(decl.attributes.module_type, None);
     assert!(matches!(
-        specifiers.as_slice(),
+        decl.specifiers.as_slice(),
         [ImportSpecifier::Default { .. }]
     ));
 
-    let (specifiers, source) = sole_import("import \"side\" with {};");
-    assert_eq!(source, "side");
-    assert!(specifiers.is_empty());
+    let decl = sole_import_decl("import \"side\" with {};");
+    assert_eq!(decl.source, "side");
+    assert_eq!(decl.attributes.module_type, None);
+    assert!(decl.specifiers.is_empty());
+}
+
+#[test]
+fn parses_import_with_type_attribute() {
+    let decl = sole_import_decl("import value from \"mod\" with { type: \"bytes\" };");
+    assert_eq!(decl.source, "mod");
+    assert_eq!(decl.attributes.module_type.as_deref(), Some("bytes"));
+    assert!(matches!(
+        decl.specifiers.as_slice(),
+        [ImportSpecifier::Default { .. }]
+    ));
 }
 
 #[test]

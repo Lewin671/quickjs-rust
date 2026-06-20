@@ -6,7 +6,9 @@
 //! module body is also rewritten into a plain [`Script`] whose `import`/`export`
 //! wrappers are stripped, so the existing global-scope compiler can lower it.
 
-use qjs_ast::{DefaultExport, ExportDecl, ImportSpecifier, ModuleDecl, Script, Stmt, VarKind};
+use qjs_ast::{
+    DefaultExport, ExportDecl, ImportAttributes, ImportSpecifier, ModuleDecl, Script, Stmt, VarKind,
+};
 
 /// The synthetic local-binding name holding a module's default export. It is
 /// not a valid identifier, so it never collides with a user binding.
@@ -16,8 +18,8 @@ pub(super) const NAMESPACE_BINDING: &str = "*namespace*";
 /// An `import` entry: a local binding fed from another module.
 #[derive(Clone, Debug)]
 pub(super) struct ImportEntry {
-    /// The module specifier the binding is imported from.
-    pub(super) module_request: String,
+    /// The module request the binding is imported from.
+    pub(super) module_request: ModuleRequest,
     /// The name imported from that module, or [`ImportName::Namespace`] for a
     /// namespace import (`import * as ns`).
     pub(super) import_name: ImportName,
@@ -57,10 +59,54 @@ pub(super) struct IndirectExportEntry {
     pub(super) import_name: ImportName,
 }
 
+/// The host module type selected by static import attributes.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum ModuleKind {
+    SourceText,
+    Bytes,
+}
+
+/// A module request plus its selected module kind.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct ModuleRequest {
+    pub(super) specifier: String,
+    pub(super) kind: ModuleKind,
+}
+
+impl ModuleRequest {
+    pub(super) fn source_text(specifier: impl Into<String>) -> Self {
+        Self {
+            specifier: specifier.into(),
+            kind: ModuleKind::SourceText,
+        }
+    }
+
+    pub(super) fn from_import_attributes(
+        specifier: impl Into<String>,
+        attributes: &ImportAttributes,
+    ) -> Self {
+        let kind = match attributes.module_type.as_deref() {
+            Some("bytes") => ModuleKind::Bytes,
+            _ => ModuleKind::SourceText,
+        };
+        Self {
+            specifier: specifier.into(),
+            kind,
+        }
+    }
+
+    pub(super) fn cache_key(&self) -> String {
+        match self.kind {
+            ModuleKind::SourceText => self.specifier.clone(),
+            ModuleKind::Bytes => format!("{}\0bytes", self.specifier),
+        }
+    }
+}
+
 /// The collected static entries of a Source Text Module Record.
 pub(super) struct ModuleRecord {
     /// Distinct module specifiers this module imports/re-exports from.
-    pub(super) requested_modules: Vec<String>,
+    pub(super) requested_modules: Vec<ModuleRequest>,
     pub(super) import_entries: Vec<ImportEntry>,
     pub(super) local_exports: Vec<LocalExportEntry>,
     pub(super) indirect_exports: Vec<IndirectExportEntry>,
@@ -87,9 +133,13 @@ pub(super) fn build_record(source: &str) -> Result<ModuleRecord, String> {
     for stmt in script.body {
         match stmt {
             Stmt::ModuleDecl(ModuleDecl::Import(import)) => {
-                record.request(&import.source);
+                let request = ModuleRequest::from_import_attributes(
+                    import.source.clone(),
+                    &import.attributes,
+                );
+                record.request(request.clone());
                 for specifier in import.specifiers {
-                    record.collect_import(&import.source, specifier);
+                    record.collect_import(request.clone(), specifier);
                 }
             }
             Stmt::ModuleDecl(ModuleDecl::Export(export)) => {
@@ -102,13 +152,13 @@ pub(super) fn build_record(source: &str) -> Result<ModuleRecord, String> {
 }
 
 impl ModuleRecord {
-    fn request(&mut self, specifier: &str) {
-        if !self.requested_modules.iter().any(|m| m == specifier) {
-            self.requested_modules.push(specifier.to_owned());
+    fn request(&mut self, request: ModuleRequest) {
+        if !self.requested_modules.iter().any(|m| m == &request) {
+            self.requested_modules.push(request);
         }
     }
 
-    fn collect_import(&mut self, module_request: &str, specifier: ImportSpecifier) {
+    fn collect_import(&mut self, module_request: ModuleRequest, specifier: ImportSpecifier) {
         let (local_name, import_name) = match specifier {
             ImportSpecifier::Default { local, .. } => {
                 (local, ImportName::Named("default".to_owned()))
@@ -119,7 +169,7 @@ impl ModuleRecord {
             } => (local, ImportName::Named(imported.as_str().to_owned())),
         };
         self.import_entries.push(ImportEntry {
-            module_request: module_request.to_owned(),
+            module_request,
             import_name,
             local_name,
         });
@@ -131,7 +181,7 @@ impl ModuleRecord {
                 specifiers, source, ..
             } => {
                 if let Some(source) = source {
-                    self.request(&source);
+                    self.request(ModuleRequest::source_text(source.clone()));
                     for specifier in specifiers {
                         self.indirect_exports.push(IndirectExportEntry {
                             export_name: specifier.exported.as_str().to_owned(),
@@ -151,7 +201,7 @@ impl ModuleRecord {
             ExportDecl::All {
                 exported, source, ..
             } => {
-                self.request(&source);
+                self.request(ModuleRequest::source_text(source.clone()));
                 match exported {
                     Some(name) => self.indirect_exports.push(IndirectExportEntry {
                         export_name: name.as_str().to_owned(),

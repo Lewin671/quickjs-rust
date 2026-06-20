@@ -496,6 +496,20 @@ pub(crate) fn create_typed_array_of_kind(
     construct::create_with_values(native, values, env)
 }
 
+/// Builds a `Uint8Array` backed by an immutable `ArrayBuffer` containing
+/// `bytes`. Used by static import-bytes module records.
+pub(crate) fn create_immutable_uint8_array(bytes: &[u8], env: &CallEnv) -> ObjectRef {
+    let values = bytes
+        .iter()
+        .map(|byte| Value::Number(f64::from(*byte)))
+        .collect();
+    let object = construct::create_with_values(NativeFunction::Uint8Array, values, env);
+    if let Some(buffer) = typed_array_buffer(&object) {
+        array_buffer::mark_immutable(&buffer);
+    }
+    object
+}
+
 /// Implements TypedArraySpeciesCreate for prototype methods that allocate a
 /// length-sized result through the receiver's constructor / @@species hook.
 /// The single-Number argument form additionally rejects an under-length

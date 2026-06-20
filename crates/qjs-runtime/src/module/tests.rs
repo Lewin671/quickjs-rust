@@ -51,6 +51,32 @@ fn default_and_named_roundtrip() {
 }
 
 #[test]
+fn import_bytes_module_exports_immutable_uint8_array() {
+    let resolver = MapResolver::new().with_bytes("bytes.bin", &[0, 255, 65]);
+    let namespace = eval_module(
+        "import value from \"bytes.bin\" with { type: \"bytes\" };\n\
+         let resizeThrows = false;\n\
+         try { value.buffer.resize(0); } catch (error) { resizeThrows = error instanceof TypeError; }\n\
+         export const isUint8 = value instanceof Uint8Array;\n\
+         export const length = value.length;\n\
+         export const bytes = value[0] + ':' + value[1] + ':' + value[2];\n\
+         export const immutable = value.buffer.immutable;\n\
+         export const cannotResize = resizeThrows;",
+        "main",
+        Box::new(resolver),
+    )
+    .expect("graph evaluates");
+    assert_eq!(export(&namespace, "isUint8"), Value::Boolean(true));
+    assert_eq!(export(&namespace, "length"), Value::Number(3.0));
+    assert_eq!(
+        export(&namespace, "bytes"),
+        Value::String("0:255:65".to_owned().into())
+    );
+    assert_eq!(export(&namespace, "immutable"), Value::Boolean(true));
+    assert_eq!(export(&namespace, "cannotResize"), Value::Boolean(true));
+}
+
+#[test]
 fn anonymous_default_function_import_is_callable() {
     let namespace = run(
         "import def from \"dep\";\n\

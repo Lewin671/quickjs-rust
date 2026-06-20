@@ -1,6 +1,6 @@
 use qjs_ast::{
-    DEFAULT_EXPORT_BINDING, DefaultExport, ExportDecl, ExportSpecifier, Expr, ImportDecl,
-    ImportSpecifier, ModuleDecl, ModuleExportName, Span, Stmt,
+    DEFAULT_EXPORT_BINDING, DefaultExport, ExportDecl, ExportSpecifier, Expr, ImportAttributes,
+    ImportDecl, ImportSpecifier, ModuleDecl, ModuleExportName, Span, Stmt,
 };
 use qjs_lexer::TokenKind;
 
@@ -58,10 +58,11 @@ impl Parser {
 
         // Side-effect import: `import "mod";`
         if let Some(source) = self.try_string_literal() {
-            let end = self.finish_module_specifier(source.span)?;
+            let (attributes, end) = self.finish_module_specifier(source.span)?;
             return Ok(ImportDecl {
                 specifiers: Vec::new(),
                 source: source.value,
+                attributes,
                 span: Span::new(start, end),
             });
         }
@@ -87,11 +88,12 @@ impl Parser {
 
         self.expect_contextual("from")?;
         let source = self.expect_string_literal()?;
-        let end = self.finish_module_specifier(source.span)?;
+        let (attributes, end) = self.finish_module_specifier(source.span)?;
         validate_import_bound_names(&specifiers)?;
         Ok(ImportDecl {
             specifiers,
             source: source.value,
+            attributes,
             span: Span::new(start, end),
         })
     }
@@ -172,7 +174,7 @@ impl Parser {
             };
             self.expect_contextual("from")?;
             let source = self.expect_string_literal()?;
-            let end = self.finish_module_specifier(source.span)?;
+            let (_, end) = self.finish_module_specifier(source.span)?;
             return Ok(ExportDecl::All {
                 exported,
                 source: source.value,
@@ -189,7 +191,7 @@ impl Parser {
             } else {
                 None
             };
-            let end = self.finish_module_specifier(self.previous_span())?;
+            let (_, end) = self.finish_module_specifier(self.previous_span())?;
             return Ok(ExportDecl::Named {
                 specifiers,
                 source,
@@ -386,16 +388,20 @@ impl Parser {
         })
     }
 
-    /// Consumes optional import attributes that do not affect the current AST,
-    /// then requires a module-declaration terminator and returns the span end to
-    /// record.
-    fn finish_module_specifier(&mut self, source_span: Span) -> Result<usize, ParseError> {
+    /// Consumes optional import attributes, then requires a
+    /// module-declaration terminator and returns the parsed attributes plus the
+    /// span end to record.
+    fn finish_module_specifier(
+        &mut self,
+        source_span: Span,
+    ) -> Result<(ImportAttributes, usize), ParseError> {
         let mut end = source_span.end;
-        if self.consume_empty_import_attributes() {
+        let attributes = self.consume_import_attributes()?;
+        if attributes.1 {
             end = self.previous_span().end;
         }
         self.consume_module_declaration_terminator(end)?;
-        Ok(end)
+        Ok((attributes.0, end))
     }
 
     fn consume_module_declaration_terminator(
@@ -418,26 +424,60 @@ impl Parser {
         })
     }
 
-    fn consume_empty_import_attributes(&mut self) -> bool {
+    fn consume_import_attributes(&mut self) -> Result<(ImportAttributes, bool), ParseError> {
         if !matches!(
             self.peek(),
             Some(token) if !token.had_escape && token.kind == TokenKind::With
         ) {
-            return false;
+            return Ok((ImportAttributes::default(), false));
         }
-        if !matches!(
-            (
-                self.peek_nth(1).map(|token| &token.kind),
-                self.peek_nth(2).map(|token| &token.kind),
-            ),
-            (Some(TokenKind::LeftBrace), Some(TokenKind::RightBrace))
-        ) {
-            return false;
+        self.advance(); // `with`
+        self.expect_kind(TokenKind::LeftBrace)?;
+        if self.match_kind(&TokenKind::RightBrace) {
+            return Ok((ImportAttributes::default(), true));
         }
-        self.advance();
-        self.advance();
-        self.advance();
-        true
+        let mut module_type = None;
+        loop {
+            let key = self.attribute_key()?;
+            self.expect_kind(TokenKind::Colon)?;
+            let value = self.expect_string_literal()?;
+            if key == "type" {
+                module_type = Some(value.value);
+            }
+            if self.match_kind(&TokenKind::Comma) {
+                if self.match_kind(&TokenKind::RightBrace) {
+                    break;
+                }
+                continue;
+            }
+            self.expect_kind(TokenKind::RightBrace)?;
+            break;
+        }
+        Ok((ImportAttributes { module_type }, true))
+    }
+
+    fn attribute_key(&mut self) -> Result<String, ParseError> {
+        let token = self.advance();
+        match token.kind {
+            TokenKind::Identifier(name) if !token.had_escape => Ok(name),
+            TokenKind::String(value) => Ok(value),
+            _ => Err(ParseError {
+                message: "expected an import attribute key".to_owned(),
+                span: token.span,
+            }),
+        }
+    }
+
+    fn expect_kind(&mut self, kind: TokenKind) -> Result<(), ParseError> {
+        if self.match_kind(&kind) {
+            Ok(())
+        } else {
+            let token = self.peek().expect("parser should always have eof token");
+            Err(ParseError {
+                message: format!("expected {kind:?}"),
+                span: token.span,
+            })
+        }
     }
 
     /// Span of the most recently consumed token.

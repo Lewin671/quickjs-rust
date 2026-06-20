@@ -577,6 +577,10 @@ fn define_array_buffer_immutable(object: &ObjectRef) {
     );
 }
 
+pub(crate) fn mark_immutable(object: &ObjectRef) {
+    define_array_buffer_immutable(object);
+}
+
 /// Whether `object` carries the `ArrayBuffer` brand (data slot or detached
 /// marker), used for brand checks and `ArrayBuffer.isView` consumers.
 pub(crate) fn is_array_buffer_object(object: &ObjectRef) -> bool {

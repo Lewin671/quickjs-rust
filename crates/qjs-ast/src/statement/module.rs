@@ -34,7 +34,8 @@ impl ModuleDecl {
 /// default (`import x from "m"`), named (`import {a as b} from "m"`),
 /// namespace (`import * as ns from "m"`), and side-effect
 /// (`import "m"`). The forms may combine (`import x, {a} from "m"`,
-/// `import x, * as ns from "m"`). Import assertions are not represented.
+/// `import x, * as ns from "m"`). Static import attributes are represented for
+/// the currently supported module types.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ImportDecl {
     /// The clauses binding names from the module, empty for a side-effect
@@ -42,8 +43,17 @@ pub struct ImportDecl {
     pub specifiers: Vec<ImportSpecifier>,
     /// The module specifier string (the `"m"` in `from "m"`).
     pub source: String,
+    /// Static import attributes following the module specifier.
+    pub attributes: ImportAttributes,
     /// Source span.
     pub span: Span,
+}
+
+/// Static import attributes attached to an import declaration.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ImportAttributes {
+    /// The value of the `type` attribute, when present.
+    pub module_type: Option<String>,
 }
 
 /// A single binding introduced by an `import` declaration.

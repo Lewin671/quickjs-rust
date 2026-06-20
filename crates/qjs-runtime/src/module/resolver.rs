@@ -14,13 +14,15 @@ pub struct ModuleResolveError {
 }
 
 /// A resolved module: its canonical key (used to deduplicate the graph) and its
-/// source text.
+/// loaded source.
 #[derive(Clone, Debug)]
 pub struct ResolvedModule {
     /// Canonical, graph-unique key for the module (e.g. an absolute path).
     pub key: String,
     /// The module's source text.
     pub source: String,
+    /// The module's raw bytes, used by import-bytes module records.
+    pub bytes: Vec<u8>,
 }
 
 /// Host callback that resolves a module specifier referenced from `referrer` to
@@ -45,7 +47,7 @@ pub trait ModuleResolver {
 /// Used by unit tests and as a simple embedding default.
 #[derive(Clone, Debug, Default)]
 pub struct MapResolver {
-    sources: std::collections::HashMap<String, String>,
+    sources: std::collections::HashMap<String, Vec<u8>>,
 }
 
 impl MapResolver {
@@ -58,7 +60,15 @@ impl MapResolver {
     /// Registers `source` under the canonical key `key`.
     #[must_use]
     pub fn with(mut self, key: &str, source: &str) -> Self {
-        self.sources.insert(key.to_owned(), source.to_owned());
+        self.sources
+            .insert(key.to_owned(), source.as_bytes().to_vec());
+        self
+    }
+
+    /// Registers raw module bytes under the canonical key `key`.
+    #[must_use]
+    pub fn with_bytes(mut self, key: &str, bytes: &[u8]) -> Self {
+        self.sources.insert(key.to_owned(), bytes.to_vec());
         self
     }
 }
@@ -70,9 +80,10 @@ impl ModuleResolver for MapResolver {
         _referrer: &str,
     ) -> Result<ResolvedModule, ModuleResolveError> {
         match self.sources.get(specifier) {
-            Some(source) => Ok(ResolvedModule {
+            Some(bytes) => Ok(ResolvedModule {
                 key: specifier.to_owned(),
-                source: source.clone(),
+                source: String::from_utf8_lossy(bytes).into_owned(),
+                bytes: bytes.clone(),
             }),
             None => Err(ModuleResolveError {
                 message: format!("Cannot resolve module '{specifier}'"),

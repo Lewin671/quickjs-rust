@@ -12,7 +12,10 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use crate::{ModuleNamespaceBindings, RuntimeError, Value, bytecode};
 
 use super::namespace::{empty_namespace, populate_namespace};
-use super::records::{ImportName, ModuleRecord, NAMESPACE_BINDING, build_record};
+use super::records::{
+    DEFAULT_BINDING, ImportName, LocalExportEntry, ModuleKind, ModuleRecord, NAMESPACE_BINDING,
+    build_record,
+};
 use super::resolver::ModuleResolver;
 
 /// A linking-phase failure: a parse error or a SyntaxError-class link error.
@@ -240,28 +243,79 @@ impl ModuleGraph {
                 static_evaluation: false,
             },
         );
-        for specifier in requested {
-            let resolved = resolver.resolve(&specifier, &key).map_err(|error| {
-                LinkError::syntax(format!(
-                    "SyntaxError: {} (importing '{specifier}' from '{key}')",
-                    error.message
-                ))
-            })?;
+        for request in requested {
+            let resolved = resolver
+                .resolve(&request.specifier, &key)
+                .map_err(|error| {
+                    LinkError::syntax(format!(
+                        "SyntaxError: {} (importing '{}' from '{key}')",
+                        error.message, request.specifier
+                    ))
+                })?;
+            let resolved_key = match request.kind {
+                ModuleKind::SourceText => resolved.key.clone(),
+                ModuleKind::Bytes => format!("{}\0bytes", resolved.key),
+            };
             self.modules
                 .get_mut(&key)
                 .expect("module just inserted")
                 .resolved_requests
-                .insert(specifier, resolved.key.clone());
-            if !self.modules.contains_key(&resolved.key) {
-                let dep_record = build_record(&resolved.source).map_err(|message| LinkError {
-                    kind: LinkErrorKind::Parse,
-                    message,
-                    thrown: None,
-                })?;
-                self.insert_and_load_dependencies(resolved.key, dep_record, resolver)?;
+                .insert(request.cache_key(), resolved_key.clone());
+            if self.modules.contains_key(&resolved_key) {
+                continue;
+            }
+            match request.kind {
+                ModuleKind::SourceText => {
+                    let dep_record =
+                        build_record(&resolved.source).map_err(|message| LinkError {
+                            kind: LinkErrorKind::Parse,
+                            message,
+                            thrown: None,
+                        })?;
+                    self.insert_and_load_dependencies(resolved_key, dep_record, resolver)?;
+                }
+                ModuleKind::Bytes => self.insert_bytes_module(resolved_key, resolved.bytes),
             }
         }
         Ok(())
+    }
+
+    fn insert_bytes_module(&mut self, key: String, bytes: Vec<u8>) {
+        let env = crate::CallEnv::new(self.realm.clone());
+        let value = Value::Object(crate::typed_array::create_immutable_uint8_array(
+            &bytes, &env,
+        ));
+        let mut exports = HashMap::new();
+        exports.insert("default".to_owned(), value.clone());
+        let mut live = HashMap::new();
+        live.insert(DEFAULT_BINDING.to_owned(), value);
+        self.modules.insert(
+            key,
+            Module {
+                record: ModuleRecord {
+                    requested_modules: Vec::new(),
+                    import_entries: Vec::new(),
+                    local_exports: vec![LocalExportEntry {
+                        export_name: "default".to_owned(),
+                        local_name: DEFAULT_BINDING.to_owned(),
+                    }],
+                    indirect_exports: Vec::new(),
+                    star_exports: Vec::new(),
+                    body: qjs_ast::Script {
+                        body: Vec::new(),
+                        source: String::new().into(),
+                    },
+                },
+                status: Status::Evaluated,
+                function_hoists_instantiated: true,
+                resolved_requests: HashMap::new(),
+                exports,
+                live_lexical: Rc::new(RefCell::new(live)),
+                namespace: None,
+                async_result_promise: None,
+                static_evaluation: false,
+            },
+        );
     }
 
     /// Links the graph rooted at `key`: validates that every import resolves to
@@ -554,7 +608,7 @@ impl ModuleGraph {
         let entries = self.modules[key].record.import_entries.to_vec();
         let mut bindings = HashMap::new();
         for entry in entries {
-            let target = self.resolved(key, &entry.module_request);
+            let target = self.resolved(key, &entry.module_request.cache_key());
             let value = match &entry.import_name {
                 ImportName::Namespace => self.namespace(&target),
                 ImportName::Named(name) => self.export_value(&target, name),
@@ -568,7 +622,7 @@ impl ModuleGraph {
         let entries = self.modules[key].record.import_entries.to_vec();
         let mut imports = Vec::new();
         for entry in entries {
-            let target = self.resolved(key, &entry.module_request);
+            let target = self.resolved(key, &entry.module_request.cache_key());
             if matches!(entry.import_name, ImportName::Namespace) {
                 let mut bindings = HashMap::new();
                 bindings.insert(NAMESPACE_BINDING.to_owned(), self.namespace(&target));
@@ -613,7 +667,7 @@ impl ModuleGraph {
             .record
             .import_entries
             .iter()
-            .any(|entry| self.resolved(key, &entry.module_request) == key)
+            .any(|entry| self.resolved(key, &entry.module_request.cache_key()) == key)
             || self.modules[key].namespace.is_some()
     }
 
@@ -788,7 +842,7 @@ impl ModuleGraph {
             .record
             .requested_modules
             .iter()
-            .map(|specifier| self.resolved(key, specifier))
+            .map(|request| self.resolved(key, &request.cache_key()))
             .collect()
     }
 
@@ -807,7 +861,7 @@ impl ModuleGraph {
             .iter()
             .map(|entry| {
                 (
-                    entry.module_request.clone(),
+                    entry.module_request.cache_key(),
                     entry.import_name.clone(),
                     entry.local_name.clone(),
                 )
