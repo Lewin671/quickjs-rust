@@ -56,7 +56,7 @@ impl Parser {
 
         // Side-effect import: `import "mod";`
         if let Some(source) = self.try_string_literal() {
-            let end = self.finish_module_specifier(source.span);
+            let end = self.finish_module_specifier(source.span)?;
             return Ok(ImportDecl {
                 specifiers: Vec::new(),
                 source: source.value,
@@ -85,7 +85,7 @@ impl Parser {
 
         self.expect_contextual("from")?;
         let source = self.expect_string_literal()?;
-        let end = self.finish_module_specifier(source.span);
+        let end = self.finish_module_specifier(source.span)?;
         validate_import_bound_names(&specifiers)?;
         Ok(ImportDecl {
             specifiers,
@@ -170,7 +170,7 @@ impl Parser {
             };
             self.expect_contextual("from")?;
             let source = self.expect_string_literal()?;
-            let end = self.finish_module_specifier(source.span);
+            let end = self.finish_module_specifier(source.span)?;
             return Ok(ExportDecl::All {
                 exported,
                 source: source.value,
@@ -187,7 +187,7 @@ impl Parser {
             } else {
                 None
             };
-            let end = self.finish_module_specifier(self.previous_span());
+            let end = self.finish_module_specifier(self.previous_span())?;
             return Ok(ExportDecl::Named {
                 specifiers,
                 source,
@@ -229,7 +229,7 @@ impl Parser {
             let async_token = self.advance();
             self.expect(&TokenKind::Function)?;
             let expr = self.function_expression_with_async(async_token.span.start, true)?;
-            self.match_kind(&TokenKind::Semicolon);
+            self.consume_module_declaration_terminator(expr.span().end)?;
             return Ok(DefaultExport::Expression(expr));
         }
         if self.at(&TokenKind::Function) {
@@ -239,16 +239,16 @@ impl Parser {
             }
             let start = self.advance().span.start;
             let expr = self.function_expression(start)?;
-            self.match_kind(&TokenKind::Semicolon);
+            self.consume_module_declaration_terminator(expr.span().end)?;
             return Ok(DefaultExport::Expression(expr));
         }
         if self.at(&TokenKind::Class) {
             let expr = self.assignment()?;
-            self.match_kind(&TokenKind::Semicolon);
+            self.consume_module_declaration_terminator(expr.span().end)?;
             return Ok(DefaultExport::Expression(expr));
         }
         let expr = self.assignment()?;
-        self.match_kind(&TokenKind::Semicolon);
+        self.consume_module_declaration_terminator(expr.span().end)?;
         Ok(DefaultExport::Expression(expr))
     }
 
@@ -357,14 +357,35 @@ impl Parser {
     }
 
     /// Consumes optional import attributes that do not affect the current AST,
-    /// then an optional trailing `;`, and returns the span end to record.
-    fn finish_module_specifier(&mut self, source_span: Span) -> usize {
+    /// then requires a module-declaration terminator and returns the span end to
+    /// record.
+    fn finish_module_specifier(&mut self, source_span: Span) -> Result<usize, ParseError> {
         let mut end = source_span.end;
         if self.consume_empty_import_attributes() {
             end = self.previous_span().end;
         }
-        self.match_kind(&TokenKind::Semicolon);
-        end
+        self.consume_module_declaration_terminator(end)?;
+        Ok(end)
+    }
+
+    fn consume_module_declaration_terminator(
+        &mut self,
+        declaration_end: usize,
+    ) -> Result<(), ParseError> {
+        if self.match_kind(&TokenKind::Semicolon) {
+            return Ok(());
+        }
+        if self.at(&TokenKind::RightBrace) || self.at(&TokenKind::Eof) {
+            return Ok(());
+        }
+        let next = self.peek().expect("parser should always have eof token");
+        if self.has_line_terminator_between(declaration_end, next.span.start) {
+            return Ok(());
+        }
+        Err(ParseError {
+            message: "expected `;` or newline after module declaration".to_owned(),
+            span: next.span,
+        })
     }
 
     fn consume_empty_import_attributes(&mut self) -> bool {

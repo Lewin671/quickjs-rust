@@ -187,6 +187,31 @@ fn rejects_unresolved_local_export_bindings() {
 }
 
 #[test]
+fn rejects_module_declarations_without_terminator() {
+    for source in [
+        "export default null null;",
+        "export {} null;",
+        "export {} from \"mod\" null;",
+        "export * from \"mod\" null;",
+        "export * as ns from \"mod\" null;",
+        "import \"mod\" null;",
+    ] {
+        let error = parse_module(source).expect_err("module declarations need a terminator");
+        assert!(error.message.contains("module declaration"));
+    }
+}
+
+#[test]
+fn parses_module_declarations_with_semicolon_or_newline_terminator() {
+    assert!(parse_module("export default null; null;").is_ok());
+    assert!(parse_module("export default null\nnull;").is_ok());
+    assert!(parse_module("export {};\nnull;").is_ok());
+    assert!(parse_module("export {} from \"mod\"\nnull;").is_ok());
+    assert!(parse_module("export * from \"mod\";\nnull;").is_ok());
+    assert!(parse_module("import \"mod\"\nnull;").is_ok());
+}
+
+#[test]
 fn rejects_duplicate_top_level_module_functions() {
     let error = parse_module("function x() {} function x() {}")
         .expect_err("module functions are lexical declarations");
