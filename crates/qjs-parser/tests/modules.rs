@@ -371,6 +371,15 @@ fn parses_import_meta() {
 }
 
 #[test]
+fn parses_new_import_meta() {
+    let script = parse_module("new import.meta();").expect("module should parse");
+    assert!(matches!(
+        script.body.as_slice(),
+        [Stmt::Expr(qjs_ast::Expr::New { .. })]
+    ));
+}
+
+#[test]
 fn rejects_new_import_call() {
     assert!(parse_script("new import('./mod.js');").is_err());
     assert!(parse_module("new import('./mod.js');").is_err());

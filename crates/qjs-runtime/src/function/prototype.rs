@@ -191,6 +191,7 @@ fn build_dynamic_function(
         has_name_binding: true,
         params: Rc::new(params),
         env: env_snapshot.clone(),
+        module_host: None,
         bytecode: Rc::new(bytecode),
         local_names,
         constructable: false,

@@ -429,6 +429,7 @@ impl<'a> Vm<'a> {
                         has_name_binding,
                         params: Rc::new(params),
                         env,
+                        module_host: self.module_host.clone(),
                         bytecode,
                         local_names,
                         constructable,
@@ -666,17 +667,15 @@ impl<'a> Vm<'a> {
                 },
                 Op::ImportCall { has_options } => self.import_call(has_options)?,
                 Op::ImportMeta => {
-                    if self.module_host.is_none() {
+                    let Some(host) = self.module_host.as_ref() else {
                         return Err(RuntimeError {
                             thrown: None,
                             message: "SyntaxError: 'import.meta' is only valid in a module"
                                 .to_owned(),
                         });
-                    }
-                    self.stack.push(Value::Object(ObjectRef::with_prototype(
-                        HashMap::new(),
-                        None,
-                    )));
+                    };
+                    self.stack
+                        .push(Value::Object(host.borrow_mut().import_meta()));
                 }
             }
         }

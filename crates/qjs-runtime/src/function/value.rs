@@ -8,6 +8,7 @@ use std::{
 use qjs_ast::{FunctionParams, Stmt};
 
 use crate::CallEnv;
+use crate::module::ModuleHostRef;
 use crate::{
     Bytecode, NativeFunction, ObjectRef, Property, PropertyKey, Prototype, Value,
     bytecode::{CaptureWriteback, compile_function_body},
@@ -73,6 +74,7 @@ pub struct Function {
     /// Environment captured when the function was created.
     pub env: HashMap<String, Value>,
     pub(crate) captured_env: Rc<RefCell<HashMap<String, Value>>>,
+    pub(crate) module_host: Option<ModuleHostRef>,
     pub(crate) with_stack: Vec<Value>,
     pub(crate) capture_writeback: Option<CaptureWriteback>,
     pub(crate) local_names: Vec<String>,
@@ -146,6 +148,7 @@ pub(crate) struct CompiledUserFunction {
     pub(crate) has_name_binding: bool,
     pub(crate) params: Rc<FunctionParams>,
     pub(crate) env: HashMap<String, Value>,
+    pub(crate) module_host: Option<ModuleHostRef>,
     pub(crate) bytecode: Rc<Bytecode>,
     pub(crate) local_names: Vec<String>,
     pub(crate) constructable: bool,
@@ -261,6 +264,7 @@ impl Function {
             params: Rc::new(params),
             env,
             captured_env,
+            module_host: None,
             with_stack: Vec::new(),
             capture_writeback: None,
             local_names,
@@ -311,6 +315,7 @@ impl Function {
             has_name_binding,
             params,
             env,
+            module_host,
             bytecode,
             local_names,
             constructable,
@@ -338,6 +343,7 @@ impl Function {
             params,
             env,
             captured_env,
+            module_host,
             with_stack,
             capture_writeback,
             local_names,
@@ -450,6 +456,7 @@ impl Function {
             params: Rc::new(FunctionParams::positional(vec![String::new(); length])),
             env: HashMap::new(),
             captured_env: Rc::new(RefCell::new(HashMap::new())),
+            module_host: None,
             with_stack: Vec::new(),
             capture_writeback: None,
             local_names: Vec::new(),
@@ -502,6 +509,7 @@ impl Function {
             params: Rc::new(FunctionParams::positional(params)),
             env,
             captured_env,
+            module_host: None,
             with_stack: Vec::new(),
             capture_writeback: None,
             local_names: Vec::new(),

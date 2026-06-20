@@ -602,6 +602,33 @@ fn import_meta_is_null_prototype_object_in_modules() {
     assert_eq!(export_log(&namespace, "log"), "true");
 }
 
+#[test]
+fn import_meta_is_cached_per_module() {
+    let namespace = run(
+        "import { meta as depMeta, getMeta } from 'dep';\n\
+         const mainMeta = import.meta;\n\
+         export const sameInMain = import.meta === mainMeta && (function() { return import.meta; })() === mainMeta;\n\
+         export const sameInDep = depMeta === getMeta();\n\
+         export const distinct = mainMeta !== depMeta;",
+        &[(
+            "dep",
+            "export var meta = import.meta;\n\
+             export function getMeta() { return import.meta; }",
+        )],
+    )
+    .expect("graph evaluates");
+    assert_eq!(export(&namespace, "sameInMain"), Value::Boolean(true));
+    assert_eq!(export(&namespace, "sameInDep"), Value::Boolean(true));
+    assert_eq!(export(&namespace, "distinct"), Value::Boolean(true));
+}
+
+#[test]
+fn new_import_meta_reaches_runtime_type_error() {
+    let error = run("new import.meta();", &[]).expect_err("import.meta is not a constructor");
+    assert_eq!(error.kind, EvalErrorKind::Runtime);
+    assert!(error.message.contains("not a constructor"));
+}
+
 // --- top-level await (T012 S5) --------------------------------------------
 
 #[test]

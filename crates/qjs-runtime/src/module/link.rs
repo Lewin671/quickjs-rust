@@ -74,6 +74,9 @@ pub(super) struct ModuleGraph {
     /// The realm's dynamic-import host, set once the graph is wrapped in a host
     /// so module bodies can reach it for nested `import()`. `None` until then.
     host: Option<super::host::ModuleHostRef>,
+    /// Shared handle to this graph, copied from the installed host so module
+    /// evaluation can create per-module hosts without borrowing the root host.
+    host_graph: Option<std::rc::Rc<std::cell::RefCell<ModuleGraph>>>,
     /// The owned host resolver, retained for the realm's lifetime so a dynamic
     /// `import()` can resolve specifiers long after the initial load.
     resolver: Option<Box<dyn ModuleResolver>>,
@@ -89,12 +92,14 @@ impl ModuleGraph {
             modules: HashMap::new(),
             realm,
             host: None,
+            host_graph: None,
             resolver: None,
         }
     }
 
     /// Records the dynamic-import host so evaluated module bodies carry it.
     pub(super) fn set_host(&mut self, host: super::host::ModuleHostRef) {
+        self.host_graph = Some(host.borrow().graph_ref());
         self.host = Some(host);
     }
 
@@ -380,7 +385,10 @@ impl ModuleGraph {
             let module = &self.modules[key];
             bytecode::compile_module(&module.record.body)?
         };
-        let host = self.host.clone();
+        let host = self
+            .host_graph
+            .as_ref()
+            .map(|graph| super::host::ModuleHost::new(graph.clone(), key.to_owned()).into_ref());
         let env = bytecode::eval_module_body(&compiled, &self.realm, imports, host, drain)?;
         // Snapshot exported binding values from the module's frame environment.
         let export_pairs = self.collect_export_values(key, &env)?;

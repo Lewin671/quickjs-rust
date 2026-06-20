@@ -217,16 +217,11 @@ impl Parser {
         } else {
             self.member_chain()?
         };
-        // `import(...)` is a CallExpression and `import.meta` a meta-property;
-        // a direct `new import(...)` is a syntax error, while `new
-        // (import(...))` is a covered expression and reaches runtime.
+        // `import(...)` is a CallExpression; a direct `new import(...)` is a
+        // syntax error, while `new (import(...))` is a covered expression and
+        // reaches runtime. `import.meta` is a valid NewExpression operand and
+        // fails later because the meta object is not a constructor.
         if matches!(callee, Expr::ImportCall { .. }) && !callee_parenthesized {
-            return Err(ParseError {
-                message: "`import` is not a valid `new` operand".to_owned(),
-                span: callee.span(),
-            });
-        }
-        if matches!(callee, Expr::ImportMeta { .. }) {
             return Err(ParseError {
                 message: "`import` is not a valid `new` operand".to_owned(),
                 span: callee.span(),

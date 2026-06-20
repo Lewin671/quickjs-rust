@@ -13,9 +13,9 @@
 //! `eval_module`/script call that installed the host has returned control to the
 //! VM loop.
 
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::Value;
+use crate::{ObjectRef, Value};
 
 use super::link::{LinkError, LinkErrorKind, ModuleGraph};
 
@@ -49,18 +49,35 @@ pub(crate) struct ImportError {
 pub(crate) struct ModuleHost {
     graph: Rc<RefCell<ModuleGraph>>,
     referrer: String,
+    import_meta: Option<ObjectRef>,
 }
 
 impl ModuleHost {
     /// Builds a host over the shared module `graph`, running on behalf of
     /// `referrer`.
     pub(super) fn new(graph: Rc<RefCell<ModuleGraph>>, referrer: String) -> Self {
-        Self { graph, referrer }
+        Self {
+            graph,
+            referrer,
+            import_meta: None,
+        }
     }
 
     /// Wraps the host in a shared cell.
     pub(super) fn into_ref(self) -> ModuleHostRef {
         Rc::new(RefCell::new(self))
+    }
+
+    /// The shared module graph handle.
+    pub(super) fn graph_ref(&self) -> Rc<RefCell<ModuleGraph>> {
+        Rc::clone(&self.graph)
+    }
+
+    /// Returns this module's cached `import.meta` object.
+    pub(crate) fn import_meta(&mut self) -> ObjectRef {
+        self.import_meta
+            .get_or_insert_with(|| ObjectRef::with_prototype(HashMap::new(), None))
+            .clone()
     }
 
     /// Resolves and evaluates `specifier` against the active referrer, returning
