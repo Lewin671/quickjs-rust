@@ -409,6 +409,10 @@ fn evaluates_regexp_prototype_accessors() {
         eval("RegExp.prototype.source;"),
         Ok(Value::String("(?:)".to_owned().into()))
     );
+    assert_eq!(
+        eval("RegExp.prototype.flags;"),
+        Ok(Value::String(String::new().into()))
+    );
     assert_eq!(eval("RegExp.prototype.global;"), Ok(Value::Undefined));
     assert_eq!(eval("RegExp.prototype.dotAll;"), Ok(Value::Undefined));
     assert_eq!(
@@ -430,6 +434,15 @@ fn evaluates_regexp_prototype_accessors() {
         Ok(Value::String(
             "true:true:true:true:true:true:true".to_owned().into()
         ))
+    );
+    assert_eq!(
+        eval(
+            "let get = Object.getOwnPropertyDescriptor(RegExp.prototype, 'global').get; \
+             let caught = false; \
+             try { get.call({ global: true }); } catch (error) { caught = error instanceof TypeError; } \
+             caught;"
+        ),
+        Ok(Value::Boolean(true))
     );
     assert_eq!(
         eval(

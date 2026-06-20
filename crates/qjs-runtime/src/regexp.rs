@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use crate::reflect::ordinary_set;
 use crate::string::{string_code_units, string_from_code_units};
 use crate::{
-    ArrayRef, Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value,
-    ensure_constructor, function_prototype, is_truthy, property_value, property_value_key, symbol,
-    to_js_string_with_env, to_length_with_env,
+    ArrayRef, Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, Property, PropertyKey,
+    RuntimeError, Value, ensure_constructor, error, function_prototype, is_truthy, property_value,
+    property_value_key, symbol, to_js_string_with_env, to_length_with_env,
 };
 
 mod escape;
@@ -108,51 +108,61 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
     symbol_replace::install_regexp_prototype_replace(env, &regexp_prototype);
     symbol_split::install_regexp_prototype_split(env, &regexp_prototype);
     define_regexp_accessor(
+        global_this,
         &regexp_prototype,
         "source",
         NativeFunction::RegExpPrototypeSource,
     );
     define_regexp_accessor(
+        global_this,
         &regexp_prototype,
         "flags",
         NativeFunction::RegExpPrototypeFlags,
     );
     define_regexp_accessor(
+        global_this,
         &regexp_prototype,
         "global",
         NativeFunction::RegExpPrototypeGlobal,
     );
     define_regexp_accessor(
+        global_this,
         &regexp_prototype,
         "dotAll",
         NativeFunction::RegExpPrototypeDotAll,
     );
     define_regexp_accessor(
+        global_this,
         &regexp_prototype,
         "ignoreCase",
         NativeFunction::RegExpPrototypeIgnoreCase,
     );
     define_regexp_accessor(
+        global_this,
         &regexp_prototype,
         "multiline",
         NativeFunction::RegExpPrototypeMultiline,
     );
     define_regexp_accessor(
+        global_this,
         &regexp_prototype,
         "sticky",
         NativeFunction::RegExpPrototypeSticky,
     );
     define_regexp_accessor(
+        global_this,
         &regexp_prototype,
         "unicode",
         NativeFunction::RegExpPrototypeUnicode,
     );
     define_regexp_accessor(
+        global_this,
         &regexp_prototype,
         "hasIndices",
         NativeFunction::RegExpPrototypeHasIndices,
     );
     define_regexp_accessor(
+        global_this,
         &regexp_prototype,
         "unicodeSets",
         NativeFunction::RegExpPrototypeUnicodeSets,
@@ -170,20 +180,23 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
     }
 }
 
-fn define_regexp_accessor(prototype: &ObjectRef, name: &str, native: NativeFunction) {
+fn define_regexp_accessor(
+    global_this: &Value,
+    prototype: &ObjectRef,
+    name: &str,
+    native: NativeFunction,
+) {
+    let mut getter = Function::new_native(Some(&format!("get {name}")), 0, native, false);
+    getter.env.insert(
+        REGEXP_PROTOTYPE_BINDING.to_owned(),
+        Value::Object(prototype.clone()),
+    );
+    getter
+        .env
+        .insert(GLOBAL_THIS_BINDING.to_owned(), global_this.clone());
     prototype.define_property(
         name.to_owned(),
-        Property::accessor(
-            Some(Value::Function(Function::new_native(
-                Some(&format!("get {name}")),
-                0,
-                native,
-                false,
-            ))),
-            None,
-            false,
-            true,
-        ),
+        Property::accessor(Some(Value::Function(getter)), None, false, true),
     );
 }
 
@@ -400,19 +413,21 @@ pub(crate) fn native_regexp_prototype_test(
 }
 
 pub(crate) fn native_regexp_prototype_source(
+    function: &Function,
     this_value: Value,
     env: &CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let source = regexp_accessor_data(&this_value, env, REGEXP_SOURCE_PROPERTY, "(?:)")?;
+    let source = regexp_accessor_data(function, &this_value, env, REGEXP_SOURCE_PROPERTY, "(?:)")?;
     Ok(Value::String(escape_regexp_source(&source).into()))
 }
 
 pub(crate) fn native_regexp_prototype_flags(
+    function: &Function,
     this_value: Value,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     if !is_regexp_accessor_object_receiver(&this_value) {
-        return Err(regexp_receiver_error());
+        return Err(regexp_receiver_error(function));
     }
     let mut flags = String::new();
     for (name, flag) in [
@@ -433,12 +448,13 @@ pub(crate) fn native_regexp_prototype_flags(
 }
 
 pub(crate) fn native_regexp_prototype_flag(
+    function: &Function,
     this_value: Value,
     env: &CallEnv,
     flag: char,
 ) -> Result<Value, RuntimeError> {
-    let flags = regexp_accessor_data(&this_value, env, REGEXP_FLAGS_PROPERTY, "")?;
-    if flags.is_empty() && is_regexp_prototype_value(&this_value, env) {
+    let flags = regexp_accessor_data(function, &this_value, env, REGEXP_FLAGS_PROPERTY, "")?;
+    if flags.is_empty() && is_regexp_prototype_value_for_accessor(function, &this_value, env) {
         return Ok(Value::Undefined);
     }
     Ok(Value::Boolean(flags.contains(flag)))
@@ -469,13 +485,14 @@ pub(crate) fn default_regexp_source_accessor_value(
 }
 
 fn regexp_accessor_data(
+    function: &Function,
     this_value: &Value,
     env: &CallEnv,
     key: &str,
     prototype_value: &str,
 ) -> Result<String, RuntimeError> {
     if !is_regexp_accessor_object_receiver(this_value) {
-        return Err(regexp_receiver_error());
+        return Err(regexp_receiver_error(function));
     };
     let Value::Object(object) = &this_value else {
         unreachable!("RegExp accessor receiver object was checked above")
@@ -483,10 +500,10 @@ fn regexp_accessor_data(
     if let Some(value) = regexp_string_data(object, key) {
         return Ok(value);
     }
-    if is_regexp_prototype_value(this_value, env) {
+    if is_regexp_prototype_value_for_accessor(function, this_value, env) {
         return Ok(prototype_value.to_owned());
     }
-    Err(regexp_receiver_error())
+    Err(regexp_receiver_error(function))
 }
 
 fn is_regexp_accessor_object_receiver(value: &Value) -> bool {
@@ -505,11 +522,48 @@ fn is_regexp_prototype_value(value: &Value, env: &CallEnv) -> bool {
         .is_some_and(|prototype| object.ptr_eq(&prototype))
 }
 
-fn regexp_receiver_error() -> RuntimeError {
-    RuntimeError {
-        thrown: None,
-        message: "TypeError: RegExp prototype accessor requires a RegExp receiver".to_owned(),
+fn is_regexp_prototype_value_for_accessor(
+    function: &Function,
+    value: &Value,
+    env: &CallEnv,
+) -> bool {
+    let Value::Object(object) = value else {
+        return false;
+    };
+    if let Some(Value::Object(prototype)) = function.env.get(REGEXP_PROTOTYPE_BINDING) {
+        return object.ptr_eq(prototype);
     }
+    is_regexp_prototype_value(value, env)
+}
+
+fn regexp_receiver_error(function: &Function) -> RuntimeError {
+    const MESSAGE: &str = "RegExp prototype accessor requires a RegExp receiver";
+    RuntimeError {
+        thrown: regexp_receiver_error_value(function, MESSAGE).map(Box::new),
+        message: format!("TypeError: {MESSAGE}"),
+    }
+}
+
+fn regexp_receiver_error_value(function: &Function, message: &str) -> Option<Value> {
+    let constructor = match function.env.get("TypeError").cloned() {
+        Some(value) => Some(value),
+        None => match function.env.get(GLOBAL_THIS_BINDING) {
+            Some(Value::Object(global_this)) => global_this.get("TypeError"),
+            _ => None,
+        },
+    };
+    let Value::Function(constructor) = constructor? else {
+        return None;
+    };
+    let mut env = CallEnv::from_map(function.env.clone());
+    error::native_error(
+        &constructor,
+        Value::Undefined,
+        &[Value::String(message.to_owned().into())],
+        false,
+        &mut env,
+    )
+    .ok()
 }
 
 fn define_regexp_data(object: &ObjectRef, source: &str, flags: &str) {

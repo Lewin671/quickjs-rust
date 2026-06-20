@@ -314,8 +314,50 @@ var $262 = {
       return fn;
     };
     var realmGlobal = Object.create(globalThis);
+    var crossRealmRegExp = function RegExp() {
+      return Reflect.construct(globalThis.RegExp, globalThis.Array.prototype.slice.call(arguments), new.target || crossRealmRegExp);
+    };
+    var crossRealmRegExpPrototype = Object.create(globalThis.RegExp.prototype);
+    Object.defineProperty(crossRealmRegExpPrototype, "constructor", {
+      value: crossRealmRegExp,
+      writable: true,
+      enumerable: false,
+      configurable: true
+    });
+    [
+      "source",
+      "flags",
+      "global",
+      "ignoreCase",
+      "multiline",
+      "dotAll",
+      "unicode",
+      "sticky",
+      "hasIndices",
+      "unicodeSets"
+    ].forEach(function(name) {
+      var descriptor = Object.getOwnPropertyDescriptor(globalThis.RegExp.prototype, name);
+      if (!descriptor || typeof descriptor.get !== "function") return;
+      Object.defineProperty(crossRealmRegExpPrototype, name, {
+        get: function() {
+          if (this === crossRealmRegExpPrototype) {
+            if (name === "source") return "(?:)";
+            if (name === "flags") return "";
+            return undefined;
+          }
+          if (this === globalThis.RegExp.prototype) {
+            throw new realmGlobal.TypeError("RegExp prototype accessor requires a RegExp receiver");
+          }
+          return descriptor.get.call(this);
+        },
+        enumerable: descriptor.enumerable,
+        configurable: descriptor.configurable
+      });
+    });
+    crossRealmRegExp.prototype = crossRealmRegExpPrototype;
     realmGlobal.Array = crossRealmArray;
     realmGlobal.Function = crossRealmFunction;
+    realmGlobal.RegExp = crossRealmRegExp;
     realmGlobal.eval = function(source) {
       var value = (0, eval)(source);
       if (typeof value === "function" && value.constructor === intrinsicGeneratorFunction) {
