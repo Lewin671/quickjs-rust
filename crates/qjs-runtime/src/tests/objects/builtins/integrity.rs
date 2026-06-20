@@ -204,6 +204,29 @@ fn evaluates_object_integrity_builtins() {
 }
 
 #[test]
+fn object_freeze_rejects_non_empty_or_resizable_typed_arrays() {
+    assert_eq!(
+        eval("Object.freeze(new Uint8Array(0)) instanceof Uint8Array;"),
+        Ok(Value::Boolean(true))
+    );
+    assert!(eval("Object.freeze(new Uint8Array(1));").is_err());
+    assert!(
+        eval("Object.freeze(new Uint8Array(new ArrayBuffer(0, { maxByteLength: 4 })));").is_err()
+    );
+    assert!(
+        eval("Object.freeze(new Uint8Array(new ArrayBuffer(4, { maxByteLength: 8 })));").is_err()
+    );
+    assert_eq!(
+        eval(
+            "let array = new Uint8Array(1); \
+             try { Object.freeze(array); } catch (_) {} \
+             Object.isExtensible(array);"
+        ),
+        Ok(Value::Boolean(false))
+    );
+}
+
+#[test]
 fn object_seal_and_freeze_route_through_proxy_traps() {
     // SetIntegrityLevel on a Proxy throws when [[PreventExtensions]] reports
     // false, and propagates an abrupt completion from the trap.

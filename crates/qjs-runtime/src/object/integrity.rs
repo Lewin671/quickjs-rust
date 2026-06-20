@@ -170,6 +170,9 @@ pub(crate) fn native_object_freeze(
         return Ok(target);
     }
     match &target {
+        Value::Object(object) if crate::typed_array::is_typed_array_object(object) => {
+            freeze_typed_array_object(object.clone(), &target, env)?;
+        }
         Value::Object(object) => object.freeze(),
         Value::Map(map) => map.object().freeze(),
         Value::Set(set) => set.object().freeze(),
@@ -255,6 +258,48 @@ fn test_integrity_level_on_proxy(
         }
     }
     Ok(true)
+}
+
+fn freeze_typed_array_object(
+    object: crate::ObjectRef,
+    target: &Value,
+    env: &mut CallEnv,
+) -> Result<(), RuntimeError> {
+    use crate::object::{PropertyDescriptor, define_property_descriptor_on_value_key};
+
+    object.prevent_extensions();
+    if crate::typed_array::typed_array_buffer(&object)
+        .is_some_and(|buffer| crate::array_buffer::is_resizable(&buffer))
+        || crate::typed_array::typed_array_length(&object) > 0
+    {
+        return Err(integrity_failed_error("Object.freeze"));
+    }
+
+    let string_keys = crate::typed_array::typed_array_own_property_names(&object)
+        .into_iter()
+        .map(crate::PropertyKey::String);
+    let symbol_keys = object
+        .own_property_symbols()
+        .into_iter()
+        .map(crate::PropertyKey::Symbol);
+    for key in string_keys.chain(symbol_keys) {
+        let current = crate::object::own_property_descriptor_key(target.clone(), &key)?;
+        let Some(property) = current else {
+            continue;
+        };
+        let descriptor = if property.is_accessor() {
+            PropertyDescriptor::integrity_non_configurable()
+        } else {
+            PropertyDescriptor::integrity_frozen_data()
+        };
+        if !define_property_descriptor_on_value_key(target.clone(), key, descriptor, env)? {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: Cannot freeze typed array property".to_owned(),
+            });
+        }
+    }
+    Ok(())
 }
 
 fn integrity_failed_error(method: &str) -> RuntimeError {
