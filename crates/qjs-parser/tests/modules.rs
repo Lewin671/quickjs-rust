@@ -396,6 +396,24 @@ fn import_with_string_export_name_and_alias_parses() {
     assert_eq!(local, "c");
 }
 
+#[test]
+fn module_export_name_strings_must_be_well_formed_unicode() {
+    parse_module(r#"import { "\uD83D" as foo } from "mod";"#)
+        .expect_err("unpaired import export name should be rejected");
+    parse_module(r#"export { foo as "\uD83D" };"#)
+        .expect_err("unpaired exported name should be rejected");
+    parse_module(r#"export { "\uD83D" } from "mod";"#)
+        .expect_err("unpaired re-export name should be rejected");
+    parse_module(r#"export { "\uD800\uDC00" as pair } from "mod";"#)
+        .expect("paired surrogate export name should parse");
+}
+
+#[test]
+fn local_export_specifier_requires_identifier_binding_name() {
+    parse_module(r#"export { "foo" as bar }; function foo() {}"#)
+        .expect_err("string local export name cannot reference a binding");
+}
+
 // --- script-mode regression guards -------------------------------------------
 
 #[test]

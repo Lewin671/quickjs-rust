@@ -6,6 +6,8 @@ use qjs_lexer::TokenKind;
 
 use crate::{ParseError, Parser};
 
+const SURROGATE_ESCAPE_SENTINEL_BASE: u32 = 0xF0000;
+
 impl Parser {
     /// Parses one top-level item of a module: an `import`/`export` declaration
     /// or an ordinary statement. Only called under the Module goal symbol.
@@ -295,7 +297,15 @@ impl Parser {
         let token = self.advance();
         match token.kind {
             TokenKind::Identifier(name) => Ok((ModuleExportName::Identifier(name), token.span)),
-            TokenKind::String(value) => Ok((ModuleExportName::String(value), token.span)),
+            TokenKind::String(value) => {
+                if !is_well_formed_module_export_name(&value) {
+                    return Err(ParseError {
+                        message: "module export name string must be well-formed Unicode".to_owned(),
+                        span: token.span,
+                    });
+                }
+                Ok((ModuleExportName::String(value), token.span))
+            }
             kind => {
                 if let Some(name) = crate::expression::keyword_property_name(&kind) {
                     Ok((ModuleExportName::Identifier(name.to_owned()), token.span))
@@ -517,6 +527,12 @@ fn validate_module_local_export_bindings(body: &[Stmt]) -> Result<(), ParseError
             continue;
         };
         for specifier in specifiers {
+            if matches!(specifier.local, ModuleExportName::String(_)) {
+                return Err(ParseError {
+                    message: "local export binding must be an identifier".to_owned(),
+                    span: specifier.span,
+                });
+            }
             if !declared_names
                 .iter()
                 .any(|name| name == specifier.local.as_str())
@@ -532,6 +548,38 @@ fn validate_module_local_export_bindings(body: &[Stmt]) -> Result<(), ParseError
         }
     }
     Ok(())
+}
+
+fn is_well_formed_module_export_name(value: &str) -> bool {
+    let mut chars = value.chars().peekable();
+    while let Some(ch) = chars.next() {
+        let Some(unit) = surrogate_escape_code_unit(ch) else {
+            continue;
+        };
+        if (0xD800..=0xDBFF).contains(&unit) {
+            if !matches!(
+                chars
+                    .peek()
+                    .and_then(|next| surrogate_escape_code_unit(*next)),
+                Some(0xDC00..=0xDFFF)
+            ) {
+                return false;
+            }
+            chars.next();
+        } else {
+            return false;
+        }
+    }
+    true
+}
+
+fn surrogate_escape_code_unit(character: char) -> Option<u16> {
+    let code = character as u32;
+    if (SURROGATE_ESCAPE_SENTINEL_BASE..SURROGATE_ESCAPE_SENTINEL_BASE + 0x800).contains(&code) {
+        Some((0xD800 + code - SURROGATE_ESCAPE_SENTINEL_BASE) as u16)
+    } else {
+        None
+    }
 }
 
 fn module_declared_names(body: &[Stmt]) -> Vec<String> {
