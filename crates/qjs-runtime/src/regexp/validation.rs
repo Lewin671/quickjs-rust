@@ -264,7 +264,16 @@ fn validate_class_ranges(
                 index = set_end;
                 continue;
             }
-            index = class_escape_end(pattern, index, unicode);
+            let escape_end = class_escape_end(pattern, index, unicode);
+            if unicode
+                && pattern.get(escape_end) == Some(&'-')
+                && escape_end + 1 < end
+                && pattern.get(escape_end + 1) == Some(&'\\')
+                && unicode_class_set_escape_end(pattern, escape_end + 1)?.is_some()
+            {
+                return Err(regexp_syntax_error("invalid regular expression pattern"));
+            }
+            index = escape_end;
             continue;
         }
         if unicode_sets && is_unicode_sets_reserved_class_char(pattern[index]) {
