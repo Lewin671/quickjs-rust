@@ -1224,6 +1224,27 @@ fn top_level_await_propagates_dynamic_import_rejection() {
 }
 
 #[test]
+fn dynamic_import_rejects_when_imported_tla_rejects() {
+    let namespace = run(
+        "let caught = '';\n\
+         await import('dep').then(\n\
+           () => { caught = 'fulfilled'; },\n\
+           error => { caught = error.message; }\n\
+         );\n\
+         export { caught };",
+        &[(
+            "dep",
+            "export default await Promise.reject(new TypeError('import failed'));",
+        )],
+    )
+    .expect("dynamic import rejection is catchable");
+    assert_eq!(
+        export(&namespace, "caught"),
+        Value::String("import failed".to_owned().into())
+    );
+}
+
+#[test]
 fn dependent_sees_settled_tla_binding() {
     // An acyclic dependency uses top-level await; its importer must observe the
     // settled exported binding (the dependency fully settles before the
@@ -1238,6 +1259,71 @@ fn dependent_sees_settled_tla_binding() {
         export(&namespace, "seen"),
         Value::String("done".to_owned().into())
     );
+}
+
+#[test]
+fn top_level_await_does_not_block_sibling_module() {
+    let namespace = run(
+        "import \"tla\";\n\
+         import { check } from \"sync\";\n\
+         export const seen = check;\n\
+         export const order = globalThis.log.join(',');",
+        &[
+            (
+                "tla",
+                "globalThis.log = [];\n\
+                 globalThis.log.push('tla-start');\n\
+                 globalThis.check = false;\n\
+                 await 0;\n\
+                 globalThis.log.push('tla-done');\n\
+                 globalThis.check = true;",
+            ),
+            (
+                "sync",
+                "globalThis.log.push('sync');\n\
+                 export const { check } = globalThis;",
+            ),
+        ],
+    )
+    .expect("graph evaluates");
+    assert_eq!(export(&namespace, "seen"), Value::Boolean(false));
+    assert_eq!(
+        export(&namespace, "order"),
+        Value::String("tla-start,sync,tla-done".to_owned().into())
+    );
+}
+
+#[test]
+fn module_destructuring_export_snapshots_local_binding() {
+    let namespace = run(
+        "import { check } from \"sync\";\n\
+         export const seen = check;",
+        &[(
+            "sync",
+            "globalThis.check = false;\n\
+             export const { check } = globalThis;\n\
+             globalThis.check = true;",
+        )],
+    )
+    .expect("graph evaluates");
+    assert_eq!(export(&namespace, "seen"), Value::Boolean(false));
+}
+
+#[test]
+fn imported_top_level_await_rejection_prevents_importer_body() {
+    let error = run(
+        "import value from \"dep\";\n\
+         throw new Error('unreachable');",
+        &[(
+            "dep",
+            "export default 42;\n\
+             await Promise.reject(new TypeError('dependency failed'));",
+        )],
+    )
+    .expect_err("dependency rejection rejects module evaluation");
+    assert_eq!(error.kind, EvalErrorKind::Runtime);
+    assert!(error.message.contains("TypeError"));
+    assert!(!error.message.contains("unreachable"));
 }
 
 #[test]

@@ -71,6 +71,10 @@ struct Module {
     /// Result promise for a top-level-await body whose dynamic import jobs may
     /// settle after static graph evaluation releases its borrow.
     async_result_promise: Option<crate::ObjectRef>,
+    /// Whether this module belongs to the current static module graph
+    /// evaluation. Dynamically imported modules reject the `import()` promise;
+    /// a caught dynamic-import rejection must not fail the original graph.
+    static_evaluation: bool,
 }
 
 /// The module graph: a registry of modules keyed by canonical key, plus the
@@ -168,12 +172,18 @@ impl ModuleGraph {
             self.insert_and_load_dependencies(key.clone(), record, resolver)?;
         }
         self.link(&key)?;
-        self.evaluate_with_drain(&key, false)
+        self.evaluate_with_drain(&key, false, false)
             .map_err(|error| LinkError {
                 // A runtime failure during module evaluation rejects the import
                 // promise. Preserve the original JS throw completion when the
                 // VM provides one so `throw 'x'` rejects with `'x'`, not a
                 // synthesized Error object.
+                kind: LinkErrorKind::Runtime,
+                message: error.message,
+                thrown: error.thrown,
+            })?;
+        self.settle_started_async_dependencies(true)
+            .map_err(|error| LinkError {
                 kind: LinkErrorKind::Runtime,
                 message: error.message,
                 thrown: error.thrown,
@@ -227,6 +237,7 @@ impl ModuleGraph {
                 live_lexical: Rc::new(RefCell::new(HashMap::new())),
                 namespace: None,
                 async_result_promise: None,
+                static_evaluation: false,
             },
         );
         for specifier in requested {
@@ -368,10 +379,21 @@ impl ModuleGraph {
         // Defer promise-job draining (including dynamic `import()`) to the
         // top-level loop run with the graph borrow released, so a job can
         // re-borrow the graph without a double-borrow panic.
-        self.evaluate_with_drain(key, false)
+        self.evaluate_with_drain(key, false, true)
     }
 
-    fn evaluate_with_drain(&mut self, key: &str, drain: bool) -> Result<(), RuntimeError> {
+    fn evaluate_with_drain(
+        &mut self,
+        key: &str,
+        drain: bool,
+        mark_static: bool,
+    ) -> Result<(), RuntimeError> {
+        if mark_static {
+            self.modules
+                .get_mut(key)
+                .expect("module exists")
+                .static_evaluation = true;
+        }
         match self.status(key) {
             Status::Evaluating | Status::Evaluated => return Ok(()),
             _ => {}
@@ -382,8 +404,15 @@ impl ModuleGraph {
             return Err(error);
         }
         let deps = self.dependency_keys(key);
+        let has_deps = !deps.is_empty();
         for dep in deps {
-            if let Err(error) = self.evaluate_with_drain(&dep, drain) {
+            if let Err(error) = self.evaluate_with_drain(&dep, drain, mark_static) {
+                self.set_status(key, Status::Linked);
+                return Err(error);
+            }
+        }
+        if has_deps {
+            if let Err(error) = self.settle_started_async_dependencies(false) {
                 self.set_status(key, Status::Linked);
                 return Err(error);
             }
@@ -488,13 +517,34 @@ impl ModuleGraph {
     }
 
     pub(super) fn async_module_rejection(&self) -> Option<String> {
+        self.async_module_rejection_error(false)
+            .map(|error| error.message)
+    }
+
+    fn async_module_rejection_error(&self, include_dynamic: bool) -> Option<RuntimeError> {
         self.modules
             .values()
+            .filter(|module| include_dynamic || module.static_evaluation)
             .filter_map(|module| module.async_result_promise.as_ref())
             .find_map(|promise| match crate::promise::settled_outcome(promise) {
-                Some(Err(reason)) => Some(rejection_message(reason)),
+                Some(Err(reason)) => Some(RuntimeError {
+                    message: rejection_message(reason.clone()),
+                    thrown: Some(Box::new(reason)),
+                }),
                 _ => None,
             })
+    }
+
+    fn settle_started_async_dependencies(&self, include_dynamic: bool) -> Result<(), RuntimeError> {
+        let mut drain_env = crate::CallEnv::new(self.realm.clone());
+        if let Some(host) = &self.host {
+            drain_env.set_module_host(host.clone());
+        }
+        crate::promise::drain_promise_jobs_until_dynamic_import(&mut drain_env)?;
+        if let Some(error) = self.async_module_rejection_error(include_dynamic) {
+            return Err(error);
+        }
+        Ok(())
     }
 
     /// Builds the local-name -> value map seeded into the module realm: each

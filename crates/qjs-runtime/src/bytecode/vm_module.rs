@@ -88,7 +88,7 @@ pub(super) fn eval_module_body(
     // (16.2.1.5.3 AsyncModuleExecution): it suspends at each `await` and resumes
     // through the realm job queue, settling a result promise on completion.
     if bytecode.contains_top_level_await() {
-        return eval_async_module_body(bytecode, env, live_exports);
+        return eval_async_module_body(bytecode, env, live_exports, drain);
     }
     for import in live_exports.imports {
         env.set_module_import(import.local_name, import.bindings, import.binding_name);
@@ -155,6 +155,7 @@ fn eval_async_module_body(
     bytecode: &Bytecode,
     mut env: CallEnv,
     live_exports: ModuleLiveExports,
+    drain: bool,
 ) -> Result<ModuleEvaluation, RuntimeError> {
     let realm = env.realm_rc();
     for import in live_exports.imports {
@@ -197,10 +198,13 @@ fn eval_async_module_body(
         })));
 
     let result_promise = crate::async_function::drive_async_module(&context, &mut env);
-    // Resume ordinary `await`s and reactions, but stop before a dynamic import:
-    // the module graph is still borrowed by static evaluation and the outer
-    // driver will drain that import job once the borrow is released.
-    crate::promise::drain_promise_jobs_until_dynamic_import(&mut env)?;
+    // Resume ordinary `await`s and reactions when this module body is allowed
+    // to settle immediately. Static graph evaluation starts async dependencies
+    // without draining them so sibling modules in the same dependency list can
+    // run before a top-level await resumes.
+    if drain {
+        crate::promise::drain_promise_jobs_until_dynamic_import(&mut env)?;
+    }
     if let Some(Err(reason)) = crate::promise::settled_outcome(&result_promise) {
         return Err(RuntimeError {
             thrown: Some(Box::new(reason)),
