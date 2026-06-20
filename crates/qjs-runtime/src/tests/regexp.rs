@@ -677,6 +677,26 @@ fn evaluates_regexp_symbol_match_all() {
         ),
         Ok(Value::String("0,1".to_owned().into()))
     );
+    assert_eq!(
+        eval(
+            "let proto = Object.getPrototypeOf(/./[Symbol.matchAll]('')); \
+             let d = Object.getOwnPropertyDescriptor(proto, 'next'); \
+             typeof d.value + ':' + d.value.length + ':' + d.value.name + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String(
+            "function:0:next:true:false:true".to_owned().into()
+        ))
+    );
+    assert_eq!(
+        eval(
+            "let saved = RegExp.prototype.exec; \
+             RegExp.prototype.exec = undefined; \
+             let result = Array.from(/\\w/g[Symbol.matchAll]('a*b')).map(function(match) { return match[0] + ':' + match.index; }).join('|'); \
+             RegExp.prototype.exec = saved; \
+             result;"
+        ),
+        Ok(Value::String("a:0|b:2".to_owned().into()))
+    );
 }
 
 #[test]

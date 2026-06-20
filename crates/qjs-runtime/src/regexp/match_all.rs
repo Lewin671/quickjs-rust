@@ -59,7 +59,11 @@ pub(crate) fn native_regexp_prototype_match_all(
     let last_index = to_length_with_env(property_value(this_value, "lastIndex", env)?, env)?;
     set_last_index(matcher.clone(), Value::Number(last_index as f64), env)?;
 
-    let iterator = ObjectRef::new(HashMap::new());
+    let prototype = crate::iterator::builtin_iterator_prototype(
+        env,
+        crate::iterator::BuiltinIteratorKind::RegExpString,
+    );
+    let iterator = ObjectRef::with_prototype(HashMap::new(), prototype);
     iterator.define_non_enumerable(REGEXP_STRING_ITERATOR_REGEXP.to_owned(), matcher);
     iterator.define_non_enumerable(
         REGEXP_STRING_ITERATOR_STRING.to_owned(),
@@ -77,16 +81,6 @@ pub(crate) fn native_regexp_prototype_match_all(
         REGEXP_STRING_ITERATOR_DONE.to_owned(),
         Value::Boolean(false),
     );
-    iterator.define_non_enumerable(
-        "next".to_owned(),
-        Value::Function(Function::new_native(
-            Some("next"),
-            0,
-            NativeFunction::RegExpStringIteratorPrototypeNext,
-            false,
-        )),
-    );
-    symbol::define_iterator_identity(env, &iterator);
     Ok(Value::Object(iterator))
 }
 
@@ -137,10 +131,11 @@ pub(crate) fn native_regexp_string_iterator_next(
 fn regexp_exec(regexp: Value, input: &str, env: &mut CallEnv) -> Result<Value, RuntimeError> {
     let exec = property_value(regexp.clone(), "exec", env)?;
     if !matches!(exec, Value::Function(_)) {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "TypeError: RegExp exec method is not callable".to_owned(),
-        });
+        return super::native_regexp_prototype_exec(
+            regexp,
+            &[Value::String(input.to_owned().into())],
+            env,
+        );
     }
     call_function(
         exec,

@@ -46,6 +46,7 @@ pub(crate) enum BuiltinIteratorKind {
     String,
     Map,
     Set,
+    RegExpString,
 }
 
 impl BuiltinIteratorKind {
@@ -55,6 +56,7 @@ impl BuiltinIteratorKind {
             Self::String => "\0StringIteratorPrototype",
             Self::Map => "\0MapIteratorPrototype",
             Self::Set => "\0SetIteratorPrototype",
+            Self::RegExpString => "\0RegExpStringIteratorPrototype",
         }
     }
 
@@ -64,6 +66,7 @@ impl BuiltinIteratorKind {
             Self::String => "String Iterator",
             Self::Map => "Map Iterator",
             Self::Set => "Set Iterator",
+            Self::RegExpString => "RegExp String Iterator",
         }
     }
 
@@ -73,6 +76,7 @@ impl BuiltinIteratorKind {
             Self::String => NativeFunction::StringIteratorPrototypeNext,
             Self::Map => NativeFunction::MapIteratorPrototypeNext,
             Self::Set => NativeFunction::SetIteratorPrototypeNext,
+            Self::RegExpString => NativeFunction::RegExpStringIteratorPrototypeNext,
         }
     }
 }
@@ -296,6 +300,7 @@ pub(crate) fn install_iterator(
         BuiltinIteratorKind::String,
         BuiltinIteratorKind::Map,
         BuiltinIteratorKind::Set,
+        BuiltinIteratorKind::RegExpString,
     ] {
         let prototype = ObjectRef::with_prototype(HashMap::new(), Some(iterator_prototype.clone()));
         prototype.define_non_enumerable(

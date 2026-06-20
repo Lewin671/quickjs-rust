@@ -363,21 +363,6 @@ pub(crate) fn define_well_known_iterator_alias(
     object.define_symbol_property(symbol, Property::non_enumerable(property.value));
 }
 
-pub(crate) fn define_iterator_identity(env: &CallEnv, object: &ObjectRef) {
-    let Some(symbol) = iterator_symbol(env) else {
-        return;
-    };
-    object.define_symbol_property(
-        symbol,
-        Property::non_enumerable(Value::Function(Function::new_native(
-            Some("[Symbol.iterator]"),
-            0,
-            NativeFunction::IteratorPrototypeIterator,
-            false,
-        ))),
-    );
-}
-
 pub(crate) fn define_species_accessor(env: &CallEnv, function: &Function) {
     let Some(symbol) = species_symbol(env) else {
         return;
