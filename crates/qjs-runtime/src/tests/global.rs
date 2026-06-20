@@ -804,4 +804,71 @@ fn eval_script_runs_global_declaration_instantiation_checks() {
         eval("__quickjsRustEvalScript('var okGlobalVar = 7;'); okGlobalVar;"),
         Ok(Value::Number(7.0))
     );
+    assert_eq!(
+        eval(
+            "__quickjsRustEvalScript('var evalScriptVar;'); \
+             let d = Object.getOwnPropertyDescriptor(this, 'evalScriptVar'); \
+             d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("true:true:false".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "__quickjsRustEvalScript('function evalScriptFunction() {}'); \
+             let d = Object.getOwnPropertyDescriptor(this, 'evalScriptFunction'); \
+             (typeof evalScriptFunction) + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("function:true:true:false".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "Object.defineProperty(this, 'evalScriptConfigurableFunction', { value: 1, writable: false, enumerable: false, configurable: true }); \
+             __quickjsRustEvalScript('function evalScriptConfigurableFunction() { return 2; }'); \
+             let d = Object.getOwnPropertyDescriptor(this, 'evalScriptConfigurableFunction'); \
+             evalScriptConfigurableFunction() + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("2:true:true:false".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "Object.defineProperty(this, 'evalScriptNonConfigurableFunction', { value: 1, writable: true, enumerable: true, configurable: false }); \
+             __quickjsRustEvalScript('function evalScriptNonConfigurableFunction() { return 3; }'); \
+             let d = Object.getOwnPropertyDescriptor(this, 'evalScriptNonConfigurableFunction'); \
+             evalScriptNonConfigurableFunction() + ':' + d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("3:true:true:false".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "__quickjsRustEvalScript('let evalScriptLexical;'); \
+             try { __quickjsRustEvalScript('var createdBeforeLexicalRedecl; let evalScriptLexical;'); 'no throw'; } \
+             catch (error) { error.name + ':' + this.hasOwnProperty('createdBeforeLexicalRedecl'); }"
+        ),
+        Ok(Value::String("SyntaxError:false".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "__quickjsRustEvalScript('const evalScriptConst = 1;'); \
+             try { __quickjsRustEvalScript('var createdBeforeConstCollision; function evalScriptConst() {}'); 'no throw'; } \
+             catch (error) { error.name + ':' + this.hasOwnProperty('createdBeforeConstCollision'); }"
+        ),
+        Ok(Value::String("SyntaxError:false".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var test262Shim = { evalScript: function(source) { return __quickjsRustEvalScript(source); } }; \
+             let shimLexical; \
+             try { test262Shim.evalScript('var createdBeforeShimCollision; var shimLexical;'); 'no throw'; } \
+             catch (error) { error.name + ':' + this.hasOwnProperty('createdBeforeShimCollision'); }"
+        ),
+        Ok(Value::String("SyntaxError:false".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "'use strict'; \
+             { function strictBlockFunction() {} } \
+             (typeof strictBlockFunction) + ':' + this.hasOwnProperty('strictBlockFunction');"
+        ),
+        Ok(Value::String("undefined:false".to_owned().into()))
+    );
 }

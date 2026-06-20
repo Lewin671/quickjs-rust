@@ -327,6 +327,12 @@ impl Vm<'_> {
         name: String,
         value: Value,
     ) -> Result<(), RuntimeError> {
+        if self.env.is_immutable_lexical_binding(&name) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: assignment to constant variable".to_owned(),
+            });
+        }
         if let Some(property) = self.global_this_own_property(&name)
             && !property.writable
         {
@@ -655,6 +661,21 @@ impl Vm<'_> {
         // later calls of that closure observe the new value.
         self.write_through_captured_slot(slot, &value);
         self.write_through_capture_writeback_slot(slot, &value);
+        if self.bytecode.global_scope
+            && !hoisted
+            && self
+                .bytecode
+                .global_lexical_names()
+                .iter()
+                .any(|name| name == &self.bytecode.locals[slot].name)
+            && !is_compiler_temporary(&self.bytecode.locals[slot].name)
+        {
+            let name = self.bytecode.locals[slot].name.clone();
+            self.env.mark_global_lexical_binding(name.clone());
+            if !mutable {
+                self.env.mark_immutable_lexical_binding(name);
+            }
+        }
         if from_env || self.bytecode.local_is_body_hoist_only(slot) {
             let name = self.bytecode.locals[slot].name.clone();
             if self.env.locals().contains_key(&name) {

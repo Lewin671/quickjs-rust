@@ -21,12 +21,18 @@
 //! (getters, setters, Proxy traps, `valueOf`/`toString`, iterators): callers
 //! copy the needed value out, drop the borrow, then call.
 
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    rc::Rc,
+};
 
 use crate::{Function, Value, private::PrivateEnvironment};
 
 /// The shared realm binding table: intrinsics plus the script's true globals.
 pub(crate) type Realm = Rc<RefCell<HashMap<String, Value>>>;
+pub(crate) type GlobalLexicalBindings = Rc<RefCell<HashSet<String>>>;
+pub(crate) type ImmutableLexicalBindings = Rc<RefCell<HashSet<String>>>;
 pub(crate) type ModuleImports = HashMap<String, (Realm, String)>;
 
 /// A two-layer environment view: a shared realm cell plus this frame's locals.
@@ -37,6 +43,8 @@ pub(crate) type ModuleImports = HashMap<String, (Realm, String)>;
 #[allow(dead_code)]
 pub(crate) struct CallEnv {
     realm: Realm,
+    global_lexical_bindings: GlobalLexicalBindings,
+    immutable_lexical_bindings: ImmutableLexicalBindings,
     locals: HashMap<String, Value>,
     /// The lexical private-name environment active for this frame. This is
     /// separate from `\0home_object`: ordinary nested functions do not inherit
@@ -68,6 +76,14 @@ impl std::fmt::Debug for CallEnv {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CallEnv")
             .field("realm", &self.realm)
+            .field(
+                "global_lexical_bindings",
+                &self.global_lexical_bindings.borrow().len(),
+            )
+            .field(
+                "immutable_lexical_bindings",
+                &self.immutable_lexical_bindings.borrow().len(),
+            )
             .field("locals", &self.locals)
             .field("module_host", &self.module_host.is_some())
             .field(
@@ -91,6 +107,8 @@ impl CallEnv {
     pub(crate) fn new(realm: Realm) -> Self {
         Self {
             realm,
+            global_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
+            immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             locals: HashMap::new(),
             private_environment: None,
             activation_captured_env: None,
@@ -152,6 +170,8 @@ impl CallEnv {
     pub(crate) fn detached() -> Self {
         Self {
             realm: Rc::new(RefCell::new(HashMap::new())),
+            global_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
+            immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             locals: HashMap::new(),
             private_environment: None,
             activation_captured_env: None,
@@ -167,6 +187,8 @@ impl CallEnv {
     pub(crate) fn from_map(map: HashMap<String, Value>) -> Self {
         Self {
             realm: Rc::new(RefCell::new(map)),
+            global_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
+            immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             locals: HashMap::new(),
             private_environment: None,
             activation_captured_env: None,
@@ -180,6 +202,8 @@ impl CallEnv {
     pub(crate) fn with_locals(realm: Realm, locals: HashMap<String, Value>) -> Self {
         Self {
             realm,
+            global_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
+            immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             locals,
             private_environment: None,
             activation_captured_env: None,
@@ -197,6 +221,27 @@ impl CallEnv {
     /// A clone of the realm `Rc` (shared cell, not a deep copy).
     pub(crate) fn realm_rc(&self) -> Realm {
         Rc::clone(&self.realm)
+    }
+
+    /// Builds an empty frame that shares this environment's realm metadata.
+    pub(crate) fn empty_frame(&self) -> Self {
+        self.with_frame_locals(HashMap::new())
+    }
+
+    pub(crate) fn mark_global_lexical_binding(&self, name: String) {
+        self.global_lexical_bindings.borrow_mut().insert(name);
+    }
+
+    pub(crate) fn is_global_lexical_binding(&self, name: &str) -> bool {
+        self.global_lexical_bindings.borrow().contains(name)
+    }
+
+    pub(crate) fn mark_immutable_lexical_binding(&self, name: String) {
+        self.immutable_lexical_bindings.borrow_mut().insert(name);
+    }
+
+    pub(crate) fn is_immutable_lexical_binding(&self, name: &str) -> bool {
+        self.immutable_lexical_bindings.borrow().contains(name)
     }
 
     /// This frame's own locals layer.
@@ -340,6 +385,8 @@ impl CallEnv {
     pub(crate) fn with_frame_locals(&self, locals: HashMap<String, Value>) -> Self {
         Self {
             realm: Rc::clone(&self.realm),
+            global_lexical_bindings: Rc::clone(&self.global_lexical_bindings),
+            immutable_lexical_bindings: Rc::clone(&self.immutable_lexical_bindings),
             locals,
             private_environment: self.private_environment.clone(),
             activation_captured_env: self.activation_captured_env.clone(),

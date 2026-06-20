@@ -235,6 +235,12 @@ impl Vm<'_> {
                 message: "TypeError: assignment to constant variable".to_owned(),
             });
         }
+        if self.env.is_immutable_lexical_binding(&name) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: assignment to constant variable".to_owned(),
+            });
+        }
         // A caller-scope binding carried in this frame's locals layer is written
         // there (and propagated back to the caller on return); only a true realm
         // global goes to the shared cell.
@@ -328,6 +334,12 @@ impl Vm<'_> {
         value: Value,
     ) -> Result<(), RuntimeError> {
         if self.env.has_module_import(&name) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: assignment to constant variable".to_owned(),
+            });
+        }
+        if self.env.is_immutable_lexical_binding(&name) {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: assignment to constant variable".to_owned(),

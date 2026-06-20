@@ -13,7 +13,11 @@ use crate::{
     function::{CallEnv, CompiledUserFunction, Realm},
     initialize_builtins, is_truthy, to_js_string_with_env, to_property_key_value,
 };
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    rc::Rc,
+};
 pub(super) type Slot = Option<Value>;
 pub(super) struct VmCallEnv {
     pub(super) env: CallEnv,
@@ -24,6 +28,7 @@ pub(super) struct VmCallEnv {
 pub(super) fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> {
     let mut vm = Vm::new(bytecode)?;
     let value = vm.run()?;
+    vm.persist_global_lexical_bindings();
     vm.drain_promise_jobs()?;
     Ok(value)
 }
@@ -118,6 +123,29 @@ impl<'a> Vm<'a> {
         Self::new_with_globals_captures_and_with_stack(bytecode, env, captured_env, Vec::new())
     }
 
+    fn persist_global_lexical_bindings(&mut self) {
+        if !self.bytecode.is_global_scope() {
+            return;
+        }
+        let hoisted = self.bytecode.hoisted_local_names().collect::<HashSet<_>>();
+        let global_lexical_names = self.bytecode.global_lexical_names();
+        for (slot, local) in self.bytecode.locals.iter().enumerate() {
+            if hoisted.contains(local.name.as_str()) {
+                continue;
+            }
+            if !global_lexical_names.iter().any(|name| name == &local.name) {
+                continue;
+            }
+            let Some(Some(_value)) = self.locals.get(slot) else {
+                continue;
+            };
+            self.env.mark_global_lexical_binding(local.name.clone());
+            if !local.mutable {
+                self.env.mark_immutable_lexical_binding(local.name.clone());
+            }
+        }
+    }
+
     pub(super) fn new_with_globals_captures_and_with_stack(
         bytecode: &'a Bytecode,
         env: CallEnv,
@@ -159,7 +187,7 @@ impl<'a> Vm<'a> {
                 locals.insert(self.bytecode.locals[index].name.clone(), value.clone());
             }
         }
-        let mut env = self.attach_host(CallEnv::with_locals(self.realm_rc(), locals));
+        let mut env = self.attach_host(self.env.with_frame_locals(locals));
         env.set_private_environment(self.current_private_environment());
         env.set_activation_captured_env(Rc::clone(&self.captured_env));
         if let Some(source) = self.env.captured_binding_source_env() {
@@ -168,14 +196,9 @@ impl<'a> Vm<'a> {
         env
     }
 
-    /// A clone of the shared realm `Rc`.
-    pub(super) fn realm_rc(&self) -> Realm {
-        Rc::clone(&self.realm)
-    }
-
     /// A shared-realm `CallEnv` with empty frame locals.
     pub(super) fn realm_env(&self) -> CallEnv {
-        self.attach_host(CallEnv::new(self.realm_rc()))
+        self.attach_host(self.env.empty_frame())
     }
 
     pub(super) fn coerce_property_key(
@@ -890,7 +913,7 @@ impl<'a> Vm<'a> {
                 }
             }
             let injected = locals.clone();
-            let mut env = self.attach_host(CallEnv::with_locals(self.realm_rc(), locals));
+            let mut env = self.attach_host(self.env.with_frame_locals(locals));
             env.set_activation_captured_env(Rc::clone(&self.captured_env));
             if let Some(source) = self.env.captured_binding_source_env() {
                 env.set_captured_binding_source_env(Rc::clone(source));
