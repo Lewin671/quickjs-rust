@@ -74,9 +74,9 @@ pub(super) fn match_lookaround(
     }
 }
 
-/// Match the body of a lookbehind ending at `state.index`. We try every body
-/// start position from 0..=state.index and keep those whose match ends exactly
-/// at `state.index`.
+/// Match the body of a lookbehind ending at `state.index`. The forward matcher
+/// still probes possible body starts from left to right, but capture writes
+/// inside the body use lookbehind's reverse-direction priority.
 #[allow(clippy::too_many_arguments)]
 fn match_lookbehind_body(
     pattern: &[char],
@@ -89,6 +89,10 @@ fn match_lookbehind_body(
     options: MatchOptions,
 ) -> Vec<MatchState> {
     let target = state.index;
+    let options = MatchOptions {
+        reverse_captures: true,
+        ..options
+    };
     let mut results = Vec::new();
     for begin in 0..=target {
         for (start, end) in group_alternatives(pattern, body_start, body_end) {

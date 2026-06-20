@@ -56,6 +56,7 @@ struct MatchOptions {
     unicode: bool,
     dot_all: bool,
     multiline: bool,
+    reverse_captures: bool,
 }
 
 struct RepeatAtom<'a> {
@@ -142,6 +143,7 @@ fn regexp_match(
         unicode,
         dot_all,
         multiline,
+        reverse_captures: false,
     };
     let starts: Vec<_> = if exact_start {
         vec![start_index]
@@ -1032,7 +1034,14 @@ fn match_group(
         .into_iter()
         .map(|mut matched| {
             if let Some(group_index) = group_index {
-                matched.captures[group_index] = Some((state.index, matched.index));
+                let capture = Some((state.index, matched.index));
+                let group_is_repeated = quantifier(pattern, end + 1).next_pc != end + 1;
+                if !options.reverse_captures
+                    || !group_is_repeated
+                    || matched.captures[group_index].is_none()
+                {
+                    matched.captures[group_index] = capture;
+                }
             }
             (end + 1, matched)
         })

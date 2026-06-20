@@ -440,3 +440,17 @@ fn lookbehind_assertions_match_preceding_text() {
     let matched = regexp_match_range(r"(?<!\$)\d+", "$100", 0, false, false, false).unwrap();
     assert_eq!((matched.start, matched.end), (2, 4));
 }
+
+#[test]
+fn lookbehind_repeated_groups_keep_reverse_capture_priority() {
+    let matched = regexp_match_range(r"(?<=(\w){3})def", "abcdef", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (3, 6));
+    assert_eq!(matched.captures, vec![Some((0, 1))]);
+}
+
+#[test]
+fn lookbehind_greedy_quantifiers_keep_widest_capture() {
+    let matched = regexp_match_range(r"(?<=(b+))c", "abbbbbbc", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (7, 8));
+    assert_eq!(matched.captures, vec![Some((1, 7))]);
+}
