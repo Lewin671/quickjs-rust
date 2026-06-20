@@ -5,10 +5,43 @@ use crate::{ParseError, Parser};
 
 impl Parser {
     pub(crate) fn nullish_coalescing(&mut self) -> Result<Expr, ParseError> {
-        self.binary_left_assoc(
-            Self::logical_or,
-            &[(TokenKind::QuestionQuestion, BinaryOp::NullishCoalescing)],
-        )
+        let mut left_start = self.cursor;
+        let mut expr = self.logical_or()?;
+        while self.at(&TokenKind::QuestionQuestion) {
+            let operator = self.cursor;
+            if starts_with_logical_operator(&expr)
+                && !self.expression_range_is_parenthesized(left_start, operator)
+            {
+                return Err(ParseError {
+                    message: "`??` cannot be mixed with `&&` or `||` without parentheses"
+                        .to_owned(),
+                    span: expr.span(),
+                });
+            }
+
+            self.expect(&TokenKind::QuestionQuestion)?;
+            let right_start = self.cursor;
+            let right = self.logical_or()?;
+            if starts_with_logical_operator(&right)
+                && !self.expression_range_is_parenthesized(right_start, self.cursor)
+            {
+                return Err(ParseError {
+                    message: "`??` cannot be mixed with `&&` or `||` without parentheses"
+                        .to_owned(),
+                    span: right.span(),
+                });
+            }
+
+            let span = Span::new(expr.span().start, right.span().end);
+            expr = Expr::Binary {
+                left: Box::new(expr),
+                op: BinaryOp::NullishCoalescing,
+                right: Box::new(right),
+                span,
+            };
+            left_start = operator;
+        }
+        Ok(expr)
     }
 
     fn logical_or(&mut self) -> Result<Expr, ParseError> {
@@ -183,4 +216,44 @@ impl Parser {
         }
         Ok(expr)
     }
+
+    fn expression_range_is_parenthesized(&self, start: usize, end: usize) -> bool {
+        let Some(first) = self.tokens.get(start) else {
+            return false;
+        };
+        if first.kind != TokenKind::LeftParen || end <= start + 1 {
+            return false;
+        }
+        let Some(last) = self.tokens.get(end - 1) else {
+            return false;
+        };
+        if last.kind != TokenKind::RightParen {
+            return false;
+        }
+
+        let mut depth = 0usize;
+        for index in start..end {
+            match self.tokens[index].kind {
+                TokenKind::LeftParen => depth += 1,
+                TokenKind::RightParen => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        return index == end - 1;
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+}
+
+fn starts_with_logical_operator(expr: &Expr) -> bool {
+    matches!(
+        expr,
+        Expr::Binary {
+            op: BinaryOp::LogicalAnd | BinaryOp::LogicalOr,
+            ..
+        }
+    )
 }

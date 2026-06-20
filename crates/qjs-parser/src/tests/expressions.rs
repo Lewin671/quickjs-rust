@@ -111,6 +111,35 @@ fn parses_nullish_coalescing_expression() {
 }
 
 #[test]
+fn rejects_unparenthesized_nullish_logical_mixing() {
+    for source in [
+        "0 && 0 ?? true;",
+        "0 || 0 ?? true;",
+        "0 ?? 0 && true;",
+        "0 ?? 0 || true;",
+        "(0) && 0 ?? true;",
+        "0 ?? (0) || true;",
+    ] {
+        assert!(
+            parse_script(source).is_err(),
+            "source should be a syntax error: {source}"
+        );
+    }
+}
+
+#[test]
+fn allows_parenthesized_nullish_logical_mixing() {
+    for source in [
+        "(0 && 0) ?? true;",
+        "(0 || 0) ?? true;",
+        "0 ?? (0 && true);",
+        "0 ?? (0 || true);",
+    ] {
+        parse_script(source).expect("source should parse");
+    }
+}
+
+#[test]
 fn parses_conditional_expression_as_right_associative() {
     let script = parse_script("false ? 1 : true ? 2 : 3;").expect("source should parse");
     let [Stmt::Expr(Expr::Conditional { alternate, .. })] = script.body.as_slice() else {
