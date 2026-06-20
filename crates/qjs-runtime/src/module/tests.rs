@@ -460,6 +460,22 @@ fn module_vars_do_not_leak_to_global_this() {
 }
 
 #[test]
+fn module_var_and_function_bindings_do_not_pollute_module_global_this() {
+    let namespace = run(
+        "var test262 = 23;\n\
+         function read() { return test262; }\n\
+         export const value = read();\n\
+         export const hasVar = globalThis.hasOwnProperty('test262');\n\
+         export const hasFn = globalThis.hasOwnProperty('read');",
+        &[],
+    )
+    .expect("module evaluates");
+    assert_eq!(export(&namespace, "value"), Value::Number(23.0));
+    assert_eq!(export(&namespace, "hasVar"), Value::Boolean(false));
+    assert_eq!(export(&namespace, "hasFn"), Value::Boolean(false));
+}
+
+#[test]
 fn prelude_script_bindings_are_visible_to_module() {
     // A prelude script (mirroring Test262 harness includes) installs a global
     // helper that the module body then calls; its value flows into an export.

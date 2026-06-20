@@ -719,6 +719,10 @@ impl Bytecode {
             .map(|local| local.name.as_str())
     }
 
+    pub(crate) const fn is_global_scope(&self) -> bool {
+        self.global_scope
+    }
+
     pub(crate) fn hoisted_function_names(&self) -> impl Iterator<Item = &str> {
         self.locals
             .iter()

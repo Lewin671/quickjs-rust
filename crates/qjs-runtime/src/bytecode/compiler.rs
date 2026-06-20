@@ -142,15 +142,26 @@ pub(super) fn compile_direct_eval_script(
     compiler.compile_eval_into(script)
 }
 
-/// Compiles a module body. Module code is global-scope bytecode (its top-level
-/// `var`/function bindings live in the module realm) but always strict mode,
-/// regardless of a leading directive prologue.
+/// Compiles a module body. Module code is always strict mode, regardless of a
+/// leading directive prologue, and its top-level declarations are module-frame
+/// bindings rather than properties on the module graph's `globalThis`. Top
+/// level `await` still uses the older global-scope lowering until async module
+/// evaluation has a full module-environment model.
 pub(super) fn compile_module(script: &Script) -> Result<Bytecode, RuntimeError> {
     let mut compiler = Compiler {
         strict: true,
+        global_scope: false,
         ..Compiler::default()
     };
-    compiler.compile_into(script)
+    let bytecode = compiler.compile_eval_into(script)?;
+    if bytecode.contains_top_level_await() {
+        let mut compiler = Compiler {
+            strict: true,
+            ..Compiler::default()
+        };
+        return compiler.compile_into(script);
+    }
+    Ok(bytecode)
 }
 
 pub(super) fn compile_function_body(

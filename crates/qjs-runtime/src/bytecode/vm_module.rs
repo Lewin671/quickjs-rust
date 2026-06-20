@@ -52,14 +52,15 @@ pub(super) fn new_module_realm() -> Realm {
     realm
 }
 
-/// Evaluates a module body (compiled as global-scope bytecode) against the
-/// shared graph `realm`, seeding `imports` as module-scope bindings first.
-/// Returns the module's frame environment so the linker can read its exports.
+/// Evaluates a module body against the shared graph `realm`, seeding `imports`
+/// as module-scope bindings first. Returns the module's frame environment so
+/// the linker can read its exports.
 ///
-/// All of a module's top-level `var`/`let`/`const`/`function`/`class` bindings
-/// land in the shared graph realm; imported bindings are inserted there before
-/// the body runs, so import references resolve through the ordinary global-load
-/// path and functions defined in any module see them.
+/// Synchronous module bodies keep top-level declarations in the module frame
+/// and shared captured-env cell, so they do not become `globalThis` properties.
+/// Top-level-await bodies temporarily keep the older global-scope lowering so
+/// the async module driver can read settled exports until it grows a fuller
+/// module-environment model.
 pub(super) fn eval_module_body(
     bytecode: &Bytecode,
     realm: &Realm,
@@ -70,7 +71,9 @@ pub(super) fn eval_module_body(
 ) -> Result<ModuleEvaluation, RuntimeError> {
     {
         let mut globals = realm.borrow_mut();
-        Vm::initialize_script_global_bindings(bytecode, &mut globals)?;
+        if bytecode.is_global_scope() || bytecode.contains_top_level_await() {
+            Vm::initialize_script_global_bindings(bytecode, &mut globals)?;
+        }
         for (name, value) in imports {
             globals.insert(name, value);
         }
