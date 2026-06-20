@@ -326,7 +326,12 @@ pub(super) fn native_global_eval(
         .hoisted_local_names()
         .chain(bytecode.global_names().iter().map(String::as_str))
     {
-        if let Some(value) = result.binding(name) {
+        let binding = if direct_function_eval && hoisted_names.contains(name) {
+            result.frame_binding(name).or_else(|| result.binding(name))
+        } else {
+            result.binding(name)
+        };
+        if let Some(value) = binding {
             if let Some(writeback_env) = strict_direct_writeback_env.as_mut() {
                 if hoisted_names.contains(name) {
                     continue;
@@ -346,6 +351,9 @@ pub(super) fn native_global_eval(
                 eval_env.insert(name.to_owned(), value.clone());
             } else if direct_function_eval {
                 eval_env.insert(name.to_owned(), value.clone());
+                if hoisted_names.contains(name) {
+                    update_direct_eval_captured_functions(&mut eval_env, name, value.clone());
+                }
             } else if hoisted_function_names.contains(name) {
                 create_eval_global_function_binding(&mut eval_env, name, value.clone());
             } else if hoisted_names.contains(name) {
@@ -565,6 +573,33 @@ fn validate_eval_global_lexical_bindings(
         }
     }
     Ok(())
+}
+
+fn update_direct_eval_captured_functions(env: &mut CallEnv, name: &str, value: Value) {
+    for local_value in env.locals_mut().values_mut() {
+        update_function_captured_binding(local_value, name, value.clone());
+    }
+    if let Some(captured_env) = env.activation_captured_env() {
+        let mut captured_env = captured_env.borrow_mut();
+        for captured_value in captured_env.values_mut() {
+            update_function_captured_binding(captured_value, name, value.clone());
+        }
+    }
+    for captured_env in env.parameter_captured_envs() {
+        captured_env
+            .borrow_mut()
+            .insert(name.to_owned(), value.clone());
+    }
+}
+
+fn update_function_captured_binding(value: &mut Value, name: &str, replacement: Value) {
+    let Value::Function(function) = value else {
+        return;
+    };
+    let mut captured = function.captured_env.borrow_mut();
+    if captured.contains_key(name) {
+        captured.insert(name.to_owned(), replacement);
+    }
 }
 
 fn validate_sloppy_function_eval_declarations(

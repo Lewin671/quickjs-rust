@@ -62,6 +62,7 @@ pub(crate) struct CallEnv {
     /// against this source so they can still write through shared outer
     /// bindings.
     captured_binding_source_env: Option<Rc<RefCell<HashMap<String, Value>>>>,
+    parameter_captured_envs: Vec<Rc<RefCell<HashMap<String, Value>>>>,
     /// The realm's dynamic-import host (module graph + resolver + active
     /// referrer), shared by `Rc::clone` into every frame and the job queue so a
     /// dynamic `import()` reached at any depth can load and cache modules. `None`
@@ -98,6 +99,10 @@ impl std::fmt::Debug for CallEnv {
                 "captured_binding_source_env",
                 &self.captured_binding_source_env.is_some(),
             )
+            .field(
+                "parameter_captured_envs",
+                &self.parameter_captured_envs.len(),
+            )
             .field("module_imports", &self.module_imports.keys())
             .finish()
     }
@@ -119,6 +124,7 @@ impl CallEnv {
             private_environment: None,
             activation_captured_env: None,
             captured_binding_source_env: None,
+            parameter_captured_envs: Vec::new(),
             module_host: None,
             module_imports: HashMap::new(),
         }
@@ -184,6 +190,7 @@ impl CallEnv {
             private_environment: None,
             activation_captured_env: None,
             captured_binding_source_env: None,
+            parameter_captured_envs: Vec::new(),
             module_host: None,
             module_imports: HashMap::new(),
         }
@@ -203,6 +210,7 @@ impl CallEnv {
             private_environment: None,
             activation_captured_env: None,
             captured_binding_source_env: None,
+            parameter_captured_envs: Vec::new(),
             module_host: None,
             module_imports: HashMap::new(),
         }
@@ -220,6 +228,7 @@ impl CallEnv {
             private_environment: None,
             activation_captured_env: None,
             captured_binding_source_env: None,
+            parameter_captured_envs: Vec::new(),
             module_host: None,
             module_imports: HashMap::new(),
         }
@@ -320,6 +329,17 @@ impl CallEnv {
         &self,
     ) -> Option<&Rc<RefCell<HashMap<String, Value>>>> {
         self.captured_binding_source_env.as_ref()
+    }
+
+    pub(crate) fn set_parameter_captured_envs(
+        &mut self,
+        envs: Vec<Rc<RefCell<HashMap<String, Value>>>>,
+    ) {
+        self.parameter_captured_envs = envs;
+    }
+
+    pub(crate) fn parameter_captured_envs(&self) -> &[Rc<RefCell<HashMap<String, Value>>>] {
+        &self.parameter_captured_envs
     }
 
     pub(crate) fn captures_binding(&self, name: &str) -> bool {
@@ -429,6 +449,7 @@ impl CallEnv {
             private_environment: self.private_environment.clone(),
             activation_captured_env: self.activation_captured_env.clone(),
             captured_binding_source_env: self.captured_binding_source_env.clone(),
+            parameter_captured_envs: self.parameter_captured_envs.clone(),
             module_host: self.module_host.clone(),
             module_imports: self.module_imports.clone(),
         }

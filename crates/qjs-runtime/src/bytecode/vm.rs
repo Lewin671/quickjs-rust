@@ -65,6 +65,7 @@ pub(super) struct Vm<'a> {
     pub(super) module_host: Option<crate::module::ModuleHostRef>,
     pub(super) captured_env: Rc<RefCell<HashMap<String, Value>>>,
     pub(super) captured_env_stack: Vec<Rc<RefCell<HashMap<String, Value>>>>,
+    pub(super) parameter_captured_envs: Vec<Rc<RefCell<HashMap<String, Value>>>>,
     pub(super) capture_writeback: Option<CaptureWriteback>,
     pub(super) sloppy_global_names: Vec<String>,
     pub(super) try_stack: Vec<TryFrame>,
@@ -154,6 +155,7 @@ impl<'a> Vm<'a> {
     ) -> Self {
         let realm = env.realm_rc();
         let module_host = env.module_host();
+        let parameter_captured_envs = env.parameter_captured_envs().to_vec();
         let locals = Self::initial_slots(bytecode, &env);
         Self {
             bytecode,
@@ -165,6 +167,7 @@ impl<'a> Vm<'a> {
             module_host,
             captured_env,
             captured_env_stack: Vec::new(),
+            parameter_captured_envs,
             capture_writeback: None,
             sloppy_global_names: Vec::new(),
             try_stack: Vec::new(),
@@ -217,6 +220,7 @@ impl<'a> Vm<'a> {
         if let Some(source) = self.env.captured_binding_source_env() {
             env.set_captured_binding_source_env(Rc::clone(source));
         }
+        env.set_parameter_captured_envs(self.parameter_captured_envs.clone());
         env
     }
 
@@ -483,11 +487,15 @@ impl<'a> Vm<'a> {
                         (None, None)
                     };
                     self.refresh_captured_env(&env);
-                    let captured_env = if self.in_parameter_prologue() {
+                    let in_parameter_prologue = self.in_parameter_prologue();
+                    let captured_env = if in_parameter_prologue {
                         Rc::new(RefCell::new(env.clone()))
                     } else {
                         self.captured_env.clone()
                     };
+                    if in_parameter_prologue {
+                        self.parameter_captured_envs.push(Rc::clone(&captured_env));
+                    }
                     let function = Function::new_user_compiled(CompiledUserFunction {
                         name,
                         has_name_binding,
@@ -942,6 +950,7 @@ impl<'a> Vm<'a> {
             if let Some(source) = self.env.captured_binding_source_env() {
                 env.set_captured_binding_source_env(Rc::clone(source));
             }
+            env.set_parameter_captured_envs(self.parameter_captured_envs.clone());
             return VmCallEnv {
                 injected,
                 env,

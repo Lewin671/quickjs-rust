@@ -93,6 +93,9 @@ impl Vm<'_> {
         let result = call_function(callee, this_value, arguments, &mut env.env, false);
         env.env.remove(crate::DIRECT_EVAL_BINDING);
         env.env.remove(crate::DIRECT_EVAL_STRICT_BINDING);
+        if direct_eval {
+            self.write_through_direct_eval_parameter_captures(&env.env, &env.injected);
+        }
         self.apply_call_env(env);
         if let Some(result) = self.handle_call_result(result)? {
             self.stack.push(result);

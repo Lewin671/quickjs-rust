@@ -114,6 +114,42 @@ fn default_parameter_eval_closures_capture_parameter_eval_bindings() {
 }
 
 #[test]
+fn default_parameter_eval_updates_prior_parameter_closures() {
+    assert_eq!(
+        eval(
+            "var x = 'outside'; var before, after; \
+             ((_ = before = function() { return x; }, \
+               __ = (eval(\"var x = 'inside';\"), after = function() { return x; })) => {})(); \
+             before() + ':' + after();"
+        ),
+        Ok(Value::String("inside:inside".to_owned().into()))
+    );
+}
+
+#[test]
+fn rest_parameter_eval_updates_prior_parameter_closures() {
+    assert_eq!(
+        eval(
+            "var x = 'outside'; var before, after; \
+             ((_ = before = function() { return x; }, \
+               ...[__ = (eval(\"var x = 'inside';\"), after = function() { return x; })]) => {})(); \
+             before() + ':' + after();"
+        ),
+        Ok(Value::String("inside:inside".to_owned().into()))
+    );
+
+    assert_eq!(
+        eval(
+            "var x = 'outside'; var before, after; \
+             ((...[_ = before = function() { return x; }, \
+                  __ = (eval(\"var x = 'inside';\"), after = function() { return x; })]) => {})(); \
+             before() + ':' + after();"
+        ),
+        Ok(Value::String("inside:inside".to_owned().into()))
+    );
+}
+
+#[test]
 fn unmapped_arguments_callee_is_restricted() {
     assert_eq!(
         eval(

@@ -85,9 +85,7 @@ impl Vm<'_> {
         if self.bytecode.global_scope {
             return false;
         }
-        if !self.bytecode.locals.iter().any(|local| {
-            local.name.starts_with("\0\0param_argument_") || local.name == "\0\0rest_argument"
-        }) {
+        if !self.bytecode.locals.iter().any(|local| local.parameter) {
             return false;
         }
         !self.bytecode.code[..self.ip]

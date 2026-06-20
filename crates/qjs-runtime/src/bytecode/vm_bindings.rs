@@ -881,6 +881,9 @@ impl Vm<'_> {
             let Some(value) = env.get(name) else {
                 continue;
             };
+            if injected.get(name) != Some(&value) {
+                self.write_through_parameter_captured_envs(name, &value);
+            }
             // An injected caller binding the callee never modified must not
             // write back: a newer value may have arrived through the shared
             // captured_env while this call was in flight.
@@ -988,6 +991,28 @@ impl Vm<'_> {
         self.capture_writeback
             .as_ref()
             .is_some_and(|writeback| writeback_contains(writeback, name))
+    }
+
+    pub(super) fn write_through_direct_eval_parameter_captures(
+        &self,
+        env: &CallEnv,
+        injected: &HashMap<String, Value>,
+    ) {
+        for (name, value) in env.locals() {
+            if injected.get(name) == Some(value) {
+                continue;
+            }
+            self.write_through_parameter_captured_envs(name, value);
+        }
+    }
+
+    fn write_through_parameter_captured_envs(&self, name: &str, value: &Value) {
+        for captured_env in &self.parameter_captured_envs {
+            let mut captured_env = captured_env.borrow_mut();
+            if captured_env.contains_key(name) {
+                captured_env.insert(name.to_owned(), value.clone());
+            }
+        }
     }
 
     pub(super) fn apply_env(&mut self, env: CallEnv) {
