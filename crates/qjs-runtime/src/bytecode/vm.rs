@@ -194,6 +194,24 @@ impl<'a> Vm<'a> {
                 env.mark_catch_binding(self.bytecode.locals[index].name.clone());
             }
         }
+        env.clear_direct_eval_var_conflicts();
+        let in_parameter_prologue = self.in_parameter_prologue();
+        for (index, local) in self.bytecode.locals.iter().enumerate() {
+            if super::vm_bindings::is_compiler_temporary(&local.name) {
+                continue;
+            }
+            if in_parameter_prologue && local.parameter {
+                env.mark_direct_eval_var_conflict(local.name.clone());
+                continue;
+            }
+            if local.hoisted {
+                continue;
+            }
+            let active_lexical = self.locals.get(index).is_some_and(Option::is_some);
+            if active_lexical {
+                env.mark_direct_eval_var_conflict(local.name.clone());
+            }
+        }
         env.set_private_environment(self.current_private_environment());
         env.set_activation_captured_env(Rc::clone(&self.captured_env));
         if let Some(source) = self.env.captured_binding_source_env() {

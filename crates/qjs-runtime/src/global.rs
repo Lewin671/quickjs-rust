@@ -303,6 +303,9 @@ pub(super) fn native_global_eval(
         )?;
     }
     if direct_function_eval && !eval_strict {
+        validate_sloppy_function_eval_declarations(&bytecode, &eval_env)?;
+    }
+    if direct_function_eval && !eval_strict {
         bytecode.mark_eval_deletable_locals(
             hoisted_names
                 .iter()
@@ -559,6 +562,23 @@ fn validate_eval_global_lexical_bindings(
                     ),
                 });
             }
+        }
+    }
+    Ok(())
+}
+
+fn validate_sloppy_function_eval_declarations(
+    bytecode: &crate::bytecode::Bytecode,
+    env: &CallEnv,
+) -> Result<(), RuntimeError> {
+    for name in bytecode.hoisted_local_names() {
+        if env.is_direct_eval_var_conflict(name) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: format!(
+                    "SyntaxError: function eval var declaration `{name}` conflicts with a lexical binding"
+                ),
+            });
         }
     }
     Ok(())

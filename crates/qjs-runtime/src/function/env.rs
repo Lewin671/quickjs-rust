@@ -47,6 +47,7 @@ pub(crate) struct CallEnv {
     immutable_lexical_bindings: ImmutableLexicalBindings,
     locals: HashMap<String, Value>,
     catch_bindings: HashSet<String>,
+    direct_eval_var_conflicts: HashSet<String>,
     /// The lexical private-name environment active for this frame. This is
     /// separate from `\0home_object`: ordinary nested functions do not inherit
     /// `super`, but they do retain access to private names declared by enclosing
@@ -87,6 +88,7 @@ impl std::fmt::Debug for CallEnv {
             )
             .field("locals", &self.locals)
             .field("catch_bindings", &self.catch_bindings)
+            .field("direct_eval_var_conflicts", &self.direct_eval_var_conflicts)
             .field("module_host", &self.module_host.is_some())
             .field(
                 "activation_captured_env",
@@ -113,6 +115,7 @@ impl CallEnv {
             immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             locals: HashMap::new(),
             catch_bindings: HashSet::new(),
+            direct_eval_var_conflicts: HashSet::new(),
             private_environment: None,
             activation_captured_env: None,
             captured_binding_source_env: None,
@@ -177,6 +180,7 @@ impl CallEnv {
             immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             locals: HashMap::new(),
             catch_bindings: HashSet::new(),
+            direct_eval_var_conflicts: HashSet::new(),
             private_environment: None,
             activation_captured_env: None,
             captured_binding_source_env: None,
@@ -195,6 +199,7 @@ impl CallEnv {
             immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             locals: HashMap::new(),
             catch_bindings: HashSet::new(),
+            direct_eval_var_conflicts: HashSet::new(),
             private_environment: None,
             activation_captured_env: None,
             captured_binding_source_env: None,
@@ -211,6 +216,7 @@ impl CallEnv {
             immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             locals,
             catch_bindings: HashSet::new(),
+            direct_eval_var_conflicts: HashSet::new(),
             private_environment: None,
             activation_captured_env: None,
             captured_binding_source_env: None,
@@ -260,6 +266,18 @@ impl CallEnv {
 
     pub(crate) fn is_catch_binding(&self, name: &str) -> bool {
         self.catch_bindings.contains(name)
+    }
+
+    pub(crate) fn clear_direct_eval_var_conflicts(&mut self) {
+        self.direct_eval_var_conflicts.clear();
+    }
+
+    pub(crate) fn mark_direct_eval_var_conflict(&mut self, name: String) {
+        self.direct_eval_var_conflicts.insert(name);
+    }
+
+    pub(crate) fn is_direct_eval_var_conflict(&self, name: &str) -> bool {
+        self.direct_eval_var_conflicts.contains(name)
     }
 
     /// This frame's own locals layer.
@@ -407,6 +425,7 @@ impl CallEnv {
             immutable_lexical_bindings: Rc::clone(&self.immutable_lexical_bindings),
             locals,
             catch_bindings: self.catch_bindings.clone(),
+            direct_eval_var_conflicts: self.direct_eval_var_conflicts.clone(),
             private_environment: self.private_environment.clone(),
             activation_captured_env: self.activation_captured_env.clone(),
             captured_binding_source_env: self.captured_binding_source_env.clone(),

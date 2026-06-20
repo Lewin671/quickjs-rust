@@ -754,6 +754,22 @@ fn direct_eval_allows_arrow_body_arguments_binding() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "let callCount = 0; \
+             let f = (a = eval('var a = 42')) => { callCount = callCount + 1; }; \
+             try { f(); } catch (error) { var caught = error instanceof SyntaxError; } \
+             caught + ':' + callCount;"
+        ),
+        Ok(Value::String("true:0".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "let f = () => { let local; eval('var local;'); }; \
+             try { f(); } catch (error) { error instanceof SyntaxError; }"
+        ),
+        Ok(Value::Boolean(true))
+    );
 }
 
 #[test]
