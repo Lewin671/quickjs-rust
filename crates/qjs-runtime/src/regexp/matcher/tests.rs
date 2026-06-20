@@ -449,8 +449,21 @@ fn lookbehind_repeated_groups_keep_reverse_capture_priority() {
 }
 
 #[test]
+fn lookbehind_fixed_alternatives_match_from_the_assertion_backwards() {
+    let matched =
+        regexp_match_range(r".*(?<=(..|...|....))(.*)", "xabcd", 0, false, false, false).unwrap();
+    assert_eq!((matched.start, matched.end), (0, 5));
+    assert_eq!(matched.captures, vec![Some((3, 5)), Some((5, 5))]);
+}
+
+#[test]
 fn lookbehind_greedy_quantifiers_keep_widest_capture() {
     let matched = regexp_match_range(r"(?<=(b+))c", "abbbbbbc", 0, false, false, false).unwrap();
     assert_eq!((matched.start, matched.end), (7, 8));
     assert_eq!(matched.captures, vec![Some((1, 7))]);
+}
+
+#[test]
+fn lookbehind_does_not_backtrack_after_continuation_fails() {
+    assert!(regexp_match_range(r"(?<=([abc]+)).\1", "abcdbc", 0, false, false, false).is_none());
 }

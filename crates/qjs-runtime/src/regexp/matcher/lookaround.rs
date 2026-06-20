@@ -64,6 +64,11 @@ pub(super) fn match_lookaround(
     } else {
         // Positive assertions keep the captures established by the body but
         // restore the index to its position before the assertion.
+        let inner = if behind {
+            inner.into_iter().take(1).collect()
+        } else {
+            inner
+        };
         inner
             .into_iter()
             .map(|mut matched| {
@@ -94,6 +99,31 @@ fn match_lookbehind_body(
         ..options
     };
     let mut results = Vec::new();
+    if !has_body_quantifier(pattern, body_start, body_end) {
+        for (start, end) in group_alternatives(pattern, body_start, body_end) {
+            for begin in (0..=target).rev() {
+                let probe = MatchState {
+                    index: begin,
+                    captures: state.captures.clone(),
+                };
+                for matched in match_pattern(
+                    pattern,
+                    text,
+                    start,
+                    end,
+                    probe,
+                    group_indices,
+                    properties,
+                    options,
+                ) {
+                    if matched.index == target {
+                        results.push(matched);
+                    }
+                }
+            }
+        }
+        return results;
+    }
     for begin in 0..=target {
         for (start, end) in group_alternatives(pattern, body_start, body_end) {
             let probe = MatchState {
@@ -117,4 +147,27 @@ fn match_lookbehind_body(
         }
     }
     results
+}
+
+fn has_body_quantifier(pattern: &[char], start: usize, end: usize) -> bool {
+    let mut escaped = false;
+    let mut in_class = false;
+    for index in start..end {
+        let char = pattern[index];
+        if escaped {
+            escaped = false;
+        } else if char == '\\' {
+            escaped = true;
+        } else if char == '[' {
+            in_class = true;
+        } else if char == ']' {
+            in_class = false;
+        } else if !in_class
+            && (matches!(char, '*' | '+' | '{')
+                || (char == '?' && index > start && pattern[index - 1] != '('))
+        {
+            return true;
+        }
+    }
+    false
 }
