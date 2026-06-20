@@ -305,6 +305,13 @@ impl PropertyDescriptor {
         self.get.is_some() || self.set.is_some()
     }
 
+    pub(crate) fn complete_accessor_halves(&mut self) {
+        if self.is_accessor_descriptor() {
+            self.get.get_or_insert(None);
+            self.set.get_or_insert(None);
+        }
+    }
+
     fn is_data_descriptor(&self) -> bool {
         self.value.is_some() || self.writable.is_some()
     }

@@ -233,6 +233,33 @@ fn evaluates_object_definition_and_creation_builtins() {
         ),
         Ok(Value::Number(8.0))
     );
+    assert_eq!(
+        eval(
+            "let arg; (function(a) { arg = arguments; }(0)); \
+             function first() { return 10; } \
+             Object.defineProperty(arg, '0', { get: first, enumerable: true, configurable: true }); \
+             function second() { return 20; } \
+             Object.defineProperties(arg, { 0: { get: second, enumerable: false, configurable: false } }); \
+             let d = Object.getOwnPropertyDescriptor(arg, '0'); \
+             (d.get === second) + ':' + (d.set === undefined) + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("true:true:false:false".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "let arg; (function(a) { arg = arguments; }(0)); \
+             function first() { return 10; } \
+             Object.defineProperty(arg, '0', { get: first, enumerable: false, configurable: false }); \
+             function second() { return 20; } \
+             let caught = false; \
+             try { Object.defineProperties(arg, { 0: { get: second } }); } catch (error) { caught = error instanceof TypeError; } \
+             let d = Object.getOwnPropertyDescriptor(arg, '0'); \
+             caught + ':' + (d.get === first) + ':' + (d.set === undefined) + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String(
+            "true:true:true:false:false".to_owned().into()
+        ))
+    );
     assert_eq!(eval("Object.create.length;"), Ok(Value::Number(2.0)));
     assert_eq!(
         eval("let proto = { value: 7 }; let object = Object.create(proto); object.value;"),

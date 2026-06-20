@@ -361,12 +361,12 @@ fn mapped_argument_descriptor(
     mapped_argument: Option<&MappedArgumentAccessors>,
     env: &mut CallEnv,
 ) -> Result<PropertyDescriptor, RuntimeError> {
-    if let Some(mapped_argument) = mapped_argument
-        && descriptor.value.is_none()
-        && descriptor.writable == Some(false)
-        && !descriptor.is_accessor_descriptor()
-    {
-        descriptor.value = Some(get_mapped_argument_value(mapped_argument, env)?);
+    if let Some(mapped_argument) = mapped_argument {
+        if descriptor.is_accessor_descriptor() {
+            descriptor.complete_accessor_halves();
+        } else if descriptor.value.is_none() && descriptor.writable == Some(false) {
+            descriptor.value = Some(get_mapped_argument_value(mapped_argument, env)?);
+        }
     }
     Ok(descriptor)
 }
