@@ -1,4 +1,8 @@
-use qjs_ast::{AssignmentOp, Expr, FunctionParams, Span, Stmt};
+use qjs_ast::{
+    ArrayElement, AssignmentOp, AssignmentTarget, AssignmentTargetProperty,
+    AssignmentTargetPropertyKey, BindingElement, BindingPattern, CallArgument, Expr,
+    FunctionParams, MemberProperty, ObjectBindingPropertyKey, ObjectPropertyKey, Span, Stmt,
+};
 use qjs_lexer::TokenKind;
 
 use crate::helpers::{assignment_target, body_has_strict_directive};
@@ -353,6 +357,12 @@ impl Parser {
                 });
             }
         }
+        if self.in_generator && arrow_parameters_contain_yield(&params) {
+            return Err(ParseError {
+                message: "`yield` is not allowed in arrow parameters".to_owned(),
+                span: close_paren_span,
+            });
+        }
         Ok(Some(params))
     }
 
@@ -462,6 +472,157 @@ fn duplicate_arrow_parameter_span(named: &[(String, Span)]) -> Option<Span> {
         }
     }
     None
+}
+
+fn arrow_parameters_contain_yield(params: &FunctionParams) -> bool {
+    params.positional.iter().any(binding_element_contains_yield)
+        || params
+            .rest
+            .as_deref()
+            .is_some_and(binding_pattern_contains_yield)
+}
+
+fn binding_element_contains_yield(element: &BindingElement) -> bool {
+    binding_pattern_contains_yield(&element.binding)
+        || element.default.as_ref().is_some_and(expr_contains_yield)
+}
+
+fn binding_pattern_contains_yield(pattern: &BindingPattern) -> bool {
+    match pattern {
+        BindingPattern::Identifier { .. } => false,
+        BindingPattern::Array { elements, rest, .. } => {
+            elements
+                .iter()
+                .flatten()
+                .any(binding_element_contains_yield)
+                || rest.as_deref().is_some_and(binding_pattern_contains_yield)
+        }
+        BindingPattern::Object {
+            properties, rest, ..
+        } => {
+            properties.iter().any(|property| {
+                matches!(
+                    &property.key,
+                    ObjectBindingPropertyKey::Computed(expr) if expr_contains_yield(expr)
+                ) || binding_pattern_contains_yield(&property.binding)
+                    || property.default.as_ref().is_some_and(expr_contains_yield)
+            }) || rest.as_deref().is_some_and(binding_pattern_contains_yield)
+        }
+    }
+}
+
+fn expr_contains_yield(expr: &Expr) -> bool {
+    match expr {
+        Expr::Yield { .. } => true,
+        Expr::Literal(_)
+        | Expr::NewTarget { .. }
+        | Expr::Function { .. }
+        | Expr::Class { .. }
+        | Expr::ImportMeta { .. }
+        | Expr::This { .. }
+        | Expr::Super { .. }
+        | Expr::Identifier { .. } => false,
+        Expr::Array { elements, .. } => elements.iter().any(|element| match element {
+            ArrayElement::Elision => false,
+            ArrayElement::Expr(expr) | ArrayElement::Spread(expr) => expr_contains_yield(expr),
+        }),
+        Expr::Object { properties, .. } => properties.iter().any(|property| {
+            matches!(
+                &property.key,
+                ObjectPropertyKey::Computed(expr) if expr_contains_yield(expr)
+            ) || expr_contains_yield(&property.value)
+        }),
+        Expr::Sequence { expressions, .. } | Expr::Template { expressions, .. } => {
+            expressions.iter().any(expr_contains_yield)
+        }
+        Expr::TaggedTemplate {
+            tag, expressions, ..
+        } => expr_contains_yield(tag) || expressions.iter().any(expr_contains_yield),
+        Expr::Unary { argument, .. }
+        | Expr::Await { argument, .. }
+        | Expr::PrivateIn {
+            object: argument, ..
+        } => expr_contains_yield(argument),
+        Expr::Binary { left, right, .. } => expr_contains_yield(left) || expr_contains_yield(right),
+        Expr::Conditional {
+            test,
+            consequent,
+            alternate,
+            ..
+        } => {
+            expr_contains_yield(test)
+                || expr_contains_yield(consequent)
+                || expr_contains_yield(alternate)
+        }
+        Expr::Assignment { target, value, .. } => {
+            assignment_target_contains_yield(target) || expr_contains_yield(value)
+        }
+        Expr::Update { target, .. } => assignment_target_contains_yield(target),
+        Expr::Call {
+            callee, arguments, ..
+        }
+        | Expr::New {
+            callee, arguments, ..
+        }
+        | Expr::OptionalCall {
+            callee, arguments, ..
+        } => {
+            expr_contains_yield(callee)
+                || arguments.iter().any(|argument| match argument {
+                    CallArgument::Expr(expr) | CallArgument::Spread(expr) => {
+                        expr_contains_yield(expr)
+                    }
+                })
+        }
+        Expr::Member {
+            object, property, ..
+        }
+        | Expr::OptionalMember {
+            object, property, ..
+        } => expr_contains_yield(object) || member_property_contains_yield(property),
+        Expr::ImportCall {
+            specifier, options, ..
+        } => expr_contains_yield(specifier) || options.as_deref().is_some_and(expr_contains_yield),
+    }
+}
+
+fn member_property_contains_yield(property: &MemberProperty) -> bool {
+    matches!(property, MemberProperty::Computed(expr) if expr_contains_yield(expr))
+}
+
+fn assignment_target_contains_yield(target: &AssignmentTarget) -> bool {
+    match target {
+        AssignmentTarget::Identifier { .. } => false,
+        AssignmentTarget::Member {
+            object, property, ..
+        } => expr_contains_yield(object) || member_property_contains_yield(property),
+        AssignmentTarget::ArrayPattern { elements, rest, .. } => {
+            elements.iter().flatten().any(|element| {
+                assignment_target_contains_yield(&element.target)
+                    || element.default.as_ref().is_some_and(expr_contains_yield)
+            }) || rest
+                .as_deref()
+                .is_some_and(assignment_target_contains_yield)
+        }
+        AssignmentTarget::ObjectPattern {
+            properties, rest, ..
+        } => {
+            properties
+                .iter()
+                .any(assignment_target_property_contains_yield)
+                || rest
+                    .as_deref()
+                    .is_some_and(assignment_target_contains_yield)
+        }
+    }
+}
+
+fn assignment_target_property_contains_yield(property: &AssignmentTargetProperty) -> bool {
+    matches!(
+        &property.key,
+        AssignmentTargetPropertyKey::Computed(expr) if expr_contains_yield(expr)
+    ) || assignment_target_contains_yield(&property.target)
+        || property.default.as_ref().is_some_and(expr_contains_yield)
 }
 
 fn restricted_strict_arrow_parameter(name: &str) -> bool {

@@ -300,6 +300,15 @@ fn yield_in_generator_parameter_default_is_error() {
 }
 
 #[test]
+fn yield_in_arrow_parameter_default_inside_generator_is_error() {
+    assert!(
+        parse_script("function* g() { (x = yield) => {}; }").is_err(),
+        "arrow parameters inherit the surrounding generator yield context"
+    );
+    parse_script("(x = yield) => x;").expect("yield is an identifier outside generators");
+}
+
+#[test]
 fn yield_identifier_reference_in_generator_is_error() {
     assert!(parse_script("function* g() { void yield; }").is_err());
     assert!(parse_script("function* g() { void yi\\u0065ld; }").is_err());
