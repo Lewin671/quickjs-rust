@@ -917,6 +917,33 @@ fn construct_falls_back_to_marked_object_realm_prototype() {
 }
 
 #[test]
+fn dynamic_function_reads_live_global_bindings() {
+    assert_eq!(
+        eval(
+            "var f = Function.call(this, 'return planet;'); \
+             var before = f(); \
+             var planet = 'mars'; \
+             before + ':' + f();"
+        ),
+        Ok(Value::String("undefined:mars".to_owned().into()))
+    );
+}
+
+#[test]
+fn dynamic_function_construct_uses_marked_function_realm_prototype() {
+    assert_eq!(
+        eval(
+            "let realmFunctionPrototype = function() {}; \
+             function C() {} \
+             Object.defineProperty(C, '__quickjsRustRealmFunctionPrototype', { value: realmFunctionPrototype }); \
+             C.prototype = null; \
+             Object.getPrototypeOf(Reflect.construct(Function, [], C)) === realmFunctionPrototype;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn evaluates_new_expressions() {
     assert_eq!(
         eval(

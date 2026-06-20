@@ -2,9 +2,10 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
     ArrayRef, Bytecode, DIRECT_EVAL_ARGUMENTS_BINDING, DIRECT_EVAL_FUNCTION_CONTEXT_BINDING,
-    FIELD_INITIALIZER_EVAL_BINDING, Function, NEW_TARGET_BINDING, NativeFunction, ObjectRef,
-    RuntimeError, Value, bytecode::eval_function_bytecode, function_prototype,
-    native::call_native_function, object_prototype, private::PrivateEnvironment, symbol,
+    FIELD_INITIALIZER_EVAL_BINDING, Function, GLOBAL_THIS_BINDING, NEW_TARGET_BINDING,
+    NativeFunction, ObjectRef, RuntimeError, Value, bytecode::eval_function_bytecode,
+    function_prototype, native::call_native_function, object_prototype,
+    private::PrivateEnvironment, symbol,
 };
 
 use super::{
@@ -670,9 +671,11 @@ fn function_env(
             }
         }
     } else {
+        let this_env_storage = callee_this_realm_env(function, env);
+        let this_env = this_env_storage.as_ref().unwrap_or(env);
         local_env.insert(
             "this".to_owned(),
-            function_call_this(Some(this_value), env, function.is_strict),
+            function_call_this(Some(this_value), this_env, function.is_strict),
         );
     }
     for (index, element) in function.params.positional.iter().enumerate() {
@@ -734,6 +737,21 @@ fn function_env(
         function_capture_names,
         caller_binding_names,
     }
+}
+
+fn callee_this_realm_env(function: &Function, caller_env: &CallEnv) -> Option<CallEnv> {
+    if function.is_strict {
+        return None;
+    }
+    let captured = function.captured_env.borrow();
+    let captured_global = captured.get(GLOBAL_THIS_BINDING)?;
+    if caller_env
+        .get(GLOBAL_THIS_BINDING)
+        .is_some_and(|caller_global| caller_global.same_value(captured_global))
+    {
+        return None;
+    }
+    Some(CallEnv::from_map(captured.clone()))
 }
 
 fn refresh_writeback_captures_from_caller(

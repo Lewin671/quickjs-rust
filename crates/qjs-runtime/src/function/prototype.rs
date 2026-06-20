@@ -12,6 +12,7 @@ use crate::{
 };
 
 const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
+const FUNCTION_REALM_PROTOTYPE: &str = "__quickjsRustRealmFunctionPrototype";
 const GENERATOR_FUNCTION_REALM_PROTOTYPE: &str = "__quickjsRustRealmGeneratorFunctionPrototype";
 
 pub(crate) fn native_function(
@@ -51,7 +52,7 @@ pub(crate) fn native_function(
     // `Function(...)` call must ignore the ambient new.target (e.g. when invoked
     // inside another constructor's body) and use %Function.prototype%.
     let prototype_slot = if is_construct {
-        crate::native_construct_prototype_slot(constructor, env)?
+        dynamic_function_construct_prototype_slot(constructor, env)?
     } else {
         crate::function_intrinsic_prototype_slot(env)
     };
@@ -233,9 +234,83 @@ fn generator_construct_prototype_slot(
     crate::native_construct_prototype_slot(constructor, env)
 }
 
+fn dynamic_function_construct_prototype_slot(
+    constructor: &Function,
+    env: &mut CallEnv,
+) -> Result<Option<Prototype>, RuntimeError> {
+    if let Some(Value::Function(new_target)) = env.get(crate::NEW_TARGET_BINDING)
+        && let Some(realm_prototype) = new_target
+            .own_property(FUNCTION_REALM_PROTOTYPE)
+            .and_then(|property| dynamic_prototype_slot_from_value(property.value, env))
+    {
+        let prototype = property_value(Value::Function(new_target), "prototype", env)?;
+        if !matches!(
+            prototype,
+            Value::Object(_) | Value::Function(_) | Value::Array(_) | Value::Proxy(_)
+        ) {
+            return Ok(Some(realm_prototype));
+        }
+    }
+    crate::native_construct_prototype_slot(constructor, env)
+}
+
+fn dynamic_prototype_slot_from_value(value: Value, env: &CallEnv) -> Option<Prototype> {
+    match value {
+        Value::Object(prototype) => Some(Prototype::Object(prototype)),
+        Value::Function(prototype) => Some(Prototype::Function(prototype)),
+        Value::Array(array) => Some(Prototype::Object(crate::array_as_object_prototype(
+            &array, env,
+        ))),
+        Value::Proxy(prototype) => Some(Prototype::Proxy(prototype)),
+        _ => None,
+    }
+}
+
 fn dynamic_function_scope_snapshot(env: &CallEnv) -> std::collections::HashMap<String, Value> {
-    let mut snapshot = env.to_flat_map();
-    if let Some(Value::Object(global)) = env.get(DYNAMIC_FUNCTION_REALM_GLOBAL) {
+    let mut snapshot = HashMap::new();
+    for name in [
+        "Object",
+        "Function",
+        "Array",
+        "Boolean",
+        "Number",
+        "String",
+        "Symbol",
+        "BigInt",
+        "RegExp",
+        "TypeError",
+        GLOBAL_THIS_BINDING,
+    ] {
+        if let Some(value) = env.get_realm(name) {
+            snapshot.insert(name.to_owned(), value);
+        }
+    }
+    let dynamic_realm_global = env
+        .get(DYNAMIC_FUNCTION_REALM_GLOBAL)
+        .and_then(|value| match value {
+            Value::Object(global) => Some(global),
+            _ => None,
+        })
+        .or_else(|| {
+            env.get(GLOBAL_THIS_BINDING).and_then(|value| match value {
+                Value::Object(global_this) => global_this
+                    .own_property(DYNAMIC_FUNCTION_REALM_GLOBAL)
+                    .and_then(|property| match property.value {
+                        Value::Object(global) => Some(global),
+                        _ => None,
+                    }),
+                _ => None,
+            })
+        });
+    if let Some(global) = dynamic_realm_global {
+        snapshot.insert(
+            DYNAMIC_FUNCTION_REALM_GLOBAL.to_owned(),
+            Value::Object(global.clone()),
+        );
+        snapshot.insert(
+            GLOBAL_THIS_BINDING.to_owned(),
+            Value::Object(global.clone()),
+        );
         for name in global.own_property_names() {
             if let Some(property) = global.own_property(&name) {
                 snapshot.insert(name, property.value);
