@@ -80,19 +80,17 @@ pub(crate) fn native_object_prevent_extensions(
     Ok(target)
 }
 
-pub(crate) fn native_object_is_sealed(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+pub(crate) fn native_object_is_sealed(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
     Ok(Value::Boolean(match argument_values.first() {
         Some(Value::Object(object)) => object.is_sealed(),
         Some(Value::Map(map)) => map.object().is_sealed(),
         Some(Value::Set(set)) => set.object().is_sealed(),
-        Some(Value::Proxy(proxy)) => match proxy.target() {
-            Value::Object(object) => object.is_sealed(),
-            Value::Map(map) => map.object().is_sealed(),
-            Value::Set(set) => set.object().is_sealed(),
-            Value::Array(elements) => elements.is_sealed(),
-            Value::Function(function) => function.is_sealed(),
-            _ => true,
-        },
+        Some(Value::Proxy(proxy)) => {
+            test_integrity_level_on_proxy(proxy.clone(), IntegrityLevel::Sealed, env)?
+        }
         Some(Value::Array(elements)) => elements.is_sealed(),
         Some(Value::Function(function)) => function.is_sealed(),
         Some(
@@ -107,19 +105,17 @@ pub(crate) fn native_object_is_sealed(argument_values: &[Value]) -> Result<Value
     }))
 }
 
-pub(crate) fn native_object_is_frozen(argument_values: &[Value]) -> Result<Value, RuntimeError> {
+pub(crate) fn native_object_is_frozen(
+    argument_values: &[Value],
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
     Ok(Value::Boolean(match argument_values.first() {
         Some(Value::Object(object)) => object.is_frozen(),
         Some(Value::Map(map)) => map.object().is_frozen(),
         Some(Value::Set(set)) => set.object().is_frozen(),
-        Some(Value::Proxy(proxy)) => match proxy.target() {
-            Value::Object(object) => object.is_frozen(),
-            Value::Map(map) => map.object().is_frozen(),
-            Value::Set(set) => set.object().is_frozen(),
-            Value::Array(elements) => elements.is_frozen(),
-            Value::Function(function) => function.is_frozen(),
-            _ => true,
-        },
+        Some(Value::Proxy(proxy)) => {
+            test_integrity_level_on_proxy(proxy.clone(), IntegrityLevel::Frozen, env)?
+        }
         Some(Value::Array(elements)) => elements.is_frozen(),
         Some(Value::Function(function)) => function.is_frozen(),
         Some(
@@ -228,6 +224,34 @@ fn set_integrity_level_on_proxy(
                 message: "TypeError: Cannot redefine property during integrity level change"
                     .to_owned(),
             });
+        }
+    }
+    Ok(true)
+}
+
+fn test_integrity_level_on_proxy(
+    proxy: crate::proxy::ProxyRef,
+    level: IntegrityLevel,
+    env: &mut CallEnv,
+) -> Result<bool, RuntimeError> {
+    if crate::proxy::proxy_is_extensible(proxy.clone(), env)? {
+        return Ok(false);
+    }
+    for key in crate::proxy::proxy_own_keys(proxy.clone(), env)? {
+        let current = crate::proxy::proxy_get_own_property_descriptor(
+            proxy.clone(),
+            &key,
+            env,
+            |target, _env| crate::object::own_property_descriptor_key(target, &key),
+        )?;
+        let Some(property) = current else {
+            continue;
+        };
+        if property.configurable {
+            return Ok(false);
+        }
+        if matches!(level, IntegrityLevel::Frozen) && !property.is_accessor() && property.writable {
+            return Ok(false);
         }
     }
     Ok(true)

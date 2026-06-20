@@ -48,8 +48,8 @@ pub(super) fn call_object_native(
         NativeFunction::ObjectIsExtensible => {
             object::native_object_is_extensible(argument_values, env)?
         }
-        NativeFunction::ObjectIsFrozen => object::native_object_is_frozen(argument_values)?,
-        NativeFunction::ObjectIsSealed => object::native_object_is_sealed(argument_values)?,
+        NativeFunction::ObjectIsFrozen => object::native_object_is_frozen(argument_values, env)?,
+        NativeFunction::ObjectIsSealed => object::native_object_is_sealed(argument_values, env)?,
         NativeFunction::ObjectPreventExtensions => {
             object::native_object_prevent_extensions(argument_values, env)?
         }

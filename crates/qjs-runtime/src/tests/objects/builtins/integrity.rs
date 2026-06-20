@@ -237,3 +237,31 @@ fn object_seal_and_freeze_route_through_proxy_traps() {
         Ok(Value::String("false:true".to_owned().into()))
     );
 }
+
+#[test]
+fn object_integrity_predicates_route_through_proxy_traps() {
+    assert_eq!(
+        eval(
+            "let target = {}; let sym = Symbol(); target[sym] = 1; target.foo = 2; target[0] = 3; \
+             Object.seal(target); \
+             let seen = []; \
+             let proxy = new Proxy(target, { \
+                 getOwnPropertyDescriptor(t, k) { seen.push(typeof k === 'symbol' ? 'sym' : k); return Reflect.getOwnPropertyDescriptor(t, k); } \
+             }); \
+             Object.isSealed(proxy) + ':' + seen.join(',');"
+        ),
+        Ok(Value::String("true:0,foo,sym".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "let target = {}; let sym = Symbol(); target[sym] = 1; target.foo = 2; target[0] = 3; \
+             Object.freeze(target); \
+             let seen = []; \
+             let proxy = new Proxy(target, { \
+                 getOwnPropertyDescriptor(t, k) { seen.push(typeof k === 'symbol' ? 'sym' : k); return Reflect.getOwnPropertyDescriptor(t, k); } \
+             }); \
+             Object.isFrozen(proxy) + ':' + seen.join(',');"
+        ),
+        Ok(Value::String("true:0,foo,sym".to_owned().into()))
+    );
+}
