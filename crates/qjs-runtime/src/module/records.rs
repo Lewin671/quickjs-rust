@@ -164,7 +164,7 @@ impl ModuleRecord {
             ExportDecl::Default { declaration, span } => {
                 self.local_exports.push(LocalExportEntry {
                     export_name: "default".to_owned(),
-                    local_name: DEFAULT_BINDING.to_owned(),
+                    local_name: default_export_local_name(&declaration),
                 });
                 self.body
                     .body
@@ -180,6 +180,16 @@ impl ModuleRecord {
                 self.body.body.push(*declaration);
             }
         }
+    }
+}
+
+fn default_export_local_name(declaration: &DefaultExport) -> String {
+    match declaration {
+        DefaultExport::Declaration(stmt) => match stmt.as_ref() {
+            Stmt::FunctionDecl { name, .. } | Stmt::ClassDecl { name, .. } => name.clone(),
+            _ => DEFAULT_BINDING.to_owned(),
+        },
+        DefaultExport::Expression(_) => DEFAULT_BINDING.to_owned(),
     }
 }
 

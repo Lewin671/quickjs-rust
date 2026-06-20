@@ -85,6 +85,25 @@ fn named_default_function_binds_local_name() {
 }
 
 #[test]
+fn default_import_tracks_named_default_function_binding_updates() {
+    let namespace = run(
+        "import val from \"dep\";\n\
+         export const before = val();\n\
+         export const after = val;",
+        &[(
+            "dep",
+            "export default function fn() {\n\
+               fn = 2;\n\
+               return 1;\n\
+             }",
+        )],
+    )
+    .expect("graph evaluates");
+    assert_eq!(export(&namespace, "before"), Value::Number(1.0));
+    assert_eq!(export(&namespace, "after"), Value::Number(2.0));
+}
+
+#[test]
 fn anonymous_default_class_gets_default_name_in_static_initializer() {
     let namespace = run(
         "var className;\n\
