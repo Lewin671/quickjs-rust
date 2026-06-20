@@ -86,7 +86,7 @@ impl Compiler {
                     Ok(())
                 }
                 qjs_ast::MemberProperty::Computed(expr) => {
-                    self.emit(Op::RequireSuperThis);
+                    self.emit(Op::SuperReference);
                     self.compile_expr(expr)?;
                     self.compile_expr(value)?;
                     self.emit(Op::SuperSetComputed {
@@ -525,11 +525,15 @@ impl Compiler {
         let key_slot = match property {
             qjs_ast::MemberProperty::Named(_) => None,
             qjs_ast::MemberProperty::Computed(expr) => {
-                self.emit(Op::RequireSuperThis);
+                let receiver_slot = self.temp_local("super_receiver");
+                let base_slot = self.temp_local("super_base");
                 let slot = self.temp_local("assign_key");
+                self.emit(Op::SuperReference);
+                self.emit(Op::StoreLocal(base_slot));
+                self.emit(Op::StoreLocal(receiver_slot));
                 self.compile_expr(expr)?;
                 self.emit(Op::StoreLocal(slot));
-                Some(slot)
+                Some((receiver_slot, base_slot, slot))
             }
             qjs_ast::MemberProperty::Private(name) => {
                 return Err(RuntimeError {
@@ -543,7 +547,10 @@ impl Compiler {
                 compiler.emit(Op::SuperGet { key: name.clone() });
             }
             _ => {
-                compiler.emit(Op::LoadLocal(key_slot.unwrap()));
+                let (receiver_slot, base_slot, slot) = key_slot.unwrap();
+                compiler.emit(Op::LoadLocal(receiver_slot));
+                compiler.emit(Op::LoadLocal(base_slot));
+                compiler.emit(Op::LoadLocal(slot));
                 compiler.emit(Op::SuperGetComputed);
             }
         };
@@ -556,7 +563,10 @@ impl Compiler {
                 });
             }
             _ => {
-                compiler.emit(Op::LoadLocal(key_slot.unwrap()));
+                let (receiver_slot, base_slot, slot) = key_slot.unwrap();
+                compiler.emit(Op::LoadLocal(receiver_slot));
+                compiler.emit(Op::LoadLocal(base_slot));
+                compiler.emit(Op::LoadLocal(slot));
                 compiler.emit(Op::LoadLocal(value_slot));
                 compiler.emit(Op::SuperSetComputed { is_strict });
             }
@@ -602,11 +612,15 @@ impl Compiler {
         let key_slot = match property {
             qjs_ast::MemberProperty::Named(_) => None,
             qjs_ast::MemberProperty::Computed(expr) => {
-                self.emit(Op::RequireSuperThis);
+                let receiver_slot = self.temp_local("super_receiver");
+                let base_slot = self.temp_local("super_base");
                 let slot = self.temp_local("update_key");
+                self.emit(Op::SuperReference);
+                self.emit(Op::StoreLocal(base_slot));
+                self.emit(Op::StoreLocal(receiver_slot));
                 self.compile_expr(expr)?;
                 self.emit(Op::StoreLocal(slot));
-                Some(slot)
+                Some((receiver_slot, base_slot, slot))
             }
             qjs_ast::MemberProperty::Private(name) => {
                 return Err(RuntimeError {
@@ -622,7 +636,10 @@ impl Compiler {
                 self.emit(Op::SuperGet { key: name.clone() });
             }
             _ => {
-                self.emit(Op::LoadLocal(key_slot.unwrap()));
+                let (receiver_slot, base_slot, slot) = key_slot.unwrap();
+                self.emit(Op::LoadLocal(receiver_slot));
+                self.emit(Op::LoadLocal(base_slot));
+                self.emit(Op::LoadLocal(slot));
                 self.emit(Op::SuperGetComputed);
             }
         }
@@ -640,7 +657,10 @@ impl Compiler {
                 });
             }
             _ => {
-                self.emit(Op::LoadLocal(key_slot.unwrap()));
+                let (receiver_slot, base_slot, slot) = key_slot.unwrap();
+                self.emit(Op::LoadLocal(receiver_slot));
+                self.emit(Op::LoadLocal(base_slot));
+                self.emit(Op::LoadLocal(slot));
                 self.emit(Op::LoadLocal(new_slot));
                 self.emit(Op::SuperSetComputed { is_strict });
             }

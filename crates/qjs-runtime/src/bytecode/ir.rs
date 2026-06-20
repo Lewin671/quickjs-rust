@@ -243,11 +243,12 @@ pub(super) enum Op {
     SuperGet {
         key: String,
     },
-    /// Checks the current `this` binding for `super[expr]` evaluation before
-    /// evaluating the computed key expression.
-    RequireSuperThis,
+    /// Captures the current super receiver and lookup base for `super[expr]`
+    /// before evaluating the computed key expression. Pushes
+    /// `[receiver, lookup_base]`.
+    SuperReference,
     /// Reads `super[expr]`: pops the key from the stack, then behaves like
-    /// `SuperGet`.
+    /// `SuperGet` using the previously captured `[receiver, lookup_base]`.
     SuperGetComputed,
     /// Writes `super.<key> = value`: pops the value, resolves the current
     /// home object's prototype as the target, and uses current `this` as the
@@ -267,7 +268,8 @@ pub(super) enum Op {
     SuperMethod {
         key: String,
     },
-    /// Like `SuperMethod` but pops the computed key from the stack first.
+    /// Like `SuperMethod` but pops the computed key and previously captured
+    /// `[receiver, lookup_base]` from the stack first.
     SuperMethodComputed,
     /// Calls a pre-resolved callee. The stack holds `[receiver, callee,
     /// args...]`; pops the arguments, callee, and receiver, then calls.

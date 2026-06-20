@@ -560,15 +560,20 @@ impl<'a> Vm<'a> {
                         self.stack.push(value);
                     }
                 }
-                Op::RequireSuperThis => {
-                    let result = self.require_super_this();
-                    self.handle_runtime_result(result)?;
+                Op::SuperReference => {
+                    let result = self.super_reference();
+                    if let Some((receiver, lookup_base)) = self.handle_runtime_result(result)? {
+                        self.stack.push(receiver);
+                        self.stack.push(lookup_base);
+                    }
                 }
                 Op::SuperGetComputed => {
                     let key_value = self.pop()?;
                     let key = self.coerce_property_key(key_value);
                     if let Some(key) = self.handle_runtime_result(key)? {
-                        let result = self.super_get(&key);
+                        let lookup_base = self.pop()?;
+                        let receiver = self.pop()?;
+                        let result = self.super_get_from(lookup_base, receiver, &key);
                         if let Some(value) = self.handle_runtime_result(result)? {
                             self.stack.push(value);
                         }
@@ -585,7 +590,10 @@ impl<'a> Vm<'a> {
                     let key_value = self.pop()?;
                     let key = self.coerce_property_key(key_value);
                     if let Some(key) = self.handle_runtime_result(key)? {
-                        let result = self.super_set_value(key, value, is_strict);
+                        let lookup_base = self.pop()?;
+                        let receiver = self.pop()?;
+                        let result =
+                            self.super_set_value_from(lookup_base, receiver, key, value, is_strict);
                         if let Some(value) = self.handle_runtime_result(result)? {
                             self.stack.push(value);
                         }
@@ -599,7 +607,9 @@ impl<'a> Vm<'a> {
                     let key_value = self.pop()?;
                     let key = self.coerce_property_key(key_value);
                     if let Some(key) = self.handle_runtime_result(key)? {
-                        let result = self.super_method(key);
+                        let lookup_base = self.pop()?;
+                        let receiver = self.pop()?;
+                        let result = self.super_method_from(lookup_base, receiver, key);
                         self.handle_runtime_result(result)?;
                     }
                 }

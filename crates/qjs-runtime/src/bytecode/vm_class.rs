@@ -625,6 +625,15 @@ impl Vm<'_> {
     pub(super) fn super_get(&mut self, key: &PropertyKey) -> Result<Value, RuntimeError> {
         let receiver = self.current_this()?;
         let lookup_base = self.super_lookup_base()?;
+        self.super_get_from(lookup_base, receiver, key)
+    }
+
+    pub(super) fn super_get_from(
+        &mut self,
+        lookup_base: Value,
+        receiver: Value,
+        key: &PropertyKey,
+    ) -> Result<Value, RuntimeError> {
         // GetSuperBase yields the home object's [[Prototype]]; reading a property
         // off it requires RequireObjectCoercible, so a `null` super base (e.g.
         // `extends null` or a null-proto home object) throws a TypeError.
@@ -660,6 +669,17 @@ impl Vm<'_> {
     ) -> Result<Value, RuntimeError> {
         let receiver = self.current_this()?;
         let lookup_base = self.super_lookup_base()?;
+        self.super_set_value_from(lookup_base, receiver, key, value, is_strict)
+    }
+
+    pub(super) fn super_set_value_from(
+        &mut self,
+        lookup_base: Value,
+        receiver: Value,
+        key: PropertyKey,
+        value: Value,
+        is_strict: bool,
+    ) -> Result<Value, RuntimeError> {
         if matches!(lookup_base, Value::Null | Value::Undefined) {
             return Err(RuntimeError {
                 thrown: None,
@@ -684,10 +704,26 @@ impl Vm<'_> {
     /// for a following `CallResolved`.
     pub(super) fn super_method(&mut self, key: PropertyKey) -> Result<(), RuntimeError> {
         let receiver = self.current_this()?;
-        let callee = self.super_get(&key)?;
+        let lookup_base = self.super_lookup_base()?;
+        self.super_method_from(lookup_base, receiver, key)
+    }
+
+    pub(super) fn super_method_from(
+        &mut self,
+        lookup_base: Value,
+        receiver: Value,
+        key: PropertyKey,
+    ) -> Result<(), RuntimeError> {
+        let callee = self.super_get_from(lookup_base, receiver.clone(), &key)?;
         self.stack.push(receiver);
         self.stack.push(callee);
         Ok(())
+    }
+
+    pub(super) fn super_reference(&mut self) -> Result<(Value, Value), RuntimeError> {
+        let receiver = self.current_this()?;
+        let lookup_base = self.super_lookup_base()?;
+        Ok((receiver, lookup_base))
     }
 
     /// Evaluates `super(...)` in a derived constructor: constructs the parent
@@ -728,7 +764,8 @@ impl Vm<'_> {
     }
 
     fn super_call_inner(&mut self, arguments: Vec<Value>) -> Result<Value, RuntimeError> {
-        let Some(super_constructor) = self.env.get(crate::SUPER_CONSTRUCTOR_BINDING) else {
+        let super_constructor = self.current_super_constructor()?;
+        let Some(super_constructor) = super_constructor else {
             return Err(RuntimeError {
                 thrown: None,
                 message: "SyntaxError: 'super' keyword unexpected here".to_owned(),
@@ -754,6 +791,15 @@ impl Vm<'_> {
         Ok(value)
     }
 
+    fn current_super_constructor(&self) -> Result<Option<Value>, RuntimeError> {
+        if let Some(active_constructor) = self.env.get(crate::ACTIVE_CONSTRUCTOR_BINDING)
+            && let Some(prototype) = value_prototype_slot(active_constructor, &self.env)
+        {
+            return Ok(Some(prototype.to_value()));
+        }
+        Ok(self.env.get(crate::SUPER_CONSTRUCTOR_BINDING))
+    }
+
     fn current_this(&mut self) -> Result<Value, RuntimeError> {
         match self.env.get_local("this") {
             Some(value) => Ok(value),
@@ -763,10 +809,6 @@ impl Vm<'_> {
                     .to_owned(),
             }),
         }
-    }
-
-    pub(super) fn require_super_this(&mut self) -> Result<(), RuntimeError> {
-        self.current_this().map(|_| ())
     }
 
     /// Returns the lookup base for `super` property access: the [[Prototype]]

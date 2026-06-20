@@ -384,7 +384,7 @@ impl Compiler {
                 self.emit(Op::SuperMethod { key: name.clone() });
             }
             MemberProperty::Computed(expr) => {
-                self.emit(Op::RequireSuperThis);
+                self.emit(Op::SuperReference);
                 self.compile_expr(expr)?;
                 self.emit(Op::SuperMethodComputed);
             }

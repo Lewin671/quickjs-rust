@@ -115,6 +115,48 @@ fn computed_super_property_evaluates_key_after_super_call() {
 }
 
 #[test]
+fn computed_super_property_captures_base_before_key_coercion() {
+    assert_eq!(
+        eval(
+            "var proto = { p: 'ok' }; \
+             var proto2 = { p: 'bad' }; \
+             var obj = { \
+               __proto__: proto, \
+               get() { return super[key]; }, \
+               set() { super[key] = 10; } \
+             }; \
+             var result; \
+             var key = { toString() { Object.setPrototypeOf(obj, proto2); return 'p'; } }; \
+             Object.defineProperty(proto, 'p', { set(v) { result = 'ok'; }, get() { return 'ok'; } }); \
+             Object.defineProperty(proto2, 'p', { set(v) { result = 'bad'; }, get() { return 'bad'; } }); \
+             var read = obj.get(); \
+             Object.setPrototypeOf(obj, proto); \
+             read + ':' + (obj.set(), result);"
+        ),
+        Ok(Value::String("ok:ok".to_owned().into()))
+    );
+}
+
+#[test]
+fn super_call_uses_current_constructor_prototype_after_argument_evaluation() {
+    assert_eq!(
+        eval(
+            "var evaluatedArg = false; \
+             var caught; \
+             class C extends Object { \
+               constructor() { \
+                 try { super(evaluatedArg = true); } catch (error) { caught = error; } \
+               } \
+             } \
+             Object.setPrototypeOf(C, parseInt); \
+             try { new C(); } catch (_) {} \
+             (caught instanceof TypeError) + ':' + evaluatedArg;"
+        ),
+        Ok(Value::String("true:true".to_owned().into()))
+    );
+}
+
+#[test]
 fn super_property_compound_assignment_reads_and_writes_through_super() {
     // `super.x <op>= v` reads the prototype accessor, combines, and writes back
     // through the home object's prototype setter.

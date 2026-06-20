@@ -875,7 +875,7 @@ impl Vm<'_> {
         injected: &HashMap<String, Value>,
     ) {
         for name in binding_names {
-            if is_compiler_temporary(name) {
+            if is_compiler_temporary(name) || is_call_frame_binding(name) {
                 continue;
             }
             let Some(value) = env.get(name) else {
@@ -1244,4 +1244,21 @@ impl Vm<'_> {
 
 pub(super) fn is_compiler_temporary(name: &str) -> bool {
     name.starts_with("\0\0")
+}
+
+fn is_call_frame_binding(name: &str) -> bool {
+    matches!(
+        name,
+        crate::GLOBAL_THIS_BINDING
+            | crate::DIRECT_EVAL_STRICT_BINDING
+            | crate::DIRECT_EVAL_ARGUMENTS_BINDING
+            | crate::DIRECT_EVAL_FUNCTION_CONTEXT_BINDING
+            | crate::FIELD_INITIALIZER_EVAL_BINDING
+            | crate::HOME_OBJECT_BINDING
+            | crate::NEW_TARGET_BINDING
+            | crate::SUPER_CONSTRUCTOR_BINDING
+            | crate::ACTIVE_CONSTRUCTOR_BINDING
+            | "this"
+            | "arguments"
+    )
 }

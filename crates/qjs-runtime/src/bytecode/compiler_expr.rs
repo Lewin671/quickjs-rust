@@ -692,7 +692,7 @@ impl Compiler {
                 self.emit(Op::SuperGet { key: name.clone() });
             }
             qjs_ast::MemberProperty::Computed(expr) => {
-                self.emit(Op::RequireSuperThis);
+                self.emit(Op::SuperReference);
                 self.compile_expr(expr)?;
                 self.emit(Op::SuperGetComputed);
             }
