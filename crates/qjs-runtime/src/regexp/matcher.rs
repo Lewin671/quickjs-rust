@@ -70,6 +70,12 @@ struct RepeatAtom<'a> {
     options: MatchOptions,
 }
 
+#[derive(Clone, Copy)]
+struct AtomStep {
+    pc: usize,
+    quantifier: Quantifier,
+}
+
 pub(super) fn regexp_match_range(
     source: &str,
     input: &str,
@@ -301,6 +307,94 @@ fn match_pattern(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+fn match_pattern_reverse(
+    pattern: &[char],
+    text: &[char],
+    pc: usize,
+    end_pc: usize,
+    state: MatchState,
+    group_indices: &HashMap<usize, usize>,
+    properties: &PropertyCache,
+    options: MatchOptions,
+) -> Vec<MatchState> {
+    let Some(steps) = reverse_atom_steps(pattern, pc, end_pc, properties, options.unicode) else {
+        return Vec::new();
+    };
+    match_reverse_steps(
+        &steps,
+        steps.len(),
+        pattern,
+        text,
+        state,
+        group_indices,
+        properties,
+        options,
+    )
+}
+
+fn reverse_atom_steps(
+    pattern: &[char],
+    start_pc: usize,
+    end_pc: usize,
+    properties: &PropertyCache,
+    unicode: bool,
+) -> Option<Vec<AtomStep>> {
+    let mut steps = Vec::new();
+    let mut pc = start_pc;
+    while pc < end_pc {
+        let atom_end = atom_end(pattern, pc, properties, unicode)?;
+        let quantifier = quantifier(pattern, atom_end);
+        if quantifier.next_pc > end_pc {
+            return None;
+        }
+        steps.push(AtomStep { pc, quantifier });
+        pc = quantifier.next_pc;
+    }
+    (pc == end_pc).then_some(steps)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn match_reverse_steps(
+    steps: &[AtomStep],
+    count: usize,
+    pattern: &[char],
+    text: &[char],
+    state: MatchState,
+    group_indices: &HashMap<usize, usize>,
+    properties: &PropertyCache,
+    options: MatchOptions,
+) -> Vec<MatchState> {
+    if count == 0 {
+        return vec![state];
+    }
+    let step = steps[count - 1];
+    repeat_atom_reverse(
+        pattern,
+        text,
+        step.pc,
+        step.quantifier,
+        state,
+        group_indices,
+        properties,
+        options,
+    )
+    .into_iter()
+    .flat_map(|state| {
+        match_reverse_steps(
+            steps,
+            count - 1,
+            pattern,
+            text,
+            state,
+            group_indices,
+            properties,
+            options,
+        )
+    })
+    .collect()
+}
+
 fn atom_end(
     pattern: &[char],
     pc: usize,
@@ -363,6 +457,51 @@ fn match_atom(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+fn match_atom_reverse(
+    pattern: &[char],
+    text: &[char],
+    pc: usize,
+    state: MatchState,
+    group_indices: &HashMap<usize, usize>,
+    properties: &PropertyCache,
+    options: MatchOptions,
+) -> Vec<MatchState> {
+    match pattern[pc] {
+        '^' => {
+            if at_line_start(text, state.index, options.multiline) {
+                vec![state]
+            } else {
+                Vec::new()
+            }
+        }
+        '$' => {
+            if at_line_end(text, state.index, options.multiline) {
+                vec![state]
+            } else {
+                Vec::new()
+            }
+        }
+        '\\' if matches!(pattern.get(pc + 1), Some('b' | 'B')) => {
+            let before = state.index > 0 && regexp_word_char(text[state.index - 1]);
+            let after = text.get(state.index).copied().is_some_and(regexp_word_char);
+            let want_boundary = pattern[pc + 1] == 'b';
+            if (before != after) == want_boundary {
+                vec![state]
+            } else {
+                Vec::new()
+            }
+        }
+        '\\' => match_escape_reverse(pattern, text, pc, state, properties, options),
+        '[' => match_class_reverse(pattern, text, pc, state, properties, options),
+        '(' => match_group_reverse(pattern, text, pc, state, group_indices, properties, options),
+        '.' => match_any_reverse(text, state, options),
+        literal => {
+            match_literal_reverse(text, state, literal, options.ignore_case, options.unicode)
+        }
+    }
+}
+
 fn match_any(
     text: &[char],
     next_pc: usize,
@@ -377,6 +516,24 @@ fn match_any(
     }
     state.index = advance_string_index(text, state.index, options.unicode);
     vec![(next_pc, state)]
+}
+
+fn match_any_reverse(
+    text: &[char],
+    mut state: MatchState,
+    options: MatchOptions,
+) -> Vec<MatchState> {
+    let Some(index) = state.index.checked_sub(1) else {
+        return Vec::new();
+    };
+    let Some(value) = text.get(index) else {
+        return Vec::new();
+    };
+    if !options.dot_all && is_line_terminator(*value) {
+        return Vec::new();
+    }
+    state.index = index;
+    vec![state]
 }
 
 fn is_line_terminator(value: char) -> bool {
@@ -417,6 +574,26 @@ fn match_literal(
     }
     state.index += 1;
     vec![(next_pc, state)]
+}
+
+fn match_literal_reverse(
+    text: &[char],
+    mut state: MatchState,
+    literal: char,
+    ignore_case: bool,
+    unicode: bool,
+) -> Vec<MatchState> {
+    let Some(index) = state.index.checked_sub(1) else {
+        return Vec::new();
+    };
+    if !text
+        .get(index)
+        .is_some_and(|value| chars_equal(*value, literal, ignore_case, unicode))
+    {
+        return Vec::new();
+    }
+    state.index = index;
+    vec![state]
 }
 
 fn match_escape(
@@ -536,6 +713,107 @@ fn match_escape(
     vec![(next_pc, state)]
 }
 
+fn match_escape_reverse(
+    pattern: &[char],
+    text: &[char],
+    pc: usize,
+    state: MatchState,
+    properties: &PropertyCache,
+    options: MatchOptions,
+) -> Vec<MatchState> {
+    let Some(escaped) = pattern.get(pc + 1).copied() else {
+        return Vec::new();
+    };
+    if let Some(index) = escaped.to_digit(10).map(|value| value as usize)
+        && (1..=state.captures.len()).contains(&index)
+    {
+        let capture = state.captures[index - 1];
+        return match_backreference_reverse(text, state, capture, options);
+    }
+    if escaped == 'k'
+        && let Some((name, _)) = named_backreference(pattern, pc)
+        && let Some(group_index) = named_group_index(pattern, &name)
+    {
+        let capture = state.captures.get(group_index).copied().flatten();
+        return match_backreference_reverse(text, state, capture, options);
+    }
+    if options.unicode
+        && matches!(escaped, 'p' | 'P')
+        && let Some(escape) = properties.get(pc)
+    {
+        return match_property_escape_reverse(text, state, &escape);
+    }
+    if escaped == 'c'
+        && let Some(escape) = control_letter_escape(pattern, pc)
+    {
+        return match_unicode_escape_reverse(
+            text,
+            state,
+            escape.value,
+            options.ignore_case,
+            options.unicode,
+        );
+    }
+    if let Some(escape) = unicode_escape(pattern, pc, options.unicode) {
+        return match_unicode_escape_reverse(
+            text,
+            state,
+            escape.value,
+            options.ignore_case,
+            options.unicode,
+        );
+    }
+    if let Some(escape) = hex_escape(pattern, pc) {
+        return match_unicode_escape_reverse(
+            text,
+            state,
+            escape.value,
+            options.ignore_case,
+            options.unicode,
+        );
+    }
+    if !options.unicode
+        && let Some(escape) = legacy_octal_escape(pattern, pc)
+    {
+        return match_unicode_escape_reverse(
+            text,
+            state,
+            escape.value,
+            options.ignore_case,
+            options.unicode,
+        );
+    }
+    let Some(index) = state.index.checked_sub(1) else {
+        return Vec::new();
+    };
+    let Some(value) = text.get(index).copied() else {
+        return Vec::new();
+    };
+    let matched = match escaped {
+        'd' => value.is_ascii_digit(),
+        'D' => !value.is_ascii_digit(),
+        's' => regexp_whitespace(value),
+        'S' => !regexp_whitespace(value),
+        'w' => regexp_word_char(value),
+        'W' => !regexp_word_char(value),
+        '0' if options.unicode && !pattern.get(pc + 2).is_some_and(char::is_ascii_digit) => {
+            chars_equal(value, '\u{0000}', options.ignore_case, options.unicode)
+        }
+        literal => chars_equal(
+            value,
+            regexp_control_escape(literal),
+            options.ignore_case,
+            options.unicode,
+        ),
+    };
+    if !matched {
+        return Vec::new();
+    }
+    let mut matched = state;
+    matched.index = index;
+    vec![matched]
+}
+
 /// Match a fixed code-unit escape (`\uHHHH` or `\xHH`); `literal` is the Annex B
 /// identity fallback when the escape did not parse.
 fn match_code_unit_escape(
@@ -594,6 +872,34 @@ fn match_backreference(
     vec![(next_pc, state)]
 }
 
+fn match_backreference_reverse(
+    text: &[char],
+    mut state: MatchState,
+    capture: Option<(usize, usize)>,
+    options: MatchOptions,
+) -> Vec<MatchState> {
+    let Some((start, end)) = capture else {
+        return vec![state];
+    };
+    let capture_len = end - start;
+    let Some(begin) = state.index.checked_sub(capture_len) else {
+        return Vec::new();
+    };
+    let matched = (0..capture_len).all(|offset| {
+        chars_equal(
+            text[begin + offset],
+            text[start + offset],
+            options.ignore_case,
+            options.unicode,
+        )
+    });
+    if !matched {
+        return Vec::new();
+    }
+    state.index = begin;
+    vec![state]
+}
+
 fn match_unicode_escape(
     text: &[char],
     state: MatchState,
@@ -625,6 +931,26 @@ fn match_unicode_escape(
     matches
 }
 
+fn match_unicode_escape_reverse(
+    text: &[char],
+    mut state: MatchState,
+    value: char,
+    ignore_case: bool,
+    unicode: bool,
+) -> Vec<MatchState> {
+    let Some(index) = state.index.checked_sub(1) else {
+        return Vec::new();
+    };
+    if text
+        .get(index)
+        .is_some_and(|current| chars_equal(*current, value, ignore_case, unicode))
+    {
+        state.index = index;
+        return vec![state];
+    }
+    Vec::new()
+}
+
 fn match_property_escape(
     text: &[char],
     mut state: MatchState,
@@ -639,6 +965,25 @@ fn match_property_escape(
     }
     state.index = next_index;
     vec![(escape.next_pc, state)]
+}
+
+fn match_property_escape_reverse(
+    text: &[char],
+    mut state: MatchState,
+    escape: &escapes::ParsedPropertyEscape,
+) -> Vec<MatchState> {
+    let Some(index) = state.index.checked_sub(1) else {
+        return Vec::new();
+    };
+    let Some(code_point) = text.get(index).map(|value| u32::from(*value)) else {
+        return Vec::new();
+    };
+    let matched = escape.set.contains(code_point);
+    if matched == escape.negated {
+        return Vec::new();
+    }
+    state.index = index;
+    vec![state]
 }
 
 fn code_unit_char(code_unit: u16) -> char {
@@ -668,6 +1013,36 @@ fn match_class(
     }
     state.index = next_index;
     vec![(class_end + 1, state)]
+}
+
+fn match_class_reverse(
+    pattern: &[char],
+    text: &[char],
+    pc: usize,
+    mut state: MatchState,
+    properties: &PropertyCache,
+    options: MatchOptions,
+) -> Vec<MatchState> {
+    let Some(class_end) = class_end(pattern, pc) else {
+        return Vec::new();
+    };
+    let Some(index) = state.index.checked_sub(1) else {
+        return Vec::new();
+    };
+    let Some(value) = text.get(index).copied() else {
+        return Vec::new();
+    };
+    if !class_match(
+        &pattern[pc + 1..class_end],
+        pc + 1,
+        value,
+        properties,
+        options,
+    ) {
+        return Vec::new();
+    }
+    state.index = index;
+    vec![state]
 }
 
 pub(super) fn class_end(pattern: &[char], start: usize) -> Option<usize> {
@@ -877,6 +1252,80 @@ fn repeat_atom(
     results
 }
 
+#[allow(clippy::too_many_arguments)]
+fn repeat_atom_reverse(
+    pattern: &[char],
+    text: &[char],
+    atom_pc: usize,
+    quantifier: Quantifier,
+    state: MatchState,
+    group_indices: &HashMap<usize, usize>,
+    properties: &PropertyCache,
+    options: MatchOptions,
+) -> Vec<MatchState> {
+    let max_count = quantifier.max.unwrap_or(text.len() + 1);
+    if quantifier.min == max_count {
+        let mut current = vec![state];
+        for _ in 0..quantifier.min {
+            current = current
+                .into_iter()
+                .flat_map(|state| {
+                    match_atom_reverse(
+                        pattern,
+                        text,
+                        atom_pc,
+                        state,
+                        group_indices,
+                        properties,
+                        options,
+                    )
+                })
+                .collect();
+            if current.is_empty() {
+                break;
+            }
+        }
+        return current;
+    }
+    let mut levels: Vec<Vec<MatchState>> = vec![vec![state]];
+    for count in 0..max_count {
+        let mut next = Vec::new();
+        for current in &levels[count] {
+            next.extend(
+                match_atom_reverse(
+                    pattern,
+                    text,
+                    atom_pc,
+                    current.clone(),
+                    group_indices,
+                    properties,
+                    options,
+                )
+                .into_iter()
+                .filter(|matched| matched.index != current.index),
+            );
+        }
+        if next.is_empty() {
+            break;
+        }
+        levels.push(next);
+    }
+
+    let mut counts: Vec<_> = (quantifier.min..levels.len()).collect();
+    if quantifier.greedy {
+        counts.reverse();
+    }
+    counts
+        .into_iter()
+        .flat_map(|count| {
+            levels[count]
+                .iter()
+                .cloned()
+                .map(move |state| repeat_accept_state(state, count, &[]))
+        })
+        .collect()
+}
+
 /// Explicit-stack DFS over repetitions of a quantified atom, producing accept
 /// states in the same priority order as the natural recursion (greedy: longest
 /// match first; lazy: shortest first). Using an explicit stack avoids native
@@ -1044,6 +1493,57 @@ fn match_group(
                 }
             }
             (end + 1, matched)
+        })
+        .collect()
+}
+
+#[allow(clippy::too_many_arguments)]
+fn match_group_reverse(
+    pattern: &[char],
+    text: &[char],
+    pc: usize,
+    state: MatchState,
+    group_indices: &HashMap<usize, usize>,
+    properties: &PropertyCache,
+    options: MatchOptions,
+) -> Vec<MatchState> {
+    let Some(end) = closing_group(pattern, pc) else {
+        return Vec::new();
+    };
+    let kind = group_kind(pattern, pc);
+    if matches!(
+        kind,
+        GroupKind::Lookahead { .. } | GroupKind::Lookbehind { .. }
+    ) {
+        return Vec::new();
+    }
+
+    let group_index = group_indices.get(&pc).copied();
+    let group_start = match kind {
+        GroupKind::Named { body_offset } => pc + body_offset,
+        GroupKind::NonCapturing => pc + 3,
+        _ => pc + 1,
+    };
+    let mut matches = Vec::new();
+    for (start, end) in group_alternatives(pattern, group_start, end) {
+        matches.extend(match_pattern_reverse(
+            pattern,
+            text,
+            start,
+            end,
+            state.clone(),
+            group_indices,
+            properties,
+            options,
+        ));
+    }
+    matches
+        .into_iter()
+        .map(|mut matched| {
+            if let Some(group_index) = group_index {
+                matched.captures[group_index] = Some((matched.index, state.index));
+            }
+            matched
         })
         .collect()
 }

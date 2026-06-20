@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 
 use super::groups::group_alternatives;
-use super::{MatchOptions, MatchState, PropertyCache, match_pattern};
+use super::{MatchOptions, MatchState, PropertyCache, match_pattern, match_pattern_reverse};
 
 /// Match a lookahead (`behind = false`) or lookbehind (`behind = true`)
 /// assertion. The assertion is zero-width: on success the index is unchanged.
@@ -94,6 +94,22 @@ fn match_lookbehind_body(
         reverse_captures: true,
         ..options
     };
+    if contains_backreference(pattern, body_start, body_end) {
+        let mut results = Vec::new();
+        for (start, end) in group_alternatives(pattern, body_start, body_end) {
+            results.extend(match_pattern_reverse(
+                pattern,
+                text,
+                start,
+                end,
+                state.clone(),
+                group_indices,
+                properties,
+                options,
+            ));
+        }
+        return results;
+    }
     let mut results = Vec::new();
     if !has_body_quantifier(pattern, body_start, body_end) {
         for (start, end) in group_alternatives(pattern, body_start, body_end) {
@@ -143,6 +159,28 @@ fn match_lookbehind_body(
         }
     }
     results
+}
+
+fn contains_backreference(pattern: &[char], start: usize, end: usize) -> bool {
+    let mut escaped = false;
+    let mut in_class = false;
+    for char in pattern.iter().take(end).skip(start).copied() {
+        if escaped {
+            escaped = false;
+            if !in_class && (char.is_ascii_digit() || char == 'k') {
+                return true;
+            }
+        } else if char == '\\' {
+            escaped = true;
+        } else if char == '[' {
+            in_class = true;
+        } else if char == ']' {
+            in_class = false;
+        } else if in_class {
+            continue;
+        }
+    }
+    false
 }
 
 fn has_body_quantifier(pattern: &[char], start: usize, end: usize) -> bool {
