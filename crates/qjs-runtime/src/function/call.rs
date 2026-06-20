@@ -22,6 +22,7 @@ use super::{
 const CROSS_REALM_OBJECT_PROTOTYPE: &str = "__quickjsRustRealmObjectPrototype";
 const CROSS_REALM_REGEXP_PROTOTYPE: &str = "__quickjsRustRealmRegExpPrototype";
 const CROSS_REALM_AGGREGATE_ERROR_PROTOTYPE: &str = "__quickjsRustRealmAggregateErrorPrototype";
+const CROSS_REALM_ITERATOR_PROTOTYPE: &str = "__quickjsRustRealmIteratorPrototype";
 
 pub(crate) fn call_function(
     callee: Value,
@@ -488,6 +489,9 @@ fn cross_realm_construct_prototype_slot(
         }
         Value::Function(function) if function.native == Some(NativeFunction::RegExp) => {
             CROSS_REALM_REGEXP_PROTOTYPE
+        }
+        Value::Function(function) if function.native == Some(NativeFunction::Iterator) => {
+            CROSS_REALM_ITERATOR_PROTOTYPE
         }
         Value::Function(_) => CROSS_REALM_OBJECT_PROTOTYPE,
         Value::Proxy(proxy) => {

@@ -90,6 +90,20 @@ fn iterator_helper_next_rejects_reentry() {
 }
 
 #[test]
+fn iterator_constructor_uses_new_target_realm_default_prototype() {
+    assert_eq!(
+        eval(
+            "let realmPrototype = {}; \
+             function C() {} \
+             Object.defineProperty(C, '__quickjsRustRealmIteratorPrototype', { value: realmPrototype }); \
+             C.prototype = null; \
+             Object.getPrototypeOf(Reflect.construct(Iterator, [], C)) === realmPrototype;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn iterator_zip_basic_modes_and_argument_validation() {
     assert_eq!(
         string(

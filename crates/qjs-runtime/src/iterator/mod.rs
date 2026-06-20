@@ -247,6 +247,10 @@ pub(crate) fn install_iterator(
         Property::fixed_non_enumerable(Value::Object(iterator_prototype.clone())),
     );
     iterator_function.properties.borrow_mut().insert(
+        "__quickjsRustRealmIteratorPrototype".to_owned(),
+        Property::fixed_non_enumerable(Value::Object(iterator_prototype.clone())),
+    );
+    iterator_function.properties.borrow_mut().insert(
         "from".to_owned(),
         Property::non_enumerable(Value::Function(Function::new_native(
             Some("from"),
