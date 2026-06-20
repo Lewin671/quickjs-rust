@@ -209,6 +209,11 @@ pub fn eval_bytecode_keep_jobs(bytecode: &Bytecode) -> Result<EvalOutcome, Runti
 /// A shared realm for a module graph (see [`vm_module::new_module_realm`]).
 pub(crate) type ModuleRealm = crate::function::Realm;
 
+pub(crate) struct ModuleEvaluation {
+    pub(crate) env: crate::CallEnv,
+    pub(crate) captured_env: Rc<RefCell<HashMap<String, Value>>>,
+}
+
 /// Builds the shared realm for a module graph. See
 /// [`vm_module::new_module_realm`].
 pub(crate) fn new_module_realm() -> ModuleRealm {
@@ -251,9 +256,10 @@ pub(crate) fn eval_module_body(
     realm: &ModuleRealm,
     imports: HashMap<String, Value>,
     host: Option<crate::module::ModuleHostRef>,
+    live_names: Vec<String>,
     drain: bool,
-) -> Result<crate::CallEnv, RuntimeError> {
-    vm_module::eval_module_body(bytecode, realm, imports, host, drain)
+) -> Result<ModuleEvaluation, RuntimeError> {
+    vm_module::eval_module_body(bytecode, realm, imports, host, live_names, drain)
 }
 
 pub(crate) fn eval_bytecode_with_env(

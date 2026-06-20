@@ -845,12 +845,18 @@ fn insert_function_captures(
     let mut protected_names = Vec::new();
     let mut names = bytecode.closure_referenced_global_names();
     names.extend(bytecode.closure_written_binding_names());
+    names.extend(bytecode.global_names().iter().cloned());
     names.sort();
     names.dedup();
+    let written_names = bytecode.written_binding_names();
+    let global_names = bytecode.global_names();
     for name in names {
         if function_local_names.iter().any(|local| local == &name) {
             continue;
         }
+        let is_written = written_names.iter().any(|written| written == &name);
+        let is_global_name = global_names.iter().any(|global| global == &name);
+        let skips_immutable_slot = is_written || is_global_name;
         insert_function_capture(
             local_env,
             &mut writeback_names,
@@ -858,10 +864,14 @@ fn insert_function_captures(
             bytecode,
             function_env,
             &name,
+            skips_immutable_slot,
         );
     }
     for name in bytecode.local_names() {
         if !function_local_names.iter().any(|local| local == name) {
+            let is_written = written_names.iter().any(|written| written == name);
+            let is_global_name = global_names.iter().any(|global| global == name);
+            let skips_immutable_slot = is_written || is_global_name;
             insert_function_capture(
                 local_env,
                 &mut writeback_names,
@@ -869,6 +879,7 @@ fn insert_function_captures(
                 bytecode,
                 function_env,
                 name,
+                skips_immutable_slot,
             );
         }
     }
@@ -882,11 +893,20 @@ fn insert_function_capture(
     bytecode: &Bytecode,
     function_env: &HashMap<String, Value>,
     name: &str,
+    skips_immutable_slot: bool,
 ) {
     if is_internal_binding_name(name) {
         return;
     }
     if let Some(value) = function_env.get(name) {
+        if skips_immutable_slot
+            && bytecode
+                .local_slot(name)
+                .is_some_and(|slot| !bytecode.local_is_mutable(slot))
+            && *value == Value::Undefined
+        {
+            return;
+        }
         local_env.insert(name.to_owned(), value.clone());
         let is_immutable_capture = bytecode
             .local_slot(name)

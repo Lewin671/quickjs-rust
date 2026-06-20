@@ -421,6 +421,61 @@ fn dynamic_import_caches_same_namespace() {
 }
 
 #[test]
+fn dynamic_import_namespace_tracks_self_export_updates() {
+    let namespace = run(
+        "import { log } from 'dep';\n\
+         export { log };",
+        &[(
+            "dep",
+            "let x = 0;\n\
+             export { x, x as y };\n\
+             export const log = [];\n\
+             async function main() {\n\
+               const imported = await import('dep');\n\
+               log.push(imported.x);\n\
+               log.push(imported.y);\n\
+               x = 1;\n\
+               log.push(imported.x);\n\
+               log.push(imported.y);\n\
+             }\n\
+             main();",
+        )],
+    )
+    .expect("graph evaluates");
+    assert_eq!(export_log(&namespace, "log"), "0,0,1,1");
+}
+
+#[test]
+fn dynamic_import_namespace_tracks_updates_after_nested_import() {
+    let namespace = run(
+        "export const log = [];\n\
+         import('dep').then(first => {\n\
+           log.push(first.x);\n\
+           return first.default().then(other => {\n\
+             log.push(first.x);\n\
+             log.push(other.default);\n\
+           });\n\
+         });",
+        &[
+            (
+                "dep",
+                "Function('return this;')().global = Function('return this;')();\n\
+                 Function('return this;')().test262Update = name => x = name;\n\
+                 export default function() { return import('other'); }\n\
+                 export var x = 'first';",
+            ),
+            (
+                "other",
+                "global.test262Update('other');\n\
+                 export default 42;",
+            ),
+        ],
+    )
+    .expect("graph evaluates");
+    assert_eq!(export_log(&namespace, "log"), "first,other,42");
+}
+
+#[test]
 fn dynamic_import_coerces_specifier_to_string() {
     // The specifier is coerced via ToString; an object with a custom toString
     // resolves to the named module.

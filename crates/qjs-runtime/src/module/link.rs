@@ -7,9 +7,9 @@
 //! mirroring the instantiation/evaluation state machine of ECMAScript 16.2.1.5
 //! (`Unlinked` -> `Linking` -> `Linked` -> `Evaluating` -> `Evaluated`).
 
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::{RuntimeError, Value, bytecode};
+use crate::{ModuleNamespaceBindings, RuntimeError, Value, bytecode};
 
 use super::namespace::build_namespace;
 use super::records::{ImportName, ModuleRecord, NAMESPACE_BINDING, build_record};
@@ -62,6 +62,9 @@ struct Module {
     /// The module's exported binding values, populated after evaluation:
     /// export name -> value.
     exports: HashMap<String, Value>,
+    /// Live lexical binding storage shared with closures created by this
+    /// module body. Export reads consult this before falling back to the realm.
+    live_lexical: Rc<RefCell<HashMap<String, Value>>>,
     /// Cached namespace object, built lazily.
     namespace: Option<Value>,
 }
@@ -216,6 +219,7 @@ impl ModuleGraph {
                 status: Status::Unlinked,
                 resolved_requests: HashMap::new(),
                 exports: HashMap::new(),
+                live_lexical: Rc::new(RefCell::new(HashMap::new())),
                 namespace: None,
             },
         );
@@ -385,14 +389,39 @@ impl ModuleGraph {
             let module = &self.modules[key];
             bytecode::compile_module(&module.record.body)?
         };
+        let live_names = self.modules[key]
+            .record
+            .local_exports
+            .iter()
+            .map(|export| export.local_name.clone())
+            .collect();
         let host = self
             .host_graph
             .as_ref()
             .map(|graph| super::host::ModuleHost::new(graph.clone(), key.to_owned()).into_ref());
-        let env = bytecode::eval_module_body(&compiled, &self.realm, imports, host, drain)?;
+        let evaluation =
+            bytecode::eval_module_body(&compiled, &self.realm, imports, host, live_names, drain)?;
+        {
+            let mut live = evaluation.captured_env.borrow_mut();
+            for (name, value) in evaluation.env.locals() {
+                live.entry(name.clone()).or_insert_with(|| value.clone());
+            }
+        }
         // Snapshot exported binding values from the module's frame environment.
-        let export_pairs = self.collect_export_values(key, &env)?;
+        let export_pairs = self.collect_export_values(key, &evaluation.env)?;
+        {
+            let mut live = evaluation.captured_env.borrow_mut();
+            for local in &self.modules[key].record.local_exports {
+                if let Some((_, value)) = export_pairs
+                    .iter()
+                    .find(|(export_name, _)| export_name == &local.export_name)
+                {
+                    live.insert(local.local_name.clone(), value.clone());
+                }
+            }
+        }
         let module = self.modules.get_mut(key).expect("module exists");
+        module.live_lexical = evaluation.captured_env;
         module.exports = export_pairs.into_iter().collect();
         Ok(())
     }
@@ -421,15 +450,36 @@ impl ModuleGraph {
             Ok(Some((module_key, export_name))) if export_name == NAMESPACE_BINDING => {
                 self.namespace(&module_key)
             }
-            Ok(Some((module_key, export_name))) => self.modules[&module_key]
-                .exports
-                .get(&export_name)
-                .cloned()
-                .unwrap_or(Value::Undefined),
+            Ok(Some((module_key, export_name))) => {
+                self.live_export_value(&module_key, &export_name)
+            }
             // A namespace-valued indirect export resolves to the target's
             // namespace object.
             _ => Value::Undefined,
         }
+    }
+
+    fn live_export_value(&self, key: &str, export_name: &str) -> Value {
+        let module = &self.modules[key];
+        if let Some(local_name) = module
+            .record
+            .local_exports
+            .iter()
+            .find(|local| local.export_name == export_name)
+            .map(|local| local.local_name.as_str())
+        {
+            if let Some(value) = module.live_lexical.borrow().get(local_name) {
+                return value.clone();
+            }
+            if let Some(value) = self.realm.borrow().get(local_name) {
+                return value.clone();
+            }
+        }
+        module
+            .exports
+            .get(export_name)
+            .cloned()
+            .unwrap_or(Value::Undefined)
     }
 
     /// Reads the local export values from a freshly evaluated module frame.
@@ -441,10 +491,25 @@ impl ModuleGraph {
         let module = &self.modules[key];
         let mut pairs = Vec::new();
         for local in &module.record.local_exports {
-            let value = env.get(&local.local_name).unwrap_or(Value::Undefined);
+            let mut value = env.get(&local.local_name).unwrap_or(Value::Undefined);
+            if value == Value::Undefined
+                && let Some(global_value) = self.global_this_property(&local.local_name)
+            {
+                value = global_value;
+            }
             pairs.push((local.export_name.clone(), value));
         }
         Ok(pairs)
+    }
+
+    fn global_this_property(&self, name: &str) -> Option<Value> {
+        let global_this = match self.realm.borrow().get(crate::GLOBAL_THIS_BINDING) {
+            Some(Value::Object(global_this)) => Some(global_this.clone()),
+            _ => None,
+        }?;
+        global_this
+            .own_property(name)
+            .map(|property| property.value)
     }
 
     /// The module namespace object for `key`, built (and cached) lazily from its
@@ -455,20 +520,34 @@ impl ModuleGraph {
         }
         let names = self.export_names(key, &mut Vec::new());
         let mut bindings = Vec::new();
+        let mut aliases = HashMap::new();
         for name in names {
             // A namespace omits any name whose resolution is ambiguous.
-            if self
+            if let Some((module_key, export_name)) = self
                 .resolve_export(key, &name, &mut Vec::new())
                 .ok()
                 .flatten()
-                .is_some()
             {
+                let namespace_name = name.clone();
                 let value = self.export_value(key, &name);
                 bindings.push((name, value));
+                if module_key == key
+                    && export_name != NAMESPACE_BINDING
+                    && let Some(local_name) = self.modules[key]
+                        .record
+                        .local_exports
+                        .iter()
+                        .find(|local| local.export_name == export_name)
+                        .map(|local| local.local_name.clone())
+                {
+                    aliases.insert(namespace_name, local_name);
+                }
             }
         }
         let env = crate::CallEnv::new(self.realm.clone());
-        let namespace = build_namespace(bindings, &env);
+        let live_bindings =
+            ModuleNamespaceBindings::new(self.modules[key].live_lexical.clone(), aliases);
+        let namespace = build_namespace(bindings, live_bindings, &env);
         self.modules.get_mut(key).expect("module exists").namespace = Some(namespace.clone());
         namespace
     }

@@ -10,6 +10,32 @@ use crate::{Function, proxy::ProxyRef};
 
 use super::{Property, Value};
 
+#[derive(Clone)]
+pub(crate) struct ModuleNamespaceBindings {
+    lexical: Rc<RefCell<HashMap<String, Value>>>,
+    aliases: Rc<HashMap<String, String>>,
+}
+
+impl ModuleNamespaceBindings {
+    pub(crate) fn new(
+        lexical: Rc<RefCell<HashMap<String, Value>>>,
+        aliases: HashMap<String, String>,
+    ) -> Self {
+        Self {
+            lexical,
+            aliases: Rc::new(aliases),
+        }
+    }
+
+    fn value_for_export(&self, export_name: &str) -> Option<Value> {
+        let binding_name = self
+            .aliases
+            .get(export_name)
+            .map_or(export_name, String::as_str);
+        self.lexical.borrow().get(binding_name).cloned()
+    }
+}
+
 /// A [[Prototype]] slot value. Most prototypes are plain objects, but a
 /// function may also sit in a prototype chain (for example a subclass
 /// constructor whose [[Prototype]] is its superclass, or an object created with
@@ -123,6 +149,7 @@ pub struct ObjectRef {
     array_prototype_exotic: Rc<Cell<bool>>,
     immutable_prototype_exotic: Rc<Cell<bool>>,
     module_namespace_exotic: Rc<Cell<bool>>,
+    module_namespace_bindings: Rc<RefCell<Option<ModuleNamespaceBindings>>>,
     /// Generator [[GeneratorState]] for generator objects; `None` for ordinary
     /// objects. Lazily allocated so non-generator objects pay only one `Rc`.
     generator_state: Rc<RefCell<Option<crate::bytecode::GeneratorState>>>,
@@ -201,6 +228,7 @@ impl ObjectRef {
             array_prototype_exotic: Rc::new(Cell::new(false)),
             immutable_prototype_exotic: Rc::new(Cell::new(false)),
             module_namespace_exotic: Rc::new(Cell::new(false)),
+            module_namespace_bindings: Rc::new(RefCell::new(None)),
             generator_state: Rc::new(RefCell::new(None)),
             async_generator_state: Rc::new(RefCell::new(None)),
             private_state: Rc::new(RefCell::new(crate::private::PrivateState::default())),
@@ -308,6 +336,10 @@ impl ObjectRef {
 
     pub(crate) fn is_module_namespace_exotic(&self) -> bool {
         self.module_namespace_exotic.get()
+    }
+
+    pub(crate) fn set_module_namespace_bindings(&self, bindings: ModuleNamespaceBindings) {
+        *self.module_namespace_bindings.borrow_mut() = Some(bindings);
     }
 
     pub(crate) fn get(&self, key: &str) -> Option<Value> {
@@ -519,7 +551,14 @@ impl ObjectRef {
     }
 
     pub(crate) fn own_property(&self, key: &str) -> Option<Property> {
-        self.properties.borrow().get(key).cloned()
+        let mut property = self.properties.borrow().get(key).cloned()?;
+        if self.module_namespace_exotic.get()
+            && let Some(bindings) = self.module_namespace_bindings.borrow().as_ref()
+            && let Some(value) = bindings.value_for_export(key)
+        {
+            property.value = value.clone();
+        }
+        Some(property)
     }
 
     pub(crate) fn own_symbol_property(&self, symbol: &ObjectRef) -> Option<Property> {

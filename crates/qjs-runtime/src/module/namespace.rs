@@ -3,20 +3,24 @@
 //! A module namespace object exposes the module's exported names as own
 //! properties in sorted order, carries `Symbol.toStringTag` "Module", and is
 //! sealed: new properties cannot be added, existing ones cannot be reassigned
-//! or deleted. It is approximated here with an ordinary sealed object whose
-//! data properties are non-writable and non-configurable; the property values
-//! are a snapshot taken after the exporting module has finished evaluating.
+//! or deleted. Export data descriptors read their value from the module's live
+//! binding map when queried.
 
-use crate::{CallEnv, ObjectRef, Property, Value};
+use crate::{CallEnv, ModuleNamespaceBindings, ObjectRef, Property, Value};
 
 /// Builds a sealed namespace object from `bindings`, a list of
 /// `(export_name, value)` pairs. Names are installed in sorted order.
-pub(super) fn build_namespace(mut bindings: Vec<(String, Value)>, env: &CallEnv) -> Value {
+pub(super) fn build_namespace(
+    mut bindings: Vec<(String, Value)>,
+    live_bindings: ModuleNamespaceBindings,
+    env: &CallEnv,
+) -> Value {
     bindings.sort_by(|(left, _), (right, _)| left.cmp(right));
     // Namespace objects have a null [[Prototype]].
     let namespace = ObjectRef::new(std::collections::HashMap::new());
     let _ = namespace.set_prototype(None);
     namespace.mark_module_namespace_exotic();
+    namespace.set_module_namespace_bindings(live_bindings);
     for (name, value) in bindings {
         // Non-writable + non-configurable so reassignment and deletion of an
         // existing export fail, matching the sealed namespace behavior.

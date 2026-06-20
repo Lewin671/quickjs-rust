@@ -201,6 +201,24 @@ impl Vm<'_> {
         }
     }
 
+    fn write_through_capture_writeback_slot(&self, slot: usize, value: &Value) {
+        let Some(writeback) = &self.capture_writeback else {
+            return;
+        };
+        let Some(name) = self.bytecode.locals.get(slot).map(|local| &local.name) else {
+            return;
+        };
+        let mut target = writeback.target.borrow_mut();
+        if writeback.names.iter().any(|candidate| candidate == name) {
+            target.insert(name.clone(), value.clone());
+        }
+        for (source_name, target_name) in &writeback.aliases {
+            if source_name == name {
+                target.insert(target_name.clone(), value.clone());
+            }
+        }
+    }
+
     pub(super) fn load_global(&mut self, name: &str) -> Result<Value, RuntimeError> {
         // `this` belongs to the frame: function frames bind it in their locals
         // layer (arrows inherit it through capture). Falling through to the
@@ -573,6 +591,7 @@ impl Vm<'_> {
         // through `captured_env`; keep a captured copy of this slot current so
         // later calls of that closure observe the new value.
         self.write_through_captured_slot(slot, &value);
+        self.write_through_capture_writeback_slot(slot, &value);
         let syncs_global_var = (from_env && !hoisted)
             || (self.bytecode.global_scope
                 && self.bytecode.local_is_body_hoist_only(slot)

@@ -13,6 +13,7 @@ use crate::{
     initialize_builtins,
 };
 
+use super::ModuleEvaluation;
 use super::ir::Bytecode;
 use super::vm::Vm;
 use super::vm_generator::{GeneratorStart, GeneratorState};
@@ -64,8 +65,9 @@ pub(super) fn eval_module_body(
     realm: &Realm,
     imports: HashMap<String, Value>,
     host: Option<crate::module::ModuleHostRef>,
+    live_names: Vec<String>,
     drain: bool,
-) -> Result<CallEnv, RuntimeError> {
+) -> Result<ModuleEvaluation, RuntimeError> {
     {
         let mut globals = realm.borrow_mut();
         Vm::initialize_script_global_bindings(bytecode, &mut globals)?;
@@ -83,9 +85,9 @@ pub(super) fn eval_module_body(
     // (16.2.1.5.3 AsyncModuleExecution): it suspends at each `await` and resumes
     // through the realm job queue, settling a result promise on completion.
     if bytecode.contains_top_level_await() {
-        return eval_async_module_body(bytecode, env);
+        return eval_async_module_body(bytecode, env, live_names);
     }
-    let captured_env = Rc::new(RefCell::new(HashMap::new()));
+    let captured_env = Rc::new(RefCell::new(seed_live_bindings(bytecode, live_names)));
     let mut vm = Vm::new_with_globals_and_captures(bytecode, env, captured_env);
     vm.run()?;
     // The dynamic-import path defers job draining to the outer queue loop so the
@@ -94,7 +96,10 @@ pub(super) fn eval_module_body(
     if drain {
         vm.drain_promise_jobs()?;
     }
-    Ok(vm.current_env())
+    Ok(ModuleEvaluation {
+        env: vm.current_env(),
+        captured_env: vm.captured_env.clone(),
+    })
 }
 
 /// Evaluates a module body that contains top-level `await`. The body is staged
@@ -112,19 +117,28 @@ pub(super) fn eval_module_body(
 /// Residue: a top-level `await` of a *dynamic* `import()` cannot drain here
 /// (the module graph is borrowed by the static evaluation, so a nested import
 /// job would re-borrow it); that path is left to the outer queue loop.
-fn eval_async_module_body(bytecode: &Bytecode, mut env: CallEnv) -> Result<CallEnv, RuntimeError> {
+fn eval_async_module_body(
+    bytecode: &Bytecode,
+    mut env: CallEnv,
+    live_names: Vec<String>,
+) -> Result<ModuleEvaluation, RuntimeError> {
     let realm = env.realm_rc();
     // Seed the shared captured-env cell with every top-level local name so each
     // `store_local` (notably a `let`/`const` export written after an `await`
     // resumes) writes through to it; the linker reads these settled lexical
     // exports back after the module's promise settles. `var`/`function` exports
     // live in the realm and are read from there.
-    let captured_env: Rc<RefCell<HashMap<String, Value>>> = Rc::new(RefCell::new(
-        bytecode
-            .local_names()
-            .map(|name| (name.to_owned(), Value::Undefined))
-            .collect(),
-    ));
+    let mut captured: HashMap<String, Value> = bytecode
+        .local_names()
+        .filter(|name| {
+            bytecode
+                .local_slot(name)
+                .is_some_and(|slot| !bytecode.local_is_body_hoist_only(slot))
+        })
+        .map(|name| (name.to_owned(), Value::Undefined))
+        .collect();
+    captured.extend(seed_live_bindings(bytecode, live_names));
+    let captured_env: Rc<RefCell<HashMap<String, Value>>> = Rc::new(RefCell::new(captured));
     let function_env = env.clone();
     let context = ObjectRef::new(HashMap::new());
     *context.generator_state().borrow_mut() =
@@ -158,5 +172,20 @@ fn eval_async_module_body(bytecode: &Bytecode, mut env: CallEnv) -> Result<CallE
         .filter(|(name, _)| !realm.borrow().contains_key(name.as_str()))
         .map(|(name, value)| (name.clone(), value.clone()))
         .collect();
-    Ok(CallEnv::with_locals(realm, locals))
+    Ok(ModuleEvaluation {
+        env: CallEnv::with_locals(realm, locals),
+        captured_env,
+    })
+}
+
+fn seed_live_bindings(bytecode: &Bytecode, names: Vec<String>) -> HashMap<String, Value> {
+    names
+        .into_iter()
+        .filter(|name| {
+            bytecode
+                .local_slot(name)
+                .is_some_and(|slot| bytecode.local_is_mutable(slot))
+        })
+        .map(|name| (name, Value::Undefined))
+        .collect()
 }
