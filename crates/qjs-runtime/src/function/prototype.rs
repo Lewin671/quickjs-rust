@@ -53,7 +53,7 @@ pub(crate) fn native_function(
     let prototype_slot = if is_construct {
         crate::native_construct_prototype_slot(constructor, env)?
     } else {
-        crate::function_prototype(constructor).map(Prototype::Object)
+        crate::function_intrinsic_prototype_slot(env)
     };
     created
         .set_internal_prototype_slot(prototype_slot)

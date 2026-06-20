@@ -77,6 +77,7 @@ pub(super) fn call_core_native(
             is_construct,
             env,
         ),
+        NativeFunction::FunctionPrototype => Ok(Value::Undefined),
         NativeFunction::GeneratorFunction => {
             crate::function::native_generator_function(function, argument_values, env)
         }

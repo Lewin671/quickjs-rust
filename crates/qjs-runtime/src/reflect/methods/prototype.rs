@@ -1,5 +1,5 @@
 use crate::CallEnv;
-use crate::{RuntimeError, Value, array_prototype, error, function_intrinsic_prototype, symbol};
+use crate::{RuntimeError, Value, array_prototype, error, symbol};
 
 pub(crate) fn native_reflect_get_prototype_of(
     argument_values: &[Value],
@@ -39,7 +39,9 @@ pub(crate) fn native_reflect_get_prototype_of(
             Ok(error::native_error_constructor_parent(function, env)
                 .or_else(|| match function.internal_prototype_slot() {
                     Some(slot) => slot.map(|prototype| prototype.to_value()),
-                    None => function_intrinsic_prototype(env).map(Value::Object),
+                    None => {
+                        crate::function_intrinsic_prototype_slot(env).map(|slot| slot.to_value())
+                    }
                 })
                 .unwrap_or(Value::Null))
         }

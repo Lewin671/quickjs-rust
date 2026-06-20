@@ -1030,6 +1030,25 @@ fn function_prototype_has_empty_name_after_length() {
 }
 
 #[test]
+fn function_prototype_is_callable_function_object() {
+    assert_eq!(
+        eval(
+            "[
+               Object.prototype.toString.call(Function.prototype),
+               Function.prototype(),
+               Function.prototype(null, void 0),
+               Object.getPrototypeOf(Function.prototype) === Object.prototype,
+               Object.getOwnPropertyDescriptor(Function, 'prototype').writable,
+               Object.prototype.hasOwnProperty.call(Function.prototype, Symbol.hasInstance)
+             ].join('|');"
+        ),
+        Ok(Value::String(
+            "[object Function]|||true|false|true".to_owned().into()
+        ))
+    );
+}
+
+#[test]
 fn bound_function_length_and_name_follow_spec() {
     // Length is derived from the target's `length` via ToIntegerOrInfinity,
     // minus bound args, clamped to >= 0; +Infinity is preserved.

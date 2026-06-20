@@ -92,10 +92,37 @@ pub(crate) fn string_prototype(env: &CallEnv) -> Option<ObjectRef> {
 }
 
 pub(crate) fn function_intrinsic_prototype(env: &CallEnv) -> Option<ObjectRef> {
+    match function_intrinsic_prototype_slot(env) {
+        Some(crate::Prototype::Object(prototype)) => Some(prototype),
+        _ => None,
+    }
+}
+
+pub(crate) fn function_intrinsic_prototype_slot(env: &CallEnv) -> Option<crate::Prototype> {
     let Some(Value::Function(function_constructor)) = env.get("Function") else {
         return None;
     };
-    function_prototype(&function_constructor)
+    match function_constructor.properties.borrow().get("prototype") {
+        Some(Property {
+            value: Value::Object(prototype),
+            ..
+        }) => Some(crate::Prototype::Object(prototype.clone())),
+        Some(Property {
+            value: Value::Function(prototype),
+            ..
+        }) => Some(crate::Prototype::Function(prototype.clone())),
+        Some(Property {
+            value: Value::Array(array),
+            ..
+        }) => Some(crate::Prototype::Object(array_as_object_prototype(
+            array, env,
+        ))),
+        Some(Property {
+            value: Value::Proxy(prototype),
+            ..
+        }) => Some(crate::Prototype::Proxy(prototype.clone())),
+        _ => None,
+    }
 }
 
 pub(crate) fn function_prototype(function: &Function) -> Option<ObjectRef> {
@@ -154,7 +181,7 @@ pub(crate) fn value_prototype_slot(value: Value, env: &CallEnv) -> Option<crate:
         },
         Value::Function(function) => match function.internal_prototype_slot() {
             Some(slot) => slot,
-            None => function_intrinsic_prototype(env).map(crate::Prototype::Object),
+            None => function_intrinsic_prototype_slot(env),
         },
         Value::Proxy(proxy) => value_prototype_slot(proxy.target(), env),
         Value::String(_) | Value::Number(_) | Value::BigInt(_) | Value::Boolean(_) => None,
@@ -215,7 +242,14 @@ pub(crate) fn function_prototype_chain_descriptor(
             .ok()
             .and_then(|target| crate::property::own_or_inherited_descriptor(target, key)),
         Some(None) => None,
-        None => function_intrinsic_prototype(env).and_then(|prototype| prototype.property(key)),
+        None => function_intrinsic_prototype_slot(env).and_then(|prototype| match prototype {
+            crate::Prototype::Object(prototype) => prototype.property(key),
+            crate::Prototype::Function(prototype) => prototype.chain_property_with_env(key, env),
+            crate::Prototype::Proxy(proxy) => proxy
+                .target_result()
+                .ok()
+                .and_then(|target| crate::property::own_or_inherited_descriptor(target, key)),
+        }),
     }
 }
 

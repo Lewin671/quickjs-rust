@@ -1,14 +1,15 @@
 use crate::CallEnv;
-use std::collections::HashMap;
-
-use crate::{Function, NativeFunction, ObjectRef, Property, Value};
+use crate::{Function, NativeFunction, ObjectRef, Property, Prototype, Value};
 
 pub(crate) fn install_function(
     env: &mut CallEnv,
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
-    let function_prototype = ObjectRef::with_prototype(HashMap::new(), Some(object_prototype));
+    let function_prototype =
+        Function::new_native(Some(""), 0, NativeFunction::FunctionPrototype, false);
+    let _ =
+        function_prototype.set_internal_prototype_slot(Some(Prototype::Object(object_prototype)));
     let function_constructor =
         Function::new_native(Some("Function"), 1, NativeFunction::Function, true);
     function_prototype.define_property(
@@ -21,45 +22,45 @@ pub(crate) fn install_function(
         "name".to_owned(),
         Property::data(Value::String(String::new().into()), false, false, true),
     );
-    function_prototype.define_non_enumerable(
+    function_prototype.define_property(
         "constructor".to_owned(),
-        Value::Function(function_constructor.clone()),
+        Property::non_enumerable(Value::Function(function_constructor.clone())),
     );
-    function_prototype.define_non_enumerable(
+    function_prototype.define_property(
         "apply".to_owned(),
-        Value::Function(Function::new_native(
+        Property::non_enumerable(Value::Function(Function::new_native(
             Some("apply"),
             2,
             NativeFunction::FunctionPrototypeApply,
             false,
-        )),
+        ))),
     );
-    function_prototype.define_non_enumerable(
+    function_prototype.define_property(
         "call".to_owned(),
-        Value::Function(Function::new_native(
+        Property::non_enumerable(Value::Function(Function::new_native(
             Some("call"),
             1,
             NativeFunction::FunctionPrototypeCall,
             false,
-        )),
+        ))),
     );
-    function_prototype.define_non_enumerable(
+    function_prototype.define_property(
         "bind".to_owned(),
-        Value::Function(Function::new_native(
+        Property::non_enumerable(Value::Function(Function::new_native(
             Some("bind"),
             1,
             NativeFunction::FunctionPrototypeBind,
             false,
-        )),
+        ))),
     );
-    function_prototype.define_non_enumerable(
+    function_prototype.define_property(
         "toString".to_owned(),
-        Value::Function(Function::new_native(
+        Property::non_enumerable(Value::Function(Function::new_native(
             Some("toString"),
             0,
             NativeFunction::FunctionPrototypeToString,
             false,
-        )),
+        ))),
     );
     // %ThrowTypeError% is a single shared intrinsic: the same function object
     // backs `Function.prototype.arguments`/`caller` and the strict
@@ -86,7 +87,7 @@ pub(crate) fn install_function(
     function_prototype.define_property("caller".to_owned(), restricted_property);
     function_constructor.properties.borrow_mut().insert(
         "prototype".to_owned(),
-        Property::fixed_non_enumerable(Value::Object(function_prototype)),
+        Property::fixed_non_enumerable(Value::Function(function_prototype)),
     );
 
     let function_value = Value::Function(function_constructor);

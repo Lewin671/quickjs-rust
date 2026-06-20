@@ -21,7 +21,7 @@ use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
     bytecode::{GeneratorOutcome, GeneratorStart, GeneratorState, Resume, resume_generator},
-    call_function, function_intrinsic_prototype, is_truthy, object_prototype, promise,
+    call_function, function_intrinsic_prototype_slot, is_truthy, object_prototype, promise,
     property_value, symbol,
 };
 
@@ -117,9 +117,9 @@ pub(crate) fn install_async_generator(
     async_generator_prototype.set_to_string_tag("AsyncGenerator");
     symbol::define_well_known_to_string_tag(env, &async_generator_prototype, "AsyncGenerator");
 
-    let async_generator_function_prototype = ObjectRef::with_prototype(
+    let async_generator_function_prototype = ObjectRef::with_prototype_slot(
         HashMap::new(),
-        function_intrinsic_prototype(env).or(Some(object_prototype)),
+        function_intrinsic_prototype_slot(env).or(Some(crate::Prototype::Object(object_prototype))),
     );
     let async_generator_function = Function::new_native(
         Some("AsyncGeneratorFunction"),
@@ -127,9 +127,8 @@ pub(crate) fn install_async_generator(
         NativeFunction::AsyncGeneratorFunction,
         true,
     );
-    let _ = async_generator_function.set_internal_prototype_slot(
-        function_intrinsic_prototype(env).map(crate::Prototype::Object),
-    );
+    let _ = async_generator_function
+        .set_internal_prototype_slot(function_intrinsic_prototype_slot(env));
     async_generator_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
         Property::data(

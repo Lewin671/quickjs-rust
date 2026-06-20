@@ -14,7 +14,7 @@ use crate::{
     Bytecode, NativeFunction, ObjectRef, Property, PropertyKey, Prototype, Value,
     bytecode::{CaptureWriteback, compile_function_body},
     function::{collect_function_local_names, is_strict_function_body},
-    function_intrinsic_prototype, object_prototype,
+    object_prototype,
 };
 
 /// A compiled instance-field initializer attached to a class constructor. It
@@ -779,7 +779,7 @@ impl Function {
     fn effective_internal_prototype_with_env(&self, env: &CallEnv) -> Option<Prototype> {
         match self.internal_prototype.borrow().clone() {
             Some(slot) => slot,
-            None => function_intrinsic_prototype(env).map(Prototype::Object),
+            None => crate::function_intrinsic_prototype_slot(env),
         }
     }
 

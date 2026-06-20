@@ -22,7 +22,7 @@ use crate::{
         CaptureWriteback, GeneratorOutcome, GeneratorStart, GeneratorState, Resume,
         resume_generator,
     },
-    function_intrinsic_prototype, promise, symbol,
+    function_intrinsic_prototype_slot, promise, symbol,
 };
 
 /// Intrinsic binding for `%AsyncFunction.prototype%`, the object that sits
@@ -42,9 +42,9 @@ pub(crate) fn install_async_function(
     _global_this: &Value,
     object_prototype: ObjectRef,
 ) {
-    let async_function_prototype = ObjectRef::with_prototype(
+    let async_function_prototype = ObjectRef::with_prototype_slot(
         HashMap::new(),
-        function_intrinsic_prototype(env).or(Some(object_prototype)),
+        function_intrinsic_prototype_slot(env).or(Some(crate::Prototype::Object(object_prototype))),
     );
     let async_function = Function::new_native(
         Some("AsyncFunction"),
@@ -52,9 +52,7 @@ pub(crate) fn install_async_function(
         NativeFunction::AsyncFunction,
         true,
     );
-    let _ = async_function.set_internal_prototype_slot(
-        function_intrinsic_prototype(env).map(crate::Prototype::Object),
-    );
+    let _ = async_function.set_internal_prototype_slot(function_intrinsic_prototype_slot(env));
     async_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
         Property::data(

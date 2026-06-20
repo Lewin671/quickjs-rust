@@ -298,6 +298,8 @@ pub(crate) enum NativeFunction {
     MathTan,
     MathTanh,
     MathTrunc,
+    /// `%Function.prototype%`: callable intrinsic that returns `undefined`.
+    FunctionPrototype,
     /// `%GeneratorFunction%`: reachable through generator function
     /// `.constructor`, but not exposed as a global binding.
     GeneratorFunction,

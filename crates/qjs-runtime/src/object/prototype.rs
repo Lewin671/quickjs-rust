@@ -1,8 +1,9 @@
 use crate::{
     PropertyKey, RuntimeError, Value, array_as_object_prototype, array_has_own_property,
-    array_prototype, bigint, boolean, call_function, date, error, function_intrinsic_prototype,
-    function_own_property_descriptor, function_prototype, number, object, property_value,
-    property_value_key, regexp, string, symbol, to_property_key_value, value_prototype_slot,
+    array_prototype, bigint, boolean, call_function, date, error,
+    function_intrinsic_prototype_slot, function_own_property_descriptor, function_prototype,
+    number, object, property_value, property_value_key, regexp, string, symbol,
+    to_property_key_value, value_prototype_slot,
 };
 
 use super::descriptor::own_property_descriptor_key;
@@ -44,7 +45,7 @@ pub(crate) fn native_object_get_prototype_of(
             Ok(error::native_error_constructor_parent(function, env)
                 .or_else(|| match function.internal_prototype_slot() {
                     Some(slot) => slot.map(|prototype| prototype.to_value()),
-                    None => function_intrinsic_prototype(env).map(Value::Object),
+                    None => function_intrinsic_prototype_slot(env).map(|slot| slot.to_value()),
                 })
                 .unwrap_or(Value::Null))
         }
@@ -276,7 +277,9 @@ pub(crate) fn native_object_prototype_has_own_property(
         (Value::Function(function), crate::PropertyKey::String(key)) => Ok(Value::Boolean(
             function_own_property_descriptor(&function, &key).is_some(),
         )),
-        (Value::Function(_), crate::PropertyKey::Symbol(_)) => Ok(Value::Boolean(false)),
+        (Value::Function(function), crate::PropertyKey::Symbol(symbol)) => Ok(Value::Boolean(
+            crate::function_own_symbol_property_descriptor(&function, &symbol).is_some(),
+        )),
         (Value::Array(elements), crate::PropertyKey::String(key)) => {
             Ok(Value::Boolean(array_has_own_property(&elements, &key)))
         }

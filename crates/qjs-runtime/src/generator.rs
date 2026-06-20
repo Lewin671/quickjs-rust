@@ -10,7 +10,7 @@ use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
     bytecode::{GeneratorOutcome, GeneratorStart, Resume, resume_generator},
-    function_intrinsic_prototype, object_prototype, symbol,
+    function_intrinsic_prototype_slot, object_prototype, symbol,
 };
 
 /// Intrinsic binding for `%GeneratorPrototype%`, propagated into call frames so
@@ -69,9 +69,9 @@ pub(crate) fn install_generator(
     // function points at. Its own [[Prototype]] is `%Function.prototype%`, it
     // exposes `%GeneratorPrototype%` as its `prototype`, and carries the
     // "GeneratorFunction" toStringTag.
-    let generator_function_prototype = ObjectRef::with_prototype(
+    let generator_function_prototype = ObjectRef::with_prototype_slot(
         HashMap::new(),
-        function_intrinsic_prototype(env).or(Some(object_prototype)),
+        function_intrinsic_prototype_slot(env).or(Some(crate::Prototype::Object(object_prototype))),
     );
     let generator_function = Function::new_native(
         Some("GeneratorFunction"),
@@ -79,9 +79,7 @@ pub(crate) fn install_generator(
         NativeFunction::GeneratorFunction,
         true,
     );
-    let _ = generator_function.set_internal_prototype_slot(
-        function_intrinsic_prototype(env).map(crate::Prototype::Object),
-    );
+    let _ = generator_function.set_internal_prototype_slot(function_intrinsic_prototype_slot(env));
     generator_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
         Property::data(

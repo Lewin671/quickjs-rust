@@ -326,23 +326,27 @@ fn install_function_has_instance(env: &CallEnv, symbol_function: &Function) {
     let Some(symbol) = well_known_symbol_from_function(symbol_function, "hasInstance") else {
         return;
     };
-    let Some(prototype) = crate::function_intrinsic_prototype(env) else {
+    let Some(prototype) = crate::function_intrinsic_prototype_slot(env) else {
         return;
     };
-    prototype.define_symbol_property(
-        symbol,
-        Property::data(
-            Value::Function(Function::new_native(
-                Some("[Symbol.hasInstance]"),
-                1,
-                NativeFunction::FunctionPrototypeHasInstance,
-                false,
-            )),
+    let property = Property::data(
+        Value::Function(Function::new_native(
+            Some("[Symbol.hasInstance]"),
+            1,
+            NativeFunction::FunctionPrototypeHasInstance,
             false,
-            false,
-            false,
-        ),
+        )),
+        false,
+        false,
+        false,
     );
+    match prototype {
+        crate::Prototype::Object(prototype) => prototype.define_symbol_property(symbol, property),
+        crate::Prototype::Function(prototype) => {
+            prototype.define_symbol_property(symbol, property);
+        }
+        crate::Prototype::Proxy(_) => {}
+    }
 }
 
 pub(crate) fn define_well_known_iterator_alias(

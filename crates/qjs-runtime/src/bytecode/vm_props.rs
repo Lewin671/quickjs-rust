@@ -6,7 +6,7 @@ use crate::{
     function_own_property_descriptor, function_own_property_names,
     function_prototype_chain_descriptor, inherited_primitive_prototype_descriptor,
     inherited_string_prototype_property, number, property_value, property_value_key, string,
-    symbol, to_int32_number, to_uint32_number, value_prototype,
+    symbol, to_int32_number, to_uint32_number,
 };
 
 use super::vm::Vm;
@@ -672,8 +672,8 @@ pub(super) fn enumerable_keys(value: Value, env: &mut CallEnv) -> Result<Vec<Val
                         }
                     }
                 }
-                value_prototype(current.clone(), env)
-                    .map(Value::Object)
+                crate::value_prototype_slot(current.clone(), env)
+                    .map(|slot| slot.to_value())
                     .unwrap_or(Value::Null)
             }
             Value::Null | Value::Undefined => break,
