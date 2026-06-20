@@ -396,6 +396,25 @@ fn namespace_self_imported_all_lexical_export_forms_throw_before_initialization(
 }
 
 #[test]
+fn namespace_self_imported_tdz_is_observed_by_super_receiver_set() {
+    let namespace = run(
+        "export { result } from \"dep\";",
+        &[(
+            "dep",
+            "import * as ns from \"dep\";\n\
+             class A { constructor() { return ns; } }\n\
+             class B extends A { constructor() { super(); super.foo = 14; } }\n\
+             let caught = false;\n\
+             try { new B(); } catch (error) { caught = error instanceof ReferenceError; }\n\
+             export const result = caught;\n\
+             export let foo = 42;",
+        )],
+    )
+    .expect("module evaluates");
+    assert_eq!(export(&namespace, "result"), Value::Boolean(true));
+}
+
+#[test]
 fn unresolvable_import_is_syntax_error() {
     let error = run("import { x } from \"missing\";\nexport const v = x;", &[])
         .expect_err("missing module rejected");

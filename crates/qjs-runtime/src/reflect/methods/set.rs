@@ -4,6 +4,7 @@ use crate::{
     ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function,
     object::{
         PropertyDescriptor, define_array_length_value, define_property_descriptor_on_value_key,
+        own_property_descriptor_key,
     },
 };
 
@@ -51,7 +52,7 @@ pub(crate) fn ordinary_set(
         }
     }
 
-    if let Some(property) = own_property_descriptor_key(&target, key) {
+    if let Some(property) = own_property_descriptor_key(target.clone(), key)? {
         return ordinary_set_with_descriptor(property, key, value, receiver, env);
     }
 
@@ -63,50 +64,6 @@ pub(crate) fn ordinary_set(
     }
 
     set_receiver_data_property(receiver, key, value, env)
-}
-
-fn own_property_descriptor_key(target: &Value, key: &PropertyKey) -> Option<Property> {
-    let PropertyKey::String(key) = key else {
-        return own_symbol_property_descriptor(target, key);
-    };
-    match target {
-        Value::Object(object) => object.own_property(key),
-        Value::Map(map) => map.object().own_property(key),
-        Value::Set(set) => set.object().own_property(key),
-        Value::Proxy(proxy) => {
-            own_property_descriptor_key(&proxy.target(), &PropertyKey::String(key.to_owned()))
-        }
-        Value::Array(elements) => crate::array_own_property_descriptor(elements, key),
-        Value::Function(function) => crate::function_own_property_descriptor(function, key),
-        Value::String(_)
-        | Value::Number(_)
-        | Value::BigInt(_)
-        | Value::Boolean(_)
-        | Value::Null
-        | Value::Undefined => None,
-    }
-}
-
-fn own_symbol_property_descriptor(target: &Value, key: &PropertyKey) -> Option<Property> {
-    let PropertyKey::Symbol(symbol) = key else {
-        unreachable!("symbol descriptor helper should only receive symbol keys");
-    };
-    match target {
-        Value::Object(object) => object.own_symbol_property(symbol),
-        Value::Map(map) => map.object().own_symbol_property(symbol),
-        Value::Set(set) => set.object().own_symbol_property(symbol),
-        Value::Proxy(proxy) => own_symbol_property_descriptor(&proxy.target(), key),
-        Value::Function(function) => {
-            crate::function_own_symbol_property_descriptor(function, symbol)
-        }
-        Value::Array(elements) => elements.own_symbol_property(symbol),
-        Value::String(_)
-        | Value::Number(_)
-        | Value::BigInt(_)
-        | Value::Boolean(_)
-        | Value::Null
-        | Value::Undefined => None,
-    }
 }
 
 fn ordinary_set_with_descriptor(
@@ -140,6 +97,26 @@ fn set_receiver_data_property(
     };
     match receiver {
         Value::Object(object) => {
+            if object.is_module_namespace_exotic() {
+                let property_key = PropertyKey::String(key.to_owned());
+                if let Some(existing) =
+                    own_property_descriptor_key(Value::Object(object.clone()), &property_key)?
+                {
+                    if existing.is_accessor() || !existing.writable {
+                        return Ok(false);
+                    }
+                } else if !object.is_extensible() {
+                    return Ok(false);
+                }
+                return define_property_descriptor_on_value_key(
+                    Value::Object(object),
+                    property_key,
+                    PropertyDescriptor::from_complete_property(Property::data(
+                        value, true, true, false,
+                    )),
+                    env,
+                );
+            }
             if crate::typed_array::is_typed_array_object(&object) {
                 match crate::typed_array::define_indexed_element_value(
                     &object,

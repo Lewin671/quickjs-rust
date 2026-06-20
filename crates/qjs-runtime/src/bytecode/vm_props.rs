@@ -3,7 +3,7 @@ use qjs_ast::{BinaryOp, UnaryOp};
 use crate::{
     GLOBAL_THIS_BINDING, ObjectRef, Property, PropertyKey, RuntimeError, Value, array_prototype,
     bigint, boolean, function_delete_own_property, function_delete_own_symbol_property,
-    function_own_property_descriptor, function_own_property_keys, function_own_property_names,
+    function_own_property_descriptor, function_own_property_names,
     function_prototype_chain_descriptor, inherited_primitive_prototype_descriptor,
     inherited_string_prototype_property, number, property_value, property_value_key, string,
     symbol, to_int32_number, to_uint32_number, value_prototype,
@@ -103,6 +103,9 @@ impl Vm<'_> {
                         }
                         crate::typed_array::IndexedRead::NotIndexed => {}
                     }
+                }
+                if object.is_module_namespace_exotic() {
+                    return None;
                 }
                 match ordinary_chain_property(object, key) {
                     Err(ProxyInChain) => None,
@@ -631,15 +634,18 @@ pub(super) fn enumerable_keys(value: Value, env: &mut CallEnv) -> Result<Vec<Val
             | Value::Function(_)
             | Value::Map(_)
             | Value::Set(_) => {
-                let (enumerable, all) = own_enumerable_and_all(&current);
-                for key in enumerable {
+                for key in own_string_keys(&current) {
                     if !seen.iter().any(|existing| existing == &key) {
-                        keys.push(key);
-                    }
-                }
-                for key in all {
-                    if !seen.iter().any(|existing| existing == &key) {
-                        seen.push(key);
+                        let property_key = PropertyKey::String(key.clone());
+                        if let Some(property) = crate::object::own_property_descriptor_key(
+                            current.clone(),
+                            &property_key,
+                        )? {
+                            if property.enumerable {
+                                keys.push(key.clone());
+                            }
+                            seen.push(key);
+                        }
                     }
                 }
                 value_prototype(current.clone(), env)
@@ -662,18 +668,16 @@ pub(super) fn enumerable_keys(value: Value, env: &mut CallEnv) -> Result<Vec<Val
     Ok(keys.into_iter().map(|s| Value::String(s.into())).collect())
 }
 
-/// The (enumerable-own, all-own) string key lists for an ordinary value, used
-/// per prototype-chain layer by [`enumerable_keys`].
-fn own_enumerable_and_all(value: &Value) -> (Vec<String>, Vec<String>) {
+/// The ordinary own string key list for a prototype-chain layer. The caller
+/// observes each key through `[[GetOwnProperty]]`, which matters for module
+/// namespace TDZ bindings.
+fn own_string_keys(value: &Value) -> Vec<String> {
     match value {
         Value::Object(object) => {
             if crate::typed_array::is_typed_array_object(object) {
-                (
-                    crate::typed_array::typed_array_own_property_keys(object),
-                    crate::typed_array::typed_array_own_property_names(object),
-                )
+                crate::typed_array::typed_array_own_property_names(object)
             } else {
-                (object.own_property_keys(), object.own_property_names())
+                object.own_property_names()
             }
         }
         Value::Array(elements) => {
@@ -682,21 +686,12 @@ fn own_enumerable_and_all(value: &Value) -> (Vec<String>, Vec<String>) {
                 .map(|index| index.to_string())
                 .collect();
             keys.extend(elements.property_keys());
-            (keys.clone(), keys)
+            keys
         }
-        Value::Function(function) => (
-            function_own_property_keys(function),
-            function_own_property_names(function),
-        ),
-        Value::Map(map) => (
-            map.object().own_property_keys(),
-            map.object().own_property_names(),
-        ),
-        Value::Set(set) => (
-            set.object().own_property_keys(),
-            set.object().own_property_names(),
-        ),
-        _ => (Vec::new(), Vec::new()),
+        Value::Function(function) => function_own_property_names(function),
+        Value::Map(map) => map.object().own_property_names(),
+        Value::Set(set) => set.object().own_property_names(),
+        _ => Vec::new(),
     }
 }
 

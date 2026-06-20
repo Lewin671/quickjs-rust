@@ -110,6 +110,11 @@ pub(crate) fn native_object_is_frozen(
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     Ok(Value::Boolean(match argument_values.first() {
+        Some(Value::Object(object))
+            if object.is_module_namespace_exotic() && !object.own_property_names().is_empty() =>
+        {
+            false
+        }
         Some(Value::Object(object)) => object.is_frozen(),
         Some(Value::Map(map)) => map.object().is_frozen(),
         Some(Value::Set(set)) => set.object().is_frozen(),
@@ -170,6 +175,11 @@ pub(crate) fn native_object_freeze(
         return Ok(target);
     }
     match &target {
+        Value::Object(object)
+            if object.is_module_namespace_exotic() && !object.own_property_names().is_empty() =>
+        {
+            return Err(integrity_failed_error("Object.freeze"));
+        }
         Value::Object(object) if crate::typed_array::is_typed_array_object(object) => {
             freeze_typed_array_object(object.clone(), &target, env)?;
         }
