@@ -355,12 +355,37 @@ impl Parser {
         })
     }
 
-    /// Consumes an optional trailing `;` after a module specifier and returns
-    /// the span end to record for the declaration.
+    /// Consumes optional import attributes that do not affect the current AST,
+    /// then an optional trailing `;`, and returns the span end to record.
     fn finish_module_specifier(&mut self, source_span: Span) -> usize {
-        let end = source_span.end;
+        let mut end = source_span.end;
+        if self.consume_empty_import_attributes() {
+            end = self.previous_span().end;
+        }
         self.match_kind(&TokenKind::Semicolon);
         end
+    }
+
+    fn consume_empty_import_attributes(&mut self) -> bool {
+        if !matches!(
+            self.peek(),
+            Some(token) if !token.had_escape && token.kind == TokenKind::With
+        ) {
+            return false;
+        }
+        if !matches!(
+            (
+                self.peek_nth(1).map(|token| &token.kind),
+                self.peek_nth(2).map(|token| &token.kind),
+            ),
+            (Some(TokenKind::LeftBrace), Some(TokenKind::RightBrace))
+        ) {
+            return false;
+        }
+        self.advance();
+        self.advance();
+        self.advance();
+        true
     }
 
     /// Span of the most recently consumed token.

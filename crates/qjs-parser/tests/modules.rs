@@ -51,6 +51,20 @@ fn parses_default_import() {
 }
 
 #[test]
+fn parses_import_with_empty_attributes() {
+    let (specifiers, source) = sole_import("import def from \"mod\" with {};");
+    assert_eq!(source, "mod");
+    assert!(matches!(
+        specifiers.as_slice(),
+        [ImportSpecifier::Default { .. }]
+    ));
+
+    let (specifiers, source) = sole_import("import \"side\" with {};");
+    assert_eq!(source, "side");
+    assert!(specifiers.is_empty());
+}
+
+#[test]
 fn parses_namespace_import() {
     let (specifiers, _) = sole_import("import * as ns from \"mod\";");
     let [ImportSpecifier::Namespace { local, .. }] = specifiers.as_slice() else {
@@ -140,6 +154,18 @@ fn parses_star_reexport() {
     let ExportDecl::All {
         exported, source, ..
     } = sole_export("export * from \"mod\";")
+    else {
+        panic!("expected a star re-export");
+    };
+    assert!(exported.is_none());
+    assert_eq!(source, "mod");
+}
+
+#[test]
+fn parses_star_reexport_with_empty_attributes() {
+    let ExportDecl::All {
+        exported, source, ..
+    } = sole_export("export * from \"mod\" with {};")
     else {
         panic!("expected a star re-export");
     };
