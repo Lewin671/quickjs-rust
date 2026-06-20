@@ -166,7 +166,9 @@ impl ModuleRecord {
                     export_name: "default".to_owned(),
                     local_name: DEFAULT_BINDING.to_owned(),
                 });
-                self.body.body.push(default_export_stmt(declaration, span));
+                self.body
+                    .body
+                    .extend(default_export_stmts(declaration, span));
             }
             ExportDecl::Declaration { declaration, .. } => {
                 for name in declared_names(&declaration) {
@@ -181,17 +183,33 @@ impl ModuleRecord {
     }
 }
 
-/// Lowers `export default <decl|expr>` to a `const *default* = <value>;`
-/// binding so the body compiler creates the synthetic default binding.
-fn default_export_stmt(declaration: DefaultExport, span: qjs_ast::Span) -> Stmt {
+/// Lowers `export default <decl|expr>` to top-level statements that create the
+/// exported `*default*` binding. Named declarations keep their own module-scope
+/// binding and then initialize `*default*` from it.
+fn default_export_stmts(declaration: DefaultExport, span: qjs_ast::Span) -> Vec<Stmt> {
+    match declaration {
+        DefaultExport::Declaration(stmt) => default_declaration_export_stmts(*stmt, span),
+        DefaultExport::Expression(expr) => {
+            vec![default_binding_stmt(default_export_expr(expr), span)]
+        }
+    }
+}
+
+fn default_declaration_export_stmts(stmt: Stmt, span: qjs_ast::Span) -> Vec<Stmt> {
+    match stmt {
+        Stmt::FunctionDecl { ref name, .. } | Stmt::ClassDecl { ref name, .. } => {
+            let init = qjs_ast::Expr::Identifier {
+                name: name.clone(),
+                span,
+            };
+            vec![stmt, default_binding_stmt(init, span)]
+        }
+        other => vec![default_binding_stmt(stmt_to_expr(other, span), span)],
+    }
+}
+
+fn default_binding_stmt(init: qjs_ast::Expr, span: qjs_ast::Span) -> Stmt {
     use qjs_ast::VarDeclarator;
-    let init = match declaration {
-        // A named `export default function f(){}` / `class C {}` also binds its
-        // own name in module scope; for S2 we bind only `*default*` to the
-        // value, which covers anonymous and named default exports uniformly.
-        DefaultExport::Declaration(stmt) => stmt_to_expr(*stmt, span),
-        DefaultExport::Expression(expr) => default_export_expr(expr),
-    };
     Stmt::VarDecl {
         kind: VarKind::Const,
         declarations: vec![VarDeclarator {

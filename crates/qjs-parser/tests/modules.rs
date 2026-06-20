@@ -194,6 +194,13 @@ fn rejects_duplicate_top_level_module_functions() {
 }
 
 #[test]
+fn rejects_export_default_function_name_conflicts() {
+    let error = parse_module("class F {} export default function F() {}")
+        .expect_err("default function name conflicts with module lexical declaration");
+    assert!(error.message.contains("conflicts"));
+}
+
+#[test]
 fn parses_named_reexport() {
     let ExportDecl::Named {
         specifiers, source, ..

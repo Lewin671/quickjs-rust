@@ -438,7 +438,7 @@ fn import_local_name_and_span(specifier: &ImportSpecifier) -> (&str, Span) {
 pub(super) fn validate_module_static_semantics(body: &[Stmt]) -> Result<(), ParseError> {
     validate_module_exported_names(body)?;
     validate_module_local_export_bindings(body)?;
-    validate_module_top_level_functions(body)
+    validate_module_top_level_declarations(body)
 }
 
 fn validate_module_exported_names(body: &[Stmt]) -> Result<(), ParseError> {
@@ -542,8 +542,15 @@ fn module_declared_names(body: &[Stmt]) -> Vec<String> {
                         .map(|(name, _)| name),
                 );
             }
-            Stmt::ModuleDecl(ModuleDecl::Export(ExportDecl::Default { .. })) => {
-                names.push("default".to_owned());
+            Stmt::ModuleDecl(ModuleDecl::Export(ExportDecl::Default {
+                declaration: DefaultExport::Declaration(declaration),
+                ..
+            })) => {
+                names.extend(
+                    declared_names_and_spans(declaration)
+                        .into_iter()
+                        .map(|(name, _)| name),
+                );
             }
             _ => {}
         }
@@ -551,31 +558,119 @@ fn module_declared_names(body: &[Stmt]) -> Vec<String> {
     names
 }
 
-fn validate_module_top_level_functions(body: &[Stmt]) -> Result<(), ParseError> {
-    let mut function_names: Vec<(&str, Span)> = Vec::new();
+fn validate_module_top_level_declarations(body: &[Stmt]) -> Result<(), ParseError> {
+    let mut lexical_names: Vec<(String, Span)> = Vec::new();
+    let mut var_names: Vec<(String, Span)> = Vec::new();
+    let mut function_names: Vec<(String, Span)> = Vec::new();
     for stmt in body {
-        let Stmt::FunctionDecl {
-            name,
-            is_generator: false,
-            is_async: false,
-            span,
-            ..
-        } = stmt
-        else {
-            continue;
-        };
-        if let Some((_, original_span)) = function_names
+        collect_module_top_level_declaration_names(
+            stmt,
+            &mut lexical_names,
+            &mut var_names,
+            &mut function_names,
+        );
+    }
+
+    for (index, (name, _)) in lexical_names.iter().enumerate() {
+        for (candidate, span) in &lexical_names[index + 1..] {
+            if candidate == name {
+                return Err(ParseError {
+                    message: format!("duplicate lexical declaration `{name}`"),
+                    span: *span,
+                });
+            }
+        }
+    }
+
+    for (lexical_name, _) in &lexical_names {
+        for (var_name, span) in &var_names {
+            if var_name == lexical_name {
+                return Err(ParseError {
+                    message: format!(
+                        "declaration `{var_name}` conflicts with a lexical declaration"
+                    ),
+                    span: *span,
+                });
+            }
+        }
+    }
+
+    for (index, (name, span)) in function_names.iter().enumerate() {
+        if function_names[index + 1..]
             .iter()
-            .find(|(candidate, _)| *candidate == name.as_str())
+            .any(|(candidate, _)| candidate == name)
         {
             return Err(ParseError {
                 message: format!("duplicate lexical declaration `{name}`"),
-                span: *original_span,
+                span: *span,
             });
         }
-        function_names.push((name, *span));
+        if lexical_names.iter().any(|(candidate, _)| candidate == name)
+            || var_names.iter().any(|(candidate, _)| candidate == name)
+        {
+            return Err(ParseError {
+                message: format!("declaration `{name}` conflicts with a lexical declaration"),
+                span: *span,
+            });
+        }
     }
     Ok(())
+}
+
+fn collect_module_top_level_declaration_names(
+    stmt: &Stmt,
+    lexical_names: &mut Vec<(String, Span)>,
+    var_names: &mut Vec<(String, Span)>,
+    function_names: &mut Vec<(String, Span)>,
+) {
+    match stmt {
+        Stmt::VarDecl {
+            kind: qjs_ast::VarKind::Var,
+            declarations,
+            ..
+        } => {
+            for declaration in declarations {
+                var_names.extend(declaration.binding.named_spans());
+            }
+        }
+        Stmt::VarDecl { declarations, .. } => {
+            for declaration in declarations {
+                lexical_names.extend(declaration.binding.named_spans());
+            }
+        }
+        Stmt::ClassDecl { name, span, .. } => lexical_names.push((name.clone(), *span)),
+        Stmt::FunctionDecl {
+            name,
+            is_generator,
+            is_async,
+            span,
+            ..
+        } => {
+            if *is_generator || *is_async {
+                lexical_names.push((name.clone(), *span));
+            } else {
+                function_names.push((name.clone(), *span));
+            }
+        }
+        Stmt::ModuleDecl(ModuleDecl::Export(ExportDecl::Declaration { declaration, .. })) => {
+            collect_module_top_level_declaration_names(
+                declaration,
+                lexical_names,
+                var_names,
+                function_names,
+            );
+        }
+        Stmt::ModuleDecl(ModuleDecl::Export(ExportDecl::Default {
+            declaration: DefaultExport::Declaration(declaration),
+            ..
+        })) => collect_module_top_level_declaration_names(
+            declaration,
+            lexical_names,
+            var_names,
+            function_names,
+        ),
+        _ => {}
+    }
 }
 
 fn declared_names_and_spans(stmt: &Stmt) -> Vec<(String, Span)> {

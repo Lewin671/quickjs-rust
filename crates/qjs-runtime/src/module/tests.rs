@@ -67,6 +67,24 @@ fn anonymous_default_function_import_is_callable() {
 }
 
 #[test]
+fn named_default_function_binds_local_name() {
+    let namespace = run(
+        "export default function F() { return 31; }\n\
+         F.extra = 11;\n\
+         export const local = F();\n\
+         export const prop = F.extra;",
+        &[],
+    )
+    .expect("module evaluates");
+    assert_eq!(export(&namespace, "local"), Value::Number(31.0));
+    assert_eq!(export(&namespace, "prop"), Value::Number(11.0));
+    match export(&namespace, "default") {
+        Value::Function(function) => assert_eq!(function.name.as_deref(), Some("F")),
+        other => panic!("expected default function, got {other:?}"),
+    }
+}
+
+#[test]
 fn anonymous_default_class_gets_default_name_in_static_initializer() {
     let namespace = run(
         "var className;\n\
