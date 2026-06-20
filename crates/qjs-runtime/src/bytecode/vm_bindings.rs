@@ -628,6 +628,17 @@ impl Vm<'_> {
             })?;
             (local_meta.mutable, local_meta.from_env, local_meta.hoisted)
         };
+        if self
+            .bytecode
+            .locals
+            .get(slot)
+            .is_some_and(|local| self.env.has_module_import(&local.name))
+        {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: assignment to constant variable".to_owned(),
+            });
+        }
         let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
             thrown: None,
             message: "bytecode local index out of bounds".to_owned(),
@@ -704,6 +715,12 @@ impl Vm<'_> {
         name: String,
         value: Value,
     ) -> Result<(), RuntimeError> {
+        if self.env.has_module_import(&name) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: assignment to constant variable".to_owned(),
+            });
+        }
         let is_sloppy_global_fallback = self
             .bytecode
             .locals

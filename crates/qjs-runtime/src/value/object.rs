@@ -10,17 +10,17 @@ use crate::{Function, RuntimeError, proxy::ProxyRef};
 
 use super::{Property, Value};
 
+type NamespaceBindingCell = Rc<RefCell<HashMap<String, Value>>>;
+type NamespaceAliasMap = HashMap<String, (NamespaceBindingCell, String)>;
+
 #[derive(Clone)]
 pub(crate) struct ModuleNamespaceBindings {
-    lexical: Rc<RefCell<HashMap<String, Value>>>,
-    aliases: Rc<HashMap<String, String>>,
+    lexical: NamespaceBindingCell,
+    aliases: Rc<NamespaceAliasMap>,
 }
 
 impl ModuleNamespaceBindings {
-    pub(crate) fn new(
-        lexical: Rc<RefCell<HashMap<String, Value>>>,
-        aliases: HashMap<String, String>,
-    ) -> Self {
+    pub(crate) fn new(lexical: NamespaceBindingCell, aliases: NamespaceAliasMap) -> Self {
         Self {
             lexical,
             aliases: Rc::new(aliases),
@@ -28,11 +28,10 @@ impl ModuleNamespaceBindings {
     }
 
     fn value_for_export(&self, export_name: &str) -> Option<Value> {
-        let binding_name = self
-            .aliases
-            .get(export_name)
-            .map_or(export_name, String::as_str);
-        self.lexical.borrow().get(binding_name).cloned()
+        if let Some((lexical, binding_name)) = self.aliases.get(export_name) {
+            return lexical.borrow().get(binding_name).cloned();
+        }
+        self.lexical.borrow().get(export_name).cloned()
     }
 }
 

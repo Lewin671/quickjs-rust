@@ -462,10 +462,20 @@ impl ModuleGraph {
         let entries = self.modules[key].record.import_entries.to_vec();
         let mut imports = Vec::new();
         for entry in entries {
+            let target = self.resolved(key, &entry.module_request);
+            if matches!(entry.import_name, ImportName::Namespace) {
+                let mut bindings = HashMap::new();
+                bindings.insert(NAMESPACE_BINDING.to_owned(), self.namespace(&target));
+                imports.push(bytecode::ModuleLiveImport {
+                    local_name: entry.local_name,
+                    bindings: Rc::new(RefCell::new(bindings)),
+                    binding_name: NAMESPACE_BINDING.to_owned(),
+                });
+                continue;
+            }
             let ImportName::Named(name) = &entry.import_name else {
                 continue;
             };
-            let target = self.resolved(key, &entry.module_request);
             let Ok(Some((module_key, export_name))) =
                 self.resolve_export(&target, name, &mut Vec::new())
             else {
@@ -603,16 +613,18 @@ impl ModuleGraph {
                 let namespace_name = name.clone();
                 let value = self.export_value(key, &name);
                 bindings.push((name, value));
-                if module_key == key
-                    && export_name != NAMESPACE_BINDING
-                    && let Some(local_name) = self.modules[key]
+                if export_name != NAMESPACE_BINDING
+                    && let Some(local_name) = self.modules[&module_key]
                         .record
                         .local_exports
                         .iter()
                         .find(|local| local.export_name == export_name)
                         .map(|local| local.local_name.clone())
                 {
-                    aliases.insert(namespace_name, local_name);
+                    aliases.insert(
+                        namespace_name,
+                        (self.modules[&module_key].live_lexical.clone(), local_name),
+                    );
                 }
             }
         }

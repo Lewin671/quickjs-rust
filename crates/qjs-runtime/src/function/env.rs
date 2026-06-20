@@ -23,7 +23,7 @@
 
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::{Value, private::PrivateEnvironment};
+use crate::{Function, Value, private::PrivateEnvironment};
 
 /// The shared realm binding table: intrinsics plus the script's true globals.
 pub(crate) type Realm = Rc<RefCell<HashMap<String, Value>>>;
@@ -124,7 +124,13 @@ impl CallEnv {
     /// Reads the current value of a live module import binding.
     pub(crate) fn module_import_value(&self, local_name: &str) -> Option<Value> {
         let (bindings, exported_local_name) = self.module_imports.get(local_name)?;
-        bindings.borrow().get(exported_local_name).cloned()
+        Some(
+            bindings
+                .borrow()
+                .get(exported_local_name)
+                .cloned()
+                .unwrap_or_else(|| Value::Function(Function::uninitialized_lexical_marker())),
+        )
     }
 
     pub(crate) fn has_module_import(&self, local_name: &str) -> bool {

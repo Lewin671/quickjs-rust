@@ -330,6 +330,74 @@ fn star_export_aggregation() {
 }
 
 #[test]
+fn indirect_export_const_import_stays_in_tdz_until_initialized() {
+    let source = "let first;\n\
+         try { typeof B; } catch (error) { first = error.name; }\n\
+         import { B, results } from \"fixture\";\n\
+         export const A = null;\n\
+         export const observed = first + ':' + results.join(',');";
+    let namespace = eval_module(
+        source,
+        "main",
+        Box::new(MapResolver::new().with("main", source).with(
+            "fixture",
+            "export { A as B } from \"main\";\n\
+             export const results = [];\n\
+             try { A; } catch (error) { results.push(error.name, typeof A); }\n\
+             try { B; } catch (error) { results.push(error.name, typeof B); }",
+        )),
+    )
+    .expect("module evaluates");
+    assert_eq!(
+        export(&namespace, "observed"),
+        Value::String(
+            "ReferenceError:ReferenceError,undefined,ReferenceError,undefined"
+                .to_owned()
+                .into()
+        )
+    );
+}
+
+#[test]
+fn namespace_self_import_binding_is_initialized_before_body() {
+    let source = "var before = typeof ns;\n\
+                  var original = ns;\n\
+                  let assignment;\n\
+                  try { ns = null; } catch (error) { assignment = error.name; }\n\
+                  import * as ns from \"main\";\n\
+                  export const observed = before + ':' + assignment + ':' + (ns === original);";
+    let namespace = eval_module(
+        source,
+        "main",
+        Box::new(MapResolver::new().with("main", source)),
+    )
+    .expect("module evaluates");
+    assert_eq!(
+        export(&namespace, "observed"),
+        Value::String("object:TypeError:true".to_owned().into())
+    );
+}
+
+#[test]
+fn namespace_star_cycle_reads_target_live_binding() {
+    let source = "import * as ns from \"cycle\";\n\
+         export { c as b } from \"cycle\";\n\
+         export var d = 23;\n\
+         export const observed = ns.a;";
+    let namespace = eval_module(
+        source,
+        "main",
+        Box::new(MapResolver::new().with("main", source).with(
+            "cycle",
+            "export { b as a } from \"main\";\n\
+             export { d as c } from \"main\";",
+        )),
+    )
+    .expect("module evaluates");
+    assert_eq!(export(&namespace, "observed"), Value::Number(23.0));
+}
+
+#[test]
 fn namespace_reexport_exposes_target_namespace() {
     let namespace = run(
         "import { nested } from \"agg\";\n\
