@@ -220,12 +220,23 @@ impl Vm<'_> {
     }
 
     pub(super) fn load_global(&mut self, name: &str) -> Result<Value, RuntimeError> {
-        // `this` belongs to the frame: function frames bind it in their locals
-        // layer (arrows inherit it through capture). Falling through to the
-        // realm's global `this` would leak it into the derived-constructor
-        // TDZ window, so only global script code reads `this` from the realm.
+        // `this` belongs to the frame for function bodies (arrows inherit it
+        // through capture). Module bodies provide their `this` binding through
+        // the environment chain instead, while derived constructors without a
+        // completed `super(...)` stay in their `this` TDZ.
         if name == "this" && !self.bytecode.global_scope {
-            return self.env.get_local(name).ok_or_else(|| RuntimeError {
+            if let Some(value) = self.env.get_local(name) {
+                return Ok(value);
+            }
+            if !self
+                .env
+                .locals()
+                .contains_key(crate::SUPER_CONSTRUCTOR_BINDING)
+                && let Some(value) = self.env.get(name)
+            {
+                return Ok(value);
+            }
+            return Err(RuntimeError {
                 thrown: None,
                 message: "ReferenceError: must call super constructor before accessing `this`"
                     .to_owned(),

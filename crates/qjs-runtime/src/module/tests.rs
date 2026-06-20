@@ -476,6 +476,13 @@ fn module_var_and_function_bindings_do_not_pollute_module_global_this() {
 }
 
 #[test]
+fn module_top_level_this_is_undefined() {
+    let namespace =
+        run("export const isUndefined = this === undefined;", &[]).expect("module evaluates");
+    assert_eq!(export(&namespace, "isUndefined"), Value::Boolean(true));
+}
+
+#[test]
 fn prelude_script_bindings_are_visible_to_module() {
     // A prelude script (mirroring Test262 harness includes) installs a global
     // helper that the module body then calls; its value flows into an export.
