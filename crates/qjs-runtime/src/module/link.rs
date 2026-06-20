@@ -384,23 +384,31 @@ impl ModuleGraph {
     /// Compiles and runs one module body against a fresh realm seeded with its
     /// resolved imports, then records its exported binding values.
     fn evaluate_body(&mut self, key: &str, drain: bool) -> Result<(), RuntimeError> {
-        let imports = self.import_bindings(key)?;
         let compiled = {
             let module = &self.modules[key];
             bytecode::compile_module(&module.record.body)?
         };
-        let live_names = self.modules[key]
+        let live_names: Vec<String> = self.modules[key]
             .record
             .local_exports
             .iter()
             .map(|export| export.local_name.clone())
             .collect();
+        let live_bindings = self.modules[key].live_lexical.clone();
+        let seed_tdz_markers = self.needs_namespace_tdz_seed(key);
+        let live_exports = bytecode::ModuleLiveExports {
+            names: live_names,
+            bindings: live_bindings,
+            seed_tdz_markers,
+        };
+        bytecode::seed_module_live_bindings(&compiled, &live_exports);
+        let imports = self.import_bindings(key)?;
         let host = self
             .host_graph
             .as_ref()
             .map(|graph| super::host::ModuleHost::new(graph.clone(), key.to_owned()).into_ref());
         let evaluation =
-            bytecode::eval_module_body(&compiled, &self.realm, imports, host, live_names, drain)?;
+            bytecode::eval_module_body(&compiled, &self.realm, imports, host, live_exports, drain)?;
         {
             let mut live = evaluation.captured_env.borrow_mut();
             for (name, value) in evaluation.env.locals() {
@@ -441,6 +449,13 @@ impl ModuleGraph {
             bindings.insert(entry.local_name, value);
         }
         Ok(bindings)
+    }
+
+    fn needs_namespace_tdz_seed(&self, key: &str) -> bool {
+        self.modules[key].record.import_entries.iter().any(|entry| {
+            matches!(entry.import_name, ImportName::Namespace)
+                && self.resolved(key, &entry.module_request) == key
+        }) || self.modules[key].namespace.is_some()
     }
 
     /// Reads the value of `name` exported by `key`, following indirect/star

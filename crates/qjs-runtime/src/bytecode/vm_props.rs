@@ -300,6 +300,7 @@ impl Vm<'_> {
         }
         self.invalidate_array_prototype_cache(&name);
         self.realm.borrow_mut().insert(name.clone(), value.clone());
+        self.write_through_captured(&name, value.clone());
         let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
             Some(Value::Object(global_this)) => Some(global_this.clone()),
             _ => None,
@@ -379,6 +380,7 @@ impl Vm<'_> {
         self.invalidate_array_prototype_cache(&name);
         if self.realm.borrow().contains_key(&name) {
             self.realm.borrow_mut().insert(name.clone(), value.clone());
+            self.write_through_captured(&name, value.clone());
             let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
                 Some(Value::Object(global_this)) => Some(global_this.clone()),
                 _ => None,
@@ -397,7 +399,8 @@ impl Vm<'_> {
         if let Some(global_this) = global_this {
             global_this.set(name.clone(), value.clone());
         }
-        self.realm.borrow_mut().insert(name, value);
+        self.realm.borrow_mut().insert(name.clone(), value.clone());
+        self.write_through_captured(&name, value);
         Ok(())
     }
 }

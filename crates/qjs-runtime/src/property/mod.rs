@@ -277,6 +277,11 @@ pub(crate) fn property_value_key_with_receiver(
                     crate::typed_array::IndexedRead::NotIndexed => {}
                 }
             }
+            if object.is_module_namespace_exotic()
+                && let Some(property) = object.module_namespace_export_property(key)?
+            {
+                return property_descriptor_value(Some(property), receiver, env);
+            }
             // OrdinaryGet: resolve the own property, otherwise walk the
             // [[Prototype]] chain one slot at a time so a Proxy anywhere in the
             // chain dispatches its `get` trap with the original receiver.

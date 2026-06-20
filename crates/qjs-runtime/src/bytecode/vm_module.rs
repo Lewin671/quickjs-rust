@@ -9,14 +9,14 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
-    GLOBAL_THIS_BINDING, ObjectRef, RuntimeError, Value, function::CallEnv, function::Realm,
-    initialize_builtins,
+    Function, GLOBAL_THIS_BINDING, ObjectRef, RuntimeError, Value, function::CallEnv,
+    function::Realm, initialize_builtins,
 };
 
-use super::ModuleEvaluation;
 use super::ir::Bytecode;
 use super::vm::Vm;
 use super::vm_generator::{GeneratorStart, GeneratorState};
+use super::{ModuleEvaluation, ModuleLiveExports};
 
 /// Evaluates a prelude *script* against the shared graph `realm` before any
 /// module body runs. The prelude is ordinary (non-module) script code — for the
@@ -65,7 +65,7 @@ pub(super) fn eval_module_body(
     realm: &Realm,
     imports: HashMap<String, Value>,
     host: Option<crate::module::ModuleHostRef>,
-    live_names: Vec<String>,
+    live_exports: ModuleLiveExports,
     drain: bool,
 ) -> Result<ModuleEvaluation, RuntimeError> {
     {
@@ -85,10 +85,15 @@ pub(super) fn eval_module_body(
     // (16.2.1.5.3 AsyncModuleExecution): it suspends at each `await` and resumes
     // through the realm job queue, settling a result promise on completion.
     if bytecode.contains_top_level_await() {
-        return eval_async_module_body(bytecode, env, live_names);
+        return eval_async_module_body(bytecode, env, live_exports);
     }
-    let captured_env = Rc::new(RefCell::new(seed_live_bindings(bytecode, live_names)));
-    let mut vm = Vm::new_with_globals_and_captures(bytecode, env, captured_env);
+    seed_live_bindings(
+        &live_exports.bindings,
+        bytecode,
+        live_exports.names,
+        live_exports.seed_tdz_markers,
+    );
+    let mut vm = Vm::new_with_globals_and_captures(bytecode, env, live_exports.bindings);
     vm.run()?;
     // The dynamic-import path defers job draining to the outer queue loop so the
     // module graph (borrowed while this body runs) is not re-borrowed by a
@@ -120,7 +125,7 @@ pub(super) fn eval_module_body(
 fn eval_async_module_body(
     bytecode: &Bytecode,
     mut env: CallEnv,
-    live_names: Vec<String>,
+    live_exports: ModuleLiveExports,
 ) -> Result<ModuleEvaluation, RuntimeError> {
     let realm = env.realm_rc();
     // Seed the shared captured-env cell with every top-level local name so each
@@ -128,17 +133,25 @@ fn eval_async_module_body(
     // resumes) writes through to it; the linker reads these settled lexical
     // exports back after the module's promise settles. `var`/`function` exports
     // live in the realm and are read from there.
-    let mut captured: HashMap<String, Value> = bytecode
-        .local_names()
-        .filter(|name| {
+    seed_live_bindings(
+        &live_exports.bindings,
+        bytecode,
+        live_exports.names,
+        live_exports.seed_tdz_markers,
+    );
+    {
+        let mut captured = live_exports.bindings.borrow_mut();
+        for name in bytecode.local_names().filter(|name| {
             bytecode
                 .local_slot(name)
                 .is_some_and(|slot| !bytecode.local_is_body_hoist_only(slot))
-        })
-        .map(|name| (name.to_owned(), Value::Undefined))
-        .collect();
-    captured.extend(seed_live_bindings(bytecode, live_names));
-    let captured_env: Rc<RefCell<HashMap<String, Value>>> = Rc::new(RefCell::new(captured));
+        }) {
+            captured
+                .entry(name.to_owned())
+                .or_insert_with(|| Value::Function(Function::uninitialized_lexical_marker()));
+        }
+    }
+    let captured_env = live_exports.bindings;
     let function_env = env.clone();
     let context = ObjectRef::new(HashMap::new());
     *context.generator_state().borrow_mut() =
@@ -178,14 +191,22 @@ fn eval_async_module_body(
     })
 }
 
-fn seed_live_bindings(bytecode: &Bytecode, names: Vec<String>) -> HashMap<String, Value> {
-    names
-        .into_iter()
-        .filter(|name| {
-            bytecode
-                .local_slot(name)
-                .is_some_and(|slot| bytecode.local_is_mutable(slot))
-        })
-        .map(|name| (name, Value::Undefined))
-        .collect()
+pub(super) fn seed_live_bindings(
+    live_bindings: &Rc<RefCell<HashMap<String, Value>>>,
+    bytecode: &Bytecode,
+    names: Vec<String>,
+    seed_tdz_markers: bool,
+) {
+    let mut bindings = live_bindings.borrow_mut();
+    for name in names {
+        let value = match bytecode.local_slot(&name) {
+            Some(slot) if bytecode.local_is_body_hoist_only(slot) => Value::Undefined,
+            Some(slot) if seed_tdz_markers || bytecode.local_is_mutable(slot) => {
+                Value::Function(Function::uninitialized_lexical_marker())
+            }
+            Some(_) => continue,
+            None => Value::Undefined,
+        };
+        bindings.entry(name).or_insert(value);
+    }
 }

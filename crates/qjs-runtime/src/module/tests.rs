@@ -279,6 +279,123 @@ fn namespace_export_descriptors_are_writable_but_not_settable() {
 }
 
 #[test]
+fn namespace_self_import_observes_initialized_exports() {
+    let namespace = run(
+        "import { result } from \"dep\";\n\
+         export { result };",
+        &[(
+            "dep",
+            "import * as ns from \"dep\";\n\
+             export let value = 23;\n\
+             value = 31;\n\
+             const desc = Object.getOwnPropertyDescriptor(ns, 'value');\n\
+             export const result = ns.value + ':' + desc.value + ':' + desc.writable;",
+        )],
+    )
+    .expect("module evaluates");
+    assert_eq!(
+        export(&namespace, "result"),
+        Value::String("31:31:true".to_owned().into())
+    );
+}
+
+#[test]
+fn namespace_self_imported_var_export_is_initialized_undefined() {
+    let namespace = run(
+        "import { result } from \"dep\";\n\
+         export { result };",
+        &[(
+            "dep",
+            "import * as ns from \"dep\";\n\
+         const desc = Object.getOwnPropertyDescriptor(ns, 'value');\n\
+         export var value;\n\
+         export const result = (desc.value === undefined) + ':' + desc.writable + ':' + Object.getOwnPropertyNames(ns).join(',');",
+        )],
+    )
+    .expect("module evaluates");
+    assert_eq!(
+        export(&namespace, "result"),
+        Value::String("true:true:result,value".to_owned().into())
+    );
+}
+
+#[test]
+fn namespace_self_import_observes_var_default_and_indirect_exports() {
+    let namespace = run(
+        "import { result } from \"dep\";\n\
+         export { result };",
+        &[(
+            "dep",
+            "import * as ns from \"dep\";\n\
+             export var local1 = 201;\n\
+             var local2 = 207;\n\
+             export { local2 as renamed };\n\
+             export { local1 as indirect } from \"dep\";\n\
+             export default 302;\n\
+             export const result = ns.local1 + ':' + ns.renamed + ':' + ns.indirect + ':' + ns.default;",
+        )],
+    )
+    .expect("module evaluates");
+    assert_eq!(
+        export(&namespace, "result"),
+        Value::String("201:207:201:302".to_owned().into())
+    );
+}
+
+#[test]
+fn namespace_self_imported_lexical_export_throws_before_initialization() {
+    let error = run(
+        "import \"dep\";\n\
+         export const result = 1;",
+        &[(
+            "dep",
+            "import * as ns from \"dep\";\n\
+             ns.value;\n\
+             export let value = 23;",
+        )],
+    )
+    .expect_err("namespace lexical export should be in TDZ");
+    assert_eq!(error.kind, EvalErrorKind::Runtime);
+    assert!(
+        error.message.contains("ReferenceError"),
+        "{}",
+        error.message
+    );
+}
+
+#[test]
+fn namespace_self_imported_all_lexical_export_forms_throw_before_initialization() {
+    for (access, message) in [
+        ("ns.local1;", "local export"),
+        ("ns.renamed;", "renamed export"),
+        ("ns.indirect;", "indirect export"),
+        ("ns.default;", "default export"),
+    ] {
+        let source = format!(
+            "import * as ns from \"dep\";\n\
+             {access}\n\
+             export let local1 = 23;\n\
+             let local2 = 45;\n\
+             export {{ local2 as renamed }};\n\
+             export {{ local1 as indirect }} from \"dep\";\n\
+             export default null;"
+        );
+        let error = run(
+            "import \"dep\";\n\
+             export const result = 1;",
+            &[("dep", source.as_str())],
+        )
+        .expect_err(message);
+        assert_eq!(error.kind, EvalErrorKind::Runtime, "{message}");
+        assert!(
+            error.message.contains("ReferenceError"),
+            "{message}: {}",
+            error.message
+        );
+    }
+}
+
+#[test]
 fn unresolvable_import_is_syntax_error() {
     let error = run("import { x } from \"missing\";\nexport const v = x;", &[])
         .expect_err("missing module rejected");

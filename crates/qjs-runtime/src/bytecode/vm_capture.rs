@@ -237,6 +237,9 @@ impl Vm<'_> {
     pub(super) fn refresh_captured_env(&self, env: &HashMap<String, Value>) {
         let mut captured_env = self.captured_env.borrow_mut();
         for (name, value) in env {
+            if super::vm_bindings::is_compiler_temporary(name) {
+                continue;
+            }
             captured_env.insert(name.clone(), value.clone());
         }
     }
@@ -244,6 +247,9 @@ impl Vm<'_> {
     pub(super) fn refresh_locals_from_captured_env(&mut self) {
         let captured_env = self.captured_env.borrow();
         for (name, value) in captured_env.iter() {
+            if super::vm_bindings::is_compiler_temporary(name) {
+                continue;
+            }
             if let Some(index) = self.bytecode.local_slot(name)
                 && let Some(local) = self.locals.get_mut(index)
             {
@@ -255,6 +261,9 @@ impl Vm<'_> {
     pub(super) fn refresh_live_locals_from_captured_env(&mut self) {
         let captured_env = self.captured_env.borrow();
         for (name, value) in captured_env.iter() {
+            if super::vm_bindings::is_compiler_temporary(name) {
+                continue;
+            }
             if let Some(index) = self.bytecode.local_slot(name)
                 && self.bytecode.local_is_from_env(index)
                 && !self.bytecode.local_is_parameter(index)

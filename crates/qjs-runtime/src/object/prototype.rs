@@ -249,6 +249,9 @@ pub(crate) fn native_object_prototype_has_own_property(
         env,
     )?;
     match (this_value, key) {
+        (Value::Object(object), key) if object.is_module_namespace_exotic() => Ok(Value::Boolean(
+            value_own_property_descriptor(Value::Object(object), &key, env)?.is_some(),
+        )),
         (Value::Object(object), crate::PropertyKey::String(key)) => {
             Ok(Value::Boolean(object.has_own_property(&key)))
         }

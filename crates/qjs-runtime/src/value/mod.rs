@@ -92,6 +92,10 @@ impl PartialEq for Value {
 }
 
 impl Value {
+    pub(crate) fn is_uninitialized_lexical_marker(&self) -> bool {
+        matches!(self, Self::Function(function) if function.is_uninitialized_lexical_marker())
+    }
+
     pub(crate) fn same_value(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Number(left), Self::Number(right)) => {

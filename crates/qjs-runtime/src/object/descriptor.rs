@@ -95,7 +95,7 @@ pub(crate) fn own_property_descriptor_key(
             ))
         }
         Value::Object(object) => Ok(match key {
-            PropertyKey::String(key) => module_namespace_export_descriptor(&object, key)
+            PropertyKey::String(key) => module_namespace_export_descriptor(&object, key)?
                 .or_else(|| object.own_property(key)),
             PropertyKey::Symbol(symbol) => object.own_symbol_property(symbol),
         }),
@@ -546,13 +546,18 @@ fn define_symbol_property_descriptor_on_value(
     }
 }
 
-fn module_namespace_export_descriptor(object: &ObjectRef, key: &str) -> Option<Property> {
+fn module_namespace_export_descriptor(
+    object: &ObjectRef,
+    key: &str,
+) -> Result<Option<Property>, RuntimeError> {
     if !object.is_module_namespace_exotic() {
-        return None;
+        return Ok(None);
     }
-    let mut property = object.own_property(key)?;
+    let Some(mut property) = object.module_namespace_export_property(key)? else {
+        return Ok(None);
+    };
     property.writable = true;
-    Some(property)
+    Ok(Some(property))
 }
 
 fn is_compatible_module_namespace_export_define(

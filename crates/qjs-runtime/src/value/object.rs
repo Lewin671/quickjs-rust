@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::private::{PrivateEnvironment, PrivateStorage};
-use crate::{Function, proxy::ProxyRef};
+use crate::{Function, RuntimeError, proxy::ProxyRef};
 
 use super::{Property, Value};
 
@@ -559,6 +559,31 @@ impl ObjectRef {
             property.value = value.clone();
         }
         Some(property)
+    }
+
+    pub(crate) fn module_namespace_export_property(
+        &self,
+        key: &str,
+    ) -> Result<Option<Property>, RuntimeError> {
+        if !self.module_namespace_exotic.get() {
+            return Ok(None);
+        }
+        let mut property = match self.properties.borrow().get(key).cloned() {
+            Some(property) => property,
+            None => return Ok(None),
+        };
+        if let Some(bindings) = self.module_namespace_bindings.borrow().as_ref()
+            && let Some(value) = bindings.value_for_export(key)
+        {
+            if value.is_uninitialized_lexical_marker() {
+                return Err(RuntimeError {
+                    thrown: None,
+                    message: format!("ReferenceError: undefined identifier `{key}`"),
+                });
+            }
+            property.value = value;
+        }
+        Ok(Some(property))
     }
 
     pub(crate) fn own_symbol_property(&self, symbol: &ObjectRef) -> Option<Property> {

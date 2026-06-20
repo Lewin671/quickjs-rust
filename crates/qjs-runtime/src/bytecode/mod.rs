@@ -214,6 +214,12 @@ pub(crate) struct ModuleEvaluation {
     pub(crate) captured_env: Rc<RefCell<HashMap<String, Value>>>,
 }
 
+pub(crate) struct ModuleLiveExports {
+    pub(crate) names: Vec<String>,
+    pub(crate) bindings: Rc<RefCell<HashMap<String, Value>>>,
+    pub(crate) seed_tdz_markers: bool,
+}
+
 /// Builds the shared realm for a module graph. See
 /// [`vm_module::new_module_realm`].
 pub(crate) fn new_module_realm() -> ModuleRealm {
@@ -256,10 +262,19 @@ pub(crate) fn eval_module_body(
     realm: &ModuleRealm,
     imports: HashMap<String, Value>,
     host: Option<crate::module::ModuleHostRef>,
-    live_names: Vec<String>,
+    live_exports: ModuleLiveExports,
     drain: bool,
 ) -> Result<ModuleEvaluation, RuntimeError> {
-    vm_module::eval_module_body(bytecode, realm, imports, host, live_names, drain)
+    vm_module::eval_module_body(bytecode, realm, imports, host, live_exports, drain)
+}
+
+pub(crate) fn seed_module_live_bindings(bytecode: &Bytecode, live_exports: &ModuleLiveExports) {
+    vm_module::seed_live_bindings(
+        &live_exports.bindings,
+        bytecode,
+        live_exports.names.clone(),
+        live_exports.seed_tdz_markers,
+    );
 }
 
 pub(crate) fn eval_bytecode_with_env(

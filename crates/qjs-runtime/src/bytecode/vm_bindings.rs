@@ -320,6 +320,7 @@ impl Vm<'_> {
         self.invalidate_array_prototype_cache(&name);
         if self.realm.borrow().contains_key(&name) {
             self.realm.borrow_mut().insert(name.clone(), value.clone());
+            self.write_through_captured(&name, value.clone());
             let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
                 Some(Value::Object(global_this)) => Some(global_this.clone()),
                 _ => None,
@@ -338,7 +339,8 @@ impl Vm<'_> {
         if let Some(global_this) = global_this {
             global_this.set(name.clone(), value.clone());
         }
-        self.realm.borrow_mut().insert(name, value);
+        self.realm.borrow_mut().insert(name.clone(), value.clone());
+        self.write_through_captured(&name, value);
         Ok(())
     }
 
@@ -748,7 +750,8 @@ impl Vm<'_> {
                 .map(|property| property.value)
                 .unwrap_or(value);
             self.invalidate_array_prototype_cache(&name);
-            self.realm.borrow_mut().insert(name, value);
+            self.realm.borrow_mut().insert(name.clone(), value.clone());
+            self.write_through_captured(&name, value);
             return Ok(());
         }
         global_this.define_property(
@@ -756,7 +759,8 @@ impl Vm<'_> {
             Property::data(value.clone(), true, true, false),
         );
         self.invalidate_array_prototype_cache(&name);
-        self.realm.borrow_mut().insert(name, value);
+        self.realm.borrow_mut().insert(name.clone(), value.clone());
+        self.write_through_captured(&name, value);
         Ok(())
     }
     pub(super) fn apply_selected_env(
@@ -766,6 +770,9 @@ impl Vm<'_> {
         injected: &HashMap<String, Value>,
     ) {
         for name in binding_names {
+            if is_compiler_temporary(name) {
+                continue;
+            }
             let Some(value) = env.get(name) else {
                 continue;
             };
