@@ -103,6 +103,20 @@ fn evaluates_object_integrity_builtins() {
         ),
         Ok(Value::Boolean(false))
     );
+    assert_eq!(
+        eval("Object.seal(new (Object.getPrototypeOf(async function() {}).constructor)()); true;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("Object.seal(new (Object.getPrototypeOf(async () => {}).constructor)()); true;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "Object.seal(new (Object.getPrototypeOf(async function* () {}).constructor)()); true;"
+        ),
+        Ok(Value::Boolean(true))
+    );
     assert_eq!(eval("Object.isSealed(1);"), Ok(Value::Boolean(true)));
     assert_eq!(eval("Object.seal(1);"), Ok(Value::Number(1.0)));
     assert_eq!(eval("Object.freeze.length;"), Ok(Value::Number(1.0)));

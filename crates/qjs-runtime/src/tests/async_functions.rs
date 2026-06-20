@@ -375,6 +375,19 @@ fn async_function_prototype_chain() {
 }
 
 #[test]
+fn async_function_constructor_creates_async_functions() {
+    assert_eq!(
+        eval(
+            "var AsyncFunction = Object.getPrototypeOf(async function() {}).constructor; \
+             var fn = new AsyncFunction('value', 'return await value;'); \
+             Object.prototype.toString.call(Object.getPrototypeOf(fn)) + ':' + typeof fn.prototype;"
+        )
+        .expect("eval"),
+        Value::String("[object AsyncFunction]:undefined".to_owned().into())
+    );
+}
+
+#[test]
 fn async_arrow_is_not_constructable() {
     let error = eval("var f = async () => 1; new f();").expect_err("async arrow not constructable");
     assert!(

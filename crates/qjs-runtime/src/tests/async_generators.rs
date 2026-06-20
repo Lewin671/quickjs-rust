@@ -415,6 +415,24 @@ fn prototype_chain_tags() {
 }
 
 #[test]
+fn async_generator_function_constructor_creates_async_generators() {
+    assert_eq!(
+        eval(
+            "var AsyncGeneratorFunction = Object.getPrototypeOf(async function*() {}).constructor; \
+             var fn = new AsyncGeneratorFunction('yield 1;'); \
+             Object.prototype.toString.call(Object.getPrototypeOf(fn)) + ':' + \
+             Object.prototype.toString.call(Object.getPrototypeOf(fn.prototype));"
+        )
+        .expect("eval"),
+        Value::String(
+            "[object AsyncGeneratorFunction]:[object AsyncGenerator]"
+                .to_owned()
+                .into()
+        )
+    );
+}
+
+#[test]
 fn yield_star_async_from_sync_does_not_expose_wrapper_intrinsics() {
     assert_eq!(
         eval_log(

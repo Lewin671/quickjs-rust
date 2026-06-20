@@ -69,59 +69,14 @@ pub(crate) fn native_generator_function(
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    let (params, body) = function_source_parts(argument_values, env)?;
-    let source = format!("function* anonymous({params}\n) {{\n{body}\n}}");
-    let script = parse_dynamic_function_script(&source).map_err(|error| RuntimeError {
-        thrown: None,
-        message: format!(
-            "SyntaxError: invalid GeneratorFunction constructor source: {}",
-            error.message
-        ),
-    })?;
-
-    let Some(Stmt::FunctionDecl {
-        name,
-        params,
-        body,
-        is_generator: true,
-        is_async: false,
-        ..
-    }) = script.body.into_iter().next()
-    else {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "GeneratorFunction constructor did not produce a generator declaration"
-                .to_owned(),
-        });
-    };
-
-    let is_strict = crate::function::is_strict_function_body(&body);
-    let local_names =
-        crate::function::collect_function_local_names(Some(&name), &params, &body, true);
-    let bytecode = crate::bytecode::compile_generator_function_body(&params, &body, is_strict)?;
-    let env_snapshot = dynamic_function_scope_snapshot(env);
-    let created = Function::new_user_compiled(CompiledUserFunction {
-        name: Some(name),
-        has_name_binding: true,
-        params: std::rc::Rc::new(params),
-        env: env_snapshot.clone(),
-        bytecode: Rc::new(bytecode),
-        local_names,
-        constructable: false,
-        is_strict,
-        lexical_this: false,
-        lexical_arguments: false,
-        is_generator: true,
-        is_async: false,
-        is_class_constructor: false,
-        is_derived_constructor: false,
-        is_field_initializer: false,
-        home_object: None,
-        super_constructor: None,
-        captured_env: Rc::new(RefCell::new(env_snapshot)),
-        with_stack: Vec::new(),
-        capture_writeback: None,
-    });
+    let created = build_dynamic_function(
+        "GeneratorFunction",
+        "function*",
+        true,
+        false,
+        argument_values,
+        env,
+    )?;
     crate::generator::wire_generator_function_intrinsics(&created, env);
     created
         .set_internal_prototype_slot(generator_construct_prototype_slot(constructor, env)?)
@@ -133,54 +88,127 @@ pub(crate) fn native_generator_function(
 }
 
 pub(crate) fn native_async_function_constructor(
+    constructor: &Function,
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    parse_dynamic_function_constructor_source(
+    let created = build_dynamic_function(
         "AsyncFunction",
         "async function",
+        false,
+        true,
         argument_values,
         env,
     )?;
-    Err(RuntimeError {
-        thrown: None,
-        message: "TypeError: AsyncFunction constructor is not implemented".to_owned(),
-    })
+    crate::async_function::wire_async_function_intrinsics(&created, env);
+    created
+        .set_internal_prototype_slot(crate::native_construct_prototype_slot(constructor, env)?)
+        .map_err(|_| RuntimeError {
+            thrown: None,
+            message: "TypeError: dynamic async function prototype could not be set".to_owned(),
+        })?;
+    Ok(Value::Function(created))
 }
 
 pub(crate) fn native_async_generator_function_constructor(
+    constructor: &Function,
     argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
-    parse_dynamic_function_constructor_source(
+    let created = build_dynamic_function(
         "AsyncGeneratorFunction",
         "async function*",
+        true,
+        true,
         argument_values,
         env,
     )?;
-    Err(RuntimeError {
-        thrown: None,
-        message: "TypeError: AsyncGeneratorFunction constructor is not implemented".to_owned(),
-    })
+    crate::async_generator::wire_async_generator_function_intrinsics(&created, env);
+    created
+        .set_internal_prototype_slot(crate::native_construct_prototype_slot(constructor, env)?)
+        .map_err(|_| RuntimeError {
+            thrown: None,
+            message: "TypeError: dynamic async generator function prototype could not be set"
+                .to_owned(),
+        })?;
+    Ok(Value::Function(created))
 }
 
-fn parse_dynamic_function_constructor_source(
+fn build_dynamic_function(
     constructor_name: &str,
     function_prefix: &str,
+    is_generator: bool,
+    is_async: bool,
     argument_values: &[Value],
     env: &mut CallEnv,
-) -> Result<(), RuntimeError> {
+) -> Result<Function, RuntimeError> {
     let (params, body) = function_source_parts(argument_values, env)?;
     let source = format!("{function_prefix} anonymous({params}\n) {{\n{body}\n}}");
-    parse_dynamic_function_script(&source)
-        .map(|_| ())
-        .map_err(|error| RuntimeError {
+    let script = parse_dynamic_function_script(&source).map_err(|error| RuntimeError {
+        thrown: None,
+        message: format!(
+            "SyntaxError: invalid {constructor_name} constructor source: {}",
+            error.message
+        ),
+    })?;
+
+    let Some(Stmt::FunctionDecl {
+        name,
+        params,
+        body,
+        is_generator: parsed_generator,
+        is_async: parsed_async,
+        ..
+    }) = script.body.into_iter().next()
+    else {
+        return Err(RuntimeError {
             thrown: None,
             message: format!(
-                "SyntaxError: invalid {constructor_name} constructor source: {}",
-                error.message
+                "{constructor_name} constructor did not produce a function declaration"
             ),
-        })
+        });
+    };
+    if parsed_generator != is_generator || parsed_async != is_async {
+        return Err(RuntimeError {
+            thrown: None,
+            message: format!("{constructor_name} constructor produced the wrong function kind"),
+        });
+    }
+
+    let is_strict = crate::function::is_strict_function_body(&body);
+    let local_names =
+        crate::function::collect_function_local_names(Some(&name), &params, &body, true);
+    let bytecode = crate::bytecode::compile_function_body_with_kind(
+        &params,
+        &body,
+        is_strict,
+        is_generator,
+        is_async,
+    )?;
+    let env_snapshot = dynamic_function_scope_snapshot(env);
+    let created = Function::new_user_compiled(CompiledUserFunction {
+        name: Some(name),
+        has_name_binding: true,
+        params: Rc::new(params),
+        env: env_snapshot.clone(),
+        bytecode: Rc::new(bytecode),
+        local_names,
+        constructable: false,
+        is_strict,
+        lexical_this: false,
+        lexical_arguments: false,
+        is_generator,
+        is_async,
+        is_class_constructor: false,
+        is_derived_constructor: false,
+        is_field_initializer: false,
+        home_object: None,
+        super_constructor: None,
+        captured_env: Rc::new(RefCell::new(env_snapshot)),
+        with_stack: Vec::new(),
+        capture_writeback: None,
+    });
+    Ok(created)
 }
 
 fn generator_construct_prototype_slot(

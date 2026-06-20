@@ -81,10 +81,14 @@ pub(super) fn call_core_native(
             crate::function::native_generator_function(function, argument_values, env)
         }
         NativeFunction::AsyncFunction => {
-            crate::function::native_async_function_constructor(argument_values, env)
+            crate::function::native_async_function_constructor(function, argument_values, env)
         }
         NativeFunction::AsyncGeneratorFunction => {
-            crate::function::native_async_generator_function_constructor(argument_values, env)
+            crate::function::native_async_generator_function_constructor(
+                function,
+                argument_values,
+                env,
+            )
         }
         NativeFunction::FunctionPrototypeApply => {
             crate::function::native_function_prototype_apply(this_value, argument_values, env)

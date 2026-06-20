@@ -99,12 +99,20 @@ pub(crate) fn compile_function_body(
     compiler::compile_function_body(params, body)
 }
 
-pub(crate) fn compile_generator_function_body(
+pub(crate) fn compile_function_body_with_kind(
     params: &FunctionParams,
     body: &[qjs_ast::Stmt],
     parent_strict: bool,
+    is_generator: bool,
+    is_async: bool,
 ) -> Result<Bytecode, RuntimeError> {
-    compiler::compile_function_body_with_strict_generator(params, body, parent_strict, true, false)
+    compiler::compile_function_body_with_strict_generator(
+        params,
+        body,
+        parent_strict,
+        is_generator,
+        is_async,
+    )
 }
 
 pub(crate) fn eval_function_bytecode(
