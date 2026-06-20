@@ -557,6 +557,25 @@ fn dynamic_import_caches_same_namespace() {
 }
 
 #[test]
+fn dynamic_import_namespace_set_same_value_still_fails() {
+    let namespace = run(
+        "export const log = [];\n\
+         import('dep').then(ns => {\n\
+           log.push(Reflect.set(ns, 'value', 5));\n\
+           try {\n\
+             ns.value = 5;\n\
+             log.push('assigned');\n\
+           } catch (error) {\n\
+             log.push(error instanceof TypeError);\n\
+           }\n\
+         });",
+        &[("dep", "export const value = 5;")],
+    )
+    .expect("graph evaluates");
+    assert_eq!(export_log(&namespace, "log"), "false,true");
+}
+
+#[test]
 fn dynamic_import_namespace_tracks_self_export_updates() {
     let namespace = run(
         "import { log } from 'dep';\n\

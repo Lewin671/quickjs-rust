@@ -99,23 +99,8 @@ fn set_receiver_data_property(
         Value::Object(object) => {
             if object.is_module_namespace_exotic() {
                 let property_key = PropertyKey::String(key.to_owned());
-                if let Some(existing) =
-                    own_property_descriptor_key(Value::Object(object.clone()), &property_key)?
-                {
-                    if existing.is_accessor() || !existing.writable {
-                        return Ok(false);
-                    }
-                } else if !object.is_extensible() {
-                    return Ok(false);
-                }
-                return define_property_descriptor_on_value_key(
-                    Value::Object(object),
-                    property_key,
-                    PropertyDescriptor::from_complete_property(Property::data(
-                        value, true, true, false,
-                    )),
-                    env,
-                );
+                let _ = own_property_descriptor_key(Value::Object(object), &property_key)?;
+                return Ok(false);
             }
             if crate::typed_array::is_typed_array_object(&object) {
                 match crate::typed_array::define_indexed_element_value(
