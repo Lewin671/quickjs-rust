@@ -264,6 +264,19 @@ fn evaluates_global_eval_builtin() {
         eval("eval('let evalLocalLexical = 3;'); typeof evalLocalLexical;"),
         Ok(Value::String("undefined".to_owned().into()))
     );
+    // A direct eval resolves a name to the innermost active block lexical, even
+    // when that binding shadows a same-named outer/function binding (the block
+    // binding is stored under a mangled name; eval must still find it).
+    assert_eq!(
+        eval("function f() { let w = 'outer'; { let w = 'inner'; return eval('w'); } } f();"),
+        Ok(Value::String("inner".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "let lexHeritage = 'outside'; let r; { let lexHeritage = 'inside'; r = eval('lexHeritage'); } r;"
+        ),
+        Ok(Value::String("inside".to_owned().into()))
+    );
 }
 
 #[test]

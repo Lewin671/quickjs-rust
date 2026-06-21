@@ -189,6 +189,16 @@ impl<'a> Vm<'a> {
             if let Some(value) = slot {
                 let name = self.bytecode.locals[index].name.clone();
                 locals.insert(name.clone(), value.clone());
+                // A block lexical that shadows a same-named binding is stored
+                // under a mangled name (`\0lexical:w:N`); also expose it under
+                // its plain source name so a direct eval (or other dynamic name
+                // lookup) at this point resolves `w` to the innermost active
+                // block binding. Slots are iterated in scope order, so an inner
+                // block's binding overwrites an outer one, and an exited block's
+                // cleared slot (None) never wins.
+                if let Some(source_name) = unmangle_lexical_storage_name(&name) {
+                    locals.insert(source_name.to_owned(), value.clone());
+                }
             }
         }
         let mut env = self.attach_host(self.env.with_frame_locals(locals));
@@ -1149,4 +1159,14 @@ pub(super) fn insert_missing_binding_name(binding_names: &mut Vec<String>, name:
     if !binding_names.iter().any(|existing| existing == name) {
         binding_names.push(name.to_owned());
     }
+}
+
+/// Recovers the source identifier from a mangled block-lexical storage name of
+/// the form `\0lexical:<name>:<index>` (see `lexical_storage_name`). Returns
+/// `None` for an ordinary, unmangled binding name.
+fn unmangle_lexical_storage_name(storage_name: &str) -> Option<&str> {
+    storage_name
+        .strip_prefix("\u{0}lexical:")
+        .and_then(|rest| rest.rsplit_once(':'))
+        .map(|(name, _index)| name)
 }
