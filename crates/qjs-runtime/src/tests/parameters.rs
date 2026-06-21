@@ -178,6 +178,31 @@ fn sloppy_simple_arguments_callee_is_a_data_property() {
 }
 
 #[test]
+fn sloppy_arguments_callee_caller_is_undefined() {
+    assert_eq!(
+        eval(
+            "var called = false; \
+             function test1(flag) { if (flag !== true) { test2(); } else { called = true; } } \
+             function test2() { \
+                 if (arguments.callee.caller === undefined) { called = true; } \
+                 else { arguments.callee.caller(true); } \
+             } \
+             test1(); \
+             var direct = called; \
+             called = false; \
+             function test3(flag) { if (flag !== true) { test4(); } else { called = true; } } \
+             function test4() { \
+                 if (arguments.callee.caller === undefined) { called = true; } \
+                 else { var explicit = arguments.callee.caller; explicit(true); } \
+             } \
+             test3(); \
+             direct + ':' + called;"
+        ),
+        Ok(Value::String("true:true".to_owned().into()))
+    );
+}
+
+#[test]
 fn arguments_symbol_iterator_is_array_prototype_values() {
     // An arguments object's `[Symbol.iterator]` is the same function object as
     // `Array.prototype.values` / `Array.prototype[Symbol.iterator]`.

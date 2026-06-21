@@ -19,7 +19,12 @@ pub(crate) fn function_own_property_descriptor(function: &Function, key: &str) -
         && !function.is_async
         && (key == "caller" || key == "arguments")
     {
-        return Some(Property::data(Value::Null, false, false, true));
+        let value = if key == "caller" {
+            Value::Undefined
+        } else {
+            Value::Null
+        };
+        return Some(Property::data(value, false, false, true));
     }
     None
 }

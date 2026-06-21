@@ -3866,6 +3866,8 @@ cases/new-expression-prototype-own-shadow-basic.js
 cases/new-expression-reassigned-prototype-basic.js
 cases/new-expression-instance-constructor-basic.js
 cases/new-expression-reassigned-prototype-constructor-object.js
+test/language/arguments-object/10.6-13-a-2.js
+test/language/arguments-object/10.6-13-a-3.js
 cases/arguments-empty-basic.js
 cases/arguments-index-basic.js
 cases/function-extra-arguments-basic.js
