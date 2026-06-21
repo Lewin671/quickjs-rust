@@ -149,6 +149,17 @@ fn parses_conditional_expression_as_right_associative() {
 }
 
 #[test]
+fn allows_in_operator_in_conditional_consequent_within_for_init() {
+    // A for-statement init is parsed [~In], but a conditional's consequent is
+    // AssignmentExpression[+In], so `in` is allowed there.
+    let script = parse_script("for (true ? 'x' in {} : 0; false; ) ;")
+        .expect("conditional consequent should allow the `in` operator in a for init");
+    let [Stmt::For { .. }] = script.body.as_slice() else {
+        panic!("expected a for statement");
+    };
+}
+
+#[test]
 fn parses_sequence_expression() {
     let script = parse_script("a = 1, b = 2, b;").expect("source should parse");
     let [Stmt::Expr(Expr::Sequence { expressions, .. })] = script.body.as_slice() else {

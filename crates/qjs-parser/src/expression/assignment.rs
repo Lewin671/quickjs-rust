@@ -457,7 +457,11 @@ impl Parser {
             return Ok(test);
         }
 
-        let consequent = self.assignment()?;
+        // ConditionalExpression[In]'s consequent is AssignmentExpression[+In],
+        // so `in` is allowed there even inside a `[~In]` context such as a
+        // for-statement init (`for (a ? b in c : d; ;) ;`). The alternate keeps
+        // the outer [?In] parameter.
+        let consequent = self.assignment_allow_in()?;
         self.expect(&TokenKind::Colon)?;
         let alternate = self.assignment()?;
         let span = Span::new(test.span().start, alternate.span().end);
