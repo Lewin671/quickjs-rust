@@ -57,6 +57,15 @@ fn with_statement_var_initializer_targets_with_object() {
         ),
         Ok(Value::String("2:3".to_owned().into()))
     );
+    // The PutValue target is resolved before the initializer runs, so a RHS
+    // side effect cannot redirect the store after deleting the property.
+    assert_eq!(
+        eval(
+            "var o = { foo: 1 }; with (o) { var foo = delete o.foo; } \
+             String(o.foo) + ':' + String(foo);"
+        ),
+        Ok(Value::String("true:undefined".to_owned().into()))
+    );
 }
 
 #[test]

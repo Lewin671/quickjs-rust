@@ -940,6 +940,18 @@ impl Compiler {
                     }
                     let has_init = declaration.init.is_some();
                     if let Some(init) = &declaration.init {
+                        if let Some((name, slot, object_slot)) =
+                            self.resolve_var_initializer_with_target(&declaration.binding, *kind)
+                        {
+                            self.compile_declaration_init(&declaration.binding, init)?;
+                            self.emit(Op::StoreResolvedIdentWith {
+                                name,
+                                slot,
+                                object_slot,
+                                is_strict: self.strict,
+                            });
+                            continue;
+                        }
                         self.compile_declaration_init(&declaration.binding, init)?;
                     } else {
                         self.emit_load_undefined();

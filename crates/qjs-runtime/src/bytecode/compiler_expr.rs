@@ -331,6 +331,18 @@ impl Compiler {
                         }
                     }
                     if let Some(init) = &declaration.init {
+                        if let Some((name, slot, object_slot)) =
+                            self.resolve_var_initializer_with_target(&declaration.binding, *kind)
+                        {
+                            self.compile_declaration_init(&declaration.binding, init)?;
+                            self.emit(Op::StoreResolvedIdentWith {
+                                name,
+                                slot,
+                                object_slot,
+                                is_strict: self.strict,
+                            });
+                            continue;
+                        }
                         self.compile_declaration_init(&declaration.binding, init)?;
                         if self.disposable_scope_depth > 0 {
                             match kind {

@@ -18,6 +18,30 @@ pub(super) struct ArrayDestructuring {
 }
 
 impl Compiler {
+    pub(super) fn resolve_var_initializer_with_target(
+        &mut self,
+        pattern: &BindingPattern,
+        kind: VarKind,
+    ) -> Option<(String, Option<usize>, usize)> {
+        if kind != VarKind::Var {
+            return None;
+        }
+        let BindingPattern::Identifier { name, .. } = pattern else {
+            return None;
+        };
+        let slot = self.resolve_local_slot(name);
+        if !self.identifier_needs_with_resolution(slot) {
+            return None;
+        }
+        let object_slot = self.temp_local("with_var_initializer_object");
+        self.emit(Op::ResolveIdentWith {
+            name: name.clone(),
+            slot,
+            object_slot,
+        });
+        Some((name.clone(), slot, object_slot))
+    }
+
     /// Compiles a declaration initializer, applying NamedEvaluation when the
     /// binding is a single identifier and the initializer is an anonymous
     /// function or class. Destructuring patterns never name their values, so
