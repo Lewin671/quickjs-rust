@@ -456,6 +456,18 @@ fn rejects_legacy_octal_escapes_in_untagged_templates() {
 }
 
 #[test]
+fn rejects_invalid_escape_sequences_in_untagged_templates() {
+    for source in ["`\\xg`;", "`\\u0`;", "`\\u{10FFFFF}`;", "`${'ok'}\\u{g`;"] {
+        assert!(
+            parse_script(source).is_err(),
+            "expected untagged template to reject {source}"
+        );
+    }
+    parse_script("tag`\\xg`; tag`\\u0`; tag`\\u{10FFFFF}`;")
+        .expect("tagged templates preserve invalid escape sequences for the tag");
+}
+
+#[test]
 fn rejects_annex_b_numeric_literals_in_strict_mode() {
     assert!(parse_script("\"use strict\"; 00;").is_err());
     assert!(parse_script("\"use strict\"; 010;").is_err());
@@ -487,8 +499,27 @@ fn parses_tagged_template_literal() {
         panic!("expected one tagged template expression");
     };
     assert!(matches!(tag.as_ref(), Expr::Identifier { .. }));
-    assert_eq!(cooked, &vec!["a ".to_owned(), " b".to_owned()]);
+    assert_eq!(cooked, &vec![Some("a ".to_owned()), Some(" b".to_owned())]);
     assert_eq!(raw, &vec!["a ".to_owned(), " b".to_owned()]);
+    assert_eq!(expressions.len(), 1);
+}
+
+#[test]
+fn parses_tagged_template_invalid_escape_as_missing_cooked_segment() {
+    let script = parse_script("tag`\\u{10FFFFF}${value}right`;").expect("script should parse");
+    let [
+        Stmt::Expr(Expr::TaggedTemplate {
+            cooked,
+            raw,
+            expressions,
+            ..
+        }),
+    ] = script.body.as_slice()
+    else {
+        panic!("expected one tagged template expression");
+    };
+    assert_eq!(cooked, &vec![None, Some("right".to_owned())]);
+    assert_eq!(raw, &vec![r"\u{10FFFFF}".to_owned(), "right".to_owned()]);
     assert_eq!(expressions.len(), 1);
 }
 

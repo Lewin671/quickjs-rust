@@ -319,7 +319,7 @@ impl Lexer<'_> {
     pub(super) fn template_literal(&mut self) -> Result<(), LexError> {
         let start = self.cursor;
         self.advance();
-        let mut value = String::new();
+        let mut value = Some(String::new());
         let mut raw = String::new();
         while let Some(ch) = self.peek() {
             if ch == '`' {
@@ -347,8 +347,13 @@ impl Lexer<'_> {
                     continue;
                 }
                 let escape_start = self.cursor;
-                if let Some(escaped) = self.escape_sequence(start)? {
-                    value.push(escaped);
+                match self.template_escape_sequence(start)? {
+                    Some(escaped) => {
+                        if let Some(value) = &mut value {
+                            value.push(escaped);
+                        }
+                    }
+                    None => value = None,
                 }
                 raw.push_str(&self.source[escape_start..self.cursor]);
                 continue;
@@ -358,7 +363,9 @@ impl Lexer<'_> {
                 continue;
             }
             raw.push(ch);
-            value.push(ch);
+            if let Some(value) = &mut value {
+                value.push(ch);
+            }
             self.advance();
         }
 
@@ -371,7 +378,7 @@ impl Lexer<'_> {
     pub(super) fn template_after_substitution(&mut self) -> Result<(), LexError> {
         let start = self.cursor;
         self.advance();
-        let mut value = String::new();
+        let mut value = Some(String::new());
         let mut raw = String::new();
         while let Some(ch) = self.peek() {
             if ch == '`' {
@@ -399,8 +406,13 @@ impl Lexer<'_> {
                     continue;
                 }
                 let escape_start = self.cursor;
-                if let Some(escaped) = self.escape_sequence(start)? {
-                    value.push(escaped);
+                match self.template_escape_sequence(start)? {
+                    Some(escaped) => {
+                        if let Some(value) = &mut value {
+                            value.push(escaped);
+                        }
+                    }
+                    None => value = None,
                 }
                 raw.push_str(&self.source[escape_start..self.cursor]);
                 continue;
@@ -410,7 +422,9 @@ impl Lexer<'_> {
                 continue;
             }
             raw.push(ch);
-            value.push(ch);
+            if let Some(value) = &mut value {
+                value.push(ch);
+            }
             self.advance();
         }
 
@@ -432,9 +446,11 @@ impl Lexer<'_> {
         true
     }
 
-    fn template_line_terminator(&mut self, cooked: &mut String, raw: &mut String) {
+    fn template_line_terminator(&mut self, cooked: &mut Option<String>, raw: &mut String) {
         let terminator = self.template_raw_line_terminator(raw);
-        cooked.push(terminator);
+        if let Some(cooked) = cooked {
+            cooked.push(terminator);
+        }
     }
 
     fn template_raw_line_terminator(&mut self, raw: &mut String) -> char {
@@ -496,6 +512,112 @@ impl Lexer<'_> {
             other => Some(other),
         };
         Ok(escaped)
+    }
+
+    fn template_escape_sequence(&mut self, literal_start: usize) -> Result<Option<char>, LexError> {
+        self.advance();
+        let Some(ch) = self.advance() else {
+            return Err(LexError {
+                message: "unterminated escape sequence".to_owned(),
+                span: Span::new(literal_start, self.cursor),
+            });
+        };
+
+        let escaped = match ch {
+            '\'' => Some('\''),
+            '"' => Some('"'),
+            '`' => Some('`'),
+            '\\' => Some('\\'),
+            'b' => Some('\u{0008}'),
+            'f' => Some('\u{000c}'),
+            'n' => Some('\n'),
+            'r' => Some('\r'),
+            't' => Some('\t'),
+            'v' => Some('\u{000b}'),
+            '0' if !matches!(self.peek(), Some(next) if next.is_ascii_digit()) => Some('\0'),
+            '0'..='7' => {
+                self.consume_legacy_octal_escape_tail(ch);
+                None
+            }
+            '8' | '9' => None,
+            'x' => self.template_fixed_hex_escape(2),
+            'u' => self.template_unicode_escape(),
+            '\n' => None,
+            '\r' => {
+                if self.peek() == Some('\n') {
+                    self.advance();
+                }
+                None
+            }
+            '\u{2028}' | '\u{2029}' => None,
+            other => Some(other),
+        };
+        Ok(escaped)
+    }
+
+    fn consume_legacy_octal_escape_tail(&mut self, first_digit: char) {
+        let max_digits = if matches!(first_digit, '0'..='3') {
+            3
+        } else {
+            2
+        };
+        let mut digits = 1;
+        while digits < max_digits {
+            let Some(next) = self.peek() else {
+                break;
+            };
+            if !matches!(next, '0'..='7') {
+                break;
+            }
+            self.advance();
+            digits += 1;
+        }
+    }
+
+    fn template_fixed_hex_escape(&mut self, digits: usize) -> Option<char> {
+        let digits_start = self.cursor;
+        for _ in 0..digits {
+            match self.peek() {
+                Some(ch) if ch.is_ascii_hexdigit() => {
+                    self.advance();
+                }
+                Some(ch) if !Self::template_escape_boundary(ch) => {
+                    self.advance();
+                    return None;
+                }
+                _ => return None,
+            }
+        }
+        let value = u32::from_str_radix(&self.source[digits_start..self.cursor], 16).ok()?;
+        if (0xD800..=0xDFFF).contains(&value) {
+            return char::from_u32(SURROGATE_ESCAPE_SENTINEL_BASE + value - 0xD800);
+        }
+        char::from_u32(value)
+    }
+
+    fn template_unicode_escape(&mut self) -> Option<char> {
+        if self.peek() == Some('{') {
+            self.advance();
+            let digits_start = self.cursor;
+            while matches!(self.peek(), Some(ch) if ch.is_ascii_hexdigit()) {
+                self.advance();
+            }
+            if self.peek() == Some('}') {
+                let value = u32::from_str_radix(&self.source[digits_start..self.cursor], 16).ok();
+                self.advance();
+                return value.and_then(char::from_u32);
+            }
+            if matches!(self.peek(), Some(ch) if !Self::template_escape_boundary(ch)) {
+                self.advance();
+            }
+            return None;
+        }
+
+        self.template_fixed_hex_escape(4)
+    }
+
+    fn template_escape_boundary(ch: char) -> bool {
+        matches!(ch, '`' | '$' | '\n' | '\r' | '\u{2028}' | '\u{2029}')
     }
 
     fn legacy_octal_escape(

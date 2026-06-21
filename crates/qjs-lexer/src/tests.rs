@@ -561,7 +561,10 @@ fn lexes_legacy_octal_escape_sequences() {
     );
     assert_eq!(
         lex("`\\07\\141`").unwrap()[0].kind,
-        TokenKind::TemplateNoSubstitution(template_segment("\u{0007}a", r"\07\141"))
+        TokenKind::TemplateNoSubstitution(TemplateSegment {
+            cooked: None,
+            raw: r"\07\141".to_owned(),
+        })
     );
 }
 
@@ -613,6 +616,35 @@ fn lexes_template_escape_sequences() {
             TokenKind::Eof,
         ]
     );
+}
+
+#[test]
+fn lexes_invalid_template_escape_sequences_with_missing_cooked_value() {
+    for (source, raw) in [
+        (r"`\01`", r"\01"),
+        (r"`\1`", r"\1"),
+        (r"`\8`", r"\8"),
+        (r"`\9`", r"\9"),
+        (r"`\xg`", r"\xg"),
+        (r"`\xAg`", r"\xAg"),
+        (r"`\u0`", r"\u0"),
+        (r"`\u0g`", r"\u0g"),
+        (r"`\u00g`", r"\u00g"),
+        (r"`\u000g`", r"\u000g"),
+        (r"`\u{g`", r"\u{g"),
+        (r"`\u{0`", r"\u{0"),
+        (r"`\u{10FFFFF}`", r"\u{10FFFFF}"),
+    ] {
+        let tokens = lex(source).expect("source should lex");
+        assert_eq!(
+            tokens[0].kind,
+            TokenKind::TemplateNoSubstitution(TemplateSegment {
+                cooked: None,
+                raw: raw.to_owned(),
+            }),
+            "unexpected template token for {source}"
+        );
+    }
 }
 
 #[test]
@@ -709,7 +741,7 @@ fn rejects_bare_hash() {
 
 fn template_segment(cooked: &str, raw: &str) -> TemplateSegment {
     TemplateSegment {
-        cooked: cooked.to_owned(),
+        cooked: Some(cooked.to_owned()),
         raw: raw.to_owned(),
     }
 }

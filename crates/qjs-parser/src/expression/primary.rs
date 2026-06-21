@@ -101,8 +101,9 @@ impl Parser {
             }
             TokenKind::TemplateNoSubstitution(segment) => {
                 self.reject_template_legacy_octal_escape(&segment.raw, token.span)?;
+                let value = self.require_template_cooked(segment.cooked, token.span)?;
                 Ok(Expr::Literal(Literal::String {
-                    value: segment.cooked,
+                    value,
                     span: token.span,
                 }))
             }
@@ -250,7 +251,7 @@ impl Parser {
         start: usize,
     ) -> Result<Expr, ParseError> {
         self.reject_template_legacy_octal_escape(&head.raw, Span::new(start, start))?;
-        let mut parts = vec![head.cooked];
+        let mut parts = vec![self.require_template_cooked(head.cooked, Span::new(start, start))?];
         let mut expressions = Vec::new();
         loop {
             expressions.push(self.assignment()?);
@@ -258,11 +259,11 @@ impl Parser {
             match token.kind {
                 TokenKind::TemplateMiddle(segment) => {
                     self.reject_template_legacy_octal_escape(&segment.raw, token.span)?;
-                    parts.push(segment.cooked);
+                    parts.push(self.require_template_cooked(segment.cooked, token.span)?);
                 }
                 TokenKind::TemplateTail(segment) => {
                     self.reject_template_legacy_octal_escape(&segment.raw, token.span)?;
-                    parts.push(segment.cooked);
+                    parts.push(self.require_template_cooked(segment.cooked, token.span)?);
                     return Ok(Expr::Template {
                         parts,
                         expressions,
@@ -284,6 +285,17 @@ impl Parser {
             self.peek().map(|token| &token.kind),
             Some(TokenKind::TemplateNoSubstitution(_) | TokenKind::TemplateHead(_))
         )
+    }
+
+    fn require_template_cooked(
+        &self,
+        cooked: Option<String>,
+        span: Span,
+    ) -> Result<String, ParseError> {
+        cooked.ok_or_else(|| ParseError {
+            message: "invalid escape sequence in template literal".to_owned(),
+            span,
+        })
     }
 
     pub(crate) fn finish_tagged_template_literal(&mut self, tag: Expr) -> Result<Expr, ParseError> {

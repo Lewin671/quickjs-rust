@@ -229,8 +229,9 @@ pub enum TokenKind {
 /// Cooked and raw text for a template literal segment.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TemplateSegment {
-    /// Cooked template value.
-    pub cooked: String,
+    /// Cooked template value. Tagged templates use `None` for invalid escape
+    /// sequences, where ECMAScript exposes `undefined` to the tag.
+    pub cooked: Option<String>,
     /// Raw template value.
     pub raw: String,
 }

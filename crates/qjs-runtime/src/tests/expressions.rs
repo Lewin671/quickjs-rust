@@ -189,6 +189,56 @@ fn evaluates_tagged_template_literals() {
 }
 
 #[test]
+fn tagged_template_invalid_escape_sequences_have_undefined_cooked_segments() {
+    assert_eq!(
+        eval(
+            r#"
+            let log = [];
+            function tag(strings) {
+                log.push(strings[0] === undefined);
+                log.push(strings.raw[0]);
+            }
+            tag`\01`;
+            tag`\1`;
+            tag`\8`;
+            tag`\9`;
+            tag`\xg`;
+            tag`\xAg`;
+            tag`\u0`;
+            tag`\u0g`;
+            tag`\u00g`;
+            tag`\u000g`;
+            tag`\u{g`;
+            tag`\u{0`;
+            tag`\u{10FFFFF}`;
+            log.join('|');
+            "#
+        ),
+        Ok(Value::String(
+            "true|\\01|true|\\1|true|\\8|true|\\9|true|\\xg|true|\\xAg|true|\\u0|true|\\u0g|true|\\u00g|true|\\u000g|true|\\u{g|true|\\u{0|true|\\u{10FFFFF}"
+                .to_owned()
+                .into()
+        ))
+    );
+    assert_eq!(
+        eval(
+            r#"
+            ((strings, value) => [
+                strings[0] === undefined,
+                strings.raw[0],
+                value,
+                strings[1],
+                strings.raw[1],
+            ].join('|'))`\u{10FFFFF}${'inner'}right`;
+            "#
+        ),
+        Ok(Value::String(
+            "true|\\u{10FFFFF}|inner|right|right".to_owned().into()
+        ))
+    );
+}
+
+#[test]
 fn tagged_template_objects_are_cached_by_site() {
     assert_eq!(
         eval(

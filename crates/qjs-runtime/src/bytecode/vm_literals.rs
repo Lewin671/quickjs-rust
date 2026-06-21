@@ -63,7 +63,12 @@ impl Vm<'_> {
         Ok(())
     }
 
-    pub(super) fn new_template_object(&mut self, site: usize, cooked: &[String], raw: &[String]) {
+    pub(super) fn new_template_object(
+        &mut self,
+        site: usize,
+        cooked: &[Option<String>],
+        raw: &[String],
+    ) {
         if let Some(value) = self.bytecode.template_objects.borrow().get(&site).cloned() {
             self.stack.push(value);
             return;
@@ -72,7 +77,10 @@ impl Vm<'_> {
         let cooked_values = cooked
             .iter()
             .cloned()
-            .map(|s| Value::String(s.into()))
+            .map(|s| match s {
+                Some(s) => Value::String(s.into()),
+                None => Value::Undefined,
+            })
             .collect::<Vec<_>>();
         let raw_values = raw
             .iter()

@@ -90,7 +90,7 @@ pub(super) enum Op {
     },
     NewTemplateObject {
         site: usize,
-        cooked: Vec<String>,
+        cooked: Vec<Option<String>>,
         raw: Vec<String>,
     },
     NewObjectLiteral,

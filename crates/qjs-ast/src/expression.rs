@@ -170,8 +170,10 @@ pub enum Expr {
     TaggedTemplate {
         /// Tag expression called with the template object.
         tag: Box<Expr>,
-        /// Cooked string segments. This always has one more entry than `expressions`.
-        cooked: Vec<String>,
+        /// Cooked string segments. `None` represents an invalid escape sequence
+        /// exposed to the tag as `undefined`.
+        /// This always has one more entry than `expressions`.
+        cooked: Vec<Option<String>>,
         /// Raw string segments. This always has one more entry than `expressions`.
         raw: Vec<String>,
         /// Substitution expressions evaluated left to right.

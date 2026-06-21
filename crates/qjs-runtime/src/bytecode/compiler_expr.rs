@@ -1066,7 +1066,7 @@ impl Compiler {
     fn compile_tagged_template(
         &mut self,
         tag: &Expr,
-        cooked: &[String],
+        cooked: &[Option<String>],
         raw: &[String],
         expressions: &[Expr],
     ) -> Result<(), RuntimeError> {
