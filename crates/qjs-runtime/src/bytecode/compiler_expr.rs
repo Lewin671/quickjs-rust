@@ -1070,6 +1070,8 @@ impl Compiler {
         raw: &[String],
         expressions: &[Expr],
     ) -> Result<(), RuntimeError> {
+        let site = self.next_template_site;
+        self.next_template_site += 1;
         if let Expr::Member {
             object, property, ..
         } = tag
@@ -1077,6 +1079,7 @@ impl Compiler {
             self.compile_expr(object)?;
             self.compile_member_key(property)?;
             self.emit(Op::NewTemplateObject {
+                site,
                 cooked: cooked.to_vec(),
                 raw: raw.to_vec(),
             });
@@ -1089,6 +1092,7 @@ impl Compiler {
 
         self.compile_expr(tag)?;
         self.emit(Op::NewTemplateObject {
+            site,
             cooked: cooked.to_vec(),
             raw: raw.to_vec(),
         });

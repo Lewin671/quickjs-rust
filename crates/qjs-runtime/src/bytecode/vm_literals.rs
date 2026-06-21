@@ -63,7 +63,12 @@ impl Vm<'_> {
         Ok(())
     }
 
-    pub(super) fn new_template_object(&mut self, cooked: &[String], raw: &[String]) {
+    pub(super) fn new_template_object(&mut self, site: usize, cooked: &[String], raw: &[String]) {
+        if let Some(value) = self.bytecode.template_objects.borrow().get(&site).cloned() {
+            self.stack.push(value);
+            return;
+        }
+
         let cooked_values = cooked
             .iter()
             .cloned()
@@ -82,7 +87,12 @@ impl Vm<'_> {
             Property::fixed_non_enumerable(Value::Array(raw_array)),
         );
         cooked_array.freeze();
-        self.stack.push(Value::Array(cooked_array));
+        let template_object = Value::Array(cooked_array);
+        self.bytecode
+            .template_objects
+            .borrow_mut()
+            .insert(site, template_object.clone());
+        self.stack.push(template_object);
     }
 
     pub(super) fn new_object_literal(&mut self) {

@@ -24,6 +24,7 @@ pub(super) struct Compiler {
     loop_stack: Vec<LoopContext>,
     pending_labels: Vec<String>,
     next_temp: usize,
+    pub(super) next_template_site: usize,
     pub(super) strict: bool,
     pub(super) global_scope: bool,
     /// Names of `var`/function declarations hoisted at global script scope.
@@ -108,6 +109,7 @@ impl Default for Compiler {
             loop_stack: Vec::new(),
             pending_labels: Vec::new(),
             next_temp: 0,
+            next_template_site: 0,
             strict: false,
             global_scope: true,
             global_hoisted: std::collections::HashSet::new(),

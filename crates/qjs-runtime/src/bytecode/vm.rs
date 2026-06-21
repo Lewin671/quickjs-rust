@@ -381,7 +381,9 @@ impl<'a> Vm<'a> {
                     self.stack.push(value);
                 }
                 Op::NewArray { elements } => self.new_array(&elements)?,
-                Op::NewTemplateObject { cooked, raw } => self.new_template_object(&cooked, &raw),
+                Op::NewTemplateObject { site, cooked, raw } => {
+                    self.new_template_object(site, &cooked, &raw)
+                }
                 Op::NewObjectLiteral => self.new_object_literal(),
                 op @ (Op::EnterDisposableScope
                 | Op::RegisterDisposable

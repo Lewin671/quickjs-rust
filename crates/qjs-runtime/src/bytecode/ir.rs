@@ -1,4 +1,5 @@
 use std::{
+    cell::RefCell,
     collections::{BTreeSet, HashMap, HashSet},
     rc::Rc,
 };
@@ -88,6 +89,7 @@ pub(super) enum Op {
         elements: Vec<ArrayElementKind>,
     },
     NewTemplateObject {
+        site: usize,
         cooked: Vec<String>,
         raw: Vec<String>,
     },
@@ -557,6 +559,7 @@ pub struct Bytecode {
     /// declaration instantiation environment.
     strict: bool,
     pub(super) code: Vec<Op>,
+    pub(super) template_objects: RefCell<HashMap<usize, Value>>,
     /// Per-call metadata precomputed once at construction. Each of these used to
     /// be recomputed on every call by recursively walking `code` (and nested
     /// function/class op trees) and materializing a fresh `BTreeSet`/`Vec`,
@@ -622,6 +625,7 @@ impl Bytecode {
             global_scope,
             strict,
             code,
+            template_objects: RefCell::new(HashMap::new()),
             cached_closure_referenced_global_names: Vec::new(),
             cached_written_binding_names: Vec::new(),
             cached_closure_written_binding_names: Vec::new(),

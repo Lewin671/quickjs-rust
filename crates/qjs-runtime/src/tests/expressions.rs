@@ -189,6 +189,22 @@ fn evaluates_tagged_template_literals() {
 }
 
 #[test]
+fn tagged_template_objects_are_cached_by_site() {
+    assert_eq!(
+        eval(
+            "let first, log = []; function tag(strings) { if (!first) first = strings; log.push(strings === first); } function sameSite(value) { tag`head${value}tail`; } sameSite(1); sameSite(2); tag`${1}`; sameSite(3); log.join(',');"
+        ),
+        Ok(Value::String("true,true,false,true".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "let objects = []; function tag(strings) { objects.push(strings); } for (let i = 0; i < 2; i++) { eval(\"for (let j = 0; j < 2; j++) tag`${j}`;\"); } [objects[0] === objects[1], objects[1] === objects[2], objects[2] === objects[3]].join(',');"
+        ),
+        Ok(Value::String("true,false,true".to_owned().into()))
+    );
+}
+
+#[test]
 fn evaluates_comparison_and_equality() {
     assert_eq!(eval("1 + 2 * 3 >= 7;"), Ok(Value::Boolean(true)));
     assert_eq!(eval("'2' < '10';"), Ok(Value::Boolean(false)));
