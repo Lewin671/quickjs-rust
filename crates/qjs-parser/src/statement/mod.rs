@@ -562,6 +562,7 @@ fn validate_statement_list_labels(body: &[Stmt]) -> Result<(), ParseError> {
 struct LabelContext {
     break_labels: Vec<String>,
     continue_labels: Vec<String>,
+    breakable_depth: usize,
     loop_depth: usize,
 }
 
@@ -587,17 +588,25 @@ fn validate_statement_labels(stmt: &Stmt, context: &mut LabelContext) -> Result<
         | Stmt::For { body, .. }
         | Stmt::ForIn { body, .. }
         | Stmt::ForOf { body, .. } => {
+            context.breakable_depth += 1;
             context.loop_depth += 1;
             let result = validate_statement_labels(body, context);
             context.loop_depth -= 1;
+            context.breakable_depth -= 1;
             result?;
         }
         Stmt::Switch { cases, .. } => {
-            for case in cases {
-                for stmt in &case.consequent {
-                    validate_statement_labels(stmt, context)?;
+            context.breakable_depth += 1;
+            let result = (|| {
+                for case in cases {
+                    for stmt in &case.consequent {
+                        validate_statement_labels(stmt, context)?;
+                    }
                 }
-            }
+                Ok(())
+            })();
+            context.breakable_depth -= 1;
+            result?;
         }
         Stmt::Try {
             block,
@@ -655,6 +664,12 @@ fn validate_statement_labels(stmt: &Stmt, context: &mut LabelContext) -> Result<
         {
             return Err(ParseError {
                 message: format!("undefined break label `{label}`"),
+                span: *span,
+            });
+        }
+        Stmt::Break { label: None, span } if context.breakable_depth == 0 => {
+            return Err(ParseError {
+                message: "`break` has no target".to_owned(),
                 span: *span,
             });
         }

@@ -529,6 +529,16 @@ fn parses_break_and_continue_statements() {
 }
 
 #[test]
+fn rejects_break_without_breakable_target() {
+    assert!(parse_script("break;").is_err());
+    assert!(parse_script("{ break; }").is_err());
+    assert!(parse_script("try {} catch (e) { break; }").is_err());
+    assert!(parse_script("while (true) { break; }").is_ok());
+    assert!(parse_script("switch (value) { default: break; }").is_ok());
+    assert!(parse_script("label: { break label; }").is_ok());
+}
+
+#[test]
 fn rejects_continue_to_non_iteration_label() {
     assert!(parse_script("label: { for (;;) { continue label; } }").is_err());
 }
