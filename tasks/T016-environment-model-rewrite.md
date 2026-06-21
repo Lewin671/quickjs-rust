@@ -40,8 +40,16 @@ regression (no half-finished cutover).
   - [x] `bytecode::upvalue_resolver`: pure classification (cell slots, received
     upvalue slots, per-child indexed `UpvalueSource`) over `Op::NewFunction`
     captures, six unit tests (commit "Add upvalue classification resolver").
-  - [ ] Call-path benchmark to baseline T011 (still pending; can land anytime,
-    independent of the cell wiring).
+  - [x] Call-path benchmark (`function_call`/`closure_call` in
+    `tests/benchmarks/quickjs/microbench.js`). **Baseline: a user call is ~70µs
+    in quickjs-rust vs ~0.12µs in QuickJS-NG (~570x).** This is the root of the
+    Test262 `timeout` bucket (109 cases, incl. RegExp `\p{}` ~44 which is NOT a
+    feature gap — `\p{}` is implemented and binary-search-fast; the cost is the
+    harness building/scanning ~1M code points through the ~70µs-per-call VM).
+    Caller-local count does not affect call cost (the snapshot's
+    caller-binding copy is not the dominant term); the ~70µs is distributed
+    across the per-call `HashMap`/`Vec`/`String` allocation in
+    `function::call::function_env` + `CallEnv` construction + `Vm` setup.
   - Re-scoped: `Op::LoadUpvalue`/`StoreUpvalue`/cell-slot ops move to **S2**,
     where they gain a real executor (`Vm.upvalues` field) instead of dead
     unreachable arms. The off-by-default flag lands with S2's first wiring.
