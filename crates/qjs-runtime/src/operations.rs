@@ -20,22 +20,20 @@ pub(crate) fn eval_unary(
     match op {
         UnaryOp::Not => Ok(Value::Boolean(!is_truthy(&argument))),
         UnaryOp::Plus => Ok(Value::Number(to_number_with_env(argument, env)?)),
-        UnaryOp::Minus if matches!(argument, Value::BigInt(_)) => {
-            let Value::BigInt(value) = argument else {
-                unreachable!("BigInt argument was checked before negation")
-            };
-            Ok(Value::BigInt(-value))
-        }
-        UnaryOp::BitwiseNot if matches!(argument, Value::BigInt(_)) => {
-            let Value::BigInt(value) = argument else {
-                unreachable!("BigInt argument was checked before bitwise not")
-            };
-            Ok(Value::BigInt(!value))
-        }
-        UnaryOp::Minus => Ok(Value::Number(-to_number_with_env(argument, env)?)),
-        UnaryOp::BitwiseNot => Ok(Value::Number(f64::from(!to_int32_number(
-            to_number_with_env(argument, env)?,
-        )))),
+        // Unary `-` and `~` coerce with ToNumeric, so an operand that becomes a
+        // BigInt (including a wrapper object or a Symbol.toPrimitive that
+        // returns a BigInt) uses the BigInt operation rather than ToNumber,
+        // which would throw.
+        UnaryOp::Minus => match to_numeric_with_env(argument, env)? {
+            Value::BigInt(value) => Ok(Value::BigInt(-value)),
+            Value::Number(value) => Ok(Value::Number(-value)),
+            _ => unreachable!("ToNumeric yields a Number or BigInt"),
+        },
+        UnaryOp::BitwiseNot => match to_numeric_with_env(argument, env)? {
+            Value::BigInt(value) => Ok(Value::BigInt(!value)),
+            Value::Number(value) => Ok(Value::Number(f64::from(!to_int32_number(value)))),
+            _ => unreachable!("ToNumeric yields a Number or BigInt"),
+        },
         UnaryOp::Void => Ok(Value::Undefined),
         UnaryOp::Typeof | UnaryOp::Delete => {
             unreachable!("operator requires unevaluated operand handling")

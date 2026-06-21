@@ -21,6 +21,14 @@ fn assert_syntax_error(source: &str) {
 #[test]
 fn evaluates_bigint_literals_and_constructor() {
     assert_eval("typeof 1n;", Value::String("bigint".to_owned().into()));
+    // Unary `-`/`~` use ToNumeric, so a non-primitive that becomes a BigInt
+    // uses the BigInt operation instead of throwing in ToNumber.
+    assert_eval("-Object(1n) === -1n;", Value::Boolean(true));
+    assert_eval("~Object(1n) === -2n;", Value::Boolean(true));
+    assert_eval(
+        "-{ [Symbol.toPrimitive]() { return 3n; } } === -3n;",
+        Value::Boolean(true),
+    );
     assert_eval("String(1_000n);", Value::String("1000".to_owned().into()));
     assert_eval("BigInt('0x10') === 16n;", Value::Boolean(true));
     assert_eval("BigInt(44) === 44n;", Value::Boolean(true));
