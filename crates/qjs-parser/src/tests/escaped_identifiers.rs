@@ -26,6 +26,16 @@ fn escaped_let_is_not_a_let_declaration() {
 }
 
 #[test]
+fn escaped_async_is_a_valid_for_of_lhs() {
+    // The `for (async of x)` restriction is a lookahead on the literal `async`
+    // token; an escaped `async` is a plain identifier LHS and is valid.
+    parse_script("for (\\u0061sync of [7]);")
+        .expect("escaped async should be a valid for-of left-hand side");
+    // The unescaped form remains an early error.
+    parse_script("for (async of [7]);").expect_err("unescaped async for-of LHS is an early error");
+}
+
+#[test]
 fn unescaped_let_is_still_a_declaration() {
     let script = parse_script("let x = 1;").expect("let declaration should parse");
     let [Stmt::VarDecl { kind, .. }] = script.body.as_slice() else {

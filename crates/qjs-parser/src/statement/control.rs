@@ -542,7 +542,7 @@ impl Parser {
                         );
                     }
                     if self.match_contextual_keyword("of") {
-                        reject_for_of_lhs_keyword(&left, "let")?;
+                        reject_for_of_lhs_keyword(&left, "let", false)?;
                         return self.finish_for_in_of(
                             start,
                             ForInLeft::Target(left),
@@ -555,6 +555,7 @@ impl Parser {
             }
         } else if !self.at(&TokenKind::Semicolon) {
             let cursor = self.cursor;
+            let lhs_had_escape = self.peek().is_some_and(|token| token.had_escape);
             if let Ok(left) = self.assignment_pattern() {
                 if self.match_kind(&TokenKind::In) {
                     return self.finish_for_in_of(
@@ -569,7 +570,7 @@ impl Parser {
                     // await (async of x)` is valid (the for-await grammar has no
                     // such lookahead restriction).
                     if is_await.is_none() {
-                        reject_for_of_lhs_keyword(&left, "async")?;
+                        reject_for_of_lhs_keyword(&left, "async", lhs_had_escape)?;
                     }
                     return self.finish_for_in_of(
                         start,
@@ -946,7 +947,17 @@ impl Parser {
 /// `async`, so `for (let of x)` / `for (async of y)` are early errors — but the
 /// parenthesized (`for ((let) of x)`) and member (`for (let.p of x)`) forms stay
 /// valid, and `for-in` is unaffected.
-fn reject_for_of_lhs_keyword(left: &AssignmentTarget, keyword: &str) -> Result<(), ParseError> {
+fn reject_for_of_lhs_keyword(
+    left: &AssignmentTarget,
+    keyword: &str,
+    had_escape: bool,
+) -> Result<(), ParseError> {
+    // The `for (let|async of x)` restriction is a lookahead on the literal
+    // token; an escaped identifier (`async`) is not that token, so it is a
+    // plain identifier LHS and stays valid.
+    if had_escape {
+        return Ok(());
+    }
     if let AssignmentTarget::Identifier {
         name,
         span,
