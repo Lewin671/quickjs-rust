@@ -32,8 +32,22 @@ var globalObject = { a: 1, b: 2, c: 3 };
 var globalArray = [1, 2, 3, 4];
 var globalResult = 0;
 
+// Leaf callee for the `function_call` benchmark: a self-contained function that
+// references no free variables, so the cost measured is pure call overhead.
+function benchCallee(a, b) {
+    return a + b;
+}
+
+// Closure factory for the `closure_call` benchmark: the returned function
+// captures `base`, exercising the closure-capture call path.
+function makeAdder(base) {
+    return function (delta) {
+        return base + delta;
+    };
+}
+
 function runNamed(name, n) {
-    var i, object, array, sum, x, s;
+    var i, object, array, sum, x, s, adder;
 
     if (name === "empty_loop") {
         for (i = 0; i < n; i++) {
@@ -180,6 +194,25 @@ function runNamed(name, n) {
         return n;
     }
 
+    if (name === "function_call") {
+        sum = 0;
+        for (i = 0; i < n; i++) {
+            sum += benchCallee(i, 1);
+        }
+        globalResult = sum;
+        return n;
+    }
+
+    if (name === "closure_call") {
+        adder = makeAdder(7);
+        sum = 0;
+        for (i = 0; i < n; i++) {
+            sum += adder(i);
+        }
+        globalResult = sum;
+        return n;
+    }
+
     throw "unknown benchmark: " + name;
 }
 
@@ -220,7 +253,9 @@ function runBenchmarks() {
         "string_build",
         "string_slice",
         "int_to_string",
-        "string_to_int"
+        "string_to_int",
+        "function_call",
+        "closure_call"
     ];
     selected = [];
     for (i = 1; i < scriptArgs.length; i++) {
