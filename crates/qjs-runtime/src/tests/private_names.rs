@@ -361,6 +361,20 @@ fn brand_check_true_and_false() {
 }
 
 #[test]
+fn brand_check_on_non_object_throws_type_error() {
+    // `#x in rval` throws a TypeError when rval is not an Object, and `<<` binds
+    // tighter than `in` so `#x in {} << 0` tests `#x in 0`.
+    assert_eq!(
+        eval(
+            "class C { #x = 1; \
+               run() { try { return #x in {} << 0; } catch (e) { return e.name; } } } \
+             new C().run();"
+        ),
+        Ok(Value::String("TypeError".to_owned().into()))
+    );
+}
+
+#[test]
 fn method_brand_check() {
     assert_eq!(
         eval("class C { #m() {} has(o) { return #m in o; } } let c = new C(); c.has(c);"),

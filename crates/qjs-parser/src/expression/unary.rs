@@ -178,6 +178,20 @@ impl Parser {
         }
         self.note_private_reference(&name, span);
         self.expect(&TokenKind::In)?;
+        // The right operand is a ShiftExpression, which can never begin with a
+        // private name, so `#a in #b in c` is a syntax error (a private name is
+        // only valid on the left of `in`). A parenthesized `#a in (#b in c)` is
+        // fine because the inner expression is a fresh relational context.
+        if let Some(token) = self.peek()
+            && let TokenKind::PrivateName(rhs) = &token.kind
+        {
+            return Err(ParseError {
+                message: format!(
+                    "private name `#{rhs}` is only valid on the left of `in` or as a member access"
+                ),
+                span: token.span,
+            });
+        }
         let object = self.shift_expression()?;
         let full = Span::new(span.start, object.span().end);
         Ok(Expr::PrivateIn {

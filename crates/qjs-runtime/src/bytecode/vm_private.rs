@@ -398,6 +398,22 @@ impl Vm<'_> {
     pub(super) fn private_in(&mut self, name: &str) -> Result<Value, RuntimeError> {
         let object = self.pop()?;
         let binding = self.resolve_private_binding(name)?;
+        // `#x in rval` throws a TypeError when rval is not an Object, before
+        // testing for the private brand.
+        if !matches!(
+            object,
+            Value::Object(_)
+                | Value::Map(_)
+                | Value::Set(_)
+                | Value::Proxy(_)
+                | Value::Array(_)
+                | Value::Function(_)
+        ) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: right operand of `in` is not an object".to_owned(),
+            });
+        }
         let present = private_storage_of(&object).is_some_and(|storage| storage.has(&binding.id));
         Ok(Value::Boolean(present))
     }

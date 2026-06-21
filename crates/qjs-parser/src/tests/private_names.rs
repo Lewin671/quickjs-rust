@@ -166,6 +166,17 @@ fn parses_private_brand_check() {
 }
 
 #[test]
+fn rejects_private_name_in_brand_check_right_operand() {
+    // The right operand of `#a in X` is a ShiftExpression, which can never start
+    // with a private name, so an unparenthesized `#a in #b in c` is a syntax
+    // error. A parenthesized inner relational expression is fine.
+    parse_script("class C { #x; constructor() { #x in #x in this; } }")
+        .expect_err("a private name is not a valid brand-check right operand");
+    parse_script("class C { #x; constructor() { #x in (#x in this ? {} : {}); } }")
+        .expect("a parenthesized inner brand check is allowed");
+}
+
+#[test]
 fn parses_division_after_private_member_access() {
     parse_script("class C { #x = 44; y = this.#x / 11; }")
         .expect("slash after a private member access is division");
