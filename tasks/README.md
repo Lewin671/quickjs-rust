@@ -48,16 +48,24 @@ Campaign working rules:
   273) stay in the normal gap queue; promote one to a campaign file when its
   slices stop fitting in single reviewable units.
 
+## Keystone
+
+- `T016-environment-model-rewrite.md` — replace the snapshot + `captured_env` +
+  `CaptureWriteback` trio with slot-indexed locals + indexed shared upvalue
+  cells (`docs/design/env-model-rewrite.md`). This is the keystone for both
+  goals: it removes capture staleness at the root and the per-call locals-map
+  clone. **Subsumes T011 and T014** — do not extend the heuristic model;
+  land cells instead. Serialize on one branch.
+
 ## Engine Correctness
 
-- `T014-var-closure-binding-staleness.md` — a `var` mutated by one function is
-  lost when a sibling function reassigned it first (snapshot-based closure model
-  desync on the realm channel). Affects common Test262 counter-callback idioms.
-  Touches the hottest call path; needs a focused slice, not a drive-by fix.
+- `T014-var-closure-binding-staleness.md` — **subsumed by T016.** A `var`
+  mutated by one function is lost when a sibling reassigned it first
+  (snapshot-model desync). The leaf-call fix landed; the full fix is T016 S2+.
 
 ## Performance
 
-- `T011-call-performance.md` — cut per-call environment-cloning cost. The
-  leaf-call activation-snapshot clone is landed; the remaining
-  shared-realm-globals redesign unblocks ~370 `TypedArray/*` cases that time
-  out under heavy nested-call load (e.g. `fill/coerced-indexes.js`).
+- `T011-call-performance.md` — **subsumed by T016.** Cut per-call
+  environment-cloning cost. The leaf-call activation-snapshot clone landed; the
+  remaining per-call locals-map clone is deleted by T016 S5, which unblocks the
+  `TypedArray/*` cases that time out under heavy nested-call load.

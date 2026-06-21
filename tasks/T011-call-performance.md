@@ -1,5 +1,10 @@
 # T011: Call and harness hot-path performance
 
+> **Status (2026-06-21): subsumed by `T016-environment-model-rewrite.md`.**
+> The remaining per-call locals-map clone is removed by T016 S5 (shared upvalue
+> cells), which is the structural fix behind the `TypedArray/*` timeouts. Prior
+> landed slices stay; new perf work on the binding path goes through T016.
+
 ## Goal
 
 Keep Test262 harness-heavy cases from timing out by making ordinary JavaScript

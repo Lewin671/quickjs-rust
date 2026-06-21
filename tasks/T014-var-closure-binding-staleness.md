@@ -1,5 +1,10 @@
 # T014: Stale `var` binding across sibling-function mutation
 
+> **Status (2026-06-21): subsumed by `T016-environment-model-rewrite.md`.**
+> The leaf-call slot-refresh fix landed and stays correct, but the root is the
+> snapshot capture model. Do not extend the heuristic further — the full fix is
+> T016 S2+ (shared upvalue cells). This file is kept for the repro corpus below.
+
 ## Goal
 
 Fix the bytecode VM so that a `var`-declared binding mutated by one function is
