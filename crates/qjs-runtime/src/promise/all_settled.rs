@@ -108,21 +108,17 @@ fn element_function(
     capability: &PromiseCapability,
 ) -> Function {
     let mut function = Function::new_native(None, 1, native, false);
-    function
-        .env
-        .insert(PROMISE_ALL_INDEX.to_owned(), Value::Number(index as f64));
-    function
-        .env
-        .insert(PROMISE_ALL_VALUES.to_owned(), Value::Array(values.clone()));
-    function.env.insert(
+    function.insert_env(PROMISE_ALL_INDEX.to_owned(), Value::Number(index as f64));
+    function.insert_env(PROMISE_ALL_VALUES.to_owned(), Value::Array(values.clone()));
+    function.insert_env(
         PROMISE_ALL_REMAINING.to_owned(),
         Value::Object(remaining.clone()),
     );
-    function.env.insert(
+    function.insert_env(
         PROMISE_ALL_ALREADY_CALLED.to_owned(),
         Value::Object(already_called.clone()),
     );
-    function.env.insert(
+    function.insert_env(
         PROMISE_ALL_CAPABILITY_RESOLVE.to_owned(),
         capability.resolve.clone(),
     );

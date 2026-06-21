@@ -187,13 +187,11 @@ fn define_regexp_accessor(
     native: NativeFunction,
 ) {
     let mut getter = Function::new_native(Some(&format!("get {name}")), 0, native, false);
-    getter.env.insert(
+    getter.insert_env(
         REGEXP_PROTOTYPE_BINDING.to_owned(),
         Value::Object(prototype.clone()),
     );
-    getter
-        .env
-        .insert(GLOBAL_THIS_BINDING.to_owned(), global_this.clone());
+    getter.insert_env(GLOBAL_THIS_BINDING.to_owned(), global_this.clone());
     prototype.define_property(
         name.to_owned(),
         Property::accessor(Some(Value::Function(getter)), None, false, true),
@@ -555,7 +553,7 @@ fn regexp_receiver_error_value(function: &Function, message: &str) -> Option<Val
     let Value::Function(constructor) = constructor? else {
         return None;
     };
-    let mut env = CallEnv::from_map(function.env.clone());
+    let mut env = CallEnv::from_map((*function.env).clone());
     error::native_error(
         &constructor,
         Value::Undefined,

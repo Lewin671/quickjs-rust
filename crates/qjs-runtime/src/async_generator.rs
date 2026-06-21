@@ -463,9 +463,7 @@ fn schedule_yield_await(generator: &ObjectRef, value: Value, env: &mut CallEnv) 
 /// Builds a reaction native carrying the async generator object.
 fn reaction(native: NativeFunction, generator: &ObjectRef) -> Value {
     let mut function = Function::new_native(None, 1, native, false);
-    function
-        .env
-        .insert(ASYNC_GEN.to_owned(), Value::Object(generator.clone()));
+    function.insert_env(ASYNC_GEN.to_owned(), Value::Object(generator.clone()));
     Value::Function(function)
 }
 
@@ -654,13 +652,9 @@ pub(crate) fn create_async_from_sync_iterator(
         ("throw", NativeFunction::AsyncFromSyncIteratorThrow),
     ] {
         let mut method = Function::new_native(Some(name), 1, native, false);
-        method
-            .env
-            .insert(SYNC_ITERATOR.to_owned(), sync_iterator.clone());
+        method.insert_env(SYNC_ITERATOR.to_owned(), sync_iterator.clone());
         if matches!(native, NativeFunction::AsyncFromSyncIteratorNext) {
-            method
-                .env
-                .insert(SYNC_ITERATOR_NEXT.to_owned(), next.clone());
+            method.insert_env(SYNC_ITERATOR_NEXT.to_owned(), next.clone());
         }
         wrapper.define_non_enumerable(name.to_owned(), Value::Function(method));
     }
@@ -837,12 +831,8 @@ fn async_from_sync_method(
 /// and the recorded `done` flag.
 fn value_await_reaction(native: NativeFunction, capability: &ObjectRef, done: bool) -> Value {
     let mut function = Function::new_native(None, 1, native, false);
-    function
-        .env
-        .insert(WRAP_PROMISE.to_owned(), Value::Object(capability.clone()));
-    function
-        .env
-        .insert(WRAP_DONE.to_owned(), Value::Boolean(done));
+    function.insert_env(WRAP_PROMISE.to_owned(), Value::Object(capability.clone()));
+    function.insert_env(WRAP_DONE.to_owned(), Value::Boolean(done));
     Value::Function(function)
 }
 

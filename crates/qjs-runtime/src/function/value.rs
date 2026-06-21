@@ -78,8 +78,13 @@ pub struct Function {
     /// cost (`tasks/T011-call-performance.md`). Parameters are immutable after
     /// the function is created.
     pub params: Rc<FunctionParams>,
-    /// Environment captured when the function was created.
-    pub env: HashMap<String, Value>,
+    /// Environment captured when the function was created. Held behind `Rc` so
+    /// the frequent `Function` value clones (every call clones the callee, plus
+    /// property reads and capture syncs) bump a refcount instead of deep-cloning
+    /// this map — which for a user function holds the ~48 realm intrinsics and
+    /// dominated the leaf-call path. Mutated only when building a native
+    /// reaction's state, via `Rc::make_mut` on the freshly, uniquely-held `Rc`.
+    pub env: Rc<HashMap<String, Value>>,
     pub(crate) captured_env: Rc<RefCell<HashMap<String, Value>>>,
     pub(crate) module_host: Option<ModuleHostRef>,
     pub(crate) module_imports: ModuleImports,
@@ -202,6 +207,13 @@ impl fmt::Debug for Function {
 }
 
 impl Function {
+    /// Inserts a binding into the function's creation environment. Used to seed
+    /// a freshly created native reaction's captured state; `Rc::make_mut` is
+    /// cheap here because the `Rc` is uniquely held immediately after creation.
+    pub(crate) fn insert_env(&mut self, key: String, value: Value) {
+        Rc::make_mut(&mut self.env).insert(key, value);
+    }
+
     pub(crate) fn new_user(
         name: Option<String>,
         params: FunctionParams,
@@ -273,7 +285,7 @@ impl Function {
             immutable_name_binding: false,
             name,
             params: Rc::new(params),
-            env,
+            env: Rc::new(env),
             captured_env,
             module_host: None,
             module_imports: HashMap::new(),
@@ -356,7 +368,7 @@ impl Function {
             immutable_name_binding,
             name,
             params,
-            env,
+            env: Rc::new(env),
             captured_env,
             module_host,
             module_imports,
@@ -471,7 +483,7 @@ impl Function {
             has_name_binding: false,
             immutable_name_binding: false,
             params: Rc::new(FunctionParams::positional(vec![String::new(); length])),
-            env: HashMap::new(),
+            env: Rc::new(HashMap::new()),
             captured_env: Rc::new(RefCell::new(HashMap::new())),
             module_host: None,
             module_imports: HashMap::new(),
@@ -526,7 +538,7 @@ impl Function {
             immutable_name_binding: false,
             name,
             params: Rc::new(FunctionParams::positional(params)),
-            env,
+            env: Rc::new(env),
             captured_env,
             module_host: None,
             module_imports: HashMap::new(),
@@ -785,7 +797,7 @@ impl Function {
     /// intrinsic cannot be resolved (for example a native function with no
     /// captured globals).
     pub(crate) fn effective_internal_prototype(&self) -> Option<Prototype> {
-        self.effective_internal_prototype_with_env(&crate::CallEnv::from_map(self.env.clone()))
+        self.effective_internal_prototype_with_env(&crate::CallEnv::from_map((*self.env).clone()))
     }
 
     fn effective_internal_prototype_with_env(&self, env: &CallEnv) -> Option<Prototype> {
@@ -799,7 +811,7 @@ impl Function {
     /// string-keyed property. Used when a function sits inside another value's
     /// prototype chain.
     pub(crate) fn chain_property(&self, key: &str) -> Option<Property> {
-        self.chain_property_with_env(key, &crate::CallEnv::from_map(self.env.clone()))
+        self.chain_property_with_env(key, &crate::CallEnv::from_map((*self.env).clone()))
     }
 
     pub(crate) fn chain_property_with_env(&self, key: &str, env: &CallEnv) -> Option<Property> {

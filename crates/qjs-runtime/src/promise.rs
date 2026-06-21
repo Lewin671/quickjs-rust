@@ -69,7 +69,7 @@ pub(crate) fn install_promise(env: &mut CallEnv, global_this: &Value, object_pro
     let promise_function = Function::new_native(Some("Promise"), 1, NativeFunction::Promise, true);
     let mut promise_then =
         Function::new_native(Some("then"), 2, NativeFunction::PromisePrototypeThen, false);
-    promise_then.env.insert(
+    promise_then.insert_env(
         PROMISE_PROTOTYPE.to_owned(),
         Value::Object(promise_prototype.clone()),
     );
@@ -79,7 +79,7 @@ pub(crate) fn install_promise(env: &mut CallEnv, global_this: &Value, object_pro
         NativeFunction::PromisePrototypeCatch,
         false,
     );
-    promise_catch.env.insert(
+    promise_catch.insert_env(
         PROMISE_PROTOTYPE.to_owned(),
         Value::Object(promise_prototype.clone()),
     );
@@ -89,7 +89,7 @@ pub(crate) fn install_promise(env: &mut CallEnv, global_this: &Value, object_pro
         NativeFunction::PromisePrototypeFinally,
         false,
     );
-    promise_finally.env.insert(
+    promise_finally.insert_env(
         PROMISE_PROTOTYPE.to_owned(),
         Value::Object(promise_prototype.clone()),
     );
@@ -125,9 +125,7 @@ pub(crate) fn install_promise(env: &mut CallEnv, global_this: &Value, object_pro
         &object_prototype,
     );
     if let Some(aggregate_error) = env.get("AggregateError") {
-        promise_any
-            .env
-            .insert(PROMISE_AGGREGATE_ERROR.to_owned(), aggregate_error);
+        promise_any.insert_env(PROMISE_AGGREGATE_ERROR.to_owned(), aggregate_error);
     }
     define_promise_static(&promise_function, "any", promise_any);
 
@@ -168,11 +166,11 @@ fn promise_static_function(
     object_prototype: &ObjectRef,
 ) -> Function {
     let mut function = Function::new_native(Some(name), length, native, false);
-    function.env.insert(
+    function.insert_env(
         PROMISE_OBJECT_PROTOTYPE.to_owned(),
         Value::Object(object_prototype.clone()),
     );
-    function.env.insert(
+    function.insert_env(
         PROMISE_PROTOTYPE.to_owned(),
         Value::Object(promise_prototype.clone()),
     );
@@ -854,18 +852,14 @@ fn resolve_promise(object: &ObjectRef, value: Value, env: &mut CallEnv) {
 fn resolving_function_pair(promise: Value) -> (Value, Value) {
     let already_resolved = Value::Object(ObjectRef::new(HashMap::new()));
     let mut resolve = Function::new_native(None, 1, NativeFunction::PromiseResolveFunction, false);
-    resolve
-        .env
-        .insert(PROMISE_TARGET.to_owned(), promise.clone());
-    resolve.env.insert(
+    resolve.insert_env(PROMISE_TARGET.to_owned(), promise.clone());
+    resolve.insert_env(
         PROMISE_ALREADY_RESOLVED.to_owned(),
         already_resolved.clone(),
     );
     let mut reject = Function::new_native(None, 1, NativeFunction::PromiseRejectFunction, false);
-    reject.env.insert(PROMISE_TARGET.to_owned(), promise);
-    reject
-        .env
-        .insert(PROMISE_ALREADY_RESOLVED.to_owned(), already_resolved);
+    reject.insert_env(PROMISE_TARGET.to_owned(), promise);
+    reject.insert_env(PROMISE_ALREADY_RESOLVED.to_owned(), already_resolved);
     (Value::Function(resolve), Value::Function(reject))
 }
 
@@ -886,19 +880,15 @@ fn resolving_function_already_resolved(function: &Function) -> bool {
 /// `onFinally` handler and the species constructor `C`.
 fn finally_reaction_function(native: NativeFunction, handler: Value, constructor: Value) -> Value {
     let mut function = Function::new_native(None, 1, native, false);
-    function
-        .env
-        .insert(PROMISE_FINALLY_HANDLER.to_owned(), handler);
-    function
-        .env
-        .insert(PROMISE_FINALLY_CONSTRUCTOR.to_owned(), constructor);
+    function.insert_env(PROMISE_FINALLY_HANDLER.to_owned(), handler);
+    function.insert_env(PROMISE_FINALLY_CONSTRUCTOR.to_owned(), constructor);
     Value::Function(function)
 }
 
 /// Builds an anonymous value/thrower thunk capturing the original outcome.
 fn finally_thunk(native: NativeFunction, value: Value) -> Value {
     let mut function = Function::new_native(None, 0, native, false);
-    function.env.insert(PROMISE_FINALLY_VALUE.to_owned(), value);
+    function.insert_env(PROMISE_FINALLY_VALUE.to_owned(), value);
     Value::Function(function)
 }
 

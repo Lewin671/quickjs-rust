@@ -62,9 +62,7 @@ pub(crate) fn new_promise_capability(
         NativeFunction::PromiseGetCapabilitiesExecutor,
         false,
     );
-    executor
-        .env
-        .insert(CAPABILITY_RECORD.to_owned(), Value::Object(record.clone()));
+    executor.insert_env(CAPABILITY_RECORD.to_owned(), Value::Object(record.clone()));
 
     let promise = construct_function(c.clone(), c.clone(), vec![Value::Function(executor)], env)?;
 

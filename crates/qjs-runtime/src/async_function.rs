@@ -213,10 +213,8 @@ fn await_reaction(
     result_promise: &ObjectRef,
 ) -> Value {
     let mut function = Function::new_native(None, 1, native, false);
-    function
-        .env
-        .insert(ASYNC_CONTEXT.to_owned(), Value::Object(context.clone()));
-    function.env.insert(
+    function.insert_env(ASYNC_CONTEXT.to_owned(), Value::Object(context.clone()));
+    function.insert_env(
         ASYNC_RESULT_PROMISE.to_owned(),
         Value::Object(result_promise.clone()),
     );

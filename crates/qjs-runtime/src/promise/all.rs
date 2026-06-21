@@ -44,22 +44,20 @@ impl ElementHandler for AllHandler {
         let already_called = ObjectRef::new(HashMap::new());
         let mut on_fulfilled =
             Function::new_native(None, 1, NativeFunction::PromiseAllResolveElement, false);
-        on_fulfilled.env.insert(
+        on_fulfilled.insert_env(
             PROMISE_ALL_CAPABILITY_RESOLVE.to_owned(),
             capability.resolve.clone(),
         );
-        on_fulfilled
-            .env
-            .insert(PROMISE_ALL_INDEX.to_owned(), Value::Number(index as f64));
-        on_fulfilled.env.insert(
+        on_fulfilled.insert_env(PROMISE_ALL_INDEX.to_owned(), Value::Number(index as f64));
+        on_fulfilled.insert_env(
             PROMISE_ALL_VALUES.to_owned(),
             Value::Array(self.values.clone()),
         );
-        on_fulfilled.env.insert(
+        on_fulfilled.insert_env(
             PROMISE_ALL_REMAINING.to_owned(),
             Value::Object(self.remaining.clone()),
         );
-        on_fulfilled.env.insert(
+        on_fulfilled.insert_env(
             PROMISE_ALL_ALREADY_CALLED.to_owned(),
             Value::Object(already_called),
         );
