@@ -28,6 +28,31 @@ fn with_statement_resolves_object_bindings() {
 }
 
 #[test]
+fn with_statement_method_call_uses_with_object_as_this() {
+    // Calling a method resolved through a with-object binds `this` to that
+    // object (GetThisValue of an object-environment reference), while a name
+    // that falls through to an outer scope keeps the ordinary undefined/global
+    // receiver.
+    assert_eq!(
+        eval(
+            "var seen; \
+             var o = { m() { seen = this; } }; \
+             with (o) { m(); } \
+             seen === o;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "var o = { x: 1 }; \
+             function f() { return this === globalThis || this === undefined; } \
+             var ok; with (o) { ok = f(); } ok;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn with_statement_var_initializer_targets_with_object() {
     // A `var` initializer inside `with` is an ordinary PutValue through the
     // scope chain: when the with-object owns the name, the property is updated
