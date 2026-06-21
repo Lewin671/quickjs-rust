@@ -324,6 +324,11 @@ pub(super) enum Op {
     DiscardPendingAbrupt,
     Return,
     Throw,
+    /// Throws a `ReferenceError` with the given message at runtime, without
+    /// evaluating any operands. Emitted for `delete super.x` / `delete
+    /// super[expr]`: deleting a SuperReference is a runtime ReferenceError and
+    /// the property-key expression is never evaluated.
+    ThrowReferenceError(String),
     /// Marks the boundary between parameter instantiation and the function body.
     /// Emitted once per function, after the parameter-binding prologue. Ordinary
     /// function and script runs treat it as a no-op; when starting a generator or

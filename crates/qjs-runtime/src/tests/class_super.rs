@@ -229,6 +229,28 @@ fn super_property_logical_assignment_short_circuits() {
 }
 
 #[test]
+fn delete_super_property_throws_reference_error_without_evaluating_key() {
+    // `delete super.x` is a runtime ReferenceError, thrown before the property
+    // key expression is evaluated, so a computed key with a side effect never
+    // runs and a throwing ToString is never reached.
+    assert_eq!(
+        eval(
+            "var obj = { m() { delete super.x; return 'no throw'; } }; \
+             try { obj.m(); } catch (e) { e.name; }"
+        ),
+        Ok(Value::String("ReferenceError".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var keyEvaluated = false; \
+             var obj = { m() { delete super[keyEvaluated = true]; } }; \
+             try { obj.m(); } catch (e) { e.name + ':' + keyEvaluated; }"
+        ),
+        Ok(Value::String("ReferenceError:false".to_owned().into()))
+    );
+}
+
+#[test]
 fn computed_super_assignment_key_coercion_error_is_catchable() {
     // A throwing ToPropertyKey on a computed super target must surface as a
     // catchable JS exception, not an uncatchable VM fault.

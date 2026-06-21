@@ -174,6 +174,16 @@ impl Compiler {
             Expr::Member {
                 object, property, ..
             } => {
+                // Deleting a SuperReference is a runtime ReferenceError, thrown
+                // before the property key is evaluated (so `delete super[expr]`
+                // never runs `expr`). Emit the throw without compiling either
+                // operand.
+                if matches!(object.as_ref(), Expr::Super { .. }) {
+                    self.emit(Op::ThrowReferenceError(
+                        "Unsupported reference to 'super'".to_owned(),
+                    ));
+                    return Ok(());
+                }
                 self.compile_expr(object)?;
                 self.compile_member_key(property)?;
                 self.emit(Op::DeleteProp {

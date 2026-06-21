@@ -724,6 +724,12 @@ impl<'a> Vm<'a> {
                     let value = self.pop()?;
                     self.throw_value(value)?;
                 }
+                Op::ThrowReferenceError(message) => {
+                    return Err(RuntimeError {
+                        thrown: None,
+                        message: format!("ReferenceError: {message}"),
+                    });
+                }
                 Op::FunctionPrologueEnd => {
                     if self.stop_at_prologue {
                         self.stop_at_prologue = false;
