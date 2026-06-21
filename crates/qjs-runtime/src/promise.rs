@@ -654,6 +654,76 @@ pub(crate) fn reject_promise_capability(promise: &ObjectRef, reason: Value, env:
     settle_promise(promise, PROMISE_REJECTED, reason, env);
 }
 
+/// `%AsyncIteratorPrototype% [ @@asyncDispose ] ()`
+/// (proposal-explicit-resource-management). Looks up the iterator's `return`
+/// method; if absent the returned promise resolves with undefined, otherwise it
+/// calls `return` and resolves with undefined once the (possibly thenable)
+/// result settles, rejecting if the `return` lookup, its call, or its result
+/// rejects.
+pub(crate) fn async_iterator_async_dispose(
+    this_value: Value,
+    env: &mut CallEnv,
+) -> Result<Value, RuntimeError> {
+    let capability = new_pending_promise(env);
+    // 3-4. return = GetMethod(O, "return"); IfAbruptRejectPromise.
+    let return_method = match property_value(this_value.clone(), "return", env) {
+        Ok(value) => value,
+        Err(error) => {
+            let reason = crate::error::runtime_error_to_value(error, env);
+            reject_promise_capability(&capability, reason, env);
+            return Ok(Value::Object(capability));
+        }
+    };
+    // 5. GetMethod returns undefined for both undefined and null receivers.
+    if matches!(return_method, Value::Undefined | Value::Null) {
+        resolve_promise_capability(&capability, Value::Undefined, env);
+        return Ok(Value::Object(capability));
+    }
+    // GetMethod throws a TypeError when the property is present but not callable.
+    if !matches!(return_method, Value::Function(_)) {
+        let reason = crate::error::runtime_error_to_value(
+            RuntimeError {
+                thrown: None,
+                message: "TypeError: return method is not callable".to_owned(),
+            },
+            env,
+        );
+        reject_promise_capability(&capability, reason, env);
+        return Ok(Value::Object(capability));
+    }
+    // 6.a-b. result = Call(return, O); IfAbruptRejectPromise.
+    let result = match call_function(return_method, this_value, Vec::new(), env, false) {
+        Ok(value) => value,
+        Err(error) => {
+            let reason = crate::error::runtime_error_to_value(error, env);
+            reject_promise_capability(&capability, reason, env);
+            return Ok(Value::Object(capability));
+        }
+    };
+    // 6.c-d. resultWrapper = PromiseResolve(%Promise%, result); IfAbruptReject.
+    let promise_constructor = env.get("Promise").unwrap_or(Value::Undefined);
+    let result_wrapper = match promise_resolve(&promise_constructor, result, env) {
+        Ok(value) => value,
+        Err(error) => {
+            let reason = crate::error::runtime_error_to_value(error, env);
+            reject_promise_capability(&capability, reason, env);
+            return Ok(Value::Object(capability));
+        }
+    };
+    // 6.e-g. resultWrapper.then(unwrap), where unwrap discards the value and
+    // yields undefined; the chained promise (undefined on fulfil, the reason on
+    // reject) is adopted by the capability.
+    let unwrap = Value::Function(Function::new_native(
+        Some(""),
+        1,
+        NativeFunction::AsyncDisposeReturnUndefined,
+        false,
+    ));
+    let chained = call_promise_then(result_wrapper, vec![unwrap, Value::Undefined], env)?;
+    resolve_promise_capability(&capability, chained, env);
+    Ok(Value::Object(capability))
+}
+
 /// Implements the `await` plumbing: resolves `value` to a promise via
 /// `PromiseResolve(%Promise%, value)`, then schedules `on_fulfilled` /
 /// `on_rejected` as promise reactions whose handlers resume the suspended async

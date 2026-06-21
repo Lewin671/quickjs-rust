@@ -90,6 +90,17 @@ pub(crate) fn install_async_generator(
             ))),
         );
     }
+    if let Some(async_dispose) = symbol::async_dispose_symbol(env) {
+        async_iterator_prototype.define_symbol_property(
+            async_dispose,
+            Property::non_enumerable(Value::Function(Function::new_native(
+                Some("[Symbol.asyncDispose]"),
+                0,
+                NativeFunction::AsyncIteratorPrototypeAsyncDispose,
+                false,
+            ))),
+        );
+    }
 
     let async_generator_prototype =
         ObjectRef::with_prototype(HashMap::new(), Some(async_iterator_prototype.clone()));
@@ -244,6 +255,14 @@ pub(crate) fn call_async_generator_native(
 ) -> Result<Option<Value>, RuntimeError> {
     if matches!(native, NativeFunction::AsyncGeneratorPrototypeAsyncIterator) {
         return Ok(Some(this_value));
+    }
+    if matches!(native, NativeFunction::AsyncIteratorPrototypeAsyncDispose) {
+        return Ok(Some(promise::async_iterator_async_dispose(
+            this_value, env,
+        )?));
+    }
+    if matches!(native, NativeFunction::AsyncDisposeReturnUndefined) {
+        return Ok(Some(Value::Undefined));
     }
     let kind = match native {
         NativeFunction::AsyncGeneratorPrototypeNext => {

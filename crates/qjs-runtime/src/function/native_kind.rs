@@ -327,6 +327,14 @@ pub(crate) enum NativeFunction {
     AsyncGeneratorPrototypeThrow,
     /// `%AsyncGeneratorPrototype%[Symbol.asyncIterator]`: returns `this`.
     AsyncGeneratorPrototypeAsyncIterator,
+    /// `%AsyncIteratorPrototype%[Symbol.asyncDispose]`: calls the iterator's
+    /// `return` method (if any) and resolves the returned promise with undefined
+    /// once it settles (proposal-explicit-resource-management).
+    AsyncIteratorPrototypeAsyncDispose,
+    /// Internal fulfillment reaction for `%AsyncIteratorPrototype%[Symbol
+    /// .asyncDispose]`: the `unwrap` closure that discards the awaited `return`
+    /// result and yields undefined.
+    AsyncDisposeReturnUndefined,
     /// Internal `await` fulfillment reaction inside an async generator body:
     /// resumes the body with the fulfilled value and continues draining.
     AsyncGeneratorAwaitFulfilled,
