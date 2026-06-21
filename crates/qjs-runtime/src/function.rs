@@ -7,6 +7,7 @@ mod local_names;
 mod native_kind;
 mod prototype;
 mod strict;
+mod upvalue;
 mod value;
 
 /// Realm key under which the single shared %ThrowTypeError% intrinsic is
