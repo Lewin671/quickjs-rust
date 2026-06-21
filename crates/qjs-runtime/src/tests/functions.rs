@@ -37,6 +37,18 @@ fn evaluates_function_declarations_and_calls() {
         ))
     );
     assert_eq!(
+        eval("function deleted() { return delete arguments; } deleted(1, 2);"),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval("function shadow(arguments) { return arguments; } shadow(42);"),
+        Ok(Value::Number(42.0))
+    );
+    assert_eq!(
+        eval("function shadow(arguments) { return typeof arguments; } shadow();"),
+        Ok(Value::String("undefined".to_owned().into()))
+    );
+    assert_eq!(
         eval(
             "var after; eval('if (true) function f() { return \"declaration\"; } else function _f() {} after = f;'); after();"
         ),

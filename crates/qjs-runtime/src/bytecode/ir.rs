@@ -829,6 +829,12 @@ impl Bytecode {
         }) {
             return true;
         }
+        if self.code.iter().any(|op| {
+            matches!(op, Op::DeleteIdent(name) if name == "arguments")
+                || matches!(op, Op::DeleteIdentWith { name, .. } if name == "arguments")
+        }) {
+            return true;
+        }
         let Some(arguments_slot) = self.local_slot("arguments") else {
             return false;
         };

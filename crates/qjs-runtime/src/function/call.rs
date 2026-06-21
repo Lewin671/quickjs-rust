@@ -690,7 +690,11 @@ fn function_env(
             .unwrap_or(Value::Undefined);
         local_env.insert(parameter_binding_name(&element.binding, index), value);
     }
-    let has_own_arguments_object = !function.lexical_arguments && bytecode.needs_arguments_object();
+    let parameter_names = function.params.names();
+    let parameter_shadows_arguments = parameter_names.iter().any(|name| name == "arguments");
+    let has_own_arguments_object = !function.lexical_arguments
+        && !parameter_shadows_arguments
+        && bytecode.needs_arguments_object();
     if has_own_arguments_object {
         local_env.insert(
             "arguments".to_owned(),
@@ -708,13 +712,7 @@ fn function_env(
             Value::Array(ArrayRef::new(values)),
         );
     }
-    if has_own_arguments_object
-        || function
-            .params
-            .names()
-            .iter()
-            .any(|name| name == "arguments")
-    {
+    if has_own_arguments_object || parameter_shadows_arguments {
         local_env.insert(
             DIRECT_EVAL_ARGUMENTS_BINDING.to_owned(),
             Value::Boolean(true),
