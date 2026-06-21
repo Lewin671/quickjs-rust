@@ -250,3 +250,38 @@ fn sibling_closure_mutation_observes_latest_var_binding() {
         Ok(Value::String("1:1:100".to_owned().into()))
     );
 }
+
+#[test]
+fn forwarded_closure_write_is_visible_to_a_later_read_in_the_same_frame() {
+    // A closure invoked through a forwarding frame writes a shared outer
+    // binding; a later read in the frame that created the closure must observe
+    // that write rather than a stale pre-call snapshot. Affects both a global
+    // and a function-local `var`, and the compound/postfix update forms.
+    assert_eq!(
+        eval(
+            "var c = 0; function fwd(f) { f(); } \
+             (function () { 'use strict'; fwd(() => { c++; }); c++; })(); c;"
+        ),
+        Ok(Value::Number(2.0))
+    );
+    assert_eq!(
+        eval(
+            "function outer() { \
+               var c = 0; function fwd(f) { f(); } \
+               (function () { 'use strict'; fwd(() => { c += 10; }); c += 1; })(); \
+               return c; \
+             } outer();"
+        ),
+        Ok(Value::Number(11.0))
+    );
+    // The compound-assignment-operator-calls-putvalue idiom: an inner arrow
+    // (run via assert.throws-style forwarding) and a sibling update share the
+    // same counter.
+    assert_eq!(
+        eval(
+            "var count = 0; function run(f) { f(); } \
+             (function () { 'use strict'; run(() => { count += 1; }); count += 1; })(); count;"
+        ),
+        Ok(Value::Number(2.0))
+    );
+}

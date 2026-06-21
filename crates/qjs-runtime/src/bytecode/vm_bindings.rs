@@ -1303,7 +1303,7 @@ pub(super) fn is_compiler_temporary(name: &str) -> bool {
     name.starts_with("\0\0")
 }
 
-fn is_call_frame_binding(name: &str) -> bool {
+pub(super) fn is_call_frame_binding(name: &str) -> bool {
     matches!(
         name,
         crate::GLOBAL_THIS_BINDING

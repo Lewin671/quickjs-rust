@@ -97,6 +97,12 @@ impl Vm<'_> {
             self.write_through_direct_eval_parameter_captures(&env.env, &env.injected);
         }
         self.apply_call_env(env);
+        // A closure created in this frame and invoked through the just-returned
+        // call (directly or via a forwarding frame) writes back to this frame's
+        // shared captured env. Refresh this frame's live captured locals from it
+        // so a later read in this frame observes that write instead of a stale
+        // pre-call snapshot.
+        self.refresh_shared_captured_locals_after_call();
         if let Some(result) = self.handle_call_result(result)? {
             self.stack.push(result);
         }

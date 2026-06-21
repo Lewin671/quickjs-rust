@@ -276,6 +276,38 @@ impl Vm<'_> {
         }
     }
 
+    /// Refreshes this frame's live captured locals from the shared captured env
+    /// after a nested call returns, so a write a sibling/forwarded closure made
+    /// to a shared binding is observed by a later read in this frame. Unlike
+    /// [`Self::refresh_live_locals_from_captured_env`] (run at frame exit) this
+    /// runs mid-execution, so it must skip the internal call-frame bindings
+    /// (`this`, `arguments`, `new.target`, ...) whose frame-local value is
+    /// authoritative and must not be clobbered by a stale captured snapshot.
+    pub(super) fn refresh_shared_captured_locals_after_call(&mut self) {
+        if self.captured_env.borrow().is_empty() {
+            return;
+        }
+        let captured_env = self.captured_env.borrow();
+        for (name, value) in captured_env.iter() {
+            if super::vm_bindings::is_compiler_temporary(name)
+                || super::vm_bindings::is_call_frame_binding(name)
+            {
+                continue;
+            }
+            if let Some(index) = self.bytecode.local_slot(name)
+                && self.bytecode.local_is_from_env(index)
+                && !self.bytecode.local_is_parameter(index)
+                && !self.bytecode.local_is_body_hoist_only(index)
+                && let Some(local @ Some(_)) = self.locals.get_mut(index)
+            {
+                *local = Some(value.clone());
+            }
+            if let Some(binding) = self.env.get_local_mut(name) {
+                *binding = value.clone();
+            }
+        }
+    }
+
     pub(super) fn refresh_call_env_from_captured_env(&self, env: &mut CallEnv) {
         let captured_env = self.captured_env.borrow();
         for (name, value) in captured_env.iter() {
