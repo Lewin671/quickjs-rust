@@ -564,7 +564,7 @@ impl Parser {
                         is_await,
                     );
                 }
-                if self.match_contextual_keyword("of") {
+                if !self.at_async_of_arrow_after_lhs(&left) && self.match_contextual_keyword("of") {
                     // The leading-`async` restriction is `for-of` only; `for
                     // await (async of x)` is valid (the for-await grammar has no
                     // such lookahead restriction).
@@ -594,7 +594,7 @@ impl Parser {
         let init = if self.match_kind(&TokenKind::Semicolon) {
             None
         } else if self.at(&TokenKind::Var)
-            || self.at(&TokenKind::Let)
+            || self.at_let_lexical_declaration()
             || self.at(&TokenKind::Const)
             || (!self.at_for_using_of_identifier_head() && self.using_declaration_kind().is_some())
         {
@@ -602,7 +602,7 @@ impl Parser {
             self.expect(&TokenKind::Semicolon)?;
             Some(init)
         } else {
-            let init = self.expression()?;
+            let init = self.expression_no_in()?;
             self.expect(&TokenKind::Semicolon)?;
             Some(ForInit::Expr(init))
         };
@@ -621,6 +621,7 @@ impl Parser {
         };
         self.expect(&TokenKind::RightParen)?;
         let body = self.statement()?;
+        validate_for_head(&init, &body)?;
         check_iteration_body(&body, "a for loop")?;
         let end = stmt_end(&body);
         Ok(Stmt::For {
@@ -763,6 +764,37 @@ impl Parser {
             && !self.has_line_terminator_between(using_token.span.end, first_of_token.span.start)
             && !self
                 .has_line_terminator_between(first_of_token.span.end, second_of_token.span.start)
+    }
+
+    fn at_let_lexical_declaration(&self) -> bool {
+        if !self.at(&TokenKind::Let) {
+            return false;
+        }
+        matches!(
+            self.peek_nth(1).map(|token| &token.kind),
+            Some(
+                TokenKind::Identifier(_)
+                    | TokenKind::Let
+                    | TokenKind::LeftBracket
+                    | TokenKind::LeftBrace
+            )
+        )
+    }
+
+    fn at_async_of_arrow_after_lhs(&self, left: &AssignmentTarget) -> bool {
+        matches!(
+            left,
+            AssignmentTarget::Identifier {
+                name,
+                parenthesized: false,
+                ..
+            } if name == "async"
+        ) && matches!(
+            (self.peek(), self.peek_nth(1)),
+            (Some(token), Some(next))
+                if matches!(&token.kind, TokenKind::Identifier(name) if name == "of")
+                    && next.kind == TokenKind::Arrow
+        )
     }
 
     pub(super) fn try_statement(&mut self) -> Result<Stmt, ParseError> {
@@ -930,6 +962,23 @@ fn reject_for_of_lhs_keyword(left: &AssignmentTarget, keyword: &str) -> Result<(
     Ok(())
 }
 
+fn validate_for_head(init: &Option<ForInit>, body: &Stmt) -> Result<(), ParseError> {
+    let Some(ForInit::VarDecl {
+        kind: VarKind::Let | VarKind::Const | VarKind::Using | VarKind::AwaitUsing,
+        declarations,
+        ..
+    }) = init
+    else {
+        return Ok(());
+    };
+
+    let mut bound_names = Vec::new();
+    for declaration in declarations {
+        bound_names.extend(declaration.binding.named_spans());
+    }
+    validate_lexical_for_head_bound_names(&bound_names, body, "for loop")
+}
+
 fn validate_for_in_of_head(left: &ForInLeft, body: &Stmt) -> Result<(), ParseError> {
     let ForInLeft::VarDecl {
         kind: VarKind::Let | VarKind::Const | VarKind::Using | VarKind::AwaitUsing,
@@ -941,23 +990,31 @@ fn validate_for_in_of_head(left: &ForInLeft, body: &Stmt) -> Result<(), ParseErr
     };
 
     let bound_names = binding.named_spans();
+    validate_lexical_for_head_bound_names(&bound_names, body, "for-in/of loop")
+}
+
+fn validate_lexical_for_head_bound_names(
+    bound_names: &[(String, Span)],
+    body: &Stmt,
+    loop_kind: &str,
+) -> Result<(), ParseError> {
     for (index, (name, _)) in bound_names.iter().enumerate() {
         for (candidate, span) in &bound_names[index + 1..] {
             if candidate == name {
                 return Err(ParseError {
-                    message: format!("duplicate for-in/of binding `{name}`"),
+                    message: format!("duplicate {loop_kind} binding `{name}`"),
                     span: *span,
                 });
             }
         }
     }
 
-    for (name, _) in &bound_names {
+    for (name, _) in bound_names {
         for (var_name, span) in var_declared_names_of(body) {
             if &var_name == name {
                 return Err(ParseError {
                     message: format!(
-                        "for-in/of body declaration `{var_name}` conflicts with lexical head"
+                        "{loop_kind} body declaration `{var_name}` conflicts with lexical head"
                     ),
                     span,
                 });

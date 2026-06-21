@@ -388,6 +388,25 @@ fn validates_for_in_head_static_semantics() {
 }
 
 #[test]
+fn validates_classic_for_head_static_semantics() {
+    for source in [
+        "for (1 in arr; 1;) {}",
+        "for (let x; false; ) { var x; }",
+        "for (const x = 0; false; ) { var x; }",
+    ] {
+        parse_script(source).expect_err("classic for static semantics should reject source");
+    }
+
+    parse_script("var let; for (let; ; ) break;").expect("sloppy let may be an expression head");
+    parse_script("var let; for (let = 3; ; ) break;")
+        .expect("sloppy let assignment may be an expression head");
+    parse_script("var let; for ([let][0]; ; ) break;")
+        .expect("sloppy let member expression may be an expression head");
+    parse_script("var i = 0; for (async of => {}; i < 1; ++i) {}")
+        .expect("async of arrow head is a classic for initializer");
+}
+
+#[test]
 fn parses_let_across_line_terminator_as_lexical_declaration_in_statement_lists() {
     parse_script("let\nlet;").expect_err("`let let` is a lexical declaration early error");
     parse_script("let\nlet = 1;")
