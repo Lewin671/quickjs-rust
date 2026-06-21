@@ -29,7 +29,15 @@ pub(super) fn sync_global_var_captures(
         return;
     }
     for (name, value) in captured.iter() {
-        if is_call_frame_binding(name) || !global_this.has_own_property(name) {
+        // The captured env also holds the ~48 realm intrinsics seeded at
+        // function creation. Only a binding this function or one of its nested
+        // closures could have reassigned needs syncing back; skipping the rest
+        // avoids deep-cloning constant intrinsic function objects (their entire
+        // property map) on every leaf call — the dominant call-path cost.
+        if is_call_frame_binding(name)
+            || !bytecode.writes_binding(name)
+            || !global_this.has_own_property(name)
+        {
             continue;
         }
         if global_this

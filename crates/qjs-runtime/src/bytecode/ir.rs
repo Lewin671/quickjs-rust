@@ -579,6 +579,10 @@ pub struct Bytecode {
     cached_writes_binding_set: HashSet<String>,
     cached_creates_closures: bool,
     cached_needs_arguments_object: bool,
+    /// Whether any local is a captured (`from_env`) binding. When false, the
+    /// frame neither receives nor needs capture write-back, so the per-call
+    /// captured-env refresh and the result's captured-env clone can be skipped.
+    cached_has_from_env_locals: bool,
 }
 
 impl Bytecode {
@@ -638,6 +642,7 @@ impl Bytecode {
             cached_writes_binding_set: HashSet::new(),
             cached_creates_closures: false,
             cached_needs_arguments_object: false,
+            cached_has_from_env_locals: false,
         };
         // Order matters: closure/arguments metadata reads the simpler caches
         // (written-binding names, creates-closures) computed just above. Nested
@@ -651,6 +656,7 @@ impl Bytecode {
         bytecode.cached_writes_binding_set = bytecode.compute_writes_binding_set();
         bytecode.cached_creates_closures = bytecode.compute_creates_closures();
         bytecode.cached_needs_arguments_object = bytecode.compute_needs_arguments_object();
+        bytecode.cached_has_from_env_locals = bytecode.locals.iter().any(|local| local.from_env);
         bytecode
     }
 
@@ -797,6 +803,13 @@ impl Bytecode {
     /// cloning the whole frame env into it.
     pub(crate) fn creates_closures(&self) -> bool {
         self.cached_creates_closures
+    }
+
+    /// Whether any local is a captured (`from_env`) binding. When false, the
+    /// frame holds no captured locals to refresh from or write back to the
+    /// shared captured env.
+    pub(crate) fn has_from_env_locals(&self) -> bool {
+        self.cached_has_from_env_locals
     }
 
     fn compute_creates_closures(&self) -> bool {

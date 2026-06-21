@@ -43,13 +43,26 @@ pub(super) fn eval_function_bytecode(
         Vm::new_with_globals_captures_and_with_stack(bytecode, env, captured_env, with_stack);
     vm.capture_writeback = capture_writeback;
     let value = vm.run();
-    vm.refresh_live_locals_from_captured_env();
+    // A frame that neither creates closures nor holds any captured (`from_env`)
+    // local never reads or writes the shared captured env beyond the realm
+    // intrinsics seeded into it, so the per-call refresh and the result clone —
+    // each O(captured-env size), ~48 intrinsic entries — are pure overhead on
+    // the hot leaf-call path. `result.captured_env` is only consulted by
+    // `FunctionBytecodeResult::binding` as a fallback for captured names, which
+    // such a frame never propagates.
+    let interacts_with_captures = bytecode.creates_closures() || bytecode.has_from_env_locals();
+    let result_captured_env = if interacts_with_captures {
+        vm.refresh_live_locals_from_captured_env();
+        vm.captured_env.borrow().clone()
+    } else {
+        HashMap::new()
+    };
     FunctionBytecodeResult {
         value,
         bytecode,
         env: vm.env,
         locals: vm.locals,
-        captured_env: vm.captured_env.borrow().clone(),
+        captured_env: result_captured_env,
         sloppy_global_names: vm.sloppy_global_names,
     }
 }
