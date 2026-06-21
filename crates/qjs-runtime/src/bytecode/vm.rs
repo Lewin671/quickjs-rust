@@ -345,8 +345,16 @@ impl<'a> Vm<'a> {
                                 });
                             }
                             value
+                        } else if let Some(value) = self.env.get(&name) {
+                            value
                         } else {
-                            self.env.get(&name).unwrap_or(Value::Undefined)
+                            // A bare global name may resolve to a property on
+                            // globalThis added via assignment or
+                            // defineProperty; reading it invokes any getter.
+                            // typeof yields "undefined" only when the reference
+                            // is genuinely unresolvable.
+                            self.global_this_own_value(&name)?
+                                .unwrap_or(Value::Undefined)
                         };
                         let value = if matches!(
                             &value,

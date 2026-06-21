@@ -961,6 +961,29 @@ fn typeof_respects_lexical_tdz() {
 }
 
 #[test]
+fn typeof_reads_global_object_properties() {
+    // `typeof name` for a bare global must consult properties added to
+    // globalThis via assignment or defineProperty (invoking any getter), not
+    // just declared bindings.
+    assert_eq!(
+        eval("Object.defineProperty(this, 'g', { value: 42 }); typeof g;"),
+        Ok(Value::String("number".to_owned().into()))
+    );
+    assert_eq!(
+        eval("Object.defineProperty(this, 'g', { get() { return 'hi'; } }); typeof g;"),
+        Ok(Value::String("string".to_owned().into()))
+    );
+    // A throwing getter propagates rather than collapsing to "undefined".
+    assert_eq!(
+        eval(
+            "Object.defineProperty(this, 'g', { get() { throw new TypeError('boom'); } });
+             try { typeof g; 'no throw'; } catch (e) { e.name; }"
+        ),
+        Ok(Value::String("TypeError".to_owned().into()))
+    );
+}
+
+#[test]
 fn destructuring_assignment_evaluates_member_targets_before_value_reads() {
     assert_eq!(
         eval(

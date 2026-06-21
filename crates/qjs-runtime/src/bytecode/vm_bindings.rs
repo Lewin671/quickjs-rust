@@ -287,22 +287,35 @@ impl Vm<'_> {
             }
             return Ok(value);
         }
-        let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
-            Some(Value::Object(global_this)) => Some(global_this.clone()),
-            _ => None,
-        };
-        if let Some(global_this) = global_this
-            && global_this.has_own_property(name)
-        {
-            let mut env = self.current_env();
-            let value = property_value(Value::Object(global_this), name, &mut env)?;
-            self.apply_env(env);
+        if let Some(value) = self.global_this_own_value(name)? {
             return Ok(value);
         }
         Err(RuntimeError {
             thrown: None,
             message: format!("ReferenceError: undefined identifier `{name}`"),
         })
+    }
+
+    /// Reads an own property of `globalThis` by name, invoking any getter, when
+    /// the name resolves to a property created directly on the global object
+    /// (e.g. `this.x = 1`, a realm binding, or `Object.defineProperty`). Returns
+    /// `None` when no such own property exists, so the caller can decide whether
+    /// that is a ReferenceError (a bare read) or "undefined" (a `typeof`).
+    pub(super) fn global_this_own_value(
+        &mut self,
+        name: &str,
+    ) -> Result<Option<Value>, RuntimeError> {
+        let global_this = match self.realm.borrow().get(GLOBAL_THIS_BINDING) {
+            Some(Value::Object(global_this)) => global_this.clone(),
+            _ => return Ok(None),
+        };
+        if !global_this.has_own_property(name) {
+            return Ok(None);
+        }
+        let mut env = self.current_env();
+        let value = property_value(Value::Object(global_this), name, &mut env)?;
+        self.apply_env(env);
+        Ok(Some(value))
     }
 
     pub(super) fn load_new_target(&self) -> Value {
