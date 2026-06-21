@@ -472,8 +472,15 @@ impl<'a> Vm<'a> {
                     );
                     let (home_object, super_constructor) = if lexical_this {
                         let home_object = self.env.get(HOME_OBJECT_BINDING);
-                        let super_constructor = self.env.get(SUPER_CONSTRUCTOR_BINDING);
+                        let mut super_constructor = self.env.get(SUPER_CONSTRUCTOR_BINDING);
                         if self.load_global("this").is_err() {
+                            self.captured_env.borrow_mut().insert(
+                                "this".to_owned(),
+                                Value::Function(Function::uninitialized_lexical_marker()),
+                            );
+                            if super_constructor.is_none() {
+                                super_constructor = Some(Value::Undefined);
+                            }
                             env.insert(
                                 "this".to_owned(),
                                 Value::Function(Function::uninitialized_lexical_marker()),

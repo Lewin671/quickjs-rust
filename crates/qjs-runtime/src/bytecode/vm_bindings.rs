@@ -232,6 +232,10 @@ impl Vm<'_> {
                 .env
                 .locals()
                 .contains_key(crate::SUPER_CONSTRUCTOR_BINDING)
+                && !self
+                    .env
+                    .locals()
+                    .contains_key(crate::ACTIVE_CONSTRUCTOR_BINDING)
                 && let Some(value) = self.env.get(name)
             {
                 return Ok(value);
@@ -1116,10 +1120,14 @@ impl Vm<'_> {
 
     fn refresh_derived_constructor_this_from_captured(&mut self) {
         if self.env.locals().contains_key("this")
-            || !self
+            || (!self
                 .env
                 .locals()
                 .contains_key(crate::SUPER_CONSTRUCTOR_BINDING)
+                && !self
+                    .env
+                    .locals()
+                    .contains_key(crate::ACTIVE_CONSTRUCTOR_BINDING))
         {
             return;
         }

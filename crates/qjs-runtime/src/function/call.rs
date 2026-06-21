@@ -655,11 +655,16 @@ fn function_env(
     if function.is_derived_constructor && is_construct {
         local_env.remove("this");
     } else if function.lexical_this {
-        let inherited_this = lexical_this.or_else(|| env.get_local("this")).or_else(|| {
-            (!env.locals().contains_key(crate::SUPER_CONSTRUCTOR_BINDING))
-                .then(|| env.get("this"))
-                .flatten()
-        });
+        let caller_has_derived_this_tdz =
+            env.locals().contains_key(crate::SUPER_CONSTRUCTOR_BINDING)
+                || env.locals().contains_key(crate::ACTIVE_CONSTRUCTOR_BINDING);
+        let inherited_this = if caller_has_derived_this_tdz {
+            env.get_local("this")
+        } else {
+            lexical_this
+                .or_else(|| env.get_local("this"))
+                .or_else(|| env.get("this"))
+        };
         if let Some(this_value) = inherited_this {
             if matches!(
                 &this_value,

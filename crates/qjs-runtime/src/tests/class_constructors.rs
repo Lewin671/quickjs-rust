@@ -187,6 +187,26 @@ fn null_extending_class_uses_function_prototype_as_constructor_parent() {
 }
 
 #[test]
+fn null_extending_constructor_arrows_keep_this_uninitialized() {
+    assert_eq!(
+        eval(
+            "var inner; \
+             class C extends null { \
+               constructor() { \
+                 try { (() => this)(); } catch (error) { inner = error.name; } \
+               } \
+             } \
+             var outer; \
+             try { new C(); } catch (error) { outer = error.name; } \
+             inner + ':' + outer;"
+        ),
+        Ok(Value::String(
+            "ReferenceError:ReferenceError".to_owned().into()
+        ))
+    );
+}
+
+#[test]
 fn explicit_derived_constructor_must_call_super_before_returning() {
     assert!(
         eval("class B {} class C extends B { constructor() {} } new C();").is_err(),
