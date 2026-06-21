@@ -559,6 +559,12 @@ fn parses_dynamic_import_with_options_and_trailing_comma() {
 }
 
 #[test]
+fn parses_dynamic_import_arguments_with_in_inside_for_head() {
+    parse_script("for (promise = import('./mod.js', 'type' in {} || undefined); false; ) ;")
+        .expect("dynamic import arguments allow `in` even in a for head initializer");
+}
+
+#[test]
 fn parses_import_meta() {
     let script = parse_module("import.meta;").expect("module should parse");
     assert!(matches!(

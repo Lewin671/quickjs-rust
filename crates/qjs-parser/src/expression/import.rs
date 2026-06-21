@@ -74,7 +74,7 @@ impl Parser {
                 span: import_token.span,
             });
         }
-        let specifier = self.assignment()?;
+        let specifier = self.assignment_allow_in()?;
         let mut options = None;
         if self.match_kind(&TokenKind::Comma) && !self.at(&TokenKind::RightParen) {
             if self.at(&TokenKind::DotDotDot) {
@@ -83,7 +83,7 @@ impl Parser {
                     span: import_token.span,
                 });
             }
-            options = Some(Box::new(self.assignment()?));
+            options = Some(Box::new(self.assignment_allow_in()?));
             // A trailing comma after the options argument is allowed; a third
             // argument is not (ImportCall must not be extended).
             if self.match_kind(&TokenKind::Comma) && !self.at(&TokenKind::RightParen) {
