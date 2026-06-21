@@ -165,6 +165,48 @@ fn evaluates_array_from_static_constructor() {
 }
 
 #[test]
+fn array_from_and_of_use_dynamic_function_realm_object_prototype() {
+    assert_eq!(
+        eval(
+            "var __quickjsRustDynamicFunctionRealm; \
+             var realmGlobal = Object.create(globalThis); \
+             var crossRealmObject = function Object(value) { return globalThis.Object(value); }; \
+             var crossRealmObjectPrototype = Object.create(globalThis.Object.prototype); \
+             crossRealmObject.prototype = crossRealmObjectPrototype; \
+             var crossRealmFunction = function Function() { \
+               var previousRealm = __quickjsRustDynamicFunctionRealm; \
+               __quickjsRustDynamicFunctionRealm = realmGlobal; \
+               globalThis.__quickjsRustDynamicFunctionRealm = realmGlobal; \
+               try { var fn = globalThis.Function.apply(null, arguments); } \
+               finally { \
+                 __quickjsRustDynamicFunctionRealm = previousRealm; \
+                 globalThis.__quickjsRustDynamicFunctionRealm = previousRealm; \
+               } \
+               Object.setPrototypeOf(fn.prototype, crossRealmObject.prototype); \
+               var prototype = (new.target || crossRealmFunction).prototype; \
+               if (prototype !== null && (typeof prototype === 'object' || typeof prototype === 'function')) { \
+                 Object.setPrototypeOf(fn, prototype); \
+               } \
+               Object.defineProperty(fn, '__quickjsRustRealmObjectPrototype', { value: crossRealmObject.prototype }); \
+               return fn; \
+             }; \
+             var crossRealmFunctionPrototype = function() {}; \
+             crossRealmFunction.prototype = crossRealmFunctionPrototype; \
+             realmGlobal.Object = crossRealmObject; \
+             realmGlobal.Function = crossRealmFunction; \
+             realmGlobal.globalThis = realmGlobal; \
+             var C = new realmGlobal.Function(); \
+             C.prototype = null; \
+             var ofResult = Array.of.call(C, 1, 2, 3); \
+             var fromResult = Array.from.call(C, []); \
+             Object.getPrototypeOf(ofResult) === realmGlobal.Object.prototype \
+               && Object.getPrototypeOf(fromResult) === realmGlobal.Object.prototype;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn exposes_array_from_async_static_surface() {
     assert_eq!(
         eval("typeof Array.fromAsync + ':' + Array.fromAsync.length + ':' + Array.fromAsync.name;"),

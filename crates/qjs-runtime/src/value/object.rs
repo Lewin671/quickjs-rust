@@ -99,14 +99,39 @@ impl Prototype {
     /// Whether this prototype is (or descends to) the object `target`, used to
     /// reject prototype cycles.
     fn would_cycle(&self, target: &ObjectRef) -> bool {
+        self.would_cycle_inner(target, &mut Vec::new(), &mut Vec::new())
+    }
+
+    fn would_cycle_inner(
+        &self,
+        target: &ObjectRef,
+        seen_objects: &mut Vec<ObjectRef>,
+        seen_functions: &mut Vec<Function>,
+    ) -> bool {
         match self {
             Self::Object(object) => {
-                object.ptr_eq(target)
-                    || object
-                        .prototype_slot()
-                        .is_some_and(|prototype| prototype.would_cycle(target))
+                if object.ptr_eq(target) {
+                    return true;
+                }
+                if seen_objects.iter().any(|seen| seen.ptr_eq(object)) {
+                    return false;
+                }
+                seen_objects.push(object.clone());
+                object.prototype_slot().is_some_and(|prototype| {
+                    prototype.would_cycle_inner(target, seen_objects, seen_functions)
+                })
             }
-            Self::Function(_) => false,
+            Self::Function(function) => {
+                if seen_functions.iter().any(|seen| seen.ptr_eq(function)) {
+                    return false;
+                }
+                seen_functions.push(function.clone());
+                function
+                    .effective_internal_prototype()
+                    .is_some_and(|prototype| {
+                        prototype.would_cycle_inner(target, seen_objects, seen_functions)
+                    })
+            }
             Self::Proxy(_) => false,
         }
     }

@@ -84,6 +84,28 @@ fn evaluates_object_prototype_mutation_builtins() {
         eval("function f() {} Object.setPrototypeOf(f, null); Object.getPrototypeOf(f);"),
         Ok(Value::Null)
     );
+    assert_eq!(
+        eval(
+            "let caught = false; function f() {} try { Object.setPrototypeOf(f, f); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("function f() {} Reflect.setPrototypeOf(f, f);"),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval(
+            "let caught = false; let object = {}; function f() {} Object.setPrototypeOf(f, object); try { Object.setPrototypeOf(object, f); } catch (error) { caught = error instanceof TypeError; } caught;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let object = {}; function f() {} Object.setPrototypeOf(f, object); Reflect.setPrototypeOf(object, f);"
+        ),
+        Ok(Value::Boolean(false))
+    );
     assert!(eval("Object.setPrototypeOf(null, null);").is_err());
     assert!(eval("Object.setPrototypeOf(undefined, null);").is_err());
     assert!(eval("Object.setPrototypeOf({}, 1);").is_err());

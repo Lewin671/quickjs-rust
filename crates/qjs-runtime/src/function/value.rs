@@ -772,7 +772,7 @@ impl Function {
     /// Returns `None` only when the prototype is explicitly `null` or the
     /// intrinsic cannot be resolved (for example a native function with no
     /// captured globals).
-    fn effective_internal_prototype(&self) -> Option<Prototype> {
+    pub(crate) fn effective_internal_prototype(&self) -> Option<Prototype> {
         self.effective_internal_prototype_with_env(&crate::CallEnv::from_map(self.env.clone()))
     }
 
@@ -943,6 +943,12 @@ impl Function {
         if !self.extensible.get() {
             return Err(());
         }
+        if prototype
+            .as_ref()
+            .is_some_and(|prototype| prototype_chain_contains_function(prototype, self))
+        {
+            return Err(());
+        }
         *self.internal_prototype.borrow_mut() = Some(prototype);
         Ok(())
     }
@@ -976,6 +982,54 @@ fn same_prototype_slot(left: &Option<Prototype>, right: &Option<Prototype>) -> b
         (None, None) => true,
         (Some(left), Some(right)) => left.ptr_eq(right),
         _ => false,
+    }
+}
+
+fn prototype_chain_contains_function(prototype: &Prototype, target: &Function) -> bool {
+    prototype_chain_contains_function_inner(prototype, target, &mut Vec::new(), &mut Vec::new())
+}
+
+fn prototype_chain_contains_function_inner(
+    prototype: &Prototype,
+    target: &Function,
+    seen_functions: &mut Vec<Function>,
+    seen_objects: &mut Vec<ObjectRef>,
+) -> bool {
+    match prototype {
+        Prototype::Function(function) => {
+            if function.ptr_eq(target) {
+                return true;
+            }
+            if seen_functions.iter().any(|seen| seen.ptr_eq(function)) {
+                return false;
+            }
+            seen_functions.push(function.clone());
+            function
+                .effective_internal_prototype()
+                .is_some_and(|prototype| {
+                    prototype_chain_contains_function_inner(
+                        &prototype,
+                        target,
+                        seen_functions,
+                        seen_objects,
+                    )
+                })
+        }
+        Prototype::Object(object) => {
+            if seen_objects.iter().any(|seen| seen.ptr_eq(object)) {
+                return false;
+            }
+            seen_objects.push(object.clone());
+            object.prototype_slot().is_some_and(|prototype| {
+                prototype_chain_contains_function_inner(
+                    &prototype,
+                    target,
+                    seen_functions,
+                    seen_objects,
+                )
+            })
+        }
+        Prototype::Proxy(_) => false,
     }
 }
 

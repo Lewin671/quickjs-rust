@@ -18,6 +18,16 @@ pub(super) fn sync_global_var_captures(
     let Some(Value::Object(global_this)) = captured.get(GLOBAL_THIS_BINDING) else {
         return;
     };
+    if captured
+        .get(DYNAMIC_FUNCTION_REALM_GLOBAL)
+        .is_some_and(|value| matches!(value, Value::Object(realm) if realm.ptr_eq(global_this)))
+        && !matches!(
+            env.get(GLOBAL_THIS_BINDING),
+            Some(Value::Object(caller_global)) if caller_global.ptr_eq(global_this)
+        )
+    {
+        return;
+    }
     for (name, value) in captured.iter() {
         if is_call_frame_binding(name) || !global_this.has_own_property(name) {
             continue;
