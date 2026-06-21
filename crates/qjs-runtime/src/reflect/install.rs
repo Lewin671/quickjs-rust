@@ -64,6 +64,9 @@ pub(crate) fn install_reflect(env: &mut CallEnv, global_this: &Value, object_pro
         NativeFunction::ReflectSetPrototypeOf,
     );
 
+    reflect_object.set_to_string_tag("Reflect");
+    crate::symbol::define_well_known_to_string_tag(env, &reflect_object, "Reflect");
+
     let reflect_value = Value::Object(reflect_object);
     env.insert_realm("Reflect".to_owned(), reflect_value.clone());
     if let Value::Object(global_object) = global_this {
