@@ -222,13 +222,9 @@ pub(super) fn native_math_pow(
         argument_values.get(1).cloned().unwrap_or(Value::Undefined),
         env,
     )?;
-    if exponent.is_nan() {
-        return Ok(Value::Number(f64::NAN));
-    }
-    if base.abs() == 1.0 && exponent.is_infinite() {
-        return Ok(Value::Number(f64::NAN));
-    }
-    Ok(Value::Number(base.powf(exponent)))
+    Ok(Value::Number(crate::operations::number_exponentiate(
+        base, exponent,
+    )))
 }
 
 pub(super) fn native_math_random() -> Result<Value, RuntimeError> {

@@ -19,6 +19,30 @@ fn evaluates_arithmetic() {
 }
 
 #[test]
+fn exponentiation_operator_handles_nan_and_unit_base_infinity() {
+    // Number::exponentiate: a base of magnitude 1 with an infinite exponent,
+    // or any NaN exponent, yields NaN even though IEEE pow would return 1.
+    // The `**` operator's runtime fast path must match Math.pow here.
+    assert_eq!(eval("Number.isNaN(1 ** Infinity);"), Ok(Value::Boolean(true)));
+    assert_eq!(
+        eval("Number.isNaN((-1) ** Infinity);"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("Number.isNaN(1 ** -Infinity);"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(eval("Number.isNaN(1 ** NaN);"), Ok(Value::Boolean(true)));
+    assert_eq!(
+        eval("Number.isNaN(Math.pow(-1, Infinity));"),
+        Ok(Value::Boolean(true))
+    );
+    // Ordinary cases are unaffected.
+    assert_eq!(eval("2 ** 10;"), Ok(Value::Number(1024.0)));
+    assert_eq!(eval("Math.pow(2, 0.5) === Math.SQRT2;"), Ok(Value::Boolean(true)));
+}
+
+#[test]
 fn evaluates_loose_equality_edge_cases() {
     assert_eq!(
         eval(

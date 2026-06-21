@@ -770,7 +770,7 @@ pub(super) fn fast_number_binary(left: &Value, op: BinaryOp, right: &Value) -> O
         BinaryOp::Mul => Value::Number(left * right),
         BinaryOp::Div => Value::Number(left / right),
         BinaryOp::Rem => Value::Number(left % right),
-        BinaryOp::Pow => Value::Number(left.powf(*right)),
+        BinaryOp::Pow => Value::Number(crate::operations::number_exponentiate(*left, *right)),
         BinaryOp::Shl => Value::Number(f64::from(
             to_int32_number(*left) << (to_uint32_number(*right) & 0x1f),
         )),

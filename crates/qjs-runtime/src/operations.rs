@@ -103,13 +103,7 @@ pub(crate) fn eval_binary(
         BinaryOp::Add => left + right,
         BinaryOp::Sub => left - right,
         BinaryOp::Mul => left * right,
-        BinaryOp::Pow => {
-            if left.abs() == 1.0 && right.is_infinite() {
-                f64::NAN
-            } else {
-                left.powf(right)
-            }
-        }
+        BinaryOp::Pow => number_exponentiate(left, right),
         BinaryOp::Div => left / right,
         BinaryOp::Rem => left % right,
         BinaryOp::Shl => {
@@ -157,6 +151,20 @@ pub(crate) fn eval_binary(
         | BinaryOp::NullishCoalescing => unreachable!("handled before numeric binary evaluation"),
     };
     Ok(Value::Number(value))
+}
+
+/// Number::exponentiate (the `**` operator and `Math.pow`). A NaN exponent, or
+/// a base whose magnitude is exactly 1 raised to an infinite exponent, both
+/// yield NaN; every other case follows IEEE 754 `pow`. The two NaN cases differ
+/// from Rust's `f64::powf`, which returns 1 for `1.powf(±∞)` and `1.powf(NaN)`.
+pub(crate) fn number_exponentiate(base: f64, exponent: f64) -> f64 {
+    if exponent.is_nan() {
+        return f64::NAN;
+    }
+    if base.abs() == 1.0 && exponent.is_infinite() {
+        return f64::NAN;
+    }
+    base.powf(exponent)
 }
 
 fn to_numeric_with_env(value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
