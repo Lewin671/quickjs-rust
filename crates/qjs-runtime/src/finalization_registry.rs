@@ -196,7 +196,7 @@ fn finalization_registry_unregister(
     Ok(removed)
 }
 
-fn can_be_held_weakly(value: &Value, env: &CallEnv) -> bool {
+pub(crate) fn can_be_held_weakly(value: &Value, env: &CallEnv) -> bool {
     match value {
         Value::Object(object) if symbol::is_symbol_primitive(object) => {
             !symbol::is_registered_symbol(object, env)

@@ -47,11 +47,13 @@ pub(crate) fn native_weak_ref(
             message: "TypeError: Constructor WeakRef requires 'new'".to_owned(),
         });
     }
+    // CanBeHeldWeakly: an object, or a non-registered symbol (ES2023).
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
-    if !is_object_value(&target) {
+    if !crate::finalization_registry::can_be_held_weakly(&target, env) {
         return Err(RuntimeError {
             thrown: None,
-            message: "TypeError: WeakRef target must be an object".to_owned(),
+            message: "TypeError: WeakRef target must be an object or an unregistered symbol"
+                .to_owned(),
         });
     }
     let object = ObjectRef::with_prototype_slot(
@@ -79,14 +81,4 @@ fn weak_ref_object(value: &Value) -> Result<ObjectRef, RuntimeError> {
             message: "TypeError: WeakRef method called on incompatible receiver".to_owned(),
         }),
     }
-}
-
-fn is_object_value(value: &Value) -> bool {
-    matches!(
-        value,
-        Value::Object(object) if !symbol::is_symbol_primitive(object)
-    ) || matches!(
-        value,
-        Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_) | Value::Proxy(_)
-    )
 }
