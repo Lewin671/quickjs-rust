@@ -230,7 +230,11 @@ impl Parser {
             let nested_start = self.peek().map_or(start, |token| token.span.start);
             self.new_expression(nested_start)?
         } else {
-            self.member_chain()?
+            let mut callee = self.member_chain()?;
+            while self.at_template_literal() {
+                callee = self.finish_tagged_template_literal(callee)?;
+            }
+            callee
         };
         // `import(...)` is a CallExpression; a direct `new import(...)` is a
         // syntax error, while `new (import(...))` is a covered expression and

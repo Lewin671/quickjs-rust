@@ -1,6 +1,6 @@
 use qjs_ast::{
-    AssignmentOp, AssignmentTarget, AssignmentTargetPropertyKey, BinaryOp, Expr, Stmt, UnaryOp,
-    UpdateOp,
+    AssignmentOp, AssignmentTarget, AssignmentTargetPropertyKey, BinaryOp, CallArgument, Expr,
+    Stmt, UnaryOp, UpdateOp,
 };
 
 use crate::parse_script;
@@ -565,4 +565,33 @@ fn parses_nested_new_expression() {
     assert!(parse_script("new new F();").is_ok());
     assert!(parse_script("new new F;").is_ok());
     assert!(parse_script("new new B(1)(2);").is_ok());
+}
+
+#[test]
+fn tagged_template_binds_inside_new_callee() {
+    let script = parse_script("new tag`template`;").expect("source should parse");
+    let [
+        Stmt::Expr(Expr::New {
+            callee, arguments, ..
+        }),
+    ] = script.body.as_slice()
+    else {
+        panic!("expected one new expression statement");
+    };
+    assert!(matches!(callee.as_ref(), Expr::TaggedTemplate { .. }));
+    assert!(arguments.is_empty());
+
+    let script = parse_script("new tag`template`(argument);").expect("source should parse");
+    let [
+        Stmt::Expr(Expr::New {
+            callee, arguments, ..
+        }),
+    ] = script.body.as_slice()
+    else {
+        panic!("expected one new expression statement");
+    };
+    assert!(matches!(callee.as_ref(), Expr::TaggedTemplate { .. }));
+    assert!(
+        matches!(arguments.as_slice(), [CallArgument::Expr(Expr::Identifier { name, .. })] if name == "argument")
+    );
 }

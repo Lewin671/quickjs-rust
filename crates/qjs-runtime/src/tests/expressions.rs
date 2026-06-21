@@ -205,6 +205,28 @@ fn tagged_template_objects_are_cached_by_site() {
 }
 
 #[test]
+fn tagged_template_binds_before_new_invocation() {
+    assert_eq!(
+        eval(
+            "function Constructor(x) { this.arg = x; } let templateObject; function tag(strings) { templateObject = strings; return Constructor; } let instance = new tag`first template`; [instance instanceof Constructor, templateObject[0], typeof instance.arg].join(',');"
+        ),
+        Ok(Value::String(
+            "true,first template,undefined".to_owned().into()
+        ))
+    );
+    assert_eq!(
+        eval(
+            "function Constructor(x) { this.arg = x; } let templateObject; function tag(strings) { templateObject = strings; return Constructor; } let instance = new tag`second template`('constructor argument'); [instance instanceof Constructor, templateObject[0], instance.arg].join(',');"
+        ),
+        Ok(Value::String(
+            "true,second template,constructor argument"
+                .to_owned()
+                .into()
+        ))
+    );
+}
+
+#[test]
 fn evaluates_comparison_and_equality() {
     assert_eq!(eval("1 + 2 * 3 >= 7;"), Ok(Value::Boolean(true)));
     assert_eq!(eval("'2' < '10';"), Ok(Value::Boolean(false)));
