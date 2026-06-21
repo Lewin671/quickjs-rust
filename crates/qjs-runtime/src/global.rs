@@ -281,8 +281,16 @@ pub(super) fn native_global_eval(
             message: "SyntaxError: cannot declare 'arguments' in function eval".to_owned(),
         });
     }
-    if !direct_function_eval {
-        validate_eval_global_lexical_bindings(&bytecode, &eval_env, false)?;
+    // A direct eval always gets its own declarative lexical environment, so its
+    // `let`/`const`/`class` declarations never clash with an existing *lexical*
+    // global binding (`let outside; eval('let outside;')` is two distinct
+    // bindings). They must still not clash with a non-configurable global *var*
+    // binding, and an indirect eval — whose lexicals do go into the global
+    // lexical environment — is checked against both.
+    if direct_function_eval {
+        // A function-scope direct eval declares no global lexicals at all.
+    } else {
+        validate_eval_global_lexical_bindings(&bytecode, &eval_env, false, !direct_eval)?;
     }
     let caller_locals = eval_env.locals().keys().cloned().collect::<HashSet<_>>();
     let hoisted_names = bytecode
@@ -393,7 +401,7 @@ pub(super) fn native_eval_script(
     })?;
     let bytecode = compile_direct_eval_script(&script, false)?;
     let mut eval_env = env.empty_frame();
-    validate_eval_global_lexical_bindings(&bytecode, env, true)?;
+    validate_eval_global_lexical_bindings(&bytecode, env, true, true)?;
     // $262.evalScript runs GlobalDeclarationInstantiation: a var/function
     // declaration that cannot be created on a non-extensible global, or that
     // collides with an existing global lexical, is rejected before evaluation.
@@ -543,6 +551,7 @@ fn validate_eval_global_lexical_bindings(
     bytecode: &crate::bytecode::Bytecode,
     env: &CallEnv,
     include_captured_global_lexicals: bool,
+    check_lexical_conflict: bool,
 ) -> Result<(), RuntimeError> {
     let global_this = env.get(GLOBAL_THIS_BINDING).and_then(|value| match value {
         Value::Object(object) => Some(object),
@@ -550,7 +559,13 @@ fn validate_eval_global_lexical_bindings(
     });
     if let Some(global_this) = &global_this {
         for name in bytecode.global_lexical_names() {
-            if has_global_lexical_binding(env, global_this, name, include_captured_global_lexicals)
+            if check_lexical_conflict
+                && has_global_lexical_binding(
+                    env,
+                    global_this,
+                    name,
+                    include_captured_global_lexicals,
+                )
             {
                 return Err(RuntimeError {
                     thrown: None,

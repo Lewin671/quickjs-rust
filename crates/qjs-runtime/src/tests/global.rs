@@ -253,6 +253,17 @@ fn evaluates_global_eval_builtin() {
         ),
         Ok(Value::String("true:undefined".to_owned().into()))
     );
+    // A direct eval gets its own lexical environment, so a `let` whose name
+    // matches an outer *lexical* binding is distinct, not a conflict, and never
+    // leaks out of the eval.
+    assert_eq!(
+        eval("let distinctOuter = 23; eval('let distinctOuter = 1;'); distinctOuter;"),
+        Ok(Value::Number(23.0))
+    );
+    assert_eq!(
+        eval("eval('let evalLocalLexical = 3;'); typeof evalLocalLexical;"),
+        Ok(Value::String("undefined".to_owned().into()))
+    );
 }
 
 #[test]
