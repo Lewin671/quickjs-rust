@@ -667,6 +667,44 @@ pub(crate) fn create_async_from_sync_iterator(
     Ok(Value::Object(wrapper))
 }
 
+/// Builds a `TypeError` value with the given message, suitable for rejecting a
+/// promise capability (a real error object, not a bare string).
+fn type_error_value(message: &str, env: &mut CallEnv) -> Value {
+    crate::error::runtime_error_to_value(
+        RuntimeError {
+            thrown: None,
+            message: format!("TypeError: {message}"),
+        },
+        env,
+    )
+}
+
+/// `IteratorClose(syncIterator, NormalCompletion)` specialised to the
+/// async-from-sync `throw`-without-throw path: calls the sync iterator's
+/// `return` (if any) and discards its value. Returns `Some(reason)` carrying the
+/// rejection value when the `return` lookup or call is abrupt, or when the
+/// `return` result is not an object; `None` when the iterator closed cleanly.
+fn close_sync_iterator(sync_iterator: &Value, env: &mut CallEnv) -> Option<Value> {
+    let return_method = match property_value(sync_iterator.clone(), "return", env) {
+        Ok(value) => value,
+        Err(error) => return Some(crate::error::runtime_error_to_value(error, env)),
+    };
+    if matches!(return_method, Value::Undefined | Value::Null) {
+        return None;
+    }
+    let result = match call_function(return_method, sync_iterator.clone(), Vec::new(), env, false) {
+        Ok(value) => value,
+        Err(error) => return Some(crate::error::runtime_error_to_value(error, env)),
+    };
+    if !matches!(result, Value::Object(_) | Value::Array(_)) {
+        return Some(type_error_value(
+            "iterator return result is not an object",
+            env,
+        ));
+    }
+    None
+}
+
 /// The `next`/`return`/`throw` of a CreateAsyncFromSyncIterator wrapper: invokes
 /// the matching sync-iterator method, then awaits the result's `value` and
 /// resolves a wrapper promise with `{ value: awaited, done }`. A `return`/`throw`
@@ -721,8 +759,19 @@ fn async_from_sync_method(
     if matches!(native, NativeFunction::AsyncFromSyncIteratorThrow)
         && matches!(method, Value::Undefined | Value::Null)
     {
-        // No `throw`: reject with the argument.
-        promise::reject_promise_capability(&capability, argument, env);
+        // No `throw` method (GetMethod treats null as absent): close the sync
+        // iterator, then reject with a TypeError. An abrupt close (a poisoned
+        // `return` getter, or a `return` result that is not an object) rejects
+        // with that completion instead (spec 27.1.6.2.3, step 7).
+        if let Some(reason) = close_sync_iterator(&sync_iterator, env) {
+            promise::reject_promise_capability(&capability, reason, env);
+            return Value::Object(capability);
+        }
+        promise::reject_promise_capability(
+            &capability,
+            type_error_value("The iterator does not provide a throw method", env),
+            env,
+        );
         return Value::Object(capability);
     }
 
@@ -741,11 +790,7 @@ fn async_from_sync_method(
     if !matches!(result, Value::Object(_) | Value::Array(_)) {
         promise::reject_promise_capability(
             &capability,
-            Value::String(
-                "TypeError: iterator result is not an object"
-                    .to_owned()
-                    .into(),
-            ),
+            type_error_value("iterator result is not an object", env),
             env,
         );
         return Value::Object(capability);
