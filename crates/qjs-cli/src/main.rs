@@ -219,25 +219,128 @@ fn with_script_args(source: &str, script_args: &[String]) -> String {
         .join(", ");
     let declaration = format!("var scriptArgs = [{args}];\n");
     let (hashbang, source) = split_hashbang_prefix(source);
-    if let Some(rest) = source.strip_prefix("\"use strict\";\n") {
-        return format!("{hashbang}\"use strict\";\n{declaration}{rest}");
+    // Inject the declaration *after* the directive prologue, not before it, so a
+    // leading `"use strict"` keeps its directive status. The prologue may be
+    // preceded and interleaved by comments (every Test262 file opens with a
+    // license/metadata comment block), which a literal prefix match misses; that
+    // misplacement demoted the directive and silently dropped strict mode.
+    let prologue_end = directive_prologue_end(source);
+    let (prologue, rest) = source.split_at(prologue_end);
+    let separator = if prologue.is_empty() || prologue.ends_with('\n') {
+        ""
+    } else {
+        "\n"
+    };
+    format!("{hashbang}{prologue}{separator}{declaration}{rest}")
+}
+
+/// Returns the byte offset at the end of `source`'s directive prologue: the
+/// leading run of comments/whitespace and string-literal directive statements.
+/// Injected top-level declarations placed here cannot demote a `"use strict"`
+/// directive.
+fn directive_prologue_end(source: &str) -> usize {
+    let bytes = source.as_bytes();
+    let mut index = 0;
+    let mut prologue_end = 0;
+    loop {
+        index = skip_trivia(source, index);
+        let Some(string_end) = string_literal_end(bytes, index) else {
+            return prologue_end;
+        };
+        // The string is a directive only if it forms a complete statement:
+        // terminated by `;`, end of input, or `}`, or — by ASI — followed across
+        // a line break by a token that starts a new statement. A string that
+        // continues an expression (`"x".length`, `"x" + y`) is not a directive,
+        // and injecting after it would corrupt the program.
+        let after = skip_trivia(source, string_end);
+        let crossed_newline = source[string_end..after]
+            .bytes()
+            .any(|byte| byte == b'\n' || byte == b'\r');
+        let consumed = match bytes.get(after).copied() {
+            Some(b';') => after + 1,
+            None | Some(b'}') => after,
+            Some(byte) if crossed_newline && !is_expression_continuation(byte) => after,
+            _ => return prologue_end,
+        };
+        prologue_end = consumed;
+        index = consumed;
     }
-    if let Some(rest) = source.strip_prefix("\"use strict\";") {
-        return format!("{hashbang}\"use strict\";\n{declaration}{rest}");
+}
+
+/// Whether `byte` can begin a token that continues the expression a preceding
+/// string literal started (so the string is not a complete directive statement).
+fn is_expression_continuation(byte: u8) -> bool {
+    matches!(
+        byte,
+        b'.' | b'('
+            | b'['
+            | b'+'
+            | b'-'
+            | b'*'
+            | b'/'
+            | b'%'
+            | b'<'
+            | b'>'
+            | b'='
+            | b'!'
+            | b'&'
+            | b'|'
+            | b'^'
+            | b'~'
+            | b','
+            | b'?'
+            | b':'
+            | b'`'
+    )
+}
+
+/// Skips ASCII/JS whitespace, line terminators, and `//`/`/* */` comments.
+fn skip_trivia(source: &str, mut index: usize) -> usize {
+    let bytes = source.as_bytes();
+    loop {
+        match bytes.get(index) {
+            Some(b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c) => index += 1,
+            Some(b'/') if bytes.get(index + 1) == Some(&b'/') => {
+                index += 2;
+                while let Some(&ch) = bytes.get(index) {
+                    if ch == b'\n' || ch == b'\r' {
+                        break;
+                    }
+                    index += 1;
+                }
+            }
+            Some(b'/') if bytes.get(index + 1) == Some(&b'*') => {
+                index += 2;
+                while index < bytes.len() {
+                    if bytes[index] == b'*' && bytes.get(index + 1) == Some(&b'/') {
+                        index += 2;
+                        break;
+                    }
+                    index += 1;
+                }
+            }
+            _ => return index,
+        }
     }
-    if let Some(rest) = source.strip_prefix("\"use strict\"\n") {
-        return format!("{hashbang}\"use strict\";\n{declaration}{rest}");
+}
+
+/// If `bytes[index]` begins a `'`/`"` string literal, returns the byte offset
+/// just past its closing quote; otherwise `None`.
+fn string_literal_end(bytes: &[u8], index: usize) -> Option<usize> {
+    let quote = match bytes.get(index) {
+        Some(&q @ (b'"' | b'\'')) => q,
+        _ => return None,
+    };
+    let mut cursor = index + 1;
+    while let Some(&ch) = bytes.get(cursor) {
+        match ch {
+            b'\\' => cursor += 2,
+            b'\n' | b'\r' => return None,
+            c if c == quote => return Some(cursor + 1),
+            _ => cursor += 1,
+        }
     }
-    if let Some(rest) = source.strip_prefix("'use strict';\n") {
-        return format!("{hashbang}'use strict';\n{declaration}{rest}");
-    }
-    if let Some(rest) = source.strip_prefix("'use strict';") {
-        return format!("{hashbang}'use strict';\n{declaration}{rest}");
-    }
-    if let Some(rest) = source.strip_prefix("'use strict'\n") {
-        return format!("{hashbang}'use strict';\n{declaration}{rest}");
-    }
-    format!("{hashbang}{declaration}{source}")
+    None
 }
 
 fn split_hashbang_prefix(source: &str) -> (String, &str) {
@@ -303,6 +406,33 @@ mod tests {
         let wrapped = with_script_args(source, &["case.js".to_owned()]);
 
         assert!(wrapped.starts_with("'use strict';\nvar scriptArgs = [\"case.js\"];\n"));
+    }
+
+    #[test]
+    fn keeps_use_strict_first_when_preceded_by_a_comment() {
+        // Every Test262 file opens with a license/metadata comment block; the
+        // injected declaration must land after the directive, not before it.
+        let source = "/*---\nmeta\n---*/\n\"use strict\";\neval = 42;";
+        let wrapped = with_script_args(source, &["case.js".to_owned()]);
+
+        let directive = wrapped.find("\"use strict\";").expect("directive kept");
+        let injected = wrapped
+            .find("var scriptArgs")
+            .expect("declaration injected");
+        assert!(
+            directive < injected,
+            "directive must precede the declaration"
+        );
+    }
+
+    #[test]
+    fn does_not_treat_a_leading_string_expression_as_a_directive() {
+        // A string that continues an expression is not a directive; injecting
+        // after it would corrupt the program.
+        let source = "\"abc\".length;";
+        let wrapped = with_script_args(source, &["case.js".to_owned()]);
+
+        assert!(wrapped.starts_with("var scriptArgs = [\"case.js\"];\n\"abc\".length;"));
     }
 
     #[test]
