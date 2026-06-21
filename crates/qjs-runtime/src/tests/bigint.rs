@@ -138,4 +138,12 @@ fn bigint_string_relational_uses_exact_comparison() {
     assert_eq!(eval("2n > '1.5';"), Ok(Value::Boolean(false)));
     assert_eq!(eval("2n < '1.5';"), Ok(Value::Boolean(false)));
     assert_eq!(eval("1n > 'abc';"), Ok(Value::Boolean(false)));
+    // A StringNumericLiteral allows at most one leading sign; a doubled sign is
+    // not a valid integer, so StringToBigInt is undefined and the comparison
+    // is false (a single sign still parses).
+    assert_eq!(eval("1n > '++0';"), Ok(Value::Boolean(false)));
+    assert_eq!(eval("1n > '--0';"), Ok(Value::Boolean(false)));
+    assert_eq!(eval("'++1' > 0n;"), Ok(Value::Boolean(false)));
+    assert_eq!(eval("'-1' < 0n;"), Ok(Value::Boolean(true)));
+    assert_eq!(eval("'+2' > 1n;"), Ok(Value::Boolean(true)));
 }

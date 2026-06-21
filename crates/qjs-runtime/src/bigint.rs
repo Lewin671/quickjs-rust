@@ -234,8 +234,18 @@ fn bigint_prototype(env: &CallEnv) -> Option<ObjectRef> {
 }
 
 fn parse_bigint_text(raw: &str, allow_separators: bool) -> Option<BigInt> {
-    let (sign, unsigned) = raw.strip_prefix('-').map_or((1, raw), |rest| (-1, rest));
-    let unsigned = unsigned.strip_prefix('+').unwrap_or(unsigned);
+    let (sign, unsigned) = if let Some(rest) = raw.strip_prefix('-') {
+        (-1, rest)
+    } else if let Some(rest) = raw.strip_prefix('+') {
+        (1, rest)
+    } else {
+        (1, raw)
+    };
+    // A StringNumericLiteral allows at most one leading sign; reject a second
+    // sign that `BigInt::parse_bytes` would otherwise consume (e.g. "++0").
+    if unsigned.starts_with(['+', '-']) {
+        return None;
+    }
     let (radix, digits, prefixed) = if let Some(digits) = unsigned
         .strip_prefix("0x")
         .or_else(|| unsigned.strip_prefix("0X"))
