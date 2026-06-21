@@ -194,7 +194,7 @@ pub(crate) fn proxy_get(
     // The trap result must agree with a non-configurable target property: a
     // non-writable data property's exact value, or undefined for an accessor
     // with no getter.
-    if let Some(target_descriptor) = crate::object::own_property_descriptor_key(target, key)?
+    if let Some(target_descriptor) = crate::object::own_property_descriptor_key(target, key, env)?
         && !target_descriptor.configurable
     {
         if target_descriptor.is_accessor() {
@@ -234,7 +234,7 @@ pub(crate) fn proxy_has(
         // non-configurable own property, or any own property of a
         // non-extensible target.
         if let Some(target_descriptor) =
-            crate::object::own_property_descriptor_key(target.clone(), key)?
+            crate::object::own_property_descriptor_key(target.clone(), key, env)?
         {
             if !target_descriptor.configurable {
                 return Err(invariant_error(
@@ -279,7 +279,8 @@ pub(crate) fn proxy_set(
         // A successful set may not contradict a non-configurable target
         // property: a non-writable data property keeps its value, and an
         // accessor with no setter cannot be assigned.
-        if let Some(target_descriptor) = crate::object::own_property_descriptor_key(target, key)?
+        if let Some(target_descriptor) =
+            crate::object::own_property_descriptor_key(target, key, env)?
             && !target_descriptor.configurable
         {
             if target_descriptor.is_accessor() {
@@ -320,7 +321,7 @@ pub(crate) fn proxy_delete_property(
     )?;
     if is_truthy(&result)
         && let Some(target_descriptor) =
-            crate::object::own_property_descriptor_key(target.clone(), key)?
+            crate::object::own_property_descriptor_key(target.clone(), key, env)?
     {
         // A reported deletion may not drop a property the target keeps: a
         // non-configurable property, or any property of a non-extensible target.
@@ -373,7 +374,7 @@ pub(crate) fn proxy_define_property(
     }
 
     // Target-consistency invariants (ECMA-262 10.5.6).
-    let target_descriptor = crate::object::own_property_descriptor_key(target.clone(), key)?;
+    let target_descriptor = crate::object::own_property_descriptor_key(target.clone(), key, env)?;
     let extensible_target = crate::object::ordinary_value_is_extensible(&target);
     let setting_config_false = descriptor.configurable_field() == Some(false);
     match target_descriptor {
@@ -453,7 +454,7 @@ pub(crate) fn proxy_get_own_property_descriptor(
         false,
     )?;
 
-    let target_descriptor = crate::object::own_property_descriptor_key(target.clone(), key)?;
+    let target_descriptor = crate::object::own_property_descriptor_key(target.clone(), key, env)?;
     let extensible_target = crate::object::ordinary_value_is_extensible(&target);
 
     let record = match &result {
@@ -721,7 +722,7 @@ pub(crate) fn proxy_own_keys(
     let mut non_configurable: Vec<PropertyKey> = Vec::new();
     let mut configurable_count = 0usize;
     for key in &target_keys {
-        match crate::object::own_property_descriptor_key(target.clone(), key)? {
+        match crate::object::own_property_descriptor_key(target.clone(), key, env)? {
             Some(descriptor) if !descriptor.configurable => non_configurable.push(key.clone()),
             Some(_) => configurable_count += 1,
             None => {}

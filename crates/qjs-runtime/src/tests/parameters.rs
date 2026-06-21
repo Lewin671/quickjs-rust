@@ -203,6 +203,66 @@ fn sloppy_arguments_callee_caller_is_undefined() {
 }
 
 #[test]
+fn mapped_arguments_nonconfigurable_descriptor_stays_mapped() {
+    assert_eq!(
+        eval(
+            "(function(a) { \
+                Object.defineProperty(arguments, '0', { configurable: false }); \
+                let before = Object.getOwnPropertyDescriptor(arguments, '0'); \
+                a = 2; \
+                let afterParam = Object.getOwnPropertyDescriptor(arguments, '0'); \
+                let argBeforeDefine = arguments[0]; \
+                Object.defineProperty(arguments, '0', { value: 3 }); \
+                let afterDefine = Object.getOwnPropertyDescriptor(arguments, '0'); \
+                return [ \
+                    before.value, before.writable, before.enumerable, before.configurable, \
+                    afterParam.value, argBeforeDefine, \
+                    afterDefine.value, a, afterDefine.writable, afterDefine.configurable \
+                ].join(':'); \
+             })(1);"
+        ),
+        Ok(Value::String(
+            "1:true:true:false:2:2:3:3:true:false".to_owned().into()
+        ))
+    );
+}
+
+#[test]
+fn mapped_arguments_nonwritable_descriptor_removes_mapping() {
+    assert_eq!(
+        eval(
+            "(function(a) { \
+                Object.defineProperty(arguments, '0', { configurable: false }); \
+                a = 2; \
+                Object.defineProperty(arguments, '0', { writable: false }); \
+                let frozen = Object.getOwnPropertyDescriptor(arguments, '0'); \
+                a = 3; \
+                let afterParam = Object.getOwnPropertyDescriptor(arguments, '0'); \
+                return [ \
+                    frozen.value, frozen.writable, frozen.enumerable, frozen.configurable, \
+                    a, arguments[0], afterParam.value \
+                ].join(':'); \
+             })(1);"
+        ),
+        Ok(Value::String("2:false:true:false:3:2:2".to_owned().into()))
+    );
+
+    assert_eq!(
+        eval(
+            "(function(a) { \
+                Object.defineProperty(arguments, '0', { configurable: false, enumerable: false }); \
+                arguments[0] = 2; \
+                Object.defineProperty(arguments, '0', { writable: false }); \
+                let frozen = Object.getOwnPropertyDescriptor(arguments, '0'); \
+                a = 3; \
+                return [a, arguments[0], frozen.value, frozen.writable, frozen.enumerable, frozen.configurable].join(':'); \
+             })(1);"
+        ),
+        Ok(Value::String("3:2:2:false:false:false".to_owned().into()))
+    );
+}
+
+#[test]
 fn arguments_symbol_iterator_is_array_prototype_values() {
     // An arguments object's `[Symbol.iterator]` is the same function object as
     // `Array.prototype.values` / `Array.prototype[Symbol.iterator]`.

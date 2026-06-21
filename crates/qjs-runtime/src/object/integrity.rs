@@ -219,7 +219,7 @@ fn set_integrity_level_on_proxy(
                     proxy.clone(),
                     &key,
                     env,
-                    |target, _env| crate::object::own_property_descriptor_key(target, &key),
+                    |target, env| crate::object::own_property_descriptor_key(target, &key, env),
                 )?;
                 let Some(property) = current else {
                     continue;
@@ -255,7 +255,7 @@ fn test_integrity_level_on_proxy(
             proxy.clone(),
             &key,
             env,
-            |target, _env| crate::object::own_property_descriptor_key(target, &key),
+            |target, env| crate::object::own_property_descriptor_key(target, &key, env),
         )?;
         let Some(property) = current else {
             continue;
@@ -293,7 +293,7 @@ fn freeze_typed_array_object(
         .into_iter()
         .map(crate::PropertyKey::Symbol);
     for key in string_keys.chain(symbol_keys) {
-        let current = crate::object::own_property_descriptor_key(target.clone(), &key)?;
+        let current = crate::object::own_property_descriptor_key(target.clone(), &key, env)?;
         let Some(property) = current else {
             continue;
         };

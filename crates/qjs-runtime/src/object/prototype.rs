@@ -232,11 +232,11 @@ fn value_own_property_descriptor(
     env: &mut CallEnv,
 ) -> Result<Option<Property>, RuntimeError> {
     if let Value::Proxy(proxy) = &value {
-        crate::proxy::proxy_get_own_property_descriptor(proxy.clone(), key, env, |target, _env| {
-            own_property_descriptor_key(target, key)
+        crate::proxy::proxy_get_own_property_descriptor(proxy.clone(), key, env, |target, env| {
+            own_property_descriptor_key(target, key, env)
         })
     } else {
-        own_property_descriptor_key(value, key)
+        own_property_descriptor_key(value, key, env)
     }
 }
 
@@ -438,11 +438,11 @@ fn lookup_own_property_descriptor(
     env: &mut CallEnv,
 ) -> Result<Option<Property>, RuntimeError> {
     if let Value::Proxy(proxy) = &value {
-        crate::proxy::proxy_get_own_property_descriptor(proxy.clone(), key, env, |target, _env| {
-            own_property_descriptor_key(target, key)
+        crate::proxy::proxy_get_own_property_descriptor(proxy.clone(), key, env, |target, env| {
+            own_property_descriptor_key(target, key, env)
         })
     } else {
-        own_property_descriptor_key(value, key)
+        own_property_descriptor_key(value, key, env)
     }
 }
 

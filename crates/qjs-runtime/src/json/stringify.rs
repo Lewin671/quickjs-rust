@@ -272,11 +272,11 @@ fn own_property_descriptor(
 ) -> Result<Option<Property>, RuntimeError> {
     match value {
         Value::Proxy(proxy) => {
-            crate::proxy::proxy_get_own_property_descriptor(proxy, key, env, |target, _| {
-                crate::object::own_property_descriptor_key(target, key)
+            crate::proxy::proxy_get_own_property_descriptor(proxy, key, env, |target, env| {
+                crate::object::own_property_descriptor_key(target, key, env)
             })
         }
-        value => crate::object::own_property_descriptor_key(value, key),
+        value => crate::object::own_property_descriptor_key(value, key, env),
     }
 }
 

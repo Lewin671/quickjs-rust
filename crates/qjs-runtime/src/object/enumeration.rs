@@ -140,7 +140,7 @@ pub(crate) fn native_object_has_own(
         env,
     )?;
     Ok(Value::Boolean(
-        own_property_descriptor_key(target, &key)?.is_some(),
+        own_property_descriptor_key(target, &key, env)?.is_some(),
     ))
 }
 
@@ -283,11 +283,11 @@ pub(crate) fn observable_own_property_descriptor(
             proxy.clone(),
             key,
             env,
-            |target, _env| own_property_descriptor_key(target, key),
+            |target, env| own_property_descriptor_key(target, key, env),
         );
     }
 
-    own_property_descriptor_key(value, key)
+    own_property_descriptor_key(value, key, env)
 }
 
 pub(crate) fn own_property_keys(value: Value) -> Vec<String> {

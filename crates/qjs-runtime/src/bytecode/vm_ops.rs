@@ -152,7 +152,7 @@ impl Vm<'_> {
                         proxy.clone(),
                         &property_key,
                         &mut self.env,
-                        |t, _env| crate::object::own_property_descriptor_key(t, &property_key),
+                        |t, env| crate::object::own_property_descriptor_key(t, &property_key, env),
                     )?;
                     if let Some(property) = descriptor {
                         return Ok(property.enumerable);

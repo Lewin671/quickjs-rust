@@ -52,7 +52,7 @@ pub(crate) fn ordinary_set(
         }
     }
 
-    if let Some(property) = own_property_descriptor_key(target.clone(), key)? {
+    if let Some(property) = own_property_descriptor_key(target.clone(), key, env)? {
         return ordinary_set_with_descriptor(property, key, value, receiver, env);
     }
 
@@ -99,7 +99,7 @@ fn set_receiver_data_property(
         Value::Object(object) => {
             if object.is_module_namespace_exotic() {
                 let property_key = PropertyKey::String(key.to_owned());
-                let _ = own_property_descriptor_key(Value::Object(object), &property_key)?;
+                let _ = own_property_descriptor_key(Value::Object(object), &property_key, env)?;
                 return Ok(false);
             }
             if crate::typed_array::is_typed_array_object(&object) {
@@ -204,7 +204,7 @@ fn set_receiver_data_property(
                 proxy,
                 &key,
                 env,
-                |target, _env| crate::object::own_property_descriptor_key(target, &key),
+                |target, env| crate::object::own_property_descriptor_key(target, &key, env),
             )?;
             let descriptor = match existing {
                 Some(existing) if !existing.writable => return Ok(false),

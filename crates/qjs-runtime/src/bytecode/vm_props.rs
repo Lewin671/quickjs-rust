@@ -672,6 +672,7 @@ pub(super) fn enumerable_keys(value: Value, env: &mut CallEnv) -> Result<Vec<Val
                         if let Some(property) = crate::object::own_property_descriptor_key(
                             current.clone(),
                             &property_key,
+                            env,
                         )? {
                             if property.enumerable {
                                 keys.push(key.clone());
@@ -745,7 +746,7 @@ fn proxy_enumerable_layer(
             proxy.clone(),
             &property_key,
             env,
-            |target, _env| crate::object::own_property_descriptor_key(target, &property_key),
+            |target, env| crate::object::own_property_descriptor_key(target, &property_key, env),
         )?;
         if let Some(property) = descriptor {
             if !seen.iter().any(|existing| existing == &name) {

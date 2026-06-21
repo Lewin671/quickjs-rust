@@ -230,11 +230,11 @@ fn own_property_descriptor(
     match value {
         Value::Proxy(proxy) => {
             let forward_key = key.clone();
-            crate::proxy::proxy_get_own_property_descriptor(proxy, key, env, move |target, _env| {
-                crate::object::own_property_descriptor_key(target, &forward_key)
+            crate::proxy::proxy_get_own_property_descriptor(proxy, key, env, move |target, env| {
+                crate::object::own_property_descriptor_key(target, &forward_key, env)
             })
         }
-        value => crate::object::own_property_descriptor_key(value, key),
+        value => crate::object::own_property_descriptor_key(value, key, env),
     }
 }
 

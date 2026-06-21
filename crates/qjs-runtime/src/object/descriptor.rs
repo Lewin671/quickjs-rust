@@ -81,6 +81,7 @@ fn to_object_for_define_properties(value: Value, env: &CallEnv) -> Result<Value,
 pub(crate) fn own_property_descriptor_key(
     value: Value,
     key: &PropertyKey,
+    env: &mut CallEnv,
 ) -> Result<Option<Property>, RuntimeError> {
     match value {
         Value::Object(object)
@@ -95,8 +96,10 @@ pub(crate) fn own_property_descriptor_key(
             ))
         }
         Value::Object(object) => Ok(match key {
-            PropertyKey::String(key) => module_namespace_export_descriptor(&object, key)?
-                .or_else(|| object.own_property(key)),
+            PropertyKey::String(key) => match module_namespace_export_descriptor(&object, key)? {
+                Some(property) => Some(property),
+                None => mapped_argument_external_descriptor(object.own_property(key), env)?,
+            },
             PropertyKey::Symbol(symbol) => object.own_symbol_property(symbol),
         }),
         Value::Map(map) => Ok(match key {
@@ -107,7 +110,7 @@ pub(crate) fn own_property_descriptor_key(
             PropertyKey::String(key) => set.object().own_property(key),
             PropertyKey::Symbol(symbol) => set.object().own_symbol_property(symbol),
         }),
-        Value::Proxy(proxy) => own_property_descriptor_key(proxy.target(), key),
+        Value::Proxy(proxy) => own_property_descriptor_key(proxy.target(), key, env),
         Value::Function(function) => Ok(match key {
             PropertyKey::String(key) => function_own_property_descriptor(&function, key),
             PropertyKey::Symbol(symbol) => {
@@ -169,8 +172,22 @@ pub(crate) fn define_property_descriptor_on_value_key(
             let mapped_argument = mapped_argument_accessors(existing.as_ref());
             let original_descriptor = descriptor.clone();
             let descriptor = mapped_argument_descriptor(descriptor, mapped_argument.as_ref(), env)?;
-            let Some(property) = resolve_property_definition(existing, descriptor) else {
-                return Ok(false);
+            let property = if let (Some(existing), Some(_)) =
+                (existing.as_ref(), mapped_argument.as_ref())
+                && !original_descriptor.is_accessor_descriptor()
+                && original_descriptor.writable == Some(false)
+            {
+                let Some(property) =
+                    resolve_mapped_argument_non_writable_definition(existing, descriptor)
+                else {
+                    return Ok(false);
+                };
+                property
+            } else {
+                let Some(property) = resolve_property_definition(existing, descriptor) else {
+                    return Ok(false);
+                };
+                property
             };
             if defines_new_property && !object.is_extensible() {
                 return Ok(false);
@@ -364,11 +381,62 @@ fn mapped_argument_descriptor(
     if let Some(mapped_argument) = mapped_argument {
         if descriptor.is_accessor_descriptor() {
             descriptor.complete_accessor_halves();
-        } else if descriptor.value.is_none() && descriptor.writable == Some(false) {
-            descriptor.value = Some(get_mapped_argument_value(mapped_argument, env)?);
+        } else if descriptor.writable == Some(false) {
+            if descriptor.value.is_none() {
+                descriptor.value = Some(get_mapped_argument_value(mapped_argument, env)?);
+            }
+        } else {
+            descriptor.value = None;
+            if descriptor.writable == Some(true) {
+                descriptor.writable = None;
+            }
         }
     }
     Ok(descriptor)
+}
+
+fn mapped_argument_external_descriptor(
+    property: Option<Property>,
+    env: &mut CallEnv,
+) -> Result<Option<Property>, RuntimeError> {
+    let Some(property) = property else {
+        return Ok(None);
+    };
+    let Some(mapped_argument) = mapped_argument_accessors(Some(&property)) else {
+        return Ok(Some(property));
+    };
+    Ok(Some(Property::data(
+        get_mapped_argument_value(&mapped_argument, env)?,
+        property.enumerable,
+        true,
+        property.configurable,
+    )))
+}
+
+fn resolve_mapped_argument_non_writable_definition(
+    existing: &Property,
+    descriptor: PropertyDescriptor,
+) -> Option<Property> {
+    if !existing.configurable {
+        if descriptor.configurable_field() == Some(true) {
+            return None;
+        }
+        if let Some(enumerable) = descriptor.enumerable_field()
+            && enumerable != existing.enumerable
+        {
+            return None;
+        }
+    }
+    let enumerable = descriptor.enumerable_field().unwrap_or(existing.enumerable);
+    let configurable = descriptor
+        .configurable_field()
+        .unwrap_or(existing.configurable);
+    Some(Property::data(
+        descriptor.value.unwrap_or(Value::Undefined),
+        enumerable,
+        false,
+        configurable,
+    ))
 }
 
 fn get_mapped_argument_value(

@@ -681,11 +681,11 @@ fn own_property_descriptor_key_trap(
     env: &mut CallEnv,
 ) -> Result<Option<Property>, RuntimeError> {
     if let Value::Proxy(proxy) = value.clone() {
-        crate::proxy::proxy_get_own_property_descriptor(proxy, key, env, |target, _env| {
-            crate::object::own_property_descriptor_key(target, key)
+        crate::proxy::proxy_get_own_property_descriptor(proxy, key, env, |target, env| {
+            crate::object::own_property_descriptor_key(target, key, env)
         })
     } else {
-        crate::object::own_property_descriptor_key(value, key)
+        crate::object::own_property_descriptor_key(value, key, env)
     }
 }
 
