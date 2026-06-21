@@ -38,7 +38,7 @@ impl Compiler {
     /// completion value on the stack. Shared by plain and disposable blocks.
     pub(super) fn compile_block_body(&mut self, body: &[Stmt]) -> Result<(), RuntimeError> {
         self.with_lexical_scope(|compiler| {
-            let blocked = annex_b_blocked_names(body);
+            let blocked = annex_b_blocked_names(body, compiler.strict);
             compiler.with_annex_b_blocked_function_names(&blocked, |compiler| {
                 compiler.predeclare_current_scope_lexicals(body);
                 if body.is_empty() {

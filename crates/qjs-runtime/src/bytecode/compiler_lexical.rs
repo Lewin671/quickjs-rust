@@ -264,26 +264,45 @@ pub(super) fn is_lexical_for_in_left(left: &ForInLeft) -> bool {
     )
 }
 
-pub(super) fn switch_lexical_declared_names(cases: &[SwitchCase]) -> Vec<String> {
+pub(super) fn switch_lexical_declared_names(cases: &[SwitchCase], strict: bool) -> Vec<String> {
     let mut names = Vec::new();
     for case in cases {
-        names.extend(lexical_declared_names(&case.consequent));
+        names.extend(switch_case_lexical_declared_names(&case.consequent, strict));
     }
     names
 }
 
-pub(super) fn switch_annex_b_blocked_names(cases: &[SwitchCase]) -> Vec<String> {
+pub(super) fn switch_lexical_declared_bindings(
+    cases: &[SwitchCase],
+    strict: bool,
+) -> Vec<(String, bool)> {
     let mut names = Vec::new();
     for case in cases {
-        names.extend(annex_b_blocked_names(&case.consequent));
+        names.extend(switch_case_lexical_declared_bindings(
+            &case.consequent,
+            strict,
+        ));
     }
     names
 }
 
-pub(super) fn annex_b_blocked_names(body: &[Stmt]) -> Vec<String> {
-    let mut names = lexical_declared_names(body);
+pub(super) fn switch_annex_b_blocked_names(cases: &[SwitchCase], strict: bool) -> Vec<String> {
+    let mut names = Vec::new();
+    for case in cases {
+        names.extend(annex_b_blocked_names(&case.consequent, strict));
+    }
+    names
+}
+
+pub(super) fn annex_b_blocked_names(body: &[Stmt], strict: bool) -> Vec<String> {
+    let mut names = switch_case_lexical_declared_names(body, strict);
     for stmt in body {
-        if let Stmt::FunctionDecl { name, .. } = stmt
+        if let Stmt::FunctionDecl {
+            name,
+            is_generator: false,
+            is_async: false,
+            ..
+        } = stmt
             && !names.iter().any(|existing| existing == name)
         {
             names.push(name.clone());
@@ -311,9 +330,33 @@ pub(super) fn lexical_declared_names(body: &[Stmt]) -> Vec<String> {
             Stmt::ForIn { left, .. } | Stmt::ForOf { left, .. } => {
                 names.extend(for_in_left_lexical_names(left));
             }
-            Stmt::Switch { cases, .. } => names.extend(switch_lexical_declared_names(cases)),
+            Stmt::Switch { cases, .. } => names.extend(switch_lexical_declared_names(cases, false)),
             Stmt::ClassDecl { name, .. } => names.push(name.clone()),
             _ => {}
+        }
+    }
+    names
+}
+
+fn switch_case_lexical_declared_names(body: &[Stmt], strict: bool) -> Vec<String> {
+    switch_case_lexical_declared_bindings(body, strict)
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect()
+}
+
+fn switch_case_lexical_declared_bindings(body: &[Stmt], strict: bool) -> Vec<(String, bool)> {
+    let mut names = current_scope_lexical_declared_bindings(body);
+    for stmt in body {
+        if let Stmt::FunctionDecl {
+            name,
+            is_generator,
+            is_async,
+            ..
+        } = stmt
+            && (strict || *is_generator || *is_async)
+        {
+            names.push((name.clone(), true));
         }
     }
     names

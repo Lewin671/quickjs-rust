@@ -743,6 +743,21 @@ fn evaluates_switch_statements() {
         ),
         Ok(Value::Number(2.0))
     );
+    assert_eq!(
+        eval(
+            "let x = 'outside'; var probeExpr, probeSelector, probeStmt; \
+             switch (probeExpr = function() { return x; }, null) { \
+               case probeSelector = function() { return x; }, null: \
+                 probeStmt = function() { return x; }; \
+                 let x = 'inside'; \
+             } \
+             probeExpr() + ':' + probeSelector() + ':' + probeStmt();"
+        ),
+        Ok(Value::String("outside:inside:inside".to_owned().into()))
+    );
+    assert!(eval("switch (0) { default: function* x() {} } x;").is_err());
+    assert!(eval("switch (0) { default: async function x() {} } x;").is_err());
+    assert!(eval("switch (0) { default: async function* x() {} } x;").is_err());
 }
 
 #[test]

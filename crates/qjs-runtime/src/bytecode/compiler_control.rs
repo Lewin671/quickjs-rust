@@ -6,8 +6,8 @@ use crate::{RuntimeError, Value};
 
 use super::compiler::{Compiler, LoopIterator};
 use super::compiler_lexical::{
-    current_scope_lexical_declared_bindings, for_in_left_lexical_names, is_lexical_for_in_left,
-    switch_annex_b_blocked_names,
+    for_in_left_lexical_names, is_lexical_for_in_left, switch_annex_b_blocked_names,
+    switch_lexical_declared_bindings,
 };
 use super::ir::Op;
 
@@ -433,6 +433,9 @@ impl Compiler {
         self.emit_load_undefined();
         self.emit(Op::StoreLocal(result_slot));
 
+        for (name, mutable) in switch_lexical_declared_bindings(cases, self.strict) {
+            self.declare_lexical_slot(&name, mutable);
+        }
         let mut default_index = None;
         let mut case_jumps = Vec::with_capacity(cases.len());
         for (index, case) in cases.iter().enumerate() {
@@ -453,13 +456,7 @@ impl Compiler {
         }
 
         let no_match_jump = self.emit(Op::Jump(usize::MAX));
-        let blocked = switch_annex_b_blocked_names(cases);
-        for (name, mutable) in cases
-            .iter()
-            .flat_map(|case| current_scope_lexical_declared_bindings(&case.consequent))
-        {
-            self.declare_lexical_slot(&name, mutable);
-        }
+        let blocked = switch_annex_b_blocked_names(cases, self.strict);
         self.push_breakable(result_slot);
         let mut case_starts = Vec::with_capacity(cases.len());
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {

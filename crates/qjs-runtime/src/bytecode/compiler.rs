@@ -424,7 +424,7 @@ impl Compiler {
                     }
                 }
                 Stmt::Switch { cases, .. } => {
-                    let blocked = switch_lexical_declared_names(cases);
+                    let blocked = switch_lexical_declared_names(cases, self.strict);
                     let pushed_switch_blocked = !blocked.is_empty();
                     if pushed_switch_blocked {
                         self.annex_b_blocked_function_names.push(blocked);
