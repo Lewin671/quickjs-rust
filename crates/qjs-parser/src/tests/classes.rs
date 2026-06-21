@@ -107,6 +107,17 @@ fn canonicalizes_numeric_member_keys() {
 }
 
 #[test]
+fn canonicalizes_bigint_member_keys() {
+    let script = parse_script("class C { 1n() {} static 0xf() {} }").expect("source should parse");
+    let [Stmt::ClassDecl { body, .. }] = script.body.as_slice() else {
+        panic!("expected class declaration");
+    };
+    let keys: Vec<&ClassMemberKey> = members(body).iter().map(|member| &member.key).collect();
+    assert_eq!(keys[0], &ClassMemberKey::Literal("1".to_owned()));
+    assert_eq!(keys[1], &ClassMemberKey::Literal("15".to_owned()));
+}
+
+#[test]
 fn parses_class_expression_named_and_anonymous() {
     let script = parse_script("let c = class Named { m() {} };").expect("source should parse");
     let [Stmt::VarDecl { declarations, .. }] = script.body.as_slice() else {

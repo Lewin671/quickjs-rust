@@ -572,11 +572,15 @@ impl Parser {
                     None,
                 ))
             }
+            TokenKind::BigInt(raw) => Ok((
+                ObjectPropertyKey::Literal(crate::helpers::bigint_property_key(&raw)),
+                None,
+            )),
             TokenKind::True => Ok((ObjectPropertyKey::Literal("true".to_owned()), None)),
             TokenKind::False => Ok((ObjectPropertyKey::Literal("false".to_owned()), None)),
             TokenKind::Null => Ok((ObjectPropertyKey::Literal("null".to_owned()), None)),
             TokenKind::LeftBracket => {
-                let name = self.assignment()?;
+                let name = self.assignment_allow_in()?;
                 self.expect(&TokenKind::RightBracket)?;
                 Ok((ObjectPropertyKey::Computed(name), None))
             }
@@ -736,11 +740,17 @@ impl Parser {
         // static block's early errors (no `return`/`await`/`arguments`/…) do
         // not reach into it.
         self.in_static_block = false;
+        let body_start = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .start;
         let body = self.block_body()?;
         self.in_method = previous_method;
         self.in_function = previous_function;
         self.allow_return = previous_allow_return;
         self.in_static_block = previous_static_block;
+        self.reject_invalid_function_parameters(&params, &body, body_start)?;
         let end = self
             .tokens
             .get(self.cursor.saturating_sub(1))
@@ -794,11 +804,17 @@ impl Parser {
         // static block's early errors (no `return`/`await`/`arguments`/…) do
         // not reach into it.
         self.in_static_block = false;
+        let body_start = self
+            .peek()
+            .expect("parser should always have eof token")
+            .span
+            .start;
         let body = self.block_body()?;
         self.in_method = previous_method;
         self.in_function = previous_function;
         self.allow_return = previous_allow_return;
         self.in_static_block = previous_static_block;
+        self.reject_invalid_function_parameters(&params, &body, body_start)?;
         let end = self
             .tokens
             .get(self.cursor.saturating_sub(1))
@@ -847,11 +863,13 @@ impl Parser {
         let previous_async = self.in_async;
         let previous_function = self.in_function;
         let previous_allow_return = self.allow_return;
+        let previous_static_block = self.in_static_block;
         self.in_method = true;
         self.in_generator = true;
         self.in_async = is_async;
         self.in_function = true;
         self.allow_return = true;
+        self.in_static_block = false;
         let params = self.function_parameters_with_context(true, is_async)?;
         reject_duplicate_method_parameters(&params)?;
         let body_start = self
@@ -865,6 +883,7 @@ impl Parser {
         self.in_async = previous_async;
         self.in_function = previous_function;
         self.allow_return = previous_allow_return;
+        self.in_static_block = previous_static_block;
         self.reject_invalid_function_parameters(&params, &body, body_start)?;
         let end = self
             .tokens
@@ -912,10 +931,12 @@ impl Parser {
         let previous_async = self.in_async;
         let previous_function = self.in_function;
         let previous_allow_return = self.allow_return;
+        let previous_static_block = self.in_static_block;
         self.in_method = true;
         self.in_async = true;
         self.in_function = true;
         self.allow_return = true;
+        self.in_static_block = false;
         let params = self.function_parameters_with_context(false, true)?;
         reject_duplicate_method_parameters(&params)?;
         let body_start = self
@@ -928,6 +949,7 @@ impl Parser {
         self.in_async = previous_async;
         self.in_function = previous_function;
         self.allow_return = previous_allow_return;
+        self.in_static_block = previous_static_block;
         self.reject_invalid_function_parameters(&params, &body, body_start)?;
         let end = self
             .tokens
@@ -991,6 +1013,7 @@ pub(crate) fn token_starts_async_method_name(kind: &TokenKind) -> bool {
         | TokenKind::PrivateName(_)
         | TokenKind::String(_)
         | TokenKind::Number(_)
+        | TokenKind::BigInt(_)
         | TokenKind::LeftBracket => true,
         other => keyword_property_name(other).is_some(),
     }

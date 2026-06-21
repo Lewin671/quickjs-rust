@@ -407,6 +407,37 @@ fn parses_computed_object_assignment_property_names() {
 }
 
 #[test]
+fn parses_in_inside_computed_object_accessor_names() {
+    parse_script("for (obj = { get ['x' in empty]() { return 1; } }; ; ) break;")
+        .expect("computed getter name may contain `in`");
+    parse_script("for (obj = { set ['x' in empty](value) {} }; ; ) break;")
+        .expect("computed setter name may contain `in`");
+}
+
+#[test]
+fn validates_object_accessor_strict_bodies_and_parameters() {
+    for source in [
+        "void { get x() { \"use strict\"; public = 42; } };",
+        "\"use strict\"; void { get x() { public = 42; } };",
+        "void { set x(value) { \"use strict\"; public = 42; } };",
+        "\"use strict\"; void { set x(value) { public = 42; } };",
+        "void { set x(arguments) { \"use strict\"; } };",
+        "void { set x(eval) { \"use strict\"; } };",
+        "var o = { set m(a = 0) { \"use strict\"; } };",
+    ] {
+        parse_script(source).expect_err("object accessor strict early error should be rejected");
+    }
+}
+
+#[test]
+fn object_generator_method_resets_static_block_context() {
+    parse_script(
+        "var await = 0; class C { static { ({ *method(x = await) { return await; } }).method().next(); } }",
+    )
+    .expect("object generator methods are function boundaries inside static blocks");
+}
+
+#[test]
 fn keeps_member_expressions_on_literal_starts_out_of_patterns() {
     let script = parse_script("[ {}[key] ] = value;").expect("source should parse");
     let [Stmt::Expr(Expr::Assignment { target, .. })] = script.body.as_slice() else {
@@ -434,6 +465,8 @@ fn rejects_strict_assignment_to_eval_or_arguments() {
     assert!(parse_script("'use strict'; arguments = 1;").is_err());
     assert!(parse_script("'use strict'; eval += 1;").is_err());
     assert!(parse_script("'use strict'; arguments *= 2;").is_err());
+    assert!(parse_script("'use strict'; public = 1;").is_err());
+    assert!(parse_script("'use strict'; static += 1;").is_err());
     // Sloppy mode permits both.
     assert!(parse_script("eval = 1;").is_ok());
     assert!(parse_script("arguments += 1;").is_ok());

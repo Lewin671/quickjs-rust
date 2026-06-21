@@ -586,6 +586,22 @@ fn parses_object_literal_and_member_assignment() {
     ));
 
     let script =
+        parse_script("({ 999999999999999999n: true, 0xf() {} });").expect("source should parse");
+    let [Stmt::Expr(Expr::Object { properties, .. })] = script.body.as_slice() else {
+        panic!("expected object expression with BigInt property keys");
+    };
+    assert_eq!(
+        properties[0].key,
+        ObjectPropertyKey::Literal("999999999999999999".to_owned())
+    );
+    assert_eq!(
+        properties[1].key,
+        ObjectPropertyKey::Literal("15".to_owned())
+    );
+    parse_script("let { 1n: value } = { '1': 1 };")
+        .expect("BigInt literal binding property names should parse");
+
+    let script =
         parse_script("({ method(a, b) { return a + b; } });").expect("source should parse");
     let [Stmt::Expr(Expr::Object { properties, .. })] = script.body.as_slice() else {
         panic!("expected object expression with method definition");

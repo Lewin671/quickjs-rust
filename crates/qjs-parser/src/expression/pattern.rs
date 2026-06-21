@@ -155,7 +155,7 @@ impl Parser {
             let shorthand = matches!(key_token.kind, TokenKind::Identifier(_));
             let key = match key_token.kind {
                 TokenKind::LeftBracket => {
-                    let expr = self.assignment()?;
+                    let expr = self.assignment_allow_in()?;
                     self.expect(&TokenKind::RightBracket)?;
                     AssignmentTargetPropertyKey::Computed(expr)
                 }
@@ -164,7 +164,10 @@ impl Parser {
                 }
                 TokenKind::Number(key) => {
                     self.reject_strict_legacy_numeric_literal(&key, key_span)?;
-                    AssignmentTargetPropertyKey::Literal(key)
+                    AssignmentTargetPropertyKey::Literal(crate::helpers::numeric_property_key(&key))
+                }
+                TokenKind::BigInt(key) => {
+                    AssignmentTargetPropertyKey::Literal(crate::helpers::bigint_property_key(&key))
                 }
                 kind => keyword_property_name(&kind)
                     .map(str::to_owned)

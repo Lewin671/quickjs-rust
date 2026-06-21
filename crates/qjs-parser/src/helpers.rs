@@ -128,6 +128,60 @@ pub(crate) fn numeric_property_key(raw: &str) -> String {
     }
 }
 
+/// Computes the `PropName` of a BigInt literal property key.
+pub(crate) fn bigint_property_key(raw: &str) -> String {
+    let cleaned: String = raw.chars().filter(|&ch| ch != '_').collect();
+    let (digits, radix) = if let Some(digits) = cleaned
+        .strip_prefix("0x")
+        .or_else(|| cleaned.strip_prefix("0X"))
+    {
+        (digits, 16)
+    } else if let Some(digits) = cleaned
+        .strip_prefix("0b")
+        .or_else(|| cleaned.strip_prefix("0B"))
+    {
+        (digits, 2)
+    } else if let Some(digits) = cleaned
+        .strip_prefix("0o")
+        .or_else(|| cleaned.strip_prefix("0O"))
+    {
+        (digits, 8)
+    } else {
+        (cleaned.as_str(), 10)
+    };
+    integer_digits_to_decimal(digits, radix)
+}
+
+fn integer_digits_to_decimal(digits: &str, radix: u32) -> String {
+    if digits.is_empty() {
+        return "0".to_owned();
+    }
+    let mut decimal = vec![0_u8];
+    for ch in digits.chars() {
+        let Some(value) = ch.to_digit(radix) else {
+            return digits.to_owned();
+        };
+        let mut carry = value;
+        for digit in decimal.iter_mut().rev() {
+            let next = u32::from(*digit) * radix + carry;
+            *digit = (next % 10) as u8;
+            carry = next / 10;
+        }
+        while carry > 0 {
+            decimal.insert(0, (carry % 10) as u8);
+            carry /= 10;
+        }
+    }
+    let first_non_zero = decimal
+        .iter()
+        .position(|digit| *digit != 0)
+        .unwrap_or(decimal.len() - 1);
+    decimal[first_non_zero..]
+        .iter()
+        .map(|digit| char::from(b'0' + *digit))
+        .collect()
+}
+
 fn radix_value(digits: &str, radix: u32) -> Option<f64> {
     if digits.is_empty() {
         return None;
@@ -243,7 +297,7 @@ pub(crate) fn body_has_strict_directive(body: &[Stmt]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::numeric_property_key;
+    use super::{bigint_property_key, numeric_property_key};
 
     #[test]
     fn canonicalizes_numeric_property_keys() {
@@ -262,5 +316,18 @@ mod tests {
         assert_eq!(numeric_property_key("0x1_0"), "16");
         assert_eq!(numeric_property_key("1e-7"), "1e-7");
         assert_eq!(numeric_property_key("1e21"), "1e+21");
+    }
+
+    #[test]
+    fn canonicalizes_bigint_property_keys() {
+        assert_eq!(bigint_property_key("0"), "0");
+        assert_eq!(bigint_property_key("1_000"), "1000");
+        assert_eq!(bigint_property_key("0xf"), "15");
+        assert_eq!(bigint_property_key("0b101"), "5");
+        assert_eq!(bigint_property_key("0o77"), "63");
+        assert_eq!(
+            bigint_property_key("999999999999999999"),
+            "999999999999999999"
+        );
     }
 }

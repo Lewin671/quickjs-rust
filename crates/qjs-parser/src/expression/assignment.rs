@@ -66,16 +66,23 @@ impl Parser {
 
         let target = assignment_target(expr, lhs_parenthesized)?;
 
-        // Strict mode: assigning to the identifiers `eval` or `arguments`
-        // (simple or compound) is an early SyntaxError.
+        // Strict mode: assigning to restricted identifiers (simple or
+        // compound) is an early SyntaxError.
         if self.strict
             && let qjs_ast::AssignmentTarget::Identifier { name, span, .. } = &target
-            && matches!(name.as_str(), "eval" | "arguments")
         {
-            return Err(ParseError {
-                message: format!("`{name}` may not be assigned in strict mode"),
-                span: *span,
-            });
+            if matches!(name.as_str(), "eval" | "arguments") {
+                return Err(ParseError {
+                    message: format!("`{name}` may not be assigned in strict mode"),
+                    span: *span,
+                });
+            }
+            if crate::statement::is_strict_reserved_word(name) {
+                return Err(ParseError {
+                    message: format!("`{name}` is a reserved word in strict mode"),
+                    span: *span,
+                });
+            }
         }
 
         let value = self.assignment()?;

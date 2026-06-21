@@ -344,12 +344,19 @@ impl Parser {
             let shorthand = matches!(key_token.kind, TokenKind::Identifier(_));
             let key = match key_token.kind {
                 TokenKind::LeftBracket => {
-                    let expr = self.assignment()?;
+                    let expr = self.assignment_allow_in()?;
                     self.expect(&TokenKind::RightBracket)?;
                     ObjectBindingPropertyKey::Computed(expr)
                 }
-                TokenKind::Identifier(key) | TokenKind::String(key) | TokenKind::Number(key) => {
+                TokenKind::Identifier(key) | TokenKind::String(key) => {
                     ObjectBindingPropertyKey::Literal(key)
+                }
+                TokenKind::Number(key) => {
+                    self.reject_strict_legacy_numeric_literal(&key, key_span)?;
+                    ObjectBindingPropertyKey::Literal(crate::helpers::numeric_property_key(&key))
+                }
+                TokenKind::BigInt(key) => {
+                    ObjectBindingPropertyKey::Literal(crate::helpers::bigint_property_key(&key))
                 }
                 kind => {
                     if let Some(key) = crate::expression::keyword_property_name(&kind) {

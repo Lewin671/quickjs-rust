@@ -567,7 +567,7 @@ impl Parser {
     fn class_member_key(&mut self) -> Result<(ClassMemberKey, Option<String>), ParseError> {
         if self.at(&TokenKind::LeftBracket) {
             self.advance();
-            let expr = self.assignment()?;
+            let expr = self.assignment_allow_in()?;
             self.expect(&TokenKind::RightBracket)?;
             return Ok((ClassMemberKey::Computed(expr), None));
         }
@@ -592,10 +592,10 @@ impl Parser {
         })?;
         // A numeric-literal member key names the property `ToString(MV)`, so
         // `0b10() {}` defines the method `"2"`, matching object literals.
-        let name = if let TokenKind::Number(raw) = &token.kind {
-            crate::helpers::numeric_property_key(raw)
-        } else {
-            name
+        let name = match &token.kind {
+            TokenKind::Number(raw) => crate::helpers::numeric_property_key(raw),
+            TokenKind::BigInt(raw) => crate::helpers::bigint_property_key(raw),
+            _ => name,
         };
         self.advance();
         Ok((ClassMemberKey::Literal(name.clone()), Some(name)))
@@ -691,7 +691,9 @@ fn is_line_terminator(ch: char) -> bool {
 fn class_member_name(kind: &TokenKind) -> Option<String> {
     match kind {
         TokenKind::Identifier(name) => Some(name.clone()),
-        TokenKind::String(name) | TokenKind::Number(name) => Some(name.clone()),
+        TokenKind::String(name) | TokenKind::Number(name) | TokenKind::BigInt(name) => {
+            Some(name.clone())
+        }
         _ => crate::expression::keyword_property_name(kind).map(str::to_owned),
     }
 }

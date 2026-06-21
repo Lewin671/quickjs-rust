@@ -46,4 +46,12 @@ impl Parser {
         self.allow_in = previous;
         result
     }
+
+    pub(crate) fn assignment_allow_in(&mut self) -> Result<Expr, ParseError> {
+        let previous = self.allow_in;
+        self.allow_in = true;
+        let result = self.assignment();
+        self.allow_in = previous;
+        result
+    }
 }
