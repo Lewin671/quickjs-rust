@@ -190,6 +190,7 @@ fn build_dynamic_function(
     let created = Function::new_user_compiled(CompiledUserFunction {
         name: Some(name),
         has_name_binding: true,
+        immutable_name_binding: false,
         params: Rc::new(params),
         env: env_snapshot.clone(),
         module_host: None,

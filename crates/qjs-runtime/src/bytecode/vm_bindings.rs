@@ -774,6 +774,11 @@ impl Vm<'_> {
                 message: "TypeError: assignment to constant variable".to_owned(),
             });
         }
+        // The inner name of a named function expression is immutable; a sloppy
+        // assignment to it is a silent no-op.
+        if self.env.is_immutable_function_name(&name) {
+            return Ok(());
+        }
         let is_sloppy_global_fallback = self
             .bytecode
             .locals

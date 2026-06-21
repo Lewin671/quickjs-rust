@@ -206,6 +206,7 @@ pub(super) enum Op {
     NewFunction {
         name: Option<String>,
         has_name_binding: bool,
+        immutable_name_binding: bool,
         params: FunctionParams,
         local_names: Vec<String>,
         lexical_captures: Vec<(String, usize)>,

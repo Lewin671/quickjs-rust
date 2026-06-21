@@ -47,6 +47,13 @@ pub(crate) struct CallEnv {
     immutable_lexical_bindings: ImmutableLexicalBindings,
     locals: HashMap<String, Value>,
     catch_bindings: HashSet<String>,
+    /// The immutable name binding of a named function expression, for this
+    /// frame only. Assigning to it is a silent no-op in sloppy mode and a
+    /// TypeError in strict mode (unless a parameter/`var`/lexical shadows it,
+    /// in which case the assignment resolves to that local slot instead and
+    /// never consults this field). Reset per frame so nested calls and arrows
+    /// do not inherit it.
+    immutable_function_name: Option<String>,
     direct_eval_var_conflicts: HashSet<String>,
     /// The lexical private-name environment active for this frame. This is
     /// separate from `\0home_object`: ordinary nested functions do not inherit
@@ -120,6 +127,7 @@ impl CallEnv {
             immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             locals: HashMap::new(),
             catch_bindings: HashSet::new(),
+            immutable_function_name: None,
             direct_eval_var_conflicts: HashSet::new(),
             private_environment: None,
             activation_captured_env: None,
@@ -186,6 +194,7 @@ impl CallEnv {
             immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             locals: HashMap::new(),
             catch_bindings: HashSet::new(),
+            immutable_function_name: None,
             direct_eval_var_conflicts: HashSet::new(),
             private_environment: None,
             activation_captured_env: None,
@@ -206,6 +215,7 @@ impl CallEnv {
             immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             locals: HashMap::new(),
             catch_bindings: HashSet::new(),
+            immutable_function_name: None,
             direct_eval_var_conflicts: HashSet::new(),
             private_environment: None,
             activation_captured_env: None,
@@ -224,6 +234,7 @@ impl CallEnv {
             immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             locals,
             catch_bindings: HashSet::new(),
+            immutable_function_name: None,
             direct_eval_var_conflicts: HashSet::new(),
             private_environment: None,
             activation_captured_env: None,
@@ -275,6 +286,18 @@ impl CallEnv {
 
     pub(crate) fn is_catch_binding(&self, name: &str) -> bool {
         self.catch_bindings.contains(name)
+    }
+
+    /// Marks `name` as this frame's immutable named-function-expression binding.
+    pub(crate) fn set_immutable_function_name(&mut self, name: String) {
+        self.immutable_function_name = Some(name);
+    }
+
+    /// Returns true when `name` is this frame's immutable function-expression
+    /// name binding, so an assignment to it must be rejected (a silent no-op in
+    /// sloppy mode, a TypeError in strict mode).
+    pub(crate) fn is_immutable_function_name(&self, name: &str) -> bool {
+        self.immutable_function_name.as_deref() == Some(name)
     }
 
     pub(crate) fn clear_direct_eval_var_conflicts(&mut self) {
@@ -445,6 +468,9 @@ impl CallEnv {
             immutable_lexical_bindings: Rc::clone(&self.immutable_lexical_bindings),
             locals,
             catch_bindings: self.catch_bindings.clone(),
+            // A new call frame's function-name binding is set explicitly by
+            // function_env for the callee; it is never inherited from the caller.
+            immutable_function_name: None,
             direct_eval_var_conflicts: self.direct_eval_var_conflicts.clone(),
             private_environment: self.private_environment.clone(),
             activation_captured_env: self.activation_captured_env.clone(),

@@ -66,6 +66,12 @@ pub struct Function {
     /// Whether `name` also creates the function body's internal name binding.
     /// Method definitions have a name property but no inner binding.
     pub(crate) has_name_binding: bool,
+    /// Whether the internal name binding is the *immutable* binding of a named
+    /// function expression (`var f = function g() {}`). Assigning to `g` inside
+    /// the body is a silent no-op in sloppy mode and a TypeError in strict mode.
+    /// False for function declarations (whose name is an ordinary mutable outer
+    /// binding) and for methods.
+    pub(crate) immutable_name_binding: bool,
     /// Parameter names. Held behind `Rc` so the frequent `Function` value
     /// clones (every property read, capture sync, and call setup) only bump a
     /// refcount instead of deep-cloning the parameter AST, which dominated call
@@ -148,6 +154,7 @@ pub(crate) struct BoundFunction {
 pub(crate) struct CompiledUserFunction {
     pub(crate) name: Option<String>,
     pub(crate) has_name_binding: bool,
+    pub(crate) immutable_name_binding: bool,
     pub(crate) params: Rc<FunctionParams>,
     pub(crate) env: HashMap<String, Value>,
     pub(crate) module_host: Option<ModuleHostRef>,
@@ -263,6 +270,7 @@ impl Function {
         let captured_env = Rc::new(RefCell::new(env.clone()));
         let function = Self {
             has_name_binding: name.is_some(),
+            immutable_name_binding: false,
             name,
             params: Rc::new(params),
             env,
@@ -317,6 +325,7 @@ impl Function {
         let CompiledUserFunction {
             name,
             has_name_binding,
+            immutable_name_binding,
             params,
             env,
             module_host,
@@ -344,6 +353,7 @@ impl Function {
         );
         let function = Self {
             has_name_binding,
+            immutable_name_binding,
             name,
             params,
             env,
@@ -459,6 +469,7 @@ impl Function {
         let function = Self {
             name: Some(name),
             has_name_binding: false,
+            immutable_name_binding: false,
             params: Rc::new(FunctionParams::positional(vec![String::new(); length])),
             env: HashMap::new(),
             captured_env: Rc::new(RefCell::new(HashMap::new())),
@@ -512,6 +523,7 @@ impl Function {
         let captured_env = Rc::new(RefCell::new(env.clone()));
         let function = Self {
             has_name_binding: false,
+            immutable_name_binding: false,
             name,
             params: Rc::new(FunctionParams::positional(params)),
             env,

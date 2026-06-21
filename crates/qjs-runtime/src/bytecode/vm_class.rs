@@ -74,6 +74,7 @@ impl Vm<'_> {
         let constructor_function = Function::new_user_compiled(CompiledUserFunction {
             name: constructor.name.clone(),
             has_name_binding: false,
+            immutable_name_binding: false,
             params: std::rc::Rc::new(constructor.params.clone()),
             env: constructor_env,
             module_host: self.module_host.clone(),
@@ -331,6 +332,7 @@ impl Vm<'_> {
                     let thunk = Function::new_user_compiled(CompiledUserFunction {
                         name: None,
                         has_name_binding: false,
+                        immutable_name_binding: false,
                         params: std::rc::Rc::new(qjs_ast::FunctionParams::positional(Vec::new())),
                         env: key_env.clone(),
                         module_host: self.module_host.clone(),
@@ -390,6 +392,7 @@ impl Vm<'_> {
         let method_function = Function::new_user_compiled(CompiledUserFunction {
             name: class_method_function_name(method, &key),
             has_name_binding: false,
+            immutable_name_binding: false,
             params: std::rc::Rc::new(method.params.clone()),
             env: method_env.clone(),
             module_host: self.module_host.clone(),
@@ -486,6 +489,7 @@ impl Vm<'_> {
         Some(Function::new_user_compiled(CompiledUserFunction {
             name: None,
             has_name_binding: false,
+            immutable_name_binding: false,
             params: std::rc::Rc::new(qjs_ast::FunctionParams::positional(Vec::new())),
             env: field_env.clone(),
             module_host: self.module_host.clone(),
@@ -573,6 +577,7 @@ impl Vm<'_> {
         let thunk = Function::new_user_compiled(CompiledUserFunction {
             name: None,
             has_name_binding: false,
+            immutable_name_binding: false,
             params: std::rc::Rc::new(qjs_ast::FunctionParams::positional(Vec::new())),
             env: block_env.clone(),
             module_host: self.module_host.clone(),

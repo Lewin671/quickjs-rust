@@ -1171,3 +1171,40 @@ fn bound_function_length_and_name_follow_spec() {
         .is_err()
     );
 }
+
+#[test]
+fn named_function_expression_name_binding_is_immutable() {
+    // A named function expression's own name is an immutable inner binding:
+    // assigning to it is a silent no-op in sloppy mode, so the name still
+    // refers to the function.
+    assert_eq!(
+        eval("var ref = function f() { f = 1; return f; }; ref() === ref;"),
+        Ok(Value::Boolean(true))
+    );
+    // In strict mode the assignment is a TypeError.
+    assert_eq!(
+        eval(
+            "'use strict'; var ref = function f() { f = 1; return f; }; \
+             try { ref(); 'no throw'; } catch (e) { e.name; }"
+        ),
+        Ok(Value::String("TypeError".to_owned().into()))
+    );
+    // A function declaration's name is an ordinary mutable binding.
+    assert_eq!(
+        eval("function g() { g = 1; return g; } g();"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval("'use strict'; function g() { g = 1; return g; } g();"),
+        Ok(Value::Number(1.0))
+    );
+    // A parameter or var that shadows the name restores a mutable binding.
+    assert_eq!(
+        eval("var ref = function f(f) { f = 1; return f; }; ref(5);"),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval("var ref = function f() { var f; f = 1; return f; }; ref();"),
+        Ok(Value::Number(1.0))
+    );
+}

@@ -512,6 +512,7 @@ impl Compiler {
         self.emit(Op::NewFunction {
             name: Some(function_name.to_owned()),
             has_name_binding: !is_anonymous_default_export,
+            immutable_name_binding: false,
             params: params.clone(),
             local_names,
             lexical_captures,
@@ -561,6 +562,7 @@ impl Compiler {
         self.emit(Op::NewFunction {
             name: Some(name.to_owned()),
             has_name_binding: false,
+            immutable_name_binding: false,
             params: params.clone(),
             local_names,
             lexical_captures,

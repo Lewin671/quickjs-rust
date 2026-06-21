@@ -725,6 +725,11 @@ fn function_env(
         );
     }
     let mut frame_env = env.with_frame_locals(local_env);
+    if function.immutable_name_binding
+        && let Some(name) = &function.name
+    {
+        frame_env.set_immutable_function_name(name.clone());
+    }
     if let Some(host) = function.module_host.clone() {
         frame_env.set_module_host(host);
     }

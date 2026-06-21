@@ -475,6 +475,9 @@ impl Compiler {
                 self.emit(Op::NewFunction {
                     name: name.clone(),
                     has_name_binding: name.is_some(),
+                    // A named function expression's inner name binding is
+                    // immutable; an anonymous one has no binding.
+                    immutable_name_binding: name.is_some(),
                     params: params.clone(),
                     local_names,
                     lexical_captures,
@@ -627,6 +630,7 @@ impl Compiler {
                 self.emit(Op::NewFunction {
                     name: Some(name.to_owned()),
                     has_name_binding: false,
+                    immutable_name_binding: false,
                     params: params.clone(),
                     local_names,
                     lexical_captures,
@@ -681,6 +685,7 @@ impl Compiler {
         self.emit(Op::NewFunction {
             name: Some(display_name.to_owned()),
             has_name_binding: false,
+            immutable_name_binding: false,
             params: params.clone(),
             local_names,
             lexical_captures,

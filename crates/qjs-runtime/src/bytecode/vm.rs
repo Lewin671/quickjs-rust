@@ -461,6 +461,7 @@ impl<'a> Vm<'a> {
                 Op::NewFunction {
                     name,
                     has_name_binding,
+                    immutable_name_binding,
                     params,
                     local_names,
                     lexical_captures,
@@ -516,6 +517,7 @@ impl<'a> Vm<'a> {
                     let function = Function::new_user_compiled(CompiledUserFunction {
                         name,
                         has_name_binding,
+                        immutable_name_binding,
                         params: Rc::new(params),
                         env,
                         module_host: self.module_host.clone(),
