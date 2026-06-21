@@ -335,22 +335,41 @@ fn abstract_eq(left: &Value, right: &Value, env: &mut CallEnv) -> Result<bool, R
         (_, Value::Boolean(value)) => {
             abstract_eq(left, &Value::Number(if *value { 1.0 } else { 0.0 }), env)
         }
-        (
-            Value::Object(_) | Value::Function(_) | Value::Array(_),
-            Value::String(_) | Value::Number(_) | Value::BigInt(_),
-        ) => {
+        (left, right)
+            if is_abstract_eq_object(left) && is_abstract_eq_primitive_for_object(right) =>
+        {
             let primitive = to_primitive_with_env(left.clone(), env)?;
             abstract_eq(&primitive, right, env)
         }
-        (
-            Value::String(_) | Value::Number(_) | Value::BigInt(_),
-            Value::Object(_) | Value::Function(_) | Value::Array(_),
-        ) => {
+        (left, right)
+            if is_abstract_eq_primitive_for_object(left) && is_abstract_eq_object(right) =>
+        {
             let primitive = to_primitive_with_env(right.clone(), env)?;
             abstract_eq(left, &primitive, env)
         }
         _ => Ok(strict_eq(left, right)),
     }
+}
+
+fn is_abstract_eq_primitive_for_object(value: &Value) -> bool {
+    matches!(
+        value,
+        Value::String(_) | Value::Number(_) | Value::BigInt(_)
+    ) || is_symbol_primitive_value(value)
+}
+
+fn is_abstract_eq_object(value: &Value) -> bool {
+    match value {
+        Value::Object(object) => !symbol::is_symbol_primitive(object),
+        Value::Function(_) | Value::Array(_) | Value::Map(_) | Value::Set(_) | Value::Proxy(_) => {
+            true
+        }
+        _ => false,
+    }
+}
+
+fn is_symbol_primitive_value(value: &Value) -> bool {
+    matches!(value, Value::Object(object) if symbol::is_symbol_primitive(object))
 }
 
 fn eval_bigint_mixed_relational(
@@ -410,7 +429,10 @@ impl BigIntComparable {
 }
 
 fn number_bigint_eq(number: f64, bigint: &BigInt) -> bool {
-    number_bigint_ordering(number, bigint) == Some(Ordering::Equal)
+    if !number.is_finite() {
+        return false;
+    }
+    finite_number_to_integer_bigint(number).is_some_and(|integer| integer == *bigint)
 }
 
 fn number_bigint_ordering(number: f64, bigint: &BigInt) -> Option<Ordering> {
@@ -423,6 +445,9 @@ fn number_bigint_ordering(number: f64, bigint: &BigInt) -> Option<Ordering> {
     if number == f64::NEG_INFINITY {
         return Some(Ordering::Less);
     }
+    if let Some(integer) = finite_number_to_integer_bigint(number) {
+        return Some(integer.cmp(bigint));
+    }
     if let Some(bigint_number) = bigint.to_f64() {
         return number.partial_cmp(&bigint_number);
     }
@@ -430,6 +455,43 @@ fn number_bigint_ordering(number: f64, bigint: &BigInt) -> Option<Ordering> {
         Sign::Minus => Ordering::Greater,
         Sign::NoSign | Sign::Plus => Ordering::Less,
     })
+}
+
+fn finite_number_to_integer_bigint(number: f64) -> Option<BigInt> {
+    if !number.is_finite() {
+        return None;
+    }
+    if number == 0.0 {
+        return Some(BigInt::zero());
+    }
+
+    let bits = number.to_bits();
+    let is_negative = bits >> 63 != 0;
+    let exponent_bits = ((bits >> 52) & 0x7ff) as i32;
+    let fraction = bits & ((1u64 << 52) - 1);
+    let (mantissa, exponent) = if exponent_bits == 0 {
+        (fraction, -1074)
+    } else {
+        ((1u64 << 52) | fraction, exponent_bits - 1075)
+    };
+
+    let mut integer = if exponent >= 0 {
+        BigInt::from(mantissa) << (exponent as usize)
+    } else {
+        let shift = (-exponent) as u32;
+        if shift >= u64::BITS {
+            return None;
+        }
+        let mask = (1u64 << shift) - 1;
+        if mantissa & mask != 0 {
+            return None;
+        }
+        BigInt::from(mantissa >> shift)
+    };
+    if is_negative {
+        integer = -integer;
+    }
+    Some(integer)
 }
 
 fn bigint_mix_error() -> RuntimeError {

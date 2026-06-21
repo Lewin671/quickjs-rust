@@ -19,6 +19,54 @@ fn evaluates_arithmetic() {
 }
 
 #[test]
+fn evaluates_loose_equality_edge_cases() {
+    assert_eq!(
+        eval(
+            "[
+               0n == undefined,
+               undefined == 0n,
+               1n == null,
+               null == 1n,
+               0n == Symbol('1'),
+               Symbol('1') == 0n
+             ].join(':');"
+        ),
+        Ok(Value::String(
+            "false:false:false:false:false:false".to_owned().into()
+        ))
+    );
+    assert_eq!(
+        eval(
+            "[
+               1n == Number.MAX_VALUE,
+               Number.MAX_VALUE == 1n,
+               0xfffffffffffff7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffn == Number.MAX_VALUE,
+               0xfffffffffffff800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000n == Number.MAX_VALUE,
+               Number.MAX_VALUE == 0xfffffffffffff800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001n
+             ].join(':');"
+        ),
+        Ok(Value::String("false:false:false:true:false".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "let y = {};
+             let retVal;
+             y[Symbol.toPrimitive] = function() { return retVal; };
+             retVal = 86;
+             let a = [0 == y, 86 == y];
+             retVal = 'str';
+             a.push(0 == y, 'str' == y);
+             retVal = Symbol.toPrimitive;
+             a.push(0 == y, Symbol.toPrimitive == y);
+             a.join(':');"
+        ),
+        Ok(Value::String(
+            "false:true:false:true:false:true".to_owned().into()
+        ))
+    );
+}
+
+#[test]
 fn evaluates_bitwise_and_shift_expressions() {
     assert_eq!(eval("5 & 3;"), Ok(Value::Number(1.0)));
     assert_eq!(eval("5 | 2;"), Ok(Value::Number(7.0)));
