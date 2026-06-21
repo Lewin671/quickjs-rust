@@ -14,8 +14,10 @@ license = "MIT"
 repository = "https://github.com/Lewin671/quickjs-rust"
 rust-version = "1.85"
 
+# `deny` (not `forbid`) so audited optimizations can opt in per-module with an
+# explicit `#[allow(unsafe_code)]` + `// SAFETY:` comment. See AGENTS.md.
 [workspace.lints.rust]
-unsafe_code = "forbid"
+unsafe_code = "deny"
 
 [workspace.lints.clippy]
 all = "warn"

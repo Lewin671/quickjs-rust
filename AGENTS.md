@@ -7,8 +7,21 @@ Do not duplicate agent workflow there.
 
 ## Prime Directive
 
-Build a Rust-native JavaScript engine incrementally. Preserve subsystem
-boundaries and make each change verifiable with focused tests.
+Build a Rust-native JavaScript engine toward two converging goals: **100%
+Test262 conformance** and **production-grade performance**. Work incrementally,
+preserve subsystem boundaries, and make each change verifiable with focused
+tests — but no longer cap the design at "small and safe by default." When a
+correctness or performance ceiling is structural, the right change is to lift
+the structure, not to add another heuristic around it.
+
+The keystone of both goals is the **environment / binding model**. The current
+per-frame `HashMap<String, Value>` snapshot plus capture-writeback heuristics is
+the shared root of the remaining conformance failures (closure/`eval`/method
+capture staleness — M2, per-iteration, generator) *and* the call-path cost
+(per-call HashMap allocation + deep clone). Migrating to a slot-indexed locals +
+shared upvalue-cell model is the highest-ROI work and should be sequenced first;
+most remaining env-model gaps are expected to fall out of it rather than be
+patched individually.
 
 ## Standard Commands
 
@@ -47,8 +60,14 @@ installed, report that clearly and do not fake test results.
 - Parser work must not mutate runtime behavior unless the task requires it;
   runtime work should use existing AST types instead of parser shortcuts;
   lexer tokens must carry spans.
-- No `unsafe` (workspace forbids it). No global mutable state; make shared
-  ownership and lifetime explicit in runtime data structures.
+- `unsafe` is permitted only as an audited, localized optimization (e.g.
+  NaN-boxed/tagged values, inline caches, arena/GC internals). The workspace
+  lint is `unsafe_code = "deny"`, overridden per-module with an explicit
+  `#[allow(unsafe_code)]` and a `// SAFETY:` comment on every `unsafe` block;
+  a sound safe equivalent must not exist or must be a measured bottleneck.
+  Default to safe code; never reach for `unsafe` for convenience. No global
+  mutable state; make shared ownership and lifetime explicit in runtime data
+  structures.
 - `third_party/` is read-only reference material: never edit it outside an
   explicit submodule-pointer task, never use `quickjs-ng` as a build
   dependency, and do not initialize its nested submodules. `test262` is
@@ -62,8 +81,16 @@ installed, report that clearly and do not fake test results.
   malformed JavaScript.
 - Preserve source spans (byte offsets) in token, syntax, and diagnostic work.
 - Prefer deterministic data structures and output for tests and diagnostics.
-- No async, threading, FFI, or custom allocators unless the task explicitly
-  requires that design.
+- No FFI and no Rust `async`: the engine stays pure Rust, and JS async is
+  implemented by the engine's own event loop / VM, never by Rust's async
+  runtime. Never take `quickjs-ng` as a build dependency.
+- A tracing GC or arena allocator is allowed and expected to replace
+  `Rc`/`RefCell` for runtime values — needed both to collect reference cycles
+  (a correctness/leak requirement for production grade) and to make allocation
+  cheap. Treat it as a deliberate, staged subsystem, not a drive-by change.
+- OS threads are allowed only behind a cargo feature and only to back
+  `SharedArrayBuffer` / `Atomics` and the Test262 `$262.agent` harness. The
+  single-threaded core must stay correct and unburdened with the feature off.
 - Keep `qjs-cli` thin; library crates own engine semantics and error models.
 - Split large test files by the behavior under test (descriptors,
   enumeration, prototype operations, ...), not by the feature that added them.
