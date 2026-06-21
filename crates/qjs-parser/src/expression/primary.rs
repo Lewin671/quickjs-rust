@@ -100,7 +100,7 @@ impl Parser {
                 }))
             }
             TokenKind::TemplateNoSubstitution(segment) => {
-                self.reject_strict_legacy_octal_escape(&segment.raw, token.span)?;
+                self.reject_template_legacy_octal_escape(&segment.raw, token.span)?;
                 Ok(Expr::Literal(Literal::String {
                     value: segment.cooked,
                     span: token.span,
@@ -249,7 +249,7 @@ impl Parser {
         head: TemplateSegment,
         start: usize,
     ) -> Result<Expr, ParseError> {
-        self.reject_strict_legacy_octal_escape(&head.raw, Span::new(start, start))?;
+        self.reject_template_legacy_octal_escape(&head.raw, Span::new(start, start))?;
         let mut parts = vec![head.cooked];
         let mut expressions = Vec::new();
         loop {
@@ -257,11 +257,11 @@ impl Parser {
             let token = self.advance();
             match token.kind {
                 TokenKind::TemplateMiddle(segment) => {
-                    self.reject_strict_legacy_octal_escape(&segment.raw, token.span)?;
+                    self.reject_template_legacy_octal_escape(&segment.raw, token.span)?;
                     parts.push(segment.cooked);
                 }
                 TokenKind::TemplateTail(segment) => {
-                    self.reject_strict_legacy_octal_escape(&segment.raw, token.span)?;
+                    self.reject_template_legacy_octal_escape(&segment.raw, token.span)?;
                     parts.push(segment.cooked);
                     return Ok(Expr::Template {
                         parts,
@@ -342,6 +342,16 @@ impl Parser {
                 span: token.span,
             }),
         }
+    }
+
+    fn reject_template_legacy_octal_escape(&self, raw: &str, span: Span) -> Result<(), ParseError> {
+        if !has_legacy_octal_escape(raw) {
+            return Ok(());
+        }
+        Err(ParseError {
+            message: "legacy octal escape sequence is not allowed in template literals".to_owned(),
+            span,
+        })
     }
 
     fn reject_strict_legacy_octal_escape(&self, raw: &str, span: Span) -> Result<(), ParseError> {

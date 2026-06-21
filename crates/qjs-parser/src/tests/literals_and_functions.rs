@@ -440,7 +440,19 @@ fn parses_template_literal_with_substitutions() {
 fn rejects_legacy_octal_escapes_in_strict_strings_and_templates() {
     assert!(parse_script("\"use strict\"; '\\07';").is_err());
     assert!(parse_script("\"use strict\"; `${'\\07'}`;").is_err());
-    parse_script("'\\07'; `${'\\07'}`;").expect("legacy octal escapes parse outside strict mode");
+    parse_script("'\\07';").expect("legacy octal escapes parse outside strict mode strings");
+}
+
+#[test]
+fn rejects_legacy_octal_escapes_in_untagged_templates() {
+    for source in ["`\\00`;", "`\\8`;", "`\\9`;", "`${'ok'}\\00`;"] {
+        assert!(
+            parse_script(source).is_err(),
+            "expected untagged template to reject {source}"
+        );
+    }
+    parse_script("tag`\\00`; tag`\\8`; tag`\\9`;")
+        .expect("tagged templates preserve invalid escape sequences for the tag");
 }
 
 #[test]
