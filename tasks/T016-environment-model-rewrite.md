@@ -34,11 +34,17 @@ Each slice is one reviewable unit. Verify with the slice's focused command and
 `./scripts/check.sh` + `./scripts/compare-qjs.sh` before push; revert on any
 regression (no half-finished cutover).
 
-- [ ] **S1 — Upvalue type + resolver classification (no behavior change).**
-  Add `Upvalue`, the cell-slot / `UpvalueSource` resolver output, and
-  `Op::LoadUpvalue`/`StoreUpvalue`/cell-slot ops, all behind an internal flag
-  that stays *off*. Land a call-path benchmark to baseline T011. Unit-test the
-  resolver classification (plain vs cell) directly.
+- [~] **S1 — Upvalue type + resolver classification (no behavior change).**
+  - [x] `function::upvalue::Upvalue` shared-cell type (commit "Add Upvalue
+    shared-cell type", unit-tested for shared-write visibility + `ptr_eq`).
+  - [x] `bytecode::upvalue_resolver`: pure classification (cell slots, received
+    upvalue slots, per-child indexed `UpvalueSource`) over `Op::NewFunction`
+    captures, six unit tests (commit "Add upvalue classification resolver").
+  - [ ] Call-path benchmark to baseline T011 (still pending; can land anytime,
+    independent of the cell wiring).
+  - Re-scoped: `Op::LoadUpvalue`/`StoreUpvalue`/cell-slot ops move to **S2**,
+    where they gain a real executor (`Vm.upvalues` field) instead of dead
+    unreachable arms. The off-by-default flag lands with S2's first wiring.
 - [ ] **S2 — Cells for the simplest captured `let`/`const`** (non-shadowing,
   one nested closure, read+write). Flip only this class end-to-end. Gate: the
   T014 counter-callback repro and `closure_state` tests pass with the flag on
