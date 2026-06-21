@@ -67,12 +67,14 @@ pub(crate) fn install_function(
     // `arguments.callee` poison accessor, so their getters compare equal. Stash
     // it in the realm (under a name no source identifier can spell) so the
     // arguments-object builder reuses this exact object.
-    let throw_type_error = Value::Function(Function::new_native(
-        Some("ThrowTypeError"),
-        0,
-        NativeFunction::ThrowTypeError,
-        false,
-    ));
+    // %ThrowTypeError% (ES2024 10.2.4.1) has an empty `name`, and its `length`
+    // (0) and `name` are non-configurable; the object itself is frozen and
+    // non-extensible. `freeze` makes the eagerly-materialized `length`/`name`
+    // data properties non-writable and non-configurable.
+    let throw_type_error_function =
+        Function::new_native(Some(""), 0, NativeFunction::ThrowTypeError, false);
+    throw_type_error_function.freeze();
+    let throw_type_error = Value::Function(throw_type_error_function);
     env.insert_realm(
         super::THROW_TYPE_ERROR_INTRINSIC.to_owned(),
         throw_type_error.clone(),
