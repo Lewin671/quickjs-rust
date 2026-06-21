@@ -279,11 +279,13 @@ pub(crate) fn call_async_generator_native(
 
     let capability = promise::new_pending_promise(env);
     let Value::Object(generator) = &this_value else {
-        promise::reject_promise_capability(&capability, not_an_async_generator_value(), env);
+        let reason = not_an_async_generator_value(env);
+        promise::reject_promise_capability(&capability, reason, env);
         return Ok(Some(Value::Object(capability)));
     };
     if generator.async_generator_state().borrow().is_none() {
-        promise::reject_promise_capability(&capability, not_an_async_generator_value(), env);
+        let reason = not_an_async_generator_value(env);
+        promise::reject_promise_capability(&capability, reason, env);
         return Ok(Some(Value::Object(capability)));
     }
 
@@ -585,11 +587,15 @@ fn iterator_result(value: Value, done: bool, env: &CallEnv) -> Value {
     Value::Object(object)
 }
 
-fn not_an_async_generator_value() -> Value {
-    Value::String(
-        "TypeError: method called on a non-async-generator object"
-            .to_owned()
-            .into(),
+fn not_an_async_generator_value(env: &mut CallEnv) -> Value {
+    // A real TypeError object, not a bare string, so a rejection handler's
+    // `e instanceof TypeError` check holds.
+    crate::error::runtime_error_to_value(
+        RuntimeError {
+            thrown: None,
+            message: "TypeError: method called on a non-async-generator object".to_owned(),
+        },
+        env,
     )
 }
 
@@ -711,7 +717,8 @@ fn async_from_sync_method(
 ) -> Value {
     let capability = promise::new_pending_promise(env);
     let Some(sync_iterator) = function.env.get(SYNC_ITERATOR).cloned() else {
-        promise::reject_promise_capability(&capability, not_an_async_generator_value(), env);
+        let reason = not_an_async_generator_value(env);
+        promise::reject_promise_capability(&capability, reason, env);
         return Value::Object(capability);
     };
 
