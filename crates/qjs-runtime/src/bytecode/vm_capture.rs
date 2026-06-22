@@ -295,7 +295,6 @@ impl Vm<'_> {
                 continue;
             }
             if let Some(index) = self.bytecode.local_slot(name)
-                && self.bytecode.local_is_from_env(index)
                 && !self.bytecode.local_is_parameter(index)
                 && !self.bytecode.local_is_body_hoist_only(index)
                 && let Some(local @ Some(_)) = self.locals.get_mut(index)
@@ -331,7 +330,7 @@ fn binding_is_declared_local(bytecode: &Bytecode, name: &str) -> bool {
     })
 }
 
-fn filtered_parent_writeback(
+pub(super) fn filtered_parent_writeback(
     writeback: &CaptureWriteback,
     written_names: &[String],
 ) -> Option<Box<CaptureWriteback>> {

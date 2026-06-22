@@ -223,7 +223,7 @@ pub(crate) fn call_function(
                 target: Rc::clone(&function.captured_env),
                 names: function_env.function_capture_names.clone(),
                 aliases: Vec::new(),
-                parent: None,
+                parent: function.capture_writeback.clone().map(Box::new),
             }
         });
         let result = eval_function_bytecode(

@@ -531,11 +531,30 @@ impl Vm<'_> {
                 self.push_member_capture_name(&mut names, name, class_inner_name);
             }
         }
+        for name in bytecode.closure_written_binding_names() {
+            self.push_member_capture_name(&mut names, &name, class_inner_name);
+        }
+        for name in bytecode.closure_referenced_global_names() {
+            self.push_member_capture_name(&mut names, &name, class_inner_name);
+        }
+        let parent_names = names
+            .iter()
+            .filter(|name| {
+                self.bytecode.local_slot(name).is_none_or(|slot| {
+                    !(self.bytecode.local_is_body_hoist_only(slot)
+                        || self.bytecode.local_is_parameter(slot))
+                })
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        let parent = self.capture_writeback.as_ref().and_then(|writeback| {
+            super::vm_capture::filtered_parent_writeback(writeback, &parent_names)
+        });
         (!names.is_empty()).then(|| CaptureWriteback {
             target: self.captured_env.clone(),
             names,
             aliases: Vec::new(),
-            parent: None,
+            parent,
         })
     }
 

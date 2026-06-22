@@ -224,6 +224,11 @@ impl Vm<'_> {
         let Some(writeback) = writeback else {
             return;
         };
+        self.write_back_one_function_capture(writeback);
+        self.write_back_function_captures(writeback.parent.as_deref());
+    }
+
+    fn write_back_one_function_capture(&self, writeback: &CaptureWriteback) {
         let realm_global = writeback
             .target
             .borrow()
@@ -234,6 +239,9 @@ impl Vm<'_> {
             });
         let mut target = writeback.target.borrow_mut();
         for name in &writeback.names {
+            if !self.bytecode.writes_binding(name) {
+                continue;
+            }
             if crate::function::is_internal_binding_name(name)
                 || matches!(
                     name.as_str(),

@@ -170,7 +170,7 @@ pub(super) fn propagate_function_captures(
         if is_call_frame_binding(name) {
             continue;
         }
-        let Some(final_value) = result.binding(name) else {
+        let Some(final_value) = result.frame_binding(name).or_else(|| result.binding(name)) else {
             continue;
         };
         let writeback_targets_caller =
@@ -187,18 +187,43 @@ pub(super) fn propagate_function_captures(
             && (captured_global_this_has_own_property(&function.captured_env, name)
                 || caller_global_this_has_own_property(caller_env, name))
             && captured_value_matches_global_this(&function.captured_env, caller_env, name);
-        if (writeback_targets_caller || writes_global_capture)
+        let parent_writeback_targets_caller = function
+            .capture_writeback
+            .as_ref()
+            .and_then(|writeback| writeback.parent.as_deref())
+            .is_some_and(|parent| {
+                capture_writeback_targets_caller(parent, caller_env)
+                    && capture_writeback_contains_name(parent, name)
+            });
+        let parent_writeback_reaches_activation_name = function
+            .capture_writeback
+            .as_ref()
+            .and_then(|writeback| writeback.parent.as_deref())
+            .is_some_and(|parent| capture_writeback_contains_name(parent, name))
+            && caller_env
+                .activation_captured_env()
+                .is_some_and(|source| source.borrow().contains_key(name));
+        if (writeback_targets_caller
+            || parent_writeback_targets_caller
+            || parent_writeback_reaches_activation_name
+            || writes_global_capture)
             && let Some(binding) = caller_env.get_local_mut(name)
         {
             *binding = final_value.clone();
-        } else if (writeback_targets_caller || writes_global_capture)
+        } else if (writeback_targets_caller
+            || parent_writeback_targets_caller
+            || parent_writeback_reaches_activation_name
+            || writes_global_capture)
             && caller_env.realm_contains(name)
         {
             caller_env.insert_realm(name.clone(), final_value.clone());
         } else if writeback_targets_caller {
             caller_env.insert(name.clone(), final_value.clone());
         }
-        if (writeback_targets_caller || writes_global_capture)
+        if (writeback_targets_caller
+            || parent_writeback_targets_caller
+            || parent_writeback_reaches_activation_name
+            || writes_global_capture)
             && let Some(source) = caller_env.captured_binding_source_env()
             && source.borrow().contains_key(name)
         {
@@ -306,7 +331,7 @@ fn write_function_capture_values(
     let mut captured_env = target.borrow_mut();
     for name in names {
         if !is_call_frame_binding(name)
-            && let Some(final_value) = result.binding(name)
+            && let Some(final_value) = result.frame_binding(name).or_else(|| result.binding(name))
         {
             if bytecode.is_some_and(|bytecode| !bytecode.writes_binding(name))
                 && captured_env
@@ -326,7 +351,9 @@ fn write_function_capture_values(
     }
     for (source_name, target_name) in aliases {
         if !is_call_frame_binding(target_name)
-            && let Some(final_value) = result.binding(source_name)
+            && let Some(final_value) = result
+                .frame_binding(source_name)
+                .or_else(|| result.binding(source_name))
         {
             captured_env.insert(target_name.clone(), final_value.clone());
         }

@@ -553,6 +553,42 @@ fn iterator_flat_map_return_closes_inner_iterator_once() {
 }
 
 #[test]
+fn iterator_lazy_helpers_cache_underlying_next_method() {
+    assert_eq!(
+        string(
+            "let methods = ['map', 'filter', 'take', 'drop', 'flatMap']; \
+             let results = []; \
+             for (let method of methods) { \
+               let nextGets = 0; \
+               let nextCalls = 0; \
+               class CountingIterator extends Iterator { \
+                 get next() { \
+                   nextGets++; \
+                   let iter = (function* () { \
+                     for (let i = 1; i < 5; ++i) { yield i; } \
+                   })(); \
+                   return function() { \
+                     nextCalls++; \
+                     return iter.next(); \
+                   }; \
+                 } \
+               } \
+               let iterator = new CountingIterator(); \
+               let helper = method === 'map' ? iterator.map(x => x) : \
+                 method === 'filter' ? iterator.filter(() => true) : \
+                 method === 'take' ? iterator.take(2) : \
+                 method === 'drop' ? iterator.drop(2) : \
+                 iterator.flatMap(x => [x]); \
+               for (const value of helper) { } \
+               results.push(method + ':' + nextGets + ':' + nextCalls); \
+             } \
+             results.join('|');"
+        ),
+        "map:1:5|filter:1:5|take:1:2|drop:1:5|flatMap:1:5"
+    );
+}
+
+#[test]
 fn iterator_eager_helpers_validate_callback_before_next() {
     assert_eq!(
         string(

@@ -586,6 +586,16 @@ fn method_capture_writeback_updates_loop_scoped_caller_binding() {
 }
 
 #[test]
+fn class_accessor_returned_closure_writes_outer_binding() {
+    assert_eq!(
+        eval(
+            "let calls = 0; class C { get next() { return function() { calls += 1; return calls; }; } } let next = new C().next; let first = next(); let second = next(); calls + ':' + first + ':' + second;"
+        ),
+        Ok(Value::String("2:1:2".to_owned().into()))
+    );
+}
+
+#[test]
 fn super_call_binds_this_and_forwards_arguments() {
     assert_eq!(
         eval(

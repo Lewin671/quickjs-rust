@@ -97,9 +97,7 @@ impl Vm<'_> {
         // Pessimistically mark the iterator done: errors raised by the step
         // itself must not trigger a close on the abrupt path.
         self.store_local(done_slot, Value::Boolean(true))?;
-        let mut env = self.current_env();
-        let result = iterator_step_value(&iterator, &next, &mut env);
-        self.apply_env(env);
+        let result = self.iterator_step_value(&iterator, &next);
         match self.handle_runtime_result(result)? {
             Some(Some(value)) => {
                 self.store_local(done_slot, Value::Boolean(false))?;
@@ -109,6 +107,40 @@ impl Vm<'_> {
             None => {}
         }
         Ok(())
+    }
+
+    fn iterator_step_value(
+        &mut self,
+        iterator: &Value,
+        next: &Value,
+    ) -> Result<Option<Value>, RuntimeError> {
+        let mut call_env = self.call_env(next);
+        let result = call_function(
+            next.clone(),
+            iterator.clone(),
+            Vec::new(),
+            &mut call_env.env,
+            false,
+        );
+        self.apply_call_env(call_env);
+        self.refresh_shared_captured_locals_after_call();
+        let result = result?;
+        if !is_iterator_result_object(&result) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: iterator result is not an object".to_owned(),
+            });
+        }
+        let mut env = self.current_env();
+        let done = property_value(result.clone(), "done", &mut env).map(|value| is_truthy(&value));
+        self.apply_env(env);
+        if done? {
+            return Ok(None);
+        }
+        let mut env = self.current_env();
+        let value = property_value(result, "value", &mut env);
+        self.apply_env(env);
+        Ok(Some(value?))
     }
 
     pub(super) fn iterator_rest(&mut self, done_slot: usize) -> Result<(), RuntimeError> {

@@ -208,15 +208,23 @@ impl Vm<'_> {
         let Some(name) = self.bytecode.locals.get(slot).map(|local| &local.name) else {
             return;
         };
-        let mut target = writeback.target.borrow_mut();
-        if writeback.names.iter().any(|candidate| candidate == name) {
-            target.insert(name.clone(), value.clone());
-        }
-        for (source_name, target_name) in &writeback.aliases {
-            if source_name == name {
-                target.insert(target_name.clone(), value.clone());
+        fn writeback_name(writeback: &super::CaptureWriteback, name: &str, value: &Value) {
+            {
+                let mut target = writeback.target.borrow_mut();
+                if writeback.names.iter().any(|candidate| candidate == name) {
+                    target.insert(name.to_owned(), value.clone());
+                }
+                for (source_name, target_name) in &writeback.aliases {
+                    if source_name == name {
+                        target.insert(target_name.clone(), value.clone());
+                    }
+                }
+            }
+            if let Some(parent) = writeback.parent.as_deref() {
+                writeback_name(parent, name, value);
             }
         }
+        writeback_name(writeback, name, value);
     }
 
     pub(super) fn load_global(&mut self, name: &str) -> Result<Value, RuntimeError> {
