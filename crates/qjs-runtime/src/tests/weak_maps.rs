@@ -80,6 +80,28 @@ fn weak_map_constructor_uses_new_target_realm_default_prototype() {
 }
 
 #[test]
+fn weak_map_constructor_closes_iterator_on_entry_errors() {
+    assert_eq!(
+        eval(
+            "let count = 0; let iterable = {}; iterable[Symbol.iterator] = function() { return { next() { return { value: [], done: false }; }, return() { count = count + 1; return {}; } }; }; WeakMap.prototype.set = function() { throw new TypeError('set'); }; try { new WeakMap(iterable); } catch (e) {} count;"
+        ),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval(
+            "let count = 0; let item = [{}, 'v']; Object.defineProperty(item, 1, { get() { throw new TypeError('value'); } }); let iterable = {}; iterable[Symbol.iterator] = function() { return { next() { return { value: item, done: false }; }, return() { count = count + 1; return {}; } }; }; try { new WeakMap(iterable); } catch (e) {} count;"
+        ),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval(
+            "let count = 0; let iterable = {}; iterable[Symbol.iterator] = function() { return { next() { return { value: 1, done: false }; }, return() { count = count + 1; return {}; } }; }; try { new WeakMap(iterable); } catch (e) {} count;"
+        ),
+        Ok(Value::Number(1.0))
+    );
+}
+
+#[test]
 fn evaluates_weak_map_basic_methods() {
     assert_eq!(
         eval("let key = {}; let map = new WeakMap(); map.set(key, 1) === map;"),

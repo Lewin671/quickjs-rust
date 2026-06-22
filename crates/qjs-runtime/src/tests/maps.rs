@@ -94,6 +94,28 @@ fn map_constructor_uses_new_target_realm_default_prototype() {
 }
 
 #[test]
+fn map_constructor_closes_iterator_on_entry_errors() {
+    assert_eq!(
+        eval(
+            "let count = 0; let iterable = {}; iterable[Symbol.iterator] = function() { return { next() { return { value: [], done: false }; }, return() { count = count + 1; return {}; } }; }; Map.prototype.set = function() { throw new TypeError('set'); }; try { new Map(iterable); } catch (e) {} count;"
+        ),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval(
+            "let count = 0; let item = ['k', 'v']; Object.defineProperty(item, 0, { get() { throw new TypeError('key'); } }); let iterable = {}; iterable[Symbol.iterator] = function() { return { next() { return { value: item, done: false }; }, return() { count = count + 1; return {}; } }; }; try { new Map(iterable); } catch (e) {} count;"
+        ),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval(
+            "let count = 0; let iterable = {}; iterable[Symbol.iterator] = function() { return { next() { return { value: 1, done: false }; }, return() { count = count + 1; return {}; } }; }; try { new Map(iterable); } catch (e) {} count;"
+        ),
+        Ok(Value::Number(1.0))
+    );
+}
+
+#[test]
 fn evaluates_map_group_by_arrays() {
     assert_eq!(eval("Map.groupBy.length;"), Ok(Value::Number(2.0)));
     assert_eq!(
