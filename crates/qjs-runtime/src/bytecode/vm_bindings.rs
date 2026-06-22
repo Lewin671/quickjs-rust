@@ -1141,6 +1141,23 @@ impl Vm<'_> {
         }
     }
 
+    /// Whether some *other* active local slot is a block-lexical that shadows
+    /// the plain identifier `name` (its storage name unmangles to `name`). Used
+    /// to detect that a plain-name env entry is really the alias of an inner
+    /// shadowing binding (see `apply_env`), not a write to the outer slot
+    /// `resolved_slot`.
+    fn active_shadowing_lexical_slot(&self, name: &str, resolved_slot: usize) -> bool {
+        self.bytecode
+            .locals
+            .iter()
+            .enumerate()
+            .any(|(slot, local)| {
+                slot != resolved_slot
+                    && self.locals.get(slot).is_some_and(Option::is_some)
+                    && super::vm::unmangle_lexical_storage_name(&local.name) == Some(name)
+            })
+    }
+
     pub(super) fn apply_env(&mut self, env: CallEnv) {
         // The realm layer is shared by `Rc`, so global writes are already live.
         // Write each non-realm local back to its slot, to the frame's own
@@ -1149,6 +1166,19 @@ impl Vm<'_> {
         let locals = env.into_locals();
         for (name, value) in locals {
             if let Some(index) = self.bytecode.local_slot(&name) {
+                // `frame_call_env` also exposes an active shadowing block-lexical
+                // (stored under a mangled `\0lexical:<name>:<slot>` key) under its
+                // plain source name, so a direct eval resolves the innermost
+                // binding. That plain-name alias must not be written back: it
+                // resolves to the OUTER same-named slot, so writing it would
+                // clobber the shadowed outer binding (and its captured cell) with
+                // the inner value. The inner binding rides back through its own
+                // mangled entry, so skip the alias entirely.
+                if super::vm::unmangle_lexical_storage_name(&name).is_none()
+                    && self.active_shadowing_lexical_slot(&name, index)
+                {
+                    continue;
+                }
                 if self.in_parameter_prologue() && !self.bytecode.local_is_parameter(index) {
                     self.env.insert(name, value);
                     continue;
@@ -1347,6 +1377,16 @@ impl Vm<'_> {
         let mut iteration_names = Vec::with_capacity(slots.len());
         for &slot in slots {
             if let Some(name) = self.bytecode.local_name_at(slot) {
+                // A loop variable that shadows an outer binding is stored under a
+                // mangled name (`\0lexical:x:N`), but a write to it can reach
+                // `propagate_captured_write_to_parents` under the *plain* name
+                // (e.g. an `apply_env` round-trip after the iterator `next()`
+                // call resolves the binding by its source identifier). Record
+                // both spellings so the per-iteration write is never propagated
+                // to an enclosing captured cell of the shadowed outer binding.
+                if let Some(plain) = super::vm::unmangle_lexical_storage_name(name) {
+                    iteration_names.push(plain.to_owned());
+                }
                 iteration_names.push(name.to_owned());
                 if let Some(Some(value)) = self.locals.get(slot) {
                     new_env.insert(name.to_owned(), value.clone());

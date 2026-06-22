@@ -375,6 +375,49 @@ fn for_of_let_body_write_reaches_outer_closure() {
 }
 
 #[test]
+fn for_of_loop_variable_shadowing_outer_does_not_leak_into_the_outer_binding() {
+    // A `for (let x of …)` head whose `x` shadows an outer `let x` must not write
+    // the per-iteration value back onto the outer binding — neither its frame
+    // slot (read directly after the loop) nor an outer cell a closure created
+    // before the loop captured. The leak came from two name-keyed round-trips:
+    // `apply_env` after the iterator `next()` call aliased the mangled loop slot
+    // under the plain name, and the captured-write propagation skip listed only
+    // the mangled storage name.
+    assert_eq!(
+        eval(
+            "function f() { \
+               let x = 'outer'; \
+               for (let x of ['inner']) {} \
+               return x; \
+             } f();"
+        ),
+        Ok(Value::String("outer".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "function f() { \
+               let x = 'outer'; \
+               var probe = function () { return x; }; \
+               for (let x of ['inner']) {} \
+               return probe(); \
+             } f();"
+        ),
+        Ok(Value::String("outer".to_owned().into()))
+    );
+    // for-in over an object key set leaks the same way without the fix.
+    assert_eq!(
+        eval(
+            "function f() { \
+               let x = 'outer'; \
+               for (let x in {a: 1}) {} \
+               return x; \
+             } f();"
+        ),
+        Ok(Value::String("outer".to_owned().into()))
+    );
+}
+
+#[test]
 fn for_of_let_body_write_to_distinct_outer_does_not_disturb_loop_variable() {
     // The per-iteration loop variable keeps its own value while an outer binding
     // written in the same body propagates to a pre-loop closure: the loop walks

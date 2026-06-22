@@ -1184,7 +1184,7 @@ pub(super) fn insert_missing_binding_name(binding_names: &mut Vec<String>, name:
 /// Recovers the source identifier from a mangled block-lexical storage name of
 /// the form `\0lexical:<name>:<index>` (see `lexical_storage_name`). Returns
 /// `None` for an ordinary, unmangled binding name.
-fn unmangle_lexical_storage_name(storage_name: &str) -> Option<&str> {
+pub(super) fn unmangle_lexical_storage_name(storage_name: &str) -> Option<&str> {
     storage_name
         .strip_prefix("\u{0}lexical:")
         .and_then(|rest| rest.rsplit_once(':'))
