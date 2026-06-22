@@ -118,7 +118,12 @@ impl Parser {
         let Some(async_token) = self.peek() else {
             return Ok(None);
         };
-        if !matches!(&async_token.kind, TokenKind::Identifier(name) if name == "async") {
+        // The `async` of an async arrow is a keyword and must be written
+        // verbatim: an escaped spelling (`async () => {}`) is not the
+        // contextual keyword, so it never forms an async arrow head.
+        if async_token.had_escape
+            || !matches!(&async_token.kind, TokenKind::Identifier(name) if name == "async")
+        {
             return Ok(None);
         }
         // A following line terminator disqualifies an async arrow head.

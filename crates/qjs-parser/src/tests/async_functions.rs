@@ -72,6 +72,14 @@ fn escaped_async_function_prefix_is_error() {
 }
 
 #[test]
+fn escaped_async_arrow_prefix_is_error() {
+    // The `async` of an async arrow is a keyword and must be written verbatim;
+    // an escaped spelling does not form an async arrow head.
+    assert!(parse_script("\\u0061sync () => {}").is_err());
+    assert!(parse_script("\\u0061sync x => x;").is_err());
+}
+
+#[test]
 fn parses_async_arrow_single_identifier() {
     let Expr::Function {
         is_async,
