@@ -285,6 +285,7 @@ pub(super) fn caller_capture_matches_existing(
     env: &CallEnv,
     name: &str,
     caller_shares_capture_source: bool,
+    allow_caller_local_match: bool,
     callee: &Value,
 ) -> bool {
     !env.locals()
@@ -292,7 +293,7 @@ pub(super) fn caller_capture_matches_existing(
         .is_some_and(|value| value == callee && local_env.get(name) != Some(value))
         && (caller_shares_capture_source
             || !local_env.contains_key(name)
-            || env.locals().contains_key(name)
+            || (allow_caller_local_match && env.locals().contains_key(name))
             || env
                 .get(name)
                 .is_some_and(|value| local_env.get(name) == Some(&value)))

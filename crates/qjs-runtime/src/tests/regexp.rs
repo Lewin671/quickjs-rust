@@ -483,6 +483,60 @@ fn evaluates_regexp_prototype_accessors() {
 }
 
 #[test]
+fn regexp_prototype_accessors_throw_getter_realm_type_error_cross_realm() {
+    assert_eq!(
+        eval(
+            "var realmGlobal = Object.create(globalThis);
+             function makeNativeError(name) {
+                 return function NativeError() {
+                     return Reflect.construct(
+                         globalThis[name],
+                         globalThis.Array.prototype.slice.call(arguments),
+                         new.target || NativeError
+                     );
+                 };
+             }
+             var crossRealmTypeError = makeNativeError('TypeError');
+             var crossRealmTypeErrorPrototype = Object.create(null);
+             Object.defineProperty(crossRealmTypeErrorPrototype, 'constructor', {
+                 value: crossRealmTypeError,
+                 writable: true,
+                 configurable: true
+             });
+             crossRealmTypeError.prototype = crossRealmTypeErrorPrototype;
+             realmGlobal.TypeError = crossRealmTypeError;
+
+             var crossRealmRegExpPrototype = Object.create(RegExp.prototype);
+             var descriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, 'global');
+             Object.defineProperty(crossRealmRegExpPrototype, 'global', {
+                 get: function() {
+                     if (this === crossRealmRegExpPrototype) {
+                         return undefined;
+                     }
+                     if (this === RegExp.prototype) {
+                         throw new realmGlobal.TypeError('bad receiver');
+                     }
+                     return descriptor.get.call(this);
+                 },
+                 configurable: descriptor.configurable
+             });
+
+             var otherGetter = Object.getOwnPropertyDescriptor(
+                 crossRealmRegExpPrototype,
+                 'global'
+             ).get;
+             try {
+                 otherGetter.call(RegExp.prototype);
+                 false;
+             } catch (error) {
+                 error instanceof realmGlobal.TypeError && !(error instanceof TypeError);
+             }"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn evaluates_regexp_exec_literal_match() {
     assert_eq!(
         eval("/test/.exec('a test value')[0];"),

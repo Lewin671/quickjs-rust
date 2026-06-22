@@ -1035,6 +1035,7 @@ fn insert_caller_bytecode_bindings(
             env,
             name,
             caller_shares_capture_source,
+            caller_local_match_is_writeback_target(callee, env, name),
             callee,
         );
         register_existing_caller_capture_writeback(
@@ -1086,6 +1087,7 @@ fn insert_caller_bytecode_bindings(
                 env,
                 name,
                 caller_shares_capture_source,
+                caller_local_match_is_writeback_target(callee, env, name),
                 callee,
             );
             register_existing_caller_capture_writeback(
@@ -1138,6 +1140,11 @@ fn register_existing_caller_capture_writeback(
     {
         insert_missing_caller_binding_name(caller_binding_names, name);
     }
+}
+
+fn caller_local_match_is_writeback_target(callee: &Value, env: &CallEnv, name: &str) -> bool {
+    callee_capture_writeback_targets_caller(callee, env, name)
+        || callee_capture_writeback_aliases_name(callee, name)
 }
 
 struct ExistingCallerCaptureWriteback<'a> {

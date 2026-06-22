@@ -163,6 +163,23 @@ fn object_to_string_preserves_captured_writeback_side_effects() {
 }
 
 #[test]
+fn constructed_closure_uses_callee_capture_not_caller_same_named_local() {
+    assert_eq!(
+        eval(
+            "function make(name) {
+                 return function C() { this.value = name; };
+             }
+             var C = make('captured');
+             function caller(name) {
+                 return new C().value;
+             }
+             caller('caller');"
+        ),
+        Ok(Value::String("captured".to_owned().into()))
+    );
+}
+
+#[test]
 fn loop_body_lexicals_get_per_iteration_environment() {
     // A `let`/`const`/`class` declared in a `while`/`do`-`while`/`for(;;)` body
     // and captured by a closure must be a fresh binding each iteration, so the
