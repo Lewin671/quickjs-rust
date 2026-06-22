@@ -22,6 +22,20 @@ fn evaluates_set_constructor_and_prototype() {
 }
 
 #[test]
+fn set_constructor_uses_new_target_realm_default_prototype() {
+    assert_eq!(
+        eval(
+            "let realmPrototype = {}; \
+             function C() {} \
+             Object.defineProperty(C, '__quickjsRustRealmSetPrototype', { value: realmPrototype }); \
+             C.prototype = null; \
+             Object.getPrototypeOf(Reflect.construct(Set, [], C)) === realmPrototype;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn exposes_set_species_accessor() {
     assert_eval(
         "let desc = Object.getOwnPropertyDescriptor(Set, Symbol.species); let receiver = {}; [desc.get.call(receiver) === receiver, desc.set === undefined, desc.enumerable, desc.configurable, desc.get.name, desc.get.length].join(':');",

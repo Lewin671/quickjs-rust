@@ -49,6 +49,27 @@ fn evaluates_boolean_builtins() {
 }
 
 #[test]
+fn primitive_wrapper_constructors_use_new_target_realm_default_prototype() {
+    for (name, marker) in [
+        ("Boolean", "__quickjsRustRealmBooleanPrototype"),
+        ("Number", "__quickjsRustRealmNumberPrototype"),
+        ("String", "__quickjsRustRealmStringPrototype"),
+    ] {
+        assert_eq!(
+            eval(&format!(
+                "let realmPrototype = {{}}; \
+                 function C() {{}} \
+                 Object.defineProperty(C, '{marker}', {{ value: realmPrototype }}); \
+                 C.prototype = null; \
+                 Object.getPrototypeOf(Reflect.construct({name}, [], C)) === realmPrototype;"
+            )),
+            Ok(Value::Boolean(true)),
+            "{name} should use the marked newTarget realm prototype"
+        );
+    }
+}
+
+#[test]
 fn evaluates_global_undefined_binding() {
     assert_eq!(eval("undefined;"), Ok(Value::Undefined));
     assert_eq!(eval("undefined === undefined;"), Ok(Value::Boolean(true)));

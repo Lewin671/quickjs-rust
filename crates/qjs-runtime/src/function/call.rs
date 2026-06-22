@@ -21,8 +21,20 @@ use super::{
 };
 
 const CROSS_REALM_OBJECT_PROTOTYPE: &str = "__quickjsRustRealmObjectPrototype";
+const CROSS_REALM_BOOLEAN_PROTOTYPE: &str = "__quickjsRustRealmBooleanPrototype";
+const CROSS_REALM_NUMBER_PROTOTYPE: &str = "__quickjsRustRealmNumberPrototype";
+const CROSS_REALM_STRING_PROTOTYPE: &str = "__quickjsRustRealmStringPrototype";
+const CROSS_REALM_DATE_PROTOTYPE: &str = "__quickjsRustRealmDatePrototype";
 const CROSS_REALM_REGEXP_PROTOTYPE: &str = "__quickjsRustRealmRegExpPrototype";
+const CROSS_REALM_ERROR_PROTOTYPE: &str = "__quickjsRustRealmErrorPrototype";
+const CROSS_REALM_EVAL_ERROR_PROTOTYPE: &str = "__quickjsRustRealmEvalErrorPrototype";
+const CROSS_REALM_RANGE_ERROR_PROTOTYPE: &str = "__quickjsRustRealmRangeErrorPrototype";
+const CROSS_REALM_REFERENCE_ERROR_PROTOTYPE: &str = "__quickjsRustRealmReferenceErrorPrototype";
+const CROSS_REALM_SYNTAX_ERROR_PROTOTYPE: &str = "__quickjsRustRealmSyntaxErrorPrototype";
+const CROSS_REALM_TYPE_ERROR_PROTOTYPE: &str = "__quickjsRustRealmTypeErrorPrototype";
+const CROSS_REALM_URI_ERROR_PROTOTYPE: &str = "__quickjsRustRealmURIErrorPrototype";
 const CROSS_REALM_AGGREGATE_ERROR_PROTOTYPE: &str = "__quickjsRustRealmAggregateErrorPrototype";
+const CROSS_REALM_SUPPRESSED_ERROR_PROTOTYPE: &str = "__quickjsRustRealmSuppressedErrorPrototype";
 const CROSS_REALM_ITERATOR_PROTOTYPE: &str = "__quickjsRustRealmIteratorPrototype";
 
 pub(crate) fn call_function(
@@ -485,8 +497,44 @@ fn cross_realm_construct_prototype_slot(
     env: &CallEnv,
 ) -> Result<Option<crate::Prototype>, RuntimeError> {
     let marker = match target {
+        Value::Function(function) if function.native == Some(NativeFunction::Boolean) => {
+            CROSS_REALM_BOOLEAN_PROTOTYPE
+        }
+        Value::Function(function) if function.native == Some(NativeFunction::Number) => {
+            CROSS_REALM_NUMBER_PROTOTYPE
+        }
+        Value::Function(function) if function.native == Some(NativeFunction::String) => {
+            CROSS_REALM_STRING_PROTOTYPE
+        }
+        Value::Function(function) if function.native == Some(NativeFunction::Date) => {
+            CROSS_REALM_DATE_PROTOTYPE
+        }
+        Value::Function(function) if function.native == Some(NativeFunction::Error) => {
+            CROSS_REALM_ERROR_PROTOTYPE
+        }
+        Value::Function(function) if function.native == Some(NativeFunction::EvalError) => {
+            CROSS_REALM_EVAL_ERROR_PROTOTYPE
+        }
+        Value::Function(function) if function.native == Some(NativeFunction::RangeError) => {
+            CROSS_REALM_RANGE_ERROR_PROTOTYPE
+        }
+        Value::Function(function) if function.native == Some(NativeFunction::ReferenceError) => {
+            CROSS_REALM_REFERENCE_ERROR_PROTOTYPE
+        }
+        Value::Function(function) if function.native == Some(NativeFunction::SyntaxError) => {
+            CROSS_REALM_SYNTAX_ERROR_PROTOTYPE
+        }
+        Value::Function(function) if function.native == Some(NativeFunction::TypeError) => {
+            CROSS_REALM_TYPE_ERROR_PROTOTYPE
+        }
+        Value::Function(function) if function.native == Some(NativeFunction::UriError) => {
+            CROSS_REALM_URI_ERROR_PROTOTYPE
+        }
         Value::Function(function) if function.native == Some(NativeFunction::AggregateError) => {
             CROSS_REALM_AGGREGATE_ERROR_PROTOTYPE
+        }
+        Value::Function(function) if function.native == Some(NativeFunction::SuppressedError) => {
+            CROSS_REALM_SUPPRESSED_ERROR_PROTOTYPE
         }
         Value::Function(function) if function.native == Some(NativeFunction::RegExp) => {
             CROSS_REALM_REGEXP_PROTOTYPE

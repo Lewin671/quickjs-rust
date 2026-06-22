@@ -66,6 +66,20 @@ fn weak_map_constructor_uses_prototype_set_adder() {
 }
 
 #[test]
+fn weak_map_constructor_uses_new_target_realm_default_prototype() {
+    assert_eq!(
+        eval(
+            "let realmPrototype = {}; \
+             function C() {} \
+             Object.defineProperty(C, '__quickjsRustRealmWeakMapPrototype', { value: realmPrototype }); \
+             C.prototype = null; \
+             Object.getPrototypeOf(Reflect.construct(WeakMap, [], C)) === realmPrototype;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn evaluates_weak_map_basic_methods() {
     assert_eq!(
         eval("let key = {}; let map = new WeakMap(); map.set(key, 1) === map;"),

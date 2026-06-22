@@ -80,6 +80,20 @@ fn map_constructor_uses_prototype_set_adder() {
 }
 
 #[test]
+fn map_constructor_uses_new_target_realm_default_prototype() {
+    assert_eq!(
+        eval(
+            "let realmPrototype = {}; \
+             function C() {} \
+             Object.defineProperty(C, '__quickjsRustRealmMapPrototype', { value: realmPrototype }); \
+             C.prototype = null; \
+             Object.getPrototypeOf(Reflect.construct(Map, [], C)) === realmPrototype;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn evaluates_map_group_by_arrays() {
     assert_eq!(eval("Map.groupBy.length;"), Ok(Value::Number(2.0)));
     assert_eq!(

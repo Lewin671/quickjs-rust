@@ -199,6 +199,53 @@ fn evaluates_native_error_builtins() {
 }
 
 #[test]
+fn error_constructors_use_new_target_realm_default_prototype() {
+    assert_eq!(
+        eval(
+            "let realmPrototype = {}; \
+             function C() {} \
+             Object.defineProperty(C, '__quickjsRustRealmErrorPrototype', { value: realmPrototype }); \
+             C.prototype = undefined; \
+             Object.getPrototypeOf(Reflect.construct(Error, [], C)) === realmPrototype;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "let realmPrototype = {}; \
+             function C() {} \
+             Object.defineProperty(C, '__quickjsRustRealmSuppressedErrorPrototype', { value: realmPrototype }); \
+             C.prototype = null; \
+             Object.getPrototypeOf(Reflect.construct(SuppressedError, ['error', 'suppressed'], C)) === realmPrototype;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+    for (name, marker) in [
+        ("EvalError", "__quickjsRustRealmEvalErrorPrototype"),
+        ("RangeError", "__quickjsRustRealmRangeErrorPrototype"),
+        (
+            "ReferenceError",
+            "__quickjsRustRealmReferenceErrorPrototype",
+        ),
+        ("SyntaxError", "__quickjsRustRealmSyntaxErrorPrototype"),
+        ("TypeError", "__quickjsRustRealmTypeErrorPrototype"),
+        ("URIError", "__quickjsRustRealmURIErrorPrototype"),
+    ] {
+        assert_eq!(
+            eval(&format!(
+                "let realmPrototype = {{}}; \
+                 function C() {{}} \
+                 Object.defineProperty(C, '{marker}', {{ value: realmPrototype }}); \
+                 C.prototype = null; \
+                 Object.getPrototypeOf(Reflect.construct({name}, [], C)) === realmPrototype;"
+            )),
+            Ok(Value::Boolean(true)),
+            "{name} should use the marked newTarget realm prototype"
+        );
+    }
+}
+
+#[test]
 fn evaluates_aggregate_error_builtin() {
     assert_eq!(
         eval("typeof AggregateError;"),

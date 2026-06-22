@@ -209,6 +209,34 @@ var $262 = {
       Object.defineProperty(fn, "__quickjsRustRealmRegExpPrototype", {
         value: crossRealmRegExpPrototype
       });
+      [
+        ["Boolean", "__quickjsRustRealmBooleanPrototype"],
+        ["Number", "__quickjsRustRealmNumberPrototype"],
+        ["String", "__quickjsRustRealmStringPrototype"],
+        ["Date", "__quickjsRustRealmDatePrototype"],
+        ["Map", "__quickjsRustRealmMapPrototype"],
+        ["Set", "__quickjsRustRealmSetPrototype"],
+        ["WeakMap", "__quickjsRustRealmWeakMapPrototype"],
+        ["WeakSet", "__quickjsRustRealmWeakSetPrototype"]
+      ].forEach(function(entry) {
+        Object.defineProperty(fn, entry[1], {
+          value: crossRealmBuiltinPrototypes[entry[0]]
+        });
+      });
+      [
+        ["Error", "__quickjsRustRealmErrorPrototype"],
+        ["EvalError", "__quickjsRustRealmEvalErrorPrototype"],
+        ["RangeError", "__quickjsRustRealmRangeErrorPrototype"],
+        ["ReferenceError", "__quickjsRustRealmReferenceErrorPrototype"],
+        ["SyntaxError", "__quickjsRustRealmSyntaxErrorPrototype"],
+        ["TypeError", "__quickjsRustRealmTypeErrorPrototype"],
+        ["URIError", "__quickjsRustRealmURIErrorPrototype"],
+        ["SuppressedError", "__quickjsRustRealmSuppressedErrorPrototype"]
+      ].forEach(function(entry) {
+        Object.defineProperty(fn, entry[1], {
+          value: crossRealmNativeErrorPrototypes[entry[0]]
+        });
+      });
       Object.defineProperty(fn, "__quickjsRustRealmGeneratorFunctionPrototype", {
         value: crossRealmGeneratorFunction.prototype
       });
@@ -283,13 +311,102 @@ var $262 = {
         configurable: true
       });
     }
+    var crossRealmBuiltinConstructors = {};
+    var crossRealmBuiltinPrototypes = {};
+    [
+      "Boolean",
+      "Number",
+      "String",
+      "Date",
+      "Map",
+      "Set",
+      "WeakMap",
+      "WeakSet"
+    ].forEach(function(name) {
+      var constructor = function Builtin() {
+        return Reflect.construct(
+          globalThis[name],
+          globalThis.Array.prototype.slice.call(arguments),
+          new.target || constructor
+        );
+      };
+      var prototype = Object.create(globalThis[name].prototype);
+      Object.defineProperty(prototype, "constructor", {
+        value: constructor,
+        writable: true,
+        enumerable: false,
+        configurable: true
+      });
+      constructor.prototype = prototype;
+      if (name === "String") {
+        ["toString", "valueOf"].forEach(function(method) {
+          Object.defineProperty(prototype, method, {
+            value: function() {
+              try {
+                return globalThis.String.prototype[method].call(this);
+              } catch (error) {
+                throw new realmGlobal.TypeError(error && error.message);
+              }
+            },
+            writable: true,
+            enumerable: false,
+            configurable: true
+          });
+        });
+      }
+      crossRealmBuiltinConstructors[name] = constructor;
+      crossRealmBuiltinPrototypes[name] = prototype;
+    });
+    var crossRealmNativeErrors = {};
+    var crossRealmNativeErrorPrototypes = {};
+    [
+      "Error",
+      "EvalError",
+      "RangeError",
+      "ReferenceError",
+      "SyntaxError",
+      "TypeError",
+      "URIError",
+      "SuppressedError"
+    ].forEach(function(name) {
+      var constructor = function NativeError() {
+        return Reflect.construct(
+          globalThis[name],
+          globalThis.Array.prototype.slice.call(arguments),
+          new.target || constructor
+        );
+      };
+      var prototype = Object.create(globalThis[name].prototype);
+      Object.defineProperty(prototype, "constructor", {
+        value: constructor,
+        writable: true,
+        enumerable: false,
+        configurable: true
+      });
+      constructor.prototype = prototype;
+      crossRealmNativeErrors[name] = constructor;
+      crossRealmNativeErrorPrototypes[name] = prototype;
+    });
     realmGlobal.Object = crossRealmObject;
     realmGlobal.Array = crossRealmArray;
     realmGlobal.Function = crossRealmFunction;
     realmGlobal.RegExp = crossRealmRegExp;
-    realmGlobal.Boolean = globalThis.Boolean;
-    realmGlobal.Number = globalThis.Number;
-    realmGlobal.String = globalThis.String;
+    realmGlobal.Boolean = crossRealmBuiltinConstructors.Boolean;
+    realmGlobal.Number = crossRealmBuiltinConstructors.Number;
+    realmGlobal.String = crossRealmBuiltinConstructors.String;
+    realmGlobal.Date = crossRealmBuiltinConstructors.Date;
+    realmGlobal.Map = crossRealmBuiltinConstructors.Map;
+    realmGlobal.Set = crossRealmBuiltinConstructors.Set;
+    realmGlobal.WeakMap = crossRealmBuiltinConstructors.WeakMap;
+    realmGlobal.WeakSet = crossRealmBuiltinConstructors.WeakSet;
+    realmGlobal.Error = crossRealmNativeErrors.Error;
+    realmGlobal.EvalError = crossRealmNativeErrors.EvalError;
+    realmGlobal.RangeError = crossRealmNativeErrors.RangeError;
+    realmGlobal.ReferenceError = crossRealmNativeErrors.ReferenceError;
+    realmGlobal.SyntaxError = crossRealmNativeErrors.SyntaxError;
+    realmGlobal.TypeError = crossRealmNativeErrors.TypeError;
+    realmGlobal.URIError = crossRealmNativeErrors.URIError;
+    realmGlobal.SuppressedError = crossRealmNativeErrors.SuppressedError;
     realmGlobal.globalThis = realmGlobal;
     realmGlobal.eval = function(source) {
       var value = (0, eval)(source);

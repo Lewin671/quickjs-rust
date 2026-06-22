@@ -4,7 +4,12 @@ use crate::{
     ArrayRef, Function, ObjectRef, Property, Value, array_own_property_descriptor,
     array_own_property_names, symbol,
 };
-use crate::{CallEnv, NEW_TARGET_BINDING, RuntimeError};
+use crate::{CallEnv, NEW_TARGET_BINDING, NativeFunction, RuntimeError};
+
+const CROSS_REALM_MAP_PROTOTYPE: &str = "__quickjsRustRealmMapPrototype";
+const CROSS_REALM_SET_PROTOTYPE: &str = "__quickjsRustRealmSetPrototype";
+const CROSS_REALM_WEAK_MAP_PROTOTYPE: &str = "__quickjsRustRealmWeakMapPrototype";
+const CROSS_REALM_WEAK_SET_PROTOTYPE: &str = "__quickjsRustRealmWeakSetPrototype";
 
 pub(crate) fn constructor_prototype(callee: &Value, env: &CallEnv) -> Option<ObjectRef> {
     constructor_prototype_slot(callee, env).and_then(|prototype| prototype.as_object())
@@ -18,9 +23,46 @@ pub(crate) fn native_construct_prototype_slot(
     let Some(new_target) = env.get(NEW_TARGET_BINDING) else {
         return Ok(fallback);
     };
-    let prototype =
-        prototype_value_to_slot(crate::property_value(new_target, "prototype", env)?, env);
-    Ok(prototype.or(fallback))
+    let prototype = prototype_value_to_slot(
+        crate::property_value(new_target.clone(), "prototype", env)?,
+        env,
+    );
+    if prototype.is_some() {
+        return Ok(prototype);
+    }
+    if let Some(marker) = native_construct_realm_prototype_marker(function.native)
+        && let Some(prototype) = marked_realm_prototype_slot(&new_target, marker, env)
+    {
+        return Ok(Some(prototype));
+    }
+    Ok(fallback)
+}
+
+fn native_construct_realm_prototype_marker(native: Option<NativeFunction>) -> Option<&'static str> {
+    Some(match native? {
+        NativeFunction::Map => CROSS_REALM_MAP_PROTOTYPE,
+        NativeFunction::Set => CROSS_REALM_SET_PROTOTYPE,
+        NativeFunction::WeakMap => CROSS_REALM_WEAK_MAP_PROTOTYPE,
+        NativeFunction::WeakSet => CROSS_REALM_WEAK_SET_PROTOTYPE,
+        _ => return None,
+    })
+}
+
+fn marked_realm_prototype_slot(
+    new_target: &Value,
+    marker: &str,
+    env: &CallEnv,
+) -> Option<crate::Prototype> {
+    match new_target {
+        Value::Function(function) => function
+            .own_property(marker)
+            .and_then(|property| prototype_value_to_slot(property.value, env)),
+        Value::Proxy(proxy) => proxy
+            .target_result()
+            .ok()
+            .and_then(|target| marked_realm_prototype_slot(&target, marker, env)),
+        _ => None,
+    }
 }
 
 /// The [[Prototype]] a `new`-created instance receives from a constructor's

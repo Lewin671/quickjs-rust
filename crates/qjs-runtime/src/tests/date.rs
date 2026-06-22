@@ -499,6 +499,20 @@ fn evaluates_date_builtins() {
 }
 
 #[test]
+fn date_constructor_uses_new_target_realm_default_prototype() {
+    assert_eq!(
+        eval(
+            "let realmPrototype = {}; \
+             function C() {} \
+             Object.defineProperty(C, '__quickjsRustRealmDatePrototype', { value: realmPrototype }); \
+             C.prototype = null; \
+             Object.getPrototypeOf(Reflect.construct(Date, [0], C)) === realmPrototype;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn date_parse_rejects_out_of_range_month_and_day() {
     // Month > 12 or day > 31 is invalid in every ISO form (date-only,
     // year-month, and date+time), not just the date+time path.

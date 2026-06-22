@@ -28,6 +28,20 @@ fn evaluates_weak_set_constructor_and_prototype() {
 }
 
 #[test]
+fn weak_set_constructor_uses_new_target_realm_default_prototype() {
+    assert_eq!(
+        eval(
+            "let realmPrototype = {}; \
+             function C() {} \
+             Object.defineProperty(C, '__quickjsRustRealmWeakSetPrototype', { value: realmPrototype }); \
+             C.prototype = null; \
+             Object.getPrototypeOf(Reflect.construct(WeakSet, [], C)) === realmPrototype;"
+        ),
+        Ok(Value::Boolean(true))
+    );
+}
+
+#[test]
 fn evaluates_weak_set_iterable_constructor_arguments() {
     assert_eq!(
         eval("let key = {}; let set = new WeakSet([key]); set.has(key);"),
