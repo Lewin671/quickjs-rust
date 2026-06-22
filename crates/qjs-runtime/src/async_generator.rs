@@ -524,9 +524,12 @@ pub(crate) fn call_async_generator_reaction(
         }
         NativeFunction::AsyncFromSyncIteratorNext
         | NativeFunction::AsyncFromSyncIteratorReturn
-        | NativeFunction::AsyncFromSyncIteratorThrow => {
-            Ok(Some(async_from_sync_method(function, native, value, env)))
-        }
+        | NativeFunction::AsyncFromSyncIteratorThrow => Ok(Some(async_from_sync_method(
+            function,
+            native,
+            argument_values,
+            env,
+        ))),
         _ => Ok(None),
     }
 }
@@ -712,9 +715,10 @@ fn close_sync_iterator(sync_iterator: &Value, env: &mut CallEnv) -> Option<Value
 fn async_from_sync_method(
     function: &Function,
     native: NativeFunction,
-    argument: Value,
+    argument_values: &[Value],
     env: &mut CallEnv,
 ) -> Value {
+    let argument = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let capability = promise::new_pending_promise(env);
     let Some(sync_iterator) = function.env.get(SYNC_ITERATOR).cloned() else {
         let reason = not_an_async_generator_value(env);
@@ -776,7 +780,8 @@ fn async_from_sync_method(
         return Value::Object(capability);
     }
 
-    let outcome = call_function(method, sync_iterator, vec![argument], env, false);
+    let sync_arguments = argument_values.to_vec();
+    let outcome = call_function(method, sync_iterator, sync_arguments, env, false);
     let result = match outcome {
         Ok(result) => result,
         Err(error) => {

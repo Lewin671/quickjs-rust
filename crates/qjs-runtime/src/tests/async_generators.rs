@@ -552,6 +552,39 @@ fn for_await_over_sync_iterable_of_promises_awaits_values() {
 }
 
 #[test]
+fn async_from_sync_next_omits_absent_value_argument() {
+    assert_eq!(
+        eval_log(
+            "var o = []; \
+             var iter = { \
+               [Symbol.iterator]: function() { return this; }, \
+               next: function() { o.push(arguments.length); return { done: true }; } \
+             }; \
+             async function run() { for await (const v of iter) {} } \
+             run(); o;"
+        ),
+        "0"
+    );
+}
+
+#[test]
+fn async_from_sync_return_omits_absent_value_argument() {
+    assert_eq!(
+        eval_log(
+            "var o = []; \
+             var iter = { \
+               [Symbol.iterator]: function() { return this; }, \
+               next: function() { return { done: false, value: 1 }; }, \
+               return: function() { o.push(arguments.length); return { done: true }; } \
+             }; \
+             async function run() { for await (const v of iter) { break; } } \
+             run(); o;"
+        ),
+        "0"
+    );
+}
+
+#[test]
 fn body_thrown_native_error_rejects_with_a_real_error_object() {
     // A native error thrown by the async-generator body (here the
     // AsyncGeneratorFunction constructor rejecting an `await` in parameters)
