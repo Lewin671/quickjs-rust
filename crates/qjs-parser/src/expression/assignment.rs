@@ -5,7 +5,7 @@ use qjs_ast::{
 };
 use qjs_lexer::TokenKind;
 
-use crate::helpers::{assignment_target, body_has_strict_directive};
+use crate::helpers::assignment_target;
 use crate::{ParseError, Parser};
 
 impl Parser {
@@ -230,12 +230,11 @@ impl Parser {
         self.in_static_block = previous_static_block;
         self.allow_return = previous_allow_return;
         let body = body?;
-        if !params.is_simple() && body_has_strict_directive(&body) {
-            return Err(ParseError {
-                message: "strict directive not allowed with non-simple parameters".to_owned(),
-                span: Span::new(body_start, body_start),
-            });
-        }
+        // Arrow formals share the function early-error rules: a parameter may
+        // not also be a lexically declared name in the body (`(bar) => { let
+        // bar; }`), a strict directive may not follow non-simple parameters, and
+        // strict mode rejects duplicate or restricted parameter names.
+        self.reject_invalid_function_parameters(&params, &body, body_start)?;
         let end = self
             .tokens
             .get(self.cursor.saturating_sub(1))

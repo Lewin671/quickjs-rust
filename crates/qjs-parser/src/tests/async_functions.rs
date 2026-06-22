@@ -403,6 +403,12 @@ fn parameter_conflicting_with_body_lexical_declaration_is_error() {
     // `var` and function declarations are var-scoped, so they do not conflict.
     assert!(parse_script("function foo(bar) { var bar; }").is_ok());
     assert!(parse_script("function foo(bar) { function bar() {} }").is_ok());
+    // Arrow functions share the rule (both plain and async).
+    assert!(parse_script("(bar) => { let bar; };").is_err());
+    assert!(parse_script("async (bar) => { let bar; };").is_err());
+    // A nested-block lexical with the same name is fine; only the body's
+    // top-level lexical names conflict.
+    assert!(parse_script("(bar) => { { let bar; } };").is_ok());
 }
 
 #[test]
