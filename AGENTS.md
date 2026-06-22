@@ -217,6 +217,13 @@ changed.
 5. Run `./scripts/check.sh` before final handoff or push.
 6. Summarize behavior, risks, verification, and the next useful task.
 
+When an LSP tool is available, prefer it over text search for semantic
+navigation: `findReferences`, `goToDefinition`, and call-hierarchy give
+exact, scope-aware results across crates (e.g. disambiguating same-named
+symbols like `Value`, or tracing a VM call path) where `grep` returns
+noise from comments, strings, and unrelated matches. Fall back to
+`grep`/`glob` for plain-text searches or when no LSP server is configured.
+
 If requirements are ambiguous, prefer a small reversible implementation and
 state the assumption. Ask for user input only when the ambiguity changes
 public architecture, dependency choices, or long-term compatibility.
