@@ -339,6 +339,7 @@ pub(crate) fn start_suspended_at_body(
     let result = vm.run_completion();
     vm.propagate_to_caller(caller_env);
     vm.write_back_function_captures(capture_writeback.as_ref());
+    refresh_activation_captures_from_realm(&mut vm);
     match result {
         // Suspended exactly at the prologue boundary: capture the body-start
         // state for the first resume.
@@ -359,6 +360,31 @@ pub(crate) fn start_suspended_at_body(
             message: "generator prologue did not reach the body boundary".to_owned(),
         }),
         Err(error) => Err(error),
+    }
+}
+
+fn refresh_activation_captures_from_realm(vm: &mut Vm<'_>) {
+    let names: Vec<String> = vm.captured_env.borrow().keys().cloned().collect();
+    for name in names {
+        if crate::function::is_internal_binding_name(&name)
+            || matches!(name.as_str(), "this" | "arguments")
+        {
+            continue;
+        }
+        let Some(value) = vm.realm.borrow().get(&name).cloned() else {
+            continue;
+        };
+        vm.captured_env
+            .borrow_mut()
+            .insert(name.clone(), value.clone());
+        if let Some(slot) = vm.bytecode.local_slot(&name)
+            && let Some(local) = vm.locals.get_mut(slot)
+        {
+            *local = Some(value.clone());
+        }
+        if vm.env.locals().contains_key(&name) {
+            vm.env.insert(name, value);
+        }
     }
 }
 

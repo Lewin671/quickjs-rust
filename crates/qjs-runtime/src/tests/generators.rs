@@ -54,6 +54,32 @@ fn calling_a_generator_runs_the_parameter_prologue() {
 }
 
 #[test]
+fn generator_rest_parameter_pattern_refreshes_outer_writes_before_body() {
+    assert_eq!(
+        number(
+            "var first = 0; \
+             var second = 0; \
+             function* source() { first += 1; yield; second += 1; } \
+             function* g([...[,]]) { yield first * 10 + second; } \
+             g(source()).next().value;"
+        ),
+        11.0
+    );
+    assert_eq!(
+        number(
+            "function outer() { \
+               let x = 0; \
+               function* source() { x = 1; yield; x = 2; } \
+               function* g([...[,]]) { yield x; } \
+               return g(source()).next().value; \
+             } \
+             outer();"
+        ),
+        2.0
+    );
+}
+
+#[test]
 fn yields_values_in_sequence() {
     assert_eq!(
         number(

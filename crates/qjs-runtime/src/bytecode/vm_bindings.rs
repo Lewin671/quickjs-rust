@@ -1283,7 +1283,12 @@ impl Vm<'_> {
                 {
                     continue;
                 }
-                if self.in_parameter_prologue() && !self.bytecode.local_is_parameter(index) {
+                if self.in_parameter_prologue()
+                    && !self.bytecode.local_is_parameter(index)
+                    && (is_call_frame_binding(&name)
+                        || !self.bytecode.local_is_from_env(index)
+                        || !self.captured_env.borrow().contains_key(&name))
+                {
                     self.env.insert(name, value);
                     continue;
                 }
