@@ -668,5 +668,10 @@ fn token_can_begin_assignment(kind: &TokenKind) -> bool {
             | TokenKind::Semicolon
             | TokenKind::Colon
             | TokenKind::Eof
+            // A TemplateMiddle/TemplateTail closes the substitution it follows
+            // (`${ yield }3${ ... }`): it continues the enclosing template, so a
+            // bare `yield` before one has no operand.
+            | TokenKind::TemplateMiddle(_)
+            | TokenKind::TemplateTail(_)
     )
 }

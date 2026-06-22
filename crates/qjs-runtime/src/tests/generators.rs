@@ -693,3 +693,19 @@ fn generator_function_constructor_realm_surface() {
         1.0
     );
 }
+
+#[test]
+fn yield_without_operand_before_a_template_middle() {
+    // A bare `yield` inside a template substitution is followed by a
+    // TemplateMiddle (`}3${`), which closes the substitution rather than
+    // beginning the yield operand. The generator pauses at the yield and the
+    // resumed value fills the template.
+    assert_eq!(
+        eval(
+            "let str; \
+             function* g() { str = `1${ yield }3${ 4 }5`; } \
+             let it = g(); it.next(); it.next(2); str;"
+        ),
+        Ok(Value::String("12345".to_owned().into()))
+    );
+}
