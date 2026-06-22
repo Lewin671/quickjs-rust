@@ -184,17 +184,19 @@ pub(super) enum Op {
         name: String,
         slot: Option<usize>,
     },
+    /// Throws a TypeError when the top stack value is not callable. Tagged
+    /// templates use this after resolving the tag and before evaluating
+    /// substitutions.
+    RequireCallable,
     Call(usize),
     CallDirectEval {
         argc: usize,
         is_strict: bool,
     },
-    CallMethod(usize),
     CallSpread,
     CallDirectEvalSpread {
         is_strict: bool,
     },
-    CallMethodSpread,
     /// Pops an iterator and calls its `return` method when present. With
     /// `swallow` set, errors from the close are ignored (the close happens
     /// while another abrupt completion is already propagating).
@@ -879,10 +881,8 @@ impl Bytecode {
                 op,
                 Op::Call(_)
                     | Op::CallDirectEval { .. }
-                    | Op::CallMethod(_)
                     | Op::CallSpread
                     | Op::CallDirectEvalSpread { .. }
-                    | Op::CallMethodSpread
                     | Op::New(_)
                     | Op::NewSpread
                     | Op::NewFunction { .. }

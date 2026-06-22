@@ -5,10 +5,23 @@ use crate::{
 };
 
 use super::ir::Bytecode;
+use super::util::stack_underflow;
 use super::vm::{Slot, Vm};
-use super::vm_props::get_property_key;
 
 impl Vm<'_> {
+    pub(super) fn require_callable(&self) -> Result<(), RuntimeError> {
+        let callee = self.stack.last().ok_or_else(stack_underflow)?;
+        if matches!(callee, Value::Function(_))
+            || matches!(callee, Value::Proxy(proxy) if crate::proxy::proxy_is_callable(proxy))
+        {
+            return Ok(());
+        }
+        Err(RuntimeError {
+            thrown: None,
+            message: "value is not callable".to_owned(),
+        })
+    }
+
     pub(super) fn call(&mut self, argc: usize) -> Result<(), RuntimeError> {
         let arguments = self.pop_arguments(argc)?;
         let callee = self.pop()?;
@@ -130,26 +143,6 @@ impl Vm<'_> {
         self.call_callee_with_direct_eval(callee, Value::Undefined, arguments, is_strict)
     }
 
-    pub(super) fn call_method(&mut self, argc: usize) -> Result<(), RuntimeError> {
-        let arguments = self.pop_arguments(argc)?;
-        // Method resolution errors (e.g. reading a property of undefined) are
-        // catchable runtime errors, not VM faults.
-        let resolved = self.pop_method_callee();
-        let Some((callee, this_value)) = self.handle_runtime_result(resolved)? else {
-            return Ok(());
-        };
-        self.call_callee(callee, this_value, arguments)
-    }
-
-    pub(super) fn call_method_spread(&mut self) -> Result<(), RuntimeError> {
-        let arguments = self.pop_argument_array("method call spread")?;
-        let resolved = self.pop_method_callee();
-        let Some((callee, this_value)) = self.handle_runtime_result(resolved)? else {
-            return Ok(());
-        };
-        self.call_callee(callee, this_value, arguments)
-    }
-
     /// Calls a pre-resolved callee whose receiver and callee are already on the
     /// stack as `[receiver, callee, args...]`.
     pub(super) fn call_resolved(&mut self, argc: usize) -> Result<(), RuntimeError> {
@@ -164,21 +157,6 @@ impl Vm<'_> {
         let callee = self.pop()?;
         let this_value = self.pop()?;
         self.call_callee(callee, this_value, arguments)
-    }
-
-    fn pop_method_callee(&mut self) -> Result<(Value, Value), RuntimeError> {
-        let key_value = self.pop()?;
-        let key = self.coerce_property_key(key_value)?;
-        let this_value = self.pop()?;
-        let callee = if let Some(callee) = self.try_direct_get(&this_value, &key) {
-            callee
-        } else {
-            let mut getter_env = self.current_env();
-            let callee = get_property_key(this_value.clone(), &key, &mut getter_env)?;
-            self.apply_env(getter_env);
-            callee
-        };
-        Ok((callee, this_value))
     }
 }
 

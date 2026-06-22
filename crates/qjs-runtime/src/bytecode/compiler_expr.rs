@@ -1082,7 +1082,10 @@ impl Compiler {
         } = tag
         {
             self.compile_expr(object)?;
+            self.emit(Op::Dup);
             self.compile_member_key(property)?;
+            self.emit(Op::GetProp);
+            self.emit(Op::RequireCallable);
             self.emit(Op::NewTemplateObject {
                 site,
                 cooked: cooked.to_vec(),
@@ -1091,11 +1094,12 @@ impl Compiler {
             for expression in expressions {
                 self.compile_expr(expression)?;
             }
-            self.emit(Op::CallMethod(expressions.len() + 1));
+            self.emit(Op::CallResolved(expressions.len() + 1));
             return Ok(());
         }
 
         self.compile_expr(tag)?;
+        self.emit(Op::RequireCallable);
         self.emit(Op::NewTemplateObject {
             site,
             cooked: cooked.to_vec(),

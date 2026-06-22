@@ -477,14 +477,16 @@ impl<'a> Vm<'a> {
                     let result = self.delete_ident(&name);
                     self.stack.push(Value::Boolean(result));
                 }
+                Op::RequireCallable => {
+                    let result = self.require_callable();
+                    self.handle_runtime_result(result)?;
+                }
                 Op::Call(argc) => self.call(argc)?,
                 Op::CallDirectEval { argc, is_strict } => self.call_direct_eval(argc, is_strict)?,
-                Op::CallMethod(argc) => self.call_method(argc)?,
                 Op::CallSpread => self.call_spread()?,
                 Op::CallDirectEvalSpread { is_strict } => {
                     self.call_direct_eval_spread(is_strict)?
                 }
-                Op::CallMethodSpread => self.call_method_spread()?,
                 Op::IteratorClose { swallow } => self.iterator_close(swallow)?,
                 Op::New(argc) => self.construct(argc)?,
                 Op::NewSpread => self.construct_spread()?,

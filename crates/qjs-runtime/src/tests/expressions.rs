@@ -267,6 +267,14 @@ fn evaluates_tagged_template_literals() {
 }
 
 #[test]
+fn member_tagged_template_resolves_tag_before_substitutions() {
+    assert_eq!(
+        eval("let ran = false; let o = {}; try { o.m`${ran = true}`; } catch (e) {} ran;"),
+        Ok(Value::Boolean(false))
+    );
+}
+
+#[test]
 fn tagged_template_invalid_escape_sequences_have_undefined_cooked_segments() {
     assert_eq!(
         eval(
@@ -1169,6 +1177,22 @@ fn optional_chaining_method_call_keeps_receiver_this() {
              calls;"
         ),
         Ok(Value::Number(1.0))
+    );
+}
+
+#[test]
+fn method_call_resolves_callee_before_arguments() {
+    assert_eq!(
+        eval("let ran = false; let o = {}; try { o.m.n(ran = true); } catch (e) {} ran;"),
+        Ok(Value::Boolean(false))
+    );
+    assert_eq!(
+        eval("let ran = false; let o = {}; try { o.m(ran = true); } catch (e) {} ran;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("let o = { value: 3, m(x) { return this.value + x; } }; o.m(4);"),
+        Ok(Value::Number(7.0))
     );
 }
 

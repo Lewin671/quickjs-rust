@@ -308,10 +308,12 @@ impl Compiler {
         } = callee
         {
             self.compile_expr(object)?;
+            self.emit(Op::Dup);
             self.compile_member_key(property)?;
+            self.emit(Op::GetProp);
             if has_spread {
                 self.compile_argument_array(arguments)?;
-                self.emit(Op::CallMethodSpread);
+                self.emit(Op::CallResolvedSpread);
                 return Ok(());
             }
             for argument in arguments {
@@ -320,7 +322,7 @@ impl Compiler {
                 };
                 self.compile_expr(argument)?;
             }
-            self.emit(Op::CallMethod(arguments.len()));
+            self.emit(Op::CallResolved(arguments.len()));
             return Ok(());
         }
 
