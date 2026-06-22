@@ -10,7 +10,8 @@ use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
     bytecode::{GeneratorOutcome, GeneratorStart, Resume, resume_generator},
-    function_intrinsic_prototype_slot, object_prototype, symbol,
+    function_constructor_as_prototype_slot, function_intrinsic_prototype_slot, object_prototype,
+    symbol,
 };
 
 /// Intrinsic binding for `%GeneratorPrototype%`, propagated into call frames so
@@ -79,7 +80,8 @@ pub(crate) fn install_generator(
         NativeFunction::GeneratorFunction,
         true,
     );
-    let _ = generator_function.set_internal_prototype_slot(function_intrinsic_prototype_slot(env));
+    let _ =
+        generator_function.set_internal_prototype_slot(function_constructor_as_prototype_slot(env));
     generator_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
         Property::data(

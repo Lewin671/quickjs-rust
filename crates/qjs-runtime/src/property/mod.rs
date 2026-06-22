@@ -18,10 +18,11 @@ pub(crate) use function::{
 pub(crate) use key::{PropertyKey, to_property_key_value};
 pub(crate) use prototype::{
     array_as_object_prototype, array_prototype, constructor_named_prototype, constructor_prototype,
-    constructor_prototype_slot, function_intrinsic_prototype_slot, function_prototype,
-    function_prototype_chain_descriptor, inherited_primitive_prototype_descriptor,
-    inherited_primitive_prototype_symbol_descriptor, native_construct_prototype_slot,
-    object_prototype, string_prototype, value_prototype, value_prototype_slot,
+    constructor_prototype_slot, function_constructor_as_prototype_slot,
+    function_intrinsic_prototype_slot, function_prototype, function_prototype_chain_descriptor,
+    inherited_primitive_prototype_descriptor, inherited_primitive_prototype_symbol_descriptor,
+    native_construct_prototype_slot, object_prototype, string_prototype, value_prototype,
+    value_prototype_slot,
 };
 
 pub(crate) fn has_property(value: Value, env: &CallEnv, key: &str) -> Result<bool, RuntimeError> {

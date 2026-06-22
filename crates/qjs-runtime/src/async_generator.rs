@@ -21,8 +21,8 @@ use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
     bytecode::{GeneratorOutcome, GeneratorStart, GeneratorState, Resume, resume_generator},
-    call_function, function_intrinsic_prototype_slot, is_truthy, object_prototype, promise,
-    property_value, symbol,
+    call_function, function_constructor_as_prototype_slot, function_intrinsic_prototype_slot,
+    is_truthy, object_prototype, promise, property_value, symbol,
 };
 
 /// Intrinsic binding for `%AsyncGeneratorFunction.prototype%`, the object that
@@ -139,14 +139,14 @@ pub(crate) fn install_async_generator(
         true,
     );
     let _ = async_generator_function
-        .set_internal_prototype_slot(function_intrinsic_prototype_slot(env));
+        .set_internal_prototype_slot(function_constructor_as_prototype_slot(env));
     async_generator_function.properties.borrow_mut().insert(
         "prototype".to_owned(),
         Property::data(
             Value::Object(async_generator_function_prototype.clone()),
             false,
             false,
-            true,
+            false,
         ),
     );
     async_generator_function_prototype.define_property(

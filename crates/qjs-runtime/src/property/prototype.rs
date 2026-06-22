@@ -140,6 +140,19 @@ pub(crate) fn function_intrinsic_prototype(env: &CallEnv) -> Option<ObjectRef> {
     }
 }
 
+/// The intrinsic `%Function%` constructor as a prototype slot. The
+/// `%GeneratorFunction%`, `%AsyncFunction%`, and `%AsyncGeneratorFunction%`
+/// constructors are subclasses of `Function`, so their `[[Prototype]]` is the
+/// `Function` constructor itself (not `%Function.prototype%`).
+pub(crate) fn function_constructor_as_prototype_slot(env: &CallEnv) -> Option<crate::Prototype> {
+    match env.get("Function") {
+        Some(Value::Function(function_constructor)) => {
+            Some(crate::Prototype::Function(function_constructor))
+        }
+        _ => None,
+    }
+}
+
 pub(crate) fn function_intrinsic_prototype_slot(env: &CallEnv) -> Option<crate::Prototype> {
     let Some(Value::Function(function_constructor)) = env.get("Function") else {
         return None;

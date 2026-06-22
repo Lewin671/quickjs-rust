@@ -388,6 +388,30 @@ fn async_function_constructor_creates_async_functions() {
 }
 
 #[test]
+fn async_function_constructor_is_a_subclass_of_function() {
+    // %AsyncFunction% is a subclass of Function: its [[Prototype]] is the
+    // Function constructor and its .prototype inherits from Function.prototype.
+    assert_eq!(
+        eval(
+            "var AsyncFunction = (async function () {}).constructor; \
+             (Object.getPrototypeOf(AsyncFunction) === Function) + ':' + \
+             (Object.getPrototypeOf(AsyncFunction.prototype) === Function.prototype);"
+        ),
+        Ok(Value::String("true:true".to_owned().into()))
+    );
+    // Its `prototype` own property is non-writable, non-enumerable, and
+    // non-configurable.
+    assert_eq!(
+        eval(
+            "var AsyncFunction = (async function () {}).constructor; \
+             var d = Object.getOwnPropertyDescriptor(AsyncFunction, 'prototype'); \
+             d.writable + ':' + d.enumerable + ':' + d.configurable;"
+        ),
+        Ok(Value::String("false:false:false".to_owned().into()))
+    );
+}
+
+#[test]
 fn async_arrow_is_not_constructable() {
     let error = eval("var f = async () => 1; new f();").expect_err("async arrow not constructable");
     assert!(
