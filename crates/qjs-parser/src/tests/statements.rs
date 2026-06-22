@@ -117,6 +117,33 @@ fn rejects_var_hoisted_from_nested_block_conflicting_with_lexical() {
 }
 
 #[test]
+fn rejects_duplicate_block_function_declarations_in_strict_code() {
+    // Two same-named plain function declarations in a block are a Syntax Error
+    // in strict code (and a module body): the Annex B relaxation that lets them
+    // coexist applies only in sloppy mode.
+    for source in [
+        "'use strict'; { function f() {} function f() {} }",
+        "function g() { 'use strict'; { function f() {} function f() {} } }",
+    ] {
+        let error = parse_script(source).expect_err("strict block duplicate must be rejected");
+        assert_eq!(
+            error.message, "duplicate lexical declaration `f`",
+            "source: {source}"
+        );
+    }
+
+    // Sloppy mode keeps Annex B's relaxation; duplicate function declarations at
+    // a function/script top level are var-scoped and always allowed.
+    for source in [
+        "{ function f() {} function f() {} }",
+        "'use strict'; function f() {} function f() {}",
+        "'use strict'; (function () { function f() {} function f() {} });",
+    ] {
+        parse_script(source).unwrap_or_else(|error| panic!("{source} should parse: {error:?}"));
+    }
+}
+
+#[test]
 fn rejects_import_and_export_as_binding_identifiers() {
     // `import`/`export` are reserved words and may not name a binding, including
     // their escaped spellings (which arrive as plain Identifier tokens).

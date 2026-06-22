@@ -48,7 +48,7 @@ impl Parser {
         // LexicallyDeclaredNames (unlike a Script, where Annex B treats them as
         // var-like), so a top-level `function f(){}` clashing with a `var f`
         // is an early error — the same rule that applies inside a block.
-        validate_statement_list_declarations(&body, self.goal == Goal::Module)?;
+        validate_statement_list_declarations(&body, self.goal == Goal::Module, self.strict)?;
         if self.goal == Goal::Module {
             module::validate_module_static_semantics(&body)?;
         }
@@ -303,7 +303,7 @@ impl Parser {
         while !self.at(&TokenKind::RightBrace) && !self.at(&TokenKind::Eof) {
             body.push(self.statement_list_item()?);
         }
-        validate_statement_list_declarations(&body, true)?;
+        validate_statement_list_declarations(&body, true, self.strict)?;
         let end = self
             .peek()
             .expect("parser should always have eof token")
@@ -325,7 +325,7 @@ impl Parser {
             while !parser.at(&TokenKind::RightBrace) && !parser.at(&TokenKind::Eof) {
                 body.push(parser.statement_list_item()?);
             }
-            validate_statement_list_declarations(&body, false)?;
+            validate_statement_list_declarations(&body, false, parser.strict)?;
             validate_statement_list_labels(&body)?;
             parser.expect(&TokenKind::RightBrace).map(|()| body)
         })(self);
@@ -341,7 +341,7 @@ impl Parser {
         while !self.at(&TokenKind::RightBrace) && !self.at(&TokenKind::Eof) {
             body.push(self.statement_list_item()?);
         }
-        validate_statement_list_declarations(&body, true)?;
+        validate_statement_list_declarations(&body, true, self.strict)?;
         self.expect(&TokenKind::RightBrace)?;
         Ok(body)
     }
@@ -376,7 +376,11 @@ impl Parser {
     }
 }
 
-fn validate_statement_list_declarations(body: &[Stmt], is_block: bool) -> Result<(), ParseError> {
+fn validate_statement_list_declarations(
+    body: &[Stmt],
+    is_block: bool,
+    strict: bool,
+) -> Result<(), ParseError> {
     let mut lexical_names: Vec<(String, Span)> = Vec::new();
     let mut var_names: Vec<(String, Span)> = Vec::new();
     // Plain (non-async, non-generator) function declarations are tracked apart
@@ -439,6 +443,23 @@ fn validate_statement_list_declarations(body: &[Stmt], is_block: bool) -> Result
                     ),
                     span: *span,
                 });
+            }
+        }
+    }
+
+    // Annex B's relaxation that lets two same-named plain function declarations
+    // coexist in a block applies only in sloppy mode. In strict code (and a
+    // module body) a block-level function declaration is an ordinary
+    // LexicallyDeclaredName, so a duplicate is a Syntax Error.
+    if strict && is_block {
+        for (index, (name, _)) in block_function_names.iter().enumerate() {
+            for (candidate, span) in &block_function_names[index + 1..] {
+                if candidate == name {
+                    return Err(ParseError {
+                        message: format!("duplicate lexical declaration `{name}`"),
+                        span: *span,
+                    });
+                }
             }
         }
     }
