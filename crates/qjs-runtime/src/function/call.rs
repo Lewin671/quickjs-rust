@@ -132,6 +132,7 @@ pub(crate) fn call_function(
             return crate::async_generator::call_async_generator_function(
                 &function,
                 function_env.env,
+                function_env.function_capture_names,
                 env,
             );
         }

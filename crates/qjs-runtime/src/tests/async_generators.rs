@@ -120,6 +120,34 @@ fn for_await_of_lexical_head_captures_fresh_binding_per_iteration() {
 }
 
 #[test]
+fn async_generator_write_to_outer_let_after_await_propagates() {
+    // An async generator body that resumes after an `await` runs in a later
+    // microtask whose caller env is not the defining frame. A write it makes to
+    // an outer `let` binding past that suspension must still reach the cell the
+    // outer closures read — without the generator's `CaptureWriteback` the write
+    // stayed local and the observer saw the stale value. This is the root of the
+    // whole `for await`/async-generator destructuring counter-update cluster.
+    assert_eq!(
+        eval_log(
+            "var o = []; let count = 0; \
+             async function* g() { await 1; count += 1; } \
+             g().next().then(() => { o.push(count); }); o;"
+        ),
+        "1"
+    );
+    // The same staleness surfaced as a `for await` loop's counter update being
+    // lost (the iterCount === 1 assertion across the Test262 cluster).
+    assert_eq!(
+        eval_log(
+            "var o = []; let iterCount = 0; \
+             async function* g() { for await (let x of [10, 20, 30]) { iterCount += 1; } } \
+             g().next().then(() => { o.push(iterCount); }); o;"
+        ),
+        "3"
+    );
+}
+
+#[test]
 fn await_inside_async_generator_between_yields() {
     assert_eq!(
         eval_log(

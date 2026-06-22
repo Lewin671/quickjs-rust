@@ -868,6 +868,7 @@ fn async_from_sync_value_fulfilled(function: &Function, value: Value, env: &mut 
 pub(crate) fn call_async_generator_function(
     function: &Function,
     function_env: CallEnv,
+    function_capture_names: Vec<String>,
     env: &mut CallEnv,
 ) -> Result<Value, RuntimeError> {
     let bytecode = function
@@ -875,6 +876,37 @@ pub(crate) fn call_async_generator_function(
         .clone()
         .expect("async generator has a bytecode body");
     let captured = Rc::new(RefCell::new(function_env.snapshot_locals()));
+    // Mirror `call_async_function`: a body that writes an outer-captured binding
+    // after an `await`/`yield` resumes in a later microtask whose caller env is
+    // not the defining frame, so the write only reaches the cell its outer
+    // closures read through this `CaptureWriteback`. Without it, `let c`-style
+    // outer bindings assigned past the first suspension stay stale (the entire
+    // async-generator `for await`/destructuring counter-update test cluster).
+    let mut capture_names = function_capture_names;
+    {
+        let captured_env = function.captured_env.borrow();
+        for name in captured_env.keys() {
+            if crate::function::is_internal_binding_name(name)
+                || matches!(name.as_str(), "this" | "arguments")
+            {
+                continue;
+            }
+            if bytecode.local_slot(name).is_some()
+                && !capture_names.iter().any(|existing| existing == name)
+            {
+                capture_names.push(name.clone());
+            }
+        }
+    }
+    let parent_writeback = function.capture_writeback.clone().map(Box::new);
+    let capture_writeback = (!capture_names.is_empty() || parent_writeback.is_some()).then(|| {
+        crate::bytecode::CaptureWriteback {
+            target: Rc::clone(&function.captured_env),
+            names: capture_names,
+            aliases: Vec::new(),
+            parent: parent_writeback,
+        }
+    });
     make_async_generator_object(
         function,
         GeneratorStart {
@@ -883,7 +915,7 @@ pub(crate) fn call_async_generator_function(
             captured_env: captured,
             with_stack: function.with_stack.clone(),
             refresh_captured_slots_on_resume: true,
-            capture_writeback: None,
+            capture_writeback,
         },
         env,
     )
