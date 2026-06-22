@@ -113,6 +113,56 @@ fn nested_closures_capture_live_outer_bindings() {
 }
 
 #[test]
+fn captured_rest_parameter_shadows_same_named_caller_rest_parameter() {
+    assert_eq!(
+        eval(
+            "function inner(strings, ...subs) {
+                 return { toString: () => typeof subs[0] + ':' + subs[0] };
+             }
+             function outer(strings, ...subs) {
+                 return String(subs.map(String));
+             }
+             var value = inner('', 1);
+             outer('', value);"
+        ),
+        Ok(Value::String("number:1".to_owned().into()))
+    );
+}
+
+#[test]
+fn object_to_string_uses_callee_rest_capture_not_caller_rest_parameter() {
+    assert_eq!(
+        eval(
+            "function render(strings, subs) {
+                 return strings.map((str, i) => `${i === 0 ? '' : subs[i - 1]}${str}`).join('');
+             }
+             function deferred(strings, ...subs) {
+                 return { toString: () => render(strings, subs) };
+             }
+             function outer(...subs) {
+                 return String(subs.map(String));
+             }
+             var value = deferred(['x: ', ''], 1);
+             outer([value]);"
+        ),
+        Ok(Value::String("x: 1".to_owned().into()))
+    );
+}
+
+#[test]
+fn object_to_string_preserves_captured_writeback_side_effects() {
+    assert_eq!(
+        eval(
+            "var value = 0;
+             var object = { toString: function() { value = 7; return 'ok'; } };
+             String(object);
+             value;"
+        ),
+        Ok(Value::Number(7.0))
+    );
+}
+
+#[test]
 fn loop_body_lexicals_get_per_iteration_environment() {
     // A `let`/`const`/`class` declared in a `while`/`do`-`while`/`for(;;)` body
     // and captured by a closure must be a fresh binding each iteration, so the

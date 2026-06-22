@@ -244,7 +244,16 @@ pub(crate) fn ordinary_to_primitive(
     for method in methods {
         let method_value = property_value(value.clone(), method, env)?;
         if is_callable(&method_value) {
-            let primitive = call_function(method_value, value.clone(), Vec::new(), env, false)?;
+            let mut method_env = to_primitive_method_env(&method_value, env);
+            let primitive = call_function(
+                method_value,
+                value.clone(),
+                Vec::new(),
+                &mut method_env,
+                false,
+            );
+            sync_to_primitive_method_env(env, &method_env);
+            let primitive = primitive?;
             if !is_object_like(&primitive) {
                 return Ok(primitive);
             }
@@ -274,6 +283,41 @@ fn is_object_like(value: &Value) -> bool {
         }
         _ => false,
     }
+}
+
+fn sync_to_primitive_method_env(env: &mut CallEnv, method_env: &CallEnv) {
+    for (name, value) in method_env.locals() {
+        if let Some(binding) = env.get_local_mut(name) {
+            *binding = value.clone();
+        } else if env.realm_contains(name) {
+            env.insert_realm(name.clone(), value.clone());
+        }
+    }
+}
+
+fn to_primitive_method_env(method: &Value, env: &CallEnv) -> CallEnv {
+    let mut method_env = env.clone();
+    if let Value::Function(function) = method {
+        let captured_env = function.captured_env.borrow();
+        let mut captured_names = function.env.keys().cloned().collect::<Vec<_>>();
+        captured_names.extend(captured_env.keys().cloned());
+        captured_names.sort();
+        captured_names.dedup();
+        for name in captured_names {
+            if function
+                .bytecode
+                .as_ref()
+                .is_some_and(|bytecode| bytecode.writes_binding(&name))
+            {
+                continue;
+            }
+            let captured_value = captured_env.get(&name).or_else(|| function.env.get(&name));
+            if env.get_local(&name).as_ref() != captured_value {
+                method_env.remove(&name);
+            }
+        }
+    }
+    method_env
 }
 
 fn is_callable(value: &Value) -> bool {
