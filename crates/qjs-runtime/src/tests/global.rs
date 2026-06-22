@@ -683,6 +683,10 @@ fn evaluates_uri_coding_builtins() {
         Ok(Value::String("%F0%9D%8C%86".to_owned().into()))
     );
     assert_eq!(
+        eval("encodeURIComponent(String.fromCharCode(0xD834, 0xDF06));"),
+        Ok(Value::String("%F0%9D%8C%86".to_owned().into()))
+    );
+    assert_eq!(
         eval("encodeURIComponent(decodeURIComponent('%F0%9D%8C%86'));"),
         Ok(Value::String("%F0%9D%8C%86".to_owned().into()))
     );

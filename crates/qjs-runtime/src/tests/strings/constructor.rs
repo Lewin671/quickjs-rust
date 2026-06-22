@@ -41,6 +41,12 @@ fn evaluates_string_constructor_and_statics() {
     );
     assert_eq!(
         eval(
+            "let value = String.fromCharCode(0xdb80, 0xdc00); value.length + ':' + value.charCodeAt(0) + ':' + value.charCodeAt(1);"
+        ),
+        Ok(Value::String("2:56192:56320".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
             "let value = String.fromCodePoint(65, 128512, 67); value.length + ':' + value.charCodeAt(0) + ':' + value.charCodeAt(1) + ':' + value.charCodeAt(2) + ':' + value.charCodeAt(3);"
         ),
         Ok(Value::String("4:65:55357:56832:67".to_owned().into()))
