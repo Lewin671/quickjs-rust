@@ -176,13 +176,16 @@ impl Vm<'_> {
     /// Keeps the frame's shared `captured_env` copy of a slot binding current
     /// when the slot changes, so closures sharing the Rc observe the update.
     pub(super) fn write_through_captured(&self, name: &str, value: Value) {
-        let mut captured = self.captured_env.borrow_mut();
-        if captured.is_empty() {
-            return;
+        {
+            let mut captured = self.captured_env.borrow_mut();
+            if captured.is_empty() {
+                return;
+            }
+            if let Some(slot_value) = captured.get_mut(name) {
+                *slot_value = value.clone();
+            }
         }
-        if let Some(slot_value) = captured.get_mut(name) {
-            *slot_value = value;
-        }
+        self.propagate_captured_write_to_parents(name, &value);
     }
 
     /// Slot-addressed `write_through_captured`: resolves the binding name from
@@ -194,10 +197,48 @@ impl Vm<'_> {
         if captured.is_empty() {
             return;
         }
-        if let Some(name) = self.bytecode.locals.get(slot).map(|local| &local.name)
-            && let Some(slot_value) = captured.get_mut(name)
+        if let Some(name) = self.bytecode.locals.get(slot).map(|local| &local.name) {
+            if let Some(slot_value) = captured.get_mut(name) {
+                *slot_value = value.clone();
+            }
+            let name = name.clone();
+            drop(captured);
+            self.propagate_captured_write_to_parents(&name, value);
+        }
+    }
+
+    /// Propagates a captured-binding write to any enclosing captured
+    /// environment that already holds the same name. A `for (let x of …)`
+    /// loop body runs under a fresh per-iteration captured env (see
+    /// [`fresh_iteration_scope`]), which is a disconnected snapshot of the
+    /// outer env. Without this, a closure created *before* the loop — and
+    /// therefore holding the original outer cell — never observes a write the
+    /// loop body makes to an outer binding (e.g. a callback that pushes into an
+    /// outer array that the loop reassigns each iteration). The per-iteration
+    /// loop variable is fresh and absent from the parent cells, so it is not
+    /// propagated; only genuinely-outer bindings are.
+    fn propagate_captured_write_to_parents(&self, name: &str, value: &Value) {
+        if self.captured_env_stack.is_empty() {
+            return;
+        }
+        // A per-iteration loop variable is a fresh binding each iteration and
+        // may shadow an outer binding of the same name; its write must stay
+        // local to the current iteration env, never reaching the enclosing
+        // captured cells.
+        if self
+            .captured_env_iteration_names
+            .iter()
+            .any(|names| names.iter().any(|candidate| candidate == name))
         {
-            *slot_value = value.clone();
+            return;
+        }
+        for parent in &self.captured_env_stack {
+            if Rc::ptr_eq(parent, &self.captured_env) {
+                continue;
+            }
+            if let Some(slot_value) = parent.borrow_mut().get_mut(name) {
+                *slot_value = value.clone();
+            }
         }
     }
 
@@ -1303,24 +1344,35 @@ impl Vm<'_> {
     /// new cell, which is fine since it belongs to THIS iteration's closures.
     pub(super) fn fresh_iteration_scope(&mut self, slots: &[usize]) {
         let mut new_env = self.captured_env.borrow().clone();
+        let mut iteration_names = Vec::with_capacity(slots.len());
         for &slot in slots {
-            if let Some(Some(value)) = self.locals.get(slot) {
-                if let Some(name) = self.bytecode.local_name_at(slot) {
+            if let Some(name) = self.bytecode.local_name_at(slot) {
+                iteration_names.push(name.to_owned());
+                if let Some(Some(value)) = self.locals.get(slot) {
                     new_env.insert(name.to_owned(), value.clone());
                 }
             }
+        }
+        // Record these as per-iteration bindings for the enclosing loop so a
+        // write to one never leaks to an outer captured env that may hold a
+        // shadowed binding of the same name (preserves the loop variable's
+        // per-iteration identity and TDZ).
+        if let Some(top) = self.captured_env_iteration_names.last_mut() {
+            *top = iteration_names;
         }
         self.captured_env = Rc::new(RefCell::new(new_env));
     }
 
     pub(super) fn push_captured_env(&mut self) {
         self.captured_env_stack.push(Rc::clone(&self.captured_env));
+        self.captured_env_iteration_names.push(Vec::new());
     }
 
     pub(super) fn pop_captured_env(&mut self) {
         if let Some(env) = self.captured_env_stack.pop() {
             self.captured_env = env;
         }
+        self.captured_env_iteration_names.pop();
     }
 
     pub(super) fn drain_promise_jobs(&mut self) -> Result<(), RuntimeError> {

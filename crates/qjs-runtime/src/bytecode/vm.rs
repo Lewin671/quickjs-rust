@@ -78,6 +78,12 @@ pub(super) struct Vm<'a> {
     pub(super) module_host: Option<crate::module::ModuleHostRef>,
     pub(super) captured_env: Rc<RefCell<HashMap<String, Value>>>,
     pub(super) captured_env_stack: Vec<Rc<RefCell<HashMap<String, Value>>>>,
+    /// Per-iteration loop-variable names introduced by `fresh_iteration_scope`,
+    /// aligned with `captured_env_stack`. These bindings are fresh each
+    /// iteration (and may shadow an outer binding of the same name), so a write
+    /// to one must never propagate to an enclosing captured env — see
+    /// `propagate_captured_write_to_parents`.
+    pub(super) captured_env_iteration_names: Vec<Vec<String>>,
     pub(super) parameter_captured_envs: Vec<Rc<RefCell<HashMap<String, Value>>>>,
     pub(super) capture_writeback: Option<CaptureWriteback>,
     pub(super) sloppy_global_names: Vec<String>,
@@ -180,6 +186,7 @@ impl<'a> Vm<'a> {
             module_host,
             captured_env,
             captured_env_stack: Vec::new(),
+            captured_env_iteration_names: Vec::new(),
             parameter_captured_envs,
             capture_writeback: None,
             sloppy_global_names: Vec::new(),

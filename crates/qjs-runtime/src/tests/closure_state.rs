@@ -352,3 +352,42 @@ fn forwarded_closure_write_is_visible_to_a_later_read_in_the_same_frame() {
         Ok(Value::Number(2.0))
     );
 }
+
+#[test]
+fn for_of_let_body_write_reaches_outer_closure() {
+    // A closure created BEFORE a `for (let … of …)` loop captures an outer
+    // binding. The loop body reassigns that binding each iteration and then
+    // invokes the closure (here through a native `Array.prototype` callback).
+    // The per-iteration captured env is a fresh snapshot, but writes to the
+    // genuinely-outer binding must still reach the pre-loop closure rather than
+    // leaving it on the stale `let values;` value (TypedArray/Array
+    // resizable-buffer-mid-iteration cluster).
+    assert_eq!(
+        eval(
+            "let values; \
+             function cb(n) { values.push(n); return true; } \
+             let out = ''; \
+             for (let i of [1, 2]) { values = []; [10, 20].every(cb); out += values.join('|') + ';'; } \
+             out;"
+        ),
+        Ok(Value::String("10|20;10|20;".to_owned().into()))
+    );
+}
+
+#[test]
+fn for_of_let_body_write_to_distinct_outer_does_not_disturb_loop_variable() {
+    // The per-iteration loop variable keeps its own value while an outer binding
+    // written in the same body propagates to a pre-loop closure: the loop walks
+    // its own `n` while `total` (outer, captured by `add`) accrues.
+    assert_eq!(
+        eval(
+            "let total; \
+             function add(v) { total += v; } \
+             let seen = ''; \
+             total = 0; \
+             for (let n of [1, 2, 3]) { add(n); seen += n; } \
+             seen + ':' + total;"
+        ),
+        Ok(Value::String("123:6".to_owned().into()))
+    );
+}
