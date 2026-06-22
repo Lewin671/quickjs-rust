@@ -555,6 +555,12 @@ emit_test262_assert_fast_paths() {
 assert.sameValue = __quickjsRustAssertSameValue;
 EOF
 }
+should_emit_test262_assert_fast_paths() {
+  case "$1" in
+    "$TEST262_DIR/test/harness/"*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
 emit_quickjs_rust_case_source() {
   cat "$1"
 }
@@ -667,8 +673,10 @@ make_case() {
       if needs_assert_prelude "$source" "$flags" "$includes"; then
         cat "$TEST262_DIR/harness/assert.js"
         printf '\n'
-        emit_test262_assert_fast_paths
-        printf '\n'
+        if should_emit_test262_assert_fast_paths "$source"; then
+          emit_test262_assert_fast_paths
+          printf '\n'
+        fi
       fi
       needs_sta_prelude "$source" "$flags" "$includes" && { cat "$TEST262_DIR/harness/sta.js"; printf '\n'; }
       if needs_host_prelude "$source" "$includes"; then
@@ -707,8 +715,10 @@ make_module_prelude() {
     if needs_assert_prelude "$source" "$flags" "$includes"; then
       cat "$TEST262_DIR/harness/assert.js"
       printf '\n'
-      emit_test262_assert_fast_paths
-      printf '\n'
+      if should_emit_test262_assert_fast_paths "$source"; then
+        emit_test262_assert_fast_paths
+        printf '\n'
+      fi
     fi
     needs_sta_prelude "$source" "$flags" "$includes" && { cat "$TEST262_DIR/harness/sta.js"; printf '\n'; }
     if needs_host_prelude "$source" "$includes"; then
@@ -1140,6 +1150,7 @@ if [ "$run" -gt 0 ]; then
   export TIMEOUT_RETRIES
   export WORK_DIR
   export -f emit_test262_assert_fast_paths
+  export -f should_emit_test262_assert_fast_paths
   export -f emit_test262_host_shim
   export -f emit_quickjs_rust_case_source
   export -f format_case_result
