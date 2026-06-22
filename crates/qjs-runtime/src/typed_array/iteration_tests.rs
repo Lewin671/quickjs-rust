@@ -351,6 +351,22 @@ fn iterators_keys_values_entries() {
 }
 
 #[test]
+fn array_iterator_next_throws_after_typed_array_detach() {
+    assert_eq!(
+        eval(
+            "let a = new Uint8Array([4, 5]); \
+             let iter = a.keys(); \
+             let first = iter.next().value; \
+             __quickjsRustDetachArrayBuffer(a.buffer); \
+             let threw = false; \
+             try { iter.next(); } catch (e) { threw = e instanceof TypeError; } \
+             first + ':' + threw;"
+        ),
+        Ok(Value::String("0:true".to_owned().into()))
+    );
+}
+
+#[test]
 fn for_each_some_every_find() {
     assert_eq!(
         eval("let s = 0; new Uint8Array([1, 2, 3]).forEach(x => { s += x; }); s;"),

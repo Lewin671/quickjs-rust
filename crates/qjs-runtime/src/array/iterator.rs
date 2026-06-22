@@ -111,12 +111,16 @@ pub(crate) fn native_array_iterator_next(
     let index = iterator_index(&iterator)?;
     if let Value::Object(object) = &target
         && crate::typed_array::is_typed_array_object(object)
-        && crate::typed_array::typed_array_is_out_of_bounds(object)
     {
-        return Err(RuntimeError {
-            thrown: None,
-            message: "TypeError: Array iterator next on out-of-bounds TypedArray".to_owned(),
-        });
+        if crate::typed_array::typed_array_buffer_detached(object) {
+            return Err(crate::array_buffer::detached_error());
+        }
+        if crate::typed_array::typed_array_is_out_of_bounds(object) {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: Array iterator next on out-of-bounds TypedArray".to_owned(),
+            });
+        }
     }
     let length = to_length_with_env(property_value(target.clone(), "length", env)?, env)?;
     if index >= length {
