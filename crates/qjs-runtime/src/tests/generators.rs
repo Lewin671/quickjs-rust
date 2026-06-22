@@ -80,6 +80,42 @@ fn generator_rest_parameter_pattern_refreshes_outer_writes_before_body() {
 }
 
 #[test]
+fn generator_body_start_refresh_preserves_activation_bindings() {
+    assert_eq!(
+        number(
+            "var x = 0; \
+             var callCount = 0; \
+             var ref = function*(x, y = x, z = y) { \
+               if (x !== 3 || y !== 3 || z !== 3) { throw new Error('bad default'); } \
+               callCount = callCount + 1; \
+             }; \
+             ref(3).next(); \
+             callCount;"
+        ),
+        1.0
+    );
+    assert_eq!(
+        number(
+            "var a = [function *(a) { yield a + 1; return; }]; \
+             var f = a[0]; \
+             var g = f(3); \
+             g.next().value;"
+        ),
+        4.0
+    );
+    assert_eq!(
+        number(
+            "var probe; \
+             var func = function* g() { probe = function() { return g; }; }; \
+             var g = 'outside'; \
+             func().next(); \
+             probe() === func ? 1 : 0;"
+        ),
+        1.0
+    );
+}
+
+#[test]
 fn yields_values_in_sequence() {
     assert_eq!(
         number(

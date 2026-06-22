@@ -368,6 +368,14 @@ fn refresh_activation_captures_from_realm(vm: &mut Vm<'_>) {
     for name in names {
         if crate::function::is_internal_binding_name(&name)
             || matches!(name.as_str(), "this" | "arguments")
+            || vm.env.is_immutable_function_name(&name)
+        {
+            continue;
+        }
+        if vm
+            .bytecode
+            .local_slot(&name)
+            .is_some_and(|slot| vm.bytecode.local_is_parameter(slot))
         {
             continue;
         }
