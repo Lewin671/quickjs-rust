@@ -61,6 +61,16 @@ regression (no half-finished cutover).
   Delete `\0lexical:<name>:<slot>` mangling for cell slots; per-iteration
   `let`/`const` allocate a fresh cell at the loop back-edge. Gate: M2
   class-method-inner-name and per-iteration Test262 slices.
+  - Note (2026-06-22, commit c84162c3): the **per-iteration shadowing leak** that
+    this slice targets — a `for (let x of/in …)` head whose `x` shadows an outer
+    `let x` writing the inner value back onto the outer slot/cell — was fixed
+    *contained* in the current name-keyed model (the inner binding rides under its
+    mangled key; `apply_env` skips the plain-name alias when a shadowing lexical
+    is active, and the per-iteration write-skip records both spellings). So this
+    leak no longer needs the cell migration. Still S3-only: M2 class-method
+    inner-name capture, and the C-style `for(;;)` per-iteration *copy*
+    (CreatePerIterationEnvironment — distinct init binding vs per-iteration
+    copies).
 - [ ] **S4 — Generators/async + parameter-scope captures.** Suspended frame
   owns `upvalues: Vec<Upvalue>`; delete the per-step generator capture
   write-back (risk #2 in `docs/design/generator-suspension.md`).
