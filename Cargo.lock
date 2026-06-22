@@ -52,6 +52,7 @@ name = "qjs-lexer"
 version = "0.1.0"
 dependencies = [
  "qjs-ast",
+ "qjs-unicode",
 ]
 
 [[package]]
@@ -70,8 +71,13 @@ dependencies = [
  "num-traits",
  "qjs-ast",
  "qjs-parser",
+ "qjs-unicode",
  "unicode-normalization",
 ]
+
+[[package]]
+name = "qjs-unicode"
+version = "0.1.0"
 
 [[package]]
 name = "tinyvec"

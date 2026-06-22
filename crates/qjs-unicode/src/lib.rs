@@ -1,4 +1,4 @@
-//! Unicode property-escape resolution for `\p{...}` / `\P{...}`.
+//! Unicode property and identifier tables shared by the lexer and runtime.
 //!
 //! The range tables under this module are generated from the Unicode
 //! Character Database 17.0.0 (see the `GENERATED FILE` headers and `tables.rs`).
@@ -16,12 +16,12 @@ mod tables;
 /// `Copy` so callers can resolve a property once at match setup and cheaply
 /// carry the static range slice through the per-character matching loop.
 #[derive(Clone, Copy)]
-pub(crate) struct PropertySet {
+pub struct PropertySet {
     ranges: &'static [(u32, u32)],
 }
 
 impl PropertySet {
-    pub(crate) fn contains(&self, code_point: u32) -> bool {
+    pub fn contains(&self, code_point: u32) -> bool {
         self.ranges
             .binary_search_by(|&(start, end)| {
                 if code_point < start {
@@ -40,7 +40,7 @@ impl PropertySet {
 ///
 /// Returns `None` when the body is not a valid Unicode property expression, in
 /// which case the regular expression is a SyntaxError.
-pub(crate) fn resolve_property(body: &str) -> Option<PropertySet> {
+pub fn resolve_property(body: &str) -> Option<PropertySet> {
     let ranges = if let Some((name, value)) = body.split_once('=') {
         resolve_property_value(name, value)?
     } else {
@@ -121,12 +121,12 @@ fn has_extra_whitespace(text: &str) -> bool {
 /// True if `code_point` carries the Unicode `ID_Start` property. The RegExp
 /// `GroupName` grammar (`RegExpIdentifierName`) is defined in terms of
 /// `ID_Start`/`ID_Continue` independently of the `u` flag.
-pub(crate) fn is_id_start(code_point: u32) -> bool {
+pub fn is_id_start(code_point: u32) -> bool {
     tables::binary_ranges("ID_Start").is_some_and(|ranges| ranges_contain(ranges, code_point))
 }
 
 /// True if `code_point` carries the Unicode `ID_Continue` property.
-pub(crate) fn is_id_continue(code_point: u32) -> bool {
+pub fn is_id_continue(code_point: u32) -> bool {
     tables::binary_ranges("ID_Continue").is_some_and(|ranges| ranges_contain(ranges, code_point))
 }
 

@@ -129,7 +129,8 @@ fn escaped_contextual_keyword_is_plain_identifier_with_flag() {
 
 #[test]
 fn accepts_non_ascii_identifier_characters() {
-    // `café` and a leading non-ASCII letter should lex as identifiers.
+    // `café`, a leading non-ASCII letter, a letter-number start, and a recent
+    // Unicode 17 ID_Continue mark should lex as identifiers.
     assert_eq!(
         kinds("café"),
         vec![TokenKind::Identifier("café".to_owned()), TokenKind::Eof]
@@ -141,6 +142,28 @@ fn accepts_non_ascii_identifier_characters() {
             TokenKind::Eof,
         ]
     );
+    assert_eq!(
+        kinds("\u{2160}x"),
+        vec![
+            TokenKind::Identifier("\u{2160}x".to_owned()),
+            TokenKind::Eof,
+        ]
+    );
+    assert_eq!(
+        kinds("_\u{1abc}"),
+        vec![
+            TokenKind::Identifier("_\u{1abc}".to_owned()),
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn rejects_pattern_syntax_identifier_characters() {
+    // U+2E2F VERTICAL TILDE is Alphabetic but also Pattern_Syntax, so it is
+    // excluded from ECMAScript IdentifierStart/IdentifierContinue.
+    assert!(lex("\u{2e2f}").is_err());
+    assert!(lex("_\u{2e2f}").is_err());
 }
 
 #[test]

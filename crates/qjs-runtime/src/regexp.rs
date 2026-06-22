@@ -16,7 +16,6 @@ mod symbol_match;
 mod symbol_replace;
 mod symbol_search;
 mod symbol_split;
-mod unicode;
 mod validation;
 
 use crate::CallEnv;

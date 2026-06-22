@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use crate::regexp::unicode::{self, PropertySet};
 use crate::string::{string_from_code_unit, surrogate_escape_code_unit};
+use qjs_unicode::{self as unicode, PropertySet};
 
 pub(super) fn is_trailing_surrogate_position(text: &[char], index: usize) -> bool {
     if index == 0 || index >= text.len() {

@@ -1,15 +1,13 @@
 [package]
-name = "qjs-lexer"
+name = "qjs-unicode"
 version = "0.1.0"
-description = "Span-preserving JavaScript lexer for quickjs-rust."
+description = "Unicode property tables shared by quickjs-rust lexer and runtime."
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-qjs-ast = { path = "../qjs-ast" }
-qjs-unicode = { path = "../qjs-unicode" }
 
 [lints]
 workspace = true

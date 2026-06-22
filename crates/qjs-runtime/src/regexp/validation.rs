@@ -1,5 +1,5 @@
-use super::unicode;
 use crate::RuntimeError;
+use qjs_unicode as unicode;
 
 pub(crate) fn validate_regexp_init(source: &str, flags: &str) -> Result<(), RuntimeError> {
     validate_regexp_flags(flags)?;
