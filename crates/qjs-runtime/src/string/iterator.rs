@@ -60,10 +60,12 @@ pub(crate) fn native_string_iterator_next(this_value: Value) -> Result<Value, Ru
         STRING_ITERATOR_NEXT_INDEX.to_owned(),
         Value::Number((index + width) as f64),
     );
-    Ok(iterator_result(
-        Value::String(string_from_code_units(&code_units[index..index + width]).into()),
-        false,
-    ))
+    let value = if width == 2 {
+        string_from_surrogate_pair(code_units[index], code_units[index + 1])
+    } else {
+        string_from_code_units(&code_units[index..index + width])
+    };
+    Ok(iterator_result(Value::String(value.into()), false))
 }
 
 fn iterator_done(iterator: &ObjectRef) -> bool {
@@ -118,4 +120,11 @@ fn is_leading_surrogate(code_unit: u16) -> bool {
 
 fn is_trailing_surrogate(code_unit: u16) -> bool {
     (0xDC00..=0xDFFF).contains(&code_unit)
+}
+
+fn string_from_surrogate_pair(high: u16, low: u16) -> String {
+    let code_point = 0x10000 + ((u32::from(high) - 0xD800) << 10) + u32::from(low) - 0xDC00;
+    char::from_u32(code_point)
+        .unwrap_or(char::REPLACEMENT_CHARACTER)
+        .to_string()
 }

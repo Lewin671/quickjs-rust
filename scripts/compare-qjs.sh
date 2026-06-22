@@ -47,7 +47,7 @@ run_fixture() {
 
   expression="$(tr '\n' ' ' < "$fixture")"
   set +e
-  rust_raw_output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$QJS_RUST_BIN" -e "$expression" 2>&1)"
+  rust_raw_output="$("$RUN_WITH_TIMEOUT" "$CASE_TIMEOUT_SECONDS" "$QJS_RUST_BIN" --raw -e "$expression" 2>&1)"
   rust_status=$?
   set -e
   if [ "$rust_status" -ne 0 ]; then
