@@ -454,6 +454,17 @@ fn evaluates_function_declarations_and_calls() {
         eval("function getThis() { 'use strict'; return this; } getThis() === undefined;"),
         Ok(Value::Boolean(true))
     );
+    // A "use strict" directive written with a line continuation or an escape
+    // computes to the string "use strict" but is NOT a Use Strict Directive, so
+    // the function stays sloppy and `this` coerces to the global object.
+    assert_eq!(
+        eval("function f() { 'use str\\\nict'; return this !== undefined; } f.call(undefined);"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("function f() { 'use\\u0020strict'; return this !== undefined; } f.call(undefined);"),
+        Ok(Value::Boolean(true))
+    );
     assert_eq!(
         eval(
             "function getThis() { return this; } let o = {}; o.getThis = getThis; o.getThis() === o;"

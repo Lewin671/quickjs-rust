@@ -351,7 +351,10 @@ impl Parser {
             let TokenKind::String(value) = &token.kind else {
                 return false;
             };
-            if value == "use strict" {
+            // Only the directive `'use strict'`/`"use strict"` written verbatim
+            // enters strict mode; an escape or line continuation computes to the
+            // same value but spans more than its 12 source bytes (ES2023 11.2.1).
+            if value == "use strict" && token.span.end - token.span.start == 12 {
                 return true;
             }
             cursor += 1;

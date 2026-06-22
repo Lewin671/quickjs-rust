@@ -285,10 +285,14 @@ pub(crate) fn stmt_end(stmt: &Stmt) -> usize {
 
 pub(crate) fn body_has_strict_directive(body: &[Stmt]) -> bool {
     for stmt in body {
-        let Stmt::Expr(Expr::Literal(Literal::String { value, .. })) = stmt else {
+        let Stmt::Expr(Expr::Literal(Literal::String { value, span })) = stmt else {
             return false;
         };
-        if value == "use strict" {
+        // A Use Strict Directive is determined by source text, not value: an
+        // escape or line continuation (e.g. `'use str\<LF>ict'`) computes to
+        // "use strict" but is not the directive. Such a literal spans more than
+        // the bare `'use strict'` (12 bytes), so the span length disambiguates.
+        if value == "use strict" && span.end - span.start == 12 {
             return true;
         }
     }
