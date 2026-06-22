@@ -86,6 +86,13 @@ pub(crate) const GLOBAL_THIS_BINDING: &str = "\0global_this";
 pub(crate) const DIRECT_EVAL_BINDING: &str = "\0\0direct_eval";
 pub(crate) const DIRECT_EVAL_STRICT_BINDING: &str = "\0\0direct_eval_strict";
 pub(crate) const DIRECT_EVAL_ARGUMENTS_BINDING: &str = "\0\0direct_eval_arguments";
+/// Marks a direct eval that runs while evaluating a function's formal parameter
+/// list (a default initializer). Such an eval's `var`/`function` declarations
+/// live in the separate parameter environment, so a `var arguments` there
+/// collides with the parameter scope's `arguments` binding (EvalDeclaration-
+/// Instantiation SyntaxError) — a body-scope direct eval does not.
+pub(crate) const DIRECT_EVAL_IN_PARAMETER_SCOPE_BINDING: &str =
+    "\0\0direct_eval_in_parameter_scope";
 pub(crate) const DIRECT_EVAL_FUNCTION_CONTEXT_BINDING: &str = "\0\0direct_eval_function_context";
 /// Per-frame marker used by direct eval to apply class-field-initializer early
 /// errors.

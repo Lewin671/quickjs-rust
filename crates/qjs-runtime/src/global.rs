@@ -265,17 +265,22 @@ pub(super) fn native_global_eval(
             eval_env.get(crate::DIRECT_EVAL_ARGUMENTS_BINDING),
             Some(Value::Boolean(true))
         )
+        && matches!(
+            eval_env.get(crate::DIRECT_EVAL_IN_PARAMETER_SCOPE_BINDING),
+            Some(Value::Boolean(true))
+        )
         && bytecode
             .hoisted_local_names()
             .any(|name| name == "arguments")
     {
-        // EvalDeclarationInstantiation: a direct eval may not hoist a `var` or
-        // `function` declaration named `arguments` when the surrounding
-        // function environment already binds `arguments` -- i.e. inside a
-        // non-arrow function (which always has the arguments object) or inside
-        // an arrow whose parameter list is named `arguments`. An arrow with no
-        // such binding (or one that only binds `arguments` in its body) may
-        // declare it freely.
+        // EvalDeclarationInstantiation: a direct eval in a formal-parameter
+        // default may not hoist a `var`/`function` named `arguments`. With
+        // parameter expressions the parameter list has its own environment that
+        // already binds `arguments` (the arguments object, or an `arguments`
+        // parameter), so the eval's separate var declaration collides with it
+        // and is a SyntaxError. A *body*-scope direct eval shares the function
+        // var environment with `arguments` and may redeclare it (`var arguments`
+        // in a plain function body is allowed in sloppy code).
         return Err(RuntimeError {
             thrown: None,
             message: "SyntaxError: cannot declare 'arguments' in function eval".to_owned(),

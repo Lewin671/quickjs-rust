@@ -771,16 +771,25 @@ fn keeps_global_object_properties_and_bindings_in_sync() {
 }
 
 #[test]
-fn direct_function_eval_rejects_var_arguments() {
-    // A non-arrow function always binds `arguments`, so a direct eval hoisting
-    // a `var`/`function` declaration named `arguments` is a SyntaxError.
+fn direct_function_eval_rejects_var_arguments_only_in_parameter_scope() {
+    // A direct eval in a *parameter default* may not hoist a `var`/`function`
+    // named `arguments`: with parameter expressions the parameter list has its
+    // own environment binding `arguments`, which the eval's separate var
+    // declaration collides with (EvalDeclarationInstantiation SyntaxError).
     assert!(
-        eval("function f() { eval('var arguments = 1'); } f();").is_err(),
-        "non-arrow eval declaring var arguments must throw"
+        eval("function f(p = eval('var arguments = 1')) {} f();").is_err(),
+        "parameter-scope eval declaring var arguments must throw"
     );
     assert!(
-        eval("function f() { eval('function arguments() {}'); } f();").is_err(),
-        "non-arrow eval declaring function arguments must throw"
+        eval("function f(p = eval('function arguments() {}')) {} f();").is_err(),
+        "parameter-scope eval declaring function arguments must throw"
+    );
+    // A *body*-scope direct eval shares the function var environment with
+    // `arguments` and may redeclare it (sloppy `var arguments` in a plain
+    // function body is allowed — Test262 language/statements/variable/12.2.1-11).
+    assert!(
+        eval("function f() { eval('var arguments = 1'); } f();").is_ok(),
+        "body-scope eval declaring var arguments must be allowed"
     );
     // Reading `arguments` through eval is fine.
     assert_eq!(

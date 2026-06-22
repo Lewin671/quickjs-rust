@@ -81,6 +81,7 @@ impl Vm<'_> {
             }
             return Ok(());
         }
+        let in_parameter_scope = direct_eval && self.in_parameter_prologue();
         let mut env = self.call_env(&callee);
         if direct_eval {
             env.env
@@ -89,10 +90,18 @@ impl Vm<'_> {
                 crate::DIRECT_EVAL_STRICT_BINDING.to_owned(),
                 Value::Boolean(direct_eval_strict),
             );
+            if in_parameter_scope {
+                env.env.insert(
+                    crate::DIRECT_EVAL_IN_PARAMETER_SCOPE_BINDING.to_owned(),
+                    Value::Boolean(true),
+                );
+            }
         }
         let result = call_function(callee, this_value, arguments, &mut env.env, false);
         env.env.remove(crate::DIRECT_EVAL_BINDING);
         env.env.remove(crate::DIRECT_EVAL_STRICT_BINDING);
+        env.env
+            .remove(crate::DIRECT_EVAL_IN_PARAMETER_SCOPE_BINDING);
         if direct_eval {
             self.write_through_direct_eval_parameter_captures(&env.env, &env.injected);
         }
