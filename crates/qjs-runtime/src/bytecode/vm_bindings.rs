@@ -1060,6 +1060,9 @@ impl Vm<'_> {
     }
 
     fn write_through_parameter_captured_envs(&self, name: &str, value: &Value) {
+        if self.env.is_immutable_function_name(name) {
+            return;
+        }
         for captured_env in &self.parameter_captured_envs {
             let mut captured_env = captured_env.borrow_mut();
             if captured_env.contains_key(name) {

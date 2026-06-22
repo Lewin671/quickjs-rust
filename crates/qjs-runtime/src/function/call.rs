@@ -777,6 +777,10 @@ fn function_env(
         && let Some(name) = &function.name
     {
         frame_env.set_immutable_function_name(name.clone());
+    } else if function.lexical_this
+        && let Some(name) = env.immutable_function_name()
+    {
+        frame_env.set_immutable_function_name(name.to_owned());
     }
     if let Some(host) = function.module_host.clone() {
         frame_env.set_module_host(host);
@@ -1033,6 +1037,19 @@ fn insert_caller_bytecode_bindings(
             caller_shares_capture_source,
             callee,
         );
+        register_existing_caller_capture_writeback(
+            local_env,
+            caller_binding_names,
+            env,
+            name,
+            ExistingCallerCaptureWriteback {
+                write_back_to_caller,
+                existing_capture_matches_caller,
+                caller_shares_capture_source,
+                allow_current_value_mismatch: !is_protected_capture && callee_is_method(callee),
+                callee,
+            },
+        );
         insert_caller_binding(
             local_env,
             caller_binding_names,
@@ -1071,6 +1088,19 @@ fn insert_caller_bytecode_bindings(
                 caller_shares_capture_source,
                 callee,
             );
+            register_existing_caller_capture_writeback(
+                local_env,
+                caller_binding_names,
+                env,
+                name,
+                ExistingCallerCaptureWriteback {
+                    write_back_to_caller: true,
+                    existing_capture_matches_caller,
+                    caller_shares_capture_source,
+                    allow_current_value_mismatch: !is_protected_capture && callee_is_method(callee),
+                    callee,
+                },
+            );
             let allow_live_env_override = from_env
                 && !is_protected_capture
                 && existing_capture_matches_caller
@@ -1087,6 +1117,99 @@ fn insert_caller_bytecode_bindings(
             );
         }
     }
+}
+
+fn register_existing_caller_capture_writeback(
+    local_env: &HashMap<String, Value>,
+    caller_binding_names: &mut Vec<String>,
+    env: &CallEnv,
+    name: &str,
+    registration: ExistingCallerCaptureWriteback<'_>,
+) {
+    if registration.write_back_to_caller
+        && registration.existing_capture_matches_caller
+        && (registration.caller_shares_capture_source
+            || callee_capture_writeback_targets_caller(registration.callee, env, name)
+            || callee_capture_writeback_aliases_name(registration.callee, name)
+            || callee_is_method(registration.callee))
+        && local_env.contains_key(name)
+        && (registration.allow_current_value_mismatch
+            || env.locals().get(name) == local_env.get(name))
+    {
+        insert_missing_caller_binding_name(caller_binding_names, name);
+    }
+}
+
+struct ExistingCallerCaptureWriteback<'a> {
+    write_back_to_caller: bool,
+    existing_capture_matches_caller: bool,
+    caller_shares_capture_source: bool,
+    allow_current_value_mismatch: bool,
+    callee: &'a Value,
+}
+
+fn callee_capture_writeback_aliases_name(callee: &Value, name: &str) -> bool {
+    let Value::Function(function) = callee else {
+        return false;
+    };
+    function
+        .capture_writeback
+        .as_ref()
+        .is_some_and(|writeback| capture_writeback_aliases_name(writeback, name))
+}
+
+fn capture_writeback_aliases_name(
+    writeback: &crate::bytecode::CaptureWriteback,
+    name: &str,
+) -> bool {
+    writeback
+        .aliases
+        .iter()
+        .any(|(source, target)| source == name || target == name)
+        || writeback
+            .parent
+            .as_deref()
+            .is_some_and(|parent| capture_writeback_aliases_name(parent, name))
+}
+
+fn callee_is_method(callee: &Value) -> bool {
+    matches!(
+        callee,
+        Value::Function(function) if function.home_object.borrow().is_some()
+    )
+}
+
+fn callee_capture_writeback_targets_caller(callee: &Value, env: &CallEnv, name: &str) -> bool {
+    let Value::Function(function) = callee else {
+        return false;
+    };
+    function
+        .capture_writeback
+        .as_ref()
+        .is_some_and(|writeback| capture_writeback_targets_env(writeback, env, name))
+}
+
+fn capture_writeback_targets_env(
+    writeback: &crate::bytecode::CaptureWriteback,
+    env: &CallEnv,
+    name: &str,
+) -> bool {
+    let contains_name = writeback.names.iter().any(|candidate| candidate == name)
+        || writeback
+            .aliases
+            .iter()
+            .any(|(source, target)| source == name || target == name);
+    let targets_env = env
+        .activation_captured_env()
+        .is_some_and(|activation| Rc::ptr_eq(activation, &writeback.target))
+        || env
+            .captured_binding_source_env()
+            .is_some_and(|source| Rc::ptr_eq(source, &writeback.target));
+    (contains_name && targets_env)
+        || writeback
+            .parent
+            .as_deref()
+            .is_some_and(|parent| capture_writeback_targets_env(parent, env, name))
 }
 
 struct CallerBindingContext<'a> {

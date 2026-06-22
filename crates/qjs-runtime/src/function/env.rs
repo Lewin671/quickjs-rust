@@ -51,8 +51,8 @@ pub(crate) struct CallEnv {
     /// frame only. Assigning to it is a silent no-op in sloppy mode and a
     /// TypeError in strict mode (unless a parameter/`var`/lexical shadows it,
     /// in which case the assignment resolves to that local slot instead and
-    /// never consults this field). Reset per frame so nested calls and arrows
-    /// do not inherit it.
+    /// never consults this field). New ordinary function frames reset this;
+    /// lexical-this functions inherit it explicitly from their enclosing frame.
     immutable_function_name: Option<String>,
     direct_eval_var_conflicts: HashSet<String>,
     /// The lexical private-name environment active for this frame. This is
@@ -300,6 +300,10 @@ impl CallEnv {
         self.immutable_function_name.as_deref() == Some(name)
     }
 
+    pub(crate) fn immutable_function_name(&self) -> Option<&str> {
+        self.immutable_function_name.as_deref()
+    }
+
     pub(crate) fn clear_direct_eval_var_conflicts(&mut self) {
         self.direct_eval_var_conflicts.clear();
     }
@@ -479,5 +483,14 @@ impl CallEnv {
             module_host: self.module_host.clone(),
             module_imports: self.module_imports.clone(),
         }
+    }
+
+    /// Builds a new view over the current execution frame. Unlike a new
+    /// ordinary function call frame, this preserves the named-function-expression
+    /// immutable name marker for direct eval and lexical arrow calls.
+    pub(crate) fn with_current_frame_locals(&self, locals: HashMap<String, Value>) -> Self {
+        let mut env = self.with_frame_locals(locals);
+        env.immutable_function_name = self.immutable_function_name.clone();
+        env
     }
 }

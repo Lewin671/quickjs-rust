@@ -570,6 +570,22 @@ fn override_delegates_to_super_method() {
 }
 
 #[test]
+fn method_capture_writeback_updates_loop_scoped_caller_binding() {
+    assert_eq!(
+        eval(
+            "let called = 0; class C { m() { called += 1; } } for (const value of [0]) { called = 0; new C().m(); } called;"
+        ),
+        Ok(Value::Number(1.0))
+    );
+    assert_eq!(
+        eval(
+            "let called = 0; class C { m() { called += 1; } } for (const [value] of [[0]]) { called = 0; new C().m(); } called;"
+        ),
+        Ok(Value::Number(1.0))
+    );
+}
+
+#[test]
 fn super_call_binds_this_and_forwards_arguments() {
     assert_eq!(
         eval(

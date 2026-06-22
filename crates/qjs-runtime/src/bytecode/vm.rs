@@ -214,7 +214,7 @@ impl<'a> Vm<'a> {
                 }
             }
         }
-        let mut env = self.attach_host(self.env.with_frame_locals(locals));
+        let mut env = self.attach_host(self.env.with_current_frame_locals(locals));
         for (index, slot) in self.locals.iter().enumerate() {
             if slot.is_some() && self.bytecode.locals[index].catch_binding {
                 env.mark_catch_binding(self.bytecode.locals[index].name.clone());
@@ -1003,7 +1003,7 @@ impl<'a> Vm<'a> {
                 }
             }
             let injected = locals.clone();
-            let mut env = self.attach_host(self.env.with_frame_locals(locals));
+            let mut env = self.attach_host(self.env.with_current_frame_locals(locals));
             env.set_activation_captured_env(Rc::clone(&self.captured_env));
             if let Some(source) = self.env.captured_binding_source_env() {
                 env.set_captured_binding_source_env(Rc::clone(source));

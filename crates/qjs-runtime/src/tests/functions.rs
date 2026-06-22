@@ -1207,4 +1207,30 @@ fn named_function_expression_name_binding_is_immutable() {
         eval("var ref = function f() { var f; f = 1; return f; }; ref();"),
         Ok(Value::Number(1.0))
     );
+    assert_eq!(
+        eval("let ref = function f() { (() => { f = 1; })(); return f; }; ref() === ref;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval("let ref = function f() { eval('f = 1'); return f; }; ref() === ref;"),
+        Ok(Value::Boolean(true))
+    );
+    assert_eq!(
+        eval(
+            "'use strict'; let ref = function f() { try { (() => { f = 1; })(); } catch (error) { return error.name; } }; ref();"
+        ),
+        Ok(Value::String("TypeError".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "'use strict'; let ref = function f() { try { eval('f = 1'); } catch (error) { return error.name; } }; ref();"
+        ),
+        Ok(Value::String("TypeError".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "var f = 'outside'; var probeParams, probeBody; var func = function f(_ = (probeParams = function() { return f; })) { probeBody = function() { return f; }; }; func(); (probeParams() === func) + ':' + (probeBody() === func);"
+        ),
+        Ok(Value::String("true:true".to_owned().into()))
+    );
 }

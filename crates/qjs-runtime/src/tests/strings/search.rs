@@ -291,6 +291,18 @@ fn evaluates_string_search_builtins() {
         ),
         Ok(Value::Boolean(true))
     );
+    assert_eq!(
+        eval(
+            "let called = 0; class RE extends RegExp { [Symbol.replace](...args) { const actual = super[Symbol.replace](...args); called += 1; return actual; } toString() { throw 'searchValue'; } } let result = ''; for (const [[source, flags], input, replacement] of [[['b', 'g'], 'abc abc abc', 'z']]) { const search = new RE(source, flags); called = 0; result = input.replaceAll(search, replacement) + ':' + called; } result;"
+        ),
+        Ok(Value::String("azc azc azc:1".to_owned().into()))
+    );
+    assert_eq!(
+        eval(
+            "let called = 0; let calls = 0; class RE extends RegExp { [Symbol.replace](...args) { const actual = super[Symbol.replace](...args); called += 1; return actual; } } for (const [source, input] of [['(a)', 'aaa abc']]) { const search = new RE(source, 'g'); called = 0; calls = 0; input.replaceAll(search, function(match, capture, position, string) { calls += (match === 'a' && capture === 'a' && string === input) ? 1 : 0; return 'z'; }); } called + ':' + calls;"
+        ),
+        Ok(Value::String("1:4".to_owned().into()))
+    );
 }
 
 #[test]
