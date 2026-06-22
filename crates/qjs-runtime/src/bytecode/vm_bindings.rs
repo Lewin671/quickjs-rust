@@ -758,6 +758,8 @@ impl Vm<'_> {
             && !is_compiler_temporary(&self.bytecode.locals[slot].name)
         {
             let name = self.bytecode.locals[slot].name.clone();
+            self.env
+                .set_global_lexical_value(name.clone(), value.clone());
             self.env.mark_global_lexical_binding(name.clone());
             if !mutable {
                 self.env.mark_immutable_lexical_binding(name);

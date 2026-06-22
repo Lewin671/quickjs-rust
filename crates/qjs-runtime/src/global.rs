@@ -246,7 +246,7 @@ pub(super) fn native_global_eval(
     let mut eval_env = if direct_eval {
         env.clone()
     } else {
-        env.empty_frame()
+        env.indirect_eval_frame()
     };
     let direct_function_eval = direct_eval && eval_env.get_local("this").is_some();
     // Direct eval inside strict code is itself strict even without its own
@@ -335,10 +335,13 @@ pub(super) fn native_global_eval(
         eval_strict,
     );
     let result = eval_bytecode_with_env(&bytecode, eval_env.clone());
-    for name in bytecode
-        .hoisted_local_names()
-        .chain(bytecode.global_names().iter().map(String::as_str))
-    {
+    let writeback_names = hoisted_names
+        .iter()
+        .cloned()
+        .chain(bytecode.written_binding_names())
+        .collect::<HashSet<_>>();
+    for name in writeback_names {
+        let name = name.as_str();
         let binding = if direct_function_eval && hoisted_names.contains(name) {
             result.frame_binding(name).or_else(|| result.binding(name))
         } else {

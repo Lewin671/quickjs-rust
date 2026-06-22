@@ -548,7 +548,7 @@ fn evaluates_indirect_eval_against_global_scope() {
             "let local = 1; \
              (function() { let local = 2; return (0, eval)('typeof local'); }());"
         ),
-        Ok(Value::String("undefined".to_owned().into()))
+        Ok(Value::String("number".to_owned().into()))
     );
     // Indirect eval evaluates lexical declarations in a fresh declarative
     // environment that is discarded afterwards: the binding neither persists as
@@ -567,6 +567,22 @@ fn evaluates_indirect_eval_against_global_scope() {
         )
         .is_err(),
         "indirect eval lexical binding must not leak into global scope"
+    );
+}
+
+#[test]
+fn optional_eval_call_is_indirect_eval_against_global_scope() {
+    assert_eq!(
+        eval(
+            "const a = 'global'; \
+             function fn() { const a = 'local'; return eval?.('a'); } \
+             fn() + ':' + Object.prototype.hasOwnProperty.call(this, 'a');"
+        ),
+        Ok(Value::String("global:false".to_owned().into()))
+    );
+    assert_eq!(
+        eval("const b = 'global'; ((b) => eval?.('b'))('local');"),
+        Ok(Value::String("global".to_owned().into()))
     );
 }
 

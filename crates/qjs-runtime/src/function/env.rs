@@ -32,6 +32,7 @@ use crate::{Function, Value, private::PrivateEnvironment};
 /// The shared realm binding table: intrinsics plus the script's true globals.
 pub(crate) type Realm = Rc<RefCell<HashMap<String, Value>>>;
 pub(crate) type GlobalLexicalBindings = Rc<RefCell<HashSet<String>>>;
+pub(crate) type GlobalLexicalValues = Rc<RefCell<HashMap<String, Value>>>;
 pub(crate) type ImmutableLexicalBindings = Rc<RefCell<HashSet<String>>>;
 pub(crate) type ModuleImports = HashMap<String, (Realm, String)>;
 
@@ -44,6 +45,8 @@ pub(crate) type ModuleImports = HashMap<String, (Realm, String)>;
 pub(crate) struct CallEnv {
     realm: Realm,
     global_lexical_bindings: GlobalLexicalBindings,
+    global_lexical_values: GlobalLexicalValues,
+    expose_global_lexical_values: bool,
     immutable_lexical_bindings: ImmutableLexicalBindings,
     locals: HashMap<String, Value>,
     catch_bindings: HashSet<String>,
@@ -91,6 +94,14 @@ impl std::fmt::Debug for CallEnv {
                 &self.global_lexical_bindings.borrow().len(),
             )
             .field(
+                "global_lexical_values",
+                &self.global_lexical_values.borrow().len(),
+            )
+            .field(
+                "expose_global_lexical_values",
+                &self.expose_global_lexical_values,
+            )
+            .field(
                 "immutable_lexical_bindings",
                 &self.immutable_lexical_bindings.borrow().len(),
             )
@@ -124,6 +135,8 @@ impl CallEnv {
         Self {
             realm,
             global_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
+            global_lexical_values: Rc::new(RefCell::new(HashMap::new())),
+            expose_global_lexical_values: false,
             immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             locals: HashMap::new(),
             catch_bindings: HashSet::new(),
@@ -191,6 +204,8 @@ impl CallEnv {
         Self {
             realm: Rc::new(RefCell::new(HashMap::new())),
             global_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
+            global_lexical_values: Rc::new(RefCell::new(HashMap::new())),
+            expose_global_lexical_values: false,
             immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             locals: HashMap::new(),
             catch_bindings: HashSet::new(),
@@ -212,6 +227,8 @@ impl CallEnv {
         Self {
             realm: Rc::new(RefCell::new(map)),
             global_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
+            global_lexical_values: Rc::new(RefCell::new(HashMap::new())),
+            expose_global_lexical_values: false,
             immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             locals: HashMap::new(),
             catch_bindings: HashSet::new(),
@@ -231,6 +248,8 @@ impl CallEnv {
         Self {
             realm,
             global_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
+            global_lexical_values: Rc::new(RefCell::new(HashMap::new())),
+            expose_global_lexical_values: false,
             immutable_lexical_bindings: Rc::new(RefCell::new(HashSet::new())),
             locals,
             catch_bindings: HashSet::new(),
@@ -260,12 +279,25 @@ impl CallEnv {
         self.with_frame_locals(HashMap::new())
     }
 
+    /// Builds an indirect-eval global frame. It has no caller locals, but it
+    /// can read Script top-level lexical bindings through the global lexical
+    /// environment instead of the global object.
+    pub(crate) fn indirect_eval_frame(&self) -> Self {
+        let mut env = self.empty_frame();
+        env.expose_global_lexical_values = true;
+        env
+    }
+
     pub(crate) fn mark_global_lexical_binding(&self, name: String) {
         self.global_lexical_bindings.borrow_mut().insert(name);
     }
 
     pub(crate) fn is_global_lexical_binding(&self, name: &str) -> bool {
         self.global_lexical_bindings.borrow().contains(name)
+    }
+
+    pub(crate) fn set_global_lexical_value(&self, name: String, value: Value) {
+        self.global_lexical_values.borrow_mut().insert(name, value);
     }
 
     pub(crate) fn mark_immutable_lexical_binding(&self, name: String) {
@@ -396,7 +428,13 @@ impl CallEnv {
         if let Some(value) = self.locals.get(name) {
             return Some(value.clone());
         }
-        self.realm.borrow().get(name).cloned()
+        if let Some(value) = self.realm.borrow().get(name).cloned() {
+            return Some(value);
+        }
+        if self.expose_global_lexical_values {
+            return self.global_lexical_values.borrow().get(name).cloned();
+        }
+        None
     }
 
     /// Looks up `name` in the shared realm layer only.
@@ -469,6 +507,8 @@ impl CallEnv {
         Self {
             realm: Rc::clone(&self.realm),
             global_lexical_bindings: Rc::clone(&self.global_lexical_bindings),
+            global_lexical_values: Rc::clone(&self.global_lexical_values),
+            expose_global_lexical_values: false,
             immutable_lexical_bindings: Rc::clone(&self.immutable_lexical_bindings),
             locals,
             catch_bindings: self.catch_bindings.clone(),
